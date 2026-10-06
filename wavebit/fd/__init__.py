@@ -222,6 +222,14 @@ a bulk spectral-resolution check. Zero strength is allowed; geometry, material
 and source-band differentiation and multiple poles remain outside this scope.
 See ``docs/fd-debye-film.md`` for the bounded contract and validation record.
 
+An isolated film may also contain exactly two passive Debye poles. Its normal
+mixture is reduced to two local passive relaxations; equal times and zero
+strengths collapse without dropping the reserved memory slots. The time-step
+policy includes the sum of both local rates before taking the spatial maximum.
+All geometry, host and differentiation restrictions of the single-Debye film
+remain. Other multiple-pole mixtures remain outside this bounded extension.
+See ``docs/fd-two-debye-film.md`` for the contract and validation status.
+
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 
     fd.Structure(fd.Sphere(radius=0.2), glass, discretisation='stencil')

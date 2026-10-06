@@ -3198,3 +3198,56 @@ code, live tests and numerical criteria were unchanged for the successful
 retry. The bounded implementation and numerical gates are complete on the
 feature branch. Earlier physical records retain their original material scopes.
 General C8 smoothing remains incomplete, and C7 remains unpassed.
+
+### Bounded C8 scope: one film with two Debye poles (2026-10-06)
+
+The [two-Debye film document](fd-two-debye-film.md) records the implemented
+extension to exactly two passive Debye poles in one concrete isolated voxel
+`Box`, with the same plain dielectric host and geometry restrictions as the
+single-Debye film. The body is unturned and unranged, spans exactly two axes
+with one-cell transverse overhangs, has normal thickness at least one cell,
+and stays clear of domain walls along its normal and of every absorber.
+No partner, initial field, arbitrary pole count, other pole family, or
+geometry/material/band differentiation is included.
+
+The harmonic normal law couples both declared relaxations. A positive
+symmetric two-mode reduction supplies passive effective Debye poles; two
+memory slots remain reserved when zero increments or equal relaxation times
+reduce the physical pole count. The existing split recurrence and local
+energy weights apply to each active slot. The material-rate policy sums both
+active contributions at each cell, then takes the maximum against the bulk
+sum. It does not replace that sum with the largest individual pole.
+
+The first disclosed calibration uses `eps_inf=2`, increments `(2,4)` and
+times `(0.05,0.2)`, with p incidence and face fraction 0.3 at 40 cells.
+All three backends complete with stable fields and finite energy. The
+largest complex-amplitude errors are 0.004119745238 for reflection and
+0.009808685985 for transmission; the unchanged 0.010 transmission ceiling
+has only 0.000191314015065 margin and was accepted after disclosure.
+Backend differences stay below 1.182681e-15, while the recorded mesh and
+subpixel warnings remain. All 374 targeted cases pass, nine actual production
+mutations are caught, and all 127 restored two-Debye cases pass.
+
+The separately registered campaign completes all 20 workers without a
+replacement or stop. All 24 self-orders and 48 direct pairs, including all
+24 final pairs, are second under its fixed sensitivity-interval criterion.
+Across both placements and polarizations, maximum absolute complex errors
+fall from 0.007719271817 to 0.000479775649 for reflection and from
+0.010084340268 to 0.000630297828 for transmission over 40 to 160 cells.
+The coarse maxima exceed the one calibration row's 0.005/0.010 ceilings;
+those are not the campaign's convergence criteria. The empirical time/PML
+proxy remains a sensitivity measure, not a rigorous fine-grid error bound.
+The repeated known calibration configuration is disclosed as such.
+
+The initial registration's unfinished stdout checksum error is preserved
+with its correction; the controller and protocol were unchanged and no
+campaign worker ran before corrected registration. The linked document
+records the complete provenance and per-cell ranges. The full tier passes
+3,122 of 3,130 collected cases with eight skips; the separate slow tier passes
+all 81 cases. All 1,141 frozen-reference arrays are bit-exact, with no golden
+files written. The final numerical record is
+`studies/results/fdtd_two_debye_film_validation.json`. The bounded implementation
+and required numerical gates are complete on the feature branch. This physical
+result is scoped to the declared material and experiment; the bulk spectral
+guard makes no broader accuracy promise. Earlier records and open limits retain
+their original scopes. General C8 smoothing is incomplete and C7 remains unpassed.

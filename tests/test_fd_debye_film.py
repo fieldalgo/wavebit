@@ -229,8 +229,8 @@ def refused_scene(case):
         own = own.replace(eps_inf=(4., 5., 4.))
     elif case == 'magnetic':
         own = own.replace(mu=2.)
-    elif case == 'two-poles':
-        own = own.replace(poles=own.poles + (fd.Debye(tau=.2),))
+    elif case == 'three-poles':
+        own = own.replace(poles=own.poles + (fd.Debye(tau=.2), fd.Debye(tau=.3)))
     elif case == 'mixed-poles':
         own = own.replace(poles=own.poles+(fd.Lorentz(omega_0=5., gamma=1., strength=2.),))
     elif case == 'background-loss':
@@ -262,7 +262,7 @@ def refused_scene(case):
 
 
 @pytest.mark.parametrize('case', ('finite-box', 'sphere', 'turned', 'ranged', 'anisotropic',
-    'magnetic', 'two-poles', 'mixed-poles', 'background-loss', 'background-magnetic', 'partner',
+    'magnetic', 'three-poles', 'mixed-poles', 'background-loss', 'background-magnetic', 'partner',
     'initial', 'stencil', 'pml-normal', 'sub-dx', 'transverse-halo', 'transverse-absorber'))
 def test_unsupported_debye_films_are_refused_by_name(case):
     with pytest.raises(ValueError) as caught:

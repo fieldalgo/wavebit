@@ -32,3 +32,12 @@ wavebit/fd/_lower/debye_film.py text eol=lf
 wavebit/fd/_lower/debye_resolution.py text eol=lf
 studies/results/fdtd_debye_film* -text
 studies/results/fdtd_debye_film*/** -text
+
+# Two-Debye film source and raw evidence preserve their validated bytes.
+studies/fdtd_two_debye_film_*.py text eol=lf
+docs/fd-two-debye-film.md text eol=lf
+tests/test_fd_two_debye_film.py text eol=lf
+wavebit/fd/_lower/two_debye_film.py text eol=lf
+wavebit/fd/_lower/two_debye_resolution.py text eol=lf
+studies/results/fdtd_two_debye_film* -text
+studies/results/fdtd_two_debye_film*/** -text

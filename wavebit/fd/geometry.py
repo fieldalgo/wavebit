@@ -776,10 +776,13 @@ class Sphere(Shape):
        Debye memory; a film with one passive Drude or Lorentz pole carries a spatial
        oscillator for the exact harmonic normal response. A single passive Debye pole
        has a spatial relaxation time and strength, with an instantaneous update shift.
+       Exactly two passive Debye poles in one isolated film use two transformed
+       relaxation memories, including exact zero/equal-time reductions.
        General conductive bodies,
-       lossy junctions, multiple-pole films and curved dispersive interfaces remain
+       lossy junctions, other multiple-pole films and curved dispersive interfaces remain
        refused. See ``docs/fd-conductive-film.md`` and ``docs/fd-single-pole-film.md``
-       and ``docs/fd-debye-film.md`` for the exact contracts and validation status.
+       and ``docs/fd-debye-film.md`` / ``docs/fd-two-debye-film.md`` for the exact
+       contracts and validation status.
     2. **No wrapping face.** A sphere that reaches a ``Periodic`` or ``Bloch`` face is refused
        because resolving its wrapped part means summing the geometry over the image ring, and
        that fold -- which needs the cell's origin, which a body does not carry -- is not

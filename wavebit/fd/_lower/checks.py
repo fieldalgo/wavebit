@@ -429,6 +429,9 @@ def check_smoothed(scene, grid):
     dispersive_film = single_pole_film(scene, grid)
     from .debye_film import descriptor as debye_film
     relaxation_film = debye_film(scene, grid)
+    if relaxation_film is None:
+        from .two_debye_film import descriptor as two_debye_film
+        relaxation_film = two_debye_film(scene, grid)
     for index, structure, body in smoothed:
         box = structure.shape.support(grid)
         where = f'structures[{index}] ({structure.shape.describe()})'
@@ -1738,6 +1741,9 @@ def cfl_bound(scene, plan):
     n_min, resonance, coupling = None, 0.0, 0.0
     from .debye_film import policy_rate as debye_policy_rate
     relaxation_rate = debye_policy_rate(scene, plan)
+    if relaxation_rate is None:
+        from .two_debye_film import policy_rate as two_debye_policy_rate
+        relaxation_rate = two_debye_policy_rate(scene, plan)
     for material in materials:
         n = material.index_bound()
         if n is None:
@@ -1746,8 +1752,8 @@ def cfl_bound(scene, plan):
         strength_sum = 0.0
         for pole in material.poles:
             if relaxation_rate is not None:
-                # This scope has one Debye film and a plain host. Its replacement
-                # rate below includes the bulk pole without evaluating tau**2 or
+                # These scopes have one Debye film and a plain host. The replacement
+                # rate includes every bulk pole without evaluating inactive tau**2 or
                 # counting the same memory twice; inactive poles need no division.
                 continue
             w0_squared, strength = pole.rate()
@@ -1788,10 +1794,16 @@ def check_stability(scene, plan):
         return True
     from .debye_film import policy_rate as debye_policy_rate
     relaxation_rate = debye_policy_rate(scene, plan)
+    if relaxation_rate is None:
+        from .two_debye_film import policy_rate as two_debye_policy_rate
+        relaxation_rate = two_debye_policy_rate(scene, plan)
     poles = [(name, p) for name, p in _all_poles(scene)]
     worst = ''
-    if poles:
-        # The supported Debye film has one pole. Its scoped rate also avoids
+    if poles and relaxation_rate is not None and len(poles) > 1:
+        worst = (' The bounded two-Debye film includes the combined bulk and '
+                 'transformed local relaxation rates of both poles.')
+    elif poles:
+        # The supported single-Debye film has one pole. Its scoped rate also avoids
         # evaluating an inactive extreme relaxation time in the diagnostic.
         name, pole = (poles[0] if relaxation_rate is not None else
                       max(poles, key=lambda np_: sum(abs(v) for v in _rate_values(np_[1]))))
@@ -2015,8 +2027,18 @@ def _smoothed_notes(scene, plan, rows=None):
                     'The source-band mesh bound certifies bulk scales only; validate '
                     'observables under refinement and check run duration and absorbers '
                     'separately. See docs/fd-debye-film.md.'))
+    from .two_debye_film import descriptor as two_debye_descriptor
+    two_relaxation_film = two_debye_descriptor(scene, plan.grid)
+    if two_relaxation_film is not None:
+        out.append((SubpixelAccuracyWarning,
+                    'The two-Debye film uses two spatial relaxation memories for '
+                    'the harmonic normal and arithmetic tangential response. This '
+                    'bounded C8 scope is one concrete axis-aligned film in a plain '
+                    'dielectric. Validate observables under refinement and check '
+                    'duration and absorbers separately. The spectral guard covers '
+                    'bulk scales only. See docs/fd-two-debye-film.md.'))
     if (len(asked) < len(smoothed) and film is None and dispersive_film is None
-            and relaxation_film is None):
+            and relaxation_film is None and two_relaxation_film is None):
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
         # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
         # It does not certify the production engine across the remaining contrasts.
@@ -2220,6 +2242,10 @@ def _resolution_notes(scene, plan):
     debye_notes = debye_resolution_notes(scene, plan, _wavelength(scene, plan))
     if debye_notes is not None:
         return debye_notes
+    from .two_debye_resolution import notes as two_debye_resolution_notes
+    two_debye_notes = two_debye_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if two_debye_notes is not None:
+        return two_debye_notes
     from .conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
     materials = [('Scene(background=)', _background(scene))]
@@ -2321,6 +2347,9 @@ def check_wavelength_resolution(scene, grid):
     from .debye_resolution import validate as validate_debye_resolution
     if validate_debye_resolution(scene, grid):
         return
+    from .two_debye_resolution import validate as validate_two_debye_resolution
+    if validate_two_debye_resolution(scene, grid):
+        return
     from ..monitors import Diffraction
     from .conductive_film import descriptor
     conductive = descriptor(scene, grid) is not None
@@ -2374,6 +2403,10 @@ def _proximity_notes(scene, plan):
         from .debye_film import descriptor as debye_descriptor
         from .debye_resolution import index_at as film_index_at
         film = debye_descriptor(scene, plan.grid)
+    if film is None:
+        from .two_debye_film import descriptor as two_debye_descriptor
+        from .two_debye_resolution import index_at as film_index_at
+        film = two_debye_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if film is not None:
