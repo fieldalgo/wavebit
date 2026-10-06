@@ -3113,3 +3113,45 @@ read-only freezers reproduce bit for bit without rewriting a golden. Curved cond
 Drude/Lorentz interfaces, lossy junctions and their
 derivatives remain outside this scope. C8 as a whole is not complete, and
 the C7 metasurface verdict above remains unpassed.
+
+### Bounded C8 scope: one Drude or Lorentz film (2026-10-06)
+
+The completed bounded implementation admits one concrete, unturned and unranged
+voxel `Box` containing exactly one passive `Drude` or `Lorentz` pole in a
+plain isotropic lossless host. Film and host are isotropic and non-magnetic.
+Exactly two axes span the grid with one-cell transverse overhangs; the normal
+thickness is at least one cell, its normal support is strictly inside the
+domain, and all support stays clear of absorbers. There is no partner or initial field. Geometry, material and
+source-band differentiation are outside this scope. Normal mixed cells use
+the exact harmonic oscillator with a shifted resonance; tangential cells use
+the arithmetic response. The spectral guard bounds bulk phase and skin scales,
+not every interface or oblique longitudinal scale.
+
+The [single-pole film document](fd-single-pole-film.md) gives the reduction,
+energy and CFL identities, the two disclosed calibration rows and retained
+warnings. The targeted suite passes all 148 cases; all nine actual production
+mutation witnesses are accepted, followed by 94 passing cases after exact
+restoration. All 40 registered physical workers and the procedural audit
+completed, but the self-order verdict is 44 second, two mixed, one low and
+one unresolved out of 48 cells. Both mesh pairs against the continuum give
+93 second, one mixed and two unresolved out of 96; the final pair gives
+47 second and one unresolved. The four self-order exceptions are all
+fraction-0.3 reflection cells: Drude s at wavelengths 1.0 and 1.1, and
+Lorentz p at 1.0 and 1.1. Their intervals and noise limits are shown in the
+linked document. The separately registered finer/longer follow-up, selected
+after these results, completed ten workers at 80/160/320 cells. It gives
+11 second and one unresolved self-order out of 12, 20 second and four
+unresolved direct pairs out of 24, and nine second with three unresolved
+final direct orders. The two Drude reflection exceptions are second on this
+ladder. Lorentz p `r` at 1.1 remains self-unresolved, while its final direct
+noise gate also leaves `r` at 0.9 and `t` at 1.1 unresolved. These records
+remain at the declared 320-cell/240-period cap; no additional sweep changes
+the original verdict. The full regression tier passes with 2,894 passed and
+eight skipped out of 2,902 collected, exit 0. All 81 separate slow-tier cases
+pass, and all four read-only freezers reproduce 143, 288, 140 and 570 arrays
+bit for bit without rewriting a golden. Counts, exits and the unchanged
+source identity are retained in
+`studies/results/fdtd_single_pole_film_validation.json`. The bounded
+implementation and its required numerical gates are complete on the feature
+branch. This is not a blanket physical pass.
+General C8 smoothing remains incomplete, and C7 remains unpassed.

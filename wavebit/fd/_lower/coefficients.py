@@ -424,10 +424,15 @@ def build(scene, plan, rt):
     # H-point evaluations would be discarded.
     from .conductive_film import descriptor, material_profiles
     film_profiles = material_profiles(scene, plan, rt)
+    film = descriptor(scene, plan.grid) if film_profiles is not None else None
+    if film_profiles is None:
+        from .single_pole_film import descriptor, material_profiles
+        film_profiles = material_profiles(scene, plan, rt)
+        film = descriptor(scene, plan.grid) if film_profiles is not None else None
     if film_profiles is not None:
-        # A flat film varies on one axis. Its normal effective response contains the
-        # instantaneous part of the induced Debye memory; sigma alone cannot represent it.
-        axes = {descriptor(scene, plan.grid).axis}
+        # Both supported films vary on one axis and lower their exact local response
+        # separately from the ordinary occupancy painter.
+        axes = {film.axis}
         eps, sigma = film_profiles
         mu = rt.array(1.0, 'float64')
     else:

@@ -54,7 +54,7 @@ the one asked for: for an interface that does not land on a cell boundary, a con
 in ``dx`` is the route to a right answer, or, for a lossless non-dispersive layer, the layer
 spelled as the smoothed ``fd.Box`` spanning the other two axes, whose faces are where they were
 asked (stage 4, gate G5); a Conductor or Dispersive layer stays a cell-snapped ``fd.Slab``
-outside the bounded conductive-film scope described below. General lossy-body and
+outside the bounded conductive and single-pole film scopes described below. General lossy-body and
 dispersive-interface smoothing remain later C8 work.
 
 Stage 2 adds sources, each a term in the kernel's additive slot::
@@ -122,7 +122,7 @@ pair, ``_lower/coefficients.py::mix`` is the rule and carries its citations). Th
 isotropic phases meeting at one interface, and C2 refuses every neighbouring case **by name**
 rather than answering it approximately (``_lower/checks.py::check_smoothed``): a smoothed
 shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (the isolated
-conductive film below is the only exception) or with an anisotropic ``eps``/``mu``; it may not reach a
+film scopes below are the only exceptions) or with an anisotropic ``eps``/``mu``; it may not reach a
 ``Periodic``, ``Bloch`` or ``Axis1D`` face, nor a face of the box (it would count material
 outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two messages);
 and two smoothed shapes may not put their surfaces through one voxel except for the flush
@@ -194,9 +194,22 @@ Use the default ``discretisation='voxel'`` and build a new plan when these concr
 inputs change. Tangential conductivity is averaged arithmetically; normal mixed
 cells require an induced passive Debye memory even when the two real
 permittivities are equal. This does not admit curved conductors, lossy junctions,
-Drude/Lorentz interface smoothing or conductive shape/material differentiation.
+general dispersive interface smoothing or conductive shape/material differentiation.
 The implementation and its physical-validation record are documented in
-``docs/fd-conductive-film.md``; C8 as a whole is not complete, and C7 remains unpassed.
+``docs/fd-conductive-film.md``.
+
+The next C8 scope admits the same concrete isolated film geometry with
+``Dispersive(eps_inf=..., poles=(Drude(...),))`` or one ``Lorentz`` pole instead.
+It uses one spatial oscillator: arithmetic response along the film and harmonic
+response across it, including the normal resonance induced in a mixed Drude cell.
+Only passive parameters and a lossless isotropic non-magnetic host are admitted.
+The source band must be concrete; a conservative bound checks its entire positive
+frequency interval, including interior Lorentz resonances, and every requested
+monitor wavelength is checked separately for phase and skin resolution. These are
+bulk mesh floors, not error bounds. See ``docs/fd-single-pole-film.md`` for its
+validation status. Multiple poles, declared Debye films, curved dispersive bodies,
+lossy junctions and geometry/material/band differentiation remain outside this scope. C8 as a whole is
+not complete, and C7 remains unpassed.
 
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 

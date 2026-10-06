@@ -545,6 +545,21 @@ class InteriorEnergy:
                 total = total + rt.weighted_energy(previous + c * field, inv_delta)
                 total = total - rt.weighted_energy(field, c)
                 continue
+            if 'energy_inverse_strength' in coefficients:
+                # Spatial Drude/Lorentz oscillators need local weights before reduction.
+                # Explicit metadata also identifies an oscillator when gamma*dt=2 makes
+                # hold zero. Inactive cells contribute nothing, including the cross term.
+                shape = mem['P'][j].shape
+                inverse, potential, active = (
+                    rt.xp.broadcast_to(rt.constant(coefficients[key][j]), shape)[inside]
+                    for key in ('energy_inverse_strength', 'energy_resonance_over_strength',
+                                'energy_active'))
+                new, old = mem['P'][j][inside], mem['previous'][j][inside]
+                step = new-old
+                total = total + rt.weighted_energy(step/dt, inverse)
+                total = total + rt.real_inner(new, old, potential)
+                total = total - rt.real_inner(field, step, active)
+                continue
             gain, hold, drive = (rt.constant(coefficients[key][j])
                                  for key in ('step_gain', 'hold', 'drive'))
             # Which kind is static wherever the coefficients are concrete (NumPy, Torch), so

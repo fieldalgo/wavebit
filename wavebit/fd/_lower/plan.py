@@ -366,6 +366,10 @@ def _pole_terms(scene, grid):
     dispersive structure overlaps another is refused outright
     (``checks.check_overlaps``, which measures what the wrong answer looks like).
     """
+    from .single_pole_film import terms as dispersive_terms
+    film_terms = dispersive_terms(scene, grid)
+    if film_terms:
+        return film_terms
     terms = []
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if not isinstance(structure.material, Dispersive):

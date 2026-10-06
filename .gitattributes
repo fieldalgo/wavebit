@@ -12,3 +12,14 @@ wavebit/fd/_lower/params.py text eol=crlf
 wavebit/fd/_kernel/observe.py text eol=crlf
 studies/results/fdtd_conductive_film* -text
 studies/results/fdtd_conductive_film*/** -text
+
+# Single-pole film registration and raw mutation/evidence bytes.
+studies/fdtd_single_pole_film_*.py text eol=lf
+docs/fd-single-pole-film.md text eol=lf
+tests/test_fd_single_pole_film.py text eol=lf
+wavebit/fd/_lower/single_pole_film.py text eol=lf
+wavebit/fd/_lower/single_pole_resolution.py text eol=lf
+wavebit/fd/_lower/plan.py text eol=crlf
+wavebit/fd/_lower/coefficients.py text eol=crlf
+studies/results/fdtd_single_pole_film* -text
+studies/results/fdtd_single_pole_film*/** -text

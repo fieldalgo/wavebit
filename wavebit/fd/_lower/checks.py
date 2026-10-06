@@ -425,6 +425,8 @@ def check_smoothed(scene, grid):
     smoothed = smoothed_structures(scene)
     from .conductive_film import descriptor as conductive_film
     film = conductive_film(scene, grid)
+    from .single_pole_film import descriptor as single_pole_film
+    dispersive_film = single_pole_film(scene, grid)
     for index, structure, body in smoothed:
         box = structure.shape.support(grid)
         where = f'structures[{index}] ({structure.shape.describe()})'
@@ -526,8 +528,8 @@ def check_smoothed(scene, grid):
         for material, name in media:
             if not isinstance(material, (Conductor, Dispersive)):
                 continue
-            if film is not None and name == where:
-                continue  # C8's single concrete conductive film has its own exact memory.
+            if (film is not None or dispersive_film is not None) and name == where:
+                continue  # These two bounded C8 film scopes carry their exact memory.
             what = ('a conductivity' if isinstance(material, Conductor)
                     else f'{len(material.poles)} pole(s)')
             # Door 4 below reads the self case the same way. A structure does not "share cells
@@ -545,7 +547,7 @@ def check_smoothed(scene, grid):
                 f'plausible number and a wrong one. Use the cell-snapped fd.Region for the lossy '
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
                 f'it), or keep it out of the smoothed shape\'s cells. C8 currently admits '
-                f'only one concrete axis-aligned conductive film in a plain dielectric, '
+                f'one concrete axis-aligned conductive or single Drude/Lorentz film in a plain dielectric, '
                 f'clear of absorbing layers, with no initial field; this scene is outside '
                 f'that measured scope.')
         for material, name in media:
@@ -1973,7 +1975,17 @@ def _smoothed_notes(scene, plan, rows=None):
                     'An exact local material response alone does not establish spatial '
                     'convergence. Validate the observables under refinement and check run '
                     'duration separately. See docs/fd-conductive-film.md.'))
-    if len(asked) < len(smoothed) and film is None:
+    from .single_pole_film import descriptor as single_pole_descriptor
+    dispersive_film = single_pole_descriptor(scene, plan.grid)
+    if dispersive_film is not None:
+        out.append((SubpixelAccuracyWarning,
+                    'The single-pole film uses a spatial Drude/Lorentz oscillator for '
+                    'the harmonic normal and arithmetic tangential response. This C8 '
+                    'scope is one concrete axis-aligned film in a lossless dielectric. '
+                    'The source-band mesh bound certifies bulk material scales only; '
+                    'validate observables under refinement and check run duration '
+                    'separately. See docs/fd-single-pole-film.md.'))
+    if len(asked) < len(smoothed) and film is None and dispersive_film is None:
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
         # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
         # It does not certify the production engine across the remaining contrasts.
@@ -2140,7 +2152,13 @@ def _index_at(material, wavelength, *, conductive=False):
         if eps is None or mu is None:
             return None, None
         if material.poles:
-            eps = eps_at(material.poles, wavelength, eps)
+            from ..materials import Lorentz
+            from .shape_ranges import _carries
+            # An exactly inactive concrete oscillator is zero at its nominal resonance
+            # too. This reader also serves post-run source round-trip diagnostics.
+            poles = tuple(p for p in material.poles if not (
+                type(p) is Lorentz and concrete(p.strength) == 0 and not _carries(p.strength)))
+            eps = eps_at(poles, wavelength, eps)
             if any(concrete(getattr(p, f)) is None
                    for p in material.poles for f in p.__dataclass_fields__):
                 return None, None
@@ -2163,6 +2181,10 @@ def _index_at(material, wavelength, *, conductive=False):
 
 def _resolution_notes(scene, plan):
     """Cells per wavelength inside every material; a metal by its skin depth instead."""
+    from .single_pole_resolution import notes as film_resolution_notes
+    film_notes = film_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if film_notes is not None:
+        return film_notes
     from .conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
     materials = [('Scene(background=)', _background(scene))]
@@ -2258,6 +2280,9 @@ def check_wavelength_resolution(scene, grid):
     same text, from :func:`_coarse_refusal`; what stays in ``warn_all`` is its warnings, and
     the scenes with no sources, whose wavelength the plan infers).
     """
+    from .single_pole_resolution import validate as validate_film_resolution
+    if validate_film_resolution(scene, grid):
+        return
     from ..monitors import Diffraction
     from .conductive_film import descriptor
     conductive = descriptor(scene, grid) is not None
@@ -2304,9 +2329,15 @@ def _proximity_notes(scene, plan):
         return []
     from .conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
+    from .single_pole_film import descriptor as single_pole_descriptor
+    from .single_pole_resolution import index_at as film_index_at
+    film = single_pole_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
-        n, _ = _index_at(structure.material, wavelength, conductive=conductive)
+        if film is not None:
+            n, _ = film_index_at(film, wavelength)
+        else:
+            n, _ = _index_at(structure.material, wavelength, conductive=conductive)
         if n is None or n <= 0:
             continue
         clearance = 0.5 * wavelength / n
