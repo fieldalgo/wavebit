@@ -432,6 +432,9 @@ def check_smoothed(scene, grid):
     if relaxation_film is None:
         from .two_debye_film import descriptor as two_debye_film
         relaxation_film = two_debye_film(scene, grid)
+    if relaxation_film is None:
+        from .debye_sum_film import descriptor as debye_sum_film
+        relaxation_film = debye_sum_film(scene, grid)
     for index, structure, body in smoothed:
         box = structure.shape.support(grid)
         where = f'structures[{index}] ({structure.shape.describe()})'
@@ -1744,6 +1747,9 @@ def cfl_bound(scene, plan):
     if relaxation_rate is None:
         from .two_debye_film import policy_rate as two_debye_policy_rate
         relaxation_rate = two_debye_policy_rate(scene, plan)
+    if relaxation_rate is None:
+        from .debye_sum_film import policy_rate as debye_sum_policy_rate
+        relaxation_rate = debye_sum_policy_rate(scene, plan)
     for material in materials:
         n = material.index_bound()
         if n is None:
@@ -1797,9 +1803,15 @@ def check_stability(scene, plan):
     if relaxation_rate is None:
         from .two_debye_film import policy_rate as two_debye_policy_rate
         relaxation_rate = two_debye_policy_rate(scene, plan)
+    if relaxation_rate is None:
+        from .debye_sum_film import policy_rate as debye_sum_policy_rate
+        relaxation_rate = debye_sum_policy_rate(scene, plan)
     poles = [(name, p) for name, p in _all_poles(scene)]
     worst = ''
-    if poles and relaxation_rate is not None and len(poles) > 1:
+    if poles and relaxation_rate is not None and len(poles) > 2:
+        worst = (' The bounded Debye-sum film includes the combined bulk and '
+                 'transformed local relaxation rates of every active pole.')
+    elif poles and relaxation_rate is not None and len(poles) > 1:
         worst = (' The bounded two-Debye film includes the combined bulk and '
                  'transformed local relaxation rates of both poles.')
     elif poles:
@@ -2037,8 +2049,19 @@ def _smoothed_notes(scene, plan, rows=None):
                     'dielectric. Validate observables under refinement and check '
                     'duration and absorbers separately. The spectral guard covers '
                     'bulk scales only. See docs/fd-two-debye-film.md.'))
+    from .debye_sum_film import descriptor as debye_sum_descriptor
+    sum_relaxation_film = debye_sum_descriptor(scene, plan.grid)
+    if sum_relaxation_film is not None:
+        out.append((SubpixelAccuracyWarning,
+                    'The Debye-sum film uses coupled normal relaxation modes and '
+                    'arithmetic tangential response for a finite passive Debye sum. '
+                    'This bounded C8 scope is one concrete axis-aligned film in a '
+                    'plain dielectric. Validate observables under refinement and '
+                    'check duration and absorbers separately. The spectral guard '
+                    'covers bulk scales only. See docs/fd-debye-sum-film.md.'))
     if (len(asked) < len(smoothed) and film is None and dispersive_film is None
-            and relaxation_film is None and two_relaxation_film is None):
+            and relaxation_film is None and two_relaxation_film is None
+            and sum_relaxation_film is None):
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
         # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
         # It does not certify the production engine across the remaining contrasts.
@@ -2246,6 +2269,10 @@ def _resolution_notes(scene, plan):
     two_debye_notes = two_debye_resolution_notes(scene, plan, _wavelength(scene, plan))
     if two_debye_notes is not None:
         return two_debye_notes
+    from .debye_sum_resolution import notes as debye_sum_resolution_notes
+    debye_sum_notes = debye_sum_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if debye_sum_notes is not None:
+        return debye_sum_notes
     from .conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
     materials = [('Scene(background=)', _background(scene))]
@@ -2350,6 +2377,9 @@ def check_wavelength_resolution(scene, grid):
     from .two_debye_resolution import validate as validate_two_debye_resolution
     if validate_two_debye_resolution(scene, grid):
         return
+    from .debye_sum_resolution import validate as validate_debye_sum_resolution
+    if validate_debye_sum_resolution(scene, grid):
+        return
     from ..monitors import Diffraction
     from .conductive_film import descriptor
     conductive = descriptor(scene, grid) is not None
@@ -2407,6 +2437,10 @@ def _proximity_notes(scene, plan):
         from .two_debye_film import descriptor as two_debye_descriptor
         from .two_debye_resolution import index_at as film_index_at
         film = two_debye_descriptor(scene, plan.grid)
+    if film is None:
+        from .debye_sum_film import descriptor as debye_sum_descriptor
+        from .debye_sum_resolution import index_at as film_index_at
+        film = debye_sum_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if film is not None:

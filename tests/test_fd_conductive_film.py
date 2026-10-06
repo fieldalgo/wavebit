@@ -211,8 +211,10 @@ def refused_scene(case):
         material = fd.Conductor(eps=4., sigma=(8., 9., 8.))
     elif case == 'magnetic':
         material = fd.Conductor(eps=4.0, sigma=8.0, mu=2.0)
+    # Finite passive Debye sums are admitted; mixed pole families remain refused.
     elif case == 'pole':
-        material = fd.Dispersive(eps_inf=4.0, poles=(fd.Debye(tau=.1), fd.Debye(tau=.2), fd.Debye(tau=.3)))
+        material = fd.Dispersive(eps_inf=4.0, poles=(fd.Debye(tau=.1), fd.Debye(tau=.2),
+                                                      fd.Lorentz(omega_0=5., gamma=1., strength=2.)))
     elif case == 'background-loss':
         return scene.replace(background=fd.Conductor(eps=1.0, sigma=.2))
     elif case == 'background-magnetic':

@@ -228,8 +228,10 @@ def refused_scene(case):
         own = own.replace(mu=2.)
     elif case == 'two-poles':
         own = own.replace(poles=own.poles + (fd.Drude(omega_p=2., gamma=1.),))
-    elif case == 'three-debye-poles':
-        own = own.replace(poles=(fd.Debye(tau=.1), fd.Debye(tau=.2), fd.Debye(tau=.3)))
+    # Finite passive Debye sums are admitted; mixed pole families remain refused.
+    elif case == 'three-mixed-poles':
+        own = own.replace(poles=(fd.Debye(tau=.1), fd.Debye(tau=.2),
+                                 fd.Lorentz(omega_0=5., gamma=1., strength=2.)))
     elif case == 'background-loss':
         return scene.replace(background=fd.Conductor(eps=1., sigma=.2))
     elif case == 'background-magnetic':
@@ -259,7 +261,7 @@ def refused_scene(case):
 
 
 @pytest.mark.parametrize('case', ('finite-box', 'sphere', 'turned', 'ranged', 'anisotropic',
-    'magnetic', 'two-poles', 'three-debye-poles', 'background-loss', 'background-magnetic', 'partner',
+    'magnetic', 'two-poles', 'three-mixed-poles', 'background-loss', 'background-magnetic', 'partner',
     'initial', 'stencil', 'pml-normal', 'sub-dx', 'transverse-halo', 'transverse-absorber'))
 def test_unsupported_single_pole_films_are_refused_by_name(case):
     with pytest.raises(ValueError) as caught:

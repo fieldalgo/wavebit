@@ -3251,3 +3251,52 @@ and required numerical gates are complete on the feature branch. This physical
 result is scoped to the declared material and experiment; the bulk spectral
 guard makes no broader accuracy promise. Earlier records and open limits retain
 their original scopes. General C8 smoothing is incomplete and C7 remains unpassed.
+
+### Bounded C8 scope: a finite Debye sum in one film (2026-10-07)
+
+The [finite-sum film document](fd-debye-sum-film.md) records one implemented realization
+for three or more declared passive Debye poles. Existing one- and two-pole
+paths retain their own arithmetic and evidence. Geometry remains one concrete
+isolated, unturned and unranged voxel `Box` in a plain isotropic non-magnetic
+dielectric host, uniform along exactly two axes and clear of absorbers and
+normal domain walls. The declared count fixes the reserved memory slots.
+
+The harmonic normal law couples the complete susceptibility sum through a
+positive symmetric relaxation operator. Its passive effective modes use the
+existing split recurrence and local energy weights. The material-rate policy
+sums every active mode at a cell before taking the maximum against the bulk
+sum; the bulk spectral floor evaluates the full response at the upper source
+band endpoint. These algebraic properties do not establish field convergence.
+
+The disclosed four-pole calibration completes on NumPy, JAX and Torch with
+stable fields and finite energy. Maximum complex-amplitude errors are
+0.003993837708 for reflection and 0.009375278239 for transmission; the inherited
+0.005/0.010 ceilings were accepted unchanged for that known configuration only.
+A separate 23-case algebra probe checks counts 3, 4, 8 and 12, exact reductions,
+small residues and a named range refusal; it runs no fields. All 536 targeted
+cases pass, including 162 cases in nine new functions. All nine actual
+production mutations are caught, source bytes are restored, and the restored
+162-case baseline passes. The registered physical campaign completes all
+20 workers without a replacement or stop. All 24 self-orders and 48 direct
+pairs, including all 24 final pairs, are second under its fixed sensitivity
+intervals. Maximum complex errors fall from 0.007525227466 to 0.000468591928
+for reflection and from 0.009708960243 to 0.000607048711 for transmission over
+40 to 160 cells. The coarse reflection maximum exceeds the one calibration
+row's 0.005 ceiling; that ceiling is not the campaign's convergence criterion.
+The empirical middle-grid time/PML proxy is at most 2.806531e-6 and is not a
+rigorous fine-grid error bound. A separate saved-data transfer-matrix audit
+confirms the per-cell verdicts; the known calibration row remains a disclosed
+repeat. The full tier collects 3,293 cases and passes 3,285 with eight skips;
+the separate slow tier passes all 81. All four read-only frozen-reference
+checks exit zero and reproduce 143/288/140/570 arrays bit for bit (1,141 in
+total), with no golden writes. The bounded implementation and required
+numerical gates are complete; the manifest and retained logs are
+`studies/results/fdtd_debye_sum_film_validation.json` and
+`studies/results/fdtd_debye_sum_film_controls/`.
+
+This measured result is specific to the registered four-pole material and
+experiment. The implementation removes a pole-count boundary
+within the passive Debye film family. Curved dispersive bodies, mixed pole
+families, lossy or dispersive hosts, junctions and geometry/material/band
+derivatives remain outside it. Earlier records keep their original scopes;
+general C8 smoothing remains incomplete and C7 remains unpassed.

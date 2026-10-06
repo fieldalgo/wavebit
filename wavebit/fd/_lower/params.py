@@ -89,12 +89,16 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_debye_film_mismatch(scene, plan)
     from .two_debye_film import refuse_mismatch as refuse_two_debye_film_mismatch
     refuse_two_debye_film_mismatch(scene, plan)
+    from .debye_sum_film import refuse_mismatch as refuse_debye_sum_film_mismatch
+    refuse_debye_sum_film_mismatch(scene, plan)
     from .single_pole_resolution import validate as validate_film_resolution
     validate_film_resolution(scene, plan.grid)
     from .debye_resolution import validate as validate_debye_resolution
     validate_debye_resolution(scene, plan.grid)
     from .two_debye_resolution import validate as validate_two_debye_resolution
     validate_two_debye_resolution(scene, plan.grid)
+    from .debye_sum_resolution import validate as validate_debye_sum_resolution
+    validate_debye_sum_resolution(scene, plan.grid)
     from .junction import refuse_mismatch
     refuse_mismatch(scene, plan)
     from .shape_ranges import refuse_mismatch as refuse_range_mismatch
@@ -317,14 +321,18 @@ def _poles(scene, plan, rt):
                             pole_params as debye_film_poles)
     from .two_debye_film import (TwoDebyeFilmTerm, descriptor as two_debye_descriptor,
                                 pole_params as two_debye_film_poles)
+    from .debye_sum_film import (DebyeSumFilmTerm, descriptor as debye_sum_descriptor,
+                                pole_params as debye_sum_film_poles)
     structures = [s for s in (getattr(scene, 'structures', ()) or ()) if s.material.poles]
     if (descriptor(scene, plan.grid) is not None
             or debye_descriptor(scene, plan.grid) is not None
-            or two_debye_descriptor(scene, plan.grid) is not None):
+            or two_debye_descriptor(scene, plan.grid) is not None
+            or debye_sum_descriptor(scene, plan.grid) is not None):
         structures = []                     # represented by one spatial film term instead
     out = {}
     for term in plan.terms:
-        if isinstance(term, (InterfacePoleTerm, DispersiveFilmTerm, DebyeFilmTerm, TwoDebyeFilmTerm)):
+        if isinstance(term, (InterfacePoleTerm, DispersiveFilmTerm, DebyeFilmTerm,
+                             TwoDebyeFilmTerm, DebyeSumFilmTerm)):
             continue
         if not hasattr(term, 'n_poles'):
             continue                                    # a test hook's term, not a pole set
@@ -352,6 +360,7 @@ def _poles(scene, plan, rt):
     out.update(dispersive_film_poles(scene, plan, rt))
     out.update(debye_film_poles(scene, plan, rt))
     out.update(two_debye_film_poles(scene, plan, rt))
+    out.update(debye_sum_film_poles(scene, plan, rt))
     return out
 
 

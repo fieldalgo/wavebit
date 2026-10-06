@@ -227,8 +227,15 @@ mixture is reduced to two local passive relaxations; equal times and zero
 strengths collapse without dropping the reserved memory slots. The time-step
 policy includes the sum of both local rates before taking the spatial maximum.
 All geometry, host and differentiation restrictions of the single-Debye film
-remain. Other multiple-pole mixtures remain outside this bounded extension.
-See ``docs/fd-two-debye-film.md`` for the contract and validation status.
+remain. See ``docs/fd-two-debye-film.md`` for its validation record.
+
+A finite passive Debye sum with three or more declared poles uses the same
+isolated film contract with one reserved memory slot per declared pole. The
+normal mixture is reduced as a whole, retaining positive modes and collapsing
+only exact equal times or zero increments. The existing one- and two-pole
+routes retain their calculations. Mixed pole families, curved interfaces,
+dispersive hosts and differentiation remain outside this extension.
+See ``docs/fd-debye-sum-film.md`` for numerical admission and validation limits.
 
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 

@@ -30,6 +30,7 @@ subtrees:
   - file: fd-single-pole-film
   - file: fd-debye-film
   - file: fd-two-debye-film
+  - file: fd-debye-sum-film
   - file: fd-sphere-clip-jit
   - file: fd-symmetric-stencil
   - file: fd-lattice-radiation

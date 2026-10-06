@@ -374,6 +374,9 @@ def _pole_terms(scene, grid):
     if not film_terms:
         from .two_debye_film import terms as two_debye_terms
         film_terms = two_debye_terms(scene, grid)
+    if not film_terms:
+        from .debye_sum_film import terms as debye_sum_terms
+        film_terms = debye_sum_terms(scene, grid)
     if film_terms:
         return film_terms
     terms = []

@@ -52,6 +52,7 @@ be runnable as written.
 | [`../fd-single-pole-film.md`](../fd-single-pole-film.md) | Which isolated flat films with one Drude or Lorentz pole are admitted, and which spectral limits and validation results apply? |
 | [`../fd-debye-film.md`](../fd-debye-film.md) | Which isolated Debye films are admitted, how do their relaxation and planning bound change, and what do the measured validation results establish? |
 | [`../fd-two-debye-film.md`](../fd-two-debye-film.md) | Which two-Debye films are admitted, how are their coupled modes represented, and what do the registered measurements and completed numerical gates establish? |
+| [`../fd-debye-sum-film.md`](../fd-debye-sum-film.md) | What is the finite-Debye-count film contract, how does its normal law couple all poles, and what do the registered measurements and completed numerical gates establish? |
 
 ### Advanced
 
