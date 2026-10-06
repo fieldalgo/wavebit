@@ -54,7 +54,8 @@ the one asked for: for an interface that does not land on a cell boundary, a con
 in ``dx`` is the route to a right answer, or, for a lossless non-dispersive layer, the layer
 spelled as the smoothed ``fd.Box`` spanning the other two axes, whose faces are where they were
 asked (stage 4, gate G5); a Conductor or Dispersive layer stays a cell-snapped ``fd.Slab``
-until C8 smooths ``sigma`` and the poles.
+outside the bounded conductive-film scope described below. General lossy-body and
+dispersive-interface smoothing remain later C8 work.
 
 Stage 2 adds sources, each a term in the kernel's additive slot::
 
@@ -120,8 +121,8 @@ the cell already held by the Farjadpour/Kottke rule (``_lower/occupancy.py`` pro
 pair, ``_lower/coefficients.py::mix`` is the rule and carries its citations). The rule is two
 isotropic phases meeting at one interface, and C2 refuses every neighbouring case **by name**
 rather than answering it approximately (``_lower/checks.py::check_smoothed``): a smoothed
-shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (``sigma`` and the
-poles are not smoothed yet) or with an anisotropic ``eps``/``mu``; it may not reach a
+shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (the isolated
+conductive film below is the only exception) or with an anisotropic ``eps``/``mu``; it may not reach a
 ``Periodic``, ``Bloch`` or ``Axis1D`` face, nor a face of the box (it would count material
 outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two messages);
 and two smoothed shapes may not put their surfaces through one voxel except for the flush
@@ -182,6 +183,20 @@ Stage 4's C4 adds the extruded bodies, smoothed the same way, and renames the ce
 refused by name. A body **uniform along** an axis over the whole domain -- extruded along it,
 or an unturned ``Box`` spanning it -- may run through a ``Periodic``, ``Bloch`` or ``Axis1D``
 face, since every layer holds the same section; any other body there is still refused.
+
+The first C8 scope admits one concrete conductive film: a single unturned, unranged
+``Box`` with ``Conductor(eps=..., sigma=...)`` in a plain lossless ``Material`` host,
+both isotropic and non-magnetic. The box spans exactly two full grid axes with at
+least one cell of overhang on each side; its finite thickness is at least ``dx``
+and its support clears the normal domain walls and every absorbing layer. No
+additional structure, initial field or traced geometry/material value is admitted.
+Use the default ``discretisation='voxel'`` and build a new plan when these concrete
+inputs change. Tangential conductivity is averaged arithmetically; normal mixed
+cells require an induced passive Debye memory even when the two real
+permittivities are equal. This does not admit curved conductors, lossy junctions,
+Drude/Lorentz interface smoothing or conductive shape/material differentiation.
+The implementation and its physical-validation record are documented in
+``docs/fd-conductive-film.md``; C8 as a whole is not complete, and C7 remains unpassed.
 
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
 

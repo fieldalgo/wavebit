@@ -422,20 +422,29 @@ def build(scene, plan, rt):
     # differs between them by half a cell. The H pass is built only when something in the
     # scene is magnetic, because ``bh`` is the scalar ``dt/dx`` otherwise and the three
     # H-point evaluations would be discarded.
-    occ = occupancy(scene, plan, rt, fields=('E', 'H') if magnetic else ('E',))
-    if rt.name == 'numpy':
-        # The body contract, before any coefficient is built from it -- and so before
-        # constitutive.validate's certificate reads one (checks._check_fill_contract).
-        from .checks import _check_fill_contract
-        _check_fill_contract(scene, occ, plan.grid)
-    paint_list = painters(scene, plan, axes, occ) if structures else []
-    eps = _stack(rt, paint_list, background.eps_for_update(dt),
-                 [s.material.eps_for_update(dt) for s in structures], 'E', 'mix',
-                 junctions=plan.junctions, scene=scene, plan=plan)
-    mu = _stack(rt, paint_list, background.mu_value,
-                [s.material.mu_value for s in structures], 'H', 'mix' if magnetic else 'keep')
-    sigma = _stack(rt, paint_list, background.sigma,
-                   [s.material.sigma for s in structures], 'E', 'keep')
+    from .conductive_film import descriptor, material_profiles
+    film_profiles = material_profiles(scene, plan, rt)
+    if film_profiles is not None:
+        # A flat film varies on one axis. Its normal effective response contains the
+        # instantaneous part of the induced Debye memory; sigma alone cannot represent it.
+        axes = {descriptor(scene, plan.grid).axis}
+        eps, sigma = film_profiles
+        mu = rt.array(1.0, 'float64')
+    else:
+        occ = occupancy(scene, plan, rt, fields=('E', 'H') if magnetic else ('E',))
+        if rt.name == 'numpy':
+            # The body contract, before any coefficient is built from it -- and so before
+            # constitutive.validate's certificate reads one (checks._check_fill_contract).
+            from .checks import _check_fill_contract
+            _check_fill_contract(scene, occ, plan.grid)
+        paint_list = painters(scene, plan, axes, occ) if structures else []
+        eps = _stack(rt, paint_list, background.eps_for_update(dt),
+                     [s.material.eps_for_update(dt) for s in structures], 'E', 'mix',
+                     junctions=plan.junctions, scene=scene, plan=plan)
+        mu = _stack(rt, paint_list, background.mu_value,
+                    [s.material.mu_value for s in structures], 'H', 'mix' if magnetic else 'keep')
+        sigma = _stack(rt, paint_list, background.sigma,
+                       [s.material.sigma for s in structures], 'E', 'keep')
 
     # Each half is built only if something makes it non-trivial: ``ae`` and ``ah`` stay the
     # stage-0 scalar 1.0 unless there is a loss, and ``bh`` stays dt/dx unless a permeability

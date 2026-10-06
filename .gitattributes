@@ -1,2 +1,14 @@
 # Notebooks are ours, but counting them would report the repository as mostly Jupyter.
 tutorials/** linguist-documentation
+
+# C8 registrations and mutation witnesses identify exact source and evidence bytes.
+# Keep the tested source line endings and preserve mixed raw-log/snapshot endings.
+studies/fdtd_conductive_film_*.py text eol=lf
+docs/fd-conductive-film.md text eol=lf
+tests/test_fd_conductive_film.py text eol=lf
+wavebit/fd/_lower/conductive_film.py text eol=lf
+wavebit/fd/_lower/checks.py text eol=crlf
+wavebit/fd/_lower/params.py text eol=crlf
+wavebit/fd/_kernel/observe.py text eol=crlf
+studies/results/fdtd_conductive_film* -text
+studies/results/fdtd_conductive_film*/** -text

@@ -386,7 +386,8 @@ def _pole_terms(scene, grid):
             'box, including every absorbing layer, and a PML cannot be matched to it (see '
             'fd.Absorber). Stage 1 takes a dispersive material as a Structure; a dispersive '
             'background is not refused on principle, it simply has no gate behind it yet.')
-    return tuple(terms)
+    from .conductive_film import terms as conductive_terms
+    return tuple(terms) + conductive_terms(scene, grid)
 
 
 def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):

@@ -26,6 +26,7 @@ subtrees:
   - file: fd-subpixel-occupancy
   - file: fd-mie-validation
   - file: fd-metasurface-validation
+  - file: fd-conductive-film
   - file: fd-sphere-clip-jit
   - file: fd-symmetric-stencil
   - file: fd-lattice-radiation

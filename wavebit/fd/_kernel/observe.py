@@ -532,6 +532,19 @@ class InteriorEnergy:
         field = E[(comps,) + tuple(slice(c0, c1) for c0, c1 in cells)]
         total = 0.0
         for j in range(n_poles):
+            if 'energy_inverse_delta' in coefficients:
+                # The induced interface Debye pole varies by cell. Weight each cell
+                # before reducing, including component and clipped-region selections.
+                # Supplied inverse strength avoids 0/0 at inactive cells and cancellation
+                # in 1-gain**2 near a pure conductor. Existing scalar poles keep their path.
+                shape = mem['P'][j].shape
+                inv_delta, c = (rt.xp.broadcast_to(rt.constant(coefficients[key][j]),
+                                                  shape)[inside]
+                                for key in ('energy_inverse_delta', 'energy_instantaneous'))
+                previous = mem['previous'][j][inside]
+                total = total + rt.weighted_energy(previous + c * field, inv_delta)
+                total = total - rt.weighted_energy(field, c)
+                continue
             gain, hold, drive = (rt.constant(coefficients[key][j])
                                  for key in ('step_gain', 'hold', 'drive'))
             # Which kind is static wherever the coefficients are concrete (NumPy, Torch), so

@@ -81,6 +81,8 @@ def lower(scene, plan, rt='numpy', device=None):
     """
     from .stencil import refuse_discretisation
     refuse_discretisation(scene, plan)
+    from .conductive_film import refuse_mismatch as refuse_film_mismatch
+    refuse_film_mismatch(scene, plan)
     from .junction import refuse_mismatch
     refuse_mismatch(scene, plan)
     from .shape_ranges import refuse_mismatch as refuse_range_mismatch
@@ -296,9 +298,12 @@ def _poles(scene, plan, rt):
     flows through ``drive``. ``dx_over_dt`` is what turns the polarisation increment into the
     right addition to ``cH``, which carries no ``1/dx`` (``wavebit/fd/_kernel/poles.py``).
     """
+    from .conductive_film import InterfacePoleTerm, pole_params as film_poles
     structures = [s for s in (getattr(scene, 'structures', ()) or ()) if s.material.poles]
     out = {}
     for term in plan.terms:
+        if isinstance(term, InterfacePoleTerm):
+            continue
         if not hasattr(term, 'n_poles'):
             continue                                    # a test hook's term, not a pole set
         index = int(term.name[len('poles['):-1])
@@ -321,6 +326,7 @@ def _poles(scene, plan, rt):
             f'dispersive structure(s). A plan drives the scene it was built from; a scene '
             f'whose poles are not in the plan would run with part of its material missing. '
             f'Use fd.plan(scene) for this scene, or take the structures out of it.')
+    out.update(film_poles(scene, plan, rt))
     return out
 
 

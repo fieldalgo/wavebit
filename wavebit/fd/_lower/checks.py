@@ -423,6 +423,8 @@ def check_smoothed(scene, grid):
     from .occupancy import smoothed_structures
     structures = tuple(getattr(scene, 'structures', ()) or ())
     smoothed = smoothed_structures(scene)
+    from .conductive_film import descriptor as conductive_film
+    film = conductive_film(scene, grid)
     for index, structure, body in smoothed:
         box = structure.shape.support(grid)
         where = f'structures[{index}] ({structure.shape.describe()})'
@@ -524,6 +526,8 @@ def check_smoothed(scene, grid):
         for material, name in media:
             if not isinstance(material, (Conductor, Dispersive)):
                 continue
+            if film is not None and name == where:
+                continue  # C8's single concrete conductive film has its own exact memory.
             what = ('a conductivity' if isinstance(material, Conductor)
                     else f'{len(material.poles)} pole(s)')
             # Door 4 below reads the self case the same way. A structure does not "share cells
@@ -540,8 +544,10 @@ def check_smoothed(scene, grid):
                 f'would carry the full conductivity or the full polarisation, which is a '
                 f'plausible number and a wrong one. Use the cell-snapped fd.Region for the lossy '
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
-                f'it), or keep it out of the smoothed shape\'s cells. Smoothing them is C8, '
-                f'which measures the rule before it writes it.')
+                f'it), or keep it out of the smoothed shape\'s cells. C8 currently admits '
+                f'only one concrete axis-aligned conductive film in a plain dielectric, '
+                f'clear of absorbing layers, with no initial field; this scene is outside '
+                f'that measured scope.')
         for material, name in media:
             for what, triple in (('eps', material.eps), ('mu', material.mu_value)):
                 if _isotropic(triple):
@@ -1751,7 +1757,11 @@ def cfl_bound(scene, plan):
         vacuum = n_min * plan.dx / math.sqrt(3.0)          # the stage-0 float, to the bit
     else:
         vacuum = n_min / math.sqrt(axes)                   # an Axis1D face (stage 3)
+    from .conductive_film import extra_rate as conductive_rate
     rate = resonance + coupling
+    film_rate = conductive_rate(scene, plan)
+    if film_rate:
+        rate += film_rate
     return 1.0 / math.sqrt(1.0 / vacuum ** 2 + rate / 4.0), None
 
 
@@ -1768,6 +1778,10 @@ def check_stability(scene, plan):
         name, pole = max(poles, key=lambda np_: sum(abs(v) for v in _rate_values(np_[1])))
         worst = (f' The tightest pole is {name}: {type(pole).__name__}'
                  f'({", ".join(f"{f}={getattr(pole, f)!r}" for f in pole.__dataclass_fields__)}).')
+    from .conductive_film import extra_rate as conductive_rate
+    if conductive_rate(scene, plan):
+        worst += (' The conductive film carries an induced interface Debye pole; its '
+                  'conservative rate is included in this bound.')
     from ..boundaries import Axis1D
     axis1d = [f'{a} (k_max = {scene.boundaries.face(a + "-").k_max:g})' for a in 'xyz'
               if isinstance(scene.boundaries.face(a + '-'), Axis1D)]
@@ -1948,7 +1962,18 @@ def _smoothed_notes(scene, plan, rows=None):
         return []
     asked = [index for index, structure, _ in smoothed if structure.discretisation == STENCIL]
     out = []
-    if len(asked) < len(smoothed):
+    from .conductive_film import descriptor
+    film = descriptor(scene, plan.grid)
+    if film is not None:
+        out.append((SubpixelAccuracyWarning,
+                    'The conductive film uses an induced Debye memory at normal mixed '
+                    'cells and arithmetic conductivity along its faces. This C8 scope is '
+                    'one concrete axis-aligned film in a lossless dielectric; curved '
+                    'conductors, declared dispersive poles and junctions are not supported. '
+                    'An exact local material response alone does not establish spatial '
+                    'convergence. Validate the observables under refinement and check run '
+                    'duration separately. See docs/fd-conductive-film.md.'))
+    if len(asked) < len(smoothed) and film is None:
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
         # R/lambda=.25, 20/28/40 cells per wavelength and three grid placements.
         # It does not certify the production engine across the remaining contrasts.
@@ -2106,7 +2131,7 @@ def _wavelength(scene, plan):
     return lengths[0] if lengths else None
 
 
-def _index_at(material, wavelength):
+def _index_at(material, wavelength, *, conductive=False):
     """``(n_real, skin_depth)`` of ``material`` at ``wavelength``, or ``(None, None)``."""
     values = []
     for c in range(3):
@@ -2119,6 +2144,11 @@ def _index_at(material, wavelength):
             if any(concrete(getattr(p, f)) is None
                    for p in material.poles for f in p.__dataclass_fields__):
                 return None, None
+        if conductive and isinstance(material, Conductor):
+            sigma = concrete(material.sigma[c])
+            if sigma is None:
+                return None, None
+            eps = complex(eps) + 1j * sigma * wavelength / (2.0 * math.pi)
         values.append(complex(eps) * mu)
     worst = max(values, key=lambda v: abs(v))
     n = complex(worst) ** 0.5
@@ -2133,6 +2163,8 @@ def _index_at(material, wavelength):
 
 def _resolution_notes(scene, plan):
     """Cells per wavelength inside every material; a metal by its skin depth instead."""
+    from .conductive_film import descriptor
+    conductive = descriptor(scene, plan.grid) is not None
     materials = [('Scene(background=)', _background(scene))]
     materials += [(f'structures[{i}]', s.material)
                   for i, s in enumerate(getattr(scene, 'structures', ()) or ())]
@@ -2152,7 +2184,7 @@ def _resolution_notes(scene, plan):
                  'mesh may be too coarse for it and nothing here can tell')]
     out = []
     for where, material in materials:
-        n, skin = _index_at(material, wavelength)
+        n, skin = _index_at(material, wavelength, conductive=conductive)
         if n is None:
             out.append((CoarseMeshWarning,
                         f'{where} has a traced value, so its cells per wavelength could not '
@@ -2227,6 +2259,8 @@ def check_wavelength_resolution(scene, grid):
     the scenes with no sources, whose wavelength the plan infers).
     """
     from ..monitors import Diffraction
+    from .conductive_film import descriptor
+    conductive = descriptor(scene, grid) is not None
     materials = [('Scene(background=)', _background(scene))]
     materials += [(f'structures[{i}]', s.material)
                   for i, s in enumerate(getattr(scene, 'structures', ()) or ())]
@@ -2237,7 +2271,7 @@ def check_wavelength_resolution(scene, grid):
                 asked.setdefault(w, m.name)
     for w in sorted(asked):
         for where, material in materials:
-            n, skin = _index_at(material, w)
+            n, skin = _index_at(material, w, conductive=conductive)
             if n is None or skin is not None:
                 continue                    # traced (not countable), or a metal: its skin
             cells = w / (n * grid.dx)
@@ -2258,7 +2292,7 @@ def check_wavelength_resolution(scene, grid):
     if band is None:
         return                              # traced: _resolution_notes says so, in a warning
     for where, material in materials:
-        n, skin = _index_at(material, band)
+        n, skin = _index_at(material, band, conductive=conductive)
         if n is not None and skin is None and band / (n * grid.dx) < 8.0:
             raise _coarse_refusal(where, n, band, grid.dx, sources)
 
@@ -2268,9 +2302,11 @@ def _proximity_notes(scene, plan):
     wavelength = _wavelength(scene, plan)
     if wavelength is None or not plan.absorbing_faces:
         return []
+    from .conductive_film import descriptor
+    conductive = descriptor(scene, plan.grid) is not None
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
-        n, _ = _index_at(structure.material, wavelength)
+        n, _ = _index_at(structure.material, wavelength, conductive=conductive)
         if n is None or n <= 0:
             continue
         clearance = 0.5 * wavelength / n

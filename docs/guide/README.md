@@ -48,6 +48,7 @@ be runnable as written.
 | [`time-domain.md`](time-domain.md) | When is the *other* solver the right one, and what does a run in the time domain need that a harmonic one does not? |
 | [`fd-differentiation.md`](fd-differentiation.md) | How do I differentiate the general FDTD engine -- material values, a ranged body's shape, both together -- and why might a traced run return NaN? |
 | [`fd-metasurface.md`](fd-metasurface.md) | How do I solve a periodic metasurface cell with the general FDTD engine, read its diffraction orders, compare them with RCWA, and how fine a grid does it need? |
+| [`../fd-conductive-film.md`](../fd-conductive-film.md) | What does the first C8 conductive-film implementation admit, why does its normal interface need memory, and what validation remains? |
 
 ### Advanced
 

@@ -3076,3 +3076,40 @@ bit for bit; no golden was rewritten. `ruff check .` (0.16.2) and `sphinx-build 
 Counts and timings are in `studies/results/fdtd_metasurface_validation.json`, the runner is
 `studies/fdtd_metasurface_validation.py`, and the raw logs are under
 `studies/results/fdtd_metasurface_controls/`.
+
+### First C8 scope: an axis-aligned conductive film (2026-10-06)
+
+The first implementation admits one concrete, unturned and unranged `Box`
+filled with isotropic non-magnetic `Conductor`, in a plain isotropic
+non-magnetic lossless host. The box spans exactly two full grid axes with
+one-cell overhangs; its separated normal faces and support remain clear of
+the normal domain walls and all absorbers. No partner, initial field or
+traced value is admitted. Tangential conductivity is averaged arithmetically,
+while normal mixed cells carry an induced passive Debye memory. This memory
+is required even when the conductor and host have equal real permittivity.
+
+The derivation, exact contract, energy accounting and bounded physical study
+are in [`fd-conductive-film.md`](fd-conductive-film.md). On the first registered
+source, the 40/80/160 study of an epsilon-4, conductivity-8 film at two placements passes
+all 24 cellwise self-order intervals and all 48 direct-order intervals as
+second, with time and absorber controls. Its largest absolute complex-amplitude
+error falls from 0.010462 to 0.0026013 to 0.00064942. All 20 field workers
+succeeded; a subsequent JSON serialization failure was repaired by a separate
+audited utility without changing the registered criteria or rerunning workers.
+The targeted 53 cases and nine production-mutation witnesses passed on that
+source. The first full regression attempt then stopped with 2,443 passed,
+eight skipped and one failed: the new film guard masked an existing stencil
+certificate error. Its logs are preserved. The guard now applies only to
+voxel discretization, without changing the numerical formulas. The corrected
+source passes the combined 54-case targeted run and all nine repeated mutation
+witnesses, with an exactly restored 53-case baseline. Its repeated 20-worker
+campaign and audit also pass: every recorded physical payload matches the
+original exactly, with all 24 self-orders and 48 direct orders still second.
+The corrected-source full tier passes with 2,798 passed and eight skipped out
+of 2,806 collected; a separate final document check passes all 67 cases,
+including the later document-header addition. All 81 slow-tier cases pass,
+and all 1,141 arrays across four
+read-only freezers reproduce bit for bit without rewriting a golden. Curved conductors,
+Drude/Lorentz interfaces, lossy junctions and their
+derivatives remain outside this scope. C8 as a whole is not complete, and
+the C7 metasurface verdict above remains unpassed.

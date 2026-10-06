@@ -25,7 +25,8 @@ in ``dx`` where the rest of the scheme is second order. For a cell-snapped struc
 thickness is not a whole number of cells, **a convergence study in ``dx`` is the route to a
 right answer** -- or, for a lossless non-dispersive structure, the smoothed spelling of the
 same geometry (stage 4: the unturned ``fd.Box`` puts a layer's faces where they were asked, gate
-G5; a Conductor or Dispersive one is refused smoothed until C8) -- and ``check`` prints the
+G5; conductive and dispersive bodies outside C8's bounded conductive-film scope remain
+refused smoothed) -- and ``check`` prints the
 snapped span beside the one that was asked for so that the size of the move is never a
 surprise.
 
@@ -766,9 +767,15 @@ class Sphere(Shape):
 
     1. **No conductivity and no poles where it reaches.** Its own material must not be an
        ``fd.Conductor`` or an ``fd.Dispersive``, and neither may the background or any
-       structure whose cells it shares: ``sigma`` and the pole coefficients are *not* smoothed
-       here and keep the cell-snapped rule they have today, which a fractional edge has no
-       answer for. (C8 measures the rule before writing it.)
+       structure whose cells it shares. C8's first exception is a single concrete,
+       unturned and unranged :class:`Box` spanning exactly two full grid axes in a
+       plain isotropic, non-magnetic dielectric host; it is not an exception for a
+       sphere. That film's separated faces and support stay clear of absorbing
+       layers and the normal domain walls, and it admits no partner, initial field
+       or differentiation. Its normal mixed cells carry an induced Debye memory;
+       arithmetic conductivity alone is insufficient. General conductive bodies,
+       lossy junctions and dispersive interfaces remain refused. See
+       ``docs/fd-conductive-film.md`` for the exact film contract and validation status.
     2. **No wrapping face.** A sphere that reaches a ``Periodic`` or ``Bloch`` face is refused
        because resolving its wrapped part means summing the geometry over the image ring, and
        that fold -- which needs the cell's origin, which a body does not carry -- is not
