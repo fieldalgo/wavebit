@@ -82,6 +82,8 @@ def lower(scene, plan, rt='numpy', device=None):
     from .._decay import validate_plan, validate_runtime, reject_carried
     validate_plan(scene, plan)
     stopping = plan.decay is not None
+    from .constitutive_absorber import refuse_mismatch as refuse_absorber_constitutive
+    refuse_absorber_constitutive(scene, plan)
     from .stencil import refuse_discretisation
     refuse_discretisation(scene, plan)
     from .conductive_stack import refuse_mismatch as refuse_stack_mismatch
@@ -133,7 +135,10 @@ def lower(scene, plan, rt='numpy', device=None):
     if plan.constitutive:
         from .constitutive import lift, lower as lower_constitutive
         nodes = {}
+        from .constitutive_absorber import add_profiles, validate_links
+        add_profiles(scene, plan, params, rt)
         params['constitutive'] = lower_constitutive(scene, plan, rt, nodes=nodes)
+        validate_links(plan, params, rt)
         _stencil(scene, plan, params, rt)
         try:
             certified = lift(plan, params, nodes, rt)

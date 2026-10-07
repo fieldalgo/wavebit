@@ -83,7 +83,8 @@ def terms(scene, plan):
                     masks.append(Slab(c=slab.c, z=z, y=y, x=x))
             out.append(ConstitutiveTerm(f'constitutive[{field}{i}]', field,
                        Region(z=box[2], y=box[1], x=box[0]), plan.dt/plan.dx, tuple(masks)))
-    return tuple(out)
+    from .constitutive_absorber import promote
+    return promote(scene, plan, tuple(out))
 
 
 def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, nodes=None):
@@ -206,7 +207,6 @@ def lift(plan, params, nodes, rt, lifted=None):
     The change goes into ``be`` and not beside it, for the reason ``params._stencil`` gives: ``be``
     is what the step multiplies the curl by and what ``InteriorEnergy`` reads the medium from.
     """
-    from .._kernel.observe import InteriorEnergy
     from .._kernel.stencil import StencilTerm
     from .stars import lift as lift_stars
     xp, certified = rt.xp, True
@@ -215,8 +215,8 @@ def lift(plan, params, nodes, rt, lifted=None):
             continue
         key = 'be' if term.field == 'E' else 'bh'
         cross = params['constitutive'][term.name]
-        diagonal = xp.broadcast_to(InteriorEnergy._cut(params[key], slice(None), term.box)
-                                   / term.ratio, cross.shape)
+        from .constitutive_absorber import physical_diagonal
+        diagonal = physical_diagonal(term, params, rt)
         out = lift_stars(term.field, diagonal, cross, *nodes[term.name], rt)
         if lifted is not None:
             lifted[term.name] = out
@@ -224,7 +224,8 @@ def lift(plan, params, nodes, rt, lifted=None):
         if out.delta is None:
             continue
         coefficient = xp.broadcast_to(params[key], (3, plan.nz, plan.ny, plan.nx))
-        block = coefficient[term.view] + term.ratio * out.delta
+        from .constitutive_absorber import lifted_delta
+        block = coefficient[term.view] + lifted_delta(term, params, out.delta)
         params[key] = _paste(xp, coefficient, tuple(reversed(term.box)), block)
     return certified
 
@@ -235,7 +236,10 @@ def lifted_on_host(scene, plan):
     from .._runtime import runtime
     rt, nodes, lifted = runtime('numpy'), {}, {}
     params = dict(build(scene, plan, rt))
+    from .constitutive_absorber import add_profiles, validate_links
+    add_profiles(scene, plan, params, rt)
     params['constitutive'] = lower(scene, plan, rt, nodes=nodes)
+    validate_links(plan, params, rt)
     lift(plan, params, nodes, rt, lifted)
     return params, lifted
 
@@ -263,7 +267,6 @@ def validate(scene, plan):
     if not coupled:
         return None
     from .._runtime import runtime
-    from .._kernel.observe import InteriorEnergy
     background, structures = materials_of(scene)
     for term in coupled:
         if getattr(plan, 'has_' + term.field + '0'):
@@ -277,6 +280,10 @@ def validate(scene, plan):
             lo, hi = box[a]
             reaches_layer = lo < cells if name[1] == '-' else hi > plan.grid.n[a]-cells
             if reaches_layer:
+                from .._kernel.constitutive_absorber import AbsorberConstitutiveTerm
+                if (isinstance(term, AbsorberConstitutiveTerm)
+                        and (name, cells) in plan.absorber_cells):
+                    continue  # certified finite-operator matched damping, not CPML
                 raise ValueError(f'{term.name} interpolation support meets the {name} '
                                  'absorbing layer. Constitutive D/B memory currently needs '
                                  'lossless cells; leave one interpolation cell beyond the '
@@ -329,7 +336,6 @@ def validate(scene, plan):
                                      'mirror: of the smoothed bodies only the unturned fd.Box '
                                      'plans no cross term, and it alone may cross a mirror '
                                      '(symmetric about the plane, checks.check_symmetry).')
-        key = 'be' if term.field == 'E' else 'bh'
         if not lifted[term.name].certified:
             raise ValueError(f'{term.name}: a star of the lifted inverse-material operator is '
                              'not positive definite. The lift makes every star positive for '
@@ -337,8 +343,8 @@ def validate(scene, plan):
                              f'{_reach(background, structures)} If the contrast is small, a '
                              'material or a fill reaching the lift is not '
                              'a finite positive number.')
-        diagonal = np.broadcast_to(InteriorEnergy._cut(coefficients[key], slice(None),
-                                                       term.box)/term.ratio, c.shape)
+        from .constitutive_absorber import physical_diagonal
+        diagonal = physical_diagonal(term, coefficients, rt)
         _, hi = (float(v) for v in enclosure(diagonal, c, np, term.field))
         if not math.isfinite(hi):
             raise ValueError(f'{term.name} inverse-material spectrum has no finite upper '
@@ -391,7 +397,6 @@ def guard(scene, plan, params, rt, certified):
     positivity of the operator. The Gershgorin enclosure is read for its upper end only, the
     time step's bound; its lower end was the certificate before the lift, and a loose one.
     """
-    from .._kernel.observe import InteriorEnergy
     from .checks import cfl_axis_sum
     xp = rt.xp
     background, structures = materials_of(scene)
@@ -406,10 +411,9 @@ def guard(scene, plan, params, rt, certified):
     for term in plan.constitutive:
         if isinstance(term, StencilTerm):
             continue                      # certified on the host at plan time; see validate
-        key = 'be' if term.field == 'E' else 'bh'
         cross = params['constitutive'][term.name]
-        diagonal = xp.broadcast_to(InteriorEnergy._cut(params[key], slice(None),
-                                                       term.box)/term.ratio, cross.shape)
+        from .constitutive_absorber import physical_diagonal
+        diagonal = physical_diagonal(term, params, rt)
         _, hi = enclosure(diagonal, cross, xp, term.field)
         valid = valid & xp.isfinite(hi)
         upper[term.field] = xp.maximum(upper[term.field], hi)

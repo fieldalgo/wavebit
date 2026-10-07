@@ -12,6 +12,14 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_constitutive_absorber_support.py` | Which exact source, reference and prior-evidence bytes bind each finite-guide measurement? [Measurement](../docs/fd-constitutive-absorber.md). |
+| `fdtd_constitutive_absorber_probe.py` | How do finite guide lengths and durations change fields, spectra and sparse storage on an aligned Yee grid? [Measurement](../docs/fd-constitutive-absorber.md). |
+| `fdtd_constitutive_absorber_calibration.py` | What algebra-independent alignment and backend differences are measured in six disclosed four-solve rows before any allowance is chosen? [Measurement](../docs/fd-constitutive-absorber.md). |
+| `fdtd_constitutive_absorber_campaign.py` | What termination and duration sensitivity remains in the fixed60-solve comparison, with every channel and control retained? [Measurement](../docs/fd-constitutive-absorber.md). |
+| `fdtd_constitutive_absorber_algebra.py` | What rounding residuals do the fixed independent dense-operator and work/loss instruments produce before accepting assertion budgets? [Measurement](../docs/fd-constitutive-absorber.md). |
+| `fdtd_constitutive_absorber_gate_support.py` | Which exact child exits, collected nodes, raw reports and source snapshots establish completion of a verification gate? [Measurement](../docs/fd-constitutive-absorber.md). |
+| `fdtd_constitutive_absorber_gates.py` | Do targeted, full and separate slow tests, frozen arrays and documentation satisfy their complete measured gates? [Measurement](../docs/fd-constitutive-absorber.md). |
+| `fdtd_constitutive_absorber_mutations.py` | Does every reviewed production defect fail its intended assertion before exact restoration and a complete baseline? [Measurement](../docs/fd-constitutive-absorber.md). |
 | `fdtd_decay_stop_probe.py` | How does an early result compare with its fixed actual prefix, a longer run and independent uniform-medium recurrences? [Measurement](../docs/fd-decay-stopping.md). |
 | `fdtd_decay_stop_campaign.py` | Do fixed temporal cases satisfy the disclosed criteria with every wavelength retained and no replacement worker? [Measurement](../docs/fd-decay-stopping.md). |
 | `fdtd_decay_stop_support.py` | Which exact sources, test inputs, subprocess exits and raw logs bind the stopping evidence? [Measurement](../docs/fd-decay-stopping.md). |

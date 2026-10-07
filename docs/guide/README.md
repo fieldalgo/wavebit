@@ -39,6 +39,7 @@ be runnable as written.
 | Page | Question it answers |
 | --- | --- |
 | [`general-fdtd.md`](general-fdtd.md) | Which FDTD entry point uses an explicit domain and named monitors, and what are its planning, units, backend and support contracts? |
+| [`fd-constitutive-absorber.md`](fd-constitutive-absorber.md) | Which coupled dielectric shapes can extend through matched Absorber layers, and which source, boundary and backend combinations are admitted? |
 | [`fd-radiation.md`](fd-radiation.md) | How do continuum and Yee propagation differ for the general engine's FarField monitor, and which readings and derivatives are supported? |
 | [`scene.md`](scene.md) | What is the stack made of, and what cell does it repeat in? |
 | [`light.md`](light.md) | Which polarization arrives, on which orders, from which side? |

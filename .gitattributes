@@ -119,3 +119,16 @@ tests/test_fd_contract.py text eol=crlf
 tests/test_fd_scene.py text eol=crlf
 wavebit/fd/_runtime.py text eol=crlf
 tests/test_fd_junction.py text eol=crlf
+
+# Coupled Absorber source and raw evidence retain applied bytes.
+wavebit/fd/_kernel/constitutive_absorber.py text eol=lf
+wavebit/fd/_lower/constitutive_absorber.py text eol=lf
+wavebit/fd/_lower/constitutive.py text eol=crlf
+wavebit/fd/_lower/params.py text eol=crlf
+wavebit/fd/_lower/plan.py text eol=crlf
+tests/test_fd_constitutive_absorber.py text eol=lf
+studies/fdtd_constitutive_absorber_*.py text eol=lf
+docs/fd-constitutive-absorber.md text eol=lf
+docs/guide/fd-constitutive-absorber.md text eol=lf
+studies/results/fdtd_constitutive_absorber* -text
+studies/results/fdtd_constitutive_absorber*/** -text

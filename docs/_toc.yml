@@ -18,6 +18,7 @@ subtrees:
       - file: guide/backends
       - file: guide/time-domain
       - file: guide/general-fdtd
+      - file: guide/fd-constitutive-absorber
       - file: guide/fd-differentiation
       - file: guide/fd-radiation
       - file: guide/fd-metasurface
@@ -30,6 +31,7 @@ subtrees:
   - file: fd-conductive-film
   - file: fd-conductive-stack
   - file: fd-decay-stopping
+  - file: fd-constitutive-absorber
   - file: fd-single-pole-film
   - file: fd-debye-film
   - file: fd-two-debye-film

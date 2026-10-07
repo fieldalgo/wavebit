@@ -265,7 +265,12 @@ class Plan:
                 offsets = tuple(a - r[0] for (a, _), r in
                                 zip(spans, (term.region.z, term.region.y, term.region.x)))
                 poles.append((term.name, term.n_poles, spans, offsets))
-        return InteriorEnergy(lo=lo, hi=hi, stride=1 if self.decay is not None else ENERGY_STRIDE,
+        from .._kernel.constitutive_absorber import (AbsorberConstitutiveTerm,
+                                                    AbsorberConstitutiveEnergy)
+        observer = (AbsorberConstitutiveEnergy if any(
+            isinstance(t, AbsorberConstitutiveTerm) for t in self.constitutive)
+                    else InteriorEnergy)
+        return observer(lo=lo, hi=hi, stride=1 if self.decay is not None else ENERGY_STRIDE,
                               dt=self.dt,
                               ratio=self.dt / self.dx, steps=self.steps, poles=tuple(poles),
                               planes=_mirror_planes(self.face_rules, lo, hi),
