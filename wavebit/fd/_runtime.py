@@ -78,6 +78,12 @@ JAX and Torch it is the functional ``acc + phase * view``. ``energy`` is ``sum |
 the region for the decay diagnostic, with the gradient stopped on every backend (it is a
 diagnostic; tracking it would put the region into the backward pass for nothing).
 
+**Concrete stopping amplitudes.** ``state_amplitude`` and ``positive_maximum`` are
+used only by the optional Decay executor. NumPy/Torch use component abs/max; JAX uses
+sign-cleared float64 integer keys for both reductions so a positive subnormal is not
+flushed to zero. Nonfinite values become sticky +Inf. These primitives do not claim
+a derivative and do not change the existing fixed-length solver arithmetic.
+
 **x64 on JAX.** ``wavebit._core.backend.lift_jax_x64(required=True)`` is called right after
 JAX is imported and before any array is built; it is the one door. JAX is imported lazily
 here, behind the backend choice, so ``import wavebit`` never pulls it in.
@@ -92,6 +98,23 @@ __all__ = ['runtime', 'BACKENDS']
 BACKENDS = ('numpy', 'jax', 'torch')
 
 _DTYPES = {'float64': np.float64, 'complex128': np.complex128}
+
+
+def _native_state_amplitude(rt, array):
+    """Component amplitude for the native CPU NumPy/Torch stopping reductions."""
+    if any(n == 0 for n in array.shape):
+        return rt.array(0.0, 'float64')
+    xp = rt.xp
+    value = xp.max(xp.abs(xp.real(array)))
+    if 'complex' in str(array.dtype):
+        value = xp.maximum(value, xp.max(xp.abs(xp.imag(array))))
+    return xp.where(xp.isfinite(value), value, xp.full_like(value, np.inf))
+
+
+def _native_positive_maximum(xp, a, b):
+    """Nonnegative maxima, with any nonfinite input permanently represented by +Inf."""
+    value = xp.maximum(a, b)
+    return xp.where(xp.isfinite(value), value, xp.full_like(value, np.inf))
 
 
 def _flatten(tree):
@@ -149,6 +172,14 @@ class _Functional:
     #: interior's energy after its H update from both, ``wavebit/fd/_kernel/step.py``).
     in_place = False
 
+    def state_amplitude(self, array):
+        """Concrete stopping norm; no square, complex modulus or mixed-unit sum."""
+        return _native_state_amplitude(self, array)
+
+    def positive_maximum(self, a, b):
+        """Stopping-window maximum of nonnegative arrays; nonfinite is sticky."""
+        return _native_positive_maximum(self.xp, a, b)
+
     def scratch(self, key, shape, dtype):
         return None
 
@@ -200,6 +231,14 @@ class NumpyRuntime:
             raise ValueError(f"backend='numpy' has one device, the CPU; device={device!r} "
                              f"names another.")
         self._buffers = {}
+
+    def state_amplitude(self, array):
+        """Concrete stopping norm; no square, complex modulus or mixed-unit sum."""
+        return _native_state_amplitude(self, array)
+
+    def positive_maximum(self, a, b):
+        """Stopping-window maximum of nonnegative arrays; nonfinite is sticky."""
+        return _native_positive_maximum(self.xp, a, b)
 
     def dtype(self, name):
         return _DTYPES[name]
@@ -412,6 +451,36 @@ class JaxRuntime(_Functional):
         if fn is None:
             fn = self._compiled[key] = self.jit(make_fn())
         return fn
+
+    def _amplitude_keys(self, value):
+        """Nonnegative IEEE-754 keys, preserving every float64 subnormal bit.
+
+        Structural stopping gate attempt 1 measured abs/max on JAX CPU mapping 1e-323
+        to zero. Float comparison in the later window merge can flush it again, so both
+        reductions stay in integer space. Clearing the sign makes positive finite
+        float64 values monotonically ordered int64 keys. Clamp every NaN/Inf encoding
+        to +Inf, which remains a permanent failure of the concrete stopping criterion.
+        This does not change field arithmetic or runtime/XLA configuration.
+        """
+        if value.dtype != self.xp.dtype('float64'):
+            raise ValueError('DecayMetricDtype: the stopping metric requires float64 components.')
+        bits = self.jax.lax.bitcast_convert_type(value, self.xp.int64)
+        positive = self.xp.bitwise_and(bits, self.xp.int64(0x7fffffffffffffff))
+        return self.xp.minimum(positive, self.xp.int64(0x7ff0000000000000))
+
+    def state_amplitude(self, array):
+        """Exact component maximum of the represented float64 values, including subnormals."""
+        if any(n == 0 for n in array.shape):
+            return self.array(0.0, 'float64')
+        key = self.xp.max(self._amplitude_keys(self.xp.real(array)))
+        if 'complex' in str(array.dtype):
+            key = self.xp.maximum(key, self.xp.max(self._amplitude_keys(self.xp.imag(array))))
+        return self.jax.lax.bitcast_convert_type(key, self.xp.float64)
+
+    def positive_maximum(self, a, b):
+        """Merge stopping-window metrics in integer space; return the selected float bits."""
+        keys = self.xp.maximum(self._amplitude_keys(a), self._amplitude_keys(b))
+        return self.jax.lax.bitcast_convert_type(keys, self.xp.float64)
 
     def dtype(self, name):
         return self.xp.dtype(name)

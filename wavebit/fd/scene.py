@@ -26,14 +26,14 @@ skeleton -- so it is concretised at the door through ``_spec.static_float`` /
 here.
 
 Named refusals. A keyword a later stage will take is refused here by name -- ``Scene(
-decay=...)`` raises ``NotImplementedError`` naming stage 7 -- rather than by the generic
+decay=...)`` raises ``NotImplementedError`` naming ``Run(decay=Decay(...))`` -- rather than by the generic
 unknown-keyword message, so the reader learns the plan and not only the spelling.
 """
 import math
 
 from ._spec import spec, static_float, static_int
 from .boundaries import Boundaries
-from .monitors import MONITOR_TYPES, Record
+from .monitors import MONITOR_TYPES, Decay, Record
 from .sources import InitialField
 
 __all__ = ['Domain', 'Resolution', 'Run', 'Scene', 'COURANT_DEFAULT']
@@ -56,7 +56,7 @@ _LATER = {
                  "tuple of Scene(structures=(fd.Structure(shape, material), ...))",
     'structure': 'stage 4 (shapes); one structure is still Scene(structures=(...,))',
     'shapes': 'stage 4 (shapes); stage 1 has fd.Slab, inside a Scene(structures=...)',
-    'decay': 'stage 7 (Decay)',
+    'decay': 'use Run(decay=Decay(threshold=..., window=...)) with an explicit hard cap',
     'source': "not the stage 2 spelling: sources are a tuple, Scene(sources=(fd.Dipole(...), "
               "fd.PlaneWave(...), fd.TFSF(...)))",
     'pml': "not the stage 1 spelling: an absorber is a FACE, so it goes in Boundaries -- "
@@ -132,17 +132,23 @@ class Run:
     known. It needs every source to share one concrete band centre, and a scene with no
     source has nothing to count periods of; both are refused by the plan. ``time=`` (stage 3)
     is an end time in the scene's length unit (``c = 1``): ``ceil(time / dt)`` steps, so the
-    last E sample is at or just past ``time``. Exactly one of the three. Stopping on a decay
-    criterion is stage 7; stage 3 measures the decay after the run instead
-    (``res.diagnostics``).
+    last E sample is at or just past ``time``. Exactly one of the three is required.
+    Optional ``decay=Decay(threshold=..., window=...)`` treats that length as a hard cap
+    and can stop at a complete qualifying state-amplitude window. Both criterion values
+    are explicit; see :class:`~wavebit.fd.Decay` for its concrete CPU/source restrictions.
+    ``res.plan.steps`` is the actual prefix and ``res.diagnostics['stopping']`` retains
+    the cap and the reason. Without ``decay`` the fixed-length execution is unchanged.
     """
 
     steps: int = None
     courant: float = COURANT_DEFAULT
     periods: object = None
     time: object = None
+    decay: object = None
 
     def __post_init__(self):
+        if self.decay is not None and type(self.decay) is not Decay:
+            raise TypeError('Run(decay=...): use fd.Decay(threshold=..., window=...).')
         given = [k for k in ('steps', 'periods', 'time') if getattr(self, k) is not None]
         if len(given) > 1:
             raise ValueError(f'Run({", ".join(f"{k}={getattr(self, k)!r}" for k in given)}): '
@@ -181,17 +187,17 @@ class Run:
 
 _run_init = Run.__init__
 
-#: Run keywords that name stage 7's decay-driven stopping; refused by the stage.
-_RUN_LATER = ('decay', 'until', 'shutoff', 'stop')
+#: Other stopping spellings remain unsupported; Decay is an explicit Run field.
+_RUN_LATER = ('until', 'shutoff', 'stop')
 
 
 def _run_init_with_stages(self, *args, **kwargs):
     later = [k for k in kwargs if k in _RUN_LATER]
     if later:
         raise NotImplementedError(
-            f'Run({later[0]}=...): stopping a run on a decay criterion is stage 7 (Decay). '
-            f'Stage 3 takes Run(steps=), Run(periods=) or Run(time=) and measures the decay '
-            f"after the run -- res.diagnostics['decay'] and fd.UnsettledFieldWarning.")
+            f'Run({later[0]}=...): use Run(decay=Decay(threshold=..., window=...)) '
+            f'with one explicit steps, periods or time hard cap; arbitrary stopping '
+            f'callbacks and these alternate spellings are not supported.')
     _run_init(self, *args, **kwargs)
 
 

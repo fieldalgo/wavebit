@@ -150,7 +150,7 @@ def _encode(v):
                 [[f.name, _digest(getattr(v, f.name)) if f.metadata.get('digest')
                   else _encode(getattr(v, f.name))]
                  for f in dataclasses.fields(v)
-                 if not (isinstance(v, Plan) and f.name in ('junctions', 'shape_ranges')
+                 if not (isinstance(v, Plan) and f.name in ('junctions', 'shape_ranges', 'decay')
                          and not getattr(v, f.name))]]
     if isinstance(v, (tuple, list)):
         return ['tuple', [_encode(x) for x in v]]
@@ -207,6 +207,7 @@ class Plan:
     schedule: object = None      # checkpoint block size; None is a plain scan
     junctions: tuple = ()        # static flush-pair geometry and write masks
     shape_ranges: tuple = ()     # index, kind, support bounds, then any orientation/vertex count
+    decay: object = None        # optional concrete state-amplitude stopping configuration
     skeleton: str = ''
 
     @property
@@ -233,7 +234,8 @@ class Plan:
     @property
     def energy(self):
         """The interior-energy observer: every cell but the PML faces', read every
-        ``ENERGY_STRIDE`` steps, with the part of each dispersive structure's pole term that
+        ``ENERGY_STRIDE`` steps (every step for an enabled Decay, so any returned execution
+        prefix has complete energy rows), with the part of each dispersive structure's pole term that
         lies inside them (``wavebit/fd/_kernel/observe.py::InteriorEnergy``). An ``Absorber``'s
         cells are judged with the rest: a passive loss backed by a wall, whose energy is
         physical and returns part of what it holds.
@@ -263,7 +265,8 @@ class Plan:
                 offsets = tuple(a - r[0] for (a, _), r in
                                 zip(spans, (term.region.z, term.region.y, term.region.x)))
                 poles.append((term.name, term.n_poles, spans, offsets))
-        return InteriorEnergy(lo=lo, hi=hi, stride=ENERGY_STRIDE, dt=self.dt,
+        return InteriorEnergy(lo=lo, hi=hi, stride=1 if self.decay is not None else ENERGY_STRIDE,
+                              dt=self.dt,
                               ratio=self.dt / self.dx, steps=self.steps, poles=tuple(poles),
                               planes=_mirror_planes(self.face_rules, lo, hi),
                               constitutive=self.constitutive)
@@ -288,7 +291,7 @@ def _finish(p):
     static = {f.name: getattr(p, f.name) for f in dataclasses.fields(p) if f.name != 'skeleton'}
     # Omit absent additions, including in nested column plans in _encode above.
     # This preserves every existing skeleton for a scene that does not use them.
-    for name in ('junctions', 'shape_ranges'):
+    for name in ('junctions', 'shape_ranges', 'decay'):
         if not getattr(p, name):
             static.pop(name)
     return dataclasses.replace(p, skeleton=skeleton_of(**static))
@@ -426,6 +429,8 @@ def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
     operator :func:`~wavebit.fd._lower.stencil.prepare` takes as it is when it was prepared
     from the same arguments, instead of solving it again (every door still runs).
     """
+    from .._decay import validate_scene, validate_plan
+    validate_scene(scene)
     from .shape_ranges import traced, remember, name as traced_name
     if traced(scene):
         raise ValueError(f'fd.plan requires concrete {traced_name(scene)} geometry; build the plan '
@@ -472,7 +477,7 @@ def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
              has_H0=initial is not None and initial.H is not None,
              cpml=cpml, absorbing_faces=absorbing, pml_cells=pml_cells,
              absorber_cells=absorber_cells, pml_wavelengths=wavelengths, spans=spans,
-             junctions=junctions, shape_ranges=shape_ranges(scene))
+             junctions=junctions, shape_ranges=shape_ranges(scene), decay=scene.run.decay)
     p = _finish(p)
     checks.check_absorbing_layers(scene, p)
     checks.check_stability(scene, p)
@@ -508,5 +513,6 @@ def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
         # checks._lift_notes reads it for this scene only (identity), so fd.run's report after
         # the run does not lower the scene a third time.
         object.__setattr__(p, '_lifted', (scene, lifted))
+    validate_plan(scene, p)
     remember(scene, p)
     return p

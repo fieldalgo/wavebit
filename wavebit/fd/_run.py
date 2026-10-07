@@ -77,6 +77,9 @@ def execute(plan, params, rt):
     that is also the compile cache's key, so a prepared operator lives exactly as long as the
     caller's plan does, on JAX too.
     """
+    if plan.decay is not None:
+        raise ValueError('DecayExecutionRefused: use fd.run(scene) for a Decay plan; '
+                         'the fixed-length executor has no source-eligibility context.')
     plan = _program(plan)
 
     def make():
@@ -171,6 +174,12 @@ def _stable(params, rt):
 
 def _solve(scene, p, rt, grazing=None):
     params = lower(scene, p, rt)
+    if p.decay is not None:
+        from ._decay import execute as execute_decay
+        actual, state, stopping = execute_decay(scene, p, params, rt)
+        result = _results(scene, actual, state, rt, params, grazing)
+        result.diagnostics['stopping'] = stopping
+        return result
     state = execute(p, params, rt)
     return _results(scene, p, state, rt, params, grazing)
 
@@ -184,6 +193,8 @@ def _planned(scene, reuse=None):
     which on the test fixture was 3 of a 4 second run, and 493 s on the 56-cell research
     sphere. Every door still runs, and the skeleton comparison below still decides.
     """
+    from ._decay import validate_scene
+    validate_scene(scene)
     rows = []
     from ._lower.shape_ranges import planning_scene
     concrete = planning_scene(scene, reuse)
@@ -207,7 +218,14 @@ def _other_polarization(scene):
 
 
 def run(scene, backend='numpy', plan=None, device=None):
-    """Run ``scene`` on ``backend`` (``'numpy'`` | ``'jax'`` | ``'torch'`` or ``wavebit.Backend``)."""
+    """Run ``scene`` on ``backend`` (``'numpy'`` | ``'jax'`` | ``'torch'`` or ``wavebit.Backend``).
+
+    With explicit ``Run(decay=Decay(...))`` the concrete CPU executor checks complete
+    windows, returns only the actual prefix, and records cap/reason/group amplitudes in
+    ``diagnostics['stopping']``. The returned early-result plan describes that prefix;
+    build a fresh capped plan to repeat the original requested run. Fixed runs keep
+    their existing execution, differentiation and result contracts.
+    """
     # The survey is always this scene's: from its own plan, even when the caller passes one
     # (a plan with the same skeleton may be another scene's, whose materials it does not hold).
     p, rows = _planned(scene, reuse=plan)

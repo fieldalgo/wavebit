@@ -25,7 +25,7 @@ def _is_complex(v):
     return dtype is not None and 'complex' in str(dtype)
 
 
-def _component(name, c, entry, grid, field, rt, dtype, flat=()):
+def _component(name, c, entry, grid, field, rt, dtype, flat=(), concrete_only=False):
     shape = (grid.n[2], grid.n[1], grid.n[0])
     if entry is None:
         return rt.zeros(shape, dtype)
@@ -34,6 +34,9 @@ def _component(name, c, entry, grid, field, rt, dtype, flat=()):
         for a in flat:
             coords[a] = coords[a] * 0.0 + grid.low[a]
         entry = entry(*coords)
+    if concrete_only:
+        from .._decay import reject_carried
+        reject_carried(entry)
     if dtype == 'float64' and _is_complex(entry):
         raise ValueError(
             f'InitialField({name}=...): the {"xyz"[c]} component is complex but the run is '
@@ -51,13 +54,16 @@ def _component(name, c, entry, grid, field, rt, dtype, flat=()):
     return x
 
 
-def evaluate(name, value, grid, field, rt, dtype, flat=()):
+def evaluate(name, value, grid, field, rt, dtype, flat=(), concrete_only=False):
     """``value`` (an ``InitialField.E`` or ``.H`` entry) as a ``(3, nz, ny, nx)`` array, or None.
 
     ``flat`` are the ``Axis1D`` axes (0, 1, 2), evaluated at their low coordinate.
     """
     if value is None:
         return None
+    if concrete_only:
+        from .._decay import reject_carried
+        reject_carried(value)
     shape = (3, grid.n[2], grid.n[1], grid.n[0])
     if hasattr(value, 'shape') and not callable(value):
         if tuple(value.shape) != shape:
@@ -68,6 +74,6 @@ def evaluate(name, value, grid, field, rt, dtype, flat=()):
                              f'Bloch face); take its real part or give a Bloch boundary.')
         return rt.array(value, dtype)
     entries = (value, value, value) if callable(value) else tuple(value)
-    parts = [_component(name, c, e, grid, field, rt, dtype, flat)
+    parts = [_component(name, c, e, grid, field, rt, dtype, flat, concrete_only)
              for c, e in enumerate(entries)]
     return rt.xp.stack(parts, axis=0)

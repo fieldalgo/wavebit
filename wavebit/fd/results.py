@@ -4,7 +4,11 @@
 component, H times for an H one) and ``values`` (an array **of the backend that ran**, so a
 JAX run hands back a JAX array and a Torch run a tensor, with any gradient graph intact).
 ``res.final.E`` and ``res.final.H`` are the fields after the last step, ``(3, nz, ny, nx)``
-on the same backend. ``res.plan`` and ``res.report`` are what the run was built from.
+on the same backend. ``res.plan`` and ``res.report`` describe the actual execution. With
+explicit ``Run(decay=Decay(...))``, their step count can be shorter than the requested hard
+cap; all time histories and DFT endpoint corrections use that actual prefix. The requested
+cap/skeleton and stop reason remain in ``res.diagnostics['stopping']``. An early-result plan
+cannot be reused as the plan of the original longer capped scene.
 
 ``res.sources[name]`` (stage 2) is each source's own reference series, a
 :class:`SourceSeries` computed by the engine in the same run: for a ``TFSF`` box and a

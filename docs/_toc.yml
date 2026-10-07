@@ -29,6 +29,7 @@ subtrees:
   - file: fd-metasurface-validation
   - file: fd-conductive-film
   - file: fd-conductive-stack
+  - file: fd-decay-stopping
   - file: fd-single-pole-film
   - file: fd-debye-film
   - file: fd-two-debye-film

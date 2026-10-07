@@ -67,8 +67,8 @@ def test_later_stages_are_refused_by_name():
     kw = dict(domain=base.domain, boundaries=base.boundaries, resolution=base.resolution,
               run=base.run)
     # Stage 2 made ``sources=`` and ``Run(periods=)`` legal; their refusals live in
-    # tests/test_fd_sources_doors.py. The stage-7 keyword is still refused by its stage.
-    with pytest.raises(NotImplementedError, match='stage 7'):
+    # tests/test_fd_sources_doors.py. Decay belongs on Run, not directly on Scene.
+    with pytest.raises(NotImplementedError, match=r'Run\(decay=Decay'):
         fd.Scene(decay=1e-6, **kw)
     # ``materials=`` and ``pml=`` are stage-1 features spelled another way, so the refusal
     # now points at the spelling rather than at the stage; ``Boundaries.open`` is the

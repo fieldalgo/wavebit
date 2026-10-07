@@ -291,11 +291,18 @@ epsilon-12 sphere converges at order 2.244; ``docs/fd-symmetric-stencil.md``); t
 (``docs/fd-mie-validation.md``). Exact volume and matching backends do not establish a
 second-order electromagnetic result for any other body.
 
+``Run(decay=Decay(threshold=..., window=...))`` optionally stops concrete CPU forward
+NumPy/JAX/Torch runs at complete state-amplitude windows, with an explicit steps/periods/time
+hard cap. Only InitialField/Dipole excitation is supported; source columns, AD and enclosing
+JAX traces are refused. Every evolving field, CPML and material array has its own peak;
+this heuristic is not a spectral-error or future-echo guarantee. Results retain only the
+actual prefix and report cap/reason in ``diagnostics['stopping']``. Both values are required.
+
 Out of scope, and refused by name rather than
 silently: shapes other than ``Slab``, ``Region``, ``Sphere``, ``Box``, ``Cylinder`` and
 ``Prism`` (CSG is later in stage 4, a tilted axis stage 5, a raster never), GPU claims (stage
 6), ``GaussianBeam``, ``ModeSource``,
-mode overlaps (``ModeMonitor``) and decay-driven stopping (``Decay``, ``Run(decay=)``) (stage 7),
+mode overlaps (``ModeMonitor``) (stage 7),
 non-uniform grids (not in v1).
 """
 from ._check import Report, check

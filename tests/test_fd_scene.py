@@ -74,7 +74,7 @@ def _static(plan):
     """The plan's static content, as ``skeleton_of`` receives it."""
     content = {f.name: getattr(plan, f.name) for f in dataclasses.fields(plan) if f.name != 'skeleton'}
     # Absent optional records preserve skeletons from before these fields existed.
-    for name in ('junctions', 'shape_ranges'):
+    for name in ('junctions', 'shape_ranges', 'decay'):
         if not getattr(plan, name):
             content.pop(name)
     return content
@@ -697,13 +697,13 @@ LATER_STAGES = [
     pytest.param('source', 'stage 2', id='source'),       # the stage-2 spelling is sources=
     pytest.param('shapes', 'stage 4', id='shapes'),
     pytest.param('structure', 'stage 4', id='structure'),
-    pytest.param('decay', 'stage 7', id='decay'),
+    pytest.param('decay', r'Run\(decay=Decay', id='decay'),
 ]
 
 
 @pytest.mark.parametrize('keyword, stage', LATER_STAGES)
 def test_a_later_stage_keyword_on_scene_is_refused_naming_the_stage(keyword, stage):
-    """Gate 9 door: a right name that is merely early is refused with its stage, not with a spelling hint."""
+    """A misplaced or pending Scene keyword names its supported spelling or stage."""
     with pytest.raises(NotImplementedError, match=stage) as e:
         fd.Scene(**{keyword: ()}, **_SCENE_KW)
     message = str(e.value)

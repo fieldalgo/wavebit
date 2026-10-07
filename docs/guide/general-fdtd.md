@@ -73,6 +73,44 @@ scene; differentiated runs follow the narrower plan-reuse rules in
 also carries `result.plan`, `result.report`, `result.sources` and
 `result.diagnostics`.
 
+## Optional early stopping
+
+For a concrete CPU transient with an initial field or Dipole sources, add an
+explicit amplitude threshold and time window to the existing capped run:
+
+```python
+scene = scene.replace(run=scene.run.replace(
+    decay=fd.Decay(threshold=1e-5, window=1.0),
+))
+result = fd.run(scene, backend='numpy')
+print(result.diagnostics['stopping']['reason'])  # 'decay' or 'cap'
+```
+
+These values illustrate the spelling; choose them for the transient being
+studied. Both arguments are required. `window` uses the same time units as
+`Run(time=...)`; `threshold` is a finite amplitude fraction strictly between
+zero and one. Keep exactly one existing `steps`, `time` or `periods` limit as
+the hard cap. A final partial window cannot satisfy the stop condition.
+
+Each full field array and each evolving material/absorber array must remain
+below the requested fraction of its own peak throughout a complete window.
+A window is eligible only after every Dipole's falling Gaussian envelope is
+below both its Band cutoff and this threshold. The waveform remains unchanged.
+Static residues or persistent oscillations can reach the cap; `reason='cap'`
+does not claim convergence. A small amplitude is not a spectral error bound.
+
+`result.plan.steps`, `result.report.steps`, histories and DFT endpoint
+corrections describe the actual executed prefix. The stopping diagnostics also
+retain `cap_steps`, the criterion and per-group amplitudes. The returned short
+plan cannot be reused for the original capped scene; keep its original
+`fd.plan(scene)` instead. Histories initially allocate for the cap, and state
+reductions add work every step, so early termination need not be faster.
+
+PlaneWave/TFSF sources, automatic differentiation, enclosing JAX transforms
+and non-CPU execution are refused for this option. Ordinary fixed-duration
+runs retain their existing contracts. See the [stopping measurement and
+limitations](../fd-decay-stopping.md).
+
 ## Units, coordinates and backends
 
 | Quantity | General-engine convention |
@@ -126,7 +164,7 @@ any member, the declaration order or the host requires a new plan.
 The film support does not extend to arbitrary curved lossy bodies, dispersive
 hosts, lossy junctions, or their geometry/material/band derivatives. General CSG,
 raster geometry, tilted extrusion axes, non-uniform grids, `GaussianBeam`,
-`ModeSource`, `ModeMonitor` and decay-triggered stopping are not implemented for
+`ModeSource` and `ModeMonitor` are not implemented for
 this engine. Exported placeholder names can still refuse construction.
 
 A successful plan or stable run is not an accuracy certificate. Refine space,

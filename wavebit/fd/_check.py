@@ -70,6 +70,8 @@ class Report:
     #: star lift of each diagonal-rule constitutive term (``stars.lift``).
     lifts: tuple = ()
     junctions: tuple = ()
+    #: (requested cap steps, amplitude threshold, requested window, window steps), or None.
+    stopping: object = None
 
     def __str__(self):
         lines = [
@@ -84,6 +86,10 @@ class Report:
              if self.params_known else
              'params     unknown (a traced value: the params could not be built on NumPy)'),
         ]
+        if self.stopping is not None:
+            cap, threshold, window, count = self.stopping
+            lines.append(f'stopping   Decay amplitude <= {threshold:g}, window {window:g} '
+                         f'({count} steps), hard cap {cap} steps; state-tail heuristic')
         for name, kind, cells in self.absorbers:
             lines.append(f'absorber   {name}  {kind}, {cells} cells')
         for axis, lo, hi, slo, shi in self.spans:
@@ -265,7 +271,14 @@ def report(scene, p=None, params=None):
                        for t in p.constitutive)
     monitors, solves = _monitor_lines(scene, p)
     from ._lower.junction import report_rows as junction_rows
+    stopping = None
+    if p.decay is not None:
+        from ._decay import window_steps
+        from ._lower.plan import run_steps
+        stopping = (run_steps(scene, p.dt), p.decay.threshold, p.decay.window,
+                    window_steps(p.decay.window, p.dt))
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
+                  stopping=stopping,
                   discretisations=_discretisation_lines(p), junctions=junction_rows(p),
                   steps=p.steps, duration=p.steps * p.dt, dtype=p.dtype,
                   bytes_per_state=(2 * 3 * p.cells * itemsize + psi + flux_memory

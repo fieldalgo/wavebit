@@ -12,6 +12,11 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_decay_stop_probe.py` | How does an early result compare with its fixed actual prefix, a longer run and independent uniform-medium recurrences? [Measurement](../docs/fd-decay-stopping.md). |
+| `fdtd_decay_stop_campaign.py` | Do fixed temporal cases satisfy the disclosed criteria with every wavelength retained and no replacement worker? [Measurement](../docs/fd-decay-stopping.md). |
+| `fdtd_decay_stop_support.py` | Which exact sources, test inputs, subprocess exits and raw logs bind the stopping evidence? [Measurement](../docs/fd-decay-stopping.md). |
+| `fdtd_decay_stop_mutations.py` | Does each deliberate production defect cause its intended assertion failure before exact source restoration? [Measurement](../docs/fd-decay-stopping.md). |
+| `fdtd_decay_stop_gates.py` | Do targeted, full and separate slow checks preserve the old references and the published documentation? [Measurement](../docs/fd-decay-stopping.md). |
 | `fdtd_conductive_stack_probe.py` | What complex reflection and transmission errors do separated conductive films produce against an independent continuum multilayer reference, including explicit host gaps and a zero-conductivity member? [Scope, instrument and validation record](../docs/fd-conductive-stack.md). |
 | `fdtd_conductive_stack_calibration.py` | How do the six disclosed coarse-grid backend responses compare before selecting optical regression ceilings for those known configurations? [Scope, instrument and validation record](../docs/fd-conductive-stack.md). |
 | `fdtd_conductive_stack_campaign.py` | Do all wavelength, polarization and placement cells converge under a fixed spatial ladder and duration/PML controls, while retaining mixed and unresolved verdicts? [Scope, instrument and validation record](../docs/fd-conductive-stack.md). |

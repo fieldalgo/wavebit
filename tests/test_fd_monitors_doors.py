@@ -16,7 +16,7 @@ The table, and where each door lives:
     Diffraction position, side, orders, polarizations       monitors.Diffraction
     ModeMonitor and Decay                                   monitors (stage 7)
     Plane: no scalar normal, two of them, a reversed span   geometry.Plane
-    Run: two lengths, a non-positive time, decay keywords   scene.Run
+    Run: two lengths, a non-positive time, explicit decay and unsupported aliases   scene.Run
     a monitor type the Scene does not know                  scene.Scene
     a plane or a box outside the domain                     scene._monitor_inside
     a plane on the edge node, a box face on the edge, an    _lower/monitors.py
@@ -164,7 +164,8 @@ def test_a_diffraction_monitor_names_its_plane_side_and_window():
 def test_mode_monitors_and_decay_stopping_are_stage_7():
     with pytest.raises(NotImplementedError, match='stage 7'):
         fd.ModeMonitor('m')
-    with pytest.raises(NotImplementedError, match='stage 7'):
+    # Decay is now explicit, but both the ratio and physical window are required.
+    with pytest.raises(TypeError, match='window'):
         fd.Decay(1e-5)
 
 
@@ -207,9 +208,11 @@ def test_run_takes_one_length_and_time_counts_steps_to_the_end_time():
 
 @pytest.mark.parametrize('keyword', ['decay', 'until', 'shutoff'])
 def test_stopping_on_decay_is_refused_naming_stage_7(keyword):
-    with pytest.raises(NotImplementedError, match='stage 7') as e:
+    # A bare ratio lacks a window; alternate stopping spellings remain refused.
+    exception = TypeError if keyword == 'decay' else NotImplementedError
+    with pytest.raises(exception, match='Decay') as e:
         fd.Run(steps=10, **{keyword: 1e-5})
-    assert "res.diagnostics['decay']" in str(e.value)
+    assert 'window' in str(e.value)
 
 
 # ---------------------------------------------------------------------------------------------

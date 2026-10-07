@@ -337,10 +337,34 @@ def ModeMonitor(*args, **kwargs):
                               'fd.FarField and fd.Diffraction.')
 
 
-def Decay(*args, **kwargs):
-    """Refused by name: stopping on decay is stage 7."""
-    raise NotImplementedError('fd.Decay (stopping a run when the field has decayed) belongs to '
-                              'stage 7. Stage 3 runs for Run(steps=), Run(periods=) or '
-                              'Run(time=), and measures the decay after the run: '
-                              "res.diagnostics['decay'], and fd.UnsettledFieldWarning when a "
-                              'frequency-domain monitor was stopped too early.')
+@spec(positional=('threshold',))
+class Decay:
+    """An optional state-amplitude stopping heuristic inside an explicit hard run cap.
+
+    Both ``threshold`` and ``window`` are required. Threshold is an amplitude ratio in
+    (0, 1); window is a positive duration in the scene's length unit (c=1). At every step,
+    E, H, each CPML history and each supported material-memory array are measured
+    separately by max(abs(real), abs(imag)), relative to their own all-time peak.
+    Only complete non-overlapping windows can stop. All groups must pass, a field must
+    have been excited, and every source's trailing Gaussian envelope must have reached
+    min(its Band.cutoff, threshold) before the window starts. Nonfinite state prevents
+    success. Static residual material memory can legitimately keep the run at its cap.
+
+    Use ``Run(time=..., decay=Decay(threshold=..., window=...))``. The first scope is
+    concrete forward CPU NumPy/JAX/Torch with InitialField/Dipole excitation, not source
+    columns, AD or an enclosing JAX trace. This is not an energy or spectral-error bound,
+    and it cannot predict a later echo. The fixed-length run remains the default.
+    """
+
+    threshold: float
+    window: float
+
+    def __post_init__(self):
+        threshold = static_float('Decay', 'threshold', self.threshold)
+        window = static_float('Decay', 'window', self.window)
+        if not (math.isfinite(threshold) and 0 < threshold < 1):
+            raise ValueError('Decay(threshold=...): a finite amplitude ratio in (0, 1) is required.')
+        if not (math.isfinite(window) and window > 0):
+            raise ValueError('Decay(window=...): a finite positive duration is required.')
+        object.__setattr__(self, 'threshold', threshold)
+        object.__setattr__(self, 'window', window)

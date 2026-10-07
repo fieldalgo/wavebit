@@ -321,7 +321,7 @@ def test_no_junction_never_classifies_or_changes_the_skeleton(monkeypatch):
     assert plan.junctions == ()
     assert plan.shape_ranges == ()
     original_static = {f.name: getattr(plan, f.name) for f in dataclasses.fields(plan)
-                       if f.name not in ('skeleton', 'junctions', 'shape_ranges')}
+                       if f.name not in ('skeleton', 'junctions', 'shape_ranges', 'decay')}
     assert plan.skeleton == skeleton_of(**original_static)
     assert not quiet(fd.check, scene).junctions
 

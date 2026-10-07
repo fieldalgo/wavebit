@@ -97,3 +97,25 @@ studies/results/fdtd_conductive_stack*/** -text
 studies/fdtd_conductive_stack_documentation.py text eol=crlf
 studies/fdtd_conductive_stack_targeted.py text eol=crlf
 studies/fdtd_conductive_stack_validation.py text eol=crlf
+
+# Automatic stopping source and original validation records retain tested bytes.
+wavebit/fd/__init__.py text eol=crlf
+wavebit/fd/_check.py text eol=crlf
+wavebit/fd/_decay.py text eol=lf
+wavebit/fd/_lower/fields.py text eol=crlf
+wavebit/fd/_lower/params.py text eol=crlf
+wavebit/fd/_lower/plan.py text eol=crlf
+wavebit/fd/_run.py text eol=crlf
+wavebit/fd/monitors.py text eol=crlf
+wavebit/fd/results.py text eol=crlf
+wavebit/fd/scene.py text eol=crlf
+studies/fdtd_decay_stop_*.py text eol=lf
+tests/test_fd_decay_stop.py text eol=lf
+docs/fd-decay-stopping.md text eol=lf
+studies/results/fdtd_decay_stop* -text
+studies/results/fdtd_decay_stop*/** -text
+tests/test_fd_monitors_doors.py text eol=crlf
+tests/test_fd_contract.py text eol=crlf
+tests/test_fd_scene.py text eol=crlf
+wavebit/fd/_runtime.py text eol=crlf
+tests/test_fd_junction.py text eol=crlf

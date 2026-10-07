@@ -79,6 +79,9 @@ def lower(scene, plan, rt='numpy', device=None):
     discretisation would otherwise get that one silently. A scene and a plan with no such
     structure pass it after one loop over each.
     """
+    from .._decay import validate_plan, validate_runtime, reject_carried
+    validate_plan(scene, plan)
+    stopping = plan.decay is not None
     from .stencil import refuse_discretisation
     refuse_discretisation(scene, plan)
     from .conductive_stack import refuse_mismatch as refuse_stack_mismatch
@@ -121,6 +124,8 @@ def lower(scene, plan, rt='numpy', device=None):
     if not hasattr(rt, 'slab_add'):
         from .._runtime import runtime
         rt = runtime(rt, device)
+    if stopping:
+        validate_runtime(rt)
     grid = plan.grid
     real = 'float64'
     params = dict(build_coefficients(scene, plan, rt))
@@ -176,6 +181,8 @@ def lower(scene, plan, rt='numpy', device=None):
     initial = scene.initial
     if initial is None:
         params['amplitude'] = rt.array(1.0, plan.dtype)
+        if stopping:
+            reject_carried(params)
         return params
     amp = initial.amplitude
     if plan.dtype == 'float64' and (isinstance(amp, complex)
@@ -191,8 +198,12 @@ def lower(scene, plan, rt='numpy', device=None):
     params['amplitude'] = rt.array(amp, plan.dtype)
     flat = tuple(a for a, axis in enumerate(AXES)
                  if isinstance(getattr(scene.boundaries, axis)[0], Axis1D))
-    params['E0'] = evaluate('E', initial.E, grid, 'E', rt, plan.dtype, flat)
-    params['H0'] = evaluate('H', initial.H, grid, 'H', rt, plan.dtype, flat)
+    params['E0'] = evaluate('E', initial.E, grid, 'E', rt, plan.dtype, flat,
+                            concrete_only=stopping)
+    params['H0'] = evaluate('H', initial.H, grid, 'H', rt, plan.dtype, flat,
+                            concrete_only=stopping)
+    if stopping:
+        reject_carried(params)
     return params
 
 
