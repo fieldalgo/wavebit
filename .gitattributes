@@ -84,3 +84,16 @@ tests/test_fd_inactive_lorentz.py text eol=lf
 studies/results/fdtd_inactive_lorentz* -text
 studies/results/fdtd_inactive_lorentz*/** -text
 docs/guide/general-fdtd.md text eol=lf
+
+# Conductive-stack source and raw evidence preserve validated bytes.
+wavebit/fd/_lower/conductive_stack.py text eol=lf
+studies/fdtd_conductive_stack_*.py text eol=lf
+tests/test_fd_conductive_stack.py text eol=lf
+docs/fd-conductive-stack.md text eol=lf
+studies/results/fdtd_conductive_stack* -text
+studies/results/fdtd_conductive_stack*/** -text
+
+# These three runners were validated and archived with CRLF bytes.
+studies/fdtd_conductive_stack_documentation.py text eol=crlf
+studies/fdtd_conductive_stack_targeted.py text eol=crlf
+studies/fdtd_conductive_stack_validation.py text eol=crlf

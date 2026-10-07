@@ -406,7 +406,9 @@ def _pole_terms(scene, grid):
             'fd.Absorber). Stage 1 takes a dispersive material as a Structure; a dispersive '
             'background is not refused on principle, it simply has no gate behind it yet.')
     from .conductive_film import terms as conductive_terms
-    return tuple(terms) + conductive_terms(scene, grid)
+    from .conductive_stack import terms as conductive_stack_terms
+    return (tuple(terms) + conductive_terms(scene, grid)
+            + conductive_stack_terms(scene, grid))
 
 
 def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):

@@ -198,6 +198,16 @@ general dispersive interface smoothing or conductive shape/material differentiat
 The implementation and its physical-validation record are documented in
 ``docs/fd-conductive-film.md``.
 
+A finite stack of two or more such ``Conductor`` films is also admitted when
+every member has the same normal axis and their padded grid supports are
+pairwise disjoint. All structures must be members of the stack; a zero-sigma
+Conductor is allowed and retains its own reserved interface memory. The
+complete ordered stack is part of the prepared plan identity. The plain host,
+concrete geometry/material/band values, absorber clearance and no-initial-field
+restrictions remain. Every member has a bulk spectral and local relaxation-rate
+check. Touching films and stacks mixing declared pole families are outside this
+scope. See ``docs/fd-conductive-stack.md`` for the validation record.
+
 The next C8 scope admits the same concrete isolated film geometry with
 ``Dispersive(eps_inf=..., poles=(Drude(...),))`` or one ``Lorentz`` pole instead.
 It uses one spatial oscillator: arithmetic response along the film and harmonic

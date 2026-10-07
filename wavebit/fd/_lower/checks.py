@@ -425,6 +425,8 @@ def check_smoothed(scene, grid):
     smoothed = smoothed_structures(scene)
     from .conductive_film import descriptor as conductive_film
     film = conductive_film(scene, grid)
+    from .conductive_stack import descriptor as conductive_stack
+    stack = conductive_stack(scene, grid)
     from .single_pole_film import descriptor as single_pole_film
     dispersive_film = single_pole_film(scene, grid)
     if dispersive_film is None:
@@ -542,7 +544,7 @@ def check_smoothed(scene, grid):
         for material, name in media:
             if not isinstance(material, (Conductor, Dispersive)):
                 continue
-            if (film is not None or dispersive_film is not None
+            if (film is not None or stack is not None or dispersive_film is not None
                     or relaxation_film is not None) and name == where:
                 continue  # These bounded C8 film scopes carry their exact memory.
             what = ('a conductivity' if isinstance(material, Conductor)
@@ -563,7 +565,8 @@ def check_smoothed(scene, grid):
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
                 f'it), or keep it out of the smoothed shape\'s cells. C8 currently admits '
                 f'one concrete axis-aligned conductive, Drude/Lorentz-sum or Debye-sum '
-                f'film in a plain dielectric, '
+                f'film, or a same-axis Conductor-only stack with disjoint padded supports, '
+                f'in a plain dielectric, '
                 f'clear of absorbing layers, with no initial field; this scene is outside '
                 f'that measured scope.')
         for material, name in media:
@@ -1794,7 +1797,8 @@ def cfl_bound(scene, plan):
         vacuum = n_min / math.sqrt(axes)                   # an Axis1D face (stage 3)
     from .conductive_film import extra_rate as conductive_rate
     rate = resonance + coupling
-    film_rate = conductive_rate(scene, plan)
+    from .conductive_stack import extra_rate as stack_rate
+    film_rate = max(conductive_rate(scene, plan), stack_rate(scene, plan))
     if film_rate:
         rate += film_rate
     if relaxation_rate is not None:
@@ -1849,6 +1853,10 @@ def check_stability(scene, plan):
         worst = (f' The tightest pole is {name}: {type(pole).__name__}'
                  f'({", ".join(f"{f}={getattr(pole, f)!r}" for f in pole.__dataclass_fields__)}).')
     from .conductive_film import extra_rate as conductive_rate
+    from .conductive_stack import extra_rate as stack_rate
+    if stack_rate(scene, plan):
+        worst += (' The conductive stack includes the maximum induced interface '
+                  'Debye rate across all members under the existing conservative policy.')
     if conductive_rate(scene, plan):
         worst += (' The conductive film carries an induced interface Debye pole; its '
                   'conservative rate is included in this bound.')
@@ -2037,6 +2045,17 @@ def _smoothed_notes(scene, plan, rows=None):
     out = []
     from .conductive_film import descriptor
     film = descriptor(scene, plan.grid)
+    from .conductive_stack import descriptor as stack_descriptor
+    stack = stack_descriptor(scene, plan.grid)
+    if stack is not None:
+        out.append((SubpixelAccuracyWarning,
+                    f'The conductive stack has {len(stack.films)} films normal to '
+                    f'{"xyz"[stack.axis]}, each with independent induced Debye memory '
+                    'on disjoint padded support. This bounded scope admits only concrete '
+                    'parallel Conductor films in a plain lossless dielectric; touching '
+                    'films, other pole families and junctions are outside it. Validate '
+                    'observables under refinement and check duration and absorbers '
+                    'separately. See docs/fd-conductive-stack.md.'))
     if film is not None:
         out.append((SubpixelAccuracyWarning,
                     'The conductive film uses an induced Debye memory at normal mixed '
@@ -2107,7 +2126,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'plain dielectric. Validate observables under refinement and '
                     'check duration and absorbers separately. The spectral guard '
                     'covers bulk scales only. See docs/fd-hybrid-film.md.'))
-    if (len(asked) < len(smoothed) and film is None and dispersive_film is None
+    if (len(asked) < len(smoothed) and film is None and stack is None and dispersive_film is None
             and relaxation_film is None and two_relaxation_film is None
             and sum_relaxation_film is None and sum_oscillator_film is None
             and hybrid is None):
@@ -2306,6 +2325,10 @@ def _index_at(material, wavelength, *, conductive=False):
 
 def _resolution_notes(scene, plan):
     """Cells per wavelength inside every material; a metal by its skin depth instead."""
+    from .conductive_stack import notes as stack_resolution_notes
+    stack_notes = stack_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if stack_notes is not None:
+        return stack_notes
     from .single_pole_resolution import notes as film_resolution_notes
     film_notes = film_resolution_notes(scene, plan, _wavelength(scene, plan))
     if film_notes is not None:
@@ -2425,6 +2448,9 @@ def check_wavelength_resolution(scene, grid):
     same text, from :func:`_coarse_refusal`; what stays in ``warn_all`` is its warnings, and
     the scenes with no sources, whose wavelength the plan infers).
     """
+    from .conductive_stack import validate as validate_stack_resolution
+    if validate_stack_resolution(scene, grid):
+        return
     from .single_pole_resolution import validate as validate_film_resolution
     if validate_film_resolution(scene, grid):
         return
@@ -2512,9 +2538,13 @@ def _proximity_notes(scene, plan):
         from .hybrid_film import descriptor as hybrid_descriptor
         from .hybrid_resolution import index_at as film_index_at
         film = hybrid_descriptor(scene, plan.grid)
+    from .conductive_stack import descriptor as stack_descriptor, index_at as stack_index_at
+    stack = stack_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
-        if film is not None:
+        if stack is not None:
+            n, _ = stack_index_at(stack.films[index], wavelength)
+        elif film is not None:
             n, _ = film_index_at(film, wavelength)
         else:
             n, _ = _index_at(structure.material, wavelength, conductive=conductive)

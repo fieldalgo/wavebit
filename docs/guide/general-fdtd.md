@@ -109,6 +109,19 @@ report entries; summing those entries still does not include every runtime cost.
 | Cell-snapped material regions | `Slab` and `Region`; real scalar/diagonal `Material`, conductivity through `Conductor`, and passive Drude/Lorentz/Debye models through `Dispersive`, subject to the planning checks. `fd.eps_at` evaluates a pole model at a vacuum wavelength. |
 | Smoothed dielectric shapes | `Sphere`, `Box`, `Cylinder` and `Prism` have bounded isotropic lossless material, separation and boundary contracts; only specific flush junctions are admitted. See [smoothed occupancy](../fd-subpixel-occupancy.md). `discretisation='stencil'` has a separate [isolated-sphere contract](../fd-symmetric-stencil.md). |
 | Smoothed lossy or dispersive films | One concrete, unturned, unranged `Box` in a plain isotropic non-magnetic host, spanning exactly two axes with the required overhang and clearing absorbers along its finite thickness. Conductors, finite Debye sums, finite Drude/Lorentz sums and mixed families each have their own restrictions: [conductive](../fd-conductive-film.md), [Debye](../fd-debye-sum-film.md), [oscillator](../fd-oscillator-sum-film.md), [mixed-family](../fd-hybrid-film.md). |
+| Separated conductive films | Two or more concrete, unturned, unranged voxel `Box` structures, all with `Conductor` materials (including `sigma=0`), in one plain positive isotropic lossless non-magnetic `Material` host. All films share a normal axis and their padded grid supports are pairwise disjoint. Initial fields, traced geometry/material/band values, touching films and stacks mixing declared pole families are refused. See [conductive stacks](../fd-conductive-stack.md). |
+
+Declare a conductive stack with the ordinary `Scene(structures=(...))` tuple;
+there is no separate stack constructor. Each film must span the same two
+transverse axes with at least one cell of overhang on each side. Its normal
+thickness must be at least `dx`, and its padded support must clear the normal
+domain walls and all absorbing layers.
+
+Separation is checked on the actual padded, half-open grid supports, not on
+a fixed physical gap. A refusal identifies the adjacent members and their
+support intervals; enlarge the host gap or refine `dx`. A zero-conductivity
+member remains part of the declared stack and its memory allocation. Changing
+any member, the declaration order or the host requires a new plan.
 
 The film support does not extend to arbitrary curved lossy bodies, dispersive
 hosts, lossy junctions, or their geometry/material/band derivatives. General CSG,

@@ -81,6 +81,8 @@ def lower(scene, plan, rt='numpy', device=None):
     """
     from .stencil import refuse_discretisation
     refuse_discretisation(scene, plan)
+    from .conductive_stack import refuse_mismatch as refuse_stack_mismatch
+    refuse_stack_mismatch(scene, plan)
     from .conductive_film import refuse_mismatch as refuse_film_mismatch
     refuse_film_mismatch(scene, plan)
     from .single_pole_film import refuse_mismatch as refuse_dispersive_film_mismatch
@@ -95,6 +97,8 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_oscillator_sum_film_mismatch(scene, plan)
     from .hybrid_film import refuse_mismatch as refuse_hybrid_film_mismatch
     refuse_hybrid_film_mismatch(scene, plan)
+    from .conductive_stack import validate as validate_stack_resolution
+    validate_stack_resolution(scene, plan.grid)
     from .single_pole_resolution import validate as validate_film_resolution
     validate_film_resolution(scene, plan.grid)
     from .debye_resolution import validate as validate_debye_resolution
@@ -371,6 +375,8 @@ def _poles(scene, plan, rt):
             f'dispersive structure(s). A plan drives the scene it was built from; a scene '
             f'whose poles are not in the plan would run with part of its material missing. '
             f'Use fd.plan(scene) for this scene, or take the structures out of it.')
+    from .conductive_stack import pole_params as stack_poles
+    out.update(stack_poles(scene, plan, rt))
     out.update(film_poles(scene, plan, rt))
     out.update(dispersive_film_poles(scene, plan, rt))
     out.update(debye_film_poles(scene, plan, rt))

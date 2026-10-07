@@ -783,7 +783,12 @@ class Sphere(Shape):
        polarizations share a normal restoring force and the corresponding energy
        cross term. A declared mixture of Debye and Drude/Lorentz poles uses
        a hybrid recurrence with four arrays per pole and its own passive
-       integer-time storage. General conductive bodies, lossy junctions,
+       integer-time storage. A separate stack scope admits two or more of the
+       concrete Conductor films, including sigma=0, with a common normal and
+       pairwise disjoint padded grid supports in the same plain host. It keeps
+       one interface memory per member and checks all members. It does not
+       admit touching films or stacks of different declared pole families.
+       General conductive bodies, lossy junctions,
        lossy hosts and curved dispersive interfaces remain refused. See ``docs/fd-conductive-film.md``,
        ``docs/fd-single-pole-film.md``, ``docs/fd-debye-film.md``,
        ``docs/fd-two-debye-film.md``, ``docs/fd-debye-sum-film.md`` and

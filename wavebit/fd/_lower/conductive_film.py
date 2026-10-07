@@ -139,6 +139,12 @@ def terms(scene, grid):
 
 def refuse_mismatch(scene, plan):
     """A prepared film plan cannot lose its memory or change its concrete inputs."""
+    # Stack terms inherit InterfacePoleTerm. Delegate only after every real
+    # member passes the stack descriptor; its guard checks all pole memories.
+    from .conductive_stack import descriptor as stack_descriptor, refuse_mismatch as stack_guard
+    if stack_descriptor(scene, plan.grid) is not None:
+        stack_guard(scene, plan)
+        return
     held = tuple(t for t in plan.terms
                  if isinstance(t, InterfacePoleTerm)
                  or getattr(t, 'name', '').startswith('conductive['))
