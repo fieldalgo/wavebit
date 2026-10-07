@@ -4,9 +4,10 @@ One implementation of the physics sits behind a thin adapter and runs on all thr
 a result never depends on which you pick — cross-backend agreement is part of the test suite,
 not a claim.
 
-This chapter is about `rcwa()`. The time-domain solver is NumPy only and takes no `backend`
-argument at all; [`time-domain.md`](time-domain.md) says why, and the capability manifest
-publishes it per door rather than once for the package.
+This chapter is about `rcwa()`. The [periodic-stack time-domain guide](time-domain.md)
+distinguishes the legacy NumPy default from the explicit-backend route. The separate
+[general FDTD guide](general-fdtd.md) covers `fd.Scene` and its NumPy/JAX/PyTorch
+CPU backends; the device and precision contracts below belong to RCWA.
 
 ![NumPy, JAX and PyTorch](../figures/backends.png "Backends")
 

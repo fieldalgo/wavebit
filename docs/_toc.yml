@@ -17,6 +17,7 @@ subtrees:
       - file: guide/autodiff
       - file: guide/backends
       - file: guide/time-domain
+      - file: guide/general-fdtd
       - file: guide/fd-differentiation
       - file: guide/fd-radiation
       - file: guide/fd-metasurface

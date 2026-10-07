@@ -83,3 +83,4 @@ studies/fdtd_inactive_lorentz_*.py text eol=lf
 tests/test_fd_inactive_lorentz.py text eol=lf
 studies/results/fdtd_inactive_lorentz* -text
 studies/results/fdtd_inactive_lorentz*/** -text
+docs/guide/general-fdtd.md text eol=lf

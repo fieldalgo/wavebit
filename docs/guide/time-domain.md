@@ -5,6 +5,10 @@
 reads and hands back the same `Result`, so one scene is solved two ways with nothing translated
 between the answers.
 
+This page covers the periodic-stack API. For `import wavebit.fd as fd` and its
+explicit `fd.Scene` domain, sources, boundaries and named monitors, see the
+[general FDTD guide](general-fdtd.md). The scene types and conventions are separate.
+
 This path is a **research alpha**. Read the [supported scope and validation evidence](../fdtd-alpha.md)
 before using a new combination of geometry, incidence and material.
 

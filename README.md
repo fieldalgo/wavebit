@@ -22,13 +22,20 @@ through the calculation, so the same model can predict and optimize a device res
 
 The RCWA implementation runs on NumPy, JAX and PyTorch; cross-backend agreement is tested.
 
-**FDTD is an experimental research-alpha path.** It supports periodic raster
-scenes and shares the RCWA scene and result interfaces. An explicit `backend`
+**The periodic-stack FDTD entry point, `wavebit.fdtd(...)`, is an experimental
+research-alpha path.** It supports periodic raster scenes and shares the RCWA
+scene and result interfaces. An explicit `backend`
 selects the common NumPy/JAX/PyTorch engine; JAX and PyTorch support angle,
 material and constant-total layer-thickness derivatives on a fixed mesh. Omitting `backend` selects the legacy
 NumPy path. CPU execution is tested; GPU validation remains outstanding.
 See the [FDTD scope and validation report](docs/fdtd-alpha.md) before relying on a new
 geometry, angle or material combination.
+
+The separate general engine, `import wavebit.fd as fd`, uses explicit `fd.Scene`
+domains, boundaries, sources and monitors for finite or periodic problems, on
+NumPy, JAX and PyTorch CPU backends. Its own material, coordinate and angle
+contracts are in the [general FDTD guide](docs/guide/general-fdtd.md), including
+its current geometry and validation limits.
 
 ## Install
 
@@ -94,6 +101,9 @@ same scene in full, and the tutorials after it take one topic each.
 Seven rows decide whether your input means what you think it means. Every one of them is legal,
 energy-conserving and *wrong* when read backwards — no error, no warning — which is why they are
 worth the two minutes. [`docs/conventions.md`](docs/conventions.md) is the normative contract.
+This table describes the RCWA and periodic-stack interfaces; the separate
+[general FDTD conventions](docs/guide/general-fdtd.md#units-coordinates-and-backends)
+include degrees for incidence angles and normalized time units.
 
 | | |
 | --- | --- |

@@ -12,6 +12,11 @@ calculation — so the same code that predicts a device's response can also opti
 rigorous, fully vectorial RCWA solver whose physics is written once and runs on NumPy, JAX and
 PyTorch, so a result never depends on which you pick.
 
+Time-domain work has two entry points: the [periodic-stack solver](guide/time-domain.md)
+shares RCWA's scene interface; the [general FDTD engine](guide/general-fdtd.md) uses
+an explicit spatial domain with sources, boundaries and named monitors. The latter
+has its own units, array layout and bounded support contract.
+
 ::::{grid} 1 2 2 2
 :gutter: 3
 
@@ -52,7 +57,9 @@ from the code they explain.
 ## The seven conventions
 
 Each is legal, energy-conserving and *wrong* when read backwards — no error, no warning.
-[`conventions.md`](conventions.md) is the normative contract.
+[`conventions.md`](conventions.md) is the normative contract for the interfaces
+summarized here. The [general FDTD guide](guide/general-fdtd.md#units-coordinates-and-backends)
+states that engine's separate coordinate, angle and time conventions.
 
 | | |
 | --- | --- |
