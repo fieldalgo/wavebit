@@ -125,8 +125,9 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
     Shared by the ETM (:func:`solve_1d`) and SMM (:mod:`wavebit._core.scattering`) connecting
     algorithms — the mode algebra is a property of the layer, not of how layers are joined.
     Which of ``±q`` is labelled "down" is the one exception: ETM passes the layer's optical
-    thickness ``k0_d`` for the labels its recursion needs, and SMM passes nothing
-    (:func:`~wavebit._core.conventions.layer_root`).
+    thickness ``k0_d`` for the labels its recursion needs, and SMM's cascade passes nothing
+    (:func:`~wavebit._core.conventions.layer_root`) -- its field state, being the ETM's, is
+    rebuilt with ``k0_d`` where the two differ.
 
     ``dng`` is the engine's word on the layer's materials
     (:class:`~wavebit._core.conventions.DoubleNegativeLayer`), or ``None`` when it said nothing.

@@ -429,8 +429,9 @@ two thick layers, as `|ETM - SMM|` against the cap:
 | 50 um, `theta = 0.5+0.3j` | 6.8e-05 | 6.1e-14 | 2.0e-14 | 2.2e-14 | **2.2e-14** | 2.2e-14 | 2.2e-14 | 2.7 |
 | 200 um, `theta = 1.2+0.5j` | 2.6e-06 | 2.6e-06 | 2.6e-06 | 2.6e-06 | **1.9e-12** | 2.7e-12 | 4.9e-11 | 1.6 |
 
-Uncapped, near-cutoff modes grew by up to `e**167` across the 50 um layer. SMM keeps `mode_q`'s
-labels: it needs none of this, and handed the uncapped labels it broke as well.
+Uncapped, near-cutoff modes grew by up to `e**167` across the 50 um layer. SMM's cascade keeps
+`mode_q`'s labels: it needs none of this, and handed the uncapped labels it broke as well. The
+field state SMM recovers for reconstruction does need it -- see the end of this section.
 
 **What it changed.** `|ETM - SMM|` in `r0`, with the decaying labels and with `etm_mode_q`:
 
@@ -462,6 +463,49 @@ every evanescent root decaying. The continuation rule it replaced on 2026-10-02 
 (`docs/branch-cuts.md`), and under it the labels above left ETM 5.8e-06 off SMM at 100 nm. At
 1 um neither algorithm was stable: SMM gave `r0 = 4.1191+3.5004j` and moved 3.2e-02 under the
 nudge, where Maystre's cut gives `-0.6412-0.2681j` and 5.0e-15.
+
+**SMM's field state takes the ETM's labels.** Added 2026-10-09. The state SMM hands to field
+reconstruction (`scattering.py::_field_state`) is the ETM's: one vector per layer, its `+`
+amplitudes at the top, carried down through `M`, the map from the gap below the layer onto them.
+Inverting `M` presumes those modes are the waves the region below receives, which is the same
+presumption `a` makes, and the gap does not protect this step: `M` maps out of the gap into the
+layer, not across it. On the decaying labels a vacuum layer between vacuum half-spaces at
+`theta = 0.5+0.3j` had every `+` amplitude zero and its whole field in the `-` amplitudes, which
+the state has no slot for. `A_i` came out at 1e15 and `T1` at zero, and the s-polarized field had
+`|E_z|/|E| = 6e-2` where it is zero, while `R` and `T` were exact. 2ff ETM, and 4ff under either
+algorithm, were right.
+
+So where the two rules may part (a complex `k_par`, a gain layer, a layer that may hold a double
+negative) SMM rebuilds the layer on the ETM's labels for its field state, one more `eig`
+(`scattering.py::_field_labels_differ`): on a two-layer 2D raster at `truncation_order = (6, 6)`
+an SMM field solve cost 1.66x the ETM's at a real angle, where nothing is rebuilt, and 2.46x at
+`theta = 0.5+0.3j`. The reflections below each split plane are label-free
+and are still read off the cascade. The cascade itself keeps `mode_q`, and that is measured
+rather than inherited. Handed the ETM's labels, SMM's `r0` at 200 um and `theta = 1.2+0.5j` sat
+4.7e-10 off the ETM and moved 2.8e-9 under the 1e-14 nudge, against 1.9e-12 and 7.7e-12 on its
+own labels. Keeping them also leaves every amplitude of a field solve identical to the bit to
+the same solve declared below `'field'`.
+
+Worst residual against a closed-form plane wave inside a reflectionless uniform layer (the layer
+on its own medium under vacuum, `truncation_order = 0`, s and p, all six components), and SMM's
+field against the ETM's on two-layer gratings at `theta = 0.5+0.3j` (`[1, 25, 1, 25, 25, 25]` over
+2000 nm, a 6x6 raster for 2D, on `eps = 25`):
+
+| SMM 2ff, worst over s and p | before | after |
+|---|---|---|
+| vacuum on vacuum, `0.5+0.3j`: conical / 2D / TE / TM | 0.75 / 3.5 / 0.80 / 0.24 | <= 1.6e-15 |
+| `eps = 25` on its own substrate, `0.5+0.3j`: conical / 2D / TE / TM | 12 / 230 / 11 / 23 | <= 3.0e-15 |
+| gain, `eps = 25-0.5i` on itself, real `theta = 0.5`: conical / 2D / TE / TM | 1.1e4 / 1.5e6 / 11 / 0.57 | <= 3.6e-15 |
+| `eps = 4`, `mu = 2.25` on itself, `0.5+0.3j`, 2D | 4.2 | 1.1e-15 |
+| grating vs ETM: conical / TE / TM / 2D | 1.5e5 / 1.7e-3 / 5.1e-7 / 5.8e-8 | <= 4.7e-14 |
+| double negative `(-4, -1)` on itself, `theta = 0.5-0.3j`, 2D, vs ETM | 2.0 | 5e-16 |
+
+The last row is why a layer that may hold a double negative is rebuilt without asking: there
+`q**2` lies below the real axis, the plain rule's check calls the labels equal, and the mirror
+flips them. At a real `k_par` nothing is rebuilt -- the two rules pick the same root, to the bit
+-- and 134 arrays (field cells, `T1`, every layer record and amplitude over TE, TM, conical and
+2D, both incidence sides, a magnetic raster and a uniform double negative) came out
+byte-identical to the code before. `tests/test_smm_field_labels.py` pins the table.
 
 **What is left.** The cap's worst case, `sqrt(eps)`, needs a mode that grows by about 8192 across a
 layer *and* crosses an interface with a rounding-level reflection; no scene measured reached it.
@@ -549,6 +593,8 @@ permittivities `[1, X, 1, X, X, X]` over 2000 nm, 100 nm thick, on a half-space 
 | no double-negative region (every layer before this section) | Maystre's cut, capped (§10) | decaying; tie `Im(q) <= 0` |
 | uniform double negative | the **mirror**, `Re(q) + Im(q) > 0`, capped | decaying; tie `Im(q) >= 0` |
 | patterned, holding a double-negative region | **per mode**: propagation-dominated (`|Im q| > |Re q|`) with resolvable flux, the root whose flux is positive; otherwise the decaying root; capped | decaying; tie broken by the flux |
+
+SMM's column is its cascade's. Its field state takes the ETM's column (§10, the end).
 
 * **Uniform: the half-space's own rule.** `etm_mode_q(..., mirrored)` is
   `conj(etm_mode_q(conj(q**2)))` before the cap, to the bit, and equals `-i*kz` of the

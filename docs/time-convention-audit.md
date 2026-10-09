@@ -346,6 +346,11 @@ copying `boundary_kz`'s opposite tie-break, which would be a no-op dressed as a 
 > now takes them up to a growth of `eps**-0.25` across the layer and the decaying root past it
 > (`etm_mode_q`). SMM, whose gap medium no layer mode resembles, keeps `mode_q`. Measurements:
 > [`connecting-algorithms.md`](connecting-algorithms.md) §10.
+>
+> **And (2026-10-09): free for SMM's cascade, not for its field state.** The state SMM hands to
+> field reconstruction is the ETM's, a layer's `+` amplitudes walked downward, and on `mode_q`'s
+> labels it reconstructed a wrong field at a complex angle while `R` and `T` stayed exact. SMM now
+> rebuilds a layer on the ETM's labels for that state where the rules may part. Same section.
 
 ---
 
