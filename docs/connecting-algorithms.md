@@ -59,7 +59,8 @@ gratings, rather than assumed.
    lost up to 12 digits there. A double-negative layer is labelled by where its modes' power
    goes (§11); before 2026-10-04 ETM raised `LinAlgError` on a quarter of the stacks that rest
    one on its own medium. The one stack ETM cannot write is Pendry's perfect-lens pair, which
-   it names (§11).
+   it names (§11). Where a layer sets negative permittivity beside positive, SMM lost up to
+   4.5e-10 to rounding at its gap until 2026-10-09, when the gap's waves changed (§11).
 2. ETM is cheaper everywhere measured, so it is the default on both paths.
 3. A plain transfer matrix is not a third option you would ever pick. It cannot run a grating at
    all — not because layers are thick, but because **diffraction orders are evanescent**, and it
@@ -267,10 +268,10 @@ Three things bound it, and each is a decision rather than an implementation deta
   children, so carrying matrices there would change its structure and drag them across every
   `jit` and `grad` boundary.
 
-**Its ports are the two half-spaces, not the cascade's gap.** The internal gap basis (`eps_gap`
-chosen per order so `kz_gap == 1`) is a gauge, and it cancels between the entry and exit
-interface factors. Re-run a solve with `eps_gap = 2.7 + k_par^2` and these blocks move 6e-15 to
-1.8e-14 while a gap-embedded per-layer block moves 0.64 against its own magnitude. That is why
+**Its ports are the two half-spaces, not the cascade's gap.** The internal gap basis (its waves
+chosen per order, §11) is a gauge, and it cancels between the entry and exit interface factors.
+Re-run a solve with the gap's waves scaled by 2.7 and these blocks move 3.6e-15 to 7.0e-15 while
+a gap-embedded per-layer block moves 0.44 to 0.80 against its own magnitude. That is why
 these numbers are directly readable and the per-layer ones are deliberately not exposed: they
 would need `_ab_matrices`, the gap → half-space conversion, shipped beside them to mean
 anything. The note beside `_ANSWERS_LADDER` in `_core/enums.py` carries that measurement.
@@ -389,7 +390,7 @@ a *transmission*, from the layer's `+` modes into the medium below, and it is we
 when those modes are the waves that medium receives: the root `boundary_kz` gives the same plane
 wave. A `+` mode that travels *up* turns that entry of `a` into a reflection, and an interface
 that does not reflect the mode makes `a` singular. SMM never meets this, because it joins every
-layer through its gap medium, whose `kz = 1` no layer mode resembles.
+layer through its gap, whose waves no layer mode reproduces (§11).
 
 **When the labels part.** `mode_q` takes the decaying root, `Re(q) >= 0`. At every real `k_par` in
 a passive layer that is the half-space's root too, bit for bit (4e5 random media). A complex
@@ -432,6 +433,12 @@ two thick layers, as `|ETM - SMM|` against the cap:
 Uncapped, near-cutoff modes grew by up to `e**167` across the 50 um layer. SMM's cascade keeps
 `mode_q`'s labels: it needs none of this, and handed the uncapped labels it broke as well. The
 field state SMM recovers for reconstruction does need it -- see the end of this section.
+
+These and the 50 um row below were measured on SMM's gap of the time. On the gap of 2026-10-09
+(§11) the cap-8192 column reads 2.1e-13 at 50 um and 6.3e-13 at 200 um, below either
+algorithm's own floor there (the nonlinear part of the response to a 1e-14 nudge of `theta`):
+1.1e-12 to 1.2e-12 at 50 um, under either gap, and 5.2e-12 to 7.7e-12 at 200 um. The 2.2e-14
+was two rounding errors agreeing, not a bound.
 
 **What it changed.** `|ETM - SMM|` in `r0`, with the decaying labels and with `etm_mode_q`:
 
@@ -555,15 +562,17 @@ The scan ran the TE, TM, conical, 2D and 4ff paths, vacuum and glass superstrate
 were still right -- a uniform layer's orders do not mix, so a tiny diagonal entry of `a` only
 rescales its own column -- which is why this stayed hidden behind the cases that raised.
 
-**SMM met it too, at its gap medium.** SMM's labels are free in exact arithmetic (§10), and
+**SMM met it too, at its gap.** SMM's labels are free in exact arithmetic (§10), and
 `mode_q` spends the freedom on keeping `exp(-k0*q*d)` bounded: `Re(q) >= 0`, ties broken by
 `Im(q) <= 0`. That tie is the phase-down root, so a lossless double negative's propagating modes
-were labelled against their power. SMM joins every layer through a gap of `eps = 1 + kx**2`,
-`mu = 1`, whose `kz` is 1 on every order; for `eps = -2`, `mu = -1` at `kx = 1` the layer's mode
-has `kz = 1` as well, the layer is the gap's exact mirror, and the gap-to-layer factor `A` was
+were labelled against their power. SMM joined every layer through a gap of `eps = 1 + kx**2`,
+`mu = 1`, whose `kz` was 1 on every order; for `eps = -2`, `mu = -1` at `kx = 1` the layer's mode
+has `kz = 1` as well, the layer was the gap's exact mirror, and the gap-to-layer factor `A` was
 exactly singular. Period 1000 nm at 500 nm puts orders +-2 there at normal incidence: the 12 SMM
-failures above. A mode labelled by its power can never make `A` singular -- the gap's downward
-wave carries power down, and no combination of upward-power modes can match it.
+failures above. Every gap has such mirrors -- the gap of 2026-10-09 ([SMM's gap](#smms-gap-a-floor-that-was-not-a-label))
+has `(-3, -1)` in TE and `(-1, -3)` in TM at `kx = 1` -- but a mode labelled by its power can
+never make `A` singular: the gap's downward wave carries power down, and no combination of
+upward-power modes can match it.
 
 **A patterned layer holding a double negative** has modes of both kinds and modes between them.
 On 360 random patterned scenes (TE, TM, conical, 2D; double-negative backgrounds with ordinary
@@ -741,6 +750,94 @@ pole: uniform layers couple no two orders, every retained order is matched, and 
 solve it, `r = 0` and `t = 1`. [`negative-index-media.md`](negative-index-media.md) §9 has the
 measurements.
 
+### SMM's gap: a floor that was not a label
+
+Written 2026-10-09. NumPy, float64. Every number here is printed by
+[`studies/smm_gap_waves.py`](../studies/smm_gap_waves.py).
+
+A seeded sweep after this section landed found SMM losing digits ETM kept, on patterned
+double-negative TM gratings at a *real* angle -- so not §10's complex `k_par`. The *floor* of a
+solve is the nonlinear part of its response to a 1e-14 relative nudge of `theta`,
+`max |d14 - d12/100|` over every amplitude, `dN` the change under a `10**-N` nudge: what is left
+once the linear response is taken out is rounding. Grating A -- `eps = -1.68`, `mu = -0.54+0.05i`
+on 5 of 20 pixels of a 432 nm cell, `eps = 1.69` on the rest, 299 nm thick, 1089 nm, `n = 1.5`
+below, `truncation_order = 22`, `theta = 0.0963` -- had an SMM floor of 4.5e-10 against ETM's
+1.3e-13. TE was clean; TM, conical and 2D were not.
+
+**It was the gap, not the labels.** Three mechanisms were candidates: the gap SMM joins layers
+through, the flux tie `power_down_labels` breaks (a flux near `_FLUX_FLAT`), and Li's inverse
+rule where `1/eps` changes sign. Each was swapped out alone, on the gap SMM had then:
+
+| floor | ETM | SMM | `_FLUX_FLAT` 1e-6, 1e-9, 1e-15 | gap's `kz/eps` x10 | x0.1 | Laurent: ETM / SMM | SMM, today's gap |
+|---|---|---|---|---|---|---|---|
+| A | 1.3e-13 | 4.5e-10 | 4.5e-10 | 1.8e-11 | 1.3e-09 | 1.2e-13 / 5.4e-11 | 1.1e-13 |
+| B, 100 nm at 1000 nm | 6.6e-15 | 1.1e-10 | 1.1e-10 | 7.7e-12 | 1.5e-09 | 1.0e-14 / 1.3e-11 | 8.6e-15 |
+| C, 14 of 20 pixels | 1.5e-14 | 6.8e-11 | 6.8e-11 | 2.2e-12 | 6.0e-10 | 1.9e-14 / 2.6e-12 | 2.9e-14 |
+| D, lossless `(-3.55, -1.41)` beside 3.64 | 6.2e-13 | 9.0e-12 | 9.0e-12 | 1.5e-12 | 4.5e-11 | 1.6e-15 / 1.2e-14 | 4.9e-13 |
+
+The flux threshold moved no floor, to the bit: SMM lets the flux break only the tie of a mode
+whose `Re(q)` is flat, and no such mode sat near the threshold. Laurent's rule left SMM's excess
+in place (A: 5.4e-11), so the inverse rule is not the difference between the algorithms; on D it
+removes a floor both of them have, which is another matter ([below](#what-it-does-not-cover)).
+The gap's p impedance moved SMM's floor by about the factor it was scaled by.
+
+**Why the gap.** SMM joins layers through a gap of zero thickness, which cancels from every exact
+answer whatever its waves are. Until 2026-10-09 it was `eps = 1 + k_par**2`, `mu = 1`, `kz = 1`:
+s admittance `kz/mu = 1`, p impedance `kz/eps = 1/(1 + k_par**2)`. A layer sits between two gaps,
+and a mode whose own `kz/eps` differs from the gap's by a ratio `M` is nearly totally reflected
+at both: the gap-embedded layer matrix carries a transmission of order `1/M`, the star product
+recovers the physical one by summing bounces with what is below, and rounding grows by about `M`.
+An evanescent mode is damped across the layer and carries none of it; a propagating one does. An
+ordinary layer has propagating modes only at `|k_par| < n`, where `1/(1 + k_par**2)` is not far
+from `kz/eps`. A layer that sets negative permittivity beside positive also has *propagating*
+high-order modes, plasmonic and backward, whose `kz/eps` grows like `|k_par|`: A's reach
+`q = 0.12-16.6i` with `|kx|` up to 55.6, where the gap's p impedance had fallen to 1/3087. ETM
+never meets the gap. Nothing double-negative is needed: lossless metal TM gratings (`mu = 1`) stood
+up to 8.6e-10 off ETM. Loss damps those modes; lossy metals were clean.
+
+**The gap now.** `scattering._gap_waves` gives both polarizations `sqrt(1 + |k_par|**2)`, as the s
+admittance and as the p impedance. It grows like `|k_par|`, as every medium's high-order waves do.
+It is never zero, which is what `kz = 1` was for, so the gap's `W` and `V` always invert. It is
+real, so the gap's downward wave carries power down and the argument [above](#what-went-wrong) --
+no mode labelled by its power can make `A` singular -- holds as it did. And `|k_par|` keeps it
+real at a complex `k_par`, where `1 + k_par**2` vanished at `k_par = +-i`: at `theta = i*asinh(1)`
+the old gap gave non-finite efficiencies on the TM and conical paths, and today's agrees with
+ETM to 5.1e-16 and 2.7e-15. Median / worst over random scenes:
+
+| scenes | ETM floor | SMM floor, old gap | today's | SMM off ETM, old gap | today's |
+|---|---|---|---|---|---|
+| 40 TM gratings of the sweep's double negative | 3.6e-14 / 8.7e-13 | 7.6e-13 / **5.5e-09** | 3.8e-14 / 8.7e-13 | 4.8e-13 / **3.4e-09** | 1.7e-15 / 6.4e-14 |
+| 12 double negatives, TE / TM / conical | 2.0e-14 / 2.3e-13 | 5.2e-14 / 1.1e-12 | 1.7e-14 / 2.4e-13 | 4.8e-14 / 8.1e-13 | 4.3e-15 / 2.0e-14 |
+| 12 double negatives, 2D | 1.4e-13 / 2.5e-10 | 3.2e-13 / 2.5e-10 | 1.5e-13 / 2.5e-10 | 2.7e-13 / 1.3e-11 | 2.1e-14 / 3.8e-13 |
+| 12 lossless metal gratings, TM | 2.8e-14 / 9.3e-14 | 7.5e-14 / **1.1e-09** | 2.7e-14 / 2.2e-13 | 3.8e-14 / **8.6e-10** | 2.1e-15 / 7.4e-14 |
+| 12 lossy metal gratings, TM | 2.0e-14 / 7.0e-14 | 2.5e-14 / 1.1e-13 | 2.0e-14 / 6.9e-14 | 3.5e-15 / 9.1e-14 | 6.9e-16 / 3.3e-15 |
+| 12 `eps = 9..16` gratings, TM | 9.2e-15 / 1.4e-13 | 8.9e-15 / 1.4e-13 | 8.8e-15 / 1.4e-13 | 1.1e-15 / 1.0e-14 | 1.3e-15 / 4.4e-15 |
+| 12 lossy dielectric gratings, TM | 4.9e-15 / 6.9e-14 | 4.7e-15 / 6.6e-14 | 5.0e-15 / 6.9e-14 | 4.9e-16 / 2.4e-15 | 4.3e-16 / 1.3e-15 |
+| 12 stacks of 2 to 20 um layers, TM | 3.1e-13 / 5.5e-12 | 3.2e-13 / 5.5e-12 | 3.1e-13 / 5.5e-12 | 8.6e-16 / 1.1e-14 | 4.6e-16 / 1.8e-15 |
+| 12 at truncation 25 to 40, TM | 9.7e-14 / 3.9e-13 | 9.7e-14 / 4.0e-13 | 9.7e-14 / 3.9e-13 | 3.6e-15 / 2.5e-14 | 1.2e-15 / 2.9e-15 |
+
+Of the 40, 10 had an SMM floor above 1e-11 and 24 one above ten times ETM's; today, none. The 2D
+row's worst floor, 2.5e-10, is ETM's own and both algorithms share it.
+
+**What it costs.** Near a layer mode's cutoff, `q -> 0`, the mode's `kz/eps` goes to zero, and a
+larger gap impedance is a larger mismatch. On high-index gratings swept to within 1e-8 of a
+crossing (`q**2` of 5e-8 to 8e-8), SMM's floor went from 1.4e-14 to 1.2e-13 (TM, `eps = 4`) and
+from 1.4e-13 to 2.1e-13 (TE, `eps = 12`); at `eps = 12` in TM it fell, 1.5e-13 to 5.6e-14. ETM's
+floor there is 1.3e-14 to 5.2e-14. Further from the crossing (`q**2` of 5e-6 and more) the two
+gaps' floors differ by at most 5e-15.
+
+**Every SMM answer moved, by rounding.** The gap is a gauge: with both its waves scaled by 2.7
+the observables moved at most 4.1e-15 and the whole-stack blocks 3.6e-15 to 7.0e-15, on a TM, a
+conical and a 2D stack, while a gap-embedded layer block moved 0.44 to 0.80 of its own size.
+Develop's gap is restored in the study (and in the tests' controls) as `(1, 1/(1 + k_par**2))`,
+and that control is develop to the byte on 24 of 24 arrays of the TE, TM, conical and 2D paths lit
+from either side; against develop, today's gap moved those amplitudes by up to 1.7e-10, which
+was develop's error. `tests/test_scattering_core.py::test_negative_permittivity_is_no_harder_for_smm_than_for_etm`
+pins SMM to ETM within 1e-13 on a TM, a conical and a 2D double-negative grating and a lossless
+metal one, where develop's gap stood 4.4e-11 to 1.0e-10 off, and
+`::test_the_gap_has_waves_at_an_imaginary_k_par` the `theta = i*asinh(1)` scenes; each has the
+control that restores develop's gap and must break it.
+
 ### What it does not cover
 
 * **At and near normal incidence, a lossless double negative beside an ordinary region can be
@@ -750,11 +847,21 @@ measurements.
   nearly defective pair of modes at `kx = 0`. The third, a lossless `(-2, -1)` layer patterned
   with a metal, stays 6.9e-05 apart up to 1e-6 rad off the normal and is 5.6e-10 apart at 1e-4,
   also identically before and after. Not a labelling question, and not caught by `auto_detune`,
-  since nothing raises.
-* **Lossless half-and-half mixtures on the conical path** stay 1e-11 to 1.5e-10 apart (`(-2, -1)`
-  beside `(2, 1.5)`, fill 0.5), before and after: the inverse rule's `[[1/eps]]` averages to nearly
-  zero there and puts eigenvalues near `1e9` in the second mode family. The amplitudes swing by a
-  factor of three with `theta` at 1e-9; 1e-6 of loss brings the two algorithms to 1e-13.
+  since nothing raises. (Measured on the gap of 2026-10-04 and not rebuilt since: random
+  `(-2, -1)` layers patterned with metals away from half fill stood within 8.4e-13 of ETM at
+  `theta = 0`, 1e-6 and 1e-4 on that gap and within 1.4e-13 on today's.)
+* **Lossless mixtures of exact opposites at exactly half fill** -- `(-2, -1)` beside `(2, 1.5)`,
+  fill 0.5, on the conical path -- put the cell average of `1/eps` (and of `eps`) at zero, so
+  Li's `[[1/eps]]` (and Laurent's `[[eps]]`) is singular to rounding and puts eigenvalues near
+  `1e9` in the second mode family. Neither algorithm answers there. This section measured 1e-11 to
+  1.5e-10 between them on its scenes; over 32 rebuilt ones they stood up to 1.8e-05 apart at
+  truncation 5 and 1.9e-03 at 10 (2.0e-04 and 9.0e-02 on the gap before 2026-10-09). The
+  amplitudes swing by a factor of three with `theta` at 1e-9. Moving the fill to 8/20 or the
+  positive permittivity to 2.2 brings them to 9.6e-13 at truncation 10, and 1e-6 of loss to
+  4.2e-12 (5.1e-13 at truncation 5).
+* **Li's inverse rule on a lossless high-contrast mixture** can leave a floor both algorithms
+  share: D of [SMM's gap](#smms-gap-a-floor-that-was-not-a-label), 6.2e-13 on ETM and 4.9e-13 on
+  SMM, is 1.6e-15 on ETM under `factorization='laurent'`. Not a connecting-algorithm question.
 * **Anisotropic double negatives** count only when every lab-frame diagonal entry of both
   tensors is negative; a hyperbolic layer keeps Maystre's labels -- unless it is rotated so that
   its lab-frame diagonal is all negative, which the test reads as a double negative. So do its backward modes, if it has any,

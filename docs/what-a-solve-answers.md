@@ -252,16 +252,19 @@ shape the field state had before this. What shipped instead is `solver.scatterin
 `ScatteringMatrix` of the whole stack's four blocks, riding `'amplitude'` rather than a rung of
 its own. Three measurements decided that.
 
-**The gap basis is a gauge, and the whole-stack blocks are outside it.** `eps_gap` is chosen per
-order so `kz_gap == 1`. Re-run a solve with `2.7 + k_par^2` instead of `1 + k_par^2`:
+**The gap basis is a gauge, and the whole-stack blocks are outside it.** The gap's waves are
+chosen per order, `sqrt(1 + |k_par|^2)` as the s admittance and the p impedance
+([`connecting-algorithms.md`](connecting-algorithms.md) §11). Re-run a solve with them scaled by
+2.7, on a TM, a conical and a 2D stack (measured 2026-10-09; on the gap before it,
+`eps = 1 + k_par^2` and `kz = 1`, swapping in `2.7 + k_par^2` drew the same picture):
 
 | | moves by |
 | --- | --- |
-| observables (`T`, `r_s`) | 2.1e-15, 0.0–1.7e-15 |
-| whole-stack blocks | 6.0e-15 – 1.8e-14 |
-| `S_layers[0].S11` | **0.64** |
-| `gamma[0]` | **0.49** |
-| `S_ref.S11` | **0.44** |
+| observables (`T`, `r_s`) | 0.9e-15 – 4.1e-15, 0.0 – 2.0e-15 |
+| whole-stack blocks | 3.6e-15 – 7.0e-15 |
+| `S_layers[0].S11` | **0.44 – 0.80** |
+| `gamma[0]` | **0.44 – 0.80** |
+| `S_ref.S11` | **0.34 – 0.81** |
 
 each against its own magnitude. The entry and exit interface factors cancel the gap between
 them, leaving the two half-spaces as the whole-stack matrix's ports — so those blocks are
