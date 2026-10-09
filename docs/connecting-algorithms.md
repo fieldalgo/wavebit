@@ -674,12 +674,13 @@ rank by label growth, or let each slice decide alone.
   12 um: 1.0e-15 before); of 2,370 random split stacks at complex angles, 31 that were answered
   before now raise, every one with an uncut layer that raises too. Where that order is lit, the exact answer is a knife edge: past 30-50 um one ulp of
   the layer's permittivity moves it by O(1) to 30, and every algorithm returns one side of it.
-- *1 mm.* The scene that opened this section moved `r0` by 3.9e-2 (SMM) and 9.3e-2 (ETM) under
+- *1 mm.* The scene that opened this section moved `r0` by 7.3e-2 (SMM) and 9.3e-2 (ETM) under
   the nudge at 1 mm and `theta = 0.5+0.3j`. That is the same knife edge: its `eps = 25` block
   rests on the `eps = 25` substrate, one combination of its confined modes crosses with a
   reflection of 4e-15 (exact arithmetic), and their round trips reach 1e14 and more. One ulp of
-  the substrate's permittivity moves the exact `r0` by 1.2e-2, and both algorithms are within
-  2.3 times of that (2.6e-2 and 2.8e-2 off the exact `r0`). A 1 nm `eps = 1` film between
+  the substrate's permittivity moves the exact `r0` by 1.2e-2; ETM is 2.8e-2 off the exact `r0`
+  and SMM 7.5e-2, within 2.3 and 6.3 times of that (on SMM's gap before 9a92bf0, 3.9e-2 under
+  the nudge and 2.6e-2 off: at the knife edge a gauge that moves rounding moves the answer). A 1 nm `eps = 1` film between
   grating and substrate, or `bot = 24.9`, removes it.
 - *4ff, a wave the substrate takes unreflected.* A uniaxial layer whose ordinary index equals
   its substrate's passes that wave without reflection, and a swap involving it divides by the
