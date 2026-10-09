@@ -8,8 +8,8 @@ the transmission from its downward modes into the region below
 advances the phase downward, and a double negative carries its power against its phase
 (V. G. Veselago, Sov. Phys. Usp. 10, 509 (1968)). So a uniform double-negative layer resting on
 the same medium made ETM's interface factor singular -- ``LinAlgError`` on 171 of 720 such
-scenes -- and SMM met the same thing at its gap medium whenever a backward mode's admittance
-matched the gap's.
+scenes -- and SMM met the same thing at its gap whenever a backward mode's admittance mirrored
+the gap's.
 
 The rules now (``docs/connecting-algorithms.md`` section 11):
 
@@ -185,17 +185,26 @@ def test_the_mirror_labels_are_the_half_spaces_roots():
 
 # ------------------------------------------------------------------------------ SMM's gap medium
 
-@pytest.mark.parametrize('tetm', ['te', 'tm'])
-def test_smm_no_longer_meets_a_backward_mode_at_its_gap(tetm):
-    """SMM joins layers through a gap of ``eps = 1 + kx**2``, ``mu = 1``, so ``kz_gap = 1``.
+# A lossless double negative whose backward wave at ``kx = 1`` is the gap's exact mirror: its
+# ``kz = sqrt(2)``, so ``kz/mu`` (TE) or ``kz/eps`` (TM) is ``-sqrt(2)``, the gap's negative.
+GAP_MIRROR = {'te': (-3.0 + 0j, -1.0 + 0j), 'tm': (-1.0 + 0j, -3.0 + 0j)}
 
-    A lossless double negative of ``mu = -1`` has, at ``kx = 1``, ``kz = 1`` too, and with
-    ``eps = -2`` it is the gap's exact mirror. ``mode_q``'s old tie labelled its propagating mode
-    by the phase, against the power, so the gap's wave had no ``+`` content in it and SMM raised
-    ``LinAlgError`` at normal incidence (period 1000 nm, 500 nm puts orders +-2 there). The
-    mirrored tie labels it by the power, as the half-space is labelled, and the gap factor is 2.
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_smm_no_longer_meets_a_backward_mode_at_its_gap(tetm, monkeypatch):
+    """SMM joins layers through a gap whose waves have ``kz/mu`` (s) and ``kz/eps`` (p) equal to
+    ``sqrt(1 + |k_par|**2)`` (``scattering._gap_waves``), ``sqrt(2)`` at ``kx = 1``.
+
+    A lossless double negative of ``(-3, -1)`` has, at ``kx = 1``, ``kz = sqrt(2)``, so its TE
+    wave's ``kz/mu`` is the gap's exact mirror; ``(-1, -3)`` is the TM one. ``mode_q``'s old tie
+    labelled its propagating mode by the phase, against the power, so the gap's wave had no
+    ``+`` content in it and SMM raised ``LinAlgError`` at normal incidence (period 1000 nm,
+    500 nm puts orders +-2 there) -- the control. The mirrored tie labels it by the power, as the
+    half-space is labelled, and the gap factor is 2. (Until 2026-10-09 the gap's ``kz/mu`` was
+    1 and its ``kz/eps`` ``1/(1 + k_par**2)``, and ``(-2, -1)`` mirrored both.)
     """
-    eps, mu = LOSSLESS
+    from wavebit._core import solve_1d
+    eps, mu = GAP_MIRROR[tetm]
     kw = dict(theta=0.0, bot=Material(eps, mu=mu), thickness=[150.0], period=1000.0,
               wavelength=500.0, truncation_order=3)
     smm = _solver(tetm, 'SMM', _uniform(tetm, eps), _uniform(tetm, mu), **kw).solve(
@@ -206,6 +215,11 @@ def test_smm_no_longer_meets_a_backward_mode_at_its_gap(tetm):
     R = _host(smm.incident.R)
     expected = _interface_R(0.0, eps, mu)[0 if tetm == 'te' else 1]
     assert abs(R.max() - expected) < 1e-13
+
+    monkeypatch.setattr(solve_1d, 'layer_label_rule', lambda *a, **k: (None, None))
+    with pytest.raises(np.linalg.LinAlgError):
+        _solver(tetm, 'SMM', _uniform(tetm, eps), _uniform(tetm, mu), **kw).solve(
+            auto_detune=False)
 
 
 # -------------------------------------------------------------------- a patterned double negative

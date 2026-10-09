@@ -311,7 +311,7 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
 # theta=0, bot=2.25 (index 1.5) and lambda/period=1/4 put order m=+-6 exactly at the substrate cutoff:
 # kx = 1.5 = n_bot, so kz_bot = 0 and the substrate's own mode basis is singular. Recovering
 # the amplitudes in that basis is the natural-looking choice and it dies here; the gap basis
-# the recovery actually uses cannot, by construction of eps_gap.
+# the recovery actually uses cannot, by construction of the gap.
 CUTOFF = dict(structure=np.array([[[4., 4., 4., 1., 1., 1.]], [[9., 9., 1., 1., 9., 1.]]]),
               thickness=[500.0, 300.0], top=1.0, bot=2.25, theta=0.0,
               wavelength=500.0, period=[2000.0], truncation_order=[8, 0])
@@ -439,6 +439,111 @@ def test_smm_2d_matches_conical_on_y_invariant_stack():
         a = np.array(getattr(conical, field)).ravel()
         b = np.array(getattr(two_d, field)).ravel()
         assert np.allclose(a, b, atol=1e-10, rtol=0), (field, np.max(np.abs(a - b)))
+
+
+# ------------------------------------------------------------------------------ the gap's waves
+# The gap cancels from every exact answer, so what it decides is conditioning: a mode that meets
+# it nearly totally reflected costs SMM the mismatch in rounding (`scattering._gap_waves`).
+# Until 2026-10-09 its p impedance was `1/(1 + k_par**2)`, and the propagating high-order modes
+# of a layer holding negative permittivity beside positive have `|kz/eps|` of order `|k_par|`.
+
+def _old_gap(xp, C, kx, ky=None):
+    """The gap before 2026-10-09, ``eps = 1 + k_par**2``, ``mu = 1``, ``kz = 1``. A control only."""
+    k_par_sq = kx ** 2 if ky is None else kx ** 2 + ky ** 2
+    z_p = xp.astype(1 / (1 + k_par_sq), C)
+    return xp.ones_like(z_p), z_p
+
+
+def _all_amplitudes(result):
+    out = []
+    for variant in ('incident', 's_inc', 'p_inc'):
+        sub = getattr(result, variant, None)
+        if sub is not None:
+            out += [np.ravel(np.asarray(getattr(sub, field))) for field in AMPLITUDES]
+    return np.concatenate(out)
+
+
+_DNG = (-1.68 + 0j, -0.54 + 0.05j)
+# (path, the region's (eps, mu) or (eps, None), background eps, region width in pixels of 20,
+# wavelength, thickness, truncation, theta). Period 432 nm (432 x 300 nm in 2D, the region on
+# the first 5 of 8 rows), vacuum both sides, every angle real.
+NEGATIVE_PERMITTIVITY = {
+    'dng_tm': ('tm', _DNG, 1.69, 5, 1000.0, 100.0, 20, 0.0963),
+    'dng_conical': ('conical', _DNG, 1.69, 10, 800.0, 200.0, 16, 0.0963),
+    'dng_2d': ('2d', _DNG, 2.25, 14, 1100.0, 100.0, (8, 2), 0.0963),
+    'lossless_metal_tm': ('tm', (-2.0 + 0j, None), 1.0, 10, 1000.0, 300.0, 25, 0.2),
+}
+
+
+def _negative_permittivity_amplitudes(algo, path, region, background, width, wavelength,
+                                      thickness, truncation, theta):
+    rows = 5 if path == '2d' else 1
+    eps = np.full((1, 8 if path == '2d' else 1, 20), background, dtype=complex)
+    eps[0, :rows, :width] = region[0]
+    kw = dict(backend=0, layer_algorithm=algo, answers='amplitude', structure=eps, top=1.0,
+              bot=1.0, theta=theta, wavelength=wavelength, thickness=[thickness],
+              truncation_order=truncation)
+    if region[1] is not None:
+        kw['mu'] = np.ones_like(eps)
+        kw['mu'][0, :rows, :width] = region[1]
+    if path == 'tm':
+        kw.update(tetm='tm', period=[432.0])
+    else:
+        kw.update(phi=0.3, psi=0.4, period=[432.0] if path == 'conical' else (432.0, 300.0))
+    return _all_amplitudes(wavebit.rcwa(**kw).solve(auto_detune=False))
+
+
+@pytest.mark.parametrize('name', list(NEGATIVE_PERMITTIVITY))
+def test_negative_permittivity_is_no_harder_for_smm_than_for_etm(name, monkeypatch):
+    """A layer with negative permittivity beside positive: SMM is ETM to 1e-13, at a real angle.
+
+    Such a layer has propagating modes whose ``kz/eps`` grows like ``|k_par|`` -- ``dng_tm``'s
+    reach ``q = 0.15-13.7i`` with ``|kx|`` up to 46.4 -- and they met the old gap, whose p
+    impedance was ``1/(1 + k_par**2)``, nearly totally reflected. SMM's rounding grew by the
+    mismatch: these scenes stood 4.4e-11 to 1.0e-10 off ETM (the double negatives are the
+    sweep's ``eps = -1.68``, ``mu = -0.54+0.05j`` in a 432 nm cell at ``theta = 0.0963``), and
+    nothing double-negative is needed -- the lossless metal is ``mu = 1``. With
+    ``sqrt(1 + |k_par|**2)`` they agree to 1.0e-15 .. 1.5e-14. The control puts the old gap back
+    and must find the disagreement again. ``docs/connecting-algorithms.md`` section 11.
+    """
+    from wavebit._core import scattering
+
+    def disagreement():
+        etm = _negative_permittivity_amplitudes('ETM', *NEGATIVE_PERMITTIVITY[name])
+        smm = _negative_permittivity_amplitudes('SMM', *NEGATIVE_PERMITTIVITY[name])
+        return np.abs(smm - etm).max()
+
+    assert disagreement() < 1e-13
+    monkeypatch.setattr(scattering, '_gap_waves', _old_gap)
+    assert disagreement() > 1e-12
+
+
+@pytest.mark.parametrize('extra', [dict(tetm='tm'), dict(phi=0.0, psi=0.3)],
+                         ids=['tm', 'conical'])
+def test_the_gap_has_waves_at_an_imaginary_k_par(extra, monkeypatch):
+    """``theta = i*asinh(1)`` puts the specular order at ``k_par = i``, where ``1 + k_par**2 = 0``.
+
+    The old gap's p impedance ``1/(1 + k_par**2)`` was infinite there, and SMM returned
+    non-finite efficiencies on the TM and conical paths while ETM, which never meets the gap,
+    solved the scene. ``|k_par|**2`` keeps ``sqrt(1 + |k_par|**2)`` real and at least 1 at any
+    complex ``k_par``.
+    """
+    from wavebit._core import scattering
+    kw = dict(backend=0, structure=np.array([[[4., 4., 1., 1., 1., 1.]]]), thickness=[200.0],
+              top=1.0, bot=2.25, theta=1j * np.arcsinh(1.0), wavelength=900.0, period=[700.0],
+              truncation_order=4, answers='amplitude', **extra)
+    solver = wavebit.rcwa(**kw)
+    k_par = np.asarray(solver.order_kxy()[0])[4]
+    assert abs(1 + k_par ** 2) < 1e-15, 'premise: the specular order at k_par = +-i'
+
+    def amplitudes(algo):
+        return _all_amplitudes(
+            wavebit.rcwa(**dict(kw, layer_algorithm=algo)).solve(auto_detune=False))
+
+    assert np.abs(amplitudes('SMM') - amplitudes('ETM')).max() < 1e-14
+    monkeypatch.setattr(scattering, '_gap_waves', _old_gap)
+    with np.errstate(all='ignore'), pytest.raises(FloatingPointError):
+        amplitudes('SMM')
 
 
 # ----------------------------------------------------------------------------- portability

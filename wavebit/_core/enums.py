@@ -295,19 +295,22 @@ class Answers(str, Enum):
 #: ``AMPLITUDE`` rather than a rung of its own, because the whole-stack ``S`` is four matrices
 #: whatever the depth and an ``S`` *is* amplitude information. The rest stayed unshipped:
 #:
-#: * **The gap basis is a gauge.** ``eps_gap`` is chosen per order so ``kz_gap == 1``; re-run a
-#:   solve with ``eps_gap = 2.7 + k_par^2`` instead of ``1 + k_par^2`` and the observables hold
-#:   (``T`` moves 2.1e-15, ``r_s`` 0.0 to 1.7e-15) while ``S_layers[0].S11`` moves 0.64 and
-#:   ``gamma[0]`` 0.49, each against its own magnitude. The whole-stack blocks move 6e-15 to
-#:   1.8e-14 -- they are gauge-*free*, because the entry and exit interface factors cancel the
+#: * **The gap basis is a gauge.** Its waves are chosen per order
+#:   (:func:`~wavebit._core.scattering._gap_waves`); re-run a solve with them scaled by 2.7
+#:   and the observables hold (``T`` moves 0.9e-15 to 4.1e-15, ``r_s`` 0.0 to 2.0e-15, on a TM,
+#:   a conical and a 2D stack) while ``S_layers[0].S11`` moves 0.44 to 0.80 and ``gamma[0]``
+#:   0.44 to 0.80, each against its own magnitude. The whole-stack blocks move 3.6e-15 to
+#:   7.0e-15 -- they are gauge-*free*, because the entry and exit interface factors cancel the
 #:   gap between them and leave the two half-spaces as the ports. That is the whole reason
-#:   ``ScatteringMatrix`` is directly readable and the per-layer blocks would not be.
+#:   ``ScatteringMatrix`` is directly readable and the per-layer blocks would not be. (Measured
+#:   2026-10-09 on the gap of that date; the 2026-08-22 measurement, on the gap of
+#:   ``eps = 1 + k_par^2``, ``kz = 1`` swapped for ``2.7 + k_par^2``, found the same.)
 #: * **So ``AB`` would have to ship with the per-layer blocks, or they do not ship.**
 #:   ``_ab_matrices`` is the gap -> half-space conversion, and exposing gauge numbers while
 #:   withholding it would document a footgun and withhold the safety.
 #: * **``S_ref`` / ``S_trn`` should not ship at all.** They *are* that conversion -- converted
-#:   to a physical (E, H) transfer ``S_ref`` is exactly the identity -- and they moved 0.44 and
-#:   0.28 under the same gauge change while encoding nothing.
+#:   to a physical (E, H) transfer ``S_ref`` is exactly the identity -- and their ``S11`` moved
+#:   0.34 to 0.81 and 0.48 to 0.82 under the same gauge change while encoding nothing.
 _ANSWERS_LADDER = (Answers.EFFICIENCY, Answers.AMPLITUDE, Answers.FIELD)
 
 

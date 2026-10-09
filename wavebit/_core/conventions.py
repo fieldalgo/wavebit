@@ -207,11 +207,12 @@ def mode_q(xp, eigenvalue, mirrored=None):
     the bit). A lossless propagating mode of such a layer carries its power against its phase
     (V. G. Veselago, Sov. Phys. Usp. 10, 509 (1968)), so its downward wave is ``Im(q) >= 0``,
     the root :func:`boundary_kz` gives a half-space of the same medium; the rule is then
-    ``conj(mode_q(conj(q**2)))``. The label stops being free there: SMM's gap medium has
-    ``kz = 1`` on every order, and a mode labelled against its power whose admittance equals
-    the gap's makes the gap-to-layer factor exactly singular. ``eps = -2``, ``mu = -1`` at
-    ``kx = 1`` is the gap's own mirror (``eps_gap = 1 + kx**2 = 2``) and raised
-    ``LinAlgError`` under the old tie. A patterned layer that holds a double negative breaks
+    ``conj(mode_q(conj(q**2)))``. The label stops being free there: a mode labelled against its
+    power whose admittance is the negative of the gap's makes SMM's gap-to-layer factor exactly
+    singular. The gap's waves have ``kz/mu = kz/eps = sqrt(1 + |k_par|**2)``
+    (``scattering._gap_waves``), so ``(eps, mu) = (-3, -1)`` at ``kx = 1`` is its exact TE
+    mirror, ``(-1, -3)`` its TM one, and each raises ``LinAlgError`` under the old tie (under the
+    gap before 2026-10-09, ``(-2, -1)`` did). A patterned layer that holds a double negative breaks
     the tie by each mode's power flux instead (:func:`power_down_labels`). Measured in
     ``docs/connecting-algorithms.md`` section 11.
     """
@@ -251,9 +252,9 @@ def etm_mode_q(xp, eigenvalue, k0_d, mirrored=None):
     ``eps = 25`` region resting on an ``eps = 25`` substrate -- the smallest singular value of
     ``a`` is that mode's reflection, ~1e-14, and the recursion loses ~12 digits: a 1e-14 nudge
     of a complex ``theta`` moved ``r`` by 2e-4 where SMM moved 2e-15. SMM never sees it,
-    because it joins every layer through its gap medium, whose ``kz = 1`` no layer mode
-    resembles. So the label is free for SMM's cascade and is not free for ETM -- nor for the
-    field state SMM hands to reconstruction, which is the ETM's and takes these labels
+    because it joins every layer through its gap, whose waves no layer mode reproduces. So the
+    label is free for SMM's cascade and is not free for ETM -- nor for the field state SMM hands
+    to reconstruction, which is the ETM's and takes these labels
     (:func:`~wavebit._core.scattering._field_labels_differ`).
 
     **Why the cap.** The half-space's root of such a mode grows downward, by

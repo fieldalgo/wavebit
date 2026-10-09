@@ -32,9 +32,11 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   primary variable ``W @ c`` and partner ``V @ c``; an upward wave flips the partner's sign.
   With that single convention the half-space scattering matrices below are derived, not
   transcribed — no per-region ``kz`` sign flip is needed.
-* Layers are joined through a fictitious *gap medium* with ``eps_gap = 1 + kx^2 + ky^2``, so
-  ``kz_gap == 1`` exactly and the gap's ``V`` can never be singular (the standard trick; the
-  gap cancels out of the composed result whatever it is, as long as it is used everywhere).
+* Layers are joined through a fictitious *gap* of zero thickness (the standard trick; the gap
+  cancels out of the composed result whatever it is, as long as it is used everywhere). Its
+  down wave has admittance (s) and impedance (p) ``sqrt(1 + |k_par|^2)`` on every order, so its
+  ``W`` and ``V`` are never singular and no layer's modes meet it nearly totally reflected
+  (:func:`_gap_waves`).
 * Incidence enters as mode amplitudes directly: ``E_s = a_s`` and ``H_p = -i*n_top*a_p``
   for the coupled path — the resolved ``(a_s, a_p)`` pair, whichever spelling the
   ``polarization`` pair — and for 1D TE/TM the unit primary amplitude signed into each order's
@@ -98,6 +100,41 @@ def _ab_matrices(xp, W_to, V_to, W_from, V_from):
     P = xp.linalg.inv(W_to) @ W_from
     Q = xp.linalg.inv(V_to) @ V_from
     return P + Q, P - Q
+
+
+def _gap_waves(xp, C, kx, ky=None):
+    """The gap's waves on each order: ``(y_s, z_p)``, both ``sqrt(1 + |k_par|**2)``.
+
+    A half-space here is written by two numbers per order, the s wave's admittance ``kz/mu`` and
+    the p wave's impedance ``kz/eps`` -- the pair the gap's ``W`` and ``V`` are built from too.
+    The gap has no thickness and cancels from every exact answer whatever its waves are, so the
+    choice is about conditioning alone. A layer sits between two gaps, and a mode whose own
+    ``kz/eps`` (or ``kz/mu``) differs from the gap's by a ratio ``M`` is nearly totally reflected
+    there: the layer's gap-embedded transmission is ``~1/M``, the cascade recovers the physical
+    one from it by summing bounces, and rounding grows by about ``M``. Only a propagating mode
+    carries that across a layer; an evanescent one is damped by ``X``.
+
+    The gap was ``eps = 1 + k_par**2``, ``mu = 1``, ``kz = 1`` until 2026-10-09: ``y_s = 1``,
+    ``z_p = 1/(1 + k_par**2)``. Every medium's waves have ``|kz| ~ |k_par|`` on high orders, so
+    ``z_p`` ran the wrong way by ``|k_par|**3``. Ordinary layers have no propagating high-order
+    modes and never showed it. A layer that sets negative permittivity beside positive does --
+    plasmonic and backward modes, ``q = 0.12-16.6i`` on a double-negative TM grating whose orders
+    reach ``|kx| = 55.6``, where ``z_p`` was 1/3087 -- and there SMM's rounding floor was 4.5e-10
+    at a real angle, against ETM's 1.3e-13. ``docs/connecting-algorithms.md`` section 11 and
+    ``studies/smm_gap_waves.py``.
+
+    ``sqrt(1 + |k_par|**2)`` grows like ``|k_par|`` as those waves do, is the same for both
+    polarizations, and keeps what ``kz = 1`` was for: never zero, so ``W`` and ``V`` of the gap
+    always invert. It is real, so the gap's down wave carries power down and section 11's
+    argument -- no mode labelled by its power can make the gap factor singular -- still holds.
+    ``|k_par|`` rather than ``k_par``: at a complex ``k_par`` it stays real and nonzero, where
+    ``1 + k_par**2`` vanished at ``kx = +-i``.
+    """
+    abs_sq = xp.real(kx * xp.conj(kx))
+    if ky is not None:
+        abs_sq = abs_sq + xp.real(ky * xp.conj(ky))
+    y = xp.astype(xp.sqrt(1 + abs_sq), C)
+    return y, y
 
 
 def _s_layer(xp, A, B, X):
@@ -247,8 +284,8 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
     vector in the substrate's own basis — matching the ETM exactly — would mean inverting the
     substrate's ``V``, and that matrix is singular whenever a retained order sits exactly at
     cutoff, ``kz_bot == 0``. The gap basis is the one basis this formulation guarantees
-    invertible, by its choice of ``eps_gap``; the value handed past the bottom layer is never
-    read anyway.
+    invertible, by its choice of waves (:func:`_gap_waves`); the value handed past the
+    bottom layer is never read anyway.
 
     Reference planes matter here too: ``b_i`` is anchored at the layer *bottom*, which is what
     keeps every exponential in it decaying. Anchoring the up-going amplitude at the top plane
@@ -398,9 +435,9 @@ class ScatteringMatrix(NamedTuple):
     ``S11`` / ``S22`` negated besides -- see :func:`_coupled_ports_1d`).
 
     **Its ports are the two half-spaces, not the SMM's gap.** The cascade's internal gap basis
-    (``eps_gap`` chosen so ``kz_gap == 1``) is a gauge, and it cancels between the entry and
-    exit interface factors: re-running a solve with a different ``eps_gap`` moves these blocks
-    by ~1e-14 while it moves the per-layer gap-embedded ones by ~0.5. So these numbers are
+    (:func:`_gap_waves`) is a gauge, and it cancels between the entry and exit interface
+    factors: re-running a solve with a different gap moves these blocks by ~1e-14 while it
+    moves the per-layer gap-embedded ones by ~0.5. So these numbers are
     directly readable. For the **s** block, ``S11 @ delta`` is exactly the reflected ``r_s``
     the solve reported and ``S21 @ delta`` its ``t_s``. The **p** block holds port variables,
     not Fresnel amplitudes: its port variable is the p wave's magnetic field, which turns over
@@ -652,12 +689,12 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     if eps_bot is None:
         eps_bot = n_bot ** 2 / mu_bot
 
-    # Gap medium: eps chosen per order so kz_gap == 1, which keeps V_gap trivially invertible.
-    # It stays **non-magnetic on purpose**, the same decision `_smm_sp`'s gap records: it is a
-    # bookkeeping device rather than a medium in the scene and it cancels out of the result, so
-    # giving it a material property would be a category error that happens to cancel — harder
-    # to notice than one that does not.
-    eps_gap = 1 + kx ** 2
+    # The gap is written by its waves, the s admittance `y_s` and p impedance `z_p` on each
+    # order (:func:`_gap_waves`, which says why those values). It takes **nothing from the scene**,
+    # the same decision `_smm_sp`'s gap records: it is a bookkeeping device rather than a medium
+    # in the scene and it cancels out of the result, so giving it the scene's `mu` would be a
+    # category error that happens to cancel — harder to notice than one that does not.
+    y_s, z_p = _gap_waves(xp, C, kx)
 
     # The half-space admittances, and the same pair the ETM twin's `G` is built from: `kz/mu`
     # where the primary is an electric amplitude (TE) and `kz/eps` where it is magnetic (TM).
@@ -665,11 +702,11 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     if tetm_index == 0:      # TE — primary variable E_y, partner H_x
         V_top = -1j * _diag(xp, kz_top / mu_top)
         V_bot = -1j * _diag(xp, kz_bot / mu_bot)
-        V_gap = -1j * I
+        V_gap = -1j * _diag(xp, y_s)
     elif tetm_index == 1:    # TM — primary variable H_y, partner scaled by eps
         V_top = -1j * _diag(xp, kz_top / eps_top)
         V_bot = -1j * _diag(xp, kz_bot / eps_bot)
-        V_gap = -1j * _diag(xp, 1 / eps_gap)
+        V_gap = -1j * _diag(xp, z_p)
     else:
         raise ValueError(f'tetm_index must be 0 (TE) or 1 (TM), got {tetm_index!r}')
     W_top = W_bot = W_gap = I    # homogeneous half-spaces are diagonal in this basis
@@ -958,7 +995,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         eps_top = n_top ** 2 / mu_top
     if eps_bot is None:
         eps_bot = n_bot ** 2 / mu_bot
-    eps_gap = xp.reshape(1 + k_par_sq, (-1,))                 # kz_gap == 1 by construction
+    y_s, z_p = (xp.reshape(w, (-1,)) for w in _gap_waves(xp, C, kx_g, ky_g))   # see there
 
     Kz_top = _diag(xp, kz_top)
     Kz_bot = _diag(xp, kz_bot)
@@ -967,16 +1004,17 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     # the ETM substrate seed (big_F, big_G) has, and the same two admittances: `kz/eps` on the
     # magnetic (p) amplitude, `kz/mu` on the electric (s) one.
     #
-    # The **gap is left non-magnetic**, deliberately. It is not a medium in the scene; it is a
-    # fictitious layer the cascade inserts so every interface is computed the same way, and it
-    # cancels out of the result. Giving a bookkeeping device a material property would be a
-    # category error that happens to cancel, which is worse than one that does not.
+    # The **gap takes nothing from the scene**, deliberately: not its `mu`, not its media. It is
+    # not a medium in the scene; it is a fictitious layer the cascade inserts so every interface
+    # is computed the same way, and it cancels out of the result. Giving a bookkeeping device a
+    # material property would be a category error that happens to cancel, which is worse than
+    # one that does not. Its waves fill the slots a half-space's `kz/mu` and `kz/eps` fill.
     W_top = _block(xp, [[I, O], [O, -1j * Kz_top / eps_top]])
     V_top = _block(xp, [[-1j * Kz_top / mu_top, O], [O, I]])
     W_bot = _block(xp, [[I, O], [O, -1j * Kz_bot / eps_bot]])
     V_bot = _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]])
-    W_gap = _block(xp, [[I, O], [O, -1j * _diag(xp, 1 / eps_gap)]])
-    V_gap = _block(xp, [[-1j * I, O], [O, I]])
+    W_gap = _block(xp, [[I, O], [O, -1j * _diag(xp, z_p)]])
+    V_gap = _block(xp, [[-1j * _diag(xp, y_s), O], [O, I]])
 
     S_ref = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
