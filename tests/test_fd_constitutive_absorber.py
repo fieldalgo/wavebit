@@ -506,9 +506,11 @@ def test_projected_yee_step_and_sampled_energy_match_independent_flux_oracle(bac
 
 @pytest.mark.parametrize('backend', ('numpy', 'jax', 'torch'))
 @pytest.mark.parametrize('family', ('cylinder', 'rotated-box'))
-def test_equal_material_new_route_matches_legacy_fields(backend, family):
+def test_equal_material_new_route_matches_legacy_fields(backend, family, monkeypatch):
     # These six configurations are disclosed before accepting the allowance.
     # The shaped scene retains the new zero-cross term; the other omits it.
+    from pathlib import Path
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "studies"))
     from studies.fdtd_constitutive_absorber_probe import measure_zero_pair
     assert ACCEPTED_BUDGETS is not None, 'Disclose calibration before accepting budgets.'
     row = measure_zero_pair(family, backend=backend, n=20, placement=.3,
