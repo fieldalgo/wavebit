@@ -802,10 +802,12 @@ class Sphere(Shape):
        spanning it), and a ball never is. An ``fd.Axis1D`` axis is refused too, with its own
        sentence and for a different reason: that axis stands for one the field is *invariant*
        along, and a ball is not.
-    3. **No reaching a face of the box.** A cell-snapped ``fd.Region`` is clipped exactly; a ball
-       is not, and the six components disagree about where the box ends -- three of them count
-       material half a cell outside a ``-`` face, and the same three lose the last half cell at
-       a ``+`` face. The two arms carry two different messages.
+    3. **No reaching a face of the box in a way the grid cannot carry whole.** A cell-snapped
+       ``fd.Region`` is clipped exactly; a ball is not, and the six components disagree about
+       where the box ends. The two arms are split by **cause** and not by side: one for a ball
+       that *leaves the domain*, at either end of an axis, and one for a ball that is inside
+       and whose last half cell before a ``+`` face the plan *trims*. Each carries its own
+       message and its own remedy, because the remedies are not interchangeable.
     4. **No anisotropic eps or mu.** The effective tensor is the Farjadpour/Kottke rule for two
        *isotropic* phases; blending each component with its own ``eps`` is not the tau-transform
        the anisotropic construction calls for, and on a ball the normal is almost never along a

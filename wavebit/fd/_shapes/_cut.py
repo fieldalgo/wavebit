@@ -119,9 +119,27 @@ from wavebit._core.backend import _concrete, array_namespace
 #: input. A ratio to ``dx^2`` says the same thing at every scale (memory: a predicate compared
 #: against an absolute floor is a predicate about the coordinate unit, and the same argument
 #: rewrote ``_bodies._TURN_SINE`` last round). The margin is far below anything physical: a
-#: cross-section of ``1e-12 dx^2`` is a corner tetrahedron of volume about ``1e-18 dx^3``, so
-#: the fill there is 0 or 1 to eighteen digits, which is the condition that makes ``w = 0``
-#: allowed in the first place.
+#: cross-section of ``1e-12 dx^2`` is a corner tetrahedron of volume about ``1e-18 dx^3``.
+#:
+#: **That last step is a plane's argument, and the fill is not the plane's**, so it does not
+#: bound the fill in a voxel this predicate calls dead. ``area`` is the tangent plane's
+#: cross-section at the voxel's *own point*, and a curved body can clip a corner of a voxel its
+#: tangent plane at the centre misses entirely: there the exact fill is fractional and ``w`` is
+#: exactly ``(0, 0, 0)``. Measured on ``Sphere(radius=0.25, center=(0.013, -0.007, 0.021))``
+#: at ``dx = 0.05``, **32** of the six components' voxels are dead with a fill further than
+#: 1e-9 from both ends, the worst **2.88e-04** from an end. Over ``dx`` 0.2 down to 0.0125 at
+#: four placements each -- centred on a node, a quarter and a half cell off it on every axis,
+#: and ``(0.13, -0.37, 0.41)`` cells off -- the worst is **1.35e-03** away from the node, and
+#: **1.67e-02** centred on it at ``dx = 0.05``, halving with ``dx`` (8.3e-03 at 0.025, 4.2e-03
+#: at 0.0125). That one is a tie and not a corner: a voxel on the ball's axis whose point sits
+#: exactly half a cell inside the surface has its tangent plane lying on its own face, so the
+#: plane's cross-section is zero while the curved clip leaves the face's corners outside the
+#: ball (fill 0.983294). These are geometric fill measurements, not coefficient-error bounds
+#: for replacing a nonzero normal moment by ``w = 0``. The sensitivity of ``coefficients.mix``
+#: depends on the positive material values and their ratio, so the fill's distance from an
+#: endpoint alone does not bound that error. The independent area-mask and fill measurements
+#: are pinned by
+#: ``tests/test_fd_occupancy.py::test_the_normal_moment_sums_to_one_wherever_the_plane_cuts_the_voxel``.
 _LIVE_AREA = 1e-12
 
 

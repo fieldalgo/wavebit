@@ -151,7 +151,7 @@ def test_a_symmetric_ball_meets_the_mirror_adjoint_refusal_not_the_wall_door():
     """
     message = _refused(_mirror((fd.Sphere(radius=0.1, center=(0.0, 0.0, 0.0)),)),
                        'mirror-weighted adjoint')
-    assert 'reaches past' not in message and 'only the unturned fd.Box' in message
+    assert 'leaves the domain' not in message and 'only the unturned fd.Box' in message
     _refused(_mirror((fd.Sphere(radius=0.1, center=(0.02, 0.0, 0.0)),)),
              'is not its own mirror image')
 

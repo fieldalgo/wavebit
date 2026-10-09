@@ -429,6 +429,89 @@ supplies their reference values. Collection, XML testcase counts and unique test
 agree at 1807 fast and 65 slow cases. No `INTERNALERROR` occurred. All four reference
 archives retain their original SHA-256 hashes; no rebaseline was performed.
 
+## Door 3 by cause, and a clip tolerance read on the grid (C2 close-out)
+
+Written for C2 on 2026-09-21 and landed on 2026-10-07, after earlier bounded C8 work;
+the numbers below were re-measured on that historical landing commit. `check_smoothed`'s door 3 refuses a smoothed shape the grid
+cannot carry whole at a face of the box. It had two messages, chosen by the face's **side**,
+and the side does not decide what went wrong. `_reaches_outside` probes the cell layer one cell
+beyond each face the support reaches. At a `-` face all six components' probe voxels lie wholly
+outside the domain. At a `+` face the three whose Yee offset along the axis is half a cell sit
+at `wall + dx/2`, so their probe voxel `[wall, wall + dx]` is wholly outside, while the other
+three sit on the wall and straddle it. The arms are now split by **cause**:
+
+* material in a wholly outside probe voxel, at either face, is a body that **leaves** the
+  domain (`_LEAVES`); its remedies are to move it inside, enlarge the domain, or say the
+  truncated body with the cell-snapped `fd.Region`;
+* material only in the straddling probe voxel, with the wholly outside ones empty, is a body
+  inside the domain whose last half cell the plan **trims** (`_TRIMMED`); its remedies are to
+  keep the surface half a cell clear of the `+` wall or to enlarge the domain.
+
+`_LEAVES` wins where both hold. The case that forced the split is
+`fd.Sphere(radius=0.2, center=(0, 0.59, 0))` in the 1.2 test box at `dx = 0.05`: it sticks 3.8
+cells past the `y+` wall, and its `Ey`, `Hx` and `Hz` probe voxels read fill 1.000000, with 37,
+30 and 30 voxels whole. Split by side, it was told that nothing outside the box was being
+counted and that there was nothing to truncate. Held open, that ball lowers 0.01801075 of
+volume on `Ey`, `Hx` and `Hz` -- exactly its 53.75% inside the wall -- and 0.01487374 on `Ex`,
+`Ez` and `Hy` (17.4% less); mirrored to `y-`, 0.01801075 and 0.02110849 (17.2% more). Which
+three components are wrong, and in which direction, belongs to the end of the axis. The
+trimmed arm's ball, `fd.Sphere(radius=0.2, center=(0.376, 0, 0))`, reads 0.000000 in the
+wholly outside probes and 0.002509 in the straddling one; it falls short of `4 pi R^3/3` by
+1.872e-05 of that volume (6.27e-07 absolute) on `Ey` and `Ez`, and by 1.114e-02 (3.73e-04)
+at tangency, while its mirror at the `x-` wall loses 1.3e-15. A `Symmetry` face is still not
+a wall for this door.
+
+**The clip tolerance.** `_CLIP_ROUNDOFF = 1e-9` was measured at `|x|/dx` about 24, but a fill's
+round-off grows with `|x|/dx`, where `|x|` is the largest coordinate in the domain. Moving
+the whole scene off the origin and reading the voxels `fd.Sphere(radius=0.2)` fills whole at
+`dx = 0.05`, with `r` standing for `|x|/dx`:
+
+| r | error of a whole voxel's fill | error over `r eps` |
+| ---: | ---: | ---: |
+| 1.2e1 | 6.7e-16 | 0.25 |
+| 2.0e3 | 6.8e-13 | 1.53 |
+| 2.0e5 | 4.4e-11 | 0.98 |
+| 2.0e6 | 7.0e-10 | 1.57 |
+| 2.0e7 | 2.8e-09 | 0.63 |
+| 2.0e8 | 4.5e-08 | 1.01 |
+| 2.0e9 | 7.2e-07 | 1.61 |
+
+A half space reads the same numbers from 2.0e3 on. The error steps with the binade of `|x|`:
+over forty ratios from 4.0e5 to 8.0e6 the multiple swings from 0.62 to 2.31, and `1e-9` is
+first crossed at about 5.2e6, where `|x|` passes `2^18`. The end a body misses reads exactly
+0 at every ratio. Doors 3 and 5 now read `_clip_tolerance(grid) = max(_CLIP_ROUNDOFF,
+_CLIP_ULPS (|x|/dx) eps)` with `_CLIP_ULPS = 1e3`; the two arms cross at `|x|/dx` about 4.5e3,
+so the historical origin-centred fixtures keep the floor, while the translated-grid tests
+exercise the relative arm. The tolerance passes 1% of a voxel at about 4.5e10; staying below
+the range refusal is not an accuracy guarantee. A nonfinite tolerance or one at least 0.5
+now raises `ClipPrecisionRefused`: the endpoint neighbourhoods meet, leaving no possible
+`tol < f < 1-tol` shared-surface predicate. An unbounded value at least 1 would also hide
+every outside fill. The remedy is to recenter the domain and geometry near the origin or
+increase `dx`, not to cap the tolerance silently. The new boundary and live-door tests are
+integration checks; their execution results are recorded separately from the historical table.
+Every other reader of `_CLIP_ROUNDOFF` -- door 6's `_snapped_joint`, `check_symmetry`, the report's
+cut counts, the constitutive plan, the junction, the shape ranges and the plane-wave layer
+medium -- still reads the bare constant, and the fill-contract guard and the junction's slack
+keep their own `max(1e-9, 64 eps |x|/dx)`. Whether those move is left to review.
+
+**The normal moment's mask.** `sum_c w_c == 1` holds wherever the tangent plane cuts the voxel
+(`area > _LIVE_AREA dx^2`), not wherever the body has surface in it. The fill is the exact
+curved clip and `area` is the plane's, so a voxel can hold a fractional fill with
+`w = (0, 0, 0)`. On `Sphere(radius=0.25, center=(0.013, -0.007, 0.021))` at `dx = 0.05`,
+2856 voxels have a live tangent-plane section; 32 other voxels have zero moment and a fill
+further than 1e-9 from both ends, the worst 2.88e-04 from an end. Over
+`dx` 0.2 to 0.0125 and four placements, the worst is 1.35e-03 off a node and 1.67e-02 for a
+ball centred on one at `dx = 0.05`, halving with `dx`: the voxel whose point is exactly half a
+cell inside the surface has its tangent plane on its own face. These are geometric fill
+measurements, not coefficient-error bounds for dropping a normal moment. The mixing rule's
+sensitivity depends on the positive material values and their ratio. For example, with held
+permittivity 1, new permittivity 1000 and fill 0.999, arithmetic mixing gives 999.001 and
+harmonic mixing gives about 500.2501; the fill distance 0.001 alone does not bound their
+difference. `_LIVE_AREA`'s comment, which had said "0 or 1 to eighteen digits", is corrected.
+
+`tests/test_fd_occupancy.py` holds the arms, the probe table, the two ends' volumes, the
+tolerance law and the mask. Its module docstring carries the mutant table.
+
 ## S7: how often a voxel holds three media, or a crease (2026-09-26)
 
 Run before the extruded bodies ship (stage 4, C4), because two populations had once been

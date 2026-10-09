@@ -55,7 +55,7 @@ widened until it refuses a scene that is legal:
     door 5 drawn on the bounding boxes instead of the voxels                 3
     door 5 keeping the distance mark and dropping the fill test              1
     the `Axis1D` arm of door 2 removed                                       1
-    door 3 (a shape reaching past a face) removed                            1
+    door 3 (a shape the grid cannot carry whole at a face) removed           1
     door 3's uniform-across-the-face exemption dropped                       5
     door 4 (anisotropy) removed                                              1
     `_isotropic` reading a triple of distinct numbers as one                 1
@@ -71,13 +71,13 @@ run against this file **and** `test_fd_shape_protocol.py` (baseline 63 passed), 
     `_VOXEL_REACH` widened to two cells                                      2
     door 2's `Bloch` arm removed (`(Periodic, Bloch)` -> `(Periodic,)`)      1
     door 2's wrapping arm widened to every face                             14
-    door 3's `+` arm given the `-` arm's message                             2
+    door 3's two arms given each other's message                             2
     door 3's `+` arm skipping the components whose point is on the wall      2
     door 3's threshold slackened to 1.0 / tightened to 0.0                   2 / 7
     door 1's self clause removed / used for every medium                     1 / 1
     `Sphere.support`'s margin dropped / dropped on the high side only        9 / 9
-    `Approximations.add` doing nothing                                          1
-    an empty `Approximations` warning anyway                                    1
+    `Approximations.record` doing nothing                                    1
+    an empty `Approximations` warning anyway                                 1
     the bound width summed instead of maximised                              1
     the report not threaded to the body at all                               1
 
@@ -85,6 +85,39 @@ None of those eighteen survived; the two of them that had no scene to die on bef
 half-voxel reach and the ``Bloch`` arm -- are what
 `test_the_shared_surface_mark_reaches_a_voxel_diagonal_and_not_an_edge` and the parametrized
 periodic-face gate exist for.
+
+And the close-out round, which split door 3 by CAUSE rather than by side, gave the clip
+tolerance the grid it is read on, and read the `w` mask from the predicate's own input. It was
+written against C2 and landed after earlier bounded C8 work. The following table records
+that historical fe92caa0 round-7 run against this file, `test_fd_shape_protocol.py` and
+`test_fd_symmetry_door.py` (93 cases); it is not the current integration's rerun count:
+
+    every probe counted as wholly outside (no straddling arm at all)          2
+    split by SIDE (the `+` face's wholly-outside probes read as straddling)   2
+    `_TRIMMED` returned in preference to `_LEAVES`                            2
+    the two arms' messages swapped                                            2
+    `_clip_tolerance` = `_CLIP_ROUNDOFF` alone (the constant as it stood)     1
+    `_clip_tolerance` = the relative arm alone, with no floor                 2
+    `_LIVE_AREA` raised to 1e-3 / dropped to 0                                1 / 0
+
+The second and third are the ones the round exists for: split by side,
+`fd.Sphere(radius=0.2, center=(0, 0.59, 0))` -- three probe voxels wholly outside the domain,
+at fill 1.0, with 3.8 cells of ball past the wall -- was told that "nothing outside the box is
+being counted here" and that "there is nothing sticking out to truncate", and the suite as it
+stood asserted that message on that very scene. **`_LIVE_AREA = 0` survives the recorded gates**: over the moment gate's sweep (``dx``
+0.2 to 0.0125, four placements) no sampled voxel has an area in ``(0, 1e-12 dx^2]``. A
+separately constructed tangent plane cutting a corner off by ``1e-8 dx`` has area
+``6.9e-16 dx^2``; its nonzero ``w = moment / area`` stays finite and sums to 1 to the last
+digit. That quotient check does not make the threshold change equivalent: the production
+threshold zeros this constructed moment, and the recorded gates do not exercise that case.
+
+The same re-run of the earlier rounds' door-3 rows, whose code the close-out rewrote: door 3
+removed 2, its uniform-across exemption dropped 6, its `+` arm skipping the components on the
+wall 2, its threshold slackened to 1.0 2 -- and **tightened to 0.0, 0**: the end door 3 reads
+is the one a body misses, and that end is exactly 0.0 on this kernel in every scene here
+(``test_the_clip_tolerance_follows_the_grid_and_not_a_number`` measures it), so no tolerance
+at that end refuses or admits anything the bare comparison would not. Door 3 answering at a
+``Symmetry`` face fails ``test_fd_symmetry_door.py`` once.
 
 Two mutants of the earlier rounds **survived a first draft**, and both notes are left where
 they were fixed.
@@ -624,26 +657,58 @@ def test_the_support_box_holds_the_whole_ball(centre, n, worst_without):
         assert lost == pytest.approx(worst_without, rel=3e-3), lost
 
 
-def test_the_normal_moment_sums_to_one_at_every_yee_point():
-    """``sum_c w_c == 1`` wherever the body has any surface in the voxel -- the free invariant.
+def test_the_normal_moment_sums_to_one_wherever_the_plane_cuts_the_voxel():
+    """``sum_c w_c == 1`` wherever the **tangent plane** cuts the voxel -- and what that is not.
 
     It has to be read at **one** point across the three components; summing ``w_x`` at the
     ``Ex`` points, ``w_y`` at the ``Ey`` points and ``w_z`` at the ``Ez`` points adds three
     different voxels and is not this invariant at all. Measured worst 4.4e-16 over all six
-    components' point sets.
+    components' point sets, on 2856 voxels of the ball below.
+
+    **The mask is the kernel's own predicate and it is read from the predicate's own input.**
+    ``_cut._mean_of_the_moment`` returns ``w = 0`` exactly where ``area <= _LIVE_AREA dx^2``,
+    so this gate takes ``area`` from ``Body.parts`` and asserts that the set it marks is
+    *exactly* the set where ``sum_c w_c != 0``. An earlier writing masked on ``sum_c w_c != 0``
+    alone, which is the failure condition itself: a mutant that zeroed ``w`` on the voxels it
+    found hardest would have shrunk the mask rather than failed the assert.
+
+    **And the invariant is not "wherever the body has any surface in the voxel".** ``fill`` is
+    the exact *curved* clip and ``area`` is the *tangent plane's* cross-section at the voxel's
+    own point, so where a ball clips a corner whose plane at the centre misses the voxel
+    altogether, the fill is fractional and ``w`` is exactly ``(0, 0, 0)``. Measured on this
+    ball: **32** of the six components' voxels have ``w = 0`` with a fill further than 1e-9
+    from both ends, the worst **2.88e-04** from an end; over ``dx`` 0.2 to 0.0125 at four
+    placements each, worst **1.35e-03** off a node and **1.67e-02** for a ball centred on one
+    at ``dx = 0.05`` (a voxel whose tangent plane lies on its own face; it halves with ``dx``).
+    That is the number ``_LIVE_AREA``'s own docstring used to put at "0 or 1 to eighteen
+    digits" -- a plane's argument applied to a curved clip -- and it is corrected there. So the
+    **mask is right and the invariant's old wording was wrong**. This gate measures the
+    geometric fill distance, not the coefficient error from dropping a normal moment; that
+    error also depends on the positive material values and their ratio.
     """
+    from wavebit.fd._shapes._cut import _LIVE_AREA
     ball = fd.Sphere(radius=0.25, center=(0.013, -0.007, 0.021))
     scene = _grid_scene((fd.Structure(ball, fd.Material(eps=2.25)),))
     plan = _quiet(fd.plan, scene)
-    box = ball.support(plan.grid)
+    dx, box, body = plan.grid.dx, ball.support(plan.grid), ball.body()
+    live, worst_live, dropped, worst_dropped = 0, 0.0, 0, 0.0
     for field in ('E', 'H'):
         for c in range(3):
-            points = yee_points(plan.grid, box, field, c)
-            _, w = body_occupancy(ball.body(), points, plan.grid.dx)
-            total = np.sum(w, axis=-1)
-            live = total != 0
-            assert live.sum() > 300
-            assert float(np.max(np.abs(total[live] - 1.0))) < 1e-14
+            points = np.asarray(yee_points(plan.grid, box, field, c))
+            fill, area, _ = body.parts(points, dx)
+            fill, area = np.asarray(fill), np.asarray(area)
+            total = np.sum(np.asarray(body_occupancy(body, points, dx)[1]), axis=-1)
+            cut = area > _LIVE_AREA * dx * dx
+            assert np.array_equal(cut, total != 0), (field, c)
+            live += int(cut.sum())
+            worst_live = max(worst_live, float(np.max(np.abs(total[cut] - 1.0))))
+            edge = np.minimum(fill[~cut], 1.0 - fill[~cut])
+            dropped += int(np.sum(edge > 1e-9))
+            worst_dropped = max(worst_dropped, float(np.max(edge)))
+    assert live == 2856, live
+    assert worst_live < 1e-14, worst_live
+    assert dropped == 32, dropped
+    assert worst_dropped == pytest.approx(2.8819e-04, rel=1e-3), worst_dropped
 
 
 def test_a_ball_varies_along_every_axis():
@@ -978,7 +1043,7 @@ def test_a_ball_that_ends_inside_an_absorbing_layer_is_refused():
     measured at 1.9e-1 reflection against 6.0e-4 -- 317x (``tests/test_fd_absorber.py``).
 
     The ball sits **tangent** to the z- wall rather than across it, so that this door and not
-    ``check_smoothed``'s door 3 (a shape whose material reaches past a face) is the one under
+    ``check_smoothed``'s door 3 (a shape the grid cannot carry whole at a face) is the one under
     test: the two are different refusals and a scene that trips both says nothing about either.
     """
     scene = fd.Scene(
@@ -1288,8 +1353,8 @@ def test_a_voxel_one_body_fills_whole_is_not_a_shared_surface():
     and 0.5000" as it turned the scene away, because its "worst" pick is an ``argmax`` over the
     same quantity.
 
-    The tolerance is :data:`~wavebit.fd._lower.checks._CLIP_ROUNDOFF`, the constant door 3 was
-    already using at the other end of the same clip, and it is measured where it is defined
+    The tolerance is :func:`~wavebit.fd._lower.checks._clip_tolerance`, what door 3 already
+    reads at the other end of the same clip, and it is measured where it is defined
     (worst 4.0e-13 at the whole end, 1.2e-13 at the missed end, over both bodies C2 can reach
     at five resolutions and four placements each). **The mutant is the code as it stood**:
     comparing against 0 and 1 themselves, which refuses this scene.
@@ -1302,9 +1367,12 @@ def test_a_voxel_one_body_fills_whole_is_not_a_shared_surface():
     lo = -N * DX / 2
     legal = (fd.Structure(_HalfSpace(lo + 13.0 * DX), 12.0),
              fd.Structure(_HalfSpace(lo + 12.5 * DX), 12.0))
-    forward = _eps_of(*_lowered(_grid_scene(legal)))
-    backward = _eps_of(*_lowered(_grid_scene(legal[::-1])))
-    one = _eps_of(*_lowered(_grid_scene((legal[0],))))
+    try:
+        forward = _eps_of(*_lowered(_grid_scene(legal)))
+        backward = _eps_of(*_lowered(_grid_scene(legal[::-1])))
+        one = _eps_of(*_lowered(_grid_scene((legal[0],))))
+    except ValueError as error:
+        raise AssertionError('known-valid whole-voxel composition was refused') from error
     assert float(np.max(np.abs(forward - backward) / np.abs(backward))) < 1e-12
     assert float(np.max(np.abs(forward - one) / np.abs(one))) < 1e-12
 
@@ -1315,12 +1383,12 @@ def test_a_voxel_one_body_fills_whole_is_not_a_shared_surface():
     boxes = [s.shape.support(grid) for s in legal]
     shared = tuple((max(u[0], v[0]), min(u[1], v[1])) for u, v in zip(*boxes))
     assert checks._shared_surface_voxels(bodies[0], bodies[1], grid, shared)[0] == 0
-    saved = checks._CLIP_ROUNDOFF
-    checks._CLIP_ROUNDOFF = 0.0
+    saved = checks._CLIP_ROUNDOFF, checks._CLIP_ULPS
+    checks._CLIP_ROUNDOFF, checks._CLIP_ULPS = 0.0, 0.0
     try:
         count, worst = checks._shared_surface_voxels(bodies[0], bodies[1], grid, shared)
     finally:
-        checks._CLIP_ROUNDOFF = saved
+        checks._CLIP_ROUNDOFF, checks._CLIP_ULPS = saved
     assert count == 740, count
     assert worst[0] < 1e-12, worst          # every one of them is round-off and nothing else
 
@@ -1331,6 +1399,134 @@ def test_a_voxel_one_body_fills_whole_is_not_a_shared_surface():
     # shared voxels, versus the historical 1815 on the six Yee components.
     with pytest.raises(ValueError, match='surfaces pass through the same voxel: 2422'):
         _quiet(fd.plan, twice)
+
+
+def test_the_clip_tolerance_follows_the_grid_and_not_a_number():
+    """A fill's round-off is ``(|x|/dx) eps``, so the tolerance that reads it cannot be a number.
+
+    ``_CLIP_ROUNDOFF`` was measured at the grids this file runs -- ``|x|/dx`` about 24 -- and
+    its own first sentence says the error grows with that ratio, which is a statement the
+    constant itself could not keep. It does grow, cleanly and over eleven decades. This gate
+    re-measures the law by moving the **whole scene**, domain and ball together, away from the
+    coordinate origin and reading the voxels the ball fills *whole*::
+
+        |x|/dx     |f - 1| where the ball fills whole    multiple of (|x|/dx) eps
+        1.2e+01                6.7e-16                            0.25
+        2.0e+03                6.8e-13                            1.53
+        2.0e+05                4.4e-11                            0.98
+        2.0e+06                7.0e-10                            1.57
+        2.0e+07                2.8e-09                            0.63
+        2.0e+08                4.5e-08                            1.01
+        2.0e+09                7.2e-07                            1.61
+
+    The law is a staircase: the error steps with the binade of ``|x|``, so within a step the
+    multiple swings -- 0.62 to 2.31 over forty ratios from 4.0e5 to 8.0e6, all six
+    components -- and the factor of 2 asserted below holds at these seven ratios, not between
+    them. The absolute 1e-9 is first crossed at ``|x|/dx`` of about **5.2e6**, where ``|x|``
+    passes ``2^18`` and the error steps from 7.0e-10 to 2.8e-9; from there a door written
+    against it alone reads a voxel the body fills whole as *fractional* -- which is
+    precisely the 740-voxel false refusal of
+    ``test_a_voxel_one_body_fills_whole_is_not_a_shared_surface``, brought back by the
+    coordinates rather than by the comparison.
+
+    **The end the body MISSES does not drift at all**: exactly 0.0 at every one of those
+    ratios. That is the whole reason door 3, which reads only that end, was never in danger
+    and door 5, which reads both, was. The gate asserts both halves, so a mutant that makes
+    the tolerance relative at the wrong end is as dead as one that leaves it absolute.
+
+    ``_CLIP_ULPS = 0`` is the mutant -- the constant as it stood -- and it fails the one
+    assertion that matters: the tolerance must stay above the measured round-off at every
+    grid, because falling below it is a refusal of a legal scene and not a lost digit.
+    """
+    from wavebit.fd._lower import checks
+    ulp = float(np.finfo(np.float64).eps)
+    rows = []
+    for centre in (0.0, 1e2, 1e4, 1e5, 1e6, 1e7, 1e8):
+        scene = fd.Scene(domain=fd.Domain(size=(N * DX,) * 3, center=(centre,) * 3),
+                         boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
+                         resolution=fd.Resolution(dx=DX), run=fd.Run(steps=4))
+        grid = _quiet(fd.plan, scene).grid
+        ball = fd.Sphere(radius=0.2, center=(centre,) * 3)
+        body = ball.body()
+        points = np.asarray(yee_points(grid, ball.support(grid), 'E', 0))
+        fill = np.asarray(body_occupancy(body, points, grid.dx)[0])
+        d = np.asarray(body.surface(points)[0])
+        whole, missed = d <= -math.sqrt(3) / 2 * grid.dx, d >= math.sqrt(3) / 2 * grid.dx
+        assert whole.sum() > 100 and missed.sum() > 100
+        at_one = float(np.max(np.abs(fill[whole] - 1.0)))
+        at_zero = float(np.max(np.abs(fill[missed])))
+        ratio = max(max(abs(grid.low[a]), abs(grid.low[a] + N * DX)) for a in range(3)) / DX
+        rows.append((ratio, at_one, at_zero, checks._clip_tolerance(grid)))
+
+    for ratio, at_one, at_zero, tol in rows:
+        assert at_zero == 0.0, (ratio, at_zero)         # the missed end never drifts
+        assert at_one <= 2.0 * ratio * ulp, (ratio, at_one)   # ... and the whole end obeys the law
+        assert tol > at_one, (ratio, tol, at_one)       # what the doors read is above both
+        assert tol < 1e-2, (ratio, tol)                 # and far below a fraction of a voxel
+    # the law is a law and not a plateau: three orders of |x|/dx buy three orders of error
+    assert rows[-1][1] / rows[2][1] == pytest.approx(rows[-1][0] / rows[2][0], rel=0.7)
+    # the floor rules at the grids this suite runs, and the relative arm takes over beyond
+    assert rows[0][3] == checks._CLIP_ROUNDOFF and rows[1][3] == checks._CLIP_ROUNDOFF
+    assert rows[-1][3] == pytest.approx(checks._CLIP_ULPS * rows[-1][0] * ulp, rel=1e-9)
+    # the mutant: the constant alone, which falls under the measured round-off from 5.2e6 on
+    saved = checks._CLIP_ULPS
+    checks._CLIP_ULPS = 0.0
+    try:
+        under = [(r[0], r[1]) for r in rows if checks._CLIP_ROUNDOFF <= r[1]]
+    finally:
+        checks._CLIP_ULPS = saved
+    assert [round(r[0], -6) for r in under] == [2e7, 2e8, 2e9], under
+
+
+@pytest.mark.parametrize('case', ('below', 'at', 'above', 'nonfinite', 'outside', 'shared'))
+def test_the_clip_tolerance_refuses_when_endpoint_neighborhoods_overlap(case, monkeypatch):
+    """A range failure must not turn either geometric refusal into an empty predicate.
+
+    The floor cases isolate the exact endpoint-neighbourhood boundary without relying on a
+    rounded coordinate product. The two live doors then use real sphere fills and a binary
+    grid translated by 2**38: nodes are still separated by 512 coordinate ulps, but the
+    unbounded tolerance exceeds one and would hide both an outside fill and shared surfaces.
+    """
+    from wavebit.fd._kernel.grid import Grid
+    from wavebit.fd._lower import checks
+
+    grid = Grid(n=(24, 24, 24), dx=1.0 / 32, low=(0.0, 0.0, 0.0))
+    if case in ('below', 'at', 'above'):
+        floor = {'below': 0.25, 'at': 0.5, 'above': 0.75}[case]
+        monkeypatch.setattr(checks, '_CLIP_ROUNDOFF', floor)
+        if case == 'below':
+            tol = checks._clip_tolerance(grid)
+            assert tol == floor and tol < 0.5 < 1.0 - tol
+        else:
+            assert not (floor < 0.5 < 1.0 - floor)
+            with pytest.raises(ValueError, match='ClipPrecisionRefused'):
+                checks._clip_tolerance(grid)
+        return
+    if case == 'nonfinite':
+        grid = Grid(n=(1, 1, 1), dx=1e-308, low=(1e308, 0.0, 0.0))
+        with pytest.raises(ValueError, match='ClipPrecisionRefused'):
+            checks._clip_tolerance(grid)
+        return
+
+    offset = 2.0 ** 38
+    moved = Grid(n=grid.n, dx=grid.dx, low=(offset, 0.0, 0.0))
+    assert grid.dx / math.ulp(offset) == 512
+    cx = 0.75 if case == 'outside' else 0.375
+    shape = fd.Sphere(radius=0.125, center=(cx, 0.375, 0.375))
+    shifted = fd.Sphere(radius=0.125, center=(offset + cx, 0.375, 0.375))
+    if case == 'outside':
+        control = checks._reaches_outside(shape, shape.body(), grid, shape.support(grid))
+        assert control[:3] == (checks._LEAVES, 0, '+') and control[3] > 0
+        with pytest.raises(ValueError, match='ClipPrecisionRefused'):
+            checks._reaches_outside(shifted, shifted.body(), moved, shifted.support(moved))
+    else:
+        control = checks._shared_surface_voxels(
+            shape.body(), shape.body(), grid, shape.support(grid), include_common=True)
+        assert control[0] > 0 and control[1][0] > 0
+        with pytest.raises(ValueError, match='ClipPrecisionRefused'):
+            checks._shared_surface_voxels(
+                shifted.body(), shifted.body(), moved, shifted.support(moved),
+                include_common=True)
 
 
 def test_the_shared_surface_mark_reaches_a_voxel_diagonal_and_not_an_edge():
@@ -1412,17 +1608,16 @@ def test_a_smoothed_shape_on_a_one_cell_invariant_axis_is_refused():
                           fd.Structure(fd.Region(size=(0.4, 10.0, 0.4)), 4.0)))
 
 
-def test_a_smoothed_shape_reaching_past_a_face_is_refused():
-    """A ball half outside the box is a different ball, and the six components disagree.
+def test_a_smoothed_shape_that_leaves_the_domain_is_refused():
+    """Door 3's first arm: material in a voxel that lies **wholly outside** the box.
 
-    Three of the six components have their Yee point **on** a face, so at a ``-`` face the
-    voxel they are asked about reaches half a cell outside it and the body's material there is
-    counted; the other three stop at the wall. What that does to the volume is measured in
-    ``test_the_volume_a_clipped_ball_would_have_lowered``. A ball *inscribed* in the box is
-    refused for the mirror reason -- at a ``+`` face the last half cell of the domain has no
-    point of those same three components in it, so its material is silently lost instead --
-    and that arm has its **own message**, gated in
-    ``test_the_plus_face_refusal_names_the_material_it_loses``.
+    Which three of the six components read that material, and whether they gain it or lose it
+    along with the rest, flips between the two ends of an axis -- so a body that leaves the box
+    is none of the shapes a reader would name, and the numbers are in
+    ``test_the_volume_a_clipped_ball_would_have_lowered`` and
+    ``test_the_two_ends_of_an_axis_disagree_in_opposite_directions``. The arm fires at a ``-``
+    face and at a ``+`` face alike, because **the cause and not the side is what it is drawn
+    on**: the second scene here sticks 3.8 cells past a ``+`` wall.
 
     **The exemption is why the test is on the body and not on the support box.** A shape that
     is uniform *across* the face loses nothing to the clip, answers ``uniform_along`` ``True``
@@ -1442,64 +1637,155 @@ def test_a_smoothed_shape_reaching_past_a_face_is_refused():
     material may not reach past a face -- and that statement is true here. The refusal names
     the spelling: a medium that fills the whole box is ``Scene(background=...)``.
     """
-    for centre, arm in (((-0.6, 0.0, 0.0), 'reaches past the x- face'),
-                        ((0.0, 0.59, 0.0), 'reaches the y+ face')):
-        with pytest.raises(ValueError, match='reaches') as e:
+    for centre, face in (((-0.6, 0.0, 0.0), 'x-'), ((0.0, 0.59, 0.0), 'y+')):
+        with pytest.raises(ValueError, match='leaves the domain') as e:
             _quiet(fd.plan, _grid_scene((fd.Structure(fd.Sphere(radius=0.2, center=centre),
                                                       2.25),)))
-        assert arm in str(e.value), str(e.value)
-        assert 'uniform ACROSS the face' in str(e.value)
-    with pytest.raises(ValueError, match='reaches the x\\+ face'):
-        _quiet(fd.plan, _grid_scene((fd.Structure(fd.Sphere(radius=N * DX / 2), 2.25),)))
+        message = str(e.value)
+        assert f'leaves the domain through the {face} face' in message, message
+        assert 'wholly outside the domain' in message, message
+        assert 'uniform ACROSS the face' in message, message
+        # ... and never the other arm's words, on either side
+        assert 'is inside the domain' not in message, message
+        assert 'nothing sticking out to truncate' not in message, message
     # tangent to the wall is inside the box, and a half space across it is exempt
     _quiet(fd.plan, _grid_scene((fd.Structure(fd.Sphere(radius=0.2, center=(-0.4, 0.0, 0.0)),
                                               2.25),)))
     _quiet(fd.plan, _grid_scene((fd.Structure(_HalfSpace(-0.1), 2.25),)))
     # a ball that contains the whole box: the only scene whose outside voxels are all interior
-    with pytest.raises(ValueError, match='reaches past the') as e:
+    with pytest.raises(ValueError, match='leaves the domain') as e:
         _quiet(fd.plan, _grid_scene((fd.Structure(fd.Sphere(radius=10.0), 2.25),)))
     assert 'fills 1.0000 of a voxel' in str(e.value)
 
 
-def test_the_plus_face_refusal_names_the_material_it_loses():
-    """Door 3's ``+`` arm: the body is **inside** the box, and the message says the right cause.
+def test_door_three_splits_by_cause_and_not_by_side():
+    """The two arms answer two questions, and a ``+`` face can be either of them.
 
-    The two ends of an axis are not the same question and the two arms now say so. At a ``-``
-    face the three components whose Yee offset along the axis is zero have their first voxel
-    centred on the wall, so it reaches half a cell outside the domain and material that is not
-    in the box is counted. At a ``+`` face those same three have their last point on the last
-    node, so their last voxel stops at ``high - dx/2`` and material between there and the wall
-    is **lost**. Nothing outside the box is counted at a ``+`` face at all: the probe voxel
-    door 3 reads there is itself half inside the domain for those three components, and
-    exactly zero for the other three, whose probe voxels really are outside (measured on the
-    inscribed ball: ``Ey`` 0.482619, ``Ez`` 0.482619, ``Hx`` 0.472177, all of it at
-    ``x <= 0.6``; ``Ex``, ``Hy``, ``Hz`` 0.000000).
+    ``_reaches_outside`` probes the cell layer one cell beyond each face the support reaches.
+    At a ``-`` face all six components' probe voxels lie wholly outside the domain. At a ``+``
+    face they do **not**: the three whose Yee offset along the axis is half a cell sit at
+    ``wall + dx/2``, so their voxel is ``[wall, wall + dx]`` and is wholly outside, while the
+    other three sit exactly on the wall and theirs is ``[wall - dx/2, wall + dx/2]``, half
+    inside. So the side does not say what went wrong and the probe voxel does, and this gate
+    reads the probe itself rather than trusting the message.
 
-    So ``fd.Sphere(radius=0.2, center=(0.376, 0, 0))``, whose surface is **0.48 cells clear**
-    of the ``x+`` wall and which never leaves the box, is refused -- and its mirror image at
-    the ``x-`` wall, and a ball tangent to the ``x-`` wall from inside, are accepted. That
-    asymmetry is the grid's and is kept; what this gate holds is that the message names it.
-    The previous writing said "reaches past the x+ face of the box: its material fills 0.0025
-    of a voxel that lies outside the domain there" for exactly this ball, and offered as
-    remedies "move it inside" (it is inside) and "say the truncated body with the cell-snapped
-    fd.Region" (there is nothing to truncate).
+    Measured here, both ways round at the ``x+`` / ``y+`` wall of this file's 1.2 box:
+
+        scene                                     wholly-outside probes   straddling probe
+        Sphere(0.2, (0, 0.59, 0)) -- 3.8 cells out   1.000000 (37, 30,       1.000000
+                                                      30 voxels at fill 1)
+        Sphere(0.2, (0.376, 0, 0)) -- inside         0.000000                0.002509
+
+    **The defect this replaces** split on ``side`` alone, so the first row got the second's
+    message: a body with three probe voxels wholly outside the domain and full of material was
+    told that "nothing outside the box is being counted here" and that "there is nothing
+    sticking out to truncate". Both halves of the table are asserted, so neither the mutant
+    that folds the straddling probe into the outside one (the old code) nor the one that folds
+    the outside probes into the straddling one survives.
+    """
+    from wavebit.fd._lower import checks
+    grid = _quiet(fd.plan, _grid_scene(())).grid
+    for shape, axis, away, straddling in (
+            (fd.Sphere(radius=0.2, center=(0.0, 0.59, 0.0)), 1, 1.0, 1.0),
+            (fd.Sphere(radius=0.2, center=(0.376, 0.0, 0.0)), 0, 0.0, 0.002509)):
+        body, box = shape.body(), shape.support(grid)
+        beyond = [(box[b][0] - 1, box[b][1] + 1) for b in range(3)]
+        beyond[axis] = (grid.n[axis], grid.n[axis] + 1)
+        wall = grid.low[axis] + grid.n[axis] * grid.dx
+        got = {True: 0.0, False: 0.0}
+        for field in ('E', 'H'):
+            for c in range(3):
+                points = np.asarray(yee_points(grid, tuple(beyond), field, c))
+                fill = np.asarray(body_occupancy(body, points, grid.dx)[0])
+                outside = bool(OFFSETS[field][c][axis])
+                # the classification is a fact about the point, so check it and do not assume
+                point = float(points.reshape(-1, 3)[0][axis])
+                assert (point - 0.5 * grid.dx >= wall - 1e-12) is outside, (field, c, point)
+                got[outside] = max(got[outside], float(np.max(fill)))
+        assert got[True] == pytest.approx(away, abs=1e-6), (shape, got)
+        assert got[False] == pytest.approx(straddling, abs=1e-6), (shape, got)
+        cause = checks._reaches_outside(shape, body, grid, box)[0]
+        assert cause is (checks._LEAVES if away else checks._TRIMMED), (shape, cause)
+
+    # x+ trims first in axis order, but the later y+ face actually leaves the domain.
+    shape = fd.Sphere(radius=0.6, center=(0.0, 0.1, 0.0))
+    got = checks._reaches_outside(shape, shape.body(), grid, shape.support(grid))
+    assert got[:3] == (checks._LEAVES, 1, '+'), got
+
+
+def test_the_trimmed_refusal_names_the_material_it_loses():
+    """Door 3's second arm: the body is **inside** the box, and the message says so.
+
+    At a ``+`` face the three components whose Yee offset along the axis is zero have their
+    last point on the last node, so their last voxel stops at ``high - dx/2`` and material
+    between there and the wall is **lost** -- with nothing outside the box at all. So
+    ``fd.Sphere(radius=0.2, center=(0.376, 0, 0))``, whose surface is **0.48 cells clear** of
+    the ``x+`` wall and which never leaves the box, is refused -- and its mirror image at the
+    ``x-`` wall, and a ball tangent to the ``x-`` wall from inside, are accepted. That
+    asymmetry is the grid's and is kept; what this gate holds is that the message names it,
+    quotes its shortfall as the **relative** number it is, and offers only the remedies that
+    work for a body already inside the domain.
 
     What it costs is in ``test_the_plus_face_loses_the_last_half_cell``.
     """
     inside = fd.Sphere(radius=0.2, center=(0.376, 0.0, 0.0))
     assert inside.high[0] < N * DX / 2, 'the ball must be entirely inside the box'
-    with pytest.raises(ValueError, match='reaches the x\\+ face') as e:
+    with pytest.raises(ValueError, match='is inside the domain') as e:
         _quiet(fd.plan, _grid_scene((fd.Structure(inside, 2.25),)))
     message = str(e.value)
     assert 'LOST' in message, message
-    assert 'lies outside the domain' not in message, message
-    assert 'entirely inside the domain and this still happens' in message, message
-    assert 'truncate' in message and 'no use here' in message, message
+    assert 'leaves the domain through' not in message, message   # the other arm's opening
+    assert 'wholly outside' not in message, message
+    assert 'Nothing is outside the box' in message, message
+    assert 'may be entirely inside and this still happens' in message, message
+    assert 'truncate' in message and 'already inside' in message, message
     assert 'half a cell (0.025) clear of the x+ wall' in message, message
+    # the shortfall is quoted as a fraction of the volume, and said to be one
+    assert '1.872e-05 OF that volume (6.27e-07 of volume)' in message, message
+    assert '1.114e-02 of it (3.73e-04) at tangency' in message, message
     # the mirror image, and a ball tangent to the x- wall from inside, are both accepted
     for cx in (-0.376, -0.3999):
         _quiet(fd.plan, _grid_scene((fd.Structure(fd.Sphere(radius=0.2, center=(cx, 0.0, 0.0)),
                                                   2.25),)))
+
+
+def test_the_two_ends_of_an_axis_disagree_in_opposite_directions(monkeypatch):
+    """The numbers the ``leaves`` arm quotes: one body, one wall, six answers.
+
+    ``Sphere(radius=0.2, center=(0, 0.59, 0))`` sticks **3.8 cells** past the ``y+`` wall of
+    this file's 1.2 box, so 53.75% of ``4 pi R^3/3`` is inside it. Held open::
+
+        component set             y+ centre (0, 0.59, 0)      y- mirror (0, -0.59, 0)
+        Ey, Hx, Hz  (offset 1/2)      0.01801075                  0.01801075
+        Ex, Ez, Hy  (offset 0)        0.01487374  (-17.4%)        0.02110849  (+17.2%)
+
+    The first row is the same at both ends and is exactly the part inside the wall -- those
+    three components' voxels stop on the wall at both ends. The second is short at ``y+``,
+    because their last voxel stops half a cell inside, and over at ``y-``, because their first
+    voxel starts half a cell outside. **Which three components are wrong, and in which
+    direction, is a property of the end of the axis**, which is the whole reason the refusal
+    cannot be written as "three of them count material beyond the wall".
+    """
+    from wavebit.fd._lower import checks
+    monkeypatch.setattr(checks, '_reaches_outside', lambda *a, **k: None)
+    truth = 4 / 3 * math.pi * 0.2 ** 3
+    got = {}
+    for cy in (0.59, -0.59):
+        scene = _grid_scene((fd.Structure(fd.Sphere(radius=0.2, center=(0.0, cy, 0.0)), 2.25),))
+        plan = _quiet(fd.plan, scene)
+        occ = occupancy(scene, plan, runtime('numpy'), fields=('E', 'H'))
+        got[cy] = {f'{f}{"xyz"[c]}': float(np.sum(occ[0][f][c][0])) * plan.dx ** 3
+                   for f in ('E', 'H') for c in range(3)}
+    cap = math.pi * 0.19 ** 2 * (3 * 0.2 - 0.19) / 3          # the part outside the y+ wall
+    for cy in (0.59, -0.59):
+        for name in ('Ey', 'Hx', 'Hz'):
+            assert got[cy][name] == pytest.approx(truth - cap, rel=1e-6), (cy, got[cy])
+            assert got[cy][name] == pytest.approx(0.01801075, abs=5e-8), (cy, got[cy])
+    for name in ('Ex', 'Ez', 'Hy'):
+        assert got[0.59][name] == pytest.approx(0.01487374, abs=5e-8), got[0.59]
+        assert got[-0.59][name] == pytest.approx(0.02110849, abs=5e-8), got[-0.59]
+    assert got[0.59]['Ex'] / got[0.59]['Ey'] - 1 == pytest.approx(-0.174, abs=1e-3)
+    assert got[-0.59]['Ex'] / got[-0.59]['Ey'] - 1 == pytest.approx(+0.172, abs=1e-3)
 
 
 def test_the_plus_face_loses_the_last_half_cell(monkeypatch):
@@ -1511,10 +1797,10 @@ def test_the_plus_face_loses_the_last_half_cell(monkeypatch):
     which is the opposite sign to the ``-`` face, where they came out 18.7% **over**.
 
         surface clear of the x+ wall     Ex          Ey = Ez
-        0.48 cells                    +2.1e-16      -1.872e-05
-        0.002 cells (tangent)         +4.1e-16      -1.114e-02
+        0.48 cells                    +2.2e-16      -1.872e-05
+        0.002 cells (tangent)         +2.2e-16      -1.114e-02
 
-    and the mirror of each at the ``x-`` wall loses nothing at all (worst 8.3e-16). Those two
+    and the mirror of each at the ``x-`` wall loses nothing at all (worst 1.3e-15). Those two
     numbers are what the ``+`` arm's message quotes.
     """
     from wavebit.fd._lower import checks

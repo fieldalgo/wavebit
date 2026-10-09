@@ -120,16 +120,17 @@ voxel it fills and which way its surface faces there, and its material is mixed 
 the cell already held by the Farjadpour/Kottke rule (``_lower/occupancy.py`` produces the
 pair, ``_lower/coefficients.py::mix`` is the rule and carries its citations). The rule is two
 isotropic phases meeting at one interface, and C2 refuses every neighbouring case **by name**
-rather than answering it approximately (``_lower/checks.py::check_smoothed``): a smoothed
-shape may not share cells with an ``fd.Conductor`` or an ``fd.Dispersive`` (the isolated
-film scopes below are the only exceptions) or with an anisotropic ``eps``/``mu``; it may not reach a
-``Periodic``, ``Bloch`` or ``Axis1D`` face, nor a face of the box (it would count material
-outside a ``-`` face and lose the last half cell at a ``+`` one -- two arms, two messages);
-and two smoothed shapes may not put their surfaces through one voxel except for the flush
-junction described below, nor (from C4) a smoothed
-surface a voxel a cell-snapped structure's face cuts -- which is how a pillar standing flush on
-a ``Slab`` substrate is refused rather than read half a cell off. General CSG remains later
-work. ``Sphere(range=...)``, ``Cylinder(range=...)``, ``Box(range=...)`` and
+rather than answering it approximately (``_lower/checks.py::check_smoothed``), in six doors
+and in the order that function numbers them: a smoothed shape may not share cells with an
+``fd.Conductor`` or an ``fd.Dispersive`` (the isolated film scopes below are the only
+exceptions); it may not reach a ``Periodic``, ``Bloch`` or ``Axis1D`` face; it may not reach a
+face of the box in a way the grid cannot carry whole (it may leave the domain, or the plan may
+trim its last half cell at a ``+`` face -- two arms split by cause, two messages); it may not
+share cells with an anisotropic ``eps``/``mu``; two smoothed shapes may not put their surfaces
+through one voxel except for the flush junction described below; and (from C4) a smoothed
+surface may not cut a voxel a cell-snapped structure's face cuts -- which is how a pillar
+standing flush on a ``Slab`` substrate is refused rather than read half a cell off. General
+CSG remains later work. ``Sphere(range=...)``, ``Cylinder(range=...)``, ``Box(range=...)`` and
 ``Prism(range=...)`` reserve fixed support boxes for sweeps and compiled-program reuse.
 Radius and centre, extrusion height, a box's three sizes and a prism's vertices may
 be differentiated with a concrete prebuilt plan. Extrusion axes, rotation angles

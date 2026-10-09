@@ -37,10 +37,10 @@ The table, and where each row lives:
     (stage 4 C2) a smoothed shape at a          check_smoothed, here: the periodic image
       Periodic, Bloch or Axis1D face              ring is not written; a body uniform
                                                   along the axis is carried (C4)
-    (stage 4 C2) a smoothed shape whose         check_smoothed, here: three of the six
-      material reaches a face of the box          components gain material outside a minus
-                                                  face, and lose the last half cell at a
-                                                  plus one -- two arms, two messages
+    (stage 4 C2) a smoothed shape the grid      check_smoothed, here: two arms, split by
+      cannot carry whole at a face of the box     CAUSE -- a body that LEAVES the domain,
+                                                  and one whose last half cell the plan
+                                                  TRIMS -- and two messages
     (stage 4 C2) an anisotropic eps or mu on    check_smoothed, here: the mixing rule is
       a smoothed shape                            derived for two isotropic media
     (stage 4 C2) two smoothed shapes whose      check_smoothed, here: the two-phase rule
@@ -316,44 +316,58 @@ def check_smoothed(scene, grid):
     volume -- the slab cross-section, which is neither the ball nor the cylinder a reader would
     take it for -- while the identical scene with ``y=Periodic()`` is refused by name.
 
-    **3. No smoothed shape whose material reaches a face of the box.** A cell-snapped
+    **3. No smoothed shape the grid cannot carry whole at a face of the box.** A cell-snapped
     ``fd.Region`` is clipped to the domain exactly, because its material is a range of cell
     indices. A smoothed body is not, and the six components do not agree about where the box
     ends -- three of them have their Yee point on the node plane and three half a cell off it.
-    **That disagreement points opposite ways at the two ends of an axis, and the two arms of
-    this door say so separately.**
+    **Two different things go wrong because of that, and the door's two arms are split by which
+    one it is, not by which end of the axis it happened at.**
 
-    *At a minus face, three components GAIN material that is not in the box.* Their first
-    voxel is centred on the wall and so reaches half a cell outside it. Measured,
-    ``Sphere(radius=0.2)`` centred on the ``x-`` PEC face of a 1.2 box at ``dx = 0.05``: ``Ex``
-    lowers **0.01675516** of volume, exactly half the ball (``2 pi R^3/3 = 0.01675516``), and
-    ``Ey`` and ``Ez`` lower **0.01988039**, **18.7% more** -- the half cell beyond the wall
-    counted in. So a ball half outside the box is neither the ball nor the hemisphere.
+    *A body that LEAVES the domain* has material in voxels that lie wholly outside it, and
+    which three components read that material -- and whether they gain it or lose it with the
+    rest -- flips between the two ends of the axis. Measured on a 1.2 box at ``dx = 0.05``,
+    ``Sphere(radius=0.2, center=(0, 0.59, 0))``, sticking **3.8 cells** past the ``y+`` wall:
+    ``Ey``, ``Hx`` and ``Hz`` lower **0.01801075** of volume, which is exactly the part inside
+    the wall, and ``Ex``, ``Ez`` and ``Hy`` lower **0.01487374**, **17.4% less**, because they
+    also drop the last half cell. Mirror it to ``y-`` and the first three still read 0.01801075
+    while the other three read **0.02110849**, **17.2% more**. Centred *on* the ``x-`` face,
+    ``Ex`` reads half the ball (**0.01675516**, ``2 pi R^3/3``) and ``Ey`` and ``Ez``
+    **0.01988039**, **18.7% more**. None of those is the ball, the hemisphere or the cap.
 
-    *At a plus face the same three LOSE the last half cell.* Their last point is the last node,
-    so their last voxel stops at ``high - dx/2`` and no voxel of theirs holds anything between
-    that and the wall. Nothing outside the box is counted there -- the probe voxel this door
-    reads at a ``+`` face is itself half inside the domain for those three -- so a body
-    entirely inside the box is refused, for the material it is about to lose rather than for
-    any it would gain. Measured on the same ball at ``dx = 0.05``: with its surface **0.48
-    cells clear** of the ``x+`` wall it lowers 1.87e-5 short of ``4 pi R^3/3`` on ``Ey`` and
-    ``Ez`` and exactly on ``Ex``, rising to **1.11e-2** at tangency, while the mirror image of
-    each of those at the ``x-`` wall loses nothing at all (8e-16). A ball **inscribed** in the
+    *A body the plan TRIMS* is entirely inside the domain and still loses its last half cell at
+    a ``+`` face: the three components whose point is on the node plane have their last point
+    on the last node, so their last voxel stops at ``high - dx/2`` and nothing of theirs holds
+    what lies between that and the wall. Measured on the same ball at ``dx = 0.05``: with its
+    surface **0.48 cells clear** of the ``x+`` wall it falls short of ``4 pi R^3/3`` by
+    **1.872e-05 of that volume** (6.27e-07 absolute) on ``Ey`` and ``Ez`` and by nothing on
+    ``Ex``, rising to **1.114e-02 of it** (3.73e-04) at tangency, while the mirror image of
+    each of those at the ``x-`` wall loses nothing at all (1.3e-15). A ball **inscribed** in the
     domain is therefore refused at its ``+`` faces and accepted at its ``-`` ones, which is not
-    a symmetry the grid has to offer. The spelling that works at a ``+`` face is to keep the
-    surface half a cell clear of the wall, or to enlarge the domain; "say the truncated body
-    with the cell-snapped ``fd.Region``" is the ``-`` arm's remedy and means nothing here, because
-    there is nothing sticking out to truncate.
+    a symmetry the grid has to offer. The remedy that works here is to keep the surface half a
+    cell clear of the wall or to enlarge the domain; "move it inside" and "say the truncated
+    body with the cell-snapped ``fd.Region``" are the other arm's and mean nothing here, because
+    this body is already inside and nothing sticks out to truncate.
+
+    **What separates them is the probe voxel's own geometry**, not the side. At a ``-`` face
+    all six probe voxels lie wholly outside the domain; at a ``+`` face the three whose Yee
+    offset along the axis is half a cell are wholly outside and the other three straddle the
+    wall. Material in a wholly outside one is the first arm, material in the straddling one
+    alone is the second, and the first wins wherever both are true. Splitting by side instead
+    put ``Sphere(radius=0.2, center=(0, 0.59, 0))`` -- the 3.8-cell case above, with three
+    probe voxels full of material outside the domain -- on the second arm's message, which told
+    it that "nothing outside the box is being counted here" and that "there is nothing sticking
+    out to truncate".
 
     The test is on the body and not on the support box, because the support carries a cell of
     margin: :func:`_reaches_outside` asks the body for its fill over the cell layer just beyond
     each face the support reaches, at all six components' points, and refuses when any of them
-    is above :data:`_CLIP_ROUNDOFF` -- the tolerance that separates the exact clip's own
-    round-off from a leak worth refusing, measured and stated there. A shape that is **uniform
-    across** the face -- a substrate, a half space -- answers ``Shape.uniform_along`` ``True``
-    in that cell layer and is exempt from both arms, because a body that does not change across
-    the wall neither gains nor loses anything there. A ``Symmetry`` face is not a wall for this
-    door: what a body may be at a mirror plane is :func:`check_symmetry`'s question (C5).
+    is above :func:`_clip_tolerance` -- what separates the exact clip's own round-off from a
+    leak worth refusing, measured and stated at :data:`_CLIP_ROUNDOFF`. A shape that is
+    **uniform across** the face -- a substrate, a half space -- answers ``Shape.uniform_along``
+    ``True`` in that cell layer and is exempt from both arms, because a body that does not
+    change across the wall neither gains nor loses anything there. A ``Symmetry`` face is not
+    a wall for this door: what a body may be at a mirror plane is :func:`check_symmetry`'s
+    question (C5).
 
     **4. No anisotropic eps or mu where a smoothed shape reaches.** The rule
     ``coefficients.mix`` applies is the diagonal of the Farjadpour/Kottke tensor's inverse
@@ -391,7 +405,7 @@ def check_smoothed(scene, grid):
     diagonal (a surface inside a voxel is within that of the voxel's own point, and a composed
     CSG distance under-estimates, so the mark cannot be missed), and only then pays for the
     exact fill at the marked points, refusing where both are fractional **to within
-    :data:`_CLIP_ROUNDOFF` of the two ends** -- because the exact clip returns neither end
+    :func:`_clip_tolerance` of the two ends** -- because the exact clip returns neither end
     exactly and comparing against 0 and 1 themselves refused 740 voxels of a legal scene. It is the
     narrow case C2's one smoothed shape can reach of the media-counting refusal C5 owns; a
     creased interface *within* one body (a prism edge, a block corner) is one painter and is
@@ -457,9 +471,9 @@ def check_smoothed(scene, grid):
                     f'{where} reaches no cell along {axis}: it lies outside the box '
                     f'entirely. A smoothed shape is not clipped to the domain the way a '
                     f'cell-snapped fd.Region is, so it would lower to nothing at all here while '
-                    f'the scene still reported it. (One that reaches the box but crosses a '
-                    f'face is refused too, a few lines below, and for the sharper reason: '
-                    f'three of the six components would count the material beyond the wall.) '
+                    f'the scene still reported it. (One that reaches the box and still '
+                    f'leaves it, or whose last half cell the grid has no point for, is refused '
+                    f'too, a few lines below, and each on its own message.) '
                     f'Move it inside Domain(size=..., center=...), or enlarge the domain.')
             face = scene.boundaries.face(axis + '-')
             # A body uniform along the axis over the whole domain is the same cross-section
@@ -501,45 +515,58 @@ def check_smoothed(scene, grid):
                         if isinstance(scene.boundaries.face(axis + side), Symmetry))
         outside = _reaches_outside(structure.shape, body, grid, box, mirrors)
         if outside is not None:
-            a, side, fill = outside
+            cause, a, side, fill = outside
             axis = 'xyz'[a]
-            if side == '-':
+            if cause is _LEAVES:
                 raise ValueError(
-                    f'{where} reaches past the {axis}- face of the box: its material '
-                    f'fills {fill:.4f} of a voxel that lies outside the domain there. A '
+                    f'{where} leaves the domain through the {axis}{side} face: its material '
+                    f'fills {fill:.4f} of a voxel that lies wholly outside the domain there. A '
                     f'smoothed shape is not clipped to the domain the way a cell-snapped '
-                    f'fd.Region is, and the six components do not agree about where the box ends '
-                    f'-- at a MINUS face three of them have their point ON the wall, so their '
-                    f'first voxel reaches half a cell outside it and counts the material '
-                    f'there. Measured, a Sphere(radius=0.2) centred on a PEC x- face at '
-                    f'dx = 0.05 lowers 0.01675516 of volume on Ex, exactly half the ball, and '
-                    f'0.01988039 on Ey and Ez -- 18.7% more. So a ball half outside the box is '
-                    f'neither the ball nor the hemisphere, and it is refused rather than '
-                    f'silently trimmed. Move it inside Domain(size=..., center=...), enlarge '
-                    f'the domain, or say the truncated body with the cell-snapped fd.Region, '
-                    f'which really is clipped. A shape that is uniform ACROSS the face -- a '
-                    f'substrate, a half space -- is not refused: it answers uniform_along() '
-                    f'True in that cell layer and the clip takes nothing from it.')
+                    f'fd.Region is -- a Region\'s material is a range of cell indices and is '
+                    f'cut to the grid exactly, a body\'s is a fraction of each voxel and out '
+                    f'there is no voxel to cut. What the lowering does with the part outside is neither '
+                    f'"keep" nor "drop": the six components disagree, because three of them '
+                    f'have their Yee point on the node plane along {axis} and three half a '
+                    f'cell off it, and WHICH three are wrong flips between the two ends of the '
+                    f'axis. Measured on a 1.2 box at dx = 0.05, Sphere(radius=0.2) sticking '
+                    f'3.8 cells past the y+ wall lowers 0.01801075 of volume on Ey, Hx and Hz '
+                    f'-- exactly the part inside the wall -- and 0.01487374 on Ex, Ez and Hy, '
+                    f'17.4% LESS; mirrored to y- the same three read 0.01801075 and the other '
+                    f'three 0.02110849, 17.2% MORE. A ball centred on the x- face reads half '
+                    f'the ball (0.01675516) on Ex and 0.01988039 on Ey and Ez, 18.7% more. So '
+                    f'a body that leaves the box is none of the shapes a reader would name, '
+                    f'and it is refused rather than silently trimmed. Move it inside '
+                    f'Domain(size=..., center=...), enlarge the domain, or say the truncated '
+                    f'body with the cell-snapped fd.Region, which really is clipped. Inside is '
+                    f'not quite enough at a + face: a surface nearer than half a cell '
+                    f'({0.5 * grid.dx:g}) to a + wall loses that last half cell, and the OTHER '
+                    f'arm of this door says so in its own words. A shape that is uniform '
+                    f'ACROSS the face -- a substrate, a half space -- is not refused at all: '
+                    f'it answers uniform_along() True in that cell layer and the clip takes '
+                    f'nothing from it.')
             raise ValueError(
-                f'{where} reaches the {axis}+ face of the box: {fill:.4f} of a voxel there '
-                f'holds material the grid has no point to carry. A smoothed shape is not '
-                f'clipped to the domain the way a cell-snapped fd.Region is, and the six '
-                f'components do not agree about where the box ends -- but a PLUS face is the '
-                f'opposite case to a minus one, and nothing outside the box is being counted '
-                f'here. At this face the three components whose Yee offset along {axis} is '
-                f'zero have their last point on the last node, so their last voxel stops half '
-                f'a cell short of the wall and whatever the body puts between there and the '
-                f'wall is simply LOST. The body may be entirely inside the domain and this '
-                f'still happens. Measured, a Sphere(radius=0.2) at dx = 0.05 whose surface is '
-                f'0.48 cells clear of the x+ wall lowers 1.87e-5 short of 4 pi R^3/3 on Ey and '
-                f'Ez and exactly on Ex, and 1.11e-2 short at tangency, while the same ball '
-                f'mirrored to the x- wall loses nothing (8e-16). Keep the surface at least '
-                f'half a cell ({0.5 * grid.dx:g}) clear of the {axis}+ wall, or enlarge the '
-                f'domain with Domain(size=..., center=...) -- a truncated fd.Region is the minus '
-                f'face\'s remedy and is no use here, because there is nothing sticking out to '
-                f'truncate. A shape that is uniform ACROSS the face -- a substrate, a half '
-                f'space -- is not refused: it answers uniform_along() True in that cell layer '
-                f'and a body that does not change across the wall loses nothing there.')
+                f'{where} is inside the domain, and its surface still comes within half a '
+                f'cell of the {axis}+ face: {fill:.4f} of a voxel straddling that wall holds '
+                f'its material, and the three components whose Yee point sits on the node '
+                f'plane along {axis} have no point beyond wall - dx/2 to carry it, so the '
+                f'domain\'s own last half cell there is simply LOST. Nothing is outside the '
+                f'box -- the probe voxel that read this is itself half INSIDE, and the three '
+                f'whose probe voxels really are outside read exactly zero, which is how this '
+                f'case is told from a body that leaves the domain. The body may be entirely '
+                f'inside and this still happens, while its mirror image at the {axis}- wall '
+                f'loses nothing at all (1.3e-15) -- not a symmetry the grid has to offer. '
+                f'Measured, Sphere(radius=0.2) at dx = 0.05 whose surface is 0.48 cells clear '
+                f'of the x+ wall falls short of 4 pi R^3/3 by 1.872e-05 OF that volume '
+                f'(6.27e-07 of volume) on Ey and Ez and by nothing on Ex, and by 1.114e-02 of '
+                f'it (3.73e-04) at tangency. Keep the surface at least half a cell '
+                f'({0.5 * grid.dx:g}) clear of the {axis}+ wall, or enlarge the domain with '
+                f'Domain(size=..., center=...). "Move it inside the domain" and "say the '
+                f'truncated body with the cell-snapped fd.Region" are the OTHER arm\'s remedies, '
+                f'for a body that really does leave the box, and neither means anything here: '
+                f'this one is already inside and there is nothing sticking out to truncate. A '
+                f'shape that is uniform ACROSS the face -- a substrate, a half space -- is not '
+                f'refused: it answers uniform_along() True in that cell layer and a body that '
+                f'does not change across the wall loses nothing there.')
         media = [(structure.material, where),
                  (_background(scene), 'Scene(background=)')]
         for other, s in enumerate(structures):
@@ -674,7 +701,8 @@ def check_smoothed(scene, grid):
     return junction.finish(scene, junctions)
 
 
-#: The exact clip's own round-off, and the tolerance **every** door here reads a fill against.
+#: The exact clip's own round-off: the floor of :func:`_clip_tolerance`, which doors 3 and 5 read
+#: a fill against, and still the whole tolerance at the other sites that read one (below).
 #:
 #: A fill is a number in ``[0, 1]`` built from coordinates of size ``|x|``, so its round-off is
 #: of order ``|x|/dx`` ulps: it grows with the grid and with how far the body's own description
@@ -694,10 +722,82 @@ def check_smoothed(scene, grid):
 #:
 #: The smallest thing worth refusing at either end -- a leak into a voxel outside the domain, a
 #: second surface inside one -- is a fraction of a voxel. This constant sits three orders above
-#: the measured round-off and eight below that, and what reading a fill within it as 0 or 1
-#: costs is bounded by itself: the mixing rule is Lipschitz in ``f``, so the mixed value moves by
-#: order ``tol`` of the two media's contrast and no more.
+#: the measured round-off and eight below that. It bounds the geometric fill distinction
+#: made by this door, not the resulting material-coefficient error: the mixing rule's
+#: sensitivity also depends on the positive material values and their ratio.
+#:
+#: **It is a floor and not the whole tolerance**, because the sweep above holds ``|x|/dx`` at
+#: about 24 while the paragraph's own first sentence says the round-off grows with that ratio.
+#: It does, cleanly. Measured on ``fd.Sphere(radius=0.2)`` at ``dx = 0.05`` with the whole
+#: scene -- domain and ball together -- moved away from the coordinate origin, reading the
+#: voxels the ball fills WHOLE (``d <= -dx sqrt(3)/2``):
+#:
+#:     |x|/dx        |f - 1| where the ball fills whole       as a multiple of (|x|/dx) eps
+#:     1.2e+01                   6.7e-16                                 0.25
+#:     2.0e+03                   6.8e-13                                 1.53
+#:     2.0e+05                   4.4e-11                                 0.98
+#:     2.0e+06                   7.0e-10                                 1.57
+#:     2.0e+07                   2.8e-09                                 0.63
+#:     2.0e+08                   4.5e-08                                 1.01
+#:     2.0e+09                   7.2e-07                                 1.61
+#:
+#: eleven decades on one law, and the half space (top 0.013 above the centre) reads the same
+#: numbers from ``2.0e3`` on; at ``1.2e1`` it reads 1.0e-13, the ratio-free round-off the sweep
+#: above was set by. The law is a staircase and not a line: the error steps with the binade of
+#: ``|x|``, so the coefficient swings within each step -- 0.62 to 2.31 over forty ratios from
+#: 4.0e5 to 8.0e6, all six components -- and the absolute ``1e-9`` is first *crossed* at
+#: ``|x|/dx`` of about **5.2e6**, where ``|x|`` passes ``2^18`` at ``dx = 0.05`` and the error
+#: steps from 7.0e-10 to 2.8e-9. From there a door written against it alone reads a voxel the
+#: body fills whole as fractional, which is exactly what the 740-voxel refusal did at
+#: ``dx = 0.05``. The end the body **misses** never drifts at all: 0.000e+00 at every one of
+#: those ratios, for both bodies, which is why door 3, which reads only that end, was never in
+#: danger and door 5, which reads both, is. :func:`_clip_tolerance` is what those two call, and
+#: ``tests/test_fd_occupancy.py::test_the_clip_tolerance_follows_the_grid_and_not_a_number``
+#: re-measures the table. Every other reader still reads this constant bare -- here, door 6's
+#: :func:`_snapped_joint` (both ends, as door 5), :func:`check_symmetry`, the report's cut
+#: counts and the fill-contract guard (which scales its own); outside this module the
+#: constitutive plan, the junction, the shape ranges and ``_post`` -- and
+#: whether they move to the grid-scaled tolerance is a decision not taken here.
 _CLIP_ROUNDOFF = 1e-9
+
+#: The margin :func:`_clip_tolerance` carries over that ``(|x|/dx) eps`` law -- more than two
+#: orders over the worst coefficient measured (2.31), about what :data:`_CLIP_ROUNDOFF`
+#: carries over the round-off at the grids this suite runs (1e-9 against 4.0e-13), and for the
+#: same reason: reading a whole voxel as fractional refuses a legal scene outright. This
+#: geometric tolerance is not a material-error budget. The two arms cross at ``|x|/dx`` of
+#: about ``4.5e3``; the historical origin-centred fixtures remain below it, while the new
+#: translated-grid gates exercise the relative arm.
+#:
+#: The tolerance passes 1% of a voxel at ``|x|/dx`` of about ``4.5e10``; admission below
+#: the range limit is not a geometry-accuracy guarantee. At ``tol >= 0.5`` the two endpoint
+#: neighbourhoods meet and no fill can satisfy ``tol < f < 1 - tol``. Continuing would disable
+#: the shared-surface door; ``tol >= 1`` would also hide every outside fill. The helper refuses
+#: that range and nonfinite tolerances explicitly, without a silent cap. Recentring the scene
+#: or increasing ``dx`` reduces the coordinate-to-cell ratio.
+_CLIP_ULPS = 1e3
+
+#: ``float64``'s own step, the unit the law above is written in.
+_ULP = float(np.finfo(np.float64).eps)
+
+
+def _clip_tolerance(grid):
+    """How far from 0 and 1 a fill may land on **this** grid and still be read as an end.
+
+    :data:`_CLIP_ROUNDOFF` floors it and the measured ``(|x|/dx) eps`` law lifts it once the
+    scene's own coordinates are large, where ``|x|`` is the furthest corner of the domain from
+    the coordinate origin -- the largest number a voxel centre here can be built from, and so
+    the one whose ulp the clip's cancellation is in.
+    """
+    reach = max(max(abs(grid.low[a]), abs(grid.low[a] + grid.n[a] * grid.dx)) for a in range(3))
+    tol = max(_CLIP_ROUNDOFF, _CLIP_ULPS * (reach / grid.dx) * _ULP)
+    if not math.isfinite(tol) or tol >= 0.5:
+        raise ValueError(
+            f'ClipPrecisionRefused: the coordinate-to-cell ratio requires fill tolerance '
+            f'{tol!r}; it must be finite and below 0.5. The endpoint neighbourhoods '
+            f'overlap at 0.5, so no shared-surface fill can be distinguished there. '
+            f'Recenter the domain and all geometry near the origin, or coarsen the grid '
+            f'(increase Resolution(dx=...)); the tolerance is not silently capped.')
+    return tol
 
 #: Half a voxel's diagonal, in cells. A surface inside the voxel centred on a point is within
 #: this of that point, so ``|d| > _VOXEL_REACH * dx`` proves the surface is not in the voxel --
@@ -719,8 +819,19 @@ def _isotropic(triple):
     return None not in values and values[0] == values[1] == values[2]
 
 
+#: The body's material is **outside the domain**: it was read in a probe voxel that lies wholly
+#: outside, so the run would gain material the scene does not have there -- or, on the three
+#: components that stop at the wall, lose it. Either way the six components disagree.
+_LEAVES = 'leaves'
+
+#: The body is **inside** the domain and the grid still cannot carry all of it: its material
+#: reaches into the last half cell before a ``+`` wall, which the three components whose Yee
+#: point sits on the node plane have no point of their own in. Nothing is outside the box.
+_TRIMMED = 'trimmed'
+
+
 def _reaches_outside(shape, body, grid, box, mirrors=()):
-    """``(axis, '-'/'+', fill)`` where the body's material reaches a face, or ``None``.
+    """``(cause, axis, '-'/'+', fill)`` where the body is not lowered whole, or ``None``.
 
     A face in ``mirrors`` (``(axis index, side)`` pairs) is a ``Symmetry`` plane, and what a
     body may be there is :func:`check_symmetry`'s question, not this one: a body symmetric
@@ -735,18 +846,33 @@ def _reaches_outside(shape, body, grid, box, mirrors=()):
     exempt: nothing is gained or lost across the wall by a body that does not change across
     it, which is what lets a substrate or a half space run out of the box.
 
-    **The two sides are not the same question, and the caller's two messages say so.** At a
-    ``-`` face the probe layer is cell ``-1``, and every one of the six components' voxels
-    there lies wholly outside the domain, so a fill is material the run would gain. At a ``+``
-    face the probe layer is cell ``n``, and for the three components whose Yee offset along
-    that axis is zero the point sits exactly ON the wall, so their probe voxel spans
-    ``[wall - dx/2, wall + dx/2]`` and is half **inside** the domain: what it reads is the
-    material those same three components are about to lose, because their last real voxel
-    stops at ``wall - dx/2``. Measured on the ball inscribed in the 1.2 box at ``dx = 0.05``,
-    the ``+`` probe reads ``Ey`` 0.482619, ``Ez`` 0.482619, ``Hx`` 0.472177 -- all of it at
-    ``x <= 0.6``, i.e. inside -- and ``Ex``, ``Hy``, ``Hz``, whose probe voxels really are
-    outside, read 0.000000. Refusing either way is right; naming the ``-`` cause at a ``+``
-    face is not, which is what a previous writing of the message did.
+    **The split is by CAUSE and not by side, and it is the probe voxel's own geometry that
+    decides which.** At a ``-`` face the probe layer is cell ``-1`` and all six components'
+    voxels there lie wholly outside the domain. At a ``+`` face the probe layer is cell ``n``
+    and the six split in two: the three whose Yee offset along that axis is half a cell sit at
+    ``wall + dx/2``, so their probe voxel is ``[wall, wall + dx]`` and is wholly outside too,
+    while the other three sit exactly ON the wall and theirs is ``[wall - dx/2, wall + dx/2]``,
+    half **inside**. So
+
+    * a fill in a **wholly outside** probe voxel -- either face -- is material outside the
+      domain, and that is :data:`_LEAVES`;
+    * a fill in the ``+`` face's **half inside** probe voxel, with nothing in the wholly
+      outside ones, is material in the domain's own last half cell that those same three
+      components have no point to carry, and that is :data:`_TRIMMED`.
+
+    Measured on the 1.2 box at ``dx = 0.05``: the ball inscribed in it reads ``Ey`` 0.482619,
+    ``Ez`` 0.482619, ``Hx`` 0.472177 in the ``x+`` probe -- all of it at ``x <= 0.6``, i.e.
+    inside -- while ``Ex``, ``Hy`` and ``Hz``, whose probe voxels really are outside, read
+    0.000000, so that scene is ``_TRIMMED``. ``Sphere(radius=0.2, center=(0, 0.59, 0))``, which
+    sticks **3.8 cells** past the ``y+`` wall, reads 1.000000 in every one of the six and has
+    37, 30 and 30 whole voxels in the three wholly outside ones, so it is ``_LEAVES``. Splitting
+    by side alone put the second of those on the first's message, which told a body with three
+    probe voxels full of material outside the domain that "nothing outside the box is being
+    counted here" and that "there is nothing sticking out to truncate".
+
+    ``_LEAVES`` wins wherever both are true and is returned as soon as it is found, because it
+    is the stronger statement and its remedy is the one to act on first; a ``_TRIMMED`` face
+    found earlier in the axis order is held and returned only if no face leaves.
 
     Two stages, as in :func:`_shared_surface_voxels` and for the same reason -- the exact fill
     is 97% of what a smoothed lowering costs, and the answer here is almost always "nothing
@@ -760,9 +886,11 @@ def _reaches_outside(shape, body, grid, box, mirrors=()):
     ``plan()`` from **357 ms to 3.4 ms**, and the scene that is refused still pays the fill only
     where the body really is.
     """
+    from .._kernel.grid import OFFSETS
     from .._shapes import occupancy as body_occupancy
     from .occupancy import yee_points
-    reach = _VOXEL_REACH * grid.dx
+    reach, tol = _VOXEL_REACH * grid.dx, _clip_tolerance(grid)
+    trimmed = None
     for a in range(3):
         for side, reached, layer in (('-', box[a][0] == 0, (0, 1)),
                                      ('+', box[a][1] == grid.n[a], (grid.n[a] - 1, grid.n[a]))):
@@ -770,7 +898,7 @@ def _reaches_outside(shape, body, grid, box, mirrors=()):
                 continue
             beyond = [(box[b][0] - 1, box[b][1] + 1) for b in range(3)]
             beyond[a] = (-1, 0) if side == '-' else (grid.n[a], grid.n[a] + 1)
-            worst = 0.0
+            away = straddling = 0.0
             for field in ('E', 'H'):
                 for c in range(3):
                     points = np.asarray(yee_points(grid, tuple(beyond), field, c))
@@ -778,10 +906,18 @@ def _reaches_outside(shape, body, grid, box, mirrors=()):
                     if not near.any():
                         continue
                     fill, _ = body_occupancy(body, points[near], grid.dx)
-                    worst = max(worst, float(np.max(np.asarray(fill))))
-            if worst > _CLIP_ROUNDOFF:
-                return a, side, worst
-    return None
+                    worst = float(np.max(np.asarray(fill)))
+                    # A probe voxel is wholly outside unless it is the one straddling a `+`
+                    # wall, which only the three node-plane components have there.
+                    if side == '-' or OFFSETS[field][c][a]:
+                        away = max(away, worst)
+                    else:
+                        straddling = max(straddling, worst)
+            if away > tol:
+                return _LEAVES, a, side, away
+            if straddling > tol and trimmed is None:
+                trimmed = (_TRIMMED, a, side, straddling)
+    return trimmed
 
 
 def _snapped_joint(body, shape, grid, box):
@@ -850,8 +986,8 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False, mask
     surface is inside a voxel is within half a voxel diagonal of that voxel's own point, and a
     CSG-composed distance under-estimates the true one, so ``|d| > _VOXEL_REACH * dx`` proves
     the surface is elsewhere and no marked voxel can be missed. Then, at the marked points
-    only, the exact fill: fractional for **both**, read against :data:`_CLIP_ROUNDOFF` at both
-    ends.
+    only, the exact fill: fractional for **both**, read against :func:`_clip_tolerance` at
+    both ends.
 
     **The tolerance is the point, not a slackening of the rule.** The two ends carry meaning --
     ``f = 1`` means the arriving shape fills the voxel whole, which composes exactly, and
@@ -875,7 +1011,7 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False, mask
     from .._shapes import occupancy as body_occupancy
     from .occupancy import yee_points
     from .constitutive import common_points
-    reach = _VOXEL_REACH * grid.dx
+    reach, tol = _VOXEL_REACH * grid.dx, _clip_tolerance(grid)
     count, worst = 0, None
     markings = {}
     for field in ('E', 'H'):
@@ -893,7 +1029,6 @@ def _shared_surface_voxels(body_a, body_b, grid, box, include_common=False, mask
             marked = points[near]
             fa = np.asarray(body_occupancy(body_a, marked, grid.dx)[0])
             fb = np.asarray(body_occupancy(body_b, marked, grid.dx)[0])
-            tol = _CLIP_ROUNDOFF
             both = ((fa > tol) & (fa < 1.0 - tol)
                     & (fb > tol) & (fb < 1.0 - tol))
             if masks:
