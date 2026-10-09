@@ -247,6 +247,14 @@ routes retain their calculations. Mixed pole families, curved interfaces,
 dispersive hosts and differentiation remain outside this extension.
 See ``docs/fd-debye-sum-film.md`` for numerical admission and validation limits.
 
+Two or more separated parallel Debye films may share one plain lossless host.
+Their padded supports must be disjoint; each member retains the existing
+one-, two- or finite-sum reduction and its declared memory slots. The policy
+checks every member and takes the maximum member material rate. Initial
+fields, traced inputs, overlapping padded supports, mixed-family stacks and automatic
+stopping are refused. See docs/fd-debye-stack.md for this bounded contract
+and its validation status.
+
 A finite sum of two or more passive Drude/Lorentz poles, with unequal damping,
 uses coupled physical polarizations in the same isolated concrete film. Each
 declared pole retains its memory slot; the normal restoring force couples

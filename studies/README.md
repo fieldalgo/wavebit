@@ -12,6 +12,13 @@ makes them assertions, not studies.
 
 | Script | Question it answers |
 | --- | --- |
+| `fdtd_debye_stack_probe.py` | How do complex stack responses compare with an independent continuum reference including all host gaps? [Record](../docs/fd-debye-stack.md). |
+| `fdtd_debye_stack_calibration.py` | What do six disclosed coarse backend rows measure before optical regression ceilings are selected? [Record](../docs/fd-debye-stack.md). |
+| `fdtd_debye_stack_campaign.py` | What do all wavelength, placement and polarization cells show under the fixed 40-worker ladder and duration/PML controls? [Record](../docs/fd-debye-stack.md). |
+| `fdtd_debye_stack_support.py` | Which source identities, collected nodes, child exits and raw records bind the stack evidence? [Record](../docs/fd-debye-stack.md). |
+| `fdtd_debye_stack_gates.py` | Do exact targeted/full/slow rosters, read-only freezers and strict documentation checks pass? [Record](../docs/fd-debye-stack.md). |
+| `fdtd_debye_stack_mutations.py` | Does each actual production defect fail the intended assertion before exact source restoration? [Record](../docs/fd-debye-stack.md). |
+| `fdtd_debye_stack_audit.py` | Do independently replayed raw logs, source hashes and every physical cell support the final report? [Record](../docs/fd-debye-stack.md). |
 | `fdtd_constitutive_absorber_support.py` | Which exact source, reference and prior-evidence bytes bind each finite-guide measurement? [Measurement](../docs/fd-constitutive-absorber.md). |
 | `fdtd_constitutive_absorber_probe.py` | How do finite guide lengths and durations change fields, spectra and sparse storage on an aligned Yee grid? [Measurement](../docs/fd-constitutive-absorber.md). |
 | `fdtd_constitutive_absorber_calibration.py` | What algebra-independent alignment and backend differences are measured in six disclosed four-solve rows before any allowance is chosen? [Measurement](../docs/fd-constitutive-absorber.md). |

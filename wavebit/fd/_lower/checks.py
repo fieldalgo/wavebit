@@ -427,6 +427,8 @@ def check_smoothed(scene, grid):
     film = conductive_film(scene, grid)
     from .conductive_stack import descriptor as conductive_stack
     stack = conductive_stack(scene, grid)
+    from .debye_stack import descriptor as debye_stack
+    relaxation_stack = debye_stack(scene, grid)
     from .single_pole_film import descriptor as single_pole_film
     dispersive_film = single_pole_film(scene, grid)
     if dispersive_film is None:
@@ -545,7 +547,7 @@ def check_smoothed(scene, grid):
             if not isinstance(material, (Conductor, Dispersive)):
                 continue
             if (film is not None or stack is not None or dispersive_film is not None
-                    or relaxation_film is not None) and name == where:
+                    or relaxation_film is not None or relaxation_stack is not None) and name == where:
                 continue  # These bounded C8 film scopes carry their exact memory.
             what = ('a conductivity' if isinstance(material, Conductor)
                     else f'{len(material.poles)} pole(s)')
@@ -565,7 +567,8 @@ def check_smoothed(scene, grid):
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
                 f'it), or keep it out of the smoothed shape\'s cells. C8 currently admits '
                 f'one concrete axis-aligned conductive, Drude/Lorentz-sum or Debye-sum '
-                f'film, or a same-axis Conductor-only stack with disjoint padded supports, '
+                f'film, or a same-axis Conductor-only or Debye-only stack with disjoint '
+                f'padded supports, '
                 f'in a plain dielectric, '
                 f'clear of absorbing layers, with no initial field; this scene is outside '
                 f'that measured scope.')
@@ -1764,6 +1767,10 @@ def cfl_bound(scene, plan):
     if relaxation_rate is None:
         from .debye_sum_film import policy_rate as debye_sum_policy_rate
         relaxation_rate = debye_sum_policy_rate(scene, plan)
+    from .debye_stack import policy_rate as debye_stack_policy_rate
+    debye_stack_rate = debye_stack_policy_rate(scene, plan)
+    if relaxation_rate is None:
+        relaxation_rate = debye_stack_rate
     for material in materials:
         n = material.index_bound()
         if n is None:
@@ -1772,9 +1779,9 @@ def cfl_bound(scene, plan):
         strength_sum = 0.0
         for pole in material.poles:
             if relaxation_rate is not None or oscillator_rate is not None or hybrid_rate is not None:
-                # These scopes have one film and a plain host. Their robust replacement
-                # rate includes every active pole without evaluating inactive extreme
-                # frequencies/times or counting the same memory twice.
+                # These scopes have one film or a separated stack in a plain host. Their
+                # replacement rate includes every active pole without evaluating inactive
+                # extreme frequencies/times or counting the same memory twice.
                 continue
             w0_squared, strength = pole.rate()
             w0_squared, strength = concrete(w0_squared), concrete(strength)
@@ -1825,13 +1832,22 @@ def check_stability(scene, plan):
     if relaxation_rate is None:
         from .debye_sum_film import policy_rate as debye_sum_policy_rate
         relaxation_rate = debye_sum_policy_rate(scene, plan)
+    from .debye_stack import policy_rate as debye_stack_policy_rate
+    debye_stack_rate = debye_stack_policy_rate(scene, plan)
+    if relaxation_rate is None:
+        relaxation_rate = debye_stack_rate
     from .oscillator_sum_film import policy_rate as oscillator_policy_rate
     oscillator_rate = oscillator_policy_rate(scene, plan)
     from .hybrid_film import policy_rate as hybrid_policy_rate
     hybrid_rate = hybrid_policy_rate(scene, plan)
     poles = [(name, p) for name, p in _all_poles(scene)]
     worst = ''
-    if hybrid_rate is not None:
+    if debye_stack_rate is not None:
+        worst = (' The bounded Debye stack uses the maximum of every member\'s bulk '
+                 'and actual local summed relaxation rates; separated members are '
+                 'not added across space. The curl bound uses physical high-frequency '
+                 'permittivity, not the affine update shift.')
+    elif hybrid_rate is not None:
         worst = (' The bounded hybrid film includes every active oscillator and a '
                  'conservative Debye penalty. Its curl bound uses the physical '
                  'high-frequency permittivity, not the affine update shift.')
@@ -1860,7 +1876,7 @@ def check_stability(scene, plan):
     if conductive_rate(scene, plan):
         worst += (' The conductive film carries an induced interface Debye pole; its '
                   'conservative rate is included in this bound.')
-    if relaxation_rate is not None:
+    if relaxation_rate is not None and debye_stack_rate is None:
         worst += (' The Debye film includes the maximum bulk and actual local '
                   'relaxation rate under the existing conservative Debye policy.')
     from ..boundaries import Axis1D
@@ -2065,6 +2081,18 @@ def _smoothed_notes(scene, plan, rows=None):
                     'An exact local material response alone does not establish spatial '
                     'convergence. Validate the observables under refinement and check run '
                     'duration separately. See docs/fd-conductive-film.md.'))
+    from .debye_stack import descriptor as debye_stack_descriptor
+    relaxation_stack = debye_stack_descriptor(scene, plan.grid)
+    if relaxation_stack is not None:
+        out.append((SubpixelAccuracyWarning,
+                    f'The Debye stack has {len(relaxation_stack.films)} films normal to '
+                    f'{"xyz"[relaxation_stack.axis]}, with separate declared Debye memories '
+                    'on disjoint padded supports. Each member retains its single-film '
+                    'harmonic normal and arithmetic tangential response in one plain '
+                    'lossless dielectric. Touching films, mixed pole families, initial '
+                    'fields, tracing and Decay are outside this bounded scope. Validate '
+                    'observables under refinement and check duration and absorbers '
+                    'separately. See docs/fd-debye-stack.md.'))
     from .single_pole_film import descriptor as single_pole_descriptor
     dispersive_film = single_pole_descriptor(scene, plan.grid)
     if dispersive_film is not None:
@@ -2127,7 +2155,8 @@ def _smoothed_notes(scene, plan, rows=None):
                     'check duration and absorbers separately. The spectral guard '
                     'covers bulk scales only. See docs/fd-hybrid-film.md.'))
     if (len(asked) < len(smoothed) and film is None and stack is None and dispersive_film is None
-            and relaxation_film is None and two_relaxation_film is None
+            and relaxation_stack is None and relaxation_film is None
+            and two_relaxation_film is None
             and sum_relaxation_film is None and sum_oscillator_film is None
             and hybrid is None):
         # The controlled C3 tensor study measured p=2.02267353134 at eps=2.25,
@@ -2325,6 +2354,10 @@ def _index_at(material, wavelength, *, conductive=False):
 
 def _resolution_notes(scene, plan):
     """Cells per wavelength inside every material; a metal by its skin depth instead."""
+    from .debye_stack import notes as debye_stack_resolution_notes
+    debye_stack_notes = debye_stack_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if debye_stack_notes is not None:
+        return debye_stack_notes
     from .conductive_stack import notes as stack_resolution_notes
     stack_notes = stack_resolution_notes(scene, plan, _wavelength(scene, plan))
     if stack_notes is not None:
@@ -2448,6 +2481,9 @@ def check_wavelength_resolution(scene, grid):
     same text, from :func:`_coarse_refusal`; what stays in ``warn_all`` is its warnings, and
     the scenes with no sources, whose wavelength the plan infers).
     """
+    from .debye_stack import validate as validate_debye_stack_resolution
+    if validate_debye_stack_resolution(scene, grid):
+        return
     from .conductive_stack import validate as validate_stack_resolution
     if validate_stack_resolution(scene, grid):
         return
@@ -2540,9 +2576,14 @@ def _proximity_notes(scene, plan):
         film = hybrid_descriptor(scene, plan.grid)
     from .conductive_stack import descriptor as stack_descriptor, index_at as stack_index_at
     stack = stack_descriptor(scene, plan.grid)
+    from .debye_stack import (descriptor as debye_stack_descriptor,
+                             index_at as debye_stack_index_at)
+    relaxation_stack = debye_stack_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
-        if stack is not None:
+        if relaxation_stack is not None:
+            n, _ = debye_stack_index_at(relaxation_stack.films[index], wavelength)
+        elif stack is not None:
             n, _ = stack_index_at(stack.films[index], wavelength)
         elif film is not None:
             n, _ = film_index_at(film, wavelength)

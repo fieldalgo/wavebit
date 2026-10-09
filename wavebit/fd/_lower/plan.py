@@ -391,6 +391,9 @@ def _pole_terms(scene, grid):
     if not film_terms:
         from .hybrid_film import terms as hybrid_terms
         film_terms = hybrid_terms(scene, grid)
+    if not film_terms:
+        from .debye_stack import terms as debye_stack_terms
+        film_terms = debye_stack_terms(scene, grid)
     if film_terms:
         return film_terms
     terms = []
