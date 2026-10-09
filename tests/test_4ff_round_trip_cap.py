@@ -142,6 +142,37 @@ def test_gain_layer_at_a_real_angle(alg):
     assert relative(grating(0.5, alg, 200e-6, gain), reference) < 1e-12
 
 
+def coherent_door(d, structure):
+    """``R`` and ``T`` of :func:`grating`'s s-polarized scene through ``excitation=``."""
+    s = wavebit.rcwa(top=1.0, bot=25.0, truncation_order=(10, 0), wavelength=900e-9,
+                     period=(2000e-9, 2000e-9), structure=structure, thickness=[d],
+                     fourier_coefficients='integrated', factorization='li',
+                     excitation={'top': wavebit.PlaneWave(theta=0.5, phi=0.3,
+                                                          polarization=(1., 0.))})
+    r = s.solve()
+    return np.array([float(np.real(r.output_top)), float(np.real(r.output_bottom))])
+
+
+@pytest.mark.parametrize('d', [50e-6, 200e-6])
+def test_the_coherent_source_door_is_capped_too(d, control):
+    """``excitation=`` runs its own 4ff cascade (``illumination._cascade``), and it takes the cap.
+
+    It passed none until 2026-10-10, so the gain grating above was 1.1e-2 off there at 50 um and
+    came back as ``R = 5861`` (for 3.659) at 200 um while every ordinary solve was right; capped
+    on its run's thickness, as the ordinary 4ff solve is, it is at 2e-15 and 7e-15 in ``R``.
+    """
+    gain = np.where(S0 > 1, 25-0.5j, 1.0+0j)
+    s = wavebit.rcwa(backend=0, top=1.0, bot=25.0, theta=0.5, phi=0.3, polarization=(1., 0.),
+                     truncation_order=(10, 0), wavelength=900e-9, period=(2000e-9, 2000e-9),
+                     structure=gain, thickness=[d], fourier_coefficients='integrated',
+                     factorization='li', layer_algorithm='SMM')
+    r = s.solve(auto_detune=False)
+    reference = np.array([float(np.sum(r.R)), float(np.sum(r.T))])
+    assert np.all(np.abs(coherent_door(d, gain) - reference) < 1e-10 * reference)
+    control('none')
+    assert np.any(np.abs(coherent_door(d, gain) - reference) > 1e-3 * reference)
+
+
 def test_grating_control_breaks(control):
     control('none')
     reference = grating(0.5+0.3j, 'SMM', 50e-6, formulation=None)

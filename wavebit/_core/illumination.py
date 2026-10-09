@@ -17,7 +17,7 @@ from .sources import (Source, PlaneWave, OrderExcitation, GaussianBeam, Electric
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
 from .solve_2d_4ff import (
-    _conv_layers, _interface_s, _propagate_s, layer_matrix_4ff,
+    _conv_layers, _interface_s, _propagate_s, _run_k0_ds, layer_matrix_4ff,
     split_forward_backward,
 )
 
@@ -119,12 +119,18 @@ def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None):
     parts, modes = [], []
     prev_f, prev_b = bottom
     jumps = {} if jumps is None else jumps
-    # Splitting a host layer at source heights reuses its eigensystem.
+    # Splitting a host layer at source heights reuses its eigensystem. The split is capped as an
+    # ordinary 4ff solve caps it, on the thickness of the layer's run: the slices a source cuts
+    # a host into share one material and so one run, and with it one decision -- which is what
+    # lets them share the split. Uncapped until 2026-10-10, this door left the gain grating of
+    # `docs/connecting-algorithms.md`'s 4ff-cap table 1.1e-2 off at 50 um and returned R = 5861
+    # (for 3.659) at 200 um, where the ordinary solve was right.
+    k0_ds = _run_k0_ds(xp, k0, layers)[0]
     cache = {}
     for j, (material, d) in enumerate(layers):
         if id(material) not in cache:
             cache[id(material)] = split_forward_backward(
-                xp, layer_matrix_4ff(xp, Kx, Ky, **material), n)
+                xp, layer_matrix_4ff(xp, Kx, Ky, **material), n, k0_ds[j])
         lf, pf, lb, pb = cache[id(material)]
         emitted = (zero, zero)
         if j in jumps:

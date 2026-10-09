@@ -668,7 +668,10 @@ References); a graph that has not settled is taken as one block. ETM and SMM use
 on the run's thickness as above, and the ETM steps across a run's planes exactly
 (`_run_pq`). Without the runs a 20 um + 1.5 um gyrotropic layer put 4ff SMM 0.75 off the uncut
 one: its interface matrix held 29 eigenvectors twice (cond 5.5e17), and this path's SMM has no
-gap medium to join slices through.
+gap medium to join slices through. The coherent-source door (`excitation=`,
+`illumination._cascade`) runs its own 4ff SMM cascade and took no cap until 2026-10-10: the gain
+row below was 1.1e-2 off there at 50 um and came back as `R = 5861` (for 3.659) at 200 um. It now
+caps on the run's thickness as well, at 2e-15 and 7e-15 in `R` (`tests/test_4ff_round_trip_cap.py`).
 
 Against exact-arithmetic transfer oracles (every order of `R` and `T`, relative to the largest;
 `theta = 0.5+0.3j, 0.5+0.05j, 0.2+0.6j, 1.0+0.1j`; the last two rows against 2ff SMM), uncapped

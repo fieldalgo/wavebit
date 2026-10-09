@@ -108,10 +108,10 @@ def split_forward_backward(xp, M, n_orders, k0_d=None):
     refuses a split with anything other than 2*n_orders modes in each direction.
 
     ``k0_d`` is ``k0`` times the thickness of the layer's run of identical layers
-    (:func:`_run_k0_ds`), given by the two stack algorithms (ETM and SMM) and by nothing else.
-    With it the labels are capped by :func:`_cap_round_trips`; without it (``None``) the split
-    is the uncapped one above, to the bit. A dipole source's host (``illumination._cascade``)
-    and the unstabilised transfer (:func:`_solve_naive`) pass none.
+    (:func:`_run_k0_ds`), given by the two stack algorithms (ETM and SMM) and by the coherent
+    sources' cascade (``illumination._cascade``, since 2026-10-10). With it the labels are capped
+    by :func:`_cap_round_trips`; without it (``None``) the split is the uncapped one above, to
+    the bit. Only the unstabilised transfer (:func:`_solve_naive`) passes none.
     """
     lam, psi = eig(_stop(M))
     flux = mode_flux_z(xp, psi, n_orders) / xp.sum(xp.abs(psi) ** 2, axis=0)
