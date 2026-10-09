@@ -125,9 +125,8 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
     Shared by the ETM (:func:`solve_1d`) and SMM (:mod:`wavebit._core.scattering`) connecting
     algorithms — the mode algebra is a property of the layer, not of how layers are joined.
     Which of ``±q`` is labelled "down" is the one exception: ETM passes the layer's optical
-    thickness ``k0_d`` for the labels its recursion needs, and SMM's cascade passes nothing
-    (:func:`~wavebit._core.conventions.layer_root`) -- its field state, being the ETM's, is
-    rebuilt with ``k0_d`` where the two differ.
+    thickness ``k0_d`` for the labels its recursion needs, and SMM passes nothing
+    (:func:`~wavebit._core.conventions.layer_root`).
 
     ``dng`` is the engine's word on the layer's materials
     (:class:`~wavebit._core.conventions.DoubleNegativeLayer`), or ``None`` when it said nothing.
@@ -390,7 +389,8 @@ def _run_k0_d(xp, k0, thickness, stacks, dng):
     identical layers (:func:`~wavebit._core.conventions.layer_runs`; ``links[i]`` joins layers
     ``i`` and ``i + 1``) decides its labels once on its whole thickness
     (:func:`~wavebit._core.conventions.run_k0_d`); every other layer reads ``k0*d`` as before.
-    Shared with SMM's field-state rebuild, which has to take the very labels the ETM takes.
+    Used by the ETM kernels here and in :mod:`~wavebit._core.solve_2d`; SMM takes no labels from
+    it.
     """
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
     slots = [tuple(None if s is None else s[i] for s in stacks) for i in range(n_layers)]
@@ -632,16 +632,19 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # layer's five become garbage as soon as the next iteration rebinds them. Only `F`,
         # `G` and `T` have to survive an iteration.
         #
-        # `muz_conv_i` rides last, for the reason `epz_conv_i` rides first: the longitudinal
+        # `muz_conv_i` rides in slot 7, for the reason `epz_conv_i` rides first: the longitudinal
         # component of each polarization is algebraic rather than propagated, and is recovered
         # by dividing out the z slot of *its own* tensor. TE reconstructs `H_z` through
         # `mu_zz` (Faraday's z row) and TM reconstructs `E_z` through `eps_zz` (Ampere's), so
         # each branch reads one of the two and the slot is `None` on a non-magnetic layer --
         # the spelling `_layer_mu` and `Material.mu` already use. See
         # :func:`wavebit._core.fields.field_1d`.
+        # The ninth slot is `None`: it is where the SMM's record keeps each layer's own `+` and
+        # `-` amplitudes, and its absence is what tells `field_1d` this record walks the `+`
+        # amplitude instead (:func:`wavebit._core.scattering._field_records`).
         if keep_field:
             layer_info_list.append([epz_conv_i, W, V, q, d, a_i, b,
-                                    None if layer_mu is None else layer_mu[2]])
+                                    None if layer_mu is None else layer_mu[2], None])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_4) -------------------------
     Kz_top = _diag(xp, kz_top)
@@ -872,10 +875,10 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # this operator had no permeability; it now holds the layer's own `mu_zz^-1`, which
         # `H_z` divides out. A `None` left here on a magnetic layer would return an `H_z`
         # scaled by `mu_zz` with every other component exact -- the 2D path's 2026-08-20
-        # defect, on this path.
+        # defect, on this path. The ninth is `None`, as in `solve_1d`'s record above.
         if keep_field:
             layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B,
-                                    None if layer_mu is None else layer_mu[2]])
+                                    None if layer_mu is None else layer_mu[2], None])
 
     # --- stage 3: final matching -> efficiency (transfer_1d_conical_4) ------------------
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,

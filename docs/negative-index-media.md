@@ -1081,11 +1081,11 @@ A layer keeps both roots of every mode, so which one the recursion calls `+` is 
 in exact arithmetic it moves no answer, only conditioning. SMM's cascade's labels are free that
 way. ETM's are not, because ETM writes each layer through the *transmission* from its downward
 modes into the region below ([`connecting-algorithms.md`](connecting-algorithms.md) §10): its `+`
-modes must be the waves that region receives -- and so must those of the field state SMM hands to
-reconstruction, which is ETM's state and takes ETM's labels. For an ordinary layer that is
-Maystre's root, the half-space's own. For a double negative Maystre's root advances its phase
-downward and carries its power *up*, so a double-negative layer resting on its own medium -- no
-interface at all -- made ETM's interface factor exactly singular.
+modes must be the waves that region receives. (SMM's field state is read off the gap between
+layers and needs no labels either.) For an ordinary layer that is Maystre's root, the half-space's
+own. For a double negative Maystre's root advances its phase downward and carries its power *up*,
+so a double-negative layer resting on its own medium -- no interface at all -- made ETM's
+interface factor exactly singular.
 
 In the language of `q = -i*kz` (§1) the two cuts read: Maystre's `Re(kz) + Im(kz) > 0` is
 `Re(q) - Im(q) > 0`, and the mirror `Im(kz) - Re(kz) > 0` is `Re(q) + Im(q) > 0` -- the form

@@ -41,9 +41,9 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   for the coupled path — the resolved ``(a_s, a_p)`` pair, whichever spelling the
   ``polarization`` pair — and for 1D TE/TM the unit primary amplitude signed into each order's
   own s/p frame, ``sigma_m`` of ``E_y`` or (TM) ``H_y``
-  (:func:`~wavebit._core.conventions.order_frame_sign`); the TM field state is then rescaled
-  once to unit incident E (``n/mu`` of the incidence medium) so that every path's
-  reconstructed field answers a unit electric input.
+  (:func:`~wavebit._core.conventions.order_frame_sign`); the TM field state is then read off
+  that column rescaled once to unit incident E (``n/mu`` of the incidence medium) so that every
+  path's reconstructed field answers a unit electric input.
   These are the same incident amplitudes the ETM final matching solves against. The sign on
   ``H_p`` is the one ``e^{-iωt}`` requires and the one the code has always carried; this
   sentence said ``+i`` — the conjugate — until 2026-08-11, describing the formulation that
@@ -51,30 +51,30 @@ Formulation, in the conventions this codebase already uses (see :func:`solve_1d`
   ``R_p / (-i*n_top)`` is the analytic amplitude to 1e-15 on both algorithms
   (``test_lossy_media.test_reflection_amplitude``), and ``+i`` gives its negative.
 
-Field reconstruction works from either algorithm. What :mod:`wavebit._core.fields` walks is
-per-layer mode amplitudes, which the ETM recursion happens to leave behind and the SMM cascade
-does not — so the SMM recovers them afterwards from its own split-plane amplitudes and hands
-over the same ``layer_info_list`` / ``T1`` state (see :func:`_field_state`). Same is close to
-literal: the recovered blocks match the ETM's to ~1e-15 for every layer but the bottom one,
-where the two differ by a basis the reconstruction never resolves. They have to match, because
-the amplitudes they describe are unique given the modes, and the modes come from the same
-builders -- on the same labels, too, which the cascade's own need not be: where the two rules
-may part (a complex ``k_par``, a gain layer, a layer that may hold a double negative) a layer is
-rebuilt on the ETM's for the state, one more ``eig`` (:func:`_field_labels_differ`). That
-recovery is a second pass over the stack, done only from ``answers='field'``
-up, so declaring anything lower skips it outright — it is where the extra ~10-20% in the cost
-quoted above goes, and it is the one rung of the ladder that buys time rather than memory.
+Field reconstruction works from either algorithm. What :mod:`wavebit._core.fields` reads is
+per-layer mode amplitudes, which the ETM recursion leaves behind as a walk over each layer's
+``+`` amplitude and the SMM cascade does not leave at all — so the SMM recovers each layer's
+``+`` and ``-`` amplitudes afterwards from its own split-plane amplitudes, and hands over the
+amplitudes themselves, in slot 8 of the same ``layer_info_list`` (see :func:`_field_state` for
+why not the ETM's walk: it inverts a map into each layer, which needs the ETM's labels, and the
+cascade does not take them). They are the ETM's amplitudes wherever the two algorithms label a
+layer's modes alike, because amplitudes are unique given the modes and their labels, and the
+modes come from the same builders. That recovery is a second pass over the stack, done only from
+``answers='field'`` up, so declaring anything lower skips it outright: it is the difference
+between the two cost figures above. It keeps two vectors per layer and incidence where the ETM
+keeps two transfer blocks, so SMM's field rung retains 2.25 blocks per 2D layer to the ETM's
+4.25.
 """
 import sys
 from typing import NamedTuple
 
 import numpy as np
 
-from .backend import _concrete, _device_of, array_namespace, as_array, check_finite
+from .backend import _device_of, array_namespace, as_array, check_finite
 from .conventions import boundary_kz, half_space_medium, order_azimuth, order_frame_sign
 from .enums import Answers, answers_of
 from .conventions import incident_column
-from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack, _run_k0_d,
+from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack,
                        layer_modes_1d, layer_modes_1d_conical, sp_efficiencies,
                        sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
@@ -196,133 +196,128 @@ def _prepare(epx_conv_all, kx, ky=None):
 
 # ------------------------------------------------------------- field-reconstruction state
 # The cascade above answers at the outer ports only. Field reconstruction needs what is
-# inside: each layer's own down- and up-going mode amplitudes. Both are recovered from the
-# split-plane amplitudes of the same cascade, and then handed over in the exact form
-# `fields` already consumes from the ETM — see `_field_state` for that contract.
+# inside: each layer's own down- and up-going mode amplitudes. Both are read off the
+# split-plane amplitudes of the same cascade, by forward maps only -- see `_field_state` for
+# how, and for why the ETM's record cannot be borrowed.
 
-def _field_labels_differ(xp, q, magnetic, dng):
-    """Whether a layer's modes must be rebuilt with the ETM's labels before the field state.
-
-    ``q`` is the layer's roots as the cascade built them (:func:`~wavebit._core.conventions.mode_q`,
-    no ``k0_d``), ``magnetic`` whether the layer carries a permeability, ``dng`` the engine's
-    :class:`~wavebit._core.conventions.DoubleNegativeLayer` for it or ``None``.
-
-    The cascade does not care which root of a mode's ``±q`` pair is called ``+``. The state
-    :func:`_field_state` hands over does: it is the ETM's, one vector per layer, the layer's
-    ``+`` amplitude at its top, advanced into the next layer through the map ``M`` from the gap
-    below. That vector says everything about the field only when ``+`` is the wave the region
-    below receives, which is :func:`~wavebit._core.conventions.etm_mode_q`'s root. ``mode_q``'s
-    decaying root is not that wave once ``q**2`` lies above the real axis -- a complex ``k_par``
-    or a gain layer -- where a propagating mode's decaying root travels *up*. A vacuum layer on
-    vacuum at ``theta = 0.5+0.3j`` then has every ``+`` amplitude zero and the whole field in
-    the ``-`` amplitudes, which the state has no slot for: ``M`` was exactly singular and the
-    field came back with ``|E_z|/|E| = 6e-2`` where it is zero. The ETM never met it, being
-    built on the other root.
-
-    So the field state takes the ETM's labels, and the cascade keeps its own: handed the ETM's,
-    the cascade's ``R`` moved 4.7e-10 at 200 um and ``theta = 1.2+0.5j`` (and 2.8e-9 under a
-    1e-14 nudge of ``theta``) where its own labels give 1.9e-12 against the ETM. Both ``W, V,
-    q`` and the interface's ``A, B`` are rebuilt; the reflections below each plane are
-    label-free and are read off the cascade unchanged.
-
-    ``False`` only where the two rules provably pick the same root -- and then the modes
-    already built *are* the ETM's, to the bit, so they serve both. On the plain rule (no
-    double-negative verdict, :func:`~wavebit._core.conventions.layer_label_rule`) that is every
-    mode with ``Re(q) > Im(q)``: ``etm_mode_q`` keeps whichever of ``±q`` has ``Re(q) - Im(q)``
-    positive, and ``mode_q``'s root has ``Re(q) >= 0``, so it never grows and the cap never
-    turns it. At a real ``k_par`` in a passive layer only ``q == 0`` misses that, so the real-angle
-    solve is the one it was. A double negative's rules -- the mirror, the per-mode flux -- are not
-    restated here, so such a layer is always rebuilt; so is a layer whose roots cannot be read
-    (``jax.jit``).
-    """
-    if magnetic and (dng is None or dng.holds is not False):
-        return True
-    values = q if q.ndim == 1 else xp.linalg.diagonal(q)      # a modal generator's are its diagonal
-    differ = _concrete(xp.any(xp.real(values) <= xp.imag(values)))
-    return True if differ is None else differ
+#: Read a mode's ``-`` amplitude off the layer's top face when ``|k0 q d|`` is below this
+#: (:func:`~wavebit._core.modal_gradient.two_face`). Below it the mode's two amplitudes cancel in
+#: the field by about ``1/|k0 q d|``, which is what reading them off two faces multiplies their
+#: rounding by; reading off one face multiplies the top's rounding by ``|exp(k0 q d)|`` instead,
+#: at most ``e`` here. The two costs cross near 1. Measured, not tuned: ``|exp(-k0 q d)| > 1e-2``
+#: also fixed the graze, and lifted the port-continuity floor of an SMM field from ``1e-14`` to
+#: ``2e-13`` (``exp(4.6)``), on evanescent orders that do not cancel at all.
+_TOP_FACE = 1.0
 
 
 def _below_reflections(xp, I, S_layers, S_trn):
-    """Reflection of everything below each split plane, in the gap basis.
+    """``(gamma, F)``: the reflection below each split plane, and each layer's gap-to-gap map.
 
-    ``gamma[p]`` maps the down-going gap amplitude at split plane ``p`` to the up-going one:
-    it is the ``S11`` block of ``L_p * ... * L_{n-1} * S_trn``. Plane ``p`` sits directly above
-    layer ``p``, so plane ``n`` faces the substrate interface alone.
+    ``gamma[p]`` maps the down-going gap amplitude at split plane ``p`` to the up-going one: it is
+    the ``S11`` block of ``L_p * ... * L_{n-1} * S_trn``. Plane ``p`` sits directly above layer
+    ``p``, so plane ``n`` faces the substrate interface alone. ``F[p] = (I - s22 gamma[p+1])^-1
+    s21`` carries the down-going gap amplitude at plane ``p`` to plane ``p+1``, closed over
+    everything below.
 
-    Built bottom-up, one plane at a time. Only the ``S11`` block of each partial cascade is
-    ever used, and that block costs a single inverse — a fraction of a full Redheffer star.
+    Built bottom-up, one plane at a time, with one solve per layer serving both:
+    ``gamma[p] = s11 + s12 gamma[p+1] F[p]``, the loop a Redheffer product closes
+    (``(I - gamma s22)^-1 gamma = gamma (I - s22 gamma)^-1``). Sharing it is what makes the walk
+    consistent with itself, and not only cheaper: the up-going amplitude at plane ``p`` is then
+    the layer's reflection of the down-going one plus its transmission of the up-going one below,
+    in the same rounding. Past the ETM's cap that loop is a cancellation, and with ``gamma``
+    spelled apart, as :func:`redheffer_star` spells its ``S11`` block, the pure TE/TM field of
+    10 um of vacuum at a complex angle jittered 5e-10 under a 1e-9 change of the permittivity and
+    its gradient sat 3.4e-4 off a difference quotient; shared, 3e-15 and 2e-9. What that spelling
+    kept and this one does not is the cascade's own rounding of ``T``: at a growth of ``7e7`` the
+    field at a layer's exit face then differs from the transmitted wave by up to 3e-3 -- less
+    than either differs from the true field there (1e-2).
     """
     n = len(S_layers)
-    gamma = [None] * (n + 1)
+    gamma, F = [None] * (n + 1), [None] * n
     gamma[n] = S_trn[0]
     for p in range(n - 1, -1, -1):
         s11, s12, s21, s22 = S_layers[p]
         below = gamma[p + 1]
-        gamma[p] = s11 + s12 @ xp.linalg.inv(I - below @ s22) @ below @ s21
-    return gamma
+        F[p] = xp.linalg.solve(I - s22 @ below, s21)
+        gamma[p] = s11 + s12 @ (below @ F[p])
+    return gamma, F
 
 
-def _field_state(xp, I, S_ref, S_trn, S_layers, AB, c_inc):
-    """Per-layer ``(a_i, b)`` blocks and the top-layer amplitude ``T1``, top-to-bottom.
+def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc):
+    """Each layer's ``(+, -)`` mode amplitudes, top-to-bottom, and the gap amplitude above them.
 
-    Field reconstruction walks the stack downward carrying one vector: ``T_i``, layer ``i``'s
-    down-going mode amplitude at its own top plane. It asks each layer for two matrices — one
-    that advances that vector to the next layer (``T_{i+1} = a_i X_i T_i``) and one that turns
-    it into the layer's up-going amplitude at its bottom plane (``c2_i = b_i T_{i+1}``). The
-    ETM produces both as by-products of its recursion; the SMM has to reconstruct them, and
-    away from the bottom layer they come out as the *same* matrices, because the down-going
-    amplitude at a plane determines everything below it uniquely.
+    ``roots[p]`` is layer ``p``'s ``(q, k0*d)``; ``c_inc`` the incident columns. The ``+``
+    amplitude is anchored at the layer's top face and the ``-`` at its bottom, as
+    :mod:`~wavebit._core.fields` expects them, so every exponential it forms decays on the
+    cascade's labels.
 
-    At the plane below layer ``i`` the gap amplitudes are ``(g, gamma[i+1] g)`` for some ``g``,
-    so a layer's amplitudes there are linear in ``g``: down is ``M_i g`` and up is ``N_i g``,
-    with ``M_i = (A_i + B_i gamma)/2`` and ``N_i = (B_i + A_i gamma)/2`` from the gap -> layer
-    interface. Eliminating ``g`` between neighbours gives the two matrices asked for.
+    Everything is read off ``g_p``, the down-going amplitude in the gap at split plane ``p``,
+    whose up-going partner is ``gamma[p] g_p`` (:func:`_below_reflections`):
 
-    The bottom layer has no layer below it and carries ``g`` itself onward, which is why its
-    two blocks are the one place this state differs from the ETM's (their product, the only
-    combination the reconstruction forms, still agrees). Going further and expressing that
-    vector in the substrate's own basis — matching the ETM exactly — would mean inverting the
-    substrate's ``V``, and that matrix is singular whenever a retained order sits exactly at
-    cutoff, ``kz_bot == 0``. The gap basis is the one basis this formulation guarantees
-    invertible, by its choice of waves (:func:`_gap_waves`); the value handed past the
-    bottom layer is never read anyway.
+    * ``g_0`` closes over the superstrate interface, ``g_0 = S_ref21 c_inc + S_ref22 gamma[0]
+      g_0``, and ``g_{p+1} = F[p] g_p`` walks down, ending in the gap above the substrate, so the
+      substrate's own basis -- singular when an order sits at cutoff, ``kz_bot = 0`` -- is never
+      needed;
+    * a layer's amplitudes at a face follow from the gap there by the gap -> layer relation of
+      :func:`_ab_matrices`: ``(A + B gamma) g / 2`` down and ``(B + A gamma) g / 2`` up;
+    * the ``+`` amplitude is the top face's down one; the ``-`` is the bottom face's up one, except
+      for a mode with ``|k0 q d| < 1`` (:data:`_TOP_FACE`), which takes the top face's carried down
+      by ``exp(k0 q d)`` (:func:`~wavebit._core.modal_gradient.two_face`). Such a mode's two
+      amplitudes nearly cancel in the field -- at a layer light line each is ``O(1/q)`` -- and read
+      off two faces their rounding did not cancel with them: an SMM field 1e-6 off at the
+      ``1e-12`` landing ``auto_detune`` makes after an exact graze, where one face keeps it at the
+      ETM's 1e-11.
 
-    Reference planes matter here too: ``b_i`` is anchored at the layer *bottom*, which is what
-    keeps every exponential in it decaying. Anchoring the up-going amplitude at the top plane
-    instead would need ``X^-1``, and that is exactly the growing exponential both connecting
-    algorithms are built to avoid.
-
-    So is the labelling. ``M_i`` maps the gap below a layer onto the layer's ``+`` amplitudes,
-    and inverting it presumes they are the waves the region below receives -- the ETM's labels.
-    ``AB`` must come from modes built on them (:func:`_field_labels_differ`); ``S_layers``,
-    which only ``gamma`` reads, need not, since a reflection below a plane does not depend on
-    how any layer's roots are named.
+    **Nothing here inverts a map into a layer, and that is why the ETM's record cannot be
+    borrowed.** The ETM hands over each layer's ``+`` amplitude and advances it; read off the gap
+    that means inverting ``M = (A + B gamma)/2``, which is well conditioned only when the layer's
+    ``+`` modes are the waves the region below receives -- the ETM's labels
+    (:func:`~wavebit._core.conventions.etm_mode_q`), not the cascade's. This function inverted ``M``
+    until 2026-10-10: at a complex ``k_par`` a propagating mode's decaying root travels up, and a
+    vacuum layer on vacuum at ``theta = 0.5+0.3j`` had ``M`` exactly singular, ``|E_z|/|E| = 6e-2``
+    where it is zero, ``R`` and ``T`` exact. Rebuilding the layers on the ETM's labels (429f4ac)
+    fixed that scene and not the inversion: it repeated an ``eig`` on an identical operator, stayed
+    O(1) wrong past the ETM's cap, and lost ``log10(G**2)`` digits below it.
+    ``docs/connecting-algorithms.md`` §10 has the measurements. The one inverse here is
+    ``I - s22 gamma``; past the ETM's cap that loop is itself a cancellation (``1e-10`` at a growth
+    of ``6e5``), and the state then carries the cascade's floor rather than the ETM's.
     """
     n = len(S_layers)
     if n == 0:
         return [], None
 
-    gamma = _below_reflections(xp, I, S_layers, S_trn)
+    gamma, F = _below_reflections(xp, I, S_layers, S_trn)
+    g = xp.linalg.solve(I - S_ref[3] @ gamma[0], S_ref[2] @ c_inc)
+    g_top = g
+    from .modal_gradient import _stop, two_face
+    amplitudes = []
+    for p in range(n):
+        A, B = AB[p]
+        q, k0_d = roots[p]
+        g_next = F[p] @ g
+        up_top = gamma[p] @ g
+        plus = 0.5 * (A @ g + B @ up_top)
+        minus_top = 0.5 * (B @ g + A @ up_top)
+        minus_bottom = 0.5 * (B @ g_next + A @ (gamma[p + 1] @ g_next))
+        values = _stop(q if q.ndim == 1 else xp.linalg.diagonal(q))
+        keep = xp.abs(values * _stop(as_array(xp, k0_d, dtype=values.dtype))) < _TOP_FACE
+        amplitudes.append((plus, two_face(xp, q, k0_d, minus_top, minus_bottom, keep)))
+        g = g_next
+    return amplitudes, g_top
 
-    # Down-going gap amplitude just below the superstrate interface, closing the loop over
-    # everything below it: g = S_ref21 c_inc + S_ref22 (gamma[0] g).
-    g_top = xp.linalg.inv(I - S_ref[3] @ gamma[0]) @ (S_ref[2] @ c_inc)
-    A_0, B_0 = AB[0]
-    T1 = 0.5 * (A_0 + B_0 @ gamma[0]) @ g_top
 
-    blocks = []
-    for i in range(n):
-        A, B = AB[i]
-        below = gamma[i + 1]
-        M = 0.5 * (A + B @ below)
-        N = 0.5 * (B + A @ below)
-        if i + 1 < n:
-            A_next, B_next = AB[i + 1]
-            M_next = 0.5 * (A_next + B_next @ below)
-            blocks.append((M_next @ xp.linalg.inv(M), N @ xp.linalg.inv(M_next)))
-        else:
-            blocks.append((xp.linalg.inv(M), N))    # carried on in the gap basis, M_next = I
-    return blocks, T1
+def _field_records(modes, amplitudes, muz, arrange):
+    """``layer_info_list`` from the per-layer pieces, bottom-to-top as the ETM appends it.
+
+    Slots 0-4 and 7 are where the ETM puts them, ``(epz_conv_i, W, V, q, d, ., ., muz_conv_i)``,
+    the first five named by the legacy goldens. The ETM's transfer blocks (slots 5 and 6) are
+    ``None`` here, and slot 8 holds the layer's ``(+, -)`` amplitudes themselves, each laid out by
+    ``arrange`` as ``T1`` is: what tells :mod:`~wavebit._core.fields` which record it walks, asked
+    structurally (``is None``) so a traced record can answer it. Two vectors per incidence instead
+    of the ETM's two full blocks, so this record keeps 2.25 blocks per layer to the ETM's 4.25.
+    """
+    return [m + [None, None, z, (arrange(plus), arrange(minus))]
+            for m, (plus, minus), z in zip(modes, amplitudes, muz)][::-1]
 
 
 #: What each :attr:`Port.channel` counts, in the words a refused join names it by.
@@ -716,39 +711,25 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
     S_layers, AB, modes, muzs = [], [], [], []
     S = S_ref
-    # The ETM's thicknesses for its labels, run by run, so the rebuilt state below takes the
-    # very labels the ETM takes (:func:`~wavebit._core.solve_1d._run_k0_d`).
-    run_k0_ds = (_run_k0_d(xp, k0, thickness,
-                           (epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all), dng)[0]
-                 if keep_field else None)
     for layer_index in range(_n_layers(thickness)):
         layer_mu = _layer_mu(I, mu_all, layer_index)
-        layer_dng = None if dng is None else dng[layer_index]
+        W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv_all[layer_index],
+                                 epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
+                                 mu=layer_mu, dng=None if dng is None else dng[layer_index])
         d = thickness[layer_index]
-
-        def layer_modes(k0_d=None):
-            return layer_modes_1d(xp, tetm_index, kx, I, epx_conv_all[layer_index],
-                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
-                                  mu=layer_mu, k0_d=k0_d, dng=layer_dng)
-
-        W, V, q = layer_modes()
         from .modal_gradient import exponential
         X = exponential(xp, q, -k0*d)
         A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
         S_layer = _s_layer(xp, A, B, X)
         S = redheffer_star(xp, I, S, S_layer)
         if keep_field:
-            # The field state is walked on the ETM's labels; the cascade above keeps its own.
-            if _field_labels_differ(xp, q, layer_mu is not None, layer_dng):
-                W, V, q = layer_modes(run_k0_ds[layer_index])
-                A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
             S_layers.append(S_layer)
             AB.append((A, B))
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
             # `muz_conv_i` travels with its layer for field reconstruction to divide `H_z` by,
             # exactly as `epz_conv_i` leads the entry for `E_z`. Kept in its own list because
-            # it rides **last** in the entry, after the two cascade-recovered blocks that are
-            # concatenated below — the layout `solve_1d` appends and `field_1d` unpacks.
+            # it rides in slot 7, after the ETM's two transfer-block slots and before the
+            # amplitudes recovered below -- the layout `field_1d` unpacks (`_field_records`).
             # Collected here as well as in the ETM twin because the two build this list by
             # their own routes, and a stack whose `H_z` was magnetic under one algorithm and
             # not the other would have identical `R` and `T` either way.
@@ -820,32 +801,32 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     if not keep_field:
         return {'incident': res, 'scattering': scattering}
 
+    # Unit incident E on the TM path, as on every other path -- the same rescale, and the same
+    # reason, as :func:`~wavebit._core.solve_1d.solve_1d`'s, put on the incident column so every
+    # amplitude the state holds carries it. `n_ref` / `mu_ref` are the incidence medium whichever
+    # port is lit.
+    column = delta * (n_ref / mu_ref) if tetm_index == 1 else delta
+    roots = [(m[3], k0 * m[4]) for m in modes]
     if backside:
-        # The mirrored scene's own cascade pieces, assembled from what this pass already
-        # built: the layer matrices are symmetric and the interface matrices come from the
-        # same A/B, so only the two half-space interfaces are formed anew. The recovered
-        # state then describes the mirrored scene — the same frame the ETM backside solve
-        # leaves behind — and field reconstruction un-mirrors once, at the cell level.
-        S_ref_m = _s_reflection(xp, W_bot, V_bot, W_gap, V_gap)
-        S_trn_m = _s_transmission(xp, W_top, V_top, W_gap, V_gap)
-        blocks, T1 = _field_state(xp, I, S_ref_m, S_trn_m, S_layers[::-1], AB[::-1], delta)
-        # `muzs` reverses with `modes`: both are per-layer state indexed the same way, and a
-        # `mu_zz` left in scene order against mirrored modes gives each layer its neighbour's
-        # permeability -- still magnetic, still energy-conserving, `R` and `T` untouched.
+        # The mirrored scene's own cascade pieces, from what this pass already built: the layer
+        # matrices are symmetric, and each mirrored half-space interface is the scene's other one
+        # with its blocks reversed -- the same arithmetic `_s_reflection` / `_s_transmission`
+        # would repeat. The recovered state then describes the mirrored scene, the same frame the
+        # ETM backside solve leaves behind, and field reconstruction un-mirrors once, at the cell
+        # level. `muzs` reverses with `modes`: a `mu_zz` left in scene order against mirrored
+        # modes gives each layer its neighbour's permeability -- still magnetic, still
+        # energy-conserving, `R` and `T` untouched.
+        amplitudes, T1 = _field_state(xp, I, S_trn[::-1], S_ref[::-1], S_layers[::-1], AB[::-1],
+                                      roots[::-1], column)
         modes, muzs = modes[::-1], muzs[::-1]
     else:
-        blocks, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, delta)
-    # Bottom-to-top, the order field reconstruction walks in reverse (as the ETM appends it).
-    layer_info_list = [m + list(b) + [z]
-                       for m, b, z in zip(modes, blocks, muzs)][::-1]
+        amplitudes, T1 = _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, column)
+
+    def flat(v):                              # the 1D path carries its state as plain vectors
+        return xp.reshape(v, (n_orders_u,))
+    layer_info_list = _field_records(modes, amplitudes, muzs, flat)
     if T1 is not None:
-        T1 = xp.reshape(T1, (n_orders_u,))    # the 1D path carries T1 as a plain vector
-        if tetm_index == 1:
-            # Unit incident E, as on every other path -- the same rescale, and the same reason,
-            # as :func:`~wavebit._core.solve_1d.solve_1d`'s. `n_ref` / `mu_ref` are the
-            # incidence medium whichever port is lit. Inside the guard: a stack with no layers
-            # has no state to rescale.
-            T1 = T1 * (n_ref / mu_ref)
+        T1 = flat(T1)
     return {'incident': res, 'layer_info_list': layer_info_list, 'T1': T1,
             'scattering': scattering}
 
@@ -944,19 +925,13 @@ def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
 
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0,
-            eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None, magnetic=False,
-            dng=None, run_stacks=None):
+            eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
-    ``layer_modes(layer_index, k0_d=None)`` returns that layer's ``(big_W, big_V, q, W, V)``:
-    the mode matrices in the s/p boundary basis that the cascade joins layers through, then the
-    raw (unrotated) pair that field reconstruction expands the same amplitudes with. ``k0_d``
-    asks for the ETM's labels, which the field state is rebuilt on where they differ
-    (:func:`_field_labels_differ`); ``magnetic`` and ``dng`` are what that check reads, and
-    ``run_stacks`` the per-layer slot stacks the ETM decides its runs on
-    (:func:`~wavebit._core.solve_1d._run_k0_d`), so the rebuild reads the ETM's own ``k0_d``;
-    without them every layer reads its own ``k0*d``, as if no two were alike.
-    Everything else — half-spaces, gap, cascade, incidence, efficiencies — is common.
+    ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
+    matrices in the s/p boundary basis that the cascade joins layers through, then the raw
+    (unrotated) pair that field reconstruction expands the same amplitudes with. Everything
+    else — half-spaces, gap, cascade, incidence, efficiencies — is common.
 
     ``muz_conv_i_all`` is the per-layer ``mu_zz^-1``, carried for one reason: field
     reconstruction recovers ``H_z`` algebraically from it, exactly as it recovers ``E_z`` from
@@ -1028,9 +1003,6 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
     S_layers, AB, modes, muz_conv = [], [], [], []
     S = S_ref
-    run_k0_ds = (None if not keep_field
-                 else [k0 * thickness[i] for i in range(_n_layers(thickness))]
-                 if run_stacks is None else _run_k0_d(xp, k0, thickness, run_stacks, dng)[0])
     for layer_index in range(_n_layers(thickness)):
         big_W, big_V, q, W, V = layer_modes(layer_index)
         d = thickness[layer_index]
@@ -1040,10 +1012,6 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         S_layer = _s_layer(xp, A, B, big_X)
         S = redheffer_star(xp, big_I, S, S_layer)
         if keep_field:
-            # The field state is walked on the ETM's labels; the cascade above keeps its own.
-            if _field_labels_differ(xp, q, magnetic, None if dng is None else dng[layer_index]):
-                big_W, big_V, q, W, V = layer_modes(layer_index, run_k0_ds[layer_index])
-                A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
             S_layers.append(S_layer)
             AB.append((A, B))
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
@@ -1057,24 +1025,22 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         return out
     n_inc = c_inc.shape[1]
 
+    roots = [(m[3], k0 * m[4]) for m in modes]
     if backside:
         # Mirrored-scene field state, same construction as `smm_1d`'s backside branch.
-        S_ref_m = _s_reflection(xp, W_bot, V_bot, W_gap, V_gap)
-        S_trn_m = _s_transmission(xp, W_top, V_top, W_gap, V_gap)
-        blocks, T1 = _field_state(xp, big_I, S_ref_m, S_trn_m,
-                                  S_layers[::-1], AB[::-1], c_inc)
+        amplitudes, T1 = _field_state(xp, big_I, S_trn[::-1], S_ref[::-1], S_layers[::-1],
+                                      AB[::-1], roots[::-1], c_inc)
         modes = modes[::-1]
         muz_conv = muz_conv[::-1]
     else:
-        blocks, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, c_inc)
-    # `muz_conv_i` last, after the transfer blocks, so slots 0..6 stay where the ETM twin
-    # puts them: `tests/test_scattering_core.py` compares the two algorithms' `A_i` / `B` by index,
-    # and the legacy goldens name the first seven.
-    layer_info_list = [m + list(b) + [z]
-                       for m, b, z in zip(modes, blocks, muz_conv)][::-1]
-    if T1 is not None:
+        amplitudes, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, roots, c_inc)
+
+    def by_incidence(v):
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
-        T1 = xp.stack([T1[:, i:i + 1] for i in range(n_inc)])
+        return xp.stack([v[:, i:i + 1] for i in range(n_inc)])
+    layer_info_list = _field_records(modes, amplitudes, muz_conv, by_incidence)
+    if T1 is not None:
+        T1 = by_incidence(T1)
     out.update(layer_info_list=layer_info_list, T1=T1)
     return out
 
@@ -1113,12 +1079,11 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     F_c = _diag(xp, xp.cos(varphi))
     F_s = _diag(xp, xp.sin(varphi))
 
-    def layer_modes(layer_index, k0_d=None):
+    def layer_modes(layer_index):
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
             epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
-            mu=_layer_mu(I, mu_all, layer_index), k0_d=k0_d,
-            dng=None if dng is None else dng[layer_index])
+            mu=_layer_mu(I, mu_all, layer_index), dng=None if dng is None else dng[layer_index])
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22)
         W = _block(xp, [[W1, W2]])
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
@@ -1128,9 +1093,7 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
                    mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
-                   muz_conv_i_all=mu_all[2], lit=lit,
-                   magnetic=any(t is not None for t in mu_all), dng=dng,
-                   run_stacks=(epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all))
+                   muz_conv_i_all=mu_all[2], lit=lit)
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
@@ -1168,7 +1131,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
     F_c, F_s = xp.cos(varphi), xp.sin(varphi)
 
-    def layer_modes(layer_index, k0_d=None):
+    def layer_modes(layer_index):
         epxy_conv = O if epxy_conv_all is None else epxy_conv_all[layer_index]
         epyx_conv = O if epyx_conv_all is None else epyx_conv_all[layer_index]
         layer_mu = None if all(t is None for t in mu_all) else (
@@ -1177,7 +1140,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             *(None if t is None else t[layer_index] for t in mu_all[2:]))
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv_all[layer_index],
                                  epy_conv_all[layer_index], epz_conv_i_all[layer_index],
-                                 epxy_conv, epyx_conv, C, mu=layer_mu, k0_d=k0_d,
+                                 epxy_conv, epyx_conv, C, mu=layer_mu,
                                  dng=None if dng is None else dng[layer_index])
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         return big_W, big_V, q, W, V
@@ -1185,7 +1148,4 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
                    mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
-                   muz_conv_i_all=mu_all[2], lit=lit,
-                   magnetic=any(t is not None for t in mu_all), dng=dng,
-                   run_stacks=(epx_conv_all, epy_conv_all, epz_conv_i_all,
-                               epxy_conv_all, epyx_conv_all, *mu_all))
+                   muz_conv_i_all=mu_all[2], lit=lit)

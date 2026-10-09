@@ -268,44 +268,48 @@ def test_smm_field_matches_tmm(name, kwargs, kind):
     assert np.max(np.abs(tmm - smm)) < 1e-10 * scale, np.max(np.abs(tmm - smm)) / scale
 
 
+def _layer_amplitudes(solver):
+    """Each layer's ``+`` amplitude at its top and ``-`` amplitude at its bottom, top to bottom.
+
+    Read off whichever record the solve left: the ETM's walks the ``+`` amplitude itself, the
+    SMM's holds both amplitudes in slot 8 (:func:`wavebit._core.scattering._field_state`).
+    """
+    k0 = 2 * np.pi / solver.wavelength
+    T = np.asarray(solver.T1)
+    out = []
+    for _, _, _, q, d, a, b, _, amplitudes in solver.layer_info_list[::-1]:
+        if amplitudes is None:
+            a, b = np.asarray(a), np.asarray(b)
+            T_next = a @ np.diag(np.exp(-k0 * np.asarray(q) * d)) @ T
+            out.append((T, b @ T_next))
+            T = T_next
+        else:
+            out.append(tuple(np.asarray(v) for v in amplitudes))
+    return out
+
+
 @pytest.mark.parametrize('name,kwargs,kind', ALL_CASES, ids=[c[0] for c in ALL_CASES])
 def test_smm_field_state_matches_tmm(name, kwargs, kind):
-    """The recovered state itself is the ETM's, layer by layer — not just its field.
+    """The recovered state describes the ETM's amplitudes, layer by layer — not just its field.
 
-    Both algorithms hand ``fields`` the same three things per layer: the incident amplitude
-    ``T1``, the block advancing it to the next layer, and the block turning it into that
-    layer's up-going amplitude. Those are unique given the modes (which both take from the
-    same builders), so they must agree matrix for matrix. Only ``W`` / ``V`` / ``q`` are gauge
-    here, and they are shared, not recomputed.
-
-    The exception is the bottom layer — entry ``0``, since the list runs bottom-to-top. Its
-    two blocks describe the amplitude handed *past* the stack, which the reconstruction never
-    reads, and the two algorithms express that one in different bases (see ``_field_state``).
-    What is defined there is their product, which is what the reconstruction actually forms.
+    The two algorithms hand ``fields`` different records -- the ETM walks each layer's ``+``
+    amplitude, the SMM holds each layer's two amplitudes -- but the mode amplitudes both records
+    describe are unique given the modes and their labels, and at a real angle the two label every
+    mode alike. So each layer's ``+`` amplitude at its top and ``-`` amplitude at its bottom must
+    agree, the bottom layer included (the ``M`` walk this replaced could only fix a product there).
     """
     tmm = wavebit.rcwa(backend=0, layer_algorithm='ETM', answers='field', **kwargs)
     smm = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='field', **kwargs)
     tmm.solve()
     smm.solve()
 
-    a, b = np.array(tmm.T1), np.array(smm.T1)
-    assert a.shape == b.shape
-    assert np.max(np.abs(a - b)) < 1e-10 * np.max(np.abs(a))
-
-    def close(x, y, where):
-        # Floored at 1: an interface between identical materials makes B identically zero,
-        # and a relative bound on a zero matrix compares two roundoff patterns.
-        scale = max(float(np.max(np.abs(x))), 1.0)
-        assert np.max(np.abs(x - y)) < 1e-9 * scale, (where, np.max(np.abs(x - y)))
-
     assert len(tmm.layer_info_list) == len(smm.layer_info_list) == len(kwargs['thickness'])
-    for i, (li_t, li_s) in enumerate(zip(tmm.layer_info_list, smm.layer_info_list)):
-        if i == 0:                                     # bottom layer: only the product is fixed
-            close(np.array(li_t[6]) @ np.array(li_t[5]),
-                  np.array(li_s[6]) @ np.array(li_s[5]), (i, 'B@A_i'))
-            continue
-        for j, nm in ((5, 'A_i'), (6, 'B')):
-            close(np.array(li_t[j]), np.array(li_s[j]), (i, nm))
+    amplitudes = list(zip(_layer_amplitudes(tmm), _layer_amplitudes(smm)))
+    scale = max(float(np.max(np.abs(c))) for pair in amplitudes for c in pair[0])
+    for i, ((plus_t, minus_t), (plus_s, minus_s)) in enumerate(amplitudes):
+        for what, x, y in (('+ at top', plus_t, plus_s), ('- at bottom', minus_t, minus_s)):
+            assert x.shape == y.shape, (i, what)
+            assert np.max(np.abs(x - y)) < 1e-10 * scale, (i, what, np.max(np.abs(x - y)) / scale)
 
 
 # theta=0, bot=2.25 (index 1.5) and lambda/period=1/4 put order m=+-6 exactly at the substrate cutoff:

@@ -520,13 +520,21 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
 
     T_layer = T1
     cells = []
-    for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i) in zip(
+    for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i, amplitudes) in zip(
             z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
         from .modal_gradient import exponential
-        X = exponential(xp, q, -k0*d)
-        c1 = T_layer[:, None]
-        c2 = B @ A_i @ X @ T_layer[:, None]
+        if amplitudes is None:
+            # The ETM's record: `T_layer` is this layer's `+` amplitude at its top.
+            X = exponential(xp, q, -k0*d)
+            c1 = T_layer[:, None]
+            c2 = B @ A_i @ X @ T_layer[:, None]
+            T_next = A_i @ X @ T_layer
+        else:
+            # The SMM's: the layer's own `(+, -)` amplitudes, read off the cascade
+            # (:func:`wavebit._core.scattering._field_state`); nothing walks.
+            c1, c2 = (a[:, None] for a in amplitudes)
+            T_next = T_layer
         z = _z_slices(xp, spec, d, C, _dev(T1))
         if q.ndim == 2:
             locations = xp.reshape(z, (nz,))
@@ -591,7 +599,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
             par_y, par_x, par_z = (1, -1, 1) if tetm_index == 0 else (-1, 1, -1)
             cells.append(xp.concat([par_y * Fy[..., 0], par_x * Fx[..., 0],
                                     par_z * Fz[..., 0]], axis=-1))
-        T_layer = A_i @ X @ T_layer
+        T_layer = T_next
 
     if _coefficients:
         return cells
@@ -643,21 +651,28 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     Kx, Ky = xp.diag(xp.reshape(kx_g, (-1,))), xp.diag(xp.reshape(ky_g, (-1,)))
 
     dev = _dev(T1)
-    keep = incidence_indices(incidences)
-    T_layer = xp.take(T1, xp.asarray(keep, device=dev), axis=0)
+    chosen = xp.asarray(incidence_indices(incidences), device=dev)
+    T_layer = xp.take(T1, chosen, axis=0)
     big_I = xp.eye(T1.shape[1], dtype=C, device=dev)
 
     z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4, interface_side)
 
     cells = []
-    for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i) in zip(
+    for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i, amplitudes) in zip(
             z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
         q_1, q_2 = q[:n_orders], q[n_orders:]
         from .modal_gradient import exponential
-        big_X = exponential(xp, q, -k0*d)
-
-        c = xp.concat([big_I, big_B @ big_A_i @ big_X], axis=0) @ T_layer
+        if amplitudes is None:
+            # The ETM's record: `T_layer` is this layer's `+` amplitude at its top.
+            big_X = exponential(xp, q, -k0*d)
+            c = xp.concat([big_I, big_B @ big_A_i @ big_X], axis=0) @ T_layer
+            T_next = big_A_i @ big_X @ T_layer
+        else:
+            # The SMM's: the layer's own `(+, -)` amplitudes, one column per incidence, read
+            # off the cascade (:func:`wavebit._core.scattering._field_state`); nothing walks.
+            c = xp.concat([xp.take(a, chosen, axis=0) for a in amplitudes], axis=-2)
+            T_next = T_layer
         c1p, c2p = c[:, 0:n_orders], c[:, n_orders:2 * n_orders]
         c1m, c2m = c[:, 2 * n_orders:3 * n_orders], c[:, 3 * n_orders:4 * n_orders]
 
@@ -715,7 +730,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)
             cells.append(xp.moveaxis(val, 1, 0))
-        T_layer = big_A_i @ big_X @ T_layer
+        T_layer = T_next
 
     if _coefficients:
         return cells

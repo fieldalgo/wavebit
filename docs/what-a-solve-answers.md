@@ -20,7 +20,8 @@ Targets:
 last two, and it is worth a keyword because they differ by three orders of magnitude: the
 amplitudes are boundary vectors already solved for, while the field-reconstruction state is
 **4.25 matrices of side `2*n_orders_u*n_orders_v` per layer** on the 2D path — 240 MB per layer at
-`truncation_order=(15, 15)`, 733 MB at `(20, 20)`. Every public route used to keep it unconditionally, and
+`truncation_order=(15, 15)`, 733 MB at `(20, 20)` — on the default ETM, and 2.25 on SMM. Every public
+route used to keep it unconditionally, and
 most large runs are optimization sweeps against a fixed objective that never reconstruct a
 field at all.
 
@@ -52,9 +53,11 @@ contract, numerical agreement, and release of spectra.
 
 ## 2. What the field state costs
 
-A layer's entry is `[epz_conv_i, W, V, q, d, a_i, b]`. With `dim = 2*n_orders_u*n_orders_v` on the coupled
-paths, `W`, `V`, `a_i` and `b` are each a full `dim x dim` block and `epz_conv_i` is a quarter
-of one (it is indexed by orders, not by the doubled s/p state), so:
+On the ETM a layer's entry is `[epz_conv_i, W, V, q, d, a_i, b, muz_conv_i, None]`. With
+`dim = 2*n_orders_u*n_orders_v` on the coupled paths, `W`, `V`, `a_i` and `b` are each a full
+`dim x dim` block and `epz_conv_i` is a quarter of one (it is indexed by orders, not by the doubled
+s/p state; `muz_conv_i` is `None` on a non-magnetic layer and a second quarter on a magnetic one),
+so:
 
 | path | blocks of `dim^2` per layer | why |
 | --- | --- | --- |
@@ -67,6 +70,13 @@ Read off the retained shapes rather than assumed, at `truncation_order=6`: the p
 `(169,169) (338,338) (338,338) (338,338) (338,338)`. Measured totals at that size are 5.15,
 3.90 and 4.26 blocks — above the asymptote by the `q` vector and `T1`, which stop mattering as
 `dim` grows (4.25 to three figures by `truncation_order=(8, 8)`).
+
+On SMM the entry is `[epz_conv_i, W, V, q, d, None, None, muz_conv_i, (plus, minus)]`: the
+cascade leaves no transfer blocks behind, so where the ETM keeps `a_i` and `b` it keeps each
+layer's `+` and `-` amplitudes, one column per incidence (`_field_state` in `scattering.py`).
+Two blocks fewer per layer: 2.25 on the 2D path, 1.75 conical and 3.0 pure 1D, measured 2.28,
+2.14 and 3.31 at `truncation_order=6` (the six amplitude vectors add to `q` and `T1` there) and
+2.27 at `(8, 8)`. `tests/test_answers_declaration.py` pins both algorithms' 2D figure.
 
 Measured, one patterned layer, ETM, 2D coupled:
 
@@ -289,8 +299,11 @@ its own rung it would have saved 7.6% of solve time and no memory at all.
 **And it is SMM-only, which is a fact about the algorithm rather than an unread keyword.** The
 ETM fixes one illumination's boundary condition and never forms a both-sides operator; asking it
 for one is not a request being silently dropped. Everything else on the ladder is
-algorithm-independent, and measurably so — `layer_info_list`, `T1` and the reconstructed field
-come out identical from both paths (see `connecting-algorithms.md` §8).
+algorithm-independent, and measurably so — the amplitudes and the reconstructed field come out
+identical from both paths (see `connecting-algorithms.md` §8). What carries them is not: the ETM
+hands field reconstruction a walk over each layer's `+` amplitude, and its `T1` is the top
+layer's; the SMM hands over each layer's `+` and `-` amplitudes themselves, and its `T1` is the
+down-going amplitude in the gap above the stack (§2, and `connecting-algorithms.md` §10).
 
 ## 9. Releasing transient 2D matrices after their last use
 

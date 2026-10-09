@@ -197,10 +197,12 @@ def mode_q(xp, eigenvalue, mirrored=None):
     itself falls back to it wherever the other root would grow. Pinned in
     ``tests/test_branch_selection.py`` and ``tests/test_etm_layer_labels.py``.
 
-    The field state SMM recovers for reconstruction is the second exception: it is the ETM's
-    state, a layer's ``+`` amplitudes walked downward, so it needs the ETM's labels for the
-    same reason, and SMM rebuilds a layer on them for it where the two rules may part
-    (:func:`~wavebit._core.scattering._field_labels_differ`). The cascade keeps this rule.
+    SMM's field state reads no labels at all: it reads each layer's amplitudes off the gap
+    amplitude between layers rather than walking a layer's ``+`` amplitudes
+    (:func:`~wavebit._core.scattering._field_state`). From 2026-10-09 to 10-10 it walked the
+    ETM's state and was rebuilt on the ETM's labels, which cost a second ``eig``, still inverted
+    the map into each layer, and made some real-angle fields up to four orders worse
+    (``docs/connecting-algorithms.md`` §10).
 
     **A uniform double-negative layer mirrors the tie** (``mirrored``, from
     :func:`layer_label_rule`; ``None`` everywhere else, which is the arithmetic above to
@@ -253,9 +255,8 @@ def etm_mode_q(xp, eigenvalue, k0_d, mirrored=None):
     ``a`` is that mode's reflection, ~1e-14, and the recursion loses ~12 digits: a 1e-14 nudge
     of a complex ``theta`` moved ``r`` by 2e-4 where SMM moved 2e-15. SMM never sees it,
     because it joins every layer through its gap, whose waves no layer mode reproduces. So the
-    label is free for SMM's cascade and is not free for ETM -- nor for the field state SMM hands
-    to reconstruction, which is the ETM's and takes these labels
-    (:func:`~wavebit._core.scattering._field_labels_differ`).
+    label is free for SMM -- its cascade, and the field state it walks in the gap basis
+    (:func:`~wavebit._core.scattering._field_state`) -- and is not free for ETM.
 
     **Why the cap.** The half-space's root of such a mode grows downward, by
     ``G = |exp(-k0*q*d)|`` across the layer. The recursion carries that round trip as ``G**2``
@@ -337,11 +338,10 @@ def layer_root(xp, eigenvalue, k0_d=None, mirrored=None):
     """A layer mode's ``q``: :func:`etm_mode_q` given the layer's ``k0*d``, :func:`mode_q` without.
 
     The one place a layer's root is chosen, so the mode builders take the connecting algorithm's
-    need as an argument instead of each spelling a rule. ETM passes ``k0_d``; SMM's cascade
-    passes nothing and keeps the bounded root, and passes ``k0_d`` where it rebuilds a layer
-    for its field state. ``mirrored`` is :func:`layer_label_rule`'s verdict on the layer, passed
-    to either rule -- and only when there is one, so every other layer makes the call it always
-    made.
+    need as an argument instead of each spelling a rule. ETM passes ``k0_d``; SMM passes nothing
+    and keeps the bounded root. ``mirrored`` is :func:`layer_label_rule`'s verdict on the layer,
+    passed to either rule -- and only when there is one, so every other layer makes the call it
+    always made.
     """
     if mirrored is None:
         return mode_q(xp, eigenvalue) if k0_d is None else etm_mode_q(xp, eigenvalue, k0_d)
@@ -616,10 +616,9 @@ def power_down_labels(xp, q, flux, energy, k0_d, active):
     (:func:`~wavebit._core.solve_2d_4ff.split_forward_backward`), so the two formulations now
     agree about which way a patterned negative-index layer's modes go.
 
-    ETM (``k0_d`` given) then applies :func:`etm_mode_q`'s cap. SMM's cascade (``k0_d is None``)
-    never takes a growing root: it keeps the decaying one and lets the flux break only the tie
-    :func:`mode_q` breaks by ``Im(q) <= 0``, the lossless propagating mode. Its field state takes
-    the ETM's labels, with the cap.
+    ETM (``k0_d`` given) then applies :func:`etm_mode_q`'s cap. SMM (``k0_d is None``) never
+    takes a growing root: it keeps the decaying one and lets the flux break only the tie
+    :func:`mode_q` breaks by ``Im(q) <= 0``, the lossless propagating mode.
 
     Measured against SMM (``docs/connecting-algorithms.md`` section 11): on 274 random
     patterned scenes at oblique incidence on the 1D TE/TM, conical and 2D paths Maystre's labels

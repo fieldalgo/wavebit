@@ -543,7 +543,8 @@ RESULTS = {
                    'rather than served, because the state is kept while the solve runs or not at '
                    'all -- it is 4.25 matrices of side 2*n_orders_u*n_orders_v per layer on the '
                    '2D path '
-                   '(3.75 conical, 5 pure 1D), against boundary vectors for the amplitudes',
+                   "(3.75 conical, 5 pure 1D; 2.25, 1.75 and 3 with layer_algorithm='SMM'), "
+                   'against boundary vectors for the amplitudes',
     },
     'jobspec': {
         #: No `outputs_default` since spec version 4: `JobSpec.outputs` was removed rather

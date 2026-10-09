@@ -436,8 +436,9 @@ two thick layers, as `|ETM - SMM|` against the cap:
 | 200 um, `theta = 1.2+0.5j` | 2.6e-06 | 2.6e-06 | 2.6e-06 | 2.6e-06 | **1.9e-12** | 2.7e-12 | 4.9e-11 | 1.6 |
 
 Uncapped, near-cutoff modes grew by up to `e**167` across the 50 um layer. SMM's cascade keeps
-`mode_q`'s labels: it needs none of this, and handed the uncapped labels it broke as well. The
-field state SMM recovers for reconstruction does need it -- see the end of this section.
+`mode_q`'s labels: it needs none of this, and handed the uncapped labels it broke as well. Nor
+does the field state SMM recovers for reconstruction, though it took a wrong turn to see that --
+see the end of this section.
 
 These and the 50 um row below were measured on SMM's gap of the time. On the gap of 2026-10-09
 (§11) the cap-8192 column reads 2.1e-13 at 50 um and 6.3e-13 at 200 um, below either
@@ -476,48 +477,106 @@ every evanescent root decaying. The continuation rule it replaced on 2026-10-02 
 1 um neither algorithm was stable: SMM gave `r0 = 4.1191+3.5004j` and moved 3.2e-02 under the
 nudge, where Maystre's cut gives `-0.6412-0.2681j` and 5.0e-15.
 
-**SMM's field state takes the ETM's labels.** Added 2026-10-09. The state SMM hands to field
-reconstruction (`scattering.py::_field_state`) is the ETM's: one vector per layer, its `+`
-amplitudes at the top, carried down through `M`, the map from the gap below the layer onto them.
-Inverting `M` presumes those modes are the waves the region below receives, which is the same
-presumption `a` makes, and the gap does not protect this step: `M` maps out of the gap into the
-layer, not across it. On the decaying labels a vacuum layer between vacuum half-spaces at
-`theta = 0.5+0.3j` had every `+` amplitude zero and its whole field in the `-` amplitudes, which
-the state has no slot for. `A_i` came out at 1e15 and `T1` at zero, and the s-polarized field had
-`|E_z|/|E| = 6e-2` where it is zero, while `R` and `T` were exact. 2ff ETM, and 4ff under either
-algorithm, were right.
+**SMM's field state is read off the gap.** Added 2026-10-09, rewritten 2026-10-10. Until 2026-10-10
+the state SMM hands to field reconstruction (`scattering.py::_field_state`) was the ETM's: one
+vector per layer, its `+` amplitudes at the top, carried down through the inverse of `M`, the map
+from the gap below the layer onto them. Inverting `M` presumes those modes are the waves the
+region below receives -- the presumption `a` makes, and the gap does not protect it here, because
+`M` maps out of the gap into the layer rather than across it. On the cascade's decaying labels a
+vacuum layer between vacuum half-spaces at `theta = 0.5+0.3j` had every `+` amplitude zero and
+its whole field in the `-` amplitudes, which that state has no slot for: `A_i` came out at 1e15,
+`T1` at zero, and the s-polarized field had `|E_z|/|E| = 6e-2` where it is zero, while `R` and
+`T` were exact. 2ff ETM, and 4ff under either algorithm, were right.
 
-So where the two rules may part (a complex `k_par`, a gain layer, a layer that may hold a double
-negative) SMM rebuilds the layer on the ETM's labels for its field state, one more `eig`
-(`scattering.py::_field_labels_differ`): on a two-layer 2D raster at `truncation_order = (6, 6)`
-an SMM field solve cost 1.66x the ETM's at a real angle, where nothing is rebuilt, and 2.46x at
-`theta = 0.5+0.3j`. The reflections below each split plane are label-free
-and are still read off the cascade. The cascade itself keeps `mode_q`, and that is measured
-rather than inherited. Handed the ETM's labels, SMM's `r0` at 200 um and `theta = 1.2+0.5j` sat
-4.7e-10 off the ETM and moved 2.8e-9 under the 1e-14 nudge, against 1.9e-12 and 7.7e-12 on its
-own labels. Keeping them also leaves every amplitude of a field solve identical to the bit to
-the same solve declared below `'field'`.
+The first repair (429f4ac, 2026-10-09) rebuilt every layer where the two label rules may part on
+the ETM's labels, for the state only. It treated the labels as the cause, and they were not:
 
-Worst residual against a closed-form plane wave inside a reflectionless uniform layer (the layer
-on its own medium under vacuum, `truncation_order = 0`, s and p, all six components), and SMM's
-field against the ETM's on two-layer gratings at `theta = 0.5+0.3j` (`[1, 25, 1, 25, 25, 25]` over
-2000 nm, a 6x6 raster for 2D, on `eps = 25`):
+- it ran a second `eig` on an identical operator, since labels are chosen only after `eig`: an
+  SMM field solve on a two-layer 2D raster at `truncation_order = (6, 6)` cost 2.5x the ETM's at a
+  complex angle against 1.6x at a real one;
+- it kept the inverse of `M`, so `M`'s two O(1) terms still cancelled to about `1/G**2` where a
+  root grows by `G` across a layer (4.1e-8 on a 4.8 um grating, 7.3e-11 against a closed form
+  under a layer that grows by `e**8.66`), and were a rounding residue where a root past the cap
+  meets an interface that reflects nothing (0.75 off, and 0.92 under a 1e-14 nudge of `theta`,
+  on 4869 nm of `eps = 2.25` inside itself; on 9a92bf0's gap, `M` rounded to exactly zero for
+  10 um of vacuum on vacuum and the field solve raised);
+- it rebuilt at real angles too, wherever a truncated metal operator's spurious root or an
+  active double negative parts the rules, and made fields that had been right to 1e-12 worse by
+  up to four orders.
 
-| SMM 2ff, worst over s and p | before | after |
-|---|---|---|
-| vacuum on vacuum, `0.5+0.3j`: conical / 2D / TE / TM | 0.75 / 3.5 / 0.80 / 0.24 | <= 1.6e-15 |
-| `eps = 25` on its own substrate, `0.5+0.3j`: conical / 2D / TE / TM | 12 / 230 / 11 / 23 | <= 3.0e-15 |
-| gain, `eps = 25-0.5i` on itself, real `theta = 0.5`: conical / 2D / TE / TM | 1.1e4 / 1.5e6 / 11 / 0.57 | <= 3.6e-15 |
-| `eps = 4`, `mu = 2.25` on itself, `0.5+0.3j`, 2D | 4.2 | 1.1e-15 |
-| grating vs ETM: conical / TE / TM / 2D | 1.5e5 / 1.7e-3 / 5.1e-7 / 5.8e-8 | <= 4.7e-14 |
-| double negative `(-4, -1)` on itself, `theta = 0.5-0.3j`, 2D, vs ETM | 2.0 | 5e-16 |
+The state is now each layer's own amplitudes, read off `g`, the gap's down-going amplitude at
+each split plane, whose up-going partner is `gamma g` with `gamma` the reflection of everything
+below. `g` walks down by `F = (I - s22 gamma_below)^-1 s21`, read off the layer's own scattering
+matrix, and a layer's amplitudes at a face follow from the gap there by the gap -> layer relation:
+`(A + B gamma) g / 2` down, `(B + A gamma) g / 2` up. The `+` amplitude is the top face's down
+one and the `-` amplitude the bottom face's up one. Nothing inverts a map into a layer -- the one
+inverse is `I - s22 gamma`, the loop a Redheffer product closes -- so whichever root the cascade
+labels `+` never matters, and each layer is built once. Two details are measured rather than
+chosen:
 
-The last row is why a layer that may hold a double negative is rebuilt without asking: there
-`q**2` lies below the real axis, the plain rule's check calls the labels equal, and the mirror
-flips them. At a real `k_par` nothing is rebuilt -- the two rules pick the same root, to the bit
--- and 134 arrays (field cells, `T1`, every layer record and amplitude over TE, TM, conical and
-2D, both incidence sides, a magnetic raster and a uniform double negative) came out
-byte-identical to the code before. `tests/test_smm_field_labels.py` pins the table.
+- A mode with `|k0 q d| < 1` has its `-` amplitude read off the top face as well, carried down by
+  `exp(k0 q d)`. Near a layer light line (`q -> 0`) its two amplitudes are each `O(1/q)` and cancel
+  to an `O(1)` field; read off opposite faces their rounding did not cancel with them, and a first
+  version of this walk lost `log10(1/q**2)` digits there -- 8e-7 to 7e-6 off the ETM at the
+  `1e-12` landing `auto_detune` makes after an exact graze, where the ETM and both earlier states
+  sit at 3e-11 to 1.6e-10 from an analytic continuation across it. Reading every mode that keeps a
+  hundredth of itself across the layer off the top face fixed that too, and lifted the
+  continuity floor below from 1e-14 to 2e-13, since the top face's rounding was then carried down
+  by up to `exp(4.6)` on modes that do not cancel at all. The two costs cross near `|k0 q d| = 1`.
+  The autodiff path carries the matching first variation (`modal_gradient.two_face`).
+- `gamma` and `F` share one solve per layer, `gamma_p = s11 + s12 gamma_below F`, which makes the
+  walk consistent with itself. Spelled apart, as `redheffer_star` spells its `S11` block, the pure
+  TE/TM field of 10 um of vacuum at `0.5+0.3j` jittered 5e-10 under a 1e-9 change of the
+  permittivity and its gradient sat 3.4e-4 off a difference quotient (shared: 3e-15 and 2e-9),
+  and the 1D paths sat 100-1000x above every other path on the three past-cap rows below. What
+  the separate spelling kept is the cascade's own rounding of `T`: at a growth of `7e7` the field
+  at a layer's exit face now differs from the transmitted wave by up to 3e-3, less than either
+  differs from the true field there (1e-2).
+
+The SMM record keeps the amplitudes, one column per incidence, in a ninth slot the ETM leaves
+`None`, and `None` in the ETM's two transfer slots; `fields.py` reads whichever it is handed, and
+SMM's `T1` is the gap amplitude above the stack. It retains 2.25 blocks per 2D layer to the ETM's
+4.25 (`what-a-solve-answers.md` §2), and an SMM field solve costs 1.4x the ETM's at a real angle
+and at a complex one (1.6x under the first version of the walk, 2.5x at a complex angle under the
+relabel). A field solve's amplitudes are the amplitude solve's to the byte, since the cascade is
+the same call; at a real angle the field cells moved by rounding, 3.2e-14 at most (median 1.2e-14)
+over 50 scenes -- gratings on all four paths, lit from either side at three angles and two
+thicknesses, and a magnetic raster.
+
+`studies/smm_field_state.py` prints every number below on this tree and on archives of b9957c8
+(the `M` walk on the cascade's labels) and 07ae0f6 (the relabel, on 9a92bf0's gap). Worst
+residual against a closed-form plane wave over s and p and all six components, relative to the
+wave where it is sampled, or against the ETM where a row says so:
+
+| scene | b9957c8 | 07ae0f6 | the walk |
+|---|---|---|---|
+| reflectionless layer, 100 nm, `0.5+0.3j`: vacuum / `eps = 25` / `eps = 4, mu = 2.25` / vacuum lit from below | 3.5 / 230 / 4.8 / 3.5 | <= 3.0e-15 | <= 9.0e-15 |
+| reflectionless `eps = 4` on itself, real `theta = 0.5` (the wave is the layer's `+` mode) | 1.1e-15 | 1.1e-15 | 1.1e-15 |
+| gain, `eps = 25-0.5i` on itself, real `theta = 0.5` | 1.5e6 | 3.0e-15 | 1.2e-14 |
+| 10 um of vacuum on vacuum, `0.5+0.3j` (every other path: 1.3e-7) | 0.76 | `LinAlgError` | 7.1e-8 |
+| 20 um of `eps = 2.13` on itself, `0.5+0.3j` (every other path: 5.3e-5) | 1.0 | 2.1 | 4.6e-5 |
+| 4869 nm of `eps = 2.25` in itself, lit from below (every other path: 2.5e-7) | 13 | 2.4 | 1.9e-7 |
+| two-layer gratings vs ETM, 160 nm / 4.8 um (worst of TE, TM, conical, 2D) | 1.5e5 / 18 | 1.3e-13 / 4.1e-8 | 1.1e-13 / 4.2e-11 |
+| 8.5 um of vacuum under 500 nm of `eps = 4`, TE vs a 60-digit closed form (ETM: 3.8e-15) | 7.1e-16 | 7.3e-11 | 5.7e-16 |
+| the 4869 nm layer at `truncation_order = 7` vs ETM; and under a 1e-14 nudge | 0.39; 1.8 | 0.75; 0.92 | 1.2e-12; 1.3e-12 |
+| lossy metal raster at a real angle vs ETM, oblique / normal | 1.7e-12 / 1.4e-12 | 3.2e-8 / 1.2e-8 | 1.8e-12 / 4.9e-14 |
+| active patterned double negative, real `theta = 0.5`, vs 4ff | 4.0e-12 | 5.9e-11 | 5.4e-13 |
+| complex64 at real angles vs the complex128 ETM (the complex64 ETM: 3.3e-6) | 1.4 | 3.3e-6 | 3.8e-6 |
+| uniform double negative on itself, `theta = 0.5-0.3j`, vs ETM | 2.1 | 2.7e-16 | 4.7e-16 |
+| an order on a spacer's light line, `auto_detune`d, vs ETM (worst of TE, TM, conical, 2D) | 1.6e-10 | 1.6e-10 | 6.0e-11 |
+| label-free: continuity at every interface and at both ports, 10 um of vacuum on vacuum | 0.19 | 0.46 | 1.1e-12 |
+
+The three rows past the cap are the problem's own floor rather than SMM's. The field grows by
+`G = 2.7e4, 6.3e5, 2.8e4` across those layers, and relative to the wave at the lit face every path
+sits near `eps * G**2` (1.6e-7, 8.9e-5, 1.8e-7); relative to the largest field, at the far face,
+the same errors are `G` times smaller, which is how an earlier version of this table quoted them.
+The complex64 row is the ETM's own single-precision level; at that width the cascade's labels
+are round-off, which the `M` walk made an O(1) error at real angles. The last row needs neither
+the ETM nor a closed form: inside a layer the modes satisfy Maxwell by construction, so a field
+continuous at every interface and equal at the outer faces to the half-space fields its own `R`
+and `T` imply is the truncated problem's unique solution (`studies/smm_field_state.py` section 9
+has it on gratings too, where every tree passes). `tests/test_smm_field_state.py` pins the table,
+the oracle and the derivative past the cap, each against a mutant or an old tree it catches.
 
 **One decision per run.** Added 2026-10-09. The cap reads a thickness, and a layer cut in two
 is two layers to it. A thin slice beside a thick one of the same material then kept the
@@ -536,12 +595,13 @@ row a dark order came out at 0.50):
 | TM, 1 um + 4.3 um | 1.9e-07 | 4.9e-14 |
 | conical, 1 um + 4.3 um | 1.7e-08 | 5.8e-14 |
 | 2D, an `eps = 5` rod over 4 um + 0.5 um of `eps = 5`, `(3, 3)`, 1300 x 1100 nm, lit from above at `0.45+0.3j` | 4.8e-08 | 6.1e-13 |
-| SMM's *field*, TE, 1 um + 8 um (the uncut ETM field: 1.1e-12) | 2.2e-05 | 2.3e-11 |
+| SMM's *field*, TE, 1 um + 8 um (the uncut ETM field: 2.6e-13) | 4.5e-15 | 4.5e-15 |
 
 SMM's cascade, joined through its gap medium, stayed at 1e-15 to 3e-14 on every split, and the
 uncut stack's ETM sits where the right-hand column does. The field row is SMM's field state,
-which takes the ETM's labels (above) and so met the same pivot. Two things now make a cut layer
-one layer:
+which is read off the gap and takes no labels (above), so it does not care how the slices decide; while
+it took the ETM's labels it met the same pivot, at 2.2e-5 and 2.3e-11. Two things now make a cut
+layer one layer:
 
 - `layer_runs` joins adjacent layers whose slots agree to `sqrt(eps)` of the largest entry over
   all their slots, under the same double-negative verdict, and `run_k0_d` hands every slice of a
@@ -553,13 +613,14 @@ one layer:
   noise in the other (the tensor rotated by `2*pi`) differs by all of its own size, and that
   80 um + 1.5 um slab put 4ff SMM 22 off at `theta = 0.5+0.05j`. A label two neighbours take
   differently costs `eps/delta` at the plane between them, `delta` being how far their slots
-  differ, so closer than `sqrt(eps)` they decide together. Farther apart is not bounded by that:
-  two slices that each keep a growing label under the cap compound it across a plane that barely
-  reflects, and slots can sit much further apart than the materials do (Li's inverse rule turned
-  a 1e-9 change of a metal grating's `eps = 2.25` background into 3.6e-8 of the slot scale). That
-  grating at normal incidence, cut into two 295 nm slices whose backgrounds differ by 1e-9, does
-  not join, and SMM's field is 2.4e-3 off, as before; joined, it would be at 1e-14. A layer in no
-  run reads its own `k0*d`, the expression passed before.
+  differ, so closer than `sqrt(eps)` they decide together. Slots can sit much further apart than
+  the materials do: Li's inverse rule turned a 1e-9 change of a metal grating's `eps = 2.25`
+  background into 3.6e-8 of the slot scale, so that grating at normal incidence, cut into two
+  295 nm slices whose backgrounds differ by 1e-9, does not join. Both algorithms' fields then move
+  1.4e-8 from the uncut one -- the physical change, 1.4e-6 at 1e-7 apart and 1.4e-4 at 1e-5 --
+  and agree with each other to 2e-11 throughout. (The 2.4e-3 recorded here first, and the
+  1.9e-4 jump just past the threshold, were SMM's field state while it took the ETM's labels.)
+  A layer in no run reads its own `k0*d`, the expression passed before.
 - Inside a run the ETM steps across the plane exactly. Its factors are written on the difference
   of the two slices' modes, `a = I + (dW + dV)/2` and `b = Y + (dW - dV)/2` with
   `dW = W^-1 (W_b - W) (I + Y)`, the same algebra as `(W^-1 F +- V^-1 G)/2`; slices of one layer
@@ -576,8 +637,10 @@ At a real `k_par` a passive layer's modes do not grow, with one exception, and i
 defect: a truncated metal operator can hold a spurious root with `Im(q**2) > 0`. A 295 nm
 `eps = -27.25+0.22j` grating at normal incidence (2D, `(3, 2)`, 575 x 477 nm, lit from below)
 has one growing by 7.0 nepers across it, under the cap; cut a 590 nm grating into two such
-slices and each slice kept it growing, and the ETM and SMM fields came out 1.9e-3 apart. As one run of 590 nm it is
-capped, as the uncut layer is, and the two fields agree to 1.4e-14. The exact step also changes
+slices and each slice kept it growing, and the split ETM's field came out 1.5e-11 off the uncut
+one. As one run of 590 nm it is capped, as the uncut layer is, and both algorithms' fields agree
+with the uncut one to 1e-14. (This paragraph first recorded the ETM and SMM fields 1.9e-3
+apart; that was SMM's field state, then rebuilt on the ETM's labels.) The exact step also changes
 the last bits of any real-angle stack that holds a run (a split layer now matches the uncut one
 to 8e-15..3e-13, the top of that on 2D double-negative runs, where it was at 2.4e-13); a stack
 without runs is unchanged to the bit.
@@ -650,19 +713,7 @@ rank by label growth, or let each slice decide alone.
   those 18 and the split slices, and left 1.8e-6 to 0.22 on the etched gratings, where a block of
   coupled modes has no per-mode cost; it also cost 30-40% at a complex `theta`. It was not
   landed. At a complex `k_par` through thick, high-contrast layers whose material recurs next to
-  them, use SMM for `R` and `T` -- but see the next limit for its field.
-- *SMM's field state on a capped layer whose material continues below it.* The state SMM hands
-  to field reconstruction takes the ETM's labels (above); where a capped label meets an interface
-  that does not reflect it, the map from the gap onto the layer's `+` amplitudes is singular. A
-  4869 nm `eps = 2.25` layer between `eps = 2.25` half-spaces, conical, `theta = 0.61+0.34j`, has
-  an SMM field 8e-1 off the ETM's (which is right) and moving 5 under a 1e-14 nudge, while every
-  amplitude moves 2e-12. Cut in half it used to escape -- each slice too thin to cap (2e-12) --
-  and now does not (2), since a cut layer is the uncut one. In a sweep of 3,932 split stacks at
-  complex angles (on SMM's gap as it was before 9a92bf0), held to the split stack's ETM field,
-  the runs brought SMM's
-  field more than 10x closer in 1,278 and moved it more than 10x away in 175, every one a run of
-  a half-space's material: in 174 the uncut layer was already 3.5e-5 or more off, and in the last
-  the ETM field moved instead (8e-10 to 1.6e-8, inside its own 1.7e-8 under the nudge).
+  them, use SMM; its field state takes no labels either (above).
 - *A thick layer of a half-space's own material, the far one or the one the light comes from.*
   The wave the half-space receives grows across the layer past the cap, and the decaying root the
   cap keeps is the one wave it does not receive: `a` is singular. ETM raises `LinAlgError`: a uniform `eps = 9` layer on `eps = 9`
@@ -775,7 +826,8 @@ permittivities `[1, X, 1, X, X, X]` over 2000 nm, 100 nm thick, on a half-space 
 | uniform double negative | the **mirror**, `Re(q) + Im(q) > 0`, capped | decaying; tie `Im(q) >= 0` |
 | patterned, holding a double-negative region | **per mode**: propagation-dominated (`|Im q| > |Re q|`) with resolvable flux, the root whose flux is positive; otherwise the decaying root; capped | decaying; tie broken by the flux |
 
-SMM's column is its cascade's. Its field state takes the ETM's column (§10, the end).
+SMM's column is its cascade's, and its field state reads no labels (§10, "SMM's field state walks
+the gap").
 
 * **Uniform: the half-space's own rule.** `etm_mode_q(..., mirrored)` is
   `conj(etm_mode_q(conj(q**2)))` before the cap, to the bit, and equals `-i*kz` of the

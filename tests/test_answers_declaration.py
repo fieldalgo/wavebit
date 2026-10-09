@@ -203,20 +203,25 @@ def test_dropping_back_down_clears_the_state_rather_than_leaving_it_stale():
 
 # ------------------------------------------------------------------------- retention
 
+@pytest.mark.parametrize('algorithm,blocks,vectors', [('ETM', 4.25, 0.05), ('SMM', 2.25, 0.12)])
 @pytest.mark.parametrize('n_layers', [1, 3])
-def test_the_amplitude_rung_retains_no_matrices_and_the_field_rung_scales_with_depth(n_layers):
+def test_the_amplitude_rung_retains_no_matrices_and_the_field_rung_scales_with_depth(
+        n_layers, algorithm, blocks, vectors):
     kept = {}
     for rung in ('amplitude', 'field'):
-        s = _solver(answers=rung, n_layers=n_layers)
+        s = _solver(answers=rung, n_layers=n_layers, layer_algorithm=algorithm)
         s.solve()
         kept[rung] = sum(_owned_bytes([s.layer_info_list, s.T1]).values())
     assert kept['amplitude'] == 0
 
-    # 4.25 blocks of side 2*n_orders per layer: W, V, big_A_i, big_B whole and epz_conv_i at a
-    # quarter. The tolerance covers `q` and `T1`, which are vectors.
+    # Blocks of side 2*n_orders per layer, `epz_conv_i` counted at a quarter: the ETM keeps `W`,
+    # `V`, `big_A_i` and `big_B` whole (4.25); the SMM keeps `W` and `V` and, in place of the two
+    # transfer blocks, each layer's `+` and `-` amplitudes (2.25). The tolerance covers `q`,
+    # `T1` and those amplitudes, which are vectors: at this size (`dim = 98`, three incidences)
+    # 0.04 of a block per layer for the ETM and 0.10 for the SMM, which keeps six of them more.
     dim = 2 * (2 * 3 + 1) ** 2
     block = dim * dim * 16
-    assert kept['field'] / (block * n_layers) == pytest.approx(4.25, abs=0.05)
+    assert kept['field'] / (block * n_layers) == pytest.approx(blocks, abs=vectors)
 
 
 # ------------------------------------------------ the JAX pytree round trip (the trap)

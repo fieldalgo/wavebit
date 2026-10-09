@@ -270,6 +270,53 @@ def exponential(xp, q, scale):
     return eye*phases[..., None, :] + (q-eye*values)*divided
 
 
+def two_face(xp, q, scale, top, bottom, keep):
+    """A layer's ``-`` amplitude at its bottom face, read from whichever face keeps it accurate.
+
+    ``top`` and ``bottom`` are the ``-`` (up-going) amplitudes at the layer's top and bottom
+    faces, each read off its own face; in exact arithmetic ``top = exp(-scale*Q) @ bottom``, with
+    ``scale = k0*d`` and ``Q`` the layer's roots. ``keep`` marks the modes to read from the top,
+    ``exp(scale*q) * top``: those with ``|scale*q|`` small, for which that factor stays bounded
+    (the caller's :data:`~wavebit._core.scattering._TOP_FACE`). Every other mode keeps
+    ``bottom``.
+
+    Why both faces. The ``+`` amplitude is read off the top face, and for a mode with
+    ``|scale*q|`` small the two amplitudes nearly cancel in the field -- at a layer light line
+    (``q -> 0``) each is ``O(1/q)`` while the field is ``O(1)``. Read off different faces, their
+    rounding does not cancel with them, and the field lost ``log10(1/q**2)`` digits; read off one
+    face it does. Any other mode's two amplitudes do not cancel, so each is read where it is
+    computed, and ``exp(scale*q)`` -- which overflows for a mode that decays -- is never formed.
+
+    With a modal generator ``q`` (autodiff, :func:`generator`) the answer carries the first
+    variation of ``exp(scale*Q) @ top`` on the kept rows: divided differences of ``exp`` between
+    two kept modes, as :func:`exponential` forms them, and for a kept mode ``j`` beside a dropped
+    one ``k`` the exact identity ``exp(scale*q_k) top_k = bottom_k``, so the dropped mode's
+    growing factor is never formed either. The value is the selection above.
+    """
+    if q.ndim == 1:
+        e = xp.exp(xp.where(keep, scale * q, xp.zeros_like(q)))
+        return xp.where(keep[:, None], e[:, None] * top, bottom)
+    values = xp.linalg.diagonal(q)
+    eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
+    e = xp.exp(xp.where(keep, scale * values, xp.zeros_like(values)))
+    difference = values[:, None] - values[None, :]
+    argument = scale * difference
+    right = xp.real(argument) >= 0
+    numerator = xp.where(right,
+                         e[:, None] * (-xp.expm1(-xp.where(right, argument, 0))),
+                         e[None, :] * xp.expm1(xp.where(right, 0, argument)))
+    denominator = xp.where(difference != 0, difference, xp.ones_like(difference))
+    divided = xp.where(difference != 0, numerator / denominator, scale * e[None, :])
+    both = keep[:, None] & keep[None, :]
+    across = keep[:, None] & ~keep[None, :]
+    variation = q - eye * values
+    zero = xp.zeros_like(variation)
+    within = xp.where(both, variation * divided, zero)
+    beside = xp.where(across, variation / denominator, zero)
+    kept = e[:, None] * top + within @ top + e[:, None] * (beside @ top) - beside @ bottom
+    return xp.where(keep[:, None], kept, bottom)
+
+
 def combine(xp, first, second):
     if first.ndim == second.ndim == 1:
         return xp.concat([first, second])

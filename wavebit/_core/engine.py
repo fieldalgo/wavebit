@@ -644,7 +644,8 @@ _FIELD_NOT_DECLARED = (
     "state has to be retained *during* the solve, so there is nothing left to reconstruct "
     "from once it has returned. Set answers='field' and solve again.\n"
     "The default is 'amplitude' because the field state is 4.25 matrices of side "
-    "2*n_orders_u*n_orders_v per layer on the 2D path (3.75 conical, 5 pure 1D) -- 21.7 MB at "
+    "2*n_orders_u*n_orders_v per layer on the 2D path (3.75 conical, 5 pure 1D; with "
+    "layer_algorithm='SMM' 2.25, 1.75 and 3) -- on the ETM 21.7 MB at "
     "truncation_order=(8, 8), 240 MB at (15, 15), 733 MB at (20, 20), per layer -- while the amplitudes "
     "it does keep are boundary vectors. An optimization against a fixed objective needs the "
     "amplitudes and never reconstructs a field.")
@@ -1070,7 +1071,8 @@ class CoreSolveMixin:
         The default is ``'amplitude'`` because that is where the cost cliff is. The
         amplitudes are boundary vectors already solved for; the field state is 4.25 matrices
         of side ``2*n_orders_u*n_orders_v`` per layer on the 2D path — 240 MB per layer at
-        ``truncation_order=(15, 15)``, 733 MB at ``(20, 20)``. The two differ by three orders of
+        ``truncation_order=(15, 15)``, 733 MB at ``(20, 20)`` (2.25 matrices, 127 MB and 388 MB,
+        with ``layer_algorithm='SMM'``). The two differ by three orders of
         magnitude, and the runs that are large enough to care are optimization sweeps
         against a fixed objective, which never call :meth:`reconstruct_field` at all.
 
@@ -3188,8 +3190,8 @@ class CoreFactorizationMixin:
                  # 'efficiency' | 'amplitude' (default) | 'field'. A declaration, like tetm --
                  # reconstruct_field is refused below 'field' rather than served, because the
                  # per-layer state it walks is 4.25 matrices of side 2*n_orders_u*n_orders_v per
-                 # layer (240 MB at truncation_order=(15, 15)) and is kept as the solve runs or not at
-                 # all. See CoreSolveMixin.answers.
+                 # layer (240 MB at truncation_order=(15, 15); 2.25 on SMM) and is kept as the solve
+                 # runs or not at all. See CoreSolveMixin.answers.
                  mu=None,                    # raster path only: the permeability field,
                  # (n_layers, Ny, Nx) beside `structure`. On the two shape paths a
                  # permeability belongs to the Material filling each region, so naming it

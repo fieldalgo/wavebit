@@ -347,10 +347,12 @@ copying `boundary_kz`'s opposite tie-break, which would be a no-op dressed as a 
 > (`etm_mode_q`). SMM, whose gap medium no layer mode resembles, keeps `mode_q`. Measurements:
 > [`connecting-algorithms.md`](connecting-algorithms.md) §10.
 >
-> **And (2026-10-09): free for SMM's cascade, not for its field state.** The state SMM hands to
-> field reconstruction is the ETM's, a layer's `+` amplitudes walked downward, and on `mode_q`'s
-> labels it reconstructed a wrong field at a complex angle while `R` and `T` stayed exact. SMM now
-> rebuilds a layer on the ETM's labels for that state where the rules may part. Same section.
+> **And (2026-10-09, settled 10-10): free for SMM's field state too, once it stopped borrowing the
+> ETM's.** The state SMM handed to field reconstruction was the ETM's, a layer's `+` amplitudes
+> walked downward through an inverse that needs the ETM's labels, and on `mode_q`'s labels it
+> reconstructed a wrong field at a complex angle while `R` and `T` stayed exact. Rebuilding layers
+> on the ETM's labels (429f4ac) treated the labels as the cause; the state is now each layer's
+> amplitudes read off the gap amplitude between layers, and reads no labels at all. Same section.
 
 ---
 

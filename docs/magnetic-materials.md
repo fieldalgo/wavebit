@@ -427,10 +427,11 @@ with its layer through the **backside** reversal — the propagation kernels' ba
 since 2026-09-21 serves public *top* incidence — and the two algorithms reverse by different
 means — the ETM mirrors the scene before solving, the SMM reverses the state it kept — so a
 `muz_conv_i` left out of either gives each layer the other's `mu_zz`: still magnetic, still
-energy-conserving, `R` and `T` untouched. And the slot is *appended*, not inserted, because
-`tests/test_scattering_core.py` compares the two algorithms' transfer blocks by index and the
-legacy goldens name the first seven; `_z_plan`'s thickness lookup, which used to infer the
-layout from the entry's length, now takes the index from its caller instead.
+energy-conserving, `R` and `T` untouched. And the slot is *appended*, not inserted, because the
+legacy goldens name the first seven and `fields.py` unpacks both algorithms' records by the same
+positions (a ninth slot, after it, holds the SMM's per-layer amplitudes); `_z_plan`'s thickness
+lookup, which used to infer the layout from the entry's length, now takes the index from its
+caller instead.
 
 ## 10. What is not implemented, and why
 

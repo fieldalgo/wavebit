@@ -8,8 +8,8 @@ neighbour had turned. The plane between them reflects nothing, so it had to turn
 other with a reflection of exactly zero -- a pivot on that zero. At ``theta = 0.66+0.47j`` a 1 um
 slice beside 8 um of the same uniform layer, under a grating, put ETM's amplitudes 3.0e-1 off the
 uncut stack (TE), and 1.7e-8..1.9e-7 at worst on the TM, conical and 2D paths, while SMM's
-cascade, which joins layers through its gap medium, stayed at 1e-14. SMM's field state is the
-ETM's and took the same labels, so its *field* went up to 1.0 off.
+cascade, which joins layers through its gap medium, stayed at 1e-14, and so does its field
+state, which walks the gap amplitude and reads no labels.
 
 :func:`~wavebit._core.conventions.run_k0_d` hands every slice of a run of identical layers --
 equal to ``sqrt(eps)``, :func:`~wavebit._core.conventions.layer_runs` -- the run's ``k0*d``, and
@@ -18,8 +18,8 @@ layer is the uncut layer. The controls below give each slice its own decision ag
 exact step away, and must break each case.
 At a real ``k_par`` in a passive layer no cap fires, whatever thickness it is handed -- with one
 exception, the spurious root a truncated metal operator can hold above the real axis, where a
-split metal grating's fields were 1.9e-3 apart between ETM and SMM and now agree. The last tests
-pin both.
+split metal grating's ETM field was 1.5e-11 off the uncut one and now agrees. The last tests pin
+both.
 """
 import numpy as np
 import pytest
@@ -123,9 +123,11 @@ def test_the_2d_path_splits_the_same(per_layer):
 def test_the_field_of_a_split_layer_is_the_uncut_field(per_layer, path):
     """The field inside a split stack is the uncut stack's field, on both algorithms.
 
-    SMM's field state is rebuilt on the ETM's labels (``_field_labels_differ``), so it has to
-    read the same run thicknesses: with each slice deciding alone its field went 1.5e-6 (TM),
-    2.2e-5 (TE) and 1.0 (conical) off, while its amplitudes stayed right.
+    The ETM's field state walks each layer's ``+`` amplitude on the ETM's labels, so it needs the
+    run: with each slice deciding alone its field went 6.3e-1 (TE), 9.7e-8 (TM) and 4.6e-9
+    (conical) off. SMM's walks the gap amplitude between layers and reads no labels
+    (:func:`~wavebit._core.scattering._field_state`), so it is the uncut field either way --
+    which it was not while it was rebuilt on the ETM's labels (429f4ac): 1.0 off, conical.
     """
     thick = 8e3 if path != 'tm' else 4.3e3
     fractions = np.array([0.02, 0.08, 0.15, 0.4, 0.6, 0.8, 0.97])
@@ -141,11 +143,13 @@ def test_the_field_of_a_split_layer_is_the_uncut_field(per_layer, path):
     split = ([UNIFORM, UNIFORM, GRATING], [1000.0, thick, 4800.0])
     reference = field(*merged, 'SMM')
     level = _relative(field(*merged, 'ETM'), reference)       # the uncut stack's own agreement
+    bound = max(20 * level, 1e-9)
     for algorithm in ('ETM', 'SMM'):
-        assert _relative(field(*split, algorithm), reference) < max(20 * level, 1e-9)
+        assert _relative(field(*split, algorithm), reference) < bound
 
     per_layer()
-    assert _relative(field(*split, 'SMM'), reference) > 1e-6
+    assert _relative(field(*split, 'ETM'), reference) > bound
+    assert _relative(field(*split, 'SMM'), reference) < bound
 
 
 # ------------------------------------------------------------------------- the rule itself
@@ -258,9 +262,13 @@ def test_a_metal_grating_split_at_a_real_angle_keeps_one_label(per_layer):
 
     A 2D ``eps = -27.25+0.22j`` grating at normal incidence holds a root with ``Im(q**2) > 0``
     that grows by 7.0 nepers across 295 nm, under the cap. Cut into two 295 nm slices, each slice
-    kept it growing and the plane between them pivoted on zero: the ETM and SMM fields came out
-    1.9e-3 apart (their amplitudes 1e-11). As one run of 590 nm it is capped, as the uncut layer
-    is, and both match the uncut layer's field to 1e-13.
+    kept it growing and the plane between them pivoted on zero: the split ETM's field came out
+    1.5e-11 off the uncut one -- a rounding residue, 5.6e-12 under some perturbations, so the
+    bounds sit at 1e-13 between it and the good case. As one run of 590 nm it is capped, as the
+    uncut layer is, and the two algorithms match the uncut layer's field to 1.8e-15 (ETM) and
+    5.6e-15 (SMM). (The 1.9e-3 between the ETM and SMM fields
+    first recorded here was SMM's, while its field state was rebuilt on the ETM's labels; it now
+    reads none, and is the uncut field whatever the slices decide.)
     """
     metal = np.full((8, 8), 2.25 + 0j)
     metal[3:7, 2:5] = -27.25 + 0.22j
@@ -281,10 +289,11 @@ def test_a_metal_grating_split_at_a_real_angle_keeps_one_label(per_layer):
     uncut = field([metal, rod], [590.0, 116.0], 'ETM')
     split = ([metal, metal, rod], [295.0, 295.0, 116.0])
     for algorithm in ('ETM', 'SMM'):
-        assert _relative(field(*split, algorithm), uncut) < 1e-12
+        assert _relative(field(*split, algorithm), uncut) < 1e-13
 
     per_layer()
-    assert _relative(field(*split, 'SMM'), field(*split, 'ETM')) > 1e-4
+    assert _relative(field(*split, 'ETM'), uncut) > 1e-13
+    assert _relative(field(*split, 'SMM'), uncut) < 1e-13
 
 
 @pytest.mark.parametrize('path', ['te', 'tm', 'conical'])

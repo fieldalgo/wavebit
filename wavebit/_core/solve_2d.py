@@ -567,15 +567,16 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # 4.25 of them per layer once `epz_conv_i` is counted at its quarter (4.5 on a
         # magnetic layer, where `muz_conv_i` is the second quarter).
         #
-        # `muz_conv_i` rides last, and it is there for the same reason `epz_conv_i` is: the two
+        # `muz_conv_i` rides in slot 7, and it is there for the same reason `epz_conv_i` is: the two
         # longitudinal components are algebraic rather than propagated, and each is recovered
         # by dividing out the z slot of its own tensor. `H_z = muz_conv_i (Kx Ey - Ky Ex)` is
         # Faraday's z row, dual to Ampere's z row that gives `E_z` -- see
         # :func:`wavebit._core.fields._field_coupled`. `None` is "non-magnetic", the spelling
-        # `layer_mu` and `Material.mu` already use.
+        # `layer_mu` and `Material.mu` already use. The ninth slot is `None`, as in
+        # :func:`~wavebit._core.solve_1d.solve_1d`'s record: only the SMM's carries one there.
         if keep_field:
             layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B,
-                                    None if layer_mu is None else layer_mu[2]])
+                                    None if layer_mu is None else layer_mu[2], None])
         # Field declarations own the saved references above. Other solves
         # release them before the next layer or final boundary elimination.
         del big_X, big_A_i, big_B
