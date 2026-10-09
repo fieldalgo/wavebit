@@ -54,9 +54,13 @@ gratings, rather than assumed.
 | `'TMM'` | **not offered** | diagnostic only | refuses past modal exponent 9 | 0.94x |
 
 1. ETM and SMM are **the same answer**, to 8e-16 on a real grating. Choosing between them is a
-   cost and structure decision, never an accuracy one. At a complex in-plane wavevector that
-   took ETM labelling its layers' modes by the half-space's rule (§10); before 2026-10-02 it
-   lost up to 12 digits there. A double-negative layer is labelled by where its modes' power
+   cost and structure decision, never an accuracy one -- at a real in-plane wavevector. At a
+   complex one that took ETM labelling its layers' modes by the half-space's rule (§10); before
+   2026-10-02 it lost up to 12 digits there. Two cases are still open, both at a complex `k_par`
+   (or in a gain medium) and both ETM's: a thick, high-contrast layer whose material recurs beside it, such as an
+   etched grating on its own slab, can leave ETM O(1) off where SMM is right; and a thick layer
+   of the far half-space's own material makes ETM raise `LinAlgError` where SMM can be right
+   (§10, "What is left"). A double-negative layer is labelled by where its modes' power
    goes (§11); before 2026-10-04 ETM raised `LinAlgError` on a quarter of the stacks that rest
    one on its own medium. The one stack ETM cannot write is Pendry's perfect-lens pair, which
    it names (§11). Where a layer sets negative permittivity beside positive, SMM lost up to
@@ -414,8 +418,9 @@ or 1e-6 moved ETM by as much (7.0e-05, 6.6e-05), so this was a floor, not condit
 both a mislabelled mode and an interface it crosses unreflected. A 1 nm `eps = 1` film between
 grating and substrate makes the interface reflect, and the floor went (1.9e-15, decaying labels
 kept). It needs high contrast too: the same grating with permittivities 1 and 2.25 moved by
-4.2e-15. A uniform layer never shows it, because its orders do not mix, so a near-zero diagonal
-entry of `a` only rescales its own column.
+4.2e-15. A thin uniform layer does not show it, because its orders do not mix, so a near-zero
+diagonal entry of `a` only rescales its own column; a uniform layer cut in two, or a thick one
+resting on the half-space of its own material, does (the end of this section).
 
 **The rule.** `etm_mode_q` takes the half-space's root, `Re(q) > Im(q)` (Maystre's cut in `q`'s
 variables, `q = -i*kz`). The exception is a root that grows across the layer by more than
@@ -625,10 +630,66 @@ swaps from about 150 um, and its bits change from 200 um, where the capped ETM a
 `tests/test_4ff_round_trip_cap.py`, with controls that remove the cap, rank over the whole layer,
 rank by label growth, or let each slice decide alone.
 
-**What is left.** The cap's worst case, `sqrt(eps)`, needs a mode that grows by about 8192 across a
-layer *and* crosses an interface with a rounding-level reflection; no scene measured reached it.
-Far thicker layers are out of reach for both algorithms: at 1 mm and `theta = 0.5+0.3j`, SMM itself
-moved 3.9e-02 under the nudge.
+**What is left.** Each limit below was measured; none is fixed.
+
+- *The label depends on what lies below, and the cap sees one layer.* The cap assumes the mode's
+  reflection is not at rounding level. Where a different layer whose modes nearly coincide with
+  this one's lies below it, the wave it hands up is the wave the cap's decaying label describes,
+  not the half-space's root, and the pivot the runs remove for identical layers comes back. An
+  etched grating whose teeth are the material of a thick slab beside it is that case: at a
+  complex `theta`, with high contrast, ETM was 0.24, 2.3 and 0.31 off SMM in three such scenes
+  (TM at `truncation_order = 24` with teeth of `eps = 108`; conical with 58 and 78), where SMM
+  moved by 1.5e-12 or less under the nudge. Among 800 random such gratings (teeth `eps` 2 to
+  120, slabs 0.3-200 um, `Im(theta)` 0.02-0.6) ETM was over 1e-6 above SMM's nudge in 17, 14 of
+  them with `eps > 30`. The decaying labels everywhere -- the rule before 2026-10-02, which the
+  grating on its own substrate above refuted -- were over it in 1. And the cap's own worst case,
+  `sqrt(eps)`, is approached: of 13,000 random complex-angle scenes, 66 lost more than 1e-10 in
+  a way their round trips account for, and ETM was the worse algorithm in 18 of them, by 1.1e-10
+  to 7.7e-9 where SMM's nudge moved 3e-14 to 1.3e-10. A rule decided from the recursion's own `a`
+  and `b` (keep the label under which the mode's reflection state stays a contraction) fixed
+  those 18 and the split slices, and left 1.8e-6 to 0.22 on the etched gratings, where a block of
+  coupled modes has no per-mode cost; it also cost 30-40% at a complex `theta`. It was not
+  landed. At a complex `k_par` through thick, high-contrast layers whose material recurs next to
+  them, use SMM for `R` and `T` -- but see the next limit for its field.
+- *SMM's field state on a capped layer whose material continues below it.* The state SMM hands
+  to field reconstruction takes the ETM's labels (above); where a capped label meets an interface
+  that does not reflect it, the map from the gap onto the layer's `+` amplitudes is singular. A
+  4869 nm `eps = 2.25` layer between `eps = 2.25` half-spaces, conical, `theta = 0.61+0.34j`, has
+  an SMM field 8e-1 off the ETM's (which is right) and moving 5 under a 1e-14 nudge, while every
+  amplitude moves 2e-12. Cut in half it used to escape -- each slice too thin to cap (2e-12) --
+  and now does not (2), since a cut layer is the uncut one. In a sweep of 3,932 split stacks at
+  complex angles (on SMM's gap as it was before 9a92bf0), held to the split stack's ETM field,
+  the runs brought SMM's
+  field more than 10x closer in 1,278 and moved it more than 10x away in 175, every one a run of
+  a half-space's material: in 174 the uncut layer was already 3.5e-5 or more off, and in the last
+  the ETM field moved instead (8e-10 to 1.6e-8, inside its own 1.7e-8 under the nudge).
+- *A thick layer of a half-space's own material, the far one or the one the light comes from.*
+  The wave the half-space receives grows across the layer past the cap, and the decaying root the
+  cap keeps is the one wave it does not receive: `a` is singular. ETM raises `LinAlgError`: a uniform `eps = 9` layer on `eps = 9`
+  under vacuum (period 2000 nm, wavelength 1000 nm, `truncation_order = 10`,
+  `theta = 0.43+0.067j`, TE) raised from 20 um to 100 um, where SMM stayed within 1.1e-15 to
+  5.7e-12 of the same layer at 1 nm -- its growing order carries no light. The incident side
+  raises the same way (that layer on an `eps = 9` incident medium, vacuum beyond). Cut into slices
+  thin enough to escape the cap alone, such a layer now raises as the uncut one does (12 um +
+  12 um: 1.0e-15 before); of 2,370 random split stacks at complex angles, 31 that were answered
+  before now raise, every one with an uncut layer that raises too. Where that order is lit, the exact answer is a knife edge: past 30-50 um one ulp of
+  the layer's permittivity moves it by O(1) to 30, and every algorithm returns one side of it.
+- *1 mm.* The scene that opened this section moved `r0` by 3.9e-2 (SMM) and 9.3e-2 (ETM) under
+  the nudge at 1 mm and `theta = 0.5+0.3j`. That is the same knife edge: its `eps = 25` block
+  rests on the `eps = 25` substrate, one combination of its confined modes crosses with a
+  reflection of 4e-15 (exact arithmetic), and their round trips reach 1e14 and more. One ulp of
+  the substrate's permittivity moves the exact `r0` by 1.2e-2, and both algorithms are within
+  2.3 times of that (2.6e-2 and 2.8e-2 off the exact `r0`). A 1 nm `eps = 1` film between
+  grating and substrate, or `bot = 24.9`, removes it.
+- *4ff, a wave the substrate takes unreflected.* A uniaxial layer whose ordinary index equals
+  its substrate's passes that wave without reflection, and a swap involving it divides by the
+  zero, which the per-layer cap cannot see. At `truncation_order = (0, 0)`, `theta = 0.2+0.6j`,
+  10 um, uncapped SMM was 5.5e-7 off (the data's own sensitivity 1.9e-7) and capped SMM is
+  7.3e-3 -- absolute, in the kernel's basis, whose largest amplitude is 2.1e3; at `(2, 2)` every
+  labelling, uncapped included, is O(1) off there. And a thick uniform layer with a complex
+  z-coupled tensor at several orders has round trips *between* orders that no balanced labelling
+  bounds: a lossy tilted uniaxial layer at `theta = 0.3+0.1j` and `(2, 2)` reached 9.4 at 100 um
+  against a data sensitivity of 2e-13, where uncapped raised `FloatingPointError` or did worse.
 
 ## 11. Double-negative layers: the label follows the power
 
@@ -1000,5 +1061,7 @@ control that restores develop's gap and must break it.
   Condens. Matter* **15**, 6345 (2003).
 - B. Gralak and D. Maystre, "Negative index materials and time-harmonic electromagnetic field",
   *C. R. Physique* **13**, 786 (2012).
+- Y. Shiloach and U. Vishkin, "An O(log n) parallel connectivity algorithm", *J. Algorithms*
+  **3**, 57 (1982).
 - M. Cassier and P. Joly, "An operator approach to the analysis of electromagnetic wave
   propagation in dispersive media. Part 2: transmission problems", arXiv:2504.00235 (2025).
