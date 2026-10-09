@@ -28,7 +28,7 @@ from .backend import (array_namespace, as_array, check_finite, division_at_a_cut
                       eig)
 from .conventions import (boundary_kz, half_space_medium, incident_column, incident_kz,
                           layer_label_rule, layer_root, order_azimuth, order_frame_sign,
-                          power_down_labels)
+                          layer_runs, power_down_labels, run_k0_d)
 from .enums import Answers, answers_of
 from .power import (incident_power, net_power, power_for_real_k,
                     sp_incident_power, wave_power)
@@ -382,6 +382,76 @@ def _layer_mu(I, mu_all, layer_index):
             None if mu_all[2] is None else mu_all[2][layer_index])
 
 
+def _run_k0_d(xp, k0, thickness, stacks, dng):
+    """``(k0_ds, links)``: each layer's ``k0_d`` for the ETM's labels, and which layers join.
+
+    ``stacks`` are the per-layer slot stacks the kernel builds its modes from (``None`` where
+    absent) and ``dng`` the engine's per-layer word on double negatives, or ``None``. A run of
+    identical layers (:func:`~wavebit._core.conventions.layer_runs`; ``links[i]`` joins layers
+    ``i`` and ``i + 1``) decides its labels once on its whole thickness
+    (:func:`~wavebit._core.conventions.run_k0_d`); every other layer reads ``k0*d`` as before.
+    Shared with SMM's field-state rebuild, which has to take the very labels the ETM takes.
+    """
+    n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
+    slots = [tuple(None if s is None else s[i] for s in stacks) for i in range(n_layers)]
+    links = layer_runs(xp, slots, None if dng is None else [dng[i] for i in range(n_layers)])
+    return run_k0_d(xp, k0, [thickness[i] for i in range(n_layers)], links), links
+
+
+def _run_join(links, layer_index, below):
+    """Whether the ETM's step into ``layer_index`` continues the run of the layer just below it.
+
+    ``links`` from :func:`_run_k0_d`; ``below`` is what that layer left (``None`` for the first
+    layer stepped, which rests on the half-space). ``True`` / ``False`` / traced.
+    """
+    if below is None or layer_index + 1 > len(links):
+        return False
+    return links[layer_index]
+
+
+def _run_ab(xp, I, W_i, V_i, W, V, F, G, below, join):
+    """The ETM's interface factors ``(a, b)`` for a layer, exact inside a run.
+
+    ``a = (W^-1 F + V^-1 G)/2`` and ``b = (W^-1 F - V^-1 G)/2``, with ``F = W_b (I + Y)``,
+    ``G = V_b (I - Y)`` the state the layer below left (``below = (W_b, V_b, Y)``). Where this
+    layer continues the run of that one (``join``, :func:`_run_join`) the same two are written
+    as ``a = I + (dW + dV)/2``, ``b = Y + (dW - dV)/2`` with ``dW = W^-1 (W_b - W) (I + Y)`` and
+    ``dV = V^-1 (V_b - V) (I - Y)``: the same algebra, read off the difference of the two
+    layers' modes. Slices of one layer have bit-equal modes, so the difference is zero and
+    ``a = I``, ``b = Y`` exactly -- the plane between them reflects nothing, and the recursion
+    now says so instead of reaching ``I`` through ``W^-1 W``. That rounding is what a run
+    cannot afford: a run of the far half-space's own material whose thin slice touches the
+    half-space carries, at the top of that slice, a ``Y`` of 4e17 (its capped label against
+    the half-space pivots on 1.7e-18, which the uncut layer's own ``exp(-k0 q d)`` balances), and
+    ``W^-1 W (I + Y)`` turned it into an exact zero on ``a``'s diagonal -- ``LinAlgError`` where
+    the uncut layer is right to 2.4e-13 (TE, ``eps = 5.79`` on itself, 0.5 um + 60 um,
+    ``theta = 0.43+0.067j``). Stepped this way a split layer is the uncut one: ``Y`` crosses
+    the plane unchanged and is carried by the next slice's propagation alone. The derivative is
+    exact too: along any direction that keeps the slices equal ``W_b - W`` stays zero, and along
+    one that parts them it is ``W^-1 (dW_b - dW) (I + Y)``, as the plain form's.
+    """
+    if join is not True:
+        a = 0.5 * (W_i @ F + V_i @ G)
+        b = 0.5 * (W_i @ F - V_i @ G)
+        if join is False:
+            return a, b
+    W_b, V_b, Y = below
+    dW = W_i @ (W_b - W) @ (I + Y)
+    dV = V_i @ (V_b - V) @ (I - Y)
+    a_run = I + 0.5 * (dW + dV)
+    b_run = Y + 0.5 * (dW - dV)
+    if join is True:
+        return a_run, b_run
+    return xp.where(join, a_run, a), xp.where(join, b_run, b)
+
+
+def _keep_below(links, layer_index, *state):
+    """``state`` if the next layer up may continue this one's run, else ``None`` (nothing kept)."""
+    if layer_index == 0 or links[layer_index - 1] is False:
+        return None
+    return state
+
+
 def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
@@ -517,6 +587,10 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     # --- stage 2: per-layer eig + transfer coupling (transfer_1d_2 / transfer_1d_3) ----
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
+    run_k0_ds, run_links = _run_k0_d(xp, k0, thickness,
+                                     (epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all),
+                                     dng)
+    below = None
     for layer_index in range(n_layers)[::-1]:
         epx_conv = epx_conv_all[layer_index]
         epy_conv = epy_conv_all[layer_index]
@@ -524,28 +598,33 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         d = thickness[layer_index]
         layer_mu = _layer_mu(I, mu_all, layer_index)
 
-        # `k0*d` asks for the ETM's labels (:func:`~wavebit._core.conventions.etm_mode_q`):
+        # `k0_d` asks for the ETM's labels (:func:`~wavebit._core.conventions.etm_mode_q`):
         # this recursion inverts a transmission into the medium below, so a layer's `+`
-        # modes have to be the waves that medium receives.
+        # modes have to be the waves that medium receives. It is the run's `k0*d`, which is
+        # the layer's own unless an identical layer touches it (:func:`_run_k0_d`).
         W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C,
-                                 mu=layer_mu, k0_d=k0*d,
+                                 mu=layer_mu, k0_d=run_k0_ds[layer_index],
                                  dng=None if dng is None else dng[layer_index])
 
         from .modal_gradient import exponential
         X = exponential(xp, q, -k0*d)
         W_i = xp.linalg.inv(W)
         V_i = xp.linalg.inv(V)
-        b = 0.5 * (W_i @ F - V_i @ G)
-
-        # A layer of the same material as the medium below shares its mode basis, which makes
-        # `a` exactly I -- there used to be a branch substituting that and skipping this
-        # inverse. It bought one inverse and it is gone; see the module docstring.
-        a_i = xp.linalg.inv(0.5 * (W_i @ F + V_i @ G))
+        # Inside a run the factors are taken from the difference of the slices' modes, which
+        # is zero: `a = I`, `b = Y` exactly (:func:`_run_ab`). Elsewhere the plain form, and a
+        # layer of the same material as the half-space below still inverts its `a`, which is
+        # exactly I there -- the branch that once skipped that inverse is gone; see the module
+        # docstring.
+        a, b = _run_ab(xp, I, W_i, V_i, W, V, F, G, below,
+                       _run_join(run_links, layer_index, below))
+        a_i = xp.linalg.inv(a)
+        del a
 
         Y = X @ b @ a_i @ X
         F = W @ (I + Y)
         G = V @ (I - Y)
         T = T @ a_i @ X
+        below = _keep_below(run_links, layer_index, W, V, Y)
 
         # Bottom-to-top, matching the legacy append order; consumed by field reconstruction.
         # Conditional, and that is a *peak* saving on top of the lifetime one: `W`, `V`, `q`,
@@ -740,6 +819,10 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
     keep_field = answers_of(answers).covers(Answers.FIELD)
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
+    run_k0_ds, run_links = _run_k0_d(xp, k0, thickness,
+                                     (epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all),
+                                     dng)
+    below = None
     for layer_index in range(n_layers)[::-1]:
         epx_conv = epx_conv_all[layer_index]
         epy_conv = epy_conv_all[layer_index]
@@ -747,10 +830,10 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         d = thickness[layer_index]
         layer_mu = _layer_mu(I, mu_all, layer_index)
 
-        # The ETM's labels, for the reason :func:`solve_1d` gives.
+        # The ETM's labels, on its run's thickness, for the reason :func:`solve_1d` gives.
         W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu,
-            k0_d=k0*d, dng=None if dng is None else dng[layer_index])
+            k0_d=run_k0_ds[layer_index], dng=None if dng is None else dng[layer_index])
 
         from .modal_gradient import exponential, combine
         X_1 = exponential(xp, q1, -k0*d)
@@ -767,13 +850,17 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
 
         big_W_i = xp.linalg.inv(big_W)
         big_V_i = xp.linalg.inv(big_V)
-        big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-        big_A_i = xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
+        # Exact inside a run, the plain form elsewhere (:func:`_run_ab`).
+        big_A, big_B = _run_ab(xp, big_I, big_W_i, big_V_i, big_W, big_V, big_F, big_G, below,
+                               _run_join(run_links, layer_index, below))
+        big_A_i = xp.linalg.inv(big_A)
+        del big_A
 
         Y = big_X @ big_B @ big_A_i @ big_X
         big_F = big_W @ (big_I + Y)
         big_G = big_V @ (big_I - Y)
         big_T = big_T @ big_A_i @ big_X
+        below = _keep_below(run_links, layer_index, big_W, big_V, Y)
 
         # Conditional for the reason `solve_1d`'s append is: the per-layer matrices are the
         # loop's working set, and only `big_F`, `big_G` and `big_T` have to outlive an

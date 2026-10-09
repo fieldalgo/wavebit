@@ -28,9 +28,11 @@ RETICOLO/fmmax references. No external solver code is included here.
 """
 from cmath import sqrt as _csqrt
 
-from .backend import array_namespace, as_array, eig
+import numpy as np
+
+from .backend import array_namespace, as_array, eig, in_namespace
 from .modal_gradient import _stop, split_generator, exponential, combine
-from .conventions import boundary_kz, half_space_medium, order_azimuth
+from .conventions import boundary_kz, half_space_medium, layer_runs, order_azimuth, run_k0_d
 from .enums import Answers, answers_of
 from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching
 from .solve_2d import order_grid_kxy, sp_modes_2d
@@ -91,7 +93,7 @@ def mode_flux_z(xp, psi, n_orders):
     return 0.5 * xp.real(xp.sum(Ex * xp.conj(Hy) - Ey * xp.conj(Hx), axis=0))
 
 
-def split_forward_backward(xp, M, n_orders):
+def split_forward_backward(xp, M, n_orders, k0_d=None):
     """Split modes into propagation towards +z and -z.
 
     For decay-dominated eigenvalues (|Im(lambda)| > |Re(lambda)|), attenuation
@@ -104,6 +106,12 @@ def split_forward_backward(xp, M, n_orders):
 
     A stable sort keeps array sizes static under JAX tracing. Eager evaluation
     refuses a split with anything other than 2*n_orders modes in each direction.
+
+    ``k0_d`` is ``k0`` times the thickness of the layer's run of identical layers
+    (:func:`_run_k0_ds`), given by the two stack algorithms (ETM and SMM) and by nothing else.
+    With it the labels are capped by :func:`_cap_round_trips`; without it (``None``) the split
+    is the uncapped one above, to the bit. A dipole source's host (``illumination._cascade``)
+    and the unstabilised transfer (:func:`_solve_naive`) pass none.
     """
     lam, psi = eig(_stop(M))
     flux = mode_flux_z(xp, psi, n_orders) / xp.sum(xp.abs(psi) ** 2, axis=0)
@@ -122,6 +130,8 @@ def split_forward_backward(xp, M, n_orders):
     flat = _FLAT * (float(xp.finfo(flux.dtype).eps) / _EPS64)
     forward = xp.where(decay_dominated | (xp.abs(flux) <= flat),
                        xp.imag(lam) > 0, flux > 0)
+    if k0_d is not None:
+        forward = _cap_round_trips(xp, _stop(M), lam, psi, forward, k0_d)
 
     # 1.0 forward / 0.0 backward, in `flux`'s own real dtype -- asking for int64 here is what
     # made JAX warn and silently narrow to int32 when x64 is off.
@@ -150,6 +160,194 @@ def split_forward_backward(xp, M, n_orders):
         modes = tuple(xp.where(valid, a, as_array(xp, complex('nan'), dtype=a.dtype,
                                                  device=getattr(a, 'device', None))) for a in modes)
     return modes
+
+
+def _cap_round_trips(xp, M, lam, psi, forward, k0_d):
+    """The split's labels with every round trip across the layer capped at ``eps**-0.5``.
+
+    The 4ff twin of :func:`~wavebit._core.conventions.etm_mode_q`'s cap, and the reason it cannot
+    be a per-mode rule here. Both stack algorithms carry a layer's reflection state as
+    ``Y = X_b R X_f``: entry ``(b, a)`` is forward mode ``a`` going down, reflecting into backward
+    mode ``b`` and coming back, and its size is ``exp(rt) |R_ba|`` with the round trip
+    ``rt = k0 d (Im lam_b - Im lam_a)``. A growing round trip costs about ``eps*exp(rt)``; swapping
+    the two labels costs about ``eps*exp(-rt)/|R_ba|``, at worst ``exp(-rt)``. The costs cross at
+    ``rt = log(1/eps)/2``, which is ``etm_mode_q``'s ``G**2 = eps**-0.5`` -- in a layer whose modes
+    come in mirror pairs ``lam_b = -lam_a`` the round trip of a pair is twice the growth of its
+    label, and the rule below flips exactly the pairs that rule flips.
+
+    Two things make it a rule about *sets*, not single modes. ETM's ``P`` and SMM's interface
+    matrices need ``2N`` modes on each side, so a mode can only leave the forward set if one
+    enters it. And the swap of forward ``a`` with backward ``b`` is a pivot on ``R_ba``
+    (``P' = E P``, ``det E = R_ba``): where ``R_ba`` is structurally zero the swap is singular. A
+    uniform layer reflects each order only into itself, and a y-invariant grating each row of
+    orders only into itself, so ``R`` vanishes between the invariant blocks of ``M`` (connected
+    components of its coupling graph) whenever what lies below shares that invariance -- a swap
+    must stay inside one block.
+    Within a block every swap is regular for a generic environment.
+
+    So, per block: rank the forward modes by ``Im lam`` ascending and the backward modes by
+    ``Im lam`` descending (most growing first) and swap the ``k``-th pair while its round trip
+    exceeds the cap. The round trips of ranked pairs decrease with ``k``, so the swapped set is a
+    prefix, and afterwards *every* forward/backward round trip in the block is within the cap
+    (the swapped modes now decay, and an unswapped pair is bounded by the first unswapped rank).
+    It is also the fewest swaps that achieve that: the cap is a band of width ``rt`` in
+    ``Im lam``, and the prefix is the unique balanced set outside it. ``Im lam`` itself, not the
+    growth of each label: a z-coupled tensor adds a common term to every ``lam`` of an order that
+    cancels in every round trip, so a label can grow while its round trip does not, and the
+    reverse.
+
+    Within each block the ranking runs over the modes the block holds by their largest component.
+    Where ``eig`` mixed two blocks that share an eigenvalue (orders ``(m, n)`` and ``(m, -n)`` at
+    ``ky = 0``), that count can come out unbalanced; the modes left without a partner are then
+    ranked and paired among themselves, as the one block they straddle.
+
+    What the rule cannot see is a pivot that the *environment* makes zero inside a block: a mode
+    the medium below receives without any reflection (a uniaxial layer whose ordinary index equals
+    its substrate's). The swap then divides by that zero -- the 4ff face of the case where
+    ``etm_mode_q``'s cap meets an index-matched half-space. Such a scene is ill-conditioned in its
+    own data (a 1e-16 perturbation of the layer moved the answer by 1e-3 to 1 from 20 um on), so
+    no labels make it accurate; the cap makes it worse than the data warrant where it swaps.
+
+    Static shapes throughout (two stable sorts, ``searchsorted``, ``where``): traceable under
+    ``jax.jit`` with a traced thickness. The labels are discrete; the modal generator is handed
+    the final ones. Every real ``k_par`` in a passive layer has ``rt <= 0`` up to round-off on
+    every pair, so nothing swaps there and the split is the uncapped one to the bit.
+    """
+    nepers = -0.25 * float(np.log(float(xp.finfo(xp.real(lam).dtype).eps)))
+    h = xp.imag(lam)
+    real = h.dtype
+    k0_d = xp.astype(k0_d, real) if in_namespace(xp, k0_d) else as_array(
+        xp, k0_d, dtype=real, device=getattr(h, 'device', None))
+    backward = ~forward
+    block = _mode_blocks(xp, M, psi)
+    swap, hit_f, hit_b = _ranked_swaps(xp, block, h, forward, backward, k0_d, nepers)
+    # the leftovers of blocks eig mixed: ranked together, as the one block they straddle
+    left_f, left_b = forward & ~hit_f, backward & ~hit_b
+    loose = xp.zeros_like(block)
+    swap_left, _, _ = _ranked_swaps(xp, loose, h, left_f, left_b, k0_d, nepers)
+    return xp.where(swap | swap_left, backward, forward)
+
+
+def _ranked_swaps(xp, block, h, forward, backward, k0_d, nepers):
+    """Swaps of the ranked pairs within each block whose round trip exceeds ``2*nepers``.
+
+    Returns ``(swap, paired_forward, paired_backward)``; ``forward`` and ``backward`` here are the
+    members taking part, which need not cover every mode.
+    """
+    n = h.shape[0]
+    rank_f = _rank_within(xp, block, h, forward)
+    rank_b = _rank_within(xp, block, -h, backward)
+    sentinel = -1
+    code_f = xp.where(forward, block * n + rank_f, sentinel)
+    code_b = xp.where(backward, block * n + rank_b, sentinel)
+    partner_f, hit_f = _partner(xp, code_f, code_b)
+    partner_b, hit_b = _partner(xp, code_b, code_f)
+    trip_f = (xp.take(h, partner_f) - h) * k0_d          # forward a against its ranked partner
+    trip_b = (h - xp.take(h, partner_b)) * k0_d          # backward b against its ranked partner
+    swap = ((forward & hit_f & (trip_f > 2 * nepers))
+            | (backward & hit_b & (trip_b > 2 * nepers)))
+    return swap, hit_f, hit_b
+
+
+def _mode_blocks(xp, M, psi):
+    """Each mode's invariant block: a component of ``M``'s coupling graph, as one integer per mode.
+
+    An entry counts as a coupling above ``4N*eps*max|M|``, the backward error ``eig`` itself works
+    to: a coefficient that is zero in exact arithmetic -- ``sinc(pi*m)`` of a rectangle spanning
+    the cell, ``1.2e-16`` -- is not one, and nothing below that can be told from zero by the
+    eigensolver either. Components by minimum-label propagation with pointer jumping (the hook
+    and shortcut steps of Y. Shiloach and U. Vishkin, J. Algorithms 3, 57 (1982)), for a fixed
+    ``2*bit_length(4N)`` rounds. The graphs a layer operator has -- coordinates in order-grid
+    order, coupled through the harmonics a pattern holds -- settle in at most 5 rounds up to
+    ``truncation_order=(20, 20)`` (26 are run); a graph that has not settled (a long chain in a
+    scrambled order would not) is taken as one block, which is the cap ranked over the whole
+    layer. A mode belongs to the block of its largest component.
+    """
+    A = xp.abs(M)
+    n = A.shape[0]
+    tol = n * float(xp.finfo(A.dtype).eps) * xp.max(A)
+    link = (A > tol) | (xp.matrix_transpose(A) > tol)
+    label = xp.arange(n, device=getattr(A, 'device', None))
+    big = xp.full_like(label, n)
+    def hook_and_jump(label):
+        label = xp.minimum(label, xp.min(xp.where(link, label[None, :], big[:, None]), axis=1))
+        return xp.take(label, label)
+    for _ in range(2 * n.bit_length()):
+        label = hook_and_jump(label)
+    settled = xp.all(hook_and_jump(label) == label)
+    label = xp.where(settled, label, xp.zeros_like(label))
+    return xp.take(label, xp.argmax(xp.abs(psi), axis=0))
+
+
+def _rank_within(xp, block, value, member):
+    """Each member's rank among its block's members, by ``value`` ascending (ties by index)."""
+    n = block.shape[0]
+    keyed = xp.where(member, block, xp.full_like(block, n))
+    by_value = xp.argsort(value, stable=True)
+    order = xp.take(by_value, xp.argsort(xp.take(keyed, by_value), stable=True))
+    sorted_block = xp.take(keyed, order)
+    start = xp.searchsorted(sorted_block, sorted_block, side='left')
+    rank_sorted = xp.arange(n, device=getattr(block, 'device', None)) - start
+    return xp.take(rank_sorted, xp.argsort(order, stable=True))
+
+
+def _partner(xp, code, other):
+    """For each non-negative ``code``: the index holding it in ``other``, and whether one does."""
+    n = code.shape[0]
+    order = xp.argsort(other, stable=True)
+    ordered = xp.take(other, order)
+    at = xp.clip(xp.searchsorted(ordered, code, side='left'), 0, n - 1)
+    return xp.take(order, at), (code >= 0) & (xp.take(ordered, at) == code)
+
+
+_SLOTS = ('exx', 'exy', 'exz', 'eyx', 'eyy', 'eyz', 'ezx', 'ezy', 'ezz_i')
+
+
+def _run_k0_ds(xp, k0, layers):
+    """``(k0_ds, links)``: each layer's ``k0_d`` for :func:`_cap_round_trips` -- ``k0`` times its
+    run's thickness -- and which adjacent layers join
+    (:func:`~wavebit._core.conventions.layer_runs`).
+
+    A run is adjacent layers equal, to ``sqrt(eps)``, in all nine permittivity blocks and all
+    nine permeability ones (absent on both, or equal); :func:`~wavebit._core.conventions.run_k0_d`
+    says why it decides once. On this path the reason bites harder than on 2ff: SMM has no gap
+    medium to join two slices through, so a slice that swapped labels its neighbour kept made
+    :func:`_interface_s` hold eigenvectors twice -- 29 of them, cond 5.5e17, for a gyrotropic
+    layer cut 20 um + 1.5 um at ``truncation_order = (2, 2)`` -- and the answer finite garbage
+    that differed between backends. The same material written twice must join too: a tilted
+    uniaxial layer as 2.5 um + 1.5 um, the thin slice a rectangle of it drawn on itself (5.6e-17
+    apart), put SMM 1.6 off at ``theta = 0.2+0.6j``.
+    """
+    def slots(blocks):
+        mu = blocks.get('mu_blocks')
+        return (tuple(blocks[k] for k in _SLOTS)
+                + ((None,) * len(_SLOTS) if mu is None else tuple(mu[k] for k in _SLOTS)))
+    links = layer_runs(xp, [slots(e) for e, _ in layers])
+    return run_k0_d(xp, k0, [d for _, d in layers], links), links
+
+
+def _run_pq(xp, psi_f, psi_b, G, below, join):
+    """The ETM's ``[P; Q]``, the state ``G`` below a layer in that layer's modes; exact in a run.
+
+    ``below = (psi_f_b, psi_b_b, Y)`` is what the layer stepped just before left, ``G =
+    psi_f_b + psi_b_b Y``. Where this layer continues its run (``join``) the solve is taken on
+    the difference of the two layers' modes, ``[I; Y] + [psi_f, psi_b]^-1 ((psi_f_b - psi_f) +
+    (psi_b_b - psi_b) Y)``, the same algebra; slices of one layer have bit-equal modes, so it is
+    ``[I; Y]`` exactly and a split layer steps as the uncut one -- the reason
+    :func:`~wavebit._core.solve_1d._run_ab` gives on the 2ff path.
+    """
+    basis = xp.concat([psi_f, psi_b], axis=1)
+    if join is not True:
+        PQ = xp.linalg.solve(basis, G)
+        if join is False:
+            return PQ
+    f_b, b_b, Y = below
+    n = Y.shape[0]
+    eye = xp.eye(n, dtype=Y.dtype, device=getattr(Y, 'device', None))
+    run_PQ = xp.concat([eye, Y], axis=0) + xp.linalg.solve(basis, (f_b - psi_f) + (b_b - psi_b) @ Y)
+    if join is True:
+        return run_PQ
+    return xp.where(join, run_PQ, PQ)
 
 
 def _forward_count(xp, key):
@@ -315,9 +513,10 @@ def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
     I = xp.eye(2 * n_orders, dtype=Kx.dtype, device=getattr(Kx, 'device', None))
     S, prev_f, prev_b = None, entry_f, entry_b
     modes, interfaces, propagators = [], [], []
-    for eps_blocks, d in layers:
+    layers = list(layers)
+    for (eps_blocks, d), k0_d in zip(layers, _run_k0_ds(xp, k0, layers)[0]):
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders)
+            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders, k0_d)
         interface = _interface_s(xp, prev_f, prev_b, psi_f, psi_b)
         propagation = _propagate_s(xp, lam_f, lam_b, k0, d, n_orders)
         for part in (interface, propagation):
@@ -417,17 +616,25 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
     """
     T_acc = xp.astype(xp.eye(2 * n_orders), Kx.dtype)
     layer_info_list = []
-    for eps_blocks, d in reversed(list(layers)):
+    layers = list(layers)
+    run, links = _run_k0_ds(xp, k0, layers)
+    below = None
+    for index in range(len(layers) - 1, -1, -1):
+        eps_blocks, d = layers[index]
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders)
+            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders, run[index])
         X_f = exponential(xp, lam_f, 1j*k0*d)
         X_b = exponential(xp, lam_b, -1j*k0*d)
 
-        PQ = xp.linalg.solve(xp.concat([psi_f, psi_b], axis=1), G)
+        PQ = _run_pq(xp, psi_f, psi_b, G, below, False if below is None else links[index])
         P_i = xp.linalg.inv(PQ[:2 * n_orders])
         QP_i = PQ[2 * n_orders:] @ P_i
         G = psi_f + psi_b @ X_b @ QP_i @ X_f
         T_acc = T_acc @ (P_i @ X_f)
+        # Kept only while the next layer up may continue this one's run: `G` in this layer's
+        # modes, `[I; Y]`, for :func:`_run_pq`.
+        below = (None if index == 0 or links[index - 1] is False
+                 else (psi_f, psi_b, X_b @ QP_i @ X_f))
 
         # `keep_field=False` lets each layer's eight-slot state be collected as the loop
         # moves on; only `G` and `T_acc` have to survive an iteration. `_solve_etm` above

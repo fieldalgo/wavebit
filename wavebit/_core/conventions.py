@@ -270,9 +270,17 @@ def etm_mode_q(xp, eigenvalue, k0_d, mirrored=None):
     labels and a thin one to :func:`boundary_kz`'s, and in the thin limit a layer of a
     half-space's own material has exactly that half-space's waves for its ``+`` modes.
 
+    **The thickness is the run's.** The kernels pass ``k0`` times the thickness of the layer's
+    run of identical layers (:func:`run_k0_d`), not of the slice: a layer cut in two is one
+    layer, and two slices deciding apart left a pivot on an exact zero at the plane between
+    them. What the cap still cannot see is the layer below: it presumes the mode's reflection
+    there is not at rounding level, and where a layer's material recurs next to it that fails
+    -- ``docs/connecting-algorithms.md`` section 10, "What is left".
+
     Bit-identical to :func:`mode_q` wherever ``q**2`` lies in the closed lower half plane --
-    every real ``k_par`` in a passive layer -- since the two rules then pick the same root and
-    the cap cannot fire. ``docs/connecting-algorithms.md`` holds the measurements.
+    every real ``k_par`` in a passive layer, but for the spurious eigenvalues a truncated metal
+    operator can put above the real axis -- since the two rules then pick the same root and the
+    cap cannot fire. ``docs/connecting-algorithms.md`` holds the measurements.
 
     **A uniform double-negative layer takes the mirror** (``mirrored``, from
     :func:`layer_label_rule`; ``None`` everywhere else, which is the arithmetic above to
@@ -339,6 +347,158 @@ def layer_root(xp, eigenvalue, k0_d=None, mirrored=None):
         return mode_q(xp, eigenvalue) if k0_d is None else etm_mode_q(xp, eigenvalue, k0_d)
     return (mode_q(xp, eigenvalue, mirrored) if k0_d is None
             else etm_mode_q(xp, eigenvalue, k0_d, mirrored))
+
+
+def layer_runs(xp, slots, rules=None):
+    """Which adjacent layers are one layer cut in two: one verdict per boundary.
+
+    ``slots[i]`` is every array layer ``i``'s modes are built from (its convolution slots,
+    ``None`` where one is absent), in the same order for every layer, in the kernel's list
+    order; ``rules[i]`` -- when given -- the engine's :class:`DoubleNegativeLayer` for it.
+    Verdict ``i`` joins layers ``i`` and ``i + 1``: ``True``, ``False`` or a traced boolean.
+    Joined layers form a *run*, which decides its labels once (:func:`run_k0_d`) and is
+    stepped through as the one layer it is (the kernels' ETM recursions).
+
+    Two layers join when every slot agrees to ``sqrt(eps)`` of the largest entry over all their
+    slots, and the rule agrees. Bit equality alone missed the same material written twice -- a
+    tensor built as ``R D R^T`` beside ``D`` rotated by ``R``, 4.4e-16 apart; a rectangle of a
+    medium drawn on a background of that medium, 5.6e-17 -- and two such slices deciding apart
+    (a tilted uniaxial layer as 2.5 um + 1.5 um under a grating, ``theta = 0.2+0.6j``) put 4ff
+    SMM 1.6 off where it had been at 1.2e-11. Why ``sqrt(eps)``: a label two neighbours take
+    differently costs ``eps/delta`` at the plane between them, ``delta`` being how far their
+    slots differ, so a pair closer than ``sqrt(eps)`` must decide together. A pair farther apart
+    is not bounded by that: slices that each keep a growing label under the cap compound it
+    across the plane, and a metal grating at a real angle cut into slices whose backgrounds
+    differ by 1e-9 (3.6e-8 apart in Li's slots) leaves SMM's field 2.4e-3 off
+    (``docs/connecting-algorithms.md`` section 10). Joining never moves an answer -- labels are a
+    basis, and the run's step is the same algebra -- so the threshold only decides where the
+    guarantee ends. Comparisons only; no gradient passes through them.
+    """
+    links = []
+    for i in range(len(slots) - 1):
+        rule = True if rules is None else _same_rule(xp, rules[i], rules[i + 1])
+        links.append(False if rule is False else _all_of(rule, _same_layer(xp, slots[i],
+                                                                           slots[i + 1])))
+    return links
+
+
+def run_k0_d(xp, k0, thickness, links):
+    """Per layer, the optical thickness a label cap decides with: ``k0`` times its run's.
+
+    ``links`` is :func:`layer_runs`'s verdicts. **Why the run and not the layer.** Joined
+    layers are one layer cut in two: the plane between them reflects nothing, and their modes
+    are the same modes. A cap (:func:`etm_mode_q`'s, and the 4ff split's
+    :func:`~wavebit._core.solve_2d_4ff._cap_round_trips`) weighs a growing label's round
+    trip against a decaying one's, and the round trip is across the whole run. A slice that
+    decided on its own thickness kept the half-space's root of a mode its thicker neighbour
+    had turned; the plane between them then had to turn one root into the other with a
+    reflection of exactly zero, which is a pivot on that zero. Measured: a uniform
+    ``eps = 12.75`` layer cut 1 um + 8 um under a grating of that material put ETM's
+    amplitudes 3.0e-1 off the uncut layer at ``theta = 0.66+0.47j`` (largest over all orders,
+    against the largest amplitude: a dark order came out at 0.50), and an ``eps = 9`` TM
+    stack (1 um + 9 um, ``theta = 0.55+0.4j``) 7.1e+2 off, where SMM's cascade (gap medium, no
+    cap) stayed at 1.4e-15 and 5.9e-16; on the 4ff path, where SMM has no gap medium, a gyrotropic
+    layer cut 20 um + 1.5 um put SMM 0.75 off. On the run's thickness all three are at the uncut
+    layer's level.
+
+    A layer in no run reads ``k0 * thickness[i]``, the expression the kernels passed before, so
+    a stack without runs is untouched; a run's total is summed once, in list order, so every
+    slice reads the same bits. At a real ``k_par`` in a passive layer no cap fires, except on
+    the spurious root a truncated metal operator can hold above the real axis; a metal grating
+    cut in two then had its two slices keep that root growing and its fields 1.9e-3 apart
+    between ETM and SMM, and now takes the uncut layer's label. Sums of thicknesses only: where
+    a verdict is traced (``jax.jit`` over a traced raster) the runs are found as segments of a
+    cumulative sum and their totals as one matrix product, so the graph does not grow with the
+    square of the stack.
+    """
+    n = len(thickness)
+    if any(not isinstance(v, bool) for v in links):
+        cut = xp.stack([xp.asarray(not v) if isinstance(v, bool) else ~v for v in links])
+        segment = xp.concat([xp.zeros((1,), dtype=xp.int64),
+                             xp.cumulative_sum(xp.astype(cut, xp.int64))])
+        member = xp.astype(segment[:, None] == segment[None, :], xp.float64)
+        widths = xp.stack([xp.astype(xp.asarray(t), xp.float64) for t in thickness])
+        totals = member @ widths
+        return [k0 * totals[i] for i in range(n)]
+    if not any(links):
+        return [k0 * thickness[i] for i in range(n)]
+    out, start = [None] * n, 0
+    for i in range(n):
+        if i == n - 1 or not links[i]:
+            if start == i:
+                out[i] = k0 * thickness[i]
+            else:
+                total = thickness[start]
+                for j in range(start + 1, i + 1):
+                    total = total + thickness[j]
+                for j in range(start, i + 1):
+                    out[j] = k0 * total
+            start = i + 1
+    return out
+
+
+def _all_of(a, b):
+    """``a and b`` over ``True`` / ``False`` / a traced boolean."""
+    if a is False or b is False:
+        return False
+    if a is True:
+        return b
+    if b is True:
+        return a
+    return a & b
+
+
+def _same_layer(xp, a, b):
+    """Do two layers hold the same values in every slot, to ``sqrt(eps)`` of the largest entry
+    over all their slots? ``True`` / ``False`` / traced (:func:`layer_runs`).
+
+    One scale for the pair, not one per slot: a slot that is exactly zero in one layer and
+    rounding noise in the other -- a tensor rotated by ``2*pi``, or twisted by 1e-12 rad --
+    differs by all of its own size, 6e-17 against a layer whose largest entry is 2.66. Scaled
+    per slot that kept one material apart from itself, and 4ff SMM went 22 off (80 um + 1.5 um
+    at ``theta = 0.5+0.05j``).
+    """
+    pairs = []
+    for x, y in zip(a, b):
+        if x is y:
+            continue
+        if x is None or y is None or tuple(x.shape) != tuple(y.shape):
+            return False
+        pairs.append((x, y))
+    if not pairs:
+        return True
+    scale = None
+    for x, y in pairs:
+        size = xp.maximum(xp.max(xp.abs(x)), xp.max(xp.abs(y)))
+        scale = size if scale is None else xp.maximum(scale, size)
+    tol = float(np.sqrt(xp.finfo(xp.real(pairs[0][0]).dtype).eps))
+    verdict = True
+    for x, y in pairs:
+        close = xp.max(xp.abs(x - y)) <= tol * scale
+        read = _concrete(close)
+        if read is False:
+            return False
+        verdict = _all_of(verdict, close if read is None else True)
+    return verdict
+
+
+def _same_rule(xp, a, b):
+    """Do two layers take the same label rule? ``True`` / ``False`` / traced: each field of
+    the two :class:`DoubleNegativeLayer` verdicts compared by value, a traced one selected on."""
+    if a is b:
+        return True
+    if a is None or b is None:
+        return False
+    verdict = True
+    for x, y in zip(a, b):
+        if x is y:
+            continue
+        if x is None or y is None:
+            return False
+        if isinstance(x, bool) and isinstance(y, bool):
+            return False                        # distinct Python bools differ
+        verdict = _all_of(verdict, xp.asarray(x) == xp.asarray(y))
+    return verdict
 
 
 class DoubleNegativeLayer(NamedTuple):

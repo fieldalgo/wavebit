@@ -432,8 +432,12 @@ normalization is not convention-free, so `de_ri` is not compared against anythin
 Every `sqrt` above is a physical decision, centralized in `_core/conventions.py`:
 
 - **layer** `q`: under SMM `Re(q) ≥ 0` (`mode_q`), a conditioning choice on a free label; under
-  ETM the half-space's root wherever it grows by less than `eps**-0.25` across the layer
-  (`etm_mode_q`), because that recursion inverts a transmission and its labels are not free
+  ETM the half-space's root wherever it grows by less than `eps**-0.25` across the layer, or
+  across its whole run of equal layers (equal to `sqrt(eps)`) when it is cut into slices
+  (`etm_mode_q`, `run_k0_d`), because that recursion inverts a transmission and its labels are
+  not free (`docs/connecting-algorithms.md` §10). The 4ff split caps the round trip of every
+  forward/backward pair inside one invariant block of the layer operator by the square of that
+  bound, `eps**-0.5` (`solve_2d_4ff._cap_round_trips`); between blocks it cannot
   (`docs/connecting-algorithms.md` §10). A uniform double-negative layer takes the mirror of
   either rule and a patterned one holding a double negative its modes' power flux
   (`layer_label_rule`, `docs/connecting-algorithms.md` §11);

@@ -20,7 +20,8 @@ from .backend import (_concrete, _readable, array_namespace, as_array, carries_a
 from .conventions import (boundary_kz, half_space_medium, layer_label_rule, layer_root,
                           order_azimuth, power_down_labels)
 from .enums import Answers, answers_of
-from .solve_1d import _block, _diag, _is_backside, _mirrored_scene, final_matching, mode_flux
+from .solve_1d import (_block, _diag, _is_backside, _keep_below, _mirrored_scene, _run_ab,
+                       _run_join, _run_k0_d, final_matching, mode_flux)
 
 # Engage the coupled-cluster rebuild (see `_rebuild_grazing_cluster`) below this
 # min|w|/max|w| ratio. Well above `backend._CUTOFF_REL` (the warn threshold) on purpose,
@@ -504,6 +505,10 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     keep_field = answers_of(answers).covers(Answers.FIELD)
     layer_info_list = []
     n_layers = len(thickness) if not hasattr(thickness, 'shape') else thickness.shape[0]
+    run_k0_ds, run_links = _run_k0_d(xp, k0, thickness,
+                                     (epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                      epxy_conv_all, epyx_conv_all, *mu_all), dng)
+    below = None
     for layer_index in range(n_layers)[::-1]:
         epx_conv = epx_conv_all[layer_index]
         epy_conv = epy_conv_all[layer_index]
@@ -522,9 +527,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
         # The ETM's labels (:func:`~wavebit._core.conventions.etm_mode_q`): this recursion
         # inverts a transmission into the medium below, so a layer's `+` modes have to be
-        # the waves that medium receives.
+        # the waves that medium receives. Decided on the run's thickness
+        # (:func:`~wavebit._core.solve_1d._run_k0_d`).
         W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
-                                 epxy_conv, epyx_conv, C, mu=layer_mu, k0_d=k0*d,
+                                 epxy_conv, epyx_conv, C, mu=layer_mu,
+                                 k0_d=run_k0_ds[layer_index],
                                  dng=None if dng is None else dng[layer_index])
 
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
@@ -533,19 +540,24 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         if big_F is None:
             big_F, big_G, big_T = substrate_state()
 
+        big_I = xp.astype(xp.eye(2 * n_orders), C)
         big_W_i = xp.linalg.inv(big_W)
         big_V_i = xp.linalg.inv(big_V)
-        big_B = 0.5 * (big_W_i @ big_F - big_V_i @ big_G)
-        big_A_i = xp.linalg.inv(0.5 * (big_W_i @ big_F + big_V_i @ big_G))
-        del big_W_i, big_V_i
+        # Exact inside a run, the plain form elsewhere
+        # (:func:`~wavebit._core.solve_1d._run_ab`).
+        big_A, big_B = _run_ab(xp, big_I, big_W_i, big_V_i, big_W, big_V, big_F, big_G, below,
+                               _run_join(run_links, layer_index, below))
+        big_A_i = xp.linalg.inv(big_A)
+        del big_W_i, big_V_i, big_A
 
         from .modal_gradient import exponential
         big_X = exponential(xp, q, -k0*d)
 
         Y = big_X @ big_B @ big_A_i @ big_X
-        big_I = xp.astype(xp.eye(2 * n_orders), C)
         big_F = big_W @ (big_I + Y)
         big_G = big_V @ (big_I - Y)
+        # Kept only while the next layer up may continue this one's run.
+        below = _keep_below(run_links, layer_index, big_W, big_V, Y)
         del big_W, big_V, big_I, Y
         big_T = big_T @ big_A_i @ big_X
 

@@ -514,11 +514,121 @@ flips them. At a real `k_par` nothing is rebuilt -- the two rules pick the same 
 2D, both incidence sides, a magnetic raster and a uniform double negative) came out
 byte-identical to the code before. `tests/test_smm_field_labels.py` pins the table.
 
+**One decision per run.** Added 2026-10-09. The cap reads a thickness, and a layer cut in two
+is two layers to it. A thin slice beside a thick one of the same material then kept the
+half-space's root of a mode its neighbour had turned, and the plane between them, which reflects
+nothing, had to turn one root into the other: a pivot on an exact zero. A uniform `eps = 12.75`
+layer as a 1 um slice and a thick slice, under a grating of the same material
+(`[1, X, 1, X, X, X, X, X]` with `X = 12.75`, period 2000 nm, 4.8 um, wavelength 1000 nm,
+`truncation_order = 10`), vacuum on both sides, lit from below at `theta = 0.66+0.47j`, against
+the uncut stack's SMM (largest over all orders, against the largest amplitude -- in the first
+row a dark order came out at 0.50):
+
+| split stack, ETM | each slice decides | the run decides |
+|---|---|---|
+| TE, 1 um + 8 um | 3.0e-01 | 1.9e-14 |
+| TE, 1 um + 6 um | 1.2e-03 | 1.1e-13 |
+| TM, 1 um + 4.3 um | 1.9e-07 | 4.9e-14 |
+| conical, 1 um + 4.3 um | 1.7e-08 | 5.8e-14 |
+| 2D, an `eps = 5` rod over 4 um + 0.5 um of `eps = 5`, `(3, 3)`, 1300 x 1100 nm, lit from above at `0.45+0.3j` | 4.8e-08 | 6.1e-13 |
+| SMM's *field*, TE, 1 um + 8 um (the uncut ETM field: 1.1e-12) | 2.2e-05 | 2.3e-11 |
+
+SMM's cascade, joined through its gap medium, stayed at 1e-15 to 3e-14 on every split, and the
+uncut stack's ETM sits where the right-hand column does. The field row is SMM's field state,
+which takes the ETM's labels (above) and so met the same pivot. Two things now make a cut layer
+one layer:
+
+- `layer_runs` joins adjacent layers whose slots agree to `sqrt(eps)` of the largest entry over
+  all their slots, under the same double-negative verdict, and `run_k0_d` hands every slice of a
+  run the run's `k0*d`, so the run takes one label. Not bit equality: the same material written
+  twice decided apart. A tensor built as `R D R^T` beside `D` rotated by `R` differs by 4.4e-16,
+  and a rectangle of a medium drawn on that medium by 5.6e-17; the second, a tilted uniaxial layer
+  as 2.5 um + 1.5 um under a grating at `theta = 0.2+0.6j`, put 4ff SMM 1.6 off where it had been
+  at 1.2e-11. Nor one scale per slot: a slot that is exactly zero in one spelling and rounding
+  noise in the other (the tensor rotated by `2*pi`) differs by all of its own size, and that
+  80 um + 1.5 um slab put 4ff SMM 22 off at `theta = 0.5+0.05j`. A label two neighbours take
+  differently costs `eps/delta` at the plane between them, `delta` being how far their slots
+  differ, so closer than `sqrt(eps)` they decide together. Farther apart is not bounded by that:
+  two slices that each keep a growing label under the cap compound it across a plane that barely
+  reflects, and slots can sit much further apart than the materials do (Li's inverse rule turned
+  a 1e-9 change of a metal grating's `eps = 2.25` background into 3.6e-8 of the slot scale). That
+  grating at normal incidence, cut into two 295 nm slices whose backgrounds differ by 1e-9, does
+  not join, and SMM's field is 2.4e-3 off, as before; joined, it would be at 1e-14. A layer in no
+  run reads its own `k0*d`, the expression passed before.
+- Inside a run the ETM steps across the plane exactly. Its factors are written on the difference
+  of the two slices' modes, `a = I + (dW + dV)/2` and `b = Y + (dW - dV)/2` with
+  `dW = W^-1 (W_b - W) (I + Y)`, the same algebra as `(W^-1 F +- V^-1 G)/2`; slices of one layer
+  have bit-equal modes, so `a = I` and `b = Y` exactly instead of through `W^-1 W`. That rounding
+  was the one thing a run could not afford. A run of the far half-space's own material whose thin
+  slice touches the half-space carries a `Y` of 4e17 at the top of that slice -- its capped
+  label pivots on 1.7e-18 there, which only the whole run's `exp(-k0 q d)` balances -- and
+  `W^-1 W (I + Y)` put an exact zero on the next slice's `a`: `LinAlgError` where the uncut layer
+  is right to 2.4e-13 (TE, `eps = 5.79` on itself, 0.5 um + 60 um, `theta = 0.43+0.067j`; also
+  TM, 2D, and gain at a real angle). Stepped exactly, a split layer is the uncut layer, the
+  derivative included: `W_b - W` stays zero along any direction that keeps the slices equal.
+
+At a real `k_par` a passive layer's modes do not grow, with one exception, and it is the same
+defect: a truncated metal operator can hold a spurious root with `Im(q**2) > 0`. A 295 nm
+`eps = -27.25+0.22j` grating at normal incidence (2D, `(3, 2)`, 575 x 477 nm, lit from below)
+has one growing by 7.0 nepers across it, under the cap; cut a 590 nm grating into two such
+slices and each slice kept it growing, and the ETM and SMM fields came out 1.9e-3 apart. As one run of 590 nm it is
+capped, as the uncut layer is, and the two fields agree to 1.4e-14. The exact step also changes
+the last bits of any real-angle stack that holds a run (a split layer now matches the uncut one
+to 8e-15..3e-13, the top of that on 2D double-negative runs, where it was at 2.4e-13); a stack
+without runs is unchanged to the bit.
+`tests/test_split_layer_labels.py`.
+
+**The 4ff cap.** Added 2026-10-09. The 4ff split (`split_forward_backward`) labels by attenuation
+where decay dominates and by energy flow otherwise, and had no cap: at a complex `theta`, or in a
+gain layer at a real one, both algorithms on this path were O(1) wrong from 10-50 um and raised
+`FloatingPointError` further on. It has no `±q` pairs to flip one at a time. ETM's `P` and SMM's
+interface matrices need `2N` modes on each side, so a forward label can only trade places with a
+backward one. Forward mode `a` and backward mode `b` meet in the reflection state with the round
+trip `rt = k0 d (Im lam_b - Im lam_a)`, and swapping the pair is a pivot on the reflection `R_ba`
+between them. The costs are the 2ff ones with `G**2 = exp(rt)`, so the cap is
+`rt = log(1/eps)/2`. Two constraints decide which pairs. `R_ba` is zero, whatever the
+thicknesses, when `a` and `b` lie in different invariant blocks of the layer operator (each order
+of a uniform layer, each row of orders of a y-invariant grating, TE and TM at `ky = 0`) and what
+lies below shares that invariance, so a swap stays inside a block. Inside a block, ranking the
+forward modes by `Im lam` ascending and the backward ones descending, and swapping ranked pairs
+while `rt` exceeds the cap, is the fewest swaps that leave every round trip in the block within
+it. `Im lam`, not each label's own growth: a z-coupled tensor shifts every `lam` of an order by a
+common amount that cancels in the round trip. On a mirror-symmetric layer the ranked pairs are the
+`±q` pairs and the rule is `etm_mode_q`'s. The blocks are the components of
+`|M| > 4N*eps*max|M|`, found by label propagation with pointer jumping (Shiloach and Vishkin,
+References); a graph that has not settled is taken as one block. ETM and SMM use the same rule,
+on the run's thickness as above, and the ETM steps across a run's planes exactly
+(`_run_pq`). Without the runs a 20 um + 1.5 um gyrotropic layer put 4ff SMM 0.75 off the uncut
+one: its interface matrix held 29 eigenvectors twice (cond 5.5e17), and this path's SMM has no
+gap medium to join slices through.
+
+Against exact-arithmetic transfer oracles (every order of `R` and `T`, relative to the largest;
+`theta = 0.5+0.3j, 0.5+0.05j, 0.2+0.6j, 1.0+0.1j`; the last two rows against 2ff SMM), uncapped
+and capped:
+
+| 4ff scene | uncapped | capped |
+|---|---|---|
+| uniform gyrotropic and tilted-uniaxial layers, `(2, 2)`, 5-200 um (the gyrotropic one at `1.0+0.1j` is refused by the split itself, 51 forward modes of 50, capped or not) | up to 3e27 at 20 um and 7e44 at 50 um (the gyrotropic layer: 1e8 and 3e32), `FloatingPointError` from 100 um | <= 4e-10 |
+| the same at `(0, 0)` | up to 1e+1 | <= 4e-12 |
+| a thick tilted-uniaxial film over a thin y-invariant grating, 5-200 um | to `inf` | <= 4e-11 |
+| the 1D grating above forced to 4ff, `(10)`, 50 um / 200 um, `0.5+0.3j` | ETM 13 / 1.2, SMM 1e2 / 33 | ETM 2e-11 / 1e-9, SMM 4e-12 / 3e-10 |
+| that grating as gain, `eps = 25-0.5j`, real `theta = 0.5`, 50 um / 200 um / 1 mm | 3e-2 / 36 / `FloatingPointError` | 5e-13 / 2e-14 / 2e-14 |
+
+Every real-`k_par` solve in passive media without a spurious root and without a run is unchanged
+to the bit (88 and 124 scenes in two independent checks: a passive layer has
+`Im lam_f >= 0 >= Im lam_b`, so no round trip is positive); a stack with a run changes the ETM's
+last bits through the exact step, as on the 2ff path (a split layer stays within 1.5e-14 of the
+uncut one), and SMM's not at all. A truncated operator can break it too, as on the 2ff path -- a lossless
+gyrotropic disc under NVF at `(2, 2)` and real `theta = 1.0` has `Im lam_f` down to -8.0e-3,
+swaps from about 150 um, and its bits change from 200 um, where the capped ETM and SMM agree to
+6.6e-13 and the uncapped ones were 4.8e-9 apart. The cap costs 2-5% of the `eig`.
+`tests/test_4ff_round_trip_cap.py`, with controls that remove the cap, rank over the whole layer,
+rank by label growth, or let each slice decide alone.
+
 **What is left.** The cap's worst case, `sqrt(eps)`, needs a mode that grows by about 8192 across a
 layer *and* crosses an interface with a rounding-level reflection; no scene measured reached it.
 Far thicker layers are out of reach for both algorithms: at 1 mm and `theta = 0.5+0.3j`, SMM itself
-moved 3.9e-02 under the nudge. The 4ff path splits its modes in `split_forward_backward` by the
-same partition (attenuation where decay dominates, energy flow otherwise), without a cap.
+moved 3.9e-02 under the nudge.
 
 ## 11. Double-negative layers: the label follows the power
 

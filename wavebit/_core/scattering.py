@@ -74,7 +74,7 @@ from .backend import _concrete, _device_of, array_namespace, as_array, check_fin
 from .conventions import boundary_kz, half_space_medium, order_azimuth, order_frame_sign
 from .enums import Answers, answers_of
 from .conventions import incident_column
-from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack,
+from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack, _run_k0_d,
                        layer_modes_1d, layer_modes_1d_conical, sp_efficiencies,
                        sp_modes_1d_conical)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
@@ -716,6 +716,11 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
     S_layers, AB, modes, muzs = [], [], [], []
     S = S_ref
+    # The ETM's thicknesses for its labels, run by run, so the rebuilt state below takes the
+    # very labels the ETM takes (:func:`~wavebit._core.solve_1d._run_k0_d`).
+    run_k0_ds = (_run_k0_d(xp, k0, thickness,
+                           (epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all), dng)[0]
+                 if keep_field else None)
     for layer_index in range(_n_layers(thickness)):
         layer_mu = _layer_mu(I, mu_all, layer_index)
         layer_dng = None if dng is None else dng[layer_index]
@@ -735,7 +740,7 @@ def smm_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         if keep_field:
             # The field state is walked on the ETM's labels; the cascade above keeps its own.
             if _field_labels_differ(xp, q, layer_mu is not None, layer_dng):
-                W, V, q = layer_modes(k0*d)
+                W, V, q = layer_modes(run_k0_ds[layer_index])
                 A, B = _ab_matrices(xp, W, V, W_gap, V_gap)
             S_layers.append(S_layer)
             AB.append((A, B))
@@ -940,15 +945,18 @@ def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0,
             eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None, magnetic=False,
-            dng=None):
+            dng=None, run_stacks=None):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index, k0_d=None)`` returns that layer's ``(big_W, big_V, q, W, V)``:
     the mode matrices in the s/p boundary basis that the cascade joins layers through, then the
     raw (unrotated) pair that field reconstruction expands the same amplitudes with. ``k0_d``
     asks for the ETM's labels, which the field state is rebuilt on where they differ
-    (:func:`_field_labels_differ`); ``magnetic`` and ``dng`` are what that check reads. Everything
-    else — half-spaces, gap, cascade, incidence, efficiencies — is common.
+    (:func:`_field_labels_differ`); ``magnetic`` and ``dng`` are what that check reads, and
+    ``run_stacks`` the per-layer slot stacks the ETM decides its runs on
+    (:func:`~wavebit._core.solve_1d._run_k0_d`), so the rebuild reads the ETM's own ``k0_d``;
+    without them every layer reads its own ``k0*d``, as if no two were alike.
+    Everything else — half-spaces, gap, cascade, incidence, efficiencies — is common.
 
     ``muz_conv_i_all`` is the per-layer ``mu_zz^-1``, carried for one reason: field
     reconstruction recovers ``H_z`` algebraically from it, exactly as it recovers ``E_z`` from
@@ -1020,6 +1028,9 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
     S_layers, AB, modes, muz_conv = [], [], [], []
     S = S_ref
+    run_k0_ds = (None if not keep_field
+                 else [k0 * thickness[i] for i in range(_n_layers(thickness))]
+                 if run_stacks is None else _run_k0_d(xp, k0, thickness, run_stacks, dng)[0])
     for layer_index in range(_n_layers(thickness)):
         big_W, big_V, q, W, V = layer_modes(layer_index)
         d = thickness[layer_index]
@@ -1031,7 +1042,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         if keep_field:
             # The field state is walked on the ETM's labels; the cascade above keeps its own.
             if _field_labels_differ(xp, q, magnetic, None if dng is None else dng[layer_index]):
-                big_W, big_V, q, W, V = layer_modes(layer_index, k0*d)
+                big_W, big_V, q, W, V = layer_modes(layer_index, run_k0_ds[layer_index])
                 A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
             S_layers.append(S_layer)
             AB.append((A, B))
@@ -1118,7 +1129,8 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
                    layer_modes, epz_conv_i_all, backside, answers,
                    mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
                    muz_conv_i_all=mu_all[2], lit=lit,
-                   magnetic=any(t is not None for t in mu_all), dng=dng)
+                   magnetic=any(t is not None for t in mu_all), dng=dng,
+                   run_stacks=(epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all))
 
 
 def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
@@ -1174,4 +1186,6 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
                    mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
                    muz_conv_i_all=mu_all[2], lit=lit,
-                   magnetic=any(t is not None for t in mu_all), dng=dng)
+                   magnetic=any(t is not None for t in mu_all), dng=dng,
+                   run_stacks=(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                               epxy_conv_all, epyx_conv_all, *mu_all))
