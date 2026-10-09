@@ -394,6 +394,9 @@ def _pole_terms(scene, grid):
     if not film_terms:
         from .debye_stack import terms as debye_stack_terms
         film_terms = debye_stack_terms(scene, grid)
+    if not film_terms:
+        from .oscillator_stack import terms as oscillator_stack_terms
+        film_terms = oscillator_stack_terms(scene, grid)
     if film_terms:
         return film_terms
     terms = []

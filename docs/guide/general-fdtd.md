@@ -150,6 +150,7 @@ report entries; summing those entries still does not include every runtime cost.
 | Smoothed lossy or dispersive films | One concrete, unturned, unranged `Box` in a plain isotropic non-magnetic host, spanning exactly two axes with the required overhang and clearing absorbers along its finite thickness. Conductors, finite Debye sums, finite Drude/Lorentz sums and mixed families each have their own restrictions: [conductive](../fd-conductive-film.md), [Debye](../fd-debye-sum-film.md), [oscillator](../fd-oscillator-sum-film.md), [mixed-family](../fd-hybrid-film.md). |
 | Separated conductive films | Two or more concrete, unturned, unranged voxel `Box` structures, all with `Conductor` materials (including `sigma=0`), in one plain positive isotropic lossless non-magnetic `Material` host. All films share a normal axis and their padded grid supports are pairwise disjoint. Initial fields, traced geometry/material/band values, touching films and stacks mixing declared pole families are refused. See [conductive stacks](../fd-conductive-stack.md). |
 | Separated Debye films | Two or more disjoint parallel voxel Box films, each with one, two or a finite sum of passive Debye poles, in the same plain lossless nonmagnetic host. Declared slots and singleton reductions are retained. Fixed duration only; initial fields, traced inputs, overlapping padded supports and mixed-family stacks are refused. See [Debye stacks](../fd-debye-stack.md). |
+| Separated single-oscillator films | Two or more parallel voxel `Box` films, each with exactly one passive `Drude` or `Lorentz` pole in the same plain lossless isotropic nonmagnetic host. Different films may use different oscillator kinds. Supports must be disjoint; duration is fixed. Initial fields, derivatives, within-film sums, Debye members and `Decay` are refused. See [the bounded contract and validation status](../fd-oscillator-stack.md). |
 
 Declare a conductive stack with the ordinary `Scene(structures=(...))` tuple;
 there is no separate stack constructor. Each film must span the same two
@@ -162,6 +163,15 @@ a fixed physical gap. A refusal identifies the adjacent members and their
 support intervals; enlarge the host gap or refine `dx`. A zero-conductivity
 member remains part of the declared stack and its memory allocation. Changing
 any member, the declaration order or the host requires a new plan.
+
+A single-oscillator stack uses the same `Scene(structures=(...))` spelling,
+with one `Dispersive(..., poles=(pole,))` declaration per member. A zero-strength
+Lorentz member retains its memory slot and its finite nominal frequency square
+in the conservative time-step check. Extreme inactive frequencies refused by
+the singleton film remain refused here. Changes to boundary declarations or
+the complete source allocation also require a new plan. The bulk spectral
+check includes interior Lorentz resonances in every member; it is not a bound
+on the final observable error.
 
 The film support does not extend to arbitrary curved lossy bodies, dispersive
 hosts, lossy junctions, or their geometry/material/band derivatives. General CSG,

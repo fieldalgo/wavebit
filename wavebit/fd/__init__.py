@@ -255,6 +255,17 @@ fields, traced inputs, overlapping padded supports, mixed-family stacks and auto
 stopping are refused. See docs/fd-debye-stack.md for this bounded contract
 and its validation status.
 
+Separated parallel films may also contain exactly one passive Drude or Lorentz
+pole per member. Different member kinds are explicitly admitted; within-film
+sums and Debye-containing stacks remain outside this extension. Existing
+single-film coefficients and energy weights are retained on disjoint padded
+supports. The material policy takes the maximum complete member rate and the
+bulk mesh check includes every member's interior Lorentz resonances. Inactive
+Lorentz frequencies retain the singleton's finite-range and conservative
+stability rules. Fixed duration is required; initial fields, traced inputs and
+Decay are refused. See ``docs/fd-oscillator-stack.md`` for the bounded contract
+and current numerical validation status; general C8 remains incomplete.
+
 A finite sum of two or more passive Drude/Lorentz poles, with unequal damping,
 uses coupled physical polarizations in the same isolated concrete film. Each
 declared pole retains its memory slot; the normal restoring force couples

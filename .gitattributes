@@ -140,3 +140,11 @@ tests/test_fd_debye_stack.py text eol=lf
 docs/fd-debye-stack.md text eol=lf
 studies/results/fdtd_debye_stack* -text
 studies/results/fdtd_debye_stack*/** -text
+
+# Separated oscillator-stack source and raw evidence preserve validated bytes.
+wavebit/fd/_lower/oscillator_stack.py text eol=lf
+studies/fdtd_oscillator_stack_*.py text eol=lf
+tests/test_fd_oscillator_stack.py text eol=lf
+docs/fd-oscillator-stack.md text eol=lf
+studies/results/fdtd_oscillator_stack* -text
+studies/results/fdtd_oscillator_stack*/** -text

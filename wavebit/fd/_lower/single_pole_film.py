@@ -170,12 +170,16 @@ def refuse_mismatch(scene, plan):
     if alternative is None:
         from .debye_stack import descriptor as debye_stack_descriptor
         alternative = debye_stack_descriptor(scene, plan.grid)
+    if alternative is None:
+        from .oscillator_stack import descriptor as oscillator_stack_descriptor
+        alternative = oscillator_stack_descriptor(scene, plan.grid)
     if not expected and alternative is None and any(s.discretisation == 'voxel' and isinstance(s.material, Dispersive)
                             and s.shape.body() is not None
                             for s in (getattr(scene, 'structures', ()) or ())):
         raise ValueError('dispersive smoothing is limited to one concrete axis-aligned film '
                          'with a finite passive Drude/Lorentz sum or Debye sum, or a '
-                         'Debye-only parallel stack with disjoint padded supports, '
+                         'Debye-only or single-Drude/Lorentz-per-film parallel stack '
+                         'with disjoint padded supports, '
                          'in a plain lossless host, '
                          'separated interfaces outside absorbing layers, and no initial '
                          'fields or differentiation. A prepared non-film plan cannot '

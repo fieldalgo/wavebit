@@ -429,6 +429,8 @@ def check_smoothed(scene, grid):
     stack = conductive_stack(scene, grid)
     from .debye_stack import descriptor as debye_stack
     relaxation_stack = debye_stack(scene, grid)
+    from .oscillator_stack import descriptor as oscillator_stack
+    resonant_stack = oscillator_stack(scene, grid)
     from .single_pole_film import descriptor as single_pole_film
     dispersive_film = single_pole_film(scene, grid)
     if dispersive_film is None:
@@ -547,7 +549,8 @@ def check_smoothed(scene, grid):
             if not isinstance(material, (Conductor, Dispersive)):
                 continue
             if (film is not None or stack is not None or dispersive_film is not None
-                    or relaxation_film is not None or relaxation_stack is not None) and name == where:
+                    or relaxation_film is not None or relaxation_stack is not None
+                    or resonant_stack is not None) and name == where:
                 continue  # These bounded C8 film scopes carry their exact memory.
             what = ('a conductivity' if isinstance(material, Conductor)
                     else f'{len(material.poles)} pole(s)')
@@ -567,8 +570,8 @@ def check_smoothed(scene, grid):
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
                 f'it), or keep it out of the smoothed shape\'s cells. C8 currently admits '
                 f'one concrete axis-aligned conductive, Drude/Lorentz-sum or Debye-sum '
-                f'film, or a same-axis Conductor-only or Debye-only stack with disjoint '
-                f'padded supports, '
+                f'film, or a same-axis Conductor-only, Debye-only or single-oscillator '
+                f'stack with disjoint padded supports, '
                 f'in a plain dielectric, '
                 f'clear of absorbing layers, with no initial field; this scene is outside '
                 f'that measured scope.')
@@ -1757,6 +1760,8 @@ def cfl_bound(scene, plan):
     n_min, resonance, coupling = None, 0.0, 0.0
     from .oscillator_sum_film import policy_rate as oscillator_policy_rate
     oscillator_rate = oscillator_policy_rate(scene, plan)
+    from .oscillator_stack import policy_rate as oscillator_stack_policy_rate
+    oscillator_stack_rate = oscillator_stack_policy_rate(scene, plan)
     from .hybrid_film import policy_rate as hybrid_policy_rate
     hybrid_rate = hybrid_policy_rate(scene, plan)
     from .debye_film import policy_rate as debye_policy_rate
@@ -1778,10 +1783,11 @@ def cfl_bound(scene, plan):
         n_min = n if n_min is None else min(n_min, n)
         strength_sum = 0.0
         for pole in material.poles:
-            if relaxation_rate is not None or oscillator_rate is not None or hybrid_rate is not None:
+            if (relaxation_rate is not None or oscillator_rate is not None
+                    or oscillator_stack_rate is not None or hybrid_rate is not None):
                 # These scopes have one film or a separated stack in a plain host. Their
-                # replacement rate includes every active pole without evaluating inactive
-                # extreme frequencies/times or counting the same memory twice.
+                # replacement rate includes every member without counting a memory twice.
+                # Each scope owns its declared inactive-frequency policy.
                 continue
             w0_squared, strength = pole.rate()
             w0_squared, strength = concrete(w0_squared), concrete(strength)
@@ -1812,6 +1818,8 @@ def cfl_bound(scene, plan):
         rate = max(rate, relaxation_rate)
     if oscillator_rate is not None:
         rate = max(rate, oscillator_rate)
+    if oscillator_stack_rate is not None:
+        rate = max(rate, oscillator_stack_rate)
     if hybrid_rate is not None:
         rate = max(rate, hybrid_rate)
     return 1.0 / math.sqrt(1.0 / vacuum ** 2 + rate / 4.0), None
@@ -1838,11 +1846,18 @@ def check_stability(scene, plan):
         relaxation_rate = debye_stack_rate
     from .oscillator_sum_film import policy_rate as oscillator_policy_rate
     oscillator_rate = oscillator_policy_rate(scene, plan)
+    from .oscillator_stack import policy_rate as oscillator_stack_policy_rate
+    oscillator_stack_rate = oscillator_stack_policy_rate(scene, plan)
     from .hybrid_film import policy_rate as hybrid_policy_rate
     hybrid_rate = hybrid_policy_rate(scene, plan)
     poles = [(name, p) for name, p in _all_poles(scene)]
     worst = ''
-    if debye_stack_rate is not None:
+    if oscillator_stack_rate is not None:
+        worst = (' The bounded oscillator stack uses the maximum member resonance squared '
+                 'plus its own strength divided by high-frequency permittivity, keeping '
+                 'each sum on its member before taking the spatial maximum. The '
+                 'singleton inactive Lorentz frequency contribution is retained.')
+    elif debye_stack_rate is not None:
         worst = (' The bounded Debye stack uses the maximum of every member\'s bulk '
                  'and actual local summed relaxation rates; separated members are '
                  'not added across space. The curl bound uses physical high-frequency '
@@ -2093,6 +2108,18 @@ def _smoothed_notes(scene, plan, rows=None):
                     'fields, tracing and Decay are outside this bounded scope. Validate '
                     'observables under refinement and check duration and absorbers '
                     'separately. See docs/fd-debye-stack.md.'))
+    from .oscillator_stack import descriptor as oscillator_stack_descriptor
+    resonant_stack = oscillator_stack_descriptor(scene, plan.grid)
+    if resonant_stack is not None:
+        out.append((SubpixelAccuracyWarning,
+                    f'The oscillator stack has {len(resonant_stack.films)} films normal to '
+                    f'{"xyz"[resonant_stack.axis]}, each retaining one Drude or Lorentz '
+                    'memory on disjoint padded supports. Different member pole kinds are '
+                    'admitted; the harmonic normal and arithmetic tangential singleton '
+                    'response is unchanged. This bounded scope excludes within-film '
+                    'sums, Debye poles, touching films, initial fields, tracing and Decay. '
+                    'Validate observables under refinement and check duration and '
+                    'absorbers separately. See docs/fd-oscillator-stack.md.'))
     from .single_pole_film import descriptor as single_pole_descriptor
     dispersive_film = single_pole_descriptor(scene, plan.grid)
     if dispersive_film is not None:
@@ -2155,7 +2182,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'check duration and absorbers separately. The spectral guard '
                     'covers bulk scales only. See docs/fd-hybrid-film.md.'))
     if (len(asked) < len(smoothed) and film is None and stack is None and dispersive_film is None
-            and relaxation_stack is None and relaxation_film is None
+            and relaxation_stack is None and resonant_stack is None and relaxation_film is None
             and two_relaxation_film is None
             and sum_relaxation_film is None and sum_oscillator_film is None
             and hybrid is None):
@@ -2354,6 +2381,10 @@ def _index_at(material, wavelength, *, conductive=False):
 
 def _resolution_notes(scene, plan):
     """Cells per wavelength inside every material; a metal by its skin depth instead."""
+    from .oscillator_stack import notes as oscillator_stack_resolution_notes
+    oscillator_stack_notes = oscillator_stack_resolution_notes(scene, plan, _wavelength(scene, plan))
+    if oscillator_stack_notes is not None:
+        return oscillator_stack_notes
     from .debye_stack import notes as debye_stack_resolution_notes
     debye_stack_notes = debye_stack_resolution_notes(scene, plan, _wavelength(scene, plan))
     if debye_stack_notes is not None:
@@ -2481,6 +2512,9 @@ def check_wavelength_resolution(scene, grid):
     same text, from :func:`_coarse_refusal`; what stays in ``warn_all`` is its warnings, and
     the scenes with no sources, whose wavelength the plan infers).
     """
+    from .oscillator_stack import validate as validate_oscillator_stack_resolution
+    if validate_oscillator_stack_resolution(scene, grid):
+        return
     from .debye_stack import validate as validate_debye_stack_resolution
     if validate_debye_stack_resolution(scene, grid):
         return
@@ -2579,9 +2613,14 @@ def _proximity_notes(scene, plan):
     from .debye_stack import (descriptor as debye_stack_descriptor,
                              index_at as debye_stack_index_at)
     relaxation_stack = debye_stack_descriptor(scene, plan.grid)
+    from .oscillator_stack import (descriptor as oscillator_stack_descriptor,
+                                  index_at as oscillator_stack_index_at)
+    resonant_stack = oscillator_stack_descriptor(scene, plan.grid)
     out, grid = [], plan.grid
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
-        if relaxation_stack is not None:
+        if resonant_stack is not None:
+            n, _ = oscillator_stack_index_at(resonant_stack.films[index], wavelength)
+        elif relaxation_stack is not None:
             n, _ = debye_stack_index_at(relaxation_stack.films[index], wavelength)
         elif stack is not None:
             n, _ = stack_index_at(stack.films[index], wavelength)

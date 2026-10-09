@@ -86,6 +86,8 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_absorber_constitutive(scene, plan)
     from .stencil import refuse_discretisation
     refuse_discretisation(scene, plan)
+    from .oscillator_stack import refuse_mismatch as refuse_oscillator_stack_mismatch
+    refuse_oscillator_stack_mismatch(scene, plan)
     from .debye_stack import refuse_mismatch as refuse_debye_stack_mismatch
     refuse_debye_stack_mismatch(scene, plan)
     from .conductive_stack import refuse_mismatch as refuse_stack_mismatch
@@ -104,6 +106,8 @@ def lower(scene, plan, rt='numpy', device=None):
     refuse_oscillator_sum_film_mismatch(scene, plan)
     from .hybrid_film import refuse_mismatch as refuse_hybrid_film_mismatch
     refuse_hybrid_film_mismatch(scene, plan)
+    from .oscillator_stack import validate as validate_oscillator_stack_resolution
+    validate_oscillator_stack_resolution(scene, plan.grid)
     from .debye_stack import validate as validate_debye_stack_resolution
     validate_debye_stack_resolution(scene, plan.grid)
     from .conductive_stack import validate as validate_stack_resolution
@@ -355,6 +359,8 @@ def _poles(scene, plan, rt):
                                 pole_params as two_debye_film_poles)
     from .debye_sum_film import (DebyeSumFilmTerm, descriptor as debye_sum_descriptor,
                                 pole_params as debye_sum_film_poles)
+    from .oscillator_stack import (OscillatorStackTerm, descriptor as oscillator_stack_descriptor,
+                                  pole_params as oscillator_stack_poles)
     from .debye_stack import (DebyeStackTerm, descriptor as debye_stack_descriptor,
                              pole_params as debye_stack_poles)
     from .oscillator_sum_film import (OscillatorSumFilmTerm, descriptor as oscillator_sum_descriptor,
@@ -367,6 +373,7 @@ def _poles(scene, plan, rt):
             or two_debye_descriptor(scene, plan.grid) is not None
             or debye_sum_descriptor(scene, plan.grid) is not None
             or debye_stack_descriptor(scene, plan.grid) is not None
+            or oscillator_stack_descriptor(scene, plan.grid) is not None
             or oscillator_sum_descriptor(scene, plan.grid) is not None
             or hybrid_descriptor(scene, plan.grid) is not None):
         structures = []                     # represented by spatial film terms instead
@@ -374,7 +381,7 @@ def _poles(scene, plan, rt):
     for term in plan.terms:
         if isinstance(term, (InterfacePoleTerm, DispersiveFilmTerm, DebyeFilmTerm,
                              TwoDebyeFilmTerm, DebyeSumFilmTerm, DebyeStackTerm,
-                             OscillatorSumFilmTerm, HybridFilmTerm)):
+                             OscillatorSumFilmTerm, HybridFilmTerm, OscillatorStackTerm)):
             continue
         if not hasattr(term, 'n_poles'):
             continue                                    # a test hook's term, not a pole set
@@ -406,6 +413,7 @@ def _poles(scene, plan, rt):
     out.update(two_debye_film_poles(scene, plan, rt))
     out.update(debye_sum_film_poles(scene, plan, rt))
     out.update(debye_stack_poles(scene, plan, rt))
+    out.update(oscillator_stack_poles(scene, plan, rt))
     out.update(oscillator_sum_film_poles(scene, plan, rt))
     out.update(hybrid_film_poles(scene, plan, rt))
     return out

@@ -19,6 +19,13 @@ makes them assertions, not studies.
 | `fdtd_debye_stack_gates.py` | Do exact targeted/full/slow rosters, read-only freezers and strict documentation checks pass? [Record](../docs/fd-debye-stack.md). |
 | `fdtd_debye_stack_mutations.py` | Does each actual production defect fail the intended assertion before exact source restoration? [Record](../docs/fd-debye-stack.md). |
 | `fdtd_debye_stack_audit.py` | Do independently replayed raw logs, source hashes and every physical cell support the final report? [Record](../docs/fd-debye-stack.md). |
+| `fdtd_oscillator_stack_probe.py` | Do separated Drude/Lorentz film responses agree with declared continuum multilayers including every host gap? [Record](../docs/fd-oscillator-stack.md). |
+| `fdtd_oscillator_stack_calibration.py` | What do six disclosed coarse backend rows measure before known-case optical ceilings are chosen? [Record](../docs/fd-oscillator-stack.md). |
+| `fdtd_oscillator_stack_campaign.py` | What do all 48 amplitude cells show under the fixed 40-worker spatial, duration and absorber ladder? [Record](../docs/fd-oscillator-stack.md). |
+| `fdtd_oscillator_stack_support.py` | Which source identities, exact collected nodes, actual child exits and original logs bind this evidence? [Record](../docs/fd-oscillator-stack.md). |
+| `fdtd_oscillator_stack_gates.py` | Do the targeted, full, slow, frozen-reference and documentation gates meet their exact saved contracts? [Record](../docs/fd-oscillator-stack.md). |
+| `fdtd_oscillator_stack_mutations.py` | Do actual production defects fail the intended assertions before exact source restoration? [Record](../docs/fd-oscillator-stack.md). |
+| `fdtd_oscillator_stack_audit.py` | Do independently replayed raw records, source hashes and every physical cell substantiate the final report? [Record](../docs/fd-oscillator-stack.md). |
 | `fdtd_constitutive_absorber_support.py` | Which exact source, reference and prior-evidence bytes bind each finite-guide measurement? [Measurement](../docs/fd-constitutive-absorber.md). |
 | `fdtd_constitutive_absorber_probe.py` | How do finite guide lengths and durations change fields, spectra and sparse storage on an aligned Yee grid? [Measurement](../docs/fd-constitutive-absorber.md). |
 | `fdtd_constitutive_absorber_calibration.py` | What algebra-independent alignment and backend differences are measured in six disclosed four-solve rows before any allowance is chosen? [Measurement](../docs/fd-constitutive-absorber.md). |

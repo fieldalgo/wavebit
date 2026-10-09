@@ -37,6 +37,7 @@ subtrees:
   - file: fd-two-debye-film
   - file: fd-debye-sum-film
   - file: fd-debye-stack
+  - file: fd-oscillator-stack
   - file: fd-oscillator-sum-film
   - file: fd-hybrid-film
   - file: fd-sphere-clip-jit
