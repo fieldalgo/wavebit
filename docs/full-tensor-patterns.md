@@ -23,7 +23,7 @@ solver = wavebit.rcwa(
     incidence_side='top',
 )
 result = solver.solve()
-print(solver.formulation_assigned)  # 4ff
+print(solver.formulation_assigned)  # first_order
 ```
 
 ## Geometry and numerical choices
@@ -42,7 +42,7 @@ scalar epsilon and mu are accepted there. The public full-tensor stack solver
 supports `layer_algorithm='ETM'` (default) and `'SMM'`. Both support incidence
 from either side, complex amplitudes, power and six-component fields. With
 SMM and `answers='amplitude'` or `'field'`, `solver.scattering` also exposes
-the scattering matrix in the same scalar half-space port basis as the 2ff
+the scattering matrix in the same scalar half-space port basis as the second-order
 solver, so compatible stacks can be joined with `.cascade()`.
 
 ## Constitutive operators and the solver
@@ -69,7 +69,7 @@ xx, yy, inverse(zz), -xy, -yx, -xz, -yz, -zx, -zy
 
 The same layout holds for epsilon and mu. It represents nonlocal Fourier
 operators, not a pointwise 3×3 material matrix. A z coupling in either quantity
-selects the first-order `4ff` solver. It eliminates the longitudinal fields as
+selects the first-order solver. It eliminates the longitudinal fields as
 
 ```text
 Ez = inverse(ezz) (Ky Hx - Kx Hy - ezx Ex - ezy Ey)
@@ -80,11 +80,11 @@ These relations are also used during reconstruction of all six field
 components. For bottom incidence, layer order and both tensors' z coupling
 signs are transformed consistently.
 
-Concrete tensors without z coupling retain the smaller five-slot/2ff path.
+Concrete tensors without z coupling retain the smaller five-slot, second-order path.
 A traced full tensor or one carrying derivatives keeps all components, even
 when a coupling is zero at the evaluation point: its derivative may be nonzero.
 Consequently a full-tensor differentiated or jitted solve can cost more than
-an eager solve at a z-decoupled value. Explicit `formulation='2ff'` rejects
+an eager solve at a z-decoupled value. Explicit `formulation='second_order'` rejects
 nine-slot input instead of discarding its components.
 
 ## Validation and convergence

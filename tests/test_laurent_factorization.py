@@ -319,17 +319,17 @@ def test_a_skewed_cell_takes_it_because_the_rule_names_no_axis(structure):
 
 
 @pytest.mark.parametrize('structure', ['raster', 'circle'])
-def test_the_four_field_formulation_reads_the_same_slots(structure):
-    """Forcing ``'4ff'`` is how the two formulations are cross-checked: they consume the same
-    five slots, so under Laurent's rule they agree to round-off -- and the field is
+def test_the_first_order_formulation_reads_the_same_slots(structure):
+    """Forcing ``'first_order'`` is how the two formulations are cross-checked: they consume the
+    same five slots, so under Laurent's rule they agree to round-off -- and the field is
     reconstructed from them either way."""
     struct = _crossed() if structure == 'raster' else _CIRCLE
-    two = wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent')
-    four = wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent', answers='field')
-    four.formulation = '4ff'
-    assert _gap(two.solve(), four.solve()) < 1e-13
-    assert four.formulation_assigned == wavebit.Formulation.FOUR_FIELD
-    field = np.asarray(four.reconstruct_field(sample_x=4, sample_y=4, sample_z=3))
+    second = wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent')
+    first = wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent', answers='field')
+    first.formulation = 'first_order'
+    assert _gap(second.solve(), first.solve()) < 1e-13
+    assert first.formulation_assigned == wavebit.Formulation.FIRST_ORDER
+    field = np.asarray(first.reconstruct_field(sample_x=4, sample_y=4, sample_z=3))
     assert np.isfinite(field).all() and np.abs(field).max() > 0
 
 

@@ -82,7 +82,7 @@ def _scene(**over):
     # `formulation` is settable on the instance and on `solve()`, never on `rcwa()`, which is
     # exactly why it went missing from the pytree -- both signature-reading guards below are
     # blind to it. It has to be put on the scene here or "nothing at its default" is false.
-    solver.formulation = '4ff'
+    solver.formulation = 'first_order'
     return solver
 
 
@@ -398,19 +398,19 @@ def test_every_settable_condition_is_carried_by_the_pytree():
     """The third direction, and the one `formulation` was lost in.
 
     The two guards above read the *constructor signature*. `formulation` is not in it --
-    `rcwa(formulation=...)` is refused; it is settable only as `solver.formulation = '4ff'` or
-    `solve(formulation='4ff')` -- so it was a condition of the solver that neither guard could
-    see, and it rode in neither children nor aux from the day it was added until 2026-08-30.
+    `rcwa(formulation=...)` is refused; it is settable only as `solver.formulation = 'first_order'`
+    or `solve(formulation='first_order')` -- so it was a condition of the solver that neither guard
+    could see, and it rode in neither children nor aux from the day it was added until 2026-08-30.
 
     What that cost is the same shape as `excitation`'s, one notch quieter. It cannot produce a
-    wrong answer: max |T_2ff - T_4ff| = 1.4e-14 on a patterned raster, and both directions of
+    wrong answer: max |T_second - T_first| = 1.4e-14 on a patterned raster, and both directions of
     the override degrade to a correct path. What it lost is that a *declaration* stopped
     meaning the same thing on the two sides of a trace. With the key absent, two solvers
     differing only in `formulation` produce **identical aux_data**, so their treedefs coincide
     and one jit compilation serves both -- measured on a 16x16 raster with `answers='field'`,
-    declaring `'4ff'` after `auto` did not recompile (0.05 s against 0.93 s) and returned
+    declaring `'first_order'` after `auto` did not recompile (0.05 s against 0.93 s) and returned
     `auto`'s number to the last digit. The declared cross-check was a silent no-op, and the
-    declared *refusal* -- `'2ff'` over a z row -- silently did not fire.
+    declared *refusal* -- `'second_order'` over a z row -- silently did not fire.
 
     `_condition_names()` is the solver's own answer to "what can be set on me", which is the
     set a round trip owes, and it is a superset of the constructor's parameters.
@@ -439,7 +439,7 @@ def test_the_formulation_declaration_survives_the_pytree_round_trip():
     from wavebit.backends.jax_backend import SolverJax
 
     scene = _scene()
-    scene.formulation = '4ff'
+    scene.formulation = 'first_order'
     before = scene.formulation
     back = SolverJax._tree_unflatten(*scene._tree_flatten()[::-1])
     assert back.formulation == before, f'{before} went in, {back.formulation} came out'
@@ -447,9 +447,9 @@ def test_the_formulation_declaration_survives_the_pytree_round_trip():
     # and two declarations must not share a treedef, or one compilation serves both
     import jax
     a = _scene(); a.formulation = 'auto'
-    b = _scene(); b.formulation = '4ff'
+    b = _scene(); b.formulation = 'first_order'
     assert jax.tree_util.tree_structure(a) != jax.tree_util.tree_structure(b), (
-        'a solver declaring 4ff and one declaring auto flatten to the same treedef, so jax '
+        'a solver declaring first_order and one declaring auto flatten to the same treedef, so jax '
         'reuses one compilation for both and the declaration cannot take effect')
 
 

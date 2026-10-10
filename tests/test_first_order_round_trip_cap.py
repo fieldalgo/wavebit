@@ -1,10 +1,10 @@
-"""The 4ff split's thickness cap: every forward/backward round trip within ``eps**-0.5``, swapped in
-balanced pairs inside the invariant blocks of the layer operator.
+"""The first-order split's thickness cap: every forward/backward round trip within
+``eps**-0.5``, swapped in balanced pairs inside the invariant blocks of the layer operator.
 
-The 4ff split had no cap. At a complex ``theta`` (or in a gain layer) a propagating mode's label can
-grow across a layer, and the reflection state carries the round trip ``exp(rt)``; past
+The first-order split had no cap. At a complex ``theta`` (or in a gain layer) a propagating mode's
+label can grow across a layer, and the reflection state carries the round trip ``exp(rt)``; past
 ``rt ~ 37`` both ETM and SMM were O(1) wrong, and past ``rt ~ 700`` they raised
-``FloatingPointError``. :func:`~wavebit._core.solve_2d_4ff._cap_round_trips` swaps labels in
+``FloatingPointError``. :func:`~wavebit._core.solve_2d_first_order._cap_round_trips` swaps labels in
 pairs, and each part of how it picks them is load-bearing; the controls below put each part back
 and must break a case:
 
@@ -26,7 +26,7 @@ import numpy as np
 import pytest
 
 import wavebit
-import wavebit._core.solve_2d_4ff as m4
+import wavebit._core.solve_2d_first_order as first_order
 
 E_GYRO = np.array([[3.1, .23+.11j, .31-.07j], [.23-.11j, 4.2, -.19+.09j],
                    [.31+.07j, -.19-.09j, 2.8]], complex)
@@ -48,7 +48,7 @@ def amplitudes(solver):
                      for k in ('r_s', 'r_p', 't_s', 't_p')])
 
 
-def grating(theta, alg, d, structure=S0, formulation='4ff'):
+def grating(theta, alg, d, structure=S0, formulation='first_order'):
     s = wavebit.rcwa(backend=0, top=1.0, bot=25.0, theta=theta, truncation_order=[10],
                      wavelength=900e-9, period=[2000e-9], structure=structure, thickness=[d],
                      complex_dtype=0, fourier_coefficients='integrated', factorization='li',
@@ -68,11 +68,12 @@ def relative(a, b):
 def control(monkeypatch):
     """Swap the cap for a broken variant for the duration of one test."""
     def install(name):
-        original = m4._cap_round_trips
+        original = first_order._cap_round_trips
         if name == 'none':
-            monkeypatch.setattr(m4, '_cap_round_trips', lambda xp, M, lam, psi, fwd, k0_d: fwd)
+            monkeypatch.setattr(first_order, '_cap_round_trips',
+                                lambda xp, M, lam, psi, fwd, k0_d: fwd)
         elif name == 'global':
-            monkeypatch.setattr(m4, '_mode_blocks',
+            monkeypatch.setattr(first_order, '_mode_blocks',
                                 lambda xp, M, psi: xp.zeros(psi.shape[1], dtype=xp.int64))
         elif name == 'label_growth':
             def by_label(xp, M, lam, psi, fwd, k0_d):
@@ -81,7 +82,7 @@ def control(monkeypatch):
                 g = xp.where(fwd, -h, h)
                 shifted = xp.where(g > 0, lam, xp.real(lam) + 1j*xp.where(fwd, 1e3, -1e3))
                 return original(xp, M, shifted, psi, fwd, k0_d)
-            monkeypatch.setattr(m4, '_cap_round_trips', by_label)
+            monkeypatch.setattr(first_order, '_cap_round_trips', by_label)
     return install
 
 
@@ -130,7 +131,7 @@ def test_label_growth_control_breaks(control):
 @pytest.mark.parametrize('alg', ['ETM', 'SMM'])
 @pytest.mark.parametrize('theta,d,tol', [(0.5+0.3j, 50e-6, 1e-10), (0.2+0.6j, 50e-6, 1e-9),
                                          (1.0+0.1j, 200e-6, 1e-9)])
-def test_isotropic_grating_forced_4ff_matches_2ff_smm(alg, theta, d, tol):
+def test_isotropic_grating_forced_first_order_matches_second_order_smm(alg, theta, d, tol):
     reference = grating(theta, 'SMM', d, formulation=None)
     assert relative(grating(theta, alg, d), reference) < tol
 
@@ -155,11 +156,12 @@ def coherent_door(d, structure):
 
 @pytest.mark.parametrize('d', [50e-6, 200e-6])
 def test_the_coherent_source_door_is_capped_too(d, control):
-    """``excitation=`` runs its own 4ff cascade (``illumination._cascade``), and it takes the cap.
+    """``excitation=`` runs its own first-order cascade (``illumination._cascade``), and it takes
+    the cap.
 
     It passed none until 2026-10-10, so the gain grating above was 1.1e-2 off there at 50 um and
     came back as ``R = 5861`` (for 3.659) at 200 um while every ordinary solve was right; capped
-    on its run's thickness, as the ordinary 4ff solve is, it is at 2e-15 and 7e-15 in ``R``.
+    on its run's thickness, as the ordinary first-order solve is, it is at 2e-15 and 7e-15 in ``R``.
     """
     gain = np.where(S0 > 1, 25-0.5j, 1.0+0j)
     s = wavebit.rcwa(backend=0, top=1.0, bot=25.0, theta=0.5, phi=0.3, polarization=(1., 0.),
@@ -192,7 +194,7 @@ def test_swaps_are_balanced_within_blocks_and_ignore_a_common_shift():
         members = np.where(np.argmax(np.abs(psi), axis=0) % 5 == b)[0]
         fwd[members[np.argsort(lam[members].real)[2:]]] = True
     for k0_d in (1.0, 30.0, 300.0, 3e4):
-        out = np.asarray(m4._cap_round_trips(np, M, lam, psi, fwd, k0_d))
+        out = np.asarray(first_order._cap_round_trips(np, M, lam, psi, fwd, k0_d))
         block = np.argmax(np.abs(psi), axis=0) % 5
         for b in range(5):
             assert out[block == b].sum() == fwd[block == b].sum()
@@ -202,8 +204,8 @@ def test_swaps_are_balanced_within_blocks_and_ignore_a_common_shift():
             cap = -0.5 * np.log(np.finfo(float).eps) + 1e-9
             assert not f.any() or np.max(h[k]) - np.min(h[f]) <= cap
         # A shift of every Im(lam) by a constant changes no round trip, so it changes no label.
-        shifted = np.asarray(m4._cap_round_trips(np, M + 0.37j * np.eye(20), lam + 0.37j, psi, fwd,
-                                                 k0_d))
+        shifted = np.asarray(first_order._cap_round_trips(np, M + 0.37j * np.eye(20), lam + 0.37j,
+                                                          psi, fwd, k0_d))
         assert np.array_equal(shifted, out)
 
 
@@ -227,7 +229,7 @@ def test_a_split_layer_is_the_uncut_layer(monkeypatch, alg, theta):
     """
     reference = amplitudes(split_uniform([21.5e3], 'SMM', theta))
     assert relative(amplitudes(split_uniform([20e3, 1.5e3], alg, theta)), reference) < 1e-12
-    monkeypatch.setattr(m4, 'layer_runs', lambda xp, slots, rules=None:
+    monkeypatch.setattr(first_order, 'layer_runs', lambda xp, slots, rules=None:
                         [False] * (len(slots) - 1))
     try:
         broken = relative(amplitudes(split_uniform([20e3, 1.5e3], alg, theta)), reference)
@@ -284,7 +286,7 @@ def test_a_slot_zero_in_one_spelling_still_joins_the_run(monkeypatch):
                          truncation_order=(2, 2), theta=0.5+0.05j, phi=.19, psi=0.7,
                          factorization='li', top=1., bot=2.25, layer_algorithm=alg,
                          structure=[dict(background=m, shapes=[]) for m in materials])
-        s.formulation = '4ff'
+        s.formulation = 'first_order'
         return amplitudes(s)
 
     uncut = solve([tilted], [81500.], 'SMM')
@@ -329,7 +331,7 @@ def test_unsettled_coupling_graph_is_one_block():
     M = np.eye(n, dtype=complex)
     M[order[:-1], order[1:]] = 1.0
     psi = np.eye(n, dtype=complex)
-    assert np.array_equal(np.asarray(m4._mode_blocks(np, M, psi)), np.zeros(n, dtype=int))
+    assert np.array_equal(np.asarray(first_order._mode_blocks(np, M, psi)), np.zeros(n, dtype=int))
     blocks = np.kron(np.eye(4), np.ones((n // 4, n // 4)))     # four dense blocks settle at once
-    found = np.asarray(m4._mode_blocks(np, blocks.astype(complex), psi))
+    found = np.asarray(first_order._mode_blocks(np, blocks.astype(complex), psi))
     assert len(set(found)) == 4

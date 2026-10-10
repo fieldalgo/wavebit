@@ -7,7 +7,7 @@ choice down -- the principal ``kz``, negated in a double-negative lit or last me
 every lossless medium: Maystre's cut for a positive one and its mirror for a double negative
 (``conventions.boundary_kz``). The two codes share nothing else: PyMoosh composes 2x2 scattering
 matrices of scalar TE / TM interfaces, this solver an RCWA stack with ``truncation_order = 0`` on
-the TE / TM path, the coupled 2D path and the 4ff path, ETM and SMM.
+the TE / TM path, the coupled 2D path and the first-order path, ETM and SMM.
 
 Each case puts a lossless double negative where a rule decides something: as the substrate (the
 mirror root), as the lit superstrate (the incident wave's root and the signed index of ``t_p``),
@@ -59,7 +59,7 @@ GOLDEN_PATH = HERE / 'golden_pymoosh_dng.npz'
 #: Measured 8.8e-15 at worst (``r``, ``t``, ``R``, ``T``; every row, path and algorithm).
 TOLERANCE = 1e-13
 
-PATHS = ('tetm', '2d', '4ff')
+PATHS = ('tetm', '2d', 'first_order')
 
 
 @pytest.fixture(scope='module')
@@ -106,8 +106,8 @@ def _solve(name, index, path, algo, pol, door='k', stack=None):
     else:
         solver = wavebit.rcwa(**kw, period=(1000.0, 1000.0), truncation_order=(0, 0),
                               polarization=(1.0, 0.0) if pol == 0 else (0.0, 1.0))
-        if path == '4ff':
-            solver.formulation = '4ff'
+        if path == 'first_order':
+            solver.formulation = 'first_order'
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         result = solver.solve(auto_detune=False)

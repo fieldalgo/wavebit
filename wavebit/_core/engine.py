@@ -36,14 +36,14 @@ from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FOR
                     Factorization, Formulation, FourierCoefficients, ModelingPath, Nesting,
                     Tetm, coefficients_of,
                     factorization_of, formulation_of, resolve_fourier_options)
-from .fields import (field_1d, field_1d_conical, field_2d, field_2d_4ff,
+from .fields import (field_1d, field_1d_conical, field_2d, field_2d_first_order,
                      is_count, to_mirrored_z, to_scene_frame)
 from .geometry import StaticGeometry
 from .result import Result, ResultSub
 from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, smm_2d as _smm_2d
 from .solve_1d import solve_1d as _etm_1d, solve_1d_conical as _etm_1d_conical
 from .solve_2d import solve_2d as _etm_2d
-from .solve_2d_4ff import solve_2d_4ff as _solve_2d_4ff
+from .solve_2d_first_order import solve_2d_first_order as _solve_2d_first_order
 
 # The four convolution slots that hold the permittivity's z row and column, in the order the
 # solve methods take them. Naming them once keeps the dispatch message specific about which
@@ -1258,7 +1258,7 @@ class CoreSolveMixin:
         and no ``psi`` or ``polarization`` beside it. Everywhere else it is refused rather
         than ignored — ``_assign_grating_type`` does that check, and says which condition
         failed. "A 1D structure" means a one-row raster: a shape structure, a tensor material,
-        a z row handed to :meth:`solve_conv` and ``formulation='4ff'`` all solve on the 2D
+        a z row handed to :meth:`solve_conv` and ``formulation='first_order'`` all solve on the 2D
         layout, and a solver holding no structure on the layout its last solve took (2D if
         none); each is refused by name in :meth:`solve_conv` unless that layout is the pure one
         (:meth:`_refuse_tetm_off_the_pure_path`, since 2026-09-27; until then all but the
@@ -1473,12 +1473,12 @@ class CoreSolveMixin:
 
         :meth:`_refuse_illegal_tetm` answers for a raster, where the structure alone decides.
         Five other routes leave the pure path with ``tetm`` still set. A z row handed to
-        :meth:`solve_conv` (the permittivity's or the permeability's) and ``formulation='4ff'``
-        move any structure onto the 2D layout the first-order path is written on; a tensor
-        material and a shape structure are always solved there; and a solver holding no
-        structure solves on the layout its last solve took, or the 2D one if it never solved --
-        so it is refused unless that solve was a pure one. The tensor route is refused by name
-        earlier, where the convolution matrices are built
+        :meth:`solve_conv` (the permittivity's or the permeability's) and
+        ``formulation='first_order'`` move any structure onto the 2D layout the first-order path is
+        written on; a tensor material and a shape structure are always solved there; and a solver
+        holding no structure solves on the layout its last solve took, or the 2D one if it never
+        solved -- so it is refused unless that solve was a pure one. The tensor route is refused by
+        name earlier, where the convolution matrices are built
         (:func:`~wavebit._core.anisotropy.validate_options`), and is here for matrices built
         before ``tetm`` was set. The other four reached :meth:`_incidence_pair`, and what they
         did there depended on the door ``tetm`` came in by. Declared at construction it leaves
@@ -1486,14 +1486,14 @@ class CoreSolveMixin:
         non-scalar array input``, naming neither input. Assigned afterwards it left the
         constructor's default ``psi = pi/2`` behind, and the solve *answered* -- for s light,
         whichever of ``'te'`` / ``'tm'`` had been declared (measured on 0937b35: ``tetm='tm'``
-        under ``formulation='4ff'`` returned the TE reflectance).
+        under ``formulation='first_order'`` returned the TE reflectance).
 
         ``z_row_given`` is :func:`_z_row_given` of the call, and ``routed`` the layout the
-        structure chose before a z row or ``'4ff'`` moved it. Where two routes meet, the message
-        names the one whose fix is complete: the z row first, since dropping ``tetm`` is the
-        whole fix whatever else holds; ``'4ff'`` only where the structure took the pure path,
-        since only there does "leave formulation at 'auto'" keep it; then the structure's own
-        reason. Asked before the structure, ``'4ff'`` told a shape, and a solver with no
+        structure chose before a z row or ``'first_order'`` moved it. Where two routes meet, the
+        message names the one whose fix is complete: the z row first, since dropping ``tetm`` is the
+        whole fix whatever else holds; ``'first_order'`` only where the structure took the pure
+        path, since only there does "leave formulation at 'auto'" keep it; then the structure's own
+        reason. Asked before the structure, ``'first_order'`` told a shape, and a solver with no
         structure, that ``'auto'`` would keep a pure path neither has. Every test is structural
         -- was a slot given, which formulation was set, which type the structure is -- so the
         refusal holds under ``jax.jit`` and ``jax.grad`` exactly as it does eagerly.
@@ -1504,18 +1504,18 @@ class CoreSolveMixin:
         if z_row_given:
             raise ValueError(
                 f"tetm={tetm!r} and a z row ({', '.join(z_row_given)}) were both given. A z "
-                'row couples E_z to the in-plane field, which only the first-order (4ff) path '
+                'row couples E_z to the in-plane field, which only the first-order path '
                 'expresses, and that path solves on the 2D layout with both polarizations: '
                 'the pure TE/TM formulation tetm selects has no slot for it. Drop tetm and give '
-                f'the incidence as {instead}; the solve then takes the 4ff path. See '
+                f'the incidence as {instead}; the solve then takes the first-order path. See '
                 'docs/anisotropic-materials.md section 8.')
-        if routed == 0 and self._formulation == Formulation.FOUR_FIELD:
+        if routed == 0 and self._formulation == Formulation.FIRST_ORDER:
             raise ValueError(
-                f"tetm={tetm!r} and formulation='4ff' were both given. '4ff' forces the "
-                'first-order path, which solves on the 2D layout with both polarizations, so '
-                'the pure TE/TM solve tetm selects cannot run on it. To cross-check the two '
-                f'formulations on this structure, drop tetm and give the incidence as '
-                f"{instead}; to keep the pure 1D path, leave formulation at 'auto'.")
+                f"tetm={tetm!r} and formulation='first_order' were both given. 'first_order' "
+                'forces the first-order path, which solves on the 2D layout with both '
+                'polarizations, so the pure TE/TM solve tetm selects cannot run on it. To '
+                'cross-check the two formulations on this structure, drop tetm and give the '
+                f"incidence as {instead}; to keep the pure 1D path, leave formulation at 'auto'.")
         if self.structure is None:
             layout = 'the conical 1D one' if routed == 1 else 'the 2D one'
             raise ValueError(
@@ -2764,26 +2764,27 @@ class CoreSolveMixin:
 
     @property
     def formulation(self):
-        """Which layer formulation the 2D solve uses: ``'auto'`` (default), ``'2ff'``, ``'4ff'``.
+        """Which layer formulation the 2D solve uses: ``'auto'`` (default), ``'second_order'`` or
+        ``'first_order'``.
 
-        ``'2ff'`` is the second-order form the library has always used, one field pair per
-        order. ``'4ff'`` carries the full transverse state and is what a populated
-        permittivity ``z`` row — the Voigt / magneto-optic geometry — needs; it costs about 8x,
-        because the eigenproblem doubles and ``eig`` is cubic.
+        ``'second_order'`` is the form the library has always used, ``d2E/dz2 = Omega2 E``.
+        ``'first_order'`` carries the full transverse state as a first-order system and is
+        what a populated permittivity ``z`` row — the Voigt / magneto-optic geometry — needs;
+        it costs about 8x, because the eigenproblem doubles and ``eig`` is cubic.
 
         The default reads the problem rather than asking: a solve handed any of the four
-        ``ep{xz,yz,zx,zy}_conv_all`` slots takes ``'4ff'``, everything else ``'2ff'``. That
-        decision is the solver's because a caller with a Faraday stack has no way to know that
-        one populated ``eps_yz`` is what would cost them eight times more.
+        ``ep{xz,yz,zx,zy}_conv_all`` slots takes ``'first_order'``, everything else
+        ``'second_order'``. That decision is the solver's because a caller with a Faraday stack has
+        no way to know that one populated ``eps_yz`` is what would cost them eight times more.
 
         Setting it overrides that, in the two directions that mean something:
 
-        * ``'4ff'`` forces the first-order path on a problem that does not need it. This is
-          how the two formulations are cross-checked against each other — the same scene run
+        * ``'first_order'`` forces the first-order path on a problem that does not need it. This
+          is how the two formulations are cross-checked against each other — the same scene run
           both ways must agree, and no external oracle provides that. The first-order path
           is written on the 2D layout, so ``tetm`` beside it is refused: give the incidence
           as ``polarization`` for the cross-check.
-        * ``'2ff'`` refuses a z row instead of dropping it. Dropping it is the dangerous
+        * ``'second_order'`` refuses a z row instead of dropping it. Dropping it is the dangerous
           failure: the reduced tensor is a perfectly good medium, so the solve succeeds and
           ``R + T`` stays at 1 to machine precision while the efficiencies have moved by 2e-2
           to 6e-2.
@@ -2807,7 +2808,7 @@ class CoreSolveMixin:
 
         Every solve sets it, including the 1D ones, which are second-order and have no choice
         to make. Leaving those alone would be the worse answer: the attribute would then keep
-        whatever a *previous* 2D solve put there, and a stale ``'4ff'`` reads exactly like a
+        whatever a *previous* 2D solve put there, and a stale ``'first_order'`` reads exactly like a
         fresh one.
         """
         return self._formulation_assigned
@@ -2822,17 +2823,17 @@ class CoreSolveMixin:
         cheap path.
         """
         given = _z_row_given(z_row, mu)
-        if self._formulation == Formulation.TWO_FIELD and given:
+        if self._formulation == Formulation.SECOND_ORDER and given:
             raise ValueError(
-                f"formulation='2ff' cannot express the z row, and {', '.join(given)} "
+                f"formulation='second_order' cannot express the z row, and {', '.join(given)} "
                 f"{'was' if len(given) == 1 else 'were'} given. "
                 'The second-order form d2E/dz2 = Omega2 E exists only while the '
                 'epsilon and mu z off-diagonals are absent; dropping them would answer for the '
                 'reduced tensor, which conserves energy to machine precision while the '
                 "efficiencies move by 2e-2 to 6e-2. Use formulation='auto' (the default) or "
-                "'4ff'. See docs/anisotropic-materials.md section 6.")
+                "'first_order'. See docs/anisotropic-materials.md section 6.")
         if self._formulation == Formulation.AUTO:
-            return Formulation.FOUR_FIELD if given else Formulation.TWO_FIELD
+            return Formulation.FIRST_ORDER if given else Formulation.SECOND_ORDER
         return self._formulation
 
     # ------------------------------------------------------------------ path selection
@@ -2972,7 +2973,7 @@ class CoreSolveMixin:
                 'take a polarization pair; use _solve_1d_conical, which solve() selects on '
                 'its own when polarization is set')
         solve = self._solve_fn('1d')
-        self._formulation_assigned = Formulation.TWO_FIELD
+        self._formulation_assigned = Formulation.SECOND_ORDER
         wavelength = self.wavelength
         # The separable pair, not :meth:`order_kxy`: the 1D operator takes a 1-D ``kx`` and
         # ``diag``s it, and the two are the same object here -- `_assign_grating_type` reaches
@@ -2999,7 +3000,7 @@ class CoreSolveMixin:
                           mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None,
                           dng=None):
         solve = self._solve_fn('conical')
-        self._formulation_assigned = Formulation.TWO_FIELD
+        self._formulation_assigned = Formulation.SECOND_ORDER
         wavelength = self.wavelength
         kx, ky = self._separable_kxy(wavelength)   # 1-D pair; see :meth:`_solve_1d`
         return self._finish(solve(
@@ -3022,8 +3023,8 @@ class CoreSolveMixin:
         kx, ky = self.order_kxy()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
         self._formulation_assigned = self._formulation_for(z_row, mu)
-        if self._formulation_assigned == Formulation.FOUR_FIELD:
-            return self._finish(_solve_2d_4ff(
+        if self._formulation_assigned == Formulation.FIRST_ORDER:
+            return self._finish(_solve_2d_first_order(
                 wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(),
                 self.thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
                 epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
@@ -3909,14 +3910,14 @@ class CoreFactorizationMixin:
         before = self._grating_type
         self._assign_grating_type()
         z_row = (epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all)
-        four_field = self._formulation_for(z_row, mu) == Formulation.FOUR_FIELD
-        if self._tetm is not None and (four_field or self._grating_type != 0):
+        first_order = self._formulation_for(z_row, mu) == Formulation.FIRST_ORDER
+        if self._tetm is not None and (first_order or self._grating_type != 0):
             # Every route off the pure path reads an incidence pair `tetm` declared absent. The
             # routing goes back before the refusal: `reconstruct_field` dispatches on it, and
             # left at 2 it took the pure solve answered before this one for a 2D one (IndexError).
             routed, self._grating_type = self._grating_type, before
             self._refuse_tetm_off_the_pure_path(_z_row_given(z_row, mu), routed)
-        if four_field:
+        if first_order:
             # The 1D paths have no z-row slots to fill, so a z row is also a choice of path:
             # the first-order solve is written on the 2D layout (a 1D structure is n_orders_v == 1
             # there, the same physics the conical path solves at conical cost).
@@ -4034,11 +4035,11 @@ class CoreFactorizationMixin:
         answer. With this refusal switched off (``docs/negative-index-media.md`` section 9, from
         ``studies/negative_index_media.py`` section 12) and no layer between, it raises
         ``LinAlgError`` on NumPy on every path, ``FloatingPointError`` on JAX, and on PyTorch
-        ``LinAlgError`` on all but 2D and 4ff SMM, which return a finite answer; with uniform
-        layers of the two media SMM returns a finite answer whose amplitudes on the 4ff path,
-        in orders a uniform stack does not excite, are round-off of order one, and ETM a finite
-        answer or its perfect-lens message. Decided per order on ``Re(kz**2) < 0`` from the
-        solve's own ``k_par`` (:meth:`order_kxy`), which is also right for a complex ``theta``:
+        ``LinAlgError`` on all but 2D and first-order SMM, which return a finite answer; with
+        uniform layers of the two media SMM returns a finite answer whose amplitudes on the
+        first-order path, in orders a uniform stack does not excite, are round-off of order one, and
+        ETM a finite answer or its perfect-lens message. Decided per order on ``Re(kz**2) < 0`` from
+        the solve's own ``k_par`` (:meth:`order_kxy`), which is also right for a complex ``theta``:
         there the two cuts take the same root exactly where ``Re(kz**2) < 0``. An order with
         ``kz**2 = 0`` exactly is a Rayleigh point, left to the solve's own handling of one.
 
@@ -4498,16 +4499,17 @@ class CoreFactorizationMixin:
                                           sample_x=sample_x, sample_y=sample_y,
                                           sample_z=sample_z, incidences=incidences,
                                           interface_side='left' if backside else 'right')
-        elif self._formulation_assigned == Formulation.FOUR_FIELD:
+        elif self._formulation_assigned == Formulation.FIRST_ORDER:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
-            # so branching on it alone would hand a 4ff solve to the 2ff reconstruction, which
-            # reads the same state slots and returns a plausible, wrong cell. Static under jit
-            # for the same reason the side flip below is -- the formulation is settled eagerly.
-            field_cell = field_2d_4ff(self.wavelength, kx, ky, self.T1,
-                                      self.layer_info_list, self.lattice,
-                                      sample_x=sample_x, sample_y=sample_y,
-                                      sample_z=sample_z, incidences=incidences,
-                                      interface_side='left' if backside else 'right')
+            # so branching on it alone would hand a first-order solve to the second-order
+            # reconstruction, which reads the same state slots and returns a plausible, wrong cell.
+            # Static under jit for the same reason the side flip below is -- the formulation is
+            # settled eagerly.
+            field_cell = field_2d_first_order(self.wavelength, kx, ky, self.T1,
+                                              self.layer_info_list, self.lattice,
+                                              sample_x=sample_x, sample_y=sample_y,
+                                              sample_z=sample_z, incidences=incidences,
+                                              interface_side='left' if backside else 'right')
         else:
             field_cell = field_2d(self.wavelength, kx, ky, self.T1,
                                   self.layer_info_list, self.lattice,
@@ -5440,8 +5442,9 @@ class CoreFactorizationMixin:
 
         Full tensors append muxz, muyz, muzx and muzy in the same negative
         off-diagonal convention, returning :class:`wavebit.TensorConvMatrices`.
-        A coupling in either epsilon or mu selects 4ff automatically. Every slot is about
-        the cell centre, like :meth:`eps_conv_matrices` and the :meth:`solve_conv` input.
+        A coupling in either epsilon or mu selects the first-order formulation automatically.
+        Every slot is about the cell centre, like :meth:`eps_conv_matrices` and the
+        :meth:`solve_conv` input.
 
         ``geometry`` behaves as in :meth:`solve`, and so do the conditions: a traced cell or
         structure serves this call and is put back after it.
@@ -5614,10 +5617,10 @@ class CoreFactorizationMixin:
         Where ``mu`` *cannot* be expressed the refusal is by name and lives elsewhere, close
         to what cannot express it: the 1D and conical operators hold the diagonal three of
         these five and have no off-diagonal position for the other two, and ``solve_conv``
-        says so. Full tensors in either epsilon or mu select the first-order
-        (4ff) solve, including longitudinal magnetic-field reconstruction. Nothing drops mu,
-        which is the whole reason it is wired at all: a material property the solve ignored
-        would be the unread knob :meth:`_reject_unread_normal_method` exists to refuse.
+        says so. Full tensors in either epsilon or mu select the first-order solve, including
+        longitudinal magnetic-field reconstruction. Nothing drops mu, which is the whole reason
+        it is wired at all: a material property the solve ignored would be the unread knob
+        :meth:`_reject_unread_normal_method` exists to refuse.
 
         A magnetic *half-space* over ordinary layers answers ``None`` here and enters through
         ``mu_top`` / ``mu_bot`` instead; see :meth:`_layers_are_magnetic`.

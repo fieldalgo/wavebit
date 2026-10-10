@@ -52,11 +52,12 @@ def _solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', backend=0
         return wavebit.rcwa(**common, phi=0.4 if phi is None else phi, psi=0.0,
                             truncation_order=0, period=[PERIOD],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
-    solver = wavebit.rcwa(**common, phi=(0.4 if path == '4ff' else 0.0) if phi is None else phi,
+    solver = wavebit.rcwa(**common,
+                          phi=(0.4 if path == 'first_order' else 0.0) if phi is None else phi,
                           psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD))
     solver.structure = np.full((1, 2, 2), N_GLASS ** 2, dtype=complex)
-    if path == '4ff':
-        solver.formulation = '4ff'
+    if path == 'first_order':
+        solver.formulation = 'first_order'
     return solver
 
 
@@ -154,7 +155,7 @@ def _check_lit_interface(eps, mu, path='2d', algo='SMM', side='top',
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_a_negative_index_far_side_matches_the_closed_form(path, side, algo):
     """``r``, ``t``, ``R`` and ``T`` for s and p, 0 to 80 degrees, lit from either side.
 
@@ -566,8 +567,8 @@ def _grating(path, algo, nim=PASSIVE, d=None, backend=0, answers='amplitude', li
         solver = wavebit.rcwa(**common, **kw, bot=N_GLASS ** 2, thickness=[d, H],
                               structure=np.concatenate([np.full_like(grating, eps), grating]))
         solver.mu = np.concatenate([np.full_like(grating, mu), np.ones_like(grating)])
-    if path == '4ff':
-        solver.formulation = '4ff'
+    if path == 'first_order':
+        solver.formulation = 'first_order'
     return solver
 
 
@@ -577,7 +578,7 @@ def _variants(result, path):
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_a_grating_on_the_half_space_is_the_thick_slab_limit(path, algo):
     """Every order's ``R``, and the half-space's ``T`` against the power the slab takes in.
 
@@ -617,7 +618,7 @@ def test_the_lossless_half_space_is_the_vanishing_loss_limit():
 
 
 @pytest.mark.parametrize('path, algo', [('te', 'ETM'), ('conical', 'SMM'), ('2d', 'SMM'),
-                                        ('4ff', 'ETM')])
+                                        ('first_order', 'ETM')])
 def test_the_field_below_the_interface_is_the_slab_field(path, algo):
     """The half-space's ``t_xyz``, carried to depth ``z`` on the decaying root, is the slab
     scene's reconstructed ``E`` at the same depth inside the slab; measured 3e-14. It decays.
@@ -650,8 +651,8 @@ def test_the_field_below_the_interface_is_the_slab_field(path, algo):
 
 
 def test_the_coherent_door_agrees_with_the_ordinary_solve():
-    """``excitation={'top': PlaneWave(...)}`` onto a NIM bottom: the 4ff cascade with its own
-    plane-wave basis (``illumination._plane_basis``) against the ordinary SMM solve. Measured
+    """``excitation={'top': PlaneWave(...)}`` onto a NIM bottom: the first-order cascade with its
+    own plane-wave basis (``illumination._plane_basis``) against the ordinary SMM solve. Measured
     2e-16 in power and 3e-14 in field."""
     pol = (0.6, 0.8j)
     opts = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :], thickness=[H],
@@ -713,8 +714,8 @@ def _mirror_scene(path, algo, side, theta, far, eps=None, mu=None, thickness=(10
     else:
         solver = wavebit.rcwa(**common, phi=0.6, psi=0.3, period=(700.0, 630.0),
                               truncation_order=truncation_order or (1, 1))
-        if path == '4ff':
-            solver.formulation = '4ff'
+        if path == 'first_order':
+            solver.formulation = 'first_order'
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         if layers:
@@ -734,7 +735,7 @@ MIRROR_PAIRS = {'lossy': (2 + 0.1j, 1.5 + 0.05j), 'lossless': (2.25 + 0j, 1.3 + 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_the_mirror_medium_conjugates_every_reflection(path, side, algo):
     """Light from a real medium at a real angle: a far half-space ``(eps, mu)`` replaced by
     ``(-conj(eps), -conj(mu))`` sends every reflection amplitude to its conjugate and leaves
@@ -783,7 +784,7 @@ def test_mirroring_everything_below_the_light_conjugates_it_through_layers():
         return eps, mu
 
     worst = 0.0
-    for path in ('te', 'tm', 'conical', '2d', '4ff'):
+    for path in ('te', 'tm', 'conical', '2d', 'first_order'):
         for build, thickness in ((uniform, (60.0, 90.0)), (grating, (60.0,))):
             eps, mu = build(path)
             for far in MIRROR_PAIRS.values():
@@ -811,7 +812,7 @@ def test_mirroring_everything_below_the_light_conjugates_it_through_layers():
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_a_lit_negative_index_half_space_matches_the_closed_form(path, side, algo):
     """``r``, ``t``, ``R``, ``T`` for s and p at 0, 20, 35 and 60 degrees, lit from an asymmetric
     lossy double negative (``eps = -3+0.1i``, ``mu = -0.5+0.05i``) and from its lossless twin,
@@ -902,7 +903,7 @@ def test_a_grating_lit_from_a_negative_index_side_is_reciprocal(tetm, algo):
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_the_incident_field_is_continuous_through_normal_incidence(path, side, algo):
     """``theta = 0`` against ``theta = 1e-9`` on a grating lit from a double negative, at
     ``phi = 0.6`` where there is an azimuth: the amplitudes, ``r_xyz`` / ``t_xyz``, the
@@ -915,7 +916,7 @@ def test_the_incident_field_is_continuous_through_normal_incidence(path, side, a
         solver = _grating(path, algo, lit=ASYM, side=side, theta=theta, answers='field', phi=0.6)
         result = solver.solve(auto_detune=False)
         sub = result.incident
-        ys = [0.0, 77.0] if path in ('2d', '4ff') else [0.0]
+        ys = [0.0, 77.0] if path in ('2d', 'first_order') else [0.0]
         rows.append(np.concatenate(
             [np.ravel(_host(getattr(sub, f))) for f in ('r_s', 'r_p', 't_s', 't_p', 'r_xyz',
                                                        't_xyz')]

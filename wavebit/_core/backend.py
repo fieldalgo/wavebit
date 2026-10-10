@@ -207,7 +207,7 @@ def _concrete(flag):
     silently wrong solve does the most damage. ``jax.jit``, and ``jit(grad)``, refuse the
     read and are skipped. Measured rather than assumed; the same asymmetry is tabulated in
     ``docs/backend-choice.md`` §3 and already relied on by
-    :func:`wavebit._core.solve_2d_4ff._forward_count` and
+    :func:`wavebit._core.solve_2d_first_order._forward_count` and
     :func:`wavebit._core.conventions._check_resolvable`.
 
     The reduction itself runs in the caller's own namespace, so what crosses the boundary is

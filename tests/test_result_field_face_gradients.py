@@ -20,11 +20,11 @@ def vacuum(backend, kind, side, algorithm):
         options['tetm'] = kind
     else:
         options.update(phi=.31, polarization=(.6, .8j))
-    if kind in ('2ff', '4ff'):
+    if kind in ('second_order', 'first_order'):
         options.update(structure=np.ones((2, 2, 2)), truncation_order=(1, 1))
     solver = wavebit.rcwa(**options)
-    if kind == '4ff':
-        solver.formulation = '4ff'
+    if kind == 'first_order':
+        solver.formulation = 'first_order'
     return solver
 
 
@@ -62,7 +62,7 @@ def differentiate(backend, loss, points):
 
 
 @pytest.mark.parametrize('backend', ['jax', 'jit', 'torch'])
-@pytest.mark.parametrize('kind', ['te', 'tm', 'conical', '2ff', '4ff'])
+@pytest.mark.parametrize('kind', ['te', 'tm', 'conical', 'second_order', 'first_order'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
 def test_saved_field_coordinate_gradient_matches_vacuum_maxwell_wave(backend, kind, side, algorithm):
@@ -87,7 +87,7 @@ def test_saved_field_coordinate_gradient_matches_vacuum_maxwell_wave(backend, ki
 
 
 @pytest.mark.parametrize('backend', ['jax', 'jit', 'torch'])
-@pytest.mark.parametrize('kind', ['te', 'tm', 'conical', '2ff', '4ff'])
+@pytest.mark.parametrize('kind', ['te', 'tm', 'conical', 'second_order', 'first_order'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_moving_an_artificial_interface_cannot_change_a_fixed_field(backend, kind, side):
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
@@ -135,7 +135,7 @@ def test_eager_source_snapshot_has_the_correct_observation_height_derivative(bac
     else:
         source = wavebit.PlaneWave(side=source_kind, theta=THETA, phi=.31,
                                   polarization=(.6, .8j))
-        expected, derivative = plane_wave('4ff', source_kind, Z)
+        expected, derivative = plane_wave('first_order', source_kind, Z)
     solver = wavebit.rcwa(backend=2 if backend == 'torch' else 1, excitation=source,
                          length_unit=1e-6, wavelength=WAVELENGTH, period=(1.7, 1.9),
                          structure=np.ones((2, 1, 1)), thickness=(.4, .6),
@@ -156,7 +156,7 @@ def test_eager_source_snapshot_has_the_correct_observation_height_derivative(bac
 
 
 @pytest.mark.parametrize('backend', ['jax', 'jit', 'torch'])
-@pytest.mark.parametrize('kind', ['conical', '4ff'])
+@pytest.mark.parametrize('kind', ['conical', 'first_order'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_unused_evanescent_layers_still_cannot_poison_the_field_gradient(backend, kind, side):
     pytest.importorskip('torch' if backend == 'torch' else 'jax')

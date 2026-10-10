@@ -201,7 +201,7 @@ def solve_tensor_stack(layers, theta, wl=WL, layer_algorithm='ETM', formulation=
     one rule across all six — see ``docs/off-diagonal-slot-convention.md``.
 
     A tensor with a populated z row is handed over as nine slots rather than refused; the
-    solver reads them and takes the first-order formulation. Passing ``formulation='2ff'``
+    solver reads them and takes the first-order formulation. Passing ``formulation='second_order'``
     makes it refuse instead, which is what
     :func:`test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it` checks.
     """
@@ -357,8 +357,8 @@ def test_voigt_geometry_matches_the_oracle(label, direction):
     wrong by 2.1e-2 for ``M`` along x and 6.2e-2 for ``M`` tilted 45 degrees. Nothing a caller
     is likely to check would notice.
 
-    Now the solver has somewhere to put them (``formulation='4ff'``, selected automatically by
-    the presence of the slots) and this is the check that it puts them in the *right* place.
+    Now the solver has somewhere to put them (``formulation='first_order'``, selected automatically
+    by the presence of the slots) and this is the check that it puts them in the *right* place.
     The oracle is not a rearrangement of the same code: Berreman integrates the first-order
     system directly with no Fourier orders, no mode split, no transfer recursion and no s/p
     rotation, and it takes the plain tensor while the solver takes the negated slots — so the
@@ -377,7 +377,7 @@ def test_voigt_geometry_matches_the_oracle(label, direction):
 
 @pytest.mark.parametrize('label,direction', VOIGT_CASES, ids=[c[0] for c in VOIGT_CASES])
 def test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it(label, direction):
-    """``formulation='2ff'`` must raise on a z row, not drop it.
+    """``formulation='second_order'`` must raise on a z row, not drop it.
 
     The guard moved from this file into the solver, which is where
     ``docs/anisotropic-materials.md`` §8 said it belonged once the solver could be handed a
@@ -385,7 +385,7 @@ def test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it(label, direct
     """
     with pytest.raises(ValueError, match='z row'):
         solve_tensor_stack([(gyro_along(direction), 220.0)], np.deg2rad(35),
-                           formulation='2ff')
+                           formulation='second_order')
 
 
 def test_faraday_geometry_stays_on_the_second_order_path():
@@ -428,8 +428,8 @@ def test_backside_illumination_of_a_z_coupled_stack(label, direction):
     through the kernels' z-mirror and this was the check of the mirror itself; since then public
     bottom incidence runs their direct branch, and the mirror's sign flip is reached by the
     top-lit Voigt comparisons above. Measured by mutation: with the z-row sign flip dropped from
-    the 4ff mirror, five tests in this file that include a top-lit solve fail, and this one
-    still passes.
+    the first-order path's mirror, five tests in this file that include a top-lit solve fail, and
+    this one still passes.
 
     A magneto-optic medium is also the one place where "the two sides agree" is the wrong
     expectation: non-reciprocity is what the material is for, so the numbers here are not the

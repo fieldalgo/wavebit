@@ -16,8 +16,8 @@ from .engine import _GAIN_CUTOFF_MESSAGE, _unknown_attribute, _holds_tracer
 from .sources import (Source, PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole, source_list, _positive)
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
-from .solve_2d_4ff import (
-    _conv_layers, _interface_s, _propagate_s, _run_k0_ds, layer_matrix_4ff,
+from .solve_2d_first_order import (
+    _conv_layers, _interface_s, _propagate_s, _run_k0_ds, layer_matrix_first_order,
     split_forward_backward,
 )
 
@@ -120,17 +120,17 @@ def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None):
     prev_f, prev_b = bottom
     jumps = {} if jumps is None else jumps
     # Splitting a host layer at source heights reuses its eigensystem. The split is capped as an
-    # ordinary 4ff solve caps it, on the thickness of the layer's run: the slices a source cuts
-    # a host into share one material and so one run, and with it one decision -- which is what
-    # lets them share the split. Uncapped until 2026-10-10, this door left the gain grating of
-    # `docs/connecting-algorithms.md`'s 4ff-cap table 1.1e-2 off at 50 um and returned R = 5861
-    # (for 3.659) at 200 um, where the ordinary solve was right.
+    # ordinary first-order solve caps it, on the thickness of the layer's run: the slices a source
+    # cuts a host into share one material and so one run, and with it one decision -- which is
+    # what lets them share the split. Uncapped until 2026-10-10, this door left the gain grating
+    # of `docs/connecting-algorithms.md`'s first-order cap table 1.1e-2 off at 50 um and returned
+    # R = 5861 (for 3.659) at 200 um, where the ordinary solve was right.
     k0_ds = _run_k0_ds(xp, k0, layers)[0]
     cache = {}
     for j, (material, d) in enumerate(layers):
         if id(material) not in cache:
             cache[id(material)] = split_forward_backward(
-                xp, layer_matrix_4ff(xp, Kx, Ky, **material), n, k0_ds[j])
+                xp, layer_matrix_first_order(xp, Kx, Ky, **material), n, k0_ds[j])
         lf, pf, lb, pb = cache[id(material)]
         emitted = (zero, zero)
         if j in jumps:
@@ -319,7 +319,7 @@ class CoherentResult(ResultFields):
                              self.has_internal_sources)
 
 class CoherentSolver:
-    """Eager, side-resolved illumination using the Cartesian 4ff SMM.
+    """Eager, side-resolved illumination using the Cartesian first-order SMM.
 
     NumPy, JAX and PyTorch arrays are supported. Grouping is a concrete setup
     operation; the facade is not a JAX pytree and cannot be passed through jit.
@@ -354,14 +354,15 @@ class CoherentSolver:
         if kwargs.get('layer_algorithm', 'SMM') != 'SMM':
             raise ValueError("Side-resolved excitation uses layer_algorithm='SMM'.")
         kwargs['layer_algorithm'] = 'SMM'
-        if kwargs.get('formulation', '4ff') not in ('auto', '4ff'):
-            raise ValueError("Side-resolved excitation uses the Cartesian '4ff' formulation.")
+        if kwargs.get('formulation', 'first_order') not in ('auto', 'first_order'):
+            raise ValueError(
+                "Side-resolved excitation uses the Cartesian 'first_order' formulation.")
         kwargs.pop('formulation', None)
         self._defaults = {k: kwargs.pop(k, None) for k in ('kx', 'ky', 'polarization', 'psi', 'chi')}
         if all(self._defaults[k] is None for k in ('polarization', 'psi', 'chi')):
             self._defaults['polarization'] = (1., 0.)
         self._scene = rcwa(backend=backend, **kwargs)
-        self._scene.formulation = '4ff'
+        self._scene.formulation = 'first_order'
         self._backend = backend
         self._result = None
         source_list(self.excitation)
@@ -400,8 +401,8 @@ class CoherentSolver:
             raise ValueError(f'Put {name} in the excitation source inputs.')
         if name == 'layer_algorithm' and value != 'SMM':
             raise ValueError("Side-resolved excitation uses layer_algorithm='SMM'.")
-        if name == 'formulation' and value != '4ff':
-            raise ValueError("Side-resolved excitation uses formulation='4ff'.")
+        if name == 'formulation' and value != 'first_order':
+            raise ValueError("Side-resolved excitation uses formulation='first_order'.")
         if name in self._OWN:
             object.__setattr__(self, name, value)
         elif scene is not None and self._forwards(scene, name):
@@ -416,7 +417,7 @@ class CoherentSolver:
 
     @property
     def formulation_assigned(self):
-        return '4ff'
+        return 'first_order'
 
     @property
     def backend(self):
@@ -436,7 +437,7 @@ class CoherentSolver:
             for name in self._SOURCE_INPUTS:
                 if name in conditions:
                     raise ValueError(f'Put {name} in each PlaneWave, or rebuild with common kx/ky.')
-            for name, expected in (('formulation', '4ff'), ('layer_algorithm', 'SMM')):
+            for name, expected in (('formulation', 'first_order'), ('layer_algorithm', 'SMM')):
                 if name in conditions and conditions.pop(name) != expected:
                     raise ValueError(f'Side-resolved excitation uses {name}={expected!r}.')
             with scene._device_scope(), scene._conditions(conditions):

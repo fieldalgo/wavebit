@@ -1,4 +1,4 @@
-"""Public four-field SMM: ports, fields, stack composition and stability."""
+"""Public first-order SMM: ports, fields, stack composition and stability."""
 import numpy as np
 import pytest
 
@@ -38,7 +38,7 @@ def test_tilted_magnetic_pattern_fields_match_etm(side, backend):
     smm = make_solver(backend=backend, side=side)
     etm = make_solver('ETM', side=side)
     compare_results(smm.solve(auto_detune=False), etm.solve(auto_detune=False))
-    assert smm.formulation_assigned == '4ff'
+    assert smm.formulation_assigned == 'first_order'
     # Sample either side of the internal interface and request all incident channels.
     samples = dict(sample_x=3, sample_y=2, sample_z=[0., 36., 73.-1e-7, 73.+1e-7, 124.],
                    incidences=('incident', 's', 'p'))
@@ -48,15 +48,15 @@ def test_tilted_magnetic_pattern_fields_match_etm(side, backend):
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-def test_two_field_port_basis_and_coherent_orders_agree(side):
+def test_second_order_port_basis_and_coherent_orders_agree(side):
     material = wavebit.Material([2.3, 3.1, 2.9], mu=[1.3, 1.2, 1.1]).rotated(.23)
     options = dict(thickness=[71.],
                    structure=[dict(background=1., shapes=[dict(type='rectangle', lx=241., ly=304.,
                                                                material=material)])],
                    period=(1800., 1700.), excitation={(0, 0): 1., (1, 0): .3j})
     solvers = [make_solver(side=side, **options) for _ in range(2)]
-    solvers[0].formulation = '2ff'
-    solvers[1].formulation = '4ff'
+    solvers[0].formulation = 'second_order'
+    solvers[1].formulation = 'first_order'
     compare_results(solvers[1].solve(auto_detune=False), solvers[0].solve(auto_detune=False))
     for actual, expected in zip(solvers[1].scattering.blocks, solvers[0].scattering.blocks):
         np.testing.assert_allclose(actual, expected, atol=3e-11, rtol=0)
@@ -66,7 +66,7 @@ def test_two_field_port_basis_and_coherent_orders_agree(side):
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-def test_scattering_composes_with_a_two_field_stack(side):
+def test_scattering_composes_with_a_second_order_stack(side):
     tilted = wavebit.Material([2.4, 3.2, 4.1], mu=[1.1, 1.3, 1.4]).rotated(.31, 'y')
     flat = wavebit.Material([2.2, 3.5, 3.1]).rotated(.21)
     lower, upper = dict(background=tilted, shapes=[]), dict(background=flat, shapes=[])
@@ -76,8 +76,8 @@ def test_scattering_composes_with_a_two_field_stack(side):
     top = make_solver(side=side, structure=[upper], thickness=[51.], bot=1.69, **options)
     for s in (whole, bottom, top):
         s.solve(auto_detune=False)
-    assert bottom.formulation_assigned == '4ff'
-    assert top.formulation_assigned == '2ff'
+    assert bottom.formulation_assigned == 'first_order'
+    assert top.formulation_assigned == 'second_order'
     first, second = (top, bottom) if side == 'top' else (bottom, top)
     joined = first.scattering.cascade(second.scattering)
     for actual, expected in zip(joined.blocks, whole.scattering.blocks):
@@ -92,7 +92,7 @@ def test_thick_absorber_has_fresnel_reflection_and_finite_fields(side):
     s = make_solver(side=side, top=1., bot=1., kx=0., ky=0.,
                     structure=[dict(background=n*n, shapes=[])],
                     thickness=[60000.], truncation_order=(0, 0))
-    s.formulation = '4ff'
+    s.formulation = 'first_order'
     result = s.solve(auto_detune=False)
     assert float(result.R.sum()) == pytest.approx(abs((1-n)/(1+n))**2, abs=2e-12)
     assert float(result.T.sum()) == pytest.approx(0., abs=1e-300)

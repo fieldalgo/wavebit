@@ -29,7 +29,7 @@ def value(backend, coupling, split, formulation):
 
 @pytest.mark.parametrize('backend', [1, 2])
 @pytest.mark.parametrize('split', [0., 1e-3, .1])
-@pytest.mark.parametrize('formulation', ['auto', '4ff'])
+@pytest.mark.parametrize('formulation', ['auto', 'first_order'])
 def test_tensor_coupling_gradient(backend, split, formulation):
     if backend == 1:
         got = float(jax.grad(lambda coupling: value(1, coupling, split, formulation))(jnp.asarray(0.)))

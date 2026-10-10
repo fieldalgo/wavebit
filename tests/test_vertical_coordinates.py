@@ -3,8 +3,9 @@ import numpy as np
 import pytest
 import wavebit
 
-PATHS = [('te', 'ETM'), ('tm', 'ETM'), ('conical', 'ETM'), ('2ff', 'ETM'),
-         ('4ff', 'ETM'), ('te', 'SMM'), ('tm', 'SMM'), ('conical', 'SMM'), ('2ff', 'SMM')]
+PATHS = [('te', 'ETM'), ('tm', 'ETM'), ('conical', 'ETM'), ('second_order', 'ETM'),
+         ('first_order', 'ETM'), ('te', 'SMM'), ('tm', 'SMM'), ('conical', 'SMM'),
+         ('second_order', 'SMM')]
 
 
 def array(value):
@@ -29,7 +30,7 @@ def test_plane_wave_phase_maxwell_and_flux(backend, path, algorithm, side, theta
     if backend:
         pytest.importorskip('jax' if backend == 1 else 'torch')
     phi = 0. if path in ('te', 'tm') else .61
-    structure = np.ones((1, 2, 2) if path in ('2ff', '4ff') else (1, 1, 2))
+    structure = np.ones((1, 2, 2) if path in ('second_order', 'first_order') else (1, 1, 2))
     kw = dict(backend=backend, top=1., bot=1., wavelength=1.3, period=(.8, .7),
               thickness=[.9], truncation_order=(0, 0), theta=theta, structure=structure,
               incidence_side=side, answers='field', layer_algorithm=algorithm)
@@ -38,7 +39,7 @@ def test_plane_wave_phase_maxwell_and_flux(backend, path, algorithm, side, theta
     else:
         kw.update(phi=phi, polarization=(.6, .8j))
     solver = wavebit.rcwa(**kw)
-    if path in ('2ff', '4ff'):
+    if path in ('second_order', 'first_order'):
         solver.formulation = path
     solver.solve()
     x, y, z = np.array([-.13, .07]), np.array([-.11, .04]), np.array([.23, .48])
@@ -83,7 +84,7 @@ def test_every_input_is_a_unit_electric_field_in_its_own_medium(medium, eps, mu,
     same ``mu`` through a raster so the stack stays matched.
     """
     phi = 0. if path in ('te', 'tm') else .61
-    shape = (1, 2, 2) if path in ('2ff', '4ff') else (1, 1, 2)
+    shape = (1, 2, 2) if path in ('second_order', 'first_order') else (1, 1, 2)
     medium_value = eps if mu is None else wavebit.Material(eps, mu=mu)
     kw = dict(backend=0, top=medium_value, bot=medium_value, wavelength=1.3, period=(.8, .7),
               thickness=[.9], truncation_order=(0, 0), theta=theta,
@@ -96,7 +97,7 @@ def test_every_input_is_a_unit_electric_field_in_its_own_medium(medium, eps, mu,
     else:
         kw.update(phi=phi, polarization=(.6, .8j))
     solver = wavebit.rcwa(**kw)
-    if path in ('2ff', '4ff'):
+    if path in ('second_order', 'first_order'):
         solver.formulation = path
     solver.solve()
     x, y, z = np.array([-.13, .07]), np.array([-.11, .04]), np.array([.23, .48])
@@ -153,7 +154,7 @@ def test_exact_interfaces_survive_cumulative_sum_roundoff(side):
 def test_one_height_sample_is_each_layers_lower_face(backend, path, algorithm, side):
     if backend:
         pytest.importorskip('jax' if backend == 1 else 'torch')
-    shape = (2, 2, 2) if path in ('2ff', '4ff') else (2, 1, 2)
+    shape = (2, 2, 2) if path in ('second_order', 'first_order') else (2, 1, 2)
     structure = np.ones(shape) * np.array([2.25, 4.])[:, None, None]
     kw = dict(backend=backend, wavelength=1.3, period=(.8, .7),
               thickness=[.2, .3], structure=structure, truncation_order=0,
@@ -163,7 +164,7 @@ def test_one_height_sample_is_each_layers_lower_face(backend, path, algorithm, s
     else:
         kw.update(phi=.61, polarization=(.6, .8j))
     solver = wavebit.rcwa(**kw)
-    if path in ('2ff', '4ff'):
+    if path in ('second_order', 'first_order'):
         solver.formulation = path
     solver.solve()
     counted = array(solver.reconstruct_field(sample_x=[0.], sample_y=[0.], sample_z=1))

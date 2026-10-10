@@ -131,7 +131,7 @@ def test_full_laminate_against_independent_integrals_and_transfer(axis,factoriza
         assert len(actual)==9
         for a,b in zip(actual,slot_values(expected)): np.testing.assert_allclose(a[0],b,atol=3e-12,rtol=0)
     r=s.solve(auto_detune=False)
-    assert s.formulation_assigned=='4ff'
+    assert s.formulation_assigned=='first_order'
     for inc,(R,T) in zip((r.s_inc,r.p_inc),reference_efficiencies(eb,mb,s,side)):
         np.testing.assert_allclose([inc.R.sum(),inc.T.sum()],[R,T],atol=3e-11,rtol=0)
         if loss==0: assert R+T==pytest.approx(1.,abs=3e-12)
@@ -166,12 +166,12 @@ def test_uniform_full_tensor_raster_matches_exact_film(factorization,quantity):
 
 
 @pytest.mark.parametrize('side',['top','bottom'])
-def test_magnetic_halfspaces_forced_4ff_agrees_with_2ff(side):
+def test_magnetic_halfspaces_forced_first_order_agrees_with_second_order(side):
     mat=wavebit.Material([2.3,3.1,2.9],mu=[1.3,1.2,1.1]).rotated(.23)
     options=dict(top=wavebit.Material(1.6,1.2),bot=wavebit.Material(2.2,1.4),
                  structure=[dict(background=mat,shapes=[])],incidence_side=side)
-    r=solver(formulation='4ff',**options).solve(auto_detune=False)
-    want=solver(formulation='2ff',**options).solve(auto_detune=False)
+    r=solver(formulation='first_order',**options).solve(auto_detune=False)
+    want=solver(formulation='second_order',**options).solve(auto_detune=False)
     for inc in ('s_inc','p_inc'):
         for key in ('r_s','r_p','t_s','t_p'):
             np.testing.assert_allclose(getattr(getattr(r,inc),key),getattr(getattr(want,inc),key),atol=2e-12,rtol=0)
@@ -235,7 +235,7 @@ def test_sampled_full_tensor_converges_to_integrated_shape_on_oblique_cell():
     assert errors[-1]<8e-4
 
 
-def test_z_coupling_in_only_mu_selects_4ff_and_survives_backside():
+def test_z_coupling_in_only_mu_selects_first_order_and_survives_backside():
     _,m=tensors()
     shape=dict(type='rectangle',lx=237.,ly=310.,material=wavebit.Material(2.3,m))
     for side in ('top','bottom'):
@@ -243,9 +243,9 @@ def test_z_coupling_in_only_mu_selects_4ff_and_survives_backside():
         assert len(s.eps_conv_matrices())==5
         assert len(s.mu_conv_matrices())==9
         r=s.solve(auto_detune=False)
-        assert s.formulation_assigned=='4ff'
+        assert s.formulation_assigned=='first_order'
         assert float(r.R.sum()+r.T.sum())==pytest.approx(1.,abs=2e-12)
-        s.formulation='2ff'
+        s.formulation='second_order'
         with pytest.raises(ValueError,match='mu'):s.solve(auto_detune=False)
 
 
@@ -323,7 +323,7 @@ def test_full_tensor_rectangle_geometry_derivative(factorization,backend):
 def test_ambiguous_mode_partition_is_invalid_under_jit():
     import jax
     import jax.numpy as jnp
-    from wavebit._core.solve_2d_4ff import split_forward_backward
+    from wavebit._core.solve_2d_first_order import split_forward_backward
     invalid=1j*jnp.eye(4,dtype=jnp.complex128)
     result=jax.jit(lambda a:split_forward_backward(jnp,a,1))(invalid)
     assert all(not np.isfinite(host(a)).any() for a in result)

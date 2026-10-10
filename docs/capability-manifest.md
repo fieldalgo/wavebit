@@ -218,7 +218,7 @@ deliberate: a consumer that cannot tell "unsupported" from "you spelled it wrong
 users to debug their own input.
 
 The `z_coupled` entry is the one to watch, and it has already turned over once: it used to
-describe work that existed but was not reachable — the 4ff operator written and pinned with
+describe work that existed but was not reachable — the first-order operator written and pinned with
 nothing dispatching to it. It now reads `supported: true`, and its `why` carries the two limits
 that ride with it (`layer_algorithm` must be `ETM`, no `mu`) — and it has already been edited
 once more since, when field reconstruction landed and stopped being one of them. That is the shape

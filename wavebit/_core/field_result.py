@@ -7,7 +7,7 @@ import numpy as np
 
 from .backend import array_namespace, as_array
 from .fields import (LayerSamples, is_count, field_1d, field_1d_conical,
-                     field_2d, field_2d_4ff)
+                     field_2d, field_2d_first_order)
 
 
 def _host_value(value):
@@ -190,7 +190,8 @@ class FieldState:
         if self.kind in ('te', 'tm'):
             cells = field_1d(*args, *tail, int(self.kind == 'tm'), **kwargs)
         else:
-            fn = {'conical': field_1d_conical, '2ff': field_2d, '4ff': field_2d_4ff}[self.kind]
+            fn = {'conical': field_1d_conical, 'second_order': field_2d,
+                  'first_order': field_2d_first_order}[self.kind]
             cells = fn(*args, g['ky'], *tail, **kwargs)
         coefficients = sum((xp.where(mask[:, None, None], cell[:, 0], 0)
                             for mask, cell in zip(masks, cells)))

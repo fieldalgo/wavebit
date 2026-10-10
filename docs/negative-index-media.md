@@ -40,7 +40,7 @@ Targets:
 - `wavebit/_core/domain.py` — `index_from_eps`; `wavebit/_core/backend.py` — `principal_sqrt`
 - `wavebit/_core/illumination.py` — `_plane_basis`, the coherent door's ports
 - `wavebit/_core/source_expansion.py` — `resolve_wave`, `gaussian_waves`
-- `wavebit/_core/solve_2d_4ff.py` — `split_forward_backward`
+- `wavebit/_core/solve_2d_first_order.py` — `split_forward_backward`
 - `studies/negative_index_media.py` — every number below
 - `tests/test_negative_index_half_space.py`, `tests/test_negative_index_layers.py`,
   `tests/references/test_fmmax_dng_golden.py`, `tests/references/test_pymoosh_dng_golden.py`,
@@ -135,7 +135,7 @@ changed; §14 other tools; §15 the limits; §16 how to use it; §17 how the dec
 | the mirror cut | the root with `Im(kz) - Re(kz) > 0`; the rule for a double-negative half-space (§5). The name is this page's: the literature has none for it |
 | limiting absorption | fix an undecided root by adding a little loss, taking the root that decays, and following it as the loss is removed. *Where* the loss goes (on `eps*mu`, or on `eps` and `mu`) decides the answer for a double negative (§5). Wavebit's half-space rule, both cuts together, is *the limiting-absorption root, with the loss applied to `eps` and `mu` separately* |
 | ETM, SMM | the two ways the solver joins its layers ([`connecting-algorithms.md`](connecting-algorithms.md)): the enhanced transmittance matrix recursion (the default `layer_algorithm`) and the scattering-matrix cascade |
-| the five paths | the solver's formulations: pure 1D TE, pure 1D TM (`tetm='te'` / `'tm'`), 1D conical, 2D, and 2D `formulation='4ff'` |
+| the five paths | the solver's formulations: pure 1D TE, pure 1D TM (`tetm='te'` / `'tm'`), 1D conical, 2D, and 2D `formulation='first_order'` |
 | raster path, shape path | a layer given as a sampled array (`structure` with `mu` beside it), or as a `background` with `shapes`, each with its `material` |
 | `q`, `+-q` | a layer mode varies as `exp(-k0 q z)` in the kernels' downward `z`, so `q = -i*kz`: `Re(q) > 0` decays downward, and on a lossless propagating mode `Im(q) < 0` advances the phase downward. Each mode has `+q` and `-q`; which one the recursion calls `+` is its *label* (§9) |
 | growth cap | ETM's guard: where the root its rule labels `+` would grow across the layer by more than the machine epsilon to the power -1/4 (8192 in double precision), the decaying root is kept instead (`etm_mode_q`; [`connecting-algorithms.md`](connecting-algorithms.md) §10) |
@@ -533,8 +533,8 @@ medium from its double-negative mirror. Lit from a lossless medium, with only th
 the change is exactly a conjugation: the root goes to `-conj(kz)`, the admittances `kz/mu` and
 `kz/eps` to their conjugates, the signed index to `-conj(n)`, so `r -> conj(r)` and `t -> conj(t)`.
 Through the solver, with no layer between, this holds **bit for bit** on every path (TE, TM,
-conical, 2D, 4ff), ETM and SMM, either side lit, lossy and lossless far sides, propagating and
-evanescent in them, at 0, 0.3 rad and 60 degrees: every operation on the bare interface has the
+conical, 2D, first-order), ETM and SMM, either side lit, lossy and lossless far sides, propagating
+and evanescent in them, at 0, 0.3 rad and 60 degrees: every operation on the bare interface has the
 conjugate operation as its conjugate. The same identity holds layer by layer -- a layer's
 first-order system goes to its conjugate under the mirror -- so with every layer and the far side
 mirrored, and every retained order propagating in the lit medium (whose admittances must stay real),
@@ -881,7 +881,7 @@ of the opposite sign), and its golden is compared at its own `kx` for that reaso
 
 The incident field the solve returns (`boundary_fields(..., part='incoming')`), its Poynting
 vector against `(theta, phi = 0.6)`, `theta` from 0.1 to 1.3 rad, `psi` 0 / `pi/2` / 0.7, both
-sides, the 2D, conical and 4ff paths *(study §4)*:
+sides, the 2D, conical and first-order paths *(study §4)*:
 
 | lit medium | polar angle | azimuth | `(kx, ky) = n sin(theta) (cos phi, sin phi)` with signed `n` |
 | --- | --- | --- | --- |
@@ -939,7 +939,7 @@ there (`CoreSolveMixin._frame_azimuth`; the pure 1D frame sign `order_frame_sign
 door's `resolve_wave` read the same azimuth). A grating lit from `(-3+0.1i, -0.5+0.05i)` at
 `phi = 0.6`, `theta = 0` against `1e-9`, every amplitude, `r_xyz` / `t_xyz`, the reconstructed
 field and the incident field, 5 paths x 2 sides x ETM / SMM: they move by at most 8.7e-09. With
-the frame left at `phi` they would step by at least 4.670 on the conical, 2D and 4ff paths
+the frame left at `phi` they would step by at least 4.670 on the conical, 2D and first-order paths
 *(study §4)*.
 
 ### Complex angles and direct wavevectors
@@ -1005,8 +1005,8 @@ every `n` in it is now the signed one.
   negative's root has `Re(kz) < 0` and its `n < 0`, and the ratio stays positive. So `r_xyz`, `t_xyz` and every field
   are physical vectors whatever the signs.
 * **At normal incidence `r_p = -r_s` and `t_p = t_s` at every interface.** Measured to 4.7e-16 and
-  7.8e-16 for lit and far double negatives and a far magnetic metal, on the conical, 2D and 4ff
-  paths, ETM and SMM *(study §5)*.
+  7.8e-16 for lit and far double negatives and a far magnetic metal, on the conical, 2D and
+  first-order paths, ETM and SMM *(study §5)*.
 * **The scattering matrix.** Its p block holds port variables -- the p wave's magnetic field,
   `-1j (n/mu) a_p` in its own medium -- so with `delta` the unit vector on the incident order's p
   channel, `S21 @ delta` (the transmitted column that channel excites) is
@@ -1111,7 +1111,7 @@ which is develop's labelling) *(study §6)*:
 
 | scenes | rules | ETM `LinAlgError` | SMM `LinAlgError` | `abs(ETM - SMM)` where both solved |
 | --- | --- | --- | --- | --- |
-| 56: a uniform double-negative layer on its own medium, 4 media, TE/TM/conical/2D/4ff | on | 0 | 0 | 5.6e-16 |
+| 56: a uniform double-negative layer on its own medium, 4 media, TE/TM/conical/2D/first-order | on | 0 | 0 | 5.6e-16 |
 | | off | 20 | 4 | 3.6e-15 |
 | 96 random patterned layers (double-negative regions in glass or a metal and the reverse, on the double negative or glass, `theta` 0.3, 0.5+0.2i, 0.7) | on | 0 | 0 | 9.7e-13 |
 | | off | 0 | 0 | 2.0e-10 |
@@ -1126,7 +1126,7 @@ polarization the result carries:
 | `theta = 0.5+0.3i`, rules on / off | 4.0e-14 / 7.5e-07 | 1.2e-14 / 2.7e-04 | 1.5e-13 / 1.2e-04 |
 
 Why per mode for a patterned layer, the five label rules that were compared, and the cost:
-[`connecting-algorithms.md`](connecting-algorithms.md) §11. The 4ff path has always split a
+[`connecting-algorithms.md`](connecting-algorithms.md) §11. The first-order path has always split a
 layer's modes by flux (`split_forward_backward`); its threshold is now counted in ulp of the
 working precision, so a lossless patterned double negative is no longer refused at single
 precision on JAX and PyTorch.
@@ -1180,33 +1180,34 @@ are equal and the order is matched: `r = 0`, `t = 1`. Uniform layers couple no t
 truncation that retains no evanescent order has a regular system and an exact answer.
 
 **What a solve does without the refusal.** Glass on `(-2.25, -1)`, wavelength 500 nm, period
-300 nm, `theta = 0.2`: of the retained orders 5 of 7 (TE, TM, conical) and 7 of 9 (2D, 4ff) are
-evanescent in both media, while one first order propagates in both (the `-1` order lit from
-glass, the `+1` lit from the double negative) *(study §12)*. Every path, ETM and SMM, either side
-lit; nothing between the half-spaces, or a glass layer, a `(-2.25, -1)` layer, or both. With the
-refusal switched off *(study §12)*:
+300 nm, `theta = 0.2`: of the retained orders 5 of 7 (TE, TM, conical) and 7 of 9 (2D, either
+formulation) are evanescent in both media, while one first order propagates in both (the `-1` order
+lit from glass, the `+1` lit from the double negative) *(study §12)*. Every path, ETM and SMM,
+either side lit; nothing between the half-spaces, or a glass layer, a `(-2.25, -1)` layer, or both.
+With the refusal switched off *(study §12)*:
 
 | between the half-spaces | NumPy | JAX | PyTorch |
 | --- | --- | --- | --- |
-| nothing (`solve_conv` with no layer), 20 scenes | `LinAlgError`, 20 | `FloatingPointError` (non-finite), 20 | `LinAlgError` 16; a finite answer 4 (2D and 4ff SMM) |
-| layers of the two media, 60 scenes | SMM a finite answer, 30; ETM a finite answer 16 (conical, 2D, 4ff), the perfect-lens message 14 (TE, TM, 2D) | the same | SMM a finite answer, 30; ETM a finite answer 14, the perfect-lens message 16 |
+| nothing (`solve_conv` with no layer), 20 scenes | `LinAlgError`, 20 | `FloatingPointError` (non-finite), 20 | `LinAlgError` 16; a finite answer 4 (2D and first-order SMM) |
+| layers of the two media, 60 scenes | SMM a finite answer, 30; ETM a finite answer 16 (conical, 2D, first-order), the perfect-lens message 14 (TE, TM, 2D) | the same | SMM a finite answer, 30; ETM a finite answer 14, the perfect-lens message 16 |
 
 The finite answers look like the matched propagating answer -- `R` at most 9e-20 and `T` within
-1e-06 of 1 on NumPy -- beside evanescent amplitudes that are round-off: on the 4ff path, five of
-SMM's six finite NumPy answers carry 0.0089 to 2.7 in orders a uniform stack does not excite
+1e-06 of 1 on NumPy -- beside evanescent amplitudes that are round-off: on the first-order path,
+five of SMM's six finite NumPy answers carry 0.0089 to 2.7 in orders a uniform stack does not excite
 (PyTorch: four, 1.1 to 21). Until the refusal landed, ETM's perfect-lens message also called such
 a stack finite; it now never does (`test_the_lens_message_never_calls_two_half_spaces_finite`).
 
 With a loss `delta` in the double negative and its layer, every one of the 80 scenes is solved
 *(study §12)*. The bare interface's `R` falls as `delta**2` -- 1.5e-26 .. 2.4e-26 at
 `delta = 1e-12`, 1.5e-08 .. 2.4e-08 at 1e-3 -- with `T = 1` to 7.1e-08 at most: the limit of the
-propagating orders is `r = 0`, `t = 1`. ETM and SMM agree to 1.6e-15 everywhere except on the 4ff
-path with both media's layers between, where the nearly singular system parts them by 4.6e-10 at
-`delta = 1e-12` and 3.1e-08 at 1e-9. The evanescent orders have no limit. Lit by an evanescent
-wave from glass (`theta = pi/2 - 0.5i`, a glass layer between, SMM) the incident order sits on the
-pole, and `delta * max|r_s|` is 0.0766 on the TE path and 0.0226 on the 2D and 4ff paths, the same
-to the four digits printed from `delta = 1e-3` to 1e-12; at `delta = 0`, with the refusal
-switched off, the solve returns `max|r_s|` of 2e+15 (TE) and 4e+14 (2D, 4ff).
+propagating orders is `r = 0`, `t = 1`. ETM and SMM agree to 1.6e-15 everywhere except on the
+first-order path with both media's layers between, where the nearly singular system parts them by
+4.6e-10 at `delta = 1e-12` and 3.1e-08 at 1e-9. The evanescent orders have no limit. Lit by an
+evanescent wave from glass (`theta = pi/2 - 0.5i`, a glass layer between, SMM) the incident order
+sits on the pole, and `delta * max|r_s|` is 0.0766 on the TE path and 0.0226 on the 2D and
+first-order paths, the same to the four digits printed from `delta = 1e-3` to 1e-12; at `delta = 0`,
+with the refusal switched off, the solve returns `max|r_s|` of 2e+15 (TE) and 4e+14 (2D,
+first-order).
 
 So the exact lossless pair is refused before any algorithm runs wherever the truncation retains
 an evanescent order -- 80 of the 80 scenes above on each of NumPy, JAX and PyTorch *(study §12)*
@@ -1352,7 +1353,7 @@ outgoing power when lossless):
 | Maxwell on the incident wave, `H = k x E / mu`, `k.E = 0` | the incident basis | 1.7e-16 *(study §5)* |
 | **fmmax 1.7.1**, `tests/references/test_fmmax_dng_golden.py`: unpolarized `R` and `T` of every order, Richardson over 16/32/64/128 samples per pixel | a solver that made none of these choices (its rule, `Im(kz) > 0`, is right for every lossy medium) | worst order per case: 1D grating on a DNG 5.9e-14 (bound 4.7e-12); 2D 7.5e-14 (5.6e-12); DNG pixels in the grating on a DNG 6.1e-12 (3.9e-10); lit from a DNG 2.7e-14 (2.7e-12); ETM and SMM, the `theta` and direct-`k` doors *(study §8)* |
 | the **mirror medium** (A. Lakhtakia's conjugation symmetry, 2004, as V. Grunhut and R. A. Depine 2011 apply it to an interface): the far side `(eps, mu)` against `(-conj(eps), -conj(mu))`, glass lit at 0, 0.3 rad and 60 deg, lossy, lossless and evanescent far sides, 5 paths x 2 sides x ETM / SMM | that a double negative takes the mirror root and the signed index, by a theorem | no layer between: 2,376 of 2,376 arrays exactly the conjugate, bit for bit; every layer mirrored too: 7.8e-15 *(study §8)* |
-| **PyMoosh 4.0.1**, `tests/references/test_pymoosh_dng_golden.py`: flat stacks with a **lossless** double negative as substrate, lit superstrate, inner layer and all three; `r`, `t`, `R`, `T`, TE and TM, four `kx` each | the lossless root and the index sign in `t_p`, where fmmax has nothing to read; PyMoosh's rule is Wavebit's on every lossless medium | 8.8e-15 over 32 rows x the TE/TM, 2D and 4ff paths x ETM / SMM (bound 1e-13); each double negative beyond the lit side replaced by its positive twin misses by 1.8 to 2.9 *(study §8)* |
+| **PyMoosh 4.0.1**, `tests/references/test_pymoosh_dng_golden.py`: flat stacks with a **lossless** double negative as substrate, lit superstrate, inner layer and all three; `r`, `t`, `R`, `T`, TE and TM, four `kx` each | the lossless root and the index sign in `t_p`, where fmmax has nothing to read; PyMoosh's rule is Wavebit's on every lossless medium | 8.8e-15 over 32 rows x the TE/TM, 2D and first-order paths x ETM / SMM (bound 1e-13); each double negative beyond the lit side replaced by its positive twin misses by 1.8 to 2.9 *(study §8)* |
 | ETM against SMM on double-negative layers | the label rules | §9 |
 | backends, `jit`, gradients | traceability | §11 |
 
@@ -1388,7 +1389,7 @@ same holds for PyMoosh 4.0.1 and `tests/references/golden_pymoosh_dng.npz`.
 | `solve_conv` half-space pairs | `test_solve_conv_half_space_terms_are_read`, `test_a_solve_conv_pair_signs_the_index_it_is_solved_with`, `test_under_jit_the_scenes_own_pairs_sign_nothing` |
 | backends, `jit`, gradients | `test_the_backends_agree`, `test_jit_through_a_lit_negative_index_superstrate`, `test_jit_and_grad_through_a_negative_index_substrate` |
 | layer labels (`tests/test_negative_index_layers.py`) | `test_a_double_negative_layer_on_its_own_medium_is_that_medium`, `test_the_mirror_labels_are_the_half_spaces_roots`, `test_a_complex_angle_takes_the_mirror_too`, `test_a_patterned_double_negative_is_labelled_by_its_power`, `test_a_high_contrast_double_negative_block_on_its_own_medium`, `test_the_flux_labels_carry_power_down`, `test_smm_breaks_a_patterned_layers_tie_by_the_flux_too`, `test_the_flux_rule_keeps_decay_where_decay_dominates_and_the_cap`, `test_smm_no_longer_meets_a_backward_mode_at_its_gap`, `test_an_ordinary_layer_takes_no_new_rule` |
-| what the engine reads from materials (`tests/test_negative_index_layers.py`) | `test_the_engine_reads_each_layer_from_its_materials`, `test_a_shape_layer_is_read_from_its_materials`, `test_three_principal_values_are_one_flag_and_solve_as_their_tensor`, `test_the_labels_travel_with_their_layers_through_the_mirrored_scene`, `test_solve_conv_with_the_scenes_own_matrices_is_solve`, `test_a_traced_double_negative_layer_is_selected_not_branched_on`, `test_the_4ff_split_reads_flux_at_the_working_precision` |
+| what the engine reads from materials (`tests/test_negative_index_layers.py`) | `test_the_engine_reads_each_layer_from_its_materials`, `test_a_shape_layer_is_read_from_its_materials`, `test_three_principal_values_are_one_flag_and_solve_as_their_tensor`, `test_the_labels_travel_with_their_layers_through_the_mirrored_scene`, `test_solve_conv_with_the_scenes_own_matrices_is_solve`, `test_a_traced_double_negative_layer_is_selected_not_branched_on`, `test_the_first_order_split_reads_flux_at_the_working_precision` |
 | Pendry's pair (`tests/test_negative_index_layers.py`) | `test_the_perfect_lens_pair_is_finite_and_smm_has_it`, `test_etm_names_the_perfect_lens_pair_where_it_cannot_write_it`, `test_a_lossy_lens_is_not_the_pair`, `test_etm_names_the_pair_when_the_double_negative_is_the_substrate`, `test_the_lens_message_never_calls_two_half_spaces_finite` |
 | two half-spaces that are each other's negation (`tests/test_negative_index_layers.py`) | `test_two_half_spaces_that_are_each_others_lossless_negation_are_refused`, `test_the_negation_pair_with_no_evanescent_order_retained_is_solved`, `test_the_negation_pair_is_refused_on_every_backend`, `test_a_lossy_negation_pair_is_solved_and_has_no_lossless_limit`, `test_a_third_medium_between_the_pair_is_another_stack` |
 | the lossless outside golden (`tests/references/test_pymoosh_dng_golden.py`) | `test_every_row_is_pymooshs`, `test_the_theta_door_from_a_double_negative_meets_the_same_rows`, `test_the_golden_tells_a_double_negative_from_its_mirror`, `test_the_golden_holds_the_scenes_the_cases_state` |
@@ -1431,8 +1432,8 @@ frame rather than the polarization, which is what makes its gradients right (§1
 selections, which XLA compiles with different rounding. Removing those `where`s restores
 identity; they are required for a traced material.
 
-Further changes for `s = +1` media outside the harness: at `complex_dtype=1` on the 4ff path a
-mode whose flux lies between 1e-12 and the single-precision threshold of its energy is now decided
+Further changes for `s = +1` media outside the harness: at `complex_dtype=1` on the first-order path
+a mode whose flux lies between 1e-12 and the single-precision threshold of its energy is now decided
 by attenuation (§9); AD at exactly `theta = 0` is now right on the 2D paths and through a
 `PlaneWave` on PyTorch (values unchanged, §11); a value exactly on the negative real axis with a
 `-0.0` imaginary part, handed in as a JAX array, now takes the root that sign names, `-i` times
@@ -1563,15 +1564,15 @@ What the survey taught, and where Wavebit's rules come from:
   `t_p = -t_s` at normal incidence.
 * **Near the negation pair nothing warns.** The refusal of §9 reads only an *exact* lossless
   pair. A tiny loss or a tiny real mismatch is solved without a word, and an excited evanescent
-  order then grows like `1/delta`; on the 4ff path with layers of both media between, ETM and
-  SMM part by 3.1e-08 at `delta = 1e-9` *(study §12)*. No warning marks the approach.
+  order then grows like `1/delta`; on the first-order path with layers of both media between, ETM
+  and SMM part by 3.1e-08 at `delta = 1e-9` *(study §12)*. No warning marks the approach.
 * **A gain-compensated negation pair is not refused.** A lossy double negative under a gain medium
   holding its exact negation -- imaginary parts negated too -- is singular in the same way: without
-  a layer SMM raises `LinAlgError` on the TE, 2D and 4ff paths, and with a layer of either medium on
-  the 2D and 4ff paths it returns round-off of order one and more in the evanescent orders (on TE it
-  returns zeros there, or with a double-negative layer and a loss of 0.1 raises `LinAlgError`). The
-  refusal tests `Im == 0` on all four values and so lets it through; beside a layer, ETM's
-  perfect-lens message can still say that SMM solves it.
+  a layer SMM raises `LinAlgError` on the TE, 2D and first-order paths, and with a layer of either
+  medium on the 2D and first-order paths it returns round-off of order one and more in the
+  evanescent orders (on TE it returns zeros there, or with a double-negative layer and a loss of 0.1
+  raises `LinAlgError`). The refusal tests `Im == 0` on all four values and so lets it through;
+  beside a layer, ETM's perfect-lens message can still say that SMM solves it.
 * **Each backend's square root is its own.** On the cut they now agree: the principal root of
   `complex(-1, -0.0)` is `-1j` in `cmath`, NumPy and PyTorch -- the lip the sign of the zero names
   (W. Kahan 1987) -- and `+1j` in JAX 0.11.0, whose `sqrt` puts both zeros on the upper lip, and
@@ -1825,7 +1826,7 @@ followed is named by commit title, since its ids change if the branch is rebased
    for Pendry's pair; then a review round: three principal values as one flag per material, the
    principal root exactly on the negative real axis, the scene's own pairs under `jit`, finite
    PyTorch gradients through a normal-incidence `PlaneWave`, the derivative of the `kx == 0`
-   frame column, the 4ff flux threshold in ulp; the fmmax golden; this page and its study.
+   frame column, the first-order flux threshold in ulp; the fmmax golden; this page and its study.
 8. **The follow-up** (2026-10-04), from a review of what the work had left open and of the
    literature since 2005: two lossless half-spaces that are each other's negation refused (§9);
    ETM's perfect-lens message for a double-negative substrate; each factor of the signed index

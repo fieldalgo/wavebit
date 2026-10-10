@@ -28,7 +28,7 @@ Explained in [Saying what the light is](../guide/light.md).
 | `theta` | `0.` in angle mode; `None` with direct k | polar angle of the incident light's direction from the inward normal, radians: the direction its power travels in a lossless medium of either sign of index (in a negative-index medium the in-plane wavevector then points the other way). Real angles give uniform surface illumination, including in absorbing incident media. A nonzero imaginary part selects the formal complex-angle parameterization; see [real-angle incidence](../conventions.md#real-angle-incidence) and [negative-index media](../negative-index-media.md) |
 | `phi` | `None` | azimuth of the incident light's direction, radians. `None` is "not named", which the pure 1D path requires |
 | `kx`, `ky` | `None` | direct real Cartesian transverse angular wavenumbers, in inverse length units; an omitted component is zero. Alternative to `theta`/`phi`; these are physical values, not divided by k0. See [direction inputs](../guide/light.md#two-ways-to-specify-direction) |
-| `tetm` | `None` | `'te'` / `'tm'`. A **declaration** that polarization and azimuth are not degrees of freedom here; one-row raster structures only, and it is what buys the pure TE/TM formulation (a shape structure, a tensor, a z row, `formulation='4ff'`, or no structure after anything but a pure solve, is refused by name, with the pair below as the fix). The same light and the same per-order amplitudes as `polarization=(1, 0)` / `(0, 1)` at `phi = 0`; its scattering matrix is that solve's s-s / p-p block, and `s_inc` / `p_inc` stay `None` |
+| `tetm` | `None` | `'te'` / `'tm'`. A **declaration** that polarization and azimuth are not degrees of freedom here; one-row raster structures only, and it is what buys the pure TE/TM formulation (a shape structure, a tensor, a z row, `formulation='first_order'`, or no structure after anything but a pure solve, is refused by name, with the pair below as the fix). The same light and the same per-order amplitudes as `polarization=(1, 0)` / `(0, 1)` at `phi = 0`; its scattering matrix is that solve's s-s / p-p block, and `s_inc` / `p_inc` stay `None` |
 | `psi` | `pi/2` (s/TE) | polarization angle, radians. `pi/2` is s/TE, `0` is p/TM |
 | `chi` | `None` | ellipticity angle. With `psi` it is the canonical chart of any state: `0` linear, `±pi/4` circular |
 | `polarization` | `None` | the Jones pair `(a_s, a_p)` itself, complex. The only spelling that carries an overall phase; magnitude is normalized away |
@@ -132,10 +132,10 @@ solver = wavebit.rcwa(backend=Backend.JAX, tetm=Tetm.TM, factorization=Factoriza
 
 `Formulation` is the ninth and is not a constructor keyword: it is a settable attribute
 defaulting to `'auto'`, which reads the problem — a solve handed any of the four z-row
-convolution slots takes `'4ff'`, everything else `'2ff'`. Forcing `'4ff'` on a problem that
-does not need it is how the two are cross-checked; forcing `'2ff'` on a z-coupled tensor raises
-rather than dropping the row, because dropping it answers a different problem while conserving
-energy to machine precision.
+convolution slots takes `'first_order'`, everything else `'second_order'`. Forcing `'first_order'`
+on a problem that does not need it is how the two are cross-checked; forcing `'second_order'` on a
+z-coupled tensor raises rather than dropping the row, because dropping it answers a different
+problem while conserving energy to machine precision.
 
 For side-keyed excitation, `power_region` chooses `"cell"`, `"infinite"`, or
 `((xmin, xmax), (ymin, ymax))`. It is required when the beams occupy different

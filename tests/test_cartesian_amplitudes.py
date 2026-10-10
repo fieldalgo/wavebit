@@ -61,7 +61,7 @@ def _scene(path, side='top', theta=0.3, answers='field', backend=0, **over):
         kw = dict(_1D, tetm=path)
     elif path == 'conical':
         kw = dict(_1D, phi=0.4, psi=0.7)
-    elif path in ('2d', '4ff'):
+    elif path in ('2d', 'first_order'):
         kw = dict(_2D, phi=0.4, psi=0.7)
     elif path == 'hex':
         kw = dict(structure=_hex_rod(), thickness=[0.25], lattice=_HEX, wavelength=0.9,
@@ -72,8 +72,8 @@ def _scene(path, side='top', theta=0.3, answers='field', backend=0, **over):
     kw.update(common)
     kw.update(over)
     solver = wavebit.rcwa(**kw)
-    if path == '4ff':
-        solver.formulation = '4ff'
+    if path == 'first_order':
+        solver.formulation = 'first_order'
     return solver, solver.solve()
 
 
@@ -110,7 +110,7 @@ def _frame(solver, kx, ky):
     return np.cos(angle), np.sin(angle)
 
 
-PATHS = ['te', 'tm', 'conical', '2d', '4ff', 'hex']
+PATHS = ['te', 'tm', 'conical', '2d', 'first_order', 'hex']
 
 
 # ----------------------------------------------------------------- 1. an independent spelling

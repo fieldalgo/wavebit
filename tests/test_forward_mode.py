@@ -3,7 +3,7 @@
 ``jax.jvp``, ``jax.jacfwd`` and ``torch.autograd.forward_ad`` are checked against ``jax.grad`` /
 ``torch.autograd`` (to 1e-11 relative) and against a central difference on NumPy, extrapolated in
 the step, for ``R``, ``T``, an amplitude and the field at a point -- on the 1D TE and TM paths,
-the conical path, the 2D Li, Laurent and NVF factorizations, the z-coupled (``'4ff'``)
+the conical path, the 2D Li, Laurent and NVF factorizations, the z-coupled (``'first_order'``)
 formulation, analytic shapes (a rectangle, a disc, an oblique cell, a two-shape layer), a metal
 where the NVF inverse-rule floor binds, a magnetic material, tensor layers, the scattering matrix,
 an ``excitation`` and the jitted ``solve_field`` door, in geometry, material and incidence -- the
@@ -17,8 +17,8 @@ entered only for ``requires_grad``, which a ``forward_ad`` dual does not set: th
 back wrong with no error. Measured on these scenes at 43ae852, the weighted read-out's tangent
 on PyTorch against reverse mode: 0.0 against 0.272 in the 1D grating's permittivity, -1.11
 against -3.02 in the 2D raster's ``theta``, 3.58 against 1.19 in the rectangle's width, 0.0154
-against 0.0179 in the gold's ``Re eps``, 0.0 against 0.0573 in the 4ff tensor's permittivity.
-Several dispatches outside the modal rule were as blind to a dual -- each asked
+against 0.0179 in the gold's ``Re eps``, 0.0 against 0.0573 in the first-order tensor's
+permittivity. Several dispatches outside the modal rule were as blind to a dual -- each asked
 ``requires_grad``, or took a successful NumPy conversion for a constant -- and each is pinned by
 a scene that reaches it: the integrated raster's pixel compression, a shape layer's projector
 cache (a two-shape layer's material), the tensor-coupling test, the lattice built from a
@@ -363,8 +363,9 @@ PATHS = {
     'gold disks, floor binds, lx': (gold_disks('lx'), 140.0, 1e-3),
     'gold disks, floor binds, Re eps': (gold_disks('Re eps'), GOLD.real, 1e-4),
     'tensor Li, zero coupling moved': (tensor('eps', coupled=False), 0.0, 1e-4),
-    'tensor 4ff, eps': (tensor('eps', coupled=True, formulation='4ff'), 0.0, 1e-4),
-    'tensor 4ff, theta': (tensor('theta', coupled=True, formulation='4ff'), 0.3, 1e-5),
+    'tensor first-order, eps': (tensor('eps', coupled=True, formulation='first_order'), 0.0, 1e-4),
+    'tensor first-order, theta': (tensor('theta', coupled=True, formulation='first_order'), 0.3,
+                                  1e-5),
     'excitation, eps': (excitation, 0.0, 1e-4),
     'solve_field door, pixel eps': (field_door, 0.0, 1e-4),
 }
@@ -409,7 +410,7 @@ JACFWD = {'1d TE, eps, ETM', 'gold disks, floor binds, Re eps', '2d Li, thicknes
 #: path per formulation and rule, the doors only JAX has (the jitted ``solve_field``) and the
 #: cell. Eager JAX costs 5-35 s a path here, where PyTorch's dispatches, which a dual can slip
 #: past one by one, are what the full list is for.
-JAX_PATHS = sorted(JACFWD | {'conical, mu, SMM', 'tensor 4ff, eps', 'shape, disc lx',
+JAX_PATHS = sorted(JACFWD | {'conical, mu, SMM', 'tensor first-order, eps', 'shape, disc lx',
                              'solve_field door, pixel eps', 'scattering matrix, pixel eps',
                              '2d NVF raster, material', '2d NVF raster, period',
                              '2d NVF raster, cell angle', 'cell, nested lists, angle'})

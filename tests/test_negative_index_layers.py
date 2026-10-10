@@ -16,7 +16,7 @@ The rules now (``docs/connecting-algorithms.md`` section 11):
 * a **uniform** double negative takes the mirror of the plain rule, as a half-space of the same
   medium does (``conventions.etm_mode_q`` / ``mode_q`` with ``mirrored``);
 * a **patterned** layer holding a double-negative region takes each mode's power flux
-  (``conventions.power_down_labels``), the partition the 4ff path has always split by;
+  (``conventions.power_down_labels``), the partition the first-order path has always split by;
 * every other layer keeps its arithmetic, structurally.
 
 The oracles need no label rule of their own: SMM (which the label cannot move in exact
@@ -119,8 +119,8 @@ def test_a_double_negative_layer_on_its_own_medium_is_that_medium(path, name, th
     superstrates, three periods, three thicknesses, real and complex angles). Under Maystre's
     labels ETM raised ``LinAlgError`` on 171 of them -- 63 of the lossless medium's, 105 of the
     asymmetric lossless one's, 3 of the lossy one's, on the TE, TM, conical and 2D paths, none on
-    4ff, which splits its modes by flux -- because the layer's ``+`` modes advanced their phase
-    downward and the substrate received none of them. SMM raised it on 12 (see below).
+    the first-order one, which splits its modes by flux -- because the layer's ``+`` modes advanced
+    their phase downward and the substrate received none of them. SMM raised it on 12 (see below).
     """
     eps, mu = PAIRS[name]
     kw = dict(theta=theta, bot=Material(eps, mu=mu), thickness=[150.0], period=1000.0,
@@ -364,10 +364,11 @@ def test_the_flux_rule_keeps_decay_where_decay_dominates_and_the_cap():
     """Two guards of ``power_down_labels``, on hand-made modes.
 
     Where a mode's decay dominates (``|Re q| >= |Im q|``) its flux is not read: a truncated
-    operator can give an evanescent mode a small flux of either sign (the reason the 4ff split
-    reads attenuation there), and following it would hand ETM a root growing by ``exp(Re(q)*k0*d)``.
-    And a propagating mode whose power-down root grows past ``eps**-0.25`` across the layer keeps
-    its decaying root under ETM, as :func:`etm_mode_q` does; SMM never takes a growing root."""
+    operator can give an evanescent mode a small flux of either sign (the reason the first-order
+    split reads attenuation there), and following it would hand ETM a root growing by
+    ``exp(Re(q)*k0*d)``. And a propagating mode whose power-down root grows past ``eps**-0.25``
+    across the layer keeps its decaying root under ETM, as :func:`etm_mode_q` does; SMM never takes
+    a growing root."""
     q = np.array([1.0 + 0.2j, 0.001 + 1.0j, 0.3 + 1.0j])
     flux = np.array([-0.5, -0.5, -0.5])        # all resolvable, all pointing up
     energy = np.ones(3)
@@ -532,10 +533,10 @@ def test_three_principal_values_are_one_flag_and_solve_as_their_tensor(name):
 
 
 @pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
-def test_the_4ff_split_reads_flux_at_the_working_precision(backend):
+def test_the_first_order_split_reads_flux_at_the_working_precision(backend):
     """A lossless patterned double negative has complex quadruplets of modes (``lam``, ``-lam``
     and their conjugates) that carry no flux and are propagation-dominated (``|Re| > |Im|``).
-    In single precision their computed flux is ~1e-7 of either sign, and the 4ff split's
+    In single precision their computed flux is ~1e-7 of either sign, and the first-order split's
     threshold of 1e-12 -- about 4500 ulp of float64 -- read it as a direction: JAX and Torch
     found 17 and 16 forward modes of 18 and refused the layer at ``complex_dtype=1``. The
     threshold is now that many ulp of the working dtype, the same 1e-12 in double precision.
@@ -556,7 +557,7 @@ def test_the_4ff_split_reads_flux_at_the_working_precision(backend):
                          thickness=[120.0], structure=eps, complex_dtype=complex_dtype,
                          layer_algorithm='SMM')
         s.mu = mu
-        s.formulation = '4ff'
+        s.formulation = 'first_order'
         return np.asarray(_host(s.solve(auto_detune=False).R), dtype=float)
 
     single = reflected(backend, 1)
@@ -740,7 +741,7 @@ NEGATED = (-3.0 + 0j, -1.5 + 0j)
 STACKS = {'none': (), 'own': ('top',), 'both': ('bot', 'top'), 'three': ('top', 'bot', 'top')}
 #: Truncations that retain evanescent orders at ``theta = 0.3``: 6 of 11 on the 1D paths at their
 #: default, 9 of 25 on the 2D ones at ``(2, 2)`` -- their default ``(1, 1)`` retains none.
-EVANESCENT_KEPT = {'te': None, 'tm': None, 'conical': None, '2d': (2, 2), '4ff': (2, 2)}
+EVANESCENT_KEPT = {'te': None, 'tm': None, 'conical': None, '2d': (2, 2), 'first_order': (2, 2)}
 
 
 def _negation_scene(path, algo, stack, *, flip=False, side='top', backend=0, bot=None,
@@ -754,12 +755,12 @@ def _negation_scene(path, algo, stack, *, flip=False, side='top', backend=0, bot
     names = STACKS[stack] or ('top',)           # the empty stack is stripped after the build
     eps = np.stack([_uniform(path, media[n][0])[0] for n in names])
     mu = np.stack([_uniform(path, media[n][1])[0] for n in names])
-    solver = _solver('2d' if path == '4ff' else path, algo, eps, mu, theta=theta,
+    solver = _solver('2d' if path == 'first_order' else path, algo, eps, mu, theta=theta,
                      top=Material(top[0], mu=top[1]), bot=Material(below[0], mu=below[1]),
                      thickness=[80.0, 120.0, 50.0][:len(names)], side=side, backend=backend,
                      period=period, truncation_order=truncation_order)
-    if path == '4ff':
-        solver.formulation = '4ff'
+    if path == 'first_order':
+        solver.formulation = 'first_order'
     if STACKS[stack]:
         return solver, lambda: solver.solve(auto_detune=False)
     return solver, lambda: _without_layers(solver)
@@ -776,7 +777,8 @@ def _without_layers(solver):
 
 
 NEGATION_CASES = [(path, algo, stack, flip, side)
-                  for path in ('te', 'tm', 'conical', '2d', '4ff') for algo in ('ETM', 'SMM')
+                  for path in ('te', 'tm', 'conical', '2d', 'first_order')
+                  for algo in ('ETM', 'SMM')
                   for stack in ('none', 'own', 'three') for flip in (False, True)
                   for side in ('top', 'bottom') if (stack, flip) != ('three', True)]
 
@@ -795,11 +797,11 @@ def test_two_half_spaces_that_are_each_others_lossless_negation_are_refused(
     Matter 15, 6345 (2003)).
 
     Before this was refused the solve did not answer it: with no layer every path raised
-    ``LinAlgError`` (NumPy), ``FloatingPointError`` (JAX) or, on Torch, all but 2D and 4ff SMM;
-    with layers SMM returned a finite answer whose 4ff evanescent amplitudes were round-off of
-    order one where they must be zero, and ETM raised ``LinAlgError`` or a perfect-lens message
-    that called the stack finite. Now every path, either algorithm, either side lit and either
-    medium on top refuses it before anything is solved, naming both media and how many of the
+    ``LinAlgError`` (NumPy), ``FloatingPointError`` (JAX) or, on Torch, all but 2D and first-order
+    SMM; with layers SMM returned a finite answer whose first-order evanescent amplitudes were
+    round-off of order one where they must be zero, and ETM raised ``LinAlgError`` or a perfect-lens
+    message that called the stack finite. Now every path, either algorithm, either side lit and
+    either medium on top refuses it before anything is solved, naming both media and how many of the
     retained orders are evanescent.
     """
     solver, solve = _negation_scene(path, algo, stack, flip=flip, side=side,
@@ -818,7 +820,7 @@ def test_two_half_spaces_that_are_each_others_lossless_negation_are_refused(
     assert 0 < evanescent < gx.size
 
 
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_the_negation_pair_with_no_evanescent_order_retained_is_solved(path):
     """Only a retained evanescent order makes the pair singular: on a propagating one the mirror
     root is ``-kz``, the admittances are equal and the order is matched, and uniform layers
@@ -890,7 +892,7 @@ def test_the_negation_pair_is_refused_on_every_backend(backend):
             jax.grad(total_R)(jnp.asarray(NEGATION[0].real))
 
 
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_a_lossy_negation_pair_is_solved_and_has_no_lossless_limit(path):
     """Any loss, however small, is solved, and shows why the exact pair is refused.
 
@@ -919,7 +921,7 @@ def test_a_lossy_negation_pair_is_solved_and_has_no_lossless_limit(path):
     assert np.all(np.isfinite(_amplitudes(result)))
 
 
-@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', '4ff'])
+@pytest.mark.parametrize('path', ['te', 'tm', 'conical', '2d', 'first_order'])
 def test_a_third_medium_between_the_pair_is_another_stack(path):
     """The pair is refused only when nothing but its own two media lies between the
     half-spaces. A vacuum layer, a layer with the top medium's ``eps`` but not its ``mu``, one
@@ -937,7 +939,7 @@ def test_a_third_medium_between_the_pair_is_another_stack(path):
               (patterned_eps, patterned_mu)]
     if path not in ('te', 'tm'):                     # `tetm` takes no tensor
         layers.append((uniaxial, np.full(shape, NEGATION[1])))
-    if path in ('2d', '4ff'):                        # the 1D operators take no eps_xy
+    if path in ('2d', 'first_order'):                # the 1D operators take no eps_xy
         sheared = uniaxial.copy()
         sheared[..., 2, 2] = NEGATION[0]
         sheared[..., 0, 1] = sheared[..., 1, 0] = 0.5
@@ -945,11 +947,11 @@ def test_a_third_medium_between_the_pair_is_another_stack(path):
     for eps, mu in layers:
         got = {}
         for algo in ('ETM', 'SMM'):
-            solver = _solver('2d' if path == '4ff' else path, algo, eps[None], mu[None],
+            solver = _solver('2d' if path == 'first_order' else path, algo, eps[None], mu[None],
                              theta=0.3, top=Material(*NEGATION), bot=Material(*NEGATED),
                              thickness=[60.0])
-            if path == '4ff':
-                solver.formulation = '4ff'
+            if path == 'first_order':
+                solver.formulation = 'first_order'
             got[algo] = _amplitudes(solver.solve(auto_detune=False))
         assert np.all(np.isfinite(got['SMM']))
         assert np.abs(got['ETM'] - got['SMM']).max() < 1e-12

@@ -1,15 +1,15 @@
-"""The first-order (4ff) layer solve, against the two things that can arbitrate it.
+"""The first-order layer solve, against the two things that can arbitrate it.
 
-``wavebit/_core/solve_2d_4ff.py`` exists because the 2ff reduction does not survive a
-populated z row — physically, a magnetisation lying in the plane. Nothing dispatches to it yet;
+``wavebit/_core/solve_2d_first_order.py`` exists because the second-order reduction does not survive
+a populated z row — physically, a magnetisation lying in the plane. Nothing dispatches to it yet;
 these tests are what says the formulation is right before anything is built on top.
 
 Two oracles, and the split between them is the point:
 
-* **Where the 2ff path is valid, the two must agree.** A z-decoupled tensor has an answer both
-  formulations can reach, and the 4ff eigenvalues must be exactly the 2ff modal constants,
-  ``lam = i q``. This is the internal cross-check the module is designed around, and no external
-  oracle provides it.
+* **Where the second-order path is valid, the two must agree.** A z-decoupled tensor has an answer
+  both formulations can reach, and the first-order eigenvalues must be exactly the second-order
+  modal constants, ``lam = i q``. This is the internal cross-check the module is designed around,
+  and no external oracle provides it.
 * **Where it is not, Berreman arbitrates.** ``tests/test_anisotropic_berreman.py`` already
   carries a 4x4 first-order oracle for uniform layers, written independently and validated
   against RETICOLO and fmmax. For a single order the two operators should agree entry for
@@ -17,7 +17,7 @@ Two oracles, and the split between them is the point:
 
 Both of those are ours, so a misconception this repo holds about the problem survives every
 test in this file. The outside check lives in
-``tests/references/test_4ff_external_goldens.py`` — RETICOLO and fmmax, 21 cases, on goldens
+``tests/references/test_first_order_external_goldens.py`` — RETICOLO and fmmax, 21 cases, on goldens
 that were already committed.
 
 Most cases here are **uniform** layers at one Fourier order. Three groups at the end widen
@@ -32,7 +32,7 @@ import numpy as np
 import pytest
 
 from wavebit._core.solve_2d import layer_modes_2d
-from wavebit._core.solve_2d_4ff import (layer_matrix_4ff, split_forward_backward,
+from wavebit._core.solve_2d_first_order import (layer_matrix_first_order, split_forward_backward,
                                           solve_uniform_stack, vacuum_sp_states)
 
 WL = 600.0
@@ -41,7 +41,7 @@ EO, EE, G = 2.25, 4.0, 0.45
 
 
 def blocks(eps, n_orders=1):
-    """The mapping ``layer_matrix_4ff`` takes, from a 3x3 tensor."""
+    """The mapping ``layer_matrix_first_order`` takes, from a 3x3 tensor."""
     e = np.asarray(eps, dtype=complex)
     I = np.eye(n_orders, dtype=complex)
     return dict(exx=e[0, 0] * I, exy=e[0, 1] * I, exz=e[0, 2] * I,
@@ -105,7 +105,8 @@ PERIOD = 300.0
 
 
 def order_grid(truncation_order, theta_deg, phi_deg=0.0):
-    """``(kx, ky, n_orders, centre)`` on a flattened ``(n_orders_v, n_orders_u)`` grid, as the 2ff path lays it out.
+    """``(kx, ky, n_orders, centre)`` on a flattened ``(n_orders_v, n_orders_u)`` grid, as the
+    second-order path lays it out.
 
     ``order_grid_kxy`` broadcasts the two 1-D vectors to that grid and everything downstream
     reads it flattened, so a test that builds the same layout is testing the same indexing.
@@ -129,11 +130,12 @@ def rot_z(eps, alpha_deg):
 
 @pytest.mark.parametrize('theta_deg', ANGLES)
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED, ids=[c[0] for c in Z_DECOUPLED])
-def test_reproduces_the_2ff_modal_constants(label, eps, theta_deg):
-    """Where 2ff is valid the two formulations must give the same modes, ``lam = i q``.
+def test_reproduces_the_second_order_modal_constants(label, eps, theta_deg):
+    """Where the second-order path is valid the two formulations must give the same modes.
 
-    ``psi`` goes as ``exp(i k0 lam z)`` and the 2ff modes as ``exp(-k0 q z)``, which is what
-    fixes the factor. A sign or transpose error anywhere in the derivation lands here.
+    They are related by ``lam = i q``: ``psi`` goes as ``exp(i k0 lam z)`` and the second-order
+    modes as ``exp(-k0 q z)``, which is what fixes the factor. A sign or transpose error anywhere
+    in the derivation lands here.
     """
     kx, ky = _kxky(theta_deg)
     Kx, Ky = np.diag(kx).astype(complex), np.diag(ky).astype(complex)
@@ -142,7 +144,7 @@ def test_reproduces_the_2ff_modal_constants(label, eps, theta_deg):
 
     _, _, q = layer_modes_2d(np, Kx, Ky, I, b['exx'], b['eyy'], b['ezz_i'],
                              -b['exy'], -b['eyx'], complex)
-    lam = np.linalg.eigvals(layer_matrix_4ff(np, Kx, Ky, **b))
+    lam = np.linalg.eigvals(layer_matrix_first_order(np, Kx, Ky, **b))
 
     gap = np.abs(np.sort_complex(lam)
                  - np.sort_complex(np.concatenate([1j * q, -1j * q]))).max()
@@ -162,7 +164,7 @@ def test_matches_the_berreman_operator_entry_for_entry(label, eps, theta_deg):
 
     kx, _ = _kxky(theta_deg)
     Kx, Ky = np.diag(kx).astype(complex), np.zeros((1, 1), dtype=complex)
-    mine = layer_matrix_4ff(np, Kx, Ky, **blocks(eps))
+    mine = layer_matrix_first_order(np, Kx, Ky, **blocks(eps))
     theirs = _berreman_M(eps, float(kx[0]))
     gap = np.abs(mine - theirs).max()
     assert gap < 1e-12, f'{label} at {theta_deg} deg: {gap:.2e}'
@@ -170,12 +172,12 @@ def test_matches_the_berreman_operator_entry_for_entry(label, eps, theta_deg):
 
 @pytest.mark.parametrize('theta_deg', ANGLES)
 @pytest.mark.parametrize('label,eps', Z_DECOUPLED, ids=[c[0] for c in Z_DECOUPLED])
-def test_the_forward_half_is_the_2ff_half(label, eps, theta_deg):
+def test_the_forward_half_is_the_second_order_half(label, eps, theta_deg):
     """The direction split must select the same modes ``mode_q`` does.
 
     ``mode_q`` picks a root by sign; this picks a half by energy flux. On a z-decoupled tensor
     they have to land on the same set, which is what licenses trusting the flux rule where no
-    2ff answer exists to compare against.
+    second-order answer exists to compare against.
     """
     kx, ky = _kxky(theta_deg)
     Kx, Ky = np.diag(kx).astype(complex), np.diag(ky).astype(complex)
@@ -184,7 +186,7 @@ def test_the_forward_half_is_the_2ff_half(label, eps, theta_deg):
 
     _, _, q = layer_modes_2d(np, Kx, Ky, I, b['exx'], b['eyy'], b['ezz_i'],
                              -b['exy'], -b['eyx'], complex)
-    lam_f, _, lam_b, _ = split_forward_backward(np, layer_matrix_4ff(np, Kx, Ky, **b), 1)
+    lam_f, _, lam_b, _ = split_forward_backward(np, layer_matrix_first_order(np, Kx, Ky, **b), 1)
 
     assert len(lam_f) == len(lam_b) == 2
     gap = np.abs(np.sort_complex(lam_f) - np.sort_complex(1j * q)).max()
@@ -203,8 +205,8 @@ def test_an_evanescent_order_is_split_by_decay(label, eps, kx):
     by each mode's own norm — passes every propagating test in this file and then reads 1e-17 of
     noise as energy flow here, splitting 3/1.
     """
-    M = layer_matrix_4ff(np, np.diag([kx]).astype(complex), np.zeros((1, 1), complex),
-                         **blocks(eps))
+    M = layer_matrix_first_order(np, np.diag([kx]).astype(complex), np.zeros((1, 1), complex),
+                                 **blocks(eps))
     lam_f, _, lam_b, _ = split_forward_backward(np, M, 1)
 
     assert len(lam_f) == len(lam_b) == 2, label
@@ -223,8 +225,8 @@ def test_forward_modes_never_grow(label, eps, theta_deg):
     growing while every efficiency still looks plausible.
     """
     kx, ky = _kxky(theta_deg)
-    M = layer_matrix_4ff(np, np.diag(kx).astype(complex), np.diag(ky).astype(complex),
-                         **blocks(eps))
+    M = layer_matrix_first_order(np, np.diag(kx).astype(complex), np.diag(ky).astype(complex),
+                                 **blocks(eps))
     lam_f, _, lam_b, _ = split_forward_backward(np, M, 1)
 
     assert np.imag(lam_f).min() > -1e-12, f'{label} at {theta_deg} deg: forward mode grows'
@@ -237,9 +239,9 @@ def test_forward_modes_never_grow(label, eps, theta_deg):
 def test_stack_solve_matches_berreman(label, eps, theta_deg):
     """End to end: modes, split, boundary and transfer together.
 
-    Four of these cases are z-coupled, which is to say the 2ff path cannot reach them at all —
-    handed one it would drop the z row and be 2e-2 to 6e-2 out while conserving energy exactly,
-    which is why ``formulation='2ff'`` refuses them
+    Four of these cases are z-coupled, which is to say the second-order path cannot reach them at
+    all — handed one it would drop the z row and be 2e-2 to 6e-2 out while conserving energy
+    exactly, which is why ``formulation='second_order'`` refuses them
     (``tests/test_anisotropic_berreman.py::test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it``).
     """
     from test_anisotropic_berreman import berreman_efficiencies
@@ -263,8 +265,8 @@ def test_rotating_the_whole_problem_about_z_changes_nothing(label, eps, theta_de
     This is the only judge of a tilted magnetisation that is neither a solver nor ours. **All
     four surveyed solvers are out, each for a measured reason** — RETICOLO stops conserving
     energy past one off-diagonal pair; fmmax's "general anisotropic" entry point means *magnetic*
-    and still takes only the five 2ff slots; S4 has the same shape; and inkstone, the one with a
-    full 3x3 API, returns numbers bit-identical to the same tensor with its z row zeroed. The
+    and still takes only the five second-order slots; S4 has the same shape; and inkstone, the one
+    with a full 3x3 API, returns numbers bit-identical to the same tensor with its z row zeroed. The
     table is in ``tests/references/README.md``. So the alternative to a theorem is two of our own
     derivations agreeing, which is what ``_berreman_M`` already is.
 
@@ -396,9 +398,9 @@ def test_the_unstabilised_transfer_refuses_before_it_becomes_inaccurate():
     silently; this checks the bound is placed at the accuracy instead, by requiring that whatever
     it still accepts agrees with the stabilised path.
 
-    Note the name. ``'ETM'`` is the enhanced form and is what the 2ff path calls its default
-    too; ``'TMM'`` here is the plain transfer, which the 2ff path does not offer. One string, one
-    meaning, across both solvers.
+    Note the name. ``'ETM'`` is the enhanced form and is what the second-order path calls its
+    default too; ``'TMM'`` here is the plain transfer, which the second-order path does not offer.
+    One string, one meaning, across both solvers.
     """
     kx, ky = _kxky(35.0)
     absorbing = np.diag([(1.5 + 0.1j) ** 2] * 3).astype(complex)
@@ -532,12 +534,14 @@ def test_the_operator_decouples_into_one_problem_per_order(label, eps):
     from scipy.optimize import linear_sum_assignment
 
     kx, ky, n_orders, _ = order_grid((1, 1), 35.0, 40.0)
-    got = np.linalg.eigvals(layer_matrix_4ff(np, np.diag(kx).astype(complex),
-                                             np.diag(ky).astype(complex), **blocks(eps, n_orders)))
+    got = np.linalg.eigvals(layer_matrix_first_order(np, np.diag(kx).astype(complex),
+                                                     np.diag(ky).astype(complex),
+                                                     **blocks(eps, n_orders)))
 
     want = np.concatenate([
-        np.linalg.eigvals(layer_matrix_4ff(np, np.diag([kx[i]]).astype(complex),
-                                           np.diag([ky[i]]).astype(complex), **blocks(eps)))
+        np.linalg.eigvals(layer_matrix_first_order(np, np.diag([kx[i]]).astype(complex),
+                                                   np.diag([ky[i]]).astype(complex),
+                                                   **blocks(eps)))
         for i in range(n_orders)])
 
     cost = np.abs(got[:, None] - want[None, :])
@@ -589,15 +593,15 @@ def test_the_plain_transfer_cannot_do_a_realistic_order_count():
 @pytest.mark.parametrize('theta_deg,phi_deg', [(0.0, 0.0), (35.0, 40.0)],
                          ids=['normal', 'conical'])
 @pytest.mark.parametrize('truncation_order', [1, 2, 3], ids=['9 orders', '25 orders', '49 orders'])
-def test_a_real_grating_matches_the_2ff_solve(truncation_order, theta_deg, phi_deg):
+def test_a_real_grating_matches_the_second_order_solve(truncation_order, theta_deg, phi_deg):
     """Order *coupling*, which the uniform multi-order tests cannot reach.
 
-    An **isotropic** grating needs no new factorization: the 2ff path already builds the three
-    convolution matrices, and for a scalar permittivity the 4ff operator's z row is empty, so the
-    mapping is direct — ``exx = epx``, ``eyy = epy``, ``ezz_i = epz_i``, everything else zero.
-    That is not a fitted correspondence: ``epx`` carries the inverse rule along ``x`` because
-    ``D_x = eps E_x`` is a continuous quantity written as a product of discontinuous ones, and
-    ``exx`` sits in exactly that product in the first-order form too.
+    An **isotropic** grating needs no new factorization: the second-order path already builds the
+    three convolution matrices, and for a scalar permittivity the first-order operator's z row is
+    empty, so the mapping is direct — ``exx = epx``, ``eyy = epy``, ``ezz_i = epz_i``, everything
+    else zero. That is not a fitted correspondence: ``epx`` carries the inverse rule along ``x``
+    because ``D_x = eps E_x`` is a continuous quantity written as a product of discontinuous ones,
+    and ``exx`` sits in exactly that product in the first-order form too.
 
     What makes this different from every other test in this file is that the convolution matrices
     are **full**, not scaled identities. Orders genuinely mix, so this exercises the block algebra
@@ -605,8 +609,9 @@ def test_a_real_grating_matches_the_2ff_solve(truncation_order, theta_deg, phi_d
 
     It stops at isotropic. A *patterned anisotropic* layer has no factorization at all yet — Li's
     rule does not apply per component when the continuous quantity is a sum of three products
-    (``docs/anisotropic-materials.md`` §3) — so the geometry 4ff exists for still cannot be
-    patterned. This says the solver is ready for those matrices, not that they exist.
+    (``docs/anisotropic-materials.md`` §3) — so the geometry the first-order path exists for
+    still cannot be patterned. This says the solver is ready for those matrices, not that they
+    exist.
     """
     import wavebit
     from wavebit._core.factorization import to_conv_mat_raster_sampled

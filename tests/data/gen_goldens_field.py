@@ -29,8 +29,8 @@ So this file is deliberately scoped to the job it can do:
   live and neither solver truncates.
   ``tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame``
   checks the curl equations and their convergence rate, which is theory rather than a
-  reference. ``tests/test_field_4ff.py`` adds the cross-formulation twin, interface continuity
-  and the flux-to-efficiency tie.
+  reference. ``tests/test_field_first_order.py`` adds the cross-formulation twin, interface
+  continuity and the flux-to-efficiency tie.
 * **What this file does** is catch drift across breadth those cannot reach: patterned layers,
   many orders, multiple layers, every ``incidences`` variant, the inverse-Fourier kernel
   and the ``(sample_z, sample_y, sample_x, comp)`` layout — cheaply, on every push.
@@ -102,11 +102,12 @@ CASES = {
                       thickness=[0.15, 0.22], top=1.44, bot=1., theta=0.2, truncation_order=[2, 2],
                       period=[0.9, 0.9], wavelength=0.7),
     # The first-order route, forced onto a problem the second-order one can also express. Its
-    # own physics is covered by tests/test_field_4ff.py; what this adds is the public path and
-    # the same drift net the others get.
-    '2d_4ff':    dict(psi=0.7, phi=0.35, structure=_rand_eps((2, 4, 4), 2),
-                      thickness=[0.18, 0.13], top=1., bot=1.9599999999999997, theta=0.25,
-                      truncation_order=[2, 1], period=[0.85, 0.8], wavelength=0.66, formulation='4ff'),
+    # own physics is covered by tests/test_field_first_order.py; what this adds is the public
+    # path and the same drift net the others get.
+    '2d_first_order': dict(psi=0.7, phi=0.35, structure=_rand_eps((2, 4, 4), 2),
+                           thickness=[0.18, 0.13], top=1., bot=1.9599999999999997, theta=0.25,
+                           truncation_order=[2, 1], period=[0.85, 0.8], wavelength=0.66,
+                           formulation='first_order'),
 }
 VARIANTS = (('default', ('incident',)), ('all', ('incident', 's', 'p')))
 
@@ -153,9 +154,9 @@ def build():
                       ((1, -1, 1) if solver.tetm_index == 0 else (-1, 1, -1)))
             out[f'{name}__{tag}'] = np.flip(cell, axis=1 if cell.ndim == 5 else 0) * parity
         out[f'{name}__grating_type'] = np.array(solver.grating_type)
-        # `.value`, not the enum: numpy reads a str-Enum's data ('2ff') for the
-        # itemsize but its __str__ ('Formulation.TWO_FIELD') for the content, storing
-        # 'For'. Worse, `enum == that_array` is True anyway, so the assertion that
+        # `.value`, not the enum: numpy reads a str-Enum's data ('second_order') for the
+        # itemsize but its __str__ ('Formulation.SECOND_ORDER') for the content, storing
+        # 'Formulation.'. Worse, `enum == that_array` is True anyway, so the assertion that
         # reads it back looks like it checks something and does not.
         out[f'{name}__formulation'] = np.array(solver.formulation_assigned.value)
     return out

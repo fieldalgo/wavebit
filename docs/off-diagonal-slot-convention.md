@@ -7,7 +7,7 @@ Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
 - `wavebit/_core/factorization.py::_nvf_assemble` — where the sign convention is set
 - `wavebit/_core/engine.py::solve_conv` — the only way to reach the slots by hand
-- `wavebit/_core/solve_2d_4ff.py::_conv_layers` — where the negation is undone for the z row
+- `wavebit/_core/solve_2d_first_order.py::_conv_layers` — where the negation is undone for the z row
 - `tests/test_uniform_anisotropic.py`, `tests/test_anisotropic_berreman.py`,
   `tests/references/test_reticolo_anisotropic_golden.py` — every number below
 
@@ -140,8 +140,9 @@ epz_i = np.stack([np.linalg.inv(eps_zz * I)])
 ### 2.1 And the z row, which the same rule covers
 
 `layer_modes_2d` has no z-row slots to derive a sign from — a populated z row selects a different
-operator entirely (`solve_2d_4ff.py::layer_matrix_4ff`, which reads the tensor as written). So
-for those four the convention was *chosen* rather than forced, and it was chosen to match:
+operator entirely (`solve_2d_first_order.py::layer_matrix_first_order`, which reads the tensor as
+written). So for those four the convention was *chosen* rather than forced, and it was chosen to
+match:
 
 ```python
 epxz  = np.stack([-eps_xz * I])        # <-- negate, same as the pair above
@@ -625,5 +626,5 @@ rather than quoted from memory.
   strongest oracle for isotropic gratings (`tests/references/golden_reticolo.npz`).
 
 Also cited in `anisotropic-materials.md`, for the factorization a patterned anisotropic layer would
-need: Li (2003) for the 4ff formulation, Popov and Nevière (2001) for the rearrangement, Schuster
-et al. (2007) for the NVF this repo implements.
+need: Li (2003) for the first-order formulation, Popov and Nevière (2001) for the rearrangement,
+Schuster et al. (2007) for the NVF this repo implements.

@@ -178,7 +178,7 @@ def test_unavailable_options_are_not_ignored(option,match):
 def test_z_coupling_and_unsupported_shapes():
     tilted=scene(mat=wavebit.Material([2.,3.,4.]).rotated(.2,'y'))
     tilted.solve()
-    assert tilted.formulation_assigned=='4ff'
+    assert tilted.formulation_assigned=='first_order'
     with pytest.raises(NotImplementedError,match='rectangles'):
         scene(structure=[dict(background=1.,shapes=[dict(type='circle',lx=240.,material=material())])]).solve()
     frozen = scene().freeze_geometry()

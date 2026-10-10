@@ -7,7 +7,7 @@ file's history.
   :func:`test_every_path_returns_a_maxwell_field_in_the_declared_frame` below checks the curl
   equations *and their convergence rate* on every path;
   ``tests/references/test_s4_field_golden.py`` compares against S4 entry for entry at 1e-15 on
-  uniform stacks; ``tests/test_field_4ff.py`` adds the cross-formulation twin, interface
+  uniform stacks; ``tests/test_field_first_order.py`` adds the cross-formulation twin, interface
   continuity and the flux-to-efficiency tie.
 * **Has it moved?** Answered by ``data/golden_field.npz``, frozen from this solver over cases
   the checks above cannot reach — patterned layers, many orders, several layers, every
@@ -211,7 +211,7 @@ def maxwell_residual(F, kx, ky, eps, d, sample_z, layer, wavelength=FRAME_WL):
     ``d/dx -> i k0 kx``, ``d/dy -> i k0 ky``, ``d/dz`` by a central difference.
     ``linspace(0, sample_z, sample_z)`` is inclusive, so the step is ``d / (sample_z - 1)``.
 
-    ``eps`` is the full 3x3 tensor, so ``tests/test_field_4ff.py`` can share this on a
+    ``eps`` is the full 3x3 tensor, so ``tests/test_field_first_order.py`` can share this on a
     z-coupled layer; a scalar is promoted. ``F`` is ``(n_z, 6)``, which is what a single
     retained order gives at ``sample_x = sample_y = 1`` — the field is then one plane wave and the
     sample at the origin *is* its Fourier coefficient.
@@ -281,7 +281,8 @@ def _frame_cell(path, sample_z, formulation=None):
 
 
 @pytest.mark.parametrize('path,formulation', [('te_slab', None), ('tm_slab', None),
-                                              ('conical', None), ('2d', '2ff'), ('2d', '4ff')])
+                                              ('conical', None), ('2d', 'second_order'),
+                                              ('2d', 'first_order')])
 def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulation):
     """The check that was missing, and that a whole convention slipped through the gap in.
 
@@ -295,7 +296,7 @@ def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulat
     The frame was never in doubt anywhere else. ``docs/formulation.md`` §1 anchors its
     ``(M1)/(M2)`` on a vacuum wave travelling ``+z`` and writes the pair ``(Ey, Hx) =
     (1, -kz)``; ``tests/test_anisotropic_berreman.py::_vacuum_modes`` writes that same pair;
-    ``solve_2d_4ff`` derives in it. Only the reconstruction disagreed.
+    ``solve_2d_first_order`` derives in it. Only the reconstruction disagreed.
 
     Nothing caught it for a reason worth recording. ``docs/time-convention-audit.md`` §8 did
     look at field reconstruction and passed it, on two checks — does ``|E|`` decay going down
@@ -321,7 +322,8 @@ def test_every_path_returns_a_maxwell_field_in_the_declared_frame(path, formulat
 
 
 @pytest.mark.parametrize('path,formulation', [('te_slab', None), ('tm_slab', None),
-                                              ('conical', None), ('2d', '2ff'), ('2d', '4ff')])
+                                              ('conical', None), ('2d', 'second_order'),
+                                              ('2d', 'first_order')])
 def test_the_declared_frame_is_the_one_that_converges(path, formulation):
     """The control: the frame the library used to ship in must now *fail* the check above.
 
@@ -342,7 +344,7 @@ def test_the_declared_frame_is_the_one_that_converges(path, formulation):
 
 
 @pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
-@pytest.mark.parametrize('name', ['te_1d', 'conical', '2d', '2d_4ff'])
+@pytest.mark.parametrize('name', ['te_1d', 'conical', '2d', '2d_first_order'])
 def test_field_cross_backend(name, backend):
     """One implementation, so jax and torch reconstruct the same field as numpy.
 

@@ -187,8 +187,8 @@ def test_a_layer_written_twice_to_rounding_is_one_layer():
     """Slots that agree to ``sqrt(eps)`` of their largest entry join; farther apart they do not.
 
     The same material written two ways -- a tensor built as ``R D R^T`` beside ``D`` rotated by
-    ``R`` -- differs by a few ulp, and the two slices must decide together: apart, 4ff SMM went
-    7.7e4 off at the plane between them.
+    ``R`` -- differs by a few ulp, and the two slices must decide together: apart, first-order SMM
+    went 7.7e4 off at the plane between them.
     """
     a = np.diag([2.4, 2.4, 3.2]).astype(complex)
     tol = np.sqrt(np.finfo(float).eps)

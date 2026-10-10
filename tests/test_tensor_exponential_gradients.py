@@ -59,7 +59,7 @@ def solver(backend, profile, multilayer):
     s=wavebit.rcwa(backend=backend, structure=eps, mu=mu, thickness=d,
                    period=(600.,750.), wavelength=900., truncation_order=(0,0),
                    theta=0., phi=0., answers='field', factorization='li')
-    s.formulation='4ff'
+    s.formulation='first_order'
     return s
 
 

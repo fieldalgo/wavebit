@@ -12,15 +12,15 @@ is the historical derivation and development record, not the current input guide
 Written: 2026-08-09, and it was scoping only then. Since 2026-08-11 the z-coupling row is
 implemented, and since 2026-08-13 it is *reachable* — `solve_conv` takes nine slots and the
 solver picks the formulation (§8, no longer conditional). See
-[`first-order-4ff.md`](first-order-4ff.md) for what that path does and how far it is checked.
-This document keeps the scoping question: what each *remaining* gap costs.
+[`first-order-formulation.md`](first-order-formulation.md) for what that path does and how far it is
+checked. This document keeps the scoping question: what each *remaining* gap costs.
 
 Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
 - `wavebit/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
 - `wavebit/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
 - `wavebit/_core/engine.py::solve_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
-- `wavebit/_core/solve_2d_4ff.py::solve_2d_4ff` — the nine-slot twin of the 2D solve
+- `wavebit/_core/solve_2d_first_order.py::solve_2d_first_order` — the nine-slot twin of the 2D solve
 
 ---
 
@@ -29,9 +29,9 @@ Targets:
 | case | status | what it costs |
 |---|---|---|
 | uniform (unpatterned) anisotropic layer, in-plane tensor | **works today** | a thin wrapper |
-| `eps_xz` / `eps_yz` (z-coupling), uniform | **works today** | done — a different solver, [`first-order-4ff.md`](first-order-4ff.md), dispatched to automatically at ~8x |
+| `eps_xz` / `eps_yz` (z-coupling), uniform | **works today** | done — a different solver, [`first-order-formulation.md`](first-order-formulation.md), dispatched to automatically at ~8x |
 | patterned anisotropic layer, in-plane tensor | **works today** | done — Popov–Nevière, [`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md); both solvers unchanged, as scoped |
-| patterned **and** z-coupled | supported | full Li/NVF closure and 4ff for epsilon and mu; [verification](full-tensor-patterns.md) |
+| patterned **and** z-coupled | supported | full Li/NVF closure and first-order for epsilon and mu; [verification](full-tensor-patterns.md) |
 | `mu != 1`, layers and half-spaces | **works today** | done — [`magnetic-materials.md`](magnetic-materials.md); the layers are the E/H dual of the five slots, the half-spaces one pair of admittances |
 
 Nothing on this list is impossible. Exactly one of them changed the *shape* of the code rather
@@ -202,7 +202,7 @@ epxz, epyz = np.stack([-exz * I]), np.stack([-eyz * I])
 epzx, epzy = np.stack([-ezx * I]), np.stack([-ezy * I])
 
 res = mee.solve_conv(epx, epy, epz_i, epxy, epyx,
-                     epxz, epyz, epzx, epzy)   # -> formulation_assigned == '4ff'
+                     epxz, epyz, epzx, epzy)   # -> formulation_assigned == 'first_order'
 ```
 
 Two things to watch:
@@ -298,22 +298,22 @@ as is a birefringent crystal cut off-axis, or a magneto-optic film magnetized ob
 Eliminating `E_z` and `H_z` leaves a first-order system in `z` for the transverse fields:
 
 ```
-   d psi / dz = M psi,        psi = [E_x, E_y, H_x, H_y]      (4ff x 4ff)
+   d psi / dz = M psi,        psi = [E_x, E_y, H_x, H_y]      (4N x 4N for N orders)
 ```
 
 Without z-coupling, `M` is block-antidiagonal:
 
 ```
-   no z-coupling                        with z-coupling
+   no z-coupling                            with z-coupling
 
-   M = [  0    P  ]                     M = [ M11    P  ]
-       [  Q    0  ]                         [  Q    M22 ]
+   M = [  0    P  ]                         M = [ M11    P  ]
+       [  Q    0  ]                             [  Q    M22 ]
 
-   dEt/dz depends on H only              dEt/dz depends on E too
+   dEt/dz depends on H only                  dEt/dz depends on E too
    dHt/dz depends on E only
 
-   -> d²Et/dz² = P·Q·Et    (2ff)        -> a first-derivative term survives;
-      no first-derivative term              no clean second-order reduction
+   -> d²Et/dz² = P·Q·Et    (second-order)   -> a first-derivative term survives;
+      no first-derivative term                  no clean second-order reduction
 ```
 
 `P·Q` written out in expanded form *is* `Omega2_LR`; the right factor is kept separately as
@@ -321,9 +321,9 @@ Without z-coupling, `M` is block-antidiagonal:
 order, `exp(+q z)` and `exp(-q z)` solve it with the **same eigenvector** — the `±` pair is free:
 
 ```
-   2ff eigenproblem                     4ff eigenproblem
-   ────────────────                     ────────────────
-   eig(Omega2_LR) -> (W, q²)            eig(M) -> 4ff eigenpairs
+   second-order eigenproblem            first-order eigenproblem
+   ─────────────────────────            ────────────────────────
+   eig(Omega2_LR) -> (W, q²)            eig(M) -> 4N eigenpairs
    down: W·exp(-k0 q d)                 forward and backward are genuinely
    up:   W·exp(+k0 q d)   same W        different mode sets; sort by decay
                                         and energy flux, not by sign
@@ -332,17 +332,19 @@ order, `exp(+q z)` and `exp(-q z)` solve it with the **same eigenvector** — th
 That `±` pairing is baked into every consumer: the `big_W (I + Y)` / `big_V (I - Y)` construction
 (`solve_2d.py::183`), the single `[epz_conv_i, W, V, q, d, big_A_i, big_B]` stored per layer, the
 four-quadrant split in `sp_modes_2d`, the branch rule in `conventions.py::mode_q`, and the field
-reconstruction in `fields.py`. All of it assumes the 2ff shape.
+reconstruction in `fields.py`. All of it assumes the second-order shape.
 
-Cost is not only structural: `eig` is `O(N³)`, so 2ff → 4ff is roughly **8x** on the layer solve.
+Cost is not only structural: `eig` is `O(N³)`, so second-order → first-order is roughly **8x** on
+the layer solve.
 
-**Part of this now exists.** `wavebit/_core/solve_2d_4ff.py` carries the first-order operator
-`M`, the forward/backward split, and a stack solve, pinned by `tests/test_solve_2d_4ff.py`
-against both the 2ff path (where that path is valid, eigenvalues agree at `lam = i q` to 1e-15)
-and the Berreman oracle (entry for entry, to 1e-16, on tensors 2ff cannot express at all), and
-by `tests/references/test_4ff_external_goldens.py` against RETICOLO and fmmax (24 cases, worst
-2.4e-15, no convention fitting). Three of those are Voigt tensors generated for this — **the
-first time an outside solver has judged the geometry this module exists for.**
+**Part of this now exists.** `wavebit/_core/solve_2d_first_order.py` carries the first-order
+operator `M`, the forward/backward split, and a stack solve, pinned by
+`tests/test_solve_2d_first_order.py` against both the second-order path (where that path is valid,
+eigenvalues agree at `lam = i q` to 1e-15) and the Berreman oracle (entry for entry, to 1e-16, on
+tensors the second-order path cannot express at all), and by
+`tests/references/test_first_order_external_goldens.py` against RETICOLO and fmmax (24 cases, worst
+2.4e-15, no convention fitting). Three of those are Voigt tensors generated for this — **the first
+time an outside solver has judged the geometry this module exists for.**
 
 That external reach has a hard edge, measured rather than assumed. RETICOLO is exact for a
 diagonal tensor at any mounting and for a *single* off-diagonal pair at classical mounting;
@@ -353,24 +355,25 @@ measurements and the reasoning are in `tests/references/README.md`.
 
 Nothing dispatches to it. It is, however, stable for any thickness: layers are joined by an
 enhanced-transmittance recursion (`layer_algorithm='ETM'`, the same string and the same
-technique as the 2ff path) or by scattering matrices (`'SMM'`), and both hold ~1e-13 relative accuracy out
-to a modal exponent of 2500, where they reproduce the closed-form single-interface Fresnel
-reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for cross-checking and refuses past the
-point where it is accurate — which on a 220 nm layer means from 25 Fourier orders upward, since
-diffraction orders above the light line are strongly evanescent whatever the thickness. That is
-the historical reason RCWA needed the enhanced form, not a preference between two recursions.
-The block layout is checked at 9 and 25 orders; what is still missing is order *coupling*, which
-needs the patterned factorization of §3. Field reconstruction landed 2026-08-14
-(`docs/first-order-4ff.md` §4b) — its `E_z` is the one formula the 2ff path could not lend,
-because a populated z row leaves two more terms in the elimination.
+technique as the second-order path) or by scattering matrices (`'SMM'`), and both hold ~1e-13
+relative accuracy out to a modal exponent of 2500, where they reproduce the closed-form
+single-interface Fresnel reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for
+cross-checking and refuses past the point where it is accurate — which on a 220 nm layer means from
+25 Fourier orders upward, since diffraction orders above the light line are strongly evanescent
+whatever the thickness. That is the historical reason RCWA needed the enhanced form, not a
+preference between two recursions. The block layout is checked at 9 and 25 orders; what is still
+missing is order *coupling*, which needs the patterned factorization of §3. Field reconstruction
+landed 2026-08-14 (`docs/first-order-formulation.md` §4b) — its `E_z` is the one formula the
+second-order path could not lend, because a populated z row leaves two more terms in the
+elimination.
 
 Two findings from building it, both invisible until the case existed. The `±` pairing above does
-not merely become unnecessary in 4ff — it becomes *false*: at normal incidence the backward set
-still matches the negated forward set to 1e-16, but for a tilted magnetisation at 35° they part by
-9e-2. z-coupling and oblique incidence have to combine before the assumption breaks, which is why
-nothing noticed. And direction has to be decided per mode against its own norm: scaling the
-flux threshold by the largest flux in the set works on every propagating case and then, once every
-mode is evanescent — which is every diffraction order above the light line — promotes 1e-17 of
+not merely become unnecessary in the first-order form — it becomes *false*: at normal incidence the
+backward set still matches the negated forward set to 1e-16, but for a tilted magnetisation at 35°
+they part by 9e-2. z-coupling and oblique incidence have to combine before the assumption breaks,
+which is why nothing noticed. And direction has to be decided per mode against its own norm: scaling
+the flux threshold by the largest flux in the set works on every propagating case and then, once
+every mode is evanescent — which is every diffraction order above the light line — promotes 1e-17 of
 noise to real energy flow.
 
 ## 6.1 Gyrotropy: the two blocks disagree on the order of the pair
@@ -468,7 +471,7 @@ that same decision rather than a new kind of decision.
 | axis | read from | branches |
 |---|---|---|
 | grating dimensionality *(exists)* | `structure` shape, `tetm`, `phi` | 1D TE/TM, 1D conical, 2D |
-| **z row of the tensor** *(exists)* | whether the four z-row slots were given | 2ff second-order, 4ff first-order |
+| **z row of the tensor** *(exists)* | whether the four z-row slots were given | second-order, first-order |
 | **permeability** | `mu != 1` | existing operator, magnetic operator |
 | **patterned or uniform** | layer has in-plane structure | factorization, or scaled identities |
 
@@ -480,15 +483,15 @@ the 8x, and the cheap path is one omitted argument away.
 
 The z-row axis reaches back into the dimensionality one. The 1D operators have no z-row slots,
 so a z row — the permittivity's `ep{xz,yz,zx,zy}` or the permeability's `mu[5:]` — moves even
-a one-row raster onto the 2D layout the first-order path is written on, and `formulation='4ff'`
-does the same without one. That layout carries both polarizations, so `tetm` beside either is
-refused by name rather than rerouted: the path it would be rerouted to reads an incident
-polarization `tetm` declared absent. Until 2026-09-27 it was rerouted: a `tetm` given at
+a one-row raster onto the 2D layout the first-order path is written on, and
+`formulation='first_order'` does the same without one. That layout carries both polarizations, so
+`tetm` beside either is refused by name rather than rerouted: the path it would be rerouted to reads
+an incident polarization `tetm` declared absent. Until 2026-09-27 it was rerouted: a `tetm` given at
 construction surfaced as a `TypeError` from deep in the solve, and one assigned afterwards
 answered for s light whichever of the two it named. The message names the pair that describes
 the same light, `polarization=(1, 0)` / `(0, 1)` at `phi = 0`, and
 `tests/test_tetm_off_the_pure_path.py` checks that it does: beside an all-zero z row, and under
-a forced `'4ff'`, the pair reproduces the pure `tetm` solve.
+a forced `'first_order'`, the pair reproduces the pure `tetm` solve.
 
 ### Why it has to be automatic
 
@@ -502,52 +505,52 @@ isotropic layer of the same size:
 | in-plane tensor, empty z row (Faraday) | 3.3x |
 | **z-coupled (Voigt)** | **9.5x** |
 
-The 9.5x is the 4ff jump — the eigenproblem doubles and `eig` is cubic. A user with a Faraday
-stack has no reason to know that a populated `eps_yz` is what would cost them eight times more,
-and no way to check whether their tensor has one without reading this document. That is what an
-`auto` default is for.
+The 9.5x is the first-order jump — the eigenproblem doubles and `eig` is cubic. A user with a
+Faraday stack has no reason to know that a populated `eps_yz` is what would cost them eight times
+more, and no way to check whether their tensor has one without reading this document. That is what
+an `auto` default is for.
 
 ### And why the override still matters
 
 ```python
 class Formulation(str, Enum):
-    AUTO   = 'auto'   # read the slots and decide           (default)
-    TWO_FIELD  = '2ff'   # force second-order; refuse z-coupling
-    FOUR_FIELD = '4ff'   # force first-order; always possible, ~8x
+    AUTO         = 'auto'           # read the slots and decide           (default)
+    SECOND_ORDER = 'second_order'   # force second-order; refuse z-coupling
+    FIRST_ORDER  = 'first_order'    # force first-order; always possible, ~8x
 ```
 
 That is `wavebit._core.enums.Formulation`, and it is reached as `solver.formulation` — an
 attribute rather than a constructor keyword, because the JAX solver passes its pytree children
 positionally and a new keyword shifts them.
 
-Forcing `'4ff'` on a problem that does not need it is how the 4ff solver gets **validated**: a
-z-decoupled case run both ways must agree, and that is an internal cross-check no external oracle
-provides. It is `tests/test_formulation_dispatch.py`, and the case that carries it is a
-*patterned* grating at conical incidence — the two formulations then eig completely different
+Forcing `'first_order'` on a problem that does not need it is how the first-order solver gets
+**validated**: a z-decoupled case run both ways must agree, and that is an internal cross-check no
+external oracle provides. It is `tests/test_formulation_dispatch.py`, and the case that carries it
+is a *patterned* grating at conical incidence — the two formulations then eig completely different
 matrices and agree to 4e-14, which a uniform layer's scaled identities could not have shown. It is the same reason `layer_algorithm` is selectable — and the same reason
 `test_anisotropic_berreman.py` drives SMM as well as ETM, since "the correction reaches the other
 path for free" is exactly the sort of claim that turns out to be false.
 
-Forcing `'2ff'` on a z-coupled tensor must **raise**, not quietly drop the z row. That failure mode
-is already measured: dropping it moves the efficiencies by 2e-2 to 6e-2 while `R + T` stays at 1 to
-machine precision, so every check a caller is likely to run still passes. The guard used to live at
-the tensor adapter in `test_anisotropic_berreman.py`; it now lives in the solver, which is where
-this paragraph said it belonged once the solver could be handed a tensor directly.
+Forcing `'second_order'` on a z-coupled tensor must **raise**, not quietly drop the z row. That
+failure mode is already measured: dropping it moves the efficiencies by 2e-2 to 6e-2 while `R + T`
+stays at 1 to machine precision, so every check a caller is likely to run still passes. The guard
+used to live at the tensor adapter in `test_anisotropic_berreman.py`; it now lives in the solver,
+which is where this paragraph said it belonged once the solver could be handed a tensor directly.
 
 ### One requirement on the dispatch itself
 
 **Which path ran has to be visible in the result.** `grating_type` is already exposed for
 exactly this reason. A silent 8x is indistinguishable from a slow machine, and a benchmark that
 cannot say which formulation it measured is not a benchmark. The attribute is
-`solver.formulation_assigned`, `'2ff'` or `'4ff'`, set by every 2D solve and `None` before the
-first one.
+`solver.formulation_assigned`, `'second_order'` or `'first_order'`, set by every 2D solve and `None`
+before the first one.
 
 ## References
 
 - L. Li, *Fourier modal method for crossed anisotropic gratings with arbitrary permittivity and
   permeability tensors*, J. Opt. A: Pure Appl. Opt. **5**(4), 345 (2003).
-  [doi:10.1088/1464-4258/5/4/307](https://doi.org/10.1088/1464-4258/5/4/307) — the 4ff formulation
-  that covers §5 and §6 together, in one paper.
+  [doi:10.1088/1464-4258/5/4/307](https://doi.org/10.1088/1464-4258/5/4/307) — the first-order
+  formulation that covers §5 and §6 together, in one paper.
 - E. Popov and M. Nevière, *Maxwell equations in Fourier space: fast-converging formulation for
   diffraction by arbitrary shaped, periodic, anisotropic media*, J. Opt. Soc. Am. A **18**(11),
   2886 (2001). [doi:10.1364/JOSAA.18.002886](https://doi.org/10.1364/JOSAA.18.002886) — the

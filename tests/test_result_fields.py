@@ -15,7 +15,7 @@ def scene(**updates):
 
 
 @pytest.mark.parametrize('theta', [.23, -.23])
-@pytest.mark.parametrize('kind', ['te', 'tm', 'conical', '2ff', '4ff'])
+@pytest.mark.parametrize('kind', ['te', 'tm', 'conical', 'second_order', 'first_order'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
 def test_all_paths_match_legacy_and_tangential_boundary_continuity(kind, side, algorithm, theta):
@@ -31,12 +31,12 @@ def test_all_paths_match_legacy_and_tangential_boundary_continuity(kind, side, a
         options['tetm'] = kind
     else:
         options.update(phi=.4, polarization=(.6, .8j))
-    if kind in ('2ff', '4ff'):
+    if kind in ('second_order', 'first_order'):
         options.update(structure=np.repeat(options['structure'], 2, axis=1),
                        truncation_order=(1, 1))
     solver = wavebit.rcwa(**options)
-    if kind == '4ff':
-        solver.formulation = '4ff'
+    if kind == 'first_order':
+        solver.formulation = 'first_order'
     result = solver.solve(auto_detune=False)
     points = dict(sample_x=[-.31, .09], sample_y=[.07], sample_z=[0., .12, .31, .4])
     field = result.reconstruct_field(**points)

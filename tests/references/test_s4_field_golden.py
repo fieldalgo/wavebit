@@ -9,7 +9,7 @@ why S4 stops at uniform stacks.
 The comparison is **exact, not converged**: a uniform stack truncates on neither side, so
 agreement is at 1e-15 rather than at some tolerance chosen to fit. All five reconstruction
 paths are run against the same S4 numbers — pure TE, pure TM, conical, 2D, and the first-order
-(4ff) route — because they are five different assemblies of the same physics and the oracle
+route — because they are five different assemblies of the same physics and the oracle
 costs nothing extra per path.
 """
 import pathlib
@@ -37,7 +37,7 @@ POL_SIGN = {'s': 1.0, 'p': -1.0}
 
 # Which reconstruction each path exercises, and what it can express. The pure 1D layouts have
 # no azimuth and one polarization each, so they only claim the cases they can actually reach.
-PATHS = ('te', 'tm', 'conical', '2d', '4ff')
+PATHS = ('te', 'tm', 'conical', '2d', 'first_order')
 
 
 def _interior(cell):
@@ -91,8 +91,8 @@ def _reconstruct(path, stack_name, theta, phi, pol):
                   truncation_order=(0, 0), period=PERIOD,
                   structure=np.repeat(np.repeat(eps, 2, axis=1), 2, axis=2))
     solver = wavebit.rcwa(**kw)
-    if path == '4ff':
-        solver.formulation = '4ff'
+    if path == 'first_order':
+        solver.formulation = 'first_order'
     solver.solve()
     # S4 samples `GetFields(0, 0, z)`, its origin, which is where it references its incidence.
     # Ours is referenced at the public origin, the cell centre, since 2026-09-27 -- so that is

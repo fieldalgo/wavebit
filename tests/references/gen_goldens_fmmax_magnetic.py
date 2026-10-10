@@ -19,8 +19,8 @@ So the file is built to be trustworthy on its own terms today:
   is a real constraint on the frozen numbers and is enforced here.
 
 ``fmmax.eigensolve_general_anisotropic_media`` takes five permittivity and five permeability
-components — ``xx, xy, yx, yy, zz`` each, no z row — so it is the same 2ff tensor class this
-solver uses, extended to mu. A magnetic Voigt geometry is out of its reach as much as ours;
+components — ``xx, xy, yx, yy, zz`` each, no z row — so it is the same second-order tensor class
+this solver uses, extended to mu. A magnetic Voigt geometry is out of its reach as much as ours;
 RETICOLO is the oracle if that is ever wanted.
 
 Environment and float64 caveats are the same as ``gen_goldens_fmmax.py``; read that first.

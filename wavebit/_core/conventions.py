@@ -291,10 +291,10 @@ def etm_mode_q(xp, eigenvalue, k0_d, mirrored=None):
     *upper* half plane at every real ``k_par``, where Maystre's root is the one that grows and
     advances its phase downward -- against the power -- so a layer of a double negative resting
     on the same medium had a singular ``a``: ``LinAlgError`` on 171 of 720 such scenes, every
-    path but 4ff. With the mirror ``a`` is the identity there, as for an ordinary layer on its
-    own substrate. The cap is the same cap, since it is about growth and not about the cut. A
-    *patterned* layer holding a double negative has no one medium to mirror and takes
-    :func:`power_down_labels` per mode. ``docs/connecting-algorithms.md`` section 11.
+    path but the first-order one. With the mirror ``a`` is the identity there, as for an
+    ordinary layer on its own substrate. The cap is the same cap, since it is about growth and not
+    about the cut. A *patterned* layer holding a double negative has no one medium to mirror and
+    takes :func:`power_down_labels` per mode. ``docs/connecting-algorithms.md`` section 11.
     """
     v = xp.sqrt(eigenvalue)
     # Its decision is the sign of `Re(q) - Im(q)`, at least `|q|` from zero for every passive layer
@@ -363,9 +363,9 @@ def layer_runs(xp, slots, rules=None):
     slots, and the rule agrees. Bit equality alone missed the same material written twice -- a
     tensor built as ``R D R^T`` beside ``D`` rotated by ``R``, 4.4e-16 apart; a rectangle of a
     medium drawn on a background of that medium, 5.6e-17 -- and two such slices deciding apart
-    (a tilted uniaxial layer as 2.5 um + 1.5 um under a grating, ``theta = 0.2+0.6j``) put 4ff
-    SMM 1.6 off where it had been at 1.2e-11. Why ``sqrt(eps)``: a label two neighbours take
-    differently costs ``eps/delta`` at the plane between them, ``delta`` being how far their
+    (a tilted uniaxial layer as 2.5 um + 1.5 um under a grating, ``theta = 0.2+0.6j``) put
+    first-order SMM 1.6 off where it had been at 1.2e-11. Why ``sqrt(eps)``: a label two neighbours
+    take differently costs ``eps/delta`` at the plane between them, ``delta`` being how far their
     slots differ, so a pair closer than ``sqrt(eps)`` must decide together. A pair farther apart
     is not bounded by that: slices that each keep a growing label under the cap compound it
     across the plane, and a metal grating at a real angle cut into slices whose backgrounds
@@ -387,8 +387,8 @@ def run_k0_d(xp, k0, thickness, links):
 
     ``links`` is :func:`layer_runs`'s verdicts. **Why the run and not the layer.** Joined
     layers are one layer cut in two: the plane between them reflects nothing, and their modes
-    are the same modes. A cap (:func:`etm_mode_q`'s, and the 4ff split's
-    :func:`~wavebit._core.solve_2d_4ff._cap_round_trips`) weighs a growing label's round
+    are the same modes. A cap (:func:`etm_mode_q`'s, and the first-order split's
+    :func:`~wavebit._core.solve_2d_first_order._cap_round_trips`) weighs a growing label's round
     trip against a decaying one's, and the round trip is across the whole run. A slice that
     decided on its own thickness kept the half-space's root of a mode its thicker neighbour
     had turned; the plane between them then had to turn one root into the other with a
@@ -397,9 +397,9 @@ def run_k0_d(xp, k0, thickness, links):
     amplitudes 3.0e-1 off the uncut layer at ``theta = 0.66+0.47j`` (largest over all orders,
     against the largest amplitude: a dark order came out at 0.50), and an ``eps = 9`` TM
     stack (1 um + 9 um, ``theta = 0.55+0.4j``) 7.1e+2 off, where SMM's cascade (gap medium, no
-    cap) stayed at 1.4e-15 and 5.9e-16; on the 4ff path, where SMM has no gap medium, a gyrotropic
-    layer cut 20 um + 1.5 um put SMM 0.75 off. On the run's thickness all three are at the uncut
-    layer's level.
+    cap) stayed at 1.4e-15 and 5.9e-16; on the first-order path, where SMM has no gap medium, a
+    gyrotropic layer cut 20 um + 1.5 um put SMM 0.75 off. On the run's thickness all three are
+    at the uncut layer's level.
 
     A layer in no run reads ``k0 * thickness[i]``, the expression the kernels passed before, so
     a stack without runs is untouched; a run's total is summed once, in list order, so every
@@ -455,8 +455,8 @@ def _same_layer(xp, a, b):
     One scale for the pair, not one per slot: a slot that is exactly zero in one layer and
     rounding noise in the other -- a tensor rotated by ``2*pi``, or twisted by 1e-12 rad --
     differs by all of its own size, 6e-17 against a layer whose largest entry is 2.66. Scaled
-    per slot that kept one material apart from itself, and 4ff SMM went 22 off (80 um + 1.5 um
-    at ``theta = 0.5+0.05j``).
+    per slot that kept one material apart from itself, and first-order SMM went 22 off (80 um +
+    1.5 um at ``theta = 0.5+0.05j``).
     """
     pairs = []
     for x, y in zip(a, b):
@@ -590,8 +590,8 @@ def layer_label_rule(xp, dng, eps_slots, mu_slots, zero_slots=()):
 
 
 #: Flux below this, on a mode normalised to unit energy, counts as none: the direction is then
-#: decided by decay. The constant and the normalisation of the 4ff split
-#: (:func:`~wavebit._core.solve_2d_4ff.split_forward_backward`).
+#: decided by decay. The constant and the normalisation of the first-order split
+#: (:func:`~wavebit._core.solve_2d_first_order.split_forward_backward`).
 _FLUX_FLAT = 1e-12
 
 
@@ -612,9 +612,9 @@ def power_down_labels(xp, q, flux, energy, k0_d, active):
     *propagation-dominated* mode (``|Im(q)| > |Re(q)|``) whose flux is resolvable takes the root
     that carries power down; any other mode takes the decaying root, which for a passive layer at
     a real ``k_par`` is the same root, since a mode's flux decays in the direction it travels.
-    That is the rule the 4ff path has always split its modes with
-    (:func:`~wavebit._core.solve_2d_4ff.split_forward_backward`), so the two formulations now
-    agree about which way a patterned negative-index layer's modes go.
+    That is the rule the first-order path has always split its modes with
+    (:func:`~wavebit._core.solve_2d_first_order.split_forward_backward`), so the two
+    formulations now agree about which way a patterned negative-index layer's modes go.
 
     ETM (``k0_d`` given) then applies :func:`etm_mode_q`'s cap. SMM (``k0_d is None``) never
     takes a growing root: it keeps the decaying one and lets the flux break only the tie

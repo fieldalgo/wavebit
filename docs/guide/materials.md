@@ -159,10 +159,10 @@ models, and layers remain ordered bottom to top.
 | Material and geometry | Supported route |
 | --- | --- |
 | Uniform diagonal or full epsilon/mu tensor | Assign `Material`; `solve()` builds exact uniform blocks |
-| Uniform epsilon or mu with xz/yz/zx/zy coupling | Shape-free background or constant tensor raster; `formulation='auto'` selects `4ff` |
+| Uniform epsilon or mu with xz/yz/zx/zy coupling | Shape-free background or constant tensor raster; `formulation='auto'` selects `'first_order'` |
 | Full epsilon and/or mu patterns | Linear NVF by default; Cartesian Li for rasters and axis-aligned rectangle paintings |
 | Tensor wavelength table | `TabulatedMaterial` with a diagonal or 3×3 tensor at each wavelength |
-| Pattern with z coupling, including explicit mu | Full three-component factorization and 4ff; ETM or SMM layer algorithm |
+| Pattern with z coupling, including explicit mu | Full three-component factorization and the first-order formulation; ETM or SMM layer algorithm |
 | Anisotropic `top` or `bot` half-space | Not supported; half-spaces remain scalar |
 
 Patterned structures containing anisotropic materials default to
@@ -222,7 +222,7 @@ couplings. See [full tensor patterns](../full-tensor-patterns.md).
 rasters always receive the physical component itself. See the
 [slot convention](../off-diagonal-slot-convention.md),
 [tensor factorization](../patterned-anisotropic-factorization.md) and
-[4ff formulation](../first-order-4ff.md) for the underlying arithmetic.
+[first-order formulation](../first-order-formulation.md) for the underlying arithmetic.
 
 ## Include permeability when measured
 

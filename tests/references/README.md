@@ -50,7 +50,7 @@ differ are exactly the `__stack` pair above.
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
 | **fmmax**, `Formulation.FFT` | `factorization='laurent'`, the same operator: **identity** on patterned layers -- 6.1e-13 to 3.2e-11 in total and per order, on a rectangular cell, a lossy metal and a hexagonal one -- once fmmax's sampled coefficients are extrapolated to the exact ones | the `fwref` env | `golden_fmmax_laurent.npz` |
 | **fmmax**, **double negatives** | gratings on a lossy double-negative substrate (1D and 2D, `\|mu\| != 1`), double-negative pixels inside a grating (patterned `eps` and `mu`), and a grating lit **from** a lossy double negative: every order's unpolarized `R` and `T`, ETM and SMM, through the `theta` door and the direct-`k` door -- **identity**, 2.7e-14 to 6.2e-12, once the quadrature is extrapolated away as for the row above | the `fwref` env | `golden_fmmax_dng.npz` |
-| **PyMoosh** 4.0.1 (MIT), **lossless double negatives** | flat multilayers with a lossless double negative as the substrate, as the lit superstrate, as an inner layer, and all three: `r`, `t`, `R`, `T`, TE and TM, four in-plane wavevectors each, on the TE/TM, 2D and 4ff paths, ETM and SMM -- 8.8e-15 at worst. The case fmmax cannot arbitrate | a throwaway venv with PyMoosh 4.0.1 -- see its generator | `golden_pymoosh_dng.npz` |
+| **PyMoosh** 4.0.1 (MIT), **lossless double negatives** | flat multilayers with a lossless double negative as the substrate, as the lit superstrate, as an inner layer, and all three: `r`, `t`, `R`, `T`, TE and TM, four in-plane wavevectors each, on the TE/TM, 2D and first-order paths, ETM and SMM -- 8.8e-15 at worst. The case fmmax cannot arbitrate | a throwaway venv with PyMoosh 4.0.1 -- see its generator | `golden_pymoosh_dng.npz` |
 | **RETICOLO**, a **crossed** grating in both of Li's nestings | the 2D Li build, `li_nesting='fixed'` against `parm.res1.li = 1` and `'symmetric'` against `li = 0` — the one case here that can tell the two apart (a 1D grating cannot) | Octave + RETICOLO V10, with `li` set by hand: the bridge does not expose it | inline in `test_reticolo_li_nesting.py`, totals to ten decimals (2026-09) |
 
 A fourth oracle lives outside this directory: the Berreman 4x4 in
@@ -329,9 +329,9 @@ when someone deliberately reruns the generator, which its own docstring invites.
 
 `R + T` stayed exactly 1 on every case, before and after. **Solving the wrong polarisation of a
 lossless stack is still a perfectly lossless answer**, so the generator's energy guard was blind
-to it — the same shape as the inkstone and 2ff-Voigt failures recorded below. What caught it was
-regeneration-vs-committed, which is worth doing whenever the bridge is touched, and is the only
-check that would have.
+to it — the same shape as the inkstone failure and the second-order path's Voigt failure recorded
+below. What caught it was regeneration-vs-committed, which is worth doing whenever the bridge is
+touched, and is the only check that would have.
 
 The polarisation is now read from whichever spelling the case uses, `tetm` first. Verified the
 only way this can be verified: regenerating produces all 72 arrays byte-identical to the
@@ -405,13 +405,14 @@ the answer.
 | S4 | — | none | same five-slot shape; not re-run here |
 
 inkstone deserves the detail because it is the trap. It has the only full-3×3 API of the eight,
-it conserves energy to 1.3e-15 across thirty lossless configurations, and it reproduces our 4ff
-to 1e-15 on every z-*decoupled* case including conical incidence — so the harness is sound and
-nothing looks wrong. On z-coupled tensors it is 4e-4 to 3e-2 out, unmoved by `num_g` from 1 to
-21, and on the four cases inside RETICOLO's validated region **RETICOLO and our 4ff agree to
-1e-15 while inkstone alone departs**. Energy conservation cannot catch this: the tensor it
-actually solves is a valid lossless one, which is the same reason our own 2ff path returns
-`R + T = 1` on a Voigt tensor while being wrong (`test_anisotropic_berreman.py`).
+it conserves energy to 1.3e-15 across thirty lossless configurations, and it reproduces our
+first-order path to 1e-15 on every z-*decoupled* case including conical incidence — so the harness
+is sound and nothing looks wrong. On z-coupled tensors it is 4e-4 to 3e-2 out, unmoved by `num_g`
+from 1 to 21, and on the four cases inside RETICOLO's validated region **RETICOLO and our
+first-order path agree to 1e-15 while inkstone alone departs**. Energy conservation cannot catch
+this: the tensor it actually solves is a valid lossless one, which is the same reason our own
+second-order path returns `R + T = 1` on a Voigt tensor while being wrong
+(`test_anisotropic_berreman.py`).
 
 EMpy fails the opposite way, and its normal-incidence blowup is what makes that readable: at
 `theta = 0` there is no angle convention to get wrong, and the same harness returns the exact

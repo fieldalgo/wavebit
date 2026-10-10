@@ -213,27 +213,31 @@ class Nesting(str, Enum):
 
 
 class Formulation(str, Enum):
-    """Which layer formulation the 2D solve uses — how many fields per order it carries.
+    """Which layer formulation the 2D solve uses, named by the order of its ODE in ``z``.
 
-    ``'2ff'`` reduces a layer to ``d2E_t/dz2 = Omega2 E_t``, which exists only while the
-    permittivity's ``z`` row and column are empty. ``'4ff'`` carries the full transverse state
-    ``(Ex, Ey, Hx, Hy)`` as a first-order system, which is what a z-coupled (magneto-optic,
-    Voigt) tensor needs — at roughly 8x the cost, because the eigenproblem doubles.
+    ``'second_order'`` reduces a layer to ``d2E_t/dz2 = Omega2 E_t``, whose modes come in
+    ``+-q`` pairs from the standard 2N RCWA eigenproblem (Moharam et al., JOSA A 12, 1068
+    (1995); S4's eq. 28). That reduction exists only while the permittivity's ``z`` row and
+    column are empty. ``'first_order'`` carries the full transverse state ``(Ex, Ey, Hx, Hy)``
+    as a first-order system of size 4N -- Berreman's 4x4 method on a uniform layer and L. Li's
+    (J. Opt. A 5, 345 (2003)) on a grating -- which is what a z-coupled (magneto-optic, Voigt)
+    tensor needs, at roughly 8x the cost, because the eigenproblem doubles.
 
-    The members are named for the *value* they carry, not for the ODE order: ``TWO_FIELD``
-    is the second-order form in two field components and ``FOUR_FIELD`` the first-order form
-    in four, so the pair used to read inverted as ``SECOND = '2ff'`` / ``FIRST = '4ff'``.
+    The values were ``'2ff'`` / ``'4ff'`` until 2026-10-10 and changed because no other code
+    uses those names, ``FF`` reads as Fourier factorization beside ``factorization=``, and the
+    field count they spelled was false on the pure 1D TE/TM path, which solves an NxN problem
+    in one field and is recorded as the second-order formulation.
 
     ``'auto'`` is the default and reads the problem: a solve handed any of the four z-row
-    convolution slots takes ``'4ff'``, everything else ``'2ff'``. The override exists because
-    forcing ``'4ff'`` on a problem that does not need it is how the two are cross-checked
-    (``docs/anisotropic-materials.md`` §8); forcing ``'2ff'`` on a z-coupled tensor raises
-    rather than dropping the row, because dropping it answers a different problem while
-    conserving energy to machine precision.
+    convolution slots takes ``'first_order'``, everything else ``'second_order'``. The override
+    exists because forcing ``'first_order'`` on a problem that does not need it is how the two
+    are cross-checked (``docs/anisotropic-materials.md`` §8); forcing ``'second_order'`` on a
+    z-coupled tensor raises rather than dropping the row, because dropping it answers a
+    different problem while conserving energy to machine precision.
     """
-    AUTO = 'auto'          # read the slots and decide
-    TWO_FIELD = '2ff'      # second-order ODE, two transverse E components; refuses a z row
-    FOUR_FIELD = '4ff'     # first-order ODE, four transverse components; always possible, ~8x
+    AUTO = 'auto'                  # read the slots and decide
+    SECOND_ORDER = 'second_order'  # d2E_t/dz2 = Omega2 E_t, +-q pairs, 2N; refuses a z row
+    FIRST_ORDER = 'first_order'    # (Ex, Ey, Hx, Hy), first-order, 4N; always possible, ~8x
 
 
 class Answers(str, Enum):

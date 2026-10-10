@@ -9,7 +9,7 @@ Targets:
 - `wavebit/_core/engine.py` — `_SOLVES`, where `layer_algorithm` becomes a function
 - `wavebit/_core/solve_2d.py`, `solve_1d.py` — the ETM recursion (`big_A_i`, `big_T`)
 - `wavebit/_core/scattering.py` — the SMM cascade
-- `wavebit/_core/solve_2d_4ff.py` — all three, on the first-order path
+- `wavebit/_core/solve_2d_first_order.py` — all three, on the first-order path
 - `wavebit/_core/conventions.py` — `etm_mode_q` / `layer_root`, the one place the two algorithms
   label a layer's modes differently (§10), and `layer_label_rule` / `power_down_labels`, how a
   double-negative layer is labelled (§11)
@@ -21,33 +21,33 @@ it selects — how the per-layer solutions are chained into a stack — without 
 
 **This document is about the connecting algorithm, not about anisotropy.** The choice is the same
 question for an isotropic grating as for a magneto-optic film — it changes no physics, only how
-per-layer modes are chained. Anisotropy appears here for one reason: the first-order (4ff) path
+per-layer modes are chained. Anisotropy appears here for one reason: the first-order path
 is the only one carrying **all three** algorithms, so it is the only place they can be measured
-side by side. The shipped 2ff solver does not offer a plain transfer at all. Treat 4ff below as
-the test bed, not the subject; what that path *is* and what it can do is
-[`first-order-4ff.md`](first-order-4ff.md).
+side by side. The shipped second-order solver does not offer a plain transfer at all. Treat the
+first-order path below as the test bed, not the subject; what that path *is* and what it can do is
+[`first-order-formulation.md`](first-order-formulation.md).
 
 **What each section was run on**, because the numbers below do not all have the same scope and
 the difference matters more than any of them:
 
 | § | solve path | structure | patterned? | varies | held |
 |---|---|---|---|---|---|
-| 3 | 2ff | square pillar array, `n = 2.6` in air | **yes** | truncation_order 3–7, 1–12 layers | 17°/31°, 200 nm |
-| 4 | 4ff | uniform slab, `n = 1.5 + 0.1j` | no | thickness 1 µm – 10 mm | 35°, one order |
-| 5 | 4ff | uniform slab, `n = 1.5` | no | truncation_order 0–4 | 35°/40°, 220 nm |
-| 5 | 2ff | pillar array **and** uniform slabs | **both** | truncation_order 1–5 | 35°/40°, 220 nm |
-| 6 | 4ff | Voigt + rotated-uniaxial stack | no | 2–160 layers | 35°, one order |
+| 3 | second-order | square pillar array, `n = 2.6` in air | **yes** | truncation_order 3–7, 1–12 layers | 17°/31°, 200 nm |
+| 4 | first-order | uniform slab, `n = 1.5 + 0.1j` | no | thickness 1 µm – 10 mm | 35°, one order |
+| 5 | first-order | uniform slab, `n = 1.5` | no | truncation_order 0–4 | 35°/40°, 220 nm |
+| 5 | second-order | pillar array **and** uniform slabs | **both** | truncation_order 1–5 | 35°/40°, 220 nm |
+| 6 | first-order | Voigt + rotated-uniaxial stack | no | 2–160 layers | 35°, one order |
 
-The 4ff rows are unpatterned throughout, and not by choice: **a patterned anisotropic layer has no
-factorization yet**, so the 4ff path cannot be handed one. Where a conclusion drawn from a uniform
-case has to carry over to a grating — §5 — it is checked on the 2ff path, which does have
-gratings, rather than assumed.
+The first-order rows are unpatterned throughout, and not by choice: **a patterned anisotropic layer
+has no factorization yet**, so the first-order path cannot be handed one. Where a conclusion drawn
+from a uniform case has to carry over to a grating — §5 — it is checked on the second-order path,
+which does have gratings, rather than assumed.
 
 ---
 
 ## TL;DR
 
-| | 2ff (shipped) | 4ff | stability | cost |
+| | second-order (shipped) | first-order | stability | cost |
 |---|---|---|---|---|
 | **`'ETM'`** | default | default | unbounded | 1.00x |
 | `'SMM'` | yes | yes | unbounded | 1.25–1.57x |
@@ -82,8 +82,8 @@ The reason it is a choice at all is that the obvious chaining does not work.
 A note on the names, since the literature is looser than this codebase can afford to be: the
 enhanced transmittance recursion is a transfer-matrix method too, so calling it `'ETM'` and
 reserving `'TMM'` for the plain, unstabilised transfer is a distinction made here on purpose. The
-public 2ff and 4ff paths offer `'ETM'` and `'SMM'`, including field reconstruction.
-`'TMM'` exists only in the internal 4ff diagnostic helper; neither public path accepts it.
+public second-order and first-order paths offer `'ETM'` and `'SMM'`, including field reconstruction.
+`'TMM'` exists only in the internal first-order diagnostic helper; neither public path accepts it.
 
 ## 2. Why the obvious one fails
 
@@ -108,7 +108,7 @@ overflows:
 | 34.0 | — | 5.1e+25 |
 
 The prediction and the measurement agree, which is what makes the bound derivable rather than
-tuned. `wavebit/_core/solve_2d_4ff.py::_MAX_EXPONENT` is set from it.
+tuned. `wavebit/_core/solve_2d_first_order.py::_MAX_EXPONENT` is set from it.
 
 **ETM removes the growing term instead of cancelling it.** Sweeping upward with the state below a
 layer written as `psi = G t`, decomposing in that layer's modes gives `a_f = X_f⁻¹ P t` — and
@@ -144,14 +144,14 @@ at azimuth 31°, four 200 nm layers unless noted:
 picture, a little dearer, on different hardware and a different structure. Nothing in the choice
 turns on the difference.
 
-On the 4ff path, over five tensors × three incidences × both polarisations: **ETM vs SMM 3.3e-15,
-ETM vs plain transfer 1.8e-15** wherever the plain transfer is willing to answer at all.
+On the first-order path, over five tensors × three incidences × both polarisations: **ETM vs SMM
+3.3e-15, ETM vs plain transfer 1.8e-15** wherever the plain transfer is willing to answer at all.
 
 ## 4. Thickness
 
-4ff, `n = 1.5 + 0.1j` at 35°, against the exact Airy slab. The third column is the **answer** —
-the transmittance the closed form gives — and the last three are each algorithm's **relative
-error** against it:
+First-order, `n = 1.5 + 0.1j` at 35°, against the exact Airy slab. The third column is the
+**answer** — the transmittance the closed form gives — and the last three are each algorithm's
+**relative error** against it:
 
 | d (nm) | exponent | *T* (exact) | ETM err | SMM err | plain err |
 |---|---|---|---|---|---|
@@ -188,11 +188,11 @@ order index **whatever the layer thickness**. On a 220 nm slab of `n = 1.5`:
 (Deviation columns are against the single-order answer, which a uniform layer must reproduce
 exactly since it cannot diffract.)
 
-**That table is a uniform slab, because the 4ff path cannot express a patterned anisotropic layer
-at all** — so read on its own it extrapolates from an unpatterned case to a real grating. The 2ff
-path does have gratings, and its modes go as `exp(-k0 q d)`, so the same exponent is directly
-readable there. Measured on a square pillar array (`n = 2.6` in air, 220 nm) beside uniform slabs
-of each index:
+**That table is a uniform slab, because the first-order path cannot express a patterned anisotropic
+layer at all** — so read on its own it extrapolates from an unpatterned case to a real grating. The
+second-order path does have gratings, and its modes go as `exp(-k0 q d)`, so the same exponent is
+directly readable there. Measured on a square pillar array (`n = 2.6` in air, 220 nm) beside uniform
+slabs of each index:
 
 | truncation_order | orders | uniform n=1.5 | uniform n=2.6 | pillar array |
 |---|---|---|---|---|
@@ -211,7 +211,7 @@ cannot run a real problem, and that is the historical reason RCWA needed the enh
 
 ## 6. Cost with stack depth
 
-4ff, alternating Voigt and rotated-uniaxial layers, single order:
+First-order, alternating Voigt and rotated-uniaxial layers, single order:
 
 | layers | ETM | SMM | plain | SMM/ETM | plain/ETM |
 |---|---|---|---|---|---|
@@ -234,8 +234,8 @@ Not for accuracy, and not for stability. Two structural reasons:
 - **It is the formulation most published results are stated in**, which makes it the natural
   thing to compare against a paper.
 
-And one practical one: two independent joinings agreeing is a real check on both. Every 4ff
-stability test in `tests/test_solve_2d_4ff.py` runs against ETM *and* SMM for that reason —
+And one practical one: two independent joinings agreeing is a real check on both. Every first-order
+stability test in `tests/test_solve_2d_first_order.py` runs against ETM *and* SMM for that reason —
 parametrising it is what caught SMM's block sizing being unexercised at more than one order once
 ETM became the default.
 
@@ -367,10 +367,10 @@ sin(theta_next) = sin(theta_this) * n_this / n_joint
 
 The channel is the mismatch no order grid can show. `Port.channel` is `'te'` or `'tm'` on the
 pure 1D path, whose ports count one polarization, and `'sp'` on the coupled ones (conical, 2D and
-first-order alike, which is why a 2ff piece and a 4ff piece join). A TE and a TM matrix of the
-same cut share every other field — the same orders, the same media, the same size — so until
-2026-09-27 `cascade` joined them, and the result was the stack's matrix for neither: off by 0.28
-to 2.3 of each block's largest entry against either polarization's whole-stack matrix, measured
+first-order alike, which is why a second-order piece and a first-order piece join). A TE and a TM
+matrix of the same cut share every other field — the same orders, the same media, the same size — so
+until 2026-09-27 `cascade` joined them, and the result was the stack's matrix for neither: off by
+0.28 to 2.3 of each block's largest entry against either polarization's whole-stack matrix, measured
 on the cut `tests/test_scattering_core.py` takes apart. A pure piece against a coupled one was
 refused already, but by its `ky` (`None` on the pure path), with advice to convert `theta` that
 cannot help; the channel is now asked first. To join across polarizations, solve every piece on
@@ -486,7 +486,7 @@ region below receives -- the presumption `a` makes, and the gap does not protect
 vacuum layer between vacuum half-spaces at `theta = 0.5+0.3j` had every `+` amplitude zero and
 its whole field in the `-` amplitudes, which that state has no slot for: `A_i` came out at 1e15,
 `T1` at zero, and the s-polarized field had `|E_z|/|E| = 6e-2` where it is zero, while `R` and
-`T` were exact. 2ff ETM, and 4ff under either algorithm, were right.
+`T` were exact. Second-order ETM, and the first-order path under either algorithm, were right.
 
 The first repair (429f4ac, 2026-10-09) rebuilt every layer where the two label rules may part on
 the ETM's labels, for the state only. It treated the labels as the cause, and they were not:
@@ -560,7 +560,7 @@ wave where it is sampled, or against the ETM where a row says so:
 | 8.5 um of vacuum under 500 nm of `eps = 4`, TE vs a 60-digit closed form (ETM: 3.8e-15) | 7.1e-16 | 7.3e-11 | 5.7e-16 |
 | the 4869 nm layer at `truncation_order = 7` vs ETM; and under a 1e-14 nudge | 0.39; 1.8 | 0.75; 0.92 | 1.2e-12; 1.3e-12 |
 | lossy metal raster at a real angle vs ETM, oblique / normal | 1.7e-12 / 1.4e-12 | 3.2e-8 / 1.2e-8 | 1.8e-12 / 4.9e-14 |
-| active patterned double negative, real `theta = 0.5`, vs 4ff | 4.0e-12 | 5.9e-11 | 5.4e-13 |
+| active patterned double negative, real `theta = 0.5`, vs first-order | 4.0e-12 | 5.9e-11 | 5.4e-13 |
 | complex64 at real angles vs the complex128 ETM (the complex64 ETM: 3.3e-6) | 1.4 | 3.3e-6 | 3.8e-6 |
 | uniform double negative on itself, `theta = 0.5-0.3j`, vs ETM | 2.1 | 2.7e-16 | 4.7e-16 |
 | an order on a spacer's light line, `auto_detune`d, vs ETM (worst of TE, TM, conical, 2D) | 1.6e-10 | 1.6e-10 | 6.0e-11 |
@@ -608,10 +608,10 @@ layer one layer:
   run the run's `k0*d`, so the run takes one label. Not bit equality: the same material written
   twice decided apart. A tensor built as `R D R^T` beside `D` rotated by `R` differs by 4.4e-16,
   and a rectangle of a medium drawn on that medium by 5.6e-17; the second, a tilted uniaxial layer
-  as 2.5 um + 1.5 um under a grating at `theta = 0.2+0.6j`, put 4ff SMM 1.6 off where it had been
-  at 1.2e-11. Nor one scale per slot: a slot that is exactly zero in one spelling and rounding
+  as 2.5 um + 1.5 um under a grating at `theta = 0.2+0.6j`, put first-order SMM 1.6 off where it had
+  been at 1.2e-11. Nor one scale per slot: a slot that is exactly zero in one spelling and rounding
   noise in the other (the tensor rotated by `2*pi`) differs by all of its own size, and that
-  80 um + 1.5 um slab put 4ff SMM 22 off at `theta = 0.5+0.05j`. A label two neighbours take
+  80 um + 1.5 um slab put first-order SMM 22 off at `theta = 0.5+0.05j`. A label two neighbours take
   differently costs `eps/delta` at the plane between them, `delta` being how far their slots
   differ, so closer than `sqrt(eps)` they decide together. Slots can sit much further apart than
   the materials do: Li's inverse rule turned a 1e-9 change of a metal grating's `eps = 2.25`
@@ -646,14 +646,14 @@ to 8e-15..3e-13, the top of that on 2D double-negative runs, where it was at 2.4
 without runs is unchanged to the bit.
 `tests/test_split_layer_labels.py`.
 
-**The 4ff cap.** Added 2026-10-09. The 4ff split (`split_forward_backward`) labels by attenuation
-where decay dominates and by energy flow otherwise, and had no cap: at a complex `theta`, or in a
-gain layer at a real one, both algorithms on this path were O(1) wrong from 10-50 um and raised
-`FloatingPointError` further on. It has no `±q` pairs to flip one at a time. ETM's `P` and SMM's
-interface matrices need `2N` modes on each side, so a forward label can only trade places with a
-backward one. Forward mode `a` and backward mode `b` meet in the reflection state with the round
-trip `rt = k0 d (Im lam_b - Im lam_a)`, and swapping the pair is a pivot on the reflection `R_ba`
-between them. The costs are the 2ff ones with `G**2 = exp(rt)`, so the cap is
+**The first-order cap.** Added 2026-10-09. The first-order split (`split_forward_backward`) labels
+by attenuation where decay dominates and by energy flow otherwise, and had no cap: at a complex
+`theta`, or in a gain layer at a real one, both algorithms on this path were O(1) wrong from 10-50
+um and raised `FloatingPointError` further on. It has no `±q` pairs to flip one at a time. ETM's `P`
+and SMM's interface matrices need `2N` modes on each side, so a forward label can only trade places
+with a backward one. Forward mode `a` and backward mode `b` meet in the reflection state with the
+round trip `rt = k0 d (Im lam_b - Im lam_a)`, and swapping the pair is a pivot on the reflection
+`R_ba` between them. The costs are the second-order ones with `G**2 = exp(rt)`, so the cap is
 `rt = log(1/eps)/2`. Two constraints decide which pairs. `R_ba` is zero, whatever the
 thicknesses, when `a` and `b` lie in different invariant blocks of the layer operator (each order
 of a uniform layer, each row of orders of a y-invariant grating, TE and TM at `ky = 0`) and what
@@ -666,35 +666,36 @@ common amount that cancels in the round trip. On a mirror-symmetric layer the ra
 `|M| > 4N*eps*max|M|`, found by label propagation with pointer jumping (Shiloach and Vishkin,
 References); a graph that has not settled is taken as one block. ETM and SMM use the same rule,
 on the run's thickness as above, and the ETM steps across a run's planes exactly
-(`_run_pq`). Without the runs a 20 um + 1.5 um gyrotropic layer put 4ff SMM 0.75 off the uncut
-one: its interface matrix held 29 eigenvectors twice (cond 5.5e17), and this path's SMM has no
+(`_run_pq`). Without the runs a 20 um + 1.5 um gyrotropic layer put first-order SMM 0.75 off the
+uncut one: its interface matrix held 29 eigenvectors twice (cond 5.5e17), and this path's SMM has no
 gap medium to join slices through. The coherent-source door (`excitation=`,
-`illumination._cascade`) runs its own 4ff SMM cascade and took no cap until 2026-10-10: the gain
-row below was 1.1e-2 off there at 50 um and came back as `R = 5861` (for 3.659) at 200 um. It now
-caps on the run's thickness as well, at 2e-15 and 7e-15 in `R` (`tests/test_4ff_round_trip_cap.py`).
+`illumination._cascade`) runs its own first-order SMM cascade and took no cap until 2026-10-10: the
+gain row below was 1.1e-2 off there at 50 um and came back as `R = 5861` (for 3.659) at 200 um. It
+now caps on the run's thickness as well, at 2e-15 and 7e-15 in `R`
+(`tests/test_first_order_round_trip_cap.py`).
 
 Against exact-arithmetic transfer oracles (every order of `R` and `T`, relative to the largest;
-`theta = 0.5+0.3j, 0.5+0.05j, 0.2+0.6j, 1.0+0.1j`; the last two rows against 2ff SMM), uncapped
-and capped:
+`theta = 0.5+0.3j, 0.5+0.05j, 0.2+0.6j, 1.0+0.1j`; the last two rows against second-order SMM),
+uncapped and capped:
 
-| 4ff scene | uncapped | capped |
+| first-order scene | uncapped | capped |
 |---|---|---|
 | uniform gyrotropic and tilted-uniaxial layers, `(2, 2)`, 5-200 um (the gyrotropic one at `1.0+0.1j` is refused by the split itself, 51 forward modes of 50, capped or not) | up to 3e27 at 20 um and 7e44 at 50 um (the gyrotropic layer: 1e8 and 3e32), `FloatingPointError` from 100 um | <= 4e-10 |
 | the same at `(0, 0)` | up to 1e+1 | <= 4e-12 |
 | a thick tilted-uniaxial film over a thin y-invariant grating, 5-200 um | to `inf` | <= 4e-11 |
-| the 1D grating above forced to 4ff, `(10)`, 50 um / 200 um, `0.5+0.3j` | ETM 13 / 1.2, SMM 1e2 / 33 | ETM 2e-11 / 1e-9, SMM 4e-12 / 3e-10 |
+| the 1D grating above forced onto the first-order path, `(10)`, 50 um / 200 um, `0.5+0.3j` | ETM 13 / 1.2, SMM 1e2 / 33 | ETM 2e-11 / 1e-9, SMM 4e-12 / 3e-10 |
 | that grating as gain, `eps = 25-0.5j`, real `theta = 0.5`, 50 um / 200 um / 1 mm | 3e-2 / 36 / `FloatingPointError` | 5e-13 / 2e-14 / 2e-14 |
 
 Every real-`k_par` solve in passive media without a spurious root and without a run is unchanged
 to the bit (88 and 124 scenes in two independent checks: a passive layer has
 `Im lam_f >= 0 >= Im lam_b`, so no round trip is positive); a stack with a run changes the ETM's
-last bits through the exact step, as on the 2ff path (a split layer stays within 1.5e-14 of the
-uncut one), and SMM's not at all. A truncated operator can break it too, as on the 2ff path -- a lossless
-gyrotropic disc under NVF at `(2, 2)` and real `theta = 1.0` has `Im lam_f` down to -8.0e-3,
-swaps from about 150 um, and its bits change from 200 um, where the capped ETM and SMM agree to
-6.6e-13 and the uncapped ones were 4.8e-9 apart. The cap costs 2-5% of the `eig`.
-`tests/test_4ff_round_trip_cap.py`, with controls that remove the cap, rank over the whole layer,
-rank by label growth, or let each slice decide alone.
+last bits through the exact step, as on the second-order path (a split layer stays within 1.5e-14 of
+the uncut one), and SMM's not at all. A truncated operator can break it too, as on the second-order
+path -- a lossless gyrotropic disc under NVF at `(2, 2)` and real `theta = 1.0` has `Im lam_f` down
+to -8.0e-3, swaps from about 150 um, and its bits change from 200 um, where the capped ETM and SMM
+agree to 6.6e-13 and the uncapped ones were 4.8e-9 apart. The cap costs 2-5% of the `eig`.
+`tests/test_first_order_round_trip_cap.py`, with controls that remove the cap, rank over the whole
+layer, rank by label growth, or let each slice decide alone.
 
 **What is left.** Each limit below was measured; none is fixed.
 
@@ -736,15 +737,16 @@ rank by label growth, or let each slice decide alone.
   and SMM 7.5e-2, within 2.3 and 6.3 times of that (on SMM's gap before 9a92bf0, 3.9e-2 under
   the nudge and 2.6e-2 off: at the knife edge a gauge that moves rounding moves the answer). A 1 nm `eps = 1` film between
   grating and substrate, or `bot = 24.9`, removes it.
-- *4ff, a wave the substrate takes unreflected.* A uniaxial layer whose ordinary index equals
-  its substrate's passes that wave without reflection, and a swap involving it divides by the
-  zero, which the per-layer cap cannot see. At `truncation_order = (0, 0)`, `theta = 0.2+0.6j`,
-  10 um, uncapped SMM was 5.5e-7 off (the data's own sensitivity 1.9e-7) and capped SMM is
-  7.3e-3 -- absolute, in the kernel's basis, whose largest amplitude is 2.1e3; at `(2, 2)` every
-  labelling, uncapped included, is O(1) off there. And a thick uniform layer with a complex
-  z-coupled tensor at several orders has round trips *between* orders that no balanced labelling
-  bounds: a lossy tilted uniaxial layer at `theta = 0.3+0.1j` and `(2, 2)` reached 9.4 at 100 um
-  against a data sensitivity of 2e-13, where uncapped raised `FloatingPointError` or did worse.
+- *On the first-order path, a wave the substrate takes unreflected.* A uniaxial layer whose ordinary
+  index equals its substrate's passes that wave without reflection, and a swap involving it divides
+  by the zero, which the per-layer cap cannot see. At `truncation_order = (0, 0)`,
+  `theta = 0.2+0.6j`, 10 um, uncapped SMM was 5.5e-7 off (the data's own sensitivity 1.9e-7) and
+  capped SMM is 7.3e-3 -- absolute, in the kernel's basis, whose largest amplitude is 2.1e3; at
+  `(2, 2)` every labelling, uncapped included, is O(1) off there. And a thick uniform layer with a
+  complex z-coupled tensor at several orders has round trips *between* orders that no balanced
+  labelling bounds: a lossy tilted uniaxial layer at `theta = 0.3+0.1j` and `(2, 2)` reached 9.4 at
+  100 um against a data sensitivity of 2e-13, where uncapped raised `FloatingPointError` or did
+  worse.
 
 ## 11. Double-negative layers: the label follows the power
 
@@ -781,12 +783,13 @@ waves without reflection -- the same medium -- made `a` exactly singular.
 | `(-3+0.1i, -0.5+0.05i)` | 0 | 0 |
 | after this section, all four | **0** (worst ETM-SMM 8.7e-16) | **0** |
 
-The scan ran the TE, TM, conical, 2D and 4ff paths, vacuum and glass superstrates, three
+The scan ran the TE, TM, conical, 2D and first-order paths, vacuum and glass superstrates, three
 (period, wavelength) pairs, 37/150/900 nm, real and complex angles. By path the ETM failures were
-63 TE, 66 TM, 24 conical, 18 2D, and none on 4ff, which has always split its modes by flux
-(`solve_2d_4ff.py::split_forward_backward`). Where the zero did not come out exact the answers
-were still right -- a uniform layer's orders do not mix, so a tiny diagonal entry of `a` only
-rescales its own column -- which is why this stayed hidden behind the cases that raised.
+63 TE, 66 TM, 24 conical, 18 2D, and none on the first-order path, which has always split its
+modes by flux (`solve_2d_first_order.py::split_forward_backward`). Where the zero did not come out
+exact the answers were still right -- a uniform layer's orders do not mix, so a tiny diagonal
+entry of `a` only rescales its own column -- which is why this stayed hidden behind the cases
+that raised.
 
 **SMM met it too, at its gap.** SMM's labels are free in exact arithmetic (§10), and
 `mode_q` spends the freedom on keeping `exp(-k0*q*d)` bounded: `Re(q) >= 0`, ties broken by
@@ -842,11 +845,12 @@ the gap").
   `-Im(sum(X * conj(Y)))/2` with `(X, Y) = (H_s, E_s)` for an s wave and `(F_p, H_p)` for a p
   wave -- the boundary variables a substrate seed is written in, so a downward wave of a lossless
   half-space comes out at `Re(kz/mu)/2` and `Re(kz/eps)/2`, positive (`solve_1d.py::mode_flux`,
-  and `solve_2d.py::mode_flux_2d` for the unrotated 2D pair). "Resolvable" is the 4ff split's own
-  threshold, `|flux| > 1e-12 * sum(|psi|**2)`. Where decay dominates the flux is not read: a
-  truncated operator can give an evanescent mode a small flux of either sign, which is the reason
-  the 4ff split reads attenuation there, and following it would hand ETM a growing root. ETM then
-  applies §10's cap; SMM never takes a growing root and lets the flux break only `mode_q`'s tie.
+  and `solve_2d.py::mode_flux_2d` for the unrotated 2D pair). "Resolvable" is the first-order
+  split's own threshold, `|flux| > 1e-12 * sum(|psi|**2)`. Where decay dominates the flux is not
+  read: a truncated operator can give an evanescent mode a small flux of either sign, which is the
+  reason the first-order split reads attenuation there, and following it would hand ETM a growing
+  root. ETM then applies §10's cap; SMM never takes a growing root and lets the flux break only
+  `mode_q`'s tie.
 * **Everything else is untouched, structurally.** The engine reads each layer's materials
   (`engine.py::CoreFactorizationMixin._layer_double_negative`: does the layer hold a point
   where both real parts are negative, and is it one medium) and hands the kernels a
@@ -885,8 +889,8 @@ were 2e-06 / 1e-05 off.)
 
 * **Every scene without a double-negative layer is byte-identical** to develop (`0dfc4ce`):
   108,640 NumPy arrays of magnetic-layer scenes (ordinary magnetic, lossy, gain, magnetic metal,
-  mu-negative, eps-negative beside mu-negative, the `Re = 0` seams; TE, TM, conical, 2D, 4ff and
-  an oblique lattice; ETM and SMM; real, normal, complex and grazing angles; both sides; fields,
+  mu-negative, eps-negative beside mu-negative, the `Re = 0` seams; TE, TM, conical, 2D, first-order
+  and an oblique lattice; ETM and SMM; real, normal, complex and grazing angles; both sides; fields,
   scattering blocks and `solve_conv` relays), 38,652 eager JAX and 38,652 eager PyTorch, and 48
   `jax.jit` arrays: 24 with the raster itself traced, 24 with `theta` traced over a concrete
   raster. The engine reads materials under the JAX backend's compile-time evaluation, so a

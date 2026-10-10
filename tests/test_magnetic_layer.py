@@ -289,7 +289,7 @@ def test_clearing_the_mu_first_makes_the_swap_legal():
 #
 # The other three reconstruction paths are covered by refusing rather than by testing:
 # `field_1d` / `field_1d_conical` carry the same `mu = 1` form and are unreachable
-# (`test_mu_on_a_one_dimensional_structure_is_refused`), and so is `field_2d_4ff`
+# (`test_mu_on_a_one_dimensional_structure_is_refused`), and so is `field_2d_first_order`
 # (`test_mu_on_the_first_order_path_is_refused_whichever_way_it_got_there`).
 
 FIELD_WL = 700.0
@@ -672,14 +672,14 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
 
 
 def test_mu_on_the_forced_first_order_path_matches_second_order():
-    """Forcing 4ff keeps the same magnetic material and half-space conventions."""
+    """Forcing the first-order path keeps the same magnetic material and half-space conventions."""
     mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
-    mee.formulation = '4ff'
+    mee.formulation = 'first_order'
     e = slots(tensor(2.6, 2.6, 2.6))
     m = tuple(slots(tensor(1.7, 1.7, 1.7)))
     full=mee.solve_conv(*e, mu=m)
-    mee.formulation='2ff'
+    mee.formulation='second_order'
     reduced=mee.solve_conv(*e, mu=m)
     np.testing.assert_allclose(full.R,reduced.R,atol=2e-12)
     np.testing.assert_allclose(full.T,reduced.T,atol=2e-12)

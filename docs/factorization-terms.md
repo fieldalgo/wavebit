@@ -255,7 +255,7 @@ scenes either way):
 | `golden_legacy.npz` `2d_oblique` | 5.7e-2 | 2.9e-2 |
 | `golden_legacy.npz` `2d_2layer` | 8.7e-2 | 2.0e-1 |
 | `golden_legacy.npz` `2d_cfs` (integrated) | 5.1e-2 | 4.5e-2 |
-| `golden_field.npz` `2d`, `2d_2layer`, `2d_4ff` | 5.7e-2 to 8.7e-2 | 2.5e-3 to 9.5e-2 |
+| `golden_field.npz` `2d`, `2d_2layer`, `2d_first_order` | 5.7e-2 to 8.7e-2 | 2.5e-3 to 9.5e-2 |
 | the L-shape at the test's own 48x48, truncation 4 and 6 | 4.8e-3 to 1.2e-2 | 4.8e-3 to 1.2e-2 |
 | the chiral L, truncation (5, 3) to (11, 9) | 4.3e-4 to 1.6e-3 | 1.9e-4 to 2.1e-3 |
 | `test_optimization_smoke.py`'s permittivity ramp | 2.5e-5 | 3.9e-5 |
@@ -490,7 +490,7 @@ series of the product. The code cites them at `laurent_conv_matrices`.
 | shapes, painted overlap | built | the resolved polygons' `[[eps]]`; curved primitives are polygonised at 256 vertices, as for NVF |
 | a skewed cell | built | the rule names no axis -- one scalar convolution in both slots -- where Li is refused |
 | 1D TE / TM, conical | built | TE equals Li to round-off; TM is Li (1996)'s slow case |
-| `formulation='4ff'` | built | the same five slots; 2ff and 4ff agree to 9e-15 |
+| `formulation='first_order'` | built | the same five slots; second-order and first-order agree to 9e-15 |
 | tensor materials | **refused by name** | tensor Li and Popov-Neviere NVF are the tensor builders; a Laurent tensor build is not written and has no reference checked against it. A uniform tensor is the same under every rule, so leaving `factorization` unset loses nothing there |
 | `li_nesting`, `raster_normal_method`, `nvf_projector`, `shape_nvf_grid_size` | **refused by name** | Laurent nests no rules and builds no normal field, so nothing reads them |
 

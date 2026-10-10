@@ -574,7 +574,7 @@ def _in_plane(t):
 
 
 def _z_row(t):
-    """The four z-row slots. Handing them over *at all* is what selects the 4ff formulation,
+    """The four z-row slots. Handing them over *at all* is what selects the first-order formulation,
     so they go only to the case that has a z row — a zero-filled set is a different request."""
     return [np.stack([-t[0, 2] * _I1]), np.stack([-t[1, 2] * _I1]),
             np.stack([-t[2, 0] * _I1]), np.stack([-t[2, 1] * _I1])]

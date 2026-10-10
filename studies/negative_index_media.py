@@ -124,7 +124,7 @@ G2 = np.ones((6, 6), dtype=complex)
 G2[1:4, 2:5] = 4.0
 G2[4, 0:2] = 2.25
 H_G, P_G = 180.0, 700.0
-PATHS = ('te', 'tm', 'conical', '2d', '4ff')
+PATHS = ('te', 'tm', 'conical', '2d', 'first_order')
 
 
 def e(x):
@@ -217,6 +217,16 @@ def phase_index(eps, mu, theta):
 
 # ------------------------------------------------------------------------- solver scaffolding
 
+def formulation(value):
+    """``value`` spelled as the imported ``wavebit`` takes it: ``'second_order'`` /
+    ``'first_order'`` since 2026-10-10, ``'2ff'`` / ``'4ff'`` before. Archived trees run this
+    script too (section 10's ``--develop``), and they know only the old spelling."""
+    from wavebit._core.enums import Formulation
+    if value is None or hasattr(Formulation, 'FIRST_ORDER'):
+        return value
+    return {'second_order': '2ff', 'first_order': '4ff'}[value]
+
+
 def solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', path='2d', side='top',
            phi=None, thickness=(D_LAYER,), answers='amplitude', **kw):
     """One uniform glass layer between the given half-spaces; the zeroth order only."""
@@ -230,11 +240,11 @@ def solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', path='2d',
         return wavebit.rcwa(**common, phi=0.4 if phi is None else phi, truncation_order=0,
                             period=[1000.0],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
-    s = wavebit.rcwa(**common, phi=(0.4 if path == '4ff' else 0.0) if phi is None else phi,
+    s = wavebit.rcwa(**common, phi=(0.4 if path == 'first_order' else 0.0) if phi is None else phi,
                      truncation_order=(0, 0), period=(1000.0, 1000.0),
                      structure=np.full((1, 2, 2), N_GLASS ** 2, dtype=complex))
-    if path == '4ff':
-        s.formulation = '4ff'
+    if path == 'first_order':
+        s.formulation = formulation('first_order')
     return s
 
 
@@ -262,8 +272,8 @@ def grating(path, algo='SMM', far=PASSIVE, d=None, lit=None, side='top', theta=0
         s = wavebit.rcwa(**common, **kw, bot=N_GLASS ** 2, thickness=[d, H_G],
                          structure=np.concatenate([np.full_like(layer, eps), layer]))
         s.mu = np.concatenate([np.full_like(layer, mu), np.ones_like(layer)])
-    if path == '4ff':
-        s.formulation = '4ff'
+    if path == 'first_order':
+        s.formulation = formulation('first_order')
     return s
 
 
@@ -756,14 +766,14 @@ def section_theta():
           f' {expected:.4f} deg to {e(worst)} deg')
     # Lossless lit media: theta and phi are the incident power's direction.
     print('\n  lossless lit media: the incident Poynting vector against (theta, phi = 0.6), '
-          'theta 0.1 .. 1.3 rad, psi 0 / pi/2 / 0.7, both sides, 2D / conical / 4ff:')
+          'theta 0.1 .. 1.3 rad, psi 0 / pi/2 / 0.7, both sides, 2D / conical / first-order:')
     for label, pair in (('(-3, -0.5), n = -sqrt(1.5)', ASYM_LOSSLESS),
                         ('(-2, -1), n = -sqrt(2)', LOSSLESS), ('(2.25, 1.3), n = +1.71', (2.25,
                                                                                          1.3))):
         polar_err = azimuth_err = kx_err = 0.0
         n = np.sqrt(complex(pair[0])) * np.sqrt(complex(pair[1]))
         with _quiet():
-            for path in ('2d', 'conical', '4ff'):
+            for path in ('2d', 'conical', 'first_order'):
                 for side in ('top', 'bottom'):
                     inward = np.array([0.0, 0.0, -1.0 if side == 'top' else 1.0])
                     scene = dict(top=wavebit.Material(*pair)) if side == 'top' else dict(
@@ -868,7 +878,7 @@ def section_theta():
                     for th, ph in ((0.0, 0.6), (1e-9, 0.6), (0.0, 0.6 + np.pi)):
                         result = grating(path, algo, lit=ASYM, side=side, theta=th, phi=ph,
                                          answers='field').solve(auto_detune=False)
-                        ys = [0.0, 77.0] if path in ('2d', '4ff') else [0.0]
+                        ys = [0.0, 77.0] if path in ('2d', 'first_order') else [0.0]
                         rows.append(np.concatenate(
                             [amplitudes(result, path, ('r_s', 'r_p', 't_s', 't_p', 'r_xyz',
                                                        't_xyz')),
@@ -880,7 +890,8 @@ def section_theta():
                     if path not in ('te', 'tm'):
                         unturned = min(unturned, np.max(np.abs(rows[1] - rows[2])))
     print(f'    max change {e(worst)}; with the frame left at phi (solved as theta = 0 at '
-          f'phi + pi, whose frame is then phi), conical / 2D / 4ff: at least {unturned:.3f}')
+          f'phi + pi, whose frame is then phi), conical / 2D / first-order: at least '
+          f'{unturned:.3f}')
     # Complex angles.
     print('\n  a complex angle, theta = 0.35 + 1e-9i against 0.35, lit from the double negative '
           '(te, tm, conical; grating; SMM):')
@@ -975,7 +986,7 @@ def section_amplitudes():
     worst_r = worst_t = 0.0
     with _quiet():
         for pair in (PASSIVE, LOSSLESS, ASYM, MAGNETIC_METAL):
-            for path in ('conical', '2d', '4ff'):
+            for path in ('conical', '2d', 'first_order'):
                 for algo in ('ETM', 'SMM'):
                     for lit in (False, True):
                         scene = dict(top=wavebit.Material(*pair)) if lit else dict(
@@ -990,7 +1001,7 @@ def section_amplitudes():
                         worst_r = max(worst_r, abs(r_p + r_s))
                         worst_t = max(worst_t, abs(t_p - t_s))
     print(f'  normal incidence, one interface, lit and far double negatives and the magnetic '
-          f'metal (far), conical / 2D / 4ff, ETM / SMM: |r_p + r_s| {e(worst_r)}, '
+          f'metal (far), conical / 2D / first-order, ETM / SMM: |r_p + r_s| {e(worst_r)}, '
           f'|t_p - t_s| {e(worst_t)}')
     with _quiet():
         for label, pair in (('(-3, -0.5)', ASYM_LOSSLESS), ('(-3+0.1i, -0.5+0.05i)', ASYM)):
@@ -1104,8 +1115,8 @@ def section_layers():
                                 truncation_order=order)
         s = wavebit.rcwa(**common, phi=phi, psi=0.3, period=(period, 0.9 * period),
                          truncation_order=(1, 1))
-        if path == '4ff':
-            s.formulation = '4ff'
+        if path == 'first_order':
+            s.formulation = 'first_order'
         return s
 
     def compare(scenes, fields=('r_s', 'r_p', 't_s', 't_p')):
@@ -1140,7 +1151,7 @@ def section_layers():
     uniform = []
     for name, (eps, mu) in pairs.items():
         for path, theta in (('te', 0.0), ('te', 0.3), ('tm', 0.0), ('tm', 0.3),
-                            ('conical', 0.3), ('2d', np.deg2rad(17)), ('4ff', 0.3)):
+                            ('conical', 0.3), ('2d', np.deg2rad(17)), ('first_order', 0.3)):
             for top in (1.0, 2.25):
                 uniform.append(lambda algo, p=path, t=theta, e_=eps, m=mu, tp=top: (
                     p, algo, raster(p, e_), raster(p, m), t, wavebit.Material(e_, mu=m), tp))
@@ -1473,8 +1484,8 @@ def _mirror_scene(path, algo, side, theta, far, eps=None, mu=None, thickness=(10
     else:
         s = wavebit.rcwa(**common, phi=0.6, psi=0.3, period=(P_G, 0.9 * P_G),
                          truncation_order=truncation_order or (1, 1))
-        if path == '4ff':
-            s.formulation = '4ff'
+        if path == 'first_order':
+            s.formulation = 'first_order'
     with _quiet():
         if layers:
             return _every_amplitude(s.solve(auto_detune=False))
@@ -1582,8 +1593,8 @@ def section_pymoosh():
         else:
             s = wavebit.rcwa(**kw, ky=0.0, period=(1000.0, 1000.0), truncation_order=(0, 0),
                              polarization=(1.0, 0.0) if pol == 0 else (0.0, 1.0))
-            if path == '4ff':
-                s.formulation = '4ff'
+            if path == 'first_order':
+                s.formulation = 'first_order'
         with _quiet():
             result = s.solve(auto_detune=False)
         sub = result.incident if one_d else (result.s_inc if pol == 0 else result.p_inc)
@@ -1599,14 +1610,14 @@ def section_pymoosh():
     worst = 0.0
     rows = 0
     for name in CASES:
-        for path in ('tetm', '2d', '4ff'):
+        for path in ('tetm', '2d', 'first_order'):
             for algo in ('ETM', 'SMM'):
                 for i in range(len(CASES[name]['thetas'])):
                     for pol in (0, 1):
                         got = solve(name, i, path, algo, pol, media(name))
                         worst = max(worst, np.abs(got - golden[f'{name}__pol{pol}'][i]).max())
                         rows += path == 'tetm' and algo == 'ETM'
-    print(f'    {rows} rows x TE/TM, 2D and 4ff paths x ETM / SMM: {e(worst)} at worst')
+    print(f'    {rows} rows x TE/TM, 2D and first-order paths x ETM / SMM: {e(worst)} at worst')
     misses = []
     for name in CASES:
         if not any(e_.real < 0 and m.real < 0 for e_, m in media(name)[1:]):
@@ -1743,7 +1754,7 @@ def _solved(s, path):
     values = {f'{v}/{f}': getattr(sub, f) for v, sub in zip('isp', variants(result, path))
               for f in ('R', 'T', 'r_s', 'r_p', 't_s', 't_p', 'r_xyz', 't_xyz',
                         'power_entering') if getattr(sub, f, None) is not None}
-    ys = [0.0, 77.0] if path in ('2d', '4ff') else [0.0]
+    ys = [0.0, 77.0] if path in ('2d', 'first_order') else [0.0]
     values.update(n_top=np.asarray(complex(s.n_top)), n_bot=np.asarray(complex(s.n_bot)),
                   kx=s.order_kxy()[0],
                   field=result.reconstruct_field([0.0, 123.0], ys, [10.0, 90.0]))
@@ -1822,8 +1833,8 @@ def _far_grating(path, algo, half, theta, backend=0):
         layer, kw = G2[None], dict(period=(P_G, 0.9 * P_G), truncation_order=(1, 1))
     kw.update(tetm=path) if path in ('te', 'tm') else kw.update(phi=0.6, psi=0.3)
     s = wavebit.rcwa(**common, **kw, thickness=[H_G], structure=layer)
-    if path == '4ff':
-        s.formulation = '4ff'
+    if path == 'first_order':
+        s.formulation = formulation('first_order')
     return s
 
 
@@ -2094,8 +2105,8 @@ def _pair_scene(path, algo, bot, layers, side='top', theta=0.2, backend=0, perio
     else:
         s = wavebit.rcwa(**common, phi=0.6, psi=0.3, period=(period, 0.9 * period),
                          truncation_order=truncation)
-        if path == '4ff':
-            s.formulation = '4ff'
+        if path == 'first_order':
+            s.formulation = 'first_order'
     if solver_only:
         return s
     if layers:
@@ -2229,7 +2240,7 @@ def section_negation_pair():
                     where[(algo, kind)].add(path)
                     if kind == 'finite':
                         powers.append((R, abs(T - 1)))
-                    if kind == 'finite' and path == '4ff' and algo == 'SMM':
+                    if kind == 'finite' and path == 'first_order' and algo == 'SMM':
                         off.append(amplitude)
                 # Name the paths where only some of them answered one way.
                 text = '; '.join(
@@ -2240,9 +2251,9 @@ def section_negation_pair():
                 wrong = [a for a in off if a > 1e-6]
                 extra = (f'; every finite answer R <= {max(R for R, _ in powers):.0e}, |T - 1| <= '
                          f'{max(t for _, t in powers):.0e}' if powers else '')
-                extra += (f'; of SMM\'s {len(off)} finite answers on 4ff, {len(wrong)} carry '
-                          f'{min(wrong):.2g} .. {max(wrong):.2g} in orders a uniform stack does '
-                          f'not excite' if wrong else '')
+                extra += (f'; of SMM\'s {len(off)} finite answers on the first-order path, '
+                          f'{len(wrong)} carry {min(wrong):.2g} .. {max(wrong):.2g} in orders a '
+                          f'uniform stack does not excite' if wrong else '')
                 print(f'    {label:7s} {"nothing between" if group == "nothing" else "layers":16s}'
                       f'{text}{extra}')
     print('  a loss delta in the double negative and its layer, (-2.25+i delta, -1+i delta), '
@@ -2278,7 +2289,7 @@ def section_negation_pair():
               f'{e(worst)} ({path}, {name}), elsewhere {e(rest)}')
     print('  lit by an evanescent wave from glass (theta = pi/2 - 0.5i), a glass layer between, '
           'SMM: delta * max|r_s|, the incident order on the pole')
-    for path in ('te', '2d', '4ff'):
+    for path in ('te', '2d', 'first_order'):
         row = []
         for delta in (1e-3, 1e-6, 1e-9, 1e-12):
             with _quiet():

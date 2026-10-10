@@ -1,9 +1,9 @@
-"""Field reconstruction on the first-order (4ff) path.
+"""Field reconstruction on the first-order path.
 
 ``tests/test_formulation_dispatch.py`` covers which path a call takes; this file covers the
 in-cell field the first-order path now returns, and — the harder half — what measures it.
 
-**The z-decoupled half has an exact internal oracle.** Forcing ``formulation='4ff'`` on a
+**The z-decoupled half has an exact internal oracle.** Forcing ``formulation='first_order'`` on a
 problem whose permittivity ``z`` row is empty makes the two paths solve the same physical
 problem by different algebra, so their reconstructed fields must agree entry for entry. Their
 efficiencies already do to 1e-14, patterned and unpatterned, which is what makes a *field*
@@ -112,7 +112,7 @@ def z_coupled_cell(eps_list, thickness, theta_deg=28.0, sample_z=64, backend=0):
     # and an array built before that is silently complex64 (see test_formulation_dispatch).
     mee = z_solver(thickness, theta_deg, backend)
     res = mee.solve_conv(*[_to_backend(s, backend) for s in uniform_slots(eps_list)])
-    assert mee.formulation_assigned == '4ff'
+    assert mee.formulation_assigned == 'first_order'
     cell = np.asarray(mee.reconstruct_field(sample_x=1, sample_y=1, sample_z=sample_z))
     kx, ky = mee.order_kxy()
     return (res, np.asarray(cell, dtype=complex)[0, :, 0, 0, :],
@@ -166,8 +166,8 @@ def test_the_two_formulations_reconstruct_the_same_field(name, theta_deg, side):
     they ride in separate columns of ``T1``, and a reconstruction that dropped the leading axis
     would still reproduce the first of them.
     """
-    got = twin_cell('4ff', name, theta_deg, side)
-    want = twin_cell('2ff', name, theta_deg, side)
+    got = twin_cell('first_order', name, theta_deg, side)
+    want = twin_cell('second_order', name, theta_deg, side)
     assert got.shape == want.shape, (got.shape, want.shape)
 
     cell_scale = np.max(np.abs(want))
@@ -190,7 +190,7 @@ def test_every_component_is_actually_present_somewhere():
     is the whole thing it was written to avoid, since ``E_z`` runs two orders below ``H_y``.
     """
     for name in TWINS:
-        cell = twin_cell('2ff', name, 35.0, 'top')
+        cell = twin_cell('second_order', name, 35.0, 'top')
         scale = np.max(np.abs(cell))
         smallest = min(np.max(np.abs(cell[..., i])) for i in range(6))
         assert smallest > 1e-4 * scale, f'{name}: {smallest / scale:.2e}'
@@ -204,7 +204,7 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
     """
     structure, truncation_order, thickness = TWINS['a patterned layer']
     cells = {}
-    for formulation in ('2ff', '4ff'):
+    for formulation in ('second_order', 'first_order'):
         mee = wavebit.rcwa(backend=0, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
                            wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
                            psi=0.6, thickness=thickness, structure=structure, answers='field')
@@ -214,11 +214,11 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
             np.asarray(mee.reconstruct_field(sample_x=4, sample_y=4, sample_z=5,
                                              incidences=which))
             for which in (('incident',), ('s',), ('p',), ('incident', 's', 'p'))]
-    for k, (want, got) in enumerate(zip(cells['2ff'], cells['4ff'])):
+    for k, (want, got) in enumerate(zip(cells['second_order'], cells['first_order'])):
         assert want.shape == got.shape
         assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-11, k
     # and on the new path the three single calls are the three slices of the combined one
-    single, combined = cells['4ff'][:3], cells['4ff'][3]
+    single, combined = cells['first_order'][:3], cells['first_order'][3]
     for k in range(3):
         assert np.allclose(single[k][0], combined[k], rtol=0, atol=1e-12), k
 
@@ -315,7 +315,7 @@ def test_a_z_coupled_cell_is_not_quietly_the_z_decoupled_one():
 
 # ------------------------------------------------------------------------- the sign convention
 
-@pytest.mark.parametrize('formulation', ['2ff', '4ff'])
+@pytest.mark.parametrize('formulation', ['second_order', 'first_order'])
 @pytest.mark.parametrize('psi_v,tag', [(np.pi / 2, 's'), (0.0, 'p')])
 def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v, tag):
     """A layer of vacuum in vacuum: the field inside is the incident wave, exactly.
@@ -363,12 +363,12 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
 def test_the_reconstruction_is_the_same_on_every_backend(backend):
     """One implementation, so jax and torch reconstruct the same cell as numpy.
 
-    Both the twin route (a patterned layer forced onto ``'4ff'``) and the z-coupled route,
+    Both the twin route (a patterned layer forced onto ``'first_order'``) and the z-coupled route,
     because they reach the reconstruction through different halves of the solver.
     """
     pytest.importorskip('jax' if backend == 1 else 'torch')
-    want = twin_cell('4ff', 'a patterned layer', 21.0, 'top')
-    got = twin_cell('4ff', 'a patterned layer', 21.0, 'top', backend=backend)
+    want = twin_cell('first_order', 'a patterned layer', 21.0, 'top')
+    got = twin_cell('first_order', 'a patterned layer', 21.0, 'top', backend=backend)
     assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-10
 
     _, want_z, _, _ = z_coupled_cell([VAC, TILTED, VAC], [90.0, 210.0, 90.0], sample_z=16)

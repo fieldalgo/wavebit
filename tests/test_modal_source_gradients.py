@@ -17,7 +17,7 @@ def solver(backend, source):
     else:
         cfg.update(theta=0., phi=0.)
     s = wavebit.rcwa(backend=backend, **cfg, structure=BASE.copy())
-    s.formulation = '4ff'
+    s.formulation = 'first_order'
     return s
 
 

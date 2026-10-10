@@ -26,8 +26,8 @@ What the file holds, and what each half is for:
   is enforced on the frozen numbers as well as on ours.
 
 Scope. ``eigensolve_general_anisotropic_media`` takes five ``mu`` components with no z row, so
-this is the same 2ff tensor class extended to ``mu``; a magnetic Voigt geometry is as far out of
-fmmax's reach as ours. And both half-spaces are **vacuum** in every case, which is what lets
+this is the same second-order tensor class extended to ``mu``; a magnetic Voigt geometry is as far
+out of fmmax's reach as ours. And both half-spaces are **vacuum** in every case, which is what lets
 these rows validate the layer operator alone — a magnetic ``n_top`` / ``n_bot`` needs the
 boundary admittance, which nothing here checks and which is not implemented.
 """

@@ -10,8 +10,8 @@ declared. The routes:
 
 * a **z row** handed to ``solve_conv`` -- any of ``epxz / epyz / epzx / epzy_conv_all``, or the
   permeability's ``mu[5:]``. The 1D operators have no z-row slots, so a z row sends even a
-  one-row raster to the first-order (4ff) path, which is written on the 2D layout;
-* ``formulation='4ff'``, which forces that same path without a z row;
+  one-row raster to the first-order path, which is written on the 2D layout;
+* ``formulation='first_order'``, which forces that same path without a z row;
 * a solver holding **no structure**, whose ``solve_conv`` keeps the layout its last solve took
   -- 2D if it never solved, conical after a conical solve; a kept pure layout is asked again
   what its raster was (``phi``, ``ky``, the cell's skew, ``truncation_order[1]``);
@@ -86,7 +86,7 @@ def test_a_z_row_beside_tetm_is_refused_by_name(slot, tetm):
     conv = solver.eps_conv_matrices()
     with pytest.raises(ValueError, match=rf"tetm='{tetm}' and a z row \({slot}\)") as info:
         solver.solve_conv(conv.epx, conv.epy, conv.epz_i, **_z_slots(conv, **{slot: True}))
-    assert 'polarization' in str(info.value) and '4ff' in str(info.value)
+    assert 'polarization' in str(info.value) and 'first-order' in str(info.value)
 
 
 def test_a_z_row_given_positionally_and_in_mu_is_named_as_given():
@@ -104,7 +104,8 @@ def test_a_z_row_given_positionally_and_in_mu_is_named_as_given():
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'])
 def test_the_advice_beside_a_z_row_is_the_same_light(tetm):
-    """Follow the message: the pair it names solves on 4ff and *is* what ``tetm`` described.
+    """Follow the message: the pair it names solves on the first-order path
+    and *is* what ``tetm`` described.
 
     An all-zero z row is still a z row -- the slots are read for given-ness, not value -- so
     it is refused beside ``tetm`` and sends the pair to the first-order path. There it has to
@@ -121,7 +122,7 @@ def test_the_advice_beside_a_z_row_is_the_same_light(tetm):
     pair = (1, 0) if tetm == 'te' else (0, 1)
     advised = wavebit.rcwa(structure=RASTER_1D, polarization=pair, phi=0.0, **KW)
     got = advised.solve_conv(conv.epx, conv.epy, conv.epz_i, None, None, zero, zero, zero, zero)
-    assert (advised.grating_type, advised.formulation_assigned) == (2, '4ff')
+    assert (advised.grating_type, advised.formulation_assigned) == (2, 'first_order')
     _assert_same_light(got, want, tetm)
 
 
@@ -142,43 +143,44 @@ def test_the_z_row_refusal_holds_under_jit_and_grad():
             traced(1.0)
 
 
-# ------------------------------------------------------------------------ formulation='4ff'
+# ---------------------------------------------------------------- formulation='first_order'
 
 @pytest.mark.parametrize('door', ['attribute', 'attribute, tetm last', 'solve keyword',
                                   'solve keyword, tetm'])
-def test_formulation_4ff_beside_tetm_is_refused_on_every_door(door):
+def test_formulation_first_order_beside_tetm_is_refused_on_every_door(door):
     """The first-order path without a z row: forced, in either order and through ``solve``."""
     if door == 'attribute':
         solver = wavebit.rcwa(structure=RASTER_1D, tetm='tm', **KW)
-        solver.formulation = '4ff'
+        solver.formulation = 'first_order'
         call = solver.solve
     elif door == 'attribute, tetm last':
         solver = wavebit.rcwa(structure=RASTER_1D, **KW)
-        solver.formulation = '4ff'
+        solver.formulation = 'first_order'
         solver.tetm = 'tm'
         call = solver.solve
     elif door == 'solve keyword':
         solver = wavebit.rcwa(structure=RASTER_1D, tetm='tm', **KW)
-        call = lambda: solver.solve(formulation='4ff')
+        call = lambda: solver.solve(formulation='first_order')
     else:
         solver = wavebit.rcwa(structure=RASTER_1D, **KW)
-        solver.formulation = '4ff'
+        solver.formulation = 'first_order'
         call = lambda: solver.solve(tetm='tm')
-    with pytest.raises(ValueError, match=r"tetm='tm' and formulation='4ff' were both given") \
-            as info:
+    with pytest.raises(ValueError,
+                       match=r"tetm='tm' and formulation='first_order' were both given") as info:
         call()
     assert "leave formulation at 'auto'" in str(info.value)
     assert re.search(_advice('tm'), str(info.value))
 
 
 @pytest.mark.parametrize('route', ['shape structure', 'no structure'])
-def test_4ff_beside_a_structure_off_the_pure_path_names_the_structure(route):
-    """Where ``'4ff'`` is not the only thing in the way, the message names what else is.
+def test_first_order_beside_a_structure_off_the_pure_path_names_the_structure(route):
+    """Where ``'first_order'`` is not the only thing in the way, the message names what else is.
 
     "Leave formulation at 'auto'" keeps the pure path only where the structure takes it. Asked
-    first, the ``'4ff'`` message told a shape, and a solver that holds no structure, to do
+    first, the ``'first_order'`` message told a shape, and a solver that holds no structure, to do
     that -- and the next solve, at ``'auto'``, was refused for the structure. The control: once
-    the structure's own reason is gone, the ``'4ff'`` message is the one left, and it is right.
+    the structure's own reason is gone, the ``'first_order'`` message is the one left, and it is
+    right.
     """
     raster = wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
     conv = raster.eps_conv_matrices()
@@ -189,7 +191,7 @@ def test_4ff_beside_a_structure_off_the_pure_path_names_the_structure(route):
         solver = wavebit.rcwa(tetm='te', **KW)
         call = lambda: solver.solve_conv(conv.epx, conv.epy, conv.epz_i)
         named = 'holds no structure'
-    solver.formulation = '4ff'
+    solver.formulation = 'first_order'
     with pytest.raises(ValueError, match=named) as info:
         call()
     assert "formulation at 'auto'" not in str(info.value)
@@ -198,8 +200,8 @@ def test_4ff_beside_a_structure_off_the_pure_path_names_the_structure(route):
         call()
 
     solver.structure = RASTER_1D
-    solver.formulation = '4ff'
-    with pytest.raises(ValueError, match=r"formulation='4ff' were both given") as info:
+    solver.formulation = 'first_order'
+    with pytest.raises(ValueError, match=r"formulation='first_order' were both given") as info:
         solver.solve_conv(conv.epx, conv.epy, conv.epz_i)
     assert "leave formulation at 'auto'" in str(info.value)
     solver.formulation = 'auto'
@@ -225,7 +227,7 @@ def test_a_refusal_leaves_the_last_solve_as_it_was(door):
         call = lambda: solver.solve_conv(conv.epx, conv.epy, conv.epz_i,
                                          **_z_slots(conv, epxz_conv_all=True))
     elif door == 'formulation keyword':
-        call = lambda: solver.solve(formulation='4ff')
+        call = lambda: solver.solve(formulation='first_order')
     else:
         # The assignment alone moves nothing the reconstruction reads -- the premise, so that
         # what the refused solve does is all that is measured.
@@ -241,14 +243,14 @@ def test_a_refusal_leaves_the_last_solve_as_it_was(door):
 
 
 @pytest.mark.parametrize('tetm', ['te', 'tm'])
-def test_the_advice_beside_4ff_is_the_cross_check_it_promises(tetm):
-    """``formulation='4ff'`` on the named pair reproduces the pure 2ff ``tetm`` solve."""
+def test_the_advice_beside_first_order_is_the_cross_check_it_promises(tetm):
+    """``formulation='first_order'`` on the named pair reproduces the pure ``tetm`` solve."""
     want = wavebit.rcwa(structure=RASTER_1D, tetm=tetm, **KW).solve()
     advised = wavebit.rcwa(structure=RASTER_1D, polarization=(1, 0) if tetm == 'te' else (0, 1),
                            phi=0.0, **KW)
-    advised.formulation = '4ff'
+    advised.formulation = 'first_order'
     got = advised.solve()
-    assert advised.formulation_assigned == '4ff'
+    assert advised.formulation_assigned == 'first_order'
     _assert_same_light(got, want, tetm)
 
 

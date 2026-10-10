@@ -586,8 +586,8 @@ def test_li_does_not_tell_x_and_y_apart_in_the_symmetric_nesting(truncation_orde
 # to carry is never exercised. Its two neighbours are degenerate the same way --
 # `test_pn_factorization.py::test_it_is_covariant_under_a_quarter_turn_about_z` does a real
 # `np.rot90` but on the internal PN path at normal incidence with a square period, and
-# `test_solve_2d_4ff.py::test_rotating_the_whole_problem_about_z_changes_nothing` turns uniform
-# tensors with no raster and no period pair at all.
+# `test_solve_2d_first_order.py::test_rotating_the_whole_problem_about_z_changes_nothing` turns
+# uniform tensors with no raster and no period pair at all.
 #
 # What follows turns the scene where all four moving parts are live: oblique incidence, unequal
 # periods, unequal truncation_order, and a chiral cell.

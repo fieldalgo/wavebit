@@ -136,7 +136,7 @@ vector on the specular order:
 | | |
 | --- | --- |
 | `solve_1d.py` stage 3 | the pure 1D TE/TM matching |
-| `solve_1d.py::final_matching` | conical, 2D and 4ff, which share it |
+| `solve_1d.py::final_matching` | conical, 2D and first-order, which share it |
 | `scattering.py::smm_1d` | the SMM twin of the first |
 | `scattering.py::_smm_sp` | the SMM twin of the second |
 

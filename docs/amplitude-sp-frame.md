@@ -284,10 +284,10 @@ is the rule; `solve_1d`, `smm_1d` and `field_result` apply it):
 **What did not move, proved rather than argued.** The tree before the change, exported from
 `6d721d2`, against the tree after, in fresh processes: 1866 arrays over 1D TE/TM x both sides x
 `theta` in {0, +-0.3} x ETM/SMM x NumPy/JAX/Torch, 1D `excitation`, magnetic half-spaces,
-conical, 2D and 4ff, each dump taken twice. Every conical, 2D and 4ff array is byte-identical;
-every 1D efficiency and `power_entering` is byte-identical; every 1D amplitude equals
-`sigma_m * sigma_inc * old` and every field `sigma_inc * old` by `==` (bytes differ only where a
-zero took a sign); every 1D `S` equals `flip * D * old * D`. The TM unit-E step alone moves
+conical, 2D and first-order, each dump taken twice. Every conical, 2D and first-order array is
+byte-identical; every 1D efficiency and `power_entering` is byte-identical; every 1D amplitude
+equals `sigma_m * sigma_inc * old` and every field `sigma_inc * old` by `==` (bytes differ only
+where a zero took a sign); every 1D `S` equals `flip * D * old * D`. The TM unit-E step alone moves
 fields by `n/mu`, to 1.3e-15 normwise, and nothing else. The battery's dumps and the
 investigation's record are not public; what they measured is stated here.
 
@@ -400,7 +400,7 @@ All of it is at the doors -- `engine._kernel_lit`, `_finish`, `_centre_phase` an
 
 **What moved and what did not, proved rather than argued.** The tree before the change, exported
 from `0937b35`, against the tree after, fresh processes, each dump taken twice and
-byte-identical to its twin: 158 NumPy scenes (1D TE/TM, conical, 2D Li, 2D NVF, 4ff and a
+byte-identical to its twin: 158 NumPy scenes (1D TE/TM, conical, 2D Li, 2D NVF, first-order and a
 60-degree cell, both sides, `theta` in {0, 0.3, -0.23}, ETM and SMM; excitations straddling
 `kx = 0`, all-odd and all-even, on 1D, conical, 2D and the 60-degree cell; complex `theta`; a
 magnetic half-space and a magnetic layer; a direct `kx`) and 28 each on JAX and Torch, 9180

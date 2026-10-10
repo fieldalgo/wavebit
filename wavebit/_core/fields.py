@@ -374,7 +374,7 @@ def _z_plan(sample_z, layer_info_list, d_index, interface_side='right'):
 
     ``d_index`` is where the thickness sits in one layer's entry, which differs by path and is
     passed rather than sniffed: it used to be read off the entry's *length*, which was only
-    ever a proxy for "is this the 4ff layout", and adding one slot to a second layout would
+    ever a proxy for "is this the first-order layout", and adding one slot to a second layout would
     have silently started reading a transfer block as a thickness.
 
     Returns ``(per_layer, unshuffle)``. ``per_layer[k]`` is what layer ``k`` of
@@ -415,7 +415,7 @@ def _z_plan(sample_z, layer_info_list, d_index, interface_side='right'):
             # the lower public face, including when thickness is traced by AD.
             per_layer = []
             for entry in layer_info_list[::-1]:
-                modes = entry[1]  # mode basis in both the 2ff and 4ff layouts
+                modes = entry[1]  # mode basis in both the second- and first-order layouts
                 xp = array_namespace(modes)
                 d = xp.asarray(entry[d_index], device=_dev(modes))
                 per_layer.append(xp.reshape(d, (1,)))
@@ -737,10 +737,10 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     return _unshuffle(xp, xp.concat(cells, axis=1), unshuffle, axis=1)
 
 
-def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
-                 sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
-                 _coefficients=False):
-    """Field of a stack solved on the first-order (4ff) path. Same shape as :func:`field_2d`.
+def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
+                         sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
+                         interface_side='right', _coefficients=False):
+    """Field of a stack solved on the first-order path. Same shape as :func:`field_2d`.
 
     The transverse half is *simpler* than the second-order reconstruction, not harder. There
     the layer's state has to be reassembled from ``W`` (the transverse ``E``) and ``V`` (its
@@ -749,7 +749,7 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
     directions are separate mode sets rather than one set with a sign, so each is propagated
     from its own reference face: forward amplitudes are carried at the layer's top, backward
     ones at its bottom, which is the same split that makes the stack solve stable
-    (:func:`wavebit._core.solve_2d_4ff._propagate_s`).
+    (:func:`wavebit._core.solve_2d_first_order._propagate_s`).
 
     ``E_z`` is the one component that cannot be carried over. Eliminating it from the curl
     equations with a **populated** permittivity ``z`` row keeps two terms the second-order form
@@ -758,14 +758,14 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
         Ez = ezz^-1 [ (Ky Hx - Kx Hy) - ezx Ex - ezy Ey ]
 
     :func:`_field_coupled`'s ``Sz = 1j * epz_conv_i @ (Kx @ Uy - Ky @ Ux)`` is that expression
-    at ``ezx = ezy = 0`` — the same line with ``U = i H`` substituted — so the 2ff spelling is a
-    special case of this one, not a shared one.
+    at ``ezx = ezy = 0`` — the same line with ``U = i H`` substituted — so the second-order spelling
+    is a special case of this one, not a shared one.
 
     ``H_z = Kx Ey - Ky Ex`` is Faraday's z row at ``mu = 1``, and ``mu = 1`` is the only thing
     this path can be handed: :meth:`wavebit._core.engine.CoreSolveMixin.solve_2d` refuses a
     permeability before routing here, by name. That refusal is what makes this line correct,
     so it is not an assumption to be checked here — it is a precondition held elsewhere, and
-    the two move together. The 2ff twin carries the general form,
+    the two move together. The second-order twin carries the general form,
     ``H_z = muz_conv_i (Kx Ey - Ky Ex)``; should ``mu`` ever land on this path it needs that
     factor *and* the two z-row terms
     ``mu_zx H_x`` / ``mu_zy H_y`` this formulation would then be the one able to express,
@@ -773,7 +773,7 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
 
     The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d`. This
     path needs **no** parity at the output, and it is the only one that does not:
-    :mod:`wavebit._core.solve_2d_4ff` already derives everything with ``+z`` along the
+    :mod:`wavebit._core.solve_2d_first_order` already derives everything with ``+z`` along the
     propagation direction — which is what makes ``Im(lam_f) >= 0`` mean "does not grow" — and
     that is the library's declared frame. The state vector is therefore already in it.
 
@@ -832,7 +832,8 @@ def field_2d_4ff(wavelength, kx, ky, T1, layer_info_list, lattice,
             cells.append(xp.stack([M[..., 0] for M in (Ex, Ey, Ez, Hx, Hy, Hz)], axis=-1))
         else:
             inv_f = _inv_fourier(xp, kx, ky, lattice, sample_x, sample_y, k0, C)[:, :, None, :]
-            # No parity here, deliberately: the 4ff state vector is already in the declared frame.
+            # No parity here, deliberately: the first-order state vector is already in the
+            # declared frame.
             comps = [inv_f @ M[:, :, None, None, :, :]
                      for M in (Ex, Ey, Ez, Hx, Hy, Hz)]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)

@@ -16,8 +16,8 @@ has an oracle outside that arithmetic:
    60-degree cell and a shear, windows moved by an excitation included; ``corner_column`` is an
    exact sign bit and leaves an undeclared solve alone.
 2. **an ordinary solve is the plane wave it names** -- the coherent-source path's ``PlaneWave``
-   (its own 4ff cascade and incident basis), on every path, a rotated cell included, and both
-   sides, through both field doors and every boundary wave, with no factor anywhere; and a
+   (its own first-order cascade and incident basis), on every path, a rotated cell included, and
+   both sides, through both field doors and every boundary wave, with no factor anywhere; and a
    y-invariant scene's field does not depend on its fictitious y period.
 3. **``excitation`` weights are ``OrderExcitation`` weights** -- the same dict, the same light;
    a lit set of one parity class is the light it always was.
@@ -165,7 +165,7 @@ def test_the_corner_column_is_a_sign_bit():
 
 # ------------------------------------------------------ 2. an ordinary solve is its plane wave
 
-_PATHS = ('te', 'tm', 'conical', '2ff', '4ff', 'hex', 'shear', 'rotated')
+_PATHS = ('te', 'tm', 'conical', 'second_order', 'first_order', 'hex', 'shear', 'rotated')
 #: The pure 1D paths return three components: TE (Ey, Hx, Hz), TM (Hy, Ex, Ez).
 _SLOTS = {'te': [1, 3, 5], 'tm': [4, 0, 2]}
 #: A 1.3 x 1.7 rectangle turned by 0.4 rad: a legal basis, and the only cell here whose ``a1``
@@ -191,7 +191,7 @@ def _plane_scene(path):
     if path == 'conical':
         return one_d, dict(theta=0.3, phi=0.6, polarization=(0.6, 0.8j)), line
     coupled = dict(theta=0.25, phi=0.6, polarization=(0.6, 0.8j))
-    if path in ('2ff', '4ff'):
+    if path in ('second_order', 'first_order'):
         return (dict(period=(1.3, 1.7), wavelength=1.1, structure=_RASTER_2D, thickness=[0.15],
                      truncation_order=(2, 1)), coupled,
                 dict(sample_x=[-0.4, 0.2], sample_y=[-0.3, 0.5], sample_z=[0.02, 0.1]))
@@ -208,8 +208,8 @@ def _ordinary(path, geometry, incidence, side, **over):
         kw['tetm'] = path
     kw.update(over)
     solver = wavebit.rcwa(**kw)
-    if path == '4ff':
-        solver.formulation = '4ff'
+    if path == 'first_order':
+        solver.formulation = 'first_order'
     return solver, solver.solve()
 
 
@@ -231,7 +231,7 @@ def _solver_door(path, solver, points):
 def test_an_ordinary_solve_is_the_plane_wave_it_names(path, side):
     """The ordinary solve's field **is** ``PlaneWave``'s, on both doors and every boundary wave.
 
-    The coherent-source path is an independent construction: its own 4ff cascade, its own
+    The coherent-source path is an independent construction: its own first-order cascade, its own
     incident basis, and phases referenced at ``x = y = 0`` from the start. Both solves are unit
     at the public origin since 2026-09-27, so there is no factor between them -- until then an
     ordinary incidence was unit at the corner, ``exp(1j k_inc . (a1 + a2)/2)`` away, which is
@@ -372,10 +372,10 @@ def test_excitation_weights_are_order_excitation_weights(side, anchor, corner):
 def test_a_2d_mixed_parity_excitation_is_the_order_excitation(side):
     """The same on a 2D cell, with lit orders odd along ``u`` and along ``v`` separately."""
     weights = {(0, 0): 1.0, (1, 0): 0.5j, (0, 1): 0.3 - 0.2j}
-    geometry, incidence, points = _plane_scene('2ff')
+    geometry, incidence, points = _plane_scene('second_order')
     geometry = dict(geometry, wavelength=0.8, truncation_order=(1, 1))
-    solver, ordinary = _ordinary('2ff', geometry, dict(incidence, theta=0.2, phi=0.5), side,
-                                 excitation=weights)
+    solver, ordinary = _ordinary('second_order', geometry, dict(incidence, theta=0.2, phi=0.5),
+                                 side, excitation=weights)
     coherent = _coherent(geometry, side, wavebit.OrderExcitation(
         theta=0.2, phi=0.5, polarization=incidence['polarization'], orders=weights))
     lit, far = ((coherent.output_top, coherent.output_bottom) if side == 'top' else
@@ -727,7 +727,7 @@ def test_the_two_field_doors_agree_on_a_moved_window(scene):
         assert solver.order_window[0][0] % 2 == 1, solver.order_window
     if scene == '2d-odd-centre':
         assert solver.order_window[1][0] % 2 == 1, solver.order_window
-    path = 'te' if scene == '1d-odd-centre' else '2ff'
+    path = 'te' if scene == '1d-odd-centre' else 'second_order'
     want = _host(result.reconstruct_field(**points))
     want = want[..., _SLOTS['te']] if path == 'te' else want
     assert _rel(_solver_door(path, solver, points), want) < 1e-10

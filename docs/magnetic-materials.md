@@ -8,7 +8,7 @@ Target: `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
 
 **Scope.** Layers (§1–§4), half-spaces (§5–§6), patterned layers (§7) and field
 reconstruction (§9, added 2026-08-20) on the **2D path**; the **1D and conical paths** since
-2026-09-01 (§11), diagonal slots only. The first-order 4ff solve still takes no `mu` and
+2026-09-01 (§11), diagonal slots only. The first-order solve still takes no `mu` and
 refuses rather than ignores, as do the two off-diagonal slots on the 1D paths.
 
 ---
@@ -341,7 +341,7 @@ the shape path replays the same boundary plans. A
 non-magnetic scene builds nothing and takes the arithmetic that existed before `mu` did, bit
 for bit.
 
-Full tensor epsilon and mu use the 4ff path when either has xz/yz/zx/zy
+Full tensor epsilon and mu use the first-order path when either has xz/yz/zx/zy
 coupling. Both longitudinal fields are reconstructed from their full z rows.
 The separate 1D operators carry diagonal mu; tensors use the coupled path.
 See [full tensor patterns](full-tensor-patterns.md).
@@ -387,8 +387,8 @@ mu_zz  H_z  =  Kx Ey - Ky Ex          Faraday's z row     ->  muz_conv_i
 One line is the other under the same `(E, H, eps, mu) -> (H, -E, mu, eps)` duality §1 places
 `mu` by. `_field_coupled` carried the first and, for the second, the `mu = 1` form
 `H_z = Kx Ey - Ky Ex`, with nothing marking it as conditional. The condition was written down
-one function away — `field_2d_4ff`'s docstring said `H_z` "is unchanged while `mu = 1`, which
-is all this path admits" — and that sentence was true of the path it was written on and false
+one function away — `field_2d_first_order`'s docstring said `H_z` "is unchanged while `mu = 1`,
+which is all this path admits" — and that sentence was true of the path it was written on and false
 of the one beside it, with no refusal anywhere making either claim hold. Before the front door
 (`Material(epsilon, mu)`, and `mu=` beside a raster) the combination was barely reachable;
 after it, it was ordinary user input.
@@ -435,10 +435,10 @@ caller instead.
 
 ## 10. What is not implemented, and why
 
-**Magnetic `mu` on the first-order 4ff solve.** No `mu` in the operator, and
-`fields.field_2d_4ff`'s `H_z = Kx Ey - Ky Ex` likewise has no `mu_zz` in it. Two ways to land
-there — a z-coupled `eps`, or `formulation='4ff'` asked for directly — and the refusal names
-which one happened, because blaming a z row that was never given sends the reader to look for
+**Magnetic `mu` on the first-order solve.** No `mu` in the operator, and
+`fields.field_2d_first_order`'s `H_z = Kx Ey - Ky Ex` likewise has no `mu_zz` in it. Two ways to
+land there — a z-coupled `eps`, or `formulation='first_order'` asked for directly — and the refusal
+names which one happened, because blaming a z row that was never given sends the reader to look for
 one. Both features work and the combination refuses, which is the point: landing on whichever
 path the dispatch picks and silently dropping the other input is the failure mode. Should `mu`
 ever land there it needs the `muz_conv_i` factor *and* the two z-row terms `mu_zx H_x` /
@@ -582,7 +582,7 @@ than a probe that misses.
 ## 12. References
 
 - fmmax's `eigensolve_general_anisotropic_media` — five `eps` and five `mu` components, no z row;
-  the same 2ff tensor class this implements, which is why it can arbitrate this and not a
+  the same second-order tensor class this implements, which is why it can arbitrate this and not a
   magnetic Voigt geometry.
 - [`formulation.md`](formulation.md) §4 — the non-magnetic first-order system this extends, in
   the code's own convention.

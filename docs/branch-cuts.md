@@ -776,8 +776,8 @@ zeros, that tie and the class boundary: [`negative-index-media.md`](negative-ind
 ### What it was measured against
 
 Glass onto a double negative, closed-form Fresnel `r` and `t` for s and p, 0/30/60/80 degrees,
-lit from either side, on the pure TE and TM, conical, 2D and 4ff paths, ETM and SMM: `3.2e-15`
-at worst over `(-2+0.1i, -1+0.1i)`, `(-3+0.1i, -0.5+0.05i)`, the lossless `(-2, -1)` and
+lit from either side, on the pure TE and TM, conical, 2D and first-order paths, ETM and SMM:
+`3.2e-15` at worst over `(-2+0.1i, -1+0.1i)`, `(-3+0.1i, -0.5+0.05i)`, the lossless `(-2, -1)` and
 `(-6+0.3i, -1.5+0.05i)`. A grating on the half-space against the same grating on a 16 um lossy
 slab of the medium, which as a layer keeps both roots and needs no rule: every order's `R`
 agrees to `4.0e-16`, and the power the slab takes in is the half-space's `T` to `1.7e-15`, on

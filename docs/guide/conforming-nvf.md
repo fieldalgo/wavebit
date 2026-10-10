@@ -232,7 +232,7 @@ floating-point geometry tolerance, not an optical accuracy criterion.
 Use a solver with the same lattice and orders. A fresh solver without a
 raster structure selects the 2D operator even for `(u, 0)`, `(0, v)`, or
 `(0, 0)`. If reusing a solver previously routed to a 1D raster calculation,
-set `solver.formulation = '4ff'` to retain all in-plane coupling.
+set `solver.formulation = 'first_order'` to retain all in-plane coupling.
 
 The [integration record](../nvf-energy-engine.md) identifies the independent
 controls and remaining geometry and accuracy limits.

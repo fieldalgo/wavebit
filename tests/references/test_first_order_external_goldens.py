@@ -1,19 +1,19 @@
-"""The 4ff solve against two outside solvers, from goldens already checked in.
+"""The first-order solve against two outside solvers, from goldens already checked in.
 
-``tests/test_solve_2d_4ff.py`` pins the first-order formulation against the 2ff path and
-against the Berreman 4x4 in ``tests/test_anisotropic_berreman.py``. Both of those are ours. An
-error in how this repo reads the problem — a convention, a factor, a transverse-field
+``tests/test_solve_2d_first_order.py`` pins the first-order formulation against the second-order
+path and against the Berreman 4x4 in ``tests/test_anisotropic_berreman.py``. Both of those are ours.
+An error in how this repo reads the problem — a convention, a factor, a transverse-field
 definition — is shared by all three and survives every one of those tests.
 
 This file is the outside check, and it costs nothing new: ``golden_reticolo_anisotropic.npz``
-and ``golden_fmmax.npz`` were frozen for the 2ff path and happen to cover exactly the 4ff
-domain, uniform layers between vacuum. Nine RETICOLO cases and twelve fmmax ones, sharing no
-wavelength, thickness, tensor or angle between the two sets.
+and ``golden_fmmax.npz`` were frozen for the second-order path and happen to cover exactly the
+first-order domain, uniform layers between vacuum. Nine RETICOLO cases and twelve fmmax ones,
+sharing no wavelength, thickness, tensor or angle between the two sets.
 
 Three of the RETICOLO cases have a **populated z row** — the Voigt geometry, which is the whole
-reason the 4ff module exists and which the 2ff path cannot express at all. Those are the first
-external confirmation of it this repo has had; everything else about that geometry rested on a
-Berreman 4x4 we wrote ourselves.
+reason the first-order module exists and which the second-order path cannot express at all. Those
+are the first external confirmation of it this repo has had; everything else about that geometry
+rested on a Berreman 4x4 we wrote ourselves.
 
 How far that goes is bounded, and the bound was measured rather than assumed. RETICOLO's
 uniform anisotropic layer is exact for a diagonal tensor at any mounting and for a single
@@ -21,7 +21,7 @@ off-diagonal pair at ``delta0 = 0``; past that it returns ``R + T`` up to 1.2e-2
 on a tensor that is provably lossless. The table and the reasoning are in
 ``gen_goldens_reticolo_anisotropic.py``. So a tilted magnetisation — xy and yz populated at
 once, the ordinary case for a real magnetised film — still has no outside judge; what stands
-behind it is ``test_solve_2d_4ff.py`` and the Berreman cases in
+behind it is ``test_solve_2d_first_order.py`` and the Berreman cases in
 ``tests/test_anisotropic_berreman.py``, both ours.
 
 Every case here is run **twice** since the public route landed: once through the module's own
@@ -36,7 +36,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit._core.solve_2d_4ff import solve_uniform_stack, vacuum_sp_states
+from wavebit._core.solve_2d_first_order import solve_uniform_stack, vacuum_sp_states
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -95,7 +95,7 @@ def public_efficiencies(eps, theta_deg, wl, thick):
                              np.stack([np.linalg.inv(e[2, 2] * I)]),
                              st(-e[0, 1]), st(-e[1, 0]),
                              st(-e[0, 2]), st(-e[1, 2]), st(-e[2, 0]), st(-e[2, 1]))
-    assert mee.formulation_assigned == '4ff'
+    assert mee.formulation_assigned == 'first_order'
     return np.array([float(res.s_inc.R.sum()), float(res.s_inc.T.sum()),
                      float(res.p_inc.R.sum()), float(res.p_inc.T.sum())])
 
@@ -112,8 +112,8 @@ def test_matches_reticolo(name):
     """RETICOLO is the strongest oracle here — a different group's solver, different language.
 
     Four of these tensors are asymmetric (``eps_xy != eps_yx``), which is what caught the
-    ordering defect in ``layer_modes_2d``. The 4ff operator takes the pair as given and never
-    forms ``Omega_R``, so it cannot make that mistake; passing here says it does not make a
+    ordering defect in ``layer_modes_2d``. The first-order operator takes the pair as given and
+    never forms ``Omega_R``, so it cannot make that mistake; passing here says it does not make a
     different one.
     """
     eps, theta_deg = RETICOLO_CASES[name]
@@ -181,13 +181,13 @@ def test_the_external_coverage_of_z_coupling_is_what_the_docs_claim():
     Two separate claims, both load-bearing and both easy to overstate later:
 
     * At least one RETICOLO case has a populated z row. Without this the module's "externally
-      validated" line would be true only of geometries 2ff already handles.
+      validated" line would be true only of geometries the second-order path already handles.
     * Every such case has exactly **one** off-diagonal pair. Beyond that RETICOLO stops
       conserving energy on lossless tensors, so anything richer must not be frozen — a tilted
       magnetisation is measured at ``R + T = 1.0044``.
 
     Adding a Voigt case to the fmmax generator would also trip this; fmmax's anisotropic entry
-    point takes the five 2ff slots and has no z row to give.
+    point takes the five second-order slots and has no z row to give.
     """
     def pairs(eps):
         e = np.asarray(eps, dtype=complex)
@@ -198,7 +198,7 @@ def test_the_external_coverage_of_z_coupling_is_what_the_docs_claim():
         return np.abs([e[0, 2], e[1, 2], e[2, 0], e[2, 1]]).max() > 0
 
     reti_z = [n for n, (eps, _) in RETICOLO_CASES.items() if z_coupled(eps)]
-    assert reti_z, 'no RETICOLO case reaches the geometry 4ff exists for'
+    assert reti_z, 'no RETICOLO case reaches the geometry the first-order path exists for'
     for name in reti_z:
         n = pairs(RETICOLO_CASES[name][0])
         assert n == 1, (f'{name} has {n} off-diagonal pairs; RETICOLO is only exact for one — '

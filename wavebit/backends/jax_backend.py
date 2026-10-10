@@ -745,16 +745,17 @@ class SolverJax(RCWAJax, OptimizerJax):
             # read, which way the stack is walked), so it must come back static, never traced.
             'incidence_side': self.incidence_side,
             # The last settable condition to reach this dict, 2026-08-30. It is a *declaration*
-            # -- `'4ff'` asks for the four-field form where `auto` would have picked two -- and
-            # a declaration that does not survive the round trip is worse than one that is
-            # refused: with the key absent, two solvers differing only here produce identical
-            # aux_data, so their treedefs coincide and **one jit compilation serves both**.
-            # Measured on a 16x16 raster with `answers='field'`: declaring `'4ff'` after `auto`
-            # did not recompile (0.05 s against 0.93 s) and returned `auto`'s number to the
+            # -- `'first_order'` asks for the first-order form where `auto` would have picked the
+            # second-order one -- and a declaration that does not survive the round trip is worse
+            # than one that is refused: with the key absent, two solvers differing only here
+            # produce identical aux_data, so their treedefs coincide and **one jit compilation
+            # serves both**.
+            # Measured on a 16x16 raster with `answers='field'`: declaring `'first_order'` after
+            # `auto` did not recompile (0.05 s against 0.93 s) and returned `auto`'s number to the
             # last digit. The declared cross-check silently became a no-op, and the declared
-            # *refusal* -- `'2ff'` over a z row -- silently did not fire. It cannot produce a
-            # wrong answer (max |T_2ff - T_4ff| = 1.4e-14 on a patterned raster, and each
-            # override degrades to the correct path), which is why it outranks nothing; it is
+            # *refusal* -- `'second_order'` over a z row -- silently did not fire. It cannot
+            # produce a wrong answer (max |T_second - T_first| = 1.4e-14 on a patterned raster, and
+            # each override degrades to the correct path), which is why it outranks nothing; it is
             # here because a declaration must mean the same thing on both sides of a trace.
             # It rides as the *raw slot*: `rcwa()` does not take `formulation` as a keyword,
             # so `_tree_unflatten` restores it directly rather than through the constructor.

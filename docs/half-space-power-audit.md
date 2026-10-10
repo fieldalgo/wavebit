@@ -119,8 +119,8 @@ T = exp(−4π Im(n) d / λ) = 0.568083605878
 ```
 
 1D TE/TM and 2D TE agreed. 2D TM gave `0.524384866964`, about 7.69% low. The same defect
-reproduced for top and bottom incidence and for 2ff/4ff. There is no reflected wave in this
-case, so a difference in how interference is normalized cannot explain it.
+reproduced for top and bottom incidence and for the second- and first-order paths. There is no
+reflected wave in this case, so a difference in how interference is normalized cannot explain it.
 
 Minimal reproduction:
 
@@ -148,7 +148,7 @@ What this investigation checked:
 - 11 single-interface setups × 2 polarizations × 2 paths × 2 algorithms = 88 calls. The
   negative-index cases among them are described separately below.
 - Two reference planes in a uniform absorbing medium: 8 combinations of incidence side,
-  2ff/4ff and TE/TM.
+  formulation (second- or first-order) and TE/TM.
 - 273 passed and 70 deselected from the existing absorbing-media tests. Selected: substrate
   reflection, conservation of the power entering the substrate, reflection/transmission
   amplitudes, and the test that pins the path difference under absorbing incidence.
@@ -332,8 +332,9 @@ Eight reference structures with a real transverse wavevector, isotropic outer me
 layers were checked: a lossless control, an absorbing exit medium, an absorbing incidence
 medium, 75 nm of propagation in one absorbing medium, a finite film under an absorbing
 incidence medium, and an incidence medium with complex ε·μ of positive real part. Top/bottom
-incidence, TE/TM/mixed polarization, 1D·conical·2D·4ff and the supported ETM/SMM combinations
-came to **304** solves. 4ff included only ETM, the one currently supported.
+incidence, TE/TM/mixed polarization, 1D·conical·2D·first-order and the supported ETM/SMM
+combinations came to **304** solves. The first-order path included only ETM, the one currently
+supported.
 
 - Largest error of the public complex reflection/transmission amplitudes against the
   independent boundary-condition/Airy calculation: below `8.25e-16`.
@@ -370,7 +371,7 @@ directly, the weight is `Re(q/ε)`. Replacing every `real(a / denom)` with
 Separately, a uniform absorbing medium with two diffraction orders incident at once was checked
 8 times: normal fundamental incidence, `(0,0)` amplitude 1 and `(1,0)` amplitude `0.5i`, period
 1000 nm, wavelength 500 nm, propagation distance 75 nm. The theoretical TM transmittance is
-`0.564563926081`. Currently 1D returns `0.564589751100` and conical/2D/4ff return
+`0.564563926081`. Currently 1D returns `0.564589751100` and conical/2D/first-order return
 `0.565551868830`. Re-evaluating the per-order power of the existing amplitudes brought every
 path within `1e-15` of theory. The plain `Σ|a_m|² Re(q_m)` in `_incident_flux` likewise has to
 become the true power weight for the polarization and the medium.
@@ -459,10 +460,10 @@ the working tree at the time of this investigation.
 The efficiency computation does not live in one function. The actual call relations are:
 
 ```text
-ETM, pure 1D ─────────────── the efficiency formula inside solve_1d()
-ETM, conical / 2D / 4ff ─── final_matching() → sp_efficiencies()
-SMM, pure 1D ─────────────── the efficiency formula inside smm_1d()
-SMM, conical / 2D ────────── _smm_sp() → sp_efficiencies()
+ETM, pure 1D ────────────────────── the efficiency formula inside solve_1d()
+ETM, conical / 2D / first-order ─── final_matching() → sp_efficiencies()
+SMM, pure 1D ────────────────────── the efficiency formula inside smm_1d()
+SMM, conical / 2D ───────────────── _smm_sp() → sp_efficiencies()
 ```
 
 | Location | Current problem | Required change |
@@ -516,8 +517,8 @@ place.**
 
 - Setup: all one material, two incident orders `(0,0): 1`, `(1,0): 0.5i`, wavelength 500 nm,
   period 1000 nm, thickness 75 nm. There should be no reflection.
-- Lossless ε=2.25 and absorbing ε=(1.5+0.3i)², TE/TM, conical/2D/4ff and the supported ETM/SMM:
-  20 checks in all.
+- Lossless ε=2.25 and absorbing ε=(1.5+0.3i)², TE/TM, conical/2D/first-order and the supported
+  ETM/SMM: 20 checks in all.
 - In lossless ETM, R of `incident` is about `1e-31`, while R of `s_inc`/`p_inc`, which mean the
   same pure polarization, is `0.0001754677013`. The complex amplitudes differ by up to about
   `0.0151650`.
@@ -599,8 +600,8 @@ which cannot tell ε from μ, has to be sorted out first. A power-direction chec
 for permeability is needed, and for passive problems at a real transverse wavevector the
 decaying branch and the lossless-limit power direction have to be chosen consistently.
 
-The call sites are the two solvers in `solve_1d.py`, `solve_2d.py`, `solve_2d_4ff.py`, and the
-two computation paths in `scattering.py`. The `Re(kz)>0` check in `_incident_flux` has to
+The call sites are the two solvers in `solve_1d.py`, `solve_2d.py`, `solve_2d_first_order.py`, and
+the two computation paths in `scattering.py`. The `Re(kz)>0` check in `_incident_flux` has to
 change too. Changing the meaning of a general conversion function such as `index_from_eps`
 unconditionally, or substituting the same rule into `mode_q` for internal finite layers, is
 outside the scope of the fix. The boundary conditions of half-spaces and the mode
@@ -656,7 +657,7 @@ orders. The `n/mu` factor that converts the public electric p coefficient to the
 magnetic amplitude is included. The complex ratio is never formed first with its real part
 taken afterwards.
 
-- Pure 1D ETM/SMM, conical/2D ETM/SMM and 4ff ETM use the same power definition.
+- Pure 1D ETM/SMM, conical/2D ETM/SMM and first-order ETM use the same power definition.
 - The denominators of the specified-polarization and pure s/p results are computed separately.
 - The incident columns of the pure s/p results returned alongside also use each order's
   wavevector. The single-incidence amplitude computation and the internal NVF/Fourier matrices
@@ -732,7 +733,7 @@ copied and no dependency added.
 
 Scope and return contract:
 
-- Connected in pure 1D ETM/SMM, conical ETM/SMM, 2D ETM/SMM and 4ff ETM.
+- Connected in pure 1D ETM/SMM, conical ETM/SMM, 2D ETM/SMM and first-order ETM.
 - Uses the incident power and interference of each of `incident`, `s_inc`, `p_inc`.
 - The two scalars are provided under `answers='efficiency'` too. This stage uses the boundary
   amplitudes right after the solve; it does not escalate to a higher answer level or
@@ -820,7 +821,7 @@ the relations above directly; no external code was copied and no dependency adde
 
 `conventions.incident_phase_index` computes the small root in rationalized form to avoid
 cancellation at negative `a`. `engine._incident_kxy` calls it, so NumPy, JAX, PyTorch, every
-ETM/SMM·2ff/4ff path and field reconstruction use the same incident wavevector. With
+ETM/SMM path of either formulation and field reconstruction use the same incident wavevector. With
 `incidence_side='bottom'` the actual ε·μ of `bot` is used, and a change of wavelength in a
 dispersive material comes through the evaluated material.
 

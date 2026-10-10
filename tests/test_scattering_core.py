@@ -1130,14 +1130,14 @@ def test_every_port_says_which_polarization_it_counts(side):
     Lit from below the blocks are handed over reversed (:func:`_scattering_matrix`), and the
     channel rides through that too: both ends of one matrix count the same waves. The 2D path
     twice, second- and first-order, because the two build their ports in different modules and
-    must still name one channel -- ``tests/test_smm_4ff.py`` joins them.
+    must still name one channel -- ``tests/test_smm_first_order.py`` joins them.
     """
     for kw, channel in ((dict(tetm='te'), 'te'), (dict(tetm='tm'), 'tm'),
                         (dict(tetm=None, psi=0.7, phi=0.0), 'sp')):
         solver, _ = _lit(side, **kw)
         ports = solver.scattering.entry_port, solver.scattering.exit_port
         assert tuple(p.channel for p in ports) == (channel, channel), kw
-    for formulation in ('2ff', '4ff'):
+    for formulation in ('second_order', 'first_order'):
         solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='amplitude',
                               incidence_side=side, **CASES_2D[0][1])
         solver.formulation = formulation

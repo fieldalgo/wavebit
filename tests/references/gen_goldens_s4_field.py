@@ -18,7 +18,7 @@ S4 cannot reach.
 
 **Where S4 reaches, measured 2026-08-14.** On a *uniform* stack the two solvers agree entry
 for entry at ~1e-15, on every field component, every reconstruction path (pure TE, pure TM,
-conical, 2D, and the first-order 4ff route), at 0/24/47 degrees and both azimuths. There is no
+conical, 2D, and the first-order route), at 0/24/47 degrees and both azimuths. There is no
 truncation on either side, so this is an exact comparison rather than a converged one.
 
 On a **patterned** layer it is not an oracle. Measured on a 1D binary grating: the continuous

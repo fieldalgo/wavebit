@@ -1,6 +1,6 @@
 """Choosing between the two formulations — and what each choice must not disturb.
 
-``tests/test_solve_2d_4ff.py`` pins the first-order engine itself, and
+``tests/test_solve_2d_first_order.py`` pins the first-order engine itself, and
 ``tests/test_anisotropic_berreman.py`` pins the physics it now answers through the public API.
 This file is about the *dispatch*: which path a given call takes, what happens at the edges of
 that decision, and — the half that is easy to lose — that the ordinary path is untouched by the
@@ -12,10 +12,10 @@ silently:
 * **A z-decoupled problem still runs on the second-order path**, and gives what it always gave.
   Widening a signature with five optional arguments is exactly the change that quietly reroutes
   everything; ``formulation_assigned`` is checked, not just the number.
-* **Forced ``'4ff'`` reproduces the ``'2ff'`` answer** on problems both can express — including a
-  patterned grating, where the two formulations genuinely disagree about what a layer *is* and
-  agree only about the answer. No external oracle provides this cross-check.
-* **Forced ``'2ff'`` refuses a z row** rather than dropping it.
+* **Forced ``'first_order'`` reproduces the ``'second_order'`` answer** on problems both can express
+  — including a patterned grating, where the two formulations genuinely disagree about what a layer
+  *is* and agree only about the answer. No external oracle provides this cross-check.
+* **Forced ``'second_order'`` refuses a z row** rather than dropping it.
 * **The transmitted amplitude is checked, not only the reflected one.** ``big_T`` feeds ``T_s`` /
   ``T_p`` directly, so a per-mode scale that cancels in ``R`` survives in ``T``; a route that got
   that wrong would match on reflection and be off by a constant factor on transmission, with
@@ -97,7 +97,7 @@ def test_a_tensor_without_a_z_row_stays_on_the_second_order_path(eps):
     """
     mee = solver(thickness=[180.0])
     res = mee.solve_conv(*uniform_slots([eps], 1, z_row=False))
-    assert mee.formulation_assigned == '2ff'
+    assert mee.formulation_assigned == 'second_order'
     assert np.isfinite(np.asarray(res.incident.R)).all()
 
 
@@ -111,14 +111,14 @@ def test_passing_the_z_slots_is_what_selects_the_first_order_path():
     zero_z = np.zeros((1, 1, 1), dtype=complex)
     mee = solver(thickness=[180.0])
     five = uniform_slots([DIAGONAL], 1, z_row=False)
-    res_2ff = mee.solve_conv(*five)
-    assert mee.formulation_assigned == '2ff'
+    res_second_order = mee.solve_conv(*five)
+    assert mee.formulation_assigned == 'second_order'
 
     mee = solver(thickness=[180.0])
-    res_4ff = mee.solve_conv(*five, zero_z, zero_z, zero_z, zero_z)
-    assert mee.formulation_assigned == '4ff'
+    res_first_order = mee.solve_conv(*five, zero_z, zero_z, zero_z, zero_z)
+    assert mee.formulation_assigned == 'first_order'
 
-    gap, where = worst_gap(channels(res_2ff), channels(res_4ff))
+    gap, where = worst_gap(channels(res_second_order), channels(res_first_order))
     assert gap < 1e-11, f'an empty z row changed the answer by {gap:.2e} on {where}'
 
 
@@ -128,7 +128,7 @@ def test_the_default_never_reaches_the_first_order_path_on_a_grating():
     structure[1, 5:15, 5:15] = 11.559999999999999           # permittivity: 3.4**2
     mee = solver(truncation_order=(3, 3), thickness=[90.0, 120.0], structure=structure)
     mee.solve()
-    assert mee.formulation_assigned == '2ff'
+    assert mee.formulation_assigned == 'second_order'
 
 
 def test_the_result_surface_is_the_same_object_the_other_paths_return():
@@ -153,7 +153,7 @@ def test_the_result_surface_is_the_same_object_the_other_paths_return():
     mee = solver(truncation_order=truncation_order, thickness=[180.0])
     res = mee.solve_conv(*uniform_slots([VOIGT], n_orders))
 
-    assert mee.formulation_assigned == '4ff'
+    assert mee.formulation_assigned == 'first_order'
     assert res.s_inc is not None and res.p_inc is not None
     R, T = np.asarray(res.incident.R), np.asarray(res.incident.T)
     assert R.shape == (2 * truncation_order[1] + 1, 2 * truncation_order[0] + 1)
@@ -180,10 +180,10 @@ def test_forcing_the_first_order_path_reproduces_a_uniform_anisotropic_answer():
     a = solver(thickness=thickness)
     res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
     b = solver(thickness=thickness)
-    b.formulation = '4ff'
+    b.formulation = 'first_order'
     res_b = b.solve_conv(*uniform_slots(layers, 1, z_row=False))
 
-    assert (a.formulation_assigned, b.formulation_assigned) == ('2ff', '4ff')
+    assert (a.formulation_assigned, b.formulation_assigned) == ('second_order', 'first_order')
     gap, where = worst_gap(channels(res_a), channels(res_b))
     assert gap < 1e-11, f'the two formulations disagree by {gap:.2e} on {where}'
 
@@ -207,10 +207,10 @@ def test_forcing_the_first_order_path_reproduces_a_patterned_grating(truncation_
     a = solver(truncation_order=truncation_order, thickness=[85.0, 130.0], structure=structure)
     res_a = a.solve()
     b = solver(truncation_order=truncation_order, thickness=[85.0, 130.0], structure=structure)
-    b.formulation = '4ff'
+    b.formulation = 'first_order'
     res_b = b.solve()
 
-    assert (a.formulation_assigned, b.formulation_assigned) == ('2ff', '4ff')
+    assert (a.formulation_assigned, b.formulation_assigned) == ('second_order', 'first_order')
     gap, where = worst_gap(channels(res_a), channels(res_b))
     assert gap < 1e-10, f'the two formulations disagree by {gap:.2e} on {where}'
 
@@ -231,7 +231,7 @@ def test_the_transmitted_amplitude_is_not_merely_proportional():
     a = solver(thickness=thickness)
     res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
     b = solver(thickness=thickness)
-    b.formulation = '4ff'
+    b.formulation = 'first_order'
     res_b = b.solve_conv(*uniform_slots(layers, 1, z_row=False))
 
     assert float(np.asarray(res_a.incident.R).sum() + np.asarray(res_a.incident.T).sum()) < 0.99
@@ -267,7 +267,7 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bo
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
     b = wavebit.rcwa(backend=0, truncation_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
-    b.formulation = '4ff'
+    b.formulation = 'first_order'
 
     res_a = a.solve_conv(*uniform_slots(layers, 1, z_row=False))
     res_b = b.solve_conv(*uniform_slots(layers, 1, z_row=False))
@@ -280,7 +280,7 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bo
 def test_forcing_the_second_order_path_on_a_z_row_raises():
     """Naming the slot that cannot be held, rather than reporting a shape mismatch."""
     mee = solver(thickness=[180.0])
-    mee.formulation = '2ff'
+    mee.formulation = 'second_order'
     with pytest.raises(ValueError, match='epxz_conv_all'):
         mee.solve_conv(*uniform_slots([VOIGT], 1))
 
@@ -293,13 +293,13 @@ def test_an_unknown_formulation_is_refused_at_the_setter():
 def test_the_first_order_scattering_path_does_not_run_etm(monkeypatch):
     """An SMM request must use its cascade, including field reconstruction."""
     import importlib
-    module = importlib.import_module('wavebit._core.solve_2d_4ff')
+    module = importlib.import_module('wavebit._core.solve_2d_first_order')
     def unexpected(*args, **kwargs):
         raise AssertionError('SMM called the ETM recursion')
     monkeypatch.setattr(module, '_etm_recursion', unexpected)
     mee = solver(thickness=[180.0], layer_algorithm='SMM', answers='field')
     result = mee.solve_conv(*uniform_slots([VOIGT], 1))
-    assert mee.formulation_assigned == '4ff'
+    assert mee.formulation_assigned == 'first_order'
     assert np.isfinite(result.R).all()
     assert np.isfinite(mee.reconstruct_field(sample_x=2, sample_y=2, sample_z=3)).all()
     assert mee.scattering.S11.shape == (2, 2)
@@ -307,7 +307,7 @@ def test_the_first_order_scattering_path_does_not_run_etm(monkeypatch):
 
 @pytest.mark.parametrize('z_row', [True, False], ids=['with a z row', 'without one'])
 def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row):
-    """``'TMM'`` is a diagnostic inside the 4ff module and must not be selectable.
+    """``'TMM'`` is a diagnostic inside the first-order module and must not be selectable.
 
     It is the plain ``Psi exp(...) Psi^-1`` transfer, kept there only to show that the
     stabilisation is load-bearing — it holds the growing and decaying halves in one matrix and
@@ -322,10 +322,10 @@ def test_the_unstabilised_transfer_cannot_be_reached_from_the_public_path(z_row)
 
 
 def test_the_scattering_algorithm_still_works_without_a_z_row():
-    """The control: the ordinary two-field SMM path still works."""
+    """The control: the ordinary second-order SMM path still works."""
     mee = solver(thickness=[180.0], layer_algorithm='SMM')
     res = mee.solve_conv(*uniform_slots([IN_PLANE], 1, z_row=False))
-    assert mee.formulation_assigned == '2ff'
+    assert mee.formulation_assigned == 'second_order'
     assert np.isfinite(np.asarray(res.incident.R)).all()
 
 
@@ -334,12 +334,12 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
 
     The first-order path sets ``_grating_type = 2`` as well — a z row is a choice of
     *layout* as much as of formulation — so a ``reconstruct_field`` that read only the grating
-    type would hand a 4ff solve to the 2ff ``field_2d``. That is not a crash but a wrong
-    answer: the two reconstructions read the same two state slots and one of them would
+    type would hand a first-order solve to the second-order ``field_2d``. That is not a crash but a
+    wrong answer: the two reconstructions read the same two state slots and one of them would
     silently reconstruct with the ``E_z`` line that assumes the z row is empty.
 
     Asserted by watching which reconstruction actually runs, rather than by trusting the
-    numbers — ``tests/test_field_4ff.py`` is where the numbers are checked.
+    numbers — ``tests/test_field_first_order.py`` is where the numbers are checked.
     """
     # `reconstruct_field` folded into `_core.engine` in C8, so the names it dispatches on
     # are looked up there now. Patching the backend module would patch a name nothing
@@ -349,7 +349,7 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
 
     mee = solver(thickness=[180.0], answers='field')
     mee.solve_conv(*uniform_slots([VOIGT], 1))
-    assert mee.formulation_assigned == '4ff'
+    assert mee.formulation_assigned == 'first_order'
     assert mee.grating_type == 2, 'the premise: the grating type cannot tell them apart'
 
     seen = []
@@ -363,10 +363,10 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
         monkeypatch.setattr(dispatch_site, name, wrapper)
 
     spy('field_2d')
-    spy('field_2d_4ff')
+    spy('field_2d_first_order')
 
     cell = mee.reconstruct_field(sample_x=4, sample_y=4, sample_z=4)
-    assert seen == ['field_2d_4ff'], seen
+    assert seen == ['field_2d_first_order'], seen
     assert np.isfinite(np.asarray(cell)).all()
 
 
@@ -404,7 +404,7 @@ def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
     to = xp.asarray if backend == 1 else xp.as_tensor
     got = mee.solve_conv(*[to(s) for s in uniform_slots([VOIGT], 1)])
 
-    assert mee.formulation_assigned == '4ff'
+    assert mee.formulation_assigned == 'first_order'
     gap, where = worst_gap(channels(ref), channels(got))
     assert gap < 1e-12, f'backend {backend} is {gap:.2e} from NumPy on {where}'
 
@@ -467,7 +467,7 @@ def test_the_degenerate_mode_guard_still_fires_where_it_can():
     Under ``jit`` there is nothing concrete to count and the guard is skipped — a real
     consequence of tracing, stated here rather than left to be discovered.
     """
-    from wavebit._core.solve_2d_4ff import _forward_count, split_forward_backward
+    from wavebit._core.solve_2d_first_order import _forward_count, split_forward_backward
 
     with pytest.raises(ValueError, match='mode split found 4 forward modes'):
         split_forward_backward(np, np.eye(4, dtype=complex) * 1j, 1)
@@ -498,7 +498,7 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
 
     n_orders = 2 * 3 + 1
     mee.solve_conv(*uniform_slots([VOIGT], n_orders))
-    assert (mee.grating_type, mee.formulation_assigned) == (2, '4ff')
+    assert (mee.grating_type, mee.formulation_assigned) == (2, 'first_order')
 
 
 # ------------------------------------------------- asking a 1D cell for y diffraction orders

@@ -20,8 +20,8 @@ That state has had three versions on develop:
                  passive and gain at a real one, magnetic, lit from below, and three thick enough
                  that the ETM's cap turns a root. Worst residual over s and p, all six
                  components, relative to the wave where it is sampled (past the cap the largest
-                 one is ``G`` times larger), on the SMM 2ff paths (conical, 2D, TE, TM) and on
-                 every other path.
+                 one is ``G`` times larger), on the SMM second-order paths (conical, 2D, TE, TM) and
+                 on every other path.
   2 gratings     ``[1, 25, 1, 25, 25, 25]`` on ``eps = 25`` (2D: a 6x6 raster), two layers, at
                  ``theta = 0.5+0.3j``: SMM's field against the ETM's, 160 nm and 4.8 um.
   3 grows below  8.5 um of vacuum under 500 nm of ``eps = 4`` on 2.25, ``theta = 0.5+0.3j``: a root
@@ -87,6 +87,16 @@ def maystre(x):
     return v if v.real + v.imag > 0 else -v
 
 
+def formulation(value):
+    """``value`` spelled as the imported ``wavebit`` takes it: ``'second_order'`` /
+    ``'first_order'`` since 2026-10-10, ``'2ff'`` / ``'4ff'`` before. Archived trees run this
+    script too (``--compare``), and they know only the old spelling."""
+    from wavebit._core.enums import Formulation
+    if value is None or hasattr(Formulation, 'FIRST_ORDER'):
+        return value
+    return {'second_order': '2ff', 'first_order': '4ff'}[value]
+
+
 def guarded(fn):
     """A measurement, or the name of what it raised."""
     try:
@@ -109,8 +119,8 @@ SCENES = [  # label, theta, eps, mu, side, incidence eps, thickness
     ('eps 2.25 in itself, 4869 nm, from below (G 2.8e4)', CHIP_THETA, 2.25, 1.0, 'bottom', 2.25,
      4869.0),
 ]
-PATHS = [('conical', '2ff'), ('2d', '2ff'), ('te', None), ('tm', None), ('conical', '4ff'),
-         ('2d', '4ff')]
+PATHS = [('conical', 'second_order'), ('2d', 'second_order'), ('te', None), ('tm', None),
+         ('conical', 'first_order'), ('2d', 'first_order')]
 
 
 def plane_wave_worst(scene, kind, form, algo):
@@ -131,7 +141,7 @@ def plane_wave_worst(scene, kind, form, algo):
     if mu != 1.0:
         solver.mu = np.full(grid, mu, dtype=complex)
     if form is not None:
-        solver.formulation = form
+        solver.formulation = formulation(form)
     solver.solve(auto_detune=False)
     z = np.linspace(0.05, 0.95, 5) * thick
     if kind in ('te', 'tm'):
@@ -175,11 +185,11 @@ def section_closed_form():
     rows = {}
     for scene in SCENES:
         smm = [guarded(lambda: plane_wave_worst(scene, k, f, 'SMM'))
-               for k, f in PATHS if f != '4ff']
+               for k, f in PATHS if f != 'first_order']
         others = ([guarded(lambda: plane_wave_worst(scene, k, f, 'ETM')) for k, f in PATHS]
                   + [guarded(lambda: plane_wave_worst(scene, k, f, 'SMM'))
-                     for k, f in PATHS if f == '4ff'])
-        rows[f'{scene[0]}: SMM 2ff/TE/TM'] = worst_of(smm)
+                     for k, f in PATHS if f == 'first_order'])
+        rows[f'{scene[0]}: SMM second-order'] = worst_of(smm)
         rows[f'{scene[0]}: every other path'] = worst_of(others)
     return rows
 
@@ -284,12 +294,12 @@ def section_grows_below():
 
 # --------------------------------------------------------------------------- 4 own medium
 
-def chip(algo, form='2ff', nudge=1.0):
+def chip(algo, form='second_order', nudge=1.0):
     s = wavebit.rcwa(backend=0, top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41, psi=0.27,
                      wavelength=1000., period=[1654.489947568981], truncation_order=[7],
                      thickness=[4869.], structure=np.full((1, 1, 8), 2.25 + 0j),
                      layer_algorithm=algo, answers='field', incidence_side='bottom')
-    s.formulation = form
+    s.formulation = formulation(form)
     s.solve(auto_detune=False)
     return np.asarray(s.reconstruct_field(sample_x=5, sample_y=1, sample_z=6,
                                           incidences=('s', 'p')))
@@ -299,7 +309,8 @@ def section_own_medium():
     return {'SMM vs ETM': guarded(lambda: rel(chip('SMM'), chip('ETM'))),
             'SMM, 1e-14 nudge of theta': guarded(
                 lambda: rel(chip('SMM', nudge=1 + 1e-14), chip('SMM'))),
-            'ETM vs 4ff (4ff floor)': guarded(lambda: rel(chip('ETM'), chip('ETM', '4ff')))}
+            'ETM vs first-order (its own floor)': guarded(
+                lambda: rel(chip('ETM'), chip('ETM', 'first_order')))}
 
 
 # ---------------------------------------------------------------------------- 5 real angle
@@ -317,7 +328,7 @@ def metal_field(algo, form, theta, thickness):
                      phi=0.4, structure=raster(-15 + 0.8j), truncation_order=[5, 5],
                      period=[400., 400.], thickness=thickness, layer_algorithm=algo,
                      answers='field', factorization='li')
-    s.formulation = form
+    s.formulation = formulation(form)
     s.solve(auto_detune=False)
     return np.asarray(s.reconstruct_field(sample_x=8, sample_y=8, sample_z=8,
                                           incidences=('s', 'p')))
@@ -330,7 +341,7 @@ def dng_field(algo, form):
                      wavelength=WL, thickness=[100., 60.], truncation_order=[3, 3],
                      period=[1200., 1200.], layer_algorithm=algo, answers='field')
     s.structure, s.mu = eps, mu
-    s.formulation = form
+    s.formulation = formulation(form)
     s.solve(auto_detune=False)
     return np.asarray(s.reconstruct_field(sample_x=5, sample_y=5, sample_z=4,
                                           incidences=('s', 'p')))
@@ -353,10 +364,10 @@ def section_real_angle():
     rows = {}
     for label, theta, thick in (('oblique 0.35', 0.35, [120., 99.]), ('normal', 0.0, [120., 95.])):
         rows[f'metal raster, {label}: SMM vs ETM'] = guarded(
-            lambda: rel(metal_field('SMM', '2ff', theta, thick),
-                        metal_field('ETM', '2ff', theta, thick)))
-    rows['active patterned double negative, 0.5: SMM 2ff vs ETM 4ff'] = guarded(
-        lambda: rel(dng_field('SMM', '2ff'), dng_field('ETM', '4ff')))
+            lambda: rel(metal_field('SMM', 'second_order', theta, thick),
+                        metal_field('ETM', 'second_order', theta, thick)))
+    rows['active patterned double negative, 0.5: SMM vs first-order ETM'] = guarded(
+        lambda: rel(dng_field('SMM', 'second_order'), dng_field('ETM', 'first_order')))
     for algo in ('SMM', 'ETM'):
         rows[f'complex64, {algo} vs complex128 ETM, worst of tm/conical at 0 and 0.5'] = worst_of([
             guarded(lambda: single_precision(k, t, algo))
@@ -366,13 +377,13 @@ def section_real_angle():
 
 # ---------------------------------------------------------------------------- 6 below axis
 
-def uniform_dng(algo, form='2ff'):
+def uniform_dng(algo, form='second_order'):
     s = wavebit.rcwa(backend=0, top=1.0, bot=wavebit.Material(-4.0, mu=-1.0), theta=0.5 - 0.3j,
                      wavelength=WL, thickness=[100.], layer_algorithm=algo, answers='field',
                      psi=np.pi / 2, phi=PHI, truncation_order=[0, 0], period=[2000., 2000.])
     s.structure = np.full((1, 2, 2), -4.0 + 0j)
     s.mu = np.full((1, 2, 2), -1.0 + 0j)
-    s.formulation = form
+    s.formulation = formulation(form)
     s.solve(auto_detune=False)
     return np.asarray(s.reconstruct_field(sample_x=3, sample_y=3, sample_z=4,
                                           incidences=('s', 'p')))
@@ -380,7 +391,8 @@ def uniform_dng(algo, form='2ff'):
 
 def section_below_axis():
     return {'SMM vs ETM': guarded(lambda: rel(uniform_dng('SMM'), uniform_dng('ETM'))),
-            'ETM vs 4ff': guarded(lambda: rel(uniform_dng('ETM'), uniform_dng('ETM', '4ff')))}
+            'ETM vs first-order': guarded(
+                lambda: rel(uniform_dng('ETM'), uniform_dng('ETM', 'first_order')))}
 
 
 # --------------------------------------------------------------------------------- 7 rungs

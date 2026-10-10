@@ -69,8 +69,9 @@ def _relative(a, b):
 #: entrance passed a bound so scaled). The thick rows grow past the ETM's cap -- by ``2.7e4``,
 #: ``6.3e5`` and ``2.8e4`` -- and there every path sits near ``eps * G**2`` at the lit face, 1.6e-7,
 #: 8.9e-5 and 1.8e-7: over seven 1e-13 nudges of ``theta`` the worst path reached 3.2e-7, 1.8e-4
-#: and 3.5e-7 (4ff), SMM's pure TE/TM paths 7.1e-8, 4.4e-5 and 1.3e-7. The ``M`` walk left SMM
-#: 0.2 to 1.0 off on these rows and the relabel 0.15 to 2.4. The thin rows are at 1.3e-14 at most.
+#: and 3.5e-7 (first-order), SMM's pure TE/TM paths 7.1e-8, 4.4e-5 and 1.3e-7. The ``M`` walk
+#: left SMM 0.2 to 1.0 off on these rows and the relabel 0.15 to 2.4. The thin rows are at 1.3e-14
+#: at most.
 SCENES = [
     ('vacuum, complex angle', THETA, 1.0, 1.0, 'top', 1.0, 100.0, 1e-12),
     ('eps 4 on its own substrate, real angle', 0.5, 4.0, 1.0, 'top', 1.0, 100.0, 1e-12),
@@ -85,9 +86,10 @@ SCENES = [
 ]
 SCENE_IDS = [s[0] for s in SCENES]
 
-#: (kind, formulation, algorithm). ETM and 4ff were right throughout and are here as the twins
-#: the SMM 2ff rows must agree with.
-PATHS = [(kind, form, algo) for kind in ('conical', '2d') for form in ('2ff', '4ff')
+#: (kind, formulation, algorithm). ETM and the first-order path were right throughout and are
+#: here as the twins the SMM second-order rows must agree with.
+PATHS = [(kind, form, algo) for kind in ('conical', '2d')
+         for form in ('second_order', 'first_order')
          for algo in ('ETM', 'SMM')] + [(k, None, a) for k in ('te', 'tm') for a in ('ETM', 'SMM')]
 PATH_IDS = [f'{k}-{f}-{a}' if f else f'{k}-{a}' for k, f, a in PATHS]
 
@@ -163,9 +165,9 @@ def test_a_reflectionless_uniform_scene_reconstructs_its_plane_wave(
 
     At a complex angle or with gain the wave sits on the cascade's ``-`` label; the passive
     real-angle row is the one whose wave is the layer's ``+`` mode, so the closed form reads both.
-    Before the gap walk every SMM 2ff and pure TE/TM case failed: by 0.24 to 1.5e6 on the thin
-    rows before 429f4ac, and on the thick ones under the relabel (07ae0f6) by 0.15 to 2.4 of the
-    largest field, or with ``LinAlgError``.
+    Before the gap walk every SMM second-order and pure TE/TM case failed: by 0.24 to 1.5e6 on
+    the thin rows before 429f4ac, and on the thick ones under the relabel (07ae0f6) by 0.15 to
+    2.4 of the largest field, or with ``LinAlgError``.
     """
     n_inc = np.sqrt(complex(eps_inc))
     kpar = n_inc * np.sin(theta)
@@ -259,7 +261,7 @@ def test_a_root_growing_below_another_layer_costs_no_digits():
         assert _relative(field('SMM', kind), field('ETM', kind)) < 1e-12, kind
 
 
-def _chip(algo, form='2ff', nudge=1.0):
+def _chip(algo, form='second_order', nudge=1.0):
     solver = wavebit.rcwa(backend=0, top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41,
                           psi=0.27, wavelength=1000., period=[1654.489947568981],
                           truncation_order=[7], thickness=[4869.],
@@ -277,12 +279,13 @@ def test_a_capped_layer_on_its_own_medium_is_the_etms_and_steady():
     The ETM's cap turns a growing root back to the decaying one there, and the interface below
     reflects nothing: on the ETM's labels ``M`` was a rounding residue, and the relabelled SMM
     field came out 0.75 off and moved 0.92 under a 1e-14 nudge of ``theta``. Now it is the ETM's
-    to 1.2e-12 and the nudge moves it 1.3e-12. 4ff, at its own floor here (3e-6), vouches for both.
+    to 1.2e-12 and the nudge moves it 1.3e-12. The first-order path, at its own floor here
+    (3e-6), vouches for both.
     """
     smm = _chip('SMM')
     assert _relative(smm, _chip('ETM')) < 1e-10
     assert _relative(_chip('SMM', nudge=1 + 1e-14), smm) < 1e-10
-    assert _relative(smm, _chip('ETM', '4ff')) < 1e-4
+    assert _relative(smm, _chip('ETM', 'first_order')) < 1e-4
 
 
 #: A grating over an ``eps = 2.25`` spacer, 900 nm on a 600 nm period at normal incidence: orders
@@ -414,13 +417,13 @@ def test_a_metal_raster_at_a_real_angle(theta, thickness):
     A truncated metal operator can hold a root with ``Im(q**2) > 0`` at a real ``k_par``, so the
     two label rules part there too. The relabel rebuilt such layers on growing roots and left
     SMM's field 3.2e-8 (oblique) and 1.2e-8 (normal) off where it had been at 1e-12 (3.5e-6 and
-    2.8e-6 on the gap before 9a92bf0). 4ff, which shares neither 2ff algorithm's modes, agrees
-    with both.
+    2.8e-6 on the gap before 9a92bf0). The first-order path, which shares neither second-order
+    algorithm's modes, agrees with both.
     """
-    etm = _metal_field('ETM', '2ff', theta, thickness)
-    smm = _metal_field('SMM', '2ff', theta, thickness)
+    etm = _metal_field('ETM', 'second_order', theta, thickness)
+    smm = _metal_field('SMM', 'second_order', theta, thickness)
     assert _relative(smm, etm) < 1e-10
-    assert _relative(smm, _metal_field('ETM', '4ff', theta, thickness)) < 1e-10
+    assert _relative(smm, _metal_field('ETM', 'first_order', theta, thickness)) < 1e-10
 
 
 @pytest.mark.parametrize('kind', ['tm', 'conical'])
@@ -447,11 +450,13 @@ def test_single_precision_at_a_real_angle(kind, theta):
 
 
 def test_an_active_patterned_double_negative_at_a_real_angle():
-    """Gain double-negative cells in a dielectric raster, ``theta = 0.5``: SMM's field is 4ff's.
+    """Gain double-negative cells in a dielectric raster, ``theta = 0.5``: SMM's field is the
+    first-order one.
 
     The ETM's power-down labels flip 41 of 98 modes per layer to growing roots there, and the
     relabelled state was 5.9e-11 off where the ``M`` walk on the cascade's labels had been at
-    4.0e-12; the walk over ``g`` is at 5.4e-13. (The ETM's own 2ff field is 5.6e-12 from 4ff.)
+    4.0e-12; the walk over ``g`` is at 5.4e-13. (The ETM's own second-order field is 5.6e-12
+    from the first-order one.)
     """
     eps = RASTER.astype(complex)
     mu = np.ones_like(eps)
@@ -466,10 +471,10 @@ def test_an_active_patterned_double_negative_at_a_real_angle():
         solver.solve()
         return np.asarray(solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4,
                                                    incidences=('s', 'p')))
-    assert _relative(field('SMM', '2ff'), field('ETM', '4ff')) < 1e-11
+    assert _relative(field('SMM', 'second_order'), field('ETM', 'first_order')) < 1e-11
 
 
-def _double_negative_cell(algo, theta, form='2ff'):
+def _double_negative_cell(algo, theta, form='second_order'):
     eps, mu = -4.0, -1.0
     solver = wavebit.rcwa(backend=0, top=1.0, bot=wavebit.Material(eps, mu=mu), theta=theta,
                           wavelength=WL, thickness=[100.], layer_algorithm=algo,
@@ -487,12 +492,13 @@ def test_a_uniform_double_negative_on_itself_below_the_real_axis():
     """A uniform double negative on its own medium at ``theta = 0.5-0.3j``: SMM's field is the ETM's.
 
     The mirror label (:func:`~wavebit._core.conventions.etm_mode_q`) and the decaying one part
-    here, and the ``M`` walk was 2.0 off. 4ff, which labels by flux, vouches for the ETM.
+    here, and the ``M`` walk was 2.0 off. The first-order path, which labels by flux, vouches
+    for the ETM.
     """
     theta = 0.5 - 0.3j
     etm = _double_negative_cell('ETM', theta)
     scale = np.max(np.abs(etm))
-    assert np.max(np.abs(_double_negative_cell('ETM', theta, '4ff') - etm)) < 1e-12 * scale
+    assert np.max(np.abs(_double_negative_cell('ETM', theta, 'first_order') - etm)) < 1e-12 * scale
     assert np.max(np.abs(_double_negative_cell('SMM', theta) - etm)) < 1e-12 * scale
 
 

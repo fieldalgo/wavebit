@@ -23,7 +23,7 @@ public bottom/top ports in the right-handed xyz frame (+z up).
 
 Validation: tests/test_full_tensor_patterns.py (independent laminate
 integrals and Maxwell transfer, magnetic duality, fields and gradients),
-tests/test_anisotropic_berreman.py, tests/test_field_4ff.py, and the checked-in
+tests/test_anisotropic_berreman.py, tests/test_field_first_order.py, and the checked-in
 RETICOLO/fmmax references. No external solver code is included here.
 """
 from cmath import sqrt as _csqrt
@@ -52,13 +52,13 @@ _EPS64 = 2.220446049250313e-16
 _MAX_EXPONENT = 9.0
 
 
-def layer_matrix_4ff(xp, Kx, Ky, exx, exy, exz, eyx, eyy, eyz, ezx, ezy, ezz_i,
-                     mu_blocks=None):
+def layer_matrix_first_order(xp, Kx, Ky, exx, exy, exz, eyx, eyy, eyz, ezx, ezy, ezz_i,
+                             mu_blocks=None):
     """``M`` in ``dpsi/dz = i k0 M psi`` for ``psi = (Ex, Ey, Hx, Hy)``.
 
     All arguments are ``n_orders x n_orders`` convolution matrices except ``Kx`` / ``Ky``, which
-    are the diagonal order matrices the 2ff path builds. ``ezz_i`` is the *inverse* of the zz
-    block, matching how :func:`wavebit._core.solve_2d.layer_modes_2d` already carries it.
+    are the diagonal order matrices the second-order path builds. ``ezz_i`` is the *inverse* of
+    the zz block, matching how :func:`wavebit._core.solve_2d.layer_modes_2d` already carries it.
     """
     n_orders = Kx.shape[0]
     I = xp.eye(n_orders, dtype=Kx.dtype, device=getattr(Kx, 'device', None))
@@ -165,8 +165,8 @@ def split_forward_backward(xp, M, n_orders, k0_d=None):
 def _cap_round_trips(xp, M, lam, psi, forward, k0_d):
     """The split's labels with every round trip across the layer capped at ``eps**-0.5``.
 
-    The 4ff twin of :func:`~wavebit._core.conventions.etm_mode_q`'s cap, and the reason it cannot
-    be a per-mode rule here. Both stack algorithms carry a layer's reflection state as
+    The first-order twin of :func:`~wavebit._core.conventions.etm_mode_q`'s cap, and the reason
+    it cannot be a per-mode rule here. Both stack algorithms carry a layer's reflection state as
     ``Y = X_b R X_f``: entry ``(b, a)`` is forward mode ``a`` going down, reflecting into backward
     mode ``b`` and coming back, and its size is ``exp(rt) |R_ba|`` with the round trip
     ``rt = k0 d (Im lam_b - Im lam_a)``. A growing round trip costs about ``eps*exp(rt)``; swapping
@@ -203,7 +203,7 @@ def _cap_round_trips(xp, M, lam, psi, forward, k0_d):
 
     What the rule cannot see is a pivot that the *environment* makes zero inside a block: a mode
     the medium below receives without any reflection (a uniaxial layer whose ordinary index equals
-    its substrate's). The swap then divides by that zero -- the 4ff face of the case where
+    its substrate's). The swap then divides by that zero -- the first-order face of the case where
     ``etm_mode_q``'s cap meets an index-matched half-space. Such a scene is ill-conditioned in its
     own data (a 1e-16 perturbation of the layer moved the answer by 1e-3 to 1 from 20 um on), so
     no labels make it accurate; the cap makes it worse than the data warrant where it swaps.
@@ -310,11 +310,11 @@ def _run_k0_ds(xp, k0, layers):
 
     A run is adjacent layers equal, to ``sqrt(eps)``, in all nine permittivity blocks and all
     nine permeability ones (absent on both, or equal); :func:`~wavebit._core.conventions.run_k0_d`
-    says why it decides once. On this path the reason bites harder than on 2ff: SMM has no gap
-    medium to join two slices through, so a slice that swapped labels its neighbour kept made
-    :func:`_interface_s` hold eigenvectors twice -- 29 of them, cond 5.5e17, for a gyrotropic
-    layer cut 20 um + 1.5 um at ``truncation_order = (2, 2)`` -- and the answer finite garbage
-    that differed between backends. The same material written twice must join too: a tilted
+    says why it decides once. On this path the reason bites harder than on the second-order
+    one: SMM has no gap medium to join two slices through, so a slice that swapped labels its
+    neighbour kept made :func:`_interface_s` hold eigenvectors twice -- 29 of them, cond 5.5e17, for
+    a gyrotropic layer cut 20 um + 1.5 um at ``truncation_order = (2, 2)`` -- and the answer finite
+    garbage that differed between backends. The same material written twice must join too: a tilted
     uniaxial layer as 2.5 um + 1.5 um, the thin slice a rectangle of it drawn on itself (5.6e-17
     apart), put SMM 1.6 off at ``theta = 0.2+0.6j``.
     """
@@ -334,7 +334,7 @@ def _run_pq(xp, psi_f, psi_b, G, below, join):
     the difference of the two layers' modes, ``[I; Y] + [psi_f, psi_b]^-1 ((psi_f_b - psi_f) +
     (psi_b_b - psi_b) Y)``, the same algebra; slices of one layer have bit-equal modes, so it is
     ``[I; Y]`` exactly and a split layer steps as the uncut one -- the reason
-    :func:`~wavebit._core.solve_1d._run_ab` gives on the 2ff path.
+    :func:`~wavebit._core.solve_1d._run_ab` gives on the second-order path.
     """
     basis = xp.concat([psi_f, psi_b], axis=1)
     if join is not True:
@@ -370,7 +370,7 @@ def _forward_count(xp, key):
 
 
 def vacuum_sp_states(xp, kx, ky, n_orders, order=0):
-    """``(psi_s, psi_p)``: unit-amplitude incident plane waves in vacuum, as ``4ff`` states.
+    """``(psi_s, psi_p)``: unit-amplitude incident plane waves in vacuum, as first-order states.
 
     The incident field has to be named rather than picked out of the vacuum eigenbasis. In
     vacuum both forward modes share ``lam = kz``, so that eigenspace is degenerate and *any*
@@ -425,7 +425,7 @@ def vacuum_sp_states(xp, kx, ky, n_orders, order=0):
     # * Complex `kx` (a complex incidence angle). TODO: undefined here. Under `e^{-iwt}` with
     #   `Im(n) > 0` a complex theta is an inhomogeneous wave by construction, so "evanescent,
     #   therefore refuse" stops being the rule -- `|kt| > 1` would reject the legitimate case
-    #   rather than the unnameable one. `docs/first-order-4ff.md` does not scope complex
+    #   rather than the unnameable one. `docs/first-order-formulation.md` does not scope complex
     #   incidence and no test reaches it, so this refuses rather than guessing. The `float()`
     #   cast that used to sit above admitted it silently and returned the wrong state, and it
     #   disarmed the line below too: `theta = 0.2 + 0.9j` has a true `|kt| = 1.046` and the
@@ -466,8 +466,8 @@ def _interface_s(xp, psi1_f, psi1_b, psi2_f, psi2_b):
         Psi1_f a1_f + Psi1_b a1_b = Psi2_f a2_f + Psi2_b a2_b
 
     and grouping the two *outgoing* sets on the left gives the scattering form directly. No
-    ``kz`` sign flip and no gap medium is needed here — the 2ff path needs both because its two
-    directions share one eigenvector, and these do not.
+    ``kz`` sign flip and no gap medium is needed here — the second-order path needs both
+    because its two directions share one eigenvector, and these do not.
     """
     n = psi1_f.shape[1]
     out = xp.concat([psi1_b, -psi2_f], axis=1)
@@ -516,7 +516,7 @@ def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
     layers = list(layers)
     for (eps_blocks, d), k0_d in zip(layers, _run_k0_ds(xp, k0, layers)[0]):
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders, k0_d)
+            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, k0_d)
         interface = _interface_s(xp, prev_f, prev_b, psi_f, psi_b)
         propagation = _propagate_s(xp, lam_f, lam_b, k0, d, n_orders)
         for part in (interface, propagation):
@@ -560,10 +560,10 @@ def _forward_amplitudes(xp, incident, psi_vf, psi_vb, n_orders):
 
 
 def _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
-    """Enhanced transmittance matrix — the 2ff path's stable transfer, carried over to 4ff.
+    """Enhanced transmittance matrix — the second-order path's stable transfer, carried over here.
 
     Same idea as :func:`wavebit._core.solve_2d.solve_2d`'s ``big_A_i`` / ``big_T`` recursion
-    (Moharam et al. 1995), which is why the 2ff transfer is stable while the naive one in
+    (Moharam et al. 1995), which is why the second-order transfer is stable while the naive one in
     :func:`_solve_naive` is not. The growth is not removed by better conditioning; it is arranged
     never to appear.
 
@@ -589,8 +589,8 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
     """Sweep the ETM recursion up the stack: ``(G_above, T_acc, layer_info_list)``.
 
     Split out of :func:`_solve_etm` because the recursion is the part
-    :func:`solve_2d_4ff` shares — it seeds a half-space of index ``n_bot`` rather than vacuum
-    and hands the result to the s/p matching instead of matching against a vacuum basis here.
+    :func:`solve_2d_first_order` shares — it seeds a half-space of index ``n_bot`` rather than
+    vacuum and hands the result to the s/p matching instead of matching against a vacuum basis here.
     The arithmetic is untouched by the split.
 
     ``G`` maps an unknown amplitude vector to the transverse state; whatever coordinates the
@@ -602,8 +602,8 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
     ``layer_info_list`` is what field reconstruction propagates — the counterpart of the
     ``[epz_conv_i, W, V, q, d, big_A_i, big_B]`` records
     :func:`wavebit._core.solve_2d.solve_2d` leaves behind, appended **bottom-to-top** for the
-    same reason (:func:`wavebit._core.fields.field_2d_4ff` walks it in reverse). Each entry is
-    ``[eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i]``, and the three pieces that are
+    same reason (:func:`wavebit._core.fields.field_2d_first_order` walks it in reverse). Each entry
+    is ``[eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i]``, and the three pieces that are
     not simply the layer's modes are exactly the two amplitude maps this loop already forms:
 
     * ``P_i @ X_f`` carries the unknown *down* one layer (``t = P_i X_f t'``), which is what
@@ -612,7 +612,7 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
       layer's **bottom** face, which is where ``X_b`` in the ``G`` update starts from.
 
     ``eps_blocks`` rides along because ``E_z`` needs ``ezz_i``, ``ezx`` and ``ezy`` — the one
-    part of the reconstruction the 2ff path cannot lend.
+    part of the reconstruction the second-order path cannot lend.
     """
     T_acc = xp.astype(xp.eye(2 * n_orders), Kx.dtype)
     layer_info_list = []
@@ -622,7 +622,7 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
     for index in range(len(layers) - 1, -1, -1):
         eps_blocks, d = layers[index]
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders, run[index])
+            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, run[index])
         X_f = exponential(xp, lam_f, 1j*k0*d)
         X_b = exponential(xp, lam_b, -1j*k0*d)
 
@@ -654,7 +654,7 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     P = xp.astype(xp.eye(4 * n_orders), Kx.dtype)
     for eps_blocks, d in layers:
         lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_4ff(xp, Kx, Ky, **eps_blocks), n_orders)
+            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders)
         lam = combine(xp, lam_f, lam_b)
         exponent = k0 * float(xp.max(xp.abs(xp.imag(lam)))) * float(d)
         if exponent > _MAX_EXPONENT:
@@ -677,10 +677,10 @@ def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, layer_al
     """``(R, T)`` for one incident state, through a stack of uniform anisotropic layers.
 
     ``layers`` is ``[(eps_blocks, thickness), ...]`` where ``eps_blocks`` is the mapping
-    :func:`layer_matrix_4ff` takes. ``incident`` is a ``4ff`` state — see
+    :func:`layer_matrix_first_order` takes. ``incident`` is a first-order state — see
     :func:`vacuum_sp_states`. Vacuum on both sides, and note it is *not* special-cased: vacuum
     is a layer with ``eps = I`` whose forward and backward halves come from the same mode split
-    as any other, which is what would make an anisotropic substrate free here. The 2ff path
+    as any other, which is what would make an anisotropic substrate free here. The second-order path
     cannot say that, and neither can RETICOLO.
 
     ``R`` and ``T`` are fluxes of the *reconstructed* reflected and transmitted fields, not sums
@@ -688,10 +688,10 @@ def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, layer_al
     lossless medium and stops holding exactly where it would be least noticed.
 
     ``layer_algorithm`` selects how layers are joined. Three, and the choice matters here in a
-    way it does not in the 2ff path, where both shipped options are already stable:
+    way it does not in the second-order path, where both shipped options are already stable:
 
     * ``'ETM'`` (default) is the enhanced-transmittance recursion — **the same option, under
-      the same name, as the 2ff path's default**. Growth never appears rather than being
+      the same name, as the second-order path's default**. Growth never appears rather than being
       cancelled. Measured the cheapest of the three — 0.94x the plain transfer on a 40-layer
       stack, against SMM's 1.13x — and identical to SMM at 1.2e-15.
     * ``'SMM'`` cascades per-layer scattering matrices with the Redheffer star. Same stability,
@@ -707,7 +707,8 @@ def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, layer_al
     Kx, Ky = _diag_of(xp, kx), _diag_of(xp, ky)
 
     vac = _identity_blocks(xp, n_orders, Kx.dtype)
-    _, psi_vf, _, psi_vb = split_forward_backward(xp, layer_matrix_4ff(xp, Kx, Ky, **vac), n_orders)
+    _, psi_vf, _, psi_vb = split_forward_backward(
+        xp, layer_matrix_first_order(xp, Kx, Ky, **vac), n_orders)
 
     if layer_algorithm == 'SMM':
         S11, _, S21, _ = _solve_smm(xp, k0, Kx, Ky, layers, n_orders, psi_vf, psi_vb)
@@ -729,15 +730,15 @@ def solve_uniform_stack(wavelength, kx, ky, layers, n_orders, incident, layer_al
     return -flux(reflected) / inc, flux(transmitted) / inc
 
 
-def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
-                 epx_conv_all, epy_conv_all, epz_conv_i_all,
-                 epxy_conv_all=None, epyx_conv_all=None,
-                 epxz_conv_all=None, epyz_conv_all=None,
-                 epzx_conv_all=None, epzy_conv_all=None,
-                 *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-                 layer_algorithm='ETM', mu=None, mu_top=1.0, mu_bot=1.0,
-                 eps_top=None, eps_bot=None):
-    """Solve a 2D stack on the first-order formulation — the public 4ff route.
+def solve_2d_first_order(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
+                         epx_conv_all, epy_conv_all, epz_conv_i_all,
+                         epxy_conv_all=None, epyx_conv_all=None,
+                         epxz_conv_all=None, epyz_conv_all=None,
+                         epzx_conv_all=None, epzy_conv_all=None,
+                         *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
+                         layer_algorithm='ETM', mu=None, mu_top=1.0, mu_bot=1.0,
+                         eps_top=None, eps_bot=None):
+    """Solve a 2D stack on the first-order formulation — the public route to it.
 
     Twin of :func:`wavebit._core.solve_2d.solve_2d`: same arguments, same returns, four more
     convolution slots. ``epxz_conv_all`` / ``epyz_conv_all`` / ``epzx_conv_all`` /
@@ -751,15 +752,16 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     down the middle of it. ``epz_conv_i`` is still the *inverse* of the ``zz`` block. See
     ``docs/off-diagonal-slot-convention.md``.
 
-    Three pieces are shared with the 2ff path rather than re-derived, and this is where the
+    Three pieces are shared with the second-order path rather than re-derived, and this is where the
     mode correspondence at the top of this module is spent:
 
     * the **substrate seed** — :func:`_half_space_state` writes the same downward half-space
-      wave the 2ff seed ``(big_F, big_G) = ([[I, 0], [0, -i Kz/eps]], [[-i Kz, 0], [0, I]])``
-      spells, as a ``4ff`` state whose two columns are that path's ``(t_s, t_p)``;
+      wave the second-order seed
+      ``(big_F, big_G) = ([[I, 0], [0, -i Kz/eps]], [[-i Kz, 0], [0, I]])`` spells, as a
+      first-order state whose two columns are that path's ``(t_s, t_p)``;
     * the **s/p rotation** — :func:`~wavebit._core.solve_2d.sp_modes_2d`, given the
-      recursion's ``G`` split as ``W = G[:2ff]`` and ``V = 1j*G[2ff:]``. That ``1j`` is the
-      whole correspondence: with it the four boundary variables come out in the basis
+      recursion's ``G`` split as ``W = G[:2 * n_orders]`` and ``V = 1j*G[2 * n_orders:]``. That
+      ``1j`` is the whole correspondence: with it the four boundary variables come out in the basis
       :func:`~wavebit._core.solve_1d.final_matching` already reads;
     * the **matching** — ``final_matching`` itself, so the incidence, the efficiencies, the
       Fresnel normalisation and the pure-s/pure-p variants are the same code the rest of the
@@ -783,14 +785,14 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
 
     ``ETM`` uses the shared final matching. ``SMM`` cascades interfaces and
     propagation in the separate forward/backward mode bases and uses the
-    same s/p amplitude and power conversion as the two-field SMM. Both return
+    same s/p amplitude and power conversion as the second-order SMM. Both return
     the same field reconstruction layout; SMM also retains its scattering
     matrix from ``answers='amplitude'`` upward.
     """
     xp = array_namespace(epx_conv_all)
     if layer_algorithm not in ('ETM', 'SMM'):
         raise ValueError(
-            f"layer_algorithm={layer_algorithm!r} is not available on the first-order (4ff) "
+            f"layer_algorithm={layer_algorithm!r} is not available on the first-order "
             "path. Use layer_algorithm='ETM' or 'SMM'.")
 
     per_layer = [epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
@@ -882,17 +884,17 @@ def solve_2d_4ff(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # `sp_modes_2d` recombines the *rows* of `G` into the s/p boundary variables and leaves
         # its columns alone, so `final_matching`'s `T1` is the unknown of the `G` above the top
         # layer unchanged -- which is that layer's forward amplitudes at its own top face. That
-        # is what `field_2d_4ff` starts from; nothing has to be undone here.
+        # is what `field_2d_first_order` starts from; nothing has to be undone here.
         out['layer_info_list'] = layer_info_list
     return out
 
 
 def _half_space_state(xp, Kz, eps, F_c, F_s, n_orders, C, mu=1.0):
-    """The downward half-space wave as a ``4ff`` state, columns ``(t_s, t_p)``.
+    """The downward half-space wave as a first-order state, columns ``(t_s, t_p)``.
 
-    This is the 2ff substrate seed, written in the variables the first-order system carries.
-    Reading it off rather than deriving it: the seed must satisfy
-    ``sp_modes_2d(seed[:2ff], 1j*seed[2ff:]) == (big_F, big_G)`` for the pair
+    This is the second-order substrate seed, written in the variables the first-order system
+    carries. Reading it off rather than deriving it: the seed must satisfy
+    ``sp_modes_2d(seed[:2 * n_orders], 1j*seed[2 * n_orders:]) == (big_F, big_G)`` for the pair
     :func:`wavebit._core.solve_2d.solve_2d` starts from, which fixes the four transverse
     components per column with nothing left to choose ::
 
@@ -922,11 +924,11 @@ def _half_space_state(xp, Kz, eps, F_c, F_s, n_orders, C, mu=1.0):
 
 
 def _conv_layers(xp, per_layer, thickness, n_orders, C):
-    """``[(eps_blocks, d), ...]`` for :func:`layer_matrix_4ff`, from the nine slot stacks.
+    """``[(eps_blocks, d), ...]`` for :func:`layer_matrix_first_order`, from the nine slot stacks.
 
     Where the slot convention is undone: every off-diagonal slot holds the negative of its
-    tensor component (``docs/off-diagonal-slot-convention.md``), and ``layer_matrix_4ff``
-    reads the tensor itself. A missing stack is zero, matching how the 2ff path treats
+    tensor component (``docs/off-diagonal-slot-convention.md``), and ``layer_matrix_first_order``
+    reads the tensor itself. A missing stack is zero, matching how the second-order path treats
     ``epxy_conv_all`` / ``epyx_conv_all``.
     """
     epx, epy, epz_i, epxy, epyx, epxz, epyz, epzx, epzy = per_layer

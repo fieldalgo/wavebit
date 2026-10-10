@@ -179,7 +179,7 @@ invariant under the axis swap and would have passed while wrong.
 With xz/yz/zx/zy coupling, the builder Fourier-transforms all nine entries of
 A and B and closes the full operator as `conv(A) @ inv(conv(B))`. The zz block
 then contains the coupling to the transverse fields; it cannot be attached
-independently. Epsilon and mu use the same construction and feed the 4ff solver.
+independently. Epsilon and mu use the same construction and feed the first-order solver.
 See [full tensor patterns](full-tensor-patterns.md) for supported geometries,
 independent laminate/Maxwell tests and numerical convergence considerations.
 

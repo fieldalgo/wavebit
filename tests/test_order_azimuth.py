@@ -245,12 +245,12 @@ def test_normal_incidence_solves_without_a_nudge(backend, case, phi, name):
 
 
 def test_the_first_order_path_gets_the_azimuth_too():
-    """``solve_2d_4ff`` has its own ``order_azimuth`` call and its own ``phi`` to thread.
+    """``solve_2d_first_order`` has its own ``order_azimuth`` call and its own ``phi`` to thread.
 
     Forced onto a problem the second-order path can also express, the two must agree — which
     is the only oracle available here, and the one ``tests/test_formulation_dispatch.py``
-    already relies on. A ``phi`` that reached 2ff and not 4ff would show up as a disagreement
-    at ``phi != 0`` and nowhere else, so both azimuths are run.
+    already relies on. A ``phi`` that reached the second-order path and not the first-order one
+    would show up as a disagreement at ``phi != 0`` and nowhere else, so both azimuths are run.
     """
     for phi in (0.0, 0.6108652381980153):
         second = _solve(structure=_UC_2D, truncation_order=(4, 4), phi=phi, psi=0.7)
@@ -260,9 +260,9 @@ def test_the_first_order_path_gets_the_azimuth_too():
             solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
                                   top=1.0, bot=2.25, theta=0.0, phi=phi, psi=0.7,
                                   structure=_UC_2D, thickness=[220.0], truncation_order=[4, 4])
-            solver.formulation = '4ff'
+            solver.formulation = 'first_order'
             first = solver.solve()
-        assert str(solver.formulation_assigned).endswith('FOUR_FIELD'), \
+        assert str(solver.formulation_assigned).endswith('FIRST_ORDER'), \
             solver.formulation_assigned
         assert _total_r(first) == pytest.approx(_total_r(second), abs=1e-11)
 
@@ -405,9 +405,9 @@ def test_the_solves_refuse_to_guess_the_azimuth():
     from wavebit._core.scattering import smm_1d_conical, smm_2d
     from wavebit._core.solve_1d import solve_1d_conical
     from wavebit._core.solve_2d import solve_2d
-    from wavebit._core.solve_2d_4ff import solve_2d_4ff
+    from wavebit._core.solve_2d_first_order import solve_2d_first_order
 
-    for fn in (solve_1d_conical, solve_2d, solve_2d_4ff, smm_1d_conical, smm_2d):
+    for fn in (solve_1d_conical, solve_2d, solve_2d_first_order, smm_1d_conical, smm_2d):
         p = inspect.signature(fn).parameters.get('phi')
         assert p is not None, f'{fn.__name__} lost its phi argument'
         assert p.kind is inspect.Parameter.KEYWORD_ONLY, f'{fn.__name__}: phi went positional'
@@ -537,7 +537,7 @@ def test_the_column_carries_its_derivative_along_kx():
                                -1 / np.asarray(ky), rtol=1e-15, atol=0)
 
 
-@pytest.mark.parametrize('formulation', [None, '4ff'])
+@pytest.mark.parametrize('formulation', [None, 'first_order'])
 def test_the_theta_derivative_at_normal_incidence_on_a_2d_grating(formulation):
     """A 2D grating at exactly ``theta = 0``: every ``(0, n)`` order sits on the ``kx == 0``
     column, and ``jax.grad`` of ``R`` with respect to ``theta`` read the column's frame as

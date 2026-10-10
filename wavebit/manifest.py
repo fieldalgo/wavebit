@@ -402,7 +402,7 @@ MATERIALS = (
         'supported': True,
         'why': 'Epsilon and mu use the same Fourier factorization, with five slots for '
                'in-plane tensors and nine for full tensors. Full tensors use the first-order '
-               '4ff solve, including magnetic field reconstruction. Scalar magnetic half-spaces '
+               'solve, including magnetic field reconstruction. Scalar magnetic half-spaces '
                'enter through their admittances. The separate 1D operators retain diagonal mu.',
         'source': 'docs/full-tensor-patterns.md',
     },
@@ -410,10 +410,10 @@ MATERIALS = (
         'case': 'z_coupled',
         'supported': True,
         'why': 'Uniform full epsilon and mu tensors use exact convolution blocks. A z '
-               'coupling in either quantity automatically selects the first-order 4ff '
+               'coupling in either quantity automatically selects the first-order '
                'formulation. Public layer_algorithm choices are ETM and SMM; fields and both incidence '
                'sides are supported. Tensor half-spaces are not implemented.',
-        'source': 'wavebit/_core/solve_2d_4ff.py',
+        'source': 'wavebit/_core/solve_2d_first_order.py',
     },
     {
         'case': 'patterned_z_coupled',
@@ -422,9 +422,10 @@ MATERIALS = (
                'components. Cartesian Li supports rasters and rectangle paintings, in the fixed '
                'nesting only; linear '
                'NVF supports tensor rasters and integrated or sampled shapes, including '
-               'oblique cells. Nine-slot operators select 4ff. Check Fourier-order and '
-               'normal-field convergence; finite-order PN need not conserve lossless power '
-               'exactly. See independent laminate, Maxwell-transfer and convergence tests.',
+               'oblique cells. Nine-slot operators select the first-order formulation. Check '
+               'Fourier-order and normal-field convergence; finite-order PN need not conserve '
+               'lossless power exactly. See independent laminate, Maxwell-transfer and '
+               'convergence tests.',
         'source': 'docs/full-tensor-patterns.md',
     },
 )

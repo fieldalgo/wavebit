@@ -23,8 +23,8 @@ yet, because nothing in the solver can express one, but the wiring will be here 
 changes.
 
 Its anisotropic entry point takes the same five slots this solver does —
-``permittivity_xx, xy, yx, yy, zz`` with no z row — so it is a 2ff formulation as well, and it
-cannot arbitrate the Voigt geometry any better than we can. RETICOLO remains the oracle there.
+``permittivity_xx, xy, yx, yy, zz`` with no z row — so it is a second-order formulation as well, and
+it cannot arbitrate the Voigt geometry any better than we can. RETICOLO remains the oracle there.
 
 Sign convention: ``_fmmax_cases`` states the *physical* tensor. fmmax takes it as-is; the
 solver's slots take the negation. Note that power efficiencies cannot see that sign either way

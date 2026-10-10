@@ -28,14 +28,14 @@ Setup notes:
   tensor — Hermitian, hence provably lossless, hence ``R + T = 1`` by theorem — through this
   same bridge:
 
-  ===============================  ==========  =====================================
+  ===============================  ==========  ======================================================
   tensor                           ``delta0``  RETICOLO's own ``R + T``
-  ===============================  ==========  =====================================
-  diagonal                         0 and 40    1 to 1e-15 (and matches 4ff to 1e-15)
-  one off-diagonal pair            0           1 to 1e-15 (and matches 4ff to 1e-15)
+  ===============================  ==========  ======================================================
+  diagonal                         0 and 40    1 to 1e-15 (and matches the first-order path to 1e-15)
+  one off-diagonal pair            0           1 to 1e-15 (and matches the first-order path to 1e-15)
   one off-diagonal pair            1 / 40      off by 5.8e-6 / 6.3e-3
   two or three off-diagonal pairs  0           off by 2.5e-3 to 1.2e-2
-  ===============================  ==========  =====================================
+  ===============================  ==========  ======================================================
 
   The deviation is equal and opposite between TE and TM, and does not move when ``nn`` is
   raised from 0 to 8, so it is converged rather than truncated. It cannot be a convention

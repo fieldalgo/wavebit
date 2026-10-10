@@ -39,8 +39,8 @@ def test_one_sided_limit_matches_existing_pattern_solver(side, pol):
 def test_the_pure_1d_solve_is_the_coherent_plane_wave(tetm, pol, side, theta):
     """``tetm`` lights the stack with ``PlaneWave(polarization=(1, 0) | (0, 1))``, exactly.
 
-    An independent route: the coherent door runs the 4ff cascade and builds its incident wave
-    from ``_plane_basis``, sharing nothing with the pure 1D kernels. The two agree since
+    An independent route: the coherent door runs the first-order cascade and builds its incident
+    wave from ``_plane_basis``, sharing nothing with the pure 1D kernels. The two agree since
     2026-09-27, when the pure path's incidence became the incident order's own s/p wave at
     unit E; before, it was ``+y`` at any angle (a sign at ``theta < 0``) and TM was a unit
     ``H_y`` (1.5 lit from the glass below).
@@ -327,7 +327,7 @@ def test_common_polarization_angles_and_beam_local_override():
     local = wavebit.rcwa(**scene(), excitation={'top': wavebit.PlaneWave(psi=.4, chi=.2)}).solve()
     np.testing.assert_allclose(common.boundary_fields('top', [0.]), local.boundary_fields('top', [0.]), atol=2e-12)
     solver = wavebit.rcwa(**options, excitation={'top': wavebit.PlaneWave(polarization=(1., 0.))})
-    assert solver.formulation == '4ff'
+    assert solver.formulation == 'first_order'
     solver.solve()
     with pytest.raises(ValueError, match='source'):
         solver.theta = .2

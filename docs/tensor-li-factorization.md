@@ -29,7 +29,7 @@ result = solver.solve()
   Boundaries follow the live rectangle coordinates; no normal grid is used.
 - Full complex 3×3 epsilon and mu, including independent xy/yx/xz/yz/zx/zy entries.
 - Uniform full tensors through exact scaled-identity blocks. A z coupling in
-  either quantity selects the first-order 4ff solver, with ETM or SMM layer connection.
+  either quantity selects the first-order solver, with ETM or SMM layer connection.
 
 Li does not read NVF normal-field or projector settings; explicit NVF settings
 are rejected. It builds the fixed nesting only (v inside u for every slot):

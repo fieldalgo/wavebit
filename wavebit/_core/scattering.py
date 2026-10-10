@@ -838,7 +838,7 @@ def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
                           eps_top, eps_bot, lit=None):
     """Public s/p amplitudes and powers from a cascade in scalar half-space bases.
 
-    Shared by the two-field and four-field SMM paths. Also return the incident
+    Shared by the second- and first-order SMM paths. Also return the incident
     columns so field reconstruction uses precisely the same normalization.
     """
     keep_amplitude = answers_of(answers).covers(Answers.AMPLITUDE)

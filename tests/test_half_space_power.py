@@ -11,7 +11,7 @@ import wavebit
 
 ROUTES = [
     ('1d', 'ETM'), ('1d', 'SMM'), ('conical', 'ETM'), ('conical', 'SMM'),
-    ('2d', 'ETM'), ('2d', 'SMM'), ('4ff', 'ETM'), ('4ff', 'SMM'),
+    ('2d', 'ETM'), ('2d', 'SMM'), ('first_order', 'ETM'), ('first_order', 'SMM'),
 ]
 ROUTE_IDS = [f'{path}_{algorithm.lower()}' for path, algorithm in ROUTES]
 MEDIA = [
@@ -45,8 +45,8 @@ def _solver(route, medium, beta, pol, side='top', *, excitation=None,
         opts['polarization'] = {'te': (1., 0.), 'tm': (0., 1.),
                                 'mixed': (1., 1j)}[pol]
     solver = wavebit.rcwa(**opts)
-    if path == '4ff':
-        solver.formulation = '4ff'
+    if path == 'first_order':
+        solver.formulation = 'first_order'
     return solver
 
 
@@ -281,7 +281,7 @@ def test_public_absorption_result_and_gradient(backend, algorithm):
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('route', [('1d', 'ETM'), ('1d', 'SMM'), ('2d', 'ETM'),
-                                  ('2d', 'SMM'), ('4ff', 'ETM')])
+                                  ('2d', 'SMM'), ('first_order', 'ETM')])
 def test_absorbing_incident_power_gradient(backend, route):
     """Differentiate incident-medium absorption at fixed real transverse k."""
     pytest.importorskip(backend)
@@ -294,12 +294,12 @@ def test_absorbing_incident_power_gradient(backend, route):
 
     from wavebit._core.solve_1d import solve_1d
     from wavebit._core.solve_2d import solve_2d
-    from wavebit._core.solve_2d_4ff import solve_2d_4ff
+    from wavebit._core.solve_2d_first_order import solve_2d_first_order
     from wavebit._core.scattering import smm_1d, smm_2d
     path, algorithm = route
     solve = {('1d', 'ETM'): solve_1d, ('1d', 'SMM'): smm_1d,
              ('2d', 'ETM'): solve_2d, ('2d', 'SMM'): smm_2d,
-             ('4ff', 'ETM'): solve_2d_4ff}[route]
+             ('first_order', 'ETM'): solve_2d_first_order}[route]
 
     def objective(loss):
         n = 1.5 + 1j * loss

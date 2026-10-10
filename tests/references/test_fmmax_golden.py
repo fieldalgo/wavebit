@@ -8,7 +8,7 @@ with pip, and reproduced the analytic slab at 1e-17 and Berreman at ~1e-16 with 
 fitting at all** — the only one of the three that did.
 
 Its anisotropic entry point takes the same five slots this solver does
-(``permittivity_xx, xy, yx, yy, zz``, no z row), so it is a 2ff formulation too and cannot
+(``permittivity_xx, xy, yx, yy, zz``, no z row), so it is a second-order formulation too and cannot
 arbitrate the Voigt geometry. RETICOLO stays the oracle there. What fmmax reaches that neither
 other does is a **patterned** complex off-diagonal tensor — nothing here uses that yet, because
 the solver cannot express one, but it is why this file exists rather than leaning on the

@@ -61,7 +61,7 @@ def make(backend,profile,side,algorithm):
     s=wavebit.rcwa(backend=backend,structure=np.stack([E,e])[:,None,None],mu=np.stack([M,m])[:,None,None],
         thickness=[90.,ROOT[4]],period=(600.,750.),wavelength=ROOT[5],truncation_order=(0,0),theta=ROOT[2],phi=ROOT[3],
         polarization=POL,incidence_side=side,answers='field',factorization='li',layer_algorithm=algorithm)
-    s.formulation='4ff';return s
+    s.formulation='first_order';return s
 
 
 def actual(s,xp,v,profile,geometry=None):

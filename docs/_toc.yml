@@ -124,7 +124,7 @@ subtrees:
     - caption: The solve
       entries:
       - file: formulation
-      - file: first-order-4ff
+      - file: first-order-formulation
       - file: connecting-algorithms
       - file: what-a-solve-answers
       - file: multimode-incidence

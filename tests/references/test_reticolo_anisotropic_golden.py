@@ -25,9 +25,9 @@ transpose. RETICOLO puts the shipped operator 4e-2 to 6e-2 out; exchanging the p
 number.
 
 The golden also holds a ``Z_COUPLED_CASES`` block that **this file deliberately does not
-consume**: those tensors have a populated z row, which the 2ff path has no slot for. They are
-generated here because the bridge and the guards already exist, and are asserted in
-``test_4ff_external_goldens.py``.
+consume**: those tensors have a populated z row, which the second-order path has no slot for. They
+are generated here because the bridge and the guards already exist, and are asserted in
+``test_first_order_external_goldens.py``.
 
 Values are frozen in ``golden_reticolo_anisotropic.npz`` by
 ``gen_goldens_reticolo_anisotropic.py``, which needs Octave and RETICOLO V10. This file needs
@@ -99,10 +99,10 @@ def _gyro(direction, g=0.45, ed=2.25):
     return e
 
 
-# A populated z row. **The 2ff path cannot express these at all** — it has no slot for eps_xz or
-# eps_yz — so none of the tests in this file may consume them; they exist for
-# ``test_4ff_external_goldens.py``, and they are the first external check this repo has of the
-# geometry the 4ff solver was written for.
+# A populated z row. **The second-order path cannot express these at all** — it has no slot for
+# eps_xz or eps_yz — so none of the tests in this file may consume them; they exist for
+# ``test_first_order_external_goldens.py``, and they are the first external check this repo has of
+# the geometry the first-order solver was written for.
 #
 # Exactly one off-diagonal pair each, and delta0 = 0, because that is as far as RETICOLO can be
 # trusted here — see the measured boundary in ``gen_goldens_reticolo_anisotropic.py``. A tilted

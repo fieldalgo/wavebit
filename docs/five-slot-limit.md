@@ -1,4 +1,4 @@
-# Five slots out of nine — the shape every 2ff RCWA has, and what happens at its edge
+# Five slots out of nine — the shape every second-order RCWA has, and what happens at its edge
 
 Written: 2026-08-11. Measured on CPU, float64: NumPy 2.5.1 for this solver, and each reference
 solver at its current release (fmmax 1.7.1, inkstone 0.3.15, EMpy 2.2.3, RETICOLO V10 2025-01),
@@ -6,7 +6,7 @@ versions checked against PyPI and Zenodo rather than against notes.
 
 Targets:
 - `wavebit/_core/solve_2d.py::layer_modes_2d` — the five blocks it reads
-- `wavebit/_core/solve_2d_4ff.py` — the formulation that reads all nine
+- `wavebit/_core/solve_2d_first_order.py` — the formulation that reads all nine
 - `tests/test_anisotropic_berreman.py::test_voigt_geometry_matches_the_oracle` — and its
   `::test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it` twin
 - `tests/references/README.md` — the per-solver measurements summarised in §4
@@ -22,12 +22,12 @@ and what does each solver do when handed them?**
 
 ## TL;DR
 
-1. A permittivity tensor has nine components. A second-order (2ff) RCWA reads **five**: the
+1. A permittivity tensor has nine components. A second-order RCWA reads **five**: the
    `xx, xy, yx, yy` block plus `zz`. The other four — `xz, yz, zx, zy` — have no slot, and that
    is structural, not an omission.
 2. `zz` survives *inverted* because eliminating `E_z` needs `eps_zz⁻¹`. The elimination closes
    into a second-order equation **only if `xz` and `yz` are zero**; otherwise a first-derivative
-   term survives and there is no 2ff operator to write.
+   term survives and there is no second-order operator to write.
 3. The four missing components are the **Voigt geometry** — a magnetisation lying in the plane,
    which is what an ordinary magnetised film has.
 4. Four reference solvers were run at their current release. **Three of the four that claim a
@@ -36,7 +36,8 @@ and what does each solver do when handed them?**
 5. **Energy conservation cannot detect the silent drop.** The reduced tensor is a valid lossless
    medium, so `R + T = 1` holds to machine precision while the answer is wrong by up to 6e-2.
    This is why Wavebit never drops: the four components select the first-order formulation,
-   and the one way to ask for 2ff over a z row (`formulation='2ff'`) raises.
+   and the one way to ask for the second-order one over a z row (`formulation='second_order'`)
+   raises.
 
 ---
 
@@ -75,23 +76,23 @@ applies. Substituting back leaves
 
 With the `○` cells zero the substitution produces `d²E_t/dz² = Omega2 E_t` — second order, no
 first-derivative term, forward and backward modes sharing one eigenvector. **That last property
-is what the whole 2ff machinery is built on**, and it is what the missing four take away.
+is what the whole second-order machinery is built on**, and it is what the missing four take away.
 
 ## 2. What the missing four are
 
 `eps_xz` and `eps_yz` couple the in-plane field to the stack normal. For a magneto-optic medium
 `eps_ij = eps·δ_ij + i·ε_ijk·g_k`, so the magnetisation direction picks which cells fill:
 
-| magnetisation | populated | 2ff? | name |
+| magnetisation | populated | second-order? | name |
 |---|---|---|---|
 | along `z` (stack normal) | `xy`, `yx` | yes | Faraday |
 | in the plane (`x` or `y`) | `yz, zy` or `zx, xz` | **no** | Voigt |
 | tilted | all six off-diagonal | **no** | — |
 
 The middle row is the ordinary case. A magnetised film magnetises *in its own plane* unless it has
-perpendicular anisotropy or an applied field holding it out — so the geometry 2ff cannot express is
-not exotic, it is the default. `anisotropic-materials.md` §6 has the physics; this document is
-about the boundary itself.
+perpendicular anisotropy or an applied field holding it out — so the geometry the second-order
+formulation cannot express is not exotic, it is the default. `anisotropic-materials.md` §6 has the
+physics; this document is about the boundary itself.
 
 ## 3. The shape is not ours
 
@@ -100,7 +101,7 @@ second-order formulation *is*, and the same five appear wherever one is used:
 
 | | how the five appear |
 |---|---|
-| Wavebit 2ff | `solve_conv(epx, epy, epz_i, epxy, epyx)` |
+| Wavebit second-order | `solve_conv(epx, epy, epz_i, epxy, epyx)` |
 | fmmax | `eigensolve_anisotropic_media(..., permittivity_xx, xy, yx, yy, zz, ...)` |
 | S4 | `xy` block plus `zz` |
 
@@ -121,13 +122,13 @@ decide every row, and neither needs another solver to agree:
 
 | solver | behaviour | evidence |
 |---|---|---|
-| **Wavebit 2ff** | refuses | `ValueError` naming the slot, only reachable by asking for `formulation='2ff'` |
+| **Wavebit second-order** | refuses | `ValueError` naming the slot, only reachable by asking for `formulation='second_order'` |
 | **Wavebit patterned (PN)** | refuses | `ValueError` naming the z row; it **accepted and silently dropped** until 2026-08-27, which is the row below, in this table, about this solver |
 | **fmmax** 1.7.1 | cannot be asked | no `xz/yz/zx/zy` arguments exist |
 | **inkstone** 0.3.15 | **accepts, silently drops** | takes a `(3,3)` array; output bit-identical to the z row zeroed |
 | **EMpy** 2.2.3 | reads it, diverges | uses the z row, but returns `R + T = 1.6e13` for a plain Faraday tensor at normal incidence |
 | **RETICOLO** V10 | handles it, within a bound | exact for one off-diagonal pair at `delta0 = 0`; past that `R + T` leaves 1 by 2.5e-3 to 1.2e-2 |
-| **Wavebit 4ff** | handles it, and is the default here | `solve_2d_4ff.py`, agreeing with RETICOLO to 1e-15 inside RETICOLO's bound — through the public API as well as directly |
+| **Wavebit first-order** | handles it, and is the default here | `solve_2d_first_order.py`, agreeing with RETICOLO to 1e-15 inside RETICOLO's bound — through the public API as well as directly |
 
 The per-solver numbers, and how each was established, are in
 [`tests/references/README.md`](https://github.com/fieldalgo/wavebit/blob/develop/tests/references/README.md).
@@ -162,23 +163,23 @@ is likewise invisible to every power efficiency.
 Reading all nine means abandoning the second-order reduction for the first-order system
 
 ```
-    d/dz (Ex, Ey, Hx, Hy) = i k0 M (Ex, Ey, Hx, Hy)          M is 4ff x 4ff
+    d/dz (Ex, Ey, Hx, Hy) = i k0 M (Ex, Ey, Hx, Hy)          M is 4N x 4N for N orders
 ```
 
 which is roughly **8x** on the layer solve (`eig` is cubic and the problem doubles), and which
-gives up the free `±` mode pairing every 2ff consumer assumes — forward and backward become
-genuinely different mode sets. `wavebit/_core/solve_2d_4ff.py` implements it, and since
-2026-08-13 the public entry does reach it: `solve_conv` takes nine slots rather than five,
-and giving any of the four z-row slots selects the first-order path (`formulation='4ff'` forces
-it, `'2ff'` refuses a z row rather than dropping it). What crossing the edge still costs, beyond
-the 8x, is `mu` and `layer_algorithm='SMM'`; the module's docstring keeps that list. Field
-reconstruction was on it until 2026-08-14 and is not any more —
+gives up the free `±` mode pairing every second-order consumer assumes — forward and backward
+become genuinely different mode sets. `wavebit/_core/solve_2d_first_order.py` implements it, and
+since 2026-08-13 the public entry does reach it: `solve_conv` takes nine slots rather than five,
+and giving any of the four z-row slots selects the first-order path (`formulation='first_order'`
+forces it, `'second_order'` refuses a z row rather than dropping it). What crossing the edge still
+costs, beyond the 8x, is `mu` and `layer_algorithm='SMM'`; the module's docstring keeps that list.
+Field reconstruction was on it until 2026-08-14 and is not any more —
 `reconstruct_field` reads the formulation, since the grating type cannot tell the two paths apart.
 
-Because no outside solver covers the general z-coupled case, the 4ff path is judged partly by a
-theorem rather than by an oracle: turning the tensor and the incidence azimuth together about the
-stack normal must leave the efficiencies unchanged
-(`tests/test_solve_2d_4ff.py::test_rotating_the_whole_problem_about_z_changes_nothing`).
+Because no outside solver covers the general z-coupled case, the first-order path is judged partly
+by a theorem rather than by an oracle: turning the tensor and the incidence azimuth together about
+the stack normal must leave the efficiencies unchanged
+(`tests/test_solve_2d_first_order.py::test_rotating_the_whole_problem_about_z_changes_nothing`).
 
 ## References
 

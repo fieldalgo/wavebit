@@ -36,7 +36,7 @@ BACKEND_IDS = ['numpy', 'jax', 'torch']
 
 # Which reconstruction each name exercises. All five paths, because the sampling helpers are
 # shared and a helper used by four of five is a helper that will break the fifth.
-PATHS = ('te', 'tm', 'conical', '2d', '4ff')
+PATHS = ('te', 'tm', 'conical', '2d', 'first_order')
 
 
 def _bar(eps_bg, eps_hi):
@@ -64,8 +64,8 @@ def _solver(path, backend=0):
         kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), truncation_order=(3, 3), period=PERIOD,
                   structure=np.repeat(TWO_LAYER, 4, axis=1))
     s = wavebit.rcwa(**kw)
-    if path == '4ff':
-        s.formulation = '4ff'
+    if path == 'first_order':
+        s.formulation = 'first_order'
     s.solve()
     return s
 
@@ -90,7 +90,7 @@ def test_explicit_points_reproduce_the_grid_they_were_taken_from(path):
     grid = _field(path, sample_x=11, sample_y=5, sample_z=4)
     named = _field(path, sample_x=np.linspace(-PERIOD[0] / 2, PERIOD[0] / 2, 11),
                    sample_y=(np.linspace(-PERIOD[1] / 2, PERIOD[1] / 2, 5)
-                             if path in ('2d', '4ff') else 5),
+                             if path in ('2d', 'first_order') else 5),
                    sample_z=4)
     assert named.shape == grid.shape
     assert np.array_equal(named, grid), np.max(np.abs(named - grid))
@@ -170,7 +170,7 @@ def test_the_x_points_need_not_be_sorted_or_uniform_or_inside_the_cell(path):
 
     # one period over: the Bloch phase, not equality
     kx0 = 1.0 * np.sin(np.deg2rad(24.0)) * (2 * np.pi / WL)
-    if path in ('2d', '4ff', 'conical'):
+    if path in ('2d', 'first_order', 'conical'):
         kx0 *= np.cos(np.deg2rad(15.0))
     assert np.allclose(shifted, got * np.exp(1j * kx0 * PERIOD[0]), rtol=0, atol=1e-9)
 

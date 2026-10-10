@@ -423,8 +423,8 @@ amplitude scale, coordinate axes and phase conventions.
 
 ## Execution scope and validation
 
-The side-keyed form returns `CoherentSolver` and uses Cartesian **4ff with SMM**.
-NumPy, JAX and PyTorch are supported in eager execution. PlaneWave grouping requires
+The side-keyed form returns `CoherentSolver` and uses the Cartesian **first-order formulation
+with SMM**. NumPy, JAX and PyTorch are supported in eager execution. PlaneWave grouping requires
 concrete directions; this facade is not a JAX pytree and does not support
 `jit`, `vmap`, `torch.compile`, or `JobSpec` serialization. Its autodiff behavior is
 not a supported contract. It does not expose the ordinary single-sided `R`, `T`,
@@ -564,7 +564,7 @@ With any internal source, `output_top`, `output_bottom`, and `absorption` are
 None. The unnormalized incoming/outgoing boundary fluxes and `net_into_stack`
 remain available. Boundary net flux includes source supply and material loss;
 it is not material absorption alone. Source work, regularized self-fields, and
-Purcell factors are not returned. All typed sources use eager 4ff/SMM; JIT,
+Purcell factors are not returned. All typed sources use eager first-order SMM; JIT,
 autodiff and JobSpec serialization are outside this API's supported scope.
 
 Validation includes homogeneous dyadic Green-function spectra for all three

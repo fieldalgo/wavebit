@@ -41,7 +41,7 @@ Targets:
 - `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch` (removed 2026-10-02), `mode_q`
 - `wavebit/_core/boundary.py` — `conv_mats`
 - `wavebit/_core/scattering.py` — the SMM incident amplitude (prose only)
-- `wavebit/_core/solve_2d_4ff.py` — `split_forward_backward` (scope note only)
+- `wavebit/_core/solve_2d_first_order.py` — `split_forward_backward` (scope note only)
 - `tests/test_branch_selection.py`, `tests/test_lossy_media.py`
 
 ---
@@ -521,9 +521,9 @@ as a catalogue of misspellings to check against, not as the resolution.
 **Six formulations, one physics.** `{ETM, SMM} × {1d, conical, 2d}` share `conventions.py` and
 nothing else — the SMM builds its incident field from mode amplitudes and cascades Redheffer
 stars, the ETM builds it from the boundary match and multiplies transfer blocks. (`'TMM'` was
-the option's name when this audit ran; it was renamed the same week — the 2ff algorithm was
-always the enhanced-transmittance form. `'TMM'` now names only the 4ff path's deliberately
-plain transfer.) Compared on
+the option's name when this audit ran; it was renamed the same week — the second-order path's
+algorithm was always the enhanced-transmittance form. `'TMM'` now names only the first-order
+path's deliberately plain transfer.) Compared on
 the complex reflection *amplitude* (`de_ri` has no defined incident-power normalisation with
 an absorbing superstrate), over ten configurations all with complex `k_par`, including the
 three the correction moves:
@@ -555,7 +555,7 @@ is not 1. Neither.
 > residual does and a closed-form amplitude comparison does not.
 > Now covered by `tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame`.
 
-**`solve_2d_4ff`.** Its `split_forward_backward` splits modes by energy flux with a decay
+**`solve_2d_first_order`.** Its `split_forward_backward` splits modes by energy flux with a decay
 fallback, and its docstring claimed that is "the same rule `boundary_kz` applies to a
 half-space". After §3 that is true only for real `k_par` — which is all this path sees, since
 its half-spaces are vacuum. The docstring now says so, and points here, so that growing an
