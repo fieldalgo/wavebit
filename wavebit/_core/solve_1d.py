@@ -515,8 +515,9 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     553, 1993, appendix A) -- and the interface inverses amplify rounding by ``1/wA**2``. Until
     2026-10-10 this refused only where ``wA`` came out exactly zero: one ULP off, at a rounded
     input, and at a patterned layer's own crossing (a genuine 2x2 Jordan block, where ``wA`` is
-    never exactly zero) it returned silently wrong answers -- ``R`` off by up to 5 and ``R + T``
-    by up to 14 -- and the ``auto_detune`` retry of a refused point landed 2.6e-2 to 0.1 off.
+    never exactly zero) it returned silently wrong answers -- ``R`` off by up to 11 and ``R + T``
+    by up to 48 over 68 offsets within relative 1e-4 -- and the ``auto_detune`` retry of a
+    refused point landed 2.6e-2 to 0.1 off.
     Such a layer is now rebuilt in a regular basis with an upper-triangular propagator, exact at
     the point (:func:`_cutoff_cluster` decides, :func:`_regular_conical_modes` builds), and
     everywhere outside that gate the arithmetic below is the one that was here, bit for bit.

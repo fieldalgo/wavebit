@@ -10,11 +10,11 @@ inverses amplify rounding by ``1/wA**2``. It is *not* a Rayleigh point: the orde
 
 * In a **uniform** layer the point is an ordinary double root: only the basis collapses. The
   family construction refused where ``wA`` came out exactly zero and was silently wrong one ULP
-  off (2e-2 .. 1.3 in ``R``; over a census of round inputs SMM's ``R + T`` reached 2.4e3); the
-  ``auto_detune`` retry landed 2.6e-2 .. 0.1 off.
+  off (2.4e-3 .. 13 in ``R`` over eight scenes; over a census of round inputs SMM's ``R + T``
+  reached 2.4e3); the ``auto_detune`` retry landed 2.6e-2 .. 0.1 off.
 * In a **patterned** layer it is a genuine 2x2 Jordan block (the two roots cross ``|ky|`` with
   different slopes); ``wA`` is never exactly zero there, so nothing refused at all: ``R`` was off
-  by up to 5, ``R + T`` by up to 14.
+  by up to 11, ``R + T`` by up to 48 (68 offsets within relative 1e-4).
 
 :func:`~wavebit._core.solve_1d._regular_conical_modes` now rebuilds such a layer in a regular
 basis with an upper-triangular propagator, gated by
@@ -206,7 +206,7 @@ def test_a_uniform_cutoff_matches_the_2d_path(name, algo, rebuilds):
     The 2D path solves for the tangential fields directly and divides only by ``q = |ky|``
     there, so it is exact at a uniform cutoff (its own spread is 1e-14). Measured here:
     ``|dR| <= 1.2e-14`` and amplitudes ``<= 4.8e-14``; before, the exact point refused and its
-    neighbours were 2e-2 .. 1.3 off with no warning. Every warning is an error, RuntimeWarning
+    neighbours were 2.4e-3 .. 13 off with no warning. Every warning is an error, RuntimeWarning
     included, and the default solve must be the ``auto_detune=False`` one to the bit: there is
     nothing left to retry. Catches a gate that never engages and a rebuild that keeps the
     singular ``1/wA`` term.
@@ -318,7 +318,7 @@ def _fit(name):
 def test_a_patterned_exceptional_point_is_exact(name, monkeypatch):
     """At ``wl0`` and ``rel`` 0, +-1e-15, +-1e-12, +-1e-9: the fit's value, ETM = SMM, silently.
 
-    The family construction was a lottery here (``R`` off by up to 5, ``R + T`` by 14, no
+    The family construction was a lottery here (``R`` off by up to 11, ``R + T`` by 48, no
     warning). Measured now: amplitudes 1.4e-13 (PA616, PD574) and 1.2e-12 (MU614, the fit's own
     accuracy) from the fit. Catches, through the amplitudes: ``tau := 0`` (5.3e-3), ``tau`` of
     the wrong sign (1.1e-2), ``U_y`` of the coupled columns without ``tau`` (4.4e-3), ``N`` without

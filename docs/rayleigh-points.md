@@ -257,7 +257,7 @@ answer.
 | --- | --- | --- |
 | the point | an ordinary double root: the two roots meet with equal slopes; only the *basis* collapses | a genuine 2x2 Jordan block: the roots cross `abs(ky)` with different slopes (ratio 0.92..1.36 measured), so no eigenvector basis exists there |
 | `wA` at the point | often exactly `0.0` (noiseless FFT) | round-off, 1e-16..3e-15, never exactly zero |
-| before | refused at an exact zero; silent one ULP off (2e-2..1.3 in `R`), at rounded inputs (water `1.7689`: 2.8e-2, `R + T - 1` up to +0.8 on SMM), and the `auto_detune` retry landed 2.6e-2..0.1 off; SMM's `R + T` reached 2.4e3 over a census | never refused, never warned: `R` off by up to 5, `R + T - 1` up to 14, a lottery in the 13th digit of the wavelength; gradients off by 1e11..1e28 |
+| before | refused at an exact zero; silent one ULP off (2.4e-3..13 in `R` over eight scenes, `R + T - 1` up to +17), at rounded inputs (water `1.7689`: 2.8e-2, `R + T - 1` up to +0.8 on SMM), and the `auto_detune` retry landed 2.6e-2..0.1 off; SMM's `R + T` reached 2.4e3 over a census | never refused, never warned: `R` off by up to 11, `R + T - 1` up to 48 (68 offsets within relative 1e-4; ETM up to 2.0 in `R`), a lottery in the 13th digit of the wavelength; gradients off by 1e11..1e28 |
 
 **The construction** (each layer whose gate engages; no `eig` beyond the two the layer already
 had, no division by `wA` or `wB` anywhere):
@@ -333,7 +333,7 @@ through 16 offsets at relative 1e-4..1e-3, where its own error is below 1e-12):
 | --- | --- | --- |
 | five reported uniform scenes, exact point | refused; default 1.6e-8..0.10 off | `abs(dR) <= 2.9e-15`, amplitudes `<= 1.4e-14`, no warning, default = `auto_detune=False` |
 | offset ladder, exact .. 1e-3 and one ULP | up to 0.78 in amplitudes | `<= 1.2e-14` in `R`, `<= 4.8e-14` in amplitudes |
-| patterned PA616 / PB687 / PD574 / MU614 | `R` off by up to 5.3, `R + T - 1` up to 14 | amplitudes 1.4e-13 / 3.3e-13 / 1.4e-13 / 1.2e-12 (the last the fit's own accuracy); ETM = SMM |
+| patterned PA616 / PB687 / PD574 / MU614 | `R` off by up to 11, `R + T - 1` up to 48 (SMM; ETM 2.0 in `R`) over 68 offsets within relative 1e-4 | amplitudes 1.4e-13 / 3.3e-13 / 1.4e-13 / 1.2e-12 (the last the fit's own accuracy); ETM = SMM |
 | gradients, uniform (vs 2D `jax.grad`) | refused; default 1e4 off | raster 3.9e-14, wavelength 4.2e-13, thickness 4e-15; `jvp`, `jacfwd`, torch reverse and forward mode alike; `theta`, `phi` and the incidence permittivity 4.3e-15..2.9e-13 on `jax.grad`, `jvp` and torch, at the point and inside the band |
 | `dR/dwl`, patterned (vs the fit's slope) | 1e11..1e28 off | 5.3e-11 .. 5.8e-9 (the fit), JAX = torch |
 | fields, uniform (vs 2D) / patterned (SMM vs ETM) | 0.25..0.84 at the default | 1.2e-14 / 2.5e-15; field gradients SMM vs ETM 1.8e-14 |
