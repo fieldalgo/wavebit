@@ -241,8 +241,27 @@ def _require_separated(valid, description, *, error=ValueError):
         raise error(f'modal derivatives are undefined for {description}')
 
 
-def exponential(xp, q, scale):
-    """The diagonal modal exponential with its complete first matrix variation."""
+def exponential(xp, q, scale, coupled=False):
+    """The modal exponential ``exp(scale * q)`` with its complete first matrix variation.
+
+    ``q`` is a vector of roots, or a matrix: a modal generator (:func:`generator`), whose value
+    is diagonal, or a conical x-cutoff layer's propagator
+    (:func:`~wavebit._core.solve_1d._regular_conical_modes`), whose value is diagonal plus one
+    coupling block with disjoint rows and columns. For either value the divided differences
+    below are the exact exponential: no product of two off-diagonal entries survives, so
+    ``exp(s q)`` is the diagonal one plus ``q_jk (exp(s q_j) - exp(s q_k)) / (q_j - q_k)`` off
+    it (Parlett's recurrence: B. N. Parlett, Linear Algebra Appl. 14, 117, 1976), and that holds
+    for every ``scale``, so a ``scale`` derivative is exact too.
+
+    What the formula does *not* carry exactly is a derivative of ``q`` beside a coupled value:
+    a variation can put entries where two couplings chain, which the formula drops. So
+    ``coupled=True`` -- the caller's *structural* word that ``q``'s value carries a coupling, set
+    where the layer was rebuilt and never read off the value, since a pytree child cannot be
+    branched on -- takes, when ``q`` carries autodiff, the value from the formula and the tangent
+    from the backend's matrix exponential (:func:`_expm`), whose derivative is its Frechet
+    derivative. Without autodiff, or with ``coupled=False`` (the default, and every other
+    layer), the arithmetic is the formula alone, as it always was.
+    """
     if 'jax' in xp.__name__ and in_namespace(xp, scale):
         # Already a JAX array: a cast, not a placement. JAX cannot batch `asarray(..., device=)`
         # of a tracer -- under `vmap`, and so under `jax.jacfwd` in a thickness, its
@@ -254,6 +273,9 @@ def exponential(xp, q, scale):
     if q.ndim == 1:
         eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
         return eye*xp.exp(scale[..., None]*q)[..., None, :]
+    if coupled and carries_autodiff(q):
+        exact = _expm(xp, scale[..., None, None]*q)
+        return exponential(xp, _stop(q), _stop(scale)) + (exact - _stop(exact))
     values = xp.linalg.diagonal(q)
     eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
     scaled = scale[..., None]*values
@@ -270,7 +292,86 @@ def exponential(xp, q, scale):
     return eye*phases[..., None, :] + (q-eye*values)*divided
 
 
-def two_face(xp, q, scale, top, bottom, keep):
+#: The largest 1-norm the degree-13 Pade approximant takes unscaled, ``theta_13`` (N. J. Higham,
+#: SIAM J. Matrix Anal. Appl. 26, 1179, 2005).
+_THETA_13 = 5.371920351148152
+
+#: The most squarings :func:`_expm` takes: a 1-norm up to ``theta_13 * 2**64`` (about 1e20),
+#: far past where ``exp`` of the layer overflows anyway. It bounds the eager count's loop and
+#: is the traced count's fixed number of conditional steps.
+_MAX_SQUARINGS = 64
+
+
+def _squarings(norm):
+    """The fewest ``s >= 0`` with ``norm <= theta_13 * 2**s``; ``None`` for an abstract ``norm``.
+
+    Read one comparison at a time through :func:`~wavebit._core.backend._concrete`, the house's
+    one door to a concrete value, so an abstract ``norm`` (``jax.jit``, ``jax.vmap``) answers
+    ``None`` instead of raising. A NaN norm answers 0 (nothing to scale); a norm past the cap
+    answers the cap.
+    """
+    from .backend import _concrete
+    for s in range(_MAX_SQUARINGS):
+        over = _concrete(norm > _THETA_13 * 2.0 ** s)
+        if over is None:
+            return None
+        if not over:
+            return s
+    return _MAX_SQUARINGS
+
+
+def _expm(xp, a):
+    """``expm(a)`` (batched over leading axes) on the backend, for its Frechet derivative.
+
+    Reached only from :func:`exponential` with ``coupled=True`` under autodiff, so only on JAX
+    and PyTorch; NumPy carries no derivative. PyTorch's ``matrix_exp`` is used as it is.
+    ``jax.scipy.linalg.expm`` takes ``floor(log2(|A|_1 / theta_13))`` squarings, so a norm up to
+    ``2 theta_13`` reaches the Pade approximant unscaled: measured (jax 0.11.0) 4e-9 in the value
+    and 8e-9 in the derivative on a cutoff layer's ``q`` at ``|A|_1 = 10.5``, where torch was
+    3e-15. So it is scaled here to ``|A|_1 <= theta_13`` -- the *ceiling* of that ``log2``,
+    Higham's count -- and squared back, and the squarings differentiate exactly.
+
+    The count is read off the value where there is one (:func:`_squarings`), so eager arithmetic
+    is ``s`` plain squarings. Where the norm is abstract -- a record built eagerly and then
+    differentiated under ``jax.jit`` or ``jax.vmap`` with the record passed in, which makes its
+    ``q`` a tracer -- the same count is formed traced and the squarings run as a fixed scan of
+    ``_MAX_SQUARINGS`` conditional steps -- borrowed from ``jax.scipy.linalg.expm``, which undoes
+    its own scaling that way, so a traced count differentiates -- rather than falling back to
+    jax's floor count. Measured on a field's ``z`` derivative at a patterned
+    exceptional point, ``jax.jit(jax.grad)`` against eager ``jax.grad``: 6.4e-11 with that
+    fallback, 4e-16 .. 1.3e-15 with the traced count.
+    """
+    if 'jax' in xp.__name__:
+        import jax
+        norm = xp.max(xp.sum(xp.abs(_stop(a)), axis=-2))
+        s = _squarings(norm)
+
+        def expm(b):
+            if b.ndim == 2:
+                return jax.scipy.linalg.expm(b)
+            r = jax.vmap(jax.scipy.linalg.expm)(xp.reshape(b, (-1,) + b.shape[-2:]))
+            return xp.reshape(r, b.shape)
+        if s is not None:
+            r = expm(a / (2.0 ** s))
+            for _ in range(s):
+                r = r @ r
+            return r
+        tiny = xp.finfo(norm.dtype).tiny
+        count = xp.clip(xp.ceil(xp.log2(xp.maximum(norm, tiny) / _THETA_13)), 0, _MAX_SQUARINGS)
+        r = expm(a / (2.0 ** count).astype(a.dtype))
+
+        def square(r, step):
+            return jax.lax.cond(step < count, lambda m: m @ m, lambda m: m, r), None
+        r, _ = jax.lax.scan(square, r, xp.arange(_MAX_SQUARINGS))
+        return r
+    if 'torch' in xp.__name__:
+        import torch
+        return torch.linalg.matrix_exp(a)
+    import scipy.linalg
+    return scipy.linalg.expm(a)
+
+
+def two_face(xp, q, scale, top, bottom, keep, coupled=False):
     """A layer's ``-`` amplitude at its bottom face, read from whichever face keeps it accurate.
 
     ``top`` and ``bottom`` are the ``-`` (up-going) amplitudes at the layer's top and bottom
@@ -292,12 +393,49 @@ def two_face(xp, q, scale, top, bottom, keep):
     two kept modes, as :func:`exponential` forms them, and for a kept mode ``j`` beside a dropped
     one ``k`` the exact identity ``exp(scale*q_k) top_k = bottom_k``, so the dropped mode's
     growing factor is never formed either. The value is the selection above.
+
+    ``coupled=True`` is the caller's structural word that ``q``'s *value* carries a coupling
+    block -- a conical x-cutoff layer (:func:`~wavebit._core.solve_1d._regular_conical_modes`),
+    ``tau`` on rows ``J`` and columns ``K``, disjoint. The value above is still exact for every
+    row outside ``J``: such a row of ``exp(scale*Q)`` is diagonal -- a mode in ``K`` included, its
+    coupling sits in its *column* -- so the identity a dropped mode stands on still holds. A row
+    in ``J`` is
+    read off the bottom face (rows are found as the nonzero rows of the coupling's value: an
+    exact test, no threshold). The first variation then misses one family of terms, the
+    coupling chained behind a variation into a dropped ``J`` mode,
+    ``d_ja tau_ab f[j, a, b] top_b``; with ``f[j, a, b] = (f[j, b] - f[a, b])/(q_j - q_a)`` and
+    the ``f[a, b]`` half already inside ``bottom_a``, what is left is
+    ``(d_ja/(q_j - q_a)) tau_ab f[j, b] top_b`` -- the ``beside`` term times ``tau`` times one
+    more divided difference, written for a dropped ``b`` through ``bottom_b`` again -- which is
+    added. Without it a field gradient at a patterned exceptional point was 2.6e-2 off; reading
+    the whole layer off its bottom face instead was exact there, but took this protection away
+    from every other mode of a rebuilt uniform layer, and a near-grazing order beside a cutoff
+    lost 1.5e-2 in the field. ``coupled=False`` (the default, and every other layer) is the
+    arithmetic above, unchanged.
+
+    **What makes that first variation exact is partly the tangent, not this function.** A kept
+    row ``k`` in ``K`` sits beside its cluster partner ``j`` in ``J``, a row the rule above drops
+    whatever its ``|scale*q|``, and the two roots are a cutoff pair: ``q_k - q_j`` is the pair's
+    root gap -- round-off at a patterned exceptional point (2.1e-15 .. 4.4e-15 over the test
+    scenes), exactly 0 in a uniform layer. The ``beside`` term ``d_kj/(q_k - q_j)`` (``d_kj``
+    over 1 at a zero gap) is then right only because a *physical* tangent's ``K x J`` entries
+    vanish with that gap: family-1 modes stay eigenvectors of the layer operator under every
+    variation that keeps the premise ``epz_i = inv(eps_y)``, ``muz_i = inv(mu_y)`` -- the one the
+    family split already rests on, and every parameter of a 1D grating keeps it -- so
+    ``d_ka = (q1_a - q2_k)(Z^-1 db1_a)_k``. For an arbitrary ``dq`` the term loses accuracy like
+    ``u/gap``: measured on a synthetic coupled ``q`` with a random ``dq``, kept-row tangent
+    errors of 7e-16 at a gap of 0.3, 9e-10 at 1e-8, 2.4e-5 at 1e-12, 8.5e-3 at 1e-15 and 0.30 at
+    0. On the physical PA616 layer (gap 2.1e-15, its ``K`` row kept) SMM's field gradient is the
+    ETM's to 2.4e-15 in the raster and 1.1e-14 in the wavelength.
     """
     if q.ndim == 1:
         e = xp.exp(xp.where(keep, scale * q, xp.zeros_like(q)))
         return xp.where(keep[:, None], e[:, None] * top, bottom)
     values = xp.linalg.diagonal(q)
     eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
+    if coupled:
+        tau = _stop(q) - eye * _stop(values)
+        keep = xp.logical_and(keep, xp.logical_not(xp.any(tau != 0, axis=1)))
     e = xp.exp(xp.where(keep, scale * values, xp.zeros_like(values)))
     difference = values[:, None] - values[None, :]
     argument = scale * difference
@@ -314,6 +452,13 @@ def two_face(xp, q, scale, top, bottom, keep):
     within = xp.where(both, variation * divided, zero)
     beside = xp.where(across, variation / denominator, zero)
     kept = e[:, None] * top + within @ top + e[:, None] * (beside @ top) - beside @ bottom
+    if coupled:
+        # f[j, b] top_b for a kept row j: by `divided` beside a kept b, through `bottom_b`
+        # beside a dropped one (a mode in a coupling column has a diagonal row).
+        ahead = xp.where(keep[None, :, None], divided[:, :, None] * top[None, :, :],
+                         (e[:, None, None] * top[None, :, :] - bottom[None, :, :])
+                         / denominator[:, :, None])
+        kept = kept + xp.sum((beside @ tau)[:, :, None] * ahead, axis=1)
     return xp.where(keep[:, None], kept, bottom)
 
 

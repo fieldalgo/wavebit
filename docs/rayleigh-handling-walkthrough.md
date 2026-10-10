@@ -119,6 +119,19 @@ five digits.
   *old* construction is itself inside the broken band. Use the two-sided sqrt
   extrapolation from far detunes (~1e-8 relative), as `rayleigh-points.md` §6 does.
 
+## Not this process: the 1D conical x-cutoff
+
+On the 1D conical path with `ky != 0`, an order with `kx_m**2 = eps*mu` in some layer is *not*
+a Rayleigh point: its `kz` is `abs(ky)`, nothing grazes, and none of the machinery above is
+involved. What breaks there is the conical path's two mode families, which collapse onto one
+field; the layer is rebuilt in a regular basis inside the 1D builder
+(`solve_1d.py::_regular_conical_modes`), exactly, with no warning and no detune, so the default
+solve and `auto_detune=False` return the same answer. Under an abstract trace — `jax.jit`, and
+`jax.vmap` too, so a wavelength sweep written as a `vmap`; a `jax.lax.map` or `scan` body,
+`jax.checkpoint` and `torch.func.vmap` the same — the rebuild cannot engage and the
+old construction ships silently. `rayleigh-points.md` §7 has the construction, the gate and the
+measurements.
+
 ## Where the proofs live
 
 - `docs/rayleigh-points.md` — every number above, measured, with the dead ends recorded.

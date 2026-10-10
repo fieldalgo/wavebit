@@ -409,10 +409,18 @@ def test_auto_detune_retries_under_an_error_filter(case):
     E/H blocks and the 2D ``V = Omega_R W / q``.
 
     ``'1D ky'`` lights the same stack at ``phi = pi/2``, so ``kx_3**2`` still meets the
-    spacer's permittivity while ``ky != 0``. There the quotient is ``inf``, not NaN, and the
-    warning comes from the *product* after the division. Silencing the divisions alone
-    passed ``'1D'`` and failed this one. Removing the 1D block fails both 1D cases; removing
-    the 2D one fails ``'2D'``.
+    spacer's permittivity while ``ky != 0``. That is an x-cutoff, not a Rayleigh point -- the
+    order's ``kz`` is ``|ky|``, not 0 -- and until 2026-10-10 it was this test's hardest case:
+    the quotient was ``inf``, not NaN, the warning came from the *product* after the division
+    (silencing the divisions alone passed ``'1D'`` and failed this one), the point refused, and
+    the retry landed on the family construction's error plateau, 2.7e-6 off here, which the
+    test could only bound by 1e-4 against a 1e-8-detuned oracle. The layer is now rebuilt in a
+    regular basis (:func:`wavebit._core.solve_1d._regular_conical_modes`), whose divisors are
+    guarded where they are discarded: nothing refuses, so nothing retries -- no
+    :class:`AutoDetuneWarning` -- no RuntimeWarning reaches the ``'error'`` filter, and ``R`` is
+    the 2D path's (a y-invariant raster, which never forms the families) at the exact point to
+    1e-12. Removing the 1D ``division_at_a_cutoff`` block fails ``'1D'``; removing the 2D one
+    fails ``'2D'``; the rebuild's guards are what ``'1D ky'`` pins now.
     """
     from wavebit._core.backend import AutoDetuneWarning
     tilt = dict(theta=0.3, phi=np.pi / 2)
@@ -428,13 +436,21 @@ def test_auto_detune_retries_under_an_error_filter(case):
     if case == '1D':
         truth = _truth(3)
     elif case == '1D ky':
-        truth, _ = _totals(_solve(0, 3, wavelength=WL * (1 + 1e-8), **tilt))
+        truth, _ = _totals(wavebit.rcwa(
+            backend=0, wavelength=WL, truncation_order=[3, 1],
+            structure=np.repeat(_STACK, 2, axis=1),
+            **{**_KW, **tilt, 'period': [PERIOD, 700.0]}).solve(auto_detune=False))
     else:
         truth, _ = _totals(_solve_2d(1.5, 'ETM', wavelength=WL * (1 + 1e-8)))
     assert not any(issubclass(r.category, RuntimeWarning) for r in rec), [str(r.message) for r in rec]
-    if case != '2D':                     # 2D may rebuild on the first pass, platform by platform
+    if case == '1D':
         assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
-    assert abs(R - truth) < (TOL if case == '1D' else 1e-4) and abs(R + T - 1.0) < 1e-4
+    elif case == '1D ky':
+        assert not any(issubclass(r.category, AutoDetuneWarning) for r in rec), (
+            [str(r.message) for r in rec])
+    # 2D may rebuild on the first pass, platform by platform
+    tol = {'1D': TOL, '1D ky': 1e-12, '2D': 1e-4}[case]
+    assert abs(R - truth) < tol and abs(R + T - 1.0) < 1e-4
 
 
 @pytest.mark.parametrize('truncation_order', BAND_MAX_ORDER)

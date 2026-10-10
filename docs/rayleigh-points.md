@@ -1,18 +1,21 @@
 # Rayleigh points — the exact graze, which paths solve it, and what `auto_detune` does
 
-Written: 2026-08-16; §6 (the 2D coupled-cluster rebuild) added later the same day.
+Written: 2026-08-16; §6 (the 2D coupled-cluster rebuild) added later the same day; §7 (the
+1D conical x-cutoff at `ky != 0`, which is not a Rayleigh point) added 2026-10-10.
 Measured on CPU (Apple Accelerate), NumPy / JAX / PyTorch, float64; the single-precision
 caveat is stated where it applies. This file is the measurement record; for the
 narrative walkthrough of how the pieces hand off to each other at solve time, read
 `rayleigh-handling-walkthrough.md`.
 
 Targets:
-- `wavebit/_core/solve_1d.py` — `layer_modes_1d_conical` (the reformulation), `layer_modes_1d`
+- `wavebit/_core/solve_1d.py` — `layer_modes_1d_conical` (the reformulation), `layer_modes_1d`,
+  `_cutoff_cluster` and `_regular_conical_modes` (§7)
 - `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `_rebuild_grazing_cluster` (§6)
 - `wavebit/_core/backend.py` — `check_mode_cutoff`, `check_finite`,
   `RayleighPointWarning`, `AutoDetuneWarning`
 - `wavebit/_core/engine.py` — `solve` (the `auto_detune` ladder)
-- `tests/test_rayleigh_guard.py` — every contract below, pinned
+- `tests/test_rayleigh_guard.py` — every contract below, pinned; `tests/test_conical_cutoff.py`
+  — §7
 
 ---
 
@@ -33,7 +36,8 @@ hunt for a *configuration* that separates failing from working cases found none,
 | --- | --- | --- |
 | half-space graze (any path) | always fine | no mode matrix is built for a half-space |
 | 1D pure TE/TM (`tetm=`) | always fine | `V = W*q` — nothing singular is ever inverted |
-| 1D conical (`psi`/pair) | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
+| 1D conical (`psi`/pair), `ky == 0` | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
+| 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, except under an abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint` (under `jax.grad` too), `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike |
 | 2D | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice; quiet-wrong is gone |
 | any path, eigenvalue *exactly* `0.0` — and, on 2D, any cluster whose coupled rates split below ~1e-10 of the modal scale | refuses, unless the ladder clears it | the exponential mode basis is degenerate at the point itself (the limit basis is `{1, z}`) |
 
@@ -225,3 +229,156 @@ vs one-ULP ≤2.6e-8; `jax.grad` through the exact graze finite and nonzero (via
 fallback-then-ladder path — the rebuild itself steps aside for values it cannot
 materialize). Off the condition: 40 random non-grazing solves, 0 rebuild engagements,
 results bit-identical.
+
+## 7. The conical x-cutoff (`ky != 0`) — not a Rayleigh point, and now solved exactly
+
+`solve_1d.py::_cutoff_cluster` gates, `solve_1d.py::_regular_conical_modes` rebuilds,
+`solve_1d.py::_regular_conical_modes_ad` differentiates. Tests: `tests/test_conical_cutoff.py`.
+
+**What it was.** On the conical path a layer's modes come in two families: `E_x = 0`
+(normalised to `H_x`) and `H_x = 0` (normalised to `E_x`) — the decomposition of Moharam et
+al. (JOSA A 12, 1068, 1995). L. Li proves it unique (J. Mod. Opt. 40, 553, 1993, appendix A)
+except for a field meeting both conditions at once, which needs `kz**2 + lambda**2 = 0` in his
+notation (his `kz` runs along the grooves, `exp(i lambda y)` across the layer): here
+`q**2 = ky**2`, i.e. `wA = q1**2 - ky**2 = 0` — in a uniform layer, `kx_m**2 = eps*mu`. (`wA`
+and `wB` are the eigenvalues of `A mu_x` and `B eps_x`, `A = Kx muz_i Kx - eps_y` and
+`B = Kx epz_i Kx - mu_y`, the two families' matrices: family 1's `q1**2 = ky**2 + wA`,
+family 2's `q2**2 = ky**2 + wB`, and `wB = 0` is the same condition met by family 2.) As a
+mode approaches it, the component it is normalised to vanishes, so both families' columns grow
+like `1/wA` and turn parallel, and the interface inverses amplify rounding by `~1/wA**2`. With
+`ky == 0` the same zero is a Rayleigh point (§1–§5). With `ky != 0` it is not — the order's `kz`
+is `abs(ky)`, nothing grazes — and the §1 nearby-problem argument does not rescue it: the error
+band is wide (`C u / wA**2`, still 5e-5 at a relative 1e-8), so a nearby point is *not* the
+answer.
+
+**Uniform versus patterned.** Two different things share that one condition.
+
+| | uniform layer | patterned layer |
+| --- | --- | --- |
+| the point | an ordinary double root: the two roots meet with equal slopes; only the *basis* collapses | a genuine 2x2 Jordan block: the roots cross `abs(ky)` with different slopes (ratio 0.92..1.36 measured), so no eigenvector basis exists there |
+| `wA` at the point | often exactly `0.0` (noiseless FFT) | round-off, 1e-16..3e-15, never exactly zero |
+| before | refused at an exact zero; silent one ULP off (2e-2..1.3 in `R`), at rounded inputs (water `1.7689`: 2.8e-2, `R + T - 1` up to +0.8 on SMM), and the `auto_detune` retry landed 2.6e-2..0.1 off; SMM's `R + T` reached 2.4e3 over a census | never refused, never warned: `R` off by up to 5, `R + T - 1` up to 14, a lottery in the 13th digit of the wavelength; gradients off by 1e11..1e28 |
+
+**The construction** (each layer whose gate engages; no `eig` beyond the two the layer already
+had, no division by `wA` or `wB` anywhere):
+
+- family-1 cluster modes re-normalised to their `E_y`: `b1_j = (wA_j/q1_j) f1_j`;
+- family-2 cluster modes with the family-1 cluster's part *omitted*, not cancelled:
+  `b2_k = f2_k - sum_j beta_jk f1_j`, `beta_jk = ky D_jk / q1_j`, `D = W1^-1 Kx muz_i W2`;
+- the coupling this leaves, `L b2_k = q2_k b2_k + sum_j tau_jk b1_j`, is 0/0 as written and
+  regular through the exact identity `wA_j N_jk = wB_k D_jk`:
+  `tau_jk = ky (N_jk - D_jk)/(q1_j + q2_k)`, `N = W1^-1 mu_x^-1 epz_i Kx epx W2` (zero in a
+  uniform layer, 5e-3..5e-2 in the patterned scenes);
+- every other column through its *own* family (`V_21 = ky muz_i Kx mu_x W1/wA`,
+  `V_12 = ky epz_i Kx epx W2/wB`), so no `1/wA_j` reaches a family-2 column — the family
+  construction divided every family-2 column's rounding by every `wA_j`, which is how one cutoff
+  order spoilt all of them.
+
+The layer comes out in the general layout, `E = [S_x; S_y]`, `U = [U_x; U_y]`, with
+`q = [[diag(q1), tau], [0, diag(q2)]]`. The coupling's rows and columns are disjoint, so
+`modal_gradient.exponential`'s divided differences are its exact exponential (Parlett's
+recurrence). It is an exact change of basis for any set of modes, so the gate decides only who
+pays for it. The identities need `epz_i = inv(eps_y)` and `muz_i = inv(mu_y)`, the premise the
+family split already rests on.
+
+**Derivatives.** Under autodiff the value is the rebuild of the stopped inputs and the
+derivative the first variation of the layer's first-order operator `L = [[0, P], [Q, 0]]` in that
+fixed basis (`modal_gradient.py::_variation` on the `4n`-sized operator): the `++` block is `dq`,
+the `-+` block tilts the `+` subspace through `T X + X T = S`, solved in four divided-difference
+passes. "Every input" includes `wA` and `wB`: they are `w - ky**2` with a live `ky`, and left
+live they gave the value a tangent of its own along any parameter that moves `ky` — the
+`theta` derivative of `sum R` 0.50 off at a uniform cutoff, and 0.52 off inside the band where
+the family construction had been right to 7e-13; stopped, the angle derivatives are the 2D
+path's to 8.2e-14 on the tested scenes and to 2.9e-13 over nine uniform ones (magnetic and
+double-negative spacers, backside, `theta = 1.4`, the incidence permittivity). Two consumers of a coupled `q` had to learn about it, both told
+*structurally* by the code that rebuilt the layer, never by reading the value:
+
+- `exponential(coupled=True)` takes the value from the formula and the tangent from the
+  backend's matrix exponential (its Fréchet derivative). The formula's own tangent misses the
+  coupling chained behind a variation (6.4e-3 on `dR/dwl`). JAX's `expm` is pre-scaled by the
+  ceiling of `log2(norm/theta_13)` and squared back: unscaled it was 4e-9 off at `norm = 10.5`.
+- SMM's field state reads the rows that carry the coupling off the bottom face and adds, for
+  every other kept row, the one term `two_face` would miss beside a coupling
+  (`two_face(coupled=True)`). Plain `two_face` was 6.8e-3 off on a field gradient; dropping only
+  the coupled rows without that term, 2.6e-2; reading the *whole* layer off its bottom face was
+  exact at the patterned point but took the light-line protection away from every other mode of
+  a rebuilt uniform layer — 1.5e-2 in the field at `theta = pi/3`, where order 1 grazes beside
+  order 2's cutoff.
+
+**The gate.** A mode is in when `abs(wA)` (or `abs(wB)`) is below
+`g = min(0.04 * abs(ky)**1.5, abs(ky)**2 / 2)`, read once per layer through `_concrete`.
+
+- `0.04 * abs(ky)**1.5` (`_CUTOFF_REL`): the family construction's error follows
+  `K0 u abs(ky)**3 / abs(w)**2` (`K0 <= 0.074` over twelve scenes), so at the gate's edge it is
+  `K0 u / 0.04**2`, about 1e-14 whatever `ky` is. Measured just outside the edge, `ky` from 1e-4
+  to 1.4: at most 9.1e-14 in amplitudes; inside it, the rebuild, at most 8.9e-14. A pure `ky**2`
+  law left 2e-10 just outside it at `theta = 1e-4`; a fixed 1e-3 left 6.7e-13.
+- `abs(ky)**2 / 2` takes over below `abs(ky) ~ 6e-3`. It keeps `abs(q) >= abs(ky)/sqrt(2)`, so a
+  cluster never holds the `q -> 0` merge of an up- and a down-going mode, and it makes
+  `ky == 0` (where `g = 0` and the comparison is strict) never engage: the Rayleigh contract,
+  the TE/TM path and every `ky == 0` solve are untouched. A gate without it engaged at a
+  `ky == 0` retry and scattered forward- and reverse-mode tangents by 4e-8.
+- A cluster root under 1e-9, or a pair with opposite root labels, keeps the family
+  construction.
+
+Engaging where it was not needed costs time, never accuracy; failing to engage leaves the 1e-14
+edge error. About 2% of random conical solves route; a solve with one rebuilt layer of two costs
+1.03–1.06x.
+
+**Measured** (oracles: the 2D path, a y-invariant raster, which never forms the families and is
+exact at a uniform cutoff; and, at a patterned point, a degree-8 fit of the family construction
+through 16 offsets at relative 1e-4..1e-3, where its own error is below 1e-12):
+
+| | before | now |
+| --- | --- | --- |
+| five reported uniform scenes, exact point | refused; default 1.6e-8..0.10 off | `abs(dR) <= 2.9e-15`, amplitudes `<= 1.4e-14`, no warning, default = `auto_detune=False` |
+| offset ladder, exact .. 1e-3 and one ULP | up to 0.78 in amplitudes | `<= 1.2e-14` in `R`, `<= 4.8e-14` in amplitudes |
+| patterned PA616 / PB687 / PD574 / MU614 | `R` off by up to 5.3, `R + T - 1` up to 14 | amplitudes 1.4e-13 / 3.3e-13 / 1.4e-13 / 1.2e-12 (the last the fit's own accuracy); ETM = SMM |
+| gradients, uniform (vs 2D `jax.grad`) | refused; default 1e4 off | raster 3.9e-14, wavelength 4.2e-13, thickness 4e-15; `jvp`, `jacfwd`, torch reverse and forward mode alike; `theta`, `phi` and the incidence permittivity 4.3e-15..2.9e-13 on `jax.grad`, `jvp` and torch, at the point and inside the band |
+| `dR/dwl`, patterned (vs the fit's slope) | 1e11..1e28 off | 5.3e-11 .. 5.8e-9 (the fit), JAX = torch |
+| fields, uniform (vs 2D) / patterned (SMM vs ETM) | 0.25..0.84 at the default | 1.2e-14 / 2.5e-15; field gradients SMM vs ETM 1.8e-14 |
+| complex64, R1 (vs 2D complex64) | refused, and the 1e-12 retry cannot move a float32 | 3.8e-7 in amplitudes |
+| `theta = pi/3`: order 2 at the cutoff, order 1 grazing | 0.30 in `R` | 3.8e-9 — a Rayleigh-type sensitivity of the grazing order, not the rebuild: 8.9e-13 at relative 1e-9 |
+
+Every solve outside the gate is byte-identical, eager and under `jit`: a 312-line `sha256`
+digest of `R`, `T`, `r_xyz`, `t_xyz` and fields over random conical, magnetic, backside,
+`ky == 0`, TE/TM and 2D scenes on NumPy, JAX and PyTorch, with eager `jax.grad`, field
+gradients, torch backward and forward mode, `jit` and `jit(grad)`, run twice per tree, differs
+in 10 lines, all of them the three random scenes the gate routes. Two are a lossy metal grating
+and a uniform layer inside the band: rebuilt, they sit 1.6e-14..2.1e-14 from the 2D path, where
+the old construction sat 1.8e-14..5.1e-13 from it. The third, a field gradient, moved 1.3e-14
+and is 2.7e-13 from the 2D path's on either tree.
+
+**The abstract-trace gap.** The masks decide the layer's *structure*, so wherever the gate's
+values are abstract — `jax.jit`, and just as much `jax.vmap` (the usual way to sweep a
+wavelength), a `jax.lax.map` or `scan` body, `jax.checkpoint` and `torch.func.vmap` — it declines and the family construction ships, as the 2D rebuild does on its
+fallback paths and as `check_finite` is skipped. Measured under `jit`: NaN at an exact zero,
+2.5e-2..7.3e-2 off one ULP away and at `+1e-12`, 3e-4..0.3 off at a patterned point, and
+`jit(grad)` NaN or 1e12..1e24 off — silent. Under `vmap` over the wavelength: NaN at R1's exact
+point and 2.6e-2 off at `+-1e-12`, no warning, no rebuild; `jax.lax.map` and `jax.checkpoint`
+alike (2.6e-2..2.7e-2), and `torch.func.vmap` (2.5e-2). `jax.grad`, `jvp`, `jacfwd` and `jacrev`
+keep a concrete primal and are not in the gap, unless the function is wrapped in
+`jax.checkpoint`, which stages it: `jax.grad(jax.checkpoint(f))` is NaN at R1's point and
+7.9e-7 off at relative 1e-6. Nor is `torch.compile` in its default mode, whose graph break
+reads the value (measured: rebuilt, 3.2e-15 at R1's point); with `fullgraph=True` it refuses,
+as do the `torch.func` derivative transforms. A traced-mask variant
+was measured and not taken: `jit` values exact, but `jit(grad)` at a patterned point 6e-4..6e-3
+off (the formula's tangent beside a coupled value, which needs confluent second and third
+divided differences to fix), and every jitted output moved by up to 1e-14.
+
+A record built *eagerly* keeps its rebuilt layer under any trace — `W`'s shape says so — and its
+fields differentiate alike under `jax.jit`: the coupled exponential's JAX `expm` takes the same
+ceiling squaring count there, formed traced (`modal_gradient.py::_expm`), where falling back to
+jax's own floor count put 6.4e-11 on a field's `z` derivative at PA616 (now 4e-16..1.3e-15).
+
+**Still open, and separate.**
+
+- The 2D path at a *patterned* exceptional point is 1e-8..4e-5 off, silently: its grazing
+  rebuild is keyed to `q -> 0`, and this cluster sits at `q = abs(ky)`.
+- First-order SMM at a patterned exceptional point is 0.07..0.32 off (`R + T - 1` up to
+  +0.36), silently, and stays near 0.2 for every relative offset under 1e-8. First-order ETM
+  there sits at the 2D path's level (3.5e-7); neither first-order path fails at a uniform
+  cutoff.
+- Patterned double negatives were not measured (no real crossing was found). Their flux labels
+  read the same `1/(w - ky**2)` quotient; if a pair's labels disagree the gate keeps the family
+  construction, silently.

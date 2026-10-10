@@ -5243,6 +5243,20 @@ class CoreFactorizationMixin:
         the caller's filters as the solve emitted it, so a constant-text warning stays one
         report per sweep, and on a retry the discarded attempt's warnings are reported too.
 
+        A 1D conical solve with ``ky != 0`` does not reach the ladder at ``kx_m**2 = eps mu``:
+        that point is an x-cutoff, not a Rayleigh point (the order's ``kz`` is ``|ky|``, not 0),
+        and the affected layer is rebuilt in a regular basis that is exact there
+        (:func:`~wavebit._core.solve_1d._regular_conical_modes`), so the default and
+        ``auto_detune=False`` return the same exact-point answer with no notice. Before
+        2026-10-10 it refused, and the retry landed 2.6e-2 to 0.1 off. Two exceptions, both the
+        old construction's: where the rebuild's gate refuses the cluster (a root under 1e-9,
+        which takes ``|ky|`` under about 1.4e-9, or a pair with opposite labels) an exact zero
+        still refuses and the ladder still retries -- measured at ``ky = 1e-10``; and under an
+        abstract trace (``jax.jit``, ``jax.vmap``, a ``jax.lax.map`` or ``scan`` body,
+        ``jax.checkpoint`` -- under ``jax.grad`` too -- and ``torch.func.vmap``) the rebuild
+        cannot engage, and nothing refuses or retries either (``docs/rayleigh-points.md``
+        section 7).
+
         During autodiff a default retry uses a relative step of at least ``1e-8``
         (64 machine eps for a lower-precision dtype). The smaller forward default can
         leave cancellation in a material derivative even when the forward value is

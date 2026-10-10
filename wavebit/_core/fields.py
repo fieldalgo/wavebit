@@ -662,10 +662,15 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             z_per_layer, layer_info_list[::-1]):
         nz = _n_samples(spec)
         q_1, q_2 = q[:n_orders], q[n_orders:]
+        # A conical x-cutoff layer arrives in the general layout (`solve_1d.
+        # _regular_conical_modes`): `W` is `2n x 2n` rather than the family layout's `n x 2n`, and
+        # its `q` couples the cluster modes in value. The shape is static, so a traced record
+        # answers it; `exponential` takes it as its structural `coupled` word.
+        rebuilt = conical and W.shape[0] != n_orders
         from .modal_gradient import exponential
         if amplitudes is None:
             # The ETM's record: `T_layer` is this layer's `+` amplitude at its top.
-            big_X = exponential(xp, q, -k0*d)
+            big_X = exponential(xp, q, -k0*d, coupled=rebuilt)
             c = xp.concat([big_I, big_B @ big_A_i @ big_X], axis=0) @ T_layer
             T_next = big_A_i @ big_X @ T_layer
         else:
@@ -683,8 +688,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             return fwd[:, None, :, :], bwd[:, None, :, :]
 
         if q.ndim == 2:
-            ap = exponential(xp, q, -k0*z)[:, None] @ c[:, :2*n_orders]
-            am = exponential(xp, q, k0*(z-d))[:, None] @ c[:, 2*n_orders:]
+            ap = exponential(xp, q, -k0*z, coupled=rebuilt)[:, None] @ c[:, :2*n_orders]
+            am = exponential(xp, q, k0*(z-d), coupled=rebuilt)[:, None] @ c[:, 2*n_orders:]
             a1p, a2p = ap[..., :n_orders, :], ap[..., n_orders:, :]
             a1m, a2m = am[..., :n_orders, :], am[..., n_orders:, :]
         else:
@@ -693,7 +698,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             a1p, a1m = f1 @ c1p, b1 @ c1m
             a2p, a2m = f2 @ c2p, b2 @ c2m
 
-        if conical:
+        if conical and not rebuilt:
+            # The conical family layout; an x-cutoff layer takes the general one below.
             W_1, W_2 = W[:, :n_orders], W[:, n_orders:]
             V_11, V_12 = V[:n_orders, :n_orders], V[:n_orders, n_orders:]
             V_21, V_22 = V[n_orders:, :n_orders], V[n_orders:, n_orders:]

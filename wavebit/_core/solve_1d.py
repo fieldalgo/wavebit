@@ -24,8 +24,8 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   2. per-layer eig+couple— Redheffer/transfer propagation from the bottom layer up
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
-from .backend import (array_namespace, as_array, check_finite, division_at_a_cutoff,
-                      eig)
+from .backend import (_concrete, _readable, array_namespace, as_array, check_finite,
+                      division_at_a_cutoff, eig)
 from .conventions import (boundary_kz, half_space_medium, incident_column, incident_kz,
                           layer_label_rule, layer_root, order_azimuth, order_frame_sign,
                           layer_runs, power_down_labels, run_k0_d)
@@ -207,13 +207,285 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
     return W, V, q
 
 
+#: The x-cutoff gate's constant: a conical mode counts as sitting on its x-cutoff when ``|wA|``
+#: (``|wB|``) is below ``min(_CUTOFF_REL * |ky|**1.5, |ky|**2 / 2)`` (:func:`_cutoff_cluster`).
+#: Measured, not derived. Near the point the family construction's rounding error follows
+#: ``K0 * u * |ky|**3 / |w|**2`` (``u`` the unit round-off; ``K0 <= 0.074`` over twelve scenes),
+#: so at the gate's edge it is ``K0 * u / _CUTOFF_REL**2``, about 1e-14 whatever ``ky`` is; the
+#: worst measured just outside the gate, ``ky`` from 1e-4 to 1.4, was 9.1e-14 in amplitudes. The
+#: rebuild is an exact change of basis for any set of modes, so a larger value costs time, never
+#: accuracy. (Not :data:`wavebit._core.backend._CUTOFF_REL`, the 2D warning's eigenvalue ratio.)
+_CUTOFF_REL = 0.04
+
+#: A cluster root at or below this modulus keeps the family construction. The gate's
+#: ``|ky|**2 / 2`` bound already holds ``|q| >= |ky|/sqrt(2)``, so this only matters as
+#: ``ky -> 0``, where the cutoff turns into a Rayleigh point (``q -> 0``) and an up- and a
+#: down-going mode merge -- the ``{1, z}`` wall no exponential basis crosses. The rebuild's own
+#: error at the exact point grows like ``1/|ky|``: measured 2e-13 in amplitudes at ``ky = 1e-5``,
+#: 3e-12 at 1e-6, 4e-10 at 1e-8.
+_CUTOFF_Q_FLOOR = 1e-9
+
+
+def _cutoff_cluster(xp, wA, wB, q1, q2, ky):
+    """``(mJ, mK)``: which family-1 / family-2 modes sit at an x-cutoff, or ``None`` for none.
+
+    A mode is in when ``|wA|`` (``|wB|``) is below ``g = min(_CUTOFF_REL * |ky|**1.5,
+    |ky|**2 / 2)``. The first bound is where the family construction's rounding stops mattering
+    (:data:`_CUTOFF_REL`). The second takes over below ``|ky| ~ 6e-3`` and is what keeps this a
+    cutoff rather than a Rayleigh point: it holds ``|q| >= |ky|/sqrt(2)``, so a cluster never
+    holds the ``q -> 0`` merge of an up- and a down-going mode; and at ``ky == 0``, where
+    ``g = 0`` and the comparison is strict, nothing engages, which leaves the Rayleigh contract
+    (the exact-zero refusal, ``auto_detune``) and every ``ky == 0`` solve as they were. Measured
+    on an earlier gate without that bound, at a ``ky == 0`` retry with ``q ~ 2e-4``: the
+    rebuild's forward and reverse tangents scattered by 4e-8 where the family construction's
+    agreed to 2e-10.
+
+    ``None`` also where the masks cannot be handed to the rebuild: a cluster root at or below
+    :data:`_CUTOFF_Q_FLOOR`, or a family-1 / family-2 pair with opposite root labels
+    (``|q1_j - q2_k| >= |q1_j + q2_k|``), which would put an up- and a down-going mode in one
+    cluster. And ``None`` whenever the values are abstract -- ``jax.jit``, and ``jax.vmap`` just
+    as much (a wavelength sweep under ``vmap`` ships NaN at an exact zero), a ``jax.lax.map``
+    or ``scan`` body, ``jax.checkpoint`` and ``torch.func.vmap``: the masks decide the layer's
+    *structure*, so they must be concrete, and a traced solve keeps the family construction --
+    the 2D grazing gate's precedent, and a documented gap (``docs/rayleigh-points.md`` section
+    7). ``jax.grad``, ``jvp``, ``jacfwd`` and ``jacrev`` carry a concrete primal and are gated as
+    an eager solve is, unless ``jax.checkpoint`` stages them.
+
+    ``wA`` and ``wB`` come from the stopped eigensolve; ``q1`` and ``q2`` may be modal
+    generators, whose diagonal is the value. Every test is one vectorised expression read once
+    through :func:`~wavebit._core.backend._concrete`, so the gate costs one boolean per layer.
+    """
+    from .modal_gradient import _stop
+    v1 = _stop(q1 if q1.ndim == 1 else xp.linalg.diagonal(q1))
+    v2 = _stop(q2 if q2.ndim == 1 else xp.linalg.diagonal(q2))
+    ky2 = xp.abs(_stop(ky)) ** 2
+    g = xp.minimum(_CUTOFF_REL * ky2 ** 0.75, 0.5 * ky2)
+    mJ = xp.abs(_readable(wA, xp)) < g
+    mK = xp.abs(_readable(wB, xp)) < g
+    pair = xp.logical_and(mJ[:, None], mK[None, :])
+    opposite = xp.abs(v1[:, None] - v2[None, :]) >= xp.abs(v1[:, None] + v2[None, :])
+    refused = xp.logical_or(
+        xp.any(xp.logical_and(pair, opposite)),
+        xp.logical_or(xp.any(xp.logical_and(mJ, xp.abs(v1) <= _CUTOFF_Q_FLOOR)),
+                      xp.any(xp.logical_and(mK, xp.abs(v2) <= _CUTOFF_Q_FLOOR))))
+    engaged = xp.logical_and(xp.logical_or(xp.any(mJ), xp.any(mK)), xp.logical_not(refused))
+    if not _concrete(engaged):       # False, or None for an abstract value
+        return None
+    return mJ, mK
+
+
+def _regular_conical_modes(xp, Kx, ky, epx_conv, epz_conv_i, A, mux_conv, muz_conv_i, mu_given,
+                           W1, W2, W1_i, wA, wB, q1, q2, mJ, mK):
+    """A conical layer with modes at an x-cutoff, as ``(E, U, q)`` in the general layout.
+
+    ``E = [S_x; S_y]`` and ``U = [U_x; U_y]`` are ``2n x 2n`` with one column per mode -- the
+    layout :func:`~wavebit._core.solve_2d.layer_modes_2d` returns -- and ``q`` is ``2n x 2n``:
+    the family roots on its diagonal and, where a family-1 mode ``j`` and a family-2 mode ``k``
+    sit at the cutoff together, a coupling ``tau[j, k]`` above it. They satisfy ``Q E = U q`` and
+    ``P U = E q`` with the layer's first-order operator (:func:`_conical_first_order`), so the
+    layer's field is ``E exp(-k0 q z) c`` as before; only the propagator is upper triangular
+    instead of diagonal.
+
+    **Why the family basis fails there.** The conical formulation (Moharam, Grann, Pommet and
+    Gaylord, JOSA A 12, 1068, 1995) splits a layer's modes into a family with ``E_x = 0`` (``W1``,
+    normalised to ``H_x``) and one with ``H_x = 0`` (``W2``, normalised to ``E_x``). L. Li proves
+    that split unique (J. Mod. Opt. 40, 553, 1993, appendix A) except for a field meeting both
+    conditions at once, which needs ``kz**2 + lambda**2 = 0`` in his notation -- his ``kz`` runs
+    along the grooves and ``exp(i lambda y)`` across the layer -- so ``q**2 = ky**2`` here, which
+    is ``wA = q1**2 - ky**2 = 0``: in a uniform layer, ``kx_m**2 = eps mu``. As a mode
+    approaches it, the component it is normalised to vanishes, so both families' columns grow like
+    ``1/wA`` and turn parallel, and the interface inverses amplify rounding by about
+    ``1/wA**2``. In a uniform layer the point is an ordinary double root and the collapse is only
+    the basis's. In a patterned layer it is a 2x2 Jordan block -- the two roots pass through
+    ``|ky|`` with different slopes -- so no eigenvector basis exists there at all.
+
+    **The regular basis.** Per cluster mode, with no division by ``wA_j`` or ``wB_k``:
+
+    * ``b1_j = (wA_j/q1_j) f1_j``, the family-1 mode normalised to its ``E_y`` instead:
+      ``E = (0, mu_x W1_j)``, ``U = ((wA_j/q1_j) W1_j, (ky/q1_j) muz_i Kx mu_x W1_j)``.
+    * ``b2_k = f2_k - sum_j beta_jk f1_j`` with ``beta_jk = ky D_jk / q1_j`` and
+      ``D = W1^-1 Kx muz_i W2``. In the family-1 eigenbasis ``f2_k``'s ``S_y`` is
+      ``ky mu_x W1 diag(1/wA) D[:, k]``; subtracting ``beta f1`` removes exactly the cluster's
+      terms, so ``E = (W2_k, ky mu_x W1 diag'(1/wA) D[:, k])`` with the cluster entries of the
+      diagonal set to zero -- the singular part is *omitted*, not cancelled.
+    * ``L b2_k = q2_k b2_k + sum_j tau_jk b1_j`` with ``tau_jk = beta_jk q1_j (q2_k - q1_j)/wA_j``,
+      0/0 at the point. The exact identity ``wA_j N_jk = wB_k D_jk`` with
+      ``N = W1^-1 mu_x^-1 epz_i Kx epx W2`` -- from ``A epz_i Kx epx W2 = Kx muz_i W2 diag(wB)``,
+      which needs ``epz_i = inv(eps_y)`` and ``muz_i = inv(mu_y)``, the premise the family split
+      already rests on -- turns it into ``tau_jk = ky (N_jk - D_jk)/(q1_j + q2_k)``: regular, and
+      zero in a uniform layer.
+    * ``U`` of a ``b2`` column from ``Q E = U q`` on the cluster block:
+      ``U_b2 = (Q E_b2 - U_b1 tau) / q2``.
+
+    Every other column is spelled through its *own* family -- ``V_21 = ky muz_i Kx mu_x W1/wA``
+    and ``V_12 = ky epz_i Kx epx W2/wB``, by the same identities -- so no family-1 quotient
+    ``1/wA_j`` reaches a family-2 column. The family construction divided every family-2
+    column's rounding by every ``wA_j``, which is how one cutoff order spoilt every order.
+
+    The result is an exact change of basis for *any* masks, so the gate only decides who pays for
+    it. The coupling's rows (cluster ``b1``) and columns (cluster ``b2``) are disjoint, so no
+    product of two couplings survives, and the exponential of ``q`` is the diagonal one plus
+    ``tau_jk (exp(s q1_j) - exp(s q2_k)) / (q1_j - q2_k)`` on the block (Parlett's recurrence:
+    B. N. Parlett, Linear Algebra Appl. 14, 117, 1976). That is what
+    :func:`~wavebit._core.modal_gradient.exponential` forms for a non-diagonal ``q``, so the
+    cascades need only the layout change.
+
+    Every divisor is guarded where its lane is discarded (``where(mask, d, 1)``), so no ``inf``
+    or NaN is formed even in lanes the masks drop: NumPy stays quiet under a caller's
+    ``'error'`` filter and a JAX ``where`` takes no NaN gradient.
+    """
+    one = xp.ones_like(wA)
+    # Outside the cluster |wA| >= the gate > 0; inside it the gate's floor keeps |q1|, |q2| > 0
+    # and one label for the pair keeps q1 + q2 off zero.
+    wA_s = xp.where(mJ, one, wA)
+    wB_s = xp.where(mK, one, wB)
+    q1_s = xp.where(mJ, q1, one)
+    q2_s = xp.where(mK, q2, one)
+
+    def Mz(X):
+        return X if muz_conv_i is None else muz_conv_i @ X
+
+    def Mx(X):
+        return mux_conv @ X if mu_given else X
+
+    zero = xp.zeros_like(W1)
+    # Family 1: H_x-normalised outside the cluster, E_y-normalised inside it.
+    MW1 = Mx(W1)
+    G1 = ky * Mz(Kx @ MW1)
+    E1y = MW1 * xp.where(mJ, one, q1 / wA_s)[None, :]
+    U1x = W1 * xp.where(mJ, wA / q1_s, one)[None, :]
+    U1y = G1 * xp.where(mJ, 1 / q1_s, 1 / wA_s)[None, :]
+    # Family 2 outside the cluster, through its own family.
+    EW2 = epx_conv @ W2
+    y = epz_conv_i @ (Kx @ EW2)
+    E2y_own = (ky * y) * (1 / wB_s)[None, :]
+    U2y_own = EW2 * (q2 / wB_s)[None, :]
+    # Family 2 inside the cluster: b2 = f2 - beta f1, its U from Q E = U q.
+    D = W1_i @ (Kx @ Mz(W2))
+    drop = xp.where(mJ, xp.zeros_like(wA), 1 / wA_s)
+    E2y_c = ky * Mx(W1 @ (drop[:, None] * D))
+    N = W1_i @ (xp.linalg.solve(mux_conv, y) if mu_given else y)
+    total = q1[:, None] + q2[None, :]
+    pair = xp.logical_and(xp.logical_and(mJ[:, None], mK[None, :]),
+                          xp.abs(q1[:, None] - q2[None, :]) < xp.abs(total))
+    tau = xp.where(pair, ky * (N - D) / xp.where(pair, total, xp.ones_like(total)),
+                   xp.zeros_like(D))
+    QEx = -ky * (Kx @ Mz(W2)) + A @ E2y_c
+    QEy = EW2 - (ky * ky) * Mz(W2) + ky * Mz(Kx @ E2y_c)
+    U2x_c = (QEx - U1x @ tau) / q2_s[None, :]
+    U2y_c = (QEy - U1y @ tau) / q2_s[None, :]
+    E2y = xp.where(mK[None, :], E2y_c, E2y_own)
+    U2x = xp.where(mK[None, :], U2x_c, zero)
+    U2y = xp.where(mK[None, :], U2y_c, U2y_own)
+
+    E = _block(xp, [[zero, W2], [E1y, E2y]])
+    U = _block(xp, [[U1x, U2x], [U1y, U2y]])
+    O = xp.zeros_like(D)
+    q = _block(xp, [[xp.diag(q1), tau], [O, xp.diag(q2)]])
+    return E, U, q
+
+
+def _coupled_sylvester(xp, T, S, rows, cols):
+    """``X`` with ``T X + X T = S`` for ``T`` diagonal plus a coupling block on ``rows x cols``.
+
+    ``rows`` and ``cols`` are disjoint boolean masks (the cluster's ``b1`` and ``b2`` modes), so
+    the coupling ``N`` has ``N @ N = 0`` and the equation is solved in four passes, each a plain
+    divided difference by ``t_a + t_b`` -- the denominator
+    :func:`~wavebit._core.modal_gradient.generator` already requires to be nonzero: entries
+    outside both masks first, then a ``rows`` row or a ``cols`` column, which read only the
+    first pass, then the block itself, which reads the two before it. Linear in ``S``, so it
+    carries a tangent exactly.
+    """
+    t = xp.linalg.diagonal(T)
+    eye = xp.eye(T.shape[0], dtype=T.dtype, device=getattr(T, 'device', None))
+    N = T - eye * t
+    total = t[:, None] + t[None, :]
+    r = rows[:, None]
+    c = cols[None, :]
+    X1 = S / total
+    X2 = (S - N @ X1) / total
+    X3 = (S - X1 @ N) / total
+    Xa = xp.where(r & ~c, X2, xp.where(~r & c, X3, X1))
+    X4 = (S - N @ Xa - Xa @ N) / total
+    return xp.where(r & c, X4, Xa)
+
+
+def _conical_first_order(xp, Kx, ky, epx_conv, epz_conv_i, A, B, mux_conv, muz_conv_i):
+    """The layer's first-order operator ``L = [[0, P], [Q, 0]]`` on ``(S_x, S_y | U_x, U_y)``.
+
+    ``P U = E q`` and ``Q E = U q`` for every mode of :func:`layer_modes_1d_conical`, column by
+    column, and of :func:`_regular_conical_modes` block-wise. Measured: both hold to 1.4e-14
+    relative on uniform, patterned and magnetic layers at their cutoffs.
+    """
+    n = Kx.shape[0]
+    eye = xp.eye(n, dtype=Kx.dtype, device=getattr(Kx, 'device', None))
+    Mz = eye if muz_conv_i is None else muz_conv_i
+    P = _block(xp, [[-ky * (Kx @ epz_conv_i), B],
+                    [mux_conv - (ky * ky) * epz_conv_i, ky * (epz_conv_i @ Kx)]])
+    Q = _block(xp, [[-ky * (Kx @ Mz), A], [epx_conv - (ky * ky) * Mz, ky * (Mz @ Kx)]])
+    O = xp.zeros_like(P)
+    return _block(xp, [[O, P], [Q, O]])
+
+
+def _regular_conical_modes_ad(xp, Kx, ky, epx_conv, epz_conv_i, A, B, mux_conv, muz_conv_i,
+                              mu_given, W1, W2, W1_i, wA, wB, q1, q2, mJ, mK):
+    """:func:`_regular_conical_modes` with a first derivative, for an operator under autodiff.
+
+    The value is the regular basis, built from stopped inputs and held fixed; the derivative is
+    the first variation of the layer's first-order operator in that basis -- the rule
+    :mod:`~wavebit._core.modal_gradient` applies to every other layer, taken on the ``4n``-sized
+    ``L`` because the cluster's ``q`` is not diagonal. With ``Z = [[E, E], [U, -U]]`` (the ``+``
+    modes and their ``-`` twins) the variation ``Z^-1 dL Z`` has a ``++`` block, which is ``dq``,
+    and a ``-+`` block ``S``, which tilts the ``+`` subspace: ``E -> E (I + X)``,
+    ``U -> U (I - X)`` with ``T X + X T = S`` (:func:`_coupled_sylvester`). No eigenvector is
+    differentiated, so repeated roots elsewhere in the layer cost nothing, as before.
+    """
+    from .modal_gradient import _stop, _variation
+    n = W1.shape[0]
+    v1 = _stop(xp.linalg.diagonal(q1) if q1.ndim == 2 else q1)
+    v2 = _stop(xp.linalg.diagonal(q2) if q2.ndim == 2 else q2)
+    # Every input stopped, `wA` and `wB` included: they are `w - ky**2` with a live `ky`, so a
+    # parameter that moves `ky` (theta, phi, the top index) would otherwise reach the value's
+    # `q1/wA`, `wA/q1` and `1/wB` and put a second, spurious tangent on top of the variation's.
+    E0, U0, T0 = _regular_conical_modes(
+        xp, _stop(Kx), _stop(ky), _stop(epx_conv), _stop(epz_conv_i), _stop(A), _stop(mux_conv),
+        None if muz_conv_i is None else _stop(muz_conv_i), mu_given, W1, W2, W1_i, _stop(wA),
+        _stop(wB), v1, v2, mJ, mK)
+    Z = _block(xp, [[E0, E0], [U0, -U0]])
+    L = _conical_first_order(xp, Kx, ky, epx_conv, epz_conv_i, A, B, mux_conv, muz_conv_i)
+    R = _variation(L, Z)
+    dq = R[:2 * n, :2 * n]
+    S = R[2 * n:, :2 * n]
+    none = xp.zeros_like(mJ)
+    X = _coupled_sylvester(xp, T0, S, xp.concat([mJ, none]), xp.concat([none, mK]))
+    return E0 + E0 @ X, U0 - U0 @ X, T0 + dq
+
+
+def sp_modes_1d_general(xp, F_c, F_s, E, U):
+    """:func:`sp_modes_1d_conical` for modes in the general layout ``E = [S_x; S_y]``,
+    ``U = [U_x; U_y]`` -- an x-cutoff layer (:func:`_regular_conical_modes`).
+
+    The same per-order rotation into ``(E_s, F_p)`` / ``(H_s, H_p)``: the family blocks are this
+    layout with ``S_x = [0, W2]``, ``S_y = [V_11, V_12]``, ``U_x = [W1, 0]`` and
+    ``U_y = [V_21, V_22]``.
+    """
+    n = F_c.shape[0]
+    Sx, Sy, Ux, Uy = E[:n], E[n:], U[:n], U[n:]
+    big_W = xp.concat([F_c @ Sy - F_s @ Sx, F_s @ Sy + F_c @ Sx], axis=0)
+    big_V = xp.concat([F_c @ Ux + F_s @ Uy, F_c @ Uy - F_s @ Ux], axis=0)
+    return big_W, big_V
+
+
 def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C,
                            mu=None, k0_d=None, dng=None):
     """Raw (unrotated) eigenmodes of one conical 1D layer.
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
-    the four blocks that couple them into the s/p system built by :func:`sp_modes_1d_conical`.
-    Shared by the ETM and SMM connecting algorithms.
+    the four blocks that couple them into the s/p system built by :func:`sp_modes_1d_conical` —
+    or, for a layer with a mode at its x-cutoff (below), the three ``(E, U, q)`` of
+    :func:`_regular_conical_modes` in the general layout, which :func:`sp_modes_1d_general`
+    rotates. A caller tells them apart by the tuple's length, a structural fact. Shared by the
+    ETM and SMM connecting algorithms.
 
     The ``V`` blocks are, on paper, functions of ``A**-1`` and ``B**-1`` — but neither inverse
     is formed. On this path ``Ky2 == ky**2 * I`` (``n_orders_v == 1``), so ``W1`` diagonalises
@@ -231,10 +503,27 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     the pure TE/TM path (``V = W * q``, nothing singular inverted) always had. Away from any
     degeneracy the two spellings agree to 8e-15 in efficiency over 40 random conical solves.
 
-    The one case still refused: an eigenvalue that comes out *exactly* zero (e.g. a uniform
-    layer whose FFT is noiseless, truncation_order=3 on the D#81 stack). Then ``q/w`` is 0/0 and the NaN
-    reaches :func:`~wavebit._core.backend.check_finite`, whose message prescribes the one-ULP
-    detune — where the old spelling died in LAPACK with no advice.
+    The one case still refused at ``ky == 0``: an eigenvalue that comes out *exactly* zero (e.g.
+    a uniform layer whose FFT is noiseless, truncation_order=3 on the D#81 stack). Then ``q/w``
+    is 0/0 and the NaN reaches :func:`~wavebit._core.backend.check_finite`, whose message
+    prescribes the one-ULP detune — where the old spelling died in LAPACK with no advice.
+
+    **With ``ky != 0`` the same zero is an x-cutoff, not a Rayleigh point**: ``q = |ky|``, not
+    0, and the quotients are ``1/wA`` against a nonzero numerator. The family columns then grow
+    like ``1/wA`` and turn parallel -- the one field with ``E_x = H_x = 0`` that both families
+    tend to, the exception in L. Li's proof that the family split is unique (J. Mod. Opt. 40,
+    553, 1993, appendix A) -- and the interface inverses amplify rounding by ``1/wA**2``. Until
+    2026-10-10 this refused only where ``wA`` came out exactly zero: one ULP off, at a rounded
+    input, and at a patterned layer's own crossing (a genuine 2x2 Jordan block, where ``wA`` is
+    never exactly zero) it returned silently wrong answers -- ``R`` off by up to 5 and ``R + T``
+    by up to 14 -- and the ``auto_detune`` retry of a refused point landed 2.6e-2 to 0.1 off.
+    Such a layer is now rebuilt in a regular basis with an upper-triangular propagator, exact at
+    the point (:func:`_cutoff_cluster` decides, :func:`_regular_conical_modes` builds), and
+    everywhere outside that gate the arithmetic below is the one that was here, bit for bit.
+    Under an abstract trace (``jax.jit``, ``jax.vmap``, a ``jax.lax.map`` or ``scan`` body,
+    ``jax.checkpoint`` -- under ``jax.grad`` too -- and ``torch.func.vmap``) the gate cannot
+    read its values and the family construction ships: a documented gap,
+    ``docs/rayleigh-points.md`` section 7.
 
     ``mu`` is the optional ``(mux_conv, muy_conv, muz_conv_i)`` triple and ``k0_d`` / ``dng``
     the label choice :func:`layer_modes_1d` documents, ``None`` for a non-magnetic layer, for
@@ -304,6 +593,17 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     W1_i = xp.linalg.inv(W1)
     W2_i = xp.linalg.inv(W2)
 
+    # A mode at its x-cutoff (`ky != 0`): the layer leaves the family layout. `None` -- no
+    # such mode, `ky == 0`, or an abstract value -- keeps every statement below as it was.
+    cluster = _cutoff_cluster(xp, wA, wB, q1, q2, ky)
+    if cluster is not None:
+        if q1.ndim == 2 or q2.ndim == 2:
+            return _regular_conical_modes_ad(xp, Kx, ky, epx_conv, epz_conv_i, A, B, mux_conv,
+                                             muz_conv_i, mu is not None, W1, W2, W1_i, wA, wB,
+                                             q1, q2, *cluster)
+        return _regular_conical_modes(xp, Kx, ky, epx_conv, epz_conv_i, A, mux_conv, muz_conv_i,
+                                      mu is not None, W1, W2, W1_i, wA, wB, q1, q2, *cluster)
+
     if q1.ndim == 2 or q2.ndim == 2:
         Q1 = xp.diag(q1) if q1.ndim == 1 else q1
         Q2 = xp.diag(q2) if q2.ndim == 1 else q2
@@ -327,10 +627,14 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
         # substitution that keeps this function free of `inv(A)` at a Rayleigh point, one slot
         # richer. `Kx muz_i` inside `V_12` is the dual of the `Kx epz_conv_i` in `V_21`.
         # `wA` and `wB` are exactly zero where an order's `kx**2` meets the layer's permittivity.
-        # With `ky == 0` that is a Rayleigh point and the quotients are 0/0; with `ky != 0` the
-        # numerators stay nonzero, the quotients are inf, and the products below turn them into
-        # NaN. Either way `check_finite` refuses the result downstream, so NumPy's own warnings
-        # are silenced over the whole block (see `division_at_a_cutoff`).
+        # With `ky == 0` that is a Rayleigh point, the quotients are 0/0, and `check_finite`
+        # refuses the result downstream. With `ky != 0` it is an x-cutoff, which the rebuild
+        # above takes. It reaches this block only under an abstract trace (`jax.jit`,
+        # `jax.vmap`, `jax.checkpoint` and the like), where nothing warns and nothing is
+        # checked, or when the gate refused its cluster (a root under the floor, opposite
+        # labels), where an exact zero makes the quotients inf, the products below NaN, and
+        # `check_finite` refuses that too. So NumPy's own warnings are silenced over the whole
+        # block (see `division_at_a_cutoff`).
         with division_at_a_cutoff():
             V_11 = W1 * (q1 / wA)
             V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None
@@ -834,22 +1138,32 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         layer_mu = _layer_mu(I, mu_all, layer_index)
 
         # The ETM's labels, on its run's thickness, for the reason :func:`solve_1d` gives.
-        W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
+        modes = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu,
             k0_d=run_k0_ds[layer_index], dng=None if dng is None else dng[layer_index])
 
         from .modal_gradient import exponential, combine
-        X_1 = exponential(xp, q1, -k0*d)
-        X_2 = exponential(xp, q2, -k0*d)
         big_I = xp.astype(xp.eye(2 * n_orders), C)
-        big_X = _block(xp, [[X_1, O], [O, X_2]])
+        if len(modes) == 3:
+            # A layer at an x-cutoff, rebuilt in the general layout
+            # (:func:`_regular_conical_modes`): its `q` couples the cluster, which `coupled` says
+            # structurally (the record keeps `W = E`, `V = U`, and :mod:`~wavebit._core.fields`
+            # knows it by `W`'s shape).
+            W, V, q = modes
+            big_X = exponential(xp, q, -k0*d, coupled=True)
+            big_W, big_V = sp_modes_1d_general(xp, F_c, F_s, W, V)
+        else:
+            W1, W2, q1, q2, V_11, V_12, V_21, V_22 = modes
+            X_1 = exponential(xp, q1, -k0*d)
+            X_2 = exponential(xp, q2, -k0*d)
+            big_X = _block(xp, [[X_1, O], [O, X_2]])
 
-        W = _block(xp, [[W1, W2]])
-        V = _block(xp, [[V_11, V_12], [V_21, V_22]])
-        q = combine(xp, q1, q2)
+            W = _block(xp, [[W1, W2]])
+            V = _block(xp, [[V_11, V_12], [V_21, V_22]])
+            q = combine(xp, q1, q2)
 
-        big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
-                                           V_11, V_12, V_21, V_22)
+            big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
+                                               V_11, V_12, V_21, V_22)
 
         big_W_i = xp.linalg.inv(big_W)
         big_V_i = xp.linalg.inv(big_V)

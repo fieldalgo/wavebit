@@ -248,6 +248,18 @@ def check_finite(xp, **named):
     is the only thing that does anything, and one ULP of wavelength, period or angle is
     already enough — measured to agree with the exact-point answer of the reformulated paths
     to eight digits.
+
+    That agreement is a ``ky == 0`` statement. On the 1D conical path with ``ky != 0`` the same
+    ``kx_m == n`` is an x-cutoff (``kz = |ky|``), where a nearby point is *not* a remedy: the
+    family construction is wrong over a band, 2e-2 one ULP off and still 5e-5 at a relative
+    1e-8. That layer is now rebuilt in a regular basis that is exact at the point
+    (:func:`~wavebit._core.solve_1d._regular_conical_modes`), so an eager solve does not reach
+    this check there -- unless the rebuild's gate refuses the cluster (a root under 1e-9, which
+    takes ``|ky|`` under about 1.4e-9, or a pair with opposite labels), where an exact zero still
+    lands here as before. Under an abstract trace (``jax.jit``, ``jax.vmap``, a ``jax.lax.map``
+    or ``scan`` body, ``jax.checkpoint`` -- under ``jax.grad`` too -- and ``torch.func.vmap``)
+    the old construction still ships there, NaN at an exact zero, and this check cannot see it
+    -- the gap noted above (``docs/rayleigh-points.md`` section 7).
     """
     bad = []
     for name, v in named.items():
@@ -265,8 +277,12 @@ def check_finite(xp, **named):
             'near-zero thickness.\n'
             'If it is a grazing order, move off the condition — one ULP of wavelength, '
             'period or angle is enough, and the answer either side of it agrees to eight '
-            'digits; solve(auto_detune=True), the default, does that retry for you, so '
-            'seeing this means it was disabled or the retry failed too. Do NOT reach for '
+            'digits (a 1D conical order with ky != 0 at kx_m == n is not a graze, and its '
+            'layer is normally rebuilt exactly -- it lands here only where that rebuild '
+            'declines, as at |ky| below about 1.4e-9); '
+            'solve(auto_detune=True), the default, does that '
+            'retry for you, so seeing this means it was disabled or the retry failed too. '
+            'Do NOT reach for '
             'truncation_order or thinner slices instead: neither knob touches the degeneracy (it is '
             'fixed by kx against an index), so at best they re-roll the round-off — '
             'measured to return quiet wrong answers on the paths that have not been '
@@ -420,8 +436,10 @@ _RAYLEIGH_MESSAGE = (
     'is finite and may be wrong at the 1e-5 level near the condition, growing to '
     'order 1 exactly on it, with no other sign. Move off the condition: one ULP of '
     'wavelength, period or angle is enough, and solve(auto_detune=True), the '
-    'default, does that retry for you. (The 1D paths solve this point exactly; a '
-    'y-invariant cell routed through the 1D solves does not need the detune.)')
+    'default, does that retry for you. (The 1D paths solve this point exactly -- with '
+    'ky != 0, where kx_m == n is an x-cutoff rather than a graze, by rebuilding that '
+    'layer in a regular basis -- so a y-invariant cell routed through the 1D solves '
+    'does not need the detune.)')
 
 #: Set by ``solve``'s auto_detune ladder around each solve it runs; :func:`check_mode_cutoff`
 #: reports a hit here instead of warning, and the ladder decides what the caller sees.
@@ -442,11 +460,16 @@ def division_at_a_cutoff():
     """Silence NumPy's divide/invalid flags where a layer's mode eigenvalue divides.
 
     That divisor is exactly zero where an order meets the layer's light line (a Rayleigh point;
-    in conical incidence also where ``kx**2`` alone meets it), and what the zero makes is
-    handled downstream: the 2D coupled-cluster rebuild replaces the columns
+    in conical incidence also where ``kx**2`` alone meets it, an x-cutoff), and what the zero
+    makes is handled downstream: the 2D coupled-cluster rebuild replaces the columns
     (:func:`wavebit._core.solve_2d._rebuild_grazing_cluster`), or :func:`check_finite` refuses
-    the NaN with a structural hint. The block covered includes the products that carry an
-    ``inf`` quotient into NaN. NumPy's own ``RuntimeWarning`` adds nothing to either outcome.
+    the NaN with a structural hint. A conical x-cutoff (``ky != 0``) is rebuilt before these
+    blocks run (:func:`wavebit._core.solve_1d._regular_conical_modes`), whose divisors are
+    guarded instead; it reaches them only under an abstract trace (``jax.jit``, ``jax.vmap``,
+    a ``jax.lax.map`` or ``scan`` body, ``jax.checkpoint``, ``torch.func.vmap``), where nothing
+    warns, or where its gate refuses the cluster. The block covered includes the
+    products that carry an ``inf`` quotient into NaN. NumPy's own ``RuntimeWarning`` adds
+    nothing to either outcome.
     It did harm: from an attempt the ``auto_detune`` ladder discarded it reached the caller,
     and under a caller's ``simplefilter('error', RuntimeWarning)`` it raised before the ladder
     could retry (``tests/test_rayleigh_guard.py::test_auto_detune_retries_under_an_error_filter``).
@@ -472,7 +495,10 @@ def check_mode_cutoff(xp, eigenvalues):
     fallback paths, where the old construction is what ships; the warning is then what
     drives ``solve``'s default detune ladder. The 1D paths do not need this check: the
     pure path never had the disease and the conical path was reformulated (see
-    ``layer_modes_1d_conical``).
+    ``layer_modes_1d_conical``) -- at ``ky == 0`` by building its blocks from the
+    eigensystem, and at ``ky != 0``, where ``kx_m == n`` is an x-cutoff and the family basis
+    itself collapses, by rebuilding that layer in a regular basis
+    (``solve_1d._regular_conical_modes``).
 
     A warning rather than an error, deliberately: the error scales as ``~eps/ratio`` (see
     ``_CUTOFF_REL``), so most of the flagged band is wrong at the 1e-5 level rather than

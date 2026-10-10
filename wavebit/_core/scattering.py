@@ -76,7 +76,7 @@ from .enums import Answers, answers_of
 from .conventions import incident_column
 from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack,
                        layer_modes_1d, layer_modes_1d_conical, sp_efficiencies,
-                       sp_modes_1d_conical)
+                       sp_modes_1d_conical, sp_modes_1d_general)
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
 from .power import (incident_power, net_power, power_for_real_k,
                     sp_incident_power, wave_power)
@@ -243,7 +243,7 @@ def _below_reflections(xp, I, S_layers, S_trn):
     return gamma, F
 
 
-def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc):
+def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc, coupled=None):
     """Each layer's ``(+, -)`` mode amplitudes, top-to-bottom, and the gap amplitude above them.
 
     ``roots[p]`` is layer ``p``'s ``(q, k0*d)``; ``c_inc`` the incident columns. The ``+``
@@ -266,7 +266,11 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc):
       amplitudes nearly cancel in the field -- at a layer light line each is ``O(1/q)`` -- and read
       off two faces their rounding did not cancel with them: an SMM field 1e-6 off at the
       ``1e-12`` landing ``auto_detune`` makes after an exact graze, where one face keeps it at the
-      ETM's 1e-11.
+      ETM's 1e-11;
+    * in a layer ``coupled`` flags -- a per-layer list of Python booleans beside ``roots``,
+      ``None`` for none: a conical x-cutoff layer, whose ``q`` couples its cluster modes in
+      value -- the rows that carry the coupling are read off the bottom face, and every other
+      mode as above (``two_face(coupled=True)`` says why that stays exact to first order).
 
     **Nothing here inverts a map into a layer, and that is why the ETM's record cannot be
     borrowed.** The ETM hands over each layer's ``+`` amplitude and advances it; read off the gap
@@ -301,7 +305,17 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc):
         minus_bottom = 0.5 * (B @ g_next + A @ (gamma[p + 1] @ g_next))
         values = _stop(q if q.ndim == 1 else xp.linalg.diagonal(q))
         keep = xp.abs(values * _stop(as_array(xp, k0_d, dtype=values.dtype))) < _TOP_FACE
-        amplitudes.append((plus, two_face(xp, q, k0_d, minus_top, minus_bottom, keep)))
+        if coupled is not None and coupled[p]:
+            # A conical x-cutoff layer (`solve_1d._regular_conical_modes`), whose `q` couples
+            # its cluster modes in value. `two_face` as built is first order beside a coupling
+            # (measured 6.8e-3 on a field gradient with the cluster kept), so it reads the
+            # coupled rows off the bottom face and adds the term it would miss
+            # (`two_face(coupled=True)`). Decided by the caller's structural flag, never by
+            # the value: a pytree child cannot be branched on.
+            minus = two_face(xp, q, k0_d, minus_top, minus_bottom, keep, coupled=True)
+        else:
+            minus = two_face(xp, q, k0_d, minus_top, minus_bottom, keep)
+        amplitudes.append((plus, minus))
         g = g_next
     return amplitudes, g_top
 
@@ -928,9 +942,14 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
             eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
-    ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V)``: the mode
-    matrices in the s/p boundary basis that the cascade joins layers through, then the raw
-    (unrotated) pair that field reconstruction expands the same amplitudes with. Everything
+    ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V, coupled)``: the
+    mode matrices in the s/p boundary basis that the cascade joins layers through, then the raw
+    (unrotated) pair that field reconstruction expands the same amplitudes with, and a Python
+    boolean saying whether ``q``'s value couples modes -- a conical x-cutoff layer
+    (:func:`~wavebit._core.solve_1d._regular_conical_modes`), whose exponential then takes its
+    tangent from a matrix exponential and whose coupled rows the field state reads off the
+    bottom face (:func:`_field_state`). Structural, so it is never read off a traced value.
+    Everything
     else — half-spaces, gap, cascade, incidence, efficiencies — is common.
 
     ``muz_conv_i_all`` is the per-layer ``mu_zz^-1``, carried for one reason: field
@@ -1001,13 +1020,13 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 
     S_ref = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
-    S_layers, AB, modes, muz_conv = [], [], [], []
+    S_layers, AB, modes, muz_conv, coupled = [], [], [], [], []
     S = S_ref
     for layer_index in range(_n_layers(thickness)):
-        big_W, big_V, q, W, V = layer_modes(layer_index)
+        big_W, big_V, q, W, V, rebuilt = layer_modes(layer_index)
         d = thickness[layer_index]
         from .modal_gradient import exponential
-        big_X = exponential(xp, q, -k0*d)
+        big_X = exponential(xp, q, -k0*d, coupled=rebuilt)
         A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
         S_layer = _s_layer(xp, A, B, big_X)
         S = redheffer_star(xp, big_I, S, S_layer)
@@ -1016,6 +1035,7 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
             AB.append((A, B))
             modes.append([epz_conv_i_all[layer_index], W, V, q, d])
             muz_conv.append(None if muz_conv_i_all is None else muz_conv_i_all[layer_index])
+            coupled.append(rebuilt)
     S = redheffer_star(xp, big_I, S, S_trn)
 
     out, c_inc = _sp_scattering_result(
@@ -1029,11 +1049,12 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     if backside:
         # Mirrored-scene field state, same construction as `smm_1d`'s backside branch.
         amplitudes, T1 = _field_state(xp, big_I, S_trn[::-1], S_ref[::-1], S_layers[::-1],
-                                      AB[::-1], roots[::-1], c_inc)
+                                      AB[::-1], roots[::-1], c_inc, coupled=coupled[::-1])
         modes = modes[::-1]
         muz_conv = muz_conv[::-1]
     else:
-        amplitudes, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, roots, c_inc)
+        amplitudes, T1 = _field_state(xp, big_I, S_ref, S_trn, S_layers, AB, roots, c_inc,
+                                      coupled=coupled)
 
     def by_incidence(v):
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
@@ -1080,15 +1101,21 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     F_s = _diag(xp, xp.sin(varphi))
 
     def layer_modes(layer_index):
-        W1, W2, q1, q2, V_11, V_12, V_21, V_22 = layer_modes_1d_conical(
+        modes = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
             epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
             mu=_layer_mu(I, mu_all, layer_index), dng=None if dng is None else dng[layer_index])
+        if len(modes) == 3:
+            # An x-cutoff layer, in the general layout (`solve_1d._regular_conical_modes`).
+            E, U, q = modes
+            big_W, big_V = sp_modes_1d_general(xp, F_c, F_s, E, U)
+            return big_W, big_V, q, E, U, True
+        W1, W2, q1, q2, V_11, V_12, V_21, V_22 = modes
         big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22)
         W = _block(xp, [[W1, W2]])
         V = _block(xp, [[V_11, V_12], [V_21, V_22]])
         from .modal_gradient import combine
-        return big_W, big_V, combine(xp, q1, q2), W, V
+        return big_W, big_V, combine(xp, q1, q2), W, V, False
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
@@ -1143,7 +1170,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                                  epxy_conv, epyx_conv, C, mu=layer_mu,
                                  dng=None if dng is None else dng[layer_index])
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
-        return big_W, big_V, q, W, V
+        return big_W, big_V, q, W, V, False
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
