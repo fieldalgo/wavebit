@@ -250,7 +250,7 @@ def _run(name):
     kw = dict(CASES[name])
     kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
     kw['thickness'] = kw['thickness'][::-1]
-    solver = wavebit.rcwa(backend=0, answers='field', **kw)
+    solver = wavebit.rcwa(backend='numpy', answers='field', **kw)
     return solver, solver.solve()
 
 
@@ -327,7 +327,7 @@ def test_reconstruct_field_still_runs():
 
 # ------------------------------------------------ every backend, one implementation
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('name', list(CASES))
 def test_jax_and_torch_match_the_same_golden(name, backend):
     """JAX and PyTorch run the same core, so they land on the NumPy reference too.
@@ -336,7 +336,7 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
     cannot silently drift. The tolerance is float-rounding only — the backends' linear algebra
     differs in accumulation order, not in the physics.
     """
-    pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     kw = dict(CASES[name])
     kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
     kw['thickness'] = kw['thickness'][::-1]

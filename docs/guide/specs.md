@@ -43,13 +43,14 @@ width** (`128` / `64`) rather than a dtype object, so the spec stays backend-neu
 `answers` lives in `numerics` rather than in `incidence`, because it describes the job and not
 the light.
 
-The enum-typed `numerics` fields (`backend`, `factorization`, `li_nesting` and the rest) take
-the enum or its name in any case, as in `Numerics(li_nesting='symmetric')`, and `backend` also
-takes its integer code. Construction normalises them exactly as `Numerics.from_dict` does, and
-so does a later assignment (`numerics.li_nesting = 'symmetric'`), so a spec built in Python, the
-same spec edited after it was built, and the same spec parsed from JSON are equal and share one
-`key()`. A name that is no member is refused at construction or assignment, with the message the
-JSON door gives, and an assignment refused leaves the field as it was.
+The enum-typed `numerics` fields (`factorization`, `li_nesting` and the rest) take the enum or
+its name in any case, as in `Numerics(li_nesting='symmetric')`. `backend` takes the enum or its
+name exactly as `wavebit.rcwa` does -- `'numpy'`, `'jax'`, `'torch'`, and no integer code.
+Construction normalises them exactly as `Numerics.from_dict` does, and so does a later
+assignment (`numerics.li_nesting = 'symmetric'`), so a spec built in Python, the same spec
+edited after it was built, and the same spec parsed from JSON are equal and share one `key()`.
+A name that is no member is refused at construction or assignment, with the message the JSON
+door gives, and an assignment refused leaves the field as it was.
 
 ## Running one
 

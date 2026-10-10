@@ -87,7 +87,7 @@ def _solve(name, index, path, algo, pol, door='k', stack=None):
     theta = case['thetas'][index]
     one_d = path == 'tetm'
     shape = (1, 2) if one_d else (2, 2)
-    kw = dict(backend=0, top=wavebit.Material(*stack[0]), bot=wavebit.Material(*stack[-1]),
+    kw = dict(backend='numpy', top=wavebit.Material(*stack[0]), bot=wavebit.Material(*stack[-1]),
               wavelength=WL, thickness=thickness, layer_algorithm=algo, answers='amplitude',
               structure=np.stack([np.full(shape, e) for e, _ in inner]),
               mu=np.stack([np.full(shape, m) for _, m in inner]))

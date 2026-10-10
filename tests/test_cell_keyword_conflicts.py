@@ -8,11 +8,11 @@ CFG = dict(structure=np.full((1, 2, 2), 4.), thickness=(100.,),
            wavelength=900., truncation_order=(0, 0), answers='field')
 
 
-def solver(backend=0, **kwargs):
+def solver(backend='numpy', **kwargs):
     return wavebit.rcwa(backend=backend, **CFG, **(dict(period=(600., 750.)) | kwargs))
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('door', ['freeze_geometry', 'solve', 'solve_field',
                                  'eps_conv_matrices', 'mu_conv_matrices'])
 @pytest.mark.parametrize('reverse', [False, True])
@@ -45,7 +45,7 @@ def test_every_keyword_door_refuses_two_cell_spellings_before_assignment(backend
 def test_conflicting_traced_spellings_are_refused_without_changing_the_solver(reverse, transform):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    s = solver(1)
+    s = solver('jax')
     before = s.period
     def loss(p):
         cell = dict(period=[p, 750.], lattice=wavebit.Lattice.rectangular(p, 780.))
@@ -63,7 +63,7 @@ def test_conflicting_traced_spellings_are_refused_without_changing_the_solver(re
     assert s._lattice_basis is None
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_withdrawing_the_basis_then_naming_a_period_remains_valid(backend):
     s = solver(backend)
     s.lattice = wavebit.Lattice.oblique(600., 750., 1.2)

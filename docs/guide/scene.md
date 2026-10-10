@@ -134,7 +134,7 @@ See [`../oblique-lattice.md`](../oblique-lattice.md) and
 from wavebit import Layer, Stack, Incidence
 
 solver = wavebit.rcwa(
-    backend=0,
+    backend='numpy',
     stack=Stack(layers=[Layer(thickness=300., structure=raster)],
                 top=1.0, bot=2.25, period=(700., 700.)),
     incidence=Incidence(wavelength=900., theta=0., phi=0., tetm='te'),

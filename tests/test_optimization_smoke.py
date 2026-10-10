@@ -36,7 +36,7 @@ def _jax_losses():
     import jax.numpy as jnp
     import optax
 
-    solver = wavebit.rcwa(backend=1, **CFG)
+    solver = wavebit.rcwa(backend='jax', **CFG)
 
     def loss(u):
         return -jnp.sum(solver.solve(structure=u).incident.T)
@@ -58,7 +58,7 @@ def _jax_losses():
 def _torch_losses():
     import torch
 
-    solver = wavebit.rcwa(backend=2, **CFG)
+    solver = wavebit.rcwa(backend='torch', **CFG)
 
     u = torch.tensor(UCELL0, dtype=torch.float64, requires_grad=True)
     opt = torch.optim.Adam([u], lr=LR)

@@ -41,9 +41,9 @@ STRUCTURE_1D = np.array([[_ROW], [_ROW]], dtype=float)
 STRUCTURE_2D = np.array([[[4.0, 1.0, 2.25, 1.0],
                           [1.0, 9.0, 1.0, 4.0]]] * 2)
 
-CFG_1D = dict(backend=0, top=1.0, bot=1.0, theta=1e-10, truncation_order=[8, 0],
+CFG_1D = dict(backend='numpy', top=1.0, bot=1.0, theta=1e-10, truncation_order=[8, 0],
               wavelength=300.0, period=[700.0, 700.0], thickness=[22.0, 460.0])
-CFG_2D = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.4, truncation_order=[2, 1],
+CFG_2D = dict(backend='numpy', top=1.0, bot=2.25, theta=0.3, phi=0.4, truncation_order=[2, 1],
               wavelength=900.0, period=[700.0, 700.0], thickness=[200.0, 100.0])
 
 _AMPLITUDE_FIELDS = ('r_s', 'r_p', 't_s', 't_p')
@@ -82,7 +82,7 @@ def test_pair_reproduces_psi(path, algo):
     _assert_same_sub(via_psi.incident, via_pair.incident)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_pair_reproduces_psi_on_every_backend(backend):
     psi_v = 1.1
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
@@ -166,11 +166,11 @@ def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
 
 def test_psi_and_polarization_together_raise():
     with pytest.raises(ValueError, match='psi and polarization'):
-        wavebit.rcwa(backend=0, psi=0.3, polarization=(1, 0))
+        wavebit.rcwa(backend='numpy', psi=0.3, polarization=(1, 0))
 
 
 def test_assignment_clashes_in_both_orders():
-    solver = wavebit.rcwa(backend=0, polarization=(1, 1j))
+    solver = wavebit.rcwa(backend='numpy', polarization=(1, 1j))
     with pytest.raises(ValueError, match='psi and polarization'):
         solver.psi = 0.3
     solver.polarization = None                     # clearing reopens the other spelling
@@ -185,13 +185,13 @@ def test_the_default_psi_does_not_block_the_pair():
     ``tetm`` is the other story and is refused beside a pair — it declares the polarization
     away rather than defaulting it, which is the distinction the two tests together pin.
     """
-    solver = wavebit.rcwa(backend=0)
+    solver = wavebit.rcwa(backend='numpy')
     assert float(np.asarray(solver.psi)) == pytest.approx(np.pi / 2)
     solver.polarization = (1, 0)
     assert solver.polarization == (1, 0)
 
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        wavebit.rcwa(backend=0, tetm='tm', polarization=(1, 0))
+        wavebit.rcwa(backend='numpy', tetm='tm', polarization=(1, 0))
 
 
 def _bits(result):
@@ -199,7 +199,7 @@ def _bits(result):
     return [np.asarray(getattr(result.incident, name)) for name in ('R', 'T', 'r_s', 't_s')]
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     """Declared on a built solver, ``psi`` is absent; withdrawn, the pure-s default is back.
 
@@ -212,7 +212,7 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     JAX, inside ``jax.jit``; and after a pure solve on a solver since left with no structure,
     whose ``solve_conv`` keeps the pure layout and so must re-route it.
     """
-    pytest.importorskip({0: 'numpy', 1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     kw = dict(CFG_1D, backend=backend, structure=STRUCTURE_1D)
     built = wavebit.rcwa(tetm='te', **kw)
     assigned = wavebit.rcwa(**kw)
@@ -246,7 +246,7 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     for a, b in zip(_bits(result), _bits(want)):
         assert np.array_equal(a, b)
 
-    if backend == 1:
+    if backend == 'jax':
         # The keyword door inside `jax.jit`, both ways. A default built there is staged -- a
         # tracer -- and `_conditions` puts a slot holding one back at the end of the call: a
         # jitted withdrawal left `psi = None` behind `tetm = None`, and the next eager solve
@@ -322,7 +322,7 @@ def test_a_tetm_assigned_after_construction_survives_the_pytree_rebuild():
     solved eagerly could not be handed to ``jax.jit`` at all.
     """
     jax = pytest.importorskip('jax')
-    solver = wavebit.rcwa(**dict(CFG_1D, backend=1, structure=STRUCTURE_1D))
+    solver = wavebit.rcwa(**dict(CFG_1D, backend='jax', structure=STRUCTURE_1D))
     solver.tetm = 'tm'
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
@@ -333,14 +333,14 @@ def test_a_tetm_assigned_after_construction_survives_the_pytree_rebuild():
 
 def test_degenerate_pairs_are_refused():
     with pytest.raises(ValueError, match='no incident field'):
-        wavebit.rcwa(backend=0, polarization=(0, 0))
+        wavebit.rcwa(backend='numpy', polarization=(0, 0))
     with pytest.raises(ValueError, match='pair'):
-        wavebit.rcwa(backend=0, polarization=(1, 0, 0))
+        wavebit.rcwa(backend='numpy', polarization=(1, 0, 0))
 
 
 # ------------------------------------------------------------------ psi is a real angle
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_complex_psi_is_refused(backend):
     """The one input that used to be silently wrong rather than merely unsupported.
 
@@ -358,14 +358,14 @@ def test_complex_psi_is_refused(backend):
         solver.psi = 0.7 + 0.5j
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_real_angle_written_as_complex_is_accepted(backend):
     """``0.7+0j`` is a real angle spelled oddly, not the mistake above."""
     solver = wavebit.rcwa(backend=backend, psi=complex(0.7, 0.0))
     assert float(np.real(np.asarray(solver.psi))) == pytest.approx(0.7)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('spelling', ['incident', 'default'])
 def test_psi_is_stored_real(backend, spelling):
     """Real dtype is what lets the refusal read a dtype, and it keeps the AD leaf real.
@@ -378,7 +378,7 @@ def test_psi_is_stored_real(backend, spelling):
     assert not np.iscomplexobj(np.asarray(solver.psi)), np.asarray(solver.psi).dtype
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_declared_away_angle_is_absent_rather_than_defaulted(backend):
     """``tetm`` leaves the ``psi`` slot empty, and that is the point.
 
@@ -469,7 +469,7 @@ def _solve_gyrotropic(pair=None, **incidence):
     I = np.eye(1, dtype=np.complex128)
     if pair is not None:
         incidence = dict(incidence, polarization=pair)
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0,
                             **incidence, truncation_order=(0, 0), period=(300.0, 300.0),
                             wavelength=WL, thickness=[D])
     return solver.solve_conv(
@@ -603,7 +603,7 @@ def test_a_circular_state_turns_as_the_table_says(spelling, side, path, angles):
     """The incident wave's rotation against its own flow, on a patterned stack, both sides."""
     incidence, turns_like = _CIRCULAR_SPELLINGS[spelling]
     theta, phi = _TURN_ANGLES[angles]
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, wavelength=900.0, period=[700.0, 700.0],
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, wavelength=900.0, period=[700.0, 700.0],
                           theta=theta, phi=phi, incidence_side=side, **_TURN_CELLS[path],
                           **incidence)
     six = np.asarray(solver.solve().boundary_fields(side, part='incoming', **_TURN_POINT))[0, 0]
@@ -630,7 +630,7 @@ def test_the_solved_field_turns_the_same_way(side, path):
     """
     theta, phi = _TURN_ANGLES['kx_negative']
     structure = np.ones((1, 1, 4)) if path == 'conical' else np.ones((1, 2, 2))
-    solver = wavebit.rcwa(backend=0, structure=structure, thickness=[300.0], top=1.0, bot=1.0,
+    solver = wavebit.rcwa(backend='numpy', structure=structure, thickness=[300.0], top=1.0, bot=1.0,
                           wavelength=600.0, period=[450.0, 450.0],
                           truncation_order=[2, 0] if path == 'conical' else [1, 1],
                           theta=theta, phi=phi, polarization=(1, -1j), incidence_side=side,
@@ -743,7 +743,7 @@ def test_jax_pytree_round_trip_keeps_the_pair():
     """
     import jax
 
-    solver = wavebit.rcwa(backend=1, polarization=(1, -1j))
+    solver = wavebit.rcwa(backend='jax', polarization=(1, -1j))
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.polarization == (1, -1j)
@@ -766,7 +766,7 @@ def test_the_pair_carries_a_gradient_through_the_pytree():
     import jax.numpy as jnp
 
     kw = dict(CFG_2D, structure=jnp.asarray(STRUCTURE_2D))
-    kw['backend'] = 1
+    kw['backend'] = 'jax'
 
     def total(solver):
         return solver.solve().T.sum()
@@ -786,7 +786,7 @@ def test_a_psi_solver_flattens_with_an_empty_pair_slot():
     """``None`` is an empty subtree, so nothing about a psi solver's flattening moved."""
     import jax
 
-    solver = wavebit.rcwa(backend=1, psi=0.7)
+    solver = wavebit.rcwa(backend='jax', psi=0.7)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.polarization is None
@@ -837,7 +837,7 @@ def test_spec_round_trips_the_pair():
 def test_run_executes_the_pair_spec():
     result = wavebit.run(_SPEC)
     reference = wavebit.rcwa(
-        backend=0, wavelength=900.0, period=[700.0], truncation_order=[10, 0],
+        backend='numpy', wavelength=900.0, period=[700.0], truncation_order=[10, 0],
         top=1.0, bot=2.25, theta=0.0, phi=0.0, polarization=(1, -1j),
         structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.0],
     ).solve()
@@ -863,7 +863,7 @@ def test_chi_zero_is_the_psi_spelling(psi_v):
                      wavebit.rcwa(psi=psi_v, chi=0.0, **kw).solve().incident, atol=1e-13)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_chart_is_the_pair_it_names(backend):
     """``(psi, chi)`` and the pair built from them are one incidence, on every backend.
 
@@ -894,16 +894,16 @@ def test_the_chart_covers_the_states_the_angle_cannot():
 def test_chi_is_exclusive_with_the_other_two_spellings():
     """One slot, three spellings: the chart, the raw pair, and the declaration."""
     with pytest.raises(ValueError, match='chi and polarization'):
-        wavebit.rcwa(backend=0, chi=0.3, polarization=(1, 0))
+        wavebit.rcwa(backend='numpy', chi=0.3, polarization=(1, 0))
     with pytest.raises(ValueError, match='chi and polarization'):
-        wavebit.rcwa(backend=0, polarization=(1, 0)).chi = 0.3
+        wavebit.rcwa(backend='numpy', polarization=(1, 0)).chi = 0.3
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        wavebit.rcwa(backend=0, chi=0.3, tetm='te')
+        wavebit.rcwa(backend='numpy', chi=0.3, tetm='te')
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        wavebit.rcwa(backend=0, tetm='te').chi = 0.3
+        wavebit.rcwa(backend='numpy', tetm='te').chi = 0.3
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_complex_chi_is_refused(backend):
     """``chi`` is an angle for the same reason ``psi`` is: every state has real coordinates."""
     with pytest.raises(ValueError, match='chi must be a real angle'):
@@ -923,7 +923,7 @@ def test_both_chart_coordinates_carry_a_gradient():
     import jax.numpy as jnp
 
     kw = dict(CFG_2D, structure=jnp.asarray(STRUCTURE_2D))
-    kw['backend'] = 1
+    kw['backend'] = 'jax'
 
     def total(**inc):
         return wavebit.rcwa(**inc, **kw).solve().T.sum()
@@ -945,12 +945,12 @@ def test_the_chart_survives_the_jax_pytree():
     """``chi`` is a child, not aux data — the same rule the pair now follows."""
     import jax
 
-    solver = wavebit.rcwa(backend=1, psi=0.4, chi=-0.2)
+    solver = wavebit.rcwa(backend='jax', psi=0.4, chi=-0.2)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert float(np.asarray(back.chi)) == pytest.approx(-0.2)
     assert float(np.asarray(back.psi)) == pytest.approx(0.4)
-    assert wavebit.rcwa(backend=1, psi=0.4).chi is None
+    assert wavebit.rcwa(backend='jax', psi=0.4).chi is None
 
 
 # ------------------------------------------------------------------ one resolved incidence
@@ -1000,13 +1000,13 @@ def test_an_integer_pair_still_carries_a_gradient():
     import jax
     import jax.numpy as jnp
 
-    solver = wavebit.rcwa(backend=1, structure=jnp.asarray(STRUCTURE_2D), polarization=(1, -1j),
+    solver = wavebit.rcwa(backend='jax', structure=jnp.asarray(STRUCTURE_2D), polarization=(1, -1j),
                             **{k: v for k, v in CFG_2D.items() if k != 'backend'})
     grad = jax.grad(lambda s: s.solve().T.sum())(solver)
     assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_refused_psi_does_not_claim_the_spelling_it_refused(backend):
     """The refusal used to latch `_psi_given`, and that flag outlives the refusal.
 
@@ -1024,9 +1024,9 @@ def test_a_refused_psi_does_not_claim_the_spelling_it_refused(backend):
     `chi`'s setter had the right order all along, in the same file: both clash checks and the
     complex check run before its single write.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     cfg = dict(CFG_2D, backend=backend)
     solver = wavebit.rcwa(structure=np.ones((2, 4, 4)) * 2.0, **cfg)   # CFG_2D names 2 layers

@@ -12,7 +12,7 @@ eps_hi = 12.25
 structure = np.array([[[1.0, 1.0, eps_hi, eps_hi]]])     # (layer, y, x)
 
 solver = wavebit.rcwa(
-    backend=0,                                # 0 = NumPy, 1 = JAX, 2 = PyTorch
+    backend='numpy',                          # or 'jax' / 'torch'
     wavelength=900., period=[700.],           # one shared length unit; nm here
     truncation_order=dict(x=10, y=0),         # named, so there is no order to recall
     top=1., bot=2.25,  # the two half-spaces, as materials

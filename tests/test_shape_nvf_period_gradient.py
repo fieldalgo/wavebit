@@ -21,16 +21,16 @@ def loss(s,xp,period,geometry=None):
 @pytest.mark.parametrize('frozen',[False,True])
 def test_both_period_components_reach_the_shape_nvf_builder(shape,frozen):
     torch=pytest.importorskip('torch')
-    s=solver(2,shape)
+    s=solver('torch',shape)
     geometry=s.freeze_geometry() if frozen else None
     p=torch.tensor([600.,750.],dtype=torch.float64,requires_grad=True)
     result=loss(s,torch,p,geometry);result.backward()
-    reference=loss(solver(0,shape),np,np.array([600.,750.]))
+    reference=loss(solver('numpy',shape),np,np.array([600.,750.]))
     assert float(result.detach())==pytest.approx(reference,abs=2e-11)
     expected=[]
     for j in (0,1):
         delta=np.zeros(2);delta[j]=.01
         plus=np.array([600.,750.])+delta;minus=np.array([600.,750.])-delta
-        expected.append((loss(solver(0,shape,plus),np,plus)-loss(solver(0,shape,minus),np,minus))/.02)
+        expected.append((loss(solver('numpy',shape,plus),np,plus)-loss(solver('numpy',shape,minus),np,minus))/.02)
     assert np.min(np.abs(expected))>1e-7
     np.testing.assert_allclose(p.grad.numpy(),expected,atol=2e-9,rtol=2e-5)

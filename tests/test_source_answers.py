@@ -15,7 +15,7 @@ def host(value):
     return value.detach().cpu().numpy() if hasattr(value, 'detach') else np.asarray(value)
 
 
-def solver_for(kind, backend=0, **updates):
+def solver_for(kind, backend='numpy', **updates):
     options = dict(backend=backend, wavelength=1.3, period=(2.7, 2.3),
                    thickness=[.4], truncation_order=(1, 0),
                    structure=np.array([[[4.+.2j]]]), top=1., bot=2.25)
@@ -50,7 +50,7 @@ def power_values(result):
     return [result.R, result.T, result.power_entering, result.absorption]
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('kind', KINDS)
 def test_answer_levels_keep_the_same_power_and_expose_the_same_field_functions(kind, backend):
     solver = solver_for(kind, backend)

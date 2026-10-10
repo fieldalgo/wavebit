@@ -79,7 +79,7 @@ def mean_energy(coefficients):
 
 def power_record(coefficients, order, transform, *, wavelength=900., thickness=300., theta=.2, phi=0.):
     slots = projected_matrices(real_coefficients(coefficients), order)
-    solver = wavebit.rcwa(backend=0, lattice=700*np.asarray(transform), wavelength=wavelength,
+    solver = wavebit.rcwa(backend='numpy', lattice=700*np.asarray(transform), wavelength=wavelength,
                           thickness=[thickness], theta=theta, phi=phi,
                           truncation_order=orders_xy(order), top=1., bot=2.25)
     result = solver._solve_conv(*(slot[None] for slot in slots))

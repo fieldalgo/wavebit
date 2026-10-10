@@ -129,6 +129,9 @@ from ._core.spec import SPEC_VERSION
 # '12': the specified-incidence result attribute and field selector are named
 # incident; consumers must use the new attribute published in incidences.fields.
 # Same argument as '6': those names are attributes a consumer indexes a result with.
+# No bump for the backend names (2026-10-10): ``enums.backend`` and the ``backends`` keys
+# already published 'numpy' / 'jax' / 'torch', and ``rcwa(backend=...)`` now takes exactly
+# those where it took 0 / 1 / 2. No published key changes shape or contents.
 MANIFEST_VERSION = '12'
 
 
@@ -574,10 +577,10 @@ def _backend_capabilities() -> dict:
         # `find_spec` rather than an import: reading this document must not pull an optional
         # library into the caller's process, and importing the JAX backend lifts
         # `jax_enable_x64` process-wide. The manifest is what a caller reads to decide whether
-        # to install JAX; it cannot be the thing that changes their JAX.
-        module = {Backend.NUMPY: 'numpy', Backend.JAX: 'jax', Backend.TORCH: 'torch'}[member]
-        out[member.name.lower()] = {
-            'available': importlib.util.find_spec(module) is not None,
+        # to install JAX; it cannot be the thing that changes their JAX. A backend's name is
+        # the name its library is imported by, so the name is also what to look for.
+        out[member.value] = {
+            'available': importlib.util.find_spec(member.value) is not None,
             'differentiable': member in DIFFERENTIABLE_BACKENDS,
         }
     return out
@@ -591,7 +594,7 @@ def manifest() -> dict:
         'manifest_version': MANIFEST_VERSION,
         'wavebit_version': __version__,
         'enums': {
-            'backend': [m.name.lower() for m in Backend],
+            'backend': [m.value for m in Backend],
             'tetm': [m.name.lower() for m in Tetm],
             'factorization': [m.value for m in Factorization],
             'fourier_coefficients': [m.value for m in FourierCoefficients],

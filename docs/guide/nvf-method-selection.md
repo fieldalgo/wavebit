@@ -35,7 +35,7 @@ matrices, gap_jvp, diagnostics = cell.closure(
     epsilon=(12.25, -10.+1j), background=1., gap_tangent=1.,
 )
 solver = wavebit.rcwa(
-    backend=0, lattice=basis, truncation_order=order,
+    backend='numpy', lattice=basis, truncation_order=order,
     wavelength=900., thickness=(300.,), top=1., bot=2.25,
     theta=.2, phi=0.,
 )

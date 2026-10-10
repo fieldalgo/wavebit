@@ -697,6 +697,22 @@ Amplitude fine print, stated once so it never has to be discovered:
   `/(-i*n_top)` footnote; they were renamed and normalized outright, with no aliases —
   including the meent-era efficiency names `de_ri`/`de_ti`.)
 
+## Backend names
+
+| `backend` | computes in |
+| --- | --- |
+| `'numpy'` (the default) | NumPy — no automatic differentiation |
+| `'jax'` | JAX — differentiable; `jax.jit` takes a frozen geometry |
+| `'torch'` | PyTorch — differentiable, eagerly |
+
+Each name is its library's import name, and it is the only spelling taken: every door that
+takes a backend -- `wavebit.rcwa` (keyword or first positional argument), the solver classes
+(keyword or `solver.backend = ...`), `CoherentSolver`, `meshgrid_xy` / `meshgrid_uv` and a
+spec's `numerics.backend` -- refuses anything else (`'JAX'`, `'pytorch'`, `True`, an integer)
+with the list of names. `wavebit.Backend` is the same three as a `str` enum, so
+`Backend.JAX == 'jax'`, and `solver.backend` holds the member. The names were the integers
+`0` / `1` / `2` until 2026-10-11.
+
 ## Where each row is pinned
 
 | rows | tests |
@@ -718,6 +734,7 @@ Amplitude fine print, stated once so it never has to be discovered:
 | negative-index media: the signed index, the mirror root, what `theta` means on a lit negative-index side, the frame at `theta = 0` there, the refusal of an active one | `tests/test_negative_index_half_space.py` (closed-form Fresnel both sides, the incident Poynting vector against `theta` and `phi`, negative refraction, a thick lossy slab, reciprocity, backends, `jit`), `tests/test_negative_index_layers.py` (layers, ETM against SMM), `tests/references/test_fmmax_dng_golden.py` (fmmax, per order, through the `theta` door) |
 | the field cell's `+z` (that `Ez`, `Hx`, `Hy` share the frame the phase and layer order use) | `tests/test_field_core.py` — the curl residual **and its convergence rate**, per path, plus the control that the pre-2026-08-14 frame fails it. Not the legacy golden, which was frozen in that frame and is transformed at the comparison |
 | the whole surface, per backend | `tests/test_golden_legacy_parity.py` |
+| backend names | `tests/test_backend_names.py` — the names accepted and every other spelling refused, with the list, at every door; `solver.backend` the member; the spec writing the name; the manifest publishing it |
 
 Why these choices: [`time-convention-audit.md`](time-convention-audit.md) (the branch
 rules and the flip residue), [`formulation.md`](formulation.md) (the full derivation in

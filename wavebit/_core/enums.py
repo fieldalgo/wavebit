@@ -1,7 +1,10 @@
 """Typed enumerations for the public API.
 
-``Backend`` and ``Tetm`` are ``IntEnum``s equal to the integer codes the solver already uses.
-``Tetm`` names the two states the ``tetm`` declaration selects, and its integer value is the
+``Backend`` is a ``str`` enum equal to the name of the array library it computes in, so
+``backend=Backend.JAX`` and ``backend='jax'`` are the same thing; see :class:`Backend`.
+
+``Tetm`` is an ``IntEnum`` equal to the integer code the solver already uses. It
+names the two states the ``tetm`` declaration selects, and its integer value is the
 index the pure 1D solves dispatch on (``CoreSolveMixin.tetm_index``). Users write the word --
 ``tetm='te'`` or ``tetm=Tetm.TE`` -- because the declaration has exactly two values and a
 number invited a third meaning: the retired ``pol`` accepted the interior of ``[0, 1]``,
@@ -31,11 +34,21 @@ import re
 from enum import Enum, IntEnum
 
 
-class Backend(IntEnum):
-    """Array backend for :func:`wavebit.rcwa`."""
-    NUMPY = 0
-    JAX = 1
-    TORCH = 2
+class Backend(str, Enum):
+    """Array backend for :func:`wavebit.rcwa`, named by the library it computes in.
+
+    Each value is the name that library is imported by, and it is the only spelling taken:
+    ``'JAX'``, ``'pytorch'`` and an integer are refused by :func:`backend_of`, which every door
+    that takes a backend calls. ``solver.backend`` holds the member, so
+    ``solver.backend == 'jax'`` reads as written.
+
+    The values were the integers ``0`` / ``1`` / ``2`` until 2026-10-11 and changed because a
+    number says nothing about which library it means, the spec documents already stored the
+    names, and one vocabulary is what a caller should have to learn.
+    """
+    NUMPY = 'numpy'   # no automatic differentiation; the default
+    JAX = 'jax'       # differentiable; jit with a frozen geometry
+    TORCH = 'torch'   # differentiable, eagerly
 
 
 #: Which backends differentiate through a solve. The one table: the backend classes set their
@@ -364,6 +377,26 @@ def factorization_of(value):
 def formulation_of(value):
     """Validate a ``formulation`` value."""
     return _one_of(Formulation, value, 'formulation')
+
+
+def backend_of(value):
+    """Validate a ``backend`` value: a :class:`Backend` member or its name, exactly.
+
+    The one parser behind every door that takes a backend -- :func:`wavebit.rcwa`, the solver
+    classes, :class:`~wavebit.CoherentSolver`, the ``meshgrid`` helpers and the spec's
+    ``numerics.backend``. Exact rather than case-folded like :func:`_one_of`: each name is the
+    one ``import`` takes, so there is one spelling per backend, and a near spelling is refused
+    as the retired integers are.
+    """
+    if isinstance(value, Backend):
+        return value
+    if isinstance(value, str):
+        try:
+            return Backend(value)
+        except ValueError:
+            pass
+    raise ValueError(
+        f"backend={value!r} is not valid; expected one of {[m.value for m in Backend]}")
 
 
 _NVF_OPTION_RENAMES = {

@@ -54,7 +54,7 @@ def _hex_rod(n=24, radius=0.45):
     return cell
 
 
-def _scene(path, side='top', theta=0.3, answers='field', backend=0, **over):
+def _scene(path, side='top', theta=0.3, answers='field', backend='numpy', **over):
     """One solve per path. Each coupled one is lit by a mixed pair, so s and p both carry."""
     common = dict(backend=backend, theta=theta, incidence_side=side, answers=answers)
     if path in ('te', 'tm'):
@@ -274,7 +274,7 @@ def test_the_vector_is_continuous_where_the_amplitude_turns_over(path):
     else:
         kw = dict(_1D, wavelength=wavelength, tetm=path)
     name = 'r_s' if path in ('te', 'conical_s') else 'r_p'
-    steps = [wavebit.rcwa(backend=0, theta=theta_c + dt, answers='amplitude', **kw).solve().incident
+    steps = [wavebit.rcwa(backend='numpy', theta=theta_c + dt, answers='amplitude', **kw).solve().incident
              for dt in (-3e-5, -1e-5, 1e-5, 3e-5)]
     at = (0, _1D['truncation_order'][0] - 1)
     a = [complex(_host(getattr(s, name))[at]) for s in steps]
@@ -299,7 +299,7 @@ def test_an_order_at_exact_kx_zero_reads_one_vector_on_every_backend(tetm):
     pytest.importorskip('jax')
     pytest.importorskip('torch')
     wavebit.enable_x64()
-    backends = (0, 1, 2)
+    backends = ('numpy', 'jax', 'torch')
     name = 'r_s' if tetm == 'te' else 'r_p'
     kw = dict(_1D, kx=2 * np.pi / _1D['period'][0], tetm=tetm, answers='amplitude')
     at = (0, _1D['truncation_order'][0] - 1)
@@ -311,7 +311,7 @@ def test_an_order_at_exact_kx_zero_reads_one_vector_on_every_backend(tetm):
         assert abs(kx) < 1e-15, kx
         seen[backend] = (np.real(kx) < 0, complex(_host(getattr(res, name))[at]),
                          _host(res.r_xyz)[at])
-    flip0, a0, v0 = seen[0]
+    flip0, a0, v0 = seen['numpy']
     assert abs(a0) > 1e-2
     for backend, (flip, a, v) in seen.items():
         sign = -1.0 if flip != flip0 else 1.0
@@ -330,7 +330,7 @@ def test_one_grating_three_paths_one_vector(tetm, side):
     retains the same single row of orders. Three formulations, three field builders, one
     wave -- so one vector, to 1e-12.
     """
-    kw = dict(_1D, backend=0, theta=0.3, incidence_side=side, answers='amplitude')
+    kw = dict(_1D, backend='numpy', theta=0.3, incidence_side=side, answers='amplitude')
     pure = wavebit.rcwa(tetm=tetm, **kw).solve().incident
     pol = (1, 0) if tetm == 'te' else (0, 1)
     conical = wavebit.rcwa(phi=0.0, polarization=pol, **kw).solve().incident
@@ -444,7 +444,7 @@ def test_jax_carries_the_vector_through_jit_and_grad():
     wavebit.enable_x64()
     import jax.numpy as jnp
 
-    solver, eager = _scene('conical', answers='amplitude', backend=1)
+    solver, eager = _scene('conical', answers='amplitude', backend='jax')
 
     @jax.jit
     def solved(s):
@@ -474,7 +474,7 @@ def test_jax_carries_the_vector_through_jit_and_grad():
 
 def test_torch_differentiates_the_vector():
     torch = pytest.importorskip('torch')
-    solver, _ = _scene('conical', answers='amplitude', backend=2)
+    solver, _ = _scene('conical', answers='amplitude', backend='torch')
 
     def power(d0):
         res = solver.solve(thickness=torch.stack([d0, d0.new_tensor(0.22)]), auto_detune=False)

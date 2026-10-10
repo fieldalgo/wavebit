@@ -67,7 +67,7 @@ def _scene(**over):
     # the structure declares its cell, so the round trip carries a real value rather than the
     # `None` a bare array would leave -- which is what `test_the_scene_holds_nothing_at_its_default`
     # is there to insist on.
-    kw = dict(backend=1, structure=as_lattice(lattice=basis).drawn(eps), mu=mu,
+    kw = dict(backend='jax', structure=as_lattice(lattice=basis).drawn(eps), mu=mu,
               lattice=basis.tolist(),
               truncation_order=[3, 2], thickness=[H, 0.5 * H], wavelength=WL,
               top=wavebit.Material(2.25, mu=1.4), bot=wavebit.Material(4.0),
@@ -95,7 +95,7 @@ def _one_row(**over):
     """
     # `li_nesting` rides here rather than on `_scene`: this is a raster Li scene, where the
     # keyword is read, and `_scene` is an NVF one, where naming it would be refused.
-    kw = dict(backend=1, structure=np.ones((1, 1, 12)), period=[P, P],
+    kw = dict(backend='jax', structure=np.ones((1, 1, 12)), period=[P, P],
               truncation_order=[3, 0], thickness=[H], wavelength=WL, top=1.0, bot=1.0,
               li_nesting='symmetric')
     kw.update(over)
@@ -152,7 +152,7 @@ def test_the_scene_holds_nothing_at_its_default():
     carries has to differ, or the scene is not exercising it.
     """
     rich = _scene()
-    plain = wavebit.rcwa(backend=1, structure=np.ones((1, 8, 8)), period=[P, P],
+    plain = wavebit.rcwa(backend='jax', structure=np.ones((1, 8, 8)), period=[P, P],
                          truncation_order=[1, 1], thickness=[H], wavelength=WL,
                          top=1.0, bot=1.0)
     others = (_one_row(polarization=(1.0, -1j), kx=.002, ky=.001),
@@ -344,7 +344,7 @@ _LIT = np.array([[[1., 1., 1., 4., 4., 4., 4., 1., 1., 1., 1., 1.]]])
 
 
 def _lit(excitation):
-    return wavebit.rcwa(backend=1, structure=_LIT, period=[3 * WL, 3 * WL],
+    return wavebit.rcwa(backend='jax', structure=_LIT, period=[3 * WL, 3 * WL],
                         truncation_order=[3, 0], thickness=[220.0], wavelength=WL,
                         top=1.0, bot=1.0, excitation=excitation)
 

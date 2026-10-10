@@ -45,7 +45,7 @@ except ImportError:
 
 # ------------------------------------------------------------------------------ the scenes
 
-_SCENE = dict(backend=0, top=1.0, bot=2.25, theta=0.21, phi=0.37, psi=0.6, wavelength=0.9,
+_SCENE = dict(backend='numpy', top=1.0, bot=2.25, theta=0.21, phi=0.37, psi=0.6, wavelength=0.9,
               period=[1.0, 0.8], thickness=[0.35], truncation_order=[4, 3])
 
 GRID = 20
@@ -181,7 +181,7 @@ def test_a_uniform_layer_is_the_same_under_every_rule(coefficients):
 
 # ------------------------------------------------------------------ one-dimensional gratings
 
-_1D = dict(backend=0, top=1.0, bot=2.25, theta=0.2, phi=0.0, period=[700.0], wavelength=900.0,
+_1D = dict(backend='numpy', top=1.0, bot=2.25, theta=0.2, phi=0.0, period=[700.0], wavelength=900.0,
            thickness=[300.0])
 
 
@@ -442,7 +442,7 @@ def test_the_spec_carries_it():
         'incidence': {'wavelength': 900.0, 'theta': 0.2, 'phi': 0.0, 'tetm': 'tm'},
     })
     ran = wavebit.run(JobSpec.from_json(spec.to_json()))
-    direct = wavebit.rcwa(backend=0, wavelength=900., period=[700.], truncation_order=[10, 0],
+    direct = wavebit.rcwa(backend='numpy', wavelength=900., period=[700.], truncation_order=[10, 0],
                           top=1., bot=2.25, theta=0.2, phi=0., tetm='tm', thickness=[300.],
                           structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]),
                           factorization='laurent').solve()
@@ -531,14 +531,14 @@ def _backend_result(backend, structure, **kw):
                         factorization='laurent', **kw).solve()
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('case', ['sampled', 'integrated', 'circle', 'painted'])
 def test_every_backend_answers_the_same(backend, case):
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     struct, extra = {'sampled': (_crossed(), {}),
                      'integrated': (_crossed(), dict(fourier_coefficients='integrated')),
                      'circle': (_CIRCLE, {}), 'painted': (_PAINTED_SHAPES, {})}[case]
-    want = _backend_result(0, struct, **extra)
+    want = _backend_result('numpy', struct, **extra)
     got = _backend_result(backend, struct, **extra)
     to_np = lambda a: a.detach().cpu().numpy() if hasattr(a, 'detach') else np.asarray(a)  # noqa: E731
     for a, b in zip(_both(want), (to_np(got.R), to_np(got.T))):
@@ -565,13 +565,13 @@ def test_jax_and_torch_differentiate_the_raster_and_agree_with_a_difference():
         return wavebit.rcwa(**{**_SCENE, 'backend': backend}, structure=eps,
                             factorization='laurent').solve().T.sum()
 
-    g_jax = float(jax.grad(lambda v: jnp.real(total(1, jnp.asarray(rest) + v * jnp.asarray(mask))))(
+    g_jax = float(jax.grad(lambda v: jnp.real(total('jax', jnp.asarray(rest) + v * jnp.asarray(mask))))(
         jnp.asarray(9.0)))
     v = torch.tensor(9.0, dtype=torch.float64, requires_grad=True)
-    total(2, torch.as_tensor(rest) + v * torch.as_tensor(mask)).real.backward()
+    total('torch', torch.as_tensor(rest) + v * torch.as_tensor(mask)).real.backward()
     g_torch = float(v.grad)
     h = 1e-5
-    value = lambda x: float(np.real(total(0, rest + x * mask)))  # noqa: E731
+    value = lambda x: float(np.real(total('numpy', rest + x * mask)))  # noqa: E731
     fd = (value(9.0 + h) - value(9.0 - h)) / (2 * h)
     assert abs(g_jax - g_torch) < 1e-10 * max(1.0, abs(g_jax))
     assert abs(g_jax - fd) < 1e-6 * max(1.0, abs(fd))
@@ -591,11 +591,11 @@ def test_jax_and_torch_differentiate_a_shape_parameter():
                             factorization='laurent').solve().T.sum()
 
     import jax.numpy as jnp
-    g_jax = float(jax.grad(lambda x: jnp.real(total(1, x)))(jnp.asarray(0.42)))
+    g_jax = float(jax.grad(lambda x: jnp.real(total('jax', x)))(jnp.asarray(0.42)))
     x = torch.tensor(0.42, dtype=torch.float64, requires_grad=True)
-    total(2, x).real.backward()
+    total('torch', x).real.backward()
     h = 1e-6
-    fd = (float(np.real(total(0, 0.42 + h))) - float(np.real(total(0, 0.42 - h)))) / (2 * h)
+    fd = (float(np.real(total('numpy', 0.42 + h))) - float(np.real(total('numpy', 0.42 - h)))) / (2 * h)
     assert abs(g_jax - float(x.grad)) < 1e-9 * max(1.0, abs(g_jax))
     assert abs(g_jax - fd) < 1e-6 * max(1.0, abs(fd))
 
@@ -605,7 +605,7 @@ def test_a_jitted_solve_and_a_jitted_replay_keep_the_rule():
     -- not the path's default -- and a frozen Laurent record replays under ``jax.jit``."""
     jax = pytest.importorskip('jax')
     from jax import tree_util
-    solver = wavebit.rcwa(**{**_SCENE, 'backend': 1}, structure=_crossed(),
+    solver = wavebit.rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_crossed(),
                           fourier_coefficients='integrated', factorization='laurent')
     leaves, treedef = tree_util.tree_flatten(solver)
     assert tree_util.tree_unflatten(treedef, leaves).factorization == Factorization.LAURENT
@@ -613,10 +613,10 @@ def test_a_jitted_solve_and_a_jitted_replay_keep_the_rule():
     eager = np.asarray(solver.solve().T)
     compiled = np.asarray(jax.jit(lambda s: s.solve(geometry=record).T)(solver))
     np.testing.assert_allclose(compiled, eager, atol=1e-12, rtol=1e-12)
-    li = np.asarray(wavebit.rcwa(**{**_SCENE, 'backend': 1}, structure=_crossed(),
+    li = np.asarray(wavebit.rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_crossed(),
                                  fourier_coefficients='integrated').solve().T)
     assert np.abs(compiled - li).max() > 1e-3
-    shapes = wavebit.rcwa(**{**_SCENE, 'backend': 1}, structure=_PAINTED_SHAPES,
+    shapes = wavebit.rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_PAINTED_SHAPES,
                           factorization='laurent')
     record = shapes.freeze_geometry()
     compiled = np.asarray(jax.jit(lambda s: s.solve(geometry=record).T)(shapes))

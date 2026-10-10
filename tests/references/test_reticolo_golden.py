@@ -84,7 +84,7 @@ CASES = {
 }
 
 
-def _solve(name, backend=0):
+def _solve(name, backend='numpy'):
     kw = dict(CASES[name])
     return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
                           **kw).solve()
@@ -133,11 +133,11 @@ def test_the_same_orders_propagate(name):
         assert max(abs(v) for v in rest) < 1e-12, (name, side, max(abs(v) for v in rest))
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_reticolo_agreement_holds_on_every_backend(backend):
     """The oracle is about the physics, so it cannot be a NumPy-only result."""
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
 
     g = _golden()
@@ -173,7 +173,7 @@ def test_the_order_axis_is_not_symmetric_in_these_cases(name):
     assert np.abs(ti[idx] - ti[::-1][idx]).max() > 1e-4, name
 
 
-def _solve_bottom(name, backend=0):
+def _solve_bottom(name, backend='numpy'):
     """The same scene lit from below, at RETICOLO's own bottom-incidence k_parallel.
 
     RETICOLO answers both sides from one ``res2`` call at one ``k_parallel =
@@ -252,7 +252,7 @@ function, and the exact
     """
     g = _golden()
     kw = dict(CASES[name])
-    res = wavebit.rcwa(backend=0, fourier_coefficients='sampled', **kw).solve()
+    res = wavebit.rcwa(backend='numpy', fourier_coefficients='sampled', **kw).solve()
     for side, arr in (('ri', res.R), ('ti', res.T)):
         got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)

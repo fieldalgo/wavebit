@@ -427,7 +427,7 @@ def test_the_raster_builders_pass_the_nesting_through(nesting):
 # ------------------------------------------------------------------------------- the keyword
 
 #: A small crossed grating, and the scene around it. 2.4**2 is spelled to the bit.
-_SCENE = dict(backend=0, top=1.0, bot=2.25, theta=0.21, phi=0.37, psi=0.6, wavelength=0.9,
+_SCENE = dict(backend='numpy', top=1.0, bot=2.25, theta=0.21, phi=0.37, psi=0.6, wavelength=0.9,
               period=[1.0, 0.8], thickness=[0.35], truncation_order=[4, 3])
 
 
@@ -626,7 +626,7 @@ def test_a_jitted_replay_keeps_the_nesting():
     """The nesting rides in the JAX treedef, so a compiled solve on a frozen record builds the
     nesting the solver holds -- not the default."""
     jax = pytest.importorskip('jax')
-    kw = dict(_SCENE, backend=1, structure=_crossed(), fourier_coefficients='integrated')
+    kw = dict(_SCENE, backend='jax', structure=_crossed(), fourier_coefficients='integrated')
     solver = wavebit.rcwa(**kw, li_nesting='symmetric')
     geometry = solver.freeze_geometry()
     direct = np.asarray(solver.solve().T)

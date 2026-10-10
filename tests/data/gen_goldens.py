@@ -84,7 +84,7 @@ for name, kw in CASES.items():
     kw = dict(kw); kw['structure'] = np.asarray(kw['structure'], dtype=float)
     # `answers='field'` because this generator pins the per-layer state as well as the
     # result surface; without it `solver.T1` is None and the goldens regenerate empty.
-    solver = wavebit.rcwa(backend=0, answers='field', **kw)
+    solver = wavebit.rcwa(backend='numpy', answers='field', **kw)
     r = solver.solve()
     out[f'{name}__grating_type'] = np.array(solver.grating_type)
     # The golden's key component is the legacy attribute name; today's is beside it.

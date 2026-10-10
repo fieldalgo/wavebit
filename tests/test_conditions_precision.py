@@ -8,7 +8,7 @@ jax = pytest.importorskip('jax')
 import jax.numpy as jnp
 
 
-def solver(backend=1, **kwargs):
+def solver(backend='jax', **kwargs):
     cfg = dict(period=(600., 750.), thickness=(170.,), truncation_order=(1, 0),
                wavelength=900., answers='field', tetm='tm',
                structure=np.array([[[1., 4., 4., 1.]]]))
@@ -52,13 +52,13 @@ def test_restored_values_match_the_kept_precision(parameter, precision_first, do
         # at the retained precision and an independent NumPy solve of the same scene.
         got = np.asarray(s.solve().T)
         np.testing.assert_array_equal(got, expected.solve().T)
-        np.testing.assert_allclose(got, solver(0, complex_dtype=1).solve().T,
+        np.testing.assert_allclose(got, solver('numpy', complex_dtype=1).solve().T,
                                    atol=2e-5, rtol=2e-5)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_precision_recasting_preserves_the_declared_cell(backend):
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     cell = wavebit.Lattice.rectangular(600., 750.)
     s = solver(backend, structure=cell.drawn(np.array([[[1., 4., 4., 1.]]])))

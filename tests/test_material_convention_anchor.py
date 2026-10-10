@@ -77,7 +77,7 @@ def _solve(eps_stack, thickness, eps_top, eps_bot, *, theta=0.0, tetm='te', wave
     structure = np.array([[[complex(_api_material(e))]] for e in reversed(eps_stack)]) if eps_stack \
         else np.zeros((0, 1, 1), dtype=complex)
     solver = wavebit.rcwa(
-        backend=0, wavelength=wavelength, period=[300.], truncation_order=[0, 0],
+        backend='numpy', wavelength=wavelength, period=[300.], truncation_order=[0, 0],
         top=complex(_api_material(eps_top)), bot=complex(_api_material(eps_bot)),
         theta=theta, phi=0., tetm=tetm,
         structure=structure if len(eps_stack) else np.array([[[_api_material(EPS_AIR)]]]),

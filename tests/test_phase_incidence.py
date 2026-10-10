@@ -34,12 +34,12 @@ def _beta(epsilon, mu, theta):
     return np.copysign((low + high) / 2, theta)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('theta,phi', [(0., .7), (.3, 0.), (-.6, .4), (1.2, -2.4)])
 @pytest.mark.parametrize('mu', [1., 1.2 + .02j])
 def test_prescribed_phase_and_decay_vectors(backend, side, theta, phi, mu):
-    if backend == 1:
+    if backend == 'jax':
         wavebit.enable_x64()
     phase, decay = 1.7, .12
     em = phase**2 - decay**2 + 2j * phase * np.cos(theta) * decay
@@ -55,10 +55,10 @@ def test_prescribed_phase_and_decay_vectors(backend, side, theta, phi, mu):
     assert inward == pytest.approx(phase * np.cos(theta) + 1j * decay, abs=8e-15)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('theta', [0., .4, 1.3])
 def test_lossless_limit_is_the_standard_angle_formula(backend, theta):
-    if backend == 1:
+    if backend == 'jax':
         wavebit.enable_x64()
     for mu in (1., 1.4):
         solver = wavebit.rcwa(backend=backend, top=wavebit.Material(2.7, mu=mu),
@@ -89,10 +89,10 @@ def test_interface_power_at_the_requested_phase_angle(route, side, pol, mu):
     np.testing.assert_allclose(getattr(result.incident, 't_' + 'sp'[j]), t[j], atol=4e-12, rtol=0)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('angles', [(.4 + .2j, .3), (.4, .3 + .1j)])
 def test_explicit_complex_angles_keep_the_formal_parameterization(backend, angles):
-    if backend == 1:
+    if backend == 'jax':
         wavebit.enable_x64()
     theta, phi = angles
     solver = wavebit.rcwa(backend=backend, top=4. + 3j, theta=theta, phi=phi,
@@ -102,9 +102,9 @@ def test_explicit_complex_angles_keep_the_formal_parameterization(backend, angle
                                atol=4e-15, rtol=0)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_weakly_absorbing_negative_epsilon_keeps_its_phase_direction(backend):
-    if backend == 1:
+    if backend == 'jax':
         wavebit.enable_x64()
     eps, theta = -4. + 1e-8j, .4
     solver = wavebit.rcwa(backend=backend, top=eps, theta=theta,
@@ -116,10 +116,10 @@ def test_weakly_absorbing_negative_epsilon_keeps_its_phase_direction(backend):
     assert np.arctan2(beta.real, q.real) == pytest.approx(theta, abs=1e-14)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('theta', [np.pi / 2, -np.pi / 2, 1.7])
 def test_absorbing_grazing_phase_angle_is_refused(backend, theta):
-    if backend == 1:
+    if backend == 'jax':
         wavebit.enable_x64()
     solver = wavebit.rcwa(backend=backend, top=4. + 3j, theta=theta,
                           period=[1000., 1000.], truncation_order=0)
@@ -167,7 +167,7 @@ def test_absorption_gradients_at_fixed_phase_angle(backend, algorithm):
     def quantities(v):
         loss, theta = v[0], v[1]
         solver = wavebit.rcwa(
-            backend=1 if backend == 'jax' else 2, top=2.25 + 1j * loss, bot=1.,
+            backend='jax' if backend == 'jax' else 'torch', top=2.25 + 1j * loss, bot=1.,
             theta=theta, phi=.3, polarization=(.6, .8j), wavelength=500.,
             period=[1000., 1000.], truncation_order=0, thickness=[75.],
             structure=xp.full((1, 2, 2), 4. + .8j, dtype=xp.complex128),
@@ -208,7 +208,7 @@ def test_lossless_material_gradient_is_continuous(backend):
         import torch as xp
 
     def component(loss):
-        solver = wavebit.rcwa(backend=1 if backend == 'jax' else 2, top=2.25 + 1j*loss,
+        solver = wavebit.rcwa(backend='jax' if backend == 'jax' else 'torch', top=2.25 + 1j*loss,
                               theta=.4, period=[1000., 1000.], truncation_order=0)
         return xp.real(solver.order_kxy()[0][0])
 
@@ -247,7 +247,7 @@ def test_reconstructed_field_has_uniform_surface_magnitude_and_normal_decay(rout
     np.testing.assert_allclose(ey / ey[0, 0], expected, rtol=0, atol=2e-12)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('eps,theta', [(2.25, .4), (4. + 3j, .5),
                                        (-4. + 1e-4j, .4), (4. + 3j, 1.55)])
 def test_single_precision_phase_angle(backend, eps, theta):
@@ -266,7 +266,7 @@ def test_jit_vmap_and_invalid_traced_phase_angle():
     wavebit.enable_x64()
 
     def transverse(loss, theta):
-        solver = wavebit.rcwa(backend=1, top=2.25 + 1j*loss, theta=theta,
+        solver = wavebit.rcwa(backend='jax', top=2.25 + 1j*loss, theta=theta,
                               period=[1000., 1000.], truncation_order=0)
         return solver.order_kxy()[0][0]
 

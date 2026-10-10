@@ -82,7 +82,7 @@ def main():
                 shapes=([dict(type='rectangle',lx=350.,ly=700.-gap,material=12.25)] if one else
                     [dict(type='rectangle',lx=300.,ly=300.,cx=-150.-gap/2,material=4.),
                      dict(type='rectangle',lx=300.,ly=300.,cx=150.+gap/2,material=4.+delta)])
-                s=wavebit.rcwa(backend=0,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
+                s=wavebit.rcwa(backend='numpy',period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
                     theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(order,order),
                     shape_nvf_grid_size=grid,structure=[dict(background=1.,shapes=shapes)])
                 with patch.object(P,'to_conv_mat_parametric_nvf',matrices):

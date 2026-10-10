@@ -120,7 +120,7 @@ def _probe_step():
 
     def step():
         t = torch.tensor(pattern, requires_grad=True)
-        out = wavebit.rcwa(backend=2, structure=t, **STRATEGIES['sampled'], **cfg).solve()
+        out = wavebit.rcwa(backend='torch', structure=t, **STRATEGIES['sampled'], **cfg).solve()
         out.incident.T.real.sum().backward()
 
     return step
@@ -167,7 +167,7 @@ def torch_grad(build, seed):
 
     def step():
         v = torch.tensor(np.asarray(seed, dtype=np.float64), requires_grad=True)
-        out = build(2, v).solve().incident.T.real.sum()
+        out = build('torch', v).solve().incident.T.real.sum()
         out.backward()
         return _fingerprint(v.grad.detach().numpy())
 
@@ -180,7 +180,7 @@ def jax_eager_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v):
-        return jnp.sum(build(1, v).solve().incident.T).real
+        return jnp.sum(build('jax', v).solve().incident.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
     g = jax.grad(loss)
@@ -199,10 +199,10 @@ def jax_jit_grad(build, seed):
     import jax.numpy as jnp
 
     def loss(v, geometry):
-        return jnp.sum(build(1, v).solve(geometry=geometry).incident.T).real
+        return jnp.sum(build('jax', v).solve(geometry=geometry).incident.T).real
 
     x = jnp.asarray(np.asarray(seed, dtype=np.float64))
-    freeze = lambda: build(1, x).freeze_geometry()
+    freeze = lambda: build('jax', x).freeze_geometry()
     g = jax.jit(jax.grad(loss), static_argnums=1)
 
     jax.clear_caches()
@@ -333,11 +333,11 @@ def sweep_recompile(budget, reps):
                                          angle=0.27, material=EPS_MID)])]
 
     def loss(v, geometry):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
+        return jnp.sum(wavebit.rcwa(backend='jax', structure=make(v), **cfg)
                        .solve(geometry=geometry).T).real
 
     g = jax.jit(jax.grad(loss), static_argnums=1)
-    freeze = lambda lx: wavebit.rcwa(backend=1, structure=make(jnp.asarray(lx)),
+    freeze = lambda lx: wavebit.rcwa(backend='jax', structure=make(jnp.asarray(lx)),
                                      **cfg).freeze_geometry()
     jax.clear_caches()
     out = []
@@ -398,9 +398,9 @@ def sweep_decomposition(budget, reps):
         if not budget.can_afford(90):
             break
         row = {'truncation_order': truncation_order, 'shape_nvf_grid_size': shape_nvf_grid_size}
-        for name, backend in (('torch', 2), ('jax', 1)):
+        for name in ('torch', 'jax'):
             try:
-                row[name] = decompose(backend, truncation_order, shape_nvf_grid_size, reps)
+                row[name] = decompose(name, truncation_order, shape_nvf_grid_size, reps)
             except Exception as exc:                   # a backend that cannot run says so
                 row[name] = {'error': f'{type(exc).__name__}: {str(exc)[:80]}'}
         out.append(row)
@@ -427,11 +427,11 @@ def sweep_recompile_shapes(budget, reps):
 
     def one(make, values, label):
         def loss(v, geometry):
-            return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
+            return jnp.sum(wavebit.rcwa(backend='jax', structure=make(v), **cfg)
                            .solve(geometry=geometry).T).real
 
         g = jax.jit(jax.grad(loss), static_argnums=1)
-        freeze = lambda v: wavebit.rcwa(backend=1, structure=make(jnp.asarray(v)),
+        freeze = lambda v: wavebit.rcwa(backend='jax', structure=make(jnp.asarray(v)),
                                         **cfg).freeze_geometry()
         jax.clear_caches()
         rows = []

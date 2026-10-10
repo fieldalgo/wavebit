@@ -10,13 +10,13 @@ CFG = dict(period=(1800., 900.), wavelength=900.,
            truncation_order=(1, 0), theta=.13, tetm='tm', answers='field')
 
 
-def solver(backend=1, **kwargs):
+def solver(backend='jax', **kwargs):
     cfg = dict(CFG, excitation={0: 1., 1: .4j}) | kwargs
     return wavebit.rcwa(backend=backend, **cfg)
 
 
 def value(excitation, thickness=170.):
-    return float(solver(0, excitation=excitation, thickness=(thickness,)).solve().T.sum().real)
+    return float(solver('numpy', excitation=excitation, thickness=(thickness,)).solve().T.sum().real)
 
 
 def differences(excitation):
@@ -33,7 +33,7 @@ def differences(excitation):
     return result
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('precision', [0, 1])
 @pytest.mark.parametrize('amplitude', [1, 1., .4j])
 def test_weights_have_the_solvers_complex_precision(backend, precision, amplitude):
@@ -119,14 +119,14 @@ def test_custom_in_place_excitation_edits_restore_the_original_dictionary(door, 
 def test_torch_excitation_conversion_preserves_the_callers_complex_leaf():
     torch = pytest.importorskip('torch')
     amplitude = torch.tensor(.4+.3j, dtype=torch.complex128, requires_grad=True)
-    s = solver(2, excitation={0: 1, 1: amplitude})
+    s = solver('torch', excitation={0: 1, 1: amplitude})
     s.solve().T.sum().real.backward()
     expected = differences({0: 1., 1: .4+.3j})[1]
     assert abs(expected) > 1e-6
     assert complex(amplitude.grad) == pytest.approx(expected, abs=2e-9, rel=2e-6)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('initial', [0, 1])
 def test_weight_precision_follows_a_later_precision_assignment(backend, initial):
     s = solver(backend, complex_dtype=initial, excitation={0: 1, 1: .5j})

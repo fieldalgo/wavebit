@@ -88,16 +88,16 @@ def bench_tilted_dielectric():
         cell = np.where((np.abs(u) <= L / 2) & (np.abs(v) <= L / 2), eps_r, 1.0)
         return cell[None]
 
-    ref, _ = solve(0, analytic, 16, **cfg)
+    ref, _ = solve('numpy', analytic, 16, **cfg)
     print("\n" + "=" * 74)
     print(f"[1] Dielectric tilted square (30 deg, n={NR}, TM subwavelength)")
     print(f"    reference t0 (analytic truncation_order=16) = {ref:.6f}")
     print(f"    {'truncation_order':>3} | {'analytic |err|':>14} | {'raster 64px':>13} | {'raster 256px':>14}")
     lo, hi = stair(64), stair(256)
     for truncation_order in (3, 5, 7, 9, 11):
-        a, _ = solve(0, analytic, truncation_order, **cfg)
-        s8, _ = solve(0, lo, truncation_order, **cfg)
-        s24, _ = solve(0, hi, truncation_order, **cfg)
+        a, _ = solve('numpy', analytic, truncation_order, **cfg)
+        s8, _ = solve('numpy', lo, truncation_order, **cfg)
+        s24, _ = solve('numpy', hi, truncation_order, **cfg)
         print(f"    {truncation_order:>3} | {abs(a - ref):14.2e} | {abs(s8 - ref):13.2e} | {abs(s24 - ref):14.2e}")
 
 
@@ -113,16 +113,16 @@ def bench_metallic_circle():
     analytic = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
                                                   lx=2 * R,
                                                   material=wavebit.eps_from_index(NM))])]
-    ref, _ = solve(0, analytic, 16, **cfg)
+    ref, _ = solve('numpy', analytic, 16, **cfg)
     print("\n" + "=" * 74)
     print(f"[2] Metallic circle (n={NM}, R={R}, TM subwavelength)")
     print(f"    reference t0 (analytic truncation_order=16) = {ref:.6f}")
     print(f"    {'truncation_order':>3} | {'analytic-NVF':>13} | {'raster-NVF':>12} | {'raster-sampled':>14}")
     for truncation_order in (3, 5, 7, 9, 11):
-        a, _ = solve(0, analytic, truncation_order, **cfg)
+        a, _ = solve('numpy', analytic, truncation_order, **cfg)
         ras = make_circle_raster(240, R, NM)
-        nvf, _ = solve(0, ras, truncation_order, factorization='nvf', **cfg)
-        dfs, _ = solve(0, ras, truncation_order, **cfg)
+        nvf, _ = solve('numpy', ras, truncation_order, factorization='nvf', **cfg)
+        dfs, _ = solve('numpy', ras, truncation_order, **cfg)
         print(f"    {truncation_order:>3} | {abs(a - ref):13.2e} | {abs(nvf - ref):12.2e} | {abs(dfs - ref):12.2e}")
 
 
@@ -148,9 +148,9 @@ def bench_energy_and_backends():
     print("[3] Lossless multi-shape / multi-layer: energy conservation + cross-backend")
     print(f"    {'truncation_order':>3} | {'|R+T-1|':>10} | {'numpy t0':>10} {'jax t0':>10} {'torch t0':>10}")
     for truncation_order in (5, 8):
-        tn, en = solve(0, structure, truncation_order, **cfg)
-        tj, _ = solve(1, structure, truncation_order, **cfg)
-        tt, _ = solve(2, structure, truncation_order, **cfg)
+        tn, en = solve('numpy', structure, truncation_order, **cfg)
+        tj, _ = solve('jax', structure, truncation_order, **cfg)
+        tt, _ = solve('torch', structure, truncation_order, **cfg)
         print(f"    {truncation_order:>3} | {abs(en - 1):10.2e} | {tn:10.6f} {tj:10.6f} {tt:10.6f}"
               f"   (|np-jax|={abs(tn - tj):.1e}, |np-torch|={abs(tn - tt):.1e})")
 

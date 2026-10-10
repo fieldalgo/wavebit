@@ -39,7 +39,7 @@ DECIDES_NOTHING = [DEFAULT_STRATEGY, dict(fourier_coefficients='sampled', factor
 @pytest.mark.parametrize('strategy', STRATEGIES, ids=IDS)
 def test_frozen_geometry_does_not_change_the_answer(strategy):
     """Freezing is an optimization, not a different computation."""
-    solver = wavebit.rcwa(backend=0, structure=STRUCTURE, **strategy, **KW)
+    solver = wavebit.rcwa(backend='numpy', structure=STRUCTURE, **strategy, **KW)
     auto = solver.solve()
     frozen = solver.solve(geometry=solver.freeze_geometry())
     assert np.array_equal(np.asarray(auto.incident.R), np.asarray(frozen.incident.R))
@@ -52,7 +52,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = wavebit.rcwa(backend=1, structure=STRUCTURE, **strategy, **KW)
+    solver = wavebit.rcwa(backend='jax', structure=STRUCTURE, **strategy, **KW)
     geometry = solver.freeze_geometry()
 
     def loss(u):
@@ -74,7 +74,7 @@ def test_jit_and_grad_through_the_public_api(strategy):
 
 def _jit_loss(**strategy):
     import jax.numpy as jnp
-    solver = wavebit.rcwa(backend=1, structure=STRUCTURE, **strategy, **KW)
+    solver = wavebit.rcwa(backend='jax', structure=STRUCTURE, **strategy, **KW)
     return lambda u: jnp.sum(solver.solve(structure=u).incident.T).real
 
 
@@ -112,7 +112,7 @@ def test_the_pairings_that_decide_nothing_need_no_frozen_geometry_at_all(strateg
 
     got = float(jax.jit(_jit_loss(**strategy))(jnp.asarray(STRUCTURE)))
     want = float(np.sum(np.asarray(
-        wavebit.rcwa(backend=0, structure=STRUCTURE, **strategy,
+        wavebit.rcwa(backend='numpy', structure=STRUCTURE, **strategy,
                        **KW).solve().incident.T).real))
     assert got == pytest.approx(want, abs=1e-10)
 
@@ -125,7 +125,7 @@ def test_freeze_geometry_reports_what_the_strategy_needs():
     singularity the convention merge had already removed.)
     """
     def geo(**strategy):
-        return wavebit.rcwa(backend=0, structure=STRUCTURE, **strategy, **KW).freeze_geometry()
+        return wavebit.rcwa(backend='numpy', structure=STRUCTURE, **strategy, **KW).freeze_geometry()
 
     default = geo()
     assert default.normal_field is None and default.compression is None
@@ -187,14 +187,14 @@ def test_a_frozen_geometry_makes_a_shape_parameter_traceable(name, make, start):
     cfg = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[3, 3], top=1.0, bot=1.0,
                theta=0.15, phi=0.35, psi=np.pi / 2, wavelength=900.0)
     x = jnp.asarray(start)
-    frozen = wavebit.rcwa(backend=1, structure=make(x), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend='jax', structure=make(x), **cfg).freeze_geometry()
     # A painted, overlapping layer records its polygon plan; a disjoint one has no discrete
     # decision in it and records nothing. Either way the freeze is what makes the trace legal.
     if 'overlapping' in name:
         assert frozen.boundary_plans is not None, 'the polygon plan was not recorded'
 
     def total(v):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=make(v), **cfg)
+        return jnp.sum(wavebit.rcwa(backend='jax', structure=make(v), **cfg)
                        .solve(geometry=frozen).T).real
 
     eager = float(total(x))
@@ -248,10 +248,10 @@ def test_a_stale_frozen_geometry_is_refused_rather_than_answered():
              material=9.0)])]
 
     def total(lx, geometry=None):
-        return float(jnp.sum(wavebit.rcwa(backend=1, structure=make(lx), **cfg)
+        return float(jnp.sum(wavebit.rcwa(backend='jax', structure=make(lx), **cfg)
                              .solve(geometry=geometry).T).real)
 
-    frozen = wavebit.rcwa(backend=1, structure=make(jnp.asarray(80.0)), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend='jax', structure=make(jnp.asarray(80.0)), **cfg).freeze_geometry()
 
     for lx in (75.0, 65.0, 62.0):                  # still overlapping: accepted, and exact
         assert total(jnp.asarray(lx), frozen) == total(lx)
@@ -280,7 +280,7 @@ def _rod(width, height=10, eps_rod=12.25, eps_bg=1.0, n=20):
 
 
 def _de_ti(structure, strategy, geometry=None):
-    solver = wavebit.rcwa(backend=0, structure=structure, **strategy, **RASTER_KW)
+    solver = wavebit.rcwa(backend='numpy', structure=structure, **strategy, **RASTER_KW)
     return np.asarray(solver.solve(geometry=geometry).incident.T).real
 
 
@@ -304,7 +304,7 @@ def test_a_stale_raster_record_is_refused_rather_than_answered(strategy):
     does: refused where the record no longer
     fits, and exact where it is accepted, so the check is not merely conservative.
     """
-    frozen = wavebit.rcwa(backend=0, structure=_rod(6), **strategy,
+    frozen = wavebit.rcwa(backend='numpy', structure=_rod(6), **strategy,
                             **RASTER_KW).freeze_geometry()
 
     for width in (7, 8, 10, 14):                   # the pattern moved: refused, not answered
@@ -337,7 +337,7 @@ def test_a_compression_that_still_separates_the_blocks_is_kept():
             cell[0, split:, k * width:(k + 1) * width] = 0.5 * v + 0.5
         return cell
 
-    frozen = wavebit.rcwa(backend=0, structure=stripes([1.0, 2.0, 3.0, 4.0]),
+    frozen = wavebit.rcwa(backend='numpy', structure=stripes([1.0, 2.0, 3.0, 4.0]),
                             fourier_coefficients='integrated',
                             **RASTER_KW).freeze_geometry()
 
@@ -367,10 +367,10 @@ def test_a_one_cell_axis_makes_every_same_shape_replay_valid():
         cell[0, 0, :width] = 12.25
         return cell
 
-    frozen = wavebit.rcwa(backend=0, structure=grating(8), factorization='nvf',
+    frozen = wavebit.rcwa(backend='numpy', structure=grating(8), factorization='nvf',
                             **cfg).freeze_geometry()
     for width in (8, 10, 14):
-        solvers = [wavebit.rcwa(backend=0, structure=grating(width), factorization='nvf',
+        solvers = [wavebit.rcwa(backend='numpy', structure=grating(width), factorization='nvf',
                                   **cfg) for _ in range(2)]
         replayed = np.asarray(solvers[0].solve(geometry=frozen).incident.T)
         assert np.array_equal(replayed, np.asarray(solvers[1].solve().incident.T))
@@ -386,11 +386,11 @@ def test_a_traced_replay_carries_no_check():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = wavebit.rcwa(backend=0, structure=_rod(6), factorization='nvf', **RASTER_KW)
+    solver = wavebit.rcwa(backend='numpy', structure=_rod(6), factorization='nvf', **RASTER_KW)
     frozen = solver.freeze_geometry()
     assert frozen.normal_field_source is not None, 'the tell was not recorded'
 
-    jax_solver = wavebit.rcwa(backend=1, structure=_rod(6), factorization='nvf',
+    jax_solver = wavebit.rcwa(backend='jax', structure=_rod(6), factorization='nvf',
                                 **RASTER_KW)
 
     def total(u):
@@ -422,9 +422,9 @@ def test_the_jitted_field_door_refuses_a_stale_raster_record_too(strategy):
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    frozen = wavebit.rcwa(backend=1, structure=_rod(6), **strategy,
+    frozen = wavebit.rcwa(backend='jax', structure=_rod(6), **strategy,
                           **RASTER_KW).freeze_geometry()
-    solver = wavebit.rcwa(backend=1, structure=_rod(6), answers='field', **strategy,
+    solver = wavebit.rcwa(backend='jax', structure=_rod(6), answers='field', **strategy,
                           **RASTER_KW)
 
     for width in (8, 14):
@@ -433,7 +433,7 @@ def test_the_jitted_field_door_refuses_a_stale_raster_record_too(strategy):
 
     cell = _rod(6, eps_rod=4.0)
     got, _ = solver.solve_field(4, 4, 2, geometry=frozen, structure=cell)
-    want = np.asarray(wavebit.rcwa(backend=1, structure=cell, **strategy,
+    want = np.asarray(wavebit.rcwa(backend='jax', structure=cell, **strategy,
                                    **RASTER_KW).solve().incident.T)
     assert np.abs(np.asarray(got.incident.T) - want).max() < 1e-12
 
@@ -465,7 +465,7 @@ def test_retained_solve_tracers_do_not_hide_a_concrete_stale_record(transform, q
     material = 12.25 if quantity == 'structure' else 1.7
     if quantity == 'mu':
         kw['mu'] = _rod(2, height=4, n=8, eps_rod=material)
-    solver = wavebit.rcwa(backend=1, **kw, **strategy)
+    solver = wavebit.rcwa(backend='jax', **kw, **strategy)
     frozen = solver.freeze_geometry()
 
     def total(wavelength):
@@ -477,7 +477,7 @@ def test_retained_solve_tracers_do_not_hide_a_concrete_stale_record(transform, q
         solver.solve_field(2, 2, 2, geometry=frozen, **moved)
 
     result, field = solver.solve_field(2, 2, 2, geometry=solver.freeze_geometry())
-    fresh = wavebit.rcwa(backend=1, **(kw | moved), **strategy)
+    fresh = wavebit.rcwa(backend='jax', **(kw | moved), **strategy)
     expected, expected_field = fresh.solve_field_eager(2, 2, 2)
     np.testing.assert_allclose(result.T, expected.T, atol=1e-11, rtol=0)
     np.testing.assert_allclose(field, expected_field, atol=1e-10, rtol=0)
@@ -493,9 +493,9 @@ def test_the_jitted_field_door_checks_the_permeability_records_beside_the_permit
     wavebit.enable_x64()
     kw = dict(structure=_rod(6), factorization='nvf', answers='field', **RASTER_KW)
     mu = _rod(6, eps_rod=1.7)
-    frozen = wavebit.rcwa(backend=1, mu=mu, **kw).freeze_geometry()
+    frozen = wavebit.rcwa(backend='jax', mu=mu, **kw).freeze_geometry()
     assert frozen.mu_normal_field_source is not None
-    solver = wavebit.rcwa(backend=1, mu=mu, **kw)
+    solver = wavebit.rcwa(backend='jax', mu=mu, **kw)
     with pytest.raises(wavebit.StaleGeometryError, match='no longer fits'):
         solver.solve_field(4, 4, 2, geometry=frozen, mu=_rod(12, eps_rod=1.7))
     solver.solve_field(4, 4, 2, geometry=frozen, mu=_rod(6, eps_rod=1.3))
@@ -514,7 +514,7 @@ def test_a_normal_field_frozen_on_one_size_of_a_cell_replays_on_another():
     eps = np.where(np.random.default_rng(0).random((1, 8, 8)) < 0.4, 5.76, 1.0)
 
     def solver(cell):
-        return wavebit.rcwa(backend=0, lattice=cell, structure=eps, truncation_order=[2, 2],
+        return wavebit.rcwa(backend='numpy', lattice=cell, structure=eps, truncation_order=[2, 2],
                             thickness=[300.0], wavelength=900.0, theta=0.2, phi=0.1, psi=0.3,
                             factorization='nvf')
 
@@ -547,7 +547,7 @@ def test_the_compression_decides_itself_inside_a_gradient():
     import jax.numpy as jnp
 
     def total(u):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=u, **INTEGRATED_STRATEGY, **KW)
+        return jnp.sum(wavebit.rcwa(backend='jax', structure=u, **INTEGRATED_STRATEGY, **KW)
                        .solve().incident.T).real
 
     grad = np.asarray(jax.grad(total)(jnp.asarray(STRUCTURE)))
@@ -575,7 +575,7 @@ def test_a_moving_pattern_needs_no_record_on_the_compression_path():
     design = rng.random((1, 6, 6)) < 0.4
 
     def total(u):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=u, **INTEGRATED_STRATEGY, **KW)
+        return jnp.sum(wavebit.rcwa(backend='jax', structure=u, **INTEGRATED_STRATEGY, **KW)
                        .solve().incident.T).real
 
     for flips in (0, 2, 4):
@@ -614,7 +614,7 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
     for strategy in (dict(fourier_coefficients='sampled', factorization='nvf'),
                      dict(fourier_coefficients='integrated', factorization='nvf')):
         def total(u):
-            return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
+            return jnp.sum(wavebit.rcwa(backend='jax', structure=u, **strategy, **KW)
                            .solve().incident.T).real
 
         grad = np.asarray(jax.grad(total)(jnp.asarray(STRUCTURE)))
@@ -622,11 +622,11 @@ def test_the_normal_field_decides_itself_inside_a_gradient_too():
 
         # Deriving the mask instead of reading it is meant to be the same mask, so the frozen
         # and unfrozen paths must not merely agree -- they must be the same computation.
-        solver = wavebit.rcwa(backend=1, structure=STRUCTURE, **strategy, **KW)
+        solver = wavebit.rcwa(backend='jax', structure=STRUCTURE, **strategy, **KW)
         frozen = solver.freeze_geometry()
 
         def total_frozen(u):
-            return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
+            return jnp.sum(wavebit.rcwa(backend='jax', structure=u, **strategy, **KW)
                            .solve(geometry=frozen).incident.T).real
 
         assert np.array_equal(grad, np.asarray(jax.grad(total_frozen)(jnp.asarray(STRUCTURE))))
@@ -653,7 +653,7 @@ def test_the_nvf_gradient_holds_the_interfaces_fixed():
     structure = np.where(rng.random((1, 8, 8)) < 0.35, 12.25, 1.0)
 
     def total(u):
-        return jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy, **KW)
+        return jnp.sum(wavebit.rcwa(backend='jax', structure=u, **strategy, **KW)
                        .solve().incident.T).real
 
     def mask_size(u):
@@ -724,7 +724,7 @@ def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilatio
              material=6.25)])]
 
     def freeze_at(lx):
-        return wavebit.rcwa(backend=1, structure=make(jnp.asarray(lx)), **cfg).freeze_geometry()
+        return wavebit.rcwa(backend='jax', structure=make(jnp.asarray(lx)), **cfg).freeze_geometry()
 
     keys = {lx: freeze_at(lx) for lx in (80.0, 100.0, 118.0, 120.0, 122.0, 140.0, 180.0)}
 
@@ -750,7 +750,7 @@ def test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilatio
 
     # And the answer is the one for the structure actually in front of it, each time.
     def total(lx, geometry):
-        return float(jnp.sum(wavebit.rcwa(backend=1, structure=make(lx), **cfg)
+        return float(jnp.sum(wavebit.rcwa(backend='jax', structure=make(lx), **cfg)
                              .solve(geometry=geometry).T).real)
 
     for lx, key in ((100.0, keys[80.0]), (140.0, keys[122.0])):
@@ -774,7 +774,7 @@ def _painted(cx, material=EPS_A):
 
 
 def _painted_t(cx, frozen=None, material=EPS_A):
-    solver = wavebit.rcwa(backend=0, structure=_painted(cx, material), **PAINT_KW)
+    solver = wavebit.rcwa(backend='numpy', structure=_painted(cx, material), **PAINT_KW)
     return np.asarray(solver.solve(geometry=frozen).T)
 
 
@@ -795,7 +795,7 @@ def test_a_stale_painting_plan_is_refused_rather_than_answered():
     (1.2% on one of ten overlapping shapes, less as ``truncation_order`` rises) -- the freeze here buys
     traceability rather than a speed plateau, so that is not what is being traded.
     """
-    frozen = wavebit.rcwa(backend=0, structure=_painted(-0.10), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend='numpy', structure=_painted(-0.10), **PAINT_KW).freeze_geometry()
     assert frozen.boundary_plans is not None, 'the plan was not recorded'
 
     for cx in (-0.10, -0.095, -0.08, -0.05, 0.00):  # moved, same overlap: accepted, and exact
@@ -822,10 +822,10 @@ def test_the_painting_plan_check_is_skipped_under_a_trace_too():
     import jax.numpy as jnp
 
     def total(cx, frozen):
-        solver = wavebit.rcwa(backend=1, structure=_painted(cx), **PAINT_KW)
+        solver = wavebit.rcwa(backend='jax', structure=_painted(cx), **PAINT_KW)
         return jnp.sum(solver.solve(geometry=frozen).T).real
 
-    frozen = wavebit.rcwa(backend=1, structure=_painted(-0.10), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend='jax', structure=_painted(-0.10), **PAINT_KW).freeze_geometry()
 
     with pytest.raises(wavebit.StaleGeometryError):        # eagerly, jax converts: checked
         total(0.25, frozen)
@@ -856,11 +856,11 @@ def test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it()
     identical and only the loop assignment differs, so a check that compared the table alone
     would pass all three of those and answer with a circle that is not in the layer.
     """
-    frozen = wavebit.rcwa(backend=0, structure=_hidden(-0.12), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend='numpy', structure=_hidden(-0.12), **PAINT_KW).freeze_geometry()
     assert frozen.boundary_plans[0][1][0] == [], 'the covered shape was expected to have no loops'
 
     def total(cx, geometry=None, material=4.0):
-        solver = wavebit.rcwa(backend=0, structure=_hidden(cx, material), **PAINT_KW)
+        solver = wavebit.rcwa(backend='numpy', structure=_hidden(cx, material), **PAINT_KW)
         return np.asarray(solver.solve(geometry=geometry).T)
 
     for cx in (-0.12, -0.10):                      # still covered: accepted, and exact
@@ -892,11 +892,11 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
     caller was already inside. Nothing in it mentioned the frozen record or said to re-freeze,
     and the same call without ``geometry=`` returns 0.933226529 quite happily.
     """
-    frozen = wavebit.rcwa(backend=0, structure=_disjoint(0.129), **PAINT_KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend='numpy', structure=_disjoint(0.129), **PAINT_KW).freeze_geometry()
     assert frozen.boundary_plans == [None], 'the layer was expected to be recorded as disjoint'
 
     def total(cx, geometry=None):
-        solver = wavebit.rcwa(backend=0, structure=_disjoint(cx), **PAINT_KW)
+        solver = wavebit.rcwa(backend='numpy', structure=_disjoint(cx), **PAINT_KW)
         return np.asarray(solver.solve(geometry=geometry).T)
 
     for cx in (0.129, 0.10, 0.20):                 # still disjoint: accepted, and exact
@@ -915,10 +915,10 @@ def test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too():
     import jax.numpy as jnp
 
     def traced_total(cx):
-        solver = wavebit.rcwa(backend=1, structure=_disjoint(cx), **PAINT_KW)
+        solver = wavebit.rcwa(backend='jax', structure=_disjoint(cx), **PAINT_KW)
         return jnp.sum(solver.solve(geometry=frozen_jax).T).real
 
-    frozen_jax = wavebit.rcwa(backend=1, structure=_disjoint(0.129), **PAINT_KW).freeze_geometry()
+    frozen_jax = wavebit.rcwa(backend='jax', structure=_disjoint(0.129), **PAINT_KW).freeze_geometry()
     assert frozen_jax.boundary_plans == [None]
     assert np.isfinite(float(jax.jit(traced_total)(jnp.asarray(0.129))))
     assert np.isfinite(float(jax.grad(traced_total)(jnp.asarray(0.129))))
@@ -951,11 +951,11 @@ def test_freeze_geometry_runs_the_layer_refusals_it_is_named_for():
     it protects and cannot be asserted directly: with the freeze refusing, no record exists to
     hand it.
     """
-    solver = wavebit.rcwa(backend=0, structure=_oversized(), **_REFUSE_KW)
+    solver = wavebit.rcwa(backend='numpy', structure=_oversized(), **_REFUSE_KW)
     with pytest.raises(ValueError, match='larger than the period'):
         solver.freeze_geometry()
 
-    ok = wavebit.rcwa(backend=0, structure=_oversized(lx=120.0), **_REFUSE_KW)
+    ok = wavebit.rcwa(backend='numpy', structure=_oversized(lx=120.0), **_REFUSE_KW)
     assert ok.freeze_geometry().boundary_plans == [None]
 
 
@@ -969,7 +969,7 @@ def test_the_freeze_also_refuses_a_layer_key_nobody_reads():
     stale = [dict(background=1.0, combine='paint',
                   shapes=[dict(type='rectangle', cx=0.0, cy=0.0, lx=120.0, ly=120.0,
                                angle=0.0, material=4.0)])]
-    solver = wavebit.rcwa(backend=0, structure=stale, **_REFUSE_KW)
+    solver = wavebit.rcwa(backend='numpy', structure=stale, **_REFUSE_KW)
     with pytest.raises(ValueError, match="'combine'"):
         solver.freeze_geometry()
 
@@ -982,13 +982,13 @@ def test_the_renderer_refuses_what_the_solver_refuses():
     layers exist. Only the layer asked for is checked: drawing layer 0 must not be stopped by
     something wrong with layer 3.
     """
-    solver = wavebit.rcwa(backend=0, structure=_oversized(), **_REFUSE_KW)
+    solver = wavebit.rcwa(backend='numpy', structure=_oversized(), **_REFUSE_KW)
     with pytest.raises(ValueError, match='larger than the period'):
         solver.slice_structure(n=32)
 
     good = dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0, lx=120.0,
                                              ly=120.0, angle=0.0, material=4.0)])
-    mixed = wavebit.rcwa(backend=0, structure=[good, _oversized()[0]],
+    mixed = wavebit.rcwa(backend='numpy', structure=[good, _oversized()[0]],
                          **dict(_REFUSE_KW, thickness=(205.0, 205.0)))
     assert mixed.slice_structure(layer=0, n=32).real.mean() > 1.0
     with pytest.raises(ValueError, match='larger than the period'):
@@ -1010,15 +1010,15 @@ def test_a_raster_record_is_refused_under_another_rule(held, now, coefficients):
     normal field, NVF's both. Replayed under the other rule, the build found its slot empty and
     rebuilt it eagerly -- or, under ``jax.jit``, had nothing to build from. It is stamped with
     its rule now, and a mismatch is refused by name, on the solve and on the per-call door."""
-    record = wavebit.rcwa(backend=0, structure=STRUCTURE, fourier_coefficients=coefficients,
+    record = wavebit.rcwa(backend='numpy', structure=STRUCTURE, fourier_coefficients=coefficients,
                           factorization=held, **KW).freeze_geometry()
     assert record.factorization == held
-    solver = wavebit.rcwa(backend=0, structure=STRUCTURE, fourier_coefficients=coefficients,
+    solver = wavebit.rcwa(backend='numpy', structure=STRUCTURE, fourier_coefficients=coefficients,
                           factorization=now, **KW)
     with pytest.raises(wavebit.StaleGeometryError, match=rf"taken under factorization='{held}' and is "
                                                  rf"being replayed under factorization='{now}'"):
         solver.solve(geometry=record)
-    same = wavebit.rcwa(backend=0, structure=STRUCTURE, fourier_coefficients=coefficients,
+    same = wavebit.rcwa(backend='numpy', structure=STRUCTURE, fourier_coefficients=coefficients,
                         factorization=held, **KW)
     with pytest.raises(wavebit.StaleGeometryError, match=f"replayed under factorization='{now}'"):
         same.eps_conv_matrices(geometry=record, factorization=now)
@@ -1030,19 +1030,19 @@ def test_a_raster_record_is_refused_under_another_rule(held, now, coefficients):
 def test_a_shape_record_is_refused_under_another_rule(held, now):
     """The parametric path refused this already, by testing ``rectilinear_plans`` for ``None``;
     the stamp says it in one place for both paths and names both rules."""
-    record = wavebit.rcwa(backend=0, structure=_BOX, factorization=held,
+    record = wavebit.rcwa(backend='numpy', structure=_BOX, factorization=held,
                           **KW).freeze_geometry()
     with pytest.raises(wavebit.StaleGeometryError, match=rf"taken under factorization='{held}'"):
-        wavebit.rcwa(backend=0, structure=_BOX, factorization=now, **KW).solve(geometry=record)
+        wavebit.rcwa(backend='numpy', structure=_BOX, factorization=now, **KW).solve(geometry=record)
 
 
 def test_the_stamp_is_checked_inside_a_trace_too():
     """A string, not a value: ``jax.jit`` cannot hide it, so a traced replay is refused as an
     eager one is -- which the slot tests the stamp replaces could not do."""
     jax = pytest.importorskip('jax')
-    record = wavebit.rcwa(backend=1, structure=STRUCTURE, fourier_coefficients='integrated',
+    record = wavebit.rcwa(backend='jax', structure=STRUCTURE, fourier_coefficients='integrated',
                           **KW).freeze_geometry()
-    solver = wavebit.rcwa(backend=1, structure=STRUCTURE, fourier_coefficients='integrated',
+    solver = wavebit.rcwa(backend='jax', structure=STRUCTURE, fourier_coefficients='integrated',
                           factorization='nvf', **KW)
     with pytest.raises(wavebit.StaleGeometryError, match="factorization='li'"):
         jax.jit(lambda s: s.solve(geometry=record).T)(solver)
@@ -1050,7 +1050,7 @@ def test_the_stamp_is_checked_inside_a_trace_too():
 
 def test_a_hand_built_record_carries_no_stamp_and_replays_on_trust():
     from wavebit._core.geometry import StaticGeometry
-    solver = wavebit.rcwa(backend=0, structure=STRUCTURE, **KW)
+    solver = wavebit.rcwa(backend='numpy', structure=STRUCTURE, **KW)
     assert StaticGeometry().factorization is None
     assert np.array_equal(np.asarray(solver.solve(geometry=StaticGeometry()).incident.T),
                           np.asarray(solver.solve().incident.T))

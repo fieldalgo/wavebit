@@ -11,7 +11,7 @@ def host(a):
     return np.asarray(a.detach().cpu() if hasattr(a,'detach') else a)
 
 
-def solver(backend=0, width=217., shape='circle', n=24, **kw):
+def solver(backend='numpy', width=217., shape='circle', n=24, **kw):
     options = dict(wavelength=730.,period=(600.,600.),thickness=[173.],
                    truncation_order=(1,1),shape_nvf_grid_size=n,theta=.23,phi=.19,
                    structure=[dict(background=1.,shapes=[dict(type=shape,lx=width,
@@ -70,7 +70,7 @@ def test_stripe_matches_exact_tensor_pn_series(n):
         np.testing.assert_allclose(actual[0],want,atol=2e-12)
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 def test_default_integrated_and_explicit_sampled(backend):
     integrated=solver(backend=backend).solve(auto_detune=False)
     expected=solver().solve(auto_detune=False)
@@ -94,12 +94,12 @@ def test_rigid_translation_is_covariant(shape):
     for a,b in zip(moved,base):np.testing.assert_allclose(a,b*phase,atol=3e-12)
 
 
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_shape_width_gradient_survives_a_subpixel_change(backend):
     frozen=solver(backend=backend).freeze_geometry()
     def f(w):
         return solver(backend=backend,width=w).solve(geometry=frozen,auto_detune=False).R.sum()
-    if backend==1:
+    if backend=='jax':
         import jax
         derivative=jax.jit(jax.grad(f))(217.)
     else:
@@ -157,13 +157,13 @@ def test_magnetic_tensor_uses_its_own_region_values():
     for e,m in zip(a.eps_conv_matrices(),b.mu_conv_matrices()):np.testing.assert_allclose(e,m,atol=2e-12)
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 def test_painted_curve_agrees_across_backends(backend):
     shapes=[dict(type='rectangle',lx=240.,ly=220.,material=wavebit.Material([2.,3.,4.])),
             dict(type='circle',lx=180.,cx=90.,cy=30.,material=wavebit.Material([3.,4.,2.]))]
     def build(b):
         return solver(backend=b,structure=[dict(background=1.,shapes=shapes)],n=12).eps_conv_matrices()
-    expected=build(0)
+    expected=build('numpy')
     for a,b in zip(build(backend),expected):np.testing.assert_allclose(host(a),b,atol=3e-12)
 
 
@@ -177,7 +177,7 @@ def test_painted_shape_and_cell_gradients(parameter,value):
                      material=wavebit.Material([2.,3.,4.]).rotated(.2)),
                 dict(type='rectangle',lx=130.,ly=140.,cx=p['x'],cy=50.,
                      material=wavebit.Material(jnp.stack([p['epsilon'],p['epsilon']*0+2.,p['epsilon']*0+3.])))]
-        return solver(backend=1,structure=[dict(background=1.,shapes=shapes)],
+        return solver(backend='jax',structure=[dict(background=1.,shapes=shapes)],
                       period=(p['period'],600.),n=12)
     frozen=make(value).freeze_geometry()
     def f(v):return make(v).solve(geometry=frozen,auto_detune=False).R.sum()

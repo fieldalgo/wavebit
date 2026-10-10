@@ -73,7 +73,7 @@ def test_public_shape_gradient_is_finite_and_correct_at_an_ellipse_grid_hit(back
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
         wavebit.enable_x64()
-    s = solver(2 if backend == 'torch' else 1, magnetic)
+    s = solver('torch' if backend == 'torch' else 'jax', magnetic)
     geometry = s.freeze_geometry() if backend == 'jit' else None
     plan = plan_gamma(structure(POINT, magnetic)[0]['shapes'], as_lattice(lattice=BASIS))
     assert len(plan.pieces[0].imgs) > 1
@@ -83,15 +83,15 @@ def test_public_shape_gradient_is_finite_and_correct_at_an_ellipse_grid_hit(back
     np.testing.assert_array_equal(BASIS@np.array([u+1, v]), [393.75, 0.])
     value, gradient = value_and_gradient(backend,
         lambda xp, p: objective(s, xp, p, magnetic, geometry), POINT)
-    expected_value = objective(solver(0, magnetic), np, POINT, magnetic)
+    expected_value = objective(solver('numpy', magnetic), np, POINT, magnetic)
     assert value == pytest.approx(expected_value, rel=2e-11, abs=2e-11)
     expected = []
     for i, h in enumerate([.01, .002, 1e-5]):
         plus, minus = POINT.copy(), POINT.copy()
         plus[i] += h
         minus[i] -= h
-        expected.append((objective(solver(0, magnetic), np, plus, magnetic)
-                         -objective(solver(0, magnetic), np, minus, magnetic))/(2*h))
+        expected.append((objective(solver('numpy', magnetic), np, plus, magnetic)
+                         -objective(solver('numpy', magnetic), np, minus, magnetic))/(2*h))
     np.testing.assert_allclose(gradient, expected, rtol=5e-5, atol=2e-8)
     assert np.linalg.norm(expected) > 1e-5
 
@@ -100,7 +100,7 @@ def test_one_compiled_gradient_handles_repeated_boundary_crossings():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    s = solver(1, False)
+    s = solver('jax', False)
     geometry = s.freeze_geometry()
     calculate = jax.jit(jax.value_and_grad(
         lambda p: objective(s, jnp, p, False, geometry)))
@@ -109,12 +109,12 @@ def test_one_compiled_gradient_handles_repeated_boundary_crossings():
             point = POINT.copy()
             point[0] = width
             value, gradient = calculate(jnp.asarray(point))
-            expected_value = objective(solver(0, False), np, point, False)
+            expected_value = objective(solver('numpy', False), np, point, False)
             assert float(value) == pytest.approx(expected_value, abs=2e-11)
             plus, minus = point.copy(), point.copy()
             plus[0] += .001
             minus[0] -= .001
-            fd = (objective(solver(0, False), np, plus, False)
-                  -objective(solver(0, False), np, minus, False))/.002
+            fd = (objective(solver('numpy', False), np, plus, False)
+                  -objective(solver('numpy', False), np, minus, False))/.002
             assert np.isfinite(np.asarray(gradient)).all()
             assert float(gradient[0]) == pytest.approx(fd, rel=5e-5, abs=2e-8)

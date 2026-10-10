@@ -168,7 +168,7 @@ def test_factorization_feeds_solve_bit_exactly():
     # boundary and takes a permittivity, converting once in the `top` / `bot` setters.
     eps_top, eps_bot = n_top ** 2, n_bot ** 2
 
-    solver = wavebit.rcwa(backend=0, top=eps_top, bot=eps_bot, theta=theta, phi=None,
+    solver = wavebit.rcwa(backend='numpy', top=eps_top, bot=eps_bot, theta=theta, phi=None,
                           tetm='te',
                           truncation_order=truncation_order, period=period, wavelength=wl, thickness=thickness, structure=structure)
     legacy = solver.solve()
@@ -199,7 +199,7 @@ def test_end_to_end_gradient_wrt_structure_1d():
     direction = np.ones_like(structure)
     truncation_order = [6, 0]
     # top: eps 4.0 is the index 2.0 the `_chain_1d` core call below still takes.
-    solver = wavebit.rcwa(backend=0, top=4.0, bot=1.0, theta=0.3, phi=None, tetm='te',
+    solver = wavebit.rcwa(backend='numpy', top=4.0, bot=1.0, theta=0.3, phi=None, tetm='te',
                           truncation_order=truncation_order, period=[0.77], wavelength=0.777, thickness=[0.15], structure=structure)
     kx, _ = solver.order_kxy()
     theta = complex(solver.theta)
@@ -233,7 +233,7 @@ def test_end_to_end_gradient_wrt_structure_2d():
     direction = np.ones_like(structure)
     truncation_order = [1, 1]
     wl, n_top, n_bot = 0.9, 1.0, 1.0
-    solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = wavebit.rcwa(backend='numpy', top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           truncation_order=truncation_order, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], structure=structure)
     kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
@@ -298,7 +298,7 @@ def test_nvf_permittivity_inputs_are_the_exact_ones(case):
 def test_nvf_runs_on_every_backend(case, backend):
     """NVF on jax / torch — a capability the legacy per-backend builders never had.
 
-    ``rcwa(backend=1|2, factorization='nvf')`` raises ValueError on the legacy path; the
+    ``rcwa(backend='jax'|'torch', factorization='nvf')`` raises ValueError on the legacy path; the
     single-source builder makes the same factorization available on all three.
     """
     pytest.importorskip(backend)
@@ -312,16 +312,16 @@ def test_nvf_runs_on_every_backend(case, backend):
 def test_nvf_now_works_on_every_backend():
     """NVF used to be NumPy-only; solve now routes every backend through the core.
 
-    ``rcwa(backend=1|2, factorization='nvf')`` raised ValueError before the factorization was
+    ``rcwa(backend='jax'|'torch', factorization='nvf')`` raised ValueError before the factorization was
     wired — the per-backend builders simply had no NVF branch.
     """
     structure = _rand((1, 5, 5), 13)
     opts = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, truncation_order=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], structure=structure,
                 factorization='nvf')
-    ref = wavebit.rcwa(backend=0, **opts).solve()
-    for backend in (1, 2):
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    ref = wavebit.rcwa(backend='numpy', **opts).solve()
+    for backend in ('jax', 'torch'):
+        pytest.importorskip(backend)
         got = wavebit.rcwa(backend=backend, **opts).solve()
         assert np.allclose(np.asarray(ref.incident.T), np.asarray(got.incident.T),
                            atol=1e-12, rtol=0), backend
@@ -343,7 +343,7 @@ def test_nvf_end_to_end_gradient_wrt_structure():
     wl, n_top, n_bot, d = 0.9, 1.0, 1.0, 0.2
     normal_field = normal_field_for_raster(structure, truncation_order[0], truncation_order[1])
 
-    solver = wavebit.rcwa(backend=0, top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = wavebit.rcwa(backend='numpy', top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           truncation_order=truncation_order, period=[1.0, 1.0], wavelength=wl, thickness=[d], structure=structure)
     kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
@@ -470,7 +470,7 @@ def test_cfs_end_to_end_gradient_wrt_structure():
     wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15      # indices: `solve_1d` takes them below
     compression = [compression_indices(structure[i]) for i in range(structure.shape[0])]
 
-    solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=0.3, phi=None,
+    solver = wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=0.3, phi=None,
                           psi=np.pi / 2,
                           truncation_order=truncation_order, period=[0.77], wavelength=wl, thickness=[d], structure=structure)
     kx, _ = solver.order_kxy()
@@ -509,7 +509,7 @@ def _transpose_symmetric_L(N=48):
 
 def _transmission_map(structure, factorization, truncation_order, psi, nesting=None):
     res = wavebit.rcwa(
-        backend=0, factorization=factorization, truncation_order=[truncation_order, truncation_order],
+        backend='numpy', factorization=factorization, truncation_order=[truncation_order, truncation_order],
         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=psi,
         wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure,
         **({} if nesting is None else {'li_nesting': nesting})).solve()
@@ -624,7 +624,7 @@ _TURN_PSI = np.deg2rad(37.0)
 def _turn_scene(structure, period, truncation_order, phi, psi, factorization='nvf', nesting=None):
     """One solve of the turnable scene. Returns ``(R, T, truncation_order)`` -- see :func:`_by_order`."""
     res = wavebit.rcwa(
-        backend=0, factorization=factorization, truncation_order=[int(truncation_order[0]), int(truncation_order[1])],
+        backend='numpy', factorization=factorization, truncation_order=[int(truncation_order[0]), int(truncation_order[1])],
         top=1.0, bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
         wavelength=_TURN_WAVELENGTH, period=[period[0], period[1]], thickness=[120.0],
         structure=structure, **({} if nesting is None else {'li_nesting': nesting})).solve()

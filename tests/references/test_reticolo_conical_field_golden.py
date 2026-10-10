@@ -104,7 +104,7 @@ def _reconstruct(stack, theta, phi, pol):
     # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
     # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],
                           theta=np.deg2rad(theta), phi=np.deg2rad(phi),
                           psi=np.pi / 2 if pol == 's' else 0.0,

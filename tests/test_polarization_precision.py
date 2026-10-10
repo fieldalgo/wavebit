@@ -4,13 +4,13 @@ import pytest
 import wavebit
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('initial', [0, 1])
 @pytest.mark.parametrize('chart', ['chi', 'polarization'])
 def test_polarization_precision_follows_solver_precision(backend, initial, chart):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     options = {'chi': .213456789} if chart == 'chi' else {'polarization': (1+.245678912j, .321234567-.412345678j)}
     cfg = dict(period=(600., 750.), wavelength=900., thickness=(170.,),
@@ -39,7 +39,7 @@ def test_a_kept_precision_keyword_recasts_the_restored_gradient_parameter(chart)
     cfg = dict(period=(600., 750.), wavelength=900., thickness=(170.,),
                truncation_order=(0, 0), theta=.13, phi=.21, answers='field',
                structure=np.full((1, 2, 2), 4.), **options)
-    s = wavebit.rcwa(backend=1, **cfg)
+    s = wavebit.rcwa(backend='jax', **cfg)
     def loss(result):
         regularization = (s.chi**2 if chart == 'chi' else
                           sum(jnp.abs(v)**2 for v in s.polarization))
@@ -52,7 +52,7 @@ def test_a_kept_precision_keyword_recasts_the_restored_gradient_parameter(chart)
     def reference(coords):
         chosen = (float(coords[0]) if chart == 'chi' else
                   (coords[0]+1j*coords[1], coords[2]+1j*coords[3]))
-        r = wavebit.rcwa(backend=0, **(cfg | {chart: chosen})).solve()
+        r = wavebit.rcwa(backend='numpy', **(cfg | {chart: chosen})).solve()
         return float(r.T.sum().real + .1*np.sum(coords**2))
     point = np.array([.21] if chart == 'chi' else [1., .24, .32, -.41])
     expected = []

@@ -260,7 +260,7 @@ def test_engine_uniform_airy_and_patterned_slot_layout_only(order):
     def solve(structure):
         plan = builder.plan(structure, basis)
         conv = builder.conv_matrices(structure, basis, plan=plan)
-        solver = wavebit.rcwa(backend=0, lattice=basis, wavelength=wavelength,
+        solver = wavebit.rcwa(backend='numpy', lattice=basis, wavelength=wavelength,
                               thickness=[thickness], truncation_order=order,
                               theta=theta, phi=.47, top=top, bot=bottom)
         return solver.solve_conv(*conv)

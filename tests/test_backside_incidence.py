@@ -73,7 +73,7 @@ _GRATING = eps_from_index(np.array([
 #: The substrate's index, kept beside its permittivity: the reciprocity angle below is a
 #: Snell relation and needs the index, while the constructor takes the square.
 N_SUB = 2.0
-GRATING_KW = dict(backend=0, top=1.0, bot=eps_from_index(N_SUB), truncation_order=10, period=[0.7],
+GRATING_KW = dict(backend='numpy', top=1.0, bot=eps_from_index(N_SUB), truncation_order=10, period=[0.7],
                   wavelength=0.85, structure=_GRATING, thickness=[0.22, 0.15])
 
 _GRATING_LOSSLESS = eps_from_index(np.array([
@@ -85,7 +85,7 @@ _GRATING_LOSSLESS = eps_from_index(np.array([
 def _solver(ns, ds, theta, tetm, path, algo, side):
     """A solver on the *scene* ``ns`` (top..bottom), illuminated from ``side``."""
     layers = ns[1:-1][::-1]
-    common = dict(backend=0, layer_algorithm=algo, top=eps_from_index(ns[0]),
+    common = dict(backend='numpy', layer_algorithm=algo, top=eps_from_index(ns[0]),
                   bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=WL, thickness=ds[::-1], incidence_side=side)
     if path == '1d':
@@ -360,11 +360,11 @@ def test_backside_field_cells_agree_between_algorithms():
 
 # ------------------------------------------------------------------- backends and validation
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_backside_holds_on_every_backend(backend):
     """Same physics through the same single-source core, so the backends may not diverge."""
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
 
     ref = wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',

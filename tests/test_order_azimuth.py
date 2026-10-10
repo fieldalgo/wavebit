@@ -54,7 +54,7 @@ def _xp():
     return array_namespace(np.zeros(1, dtype=np.complex128))
 
 
-def _solve(backend=0, structure=None, truncation_order=(6, 0), theta=0.0, phi=0.0, psi=np.pi / 2, **kw):
+def _solve(backend='numpy', structure=None, truncation_order=(6, 0), theta=0.0, phi=0.0, psi=np.pi / 2, **kw):
     base = dict(backend=backend, wavelength=500.0, period=[700.0, 700.0], top=1.0,
                 bot=2.25, theta=theta, phi=phi, psi=psi,
                 structure=_UC_1D if structure is None else structure, thickness=[220.0], truncation_order=list(truncation_order))
@@ -217,19 +217,19 @@ def test_normal_incidence_still_depends_on_phi():
                 'azimuth is being dropped at the origin')
 
 
-@pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('case', ['1d', 'conical', '2d', 'smm', '2d_smm'])
 @pytest.mark.parametrize('phi', [0.0, 0.6108652381980153])
-def test_normal_incidence_solves_without_a_nudge(backend, case, phi, name):
+def test_normal_incidence_solves_without_a_nudge(backend, case, phi):
     """Every path, every backend, at exactly ``theta = 0`` — and at both azimuths.
 
     Before :func:`order_azimuth`, removing the nudge made all of these raise
     ``FloatingPointError``: the 2D ones for the ``m == 0`` column, the rest for the origin.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
 
     kw = {'1d': {},
@@ -240,7 +240,7 @@ def test_normal_incidence_solves_without_a_nudge(backend, case, phi, name):
     result = _solve(backend=backend, phi=phi, **kw)
     for array in (result.R, result.T):
         values = np.asarray(array, dtype=np.complex128)
-        assert np.all(np.isfinite(values)), f'{name}/{case} went non-finite at theta=0'
+        assert np.all(np.isfinite(values)), f'{backend}/{case} went non-finite at theta=0'
     assert _energy(result) == pytest.approx(1.0, abs=1e-9)
 
 
@@ -257,7 +257,7 @@ def test_the_first_order_path_gets_the_azimuth_too():
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
+            solver = wavebit.rcwa(backend='numpy', wavelength=500.0, period=[700.0, 700.0],
                                   top=1.0, bot=2.25, theta=0.0, phi=phi, psi=0.7,
                                   structure=_UC_2D, thickness=[220.0], truncation_order=[4, 4])
             solver.formulation = 'first_order'
@@ -341,7 +341,7 @@ def test_phi_plus_pi_negates_the_reconstructed_field():
     def cell(**kw):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            solver = wavebit.rcwa(backend=0, wavelength=500.0, period=[700.0, 700.0],
+            solver = wavebit.rcwa(backend='numpy', wavelength=500.0, period=[700.0, 700.0],
                                   top=1.0, bot=2.25, theta=0.0,
                                   structure=_UC_2D, thickness=[220.0], truncation_order=[4, 4],
                                   answers='field', **kw)
@@ -430,7 +430,7 @@ def test_gradient_flows_through_the_azimuth():
     def loss(period, structure, truncation_order, phi):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period],
+            r = wavebit.rcwa(backend='jax', wavelength=500.0, period=[period, period],
                              top=1.0, bot=2.25, theta=0.0, phi=phi, psi=np.pi / 2,
                              structure=jnp.asarray(structure), thickness=[220.0],
                              truncation_order=list(truncation_order)).solve()
@@ -462,7 +462,7 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
     def jax_loss(period):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            r = wavebit.rcwa(backend=1, wavelength=500.0, period=[period, period], top=1.0,
+            r = wavebit.rcwa(backend='jax', wavelength=500.0, period=[period, period], top=1.0,
                              bot=2.25, theta=0.0, phi=0.7, psi=np.pi / 2,
                              structure=jnp.asarray(_UC_2D), thickness=[220.0],
                              truncation_order=[4, 4]).solve()
@@ -471,7 +471,7 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
     p = torch.tensor(700.0, dtype=torch.float64, requires_grad=True)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        r = wavebit.rcwa(backend=2, wavelength=500.0, period=[p, p], top=1.0, bot=2.25,
+        r = wavebit.rcwa(backend='torch', wavelength=500.0, period=[p, p], top=1.0, bot=2.25,
                          theta=0.0, phi=0.7, psi=np.pi / 2,
                          structure=torch.asarray(_UC_2D), thickness=[220.0],
                          truncation_order=[4, 4]).solve()
@@ -560,8 +560,8 @@ def test_the_theta_derivative_at_normal_incidence_on_a_2d_grating(formulation):
         return s.solve(auto_detune=False).R.sum()
 
     h = 1e-6
-    fd = (float(np.real(reflected(h, 0))) - float(np.real(reflected(-h, 0)))) / (2 * h)
-    ad = float(jax.grad(lambda t: jnp.real(reflected(t, 1)))(jnp.asarray(0.0)))
+    fd = (float(np.real(reflected(h, 'numpy'))) - float(np.real(reflected(-h, 'numpy')))) / (2 * h)
+    ad = float(jax.grad(lambda t: jnp.real(reflected(t, 'jax')))(jnp.asarray(0.0)))
     assert ad == pytest.approx(fd, rel=1e-6)
 
 
@@ -578,10 +578,10 @@ _ROW = (0.0, -0.0, 1e-300, -1e-300, 0.3, -0.3, -0.3 + 0.2j, -0.3 - 0.2j, 0.2j, -
 def _row(backend, dtype):
     """``_ROW`` on a backend, as the complex dtype named -- the arrays the kernels are handed."""
     values = np.asarray(_ROW, dtype=dtype)
-    if backend == 1:
+    if backend == 'jax':
         import jax.numpy as jnp
         return jnp.asarray(values)
-    if backend == 2:
+    if backend == 'torch':
         import torch
         return torch.asarray(values)
     return values
@@ -593,8 +593,8 @@ def _expected_row(dtype):
 
 
 @pytest.mark.parametrize('dtype', [np.complex128, np.complex64])
-@pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
-def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, name, dtype):
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, dtype):
     """``order_frame_sign`` is ``cos(order_azimuth)`` on the ``ky == 0`` row, to the bit.
 
     The pure 1D path cannot call ``order_azimuth`` -- it would carry ``sin(pi)`` into a
@@ -609,10 +609,10 @@ def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, name, dtype):
       ``|sin|`` no larger than the ``sin(pi)`` it avoids.
     """
     from wavebit._core.conventions import order_frame_sign
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     kx = _row(backend, dtype)
     xp = array_namespace(kx)
@@ -620,9 +620,9 @@ def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, name, dtype):
     host = np.asarray(got.cpu() if hasattr(got, 'cpu') else got)
 
     real = np.float32 if dtype == np.complex64 else np.float64
-    assert host.dtype == real, f'{name}: {host.dtype}, not the real dtype of {np.dtype(dtype)}'
+    assert host.dtype == real, f'{backend}: {host.dtype}, not the real dtype of {np.dtype(dtype)}'
     want = _expected_row(dtype)
-    assert np.array_equal(host, want), (name, host, want)
+    assert np.array_equal(host, want), (backend, host, want)
     assert (host[:2] == 1).all() and (host[8:10] == 1).all() and (host[11:] == 1).all(), (
         'a signed zero or a purely imaginary kx flipped')
     # -1e-300 is a negative number in double and a signed zero in single precision.
@@ -631,22 +631,22 @@ def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, name, dtype):
     for phi in (None, 0.0, -0.0):
         angle = order_azimuth(xp, 0 * kx, kx, phi)
         angle = np.asarray(angle.cpu() if hasattr(angle, 'cpu') else angle)
-        assert np.array_equal(np.real(np.cos(angle)), host), (name, phi)
+        assert np.array_equal(np.real(np.cos(angle)), host), (backend, phi)
         assert np.abs(np.sin(angle)).max() <= (2e-16 if dtype == np.complex128 else 1e-7)
 
 
 @pytest.mark.parametrize('dtype', [np.complex128, np.complex64])
-@pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
-def test_the_1d_frame_sign_takes_its_origin_azimuth(backend, name, dtype):
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_the_1d_frame_sign_takes_its_origin_azimuth(backend, dtype):
     """With ``phi = pi`` -- what the engine hands over at normal incidence from a negative-index
     medium (``CoreSolveMixin._frame_azimuth``) -- the entries at ``kx == 0``, both signed zeros,
     turn to ``-1`` and nothing else moves: still exactly ``cos(order_azimuth(0*kx, kx, pi))``.
     ``phi = 0`` is the default to the bit, and a purely imaginary ``kx`` is not the origin."""
     from wavebit._core.conventions import order_frame_sign
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     kx = _row(backend, dtype)
     xp = array_namespace(kx)
@@ -658,10 +658,10 @@ def test_the_1d_frame_sign_takes_its_origin_azimuth(backend, name, dtype):
     want = np.where((np.real(stored) < 0) | (stored == 0), -1.0, 1.0)
     turned = host(order_frame_sign(xp, kx, np.pi))
     assert turned.dtype == host(order_frame_sign(xp, kx)).dtype
-    assert np.array_equal(turned, want), (name, turned, want)
+    assert np.array_equal(turned, want), (backend, turned, want)
     assert (turned[:2] == -1).all() and (turned[8:10] == 1).all() and (turned[11:] == 1).all()
     angle = host(order_azimuth(xp, 0 * kx, kx, np.pi))
-    assert np.array_equal(np.real(np.cos(angle)), turned), name
+    assert np.array_equal(np.real(np.cos(angle)), turned), backend
     assert np.array_equal(host(order_frame_sign(xp, kx, 0.0)), host(order_frame_sign(xp, kx)))
 
 

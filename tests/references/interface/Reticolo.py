@@ -303,7 +303,7 @@ if __name__ == '__main__':
     print('reti T', np.array(reti_de_ti).flatten())
 
     # Numpy
-    backend = 0
+    backend = 'numpy'
     nmee = wavebit.rcwa(backend=backend, answers='field', **option)
     n_de_ri, n_de_ti = nmee.solve()
     n_field_cell = nmee.reconstruct_field(sample_z=200, sample_x=5)
@@ -311,7 +311,7 @@ if __name__ == '__main__':
     print('numpy T', n_de_ti)
 
     # # JAX
-    # backend = 1
+    # backend = 'jax'
     # jmee = wavebit.rcwa(backend=backend, **option)
     # j_de_ri, j_de_ti = jmee.solve()
     # j_field_cell = jmee.reconstruct_field(sample_z=200, sample_x=5)
@@ -319,7 +319,7 @@ if __name__ == '__main__':
     # print('jax T', j_de_ti)
     #
     # # Torch
-    # backend = 2
+    # backend = 'torch'
     # tmee = wavebit.rcwa(backend=backend, **option)
     # t_de_ri, t_de_ti = tmee.solve()
     # t_field_cell = tmee.reconstruct_field(sample_z=200, sample_x=5)

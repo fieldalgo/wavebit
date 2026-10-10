@@ -5,10 +5,9 @@ import pytest
 import wavebit
 
 
-@pytest.fixture(params=[0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.fixture(params=['numpy', 'jax', 'torch'])
 def backend(request):
-    if request.param:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[request.param])
+    pytest.importorskip(request.param)
     return request.param
 
 
@@ -59,7 +58,7 @@ def test_traced_invalid_period_is_refused_before_mutation(size, compile):
     import jax.numpy as jnp
     from wavebit._core.engine import _holds_tracer
 
-    s = solver(1, lattice=np.diag([600., 750.]))
+    s = solver('jax', lattice=np.diag([600., 750.]))
     def loss(p):
         with s._conditions(dict(period=jnp.repeat(p, size))):
             return jnp.sum(s.period)

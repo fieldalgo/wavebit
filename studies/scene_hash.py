@@ -78,7 +78,7 @@ CELLS = {
     'hex': np.column_stack(([P, 0.0], [P / 2, P * np.sqrt(3) / 2])),
     'shear': np.column_stack(([P, 0.0], [0.35 * P, 1.2 * P])),
 }
-BACKENDS = {'numpy': 0, 'jax': 1, 'torch': 2}
+BACKENDS = ('numpy', 'jax', 'torch')
 SIDES = ('top', 'bottom')
 
 
@@ -146,7 +146,7 @@ def digest_one(cell, kind, side, backend):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             solver = wavebit.rcwa(
-                backend=BACKENDS[backend], structure=_structure(kind, basis),
+                backend=backend, structure=_structure(kind, basis),
                 lattice=np.asarray(basis).tolist(), truncation_order=[4, 4], thickness=[H],
                 wavelength=WL, top=1.0, bot=2.25, theta=0.3, phi=0.4, psi=0.2,
                 incidence_side=side, answers='field',

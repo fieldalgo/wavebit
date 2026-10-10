@@ -103,7 +103,7 @@ def test_the_centre_sign_is_the_phase_the_centre_adds(cell, excitation):
     centre would pass the first cell and fail these. The excitations move the window by an odd
     step on each axis, where parity by array index and parity by label part company.
     """
-    solver = wavebit.rcwa(backend=0, wavelength=0.9, theta=0.3, phi=0.4, top=1.0, bot=2.25,
+    solver = wavebit.rcwa(backend='numpy', wavelength=0.9, theta=0.3, phi=0.4, top=1.0, bot=2.25,
                           structure=np.full((1, 8, 8), 2.25), thickness=[0.2],
                           truncation_order=(2, 2), excitation=excitation, **_CELLS[cell])
     window_u, window_v = solver.order_window
@@ -202,7 +202,7 @@ def _plane_scene(path):
 
 
 def _ordinary(path, geometry, incidence, side, **over):
-    kw = dict(backend=0, top=1.0, bot=2.25, answers='field', incidence_side=side, **geometry)
+    kw = dict(backend='numpy', top=1.0, bot=2.25, answers='field', incidence_side=side, **geometry)
     kw.update(incidence)
     if path in ('te', 'tm'):
         kw['tetm'] = path
@@ -214,7 +214,7 @@ def _ordinary(path, geometry, incidence, side, **over):
 
 
 def _coherent(geometry, side, source, **over):
-    kw = dict(backend=0, top=1.0, bot=2.25, answers='field', excitation={side: source},
+    kw = dict(backend='numpy', top=1.0, bot=2.25, answers='field', excitation={side: source},
               **geometry)
     kw.update(over)
     return wavebit.rcwa(**kw).solve()
@@ -304,7 +304,7 @@ def test_a_fictitious_period_does_not_move_the_field(door):
     """
     cells = []
     for period_y in (1.6, 2.9):
-        solver = wavebit.rcwa(backend=0, wavelength=1.1, period=(1.6, period_y),
+        solver = wavebit.rcwa(backend='numpy', wavelength=1.1, period=(1.6, period_y),
                               structure=np.array([[[4., 4., 1., 1., 2.25, 1., 1.]]]),
                               thickness=[0.2], truncation_order=(4, 0), top=1.0, bot=2.25,
                               theta=0.4, phi=0.8, psi=0.3, answers='field')
@@ -318,7 +318,7 @@ def test_a_fictitious_period_does_not_move_the_field(door):
 # ------------------------------------------------ 3. excitation weights are OrderExcitation's
 
 #: `tests/test_excitation.py`'s scene: lambda/period = 0.3, orders -3..+3 propagate at 0.25.
-_EXC = dict(backend=0, truncation_order=(6, 0), period=(2000.0, 2000.0), wavelength=600.0,
+_EXC = dict(backend='numpy', truncation_order=(6, 0), period=(2000.0, 2000.0), wavelength=600.0,
             thickness=[130.0, 220.0], top=1.0, bot=2.25)
 _W2 = {0: 1.0, 1: 0.6 - 0.8j}
 
@@ -448,13 +448,13 @@ def test_every_amplitude_is_the_centre_fourier_coefficient_of_the_field(scene, s
     carries rows of odd ``n``, where a parity that ignored ``n`` would show.
     """
     if scene == '1d':
-        solver = wavebit.rcwa(backend=0, wavelength=0.6, period=(2.0, 2.0), structure=_EPS_1D,
+        solver = wavebit.rcwa(backend='numpy', wavelength=0.6, period=(2.0, 2.0), structure=_EPS_1D,
                               thickness=[0.12], truncation_order=(3, 0), top=1.0, bot=2.25,
                               theta=0.3, tetm='te', incidence_side=side,
                               excitation={1: 1.0, 2: 0.5j}, answers='field')
         grid = (32, 1)
     else:
-        solver = wavebit.rcwa(backend=0, wavelength=0.4, period=(1.3, 1.7), structure=_RASTER_2D,
+        solver = wavebit.rcwa(backend='numpy', wavelength=0.4, period=(1.3, 1.7), structure=_RASTER_2D,
                               thickness=[0.15], truncation_order=(2, 2), top=1.0, bot=2.25,
                               theta=0.2, phi=0.3, polarization=(0.6, 0.8j), incidence_side=side,
                               excitation={(0, 0): 1.0, (1, 0): 0.5j}, answers='field')
@@ -524,7 +524,7 @@ def test_a_centred_stripe_scatters_in_phase_as_born_says(theta):
     period = 1.6 * _BORN_WL
     X, _ = (np.asarray(c) for c in wavebit.meshgrid_xy((1, 400), period=(period, period)))
     inside = np.abs(X) < 0.15 * period
-    solver = wavebit.rcwa(backend=0, period=(period, period), wavelength=_BORN_WL, theta=theta,
+    solver = wavebit.rcwa(backend='numpy', period=(period, period), wavelength=_BORN_WL, theta=theta,
                           tetm='te', top=1.0, bot=1.0, thickness=[_BORN_D],
                           structure=np.where(inside, 1 + _BORN_DELTA, 1.0).reshape(1, 1, -1),
                           truncation_order=(4, 0))
@@ -545,7 +545,7 @@ def test_a_centred_disc_scatters_in_phase_as_born_says(cell):
     lattice = (np.array([[1.7, 0.0], [0.0, 1.5]]) if cell == 'rectangle' else
                np.array([[1.7, 0.85], [0.0, 1.7 * np.sqrt(3) / 2]]))
     radius = 0.35
-    solver = wavebit.rcwa(backend=0, lattice=lattice, wavelength=_BORN_WL, theta=0.0, phi=0.0,
+    solver = wavebit.rcwa(backend='numpy', lattice=lattice, wavelength=_BORN_WL, theta=0.0, phi=0.0,
                           polarization=(1.0, 0.0), top=1.0, bot=1.0, thickness=[_BORN_D],
                           structure=[{'background': 1.0, 'shapes': [
                               {'type': 'circle', 'cx': 0.0, 'cy': 0.0, 'lx': 2 * radius,
@@ -586,7 +586,7 @@ def test_all_four_coupled_blocks_read_the_centre_amplitudes(side):
     block alone, or doubled the wrong way on the ``[s; p]`` layout, passes a check on one.
     """
     weights = {(0, 0): 1.0, (1, 0): 0.4j, (0, -1): 0.3 - 0.2j, (1, 1): 0.25 + 0.1j}
-    solver = wavebit.rcwa(backend=0, wavelength=0.6, period=(1.3, 1.7), structure=_RASTER_2D,
+    solver = wavebit.rcwa(backend='numpy', wavelength=0.6, period=(1.3, 1.7), structure=_RASTER_2D,
                           thickness=[0.21], truncation_order=(2, 2), top=1.0, bot=2.1025,
                           theta=0.35, phi=0.7, polarization=(0.6, 0.8j), incidence_side=side,
                           excitation=weights, layer_algorithm='SMM')
@@ -613,7 +613,7 @@ def test_the_far_blocks_are_a_solve_lit_from_the_other_side(tetm):
     ``t_s``; TM the p port variables, ``-r_p`` and ``t_p (n/mu)_top / (n/mu)_bot``.
     """
     weights = {-1: 0.4 + 0.2j, 0: 1.0, 1: 0.6 - 0.8j}
-    common = dict(backend=0, wavelength=0.6, period=(2.0, 2.0), structure=_EPS_1D,
+    common = dict(backend='numpy', wavelength=0.6, period=(2.0, 2.0), structure=_EPS_1D,
                   thickness=[0.12], truncation_order=(3, 0), top=1.0, bot=2.25, tetm=tetm,
                   layer_algorithm='SMM', excitation=weights)
     top = wavebit.rcwa(**common, theta=0.3)
@@ -646,7 +646,7 @@ def test_a_cascade_across_an_odd_label_shift_is_the_joined_stack():
     period, wavelength, joint = 2.0, 0.6, 2.0
     theta_a = 0.2
     theta_b = float(np.arcsin((np.sin(theta_a) + wavelength / period) / np.sqrt(joint)))
-    base = dict(backend=0, wavelength=wavelength, period=(period, period),
+    base = dict(backend='numpy', wavelength=wavelength, period=(period, period),
                 truncation_order=(3, 0), tetm='te', layer_algorithm='SMM')
     a = wavebit.rcwa(**base, top=1.0, bot=joint, structure=layer_a, thickness=[0.12],
                      theta=theta_a)
@@ -676,7 +676,7 @@ def test_a_complex_angle_is_unit_at_the_origin_not_at_the_corner():
     field doors agree.
     """
     period, wavelength = 1.6, 0.6
-    solver = wavebit.rcwa(backend=0, period=(period, period), wavelength=wavelength,
+    solver = wavebit.rcwa(backend='numpy', period=(period, period), wavelength=wavelength,
                           structure=_EPS_1D, thickness=[0.12], truncation_order=(3, 0),
                           top=2.25 + 1j, bot=2.25 + 0.5j, theta=0.3 + 0.1j, tetm='te',
                           answers='field')
@@ -708,16 +708,16 @@ def test_the_two_field_doors_agree_on_a_moved_window(scene):
     if scene in ('hexagonal', 'rotated'):
         geometry, incidence, points = _plane_scene('hex' if scene == 'hexagonal' else scene)
         geometry = dict(geometry, wavelength=0.9)       # orders (1, 0) and (0, 1) propagate
-        solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, answers='field', **geometry,
+        solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, answers='field', **geometry,
                               **incidence, excitation={(1, 0): 1.0, (0, 1): 0.5j})
     elif scene == '1d-odd-centre':
-        solver = wavebit.rcwa(backend=0, wavelength=0.6, period=(2.0, 2.0), structure=_EPS_1D,
+        solver = wavebit.rcwa(backend='numpy', wavelength=0.6, period=(2.0, 2.0), structure=_EPS_1D,
                               thickness=[0.12], truncation_order=(3, 0), top=1.0, bot=2.25,
                               theta=0.3, tetm='te', excitation={1: 1.0, 2: 0.5j},
                               answers='field')
         points = dict(sample_x=[-0.37, 0.05, 0.61], sample_y=[0.0], sample_z=[0.05])
     else:
-        solver = wavebit.rcwa(backend=0, wavelength=0.4, period=(1.3, 1.7), structure=_RASTER_2D,
+        solver = wavebit.rcwa(backend='numpy', wavelength=0.4, period=(1.3, 1.7), structure=_RASTER_2D,
                               thickness=[0.15], truncation_order=(2, 2), top=1.0, bot=2.25,
                               theta=0.2, phi=0.3, polarization=(0.6, 0.8j),
                               excitation={(1, 1): 1.0, (2, 1): 0.5j}, answers='field')
@@ -774,12 +774,12 @@ def _ad_against_fd(jax, probes, build, x0, step):
     import jax.numpy as jnp
 
     def parts(x):
-        values = probes(build(1, x))
+        values = probes(build('jax', x))
         return jnp.stack([f(v) for v in values for f in (jnp.real, jnp.imag)])
 
     ad = np.asarray(jax.jacrev(parts)(x0))
-    plus = np.array([complex(_host(v)) for v in probes(build(0, x0 + step))])
-    minus = np.array([complex(_host(v)) for v in probes(build(0, x0 - step))])
+    plus = np.array([complex(_host(v)) for v in probes(build('numpy', x0 + step))])
+    minus = np.array([complex(_host(v)) for v in probes(build('numpy', x0 - step))])
     fd = (plus - minus) / (2 * step)
     ad = ad[0::2] + 1j * ad[1::2]
     return ad, fd
@@ -820,7 +820,7 @@ def test_the_centre_reference_differentiates_through_the_cell(entry):
     unit[entry] = 1.0
 
     def build(backend, t):
-        lattice = (jnp.asarray(_SHEAR) + t * jnp.asarray(unit) if backend == 1
+        lattice = (jnp.asarray(_SHEAR) + t * jnp.asarray(unit) if backend == 'jax'
                    else _SHEAR + t * unit)
         return _sheared_scene(backend, lattice)
 
@@ -834,31 +834,31 @@ def test_torch_differentiates_the_solver_door_through_the_angle():
     """One Torch ``backward`` on ``theta`` through the solver door's scalar."""
     torch = pytest.importorskip('torch')
     theta = torch.tensor(0.3, dtype=torch.float64, requires_grad=True)
-    value = _probes_1d(_gradient_scene(2, theta=theta))[2]
+    value = _probes_1d(_gradient_scene('torch', theta=theta))[2]
     grad_re, = torch.autograd.grad(value.real, theta, retain_graph=True)
     grad_im, = torch.autograd.grad(value.imag, theta)
     h = 1e-6
-    fd = (complex(_host(_probes_1d(_gradient_scene(0, theta=0.3 + h))[2]))
-          - complex(_host(_probes_1d(_gradient_scene(0, theta=0.3 - h))[2]))) / (2 * h)
+    fd = (complex(_host(_probes_1d(_gradient_scene('numpy', theta=0.3 + h))[2]))
+          - complex(_host(_probes_1d(_gradient_scene('numpy', theta=0.3 - h))[2]))) / (2 * h)
     got = float(grad_re) + 1j * float(grad_im)
     assert abs(got - fd) < 1e-6 * abs(fd), (got, fd)
 
 
 # ---------------------------------------------------------------------- 10. backends and jit
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_the_backends_agree_on_odd_orders_and_both_doors(backend):
     """JAX and Torch against NumPy: an odd order's ``r_s`` and ``r_xyz``, and both field doors.
 
     The solver door by counts and at explicit points written as a list, which reached Torch in
     single precision until the sampling helpers converted at the solve's own.
     """
-    pytest.importorskip('jax' if backend == 1 else 'torch')
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
     excitation = {0: 1.0, 1: 0.5 - 0.3j}
     out = []
-    for b in (0, backend):
+    for b in ('numpy', backend):
         solver = wavebit.rcwa(backend=b, period=(1.7, 1.7), wavelength=1.0, theta=0.3, tetm='te',
                               top=1.0, bot=2.25, thickness=[0.2], structure=_EPS_1D,
                               truncation_order=(3, 0), answers='field', excitation=excitation)
@@ -886,7 +886,7 @@ def test_a_result_that_crossed_jit_reconstructs_the_centre_field():
     points = dict(sample_x=4, sample_y=1, sample_z=3)
 
     def scene(weights):
-        solver = wavebit.rcwa(backend=1, period=(1.7, 1.7), wavelength=1.0, theta=0.3, phi=0.2,
+        solver = wavebit.rcwa(backend='jax', period=(1.7, 1.7), wavelength=1.0, theta=0.3, phi=0.2,
                               psi=0.4, top=1.0, bot=2.25, thickness=[0.2], structure=_EPS_1D,
                               truncation_order=(3, 0), answers='field', excitation=weights)
         return solver

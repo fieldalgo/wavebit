@@ -29,7 +29,7 @@ def structure(right):
 
 def total(right, **kwargs):
     P._PROJECTOR_CACHE.clear()
-    return float(np.sum(wavebit.rcwa(backend=0, structure=structure(right),
+    return float(np.sum(wavebit.rcwa(backend='numpy', structure=structure(right),
                                      **dict(KW, **kwargs)).solve().T))
 
 
@@ -51,7 +51,7 @@ def test_equal_moduli_are_continuous_in_coefficients_and_transmission(right):
 def test_equal_moduli_do_not_choose_the_listing_order(right):
     # The 300-unit anchor offset is 60 whole pixels at N=140, removing sampling jitter.
     kw = dict(KW, shape_nvf_grid_size=140)
-    values = [wavebit.rcwa(backend=0, structure=[dict(background=1., shapes=shapes)],
+    values = [wavebit.rcwa(backend='numpy', structure=[dict(background=1., shapes=shapes)],
                            **kw).solve().T for shapes in (pair(right), pair(right)[::-1])]
     np.testing.assert_allclose(*values, rtol=0., atol=2e-11)
 
@@ -119,7 +119,7 @@ def test_jitted_material_gradient_crosses_equal_moduli_and_material_equality():
     import jax.numpy as jnp
     wavebit.enable_x64()
     for right in (MATERIALS[0], -4., 4., 4.+0j):
-        solver = wavebit.rcwa(backend=1, structure=structure(right), **KW)
+        solver = wavebit.rcwa(backend='jax', structure=structure(right), **KW)
         geometry = solver.freeze_geometry()
         def response(scale):
             return jnp.sum(solver.solve(structure=structure(right*scale),
@@ -138,23 +138,22 @@ def test_torch_material_gradient_matches_the_same_secant():
     torch = pytest.importorskip('torch')
     right = MATERIALS[0]
     scale = torch.tensor(1., dtype=torch.float64, requires_grad=True)
-    response = wavebit.rcwa(backend=2, structure=structure(right*scale), **KW).solve().T.sum()
+    response = wavebit.rcwa(backend='torch', structure=structure(right*scale), **KW).solve().T.sum()
     response.backward()
     assert float(response.detach()) == pytest.approx(total(right), abs=2e-11)
     secant = (total(right*(1.+1e-6))-total(right*(1.-1e-6)))/2e-6
     assert float(scale.grad) == pytest.approx(secant, rel=2e-4, abs=1e-7)
 
 
-@pytest.mark.parametrize('backend', (0, 1, 2))
+@pytest.mark.parametrize('backend', ('numpy', 'jax', 'torch'))
 @pytest.mark.parametrize('precision', (0, 1))
 def test_complex_electric_and_magnetic_seams_keep_backend_and_precision(backend, precision):
-    if backend:
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     shapes = pair(wavebit.Material(MATERIALS[0], mu=.7+.8j),
                   left=wavebit.Material(4., mu=1.1+.1j))
     kw = dict(KW, shape_nvf_grid_size=64, truncation_order=(1, 1),
               structure=[dict(background=1., shapes=shapes)])
-    want = wavebit.rcwa(backend=0, **kw).solve()
+    want = wavebit.rcwa(backend='numpy', **kw).solve()
     solver = wavebit.rcwa(backend=backend, complex_dtype=precision, **kw)
     got = solver.solve()
     for a, b in ((got.R, want.R), (got.T, want.T)):

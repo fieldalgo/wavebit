@@ -129,7 +129,7 @@ CASE_VARIANTS = tuple((name, tag, which) for name in CASES for tag, which in VAR
 RES = dict(sample_x=5, sample_y=4, sample_z=6)
 
 
-def solved(name, backend=0):
+def solved(name, backend='numpy'):
     kw = dict(CASES[name])
     formulation = kw.pop('formulation', None)
     kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]

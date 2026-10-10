@@ -106,7 +106,7 @@ def scene(case, basis=None, **over):
     # `lattice` only: it is given on every case here (the square one included), and naming
     # `period` beside a basis was always a no-op -- the basis overwrites the period slot. It is
     # refused outright since 2026-09-01.
-    kw = dict(backend=0, structure=np.where(mask, medium['eps'], 1.0)[None, ...],
+    kw = dict(backend='numpy', structure=np.where(mask, medium['eps'], 1.0)[None, ...],
               lattice=basis.tolist(), truncation_order=[4, 4], thickness=[H],
               wavelength=WL, top=medium['top'], bot=medium['bot'], factorization='nvf',
               incidence_side=case['side'], **INCIDENCE[case['incidence']])
@@ -152,7 +152,7 @@ def shape_scene(case, basis=None, **over):
     medium = MEDIA[case['media']]
     material = (wavebit.Material(medium['eps'], mu=medium['mu']) if 'mu' in medium
                 else medium['eps'])
-    kw = dict(backend=0, lattice=basis.tolist(), truncation_order=[6, 6],
+    kw = dict(backend='numpy', lattice=basis.tolist(), truncation_order=[6, 6],
               thickness=[H], wavelength=WL, top=medium['top'], bot=medium['bot'],
               factorization='nvf', incidence_side=case['side'], shape_nvf_grid_size=256,
               structure=[{'background': 1.0,
@@ -218,8 +218,8 @@ def test_the_two_layer_algorithms_agree(case):
 @pytest.mark.parametrize('case', CASES, ids=IDS)
 def test_the_backends_agree(case):
     """NumPy, JAX and Torch solve the same scene. Differences here are wiring, not physics."""
-    ref = totals(scene(case, backend=0).solve())
-    for backend in (1, 2):
+    ref = totals(scene(case, backend='numpy').solve())
+    for backend in ('jax', 'torch'):
         got = totals(scene(case, backend=backend).solve())
         for x, y, name in ((ref[0], got[0], 'R'), (ref[1], got[1], 'T')):
             assert float(np.max(np.abs(np.asarray(x) - np.asarray(y)))) < 1e-9,\
@@ -250,7 +250,7 @@ def test_the_declared_width_is_the_width_answered_in(case, build):
         assert np.asarray(T).dtype == want, (complex_dtype, case)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_reassigning_the_width_gives_the_solver_it_would_have_been_born_as(backend):
     """`complex_dtype` is settable, and setting it used to build a third kind of solver.
 
@@ -277,9 +277,9 @@ def test_reassigning_the_width_gives_the_solver_it_would_have_been_born_as(backe
     when switched. Extending this test to that path is the check that the fix has landed, not
     a check that can pass first.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     cfg = dict(backend=backend, structure=np.ones((1, 4, 4)) * 2.0, truncation_order=(2, 2),
                wavelength=620., top=1.0, bot=1.0, period=[400.0, 500.0], thickness=[150.0],
@@ -301,7 +301,7 @@ def test_reassigning_the_width_gives_the_solver_it_would_have_been_born_as(backe
         assert np.array_equal(np.asarray(x), np.asarray(y)), name
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_dtype_instance_and_a_dtype_class_choose_the_same_three_widths(backend):
     """The three widths are chosen together, because deriving them apart went wrong.
 
@@ -311,9 +311,9 @@ def test_a_dtype_instance_and_a_dtype_class_choose_the_same_three_widths(backend
     was accepted, selected complex64 arithmetic, and paired it with `float64` and `int64` --
     a mixed width, chosen silently, that nothing downstream could report.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     cfg = dict(backend=backend, structure=np.ones((1, 4, 4)), truncation_order=(1, 1),
                wavelength=620., top=1.0, bot=1.0, period=[400.0, 400.0], thickness=[150.0])
@@ -340,7 +340,7 @@ def test_a_dtype_instance_and_a_dtype_class_choose_the_same_three_widths(backend
 def test_an_unrecognised_width_is_refused_by_name():
     """One message for all three, where there were three (and one of them was empty)."""
     with pytest.raises(ValueError, match=r'complex_dtype'):
-        wavebit.rcwa(backend=0, structure=np.ones((1, 4, 4)), truncation_order=(1, 1),
+        wavebit.rcwa(backend='numpy', structure=np.ones((1, 4, 4)), truncation_order=(1, 1),
                      wavelength=620., top=1.0, bot=1.0, period=[400.0, 400.0],
                      thickness=[150.0], complex_dtype=np.float64)
 
@@ -379,7 +379,7 @@ def test_the_three_backends_clamp_a_grazing_theta_the_same_way(theta):
     :func:`test_a_theta_past_grazing_saturates` below.
     """
     reference = None
-    for backend in (0, 1, 2):
+    for backend in ('numpy', 'jax', 'torch'):
         solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.7, bot=1.0, theta=theta, phi=0.4, psi=0.1)
@@ -419,7 +419,7 @@ def test_a_theta_past_grazing_saturates(imag):
     """
     threshold = float(np.float32(np.pi / 2))
     reference = None
-    for backend in (0, 1, 2):
+    for backend in ('numpy', 'jax', 'torch'):
         for real in (threshold, 1.9, 2.6, 3.0):
             solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
                                   truncation_order=[1, 1], thickness=[H], wavelength=WL,
@@ -438,7 +438,7 @@ def test_a_theta_past_grazing_saturates(imag):
     # imaginary part gone, all four real parts still agree, so the check still passes.
     grazing = float(np.float32(np.pi / 2))
     def _at(imag_part):
-        solver = wavebit.rcwa(backend=0, structure=np.ones((1, 4, 4)), period=[P, P],
+        solver = wavebit.rcwa(backend='numpy', structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.7, bot=1.0, theta=grazing + 1j * imag_part,
                               phi=0.4, psi=0.1)
@@ -477,7 +477,7 @@ def test_every_backend_declares_where_its_arrays_are_placed():
               '_separable_kxy', 'solve', 'eps_conv_matrices', 'mu_conv_matrices',
               'freeze_geometry', 'order_kxy', 'grad', 'fit')
 
-    for backend in (0, 1, 2):
+    for backend in ('numpy', 'jax', 'torch'):
         solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.0, bot=1.0)
@@ -486,7 +486,7 @@ def test_every_backend_declares_where_its_arrays_are_placed():
         with scope:                                    # it has to be usable, not merely typed
             pass
 
-    jax_solver = wavebit.rcwa(backend=1, structure=np.ones((1, 4, 4)), period=[P, P],
+    jax_solver = wavebit.rcwa(backend='jax', structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.0, bot=1.0)
     assert not isinstance(jax_solver._device_scope(), contextlib.nullcontext), (
@@ -519,7 +519,7 @@ def test_a_device_this_backend_does_not_have_is_refused_rather_than_printed_abou
     import io
     import contextlib
 
-    solver = wavebit.rcwa(backend=0, **SCENE)
+    solver = wavebit.rcwa(backend='numpy', **SCENE)
 
     for asked in (1, 'gpu', 'cuda'):
         with pytest.raises(ValueError, match='one device'):
@@ -536,7 +536,7 @@ def test_a_device_this_backend_does_not_have_is_refused_rather_than_printed_abou
         f'a satisfiable assignment wrote to stdout: {noise.getvalue()!r}')
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_three_backends_take_one_device_vocabulary_and_answer_in_their_own(backend):
     """The words going in are wavebit's; the object coming back is the backend's.
 
@@ -570,8 +570,8 @@ def test_the_same_positional_argument_means_the_same_thing_on_all_three_backends
     `SolverTorch.__init__` was `(self, device=0, complex_dtype=0, *args, **kwargs)` while
     `SolverNumpy` and `SolverJax` were `(self, *args, **kwargs)`. Those two names are not
     defaults -- one layer down they already had defaults that resolve identically -- they are a
-    claim on the first two POSITIONS. So `rcwa(0, 1.5, 2.25)` and `rcwa(1, 1.5, 2.25)` built a
-    solver with `top=1.5, bot=2.25`, and `rcwa(2, 1.5, 2.25)` read 1.5 as a device request and
+    claim on the first two POSITIONS. So `rcwa('numpy', 1.5, 2.25)` and `rcwa('jax', 1.5, 2.25)` built a
+    solver with `top=1.5, bot=2.25`, and `rcwa('torch', 1.5, 2.25)` read 1.5 as a device request and
     refused it.
 
     Read through the public entry point rather than off the signature: a wrapper could grow the
@@ -580,13 +580,13 @@ def test_the_same_positional_argument_means_the_same_thing_on_all_three_backends
     kw = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
               thickness=[H], wavelength=WL)
 
-    built = [wavebit.rcwa(backend, 1.5, 2.25, **kw) for backend in (0, 1, 2)]
+    built = [wavebit.rcwa(backend, 1.5, 2.25, **kw) for backend in ('numpy', 'jax', 'torch')]
     for backend, solver in enumerate(built):
         assert float(np.asarray(solver.top.epsilon)) == pytest.approx(1.5), backend
         assert float(np.asarray(solver.bot.epsilon)) == pytest.approx(2.25), backend
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_solver_wrapper_adds_no_parameters_of_its_own(backend):
     """The wrapper exists to mix in the optimizer, not to re-declare the scene.
 
@@ -596,8 +596,8 @@ def test_the_solver_wrapper_adds_no_parameters_of_its_own(backend):
     """
     import inspect
 
-    module = f'wavebit.backends.{["numpy", "jax", "torch"][backend]}_backend'
-    name = {0: 'SolverNumpy', 1: 'SolverJax', 2: 'SolverTorch'}[backend]
+    module = f'wavebit.backends.{backend}_backend'
+    name = {'numpy': 'SolverNumpy', 'jax': 'SolverJax', 'torch': 'SolverTorch'}[backend]
     cls = getattr(__import__(module, fromlist=[name]), name)
 
     kinds = [p.kind for n, p in inspect.signature(cls.__init__).parameters.items()
@@ -628,9 +628,9 @@ def test_the_scene_is_built_by_one_constructor_for_all_three_backends():
     from wavebit._core.engine import CoreSolveMixin
 
     shared = CoreSolveMixin.__init__
-    for backend, module in ((0, 'wavebit.backends.numpy_backend'),
-                            (1, 'wavebit.backends.jax_backend'),
-                            (2, 'wavebit.backends.torch_backend')):
+    for backend, module in (('numpy', 'wavebit.backends.numpy_backend'),
+                            ('jax', 'wavebit.backends.jax_backend'),
+                            ('torch', 'wavebit.backends.torch_backend')):
         base = __import__(module, fromlist=['_BaseRCWA'])._BaseRCWA
         assert base.__init__ is shared, (
             f'backend {backend} declares its own `_BaseRCWA.__init__` again. If it needs to do '
@@ -639,23 +639,25 @@ def test_the_scene_is_built_by_one_constructor_for_all_three_backends():
             f'per-backend halves of `device` and `complex_dtype`.')
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_public_class_declares_which_backend_it_is_and_nothing_else(backend):
     """The layer above `_BaseRCWA` folded too, and `backend` is what made it awkward.
 
     `RCWANumpy` / `RCWAJax` / `RCWATorch` each carried a ~104-line constructor that differed in
-    `backend=0/1/2` and two default spellings. The defaults resolve identically through
-    `_resolve_device` and `_resolve_precision`, so they became wavebit's own `0`. `backend`
-    could not: `SolverJax._tree_flatten` puts it in aux_data, which is part of the treedef and
-    therefore of every jit cache key, and `_tree_unflatten` hands it back to `__init__` on every
-    jitted call. So it stays an accepted keyword, and its *default* comes from a declared
-    `_BACKEND_ID` -- the same shape as `xp` and `_ARRAY_TYPES`.
+    the backend code (then the integers 0/1/2) and two default spellings. The defaults resolve
+    identically through `_resolve_device` and `_resolve_precision`, so they became wavebit's own
+    `0`. `backend` could not: `SolverJax._tree_flatten` puts it in aux_data, which is part of the
+    treedef and therefore of every jit cache key, and `_tree_unflatten` hands it back to
+    `__init__` on every jitted call. So it stays an accepted keyword, and its *default* comes
+    from a declared `_BACKEND_ID` -- the same shape as `xp` and `_ARRAY_TYPES`.
 
     Both halves are asserted, because either alone passes while the other is broken: the class
-    must answer its own id when nothing is named, and must still take an explicit one.
+    must answer its own id when nothing is named, and must still take an explicit one -- parsed
+    like every other door, and refused when it names a backend the class does not compute in.
     """
-    module = f'wavebit.backends.{["numpy", "jax", "torch"][backend]}_backend'
-    name = {0: 'RCWANumpy', 1: 'RCWAJax', 2: 'RCWATorch'}[backend]
+    pytest.importorskip(backend)
+    module = f'wavebit.backends.{backend}_backend'
+    name = {'numpy': 'RCWANumpy', 'jax': 'RCWAJax', 'torch': 'RCWATorch'}[backend]
     cls = getattr(__import__(module, fromlist=[name]), name)
 
     from wavebit._core.engine import CoreFactorizationMixin
@@ -667,10 +669,18 @@ def test_the_public_class_declares_which_backend_it_is_and_nothing_else(backend)
 
     kw = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
               thickness=[H], wavelength=WL, top=1.0, bot=1.0)
-    assert cls(**kw).backend == backend, 'the default did not come from `_BACKEND_ID`'
-    assert cls(backend=7, **kw).backend == 7, (
-        'an explicit `backend=` was ignored -- the JAX pytree passes one back on every jitted '
-        'call, so a constructor that overrides it rebuilds a solver under a different cache key')
+    assert cls(**kw).backend is wavebit.Backend(backend), (
+        'the default did not come from `_BACKEND_ID`')
+    for explicit in (backend, wavebit.Backend(backend)):
+        assert cls(backend=explicit, **kw).backend is wavebit.Backend(backend), (
+            'an explicit `backend=` was not taken -- the JAX pytree passes one back on every '
+            'jitted call, so a constructor that loses it rebuilds a solver under a different '
+            'cache key')
+    for other in {'numpy', 'jax', 'torch'} - {backend}:
+        with pytest.raises(ValueError, match='names another backend'):
+            cls(backend=other, **kw)
+    with pytest.raises(ValueError, match=r"expected one of \['numpy', 'jax', 'torch'\]"):
+        cls(backend=7, **kw)
 
 
 def test_importing_a_backend_does_not_import_the_other_two():
@@ -678,7 +688,7 @@ def test_importing_a_backend_does_not_import_the_other_two():
 
     `wavebit/backends/` replaced `on_numpy/`, `on_jax/` and `on_torch/`, three packages that
     were four levels deep and held about 500 lines between them. A package `__init__` that
-    imported all three would make `rcwa(backend=0)` pull in JAX and PyTorch -- which is what
+    imported all three would make `rcwa(backend='numpy')` pull in JAX and PyTorch -- which is what
     the empty `wavebit/backends/__init__.py` is for, and empty is not self-evidently deliberate.
 
     Checked in a subprocess, because `sys.modules` is process state and this whole suite has
@@ -687,12 +697,11 @@ def test_importing_a_backend_does_not_import_the_other_two():
     import subprocess
     import sys
 
-    for backend, absent in ((0, ('jax', 'torch')), (1, ('torch',)), (2, ('jax',))):
-        if backend:
-            pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    for backend, absent in (('numpy', ('jax', 'torch')), ('jax', ('torch',)), ('torch', ('jax',))):
+        pytest.importorskip(backend)
         code = (
             'import sys, numpy as np, wavebit\n'
-            f'wavebit.rcwa(backend={backend}, structure=np.ones((1, 4, 4)), period=[400., 400.],\n'
+            f'wavebit.rcwa(backend={backend!r}, structure=np.ones((1, 4, 4)), period=[400., 400.],\n'
             '             truncation_order=[1, 1], thickness=[150.], wavelength=900.).solve()\n'
             f'print([m for m in {absent!r} if m in sys.modules])\n')
         got = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,

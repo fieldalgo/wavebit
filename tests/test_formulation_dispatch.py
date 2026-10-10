@@ -52,7 +52,7 @@ def uniform_slots(eps_list, n_orders, z_row=True):
     return stacks if z_row else stacks[:5]
 
 
-def solver(truncation_order=(0, 0), backend=0, **kw):
+def solver(truncation_order=(0, 0), backend='numpy', **kw):
     kw.setdefault('theta', np.deg2rad(28.0))
     kw.setdefault('phi', np.deg2rad(37.0))
     kw.setdefault('psi', 0.6)
@@ -263,9 +263,9 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bo
     layers = [np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex), IN_PLANE]
     kw = dict(top=eps_top, bot=eps_bot, thickness=[260.0, 140.0])
 
-    a = wavebit.rcwa(backend=0, truncation_order=(0, 0), period=PERIOD, wavelength=WL,
+    a = wavebit.rcwa(backend='numpy', truncation_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
-    b = wavebit.rcwa(backend=0, truncation_order=(0, 0), period=PERIOD, wavelength=WL,
+    b = wavebit.rcwa(backend='numpy', truncation_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
     b.formulation = 'first_order'
 
@@ -382,7 +382,7 @@ def test_field_reconstruction_still_works_on_the_second_order_path():
 
 # --------------------------------------------------------------------------------- backends
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
     """All three agree — which is more than the module originally promised.
 
@@ -393,15 +393,15 @@ def test_the_first_order_path_gives_the_same_answer_on_every_backend(backend):
     permutation, which keeps the shapes static. See
     :func:`test_the_first_order_path_traces_under_jit`.
     """
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     ref = solver(thickness=[180.0]).solve_conv(*uniform_slots([VOIGT], 1))
 
     # Solver first, arrays second: importing the JAX backend is what lifts `jax_enable_x64`,
     # and an array built before that is silently complex64 (measured 6.6e-5 out, which reads
     # as a solver disagreement rather than as the single-precision result it is).
     mee = solver(thickness=[180.0], backend=backend)
-    xp = pytest.importorskip({1: 'jax.numpy', 2: 'torch'}[backend])
-    to = xp.asarray if backend == 1 else xp.as_tensor
+    xp = pytest.importorskip({'jax': 'jax.numpy', 'torch': 'torch'}[backend])
+    to = xp.asarray if backend == 'jax' else xp.as_tensor
     got = mee.solve_conv(*[to(s) for s in uniform_slots([VOIGT], 1)])
 
     assert mee.formulation_assigned == 'first_order'
@@ -421,12 +421,12 @@ def test_the_first_order_path_traces_under_jit():
     through the same permutation.
     """
     jax = pytest.importorskip('jax')
-    solver(thickness=[180.0], backend=1)          # imports the backend, which lifts x64
+    solver(thickness=[180.0], backend='jax')          # imports the backend, which lifts x64
     jnp = pytest.importorskip('jax.numpy')
     slots = [jnp.asarray(s) for s in uniform_slots([VOIGT], 1)]
 
     def run(thickness):
-        mee = solver(thickness=[thickness], backend=1)
+        mee = solver(thickness=[thickness], backend='jax')
         return mee.solve_conv(*slots).incident.T.sum()
 
     eager = float(run(180.0))
@@ -444,12 +444,12 @@ def test_the_gradient_through_the_first_order_path_is_the_real_one():
     gradient that ignored it would still be finite and plausible.
     """
     jax = pytest.importorskip('jax')
-    solver(thickness=[180.0], backend=1)
+    solver(thickness=[180.0], backend='jax')
     jnp = pytest.importorskip('jax.numpy')
     slots = [jnp.asarray(s) for s in uniform_slots([VOIGT], 1)]
 
     def run(thickness):
-        mee = solver(thickness=[thickness], backend=1)
+        mee = solver(thickness=[thickness], backend='jax')
         return mee.solve_conv(*slots).incident.T.sum()
 
     h = 1e-4
@@ -505,7 +505,7 @@ def test_a_z_row_pulls_a_one_dimensional_structure_onto_the_2d_layout():
 
 _Y_INVARIANT = np.array([[[9.0, 9.0, 1.0, 1.0]]])          # one row: nothing varies in y
 _Y_ROWS = np.repeat(_Y_INVARIANT, 2, axis=1)               # the same physics, on the 2D path
-_1D_KW = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.4, thickness=[0.2],
+_1D_KW = dict(backend='numpy', top=1.0, bot=2.25, theta=0.3, phi=0.4, thickness=[0.2],
               period=[0.7, 0.7], wavelength=0.9)
 
 

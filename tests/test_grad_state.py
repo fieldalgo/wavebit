@@ -15,7 +15,7 @@ RASTER = np.ones((1, 4, 4))
 RASTER[0, 1:3, 1:3] = 4.
 
 
-def solver(backend=1, **kwargs):
+def solver(backend='jax', **kwargs):
     return wavebit.rcwa(backend=backend, **(dict(CFG, structure=RASTER) | kwargs))
 
 
@@ -43,7 +43,7 @@ def test_gradient_state_is_released_even_if_the_loss_raises(door, fails):
         got = s.grad(['wavelength'], forward, loss)['wavelength']
         h = 1e-3
         def reference(w):
-            return solver(0, wavelength=w).solve().T.sum().real
+            return solver('numpy', wavelength=w).solve().T.sum().real
         expected = (reference(900.+h)-reference(900.-h))/(2*h)
         assert abs(expected) > 1e-6
         np.testing.assert_allclose(got, expected, rtol=2e-6, atol=1e-9)
@@ -62,7 +62,7 @@ def test_default_polarization_remains_default_after_its_gradient():
     s.grad(['psi'], partial(s.solve, geometry=g), lambda r: r.T.sum().real)
     assert not s._psi_given
     s.polarization = (.8, .6)
-    np.testing.assert_allclose(s.solve().T, solver(0, polarization=(.8, .6)).solve().T,
+    np.testing.assert_allclose(s.solve().T, solver('numpy', polarization=(.8, .6)).solve().T,
                                atol=2e-11)
 
 
@@ -86,7 +86,7 @@ def test_gradient_restores_the_material_definition_beside_its_value(slot, fails)
     s.wavelength = 1000.
     evaluated = s.structure[0]['background'] if slot == 'structure' else getattr(s, slot)
     assert complex(evaluated.epsilon) == pytest.approx(4.)
-    np.testing.assert_allclose(s.solve().T, solver(0, **{slot: value}, wavelength=1000.).solve().T,
+    np.testing.assert_allclose(s.solve().T, solver('numpy', **{slot: value}, wavelength=1000.).solve().T,
                                rtol=2e-9, atol=2e-11)
 
 
@@ -126,7 +126,7 @@ def test_field_loss_can_read_the_solver_while_the_gradient_is_being_evaluated():
         return jnp.sum(jnp.abs(s.reconstruct_field(2, 2, 2))**2).real
     got = s.grad(['wavelength'], partial(s.solve, geometry=g), loss)['wavelength']
     def reference(w):
-        reference_solver = solver(0, wavelength=w)
+        reference_solver = solver('numpy', wavelength=w)
         reference_solver.solve()
         return np.sum(np.abs(reference_solver.reconstruct_field(2, 2, 2))**2).real
     h = 1e-3

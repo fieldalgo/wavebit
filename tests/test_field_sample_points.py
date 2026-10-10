@@ -31,8 +31,7 @@ WL = 620.0
 PERIOD = (400.0, 380.0)
 NX = 20
 
-BACKENDS = [0, 1, 2]
-BACKEND_IDS = ['numpy', 'jax', 'torch']
+BACKENDS = ['numpy', 'jax', 'torch']
 
 # Which reconstruction each name exercises. All five paths, because the sampling helpers are
 # shared and a helper used by four of five is a helper that will break the fifth.
@@ -52,7 +51,7 @@ THICK = [150.0, 260.0]
 TOTAL = float(sum(THICK))
 
 
-def _solver(path, backend=0):
+def _solver(path, backend='numpy'):
     kw = dict(backend=backend, top=1.0, bot=1.0, wavelength=WL, thickness=THICK,
               theta=np.deg2rad(24.0), fourier_coefficients='integrated', answers='field')
     if path in ('te', 'tm'):
@@ -70,7 +69,7 @@ def _solver(path, backend=0):
     return s
 
 
-def _field(path, backend=0, **kw):
+def _field(path, backend='numpy', **kw):
     return np.asarray(_solver(path, backend).reconstruct_field(**kw))
 
 
@@ -118,7 +117,7 @@ def test_the_shape_origin_and_the_sample_origin_are_one_origin():
     # the same rod: absolute x in [100, 200), which is 50 left of the centre of the cell
     shapes = [dict(background=1.0, shapes=[dict(type='rectangle', cx=-50.0, cy=0.0,
                                                 lx=100.0, ly=P, material=EPS)])]
-    kw = dict(backend=0, top=1.0, bot=1.0, wavelength=900.0, thickness=[220.0],
+    kw = dict(backend='numpy', top=1.0, bot=1.0, wavelength=900.0, thickness=[220.0],
               theta=np.deg2rad(18.0), phi=0.0, psi=np.pi / 2, truncation_order=[8, 0],
               period=[P], answers='field')
 
@@ -291,20 +290,20 @@ def test_a_float_count_is_not_silently_a_coordinate():
             _field(path, **call)
 
 
-@pytest.mark.parametrize('backend,bid', list(zip(BACKENDS, BACKEND_IDS)), ids=BACKEND_IDS)
-def test_every_backend_samples_the_same_points(backend, bid):
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_every_backend_samples_the_same_points(backend):
     """The helpers are in ``_core`` and shared, so all three must agree — and with the grid."""
     z = np.array([0.0, 60.0, 150.0, 275.0, TOTAL])
     x = np.array([0.0, 133.3, 251.7, 400.0])
-    ref = _field('tm', backend=0, sample_x=x, sample_y=1, sample_z=z)
+    ref = _field('tm', backend='numpy', sample_x=x, sample_y=1, sample_z=z)
     got = _field('tm', backend=backend, sample_x=x, sample_y=1, sample_z=z)
     assert got.shape == ref.shape
     assert np.allclose(got, ref, rtol=0, atol=1e-10 * np.max(np.abs(ref)))
 
 
 @pytest.mark.parametrize('path', ['tm', '2d'])
-@pytest.mark.parametrize('backend,bid', list(zip(BACKENDS, BACKEND_IDS))[1:], ids=BACKEND_IDS[1:])
-def test_a_python_list_of_points_keeps_double_precision(backend, bid, path):
+@pytest.mark.parametrize('backend', BACKENDS[1:])
+def test_a_python_list_of_points_keeps_double_precision(backend, path):
     """Points written as a plain list are converted at the solve's precision, not the backend's.
 
     ``torch.asarray`` makes a list of Python floats ``float32`` (Torch's default dtype), and the
@@ -318,7 +317,7 @@ def test_a_python_list_of_points_keeps_double_precision(backend, bid, path):
     """
     x, z = [-130.7, 0.0, 91.3], [60.3, 150.0, 275.1]
     y = [0.0] if path == 'tm' else [-47.9, 120.1]
-    ref = _field(path, backend=0, sample_x=x, sample_y=y, sample_z=z)
+    ref = _field(path, backend='numpy', sample_x=x, sample_y=y, sample_z=z)
     got = _field(path, backend=backend, sample_x=x, sample_y=y, sample_z=z)
     assert got.shape == ref.shape
     assert np.abs(got - ref).max() < 1e-11 * np.abs(ref).max(), np.abs(got - ref).max()
@@ -355,7 +354,7 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot(backend, side):
                                                   torch.ones(2, dtype=torch.float64))
 
     def run(thick, sample_z):
-        s = wavebit.rcwa(backend=1 if backend == 'jax' else 2, top=1.0, bot=1.0, wavelength=WL,
+        s = wavebit.rcwa(backend='jax' if backend == 'jax' else 'torch', top=1.0, bot=1.0, wavelength=WL,
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
                          truncation_order=4, period=[PERIOD[0]], structure=xp.asarray(TWO_LAYER),
                          fourier_coefficients='integrated', answers='field', incidence_side=side)

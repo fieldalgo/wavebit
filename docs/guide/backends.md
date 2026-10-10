@@ -14,9 +14,14 @@ not a claim.
   and so none to go stale. `torch.compile` is not a supported path here.
 
 ```python
-solver = wavebit.rcwa(backend=0, ...)                  # 0 NumPy, 1 JAX, 2 PyTorch
-solver = wavebit.rcwa(backend=wavebit.Backend.JAX, ...)   # or the named constant
+solver = wavebit.rcwa(backend='numpy', ...)               # 'numpy', 'jax' or 'torch'
+solver = wavebit.rcwa(backend=wavebit.Backend.JAX, ...)   # or the enum member, the same thing
 ```
+
+The names are the libraries' import names, spelled exactly so: `'JAX'`, `'pytorch'` and the
+integers `0` / `1` / `2` -- the spelling until 2026-10-11 -- are refused with the list of names.
+`solver.backend` holds the `wavebit.Backend` member, which equals its name
+(`solver.backend == 'jax'`).
 
 ## What each one can do
 
@@ -52,7 +57,7 @@ Both keywords are written in wavebit's own vocabulary rather than a namespace's,
 lets one signature serve three backends:
 
 ```python
-wavebit.rcwa(backend=1, device=1, complex_dtype=1, ...)     # JAX, GPU, single precision
+wavebit.rcwa(backend='jax', device=1, complex_dtype=1, ...)     # JAX, GPU, single precision
 ```
 
 | | Accepts |

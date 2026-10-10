@@ -24,7 +24,7 @@ FIELDS = AMPLITUDES + ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _setup(**kw):
-    solver = wavebit.rcwa(backend=0, **kw)
+    solver = wavebit.rcwa(backend='numpy', **kw)
     legacy = solver.solve()
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.truncation_order[0], solver.truncation_order[1])

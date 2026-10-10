@@ -196,22 +196,22 @@ STACK = dict(top=1.0, bot=1.0, phi=None, tetm='te', truncation_order=[4, 0],
 
 def _ucell_grad(theta, backend):
     """d(sum T) / d(structure) — a derivative that has to cross the eigendecomposition."""
-    if backend == 1:
+    if backend == 'jax':
         def loss(u):
-            s = wavebit.rcwa(backend=1, structure=u, theta=theta,
+            s = wavebit.rcwa(backend='jax', structure=u, theta=theta,
                                fourier_coefficients='sampled', factorization='li', **STACK)
             return jnp.real(jnp.sum(s.solve().T))
         return np.asarray(jax.grad(loss)(jnp.asarray(UNIFORM)))
 
     torch = pytest.importorskip('torch')
     u = torch.tensor(UNIFORM, dtype=torch.float64, requires_grad=True)
-    s = wavebit.rcwa(backend=2, structure=u, theta=theta,
+    s = wavebit.rcwa(backend='torch', structure=u, theta=theta,
                        fourier_coefficients='sampled', factorization='li', **STACK)
     s.solve().T.real.sum().backward()
     return u.grad.numpy()
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_uniform_layer_at_normal_incidence_is_differentiable(backend):
     """The ordinary structure that used to return an all-NaN gradient.
 

@@ -118,7 +118,7 @@ def analytic_r(ns, thicknesses, wavelength, theta, tetm):
 def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, truncation_order=0)."""
     structure = eps_from_index(np.array([[[n, n]] for n in ns[1:-1][::-1]]))
-    solver = wavebit.rcwa(backend=0, layer_algorithm=algo, tetm=tetm,
+    solver = wavebit.rcwa(backend='numpy', layer_algorithm=algo, tetm=tetm,
                            top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                            theta=theta, truncation_order=0, wavelength=wavelength,
                            period=[wavelength * 2], structure=structure,
@@ -222,7 +222,7 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2   # == the bare air/gold interface
 
     structure = eps_from_index(np.array([[[AU, AU]]]))
-    common = dict(backend=0, tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, truncation_order=0,
+    common = dict(backend='numpy', tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, truncation_order=0,
                   wavelength=WL, period=[WL * 2], structure=structure, thickness=ds)
     tmm = wavebit.rcwa(layer_algorithm='ETM', **common).solve()
     smm = wavebit.rcwa(layer_algorithm='SMM', **common).solve()
@@ -240,7 +240,7 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
     ``tetm``, and the period must be 2D.
     """
     structure = [dict(background=eps_from_index(n), shapes=[]) for n in ns[1:-1][::-1]]
-    solver = wavebit.rcwa(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+    solver = wavebit.rcwa(backend='numpy', top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                             theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
@@ -305,7 +305,7 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
                    material=eps),
               dict(type='rectangle', cx=0.20 * P, cy=0.0, lx=0.60 * P, ly=1.0 * P,
                    material=eps)]
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=theta, phi=0.0,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=(3, 3),
                             wavelength=wavelength, period=[P, P],
                             structure=[dict(background=eps, shapes=shapes)],
@@ -338,7 +338,7 @@ def test_absorbing_layer_via_the_painted_path(n, tetm, theta):
     assert R + T <= 1.0, 'an absorbing layer cannot return more power than it was given'
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     """A complex ``n_bot`` must reach the boundary at the solve's working precision.
 
@@ -346,8 +346,8 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     introduces survives the later promotion to ``complex128`` — invisible against a real
     ``n_bot``, which is exactly the case the other cross-backend tests use.
     """
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
 
     ns, ds = [1.0, 1.5, AU], [20.0]
@@ -412,7 +412,7 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
     footnote that conversion now lives without.)
     """
     layers = ns[1:-1][::-1]
-    common = dict(backend=0, layer_algorithm=algo, top=eps_from_index(ns[0]),
+    common = dict(backend='numpy', layer_algorithm=algo, top=eps_from_index(ns[0]),
                   bot=eps_from_index(ns[-1]), theta=theta,
                   wavelength=wavelength, thickness=thicknesses[::-1])
     if path == '1d':
@@ -456,7 +456,7 @@ def test_absorbing_incident_reflectance_matches_airy(beta, algo):
     ns, ds = [n_top, 2.0, 1.0], [30.0]
 
     def eff(path):
-        common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+        common = dict(backend='numpy', top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                       theta=theta, wavelength=WL, thickness=ds, layer_algorithm=algo)
         if path == '1d':
             s = wavebit.rcwa(tetm='tm', truncation_order=0, period=[WL * 2],

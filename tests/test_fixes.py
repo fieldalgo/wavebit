@@ -20,7 +20,7 @@ def test_1_si_glass_branch_cut():
         structure=eps_from_index(np.array([[[n_si, n_si]]])), thickness=[200]
     )
 
-    for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
+    for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
             res = solver.solve()
@@ -51,7 +51,7 @@ def test_2_air_au_raw_n_lossy_substrate():
         structure=np.array([[[1.0, 1.0]]]), thickness=[0] # Bare interface
     )
 
-    for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
+    for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
             res = solver.solve()
@@ -79,7 +79,7 @@ def test_3_same_material_interface():
         structure=eps_from_index(np.array([[[n_au, n_au]]])), thickness=[20]
     )
 
-    for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
+    for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
         solver = wavebit.rcwa(backend=backend_id, **option)
         res = solver.solve()
         assert res.R is not None
@@ -103,7 +103,7 @@ def test_4_tm_transmittance_conjugation():
         structure=eps_from_index(np.array([[[1.0, n_au]]])), thickness=[20]
     )
 
-    for backend_id, backend_name in [(0, 'NumPy'), (2, 'PyTorch')]:
+    for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option_conical)
             res = solver.solve()
@@ -148,7 +148,7 @@ def test_6_none_structure_grating_type():
         structure=None, thickness=[100]
     )
 
-    for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
+    for backend_id, backend_name in [('numpy', 'NumPy'), ('jax', 'JAX'), ('torch', 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
             solver._assign_grating_type()
@@ -171,7 +171,7 @@ def test_7_none_theta_handling():
         structure=np.array([[[2.25, 2.25]]]), thickness=[100]
     )
 
-    for backend_id, backend_name in [(0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch')]:
+    for backend_id, backend_name in [('numpy', 'NumPy'), ('jax', 'JAX'), ('torch', 'PyTorch')]:
         try:
             solver = wavebit.rcwa(backend=backend_id, **option)
             res = solver.solve()
@@ -221,7 +221,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, truncation_order=[2, 2])
 
     for algo in ('ETM', 'SMM'):
-        res = wavebit.rcwa(backend=0, layer_algorithm=algo, **option).solve()
+        res = wavebit.rcwa(backend='numpy', layer_algorithm=algo, **option).solve()
         total = float(np.sum(res.R)) + float(np.sum(res.T))
         print(f"[{algo}] R+T = {total:.12f}")
         assert abs(total - 1.0) < 1e-9, f"{algo} energy conservation failed: {total}"

@@ -70,7 +70,7 @@ def test_directional_mixed_cell_powers_match_public_scattering_path(order):
     slots = projected_matrices(coefficients, order)
     t, r = polarized_powers(order, slots)
     for i, psi in enumerate((0., np.pi/2)):
-        solver = wavebit.rcwa(backend=0, period=(PERIOD, PERIOD), wavelength=WAVELENGTH,
+        solver = wavebit.rcwa(backend='numpy', period=(PERIOD, PERIOD), wavelength=WAVELENGTH,
                               top=1., bot=2.25, theta=THETA, phi=0., psi=psi,
                               thickness=(THICKNESS,), truncation_order=order)
         result = solver._solve_conv(*(s[None] for s in slots))

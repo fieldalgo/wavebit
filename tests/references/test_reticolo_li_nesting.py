@@ -53,7 +53,7 @@ def _rectangle(along_x=200.0, along_y=150.0):
 
 
 def _total_T(structure, nesting, truncation_order, psi, coefficients='integrated'):
-    res = wavebit.rcwa(backend=0, structure=structure, period=[_PERIOD, _PERIOD],
+    res = wavebit.rcwa(backend='numpy', structure=structure, period=[_PERIOD, _PERIOD],
                        thickness=[600.0], wavelength=532.0, top=1.0, bot=1.46 ** 2,
                        theta=0.0, phi=0.0, psi=psi, truncation_order=[truncation_order] * 2,
                        fourier_coefficients=coefficients, li_nesting=nesting).solve()

@@ -52,7 +52,7 @@ def _run(**kwargs):
     """Solve, returning ``(result, fp_warning_messages)``."""
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = wavebit.rcwa(backend=0, wavelength=WL, **kwargs).solve()
+        res = wavebit.rcwa(backend='numpy', wavelength=WL, **kwargs).solve()
     return res, _fp_warnings(rec)
 
 
@@ -136,7 +136,7 @@ def test_parametric_path_is_silent():
                                               material=9.0)])]
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = wavebit.rcwa(backend=0, structure=structure, truncation_order=(6, 6), top=1.0, bot=1.0,
+        res = wavebit.rcwa(backend='numpy', structure=structure, truncation_order=(6, 6), top=1.0, bot=1.0,
                              theta=np.deg2rad(5), phi=np.deg2rad(20), period=(1.0, 1.2),
                              wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).solve()
     assert _fp_warnings(rec) == []
@@ -145,7 +145,7 @@ def test_parametric_path_is_silent():
 
 def test_field_reconstruction_is_silent_and_finite():
     """Reconstruction re-walks the same modal exponentials the solve cascaded."""
-    sim = wavebit.rcwa(backend=0, structure=_structure_2d(), thickness=[600], period=[700, 700],
+    sim = wavebit.rcwa(backend='numpy', structure=_structure_2d(), thickness=[600], period=[700, 700],
                          wavelength=WL, truncation_order=[6, 6], psi=0.0, bot=EPS_SI, answers='field')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
@@ -226,8 +226,8 @@ def test_finiteness_guard_fires_from_the_solve_path():
 # --- the line is concreteness, not the namespace ---------------------------------------------
 #
 # These two used to assert the opposite: that both guards were no-ops on anything that was not
-# eager NumPy. That was keyed on the namespace, and it meant an ordinary eager `backend=1` /
-# `backend=2` call — where the value is right there to be read — went unguarded. A
+# eager NumPy. That was keyed on the namespace, and it meant an ordinary eager `backend='jax'` /
+# `backend='torch'` call — where the value is right there to be read — went unguarded. A
 # near-singular stack then returned R = 2.47 (JAX) and 243.9 (PyTorch) against a truth of
 # 0.215, finite and with an empty warning list. tests/test_rayleigh_guard.py pins that case
 # end to end; these pin the adapter-level rule it rests on.
@@ -280,7 +280,7 @@ def test_guards_step_aside_for_a_jit_tracer():
 _BRANCH_STRUCTURE = np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1
 
 
-def _branch_solve(complex_dtype, top=1.0, theta=0.4, phi=0.3, backend=0, layer_algorithm='ETM'):
+def _branch_solve(complex_dtype, top=1.0, theta=0.4, phi=0.3, backend='numpy', layer_algorithm='ETM'):
     return wavebit.rcwa(
         backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, truncation_order=[30],
         wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
@@ -309,7 +309,7 @@ _REGIMES = {
 
 
 @pytest.mark.parametrize('regime', list(_REGIMES))
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_double_precision_resolves_every_branch(backend, regime):
     """Silence at complex128 is the claim that makes the warning worth having."""
     assert _branch_warnings(complex_dtype=0, backend=backend, **_REGIMES[regime]) == []
@@ -317,7 +317,7 @@ def test_double_precision_resolves_every_branch(backend, regime):
 
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
 @pytest.mark.parametrize('regime', list(_REGIMES))
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_single_precision_reads_no_branch_from_round_off(backend, regime, algorithm):
     """complex64 now answers every branch question these regimes ask, and says nothing.
 
@@ -356,9 +356,9 @@ def _on_a_cut(backend, which, single=True):
     same cut in ``q = -i*kz``.
     """
     from wavebit._core.conventions import boundary_kz, etm_mode_q
-    if backend == 0:
+    if backend == 'numpy':
         make = lambda v: np.asarray(v, dtype=np.complex64 if single else np.complex128)
-    elif backend == 1:
+    elif backend == 'jax':
         jnp = pytest.importorskip('jax.numpy')
         make = lambda v: jnp.asarray(v, dtype=jnp.complex64 if single else jnp.complex128)
     else:
@@ -376,7 +376,7 @@ def _on_a_cut(backend, which, single=True):
 
 
 @pytest.mark.parametrize('which', ['half-space', 'layer'])
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_decision_on_its_cut_still_reports_at_single_precision(backend, which):
     """The warning is not retired with the round-off it used to report: a cut still has one.
 
@@ -406,7 +406,7 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
 
     def amplitude(complex_dtype, t):
         res = wavebit.rcwa(
-            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, truncation_order=[10],
+            backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, truncation_order=[10],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=complex_dtype, fourier_coefficients='sampled',
             factorization='li').solve()
@@ -436,7 +436,7 @@ def test_the_check_does_not_break_tracing():
 
     def R(theta):
         res = wavebit.rcwa(
-            backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[6],
+            backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[6],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=0, fourier_coefficients='sampled',
             factorization='li').solve()
@@ -447,8 +447,8 @@ def test_the_check_does_not_break_tracing():
 
 
 def test_branch_warning_message_carries_no_numbers():
-    a = str(_on_a_cut(0, 'half-space')[0].message)
-    b = str(_on_a_cut(0, 'layer')[0].message)
+    a = str(_on_a_cut('numpy', 'half-space')[0].message)
+    b = str(_on_a_cut('numpy', 'layer')[0].message)
     assert a == b
 
 
@@ -462,7 +462,7 @@ def _branch_error(algorithm, **kw):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             res = wavebit.rcwa(
-                backend=0, psi=np.pi / 2, bot=25.0, truncation_order=[30], wavelength=900e-9,
+                backend='numpy', psi=np.pi / 2, bot=25.0, truncation_order=[30], wavelength=900e-9,
                 period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
                 complex_dtype=complex_dtype, fourier_coefficients='integrated',
                 factorization='li', layer_algorithm=algorithm, **kw).solve()
@@ -501,7 +501,7 @@ def test_a_weak_absorber_at_a_complex_angle_holds_at_single_precision(algorithm)
 
 # --- a value that arrived below the precision it was asked to be solved at --------------------
 
-def _precision_warnings(theta, backend=0, complex_dtype=0):
+def _precision_warnings(theta, backend='numpy', complex_dtype=0):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         wavebit.rcwa(
@@ -596,7 +596,7 @@ def test_the_remaining_x64_ordering_gap_is_reported():
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
             wavebit.rcwa(
-                backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
+                backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
                 wavelength=900e-9, period=[2000e-9],
                 structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
                 complex_dtype=0, fourier_coefficients='sampled', factorization='li')
@@ -632,7 +632,7 @@ def test_the_remedy_the_warning_names_actually_removes_it():
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
             wavebit.rcwa(
-                backend=1, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
+                backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
                 wavelength=900e-9, period=[2000e-9],
                 structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
                 complex_dtype=0, fourier_coefficients='sampled', factorization='li')

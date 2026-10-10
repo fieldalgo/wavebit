@@ -187,7 +187,7 @@ not changed hits the JAX compilation cache — take the freeze again every step 
 on stale geometry).
 
 ```python
-solver = wavebit.rcwa(backend=1, structure=structure, ...)
+solver = wavebit.rcwa(backend='jax', structure=structure, ...)
 res = solver.solve(geometry=solver.freeze_geometry())
 ```
 

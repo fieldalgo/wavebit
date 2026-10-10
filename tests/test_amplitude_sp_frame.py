@@ -46,7 +46,7 @@ _PX, _PY, _FX, _FY = 500.0, 800.0, 5, 3
 _THICK = [120.0]
 
 
-def _solve(structure, period, truncation_order, phi, psi, theta=_THETA, backend=0, **kw):
+def _solve(structure, period, truncation_order, phi, psi, theta=_THETA, backend='numpy', **kw):
     return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, thickness=_THICK,
                         wavelength=_WL, theta=theta, phi=phi, psi=psi, factorization='nvf',
                         structure=structure, period=list(period), truncation_order=list(truncation_order),
@@ -132,7 +132,7 @@ def _host(value):
     return value.detach().cpu().numpy() if hasattr(value, 'detach') else np.asarray(value)
 
 
-def _field_scene(grating, side, backend=0, theta=_THETA):
+def _field_scene(grating, side, backend='numpy', theta=_THETA):
     """A solve with the field kept, its result, and its orders' in-plane wavevectors.
 
     ``'te'`` / ``'tm'`` are the pure 1D path on the conical scene's grating, at the only
@@ -311,16 +311,16 @@ def test_the_amplitudes_are_the_field_projected_on_zhat_cross_k(grating, side, t
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('backend, name', [(1, 'jax'), (2, 'torch')])
-def test_the_traced_backends_reconstruct_in_the_same_frame(backend, name, side):
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_the_traced_backends_reconstruct_in_the_same_frame(backend, side):
     """The field arbiter above, on the two traced backends.
 
     The twin test below compares these backends' amplitudes with themselves, which a
     backend-specific error in the amplitudes *and* the field together would pass; this one
     holds them to the field.
     """
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
     _, result, (KX, KY) = _field_scene('2d', side, backend=backend)
     _assert_amplitudes_are_the_field(result, _incident_pair('2d'), KX, KY, side, tol=1e-11,
@@ -369,8 +369,8 @@ def test_an_orders_amplitude_is_continuous_when_its_own_kx_crosses_zero():
             + ('  (a sign)' if abs(v[1] + v[2]) < 0.1 * abs(v[1]) else ''))
 
 
-@pytest.mark.parametrize('backend, name', [(1, 'jax'), (2, 'torch')])
-def test_the_traced_backends_quote_the_same_frame(backend, name):
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_the_traced_backends_quote_the_same_frame(backend):
     """The sign the fix puts back is a boolean cast to a complex dtype, which is the one line
     here the three array namespaces could disagree about.
 
@@ -378,8 +378,8 @@ def test_the_traced_backends_quote_the_same_frame(backend, name):
     ``astype`` of a comparison is not obviously the same operation, and where a wrong answer
     would reach anyone differentiating through a 2D solve.
     """
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
 
     a = _solve(_UC, (_PX, _PY), (_FX, _FY), np.pi / 2, _PSI, backend=backend)
@@ -390,8 +390,8 @@ def test_the_traced_backends_quote_the_same_frame(backend, name):
         y = np.asarray(getattr(b, attr), dtype=np.complex128).T
         if attr.endswith('_s'):
             y = -y
-        assert np.abs(x).max() > 0.1, f'{name}: {attr} came back empty'
-        assert np.abs(x - y).max() < 1e-12, f'{name}: {attr}'
+        assert np.abs(x).max() > 0.1, f'{backend}: {attr} came back empty'
+        assert np.abs(x - y).max() < 1e-12, f'{backend}: {attr}'
 
 
 @pytest.mark.parametrize('layer_algorithm', ['ETM', 'SMM'])
@@ -425,7 +425,7 @@ _PSI_OF = {'te': np.pi / 2, 'tm': 0.0}
 _EVERY = ('r_s', 'r_p', 't_s', 't_p', 'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p', 'power_entering')
 
 
-def _pure_and_coupled(tetm, side, theta, algorithm='ETM', backend=0, spelling='psi'):
+def _pure_and_coupled(tetm, side, theta, algorithm='ETM', backend='numpy', spelling='psi'):
     """The same light three ways: ``tetm``, and ``phi = 0`` with ``psi`` or with the pair."""
     kw = dict(_1D, backend=backend, theta=theta, incidence_side=side,
               layer_algorithm=algorithm, answers='field')
@@ -476,18 +476,18 @@ def test_the_pure_1d_path_is_the_conical_path_at_zero_azimuth(tetm, side, theta,
 @pytest.mark.parametrize('theta', [0.3, -0.3])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('tetm', ['te', 'tm'])
-@pytest.mark.parametrize('backend, name', [(1, 'jax'), (2, 'torch')])
-def test_the_traced_backends_put_the_pure_1d_path_in_the_same_frame(backend, name, tetm, side,
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_the_traced_backends_put_the_pure_1d_path_in_the_same_frame(backend, tetm, side,
                                                                      theta):
     """The sign is a real ``where`` multiplied into complex arrays, on every backend."""
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
     _, a, _, b = _pure_and_coupled(tetm, side, theta, backend=backend)
     for field in _EVERY:
         x = _host(getattr(a.incident, field)).astype(np.complex128)
         y = _host(getattr(b.incident, field)).astype(np.complex128)
-        assert np.abs(x - y).max() < 1e-12, (name, field)
+        assert np.abs(x - y).max() < 1e-12, (backend, field)
 
 
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
@@ -575,7 +575,7 @@ def test_on_the_ky_zero_row_an_amplitude_turns_over_where_its_own_kx_crosses_zer
     Order ``-1`` has ``kx = sin(theta) - 0.375``, zero at ``theta = asin(0.375)``.
     """
     theta_c = float(np.arcsin(0.375))
-    steps = [wavebit.rcwa(tetm=tetm, theta=theta_c + d, backend=0, answers='amplitude',
+    steps = [wavebit.rcwa(tetm=tetm, theta=theta_c + d, backend='numpy', answers='amplitude',
                           **_1D).solve().incident for d in (-3e-5, -1e-5, 1e-5, 3e-5)]
     at = (0, _1D['truncation_order'][0] - 1)
     name = 'r_s' if tetm == 'te' else 'r_p'

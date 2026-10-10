@@ -60,7 +60,7 @@ def _amplitudes(result):
     return np.concatenate(out)
 
 
-def _solver(path, algo, eps, mu, *, theta, top=1.0, bot, thickness, side='top', backend=0,
+def _solver(path, algo, eps, mu, *, theta, top=1.0, bot, thickness, side='top', backend='numpy',
             period=P, wavelength=WL, truncation_order=None, phi=0.6):
     """A raster stack: ``eps`` / ``mu`` are ``(n_layers, Ny, Nx)`` (1D paths: ``Ny = 1``)."""
     def raster(a):
@@ -435,7 +435,7 @@ def test_a_shape_layer_is_read_from_its_materials():
                          'material': Material(2.25, mu=1.0)}]}
     out = {}
     for algo in ('ETM', 'SMM'):
-        s = wavebit.rcwa(backend=0, top=1.0, bot=Material(*ASYM), theta=0.5, phi=0.6, psi=0.3,
+        s = wavebit.rcwa(backend='numpy', top=1.0, bot=Material(*ASYM), theta=0.5, phi=0.6, psi=0.3,
                          wavelength=WL, period=(P, P), thickness=[40.0], truncation_order=(2, 2),
                          layer_algorithm=algo, answers='amplitude', structure=[layer])
         out[algo] = _amplitudes(s.solve(auto_detune=False))
@@ -463,12 +463,12 @@ def test_the_engine_reads_each_layer_from_its_materials():
     # A 3x3 *scalar* raster: a 3x3 cell, not a tensor per pixel.
     grid = np.full((1, 3, 3), -2.0, complex)
     grid[0, 0, 0] = 1.0
-    s3 = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
+    s3 = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
                       thickness=[10.0], truncation_order=(1, 1), structure=grid,
                       mu=np.full((1, 3, 3), -1.0, complex))
     assert s3._layer_double_negative() == (DoubleNegativeLayer(True, False),)
     # Non-magnetic: no word at all.
-    plain = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=[P],
+    plain = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=[P],
                          thickness=[10.0], truncation_order=2, tetm='te',
                          structure=np.full((1, 1, 8), -2.0, complex))
     assert plain._layer_double_negative() is None
@@ -477,7 +477,7 @@ def test_the_engine_reads_each_layer_from_its_materials():
               {'background': Material(*ASYM), 'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                                           'lx': 100.0, 'material': 2.25}]},
               {'background': Material(2.0, mu=1.5)}]
-    shapes = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
+    shapes = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
                           thickness=[10.0] * 3, truncation_order=(1, 1), structure=layers)
     assert shapes._layer_double_negative() == (DoubleNegativeLayer(True, True),
                                                DoubleNegativeLayer(True, False),
@@ -513,7 +513,7 @@ def test_three_principal_values_are_one_flag_and_solve_as_their_tensor(name):
         layer = ({'background': 1.0, 'shapes': [{'type': 'rectangle', 'lx': 150.0, 'ly': 150.0,
                                                  'material': material}]}
                  if shape else {'background': material})
-        return wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=0.2, phi=0.1,
+        return wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=0.2, phi=0.1,
                             polarization=(1.0, 0.0), wavelength=600.0, period=(400.0, 400.0),
                             truncation_order=(1, 1), thickness=[100.0], structure=[layer],
                             layer_algorithm=algo, answers='amplitude')
@@ -532,7 +532,7 @@ def test_three_principal_values_are_one_flag_and_solve_as_their_tensor(name):
             assert np.abs(value - out['SMM', 'tensor']).max() < 1e-12 * scale, (name, shape, key)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_first_order_split_reads_flux_at_the_working_precision(backend):
     """A lossless patterned double negative has complex quadruplets of modes (``lam``, ``-lam``
     and their conjugates) that carry no flux and are propagation-dominated (``|Re| > |Im|``).
@@ -541,8 +541,8 @@ def test_the_first_order_split_reads_flux_at_the_working_precision(backend):
     found 17 and 16 forward modes of 18 and refused the layer at ``complex_dtype=1``. The
     threshold is now that many ulp of the working dtype, the same 1e-12 in double precision.
     The single-precision answer is held to the double-precision one."""
-    pytest.importorskip({0: 'numpy', 1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
     mask = np.zeros((6, 6))
     mask[1:4, 2:5] = 1
@@ -561,7 +561,7 @@ def test_the_first_order_split_reads_flux_at_the_working_precision(backend):
         return np.asarray(_host(s.solve(auto_detune=False).R), dtype=float)
 
     single = reflected(backend, 1)
-    double = reflected(0, 0)
+    double = reflected('numpy', 0)
     np.testing.assert_allclose(single, double, rtol=0, atol=1e-5)
 
 
@@ -606,8 +606,8 @@ def test_a_traced_double_negative_layer_is_selected_not_branched_on():
                                            thickness=[40.0], truncation_order=(2, 2))),
     )
     for name, build in cases:
-        eager = _amplitudes(build(0.0, 0).solve(auto_detune=False))
-        traced = jax.jit(lambda x: jnp.asarray(_amplitudes_jax(build(x, 1).solve(
+        eager = _amplitudes(build(0.0, 'numpy').solve(auto_detune=False))
+        traced = jax.jit(lambda x: jnp.asarray(_amplitudes_jax(build(x, 'jax').solve(
             auto_detune=False))))(jnp.asarray(0.0))
         assert np.abs(np.asarray(traced) - eager).max() < 1e-13, name
 
@@ -628,7 +628,7 @@ def _amplitudes_jax(result):
 
 # ------------------------------------------------------------------------- Pendry's perfect lens
 
-def _lens(algo, delta=0.0, backend=0, thickness=100.0):
+def _lens(algo, delta=0.0, backend='numpy', thickness=100.0):
     """A uniform ``(-2, -1)`` layer on its double-positive mirror ``(2, 1)``, lit from vacuum."""
     nim = (-2 + 1j * delta, -1 + 1j * delta)
     return _solver('te', algo, _uniform('te', nim[0]), _uniform('te', nim[1]), theta=0.25,
@@ -667,16 +667,16 @@ def test_the_perfect_lens_pair_is_finite_and_smm_has_it():
         assert 1e-3 * delta < moved < 1e3 * delta
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_etm_names_the_perfect_lens_pair_where_it_cannot_write_it(backend):
     """ETM writes a layer through its transmission into the medium below, and on Pendry's pair
     that is zero on every evanescent order. Here the zero comes out exact and the inversion
     fails -- ``LinAlgError`` on NumPy and Torch, a non-finite result on JAX -- and the solve says
     which pair it is and that SMM solves it, rather than retrying the wavelength for nothing."""
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     with pytest.raises(ValueError, match='perfect-lens pair') as caught:
         _lens('ETM', backend=backend).solve()
@@ -696,14 +696,14 @@ def test_a_lossy_lens_is_not_the_pair():
     assert np.abs(etm - smm).max() < 1e-13
 
 
-def _lens_on_its_negation(algo, backend=0):
+def _lens_on_its_negation(algo, backend='numpy'):
     """The roles swapped: a uniform ``(2, 1)`` layer on a ``(-2, -1)`` substrate, lit from vacuum."""
     return _solver('te', algo, _uniform('te', 2.0), _uniform('te', 1.0), theta=0.25,
                    bot=Material(-2.0 + 0j, mu=-1.0 + 0j), thickness=[100.0], backend=backend,
                    truncation_order=4)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_etm_names_the_pair_when_the_double_negative_is_the_substrate(backend):
     """The same pair with the double negative as the half-space: ETM writes the ordinary layer
     through its transmission into the substrate, ``(1 + Y_below/Y_layer)/2``, zero on every
@@ -715,10 +715,10 @@ def test_etm_names_the_pair_when_the_double_negative_is_the_substrate(backend):
     Pendry and S. A. Ramakrishna, J. Phys.: Condens. Matter 15, 6345 (2003)), so the stack
     reflects as vacuum onto ``(-2, -1)`` does; and the lens the other way round,
     ``(-2, -1)`` on ``(2, 1)``, reflects as vacuum onto ``(2, 1)``, the same ``R``."""
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     with pytest.raises(ValueError, match='perfect-lens pair') as caught:
         _lens_on_its_negation('ETM', backend=backend).solve()
@@ -744,7 +744,7 @@ STACKS = {'none': (), 'own': ('top',), 'both': ('bot', 'top'), 'three': ('top', 
 EVANESCENT_KEPT = {'te': None, 'tm': None, 'conical': None, '2d': (2, 2), 'first_order': (2, 2)}
 
 
-def _negation_scene(path, algo, stack, *, flip=False, side='top', backend=0, bot=None,
+def _negation_scene(path, algo, stack, *, flip=False, side='top', backend='numpy', bot=None,
                     theta=0.3, delta=0.0, period=P, truncation_order=None):
     """``NEGATION`` above ``NEGATED`` (``flip``: below it), with uniform layers of the two named
     by ``stack``; ``delta`` adds a loss to the double negative wherever it is."""
@@ -853,17 +853,17 @@ def test_the_negation_pair_with_no_evanescent_order_retained_is_solved(path):
                     assert '1 of the 1 retained orders is evanescent' in str(caught.value)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_negation_pair_is_refused_on_every_backend(backend):
     """The test reads values, so it runs on JAX and Torch eagerly as on NumPy -- and under an
     un-jitted ``jax.grad``, whose tracer carries its value -- and the spellings of the pair that
     reach it differently are refused too: a half-space that names no permeability (``mu = 1``),
     a layer that names none, and a ``solve_conv`` pair whose permittivity is left to
     ``n**2/mu``."""
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     for path, stack in (('te', 'none'), ('2d', 'three'), ('conical', 'own')):
         with pytest.raises(ValueError, match="each other's exact negation"):
@@ -878,14 +878,14 @@ def test_the_negation_pair_is_refused_on_every_backend(backend):
     with pytest.raises(ValueError, match="each other's exact negation"):
         solver.solve_conv(*solver.eps_conv_matrices(), mu=solver.mu_conv_matrices(),
                           mu_top=NEGATION[1], eps_bot=NEGATED[0], mu_bot=NEGATED[1])
-    if backend == 1:
+    if backend == 'jax':
         import jax
         import jax.numpy as jnp
 
         def total_R(re_eps):
             solver = _solver('te', 'SMM', _uniform('te', NEGATED[0]), _uniform('te', NEGATED[1]),
                              theta=0.3, top=Material(re_eps + 0j, mu=NEGATION[1]),
-                             bot=Material(*NEGATED), thickness=[80.0], backend=1)
+                             bot=Material(*NEGATED), thickness=[80.0], backend='jax')
             return solver.solve(auto_detune=False).incident.R.sum().real
 
         with pytest.raises(ValueError, match="each other's exact negation"):

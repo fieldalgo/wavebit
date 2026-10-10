@@ -27,7 +27,7 @@ import numpy as np
 
 import wavebit
 
-SCENE = dict(backend=0, top=1.0, bot=2.25, wavelength=900.0, thickness=[250.0])
+SCENE = dict(backend='numpy', top=1.0, bot=2.25, wavelength=900.0, thickness=[250.0])
 ANGLES = dict(theta=np.deg2rad(10.0), phi=np.deg2rad(20.0), psi=0.0)
 
 

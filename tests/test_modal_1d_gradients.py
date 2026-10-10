@@ -34,15 +34,15 @@ def test_one_dimensional_material_and_field_derivatives(mode, path, quantity, al
     if mode == 'torch':
         torch = pytest.importorskip('torch')
         t = torch.tensor(0., dtype=torch.float64, requires_grad=True)
-        value(2, t, path, quantity, algorithm).backward()
+        value('torch', t, path, quantity, algorithm).backward()
         got = float(t.grad)
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
         wavebit.enable_x64()
-        got = float(jax.grad(lambda t: value(1, t, path, quantity, algorithm))(jnp.asarray(0.)))
+        got = float(jax.grad(lambda t: value('jax', t, path, quantity, algorithm))(jnp.asarray(0.)))
     h = 1e-4
-    expected = (value(0, np.asarray(h), path, quantity, algorithm)
-                - value(0, np.asarray(-h), path, quantity, algorithm))/(2*h)
+    expected = (value('numpy', np.asarray(h), path, quantity, algorithm)
+                - value('numpy', np.asarray(-h), path, quantity, algorithm))/(2*h)
     assert abs(expected) > 1e-6
     assert got == pytest.approx(float(expected), abs=2e-7, rel=2e-5)

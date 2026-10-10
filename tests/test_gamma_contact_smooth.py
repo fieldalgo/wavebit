@@ -60,12 +60,12 @@ def test_solve_derivative_matches_the_endpoint_crossing_secant():
                            top=1., bot=2.25, theta=.2, phi=.13, psi=.2, thickness=(300.,),
                            truncation_order=(2,2), shape_nvf_grid_size=grid,
                            structure=[dict(background=1., shapes=shapes(height))])
-    frozen = solver(center, 0).freeze_geometry()
+    frozen = solver(center, 'numpy').freeze_geometry()
     def loss(height):
-        return jnp.sum(solver(height, 1).solve(geometry=frozen).T).real
+        return jnp.sum(solver(height, 'jax').solve(geometry=frozen).T).real
     got = float(jax.jit(jax.grad(loss))(jnp.asarray(center)))
     assert np.isfinite(got) and abs(got) > 1e-6
     for h in (1e-3, 1e-4):
-        plus = float(np.sum(solver(center+h,0).solve().T))
-        minus = float(np.sum(solver(center-h,0).solve().T))
+        plus = float(np.sum(solver(center+h,'numpy').solve().T))
+        minus = float(np.sum(solver(center-h,'numpy').solve().T))
         assert got == pytest.approx((plus-minus)/(2*h), rel=2e-3, abs=1e-7)

@@ -52,7 +52,7 @@ def per_layer(monkeypatch):
 
 def _solver(layers, thickness, algorithm, path, theta=THETA, answers='amplitude'):
     kw = dict(tetm=path) if path in ('te', 'tm') else dict(phi=0.4, psi=0.3)
-    return wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, wavelength=1000.0,
+    return wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, wavelength=1000.0,
                         period=[2000.0], truncation_order=[10],
                         structure=np.array(layers, dtype=complex), thickness=thickness,
                         layer_algorithm=algorithm, complex_dtype=0, incidence_side='bottom',
@@ -97,7 +97,7 @@ def test_a_split_layer_answers_as_the_uncut_one(per_layer, path, thick, before):
 
 def _amplitudes_2d(layers, thickness, algorithm):
     """A 2D rod of eps 5 in vacuum, over a uniform eps 5 layer cut in two, lit from above."""
-    s = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.45 + 0.3j, phi=0.4, psi=0.3,
+    s = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.45 + 0.3j, phi=0.4, psi=0.3,
                      wavelength=1000.0, period=(1300.0, 1100.0), truncation_order=(3, 3),
                      structure=np.array(layers), thickness=thickness, layer_algorithm=algorithm,
                      complex_dtype=0, incidence_side='top')
@@ -250,10 +250,10 @@ def test_a_split_stack_traced_under_jit_matches_numpy():
                          incidence_side='bottom', factorization='laurent', tetm='te')
         return s.solve(auto_detune=False).incident.r_s
 
-    merged = np.asarray(r(0, np.array([UNIFORM, GRATING], dtype=complex), [9000.0, 4800.0],
+    merged = np.asarray(r('numpy', np.array([UNIFORM, GRATING], dtype=complex), [9000.0, 4800.0],
                           'SMM'))
     split = np.array([UNIFORM, UNIFORM, GRATING], dtype=complex)
-    traced = jax.jit(lambda st: r(1, st, [1000.0, 8e3, 4800.0]))(jnp.asarray(split))
+    traced = jax.jit(lambda st: r('jax', st, [1000.0, 8e3, 4800.0]))(jnp.asarray(split))
     assert _relative(np.asarray(traced), merged) < 1e-12
 
 
@@ -276,7 +276,7 @@ def test_a_metal_grating_split_at_a_real_angle_keeps_one_label(per_layer):
     rod[3:7, 3:6] = 12.0
 
     def field(layers, thickness, algorithm):
-        s = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.6, psi=0.3,
+        s = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.6, psi=0.3,
                          wavelength=1000.0, period=(575.0, 477.0), truncation_order=(3, 2),
                          structure=np.array(layers), thickness=thickness,
                          layer_algorithm=algorithm, incidence_side='bottom', factorization='li',
@@ -333,7 +333,7 @@ def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch):
     eps = 5.792813684844445
 
     def amplitudes(thickness):
-        s = wavebit.rcwa(backend=0, top=1.0, bot=eps, theta=0.43 + 0.067j, wavelength=1000.0,
+        s = wavebit.rcwa(backend='numpy', top=1.0, bot=eps, theta=0.43 + 0.067j, wavelength=1000.0,
                          period=[2000.0], truncation_order=[10],
                          structure=np.full((len(thickness), 1, 8), eps + 0j),
                          thickness=thickness, layer_algorithm='ETM', complex_dtype=0, tetm='te')

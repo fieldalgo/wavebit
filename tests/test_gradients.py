@@ -38,7 +38,7 @@ ANALYTIC_BASE = dict(period=[0.77, 0.77], thickness=[0.25], theta=0.35, phi=0.4,
 def _frozen_raster():
     global FROZEN
     if FROZEN is None:
-        FROZEN = wavebit.rcwa(backend=0, structure=RASTER, **BASE).freeze_geometry()
+        FROZEN = wavebit.rcwa(backend='numpy', structure=RASTER, **BASE).freeze_geometry()
     return FROZEN
 
 
@@ -49,9 +49,9 @@ def _backend(name):
     if name == 'jax':
         wavebit.enable_x64()
         import jax.numpy as jnp
-        return 1, (lambda v: jnp.asarray(v, dtype=jnp.float64))
+        return 'jax', (lambda v: jnp.asarray(v, dtype=jnp.float64))
     import torch
-    return 2, (lambda v: torch.tensor(v, dtype=torch.float64))
+    return 'torch', (lambda v: torch.tensor(v, dtype=torch.float64))
 
 
 def _derivative(backend, objective, value, rel_step=1e-6):
@@ -63,7 +63,7 @@ def _derivative(backend, objective, value, rel_step=1e-6):
     derivative — at ``cx = period/2``, which sits exactly on a grid line, ``h = 1e-6`` gives
     3.8 where the derivative is 3.2e-3. Stay well inside one cell.
     """
-    if backend == 2:
+    if backend == 'torch':
         import torch
         p = torch.tensor(value, dtype=torch.float64, requires_grad=True)
         objective(p).backward()
@@ -78,7 +78,7 @@ def _derivative(backend, objective, value, rel_step=1e-6):
 
 
 def _backend_scalar(backend):
-    if backend == 2:
+    if backend == 'torch':
         import torch
         return lambda v: torch.tensor(v, dtype=torch.float64)
     import jax.numpy as jnp
@@ -135,15 +135,15 @@ def test_raster_per_cell_gradient_reaches_every_cell(name):
     backend, cast = _backend(name)
 
     def cells(geometry=None, **strategy):
-        if backend == 2:
+        if backend == 'torch':
             import torch
             uc = torch.tensor(RASTER, dtype=torch.float64, requires_grad=True)
-            res = wavebit.rcwa(backend=2, structure=uc, **strategy,
+            res = wavebit.rcwa(backend='torch', structure=uc, **strategy,
                                  **BASE).solve(geometry=geometry)
             torch.sum(res.T).backward()
             return int((uc.grad.abs() > 1e-14).sum())
         import jax, jax.numpy as jnp
-        g = jax.grad(lambda u: jnp.sum(wavebit.rcwa(backend=1, structure=u, **strategy,
+        g = jax.grad(lambda u: jnp.sum(wavebit.rcwa(backend='jax', structure=u, **strategy,
                      **BASE).solve(geometry=geometry).T).real)
         return int(np.sum(np.abs(np.asarray(g(jnp.asarray(RASTER)))) > 1e-14))
 
@@ -209,7 +209,7 @@ def test_analytic_angle_is_smooth_through_normal():
     def analytic(angle):
         shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=80.0, ly=60.0,
                      angle=angle, material=4.0)
-        res = wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
+        res = wavebit.rcwa(backend='numpy', structure=[dict(background=12.25, shapes=[shape])],
                              **base).solve()
         return float(np.sum(res.T))
 
@@ -232,13 +232,13 @@ def test_translation_leaves_nothing_behind_within_one_normal_field_cell():
     """
     base = dict(period=[300.0, 300.0], thickness=[205.0], truncation_order=[5, 5], top=1.0, bot=1.0,
                 wavelength=900.0, psi=np.pi / 4, theta=0.1, phi=0.3)
-    solver = wavebit.rcwa(backend=0, period=[300.0, 300.0])
+    solver = wavebit.rcwa(backend='numpy', period=[300.0, 300.0])
     cell = 300.0 / solver.shape_nvf_grid_size
 
     def total(cx):
         shape = dict(type='rectangle', cx=cx, cy=0.0, lx=80.0, ly=60.0,
                      angle=0.4, material=4.0)
-        return float(np.sum(wavebit.rcwa(backend=0, structure=[dict(background=12.25, shapes=[shape])],
+        return float(np.sum(wavebit.rcwa(backend='numpy', structure=[dict(background=12.25, shapes=[shape])],
                                            **base).solve().T))
 
     values = [total(f * cell) for f in (0.05, 0.35, 0.65, 0.95)]

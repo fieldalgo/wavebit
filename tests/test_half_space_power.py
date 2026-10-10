@@ -29,7 +29,7 @@ def _solver(route, medium, beta, pol, side='top', *, excitation=None,
     ei, mi, et, mt = medium
     incoming = wavebit.Material(ei, mu=mi)
     outgoing = wavebit.Material(et, mu=mt)
-    opts = dict(backend=0, top=incoming if side == 'top' else outgoing,
+    opts = dict(backend='numpy', top=incoming if side == 'top' else outgoing,
                 bot=outgoing if side == 'top' else incoming,
                 structure=np.full((1, 1 if path in ('1d', 'conical') else 2, 2), ei),
                 mu=np.full((1, 1 if path in ('1d', 'conical') else 2, 2), mi),
@@ -247,7 +247,7 @@ def test_public_absorption_result_and_gradient(backend, algorithm):
     def solve(loss):
         n = 1.5 + 1j * loss
         solver = wavebit.rcwa(
-            backend=1 if backend == 'jax' else 2,
+            backend='jax' if backend == 'jax' else 'torch',
             top=n**2, bot=1., theta=xp.arcsin(.5 / n), phi=0.,
             polarization=(.6, .8j), wavelength=500., period=[1000., 1000.],
             structure=xp.full((1, 2, 2), 4. + .8j, dtype=xp.complex128),

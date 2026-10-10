@@ -16,7 +16,7 @@ def shapes(width=300.,epsilon=9.,mu=1.,shift=(0.,0.)):
                  material=wavebit.Material(epsilon,mu=mu))]
 
 
-def build(scene=None,backend=0,**kwargs):
+def build(scene=None,backend='numpy',**kwargs):
     return solver(shapes() if scene is None else scene,backend=backend,grid=32,
                   truncation_order=(1,1),phi=.13,psi=.23,**kwargs)
 
@@ -89,9 +89,9 @@ def test_public_build_uses_the_polygon_projector_coefficients():
         np.testing.assert_allclose(a[0],b,atol=2e-12,rtol=0)
 
 
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_lossy_magnetic_painting_in_single_precision_matches_numpy(backend):
-    pytest.importorskip('jax' if backend==1 else 'torch')
+    pytest.importorskip(backend)
     scene=shapes(epsilon=9.+.04j,mu=1.2+.01j)
     options=dict(lattice=((700.,140.),(0.,600.)))
     want=build(scene,**options).solve()
@@ -106,7 +106,7 @@ def test_frozen_jit_geometry_and_material_derivatives_match_eager_differences():
     jax=pytest.importorskip('jax');import jax.numpy as jnp
     jax.config.update('jax_enable_x64',True)
     geometry=build().freeze_geometry()
-    def loss(p):return build(shapes(p[0],p[1]),backend=1).solve(geometry=geometry).T.sum().real
+    def loss(p):return build(shapes(p[0],p[1]),backend='jax').solve(geometry=geometry).T.sum().real
     point=jnp.array([300.,9.])
     value,gradient=jax.jit(jax.value_and_grad(loss))(point)
     assert float(value)==pytest.approx(build().solve().T.sum(),abs=3e-12)
@@ -122,7 +122,7 @@ def test_torch_geometry_and_permeability_derivatives():
     torch=pytest.importorskip('torch')
     width=torch.tensor(300.,dtype=torch.float64,requires_grad=True)
     mu=torch.tensor(1.2,dtype=torch.float64,requires_grad=True)
-    s=build(shapes(width,mu=mu),backend=2)
+    s=build(shapes(width,mu=mu),backend='torch')
     got=torch.autograd.grad(s.solve(geometry=s.freeze_geometry()).T.sum().real,(width,mu))
     for i,g in enumerate(got):
         assert np.isfinite(g.item()) and abs(g.item())>1e-7
@@ -193,7 +193,7 @@ def test_corrected_projector_rotates_covariantly():
 
 def test_jitted_painted_fields_match_eager():
     jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
-    s=build(backend=1,answers='field');geometry=s.freeze_geometry()
+    s=build(backend='jax',answers='field');geometry=s.freeze_geometry()
     a,af=s.solve_field_eager(3,3,2,geometry=geometry)
     b,bf=jax.jit(lambda:s.solve_field(3,3,2,geometry=geometry))()
     np.testing.assert_allclose(a.T,b.T,atol=3e-12,rtol=0)

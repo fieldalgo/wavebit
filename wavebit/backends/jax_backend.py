@@ -34,6 +34,7 @@ from .._core.engine import (CoreFactorizationMixin, CoreSolveMixin,  # noqa: E40
                             device_scoped)
 from .._core import fields as _fields                            # noqa: E402
 from .._core import lattice as _lattice_module                   # noqa: E402
+from .._core.enums import Backend                                # noqa: E402
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS  # noqa: E402
 from .._core.result import Result, ResultSub                     # noqa: E402
 from .._core.geometry import StaticGeometry                      # noqa: E402
@@ -49,12 +50,12 @@ class _BaseRCWA(CoreSolveMixin):
     #: keeps `_core` from naming an optional dependency.
     xp = _xp
 
-    #: Which backend this class is, as the integer `rcwa(backend=...)` takes. A declared
+    #: Which backend this class is, as the member `rcwa(backend=...)` parses to. A declared
     #: member because the shared constructor cannot spell three literals -- and it has to
     #: stay an accepted *keyword* as well: `SolverJax._tree_flatten` puts `backend` in
     #: aux_data, so it is part of the treedef and of every jit cache key, and
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
-    _BACKEND_ID = 1
+    _BACKEND_ID = Backend.JAX
 
     #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
     #: so `manifest.py` can publish this without importing this module to ask.
@@ -861,5 +862,5 @@ tree_util.register_pytree_node(SolverJax,
 # The cell basis is a child of that tree, so its own class has to be a pytree before the first
 # flatten. `Lattice` registers itself lazily when one is built with JAX loaded, and a basis
 # built *before* this module was imported -- `Lattice.hexagonal(400.)` ahead of the first
-# `rcwa(backend=1)` -- is handed on as it is, so nothing would register it in time.
+# `rcwa(backend='jax')` -- is handed on as it is, so nothing would register it in time.
 _lattice_module._register_pytree_if_jax_loaded()

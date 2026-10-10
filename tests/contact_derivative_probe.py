@@ -19,7 +19,7 @@ from contact_instruments import rectangular_li, split_nvf_derivative
 def total(height, order, grid):
     P._PROJECTOR_CACHE.clear()
     solver = wavebit.rcwa(
-        backend=0, period=(700., 700.), wavelength=900., top=1., bot=2.25,
+        backend='numpy', period=(700., 700.), wavelength=900., top=1., bot=2.25,
         theta=.2, phi=0., psi=0., thickness=(300.,),
         truncation_order=(order, order), shape_nvf_grid_size=grid,
         structure=[dict(background=1., shapes=[dict(

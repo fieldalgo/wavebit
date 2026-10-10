@@ -22,9 +22,9 @@ KW = dict(period=(1., 1.), wavelength=1.3, thickness=(.2,),
           truncation_order=(1, 1), factorization='nvf')
 
 
-@pytest.mark.parametrize('backend,module', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
-def test_constructor_and_properties_publish_only_the_new_names(backend, module):
-    pytest.importorskip(module)
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_constructor_and_properties_publish_only_the_new_names(backend):
+    pytest.importorskip(backend)
     solver = wavebit.rcwa(backend=backend, raster_normal_method='smooth',
                           shape_nvf_grid_size=32, nvf_projector='circular')
     params = {name for cls in type(solver).__mro__ if '__init__' in cls.__dict__
@@ -110,7 +110,7 @@ def test_jax_tree_roundtrip_preserves_explicit_and_unset_options(shape):
     jax = pytest.importorskip('jax')
     options = (dict(shape_nvf_grid_size=32) if shape
                else dict(raster_normal_method='smooth'))
-    solver = wavebit.rcwa(backend=1, structure=SHAPE if shape else RASTER,
+    solver = wavebit.rcwa(backend='jax', structure=SHAPE if shape else RASTER,
                           nvf_projector='circular', **options, **KW)
     leaves, tree = jax.tree_util.tree_flatten(solver)
     restored = jax.tree_util.tree_unflatten(tree, leaves)

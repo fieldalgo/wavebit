@@ -93,7 +93,7 @@ _LOSSLESS_TOP = ('te_grating_lossless_top', 'tm_grating_lossless_top',
 
 
 def _solver(name):
-    return wavebit.rcwa(backend=0, fourier_coefficients='integrated', **CASES[name])
+    return wavebit.rcwa(backend='numpy', fourier_coefficients='integrated', **CASES[name])
 
 
 def _golden():

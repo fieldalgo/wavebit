@@ -26,7 +26,7 @@ def layer(p, quantity='epsilon', circle='circle'):
         dict(type=circle, cy=200., lx=70., material=other)])
 
 
-def solver(backend=0, quantity='epsilon', p=POINT, n=16, **options):
+def solver(backend='numpy', quantity='epsilon', p=POINT, n=16, **options):
     kw = dict(lattice=CELL, wavelength=900., thickness=[170.],
               truncation_order=(1, 1), theta=.17, phi=.3, polarization=(.8, .6j),
               factorization='nvf', shape_nvf_grid_size=n, answers='field',
@@ -62,14 +62,14 @@ def test_shape_derivatives_at_the_old_polygon_vertex(backend, quantity):
     if backend == 'torch':
         torch = pytest.importorskip('torch')
         p = torch.tensor(POINT, dtype=torch.float64, requires_grad=True)
-        value = objective(solver(2, quantity), torch, p, quantity)
+        value = objective(solver('torch', quantity), torch, p, quantity)
         gradient, = torch.autograd.grad(value, p)
         value, gradient = float(value.detach()), gradient.detach().numpy()
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
         wavebit.enable_x64()
-        s = solver(1, quantity)
+        s = solver('jax', quantity)
         geometry = s.freeze_geometry() if backend == 'jit' else None
         calculate = jax.value_and_grad(lambda p: objective(s, jnp, p, quantity, geometry))
         if backend == 'jit':
@@ -209,7 +209,7 @@ def _window(name, n=32):
     values, gradients = [], []
     for x in xs:
         p = torch.tensor(x, dtype=torch.float64, requires_grad=True)
-        s = wavebit.rcwa(backend=2, lattice=cell, wavelength=900., thickness=[170.],
+        s = wavebit.rcwa(backend='torch', lattice=cell, wavelength=900., thickness=[170.],
                          truncation_order=(1, 1), theta=.17, phi=.3, polarization=(.8, .6j),
                          factorization='nvf', shape_nvf_grid_size=n,
                          structure=[dict(background=1., shapes=scene(**{parameter: p}))])
@@ -303,7 +303,7 @@ def test_one_jit_gradient_replays_across_the_old_corner():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    s = solver(1)
+    s = solver('jax')
     geometry = s.freeze_geometry()
     calculate = jax.jit(jax.value_and_grad(lambda p: objective(s, jnp, p, geometry=geometry)))
     with jax.checking_leaks():
@@ -381,13 +381,13 @@ def test_a_sample_on_an_ellipse_differentiates_as_the_field_around_it():
     assert np.count_nonzero(distance2 <= boundary._on_interface_threshold2(np, lattice, np.float64)) == 2
     torch = pytest.importorskip('torch')
     p = torch.tensor(point, dtype=torch.float64, requires_grad=True)
-    gradient, = torch.autograd.grad(_on_curve_transmission(2, torch, p), p)
+    gradient, = torch.autograd.grad(_on_curve_transmission('torch', torch, p), p)
     expected = []
     for i, h in ((0, 1e-4), (1, 1e-7)):
         plus, minus = point.copy(), point.copy()
         plus[i] += h
         minus[i] -= h
-        expected.append((_on_curve_transmission(0, np, plus) - _on_curve_transmission(0, np, minus))/(2*h))
+        expected.append((_on_curve_transmission('numpy', np, plus) - _on_curve_transmission('numpy', np, minus))/(2*h))
     np.testing.assert_allclose(gradient.numpy(), expected, rtol=1e-4)
 
 
@@ -480,14 +480,14 @@ def test_float32_boundary_gradients_are_finite_in_different_length_units(backend
         plus, minus = POINT.copy(), POINT.copy()
         plus[i] += h
         minus[i] -= h
-        expected.append((scaled_transmission(0, np, plus, 1., 0)
-                         -scaled_transmission(0, np, minus, 1., 0))/(2*h))
-    expected_value = scaled_transmission(0, np, POINT, 1., 0)
+        expected.append((scaled_transmission('numpy', np, plus, 1., 0)
+                         -scaled_transmission('numpy', np, minus, 1., 0))/(2*h))
+    expected_value = scaled_transmission('numpy', np, POINT, 1., 0)
     if backend == 'torch':
         torch = pytest.importorskip('torch')
         for scale in (1., 1e-3, 1e-6):
             p = torch.tensor(POINT, dtype=torch.float32, requires_grad=True)
-            value = scaled_transmission(2, torch, p, scale)
+            value = scaled_transmission('torch', torch, p, scale)
             gradient, = torch.autograd.grad(value, p)
             assert float(value.detach()) == pytest.approx(expected_value, abs=3e-6)
             np.testing.assert_allclose(gradient.detach().numpy(), expected, rtol=3e-3, atol=2e-6)
@@ -496,7 +496,7 @@ def test_float32_boundary_gradients_are_finite_in_different_length_units(backend
         import jax.numpy as jnp
         geometry = solver().freeze_geometry()
         calculate = jax.value_and_grad(
-            lambda p, scale: scaled_transmission(1, jnp, p, scale, geometry=geometry))
+            lambda p, scale: scaled_transmission('jax', jnp, p, scale, geometry=geometry))
         if backend == 'jit':
             calculate = jax.jit(calculate)
         with jax.checking_leaks():
@@ -535,15 +535,15 @@ def test_float32_gradients_are_finite_with_a_zero_strength_curve(backend):
         plus, minus = point.copy(), point.copy()
         plus[i] += 1e-3
         minus[i] -= 1e-3
-        expected.append((zero_strength_transmission(0, np, plus, 1., 0)
-                         -zero_strength_transmission(0, np, minus, 1., 0))/2e-3)
-    expected_value = zero_strength_transmission(0, np, point, 1., 0)
+        expected.append((zero_strength_transmission('numpy', np, plus, 1., 0)
+                         -zero_strength_transmission('numpy', np, minus, 1., 0))/2e-3)
+    expected_value = zero_strength_transmission('numpy', np, point, 1., 0)
     scales = (1., 1e-3, 1e-6, 1e-9)
     if backend == 'torch':
         torch = pytest.importorskip('torch')
         for scale in scales:
             p = torch.tensor(point, dtype=torch.float32, requires_grad=True)
-            value = zero_strength_transmission(2, torch, p, scale)
+            value = zero_strength_transmission('torch', torch, p, scale)
             gradient, = torch.autograd.grad(value, p)
             assert float(value.detach()) == pytest.approx(expected_value, abs=5e-6)
             np.testing.assert_allclose(gradient.numpy(), expected, rtol=2e-3, atol=1e-9)
@@ -552,7 +552,7 @@ def test_float32_gradients_are_finite_with_a_zero_strength_curve(backend):
         import jax.numpy as jnp
         wavebit.enable_x64()
         geometry = wavebit.rcwa(
-            backend=0, lattice=np.diag([600., 600.]), wavelength=900., thickness=[170.],
+            backend='numpy', lattice=np.diag([600., 600.]), wavelength=900., thickness=[170.],
             truncation_order=(1, 1), factorization='nvf', shape_nvf_grid_size=15,
             structure=[dict(background=1., shapes=[
                 dict(type='circle', lx=160., material=wavebit.Material(1., 2.25)),
@@ -560,7 +560,7 @@ def test_float32_gradients_are_finite_with_a_zero_strength_curve(backend):
                     wavebit.Material([3.8+.04j, 4.2+.06j, 4.5+.08j]).rotated(.2, 'y').epsilon))])],
         ).freeze_geometry()
         calculate = jax.jit(jax.value_and_grad(
-            lambda p, scale: zero_strength_transmission(1, jnp, p, scale, geometry=geometry)))
+            lambda p, scale: zero_strength_transmission('jax', jnp, p, scale, geometry=geometry)))
         with jax.checking_leaks():
             for scale in scales:
                 value, gradient = calculate(jnp.asarray(point, dtype=jnp.float32),
@@ -596,15 +596,15 @@ def test_float32_gradients_of_an_off_centre_ellipse_are_finite_in_any_length_uni
         plus, minus = point.copy(), point.copy()
         plus[i] += 1e-3
         minus[i] -= 1e-3
-        expected.append((off_centre_transmission(0, np, plus, 1., 0)
-                         - off_centre_transmission(0, np, minus, 1., 0))/2e-3)
-    expected_value = off_centre_transmission(0, np, point, 1., 0)
+        expected.append((off_centre_transmission('numpy', np, plus, 1., 0)
+                         - off_centre_transmission('numpy', np, minus, 1., 0))/2e-3)
+    expected_value = off_centre_transmission('numpy', np, point, 1., 0)
     scales = (1., 1e-3, 1e-6, 1e-9)
     if backend == 'torch':
         torch = pytest.importorskip('torch')
         for scale in scales:
             p = torch.tensor(point, dtype=torch.float32, requires_grad=True)
-            value = off_centre_transmission(2, torch, p, scale)
+            value = off_centre_transmission('torch', torch, p, scale)
             gradient, = torch.autograd.grad(value, p)
             assert float(value.detach()) == pytest.approx(expected_value, abs=5e-6)
             np.testing.assert_allclose(gradient.numpy(), expected, rtol=2e-3, atol=2e-9)
@@ -613,13 +613,13 @@ def test_float32_gradients_of_an_off_centre_ellipse_are_finite_in_any_length_uni
         import jax.numpy as jnp
         wavebit.enable_x64()
         geometry = wavebit.rcwa(
-            backend=0, lattice=CELL, wavelength=900., thickness=[170.], truncation_order=(1, 1),
+            backend='numpy', lattice=CELL, wavelength=900., thickness=[170.], truncation_order=(1, 1),
             factorization='nvf', shape_nvf_grid_size=16, structure=[dict(background=1., shapes=[
                 dict(type='circle', lx=150., material=2.25),
                 dict(type='ellipse', cx=120., cy=250., lx=300., ly=110., angle=.3,
                      material=TENSOR)])]).freeze_geometry()
         calculate = jax.jit(jax.value_and_grad(
-            lambda p, scale: off_centre_transmission(1, jnp, p, scale, geometry=geometry)))
+            lambda p, scale: off_centre_transmission('jax', jnp, p, scale, geometry=geometry)))
         with jax.checking_leaks():
             for scale in scales:
                 value, gradient = calculate(jnp.asarray(point, dtype=jnp.float32),
@@ -689,9 +689,9 @@ def test_an_odd_grid_samples_a_curve_centre(kind, n):
         plus, minus = point.copy(), point.copy()
         plus[i] += 1e-3
         minus[i] -= 1e-3
-        expected.append((transmission(0, np, plus) - transmission(0, np, minus))/2e-3)
+        expected.append((transmission('numpy', np, plus) - transmission('numpy', np, minus))/2e-3)
     p = torch.tensor(point, dtype=torch.float64, requires_grad=True)
-    gradient, = torch.autograd.grad(transmission(2, torch, p), p)
+    gradient, = torch.autograd.grad(transmission('torch', torch, p), p)
     np.testing.assert_allclose(gradient.numpy(), expected, rtol=1e-5, atol=1e-10)
 
 
@@ -712,11 +712,11 @@ def test_a_circle_does_not_turn_with_its_angle(n):
     # across these angles at n = 15, with a slope of 3.3e-4 that a central difference
     # confirmed, and by 4e-15 of rounding at n = 16; unrotated, nothing reads the angle and
     # every value is the same to the bit.
-    values = [_turned_circle_transmission(0, np, angle, n) for angle in (0., .4, 1.1, 2.3)]
+    values = [_turned_circle_transmission('numpy', np, angle, n) for angle in (0., .4, 1.1, 2.3)]
     assert len(set(values)) == 1, values
     torch = pytest.importorskip('torch')
     angle = torch.tensor(.4, dtype=torch.float64, requires_grad=True)
-    slope, = torch.autograd.grad(_turned_circle_transmission(2, torch, angle, n), angle)
+    slope, = torch.autograd.grad(_turned_circle_transmission('torch', torch, angle, n), angle)
     assert float(slope) == 0., float(slope)
 
 
@@ -917,20 +917,20 @@ def test_gradients_through_the_neighbour_sweep_of_an_in_cell_ellipse(backend):
         plus, minus = point.copy(), point.copy()
         plus[i] += h
         minus[i] -= h
-        expected.append((in_cell_transmission(0, np, plus)-in_cell_transmission(0, np, minus))/(2*h))
+        expected.append((in_cell_transmission('numpy', np, plus)-in_cell_transmission('numpy', np, minus))/(2*h))
     if backend == 'torch':
         torch = pytest.importorskip('torch')
         p = torch.tensor(point, dtype=torch.float64, requires_grad=True)
-        gradient, = torch.autograd.grad(in_cell_transmission(2, torch, p), p)
+        gradient, = torch.autograd.grad(in_cell_transmission('torch', torch, p), p)
         gradient = gradient.numpy()
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
         wavebit.enable_x64()
-        geometry = in_cell_solver(0, point).freeze_geometry()
+        geometry = in_cell_solver('numpy', point).freeze_geometry()
         with jax.checking_leaks():
             gradient = np.asarray(jax.jit(jax.grad(
-                lambda p: in_cell_transmission(1, jnp, p, geometry)))(jnp.asarray(point)))
+                lambda p: in_cell_transmission('jax', jnp, p, geometry)))(jnp.asarray(point)))
     np.testing.assert_allclose(gradient, expected, rtol=1e-5, atol=1e-10)
 
 
@@ -1008,7 +1008,7 @@ def test_the_polygon_route_converges_to_the_nearest_point_vector_and_not_to_the_
 
 
 def stale_solver(backend, shapes, cell):
-    if backend == 1:
+    if backend == 'jax':
         wavebit.enable_x64()
     return wavebit.rcwa(backend=backend, lattice=cell, wavelength=900., thickness=[170.],
                         truncation_order=(1, 1), theta=.17, phi=.3, polarization=(.8, .6j),
@@ -1028,18 +1028,18 @@ def growing_ellipse(lx, ly=200.):
             dict(type='rectangle', lx=60., ly=60., cy=250., material=2.25)]
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_box_crossing_its_own_ring_threshold_replays_as_a_fresh_solve(backend):
     # The rectangle's image list grows (9 -> 13): the full interface-set plan changes, the
     # curve candidates read nothing of it, and the frozen record must still replay.
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     cell = np.diag([600., 600.])
     lattice = as_lattice(lattice=cell)
     before, after = (parametric.plan_gamma(growing_box(w), lattice) for w in (200., 220.))
     assert before != after
     assert tensor_shapes._curve_plan(before) == tensor_shapes._curve_plan(after)
-    geometry = stale_solver(0, growing_box(200.), cell).freeze_geometry()
+    geometry = stale_solver('numpy', growing_box(200.), cell).freeze_geometry()
     replay = stale_solver(backend, growing_box(220.), cell).solve(geometry=geometry,
                                                                   auto_detune=False)
     fresh = stale_solver(backend, growing_box(220.), cell).solve(auto_detune=False)
@@ -1056,19 +1056,19 @@ def _ellipse_images(lx, ly=200.):
     return tensor_shapes._curve_plan(parametric.plan_gamma(growing_ellipse(lx, ly), lattice))[1][0][1]
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_an_ellipse_growing_out_of_its_wigner_seitz_cell_is_refused_by_name(backend):
     # 709 x 200 at 10 deg stays inside the Wigner-Seitz cell of a 700 square, 710 leaves it:
     # its arc grows from one instance, searched over the 3x3, to a ring of 11 that the 3x3
     # does not hold, which a replay must not search short. The polygon interface plan is the
     # same at both sizes, so only the curve check can refuse.
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     lattice = as_lattice(lattice=ELLIPSE_CELL)
     assert (boundary._plan_key(boundary.plan_layer(growing_ellipse(709.), lattice))
             == boundary._plan_key(boundary.plan_layer(growing_ellipse(710.), lattice)))
     assert (len(_ellipse_images(709.)), len(_ellipse_images(710.))) == (1, 11)
-    geometry = stale_solver(0, growing_ellipse(709.), ELLIPSE_CELL).freeze_geometry()
+    geometry = stale_solver('numpy', growing_ellipse(709.), ELLIPSE_CELL).freeze_geometry()
     with pytest.raises(wavebit.StaleGeometryError) as refusal:
         stale_solver(backend, growing_ellipse(710.), ELLIPSE_CELL).solve(geometry=geometry,
                                                                          auto_detune=False)
@@ -1079,13 +1079,13 @@ def test_an_ellipse_growing_out_of_its_wigner_seitz_cell_is_refused_by_name(back
     stale_solver(backend, growing_ellipse(710.), ELLIPSE_CELL).solve(auto_detune=False)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_an_ellipse_shrinking_into_its_wigner_seitz_cell_replays_as_a_fresh_solve(backend):
     # The other way: the recorded ring of 11 holds the 3x3 a fresh plan searches, so the
     # replay finds the same nearest boundary by the same arithmetic per instance.
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
-    geometry = stale_solver(0, growing_ellipse(710.), ELLIPSE_CELL).freeze_geometry()
+    geometry = stale_solver('numpy', growing_ellipse(710.), ELLIPSE_CELL).freeze_geometry()
     replay = stale_solver(backend, growing_ellipse(709.), ELLIPSE_CELL).solve(
         geometry=geometry, auto_detune=False)
     fresh = stale_solver(backend, growing_ellipse(709.), ELLIPSE_CELL).solve(auto_detune=False)
@@ -1093,19 +1093,19 @@ def test_an_ellipse_shrinking_into_its_wigner_seitz_cell_replays_as_a_fresh_solv
         np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
 
 
-@pytest.mark.parametrize('backend', [0, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
 def test_an_ellipse_leaving_its_cell_into_a_ring_the_3x3_holds_replays_as_a_fresh_solve(backend):
     # 60 wide instead of 200, the ellipse leaves its Wigner-Seitz cell at 711 rather than 710,
     # and its ring is the 3x3 itself, which the single-image record already searches: the
     # refusal reads the instances searched, not the length of the image list.
-    if backend == 2:
+    if backend == 'torch':
         pytest.importorskip('torch')
     lattice = as_lattice(lattice=ELLIPSE_CELL)
     assert (boundary._plan_key(boundary.plan_layer(growing_ellipse(709., 60.), lattice))
             == boundary._plan_key(boundary.plan_layer(growing_ellipse(711., 60.), lattice)))
     assert _ellipse_images(709., 60.) == ((0, 0),)
     assert _ellipse_images(711., 60.) == tensor_shapes._NEIGHBOURS
-    geometry = stale_solver(0, growing_ellipse(709., 60.), ELLIPSE_CELL).freeze_geometry()
+    geometry = stale_solver('numpy', growing_ellipse(709., 60.), ELLIPSE_CELL).freeze_geometry()
     replay = stale_solver(backend, growing_ellipse(711., 60.), ELLIPSE_CELL).solve(
         geometry=geometry, auto_detune=False)
     fresh = stale_solver(backend, growing_ellipse(711., 60.), ELLIPSE_CELL).solve(auto_detune=False)
@@ -1118,7 +1118,7 @@ def _value_and_gradient(differentiate, shapes_of, lx, cell, geometry=None):
     if differentiate == 'torch':
         torch = pytest.importorskip('torch')
         width = torch.tensor(lx, dtype=torch.float64, requires_grad=True)
-        value = torch.real(stale_solver(2, shapes_of(width), cell).solve(
+        value = torch.real(stale_solver('torch', shapes_of(width), cell).solve(
             geometry=geometry, auto_detune=False).T.sum())
         gradient, = torch.autograd.grad(value, width)
         return float(value.detach()), float(gradient)
@@ -1126,7 +1126,7 @@ def _value_and_gradient(differentiate, shapes_of, lx, cell, geometry=None):
     import jax.numpy as jnp
     wavebit.enable_x64()
     value, gradient = jax.value_and_grad(lambda width: jnp.real(stale_solver(
-        1, shapes_of(width), cell).solve(geometry=geometry, auto_detune=False).T.sum()))(
+        'jax', shapes_of(width), cell).solve(geometry=geometry, auto_detune=False).T.sum()))(
         jnp.asarray(lx))
     return float(value), float(gradient)
 
@@ -1141,16 +1141,16 @@ def test_the_curve_check_reads_shape_values_under_differentiation(differentiate)
     # jax.grad the two round the blend differently -- 5.6e-16 in the value, with identical
     # inputs to the blend and candidates that agree bitwise on their own.
     square = np.diag([600., 600.])
-    geometry = stale_solver(0, growing_box(200.), square).freeze_geometry()
+    geometry = stale_solver('numpy', growing_box(200.), square).freeze_geometry()
     assert (_value_and_gradient(differentiate, growing_box, 220., square, geometry)
             == _value_and_gradient(differentiate, growing_box, 220., square))
-    geometry = stale_solver(0, growing_ellipse(710.), ELLIPSE_CELL).freeze_geometry()
+    geometry = stale_solver('numpy', growing_ellipse(710.), ELLIPSE_CELL).freeze_geometry()
     replay = _value_and_gradient(differentiate, growing_ellipse, 709., ELLIPSE_CELL, geometry)
     fresh = _value_and_gradient(differentiate, growing_ellipse, 709., ELLIPSE_CELL)
     if differentiate == 'torch':
         assert replay == fresh
     else:
         np.testing.assert_allclose(replay, fresh, rtol=1e-13, atol=0.)
-    geometry = stale_solver(0, growing_ellipse(709.), ELLIPSE_CELL).freeze_geometry()
+    geometry = stale_solver('numpy', growing_ellipse(709.), ELLIPSE_CELL).freeze_geometry()
     with pytest.raises(wavebit.StaleGeometryError, match=r"\(1 -> 11 instances"):
         _value_and_gradient(differentiate, growing_ellipse, 710., ELLIPSE_CELL, geometry)

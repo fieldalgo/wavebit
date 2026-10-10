@@ -84,12 +84,12 @@ def test_closing_equal_material_pieces_recovers_a_single_rectangle_with_the_same
 
 
 @pytest.mark.research
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_separated_contact_stack_matches_independent_inverse_rules_on_all_backends(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
     p[1] = 0.

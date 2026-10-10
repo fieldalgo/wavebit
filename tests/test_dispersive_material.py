@@ -14,7 +14,7 @@ def scalar(value):
     return np.asarray(value).item()
 
 
-def film(material, backend=0, **kwargs):
+def film(material, backend='numpy', **kwargs):
     return wavebit.rcwa(backend=backend, wavelength=900., period=(600., 600.),
                         structure=[dict(background=material, shapes=[])], thickness=[120.],
                         truncation_order=(0, 0), polarization=(1., 0.), factorization="li", **kwargs)
@@ -30,10 +30,9 @@ def airy(wavelength, epsilon):
     return abs(r)**2, abs(t)**2
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_dispersive_film_against_airy_and_repeated_wavelengths(backend):
-    if backend:
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     m = TabulatedMaterial([800., 1000.], [4.+.1j, 9.+.3j])
     solver = film(m, backend)
     for w in (800., 875., 1000., 900.):
@@ -140,7 +139,7 @@ def test_jax_wavelength_gradient_jit_and_solver_pytree_keep_dispersion():
     import jax.numpy as jnp
     wavebit.enable_x64()
     m = TabulatedMaterial([800., 1000.], [4., 9.])
-    solver = film(m, backend=1)
+    solver = film(m, backend='jax')
     geometry = solver.freeze_geometry()
     fn = jax.jit(lambda w: solver.solve(wavelength=w, geometry=geometry,
                                         auto_detune=False).R.sum())
@@ -161,7 +160,7 @@ def test_torch_wavelength_derivative_keeps_graph():
     torch = pytest.importorskip('torch')
     m = TabulatedMaterial([800., 1000.], [4., 9.])
     w = torch.tensor(910., dtype=torch.float64, requires_grad=True)
-    solver = film(m, backend=2)
+    solver = film(m, backend='torch')
     r = solver.solve(wavelength=w, auto_detune=False).R.sum()
     r.backward()
     finite = (airy(910.01, 6.75025)[0]-airy(909.99, 6.74975)[0])/.02
@@ -171,10 +170,9 @@ def test_torch_wavelength_derivative_keeps_graph():
     assert w2.grad.item() == pytest.approx(.025)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_precision_change_keeps_material_definitions(backend):
-    if backend:
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     m = TabulatedMaterial([800., 1000.], [4., 9.])
     solver = film(m, backend, bot=m)
     solver.complex_dtype = 1
@@ -216,7 +214,7 @@ def test_jit_assignment_restores_definition_with_its_evaluated_values():
     wavebit.enable_x64()
     old = TabulatedMaterial([800., 1000.], [4., 9.])
     new = TabulatedMaterial([800., 1000.], [16., 25.])
-    solver = wavebit.rcwa(backend=1, wavelength=900., period=600.,
+    solver = wavebit.rcwa(backend='jax', wavelength=900., period=600.,
                           structure=np.ones((1, 1, 1)), thickness=[0.],
                           top=old, tetm='te', fourier_coefficients='integrated')
     geometry = solver.freeze_geometry()
@@ -230,12 +228,11 @@ def test_jit_assignment_restores_definition_with_its_evaluated_values():
     assert float(result.R.sum()) == pytest.approx(((n-1)/(n+1))**2)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('slot', ['top', 'bot'])
 def test_permeability_dispersion_reaches_interface_impedance(backend, slot):
     """Changing mu alone changes Fresnel reflection; index-only ingest cannot pass."""
-    if backend:
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     m = TabulatedMaterial([800., 1000.], [4., 4.], mu=[1., 4.])
     solver = wavebit.rcwa(backend=backend, wavelength=800., period=600.,
                           structure=np.ones((1, 1, 1)), thickness=[0.],
@@ -264,7 +261,7 @@ def test_restored_tables_follow_the_concrete_wavelength_kept_by_a_traced_call(sl
                theta=.13, phi=.21, wavelength=900., answers='field',
                structure=np.full((1, 1, 1), 5.))
     cfg[slot] = declaration(material)
-    solver = wavebit.rcwa(backend=1, **cfg)
+    solver = wavebit.rcwa(backend='jax', **cfg)
     geometry = solver.freeze_geometry()
     forward = getattr(solver, door)
     if door == 'solve_field':
@@ -285,7 +282,7 @@ def test_restored_tables_follow_the_concrete_wavelength_kept_by_a_traced_call(sl
     assert scalar(live.epsilon) == pytest.approx(4.)
     if slot != 'structure':
         assert scalar(getattr(solver, f'n_{slot}')) == pytest.approx(2.)
-    reference = wavebit.rcwa(backend=0, **(cfg | dict(wavelength=1000.))).solve()
+    reference = wavebit.rcwa(backend='numpy', **(cfg | dict(wavelength=1000.))).solve()
     np.testing.assert_allclose(solver.solve().T, reference.T, atol=2e-12, rtol=0)
 
 
@@ -300,7 +297,7 @@ def test_restoration_outside_the_original_table_recovers_a_usable_scene(slot, fa
     cfg = dict(period=600., thickness=(170.,), truncation_order=0, wavelength=900.,
                structure=np.full((1, 1, 1), 5.), answers='field')
     cfg[slot] = value
-    solver = wavebit.rcwa(backend=1, **cfg)
+    solver = wavebit.rcwa(backend='jax', **cfg)
     initial = solver.solve()
     geometry = solver.freeze_geometry()
     def loss(result):

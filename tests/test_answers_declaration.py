@@ -29,9 +29,9 @@ def _structure(n_layers=1):
     return u
 
 
-def _solver(backend=0, n_layers=1, **kw):
+def _solver(backend='numpy', n_layers=1, **kw):
     grid = _structure(n_layers)
-    if backend == 1:
+    if backend == 'jax':
         import jax.numpy as jnp
         grid = jnp.asarray(grid)
     return wavebit.rcwa(backend=backend, truncation_order=(3, 3), period=(300., 300.), wavelength=500.,
@@ -229,7 +229,7 @@ def test_the_amplitude_rung_retains_no_matrices_and_the_field_rung_scales_with_d
 def test_the_declaration_survives_the_pytree_round_trip():
     jax = pytest.importorskip('jax')
     for rung in ('amplitude', 'field'):
-        s = _solver(backend=1, answers=rung)
+        s = _solver(backend='jax', answers=rung)
         leaves, treedef = jax.tree_util.tree_flatten(s)
         assert jax.tree_util.tree_unflatten(treedef, leaves).answers is answers_of(rung)
 
@@ -242,8 +242,8 @@ def test_the_declaration_is_static_so_jit_recompiles_across_it():
     declared — which is how this failed before it was aux data.
     """
     jax = pytest.importorskip('jax')
-    _, amplitude = jax.tree_util.tree_flatten(_solver(backend=1, answers='amplitude'))
-    _, field = jax.tree_util.tree_flatten(_solver(backend=1, answers='field'))
+    _, amplitude = jax.tree_util.tree_flatten(_solver(backend='jax', answers='amplitude'))
+    _, field = jax.tree_util.tree_flatten(_solver(backend='jax', answers='field'))
     assert amplitude != field
 
 
@@ -256,7 +256,7 @@ def test_the_declaration_holds_across_a_jit_boundary():
 
     ref = None
     for rung in ('amplitude', 'field'):
-        R = np.asarray(solved(_solver(backend=1, answers=rung)))
+        R = np.asarray(solved(_solver(backend='jax', answers=rung)))
         ref = R if ref is None else ref
         assert np.array_equal(ref, R), rung
 

@@ -35,7 +35,7 @@ def _eps():
 
 
 def _solver(truncation_order, lattice=None, period=None):
-    kw = dict(backend=0, wavelength=900.0, truncation_order=truncation_order, top=1.0, bot=1.0,
+    kw = dict(backend='numpy', wavelength=900.0, truncation_order=truncation_order, top=1.0, bot=1.0,
               theta=0.1, phi=0.3, psi=0.2, structure=_eps(), thickness=[300.0],
               factorization='nvf')
     if lattice is not None:
@@ -136,7 +136,7 @@ def test_the_labels_follow_a_moved_window_not_the_declaration():
     """
     e = _eps()
     # long enough that orders 0 and 2 both propagate: |kx_m| = |m| * wl / period < 1
-    s = wavebit.rcwa(backend=0, wavelength=900.0, period=[2400.0, 1100.0],
+    s = wavebit.rcwa(backend='numpy', wavelength=900.0, period=[2400.0, 1100.0],
                      truncation_order=dict(u=6, v=2), top=1.0, bot=1.0, theta=0.0, phi=0.0,
                      psi=0.2, structure=e, thickness=[300.0],
                      excitation={0: 1.0, 2: 0.5 - 0.3j})
@@ -170,7 +170,7 @@ def test_the_check_reads_the_present_state_whatever_order_it_arrived_in(build, a
     must be allowed. Both directions are here. A check that latched on first refusal would pass
     the fourth case and fail the fifth.
     """
-    kw = dict(backend=0, wavelength=900.0, top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.2,
+    kw = dict(backend='numpy', wavelength=900.0, top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.2,
               structure=_eps(), thickness=[300.0], factorization='nvf')
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')

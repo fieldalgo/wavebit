@@ -127,7 +127,7 @@ def test_two_sided_matches_independent_magnetic_slab(pol, phase, lossy_ports):
                                    r.boundary_fields(side, [.13], [.07])[0, 0, [0, 1, 3, 4]], atol=3e-12)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_patterned_oblique_tensor_superposition(backend):
     material = wavebit.Material([2.5, 3.1, 4.2], mu=[1.1, 1.3, 1.2]).rotated(.3, 'y')
     options = scene(backend=backend, period=None, lattice=[[2., .4], [0., 1.7]],
@@ -240,7 +240,7 @@ def test_torch_gradients_at_normal_incidence_are_the_one_sided_limit(top):
 
     def autodiff(which):
         x = torch.tensor(2.25 if which == 'eps' else 0.0, dtype=torch.float64, requires_grad=True)
-        values = outputs(x, 0.0, 2) if which == 'eps' else outputs(2.25, x, 2)
+        values = outputs(x, 0.0, 'torch') if which == 'eps' else outputs(2.25, x, 'torch')
         out = []
         for v in values:
             v = torch.reshape(torch.as_tensor(v), (-1,)).to(torch.complex128)
@@ -253,12 +253,12 @@ def test_torch_gradients_at_normal_incidence_are_the_one_sided_limit(top):
         return np.asarray(out)
 
     h = 1e-6
-    fd_eps = (flat(outputs(2.25 + h, 0.0, 0)) - flat(outputs(2.25 - h, 0.0, 0))) / (2 * h)
+    fd_eps = (flat(outputs(2.25 + h, 0.0, 'numpy')) - flat(outputs(2.25 - h, 0.0, 'numpy'))) / (2 * h)
     ad_eps = autodiff('eps')
     assert np.all(np.isfinite(ad_eps))
     np.testing.assert_allclose(ad_eps, fd_eps, rtol=0, atol=1e-7 * np.abs(fd_eps).max())
     h = 1e-8
-    fd_theta = (flat(outputs(2.25, h, 0)) - flat(outputs(2.25, 0.0, 0))) / h
+    fd_theta = (flat(outputs(2.25, h, 'numpy')) - flat(outputs(2.25, 0.0, 'numpy'))) / h
     ad_theta = autodiff('theta')
     assert np.all(np.isfinite(ad_theta))
     np.testing.assert_allclose(ad_theta, fd_theta, rtol=0, atol=1e-6 * np.abs(fd_theta).max())
@@ -303,7 +303,7 @@ def test_tilted_tensor_one_sided_matches_etm(side):
     np.testing.assert_allclose(b.reconstruct_field(**points), expected, atol=3e-12)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_backend_outputs_match_numpy(backend):
     options = scene(excitation={'top': wavebit.PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j)),
                                 'bottom': wavebit.PlaneWave(kx=.2, ky=.3, amplitude=.5j)})
@@ -346,7 +346,7 @@ def _facade(backend):
     return wavebit.rcwa(**scene(), backend=backend, excitation={'top': wavebit.PlaneWave()})
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('typo, hint', [('thicknes', "Did you mean 'thickness'?"),
                                         ('perio', "Did you mean 'period'?"),
                                         ('nesting', "Did you mean 'li_nesting'?"),
@@ -389,7 +389,7 @@ def test_the_facade_door_reads_a_quantity_off_the_name_as_the_solver_does():
     and keeps the guess plain difflib draws from what the facade can set."""
     import difflib
     from test_spec import COUNT_SPELLINGS, INDEX_SPELLINGS
-    facade = _facade(0)
+    facade = _facade('numpy')
     crossed = []
     for name in INDEX_SPELLINGS:
         if hasattr(type(facade._scene), name):             # `n_top`, `n_bot`: "has no setter"
@@ -415,7 +415,7 @@ def test_the_facade_door_reads_a_quantity_off_the_name_as_the_solver_does():
     assert reached >= 2, reached
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_facade_door_forwards_every_scene_condition_and_keeps_its_own(backend):
     """Closing the door must leave every legitimate name through it working.
 

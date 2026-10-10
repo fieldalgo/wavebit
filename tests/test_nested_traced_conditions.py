@@ -17,7 +17,7 @@ def design(value):
                                             lx=100., ly=120., material=value)])]
 
 
-def solver(backend=1, **kwargs):
+def solver(backend='jax', **kwargs):
     return wavebit.rcwa(backend=backend, **CFG, **kwargs)
 
 
@@ -50,8 +50,8 @@ def test_nested_material_gradient_restores_modeling_path_before_following_solve(
         got = np.asarray(s.grad(['structure'], forward, lambda value: value)['structure'])
     assert observed == ['raster']
     def reference(values):
-        first = solver(0, structure=design(float(np.mean(values)))).solve().T.sum().real
-        second = solver(0, structure=values).solve().T.sum().real
+        first = solver('numpy', structure=design(float(np.mean(values)))).solve().T.sum().real
+        second = solver('numpy', structure=values).solve().T.sum().real
         return float((0. if failure else first) + second)
     expected = np.empty_like(raster)
     for index in np.ndindex(raster.shape):

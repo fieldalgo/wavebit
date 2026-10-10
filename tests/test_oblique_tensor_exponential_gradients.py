@@ -80,9 +80,9 @@ def actual(s,xp,v,profile,geometry=None):
 def test_oblique_field_and_nine_parameter_gradient_match_maxwell_boundary_problem(backend,profile,side,algorithm):
     pytest.importorskip('torch' if backend=='torch' else 'jax')
     want=reference(ROOT,profile,side)
-    got=actual(make(0,profile,side,algorithm),np,ROOT,profile)
+    got=actual(make('numpy',profile,side,algorithm),np,ROOT,profile)
     np.testing.assert_allclose(got,want,rtol=3e-11,atol=3e-11)
-    s=make(2 if backend=='torch' else 1,profile,side,algorithm)
+    s=make('torch' if backend=='torch' else 'jax',profile,side,algorithm)
     if backend in ('jax','jit'):
         import jax
         import jax.numpy as jnp

@@ -78,8 +78,8 @@ def actual(s,xp,t,profile,multilayer,geometry=None):
 @pytest.mark.parametrize('multilayer',[False,True])
 def test_field_and_joint_constitutive_derivative_match_independent_maxwell_exponential(backend,profile,multilayer):
     reference=independent_field(0.,profile,multilayer)
-    np.testing.assert_allclose(actual(solver(0,profile,multilayer),np,0.,profile,multilayer),reference,atol=2e-12,rtol=2e-12)
-    s=solver(2 if backend=='torch' else 1,profile,multilayer)
+    np.testing.assert_allclose(actual(solver('numpy',profile,multilayer),np,0.,profile,multilayer),reference,atol=2e-12,rtol=2e-12)
+    s=solver('torch' if backend=='torch' else 'jax',profile,multilayer)
     if backend in ('jax','jit'):
         jax=pytest.importorskip('jax')
         import jax.numpy as jnp

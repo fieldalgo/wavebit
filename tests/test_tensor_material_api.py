@@ -17,7 +17,7 @@ def host(a):
     return np.asarray(a)
 
 
-def film(material, backend=0, **kwargs):
+def film(material, backend='numpy', **kwargs):
     options = dict(backend=backend, wavelength=600., period=(300., 300.),
                    thickness=[220.], structure=[dict(background=material, shapes=[])],
                    truncation_order=(0, 0), phi=0.)
@@ -25,7 +25,7 @@ def film(material, backend=0, **kwargs):
     return wavebit.rcwa(**options)
 
 
-def pattern(material=None, backend=0, **kwargs):
+def pattern(material=None, backend='numpy', **kwargs):
     material = Material([2.25, 4., 2.8]) if material is None else material
     options = dict(wavelength=700., period=(600., 600.), thickness=[170.],
                    structure=[dict(background=1., shapes=[dict(
@@ -38,7 +38,7 @@ def pattern(material=None, backend=0, **kwargs):
     return wavebit.rcwa(backend=backend, **options)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('theta', [0., .47])
 def test_diagonal_assignment_matches_independent_airy(backend, theta):
     res = film(Material([2.25, 4., 2.8]), backend, theta=theta).solve(auto_detune=False)
@@ -48,7 +48,7 @@ def test_diagonal_assignment_matches_independent_airy(backend, theta):
         np.testing.assert_allclose(host(actual.T.sum()), abs(expected[1])**2, atol=2e-12)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_rotated_material_matches_waveplate_amplitude(backend):
     angle = .38
     m = Material([4., 2.25, 2.25]).rotated(angle)
@@ -81,7 +81,7 @@ def test_full_tensor_and_stack_order_against_berreman(side):
             np.testing.assert_allclose(getattr(inc,key).sum(), expected[name][key], atol=2e-11)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_tensor_shape_equals_raster_and_frozen_replay(backend):
     solver = pattern(backend=backend)
     X, Y = wavebit.meshgrid_xy((24, 24), period=(600.,600.))
@@ -135,7 +135,7 @@ def test_tensor_json_round_trip_constant_table_and_raster():
         np.testing.assert_allclose(wavebit.run(restored).R, wavebit.run(spec).R, atol=2e-12)
 
 
-@pytest.mark.parametrize('backend', [0,1,2])
+@pytest.mark.parametrize('backend', ['numpy','jax','torch'])
 def test_tensor_dispersion_resolves_each_wavelength(backend):
     m = TabulatedMaterial([500.,700.], [[2.,3.,2.5],[3.,4.,2.9]])
     solver = film(m, backend)
@@ -172,7 +172,7 @@ def test_unsupported_requests_and_stale_geometry_fail_loudly():
 def test_material_rotation_gradient_against_finite_difference(backend):
     def objective(a):
         m = Material([4.,2.25,2.8]).rotated(a)
-        return film(m, 1 if backend=='jax' else 2).solve(auto_detune=False).s_inc.t_p.real.sum()
+        return film(m, 'jax' if backend=='jax' else 'torch').solve(auto_detune=False).s_inc.t_p.real.sum()
     if backend == 'jax':
         import jax
         derivative = jax.jit(jax.grad(objective))(.3)
@@ -188,10 +188,10 @@ def test_material_rotation_gradient_against_finite_difference(backend):
 def test_jax_pattern_material_gradient_with_frozen_geometry():
     import jax
     import jax.numpy as jnp
-    frozen = pattern(backend=1).freeze_geometry()
+    frozen = pattern(backend='jax').freeze_geometry()
     def f(e):
         m = Material(jnp.stack([e, e*0+4., e*0+2.8]))
-        return pattern(m, backend=1).solve(geometry=frozen, auto_detune=False).R.sum()
+        return pattern(m, backend='jax').solve(geometry=frozen, auto_detune=False).R.sum()
     derivative = jax.jit(jax.grad(f))(2.25)
     expected = (host(f(2.25001))-host(f(2.24999)))/.00002
     np.testing.assert_allclose(host(derivative), expected, rtol=2e-5, atol=1e-8)
@@ -220,7 +220,7 @@ def test_tensor_picture_selects_component_and_paints_in_order():
         solver.slice_structure(show='n', component='xx')
 
 
-@pytest.mark.parametrize('backend', [0,1,2])
+@pytest.mark.parametrize('backend', ['numpy','jax','torch'])
 def test_full_tensor_and_magnetic_tensor_across_backends(backend):
     for m in (Material([2.,3.,4.]).rotated(.3,'x'),
               Material([2.,3.,4.],mu=[1.1,1.3,1.2]).rotated(.3)):
@@ -238,7 +238,7 @@ def test_uniform_pixel_values_do_not_discard_pixel_gradients():
     x = torch.tensor(2.,dtype=torch.float64,requires_grad=True)
     mask = torch.tensor([[0.,0.],[0.,1.]],dtype=torch.float64)
     eps = (2.+(x-2.)*mask)[None,...,None,None]*torch.eye(3,dtype=torch.float64)
-    solver = wavebit.rcwa(backend=2, structure=eps, period=(600.,600.), thickness=[170.],
+    solver = wavebit.rcwa(backend='torch', structure=eps, period=(600.,600.), thickness=[170.],
                          wavelength=700., truncation_order=(0,0))
     yy = solver.eps_conv_matrices().epy.real.sum()
     derivative, = torch.autograd.grad(yy,x)
@@ -272,18 +272,18 @@ def test_frozen_pattern_rejects_moved_or_merged_material_interfaces():
     import torch
     radius = torch.tensor(270.,requires_grad=True)
     with pytest.raises(ValueError,match='geometry derivatives'):
-        pattern(backend=2,structure=[dict(background=1.,shapes=[dict(
+        pattern(backend='torch',structure=[dict(background=1.,shapes=[dict(
             type='circle',lx=radius,material=Material([2.,3.,4.]))])]).solve()
 
 
 def test_jax_traced_z_coupling_is_not_discarded():
     import jax
     import jax.numpy as jnp
-    solver = pattern(backend=1)
+    solver = pattern(backend='jax')
     frozen = solver.freeze_geometry()
     def f(xz):
         e = jnp.diag(jnp.array([2.25,4.,2.8])).at[0,2].set(xz)
-        return pattern(Material(e),backend=1).eps_conv_matrices(geometry=frozen).epxz
+        return pattern(Material(e),backend='jax').eps_conv_matrices(geometry=frozen).epxz
     assert np.isfinite(host(jax.jit(f)(0.))).all()
     coupled=host(jax.jit(f)(.2))
     assert np.isfinite(coupled).all()
@@ -293,12 +293,12 @@ def test_jax_traced_z_coupling_is_not_discarded():
 def test_sampled_tensor_lattice_derivative_is_refused():
     import jax
     import torch
-    frozen = pattern(backend=1).freeze_geometry()
+    frozen = pattern(backend='jax').freeze_geometry()
     with pytest.raises(ValueError, match='lattice derivatives'):
-        jax.jit(jax.grad(lambda p: pattern(backend=1, period=(p,600.)).solve(
+        jax.jit(jax.grad(lambda p: pattern(backend='jax', period=(p,600.)).solve(
             geometry=frozen,auto_detune=False).R.sum()))(600.)
     with pytest.raises(ValueError, match='lattice derivatives'):
-        pattern(backend=2, period=torch.tensor([600.,600.], requires_grad=True)).solve()
+        pattern(backend='torch', period=torch.tensor([600.,600.], requires_grad=True)).solve()
 
 
 def test_periodic_tensor_shapes_on_an_unreduced_cell_match_brute_force_images():

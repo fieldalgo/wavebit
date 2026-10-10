@@ -99,12 +99,12 @@ def _contact_reference(layer, lattice, order, axis):
 
 
 @pytest.mark.research
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_mixed_axis_contact_stack_matches_independent_analytic_matrices_and_engine(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
     p[1] = 0.

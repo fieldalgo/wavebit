@@ -8,7 +8,7 @@ PyTorch autograd need nothing from you; `jax.jit` and `vmap` need one extra obje
 ```python
 import jax, jax.numpy as jnp
 
-solver = wavebit.rcwa(backend=1, structure=structure, ...)
+solver = wavebit.rcwa(backend='jax', structure=structure, ...)
 grad = jax.grad(lambda u: jnp.sum(solver.solve(structure=u).T))(structure)
 ```
 
@@ -16,7 +16,7 @@ and on PyTorch, eagerly:
 
 ```python
 u = torch.tensor(raster, dtype=torch.float64, requires_grad=True)
-solver = wavebit.rcwa(backend=2, structure=u, ...)
+solver = wavebit.rcwa(backend='torch', structure=u, ...)
 solver.solve().T.sum().backward()          # u.grad
 ```
 
@@ -59,7 +59,7 @@ can express:
 ```python
 def loss(angle):
     A = wavebit.Lattice.oblique(400., 400., angle)
-    solver = wavebit.rcwa(backend=1, lattice=A, structure=structure, ...)
+    solver = wavebit.rcwa(backend='jax', lattice=A, structure=structure, ...)
     return jnp.sum(solver.solve().T)
 
 jax.grad(loss)(jnp.asarray(np.radians(105.)))
@@ -126,7 +126,7 @@ def design(width):
              angle=0., material=4.)])])
 
 initial = dict(width=jnp.asarray(230., dtype=jnp.float64))
-solver = wavebit.rcwa(backend=1, period=(700., 700.), thickness=(150.,),
+solver = wavebit.rcwa(backend='jax', period=(700., 700.), thickness=(150.,),
                      wavelength=850., truncation_order=(2, 2), **design(**initial))
 best = solver.fit(initial, solver.solve, lambda result: -result.T.sum().real,
                   optax.adam(1.), iteration=20, parameterize=design)

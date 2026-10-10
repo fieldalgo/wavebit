@@ -39,7 +39,7 @@ def _host(v):
     return np.asarray(v.detach().cpu().numpy() if hasattr(v, 'detach') else v)
 
 
-def _solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', backend=0, path='2d',
+def _solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', backend='numpy', path='2d',
             side='top', phi=None, **kw):
     """One uniform glass layer between the given half-spaces; the zeroth order only."""
     common = dict(backend=backend, top=top, bot=bot, theta=theta, wavelength=WL,
@@ -377,7 +377,8 @@ def test_a_factor_on_maystres_cut_keeps_its_root_whatever_the_round_off():
             assert np.all((np.conj(n) * kz).real > 0), name
             np.testing.assert_allclose(n, kz, rtol=1e-15, atol=0, err_msg=name)
     # Through the solver, the materials as Python numbers and as each backend's arrays.
-    for backend, wrap in ((0, complex), (0, np.asarray), (1, 'jax'), (2, 'torch')):
+    for backend, wrap in (('numpy', complex), ('numpy', np.asarray), ('jax', 'jax'),
+                          ('torch', 'torch')):
         if wrap == 'jax':
             jnp = pytest.importorskip('jax').numpy
             wrap = jnp.asarray
@@ -541,7 +542,7 @@ G2[4, 0:2] = 2.25
 H, P_G = 180.0, 700.0
 
 
-def _grating(path, algo, nim=PASSIVE, d=None, backend=0, answers='amplitude', lit=None,
+def _grating(path, algo, nim=PASSIVE, d=None, backend='numpy', answers='amplitude', lit=None,
              side='top', theta=0.3, phi=0.4):
     """glass (lit) / grating / NIM half-space, or / NIM slab of thickness ``d`` / glass.
 
@@ -883,7 +884,7 @@ def test_a_grating_lit_from_a_negative_index_side_is_reciprocal(tetm, algo):
     root rule, index sign or angle semantics of the double negative enters it except as the
     far side the slab test pins."""
     def solve(side, excitation, **incidence):
-        solver = wavebit.rcwa(backend=0, wavelength=WL, period=[P_G], structure=G1[None, None, :],
+        solver = wavebit.rcwa(backend='numpy', wavelength=WL, period=[P_G], structure=G1[None, None, :],
                               thickness=[H], truncation_order=3, tetm=tetm, layer_algorithm=algo,
                               top=wavebit.Material(*ASYM_LOSSLESS), bot=N_GLASS ** 2,
                               incidence_side=side, excitation=excitation, **incidence)
@@ -1041,7 +1042,7 @@ def test_the_gain_band_flags_an_active_double_negative_under_jit():
 
     def band(re_eps):
         solver = _grating('conical', 'SMM', nim=(re_eps + 1j * GAIN[0].imag, GAIN[1]),
-                          backend=1)
+                          backend='jax')
         solver.theta = np.deg2rad(60.0)
         return solver.gain_cutoff_band()['bottom']
 
@@ -1080,7 +1081,7 @@ def test_a_solve_conv_pair_signs_the_index_it_is_solved_with(where):
     def scene(material, theta):
         sides = (dict(top=material, bot=N_GLASS ** 2) if where == 'top' else
                  dict(top=N_GLASS ** 2, bot=material))
-        return wavebit.rcwa(backend=0, wavelength=WL, period=(P_G, 0.9 * P_G),
+        return wavebit.rcwa(backend='numpy', wavelength=WL, period=(P_G, 0.9 * P_G),
                             truncation_order=(1, 1), structure=G2[None], thickness=[H],
                             theta=theta, phi=0.6, psi=0.3, answers='field', **sides)
     points = ([0.0, 100.0], [0.0, 50.0], [10.0, 90.0])
@@ -1106,10 +1107,10 @@ def test_a_solve_conv_pair_signs_the_index_it_is_solved_with(where):
 
 # ----------------------------------------------------------------------------- the backends
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_the_backends_agree(backend):
-    pytest.importorskip('jax' if backend == 1 else 'torch')
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
 
     def flat(result):
@@ -1128,14 +1129,14 @@ def test_the_refusals_read_torch_values_eagerly():
     eps = torch.tensor(ASYM[0], dtype=torch.complex128)
     mu = torch.tensor(ASYM[1], dtype=torch.complex128)
     theta = np.deg2rad(35.0)
-    got = _solver(backend=2, theta=theta, phi=0.6, top=wavebit.Material(eps, mu=mu)).solve()
+    got = _solver(backend='torch', theta=theta, phi=0.6, top=wavebit.Material(eps, mu=mu)).solve()
     want = _solver(theta=theta, phi=0.6, top=wavebit.Material(*ASYM)).solve()
     for name in ('R', 'T', 'r_s', 'r_p', 't_s', 't_p'):
         np.testing.assert_allclose(_host(getattr(got.incident, name)),
                                    _host(getattr(want.incident, name)), rtol=0, atol=1e-13)
     gain = [torch.tensor(v, dtype=torch.complex128) for v in GAIN]
     with pytest.raises(ValueError, match='active negative-index half-space'):
-        _solver(backend=2, bot=wavebit.Material(gain[0], mu=gain[1]))
+        _solver(backend='torch', bot=wavebit.Material(gain[0], mu=gain[1]))
 
 
 def test_jit_through_a_lit_negative_index_superstrate():
@@ -1156,7 +1157,7 @@ def test_jit_through_a_lit_negative_index_superstrate():
         eager = amplitudes(_grating('conical', 'SMM', lit=ASYM, theta=theta, phi=0.6).solve(
             auto_detune=False))
         traced = jax.jit(lambda re_eps: amplitudes(_grating(
-            'conical', 'SMM', lit=(re_eps + 1j * ASYM[0].imag, ASYM[1]), backend=1,
+            'conical', 'SMM', lit=(re_eps + 1j * ASYM[0].imag, ASYM[1]), backend='jax',
             theta=theta, phi=0.6).solve(auto_detune=False)))(jnp.asarray(ASYM[0].real))
         for a, b in zip(traced, eager):
             np.testing.assert_allclose(np.asarray(a), _host(b), rtol=0, atol=1e-12)
@@ -1174,7 +1175,7 @@ def test_jit_and_grad_through_a_negative_index_substrate():
 
     def solved(re_eps):
         nim = (re_eps + 1j * PASSIVE[0].imag, PASSIVE[1])
-        return _grating('conical', 'SMM', nim=nim, backend=1).solve(auto_detune=False)
+        return _grating('conical', 'SMM', nim=nim, backend='jax').solve(auto_detune=False)
 
     def total_R(re_eps):
         return solved(re_eps).R.sum()
@@ -1212,7 +1213,7 @@ def test_under_jit_the_scenes_own_pairs_sign_nothing():
     seen = {}
 
     def probe(re_eps):
-        solver = _grating('conical', 'SMM', nim=(re_eps + 0.1j, 1 + 0.1j), backend=1)
+        solver = _grating('conical', 'SMM', nim=(re_eps + 0.1j, 1 + 0.1j), backend='jax')
         bot = solver._bot
         n_top, n_bot = solver._n_top, solver._n_bot
         with solver._indices_signed_by_pairs(solver._top.epsilon, solver._top.mu,

@@ -80,7 +80,7 @@ def _solve(name, algo='SMM', door='k', factorization='laurent', top=None, bot=No
     ``door='theta'`` hands it the case's angles and lets the solver's own rule make one."""
     case = CASES[name]
     one_d = len(case['period']) == 1
-    kw = dict(backend=0, top=wavebit.Material(*(case['top'] if top is None else top)),
+    kw = dict(backend='numpy', top=wavebit.Material(*(case['top'] if top is None else top)),
               bot=wavebit.Material(*(case['bot'] if bot is None else bot)), wavelength=WL,
               thickness=[THICK], structure=case['eps'][None], factorization=factorization,
               layer_algorithm=algo,

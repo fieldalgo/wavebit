@@ -140,11 +140,10 @@ def test_magnetic_index_json_preserves_source_tables_and_interpolation(mu):
     assert restored.stack.top.at(875.).epsilon == model.at(875.).epsilon
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('slot', ['top', 'bot'])
 def test_constant_index_changing_mu_matches_fresnel_impedance(backend, slot):
-    if backend:
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     model = TabulatedMaterial.from_index([800., 1000.], [2., 2.], mu=[1., 3.])
     solver = wavebit.rcwa(backend=backend, wavelength=800., period=600.,
                           structure=np.ones((1, 1, 1)), thickness=[0.],

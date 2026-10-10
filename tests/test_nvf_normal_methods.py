@@ -83,7 +83,7 @@ def band_error(eps, normal_x, normal_y, cx=0.5, cy=0.5, r=0.3, width_px=2):
     return float(angular_error_deg(normal_x, normal_y, tx, ty)[band].mean())
 
 
-SOLVE_KW = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3],
+SOLVE_KW = dict(backend='numpy', period=[1., 1.], wavelength=.55, thickness=[.3],
                 theta=np.deg2rad(12), phi=np.deg2rad(30), psi=np.deg2rad(40),
                 top=1., bot=1.)
 
@@ -219,7 +219,7 @@ def test_mirror_asymmetry_of_the_solve_is_bounded(method, limit):
     asymmetries worth ~1.5e-4 here — an order below their accuracy gains at the same
     settings, but real, which is why the bound is stated rather than pretended away."""
     eps = circle_raster(48, cx=0.4, cy=0.55)
-    cfg = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
+    cfg = dict(backend='numpy', period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
                phi=0., psi=0., top=1., bot=1., truncation_order=[5, 5], factorization='nvf')
     r1 = wavebit.rcwa(structure=eps[None], raster_normal_method=method, **cfg).solve()
     r2 = wavebit.rcwa(structure=eps[:, ::-1].copy()[None], raster_normal_method=method,
@@ -533,7 +533,7 @@ def test_a_tracer_is_told_to_freeze_instead_of_failing_inside_scipy():
     structure = circle_raster(24)[None]
 
     def loss(u):
-        res = wavebit.rcwa(backend=1, structure=u, truncation_order=[2, 2], factorization='nvf',
+        res = wavebit.rcwa(backend='jax', structure=u, truncation_order=[2, 2], factorization='nvf',
                            raster_normal_method='contour', **{k: v for k, v in SOLVE_KW.items()
                                                        if k != 'backend'}).solve()
         return jax.numpy.sum(res.R)

@@ -183,7 +183,7 @@ def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
     if overlapping:
         shapes.append(dict(type='rectangle', cx=-0.06, cy=0.0, lx=0.34, ly=0.30, angle=0.0,
                            material=9.0))
-    cfg = dict(backend=0, period=PERIOD, thickness=(0.32,), truncation_order=(order, order),
+    cfg = dict(backend='numpy', period=PERIOD, thickness=(0.32,), truncation_order=(order, order),
                top=1.0, bot=1.0, wavelength=1.6, psi=np.pi / 2, theta=0.0, phi=0.0)
     build = lambda ng: wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
                                     shape_nvf_grid_size=ng, **cfg)
@@ -508,7 +508,7 @@ def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
 # --------------------------------------------------------------------------- wiring
 def _solve(structure, truncation_order=6, **over):
     import wavebit
-    cfg = dict(backend=0, truncation_order=(truncation_order, truncation_order), period=PERIOD, thickness=(0.6,), wavelength=1.6,
+    cfg = dict(backend='numpy', truncation_order=(truncation_order, truncation_order), period=PERIOD, thickness=(0.6,), wavelength=1.6,
                top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
     cfg.update(over)
     return wavebit.rcwa(structure=structure, **cfg)
@@ -969,9 +969,9 @@ def test_a_painted_overlap_agrees_across_backends(curved):
     Routing is on the overlap, so both are reached only when the shapes actually intersect --
     which is why a non-overlapping smoke test would have stayed green through both.
     """
-    reference = _painted_total(0, float, curved)
-    for backend, lib in ((1, 'jax'), (2, 'torch')):
-        pytest.importorskip(lib)
+    reference = _painted_total('numpy', float, curved)
+    for backend in ('jax', 'torch'):
+        pytest.importorskip(backend)
         assert _painted_total(backend, float, curved) == pytest.approx(reference, abs=1e-12)
 
 
@@ -982,8 +982,8 @@ def test_a_painted_overlap_takes_traced_geometry_on_torch():
     ``plan_layer`` differently, and only the second one raised.
     """
     torch = pytest.importorskip('torch')
-    reference = _painted_total(0, float)
-    traced = _painted_total(2, lambda v: torch.tensor(v, dtype=torch.float64))
+    reference = _painted_total('numpy', float)
+    traced = _painted_total('torch', lambda v: torch.tensor(v, dtype=torch.float64))
     assert traced == pytest.approx(reference, abs=1e-12)
 
 
@@ -1001,9 +1001,9 @@ def test_painted_geometry_follows_the_dtype_it_was_given():
     test isolation, not about the geometry.
     """
     torch = pytest.importorskip('torch')
-    reference = _painted_total(0, float)
-    single = _painted_total(2, lambda v: torch.tensor(v, dtype=torch.float32))
-    double = _painted_total(2, lambda v: torch.tensor(v, dtype=torch.float64))
+    reference = _painted_total('numpy', float)
+    single = _painted_total('torch', lambda v: torch.tensor(v, dtype=torch.float32))
+    double = _painted_total('torch', lambda v: torch.tensor(v, dtype=torch.float64))
     assert double == pytest.approx(reference, abs=1e-12)
     assert single != pytest.approx(reference, abs=1e-12)
     assert single == pytest.approx(reference, abs=1e-6)
@@ -1041,7 +1041,7 @@ _SCENES = ['scalar painted', 'scalar beside a box', 'tensor painted', 'tensor be
 
 
 @pytest.mark.parametrize('scene', _SCENES)
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_numpy_scalar_shape_parameter_is_the_constant_a_float_is(backend, scene):
     """``angle=np.float64(0.3)`` solves as ``angle=0.3`` does, bit for bit, on every backend.
 
@@ -1057,8 +1057,7 @@ def test_a_numpy_scalar_shape_parameter_is_the_constant_a_float_is(backend, scen
     handing on the NumPy scalar such an array holds. On every backend each spelling below is
     the float it holds.
     """
-    if backend:
-        pytest.importorskip(('jax', 'torch')[backend - 1])
+    pytest.importorskip(backend)
     reference = _ellipse_and_box_total(backend, float, scene)
     for spell in (np.float64, np.asarray, lambda v: np.asarray([v])[0]):
         value = _ellipse_and_box_total(backend, spell, scene)
@@ -1077,12 +1076,12 @@ def test_a_numpy_float32_shape_parameter_keeps_its_precision_on_every_backend(sc
     """
     pytest.importorskip('jax')
     pytest.importorskip('torch')
-    values = [float(_ellipse_and_box_total(backend, np.float32, scene)) for backend in (0, 1, 2)]
+    values = [float(_ellipse_and_box_total(backend, np.float32, scene)) for backend in ('numpy', 'jax', 'torch')]
     assert max(values) - min(values) < 1e-12, values
 
 
 @pytest.mark.parametrize('scene', _SCENES)
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_numpy_integer_shape_parameter_is_built_in_the_solver_dtype(backend, scene):
     """``angle=np.int64(1)`` solves as ``angle=1.0`` does, bit for bit, on every backend.
 
@@ -1091,8 +1090,7 @@ def test_a_numpy_integer_shape_parameter_is_built_in_the_solver_dtype(backend, s
     from ``angle=1`` on Torch alone (order 1, ``N = 16``), where NumPy and JAX agreed to the
     bit. An integer is built in the vertex dtype, as a Python number is.
     """
-    if backend:
-        pytest.importorskip(('jax', 'torch')[backend - 1])
+    pytest.importorskip(backend)
     reference = _ellipse_and_box_total(backend, float, scene, angle=1.0)
     for spell in (int, np.int64, np.int32, lambda v: np.asarray(int(v))):
         value = _ellipse_and_box_total(backend, spell, scene, angle=1.0)
@@ -1118,11 +1116,11 @@ def test_a_numpy_scalar_beside_a_traced_parameter_keeps_its_gradient(scene):
         return w
 
     for key, x0, h in (('angle', 0.3, 1e-6), ('lx', 300.0, 1e-4)):
-        fd = (float(_ellipse_and_box_total(0, wrap(key, x0 + h), scene))
-              - float(_ellipse_and_box_total(0, wrap(key, x0 - h), scene))) / (2 * h)
-        g_jax = float(jax.grad(lambda x: _ellipse_and_box_total(1, wrap(key, x), scene))(x0))
+        fd = (float(_ellipse_and_box_total('numpy', wrap(key, x0 + h), scene))
+              - float(_ellipse_and_box_total('numpy', wrap(key, x0 - h), scene))) / (2 * h)
+        g_jax = float(jax.grad(lambda x: _ellipse_and_box_total('jax', wrap(key, x), scene))(x0))
         x = torch.tensor(x0, dtype=torch.float64, requires_grad=True)
-        _ellipse_and_box_total(2, wrap(key, x), scene).backward()
+        _ellipse_and_box_total('torch', wrap(key, x), scene).backward()
         g_torch = float(x.grad)
         assert g_jax == pytest.approx(g_torch, rel=1e-9), (key, g_jax, g_torch)
         assert g_jax == pytest.approx(fd, rel=1e-4), (key, g_jax, fd)
@@ -1135,10 +1133,10 @@ def test_freezing_a_painted_layer_works_on_torch():
     """
     torch = pytest.importorskip('torch')
     structure = _two_painted(lambda v: torch.tensor(v, dtype=torch.float64))
-    solver = wavebit.rcwa(backend=2, structure=structure, **_PAINT_CFG)
+    solver = wavebit.rcwa(backend='torch', structure=structure, **_PAINT_CFG)
     frozen = solver.freeze_geometry()
     total = float(np.sum(np.asarray(solver.solve(geometry=frozen).T.detach())).real)
-    assert total == pytest.approx(_painted_total(0, float), abs=1e-12)
+    assert total == pytest.approx(_painted_total('numpy', float), abs=1e-12)
 
 
 def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
@@ -1178,7 +1176,7 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
             dict(fixed)])]
 
     def total(v, geometry=None):
-        solver = wavebit.rcwa(backend=1, structure=structure(v), **cfg)
+        solver = wavebit.rcwa(backend='jax', structure=structure(v), **cfg)
         res = solver.solve() if geometry is None else solver.solve(geometry=geometry)
         return jnp.sum(res.T).real
 
@@ -1194,7 +1192,7 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
 
     # and the documented route works, and agrees with central differences on the *painted*
     # structure rather than on the summed one
-    frozen = wavebit.rcwa(backend=0, structure=structure(0.34), **cfg).freeze_geometry()
+    frozen = wavebit.rcwa(backend='numpy', structure=structure(0.34), **cfg).freeze_geometry()
     analytic = float(jax.grad(lambda v: total(v, frozen))(jnp.asarray(0.34)))
     # Nearest-interface selection is piecewise smooth. At h=1e-4 a grid
     # point switches its nearest segment, so that secant is not the local
@@ -1202,9 +1200,9 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
     # check, with a tighter tolerance than the former 2e-2 sanity band.
     for h in (1e-5, 1e-6):
         plus = float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, structure=structure(0.34 + h), **cfg).solve().T)).real)
+            wavebit.rcwa(backend='numpy', structure=structure(0.34 + h), **cfg).solve().T)).real)
         minus = float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, structure=structure(0.34 - h), **cfg).solve().T)).real)
+            wavebit.rcwa(backend='numpy', structure=structure(0.34 - h), **cfg).solve().T)).real)
         assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-5)
 
     # Bit-identical, not merely close: the plan a gradient builds from the primal *is* the plan
@@ -1231,7 +1229,7 @@ def test_a_traced_single_shape_layer_is_not_refused():
         u = [dict(background=1.0, shapes=[
             dict(type='rectangle', cx=-0.04, cy=0.0, lx=v, ly=0.26, angle=0.3,
                  material=12.1104)])]
-        return jnp.sum(wavebit.rcwa(backend=1, structure=u, **cfg).solve().T).real
+        return jnp.sum(wavebit.rcwa(backend='jax', structure=u, **cfg).solve().T).real
 
     assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.34))))
 
@@ -1262,18 +1260,18 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
 
     # the rods meet at cx = -0.06: -0.06 + 0.13 == 0.20 - 0.13
     for cx, overlapping in ((-0.08, False), (-0.04, True)):
-        frozen = wavebit.rcwa(backend=0, structure=structure(cx), **cfg).freeze_geometry()
+        frozen = wavebit.rcwa(backend='numpy', structure=structure(cx), **cfg).freeze_geometry()
         assert frozen.boundary_plans is not None, cx
         assert (frozen.boundary_plans[0] is not None) is overlapping, cx
 
         def total(v):
-            return jnp.sum(wavebit.rcwa(backend=1, structure=structure(v), **cfg)
+            return jnp.sum(wavebit.rcwa(backend='jax', structure=structure(v), **cfg)
                            .solve(geometry=frozen).T).real
 
         analytic = float(jax.grad(total)(jnp.asarray(cx)))
         h = 1e-4
         step = [float(np.sum(np.asarray(
-            wavebit.rcwa(backend=0, structure=structure(cx + s * h), **cfg).solve().T)).real)
+            wavebit.rcwa(backend='numpy', structure=structure(cx + s * h), **cfg).solve().T)).real)
             for s in (1, -1)]
         assert analytic == pytest.approx((step[0] - step[1]) / (2 * h), rel=3e-2), cx
 
@@ -1302,7 +1300,7 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
     import wavebit
 
     P = 300.0
-    cfg = dict(backend=0, period=[P, P], thickness=(205.0,), truncation_order=(6, 6), top=1.0,
+    cfg = dict(backend='numpy', period=[P, P], thickness=(205.0,), truncation_order=(6, 6), top=1.0,
                bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0, shape_nvf_grid_size=256)
 
     def layer(shift):
@@ -1357,7 +1355,7 @@ _TWO_DISJOINT = [_box(lx=250.0, ly=300.0, cx=-160.0), _box(lx=250.0, ly=300.0, c
 #: The one window where every spelling retains the same order set: ``b2`` is shared by all of
 #: them (``a1 . b2 = 0`` and ``(a2 + k a1) . b2 = 2 pi`` for any ``k``), so ``u = 0`` keeps
 #: exactly the orders ``n b2``.
-_SPELLING_KW = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.3, psi=0.4,
+_SPELLING_KW = dict(backend='numpy', wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.3, psi=0.4,
                     thickness=[300.0], shape_nvf_grid_size=64, truncation_order=dict(u=0, v=6))
 
 
@@ -1478,7 +1476,7 @@ def test_a_painted_layer_on_an_unreduced_basis_replays_under_jit_over_the_lattic
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = _spelled(10, _TWO_OVERLAPPING, backend=1)
+    solver = _spelled(10, _TWO_OVERLAPPING, backend='jax')
     frozen = solver.freeze_geometry()
     eager = float(jnp.sum(solver.solve(geometry=frozen).T).real)
 

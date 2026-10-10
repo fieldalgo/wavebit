@@ -191,7 +191,7 @@ def aspect_of(lit, cell):
 
 
 def solve(cell, structure, **kw):
-    s = wavebit.rcwa(backend=0, lattice=cell, structure=structure, thickness=[THICKNESS],
+    s = wavebit.rcwa(backend='numpy', lattice=cell, structure=structure, thickness=[THICKNESS],
                      wavelength=WAVELENGTH, truncation_order=[TRUNCATION, TRUNCATION],
                      top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, **kw)
     return float(np.sum(np.asarray(s.solve().T)))

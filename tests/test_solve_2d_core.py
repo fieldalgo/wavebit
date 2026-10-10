@@ -34,7 +34,7 @@ except ImportError:
 def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi):
     # The constructor takes permittivity, `solve_2d` the index -- one pair of half-spaces
     # spelled in the quantity each side actually works in.
-    solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
+    solver = wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, truncation_order=truncation_order, period=period, wavelength=wl,
                           thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()

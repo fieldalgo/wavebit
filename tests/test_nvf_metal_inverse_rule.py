@@ -80,7 +80,7 @@ def largest_eps(par):
 
 
 def solve_with(par, cfg, M, slots):
-    s = wavebit.rcwa(backend=0, structure=par, truncation_order=(M, M), **cfg)
+    s = wavebit.rcwa(backend='numpy', structure=par, truncation_order=(M, M), **cfg)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         r = s.solve_conv(*(m[None] for m in slots))
@@ -173,7 +173,7 @@ def test_gold_disks_return_less_than_they_receive():
     assert after <= 1.0, after
 
     # ...and the front door takes the same route.
-    res = wavebit.rcwa(backend=0, structure=par, truncation_order=(5, 5), **cfg).solve()
+    res = wavebit.rcwa(backend='numpy', structure=par, truncation_order=(5, 5), **cfg).solve()
     assert float(np.sum(res.R).real + np.sum(res.T).real) == pytest.approx(after, abs=1e-3)
 
 
@@ -256,7 +256,7 @@ def test_every_nvf_builder_floors_its_metal(monkeypatch, scene, route):
     _, cfg = geometry(metal, wavelength)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = wavebit.rcwa(backend=0, truncation_order=(5, 5), **cfg, **route).solve()
+        res = wavebit.rcwa(backend='numpy', truncation_order=(5, 5), **cfg, **route).solve()
     assert len(calls) == 1
     s, floor = calls[0]
     assert floor == pytest.approx(1.0 / (INVERSE_RULE_BOUND * abs(metal)), rel=1e-12)
@@ -322,7 +322,7 @@ def _power(backend, scene):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         r = wavebit.rcwa(backend=backend, **scene).solve()
-    if backend == 0:
+    if backend == 'numpy':
         return float(np.sum(r.R).real + np.sum(r.T).real)
     return (r.R.sum() + r.T.sum()).real
 
@@ -346,13 +346,13 @@ def _diameter_derivatives(geometry, eps, wl, order, lx, angles=None):
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
 
-    want = _power(0, _scene(geometry, eps, wl, lx, order, angles))
+    want = _power('numpy', _scene(geometry, eps, wl, lx, order, angles))
     value_jax, grad_jax = jax.value_and_grad(
-        lambda x: _power(1, _scene(geometry, eps, wl, x, order, angles)))(jnp.asarray(lx))
+        lambda x: _power('jax', _scene(geometry, eps, wl, x, order, angles)))(jnp.asarray(lx))
     lx_t = torch.tensor(lx, dtype=torch.float64, requires_grad=True)
-    value_torch = _power(2, _scene(geometry, eps, wl, lx_t, order, angles))
+    value_torch = _power('torch', _scene(geometry, eps, wl, lx_t, order, angles))
     grad_torch, = torch.autograd.grad(value_torch, lx_t)
-    finite = _difference(lambda x: _power(0, _scene(geometry, eps, wl, x, order, angles)), lx, 1e-3)
+    finite = _difference(lambda x: _power('numpy', _scene(geometry, eps, wl, x, order, angles)), lx, 1e-3)
     return dict(want=want, value_jax=float(value_jax), value_torch=float(value_torch.detach()),
                 jax=float(grad_jax), torch=float(grad_torch), finite=finite)
 
@@ -366,13 +366,13 @@ def _permittivity_derivatives(geometry, eps, wl, order, lx):
     import jax.numpy as jnp
 
     a, b = eps.real, eps.imag
-    grad_jax = jax.grad(lambda x, y: _power(1, _scene(geometry, x + 1j * y, wl, lx, order)),
+    grad_jax = jax.grad(lambda x, y: _power('jax', _scene(geometry, x + 1j * y, wl, lx, order)),
                         argnums=(0, 1))(jnp.asarray(a), jnp.asarray(b))
     a_t = torch.tensor(a, dtype=torch.float64, requires_grad=True)
     b_t = torch.tensor(b, dtype=torch.float64, requires_grad=True)
     grad_torch = torch.autograd.grad(
-        _power(2, _scene(geometry, torch.complex(a_t, b_t), wl, lx, order)), (a_t, b_t))
-    power = lambda x, y: _power(0, _scene(geometry, complex(x, y), wl, lx, order))
+        _power('torch', _scene(geometry, torch.complex(a_t, b_t), wl, lx, order)), (a_t, b_t))
+    power = lambda x, y: _power('numpy', _scene(geometry, complex(x, y), wl, lx, order))
     finite = (_difference(lambda x: power(x, b), a, 1e-4), _difference(lambda y: power(a, y), b, 1e-4))
     return dict(jax=tuple(float(g) for g in grad_jax), torch=tuple(float(g) for g in grad_torch),
                 finite=finite)
@@ -655,7 +655,7 @@ def _conv_read_out(backend, material, parameter='diameter', geometry=None):
     def read_out(x):
         if parameter == 'diameter':
             solver = _conv_solver(backend, material, x)
-        elif backend == 2:
+        elif backend == 'torch':
             import torch
             solver = _conv_solver(backend, torch.complex(x, torch.tensor(material.imag, dtype=x.dtype)))
         else:
@@ -668,7 +668,7 @@ def _conv_read_out(backend, material, parameter='diameter', geometry=None):
 
 def _conv_difference(material, parameter='diameter'):
     """The read-out's central difference on NumPy, extrapolated in the step."""
-    read_out = _conv_read_out(0, material, parameter)
+    read_out = _conv_read_out('numpy', material, parameter)
     at, step = (140.0, 1e-3) if parameter == 'diameter' else (material.real, 1e-4)
     return _difference(lambda x: float(read_out(x)), at, step)
 
@@ -693,13 +693,13 @@ def test_forward_mode_through_the_floor_is_the_exact_derivative(mode, parameter)
         jax = pytest.importorskip('jax')
         jax.config.update('jax_enable_x64', True)
         import jax.numpy as jnp
-        read_out = _conv_read_out(1, GOLD, parameter)
+        read_out = _conv_read_out('jax', GOLD, parameter)
         forward = float(jax.jvp(read_out, (jnp.asarray(at),), (jnp.asarray(1.0),))[1])
         reverse = float(jax.grad(read_out)(jnp.asarray(at)))
     else:
         torch = pytest.importorskip('torch')
         from torch.autograd import forward_ad
-        read_out = _conv_read_out(2, GOLD, parameter)
+        read_out = _conv_read_out('torch', GOLD, parameter)
         with forward_ad.dual_level():
             x = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64),
                                      torch.tensor(1.0, dtype=torch.float64))
@@ -721,7 +721,7 @@ def test_torch_func_is_refused_by_name_where_the_floor_binds(transform, metal):
     """
     torch = pytest.importorskip('torch')
     material = GOLD if metal else DIELECTRIC
-    read_out = _conv_read_out(2, material)
+    read_out = _conv_read_out('torch', material)
     x = torch.tensor(140.0, dtype=torch.float64)
     if transform == 'jvp':
         def run():
@@ -768,7 +768,7 @@ def test_a_second_derivative_through_the_floor_is_refused_where_it_binds(backend
     if backend.startswith('torch'):
         torch = pytest.importorskip('torch')
         from torch.autograd import forward_ad
-        read_out = _conv_read_out(2, material)
+        read_out = _conv_read_out('torch', material)
 
         def tangent(at, requires_grad=False):
             x = torch.tensor(at, dtype=torch.float64, requires_grad=requires_grad)
@@ -800,8 +800,8 @@ def test_a_second_derivative_through_the_floor_is_refused_where_it_binds(backend
         jax = pytest.importorskip('jax')
         jax.config.update('jax_enable_x64', True)
         import jax.numpy as jnp
-        geometry = _conv_solver(1, material).freeze_geometry() if staged else None
-        read_out = _conv_read_out(1, material, geometry=geometry)
+        geometry = _conv_solver('jax', material).freeze_geometry() if staged else None
+        read_out = _conv_read_out('jax', material, geometry=geometry)
         if 'checkpoint' in backend:
             read_out = jax.checkpoint(read_out)
         gradient = jax.grad(read_out)

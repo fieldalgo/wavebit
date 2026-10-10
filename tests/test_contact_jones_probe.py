@@ -14,7 +14,7 @@ def pair(gap=0.,epsilon=9.):
             dict(type='rectangle',lx=300.,ly=300.,cx=150.+gap/2,material=epsilon)]
 
 
-def solver(shapes,grid=128,backend=0,order=3):
+def solver(shapes,grid=128,backend='numpy',order=3):
     return wavebit.rcwa(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
         theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(order,order),
         shape_nvf_grid_size=grid,structure=[dict(background=1.,shapes=shapes)])
@@ -75,7 +75,7 @@ def test_frozen_jit_gradient_matches_two_secants(monkeypatch,kind):
     center=1e-4
     geometry=solver(scene(center)).freeze_geometry()
     def loss(v):
-        return jnp.sum(solver(scene(v),backend=1).solve(geometry=geometry).T).real
+        return jnp.sum(solver(scene(v),backend='jax').solve(geometry=geometry).T).real
     got=float(jax.jit(jax.grad(loss))(jnp.asarray(center)))
     assert np.isfinite(got) and abs(got)>1e-5
     for h in (1e-5,1e-6):

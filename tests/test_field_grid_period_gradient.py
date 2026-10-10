@@ -31,7 +31,7 @@ def analytic(kind,count,door):
 @pytest.mark.parametrize('kind',['x','y','both'])
 @pytest.mark.parametrize('count',[1,3])
 def test_period_tangent_includes_motion_of_count_samples(backend,door,kind,count):
-    s=wavebit.rcwa(backend=1 if backend=='jax' else 2,structure=np.ones((1,1,1)),
+    s=wavebit.rcwa(backend='jax' if backend=='jax' else 'torch',structure=np.ones((1,1,1)),
                   thickness=[D],period=P,wavelength=WL,theta=THETA,phi=PHI,
                   truncation_order=(0,0),answers='field')
     sx,sy=samples(kind,count)

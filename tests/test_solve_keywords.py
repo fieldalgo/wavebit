@@ -37,7 +37,7 @@ DOORS = {
     # is opened the way its docstring says to. That is the *same* `_solve_and_field` body the
     # other two backends reach directly, which is the point of testing it here at all.
     'solve_field': lambda s, **kw: s.solve_field(
-        4, 4, 4, geometry=(s.freeze_geometry() if s.backend == 1 else None), **kw),
+        4, 4, 4, geometry=(s.freeze_geometry() if s.backend == 'jax' else None), **kw),
     'freeze_geometry': lambda s, **kw: s.freeze_geometry(**kw),
     'eps_conv_matrices': lambda s, **kw: s.eps_conv_matrices(**kw),
     'mu_conv_matrices': lambda s, **kw: s.mu_conv_matrices(**kw),
@@ -70,7 +70,7 @@ ACCEPTED = ('thickness', 'structure', 'mu', 'factorization', 'fourier_coefficien
             'wavelength', 'layer_algorithm', 'shape_nvf_grid_size')
 
 
-def _scene(backend=0, **over):
+def _scene(backend='numpy', **over):
     kw = dict(backend=backend, structure=GRATING, period=[P, P], truncation_order=[2, 0],
               thickness=[H], wavelength=WL, top=1.0, bot=1.0, answers='field')
     kw.update(over)
@@ -78,27 +78,25 @@ def _scene(backend=0, **over):
 
 
 def _backends():
-    out = [0]
-    for backend, module in ((1, 'jax'), (2, 'torch')):
-        if pytest.importorskip.__module__ and __import__('importlib').util.find_spec(module):
+    out = ['numpy']
+    for backend in ('jax', 'torch'):
+        if pytest.importorskip.__module__ and __import__('importlib').util.find_spec(backend):
             out.append(backend)
     return out
 
 
 BACKENDS = _backends()
-BACKEND_IDS = {0: 'numpy', 1: 'jax', 2: 'torch'}
 
 
 @pytest.mark.parametrize('door,name', list(itertools.product(sorted(DOORS), sorted(REFUSED))))
-@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+@pytest.mark.parametrize('backend', BACKENDS)
 def test_a_keyword_that_is_not_a_condition_is_refused_by_name(backend, door, name):
     """Every door x every way of being wrong. The product is the point.
 
     A spot check on `solve` alone would have passed while four other doors kept the hole -- and
     they did keep it, in the same file, for the same reason: the line was copied.
     """
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     solver = _scene(backend)
     with pytest.raises(TypeError, match=r'unexpected keyword argument'):
         DOORS[door](solver, **{name: [900.0]})
@@ -131,15 +129,14 @@ def test_the_refusal_names_the_keyword_and_suggests_a_near_miss(name):
             f'{name!r} is one edit from {near[name]!r} and the message did not say so: {message}')
 
 
-@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+@pytest.mark.parametrize('backend', BACKENDS)
 def test_a_real_condition_still_reaches_the_solve_and_moves_the_answer(backend):
     """The refusal must not have closed the door it is guarding.
 
     Asserted as *the answer moves*, not as *the call succeeds*: an assignment that lands in the
     wrong place also succeeds, and that is the whole defect.
     """
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     solver = _scene(backend)
     base = float(np.asarray(solver.solve().T).sum())
     moved = float(np.asarray(solver.solve(thickness=[3 * H]).T).sum())
@@ -197,7 +194,7 @@ def _gap(a, b):
 
 
 @pytest.mark.parametrize('door', sorted(MOVES))
-@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+@pytest.mark.parametrize('backend', BACKENDS)
 def test_a_real_condition_through_every_other_door_answers_as_the_scene_built_with_it(
         backend, door):
     """The accepting half, on the four doors the test above does not open.
@@ -214,9 +211,8 @@ def test_a_real_condition_through_every_other_door_answers_as_the_scene_built_wi
     answered for the new thickness and left the live solver at the old one, while NumPy and
     Torch kept it -- the same sweep loop's next `solve()` answered two different scenes.
     """
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
     name, value = MOVES[door]
     solver = _door_scene(backend)
@@ -240,7 +236,7 @@ NON_ARRAY = {'layer_algorithm': 'SMM', 'truncation_order': [1, 1]}
 
 
 @pytest.mark.parametrize('name', sorted(NON_ARRAY))
-@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+@pytest.mark.parametrize('backend', BACKENDS)
 def test_a_condition_that_is_not_an_array_passes_the_field_door_on_every_backend(backend, name):
     """``solve_field(layer_algorithm='SMM')`` answers, as the scene built with it, and keeps it.
 
@@ -255,21 +251,20 @@ def test_a_condition_that_is_not_an_array_passes_the_field_door_on_every_backend
     order 1), so the unmoved scene's freeze is stale for ``truncation_order`` -- and the jitted
     door replays a record on trust, as its docstring says.
     """
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-    if backend == 1:
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
     value = NON_ARRAY[name]
     solver = _door_scene(backend)
     built = _door_scene(backend, **{name: value})
-    geometry = built.freeze_geometry() if backend == 1 else None
+    geometry = built.freeze_geometry() if backend == 'jax' else None
     moved = solver.solve_field(4, 4, 4, geometry=geometry, **{name: value})
     want = built.solve_field(4, 4, 4, geometry=geometry)
     assert _gap(READOUT['solve_field'](moved), READOUT['solve_field'](want)) < 1e-12
     assert getattr(solver, name) == getattr(built, name)
 
 
-@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+@pytest.mark.parametrize('backend', BACKENDS)
 def test_a_field_door_refused_for_its_declaration_assigns_nothing(backend):
     """A solver that did not declare ``answers='field'`` is refused before any keyword lands.
 
@@ -278,8 +273,7 @@ def test_a_field_door_refused_for_its_declaration_assigns_nothing(backend):
     declaration used to be read, so the order is pinned here: refused, and the thickness is the
     one the solver was built with.
     """
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     solver = _door_scene(backend, answers='amplitude')
     with pytest.raises(RuntimeError, match='field'):
         DOORS['solve_field'](solver, thickness=[3 * H])
@@ -299,7 +293,7 @@ def test_every_keyword_the_suite_passes_is_still_accepted(name):
         f'derived condition set no longer contains it')
 
 
-@pytest.mark.parametrize('backend', BACKENDS, ids=lambda b: BACKEND_IDS[b])
+@pytest.mark.parametrize('backend', BACKENDS)
 def test_the_condition_set_is_derived_not_listed(backend):
     """It has to track the code, or it is a second list to keep in sync.
 
@@ -313,8 +307,7 @@ def test_the_condition_set_is_derived_not_listed(backend):
     """
     import inspect
 
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     solver = _scene(backend)
     derived = solver._condition_names()
 
@@ -343,17 +336,17 @@ def test_the_condition_set_is_derived_not_listed(backend):
 
 # ------------------------------------------- the sixth door: plain attribute assignment
 
-#: Every backend that is importable, as `(id, name)`. The guard is derived per class, so a
+#: Every backend that is importable, by name. The guard is derived per class, so a
 #: version that drifted on one backend would be invisible from another -- the same argument
 #: the keyword tests above are crossed for.
-_GUARD_BACKENDS = [(0, 'numpy')]
-for _bk, _mod in ((1, 'jax'), (2, 'torch')):
+_GUARD_BACKENDS = ['numpy']
+for _bk in ('jax', 'torch'):
     try:
-        __import__(_mod)
+        __import__(_bk)
     except ImportError:                                    # pragma: no cover - env-dependent
         pass
     else:
-        _GUARD_BACKENDS.append((_bk, _mod))
+        _GUARD_BACKENDS.append(_bk)
 
 
 def _guard_solver(backend, cls=None):
@@ -362,12 +355,12 @@ def _guard_solver(backend, cls=None):
     return cls(**kw) if cls is not None else wavebit.rcwa(backend=backend, **kw)
 
 
-@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
+@pytest.mark.parametrize('backend', _GUARD_BACKENDS)
 @pytest.mark.parametrize('typo, meant', [('thicknes', 'thickness'), ('wavelenght', 'wavelength'),
                                          ('truncation_orders', 'truncation_order'),
                                          ('perio', 'period'), ('max_order', None),
                                          ('ucell', None)])
-def test_a_typoed_attribute_is_refused_rather_than_stored(backend, name, typo, meant):
+def test_a_typoed_attribute_is_refused_rather_than_stored(backend, typo, meant):
     """The door the five above did not cover, and the one the tutorials teach.
 
     ``rcwa(thicknes=...)`` and ``solve(thicknes=...)`` have been refused since 2026-08-26.
@@ -404,7 +397,7 @@ def test_a_name_spelled_like_another_quantity_is_not_pointed_at_a_material_condi
     """
     import difflib
     from test_spec import INDEX_SPELLINGS
-    solver = _guard_solver(0)
+    solver = _guard_solver('numpy')
     legal = sorted(solver._condition_names())
     assert difflib.get_close_matches('n_top', legal, n=1, cutoff=0.7) == ['top']
     assert difflib.get_close_matches('mu_top', legal, n=1, cutoff=0.6) == ['top']
@@ -432,7 +425,7 @@ def test_a_count_spelled_with_n_keeps_the_guess_plain_difflib_gives():
     at least one count reaches a condition, so this is not every guess being none."""
     import difflib
     from test_spec import COUNT_SPELLINGS
-    solver = _guard_solver(0)
+    solver = _guard_solver('numpy')
     legal = sorted(solver._condition_names())
     reached = 0
     for name in COUNT_SPELLINGS + ('n_period', 'n_phi'):
@@ -453,8 +446,8 @@ def test_a_count_spelled_with_n_keeps_the_guess_plain_difflib_gives():
     assert reached >= 4, reached
 
 
-@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
-def test_the_guard_leaves_the_descriptor_protocol_in_charge(backend, name):
+@pytest.mark.parametrize('backend', _GUARD_BACKENDS)
+def test_the_guard_leaves_the_descriptor_protocol_in_charge(backend):
     """A read-only property is not a missing attribute, and must not be reported as one.
 
     This is the branch that costs the least to leave out and the most to get wrong. Without it
@@ -471,8 +464,8 @@ def test_the_guard_leaves_the_descriptor_protocol_in_charge(backend, name):
             setattr(solver, prop, 1.5)
 
 
-@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
-def test_a_method_can_still_be_stubbed_on_an_instance(backend, name):
+@pytest.mark.parametrize('backend', _GUARD_BACKENDS)
+def test_a_method_can_still_be_stubbed_on_an_instance(backend):
     """The other half of that branch, and a capability a guard silently removes.
 
     ``monkeypatch.setattr(solver, 'solve', ...)`` is how a test isolates a caller from the
@@ -485,8 +478,8 @@ def test_a_method_can_still_be_stubbed_on_an_instance(backend, name):
     assert solver.solve() == 'stubbed'
 
 
-@pytest.mark.parametrize('backend, name', _GUARD_BACKENDS, ids=[n for _, n in _GUARD_BACKENDS])
-def test_a_subclass_opts_its_own_state_in_with_a_class_attribute(backend, name):
+@pytest.mark.parametrize('backend', _GUARD_BACKENDS)
+def test_a_subclass_opts_its_own_state_in_with_a_class_attribute(backend):
     """Refused by default, and there is a way in that is not a private name.
 
     A solver subclass cannot simply add ``self.label = ...``: the guard cannot tell that from a

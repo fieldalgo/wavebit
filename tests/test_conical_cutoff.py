@@ -111,7 +111,7 @@ PATTERNED = {
 }
 
 
-def _solver(scene, *, algo='ETM', backend=0, two_d=False, **over):
+def _solver(scene, *, algo='ETM', backend='numpy', two_d=False, **over):
     """A ``wavebit.rcwa`` for ``scene``: the 1D conical solve, or its 2D twin (y-invariant)."""
     sc = {**scene, **over}
     kw = dict(backend=backend, wavelength=sc['wavelength'], top=sc['top'], bot=sc['bot'],
@@ -227,11 +227,11 @@ def test_a_uniform_cutoff_matches_the_2d_path(name, algo, rebuilds):
             assert np.array_equal(value, got[key]), f'{name} {label}: the default moved {key}'
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_a_uniform_cutoff_on_jax_and_torch(backend, algo, rebuilds):
     """The same exact point, eager JAX and PyTorch: the 2D path's answer (measured <= 1.9e-14)."""
-    pytest.importorskip(['jax', 'torch'][backend - 1])
+    pytest.importorskip(backend)
     ref = _numbers(_solver(R1, two_d=True).solve(auto_detune=False), True)
     got = _numbers(_solver(R1, algo=algo, backend=backend).solve(auto_detune=False))
     assert rebuilds
@@ -449,7 +449,7 @@ def _reference_gradients():
     """``jax.grad`` of the 2D path at R1's exact point: raster, wavelength, first thickness."""
     jax = pytest.importorskip('jax')
     jnp = jax.numpy
-    s = _solver(R1, backend=1, two_d=True)
+    s = _solver(R1, backend='jax', two_d=True)
 
     def f(u, w, t):
         r = s.solve(structure=jnp.repeat(u, 2, axis=1), wavelength=w,
@@ -470,7 +470,7 @@ def test_uniform_cutoff_derivatives_on_jax(algo, rebuilds):
     jax = pytest.importorskip('jax')
     jnp = jax.numpy
     g_raster, g_wl, g_th = _reference_gradients()
-    s = _solver(R1, algo=algo, backend=1)
+    s = _solver(R1, algo=algo, backend='jax')
 
     def f(u, w, t):
         r = s.solve(structure=u, wavelength=w, thickness=jnp.stack([t, jnp.asarray(200.)]),
@@ -494,12 +494,12 @@ def test_uniform_cutoff_derivatives_on_torch(algo):
     from torch.autograd import forward_ad
     g_raster, g_wl, _ = _reference_gradients()
     u = torch.tensor(R1['structure'], dtype=torch.float64, requires_grad=True)
-    _solver(R1, algo=algo, backend=2, structure=u).solve(auto_detune=False).R.real.sum().backward()
+    _solver(R1, algo=algo, backend='torch', structure=u).solve(auto_detune=False).R.real.sum().backward()
     assert _rel(u.grad.numpy(), g_raster) < 1e-11
     with forward_ad.dual_level():
         w = forward_ad.make_dual(torch.tensor(500., dtype=torch.float64),
                                  torch.tensor(1., dtype=torch.float64))
-        r = _solver(R1, algo=algo, backend=2, wavelength=w).solve(auto_detune=False)
+        r = _solver(R1, algo=algo, backend='torch', wavelength=w).solve(auto_detune=False)
         tangent = forward_ad.unpack_dual(r.R.real.sum()).tangent
     assert _rel(float(tangent), g_wl) < 1e-11
 
@@ -520,19 +520,19 @@ def test_patterned_derivatives_match_the_fit(name, algo):
     jnp = jax.numpy
     scene = PATTERNED[name]
     slope = np.real(_fit(name)[-2][0]) * 1e3 / scene['wavelength']
-    s = _solver(scene, algo=algo, backend=1)
+    s = _solver(scene, algo=algo, backend='jax')
     g = float(jax.grad(lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R)))(
         jnp.asarray(scene['wavelength'])))
     assert abs(g - slope) < 1e-6 * abs(slope), f'jax.grad {abs(g - slope) / abs(slope):.1e}'
     w = torch.tensor(scene['wavelength'], dtype=torch.float64, requires_grad=True)
-    r = _solver(scene, algo=algo, backend=2, wavelength=w).solve(auto_detune=False)
+    r = _solver(scene, algo=algo, backend='torch', wavelength=w).solve(auto_detune=False)
     r.R.real.sum().backward()
     assert abs(float(w.grad) - slope) < 1e-6 * abs(slope)
     u0 = np.asarray(scene['structure'], dtype=float)
     gj = np.asarray(jax.grad(
         lambda u: jnp.sum(jnp.real(s.solve(structure=u, auto_detune=False).R)))(jnp.asarray(u0)))
     u = torch.tensor(u0, dtype=torch.float64, requires_grad=True)
-    r = _solver(scene, algo=algo, backend=2, structure=u).solve(auto_detune=False)
+    r = _solver(scene, algo=algo, backend='torch', structure=u).solve(auto_detune=False)
     r.R.real.sum().backward()
     assert _rel(u.grad.numpy(), gj) < 1e-12
 
@@ -554,7 +554,7 @@ def _reference_angle_gradient(name):
     jax = pytest.importorskip('jax')
     jnp = jax.numpy
     scene, var = _ANGLE_SCENES[name]
-    s = _solver(scene, backend=1, two_d=True)
+    s = _solver(scene, backend='jax', two_d=True)
     row = list(_np(s.solve(auto_detune=False).orders_v)).index(0)
     return float(jax.grad(lambda x: jnp.sum(jnp.real(
         s.solve(**{var: x}, auto_detune=False).R[row])))(jnp.asarray(scene[var])))
@@ -575,13 +575,13 @@ def test_angle_derivatives_on_a_rebuilt_layer(name, algo, rebuilds):
     jnp = jax.numpy
     scene, var = _ANGLE_SCENES[name]
     ref = _reference_angle_gradient(name)
-    s = _solver(scene, algo=algo, backend=1)
+    s = _solver(scene, algo=algo, backend='jax')
     g = float(jax.grad(lambda x: jnp.sum(jnp.real(s.solve(**{var: x}, auto_detune=False).R)))(
         jnp.asarray(scene[var])))
     assert rebuilds
     assert abs(g - ref) < 1e-11 * abs(ref), f'jax.grad {abs(g - ref) / abs(ref):.1e}'
     x = torch.tensor(scene[var], dtype=torch.float64, requires_grad=True)
-    r = _solver(scene, algo=algo, backend=2, **{var: x}).solve(auto_detune=False)
+    r = _solver(scene, algo=algo, backend='torch', **{var: x}).solve(auto_detune=False)
     r.R.real.sum().backward()
     assert abs(float(x.grad) - ref) < 1e-11 * abs(ref), (
         f'torch reverse {abs(float(x.grad) - ref) / abs(ref):.1e}')
@@ -601,7 +601,7 @@ def test_patterned_angle_derivatives_match_a_central_difference(name, algo, rebu
     jax = pytest.importorskip('jax')
     jnp = jax.numpy
     scene = PATTERNED[name]
-    s = _solver(scene, algo=algo, backend=1)
+    s = _solver(scene, algo=algo, backend='jax')
     g = float(jax.grad(lambda x: jnp.sum(jnp.real(s.solve(theta=x, auto_detune=False).R)))(
         jnp.asarray(scene['theta'])))
     assert rebuilds
@@ -684,7 +684,7 @@ def test_a_patterned_cutoff_field_and_its_gradient_agree_across_algorithms(name)
     xs, zs = np.array([-200., 0., 130.]), np.array([0.13, 0.5, 0.87]) * sum(scene['thickness'])
     grads = {}
     for algo in ('ETM', 'SMM'):
-        s = _solver(scene, algo=algo, backend=1)
+        s = _solver(scene, algo=algo, backend='jax')
 
         def F(u, w):
             r = s.solve(structure=u, wavelength=w, auto_detune=False, answers='field')
@@ -712,7 +712,7 @@ def test_an_eager_field_record_differentiates_alike_under_jit(algo):
     """
     jax = pytest.importorskip('jax')
     jnp = jax.numpy
-    result = _solver(PATTERNED['PA616'], algo=algo, backend=1).solve(auto_detune=False,
+    result = _solver(PATTERNED['PA616'], algo=algo, backend='jax').solve(auto_detune=False,
                                                                        answers='field')
 
     def F(r, z):
@@ -776,14 +776,14 @@ def test_under_an_abstract_trace_the_family_construction_ships(rebuilds):
     wls = [500. * (1 - 1e-12), 500., 500. * (1 + 1e-12)]
 
     def traced():
-        s = _solver(R1, backend=1)
+        s = _solver(R1, backend='jax')
         r = jax.jit(lambda u: s.solve(structure=u, auto_detune=False))(jnp.asarray(R1['structure']))
         sweep = jnp.asarray(wls)
         one = lambda w: s.solve(wavelength=w, auto_detune=False).R
         v = jax.vmap(one)(sweep)
         m = jax.lax.map(one, sweep)
         c = [jax.checkpoint(one)(w) for w in sweep]
-        st = _solver(R1, backend=2)
+        st = _solver(R1, backend='torch')
         t = torch.func.vmap(lambda w: st.solve(wavelength=w, auto_detune=False).R)(
             torch.tensor(wls, dtype=torch.float64))
         return (np.asarray(r.R), np.asarray(r.r_xyz), np.asarray(v), np.asarray(m),

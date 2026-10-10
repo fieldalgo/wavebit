@@ -1,6 +1,6 @@
 """Typed enums are a non-breaking upgrade over the raw values the solver stores.
 
-``Tetm`` / ``Backend`` are ``IntEnum``s equal to their int codes; ``FourierCoefficients`` /
+``Tetm`` is an ``IntEnum`` equal to its int code; ``Backend``, ``FourierCoefficients`` and
 ``Factorization`` are ``str`` enums equal to their lowercase strings. Passing the enum must
 give byte-identical results to passing the raw value.
 """
@@ -13,10 +13,10 @@ from wavebit import Backend, Factorization, FourierCoefficients, Tetm
 
 def test_intenum_equals_int_codes():
     assert Tetm.TE == 0 and Tetm.TM == 1
-    assert Backend.NUMPY == 0 and Backend.JAX == 1 and Backend.TORCH == 2
 
 
 def test_str_enums_equal_their_strings():
+    assert Backend.NUMPY == 'numpy' and Backend.JAX == 'jax' and Backend.TORCH == 'torch'
     assert FourierCoefficients.SAMPLED == 'sampled'
     assert FourierCoefficients.INTEGRATED == 'integrated'
     assert Factorization.LI == 'li' and Factorization.NVF == 'nvf'
@@ -42,8 +42,8 @@ def test_enum_matches_raw_api():
         a = _solve(enum_spelling, Backend.NUMPY,
                    fourier_coefficients=FourierCoefficients.SAMPLED,
                    factorization=Factorization.LI)
-        b = _solve(word, 0, fourier_coefficients='sampled', factorization='li')
+        b = _solve(word, 'numpy', fourier_coefficients='sampled', factorization='li')
         assert np.allclose(a, b, atol=0, rtol=0), (enum_spelling, a, b)
 
     with pytest.raises(ValueError, match='tetm'):
-        _solve(0, 0)
+        _solve(0, 'numpy')

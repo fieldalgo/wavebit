@@ -370,7 +370,7 @@ complex64:
 ```python
 import jax.numpy as jnp, wavebit
 theta = jnp.asarray(0.4 + 0.3j)                               # complex64 — x64 is not on yet
-wavebit.rcwa(backend=1, theta=theta, complex_dtype=0, ...)   # ...but double was asked for
+wavebit.rcwa(backend='jax', theta=theta, complex_dtype=0, ...)   # ...but double was asked for
 ```
 
 The setter's `jnp.array(theta, dtype=complex128)` then widens it without recovering anything,

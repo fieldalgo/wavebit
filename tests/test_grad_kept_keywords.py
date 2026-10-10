@@ -14,7 +14,7 @@ CFG = dict(period=(600., 750.), structure=np.full((1, 2, 2), 4.),
            theta=.13, phi=.21, answers='field', factorization='li')
 
 
-def solver(backend=1, **kwargs):
+def solver(backend='jax', **kwargs):
     return wavebit.rcwa(backend=backend, **(CFG | kwargs))
 
 
@@ -45,14 +45,14 @@ def test_concrete_forward_keywords_survive_the_gradient_scope(door, wrapper, fai
     if not failure:
         h = 1e-3
         def reference(t):
-            return float(solver(0, thickness=(t,), **fixed).solve().T.sum().real)
+            return float(solver('numpy', thickness=(t,), **fixed).solve().T.sum().real)
         expected = (reference(170.+h)-reference(170.-h))/(2*h)
         assert got == pytest.approx(expected, abs=1e-9, rel=2e-6)
     assert float(s.wavelength) == 850.
     assert complex(s.theta) == .23
     np.testing.assert_array_equal(s.thickness, [170.])
     assert not any(_holds_tracer(v) for v in vars(s).values())
-    np.testing.assert_allclose(s.solve().T, solver(0, **fixed).solve().T, atol=1e-12)
+    np.testing.assert_allclose(s.solve().T, solver('numpy', **fixed).solve().T, atol=1e-12)
 
 
 def test_a_named_gradient_parameter_stays_temporary_even_if_overridden_concretely():
@@ -75,7 +75,7 @@ def test_replayed_keywords_keep_the_accepted_numpy_value_after_caller_mutation()
     s.grad(['thickness'], forward, lambda result: result.T.sum().real)
     np.testing.assert_array_equal(s.structure, np.full((1, 2, 2), 9.))
     np.testing.assert_array_equal(raster, np.full((1, 2, 2), 16.))
-    np.testing.assert_allclose(s.solve().T, solver(0, structure=np.full((1, 2, 2), 9.)).solve().T,
+    np.testing.assert_allclose(s.solve().T, solver('numpy', structure=np.full((1, 2, 2), 9.)).solve().T,
                                atol=1e-12)
 
 
@@ -108,5 +108,5 @@ def test_replayed_drawn_raster_keeps_the_accepted_cell_and_material_values():
     s.grad(['thickness'], forward, lambda result: result.T.sum().real)
     np.testing.assert_array_equal(s.structure, np.full((1, 2, 2), 9.))
     np.testing.assert_array_equal(s._structure_drawn_on, np.diag([600., 750.]))
-    np.testing.assert_allclose(s.solve().T, solver(0, structure=np.full((1, 2, 2), 9.)).solve().T,
+    np.testing.assert_allclose(s.solve().T, solver('numpy', structure=np.full((1, 2, 2), 9.)).solve().T,
                                atol=1e-12)

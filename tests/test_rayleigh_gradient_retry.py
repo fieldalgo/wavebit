@@ -10,9 +10,9 @@ PILLAR = np.ones((1, 20)); PILLAR[:, 6:14] = 12.25
 
 
 def value(backend, parameter, knob, auto_detune=True):
-    if backend == 1:
+    if backend == 'jax':
         import jax.numpy as xp
-    elif backend == 2:
+    elif backend == 'torch':
         import torch as xp
     else:
         xp = np
@@ -24,24 +24,24 @@ def value(backend, parameter, knob, auto_detune=True):
 
 
 @pytest.mark.parametrize('detune', [True, 1e-10, 1e-8, 1e-6])
-@pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('knob', ['epsilon', 'wavelength'])
 def test_rayleigh_parameter_gradient_reaches_the_detuned_retry(backend, knob, detune):
     point = 2.25 if knob == 'epsilon' else 500.
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        if backend == 1:
+        if backend == 'jax':
             jax = pytest.importorskip('jax')
             import jax.numpy as jnp
             wavebit.enable_x64()
-            got = float(jax.grad(lambda t: value(1, t, knob, detune))(jnp.asarray(point)))
+            got = float(jax.grad(lambda t: value('jax', t, knob, detune))(jnp.asarray(point)))
         else:
             torch = pytest.importorskip('torch')
             t = torch.tensor(point, dtype=torch.float64, requires_grad=True)
-            value(2, t, knob, detune).backward()
+            value('torch', t, knob, detune).backward()
             got = float(t.grad)
         h = 1e-4
-        expected = (float(value(0, point+h, knob))-float(value(0, point-h, knob)))/(2*h)
+        expected = (float(value('numpy', point+h, knob))-float(value('numpy', point-h, knob)))/(2*h)
     print(backend, knob, detune, got, expected, flush=True)
     assert np.isfinite(got)
     assert got == pytest.approx(expected, rel=2e-4, abs=2e-6)

@@ -47,7 +47,7 @@ def score(result, field=None):
 def test_nested_lattice_jit_derivative_matches_numpy(family, spelling, door):
     wavebit.enable_x64()
     point = np.array([600., 40.])
-    s = solver(1, family, point)
+    s = solver('jax', family, point)
     original = np.asarray(s.lattice).copy()
     geometry = s.freeze_geometry()
     def loss(p):
@@ -57,7 +57,7 @@ def test_nested_lattice_jit_derivative_matches_numpy(family, spelling, door):
         return score(*s.solve_field(2, 2, 2, **kwargs))
     got = np.asarray(jax.jit(jax.grad(loss))(jnp.asarray(point)))
     def reference(p):
-        fresh = solver(0, family, p)
+        fresh = solver('numpy', family, p)
         return float(score(fresh.solve()) if door == 'solve' else score(*fresh.solve_field(2, 2, 2)))
     fd = []
     for i in range(2):

@@ -245,11 +245,11 @@ def _snapshot(solver, result):
     return [(a.shape, a.dtype, a.tobytes()) for a in (_host(value) for value in values if value is not None)]
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('case', ['te', 'tm', 'conical', 'li', 'laurent', 'nvf', 'raster',
                                   'hex', 'bottom', 'moved', 'mu', 'tensor'])
 def test_the_public_round_trip_preserves_every_answer_byte(case, backend):
-    if backend: pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     s = _round_trip_scene(case, backend)
     before = _snapshot(s, s.solve())
     conv, mu = s.eps_conv_matrices(), s.mu_conv_matrices()
@@ -258,11 +258,11 @@ def test_the_public_round_trip_preserves_every_answer_byte(case, backend):
     assert before == _snapshot(s, s.solve_conv(*conv, **extra))
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_origin_swap_is_exact_and_its_own_inverse(backend):
     from wavebit._core.conventions import swap_fourier_origin
     from _conv_frame import about_centre
-    if backend: pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     s = wavebit.rcwa(backend=backend)
     values = np.arange(81, dtype=float).reshape(9, 9).astype(complex)
     values[0, 1] = complex(-0., 0.);values[1, 0] = complex(0., -0.)
@@ -316,16 +316,16 @@ def test_from_energy_preserves_the_supplied_centre_frame():
         np.testing.assert_allclose(a, about_centre(b, (1, 1)), atol=8e-14, rtol=0)
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_a_public_matrix_gradient_is_the_kernel_gradient_restated(backend):
     from _conv_frame import about_centre
-    module = pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    module = pytest.importorskip(backend)
     wavebit.enable_x64()
     s = _round_trip_scene('laurent', backend)
     public, corner = s.eps_conv_matrices(), s._eps_conv_matrices()
     def loss(v, rest, solve):
         return s.xp.sum(solve(v, rest.epy, rest.epz_i).R)
-    if backend == 1:
+    if backend == 'jax':
         g_public = module.grad(lambda v: loss(v, public, s.solve_conv))(public.epx)
         g_corner = module.grad(lambda v: loss(v, corner, s._solve_conv))(corner.epx)
         eager = loss(public.epx, public, s.solve_conv)
@@ -333,7 +333,7 @@ def test_a_public_matrix_gradient_is_the_kernel_gradient_restated(backend):
         np.testing.assert_allclose(traced, eager, atol=1e-12, rtol=0)
         # Differentiate a raster value through the accessor, before any eigensolve.
         row = module.numpy.asarray([[[1., 3., 2., 1.]]])
-        a = wavebit.rcwa(backend=1, period=(1.6, 1.8), thickness=[.2],
+        a = wavebit.rcwa(backend='jax', period=(1.6, 1.8), thickness=[.2],
                          truncation_order=(1, 0), structure=row)
         jp = module.jacfwd(lambda v: a.eps_conv_matrices(structure=row.at[0, 0, 1].set(v)).epx)(3.)
         def kernel(v):
@@ -350,7 +350,7 @@ def test_a_public_matrix_gradient_is_the_kernel_gradient_restated(backend):
     expected = about_centre(g_corner, (1, 1))
     np.testing.assert_array_equal(_host(g_public), _host(expected))
     assert _host(g_public).tobytes() == _host(expected).tobytes()
-    if backend == 1: module.clear_caches()
+    if backend == 'jax': module.clear_caches()
 
 
 @pytest.mark.parametrize('theta', [0., .1])

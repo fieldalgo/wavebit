@@ -8,6 +8,7 @@ import array_api_compat.torch as _xp
 from tqdm import tqdm
 
 from .._core.engine import CoreFactorizationMixin, CoreSolveMixin
+from .._core.enums import Backend
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS
 
 
@@ -21,12 +22,12 @@ class _BaseRCWA(CoreSolveMixin):
     #: keeps `_core` from naming an optional dependency.
     xp = _xp
 
-    #: Which backend this class is, as the integer `rcwa(backend=...)` takes. A declared
+    #: Which backend this class is, as the member `rcwa(backend=...)` parses to. A declared
     #: member because the shared constructor cannot spell three literals -- and it has to
     #: stay an accepted *keyword* as well: `SolverJax._tree_flatten` puts `backend` in
     #: aux_data, so it is part of the treedef and of every jit cache key, and
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
-    _BACKEND_ID = 2
+    _BACKEND_ID = Backend.TORCH
 
     #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
     #: so `manifest.py` can publish this without importing this module to ask.
@@ -44,7 +45,7 @@ class _BaseRCWA(CoreSolveMixin):
     def _resolve_device(self, value):
         """A :class:`torch.device`.
 
-        Strings are accepted, which they were not: `rcwa(backend=2, device='cpu')` raised a
+        Strings are accepted, which they were not: `rcwa(backend='torch', device='cpu')` raised a
         bare `ValueError` while `RCWATorch.__init__` declared `device='cpu'` as its own
         default, so the documented default could not be written out. JAX took the strings all
         along, and `_core.modeler._resolve_device` -- the same mapping, for the modeler --
@@ -111,8 +112,8 @@ class SolverTorch(RCWATorch, OptimizerTorch):
     # `(*args, **kwargs)` and nothing else, which is what `SolverNumpy` and `SolverJax` are.
     # This one used to name `device` and `complex_dtype` before them, and naming them here is
     # not a default -- it is a claim on the first two POSITIONS. `rcwa()` forwards `*args`
-    # positionally, so `rcwa(0, 1.5, 2.25)` and `rcwa(1, 1.5, 2.25)` build a solver with
-    # `top=1.5, bot=2.25` while `rcwa(2, 1.5, 2.25)` read 1.5 as a device and refused. Same
+    # positionally, so `rcwa('numpy', 1.5, 2.25)` and `rcwa('jax', 1.5, 2.25)` build a solver with
+    # `top=1.5, bot=2.25` while `rcwa('torch', 1.5, 2.25)` read 1.5 as a device and refused. Same
     # call, one backend answering a different question -- and the two names it intercepted are
     # the two that already had defaults one layer down, so it was not adding anything either.
     #

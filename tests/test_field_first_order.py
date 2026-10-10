@@ -81,7 +81,7 @@ def uniform_slots(eps_list):
             np.stack([-x[2, 1] * I for x in e])]
 
 
-def z_solver(thickness, theta_deg=28.0, backend=0):
+def z_solver(thickness, theta_deg=28.0, backend='numpy'):
     """A solver for a stack of uniform tensors, at one retained order.
 
     The tensors themselves arrive through :func:`uniform_slots`, not through a ``structure``: a
@@ -94,14 +94,14 @@ def z_solver(thickness, theta_deg=28.0, backend=0):
 
 def _to_backend(a, backend):
     """A convolution stack in the backend's own array type — ``thickness`` is already in it."""
-    if backend == 0:
+    if backend == 'numpy':
         return a
-    if backend == 1:
+    if backend == 'jax':
         return pytest.importorskip('jax.numpy').asarray(a)
     return pytest.importorskip('torch').as_tensor(a)
 
 
-def z_coupled_cell(eps_list, thickness, theta_deg=28.0, sample_z=64, backend=0):
+def z_coupled_cell(eps_list, thickness, theta_deg=28.0, sample_z=64, backend='numpy'):
     """``(result, cell, kx, ky)`` for a stack of uniform tensors.
 
     ``sample_x = sample_y = 1`` on purpose: with a single retained order the field is one plane wave,
@@ -138,7 +138,7 @@ TWINS = {
 }
 
 
-def twin_cell(formulation, name, theta_deg, side, backend=0):
+def twin_cell(formulation, name, theta_deg, side, backend='numpy'):
     structure, truncation_order, thickness = TWINS[name]
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
                        wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
@@ -205,7 +205,7 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
     structure, truncation_order, thickness = TWINS['a patterned layer']
     cells = {}
     for formulation in ('second_order', 'first_order'):
-        mee = wavebit.rcwa(backend=0, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
+        mee = wavebit.rcwa(backend='numpy', top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
                            wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
                            psi=0.6, thickness=thickness, structure=structure, answers='field')
         mee.formulation = formulation
@@ -332,7 +332,7 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     them; ``tests/test_field_core.py`` makes the same claim for the two 1D layouts and by
     Maxwell rather than by a closed form.
     """
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, truncation_order=(0, 0), period=PERIOD,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, truncation_order=(0, 0), period=PERIOD,
                        wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
                        thickness=[WL], structure=np.ones((1, 1, 1)), answers='field')
     mee.formulation = formulation
@@ -359,14 +359,14 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
 
 # --------------------------------------------------------------------------------- backends
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_the_reconstruction_is_the_same_on_every_backend(backend):
     """One implementation, so jax and torch reconstruct the same cell as numpy.
 
     Both the twin route (a patterned layer forced onto ``'first_order'``) and the z-coupled route,
     because they reach the reconstruction through different halves of the solver.
     """
-    pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     want = twin_cell('first_order', 'a patterned layer', 21.0, 'top')
     got = twin_cell('first_order', 'a patterned layer', 21.0, 'top', backend=backend)
     assert np.max(np.abs(want - got)) / np.max(np.abs(want)) < 1e-10

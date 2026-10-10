@@ -41,7 +41,7 @@ TILT_LY = PERIOD * np.sin(TILT)
 L_ANGLE = float(np.arctan2(117.9, 690.0))
 
 #: The operating point of ``test_nvf_self_coincident_faces.py``: eps 12.25 on 1, substrate 2.25.
-SOLVE_KW = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25,
+SOLVE_KW = dict(backend='numpy', wavelength=900.0, top=1.0, bot=2.25,
                 theta=0.2, phi=0.0, psi=0.0, thickness=[300.0])
 
 
@@ -69,7 +69,7 @@ def test_the_grating_keeps_the_previous_mechanisms_digits():
     sample -- and a difference in the last digits would mean the field is not that.
     """
     P._PROJECTOR_CACHE.clear()
-    s = wavebit.rcwa(backend=0, thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+    s = wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                      truncation_order=dict(x=5, y=5), top=1, bot=1, wavelength=550.0, psi=0.0)
     s.structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                      lx=350.0, ly=PERIOD, angle=0.0,
@@ -284,7 +284,7 @@ def test_x_orders_cannot_change_an_x_invariant_answer():
     """
     def total(tox, toy):
         P._PROJECTOR_CACHE.clear()
-        s = wavebit.rcwa(backend=0, thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+        s = wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                          truncation_order=dict(x=tox, y=toy), top=1, bot=1, wavelength=550.0,
                          psi=np.pi / 2)
         s.structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,

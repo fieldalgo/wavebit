@@ -219,7 +219,7 @@ def solve_tensor_stack(layers, theta, wl=WL, layer_algorithm='ETM', formulation=
             slot.append(np.linalg.inv(e[2, 2] * I) if value is None else value * I)
         thick.append(d)
     conv = [np.stack(s) for s in slots]
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          truncation_order=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
                          layer_algorithm=layer_algorithm, incidence_side=incidence_side)
     if formulation is not None:

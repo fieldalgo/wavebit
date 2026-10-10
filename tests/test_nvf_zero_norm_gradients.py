@@ -124,11 +124,11 @@ def test_symmetric_two_shape_layer_has_a_finite_position_gradient():
     cannot answer that -- so ``freeze_geometry`` is how any two-shape gradient is taken. These
     circles stay disjoint across the window, so one freeze covers it.
     """
-    frozen = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=_twin_circles(0.0))],
+    frozen = wavebit.rcwa(backend='numpy', structure=[dict(background=1.0, shapes=_twin_circles(0.0))],
                           **BASE).freeze_geometry()
 
     def objective(d):
-        res = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=_twin_circles(d))],
+        res = wavebit.rcwa(backend='jax', structure=[dict(background=1.0, shapes=_twin_circles(d))],
                              **BASE).solve(geometry=frozen)
         return jnp.real(jnp.sum(res.R))
 

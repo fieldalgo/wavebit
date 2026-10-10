@@ -31,7 +31,7 @@ def _grating(eps_hi=16.0, cells=8):
 def _solve(*, truncation_order, thickness, eps_hi=16.0, algo='ETM', complex_dtype=np.complex128,
            period=3000.0, wavelength=400.0, eps_bot=2.25):
     return wavebit.rcwa(
-        backend=0, wavelength=wavelength, period=[period], truncation_order=[truncation_order, 0],
+        backend='numpy', wavelength=wavelength, period=[period], truncation_order=[truncation_order, 0],
         top=1.0, bot=eps_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
         structure=_grating(eps_hi), thickness=[thickness],
         layer_algorithm=algo, complex_dtype=complex_dtype,
@@ -115,7 +115,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
     cells = []
     for algo in ('ETM', 'SMM'):
         solver = wavebit.rcwa(
-            backend=0, wavelength=400.0, period=[3000.0], truncation_order=[40, 0],
+            backend='numpy', wavelength=400.0, period=[3000.0], truncation_order=[40, 0],
             top=1.0, bot=2.25, theta=0.0, phi=0.0, psi=np.pi / 2,
             structure=_grating(), thickness=[thickness], layer_algorithm=algo,
             answers='field')

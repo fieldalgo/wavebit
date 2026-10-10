@@ -133,12 +133,12 @@ def test_real_engine_matches_independent_lossless_and_absorbing_slab(epsilon, wa
         assert actual == pytest.approx(_airy(epsilon, wavelength, thickness, .23, polarization), abs=2e-11)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_conforming_nvf_export_runs_in_the_real_engine_for_both_polarizations(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     from studies.nvf_polynomial_body import PolynomialBodyGapModel
     from studies.nvf_scattering_doubling import doubling_powers

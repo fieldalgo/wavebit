@@ -39,7 +39,7 @@ def _loss_at(value):
     """`sum(T)` with one pixel's permittivity replaced -- the finite-difference oracle."""
     eps = LOSSY.copy()
     eps[PIXEL] = value
-    return float(np.asarray(wavebit.rcwa(backend=0, structure=eps, **SCENE).solve().T).sum())
+    return float(np.asarray(wavebit.rcwa(backend='numpy', structure=eps, **SCENE).solve().T).sum())
 
 
 def _true_gradient(step=1e-6):
@@ -50,15 +50,15 @@ def _true_gradient(step=1e-6):
 
 
 def _solver_and_gradient(backend):
-    if backend == 1:
+    if backend == 'jax':
         jnp = pytest.importorskip('jax.numpy')
         wavebit.enable_x64()
-        solver = wavebit.rcwa(backend=1, structure=LOSSY, **SCENE)
+        solver = wavebit.rcwa(backend='jax', structure=LOSSY, **SCENE)
         solver.structure = jnp.asarray(LOSSY)
         loss_fn = (lambda result: jnp.sum(result.T).real)
     else:
         torch = pytest.importorskip('torch')
-        solver = wavebit.rcwa(backend=2, structure=LOSSY, **SCENE)
+        solver = wavebit.rcwa(backend='torch', structure=LOSSY, **SCENE)
         solver.structure = torch.tensor(LOSSY, dtype=torch.complex128)
         loss_fn = (lambda result: torch.sum(result.T).real)
     grads = solver.grad(['structure'], functools.partial(solver.solve), loss_fn)
@@ -69,7 +69,7 @@ def _detach(v):
     return v.detach() if hasattr(v, 'detach') else v
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_the_gradient_of_a_complex_permittivity_points_downhill(backend):
     """Against finite differences, both partials -- and then a step, which is the whole point.
 
@@ -100,27 +100,27 @@ def test_the_two_backends_return_the_same_gradient():
     """
     pytest.importorskip('jax')
     pytest.importorskip('torch')
-    _, from_jax = _solver_and_gradient(1)
-    _, from_torch = _solver_and_gradient(2)
+    _, from_jax = _solver_and_gradient('jax')
+    _, from_torch = _solver_and_gradient('torch')
     assert from_jax == pytest.approx(from_torch, rel=1e-9, abs=1e-12), (
         f'jax {from_jax} against torch {from_torch}; conjugates differ by '
         f'{abs(from_jax - from_torch.conjugate()):.2e}, which is the tell')
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_asking_for_the_same_gradient_twice_gives_the_same_answer(backend):
     """Torch accumulates into `.grad`, and nothing used to clear it: 1x, 2x, 3x.
 
     Silent, and it reads as a learning rate that is merely too high -- every step of a
     hand-written loop moves further than the last.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
     else:
         pytest.importorskip('torch')
 
     solver, first = _solver_and_gradient(backend)
-    if backend == 1:
+    if backend == 'jax':
         import jax.numpy as jnp
         loss_fn = (lambda result: jnp.sum(result.T).real)
     else:
@@ -135,7 +135,7 @@ def test_asking_for_the_same_gradient_twice_gives_the_same_answer(backend):
             f'(ratio {abs(value / first):.4f})')
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_fit_lowers_the_loss(backend):
     """`fit` is the other half of this surface and had no test either.
 
@@ -144,12 +144,12 @@ def test_fit_lowers_the_loss(backend):
     conjugation now happens once, in `_grad`, and this asserts `fit` still descends after that
     line moved.
     """
-    if backend == 1:
+    if backend == 'jax':
         jnp = pytest.importorskip('jax.numpy')
         pytest.importorskip('optax')
         import optax
         wavebit.enable_x64()
-        solver = wavebit.rcwa(backend=1, structure=LOSSY, **SCENE)
+        solver = wavebit.rcwa(backend='jax', structure=LOSSY, **SCENE)
         solver.structure = jnp.asarray(LOSSY)
         loss_fn = (lambda result: jnp.sum(result.T).real)
         before = float(loss_fn(solver.solve()))
@@ -157,7 +157,7 @@ def test_fit_lowers_the_loss(backend):
                    optax.sgd(1e-2), iteration=5)
     else:
         torch = pytest.importorskip('torch')
-        solver = wavebit.rcwa(backend=2, structure=LOSSY, **SCENE)
+        solver = wavebit.rcwa(backend='torch', structure=LOSSY, **SCENE)
         solver.structure = torch.tensor(LOSSY, dtype=torch.complex128)
         loss_fn = (lambda result: torch.sum(result.T).real)
         before = float(loss_fn(solver.solve()))

@@ -28,7 +28,7 @@ def field(s):
 def test_autograd_condition_does_not_hide_a_changed_scene(name,change,algorithm):
     torch=pytest.importorskip('torch')
     leaf=torch.tensor(VALUES[name],dtype=torch.float64,requires_grad=True)
-    s=solver(2,name,leaf,algorithm)
+    s=solver('torch',name,leaf,algorithm)
     s.solve(auto_detune=False)
     before=field(s).detach().numpy()
     setattr(s,change,750. if change=='wavelength' else 'bottom')
@@ -44,7 +44,7 @@ def test_autograd_condition_does_not_hide_a_changed_scene(name,change,algorithm)
 def test_scene_snapshot_preserves_the_live_gradient(name,algorithm):
     torch=pytest.importorskip('torch')
     leaf=torch.tensor(VALUES[name],dtype=torch.float64,requires_grad=True)
-    s=solver(2,name,leaf,algorithm)
+    s=solver('torch',name,leaf,algorithm)
     s.solve(auto_detune=False)
     def objective(xp,f):return xp.sum(xp.abs(f)**2)+.31*xp.real(xp.sum(f))
     loss=objective(torch,field(s));loss.backward()
@@ -52,7 +52,7 @@ def test_scene_snapshot_preserves_the_live_gradient(name,algorithm):
     direction=np.linspace(.3,.8,leaf.numel()).reshape(VALUES[name].shape)
     actual=np.sum(leaf.grad.numpy()*direction)
     def independent(t):
-        reference=solver(0,name,VALUES[name]+t*direction,algorithm)
+        reference=solver('numpy',name,VALUES[name]+t*direction,algorithm)
         reference.solve(auto_detune=False)
         return objective(np,field(reference))
     h=1e-4
@@ -69,7 +69,7 @@ def test_scene_snapshot_preserves_the_live_gradient(name,algorithm):
 def test_inplace_condition_update_invalidates_legacy_field_but_not_result(algorithm):
     torch=pytest.importorskip('torch')
     leaf=torch.tensor([150.],dtype=torch.float64,requires_grad=True)
-    s=solver(2,'thickness',leaf,algorithm)
+    s=solver('torch','thickness',leaf,algorithm)
     result=s.solve(auto_detune=False)
     before=result.reconstruct_field([21.],[-17.],[63.]).detach().numpy()
     with torch.no_grad():s.thickness.add_(20.)

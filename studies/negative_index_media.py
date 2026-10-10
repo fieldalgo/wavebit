@@ -227,12 +227,23 @@ def formulation(value):
     return {'second_order': '2ff', 'first_order': '4ff'}[value]
 
 
+def backend_arg(name):
+    """``name`` spelled as the imported ``wavebit`` takes it: ``'numpy'`` / ``'jax'`` /
+    ``'torch'`` since 2026-10-11, the integers ``0`` / ``1`` / ``2`` before, when ``Backend``
+    was an ``IntEnum``. Archived trees run this script too (section 10's ``--develop``), and
+    they know only the old spelling."""
+    from wavebit._core.enums import Backend
+    if issubclass(Backend, int):
+        return {'numpy': 0, 'jax': 1, 'torch': 2}[name]
+    return name
+
+
 def solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', path='2d', side='top',
            phi=None, thickness=(D_LAYER,), answers='amplitude', **kw):
     """One uniform glass layer between the given half-spaces; the zeroth order only."""
-    common = dict(backend=kw.pop('backend', 0), top=top, bot=bot, theta=theta, wavelength=WL,
-                  thickness=list(thickness), layer_algorithm=algo, incidence_side=side,
-                  answers=answers, **kw)
+    common = dict(backend=backend_arg(kw.pop('backend', 'numpy')), top=top, bot=bot,
+                  theta=theta, wavelength=WL, thickness=list(thickness), layer_algorithm=algo,
+                  incidence_side=side, answers=answers, **kw)
     if path in ('te', 'tm'):
         return wavebit.rcwa(**common, tetm=path, truncation_order=0, period=[1000.0],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
@@ -249,13 +260,13 @@ def solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', path='2d',
 
 
 def grating(path, algo='SMM', far=PASSIVE, d=None, lit=None, side='top', theta=0.3, phi=0.4,
-            answers='amplitude', backend=0, psi=0.3):
+            answers='amplitude', backend='numpy', psi=0.3):
     """glass (lit) / grating / double-negative half-space; or, with ``d``, / a slab of the
     double negative ``d`` thick / glass; or, with ``lit``, that medium lit on ``side`` and glass
     the far side."""
     eps, mu = far
-    common = dict(backend=backend, top=N_GLASS ** 2, wavelength=WL, layer_algorithm=algo,
-                  theta=theta, answers=answers)
+    common = dict(backend=backend_arg(backend), top=N_GLASS ** 2, wavelength=WL,
+                  layer_algorithm=algo, theta=theta, answers=answers)
     if path in ('te', 'tm', 'conical'):
         layer, kw = G1[None, None, :], dict(period=[P_G], truncation_order=3)
     else:
@@ -1650,7 +1661,7 @@ def section_backends():
                 auto_detune=False), 'conical'),
             'lit, theta = 0': amplitudes(grating('conical', lit=ASYM, theta=0.0, phi=0.6).solve(
                 auto_detune=False), 'conical')}
-        for backend, label in ((1, 'JAX eager'), (2, 'PyTorch')):
+        for backend, label in (('jax', 'JAX eager'), ('torch', 'PyTorch')):
             got = {
                 'far': amplitudes(grating('conical', backend=backend).solve(auto_detune=False),
                                   'conical'),
@@ -1664,7 +1675,7 @@ def section_backends():
 
         def lit(re_eps, theta=0.35):
             pair = (re_eps + 1j * ASYM[0].imag, ASYM[1])
-            result = grating('conical', lit=pair, theta=theta, phi=0.6, backend=1).solve(
+            result = grating('conical', lit=pair, theta=theta, phi=0.6, backend='jax').solve(
                 auto_detune=False)
             return [result.incident.R, result.incident.r_s, result.incident.r_p,
                     result.incident.t_s, result.incident.t_p]
@@ -1686,10 +1697,10 @@ def section_backends():
 
         def total_R(re_eps):
             return grating('conical', far=(re_eps + 1j * PASSIVE[0].imag, PASSIVE[1]),
-                           backend=1).solve(auto_detune=False).R.sum().real
+                           backend='jax').solve(auto_detune=False).R.sum().real
 
         def total_R_theta(theta):
-            return grating('conical', lit=ASYM, theta=theta, phi=0.6, backend=1).solve(
+            return grating('conical', lit=ASYM, theta=theta, phi=0.6, backend='jax').solve(
                 auto_detune=False).R.sum().real
 
         h = 1e-6
@@ -1701,7 +1712,8 @@ def section_backends():
             rows.append(f'{label}: {auto:+.6f} against {fd:+.6f} ({e(abs(auto - fd))})')
         print('  jax.grad against a central difference (h = 1e-6):\n    ' + '\n    '.join(rows))
         eps = torch.tensor(PASSIVE[0], dtype=torch.complex128, requires_grad=True)
-        R = grating('conical', far=(eps, PASSIVE[1]), backend=2).solve(auto_detune=False).R.sum()
+        R = grating('conical', far=(eps, PASSIVE[1]), backend='torch').solve(
+            auto_detune=False).R.sum()
         R.real.backward()
         auto = float(eps.grad.real)
         fd = (float(total_R(-2.0 + h)) - float(total_R(-2.0 - h))) / (2 * h)
@@ -1709,7 +1721,7 @@ def section_backends():
               f'({e(abs(auto - fd))})')
 
         def band(re_eps):
-            s = grating('conical', far=(re_eps + 1j * ACTIVE[0].imag, ACTIVE[1]), backend=1)
+            s = grating('conical', far=(re_eps + 1j * ACTIVE[0].imag, ACTIVE[1]), backend='jax')
             s.theta = np.deg2rad(60.0)
             return s.gain_cutoff_band()['bottom']
 
@@ -1797,15 +1809,15 @@ def harness():
     except ImportError:                             # pragma: no cover - environment
         return out
     wavebit.enable_x64()
-    for backend, label in ((1, 'jax'), (2, 'torch')):
+    for backend in ('jax', 'torch'):
         for name, (eps, mu) in HARNESS_MEDIA.items():
             half = eps if mu is None else wavebit.Material(eps, mu=mu)
             lit = (eps,) if mu is None else (eps, mu)
             for path in ('conical', '2d'):
                 for algo in ('ETM', 'SMM'):
-                    _record(out, f'{label}/{name}/{path}/{algo}/far', lambda: _solved(
+                    _record(out, f'{backend}/{name}/{path}/{algo}/far', lambda: _solved(
                         _far_grating(path, algo, half, 0.3, backend=backend), path))
-                    _record(out, f'{label}/{name}/{path}/{algo}/lit', lambda: _solved(
+                    _record(out, f'{backend}/{name}/{path}/{algo}/lit', lambda: _solved(
                         grating(path, algo, theta=0.3, phi=0.6, lit=lit, answers='field',
                                 backend=backend), path))
     for name in ('magnetic', 'magnetic_lossy', 'mu_negative'):
@@ -1813,9 +1825,10 @@ def harness():
         for role in ('far', 'lit'):
             def traced(re_eps):
                 pair = (re_eps + 1j * complex(eps).imag, mu)
-                s = (grating('conical', theta=0.3, phi=0.6, lit=pair, backend=1) if role == 'lit'
+                s = (grating('conical', theta=0.3, phi=0.6, lit=pair, backend='jax')
+                     if role == 'lit'
                      else _far_grating('conical', 'SMM', wavebit.Material(*pair), 0.3,
-                                       backend=1))
+                                       backend='jax'))
                 result = s.solve(auto_detune=False)
                 return {f: getattr(result.incident, f) for f in ('R', 'T', 'r_s', 'r_p',
                                                                  't_s', 't_p')}
@@ -1824,9 +1837,9 @@ def harness():
     return out
 
 
-def _far_grating(path, algo, half, theta, backend=0):
+def _far_grating(path, algo, half, theta, backend='numpy'):
     common = dict(top=N_GLASS ** 2, bot=half, wavelength=WL, layer_algorithm=algo, theta=theta,
-                  answers='field', backend=backend)
+                  answers='field', backend=backend_arg(backend))
     if path in ('te', 'tm', 'conical'):
         layer, kw = G1[None, None, :], dict(period=[P_G], truncation_order=3)
     else:
@@ -2029,7 +2042,7 @@ def section_usage():
 
         def reflectance(re_eps):
             medium = wavebit.Material(re_eps + 0.1j, mu=-1 + 0.1j)
-            s = wavebit.rcwa(backend=1, top=2.25, bot=medium, wavelength=500.,
+            s = wavebit.rcwa(backend='jax', top=2.25, bot=medium, wavelength=500.,
                              period=(1000., 1000.), truncation_order=(0, 0),
                              structure=np.full((1, 2, 2), 2.25), thickness=[37.])
             return s.solve().R.sum().real
@@ -2042,7 +2055,7 @@ def section_usage():
 
         # Under jax.jit: the gain band is what is left to read.
         def band(re_eps):
-            s = wavebit.rcwa(backend=1, top=2.25,
+            s = wavebit.rcwa(backend='jax', top=2.25,
                              bot=wavebit.Material(re_eps - 0.1j, mu=-1 - 0.1j),
                              theta=np.deg2rad(60.), wavelength=500., period=[700.],
                              truncation_order=3, thickness=[180.],
@@ -2080,7 +2093,7 @@ def _negation_refusal_off():
         CoreFactorizationMixin._refuse_half_space_negation_pair = original
 
 
-def _pair_scene(path, algo, bot, layers, side='top', theta=0.2, backend=0, period=300.0,
+def _pair_scene(path, algo, bot, layers, side='top', theta=0.2, backend='numpy', period=300.0,
                 truncation=None, solver_only=False):
     """Glass over ``bot``, 500 nm, period 300 nm: at ``theta = 0.2`` the retained orders include
     evanescent ones in both media (printed by section 12), and one first order propagates.
@@ -2090,8 +2103,9 @@ def _pair_scene(path, algo, bot, layers, side='top', theta=0.2, backend=0, perio
     one_d = path in ('te', 'tm', 'conical')
     shape = (1, 8) if one_d else (4, 4)
     stack = layers or [(PAIR, 10.0)]
-    common = dict(backend=backend, top=wavebit.Material(*PAIR), bot=wavebit.Material(*bot),
-                  theta=theta, wavelength=WL, thickness=[d for _, d in stack][::-1],
+    common = dict(backend=backend_arg(backend), top=wavebit.Material(*PAIR),
+                  bot=wavebit.Material(*bot), theta=theta, wavelength=WL,
+                  thickness=[d for _, d in stack][::-1],
                   layer_algorithm=algo, answers='amplitude', incidence_side=side,
                   structure=np.stack([np.full(shape, m[0]) for m, _ in stack][::-1]),
                   mu=np.stack([np.full(shape, m[1]) for m, _ in stack][::-1]))
@@ -2160,11 +2174,11 @@ def section_negation_pair():
     try:
         import jax                                  # noqa: F401
         import torch                                # noqa: F401
-        backends = ((0, 'NumPy'), (1, 'JAX'), (2, 'PyTorch'))
+        backends = (('numpy', 'NumPy'), ('jax', 'JAX'), ('torch', 'PyTorch'))
         wavebit.enable_x64()
     except ImportError as error:                    # pragma: no cover - environment
         print(f'  JAX and PyTorch skipped: {error}')
-        backends = ((0, 'NumPy'),)
+        backends = (('numpy', 'NumPy'),)
     cases = [(name, stack, path, algo, side) for name, stack in PAIR_STACKS.items()
              for side in ('top', 'bottom') for path in PATHS for algo in ('ETM', 'SMM')]
     from wavebit._core.solve_2d import order_grid_kxy
@@ -2207,7 +2221,7 @@ def section_negation_pair():
                 if kind != 'finite':
                     continue
                 R_max, T_gap = max(R_max, R), max(T_gap, abs(T - 1))
-                if backend == 0:
+                if backend == 'numpy':
                     lossy = _negated(PAIR, 1e-12)
                     stack_d = None if stack is None else [(lossy if m[0].real < 0 else m, d)
                                                           for m, d in stack]
@@ -2221,7 +2235,7 @@ def section_negation_pair():
                                        for f in ('r_s', 'r_p', 't_s', 't_p')
                                        if getattr(a, f, None) is not None))
         neighbour = (f'; every amplitude within {e(gap)} of the same scene with a loss of 1e-12'
-                     if backend == 0 else '')
+                     if backend == 'numpy' else '')
         print(f'    {label:7s} ' + ', '.join(f'{kind} {count}' for kind, count in kinds.items())
               + f' of {sum(kinds.values())}; R <= {R_max:.0e}, |T - 1| <= {T_gap:.0e}{neighbour}')
     print('  the same scenes with the refusal switched off -- what a solve does without it:')

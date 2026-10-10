@@ -58,6 +58,7 @@ from typing import Any
 import numpy as np
 
 from .backend import array_namespace, as_array, carries_autodiff, checked_float, constant_array
+from .enums import Backend, backend_of
 
 __all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
            'order_kxy', 'periods_of', 'reduced_basis', 'reduction_transform', 'sample_grid']
@@ -142,7 +143,7 @@ class Lattice:
     def __getitem__(self, key):
         return self.columns[key]
 
-    def meshgrid_xy(self, grid_shape, backend=0, dtype=None):
+    def meshgrid_xy(self, grid_shape, backend='numpy', dtype=None):
         """The cell's sample points as Cartesian ``(X, Y)`` -- ``numpy.meshgrid`` on this cell.
 
         Identical to ``wavebit.meshgrid_xy(grid_shape, lattice=A)`` in every respect, and it exists
@@ -175,7 +176,7 @@ class Lattice:
         """
         return meshgrid_xy(grid_shape, lattice=self, backend=backend, dtype=dtype)
 
-    def meshgrid_uv(self, grid_shape, backend=0, dtype=None):
+    def meshgrid_uv(self, grid_shape, backend='numpy', dtype=None):
         """The same sample points as **lattice** ``(U, V)`` -- fractions of the cell, in [-0.5, 0.5].
 
         The other half of the pair, and the reason both are spelled with a suffix: one mesh, two
@@ -790,7 +791,7 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
             xp.astype(xp.broadcast_to(ky, (n_orders_v, n_orders_u)), dtype))
 
 
-def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
+def meshgrid_xy(grid_shape, period=None, lattice=None, backend='numpy', dtype=None):
     """Cartesian coordinates of a raster's pixel centres: ``(X, Y)``, both that shape.
 
     ``numpy.meshgrid`` for a unit cell. On a skewed cell the two cannot be separated into 1-D
@@ -848,7 +849,7 @@ def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     measurement and the limits of the nudge.
 
     Exactly one of ``period`` / ``lattice``; ``backend`` matches :func:`wavebit.rcwa`
-    (0 NumPy, 1 JAX, 2 PyTorch). ``dtype`` defaults to the backend's float64.
+    (``'numpy'``, ``'jax'``, ``'torch'``). ``dtype`` defaults to the backend's float64.
     """
     A = as_lattice(period=period, lattice=lattice)
     shape = tuple(int(v) for v in grid_shape)
@@ -857,14 +858,13 @@ def meshgrid_xy(grid_shape, period=None, lattice=None, backend=0, dtype=None):
     if min(shape) < 1:
         raise ValueError(f'meshgrid_xy: grid_shape must be positive; got {grid_shape!r}')
 
-    if backend == 0:
+    backend = backend_of(backend)
+    if backend is Backend.NUMPY:
         import array_api_compat.numpy as xp
-    elif backend == 1:
+    elif backend is Backend.JAX:
         import jax.numpy as xp
-    elif backend == 2:
-        import array_api_compat.torch as xp
     else:
-        raise ValueError(f'meshgrid_xy: backend must be 0 (NumPy), 1 (JAX) or 2 (PyTorch); got {backend!r}')
+        import array_api_compat.torch as xp
 
     X, Y = sample_grid(xp, shape, A, dtype if dtype is not None else xp.float64)
     # The one place the public frame is put on. `sample_grid` builds the cell from its corner

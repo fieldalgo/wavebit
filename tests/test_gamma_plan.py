@@ -642,7 +642,7 @@ def test_an_empty_plan_is_a_uniform_layer():
     for got, want in zip(bar, none):
         assert np.array_equal(got, want)
 
-    kw = dict(backend=0, lattice=lattice, thickness=[0.3], wavelength=0.94,
+    kw = dict(backend='numpy', lattice=lattice, thickness=[0.3], wavelength=0.94,
               truncation_order=dict(u=4, v=4), top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3)
     bar_t = float(np.sum(wavebit.rcwa(structure=[dict(background=1.0, shapes=[shape])],
                                       **kw).solve().T))

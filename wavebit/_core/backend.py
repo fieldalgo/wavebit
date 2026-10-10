@@ -198,8 +198,8 @@ def _concrete(flag):
     ``None`` means the value is *abstract* — a ``jax.jit`` tracer, a PyTorch ``FakeTensor``
     under ``compile`` — where there is genuinely no number to look at. That, and not the
     namespace, is what the guards below are keyed on. Keying on the namespace was the bug:
-    an ordinary eager ``backend=1`` / ``backend=2`` call has its values right there, and was
-    skipped anyway.
+    an ordinary eager ``backend='jax'`` / ``backend='torch'`` call has its values right there,
+    and was skipped anyway.
 
     ``jax.grad`` sits on the *checked* side of the line, which is the whole point. An
     un-jitted grad tracer carries a concrete primal, so the reduction narrows to a real
@@ -550,7 +550,7 @@ def check_input_precision(name, value, target_dtype):
 
         import jax.numpy as jnp, wavebit
         theta = jnp.asarray(0.4 + 0.3j)          # complex64 -- x64 is not on yet
-        wavebit.rcwa(backend=1, theta=theta, complex_dtype=0, ...)   # asks for double
+        wavebit.rcwa(backend='jax', theta=theta, complex_dtype=0, ...)   # asks for double
 
     ``wavebit.enable_x64()`` before the second line is the fix.
 
@@ -583,7 +583,7 @@ def forward_strided(v):
     ``np.rot90``, ``np.flip`` and ``a[::-1]`` all return views with a negative stride, and
     PyTorch refuses those outright: ``ValueError: At least one stride in the given numpy array
     is negative``. NumPy and JAX take them without complaint, so the natural spelling of "solve
-    the rotated cell" is a crash on ``backend=2`` and a result on the other two — a backend
+    the rotated cell" is a crash on ``backend='torch'`` and a result on the other two — a backend
     difference in what the *input contract* accepts, which is exactly what this module exists
     to absorb.
 

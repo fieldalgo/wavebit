@@ -39,7 +39,7 @@ PATHS = ('raster', 'smooth')
 COUNTS = (1, 2, 3)
 
 
-def _solver(path, layers, thicknesses, backend=0, **over):
+def _solver(path, layers, thicknesses, backend='numpy', **over):
     kw = dict(backend=backend, structure=_layers(path, layers),
               thickness=[H] * thicknesses, period=[P, P], truncation_order=[2, 0],
               wavelength=WL, top=1.0, bot=1.0)
@@ -93,15 +93,14 @@ def test_the_refusal_says_both_counts_and_which_way_it_is_wrong(path):
 
 
 @pytest.mark.parametrize('mismatch', [(2, 1), (1, 2)], ids=['extra-layer', 'extra-thickness'])
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_every_backend_refuses_the_same_mismatch(backend, mismatch):
     """The check lives in `_core`, so all three must reach it -- and reach it before the solve.
 
     Torch raised its own dtype error and JAX its own tracer error from further in, so a per-
     backend refusal would have read as three unrelated bugs.
     """
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     layers, thicknesses = mismatch
     with pytest.raises(ValueError, match=r'one thickness per layer'):
         _solver('raster', layers, thicknesses, backend=backend).solve()

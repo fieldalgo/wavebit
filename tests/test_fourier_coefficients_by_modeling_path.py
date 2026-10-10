@@ -29,7 +29,7 @@ import wavebit
 from wavebit._core.lattice import as_lattice
 from wavebit._core.enums import FourierCoefficients
 
-KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+KW = dict(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           truncation_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # One structure per modeling path, as close to the same circle as each path can state it --
@@ -163,14 +163,14 @@ def test_freezing_the_geometry_refuses_before_the_solve_does(path, series):
         solver(path).freeze_geometry(fourier_coefficients=series)
 
 
-@pytest.mark.parametrize('name,code', [('jax', 1), ('torch', 2)])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('path,series', sorted(UNAVAILABLE.items()))
-def test_the_refusal_holds_on_every_backend(name, code, path, series):
+def test_the_refusal_holds_on_every_backend(backend, path, series):
     """The dispatch is in the shared mixin, so a backend that still substituted would mean one
     of the three had grown its own copy."""
-    pytest.importorskip(name)
+    pytest.importorskip(backend)
     with pytest.raises(NotImplementedError):
-        wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=code),
+        wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=backend),
                        fourier_coefficients=series).solve()
 
 
@@ -270,7 +270,7 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
     inside JAX's tree machinery rather than at the solve being refused, which is pinned below.
     """
     jax = pytest.importorskip('jax')
-    s = wavebit.rcwa(structure=SMOOTH, **dict(KW, backend=1))
+    s = wavebit.rcwa(structure=SMOOTH, **dict(KW, backend='jax'))
     leaves, treedef = jax.tree_util.tree_flatten(s)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
 
@@ -282,7 +282,7 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
 
 def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_solve():
     jax = pytest.importorskip('jax')
-    s = wavebit.rcwa(structure=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend=1))
+    s = wavebit.rcwa(structure=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend='jax'))
     leaves, treedef = jax.tree_util.tree_flatten(s)     # must not raise here
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back._fourier_coefficients == 'sampled'

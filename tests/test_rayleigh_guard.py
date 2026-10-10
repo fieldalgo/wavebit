@@ -104,7 +104,7 @@ def _truth(truncation_order):
 
     Cached because every case below wants it and it is a clean solve.
     """
-    return _totals(_solve(0, truncation_order, wavelength=np.nextafter(WL, WL + 1)))[0]
+    return _totals(_solve('numpy', truncation_order, wavelength=np.nextafter(WL, WL + 1)))[0]
 
 
 def _exact_point_or_refusal(call):
@@ -175,10 +175,10 @@ def test_the_stack_actually_sits_on_a_rayleigh_condition():
 
 # ---------------------------------------------------------------- the regression itself
 
-@pytest.mark.parametrize('backend, name', [(0, 'numpy'), (1, 'jax'), (2, 'torch')])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('truncation_order', BAND_MAX_ORDER)
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-def test_exact_rayleigh_point_solves_correctly(backend, truncation_order, name, algo):
+def test_exact_rayleigh_point_solves_correctly(backend, truncation_order, algo):
     """The exact-point solve equals the detuned one, conserves energy, and says nothing.
 
     This is the regression for the D#81 formulation fix. Before it, these exact solves
@@ -189,20 +189,20 @@ def test_exact_rayleigh_point_solves_correctly(backend, truncation_order, name, 
     tight agreement rather than a looser "not absurd" bound: a re-introduced instability
     would miss by orders of magnitude, not by a factor near TOL.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
 
     R, T = _exact_point_or_refusal(
         lambda: _totals(_solve(backend, truncation_order, layer_algorithm=algo)))
 
     assert abs(R - _truth(truncation_order)) < TOL, (
-        f'{name}/{algo} truncation_order={truncation_order}: exact-point R={R!r} vs detuned {_truth(truncation_order)!r} — the '
+        f'{backend}/{algo} truncation_order={truncation_order}: exact-point R={R!r} vs detuned {_truth(truncation_order)!r} — the '
         'exact Rayleigh solve has come apart from its one-ULP neighbour again')
     assert abs(R + T - 1.0) < TOL, (
-        f'{name}/{algo} truncation_order={truncation_order}: R+T={R + T!r} on a lossless stack')
+        f'{backend}/{algo} truncation_order={truncation_order}: R+T={R + T!r} on a lossless stack')
 
 
 # ---------------------------------------------------------------- the 2D path
@@ -222,7 +222,7 @@ def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     # `n_spacer` names the index, because that is the quantity the graze condition is about;
     # squaring it here is the only conversion, and it is exact for both 2.0 and 1.5.
     cell = np.concatenate([np.full((1, 2, 20), n_spacer ** 2), pillar], axis=0)
-    return wavebit.rcwa(backend=0, wavelength=wavelength, truncation_order=[5, 1], structure=cell,
+    return wavebit.rcwa(backend='numpy', wavelength=wavelength, truncation_order=[5, 1], structure=cell,
                         period=[PERIOD, PERIOD], top=1.0, bot=2.25, theta=0.0, phi=0.0,
                         psi=np.pi / 2, thickness=[300.0, 200.0],
                         layer_algorithm=algo).solve(auto_detune=auto_detune)
@@ -320,9 +320,9 @@ def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
     kw = dict(_KW)
     kw['psi'] = psi
     exact = _exact_point_or_refusal(
-        lambda: wavebit.rcwa(backend=0, wavelength=WL, truncation_order=[5, 0], structure=_STACK,
+        lambda: wavebit.rcwa(backend='numpy', wavelength=WL, truncation_order=[5, 0], structure=_STACK,
                              layer_algorithm=algo, **kw).solve(auto_detune=False))
-    near = wavebit.rcwa(backend=0, wavelength=np.nextafter(WL, WL + 1), truncation_order=[5, 0],
+    near = wavebit.rcwa(backend='numpy', wavelength=np.nextafter(WL, WL + 1), truncation_order=[5, 0],
                         structure=_STACK, layer_algorithm=algo,
                         **kw).solve(auto_detune=False)
     R, T = _totals(exact)
@@ -340,7 +340,7 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
     LAPACK builds.
     """
     def field(wl):
-        mee = wavebit.rcwa(backend=0, wavelength=wl, truncation_order=[5, 0], structure=_STACK,
+        mee = wavebit.rcwa(backend='numpy', wavelength=wl, truncation_order=[5, 0], structure=_STACK,
                            answers='field', **_KW)
         mee.solve(auto_detune=False)
         return np.asarray(mee.reconstruct_field(sample_x=16, sample_y=1, sample_z=16))
@@ -392,7 +392,7 @@ def test_auto_detune_rescues_the_refused_point():
     from wavebit._core.backend import AutoDetuneWarning
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R, T = _totals(_solve(0, 3, auto_detune=True))
+        R, T = _totals(_solve('numpy', 3, auto_detune=True))
     assert any(issubclass(r.category, AutoDetuneWarning) for r in rec)
     assert abs(R - _truth(3)) < TOL and abs(R + T - 1.0) < TOL
 
@@ -428,16 +428,16 @@ def test_auto_detune_retries_under_an_error_filter(case):
         warnings.simplefilter('always')
         warnings.filterwarnings('error', category=RuntimeWarning)
         if case == '1D':
-            R, T = _totals(_solve(0, 3, auto_detune=True))
+            R, T = _totals(_solve('numpy', 3, auto_detune=True))
         elif case == '1D ky':
-            R, T = _totals(_solve(0, 3, auto_detune=True, **tilt))
+            R, T = _totals(_solve('numpy', 3, auto_detune=True, **tilt))
         else:
             R, T = _totals(_solve_2d(1.5, 'ETM', auto_detune=True))
     if case == '1D':
         truth = _truth(3)
     elif case == '1D ky':
         truth, _ = _totals(wavebit.rcwa(
-            backend=0, wavelength=WL, truncation_order=[3, 1],
+            backend='numpy', wavelength=WL, truncation_order=[3, 1],
             structure=np.repeat(_STACK, 2, axis=1),
             **{**_KW, **tilt, 'period': [PERIOD, 700.0]}).solve(auto_detune=False))
     else:
@@ -472,7 +472,7 @@ def test_auto_detune_lands_every_band_order(truncation_order):
     from wavebit._core.backend import AutoDetuneWarning, RayleighPointWarning
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R, T = _totals(_solve(0, truncation_order, auto_detune=True))
+        R, T = _totals(_solve('numpy', truncation_order, auto_detune=True))
     assert not any(issubclass(r.category, RayleighPointWarning) for r in rec), (
         f'truncation_order={truncation_order}: a RayleighPointWarning reached the caller: {rec}')
     for notice in (r for r in rec if issubclass(r.category, AutoDetuneWarning)):
@@ -489,8 +489,8 @@ def test_auto_detune_is_silent_on_an_ordinary_solve():
     from wavebit._core.backend import AutoDetuneWarning
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        R_on, T_on = _totals(_solve(0, 5, wavelength=520.0, auto_detune=True))
-    R_off, T_off = _totals(_solve(0, 5, wavelength=520.0))
+        R_on, T_on = _totals(_solve('numpy', 5, wavelength=520.0, auto_detune=True))
+    R_off, T_off = _totals(_solve('numpy', 5, wavelength=520.0))
     assert not any(issubclass(r.category, AutoDetuneWarning) for r in rec)
     assert R_on == R_off and T_on == T_off
 
@@ -498,7 +498,7 @@ def test_auto_detune_is_silent_on_an_ordinary_solve():
 def test_auto_detune_accepts_an_explicit_step():
     """A float ``auto_detune`` is the relative step — the complex64 escape hatch."""
     from wavebit._core.backend import AutoDetuneWarning
-    mee = wavebit.rcwa(backend=0, wavelength=WL, truncation_order=[3, 0], structure=_STACK, **_KW)
+    mee = wavebit.rcwa(backend='numpy', wavelength=WL, truncation_order=[3, 0], structure=_STACK, **_KW)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         R, T = _totals(mee.solve(auto_detune=1e-9))
@@ -509,7 +509,7 @@ def test_auto_detune_accepts_an_explicit_step():
 
 def _ordinary_solver():
     """The ordinary 520 nm stack: no degeneracy, so the ladder has nothing to retry."""
-    return wavebit.rcwa(backend=0, wavelength=520.0, truncation_order=[5, 0], structure=_STACK,
+    return wavebit.rcwa(backend='numpy', wavelength=520.0, truncation_order=[5, 0], structure=_STACK,
                         **_KW)
 
 
@@ -642,7 +642,7 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
         pytest.skip("this platform's libm never lands n_top*sin(theta) on 1.25 exactly")
 
     def solver():
-        return wavebit.rcwa(backend=0, wavelength=WL, truncation_order=[2, 0],
+        return wavebit.rcwa(backend='numpy', wavelength=WL, truncation_order=[2, 0],
                             structure=np.full((1, 1, 16), 1.5625), period=[PERIOD],
                             top=6.25, bot=2.25, theta=theta, phi=0.0, psi=np.pi / 2,
                             thickness=[300.0])
@@ -679,7 +679,7 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
     import jax.numpy as jnp
 
     def loss(thickness):
-        r = wavebit.rcwa(backend=1, wavelength=WL, truncation_order=[3, 0], structure=_STACK,
+        r = wavebit.rcwa(backend='jax', wavelength=WL, truncation_order=[3, 0], structure=_STACK,
                          **_KW).solve(thickness=[thickness, 200.0])
         return jnp.real(jnp.asarray(r.R)).sum()
 
@@ -704,19 +704,19 @@ def test_exact_zero_eigenvalue_is_loud_on_every_backend():
     what it saw instead of passing by falling through three ``continue``\\ s.
     """
     outcomes = {}
-    for backend, name in ((0, 'numpy'), (1, 'jax'), (2, 'torch')):
-        if backend == 1:
+    for backend in ('numpy', 'jax', 'torch'):
+        if backend == 'jax':
             pytest.importorskip('jax')
             wavebit.enable_x64()
-        elif backend == 2:
+        elif backend == 'torch':
             pytest.importorskip('torch')
 
         try:
             got, _ = _totals(_solve(backend, 3))
         except Exception as exc:
-            outcomes[name] = f'raised {type(exc).__name__}'
+            outcomes[backend] = f'raised {type(exc).__name__}'
             continue
-        outcomes[name] = f'RETURNED QUIETLY: R={got!r}'
+        outcomes[backend] = f'RETURNED QUIETLY: R={got!r}'
 
     assert len(outcomes) == 3, f'a backend was skipped: {outcomes}'
     quiet = {k: v for k, v in outcomes.items() if v.startswith('RETURNED')}
@@ -789,7 +789,7 @@ def test_grad_is_guarded_and_still_differentiates():
             jnp.stack([jnp.ones((), dtype=jnp.complex128)] * 2
                       + [jnp.astype(n, jnp.complex128)] * 3
                       + [jnp.ones((), dtype=jnp.complex128)] * 3), (1, 1, 8))
-        r = wavebit.rcwa(backend=1, wavelength=550.0, period=[700.0], truncation_order=[10, 0],
+        r = wavebit.rcwa(backend='jax', wavelength=550.0, period=[700.0], truncation_order=[10, 0],
                          top=1.0, bot=2.25, theta=0.1, phi=0.0, psi=np.pi / 2,
                          structure=structure, thickness=[220.0]).solve()
         return jnp.real(r.R).sum()

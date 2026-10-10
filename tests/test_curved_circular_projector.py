@@ -75,9 +75,9 @@ def test_contact_value_and_one_sided_slope(kind,grid):
 def test_contact_frozen_jit_gradient_matches_eager_secants(kind):
     jax=pytest.importorskip('jax');import jax.numpy as jnp
     jax.config.update('jax_enable_x64',True)
-    def build(g,b=0):return solver(contact(kind,g),backend=b,grid=32,truncation_order=(1,1))
+    def build(g,b='numpy'):return solver(contact(kind,g),backend=b,grid=32,truncation_order=(1,1))
     geometry=build(0.).freeze_geometry()
-    def loss(g):return build(g,1).solve(geometry=geometry).T.sum().real
+    def loss(g):return build(g,'jax').solve(geometry=geometry).T.sum().real
     value,grad=jax.jit(jax.value_and_grad(loss))(jnp.asarray(0.))
     base=build(0.).solve().T.sum()
     assert float(value)==pytest.approx(base,abs=2e-12)
@@ -86,9 +86,9 @@ def test_contact_frozen_jit_gradient_matches_eager_secants(kind):
         assert float(grad)==pytest.approx(fd,rel=3e-4,abs=2e-7)
 
 
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_rotated_skew_cell_and_precision_match_numpy(backend):
-    pytest.importorskip('jax' if backend==1 else 'torch')
+    pytest.importorskip(backend)
     options=dict(lattice=((700.,130.),(0.,600.)),grid=32,truncation_order=(1,1))
     scene=[shape(lx=720.,ly=200.,angle=.17,material=4.+.02j)]
     want=solver(scene,**options).solve()
@@ -100,11 +100,11 @@ def test_rotated_skew_cell_and_precision_match_numpy(backend):
 
 def test_torch_curve_width_and_material_derivatives():
     torch=pytest.importorskip('torch')
-    def build(width,epsilon,backend=0):
+    def build(width,epsilon,backend='numpy'):
         return solver([shape(lx=width,angle=.17,material=epsilon)],backend=backend,grid=32,truncation_order=(1,1))
     width=torch.tensor(310.,dtype=torch.float64,requires_grad=True)
     eps=torch.tensor(4.,dtype=torch.float64,requires_grad=True)
-    s=build(width,eps,2)
+    s=build(width,eps,'torch')
     derivatives=torch.autograd.grad(s.solve(geometry=s.freeze_geometry()).T.sum().real,(width,eps))
     for i,d in enumerate(derivatives):
         for h in (1e-4,1e-5):
@@ -160,7 +160,7 @@ def test_disk_alias_uses_the_circle_projector():
 
 def test_curved_jitted_fields_match_eager_fields():
     jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
-    s=solver([shape()],backend=1,grid=32,truncation_order=(1,1),answers='field')
+    s=solver([shape()],backend='jax',grid=32,truncation_order=(1,1),answers='field')
     geometry=s.freeze_geometry()
     a,af=s.solve_field_eager(3,3,2,geometry=geometry)
     b,bf=jax.jit(lambda:s.solve_field(3,3,2,geometry=geometry))()

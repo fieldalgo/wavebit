@@ -56,7 +56,7 @@ def test_all_paths_match_legacy_and_tangential_boundary_continuity(kind, side, a
         np.testing.assert_allclose(total, incoming+outgoing, atol=1e-13)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('sources', [False, True])
 def test_count_coordinate_layout_and_result_lifetime(backend, sources):
     options = scene(backend=backend, truncation_order=0)
@@ -92,7 +92,7 @@ def test_interface_normal_jump_and_layer_count_limits(source):
 def test_jax_jit_result_and_thickness_derivative(sampling):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    solver = wavebit.rcwa(**scene(backend=1, truncation_order=0, tetm='te'))
+    solver = wavebit.rcwa(**scene(backend='jax', truncation_order=0, tetm='te'))
     geometry = solver.freeze_geometry()
     def solve(d):
         return solver.solve(thickness=jnp.array([d, .23]), geometry=geometry, auto_detune=False)
@@ -111,7 +111,7 @@ def test_jax_jit_result_and_thickness_derivative(sampling):
 @pytest.mark.parametrize('sampling', [4, [.05, .12]])
 def test_torch_thickness_derivative(sampling):
     torch = pytest.importorskip('torch')
-    solver = wavebit.rcwa(**scene(backend=2, truncation_order=0, tetm='te'))
+    solver = wavebit.rcwa(**scene(backend='torch', truncation_order=0, tetm='te'))
     def loss(d):
         r = solver.solve(thickness=torch.stack([d, d.new_tensor(.23)]), auto_detune=False)
         return torch.sum(torch.abs(r.reconstruct_field([0.], [0.], sampling)[...,1])**2)

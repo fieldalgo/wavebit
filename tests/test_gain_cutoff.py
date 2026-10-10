@@ -22,7 +22,7 @@ GAIN = 1 - 0.05j
 CRITICAL = float(np.degrees(np.arcsin(2 / 3)))
 
 
-def _planar(theta_deg, bot=GAIN, tetm='te', backend=0, **kw):
+def _planar(theta_deg, bot=GAIN, tetm='te', backend='numpy', **kw):
     return wavebit.rcwa(backend=backend, tetm=tetm, top=2.25, bot=bot, theta=np.deg2rad(theta_deg),
                         truncation_order=0, wavelength=500.0, period=[1000.0],
                         structure=np.full((1, 1, 2), 2.25), thickness=[100.0], **kw)
@@ -143,7 +143,7 @@ _GRATING = np.array([[[2.25] * 4 + [1.0] * 4]])
 
 
 def _grating(wavelength, **kw):
-    scene = dict(backend=0, tetm='te', top=1.0, bot=2.25 - 0.05j, theta=0.0,
+    scene = dict(backend='numpy', tetm='te', top=1.0, bot=2.25 - 0.05j, theta=0.0,
                  truncation_order=5, period=[1000.0], structure=_GRATING, thickness=[100.0])
     scene.update(kw)
     return wavebit.rcwa(wavelength=wavelength, **scene)
@@ -176,7 +176,7 @@ def test_the_mask_names_the_orders():
 
 def test_a_complex_angle_is_left_to_its_own_warning():
     """Formal R and T already carry ComplexIncidenceWarning; the band is about real k_par."""
-    solver = wavebit.rcwa(backend=0, tetm='te', top=2.25, bot=GAIN, theta=np.deg2rad(44.0) + 0.01j,
+    solver = wavebit.rcwa(backend='numpy', tetm='te', top=2.25, bot=GAIN, theta=np.deg2rad(44.0) + 0.01j,
                           truncation_order=0, wavelength=500.0, period=[1000.0],
                           structure=np.full((1, 1, 2), 2.25), thickness=[100.0])
     with warnings.catch_warnings(record=True) as rec:
@@ -218,9 +218,9 @@ def test_the_band_is_not_a_detune_trigger():
 
 # --------------------------------------------------------------------------------- backends
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_eager_jax_and_torch_warn_too(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
     else:
         pytest.importorskip('torch')
@@ -233,7 +233,7 @@ def test_a_traced_solve_is_silent_and_the_mask_traces():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    solver = _planar(44.0, backend=1)
+    solver = _planar(44.0, backend='jax')
 
     def bottom_mask(theta):
         solver.theta = theta
@@ -266,7 +266,7 @@ def test_every_solve_path_checks_once(scene, monkeypatch):
         return original(self, **kw)
 
     monkeypatch.setattr(engine.CoreFactorizationMixin, '_warn_gain_cutoff', counted)
-    common = dict(backend=0, top=2.25, bot=GAIN, theta=np.deg2rad(44.0), wavelength=500.0,
+    common = dict(backend='numpy', top=2.25, bot=GAIN, theta=np.deg2rad(44.0), wavelength=500.0,
                   thickness=[100.0])
     if scene == 'te':
         solver = _planar(44.0)
@@ -286,7 +286,7 @@ def test_every_solve_path_checks_once(scene, monkeypatch):
 # ------------------------------------------------------------------------- CoherentSolver
 
 def _coherent(source, bot=GAIN, **kw):
-    return wavebit.rcwa(backend=0, top=2.25, bot=bot, truncation_order=(0, 0), wavelength=500.0,
+    return wavebit.rcwa(backend='numpy', top=2.25, bot=bot, truncation_order=(0, 0), wavelength=500.0,
                         period=(1000.0, 1000.0), structure=np.full((1, 2, 2), 2.25),
                         thickness=[100.0], excitation={'top': source}, **kw)
 

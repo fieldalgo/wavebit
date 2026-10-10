@@ -10,7 +10,7 @@ import jax.numpy as jnp
 POINTS = (-211., 11., 129.)
 
 
-def solver(backend=1, basis=False):
+def solver(backend='jax', basis=False):
     cell = dict(lattice=np.diag([600., 750.])) if basis else dict(period=(600., 750.))
     return wavebit.rcwa(backend=backend, **cell, structure=np.full((1, 2, 2), 4.),
                         wavelength=900., thickness=(170.,), truncation_order=(0, 0),
@@ -30,7 +30,7 @@ def test_coordinate_containers_reconstruct_the_same_numpy_field(spelling, basis,
     kw = dict(sample_x=2, sample_y=2, sample_z=2, incidences=['p', 's'])
     kw[axis] = samples(spelling)
     result, field = s.solve_field(geometry=s.freeze_geometry(), **kw)
-    reference, expected = solver(0, basis=basis).solve_field(**kw)
+    reference, expected = solver('numpy', basis=basis).solve_field(**kw)
     np.testing.assert_allclose(field, expected, atol=1e-10, rtol=1e-10)
     np.testing.assert_allclose(result.T, reference.T, atol=1e-10)
 
@@ -52,7 +52,7 @@ def test_mutating_a_coordinate_array_updates_the_sampled_field():
     _, before = s.solve_field(x, 2, 2, geometry=geometry)
     x[1] += 20.
     _, after = s.solve_field(x, 2, 2, geometry=geometry)
-    _, expected = solver(0).solve_field(x, 2, 2)
+    _, expected = solver('numpy').solve_field(x, 2, 2)
     assert np.max(np.abs(np.asarray(after)-np.asarray(before))) > 1e-4
     np.testing.assert_allclose(after, expected, atol=1e-10)
 
@@ -93,7 +93,7 @@ def test_array_coordinates_allow_a_wavelength_derivative_under_outer_jit():
         return jnp.mean(jnp.abs(field)**2)
     got = float(jax.jit(jax.grad(loss))(900.))
     def reference(wavelength):
-        _, field = solver(0).solve_field(x, 2, 2, wavelength=wavelength)
+        _, field = solver('numpy').solve_field(x, 2, 2, wavelength=wavelength)
         return np.mean(np.abs(field)**2)
     h = 1e-3
     expected = (reference(900.+h)-reference(900.-h))/(2*h)
@@ -110,7 +110,7 @@ def test_recommended_xy_derivative_doors_match_numpy_differences(door):
                  else result.reconstruct_field(x, 2, 2))
         return jnp.mean(jnp.real(field))
     got = np.asarray(jax.grad(loss)(jnp.asarray(POINTS)))
-    ref = solver(0)
+    ref = solver('numpy')
     saved = ref.solve()
     def reference(x):
         field = (ref.solve_field(x, 2, 2)[1] if door == 'eager'
@@ -132,5 +132,5 @@ def test_explicit_z_keeps_its_thickness_refusal_and_works_eagerly():
     with pytest.raises(TypeError, match='explicit z.*thickness'):
         s.solve_field(2, 2, z, geometry=s.freeze_geometry())
     _, field = s.solve_field_eager(2, 2, z)
-    _, expected = solver(0).solve_field(2, 2, z)
+    _, expected = solver('numpy').solve_field(2, 2, z)
     np.testing.assert_allclose(field, expected, atol=1e-10)

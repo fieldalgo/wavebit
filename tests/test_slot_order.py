@@ -45,7 +45,7 @@ from wavebit._core import factorization as _fac
 
 
 GRID, MAX_ORDER = 48, 4
-KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+KW = dict(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           period=(1.0, 1.0), wavelength=1.1, thickness=[0.3])
 
 #: A lossless, passive pillar -- the same shape in every spelling a builder accepts, so the

@@ -87,7 +87,7 @@ DEFAULT_OUT = os.path.join(HERE, 'results', 'nvf_seam_contrast.log')
 PERIOD = 700.0
 SQUARE = np.array([[PERIOD, 0.0], [0.0, PERIOD]])
 LAT = as_lattice(lattice=SQUARE)
-SOLVE_KW = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.0, psi=0.0,
+SOLVE_KW = dict(wavelength=900.0, top=1.0, bot=2.25, theta=0.2, phi=0.0, psi=0.0,
                 thickness=[300.0])
 GAP = 1e-9
 N_SOLVE, N_EQUAL, N_LIST = 512, 128, 504

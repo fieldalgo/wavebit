@@ -75,7 +75,7 @@ eps_hi = wavebit.eps_from_index(3.5)                     # 12.25
 structure = np.array([[[1.0, 1.0, eps_hi, eps_hi]]])     # (layer, y, x)
 
 solver = wavebit.rcwa(
-    backend=0,                                # 0 = NumPy, 1 = JAX, 2 = PyTorch
+    backend='numpy',                          # or 'jax' / 'torch'
     wavelength=900., period=[700.],           # one shared length unit; nm here
     truncation_order=dict(x=10, y=0),         # named, so there is no order to recall
     top=1., bot=wavebit.eps_from_index(1.5),  # the two half-spaces, as materials
@@ -118,7 +118,7 @@ concrete value, so the pipeline's geometric decisions read it one at a time:
 ```python
 import jax, jax.numpy as jnp
 
-solver = wavebit.rcwa(backend=1, structure=structure, ...)
+solver = wavebit.rcwa(backend='jax', structure=structure, ...)
 grad = jax.grad(lambda u: jnp.sum(solver.solve(structure=u).T))(structure)
 ```
 

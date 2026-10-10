@@ -13,7 +13,7 @@ def _merge_domain(kwargs, domain_kwargs, source):
     return merged
 
 
-def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
+def rcwa(backend='numpy', *args, stack=None, incidence=None, **kwargs):
     """
     decide backend and return RCWA solver instance
 
@@ -25,7 +25,9 @@ def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
     *quantity* changed with them -- see ``docs/conventions.md``.
 
     Args:
-        backend: decide backend. 0 is numpy, 1 is JAX, 2 is PyTorch.
+        backend: ``'numpy'`` (the default), ``'jax'`` or ``'torch'``, or the
+            :class:`wavebit.Backend` member. Anything else -- the integers ``0`` / ``1`` /
+            ``2`` it took until 2026-10-10 among them -- is refused with the list of names.
         stack: optional typed ``Stack`` supplying ``structure`` / ``thickness`` / ``top`` /
             ``bot`` / ``period`` (and ``mu``, when its layers carry one); adapts in, so do
             not also pass those keywords.
@@ -43,6 +45,8 @@ def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
         require ``length_unit``: metres per scene length unit.
 
     """
+    from ._core.enums import Backend, backend_of
+    backend = backend_of(backend)
     if stack is not None:
         kwargs = _merge_domain(kwargs, stack.as_kwargs(), 'stack')
     if incidence is not None:
@@ -53,15 +57,13 @@ def rcwa(backend=0, *args, stack=None, incidence=None, **kwargs):
     if is_source_excitation(kwargs.get('excitation')):
         return CoherentSolver(backend, args, kwargs)
 
-    if backend == 0:
+    if backend is Backend.NUMPY:
         from .backends.numpy_backend import SolverNumpy
         solver = SolverNumpy(backend=backend, *args, **kwargs)
-    elif backend == 1:
+    elif backend is Backend.JAX:
         from .backends.jax_backend import SolverJax
         solver = SolverJax(backend=backend, *args, **kwargs)
-    elif backend == 2:
+    else:
         from .backends.torch_backend import SolverTorch
         solver = SolverTorch(backend=backend, *args, **kwargs)
-    else:
-        raise ValueError
     return solver

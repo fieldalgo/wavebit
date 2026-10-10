@@ -88,14 +88,14 @@ def test_physical_rotation_common_scale_and_passive_energy(gap, grade_y):
     assert np.linalg.eigvalsh((blocks-blocks.conj().T)/(2j)).min() > -1e-11
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('gap', [0., 23.])
 @pytest.mark.parametrize('loss', [0., .8])
 def test_affine_matrices_feed_the_engine_with_contact_inverse_rule(backend, gap, loss):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     model = AffineCellGapModel(1, **SETTINGS)
     lattice, epsilon = 700*BASIS, 4.+1j*loss

@@ -31,13 +31,13 @@ def test_reference_retains_a_subpixel_gap_and_its_derivative(monkeypatch):
                            structure=[dict(background=1.,shapes=[dict(type='rectangle',cx=0.,
                            cy=0.,lx=350.,ly=height,angle=0.,material=12.25)])])
     center=700.-1e-4
-    geometry=solver(center,0).freeze_geometry()
+    geometry=solver(center,'numpy').freeze_geometry()
     def loss(height):
-        return jnp.sum(solver(height,1).solve(geometry=geometry).T).real
+        return jnp.sum(solver(height,'jax').solve(geometry=geometry).T).real
     derivative=float(jax.jit(jax.grad(loss))(jnp.asarray(center)))
     assert np.isfinite(derivative) and abs(derivative)>1e-4
     for h in (1e-5,1e-6):
-        fd=(float(np.sum(solver(center+h,0).solve().T))-float(np.sum(solver(center-h,0).solve().T)))/(2*h)
+        fd=(float(np.sum(solver(center+h,'numpy').solve().T))-float(np.sum(solver(center-h,'numpy').solve().T)))/(2*h)
         assert derivative==pytest.approx(fd,rel=2e-4,abs=1e-7)
 
 
@@ -59,7 +59,7 @@ def test_partial_derivatives_reconstruct_the_live_nvf_gradient(monkeypatch):
                 type='rectangle', cx=0., cy=0., lx=350., ly=height,
                 angle=0., material=12.25)])])
 
-    geometry = solver(center, 0).freeze_geometry()
+    geometry = solver(center, 'numpy').freeze_geometry()
     original = P.to_conv_mat_parametric_nvf
     values, derivatives = {}, {}
     try:
@@ -69,15 +69,15 @@ def test_partial_derivatives_reconstruct_the_live_nvf_gradient(monkeypatch):
             P._PROJECTOR_CACHE.clear()
 
             def loss(height):
-                return jnp.sum(solver(height, 1).solve(geometry=geometry).T).real
+                return jnp.sum(solver(height, 'jax').solve(geometry=geometry).T).real
 
             value, derivative = jax.jit(jax.value_and_grad(loss))(jnp.asarray(center))
             values[component], derivatives[component] = float(value), float(derivative)
             for h in (1e-5, 1e-6):
                 P._PROJECTOR_CACHE.clear()
-                plus = float(np.sum(solver(center+h, 0).solve().T))
+                plus = float(np.sum(solver(center+h, 'numpy').solve().T))
                 P._PROJECTOR_CACHE.clear()
-                minus = float(np.sum(solver(center-h, 0).solve().T))
+                minus = float(np.sum(solver(center-h, 'numpy').solve().T))
                 # The wider secant has visible curvature; the narrower one must
                 # agree more tightly. No topology switch is crossed by either.
                 tolerance = 3e-3 if h == 1e-5 else 4e-5

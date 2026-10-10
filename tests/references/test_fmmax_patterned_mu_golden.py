@@ -71,7 +71,7 @@ def solve(case, truncation_order=MAX_ORDER, algo='ETM'):
     # this file supplies as finished convolution slots to `solve_conv` rather than as the
     # raster field the constructor takes, because the point of the golden is the factorization
     # under test and not the build in front of it.
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0),
                        layer_algorithm=algo)
@@ -158,7 +158,7 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     wrong_field = [normal_vector_field(eps)]        # eps's boundary, applied to mu
     wrong_mu = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], truncation_order, truncation_order,
                                         normal_field=wrong_field)
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee._solve_conv(epx, epy, epz_i, epxy, epyx, mu=wrong_mu)

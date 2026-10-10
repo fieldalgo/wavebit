@@ -316,7 +316,7 @@ belongs to, so on the three *assignment* paths there is nothing extra to pass:
 structure = [dict(background=1.0, shapes=[
     dict(type='circle', cx=0., cy=0., lx=180.,
          material=wavebit.Material(12.25, mu=2.0))])]
-solver = wavebit.rcwa(backend=0, structure=structure,
+solver = wavebit.rcwa(backend='numpy', structure=structure,
                       top=1.0, bot=wavebit.Material(2.25, mu=1.5), ...)
 ```
 
@@ -325,7 +325,7 @@ raster is a sampled *field*, not an assignment, and a field holds one quantity, 
 permeability is a second array of the same shape.
 
 ```python
-solver = wavebit.rcwa(backend=0, structure=eps_raster, mu=mu_raster, ...)
+solver = wavebit.rcwa(backend='numpy', structure=eps_raster, mu=mu_raster, ...)
 ```
 
 `mu=` is refused by name on the two shape paths rather than ignored — there is no region for a

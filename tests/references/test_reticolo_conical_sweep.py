@@ -81,7 +81,7 @@ def _solve(g, i, j):
     kx, ky = g['kx'], g['ky']
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
-    res = wavebit.rcwa(backend=0, psi=np.pi / 2, **_scene(g),
+    res = wavebit.rcwa(backend='numpy', psi=np.pi / 2, **_scene(g),
                          theta=theta, phi=phi, truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
                          thickness=list(g['thickness'])[::-1],
@@ -152,7 +152,7 @@ def test_evanescent_incidence_matches_reticolo():
     assert worst < 2e-13, worst
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
     """The three backends must land on the same answer, which single precision does not.
 
@@ -176,7 +176,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
                              factorization='li').solve()
         return complex(np.asarray(res.s_inc.r_s).ravel()[40])
 
-    reference, got = solve(0), solve(backend)
+    reference, got = solve('numpy'), solve(backend)
     assert abs(reference) < 1.0, reference
     assert abs(got - reference) < 1e-12, (backend, got, reference)
 
@@ -201,7 +201,7 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     scene['structure'] = np.full_like(np.asarray(scene['structure'], dtype=float), 6.25)
     # Re(theta) != pi/2 makes kx itself complex, which the solve now says out loud.
     with pytest.warns(wavebit.ComplexIncidenceWarning):
-        res = wavebit.rcwa(backend=0, psi=np.pi / 2, **scene,
+        res = wavebit.rcwa(backend='numpy', psi=np.pi / 2, **scene,
                              theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
                              truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                              period=list(g['period']),

@@ -41,7 +41,7 @@ import pytest
 import wavebit
 from wavebit._core.factorization import normal_vector_field
 
-SOLVE_KW = dict(backend=0, top=1.0, bot=1.0, thickness=[120.0], wavelength=250.0,
+SOLVE_KW = dict(backend='numpy', top=1.0, bot=1.0, thickness=[120.0], wavelength=250.0,
                 theta=np.deg2rad(25.0), phi=np.pi / 2, psi=0.7, period=[500.0, 800.0])
 
 #: Sign is free -- the factorization consumes ``n n^T`` only -- so covariance is compared on the
@@ -317,7 +317,7 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
     n = 64
     ax = np.arange(n)
     U, V = np.meshgrid(ax, ax)
-    cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
+    cfg = dict(backend='numpy', thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                period=[1.0, 1.0], raster_normal_method='contour')
 
@@ -470,7 +470,7 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rol
     ax = np.arange(n)
     U, V = np.meshgrid(ax, ax)
     cell = build(U, V)
-    cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
+    cfg = dict(backend='numpy', thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                raster_normal_method='contour')
     cfg['period'] = [1.0, 1.0]
@@ -514,7 +514,7 @@ def _translation_defect(cell, shift, method, lattice=None, to=3):
     others is under-reported, which is the right trade: such a slot cannot move an answer.
     """
     import wavebit
-    kw = dict(backend=0, thickness=[0.3], truncation_order=(to, to), top=1.0, bot=1.0,
+    kw = dict(backend='numpy', thickness=[0.3], truncation_order=(to, to), top=1.0, bot=1.0,
               wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2,
               factorization='nvf', raster_normal_method=method)
     kw['lattice' if lattice is not None else 'period'] = (lattice if lattice is not None
@@ -730,7 +730,7 @@ def test_half_fill_contour_translation_is_invariant():
         'the blob must not touch a cell edge, or open curves confound this')
 
     cell = np.where(blob, 12.25, 1.0)
-    cfg = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
+    cfg = dict(backend='numpy', thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                raster_normal_method='contour', period=[1.0, 1.0])
     got = [float(np.sum(np.asarray(wavebit.rcwa(

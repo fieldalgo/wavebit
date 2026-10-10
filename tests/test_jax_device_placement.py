@@ -1,7 +1,7 @@
 """A JAX solve runs on the device it was given -- every array, not only `solver.device`.
 
 `solver.device` is the one thing that cannot answer this: it reports what was asked for.
-Measured 2026-09-10 on a CUDA jaxlib (jax 0.11.0): `rcwa(backend=1, device='cpu')` reported
+Measured 2026-09-10 on a CUDA jaxlib (jax 0.11.0): `rcwa(backend='jax', device='cpu')` reported
 `[CpuDevice(id=0)]` while its structure, its convolution matrices and the `R` it returned all
 lived on `cuda:0`, and T differed from a CPU-only jaxlib's in the 13th digit
 (8.77000489428177987e-01 against 8.77000489428339414e-01 on a 2D raster). Omitting `device`,
@@ -68,18 +68,18 @@ def _solvers(device_kw, foreign):
              material=5.76),
         dict(type='circle', cx=-200.0, cy=-250.0, lx=80.0, material=9.0)])]
     return {
-        '1d': wavebit.rcwa(backend=1, structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]),
+        '1d': wavebit.rcwa(backend='jax', structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]),
                            period=[P], truncation_order=dict(x=6, y=0),
                            wavelength=foreign['wavelength'],
                            top=1.0, bot=2.25, theta=0.2, phi=0.0, tetm='te', thickness=[H],
                            **device_kw),
-        'magnetic': wavebit.rcwa(backend=1, structure=eps[::-1], mu=mu[::-1], period=[P, 0.9 * P],
+        'magnetic': wavebit.rcwa(backend='jax', structure=eps[::-1], mu=mu[::-1], period=[P, 0.9 * P],
                                  truncation_order=[2, 2], thickness=[0.5 * H, H],
                                  wavelength=WL, top=wavebit.Material(2.25, mu=1.4),
                                  bot=wavebit.Material(4.0), theta=0.31, phi=0.47, psi=0.29,
                                  layer_algorithm='SMM', answers='field',
                                  excitation={(0, 0): 1.0, (-1, 0): 0.5j}, **device_kw),
-        'shapes': wavebit.rcwa(backend=1, structure=shapes, period=[P, 1.2 * P],
+        'shapes': wavebit.rcwa(backend='jax', structure=shapes, period=[P, 1.2 * P],
                                truncation_order=[3, 3], thickness=[H], wavelength=WL,
                                top=foreign['top'], bot=2.25, theta=0.1, phi=0.3, psi=0.4,
                                **device_kw),
@@ -169,7 +169,7 @@ def poisoned(first, second):
         shapes = [dict(background=1.0, shapes=[
             dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=150.0, angle=0.7, material=5.76),
             dict(type='circle', cx=-200.0, cy=-250.0, lx=80.0, material=9.0)])]
-        return wavebit.rcwa(backend=1, structure=shapes, period=[P, 1.2 * P],
+        return wavebit.rcwa(backend='jax', structure=shapes, period=[P, 1.2 * P],
                             truncation_order=[2, 2], thickness=[H], wavelength=WL, top=1.0,
                             bot=2.25, theta=0.1, phi=0.3, psi=0.4, shape_nvf_grid_size=64,
                             device=device)
@@ -300,7 +300,7 @@ def moved(first, second):
         rng = np.random.default_rng(1)
         eps = np.where(rng.random((1, 8, 8)) < 0.4, 5.76, 1.0)
         basis = wavebit.Lattice(jnp.asarray([P, 0.0]), jnp.asarray([0.2 * P, 0.9 * P]), False)
-        return wavebit.rcwa(backend=1, structure=eps, lattice=basis, truncation_order=[2, 2],
+        return wavebit.rcwa(backend='jax', structure=eps, lattice=basis, truncation_order=[2, 2],
                             thickness=[H], wavelength=WL, factorization='nvf', device=device)
 
     try:
@@ -423,8 +423,8 @@ _FIELD_DOOR_CHILD = """
               wavelength=900.0, theta=0.2, phi=0.1, psi=0.3, answers='field')
     bad = []
     for first, second in ((cpus[0], cpus[1]), (cpus[1], cpus[0])):
-        solver = wavebit.rcwa(backend=1, device=first, **kw)
-        built = wavebit.rcwa(backend=1, device=second, **kw)
+        solver = wavebit.rcwa(backend='jax', device=first, **kw)
+        built = wavebit.rcwa(backend='jax', device=second, **kw)
         geometry = built.freeze_geometry()
         got = solver.solve_field(3, 3, 2, geometry=geometry, device=second)
         want = built.solve_field(3, 3, 2, geometry=geometry)

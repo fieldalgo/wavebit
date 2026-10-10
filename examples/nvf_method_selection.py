@@ -22,7 +22,7 @@ def solve_pair(method='nvf', *, order=1, gap=0., auxiliary_options=None):
     epsilon = (12.25, -10.+1j)
     basis = np.diag([700., 700.])
     orders = (order, order) if isinstance(order, (int, np.integer)) else order
-    common = dict(backend=0, lattice=basis, wavelength=900., thickness=(300.,),
+    common = dict(backend='numpy', lattice=basis, wavelength=900., thickness=(300.,),
                   top=1., bot=2.25, theta=.2, phi=0., truncation_order=orders)
     started = time.perf_counter()
     if method == 'auxiliary':

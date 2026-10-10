@@ -12,7 +12,7 @@ import jax.numpy as jnp
 optax = pytest.importorskip('optax')
 
 
-def solver(backend=1, **kwargs):
+def solver(backend='jax', **kwargs):
     cfg = dict(period=(600., 750.), structure=np.full((1, 2, 2), 4.),
                wavelength=900., thickness=(170.,), truncation_order=(0, 0),
                theta=.13, phi=.21, answers='field', factorization='li')
@@ -85,14 +85,14 @@ def test_custom_design_writes_restore_the_complete_raster_declaration(failure):
     else:
         final = s.fit(params, forward, loss, optax.sgd(10.), iteration=1, prepare_geometry=prepare)
         h = 1e-3
-        fd = (solver(0, structure=design(100.+h)).solve().T.sum().real
-              - solver(0, structure=design(100.-h)).solve().T.sum().real)/(2*h)
+        fd = (solver('numpy', structure=design(100.+h)).solve().T.sum().real
+              - solver('numpy', structure=design(100.-h)).solve().T.sum().real)/(2*h)
         assert float(final['width']) == pytest.approx(100.-10.*fd, abs=1e-8)
     assert not any(_holds_tracer(v) for v in vars(s).values())
     assert not hasattr(s, 'width')
     np.testing.assert_array_equal(s.structure, raster)
     np.testing.assert_array_equal(s._structure_drawn_on, np.asarray(cell))
-    np.testing.assert_allclose(s.solve().T, solver(0).solve().T, atol=1e-11)
+    np.testing.assert_allclose(s.solve().T, solver('numpy').solve().T, atol=1e-11)
     with pytest.raises(ValueError, match='drawn|cell|lattice'):
         s.solve(period=(610., 750.))
 
@@ -110,4 +110,4 @@ def test_in_place_shape_edits_only_touch_the_temporary_design():
     assert not any(_holds_tracer(v) for v in vars(s).values())
     assert s.structure is original
     assert original[0]['shapes'][0]['lx'] == 100.
-    np.testing.assert_allclose(s.solve().T, solver(0, structure=design(100.)).solve().T, atol=1e-11)
+    np.testing.assert_allclose(s.solve().T, solver('numpy', structure=design(100.)).solve().T, atol=1e-11)

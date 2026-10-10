@@ -118,12 +118,12 @@ def test_identical_physical_mode_sets_preserve_positive_gap_engine_results(axis,
 
 
 @pytest.mark.research
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_rebased_mixed_axis_contact_stack_matches_analytic_controls_on_three_engines(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
     p[1] = 0.

@@ -6,7 +6,7 @@ import wavebit
 jax=pytest.importorskip('jax')
 
 
-def make(backend=1,width=100.,epsilon=(4.,3.,2.),thickness=170.):
+def make(backend='jax',width=100.,epsilon=(4.,3.,2.),thickness=170.):
     recipe=[dict(background=1.,shapes=[dict(type='rectangle',lx=np.array(width),ly=100.,
                                            material=wavebit.Material(np.array(epsilon)))])]
     return wavebit.rcwa(backend=backend,structure=recipe,period=(600.,750.),thickness=[thickness],
@@ -48,9 +48,9 @@ def test_numpy_recipe_edits_are_isolated_in_success_and_failure(helper,slot,phas
     if not failure:
         def independent(t):
             cfg=({'width':120.} if slot=='width' else {'epsilon':(5.,3.,2.)}) if phase=='forward' else {}
-            return float(make(0,thickness=t,**cfg).solve().T.sum().real)
+            return float(make('numpy',thickness=t,**cfg).solve().T.sum().real)
         h=1e-3;gradient=(independent(170.+h)-independent(170.-h))/(2*h)
         expected=gradient if helper=='grad' else 170.-.1*gradient
         assert got==pytest.approx(expected,abs=2e-9,rel=2e-5)
     final_t=float(np.asarray(s.thickness)[0])
-    np.testing.assert_allclose(s.solve().T,make(0,thickness=final_t).solve().T,atol=2e-12,rtol=2e-12)
+    np.testing.assert_allclose(s.solve().T,make('numpy',thickness=final_t).solve().T,atol=2e-12,rtol=2e-12)

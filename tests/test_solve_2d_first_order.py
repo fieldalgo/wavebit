@@ -620,7 +620,7 @@ def test_a_real_grating_matches_the_second_order_solve(truncation_order, theta_d
     structure = np.ones((1, 40, 40))
     structure[0, 12:28, 12:28] = 6.760000000000001     # permittivity: 2.6**2
 
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                             phi=np.deg2rad(phi_deg), psi=0.0, truncation_order=(truncation_order, truncation_order),
                             period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                             structure=structure)

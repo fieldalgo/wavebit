@@ -60,7 +60,7 @@ def golden():
 
 def _solve(name, factorization='laurent', fourier_coefficients='sampled'):
     basis, raster, top, bot = CASES[name]
-    kw = dict(backend=0, top=top, bot=bot, theta=np.deg2rad(THETA), phi=0.0, wavelength=WL,
+    kw = dict(backend='numpy', top=top, bot=bot, theta=np.deg2rad(THETA), phi=0.0, wavelength=WL,
               thickness=[THICK], truncation_order=(ORDER, ORDER), structure=raster[None],
               factorization=factorization, fourier_coefficients=fourier_coefficients)
     if np.allclose(basis, np.diag(np.diag(basis))):

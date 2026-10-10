@@ -16,7 +16,7 @@ def test_numpy_lattice_is_preserved_by_temporary_helper_state(helper,phase,failu
     eps_top=np.array(1.);eps_bot=np.array(1.2)
     raw=np.array([[[4.+.07j]]])
     structure=wavebit.Lattice(cell[:,0],cell[:,1],True).drawn(raw) if slot=='drawn-cell' else raw
-    s=wavebit.rcwa(backend=1,lattice=cell,structure=structure,thickness=[170.],
+    s=wavebit.rcwa(backend='jax',lattice=cell,structure=structure,thickness=[170.],
                    top=wavebit.Material(eps_top),bot=wavebit.Material(eps_bot),
                    wavelength=900.,truncation_order=(0,0),theta=.17,phi=.29,factorization='li')
     original=s.lattice
@@ -59,7 +59,7 @@ def test_jitted_grad_retains_validated_drawn_cell_identity(changed):
     wavebit.enable_x64()
     cell=wavebit.Lattice.rectangular(600.,750.)
     raw=np.array([[[4.+.07j]]])
-    s=wavebit.rcwa(backend=1,lattice=cell,structure=cell.drawn(raw),thickness=[170.],
+    s=wavebit.rcwa(backend='jax',lattice=cell,structure=cell.drawn(raw),thickness=[170.],
                    wavelength=900.,truncation_order=(0,0),theta=.17,phi=.29,factorization='li')
     def calculation(solver):
         def forward(thickness):
@@ -73,7 +73,7 @@ def test_jitted_grad_retains_validated_drawn_cell_identity(changed):
         else:
             got=float(jax.jit(calculation)(s))
             def reference(t):
-                return float(wavebit.rcwa(backend=0,lattice=cell,structure=cell.drawn(raw),
+                return float(wavebit.rcwa(backend='numpy',lattice=cell,structure=cell.drawn(raw),
                     thickness=[t],wavelength=900.,truncation_order=(0,0),theta=.17,phi=.29,
                     factorization='li').solve().T.sum().real)
             fd=(reference(170.001)-reference(169.999))/.002

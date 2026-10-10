@@ -16,7 +16,7 @@ def test_captured_solver_field_gradient_releases_runtime_and_keeps_saved_fields(
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    s = wavebit.rcwa(backend=1, **CFG, layer_algorithm=algorithm)
+    s = wavebit.rcwa(backend='jax', **CFG, layer_algorithm=algorithm)
     saved = s.solve()
     saved_field = np.asarray(saved.reconstruct_field(2, 2, 2))
     geometry = s.freeze_geometry()
@@ -40,7 +40,7 @@ def test_captured_solver_field_gradient_releases_runtime_and_keeps_saved_fields(
     else:
         assert s.T1 is None and s.layer_info_list == [] and s._scattering is None
     def reference(t):
-        r = wavebit.rcwa(backend=0, **(CFG | {'thickness': [t]}), layer_algorithm=algorithm).solve()
+        r = wavebit.rcwa(backend='numpy', **(CFG | {'thickness': [t]}), layer_algorithm=algorithm).solve()
         return np.sum(np.abs(r.reconstruct_field(2, 2, 2))**2)
     h = 1e-3
     expected_gradient = (reference(170.+h)-reference(170.-h))/(2*h)
@@ -55,7 +55,7 @@ def test_high_level_solve_releases_partial_modes_when_finishing_raises(algorithm
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    s = wavebit.rcwa(backend=1, **CFG, layer_algorithm=algorithm)
+    s = wavebit.rcwa(backend='jax', **CFG, layer_algorithm=algorithm)
     geometry = s.freeze_geometry()
     finish = s._finish
     def fail(out):

@@ -17,7 +17,7 @@ def material(loss=0., magnetic=False):
     return wavebit.Material(e, mu)
 
 
-def scene(backend=0, width=240., mat=None, **kw):
+def scene(backend='numpy', width=240., mat=None, **kw):
     options = dict(backend=backend, wavelength=730., period=(600.,600.),
                    thickness=[173.], truncation_order=(2,1), theta=.23, phi=.19,
                    factorization='li', top=1., bot=2.25,
@@ -85,7 +85,7 @@ def test_laminate_matches_independent_continuous_field_relations(axis, loss):
                                        getattr(getattr(reference,inc),name),atol=3e-11,rtol=0)
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 @pytest.mark.parametrize('loss',[0.,.1])
 def test_magnetic_painting_matches_raster_and_conserves_passivity(backend,loss):
     a = material(loss,magnetic=True)
@@ -112,7 +112,7 @@ def test_magnetic_painting_matches_raster_and_conserves_passivity(backend,loss):
         if loss==0.: assert energy==pytest.approx(1.,abs=3e-12)
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 def test_uniform_rotated_tensor_uses_exact_operator(backend):
     m = wavebit.Material([2.25,3.4,4.]).rotated(.4,'y').rotated(.2)
     options = dict(structure=[dict(background=m,shapes=[])],truncation_order=(0,0))
@@ -122,7 +122,7 @@ def test_uniform_rotated_tensor_uses_exact_operator(backend):
         np.testing.assert_allclose(host(getattr(result.s_inc,name)),getattr(reference.s_inc,name),atol=2e-12)
 
 
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_shape_material_and_period_gradients(backend):
     frozen = scene().freeze_geometry()
     def loss(v):
@@ -130,7 +130,7 @@ def test_shape_material_and_period_gradients(backend):
         return scene(backend,width=v[0],mat=m,period=(v[3],600.)).solve(
             geometry=frozen,auto_detune=False).s_inc.T.sum().real
     center = [237.,3.1,.31,600.]
-    if backend==1:
+    if backend=='jax':
         import jax
         import jax.numpy as jnp
         jax.config.update('jax_enable_x64',True)
@@ -156,7 +156,7 @@ def test_jitted_raster_gradients_need_no_frozen_normal_field(coefficients):
     def loss(v):
         e = wavebit.Material(jnp.array([v,4.,2.8])).rotated(.31).epsilon
         t = jnp.eye(3)+(e-jnp.eye(3))*mask[...,None,None]
-        return scene(1,structure=t[None],fourier_coefficients=coefficients).solve(auto_detune=False).T.sum()
+        return scene('jax',structure=t[None],fourier_coefficients=coefficients).solve(auto_detune=False).T.sum()
     derivative = jax.jit(jax.grad(loss))(3.1)
     fd = (loss(3.10001)-loss(3.09999))/.00002
     np.testing.assert_allclose(derivative,fd,rtol=4e-5,atol=1e-9)
@@ -194,7 +194,7 @@ def test_raster_uniform_values_preserve_all_pixel_derivatives():
     x = torch.tensor(2.,dtype=torch.float64,requires_grad=True)
     mask = torch.tensor([[0.,0.],[0.,1.]],dtype=torch.float64)
     t = (2.+(x-2.)*mask)[None,...,None,None]*torch.eye(3,dtype=torch.float64)
-    loss = scene(2,structure=t,truncation_order=(0,0)).eps_conv_matrices().epx.real.sum()
+    loss = scene('torch',structure=t,truncation_order=(0,0)).eps_conv_matrices().epx.real.sum()
     derivative, = torch.autograd.grad(loss,x)
     assert derivative.item()==pytest.approx(.25,abs=1e-12)
 
@@ -205,14 +205,14 @@ def test_traced_z_coupling_is_not_silently_discarded():
     def operator(z):
         e = jnp.diag(jnp.array([2.,3.,4.])).at[0,2].set(z)
         t = jnp.stack([jnp.eye(3),e])[None,None]
-        return scene(1,structure=t).eps_conv_matrices().epxz
+        return scene('jax',structure=t).eps_conv_matrices().epxz
     assert np.isfinite(jax.jit(operator)(0.)).all()
     coupled = jax.jit(operator)(.1)
     assert np.isfinite(coupled).all()
     assert np.max(np.abs(coupled))>1e-3
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 def test_single_precision_and_field_reconstruction(backend):
     s = scene(backend,complex_dtype=1,answers='field',truncation_order=(1,1))
     assert all(a.dtype==s.xp.complex64 for a in s.eps_conv_matrices())
@@ -242,7 +242,7 @@ def test_li_tensor_spec_round_trip_keeps_the_selected_rule():
 
 
 def test_jitted_tensor_li_field_reuses_the_geometry_plan():
-    s = scene(1,answers='field',truncation_order=(1,1))
+    s = scene('jax',answers='field',truncation_order=(1,1))
     geometry = s.freeze_geometry()
     want, expected = s.solve_field_eager(3,3,2,geometry=geometry)
     got, actual = s.solve_field(3,3,2,geometry=geometry)

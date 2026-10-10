@@ -61,7 +61,7 @@ DISC = np.where(_R2 <= 30 ** 2, 12.25, 1.0)
 SADDLE = np.where((((_U - 16.) ** 2 + (_V - 32.) ** 2) <= 14 ** 2) |
                   (((_U - 48.) ** 2 + (_V - 32.) ** 2) <= 14 ** 2), 12.25, 1.0)
 
-SOLVE_KW = dict(backend=0, thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
+SOLVE_KW = dict(backend='numpy', thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                 wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, period=[1.0, 1.0],
                 factorization='nvf')
 
@@ -361,7 +361,7 @@ def test_both_projectors_converge_to_the_same_physics():
     raster = np.where((X - .5) ** 2 + (Y - .5) ** 2 <= 0.3 ** 2, 5.76, 1.0)[None]
     shapes = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                               'lx': 0.6, 'material': 5.76}]}]
-    kw = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3],
+    kw = dict(backend='numpy', period=[1., 1.], wavelength=.55, thickness=[.3],
               theta=np.deg2rad(12), phi=np.deg2rad(30), psi=np.deg2rad(40), top=1., bot=1.)
 
     def total(structure, to, **over):
@@ -416,7 +416,7 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
     X, Y = np.meshgrid(ax, ax)
     rr = np.hypot(X - 0.4, Y - 0.55)
     eps = np.where((rr <= 0.3) & (rr > 0.14), 5.76, 1.0)
-    cfg = dict(backend=0, period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
+    cfg = dict(backend='numpy', period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
                phi=0., psi=0., top=1., bot=1., truncation_order=[5, 5],
                factorization='nvf', raster_normal_method='distance')
 
@@ -540,7 +540,7 @@ def test_it_crosses_a_jit_boundary_and_carries_a_gradient():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = wavebit.rcwa(structure=ANNULUS[None], **{**SOLVE_KW, 'backend': 1},
+    solver = wavebit.rcwa(structure=ANNULUS[None], **{**SOLVE_KW, 'backend': 'jax'},
                           nvf_projector='circular')
     frozen = solver.freeze_geometry()
     eager = float(np.sum(np.asarray(solver.solve(geometry=frozen).T)))
@@ -555,19 +555,19 @@ def test_it_crosses_a_jit_boundary_and_carries_a_gradient():
     assert np.abs(grad).max() > 0.0, 'the gradient to the raster vanished entirely'
 
 
-@pytest.mark.parametrize('backend,name', [(1, 'jax'), (2, 'torch')])
-def test_every_backend_builds_the_same_circular_projector(backend, name):
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_every_backend_builds_the_same_circular_projector(backend):
     """The complex projector is the first thing on this path with a genuinely complex
     pointwise field, so it is the first place a backend could differ on the imaginary half.
     """
-    pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     def total(which):
         return float(np.sum(np.asarray(wavebit.rcwa(
             structure=ANNULUS[None], **{**SOLVE_KW, 'backend': which},
             nvf_projector='circular').solve().T)))
 
-    reference, got = total(0), total(backend)
-    assert abs(got - reference) < 1e-12, f'{name} {got:.12f} against numpy {reference:.12f}'
+    reference, got = total('numpy'), total(backend)
+    assert abs(got - reference) < 1e-12, f'{backend} {got:.12f} against numpy {reference:.12f}'
 
 
 # ------------------------------------------------------------------ the translation identity

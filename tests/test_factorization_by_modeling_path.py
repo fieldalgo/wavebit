@@ -5,7 +5,7 @@ import pytest
 import wavebit
 from wavebit._core.enums import Factorization
 
-KW = dict(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+KW = dict(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
           truncation_order=[4, 4], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 #: `KW` without its cell. `period` and `lattice` are two spellings of one cell and naming
@@ -187,14 +187,14 @@ def test_freezing_the_geometry_refuses_before_the_solve_does(path, rule):
         solver(path).freeze_geometry(factorization=rule)
 
 
-@pytest.mark.parametrize('name,code', [('jax', 1), ('torch', 2)])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('path,rule', sorted(UNAVAILABLE.items()))
-def test_the_refusal_holds_on_every_backend(name, code, path, rule):
+def test_the_refusal_holds_on_every_backend(backend, path, rule):
     """The dispatch is in the shared mixin, so a backend that still substituted would mean
     one of the three had grown its own copy."""
-    pytest.importorskip(name)
+    pytest.importorskip(backend)
     with pytest.raises(NotImplementedError):
-        wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=code),
+        wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=backend),
                        factorization=rule).solve()
 
 

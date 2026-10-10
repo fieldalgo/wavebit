@@ -48,7 +48,7 @@ def _airy_R(ns, ds, theta, tetm):
 def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', truncation_order=0, answers='amplitude'):
     """A uniform stack on the requested solve path (see test_lossy_media.solver_r)."""
     layers = ns[1:-1][::-1]  # Oracle cases are top-down; the public API is bottom-up.
-    common = dict(backend=0, top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+    common = dict(backend='numpy', top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
                   theta=theta, wavelength=WL, thickness=list(reversed(ds)), answers=answers)
     if path == '1d':
         return wavebit.rcwa(tetm=tetm, truncation_order=truncation_order, period=[WL * 2],

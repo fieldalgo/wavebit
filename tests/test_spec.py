@@ -44,7 +44,7 @@ def test_run_matches_the_equivalent_rcwa_call():
     result = wavebit.run(BINARY_GRATING)
 
     reference = wavebit.rcwa(
-        backend=0, wavelength=900., period=[700.], truncation_order=[10, 0],
+        backend='numpy', wavelength=900., period=[700.], truncation_order=[10, 0],
         top=1., bot=2.25, theta=0., phi=0., tetm='te',
         structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.],
     ).solve()
@@ -80,9 +80,9 @@ def test_spec_survives_json_unchanged():
 def test_key_tracks_content_not_spelling():
     spec = JobSpec.from_dict(BINARY_GRATING)
 
-    # same run, written differently: enum by name vs by int, defaults stated vs omitted
+    # same run, written differently: defaults stated vs omitted
     reworded = dict(BINARY_GRATING)
-    reworded['numerics'] = {'backend': 0, 'truncation_order': [10, 0], 'complex_dtype': 128}
+    reworded['numerics'] = {'backend': 'numpy', 'truncation_order': [10, 0], 'complex_dtype': 128}
     reworded['incidence'] = {'wavelength': 900.0, 'theta': 0.0, 'phi': 0.0, 'tetm': 'te'}
     assert JobSpec.from_dict(reworded).key() == spec.key()
 
@@ -116,7 +116,7 @@ def test_tetm_normalises_to_the_word_and_has_no_interior():
 def test_enums_accept_name_or_value():
     spec = JobSpec.from_dict({
         **BINARY_GRATING,
-        'numerics': {'backend': 'JAX', 'factorization': 'nvf', 'truncation_order': 3},
+        'numerics': {'backend': 'jax', 'factorization': 'NVF', 'truncation_order': 3},
     })
     assert spec.numerics.backend is Backend.JAX
     assert spec.numerics.factorization is Factorization.NVF
@@ -510,7 +510,7 @@ def _oblique_spec():
                                           period=(400.0, 400.0),
                                           lattice=basis.tolist()),
         incidence=wavebit.Incidence(wavelength=900.0, theta=0.1, phi=0.3, psi=0.2),
-        numerics=wavebit.Numerics(backend=0, truncation_order=[4, 4],
+        numerics=wavebit.Numerics(backend='numpy', truncation_order=[4, 4],
                                   factorization=Factorization.NVF))
 
 
@@ -603,10 +603,11 @@ ENUM_MEMBERS = [(name, member) for name, (cls, _) in ENUM_FIELDS.items() for mem
 
 
 def _spellings(member):
-    """Every way the JSON door accepts ``member``: itself, its name in either case, its code."""
-    out = [member, member.name.lower(), member.name.upper()]
-    if isinstance(member.value, int):
-        out.append(int(member))
+    """Every way the JSON door accepts ``member``: itself and its name -- in either case, except
+    ``backend``, whose name is taken exactly as written, as every door that takes one does."""
+    out = [member, member.name.lower()]
+    if not isinstance(member, Backend):
+        out.append(member.name.upper())
     return out
 
 
@@ -689,8 +690,9 @@ def test_numerics_assigned_after_construction_is_the_numerics_construction_build
 
     Until 2026-09-27 construction normalised in ``__post_init__`` and assignment did not, so the
     door left over stored the string: ``as_kwargs`` raised on it as it had on construction
-    before, and ``n.backend = 1`` wrote ``1`` into the document where ``Numerics(backend=1)``
-    wrote ``'jax'`` -- one run, two cache keys. Each assignment starts from another member, so
+    before, and the integer backend code ``1`` (refused since 2026-10-11) assigned to
+    ``n.backend`` wrote ``1`` into the document where construction wrote ``'jax'`` -- one run,
+    two cache keys. Each assignment starts from another member, so
     one that stored nothing fails here rather than matching a default it left behind.
     """
     built = wavebit.Numerics(**{name: member.name.lower()})

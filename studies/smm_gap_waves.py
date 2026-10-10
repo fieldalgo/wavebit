@@ -151,7 +151,7 @@ def grating(path, layers, *, wavelength, period, thickness, truncation, theta, t
 
 def solve(scene, algo, theta=None, **extra):
     kw = {k: v for k, v in scene.items() if k not in ('path', 'theta')}
-    kw.update(backend=0, layer_algorithm=algo, answers='amplitude',
+    kw.update(layer_algorithm=algo, answers='amplitude',
               theta=scene['theta'] if theta is None else theta, **extra)
     path = scene['path']
     if path in ('te', 'tm'):
@@ -468,7 +468,7 @@ def section_gauge():
         with gap(waves):
             scattering._field_state = capture
             try:
-                solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='field', **kw)
+                solver = wavebit.rcwa(layer_algorithm='SMM', answers='field', **kw)
                 result = solver.solve(auto_detune=False)
             finally:
                 scattering._field_state = field_state

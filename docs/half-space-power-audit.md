@@ -129,7 +129,7 @@ import numpy as np
 import wavebit
 
 common = dict(
-    backend=0,
+    backend='numpy',
     top=2.16 + 0.9j,
     bot=2.16 + 0.9j,
     structure=np.full((1, 2, 2), 2.16 + 0.9j),

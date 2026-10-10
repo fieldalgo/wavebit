@@ -29,7 +29,7 @@ def scene(width=1.18, tensor=False, epsilon=9.):
         dict(type='rectangle', cx=90., cy=0., lx=60., ly=100., material=material(6.25))])]
 
 
-def solver(tensor=False, rule='nvf', backend=1, width=1.18, **kwargs):
+def solver(tensor=False, rule='nvf', backend='jax', width=1.18, **kwargs):
     cfg = dict(CFG, factorization=rule, structure=scene(width, tensor))
     if rule == 'nvf':
         cfg['shape_nvf_grid_size'] = 16
@@ -65,7 +65,7 @@ def test_valid_shape_changes_match_fresh_numpy_fields(tensor, rule, change):
     moved = scene(1.19 if change == 'width' else 1.18, tensor,
                   epsilon=9.4 if change == 'material' else 9.)
     got, field = s.solve_field(3, 3, 2, geometry=frozen, structure=moved)
-    want, reference = solver(tensor, rule, backend=0, structure=moved).solve_field(3, 3, 2)
+    want, reference = solver(tensor, rule, backend='numpy', structure=moved).solve_field(3, 3, 2)
     np.testing.assert_allclose(got.T, want.T, rtol=2e-9, atol=2e-11)
     np.testing.assert_allclose(field, reference, rtol=2e-8, atol=2e-9)
 
@@ -95,7 +95,7 @@ def test_tensor_shape_field_gradients_match_fresh_numpy_differences(rule, parame
         _, field = s.solve_field(3, 3, 2, geometry=frozen, structure=structure(value))
         return jnp.sum(jnp.abs(field)**2).real
     def reference(value):
-        _, field = solver(True, rule, backend=0, structure=structure(value)).solve_field(3, 3, 2)
+        _, field = solver(True, rule, backend='numpy', structure=structure(value)).solve_field(3, 3, 2)
         return np.sum(np.abs(field)**2).real
     value = 1.18 if parameter == 'width' else 9.
     derivative = jax.jit(jax.grad(loss))(jnp.asarray(value))
@@ -119,7 +119,7 @@ def test_tensor_raster_records_are_checked_before_compilation(monkeypatch, chang
     if uniform:
         eps[:] = eps[0, 0, 0]
     mu = eps * .1 + np.eye(3)
-    s = wavebit.rcwa(backend=1, **CFG, structure=eps, mu=mu)
+    s = wavebit.rcwa(backend='jax', **CFG, structure=eps, mu=mu)
     frozen = s.freeze_geometry()
     moved = eps.copy()
     moved[0, 1, 1] = np.diag([7., 7.2, 6.8])
@@ -135,7 +135,7 @@ def test_tensor_raster_records_are_checked_before_compilation(monkeypatch, chang
 def test_tensor_raster_material_sweep_keeps_interfaces_and_matches_numpy(quantity):
     eps = tensor_raster()
     mu = eps * .1 + np.eye(3)
-    s = wavebit.rcwa(backend=1, **CFG, structure=eps, mu=mu)
+    s = wavebit.rcwa(backend='jax', **CFG, structure=eps, mu=mu)
     frozen = s.freeze_geometry()
     # Swapping phase values also swaps np.unique labels, but not the interfaces.
     original = eps if quantity == 'structure' else mu
@@ -143,7 +143,7 @@ def test_tensor_raster_material_sweep_keeps_interfaces_and_matches_numpy(quantit
     cfg = dict(CFG, structure=eps, mu=mu)
     cfg[quantity] = moved
     got, field = s.solve_field(3, 3, 2, geometry=frozen, **{quantity: moved})
-    want, reference = wavebit.rcwa(backend=0, **cfg).solve_field(3, 3, 2)
+    want, reference = wavebit.rcwa(backend='numpy', **cfg).solve_field(3, 3, 2)
     np.testing.assert_allclose(got.T, want.T, rtol=2e-9, atol=2e-11)
     np.testing.assert_allclose(field, reference, rtol=2e-8, atol=2e-9)
 
@@ -154,7 +154,7 @@ def test_laurent_disjoint_shape_count_changes_need_no_new_plan():
     moved = scene()
     moved[0]['shapes'].pop()
     got, field = s.solve_field(3, 3, 2, geometry=frozen, structure=moved)
-    want, reference = solver(rule='laurent', backend=0, structure=moved).solve_field(3, 3, 2)
+    want, reference = solver(rule='laurent', backend='numpy', structure=moved).solve_field(3, 3, 2)
     np.testing.assert_allclose(got.T, want.T, rtol=2e-9, atol=2e-11)
     np.testing.assert_allclose(field, reference, rtol=2e-8, atol=2e-9)
 
@@ -193,7 +193,7 @@ def test_a_traced_material_does_not_hide_the_other_concrete_interfaces(
         monkeypatch, tensor, moving, transform):
     eps = tensor_raster() if tensor else tensor_raster()[..., 0, 0]
     mu = eps * .1 + (np.eye(3) if tensor else 1.)
-    s = wavebit.rcwa(backend=1, **CFG, structure=eps, mu=mu, factorization='nvf')
+    s = wavebit.rcwa(backend='jax', **CFG, structure=eps, mu=mu, factorization='nvf')
     frozen = s.freeze_geometry()
     base = eps if moving == 'structure' else mu
     moved = base.copy()
@@ -215,14 +215,14 @@ def test_valid_traced_raster_material_updates_still_have_correct_gradients(tenso
     eps = tensor_raster() if tensor else tensor_raster()[..., 0, 0]
     mu = eps * .1 + (np.eye(3) if tensor else 1.)
     cfg = dict(CFG, structure=eps, mu=mu, factorization='nvf')
-    s = wavebit.rcwa(backend=1, **cfg)
+    s = wavebit.rcwa(backend='jax', **cfg)
     frozen = s.freeze_geometry()
     live = getattr(s, quantity)
     def loss(scale):
         result, _ = s.solve_field(2, 2, 2, geometry=frozen, **{quantity: live*scale})
         return result.T.sum().real
     def reference(scale):
-        return wavebit.rcwa(backend=0, **(cfg | {quantity: np.asarray(live)*scale})).solve().T.sum().real
+        return wavebit.rcwa(backend='numpy', **(cfg | {quantity: np.asarray(live)*scale})).solve().T.sum().real
     got = jax.jit(jax.grad(loss))(jnp.asarray(1.))
     h = 1e-5
     expected = (reference(1.+h)-reference(1.-h))/(2*h)

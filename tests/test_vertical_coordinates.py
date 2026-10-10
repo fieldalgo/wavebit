@@ -21,14 +21,13 @@ def six(cell, path):
     return out
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('path,algorithm', PATHS)
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('theta', [0., .53])
 def test_plane_wave_phase_maxwell_and_flux(backend, path, algorithm, side, theta):
     """Absolute k direction, curl signs and phase; no old solver output is the oracle."""
-    if backend:
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     phi = 0. if path in ('te', 'tm') else .61
     structure = np.ones((1, 2, 2) if path in ('second_order', 'first_order') else (1, 1, 2))
     kw = dict(backend=backend, top=1., bot=1., wavelength=1.3, period=(.8, .7),
@@ -86,7 +85,7 @@ def test_every_input_is_a_unit_electric_field_in_its_own_medium(medium, eps, mu,
     phi = 0. if path in ('te', 'tm') else .61
     shape = (1, 2, 2) if path in ('second_order', 'first_order') else (1, 1, 2)
     medium_value = eps if mu is None else wavebit.Material(eps, mu=mu)
-    kw = dict(backend=0, top=medium_value, bot=medium_value, wavelength=1.3, period=(.8, .7),
+    kw = dict(backend='numpy', top=medium_value, bot=medium_value, wavelength=1.3, period=(.8, .7),
               thickness=[.9], truncation_order=(0, 0), theta=theta,
               structure=np.full(shape, eps), incidence_side=side, answers='field',
               layer_algorithm=algorithm)
@@ -148,12 +147,11 @@ def test_exact_interfaces_survive_cumulative_sum_roundoff(side):
     np.testing.assert_allclose(actual, grid[[3, 6, 9]], atol=3e-12, rtol=0)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('path,algorithm', PATHS)
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_one_height_sample_is_each_layers_lower_face(backend, path, algorithm, side):
-    if backend:
-        pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     shape = (2, 2, 2) if path in ('second_order', 'first_order') else (2, 1, 2)
     structure = np.ones(shape) * np.array([2.25, 4.])[:, None, None]
     kw = dict(backend=backend, wavelength=1.3, period=(.8, .7),
@@ -177,10 +175,10 @@ def test_old_serialized_layer_order_requires_explicit_migration():
         wavebit.JobSpec.from_dict({'version': '9'})
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('patterned', [False, True], ids=['uniform', 'two-pixel'])
 def test_single_height_keeps_thickness_derivatives(backend, patterned):
-    pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     structure = np.array([[[2.25, 3.]], [[4., 5.]]] if patterned else [[[2.25]], [[4.]]])
     kwargs = dict(backend=backend, wavelength=1.3, period=(.8, .7),
                   structure=structure,
@@ -192,7 +190,7 @@ def test_single_height_keeps_thickness_derivatives(backend, patterned):
         _, cell = solver.solve_field(sample_x=1, sample_y=1, sample_z=1, geometry=geometry)
         return cell.real.sum()
 
-    if backend == 1:
+    if backend == 'jax':
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
         thickness = jnp.asarray([.2, .3])

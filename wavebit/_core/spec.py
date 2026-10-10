@@ -61,7 +61,7 @@ from .conventions import _DIRECTION_CLASH, parse_order_pair, transverse_componen
 from .domain import Layer, Material, Stack, Incidence, _DeclaredFieldsOnly
 from .materials import TabulatedMaterial
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, Nesting, NormalMethod,
-                    Projector, Tetm, near_match_hint)
+                    Projector, Tetm, backend_of, near_match_hint)
 
 SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
@@ -110,8 +110,8 @@ SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-1
 # No bump (2026-09-27): `Numerics(...)` normalises its enum fields at construction, as
 # `from_dict` always did. No document changes shape or meaning -- every one was already read
 # through the coercion. What moves is the key of a spec *built in Python* with a non-canonical
-# spelling ('NVF', `backend=1`): it now equals its parsed twin's, the key it always should
-# have had.
+# spelling ('NVF', or the integer backend code 1 of the day): it now equals its parsed twin's,
+# the key it always should have had.
 # No bump (2026-09-27): the pure 1D TE/TM path moved into the per-order s/p frame and a
 # unit-E input. No document changes shape, and no input value names a different structure
 # (the '3' / '7' argument): `Incidence` cannot carry `excitation`, the one input whose physics
@@ -127,6 +127,10 @@ SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-1
 # (by exp(-1j k_inc . (a1 + a2)/2), 1 at normal incidence). Every efficiency of a single-wave
 # spec is byte-identical. Amplitudes cached under an old key() are stale on every order with
 # m + n odd.
+# No bump (2026-10-10): `numerics.backend` takes the names only ('numpy' / 'jax' / 'torch'),
+# exactly as written, and `as_kwargs` hands the solver the name. `to_dict` always wrote the
+# name, so every document wavebit wrote reads as before and keeps its key(); a hand-written
+# integer or 'JAX' is refused, loudly, rather than read as anything.
 
 #: Refusal for a document that states no version. Its own justification, because the rule
 #: reads as gratuitous ceremony until you see which case it is for.
@@ -188,25 +192,32 @@ def _reject_unknown(got, allowed, where):
 
 
 def _enum(value, enum_cls, where):
-    """Accept an enum, its integer value, or its name ('numpy' / 'NUMPY' / 0)."""
+    """Accept an enum member or its name, in either case ('nvf' / 'NVF').
+
+    ``backend`` is the exception: it takes exactly what
+    :func:`~wavebit._core.enums.backend_of` takes -- the member or its name as written, which
+    is what every other door that takes a backend accepts. It was the one integer-coded enum
+    here, and its codes went on 2026-10-10.
+    """
     if isinstance(value, enum_cls):
         return value
+    expected = f"Expected one of {[m.name.lower() for m in enum_cls]}"
+    if enum_cls is Backend:
+        try:
+            return backend_of(value)
+        except ValueError:
+            raise SpecError(f"{where}: {value!r} is not a Backend. {expected}") from None
     if isinstance(value, str):
         try:
             return enum_cls[value.upper()]
         except KeyError:
             raise SpecError(
-                f"{where}: {value!r} is not a {enum_cls.__name__}. "
-                f"Expected one of {[m.name.lower() for m in enum_cls]}") from None
+                f"{where}: {value!r} is not a {enum_cls.__name__}. {expected}") from None
     try:
         return enum_cls(value)
     except ValueError:
-        # Only the integer-coded enums have a numeric spelling to suggest.
-        codes = ('' if not all(isinstance(m.value, int) for m in enum_cls)
-                 else f" or {[int(m) for m in enum_cls]}")
         raise SpecError(
-            f"{where}: {value!r} is not a {enum_cls.__name__}. "
-            f"Expected one of {[m.name.lower() for m in enum_cls]}{codes}") from None
+            f"{where}: {value!r} is not a {enum_cls.__name__}. {expected}") from None
 
 
 @cache
@@ -527,15 +538,17 @@ class Numerics(_DeclaredFieldsOnly):
         built the enum. Six of the seven enum fields broke that way. ``answers`` survived
         because ``as_kwargs`` re-validated it, and still wrote ``'FIELD'`` into the document
         where ``from_dict`` wrote ``'field'``, which splits :meth:`JobSpec.key` for one run;
-        ``backend=1`` did the same against ``'jax'``. ``from_dict`` leaves the enum fields to
-        this method, so a refusal carries the same message whichever door it came in by.
+        the integer backend code ``1`` (refused since 2026-10-10) did the same against
+        ``'jax'``. ``from_dict`` leaves the enum fields to this method, so a refusal carries
+        the same message whichever door it came in by.
 
         Here rather than in ``__post_init__``, where the rule lived until 2026-09-27, because
         construction *is* an assignment: the dataclass ``__init__`` writes each field through
         this method, and so does ``dataclasses.replace``. In ``__post_init__`` it covered those
         and missed the door left over -- ``n.li_nesting = 'symmetric'`` after construction
-        stored the string and ``as_kwargs`` raised again, and ``n.backend = 1`` wrote ``1``
-        where ``Numerics(backend=1)`` wrote ``'jax'``. One method, one rule, every door.
+        stored the string and ``as_kwargs`` raised again, and the integer backend code ``1``
+        assigned to ``n.backend`` was written as ``1`` where construction wrote ``'jax'``. One
+        method, one rule, every door.
 
         A name that is no member is refused here, where ``complex_dtype=32`` is left for
         :meth:`check`. The difference is that an enum field is *converted* on the way in: a
@@ -617,7 +630,7 @@ class Numerics(_DeclaredFieldsOnly):
         call and resolves each per modeling path.
         """
         return dict(
-            backend=int(self.backend),
+            backend=self.backend.value,
             truncation_order=list(self.truncation_order),
             complex_dtype=0 if self.complex_dtype == 128 else 1,
             layer_algorithm=self.layer_algorithm,

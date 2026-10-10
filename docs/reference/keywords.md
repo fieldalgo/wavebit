@@ -68,7 +68,7 @@ Explained in [Choosing the numerics](../guide/numerics.md), except
 | Keyword | Default | What it takes |
 | --- | --- | --- |
 | `truncation_order` | `(0, 0)` | retained Fourier orders per axis. A pair, `dict(x=..., y=...)` or `dict(u=..., v=...)` |
-| `backend` | `0` | `0` NumPy, `1` JAX, `2` PyTorch — see [Backends and precision](../guide/backends.md) |
+| `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly so — see [Backends and precision](../guide/backends.md) |
 | `device` | `0` | `0`/`'cpu'`, `1`/`'gpu'`/`'cuda'`, or the backend's own device object |
 | `complex_dtype` | `0` (double) | `0` double, `1` single, or any of the three namespaces' complex spellings |
 | `layer_algorithm` | `'ETM'` | `'ETM'` (enhanced transmittance matrix) or `'SMM'` (scattering matrix) |
@@ -121,7 +121,7 @@ directly and needs none of this.
 ## Named constants
 
 
-The integer and string codes have enum equivalents, if you prefer them to the literals:
+The string values have enum equivalents, if you prefer them to the literals:
 
 ```python
 from wavebit import (Answers, Backend, Tetm, FourierCoefficients, Factorization, NormalMethod,

@@ -59,7 +59,7 @@ def _bar(**kw):
     return dict({'type': 'rectangle', 'cx': 0.0, 'cy': 0.0, 'material': 4.0}, **kw)
 
 
-def _solver(tox, toy, backend=0):
+def _solver(tox, toy, backend='numpy'):
     return wavebit.rcwa(backend=backend, thickness=[300.0],
                         period=dict(x=PERIOD, y=PERIOD),
                         truncation_order=dict(x=tox, y=toy),
@@ -288,7 +288,7 @@ def test_growing_a_rod_into_a_slab_has_no_cliff_at_the_period():
     assert previous < 1e-5
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_every_backend_spans_the_same_way(backend):
     """numpy, jax and torch build this field through three different namespaces.
 
@@ -298,7 +298,7 @@ def test_every_backend_spans_the_same_way(backend):
     ``P * round(s/inf)`` is ``inf * 0``, a NaN in the branch a ``where`` discards and
     reverse-mode still reads.
     """
-    pytest.importorskip({0: 'numpy', 1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     solver = _solver(5, 5, backend=backend)
     solver.structure = _grating_layer()
     assert float(np.sum(np.asarray(solver.solve().incident.T))) == pytest.approx(
@@ -330,7 +330,7 @@ def test_a_spanning_shape_still_traces_and_differentiates():
             type='rectangle', cx=0.0, cy=0.0, lx=jnp.asarray(350.0), ly=ly,
             angle=jnp.asarray(0.0), material=4.0)])]
 
-    solver = _solver(4, 4, backend=1)
+    solver = _solver(4, 4, backend='jax')
     solver.structure = layer(jnp.asarray(PERIOD))
     frozen = solver.freeze_geometry()
     assert frozen.gamma_plans[0].pairs                  # the spanning pair, recorded
@@ -343,7 +343,7 @@ def test_a_spanning_shape_still_traces_and_differentiates():
     assert float(replayed) == pytest.approx(eager, abs=1e-12)
 
     def built_inside(ly):
-        inner = _solver(4, 4, backend=1)
+        inner = _solver(4, 4, backend='jax')
         inner.structure = layer(ly)
         return jnp.sum(inner.solve().incident.T)
 
@@ -433,7 +433,7 @@ def test_the_x_fold_carries_its_own_weight():
     ``test_a_shape_filling_the_cell_gets_the_no_interface_constant`` does not cover.
     """
     def total(lx, ly, psi):
-        s = wavebit.rcwa(backend=0, thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+        s = wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                          truncation_order=dict(x=5, y=5), top=1, bot=1,
                          wavelength=550.0, psi=psi)
         s.structure = [dict(background=1.0, shapes=[_bar(lx=lx, ly=ly, angle=0.0)])]

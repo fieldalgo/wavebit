@@ -41,12 +41,12 @@ def test_independent_loss_has_analytic_longitudinal_material_and_passive_transve
     assert np.all(1-powers.sum(axis=(1, 2, 3)) > 1e-3)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_independent_loss_mixed_contact_stack_matches_analytic_inverse_rules(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
     p[1] = 0.

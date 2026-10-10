@@ -10,7 +10,7 @@ def solver(gap, right_epsilon=9.):
     shapes = [dict(type='rectangle', cx=-150.-gap/2, lx=300., ly=300., material=4.),
               dict(type='rectangle', cx=150.+gap/2, lx=300., ly=300., material=right_epsilon)]
     return wavebit.rcwa(
-        backend=1, period=(700., 700.), wavelength=900., top=1., bot=2.25,
+        backend='jax', period=(700., 700.), wavelength=900., top=1., bot=2.25,
         theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(3, 3),
         factorization='li', structure=[dict(background=1., shapes=shapes)])
 

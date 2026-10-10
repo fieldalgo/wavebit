@@ -49,7 +49,7 @@ def tensor(eps, gyro=None, ezz=None):
 
 def solve(slots, eps, truncation_order, theta=0.0, phi=0.0, psi=0.0):
     epx, epy, epz_i, epxy, epyx = slots
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(theta),
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta),
                        phi=np.deg2rad(phi), psi=np.deg2rad(psi), truncation_order=(truncation_order, truncation_order),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.expand_dims(np.sqrt(eps), axis=0))

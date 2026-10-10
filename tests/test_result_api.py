@@ -17,14 +17,14 @@ CELL_2D = np.array([[[1.0, 12.25], [12.25, 1.0]]])
 
 
 def _solve_1d(**kw):
-    args = dict(backend=0, tetm='te', top=1.0, bot=2.25, theta=0.3, truncation_order=2, wavelength=WL,
+    args = dict(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=0.3, truncation_order=2, wavelength=WL,
                 period=[900.0], structure=CELL_1D, thickness=[300.0])
     args.update(kw)
     return wavebit.rcwa(**args).solve()
 
 
 def _solve_2d(**kw):
-    args = dict(backend=0, top=1.0, bot=2.25, theta=0.3, phi=0.0, psi=0.0, truncation_order=[2, 1],
+    args = dict(backend='numpy', top=1.0, bot=2.25, theta=0.3, phi=0.0, psi=0.0, truncation_order=[2, 1],
                 wavelength=WL, period=[900.0, 900.0], structure=CELL_2D, thickness=[300.0])
     args.update(kw)
     return wavebit.rcwa(**args).solve()

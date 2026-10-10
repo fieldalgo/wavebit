@@ -27,11 +27,11 @@ def objective(s,xp,scale,family,geometry=None):
 @pytest.mark.parametrize('family',['scalar-li','scalar-nvf','tensor-li'])
 def test_all_lengths_scale_without_changing_the_optical_problem(backend,family):
     pytest.importorskip('torch' if backend=='torch' else 'jax')
-    baseline=float(objective(make(0,family),np,np.asarray(1.),family))
+    baseline=float(objective(make('numpy',family),np,np.asarray(1.),family))
     for scale in (.37,1.8):
-        value=float(objective(make(0,family,scale),np,np.asarray(scale),family))
+        value=float(objective(make('numpy',family,scale),np,np.asarray(scale),family))
         assert value==pytest.approx(baseline,abs=3e-11,rel=3e-11)
-    s=make(1 if backend!='torch' else 2,family)
+    s=make('jax' if backend!='torch' else 'torch',family)
     if backend in ('jax','jit'):
         import jax
         import jax.numpy as jnp

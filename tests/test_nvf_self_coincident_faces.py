@@ -80,7 +80,7 @@ L_ANGLE = float(np.arctan2(117.9, 690.0))
 #: a cell one shape over.
 CHECKER = np.array([[1.25, 1.25], [1.25, -1.25]])
 
-SOLVE_KW = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25,
+SOLVE_KW = dict(backend='numpy', wavelength=900.0, top=1.0, bot=2.25,
                 theta=0.2, phi=0.0, psi=0.0, thickness=[300.0])
 
 
@@ -461,7 +461,7 @@ def test_the_drop_survives_jit_and_grad():
         return [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                   lx=lx, ly=PERIOD, material=EPS_HI)])]
 
-    solver = wavebit.rcwa(backend=1, period=[PERIOD, PERIOD], structure=layer(350.0),
+    solver = wavebit.rcwa(backend='jax', period=[PERIOD, PERIOD], structure=layer(350.0),
                           truncation_order=dict(x=4, y=4), shape_nvf_grid_size=128,
                           **{k: v for k, v in SOLVE_KW.items() if k != 'backend'})
     frozen = solver.freeze_geometry()

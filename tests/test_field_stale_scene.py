@@ -47,7 +47,7 @@ MOVES = {
 }
 
 
-def _scene(backend=0, **over):
+def _scene(backend='numpy', **over):
     kw = dict(backend=backend, structure=GRATING, period=[P, P], truncation_order=[2, 0],
               thickness=[H], wavelength=WL, top=1.0, bot=1.0, answers='field',
               theta=0.1, phi=0.0)
@@ -60,11 +60,10 @@ def _field(solver):
 
 
 @pytest.mark.parametrize('name', sorted(MOVES))
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_moving_any_condition_the_reconstruction_reads_is_refused(backend, name):
     """One case per condition, because the mix is per-condition and each is a separate read."""
-    if backend:
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
+    pytest.importorskip(backend)
     solver = _scene(backend)
     solver.solve()
     _field(solver)                                   # the honest one still works
@@ -152,7 +151,7 @@ def test_a_jitted_reconstruction_is_not_refused_on_its_traced_conditions():
     """
     pytest.importorskip('jax')
     wavebit.enable_x64()
-    solver = _scene(1)
+    solver = _scene('jax')
     geometry = solver.freeze_geometry()
     _, cell = solver.solve_field(4, 4, 4, geometry=geometry)
     assert np.isfinite(np.asarray(cell[0])).all()
@@ -183,7 +182,7 @@ def test_a_differentiated_condition_is_not_a_scene_change_either(name):
     """A value snapshot must neither change nor detach a live autograd condition."""
     torch = pytest.importorskip('torch')
 
-    solver = _scene(2)
+    solver = _scene('torch')
     leaf = torch.tensor(np.atleast_1d(np.asarray(getattr(solver, name), dtype=float)),
                         dtype=torch.float64, requires_grad=True)
     setattr(solver, name, leaf if name != 'theta' else leaf[0])

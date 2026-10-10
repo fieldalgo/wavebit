@@ -128,7 +128,7 @@ GOOD_KW = dict(structure=GOOD, period=[400.0, 400.0], truncation_order=[3, 3],
 
 def _solver_refuses(**over):
     try:
-        wavebit.rcwa(backend=0, **dict(GOOD_KW, **over))
+        wavebit.rcwa(backend='numpy', **dict(GOOD_KW, **over))
         return False
     except Exception:                          # noqa: BLE001 - refusal is the datum
         return True
@@ -217,7 +217,7 @@ def test_normal_grid_is_refused_where_nothing_reads_it(factorization):
 
     raster = np.full((1, 16, 16), 4.0)
     raster[0, 4:12, 4:12] = 12.25
-    cfg = dict(backend=0, period=[300.0, 300.0], thickness=[205.0], truncation_order=(4, 4),
+    cfg = dict(backend='numpy', period=[300.0, 300.0], thickness=[205.0], truncation_order=(4, 4),
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
                factorization=factorization)
 

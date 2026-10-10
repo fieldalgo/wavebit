@@ -30,7 +30,7 @@ P = 1000.0
 #: The axis-aligned cell as a *basis*. The boundary helpers below take one, not a period pair:
 #: a shape's `cx` / `cy` are measured from `0.5*(a1 + a2)`, which a pair of lengths cannot say.
 CELL = as_lattice(period=(P, P))
-COMMON = dict(backend=0, period=(P, P), thickness=(300.,), wavelength=900.,
+COMMON = dict(backend='numpy', period=(P, P), thickness=(300.,), wavelength=900.,
               top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, truncation_order=(9, 9))
 
 #: `COMMON` without its cell, for the two calls that give a basis instead: naming `period` and
@@ -349,7 +349,7 @@ def test_a_traced_structure_is_refused_by_name_rather_than_by_numpy():
 
     def drawn(lx):
         return jnp.sum(jnp.asarray(wavebit.rcwa(
-            structure=layer(lx), **dict(COMMON, backend=1)).slice_structure(n=32)).real)
+            structure=layer(lx), **dict(COMMON, backend='jax')).slice_structure(n=32)).real)
 
     with pytest.raises(ValueError, match='traced structure cannot be drawn'):
         jax.grad(drawn)(jnp.asarray(200.0))

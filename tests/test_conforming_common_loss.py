@@ -54,12 +54,12 @@ def test_lossy_material_matches_independent_analytic_integrals(axis, order):
 
 
 @pytest.mark.research
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_different_loss_ratios_across_layers_match_independent_contact_controls(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
     p[1] = 0.
@@ -85,12 +85,12 @@ def test_different_loss_ratios_across_layers_match_independent_contact_controls(
 
 @pytest.mark.research
 @pytest.mark.parametrize('epsilon', [3.+.2j, 1.7+1.2j])
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_uniform_lossy_layer_matches_independent_airy_formula(epsilon, backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     lattice = np.diag([700., 430.])
     builder = wavebit.ConformingNVF((1, 0), **SETTINGS)

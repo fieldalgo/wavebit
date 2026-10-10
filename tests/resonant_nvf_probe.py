@@ -31,7 +31,7 @@ def fixture_shape():
 
 def make_solver(order, grid, method='pieces', shape=None):
     return wavebit.rcwa(
-        backend=0, period=(700., 700.), wavelength=900.,
+        backend='numpy', period=(700., 700.), wavelength=900.,
         top=1., bot=2.25, theta=.2, phi=0., psi=0., thickness=(300.,),
         truncation_order=(order, order), shape_nvf_grid_size=grid,
         nvf_projector='circular' if method == 'circular' else None,

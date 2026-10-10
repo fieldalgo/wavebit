@@ -1750,7 +1750,7 @@ wavebit.enable_x64()
 
 def reflectance(re_eps):
     medium = wavebit.Material(re_eps + 0.1j, mu=-1 + 0.1j)
-    s = wavebit.rcwa(backend=1, top=2.25, bot=medium, wavelength=500.,
+    s = wavebit.rcwa(backend='jax', top=2.25, bot=medium, wavelength=500.,
                      period=(1000., 1000.), truncation_order=(0, 0),
                      structure=np.full((1, 2, 2), 2.25), thickness=[37.])
     return s.solve().R.sum().real
@@ -1763,7 +1763,7 @@ jax.jit(reflectance)(jnp.asarray(-2.0))     # 0.0010766816
 
 ```python
 def band(re_eps):
-    s = wavebit.rcwa(backend=1, top=2.25, bot=wavebit.Material(re_eps - 0.1j, mu=-1 - 0.1j),
+    s = wavebit.rcwa(backend='jax', top=2.25, bot=wavebit.Material(re_eps - 0.1j, mu=-1 - 0.1j),
                      theta=np.deg2rad(60.), wavelength=500., period=[700.],
                      truncation_order=3, thickness=[180.],
                      structure=np.array([[[4., 4., 1., 1., 2.25, 2.25]]]))

@@ -37,7 +37,7 @@ def test_source_list_and_order_adapter_keep_boundary_physics():
         wavebit.rcwa(**options, excitation={'bottom': top})
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('moment', [(1e-29, 0., 0.), (0., 1e-29j, 0.), (0., 0., 1e-29)])
 def test_dipole_matches_homogeneous_dyadic_green_spectrum(backend, moment):
     """E_G = i k0^2/(2 eps0 A kz) (I-kk/k0^2) p, independently of SMM."""
@@ -140,7 +140,7 @@ def test_gaussian_one_component_limit_and_focus_phase(side):
     np.testing.assert_allclose(np.linalg.norm(field), .7, atol=1e-12)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_gaussian_focal_envelope_and_vacuum_transmission(backend):
     source = wavebit.GaussianBeam(waist=8., focus=(0., 0., .4), sampling=(11, 11), spectral_extent=5.)
     options = vacuum(backend=backend, period=(2.31, 2.73), truncation_order=0)

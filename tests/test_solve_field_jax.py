@@ -55,7 +55,7 @@ def test_jit_matches_the_eager_path(case):
     Freezing the geometry is an optimization, not a different computation — same contract as
     ``solve(geometry=...)``.
     """
-    solver = _solver(1, case)
+    solver = _solver('jax', case)
     sample_x, sample_y, sample_z = _res(case)
 
     jitted, field = solver.solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
@@ -72,10 +72,10 @@ def test_jit_matches_the_numpy_backend(case):
     """Physics check: the jitted JAX field agrees with NumPy, not merely with itself."""
     sample_x, sample_y, sample_z = _res(case)
 
-    jax_solver = _solver(1, case)
+    jax_solver = _solver('jax', case)
     _, jax_field = jax_solver.solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                                geometry=jax_solver.freeze_geometry())
-    _, np_field = _solver(0, case).solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
+    _, np_field = _solver('numpy', case).solve_field(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
 
     assert np.asarray(jax_field).shape == np.asarray(np_field).shape
     assert np.allclose(np.asarray(jax_field), np.asarray(np_field), rtol=1e-8, atol=1e-8)
@@ -87,7 +87,7 @@ def test_omitting_the_geometry_names_freeze_geometry():
     Before this was added, every call to ``solve_field`` on the JAX backend died inside the
     trace with a message about ``self[4]``, which points at nothing a caller can act on.
     """
-    solver = _solver(1, '1d_conical')
+    solver = _solver('jax', '1d_conical')
 
     with pytest.raises(ValueError, match=r'freeze_geometry\(\)'):
         solver.solve_field(sample_x=8, sample_y=1, sample_z=4)
@@ -100,7 +100,7 @@ def test_omitting_the_geometry_names_freeze_geometry():
 
 def test_no_jit_still_auto_detects_without_a_geometry():
     """``solve_field_eager`` keeps ``geometry`` optional: eager code needs no freeze."""
-    solver = _solver(1, '1d_conical')
+    solver = _solver('jax', '1d_conical')
     sample_x, sample_y, sample_z = _res('1d_conical')
 
     auto, auto_field = solver.solve_field_eager(sample_x=sample_x, sample_y=sample_y, sample_z=sample_z)
@@ -134,7 +134,7 @@ def test_no_traced_condition_outlives_a_field_call(door, transform):
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = _solver(1, '2d')
+    solver = _solver('jax', '2d')
     geometry = solver.freeze_geometry()
     reference = float(jnp.sum(solver.solve().T).real)
 
@@ -144,7 +144,7 @@ def test_no_traced_condition_outlives_a_field_call(door, transform):
         return jnp.sum(result.T).real
 
     def built_at(w):
-        built = wavebit.rcwa(backend=1, **{**BASE, 'wavelength': w}, **CASES['2d'][0],
+        built = wavebit.rcwa(backend='jax', **{**BASE, 'wavelength': w}, **CASES['2d'][0],
                              answers='field')
         result, _ = built.solve_field_eager(sample_x=4, sample_y=4, sample_z=4,
                                             geometry=geometry)
@@ -166,7 +166,7 @@ def test_every_traceable_fourier_strategy_runs_under_jit(fourier_coefficients):
     The old implementation printed a notice and returned ``(None, None, None)`` for the
     closed-form path — a silent wrong-arity return that no caller could unpack.
     """
-    solver = _solver(1, '2d', fourier_coefficients=fourier_coefficients)
+    solver = _solver('jax', '2d', fourier_coefficients=fourier_coefficients)
     result, field = solver.solve_field(sample_x=4, sample_y=4, sample_z=4,
                                             geometry=solver.freeze_geometry())
 
@@ -194,7 +194,7 @@ def test_a_freeze_recompiles_only_when_its_content_moves():
 
     compiled = RCWAJax._solve_field_compiled
     jax.clear_caches()
-    solver = _solver(1, '1d_conical')          # ('sampled', 'li'): records nothing at all
+    solver = _solver('jax', '1d_conical')          # ('sampled', 'li'): records nothing at all
     geometry = solver.freeze_geometry()
     before = compiled._cache_size()
 
@@ -207,7 +207,7 @@ def test_a_freeze_recompiles_only_when_its_content_moves():
     assert compiled._cache_size() == before + 1
 
     # A record carrying arrays cannot compare by content, and says so by compiling again.
-    nvf = _solver(1, '1d_conical', factorization='nvf')
+    nvf = _solver('jax', '1d_conical', factorization='nvf')
     nvf.solve_field(sample_x=8, sample_y=1, sample_z=4, geometry=nvf.freeze_geometry())
     nvf.solve_field(sample_x=8, sample_y=1, sample_z=4, geometry=nvf.freeze_geometry())
     assert compiled._cache_size() == before + 3
@@ -215,7 +215,7 @@ def test_a_freeze_recompiles_only_when_its_content_moves():
 
 def test_resolution_and_field_selection_are_static():
     """They set the output shape, so they must be compile-time constants, not traced."""
-    solver = _solver(1, '2d')
+    solver = _solver('jax', '2d')
     geometry = solver.freeze_geometry()
 
     _, one = solver.solve_field(sample_x=4, sample_y=4, sample_z=4, geometry=geometry)
@@ -242,7 +242,7 @@ def test_changing_the_incidence_is_not_served_from_a_stale_trace(case, slot, val
     declaration and has exactly two values. A 2D structure has no ``tetm`` to change at all —
     it is refused there — which is why that row sweeps the angle instead.
     """
-    solver = _solver(1, case)
+    solver = _solver('jax', case)
     sample_x, sample_y, sample_z = _res(case)
     geometry = solver.freeze_geometry()
 
@@ -281,7 +281,7 @@ def test_the_declaration_is_static_and_the_angle_is_traced():
             seen['psi'] = s.psi
             return s.structure.sum()
 
-        jax.jit(peek)(_solver(1, case))
+        jax.jit(peek)(_solver('jax', case))
         return seen
 
     declared = peek_at('1d_tetm')
@@ -303,14 +303,14 @@ SQUARE = np.diag([700.0, 700.0])
 def _cell_solver(basis):
     """A raster on ``basis``, declared with ``lattice=`` -- the spelling a basis rides under."""
     eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
-    return wavebit.rcwa(backend=1, lattice=basis, structure=eps, truncation_order=[1, 1],
+    return wavebit.rcwa(backend='jax', lattice=basis, structure=eps, truncation_order=[1, 1],
                         thickness=[300.0], wavelength=900.0, theta=0.2, phi=0.1, psi=0.3,
                         answers='field', factorization='nvf')
 
 
 def _scene_2d(**over):
     """The '2d' case with any of its conditions -- `top` and `structure` included -- moved."""
-    return wavebit.rcwa(backend=1, **{**BASE, **CASES['2d'][0], 'answers': 'field', **over})
+    return wavebit.rcwa(backend='jax', **{**BASE, **CASES['2d'][0], 'answers': 'field', **over})
 
 
 @pytest.mark.parametrize('name, basis, value', [('lattice', SHEAR, SHEAR),
@@ -384,7 +384,7 @@ def _li_raster_on(cell, radius=None):
 
 
 def _li_solver(**cell):
-    return wavebit.rcwa(backend=1, truncation_order=[1, 1], thickness=[300.0],
+    return wavebit.rcwa(backend='jax', truncation_order=[1, 1], thickness=[300.0],
                         wavelength=900.0, theta=0.2, phi=0.1, psi=0.3, answers='field', **cell)
 
 
@@ -546,8 +546,8 @@ def test_a_declaration_named_at_the_jitted_door_answers_as_one_built_with_it():
     """
     kwargs = dict(CASES['1d_tetm'][0])
     del kwargs['tetm']
-    solver = wavebit.rcwa(backend=1, **BASE, **kwargs, answers='field')
-    built = _solver(1, '1d_tetm')
+    solver = wavebit.rcwa(backend='jax', **BASE, **kwargs, answers='field')
+    built = _solver('jax', '1d_tetm')
     geometry = built.freeze_geometry()
     got = solver.solve_field(*_res('1d_tetm'), geometry=geometry, tetm='te')
     want = built.solve_field(*_res('1d_tetm'), geometry=geometry)
@@ -584,7 +584,7 @@ BOX_LAYER = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
 
 def test_parametric_structures_cross_the_compiled_door_and_keyword_assignment():
     """Shape strings are static declarations; the retained keyword door keeps that support."""
-    kw = dict(backend=1, lattice=SQUARE, thickness=[300.0], wavelength=900.0,
+    kw = dict(backend='jax', lattice=SQUARE, thickness=[300.0], wavelength=900.0,
               truncation_order=[2, 2], answers='field')
     parametric = wavebit.rcwa(structure=BOX_LAYER, **kw)
     geometry = parametric.freeze_geometry()

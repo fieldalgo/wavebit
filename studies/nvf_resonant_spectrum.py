@@ -40,7 +40,7 @@ PERIOD, THETA, N_SUBSTRATE = 700., .2, 1.5
 
 def make_solver(order, grid, method, wavelength):
     return wavebit.rcwa(
-        backend=0, period=(PERIOD, PERIOD), wavelength=wavelength,
+        backend='numpy', period=(PERIOD, PERIOD), wavelength=wavelength,
         top=1., bot=2.25, theta=THETA, phi=0., psi=0., thickness=(300.,),
         truncation_order=(order, order), shape_nvf_grid_size=grid,
         nvf_projector='circular' if method == 'circular' else None,

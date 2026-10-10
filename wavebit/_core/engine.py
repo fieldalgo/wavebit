@@ -31,7 +31,8 @@ from .domain import Material, as_material, index_from_eps
 from .materials import TabulatedMaterial, evaluate_material, evaluate_structure
 from .enums import (Answers, DEFAULT_ANSWERS, DEFAULT_FACTORIZATION, DEFAULT_FORMULATION,
                     DEFAULT_FOURIER_COEFFICIENTS, DEFAULT_NESTING, DEFAULT_NORMAL_METHOD,
-                    DEFAULT_PROJECTOR, answers_of, nesting_of, normal_method_of, projector_of,
+                    DEFAULT_PROJECTOR, answers_of, backend_of, nesting_of, normal_method_of,
+                    projector_of,
                     near_match, near_match_hint, nvf_option_rename_hint, quantity_note,
                     Factorization, Formulation, FourierCoefficients, ModelingPath, Nesting,
                     Tetm, coefficients_of,
@@ -684,8 +685,8 @@ _NO_AUTODIFF = (
     "{name} needs automatic differentiation and the NumPy backend has none. This is a "
     "property of the backend rather than of the scene: the same solver on JAX or PyTorch "
     "differentiates it, and `backend=` is the only thing that changes.\n"
-    "    solver = wavebit.rcwa(backend=1, ...)   # JAX, then `optax` for `fit`\n"
-    "    solver = wavebit.rcwa(backend=2, ...)   # PyTorch, then `torch.optim`\n"
+    "    solver = wavebit.rcwa(backend='jax', ...)   # JAX, then `optax` for `fit`\n"
+    "    solver = wavebit.rcwa(backend='torch', ...)   # PyTorch, then `torch.optim`\n"
     "Ask before building, with `type(solver)._DIFFERENTIABLE` or the manifest's "
     "`backends` section, which publishes the same fact.")
 
@@ -2103,7 +2104,7 @@ class CoreSolveMixin:
             return 0
         raise ValueError(
             f'device: the NumPy backend has one device and it is the CPU; got {value!r}. '
-            f'Use backend=1 (JAX) or backend=2 (Torch) for anything else.')
+            "Use backend='jax' or backend='torch' for anything else.")
 
     #: Where the setters place what they build -- `_as_complex`, `_as_real_angle`,
     #: `_as_lengths`, `_coerce_raster`, `_separable_kxy`'s order ranges -- and where `_placed`
@@ -3131,7 +3132,7 @@ class CoreFactorizationMixin:
                  # (n_layers, Ny, Nx) array of relative PERMITTIVITY; the two shape spellings
                  # name a Material per region instead. Was `ucell`, and held index samples.
                  thickness=(0.,),
-                 backend=None,               # the integer `rcwa(backend=...)` takes.
+                 backend=None,               # the name `rcwa(backend=...)` takes.
                  # `None` means this class's own `_BACKEND_ID` -- the one default that cannot
                  # be a shared literal. It stays an accepted keyword because
                  # `SolverJax._tree_unflatten` passes it back in on every jitted call.
@@ -3245,6 +3246,7 @@ class CoreFactorizationMixin:
         # only becomes known when the structure is assigned.
         self.mu = mu
 
+        # Parsed and held to the class by `__setattr__`, the one check behind both doors.
         self.backend = self._BACKEND_ID if backend is None else backend
         self._set_fourier_options(fourier_coefficients, factorization)
         self.raster_normal_method = raster_normal_method
@@ -3312,7 +3314,7 @@ class CoreFactorizationMixin:
         not be merged. `backend`, `T1` and `layer_info_list` are public attributes the library
         writes on itself and no caller may pass as a keyword; they are in
         `_ASSIGNABLE_NON_CONDITIONS` and `tests/test_solve_keywords.py` refuses them at the
-        keyword door on purpose. Folding them in here would make `solve(backend=1)` legal for
+        keyword door on purpose. Folding them in here would make `solve(backend='jax')` legal for
         an effect it does not have.
 
         Cached per class, because the three backends have different sets and the answer cannot
@@ -3356,7 +3358,8 @@ class CoreFactorizationMixin:
         return cached
 
     #: Public attributes the library writes on itself that are not conditions. `backend` is
-    #: subtracted from `_condition_names` above because assigning it cannot take effect;
+    #: subtracted from `_condition_names` above because assigning it cannot take effect, and
+    #: `__setattr__` parses it and holds it to the class before this set is consulted;
     #: `layer_info_list` and `T1` are per-solve state written by `__init__` and `_finish`.
     #: Every one is refused as a *keyword* (`tests/test_solve_keywords.py`) and must still be
     #: writable as an *attribute* -- the two rules are different rules, and this is the
@@ -3398,7 +3401,8 @@ class CoreFactorizationMixin:
           inherit it, `_BaseRCWA()` dies inside the guard on its own first assignment.
         * **No branch on the value.** `SolverJax._tree_unflatten` rebuilds through `__init__`,
           so under a jitted `solve_field` every slot arrives as a tracer. This branches on
-          `name`, a `str`, and on nothing else.
+          `name`, a `str`, and on nothing else. The one value it reads is `backend`'s, chosen
+          by name: `SolverJax._tree_flatten` keeps it in aux_data, so it is never a tracer.
 
         A leading underscore passes. Pinning the private slots by name instead was measured --
         35 of them -- and rejected: it buys nothing a caller can reach by accident and goes
@@ -3410,7 +3414,23 @@ class CoreFactorizationMixin:
         and a private name never needed to. The alternative -- allowing any new name on a
         subclass -- would make whether a name is checked depend on which class wrote it, which
         is not a rule anyone could predict.
+
+        **`backend` is parsed on every write**, the constructor's included, so both doors hold
+        one rule: `backend_of` takes a member or its name and refuses anything else, and a name
+        that is not the class's own is refused, because the class is what computes and
+        `solver.backend` would otherwise report a library the solve never runs in.
         """
+        if name == 'backend':
+            value = backend_of(value)
+            own = type(self)._BACKEND_ID
+            if value is not own:
+                raise ValueError(
+                    f"backend={value.value!r} names another backend than "
+                    f"{type(self).__name__}, which computes in {own.value!r}; "
+                    f"use wavebit.rcwa(backend={value.value!r}, ...)")
+            object.__setattr__(self, name, value)
+            return
+
         if (name.startswith('_')
                 or name in self._condition_names()
                 or name in self._ASSIGNABLE_NON_CONDITIONS

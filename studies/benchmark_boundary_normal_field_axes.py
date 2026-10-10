@@ -65,7 +65,7 @@ def scalar(geometry, cx, na, nb, theta, phi, key, backend):
     s = wavebit.rcwa(backend=backend, structure=build(cx, na, nb), truncation_order=[8, 8],
                      shape_nvf_grid_size=NGRID, theta=theta, phi=phi, **BASE)
     r = getattr(s.solve(geometry=geometry), key)
-    return jnp.real(jnp.sum(r)) if backend == 1 else float(np.real(np.sum(np.asarray(r))))
+    return jnp.real(jnp.sum(r)) if backend == 'jax' else float(np.real(np.sum(np.asarray(r))))
 
 
 print(f'base: period {P:.4f}  wl {WL}  thickness 0.25  grid {NGRID}  '
@@ -85,9 +85,9 @@ for cname, inc, rname in itertools.product(AXES['contrast'], AXES['incidence'],
         cells = []
         for geometry in (g_sampled, g_swapped):
             g = np.array([float(jax.grad(
-                lambda c: scalar(geometry, c, na, nb, theta, phi, key, 1))(jnp.asarray(x)))
+                lambda c: scalar(geometry, c, na, nb, theta, phi, key, 'jax'))(jnp.asarray(x)))
                 for x in xs])
-            v = np.array([scalar(geometry, x, na, nb, theta, phi, key, 0) for x in xs])
+            v = np.array([scalar(geometry, x, na, nb, theta, phi, key, 'numpy') for x in xs])
             integ, d, spread = np.trapezoid(g, xs), v[-1] - v[0], v.max() - v.min()
             cells.append((abs(integ - d) / spread, integ / d, spread))
         print(f'{cname:>9} {inc:>10} {rname:>5} {c0/P:>7.3f} | '

@@ -17,7 +17,7 @@ def test_fractional_cell_literals_survive_integer_traced_inputs(dtype, quantity,
         return ({'period': [p, 750.123456789]} if quantity == 'period' else
                 {'lattice': [[p, 180.123456789], [0., 750.123456789]]})
     def grid(p):
-        return wavebit.meshgrid_xy((3, 5), backend=1, **inputs(p))
+        return wavebit.meshgrid_xy((3, 5), backend='jax', **inputs(p))
     points = np.array([600, 650])
     if transform == 'jit':
         function = jax.jit(grid)
@@ -26,6 +26,6 @@ def test_fractional_cell_literals_survive_integer_traced_inputs(dtype, quantity,
         x, y = jax.vmap(grid)(jnp.asarray(points, dtype=getattr(jnp, dtype)))
         actual = list(zip(x, y))
     for point, got in zip(points, actual):
-        expected = wavebit.meshgrid_xy((3, 5), backend=0, **inputs(float(point)))
+        expected = wavebit.meshgrid_xy((3, 5), backend='numpy', **inputs(float(point)))
         for a, b in zip(got, expected):
             np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-12)

@@ -27,12 +27,12 @@ _X, _Y = wavebit.Lattice.rectangular(1.0).meshgrid_uv((N, N))
 ROD = np.ones((1, N, N))
 ROD[0, _X ** 2 + _Y ** 2 <= 0.3 ** 2] = 6.25       # permittivity: 2.5**2
 
-CFG_2D = dict(backend=0, structure=ROD, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+CFG_2D = dict(backend='numpy', structure=ROD, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
               truncation_order=[3, 3], period=[1.0, 1.0], wavelength=1.1, thickness=[0.3])
 
 # A 1D grating: no interface along y, so every normal points along x. A *constant* normal
 # collapses the NVF projector onto Li's rules exactly (C_xx = I, C_xy = C_yy = 0).
-CFG_1D = dict(backend=0, structure=np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]]]), tetm='tm',
+CFG_1D = dict(backend='numpy', structure=np.array([[[9., 9., 1., 1., 9., 1., 1., 1.]]]), tetm='tm',
               period=[0.77], thickness=[0.2], theta=0.25, wavelength=0.777,
               top=1.0, bot=2.25, truncation_order=[10, 0])
 
@@ -67,8 +67,8 @@ def test_the_default_is_what_spelling_it_out_gives():
 
 # ------------------------------------------------------------------- validation
 
-@pytest.mark.parametrize('name,code', [('numpy', 0), ('jax', 1), ('torch', 2)])
-def test_the_removed_fourier_type_alias_is_not_silently_swallowed(name, code):
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_the_removed_fourier_type_alias_is_not_silently_swallowed(backend):
     """The removed single-knob spelling has to *fail*, not be ignored.
 
     A keyword the constructor quietly drops is the one failure mode worse than removing it:
@@ -77,10 +77,10 @@ def test_the_removed_fourier_type_alias_is_not_silently_swallowed(name, code):
     constructor signature out, so each has to refuse on its own -- a ``**kwargs`` added to any
     one of them would swallow it there and nowhere else.
     """
-    if name != 'numpy':
-        pytest.importorskip(name)
+    if backend != 'numpy':
+        pytest.importorskip(backend)
     with pytest.raises(TypeError, match='fourier_type'):
-        wavebit.rcwa(**dict(CFG_2D, backend=code), fourier_type=2)
+        wavebit.rcwa(**dict(CFG_2D, backend=backend), fourier_type=2)
 
 
 @pytest.mark.parametrize('keyword,bad', [('fourier_coefficients', 'discrete'),
@@ -151,7 +151,7 @@ def test_integrated_nvf_agrees_with_sampled_nvf_on_the_same_structure():
 def test_integrated_nvf_runs_on_every_backend(name):
     """The core builders are backend-agnostic; the new pairing must not be an exception."""
     pytest.importorskip(name)
-    backend = 1 if name == 'jax' else 2
+    backend = name
     strategy = dict(fourier_coefficients='integrated', factorization='nvf')
 
     ref = _totals(CFG_2D, **strategy)

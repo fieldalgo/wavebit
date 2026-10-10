@@ -55,7 +55,7 @@ Disjoint circles and ellipses also support circular projection, as described bel
 
 ```python
 solver = wavebit.rcwa(
-    backend=1, period=(700., 700.), wavelength=900., thickness=(300.,),
+    backend='jax', period=(700., 700.), wavelength=900., thickness=(300.,),
     truncation_order=(3, 3), shape_nvf_grid_size=128,
     factorization='nvf', nvf_projector='circular',
     structure=[dict(background=1., shapes=[
@@ -165,7 +165,7 @@ over earlier shapes. Shape modeling still defaults to NVF; selecting Li is expli
 
 ```python
 solver = wavebit.rcwa(
-    backend=1, period=(700., 700.), wavelength=900., thickness=(300.,),
+    backend='jax', period=(700., 700.), wavelength=900., thickness=(300.,),
     truncation_order=(3, 3), factorization='li',
     structure=[dict(background=1., shapes=[
         dict(type='rectangle', cx=-150., lx=300., ly=300., material=4.),
@@ -373,7 +373,7 @@ structure = [dict(background=1.0, shapes=[
                       angle=np.deg2rad(25), material=1.0),
                  dict(type='ellipse', cx=0.3, cy=0.4, lx=0.3, ly=0.2,
                       angle=0.6, material=9.0)])]
-solver = wavebit.rcwa(backend=0, structure=structure, truncation_order=dict(x=11, y=11), ...)  # shape_nvf_grid_size=256 (default)
+solver = wavebit.rcwa(backend='numpy', structure=structure, truncation_order=dict(x=11, y=11), ...)  # shape_nvf_grid_size=256 (default)
 res = solver.solve()
 ```
 

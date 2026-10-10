@@ -43,10 +43,10 @@ from wavebit._core.conventions import boundary_kz, mode_q
 
 
 def _backend_namespace(backend):
-    """The array namespace a given ``backend`` code solves in."""
-    if backend == 0:
+    """The array namespace a given ``backend`` solves in."""
+    if backend == 'numpy':
         return array_namespace(np.asarray(0j))
-    if backend == 1:
+    if backend == 'jax':
         jnp = pytest.importorskip('jax.numpy')
         return array_namespace(jnp.asarray(np.asarray(0j)))
     torch = pytest.importorskip('torch')
@@ -127,7 +127,7 @@ def _amp(n_top, n_bot, n_layer, d, theta, tetm):
     # The cases are written in refractive index because ``theta_cut`` is derived from the
     # half-space *permittivities* below and would read circularly if both were the same
     # spelling. The conversion happens here, where the public API takes over.
-    solver = wavebit.rcwa(backend=0, tetm=tetm, top=eps_from_index(n_top),
+    solver = wavebit.rcwa(backend='numpy', tetm=tetm, top=eps_from_index(n_top),
                             bot=eps_from_index(n_bot), theta=theta + _FORMAL,
                             truncation_order=0, wavelength=WL, period=[WL * 2],
                             structure=eps_from_index(np.array([[[n_layer, n_layer]]])),
@@ -252,7 +252,7 @@ def _grating_r0(theta):
     """Air over glass with a binary 9/1 grating, eleven orders: the zeroth reflection amplitude."""
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = wavebit.rcwa(backend=0, tetm='te', top=1.0, bot=2.25, theta=theta, truncation_order=5,
+        res = wavebit.rcwa(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=theta, truncation_order=5,
                            wavelength=0.9, period=[0.7], structure=np.array([[[9.0, 1.0]]]),
                            thickness=[0.15], fourier_coefficients='integrated').solve()
     amp = np.asarray(res.incident.r_s).ravel()
@@ -291,7 +291,7 @@ def test_a_gain_substrate_reflects_as_switching_its_gain_on_says(theta_deg, gain
     def solved(eps_bot):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            res = wavebit.rcwa(backend=0, tetm='te', top=2.25, bot=eps_bot, theta=theta,
+            res = wavebit.rcwa(backend='numpy', tetm='te', top=2.25, bot=eps_bot, theta=theta,
                                truncation_order=0, wavelength=WL, period=[WL * 2],
                                structure=np.full((1, 1, 2), 2.25), thickness=[100.0]).solve()
         return float(np.sum(res.R))
@@ -327,7 +327,7 @@ def _grating(tetm, thickness, **kw):
     # the medium below each layer, so its labels are not free: they take the half-space's root
     # (`etm_mode_q`), pinned in `tests/test_etm_layer_labels.py`.
     cell = eps_from_index(np.array([[[1.0] * 8 + [3.4] * 8]]))
-    return dict(backend=0, tetm=tetm, truncation_order=6, wavelength=WL, period=[300.0], structure=cell,
+    return dict(backend='numpy', tetm=tetm, truncation_order=6, wavelength=WL, period=[300.0], structure=cell,
                 thickness=[thickness], layer_algorithm='SMM', **kw)
 
 
@@ -449,7 +449,7 @@ def test_the_two_selectors_disagree_at_complex_k_par_by_design():
 # These pin the exactness rather than the fix, so they fail if any complex root on this path is
 # spelled `** 0.5` again.
 
-BACKENDS = [(0, 'numpy'), (1, 'jax'), (2, 'torch')]
+BACKENDS = ['numpy', 'jax', 'torch']
 
 # A grating whose orders straddle the vacuum light line, so one solve carries both kinds and the
 # propagating ones witness that the solve is not simply empty.
@@ -461,22 +461,22 @@ CUT_OFF_SCENE = dict(wavelength=500., period=[900.], truncation_order=[5, 0],
 CUT_OFF_U = np.array([np.sin(0.3) + m * 500. / 900. for m in range(-5, 6)])
 
 
-@pytest.mark.parametrize('backend,name', BACKENDS, ids=[n for _, n in BACKENDS])
-def test_evanescent_kz_has_no_real_part_at_all(backend, name):
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_evanescent_kz_has_no_real_part_at_all(backend):
     """``Re(kz)`` of a cut-off order is bitwise 0, not merely small."""
     xp = _backend_namespace(backend)
     # k_par**2 of 1.44, 4.0, 9.0 -- all past the light line of a vacuum superstrate.
     kz = np.asarray(boundary_kz(xp, xp.asarray(np.asarray(1.0 + 0j)),
                                 xp.asarray(np.array([1.44, 4.0, 9.0], dtype=complex))))
     real = [float(v) for v in np.real(kz)]
-    assert real == [0.0, 0.0, 0.0], f'{name}: Re(kz) leaked {real}'
+    assert real == [0.0, 0.0, 0.0], f'{backend}: Re(kz) leaked {real}'
     # and the decaying root is still the one taken, so this is not a sign flip in disguise
-    assert all(float(v) > 0 for v in np.imag(kz)), f'{name}: took the growing root'
+    assert all(float(v) > 0 for v in np.imag(kz)), f'{backend}: took the growing root'
 
 
-@pytest.mark.parametrize('backend,name', BACKENDS, ids=[n for _, n in BACKENDS])
+@pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('tetm', ['te', 'tm'], ids=['te', 'tm'])
-def test_cut_off_orders_report_exactly_zero_efficiency(backend, tetm, name):
+def test_cut_off_orders_report_exactly_zero_efficiency(backend, tetm):
     """A grating's cut-off orders carry real amplitude and exactly zero efficiency.
 
     The amplitude half is the point: the zero has to come from the ``Re(kz)`` factor, not from
@@ -489,5 +489,5 @@ def test_cut_off_orders_report_exactly_zero_efficiency(backend, tetm, name):
     assert cut.any() and (~cut).any(), 'scene must carry both kinds of order'
 
     leaked = R[cut][np.nonzero(R[cut])]
-    assert leaked.size == 0, f'{name}/{tetm}: cut-off orders reported {leaked}'
-    assert R[~cut].sum() > 0.0, f'{name}/{tetm}: no propagating order carried anything'
+    assert leaked.size == 0, f'{backend}/{tetm}: cut-off orders reported {leaked}'
+    assert R[~cut].sum() > 0.0, f'{backend}/{tetm}: no propagating order carried anything'

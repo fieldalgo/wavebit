@@ -25,7 +25,7 @@ import wavebit
 WL, PERIOD, THICK = 600.0, 2000.0, [130.0, 220.0]
 #: `lambda/period = 0.3`, so orders -3..+3 are all inside the light line at this angle --
 #: which is what makes a three-beam excitation legal here at all (see the refusal below).
-COMMON = dict(backend=0, truncation_order=(6, 0), period=(PERIOD, PERIOD), wavelength=WL,
+COMMON = dict(backend='numpy', truncation_order=(6, 0), period=(PERIOD, PERIOD), wavelength=WL,
               theta=0.25, thickness=THICK, top=1.0, bot=2.25, answers='amplitude')
 BEAMS = {-1: 0.4 + 0.2j, 0: 1.0, 1: 0.6 - 0.8j}
 #: Deliberately *not* symmetric about the specular order, so the widened window's centre is
@@ -139,7 +139,7 @@ def test_tetm_weights_mean_what_the_coupled_weights_mean(tetm, algo, side):
         assert np.abs(x - y).max() < 1e-12, f'incoming at {face}'
     if side == 'top':
         coherent = wavebit.rcwa(
-            backend=0, truncation_order=COMMON['truncation_order'], period=COMMON['period'],
+            backend='numpy', truncation_order=COMMON['truncation_order'], period=COMMON['period'],
             wavelength=WL, thickness=THICK, top=1.0, bot=2.25, structure=_structure(),
             excitation={'top': wavebit.OrderExcitation(
                 theta=0.25, phi=0.0, polarization=(1, 0) if tetm == 'te' else (0, 1),
@@ -299,7 +299,7 @@ def test_an_incident_amplitude_carries_a_gradient():
     jnp = jax.numpy
 
     def reflectance(scale):
-        solver = wavebit.rcwa(**dict(COMMON, backend=1, phi=None, tetm='te',
+        solver = wavebit.rcwa(**dict(COMMON, backend='jax', phi=None, tetm='te',
                                      excitation={0: 1.0, 1: scale * (0.6 - 0.8j)}))
         solver.structure = jnp.asarray(_structure())
         return jnp.sum(solver.solve().incident.R)
@@ -318,7 +318,7 @@ def test_a_superposition_survives_a_jit_boundary():
     jnp = jax.numpy
 
     def reflectance(a1):
-        solver = wavebit.rcwa(**dict(COMMON, backend=1, phi=None, tetm='te',
+        solver = wavebit.rcwa(**dict(COMMON, backend='jax', phi=None, tetm='te',
                                      excitation={0: 1.0, 1: a1}))
         solver.structure = jnp.asarray(_structure())
         return jnp.sum(solver.solve().incident.R)
@@ -347,7 +347,7 @@ def test_a_superposition_survives_the_solver_itself_crossing_the_boundary():
     jax = pytest.importorskip('jax')
     jnp = jax.numpy
 
-    solver, eager = _solve(BEAMS, backend=1, phi=None, tetm='te')
+    solver, eager = _solve(BEAMS, backend='jax', phi=None, tetm='te')
 
     @jax.jit
     def reflectance(s):                                # `s` is flattened on the way in
@@ -357,7 +357,7 @@ def test_a_superposition_survives_the_solver_itself_crossing_the_boundary():
 
     # And the same scene with the excitation dropped must NOT agree -- otherwise the assertion
     # above is satisfied by a solver that ignored the superposition on both sides.
-    plain, _ = _solve(None, backend=1, phi=None, tetm='te')
+    plain, _ = _solve(None, backend='jax', phi=None, tetm='te')
     assert float(reflectance(plain)) != pytest.approx(float(jnp.sum(eager.incident.R)), rel=1e-6), (
         'the lit and unlit scenes answer the same number, so this test cannot see the drop')
 
@@ -371,7 +371,7 @@ def test_the_jitted_field_path_keeps_the_superposition():
     """
     jax = pytest.importorskip('jax')
 
-    kw = dict(COMMON, backend=1, phi=None, tetm='te', answers='field', excitation=BEAMS)
+    kw = dict(COMMON, backend='jax', phi=None, tetm='te', answers='field', excitation=BEAMS)
     solver = wavebit.rcwa(**kw)
     solver.structure = _structure()
 

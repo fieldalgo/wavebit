@@ -23,7 +23,7 @@ def test_traced_source_keywords_restore_before_an_eager_reuse(container, fails):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    s = wavebit.rcwa(backend=1, **CFG, excitation=wavebit.PlaneWave(amplitude=.8j))
+    s = wavebit.rcwa(backend='jax', **CFG, excitation=wavebit.PlaneWave(amplitude=.8j))
     original = s.excitation
     saved = s.solve()
     saved_field = np.asarray(saved.reconstruct_field([23.], [-19.], [83.]))
@@ -38,7 +38,7 @@ def test_traced_source_keywords_restore_before_an_eager_reuse(container, fails):
                 jax.grad(loss)(jnp.asarray(1.2))
         else:
             got = float(jax.grad(loss)(jnp.asarray(1.2)))
-            reference = wavebit.rcwa(backend=0, **CFG, excitation=wrap(1.2, container))
+            reference = wavebit.rcwa(backend='numpy', **CFG, excitation=wrap(1.2, container))
             expected = 2*float(intensity(reference, np, wrap(1.2, container)))/1.2
             assert got == pytest.approx(expected, rel=2e-10, abs=2e-10)
     assert s.excitation is original
@@ -51,11 +51,11 @@ def test_a_trace_local_source_solver_keeps_legacy_field_access():
     import jax.numpy as jnp
     wavebit.enable_x64()
     def loss(a):
-        s = wavebit.rcwa(backend=1, **CFG, excitation=wavebit.PlaneWave(amplitude=a))
+        s = wavebit.rcwa(backend='jax', **CFG, excitation=wavebit.PlaneWave(amplitude=a))
         s.solve()
         return jnp.sum(jnp.abs(s.reconstruct_field([23.], [-19.], [83.]))**2)
     with jax.checking_leaks():
         got = float(jax.grad(loss)(jnp.asarray(1.2)))
-    s = wavebit.rcwa(backend=0, **CFG, excitation=wavebit.PlaneWave(amplitude=1.2))
+    s = wavebit.rcwa(backend='numpy', **CFG, excitation=wavebit.PlaneWave(amplitude=1.2))
     expected = 2*float(intensity(s, np, wavebit.PlaneWave(amplitude=1.2)))/1.2
     assert got == pytest.approx(expected, rel=2e-10, abs=2e-10)

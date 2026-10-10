@@ -889,7 +889,7 @@ def _solve_glass_onto(eps, thetas):
     for theta in thetas:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            result = wavebit.rcwa(backend=0, top=N_INC**2, bot=eps, wavelength=900.0,
+            result = wavebit.rcwa(backend='numpy', top=N_INC**2, bot=eps, wavelength=900.0,
                                   thickness=[100.0], period=[500.0],
                                   structure=np.full((1, 1, 4), N_INC**2 + 0j),
                                   theta=np.radians(theta), phi=0.0, truncation_order=(0, 0),

@@ -30,7 +30,7 @@ def scene(p=PARAMETERS, xp=np):
     return [dict(background=background, shapes=shapes[::-1])], period*rotation
 
 
-def solve(conv, lattice, order, *, scale=1., angle=.31, backend=0, kernel_frame=False):
+def solve(conv, lattice, order, *, scale=1., angle=.31, backend='numpy', kernel_frame=False):
     solver = wavebit.rcwa(backend=backend, lattice=lattice, wavelength=900.*scale,
                           theta=.23, phi=.47+angle, thickness=[173.*scale]*len(conv.epx),
                           truncation_order=order, top=1., bot=2.25)
@@ -111,9 +111,9 @@ def test_uniform_physical_scaling_and_uniform_layers_reach_the_engine():
         np.testing.assert_allclose(got[0], expected*np.eye(count), atol=1e-15, rtol=0)
 
 
-@pytest.mark.parametrize('backend', [1, 2])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_public_export_runs_in_jax_and_torch_engines(backend):
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
         wavebit.enable_x64()
     else:

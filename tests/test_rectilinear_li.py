@@ -10,7 +10,7 @@ def box(lx=350., ly=300., cx=0., cy=0., material=4.):
     return dict(type='rectangle', lx=lx, ly=ly, cx=cx, cy=cy, material=material)
 
 
-def solver(shapes, backend=0, background=1., **kwargs):
+def solver(shapes, backend='numpy', background=1., **kwargs):
     options = dict(backend=backend, period=(700.,700.), wavelength=900., top=1., bot=2.25,
                    theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(2,2),
                    factorization='li', structure=[dict(background=background, shapes=shapes)])
@@ -97,26 +97,26 @@ def test_jitted_gap_and_material_derivatives_match_two_finite_differences():
     jax.config.update('jax_enable_x64',True)
     def scene(gap,eps,backend):
         return solver([box(300,300,-150-gap/2),box(300,300,150+gap/2,material=eps)],backend)
-    geometry=scene(0.,4.,0).freeze_geometry()
+    geometry=scene(0.,4.,'numpy').freeze_geometry()
     def loss(v):
-        return jnp.sum(scene(v[0],v[1],1).solve(geometry=geometry).T).real
+        return jnp.sum(scene(v[0],v[1],'jax').solve(geometry=geometry).T).real
     center=np.array([1e-4,4.])
     value,grad=jax.jit(jax.value_and_grad(loss))(jnp.asarray(center))
     assert np.isfinite(grad).all() and np.all(abs(grad)>1e-7)
     for i in (0,1):
         for h in (1e-5,1e-6):
             a=center.copy();b=center.copy();a[i]+=h;b[i]-=h
-            fd=(scene(*a,0).solve().T.sum()-scene(*b,0).solve().T.sum())/(2*h)
+            fd=(scene(*a,'numpy').solve().T.sum()-scene(*b,'numpy').solve().T.sum())/(2*h)
             assert float(grad[i]) == pytest.approx(fd,rel=3e-4,abs=2e-8)
-    baseline=scene(0.,4.,0).solve().T.sum()
-    assert abs(scene(1e-8,4.,0).solve().T.sum()-baseline)<1e-9
-    assert abs(scene(0.,4.+1e-8,0).solve().T.sum()-baseline)<1e-9
+    baseline=scene(0.,4.,'numpy').solve().T.sum()
+    assert abs(scene(1e-8,4.,'numpy').solve().T.sum()-baseline)<1e-9
+    assert abs(scene(0.,4.+1e-8,'numpy').solve().T.sum()-baseline)<1e-9
 
 
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_magnetic_solve_matches_numpy(backend):
-    pytest.importorskip('jax' if backend==1 else 'torch')
-    if backend==1:
+    pytest.importorskip(backend)
+    if backend=='jax':
         import jax;jax.config.update('jax_enable_x64',True)
     shapes=[box(material=wavebit.Material(4.,mu=1.3))]
     bg=wavebit.Material(1.,mu=1.1)
@@ -128,7 +128,7 @@ def test_magnetic_solve_matches_numpy(backend):
 
 def test_jitted_field_replays_cartesian_plan():
     jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
-    s=solver([box()],1,answers='field',truncation_order=(1,1))
+    s=solver([box()],'jax',answers='field',truncation_order=(1,1))
     geometry=s.freeze_geometry()
     want,wf=s.solve_field_eager(3,3,2,geometry=geometry)
     got,gf=s.solve_field(3,3,2,geometry=geometry)
@@ -165,14 +165,14 @@ def test_torch_retains_geometry_and_material_gradients():
     mu=torch.tensor(1.3,dtype=torch.float64,requires_grad=True)
     def scene(w,m,backend):
         return solver([box(lx=w,material=wavebit.Material(4.,mu=m))],backend)
-    s=scene(width,mu,2);g=s.freeze_geometry()
+    s=scene(width,mu,'torch');g=s.freeze_geometry()
     loss=s.solve(geometry=g).T.sum().real
     derivatives=torch.autograd.grad(loss,(width,mu))
     for i,derivative in enumerate(derivatives):
         assert np.isfinite(derivative.item()) and abs(derivative.item())>1e-7
         for h in (1e-4,1e-5):
             a=[350.,1.3];b=a.copy();a[i]+=h;b[i]-=h
-            fd=(scene(*a,0).solve().T.sum()-scene(*b,0).solve().T.sum())/(2*h)
+            fd=(scene(*a,'numpy').solve().T.sum()-scene(*b,'numpy').solve().T.sum())/(2*h)
             assert derivative.item()==pytest.approx(fd,rel=2e-4,abs=2e-8)
 
 
@@ -192,10 +192,9 @@ def test_geometry_hash_distinguishes_cartesian_edge_order():
     assert a != b and a == c and hash(a) == hash(c)
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 def test_single_precision_is_preserved(backend):
-    if backend:
-        pytest.importorskip('jax' if backend==1 else 'torch')
+    pytest.importorskip(backend)
     s=solver([box()],backend,complex_dtype=1)
     matrices=s._eps_conv_matrices(s.freeze_geometry())
     assert all(m.dtype==s.xp.complex64 for m in matrices[:3])
@@ -207,22 +206,22 @@ def test_period_spanning_gap_derivative_matches_independent_reference():
     jax.config.update('jax_enable_x64',True)
     def scene(gap,backend):
         return solver([box(350,700-gap,material=12.25)],backend,truncation_order=(3,3))
-    geometry=scene(0.,0).freeze_geometry()
+    geometry=scene(0.,'numpy').freeze_geometry()
     def loss(gap):
-        return jnp.sum(scene(gap,1).solve(geometry=geometry).T).real
+        return jnp.sum(scene(gap,'jax').solve(geometry=geometry).T).real
     derivative=float(jax.jit(jax.grad(loss))(jnp.asarray(1e-4)))
     assert derivative==pytest.approx(.00147644,rel=1e-4)
     for h in (1e-5,1e-6):
-        fd=(scene(1e-4+h,0).solve().T.sum()-scene(1e-4-h,0).solve().T.sum())/(2*h)
+        fd=(scene(1e-4+h,'numpy').solve().T.sum()-scene(1e-4-h,'numpy').solve().T.sum())/(2*h)
         assert derivative==pytest.approx(fd,rel=2e-4,abs=1e-7)
 
 
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_live_cell_period_derivative(backend):
     def scene(period):
         return solver([box()],backend,period=(period,700.))
     geometry=scene(700.).freeze_geometry()
-    if backend==1:
+    if backend=='jax':
         jax=pytest.importorskip('jax');import jax.numpy as jnp
         jax.config.update('jax_enable_x64',True)
         def loss(period):

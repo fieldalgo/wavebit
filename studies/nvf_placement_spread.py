@@ -211,7 +211,7 @@ COEFF_ROWS = [
     ('polygon_planned', 'ONE_PAINTED', 'xy16'), ('polygon_production', 'ONE_PAINTED', 'xy16'),
 ]
 
-CFG = dict(backend=0, period=[PER, PER], thickness=(300.0,), truncation_order=dict(u=8, v=8),
+CFG = dict(backend='numpy', period=[PER, PER], thickness=(300.0,), truncation_order=dict(u=8, v=8),
            top=1.0, bot=1.0, wavelength=900.0, theta=0.2, phi=0.3, psi=0.4)
 
 

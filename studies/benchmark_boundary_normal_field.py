@@ -124,11 +124,11 @@ def geometries(structure):
     return sampled, swapped
 
 
-def total_reflectance(build, geometry, cx, truncation_order, backend=0):
+def total_reflectance(build, geometry, cx, truncation_order, backend='numpy'):
     solver = wavebit.rcwa(backend=backend, structure=build(cx), truncation_order=[truncation_order, truncation_order],
                           shape_nvf_grid_size=NORMAL_GRID, **CFG)
     result = solver.solve(geometry=geometry)
-    if backend == 1:
+    if backend == 'jax':
         import jax.numpy as jnp
         return jnp.real(jnp.sum(result.R))
     return float(np.real(np.sum(np.asarray(result.R))))
@@ -142,7 +142,7 @@ def integral_test(build, cx0, truncation_order, use_boundary):
     geometry = geometries(build(cx0))[1 if use_boundary else 0]
     xs = cx0 + np.linspace(-HALF_PIXELS * PIX, HALF_PIXELS * PIX, N_POINTS)
     grads = np.array([float(jax.grad(
-        lambda c: total_reflectance(build, geometry, c, truncation_order, backend=1))(
+        lambda c: total_reflectance(build, geometry, c, truncation_order, backend='jax'))(
             jnp.asarray(x))) for x in xs])
     loss = np.array([total_reflectance(build, geometry, x, truncation_order) for x in xs])
     return dict(integral=float(np.trapezoid(grads, xs)),

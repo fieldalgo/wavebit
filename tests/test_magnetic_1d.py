@@ -57,7 +57,7 @@ def _grating(rows, theta=THETA, **kw):
     time. The raster front door is the one that reaches these paths at all: a shape structure
     sets ``modeling_path='parametric'``, which routes to the 2D solve whatever its geometry.
     """
-    return wavebit.rcwa(backend=0, top=1.0, bot=Material(2.25, mu=1.3), theta=theta,
+    return wavebit.rcwa(backend='numpy', top=1.0, bot=Material(2.25, mu=1.3), theta=theta,
                         truncation_order=(TO, 0), period=(PERIOD, PERIOD), wavelength=WL,
                         thickness=[THICK], answers='field',
                         structure=_raster(rows, 1.0, 6.25),
@@ -117,7 +117,7 @@ def test_te_with_a_permeability_is_tm_with_the_two_tensors_traded():
     n_top, n_bot = np.sqrt(eps_top * mu_top), np.sqrt(eps_bot * mu_bot)
 
     def run(tetm, e, m, m_top, m_bot):
-        solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=0.21,
+        solver = wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=0.21,
                               tetm=tetm, truncation_order=(TO, 0), period=(PERIOD, PERIOD),
                               wavelength=WL, thickness=[130.0, 220.0],
                               structure=np.ones((2, 1, 32)) * 2.25)
@@ -168,7 +168,7 @@ def test_the_duality_carries_the_field_with_the_traded_admittance(side, theta):
     n_top, n_bot = np.sqrt(eps_top * mu_top), np.sqrt(eps_bot * mu_bot)
 
     def cell(tetm, e, m, m_top, m_bot):
-        solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta,
+        solver = wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta,
                               tetm=tetm, truncation_order=(TO, 0), period=(PERIOD, PERIOD),
                               wavelength=WL, thickness=[130.0, 220.0], answers='field',
                               incidence_side=side, structure=np.ones((2, 1, 32)) * 2.25)
@@ -255,7 +255,7 @@ def test_uniform_magnetic_slab_matches_its_closed_form(eps, mu, theta, tetm):
     Absolute, not relative to a fitted scale: the incident amplitude is unit and the
     reflectance is compared as a number. Measured worst case over the twenty rows, 3.3e-16.
     """
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=theta, phi=0.0, tetm=tetm,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, phi=0.0, tetm=tetm,
                           truncation_order=(2, 0), period=(PERIOD, PERIOD), wavelength=WL,
                           thickness=[THICK], structure=np.ones((1, 1, 16)) * eps,
                           mu=np.ones((1, 1, 16)) * mu)
@@ -274,7 +274,7 @@ def test_the_two_cases_an_index_only_solver_cannot_express():
     the parametrized test above so that the claim is stated rather than merely covered.
     """
     def reflectance(eps, mu):
-        solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, tetm='te',
+        solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, tetm='te',
                               truncation_order=(2, 0), period=(PERIOD, PERIOD),
                               wavelength=WL, thickness=[THICK],
                               structure=np.ones((1, 1, 16)) * eps,
@@ -389,7 +389,7 @@ def test_an_off_diagonal_permeability_is_refused_on_the_1d_paths():
     named?"), never a value comparison, because under ``jax.jit`` a named ``mu`` is a tracer
     and ``!= 0`` on one is a traced boolean no ``if`` can take.
     """
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                           truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL,
                           thickness=[THICK], structure=np.ones((1, 1, 8)) * 2.25)
     eps = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]

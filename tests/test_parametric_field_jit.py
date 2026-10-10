@@ -9,7 +9,7 @@ jax = pytest.importorskip('jax')
 import jax.numpy as jnp
 
 
-def solver(width=230., kind='rectangle', painted=False, skew=False, backend=1, epsilon=4.):
+def solver(width=230., kind='rectangle', painted=False, skew=False, backend='jax', epsilon=4.):
     shape = dict(type=kind, cx=-31., cy=17., lx=width, ly=190., angle=.13,
                  material=wavebit.Material(epsilon, mu=1.1))
     shapes = [shape]
@@ -45,7 +45,7 @@ def test_jitted_shape_field_matches_eager_without_leaving_tracers(painted, skew)
     got, gf = s.solve_field(3, 3, 2, geometry=geometry)
     np.testing.assert_allclose(got.T, eager.T, rtol=2e-10, atol=2e-11)
     np.testing.assert_allclose(gf, ef, rtol=2e-9, atol=2e-10)
-    nr, nf = solver(painted=painted, skew=skew, backend=0).solve_field(3, 3, 2)
+    nr, nf = solver(painted=painted, skew=skew, backend='numpy').solve_field(3, 3, 2)
     np.testing.assert_allclose(got.T, nr.T, rtol=2e-10, atol=2e-11)
     np.testing.assert_allclose(gf, nf, rtol=2e-9, atol=2e-10)
     assert not any(isinstance(v, jax.core.Tracer) for v in jax.tree_util.tree_leaves(s))

@@ -297,15 +297,15 @@ def test_a_signed_zero_names_the_same_root_on_every_backend(backend):
               complex(-3, 1e-300), complex(2.25, 0.1)]
     want = np.asarray([cmath.sqrt(v) for v in values])
     if backend == 'numpy':
-        convert, back, solver_backend = np.asarray, np.asarray, 0
+        convert, back, solver_backend = np.asarray, np.asarray, 'numpy'
     elif backend == 'jax':
         jax = pytest.importorskip('jax')
         wavebit.enable_x64()
-        convert, back, solver_backend = jax.numpy.asarray, np.asarray, 1
+        convert, back, solver_backend = jax.numpy.asarray, np.asarray, 'jax'
     else:
         torch = pytest.importorskip('torch')
         convert = lambda v: torch.tensor(v, dtype=torch.complex128)   # noqa: E731
-        back, solver_backend = (lambda t: t.numpy()), 2
+        back, solver_backend = (lambda t: t.numpy()), 'torch'
     for dtype in (np.complex128, np.complex64):
         got = back(index_from_eps(convert(np.asarray(values, dtype=dtype))))
         assert np.all(np.sign(got.imag) == np.sign(want.imag)), dtype
@@ -553,7 +553,7 @@ def test_material_is_exported_from_the_package_root():
 
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('where', ['top', 'bot'])
 def test_a_refused_half_space_leaves_neither_the_material_nor_the_index(backend, where):
     """The Material and the index it yields are one write, and they used to be two.
@@ -569,9 +569,9 @@ def test_a_refused_half_space_leaves_neither_the_material_nor_the_index(backend,
     `is_magnetic` flipped with it, and that selects a different arithmetic path rather than a
     different number.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     solver = wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)) * 2.0,
                           period=[400.0, 500.0], truncation_order=(2, 2), wavelength=620.,

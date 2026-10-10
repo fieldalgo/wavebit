@@ -264,7 +264,7 @@ def _frame_cell(path, sample_z, formulation=None):
     two = np.array([[[1.0, 1.0], [1.0, 1.0]],
                     [[FRAME_EPS, FRAME_EPS], [FRAME_EPS, FRAME_EPS]],
                     [[1.0, 1.0], [1.0, 1.0]]])
-    kw = dict(backend=0, top=1.0, bot=1.0, wavelength=FRAME_WL, thickness=FRAME_D,
+    kw = dict(backend='numpy', top=1.0, bot=1.0, wavelength=FRAME_WL, thickness=FRAME_D,
               theta=np.deg2rad(33.0), structure=two if path == '2d' else one,
               answers='field', **FRAME_PATHS[path])
     solver = wavebit.rcwa(**kw)
@@ -343,7 +343,7 @@ def test_the_declared_frame_is_the_one_that_converges(path, formulation):
     assert np.max(r) > 0.5, np.max(r)
 
 
-@pytest.mark.parametrize('backend', [1, 2], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('name', ['te_1d', 'conical', '2d', '2d_first_order'])
 def test_field_cross_backend(name, backend):
     """One implementation, so jax and torch reconstruct the same field as numpy.
@@ -352,7 +352,7 @@ def test_field_cross_backend(name, backend):
     agree by construction, so a convention error is invisible here — it was, for as long as
     the old golden existed. This is a port check.
     """
-    pytest.importorskip('jax' if backend == 1 else 'torch')
+    pytest.importorskip(backend)
     solver = solved(name, backend=backend)
     got = np.asarray(solver.reconstruct_field(**RES))
     want = (upward_reference(name, GOLDEN[f'{name}__default']) * pure_1d_input(name, solver)

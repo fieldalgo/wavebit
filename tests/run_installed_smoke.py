@@ -36,7 +36,7 @@ def main():
         assert np.isfinite(material.at(900.).epsilon), name
 
     result = wavebit.rcwa(
-        backend=0, tetm='tm', top=1.0, bot=2.25, theta=0.0, phi=0.0,
+        backend='numpy', tetm='tm', top=1.0, bot=2.25, theta=0.0, phi=0.0,
         truncation_order=2, wavelength=632.8, period=[1000],
         structure=np.array([[[14.44, 14.44]]]), thickness=[200],
     ).solve()

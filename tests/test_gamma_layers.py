@@ -45,7 +45,7 @@ SQUARE = np.array([[PERIOD, 0.0], [0.0, PERIOD]])
 GRID = (512, 512)
 
 #: The operating point of ``test_nvf_self_coincident_faces.py``.
-SOLVE_KW = dict(backend=0, wavelength=900.0, top=1.0, bot=2.25,
+SOLVE_KW = dict(backend='numpy', wavelength=900.0, top=1.0, bot=2.25,
                 theta=0.2, phi=0.0, psi=0.0, thickness=[300.0])
 
 
@@ -89,7 +89,7 @@ def _gamma(shapes, lattice=SQUARE, groups=None):
 def _grating_total(shapes, tox, toy, psi):
     """The 550 nm, eps 4 on 1 scene of ``test_y_orders_cannot_change_a_y_invariant_answer``."""
     P._PROJECTOR_CACHE.clear()
-    s = wavebit.rcwa(backend=0, thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+    s = wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                      truncation_order=dict(x=tox, y=toy), top=1, bot=1, wavelength=550.0,
                      psi=psi, shape_nvf_grid_size=256)
     s.structure = [dict(background=1.0, shapes=shapes)]

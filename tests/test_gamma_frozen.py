@@ -51,7 +51,7 @@ def _d_layer():
                                          _box(lx=350.0, ly=350.0, cy=175.0)])]
 
 
-def _total(structure, lattice, backend=0, geometry=None, solver=None):
+def _total(structure, lattice, backend='numpy', geometry=None, solver=None):
     P._PROJECTOR_CACHE.clear()
     if solver is None:
         solver = wavebit.rcwa(backend=backend, lattice=lattice, structure=structure, **KW)
@@ -62,7 +62,7 @@ def _total(structure, lattice, backend=0, geometry=None, solver=None):
 
 def test_the_freeze_records_a_gamma_plan_for_every_layer():
     """Beside the painting plan, for every layer, whether or not the closed form builds it."""
-    solver = wavebit.rcwa(backend=0, lattice=SHEAR, structure=_b_layer(500.0), **KW)
+    solver = wavebit.rcwa(backend='numpy', lattice=SHEAR, structure=_b_layer(500.0), **KW)
     frozen = solver.freeze_geometry()
     assert frozen.gamma_plans == [P.plan_gamma(_b_layer(500.0)[0]['shapes'],
                                                as_lattice(lattice=SHEAR))]
@@ -78,7 +78,7 @@ def test_the_record_hashes_by_content_with_its_gamma_plans():
     compilation cache until a pair appears or vanishes.
     """
     def freeze(structure, lattice=SHEAR):
-        return wavebit.rcwa(backend=0, lattice=lattice, structure=structure, **KW).freeze_geometry()
+        return wavebit.rcwa(backend='numpy', lattice=lattice, structure=structure, **KW).freeze_geometry()
 
     assert freeze(_b_layer(500.0)) == freeze(_b_layer(450.0))          # same pair, moved
     assert hash(freeze(_b_layer(500.0))) == hash(freeze(_b_layer(450.0)))
@@ -108,7 +108,7 @@ def test_a_jitted_solve_with_a_record_equals_the_eager_one(name, lattice, make, 
     wavebit.enable_x64()
 
     x = jnp.asarray(start)
-    solver = wavebit.rcwa(backend=1, lattice=lattice, structure=make(start), **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=lattice, structure=make(start), **KW)
     frozen = solver.freeze_geometry()
     assert frozen.gamma_plans[0].pairs, name
 
@@ -121,7 +121,7 @@ def test_a_jitted_solve_with_a_record_equals_the_eager_one(name, lattice, make, 
     assert np.isfinite(grad) and grad != 0.0, name
     assert float(jax.jit(jax.grad(total))(x)) == pytest.approx(grad, rel=1e-9), name
     P._PROJECTOR_CACHE.clear()
-    plain = float(np.sum(np.asarray(wavebit.rcwa(backend=0, lattice=lattice,
+    plain = float(np.sum(np.asarray(wavebit.rcwa(backend='numpy', lattice=lattice,
                                                  structure=make(start), **KW).solve().T)))
     assert eager == pytest.approx(plain, abs=1e-12), name
 
@@ -159,7 +159,7 @@ def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lat
     wavebit.enable_x64()
 
     structure = [dict(background=1.0, shapes=[_box(lx=500.0, ly=PERIOD, material=12.25)])]
-    solver = wavebit.rcwa(backend=1, lattice=lattice, structure=structure, **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=lattice, structure=structure, **KW)
     frozen = solver.freeze_geometry()
     assert frozen.gamma_plans[0].pairs, name
 
@@ -172,7 +172,7 @@ def test_a_traced_basis_with_no_record_is_refused_and_with_one_replays(name, lat
     replayed = float(jax.jit(lambda L: total(L, frozen))(jnp.asarray(lattice)))
     assert replayed == pytest.approx(eager, abs=1e-12), name
     P._PROJECTOR_CACHE.clear()
-    plain = float(np.sum(np.asarray(wavebit.rcwa(backend=0, lattice=lattice, structure=structure,
+    plain = float(np.sum(np.asarray(wavebit.rcwa(backend='numpy', lattice=lattice, structure=structure,
                                                  **KW).solve().T)))
     assert eager == pytest.approx(plain, abs=1e-12), name
     assert np.isfinite(np.asarray(jax.grad(total)(jnp.asarray(lattice)))).all(), name
@@ -206,7 +206,7 @@ def test_the_refusal_recipe_works_in_the_order_it_is_read(name, lattice, structu
 
     if structure is None:
         structure = _l_ellipse_layer(720.0)
-    solver = wavebit.rcwa(backend=1, lattice=lattice, structure=structure, **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=lattice, structure=structure, **KW)
     before = np.asarray(solver.lattice)
     reference = float(jnp.sum(solver.solve().T).real)
 
@@ -257,7 +257,7 @@ def test_a_traced_scalar_condition_does_not_outlive_its_solve(name, value):
     wavebit.enable_x64()
 
     structure = [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0, material=12.25)])]
-    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=structure, **KW)
     reference = float(jnp.sum(solver.solve().T).real)
     frozen = solver.freeze_geometry()
 
@@ -299,11 +299,11 @@ def test_a_jitted_first_solve_leaves_no_tracer_in_the_projector_cache(name, valu
     wavebit.enable_x64()
 
     structure = [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0, material=12.25)])]
-    fresh = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    fresh = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=structure, **KW)
     reference = float(jnp.sum(fresh.solve().T).real)
 
     P._PROJECTOR_CACHE.clear()
-    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=structure, **KW)
     frozen = solver.freeze_geometry()                      # no eager solve: the key is cold
 
     def total(v):
@@ -327,7 +327,7 @@ SOLVE_STATE = frozenset({'_formulation_assigned', '_frozen_geometry', '_grating_
 
 
 def _companion_raster_solver(**over):
-    kw = dict(backend=1, structure=COMPANION_RASTER, lattice=SQUARE, truncation_order=[1, 1],
+    kw = dict(backend='jax', structure=COMPANION_RASTER, lattice=SQUARE, truncation_order=[1, 1],
               thickness=[300.0], wavelength=900.0, top=1.0, bot=1.0)
     kw.update(over)
     return wavebit.rcwa(**kw)
@@ -407,7 +407,7 @@ def test_a_traced_material_condition_does_not_outlive_its_solve(side, value):
     wavebit.enable_x64()
 
     structure = [dict(background=1.0, shapes=[_box(lx=350.0, ly=350.0, material=12.25)])]
-    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=structure, **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=structure, **KW)
     reference = float(jnp.sum(solver.solve().T).real)
     before = getattr(solver, side)
     frozen = solver.freeze_geometry()
@@ -437,7 +437,7 @@ def test_a_setter_that_raises_after_a_traced_assignment_still_puts_it_back():
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(500.0), **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SHEAR, structure=_b_layer(500.0), **KW)
     frozen = solver.freeze_geometry()
     before = np.asarray(solver.lattice)
     reference = float(jnp.sum(solver.solve().T).real)
@@ -472,7 +472,7 @@ def test_a_freeze_on_a_solver_holding_a_tracer_is_refused_by_name():
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(500.0), **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SHEAR, structure=_b_layer(500.0), **KW)
     seen = []
 
     def traced_cell(L):
@@ -522,7 +522,7 @@ def test_a_reconstruction_after_a_traced_solve_is_refused_rather_than_read_off_t
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(500.0), answers='field',
+    solver = wavebit.rcwa(backend='jax', lattice=SHEAR, structure=_b_layer(500.0), answers='field',
                           **KW)
     frozen = solver.freeze_geometry()
     jax.jit(lambda L: jnp.sum(solver.solve(lattice=L, geometry=frozen).T).real)(jnp.asarray(SHEAR))
@@ -551,7 +551,7 @@ def test_plan_gamma_runs_once_at_the_freeze_and_never_in_the_trace(monkeypatch):
         return real(shapes, lattice)
 
     monkeypatch.setattr(P, 'plan_gamma', counting)
-    solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(500.0), **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SHEAR, structure=_b_layer(500.0), **KW)
     frozen = solver.freeze_geometry()
     assert calls == [1]
 
@@ -601,7 +601,7 @@ def test_the_gradient_across_a_coverage_breakpoint_is_finite():
 
     def total(v):
         P._PROJECTOR_CACHE.clear()
-        solver = wavebit.rcwa(backend=1, lattice=SHEAR, structure=_b_layer(v), **KW)
+        solver = wavebit.rcwa(backend='jax', lattice=SHEAR, structure=_b_layer(v), **KW)
         return jnp.sum(solver.solve().T).real
 
     for lx in (199.9, 200.0, 200.1, 350.0):
@@ -625,7 +625,7 @@ def test_a_frozen_material_sweep_is_accepted_and_the_seam_contrast_follows():
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=_k_layer(4.0, 9.0), **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=_k_layer(4.0, 9.0), **KW)
     frozen = solver.freeze_geometry()
     same = _total(_k_layer(9.0, 9.0), SQUARE)                          # eager, planned afresh
     P._PROJECTOR_CACHE.clear()
@@ -650,7 +650,7 @@ def test_a_pair_that_appears_or_vanishes_is_refused_by_name():
     are not). The message names the pair. Under a trace nothing checks, as for every record.
     """
     def frozen_at(lx):
-        return wavebit.rcwa(backend=0, lattice=SHEAR, structure=_b_layer(lx), **KW).freeze_geometry()
+        return wavebit.rcwa(backend='numpy', lattice=SHEAR, structure=_b_layer(lx), **KW).freeze_geometry()
 
     with_run = frozen_at(500.0)
     assert _total(_b_layer(450.0), SHEAR, geometry=with_run) == pytest.approx(
@@ -673,12 +673,12 @@ def test_a_face_that_becomes_dead_or_a_list_that_grows_is_refused_too():
     live one unit short of the period and are refused with them.
     """
     grating = [dict(background=1.0, shapes=[_box(lx=350.0, ly=PERIOD)])]
-    frozen = wavebit.rcwa(backend=0, lattice=SQUARE, structure=grating, **KW).freeze_geometry()
+    frozen = wavebit.rcwa(backend='numpy', lattice=SQUARE, structure=grating, **KW).freeze_geometry()
     short = [dict(background=1.0, shapes=[_box(lx=350.0, ly=PERIOD - 1.0)])]
     with pytest.raises(StaleGeometryError, match='no longer fits'):
         _total(short, SQUARE, geometry=frozen)
     small = [dict(background=1.0, shapes=[_box(lx=100.0, ly=100.0)])]
-    frozen_small = wavebit.rcwa(backend=0, lattice=SQUARE, structure=small, **KW).freeze_geometry()
+    frozen_small = wavebit.rcwa(backend='numpy', lattice=SQUARE, structure=small, **KW).freeze_geometry()
     big = [dict(background=1.0, shapes=[_box(lx=600.0, ly=600.0)])]
     with pytest.raises(StaleGeometryError, match='image'):
         _total(big, SQUARE, geometry=frozen_small)
@@ -702,7 +702,7 @@ def test_a_layer_that_starts_or_stops_tiling_the_plane_is_refused_by_that_name()
     kw = dict(KW, wavelength=1.6)
     for held, replayed, says in ((span, bar, 'the layer tiles the plane now'),
                                  (bar, span, 'the layer no longer tiles the plane')):
-        solver = wavebit.rcwa(backend=0, lattice=CHECKER, structure=held, **kw)
+        solver = wavebit.rcwa(backend='numpy', lattice=CHECKER, structure=held, **kw)
         frozen = solver.freeze_geometry()
         assert frozen.gamma_plans[0].empty is (held is bar)
         with pytest.raises(StaleGeometryError, match=says):
@@ -724,9 +724,9 @@ def test_a_record_replayed_on_another_spelling_of_its_lattice_is_refused_by_the_
     far = np.array([[PERIOD, 1450.0], [0.0, PERIOD]])
     structure = _b_layer(500.0)
     for held, replayed in ((near, far), (far, near)):
-        frozen = wavebit.rcwa(backend=0, lattice=held, structure=structure,
+        frozen = wavebit.rcwa(backend='numpy', lattice=held, structure=structure,
                               **KW).freeze_geometry()
-        solver = wavebit.rcwa(backend=0, lattice=replayed, structure=structure, **KW)
+        solver = wavebit.rcwa(backend='numpy', lattice=replayed, structure=structure, **KW)
         fresh = solver.freeze_geometry()
         assert frozen.gamma_plans[0].reduction != fresh.gamma_plans[0].reduction
         assert (frozen.gamma_plans[0]._replace(reduction=None)
@@ -754,7 +754,7 @@ def _cache_sizes(make, values):
     P._PROJECTOR_CACHE.clear()
     sizes = []
     for v in values:
-        wavebit.rcwa(backend=0, lattice=SQUARE, structure=make(v), **KW).solve()
+        wavebit.rcwa(backend='numpy', lattice=SQUARE, structure=make(v), **KW).solve()
         sizes.append(len(P._PROJECTOR_CACHE))
     return sizes
 
@@ -803,11 +803,11 @@ def test_a_traced_material_on_a_seam_is_never_served_from_the_cache(monkeypatch)
     wavebit.enable_x64()
 
     P._PROJECTOR_CACHE.clear()
-    wavebit.rcwa(backend=1, lattice=SQUARE, structure=_k_layer(4.0, 9.0), **KW).solve()
+    wavebit.rcwa(backend='jax', lattice=SQUARE, structure=_k_layer(4.0, 9.0), **KW).solve()
     assert len(P._PROJECTOR_CACHE) == 1
 
     def total(right):
-        return jnp.sum(wavebit.rcwa(backend=1, lattice=SQUARE, structure=_k_layer(4.0, right),
+        return jnp.sum(wavebit.rcwa(backend='jax', lattice=SQUARE, structure=_k_layer(4.0, right),
                                     **KW).solve().T).real
 
     keys = _keys_asked_for(monkeypatch)
@@ -834,13 +834,13 @@ def test_a_traced_material_on_a_pair_free_layer_is_never_served_from_the_cache(m
     wavebit.enable_x64()
 
     def total(right):
-        return jnp.sum(wavebit.rcwa(backend=1, lattice=SQUARE, structure=_apart_layer(right),
+        return jnp.sum(wavebit.rcwa(backend='jax', lattice=SQUARE, structure=_apart_layer(right),
                                     **KW).solve().T).real
 
     h = 1e-4
     fd = (float(total(jnp.asarray(9.0 + h))) - float(total(jnp.asarray(9.0 - h)))) / (2 * h)
     P._PROJECTOR_CACHE.clear()
-    wavebit.rcwa(backend=1, lattice=SQUARE, structure=_apart_layer(9.0), **KW).solve()
+    wavebit.rcwa(backend='jax', lattice=SQUARE, structure=_apart_layer(9.0), **KW).solve()
     assert len(P._PROJECTOR_CACHE) == 1
 
     keys = _keys_asked_for(monkeypatch)
@@ -871,7 +871,7 @@ def test_an_ellipse_over_its_ring_replays_under_jit_and_is_refused_across_the_ed
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=_l_ellipse_layer(720.0), **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=_l_ellipse_layer(720.0), **KW)
     frozen = solver.freeze_geometry()
     assert len(frozen.gamma_plans[0].pieces[0].imgs) == 11
 
@@ -884,7 +884,7 @@ def test_an_ellipse_over_its_ring_replays_under_jit_and_is_refused_across_the_ed
     fd = (float(total(jnp.asarray(720.0 + h), None)) - float(total(jnp.asarray(720.0 - h), None))) / (2 * h)
     assert float(jax.grad(lambda v: total(v, None))(jnp.asarray(720.0))) == pytest.approx(fd, rel=1e-5)
 
-    inside = wavebit.rcwa(backend=0, lattice=SQUARE, structure=_l_ellipse_layer(690.0), **KW)
+    inside = wavebit.rcwa(backend='numpy', lattice=SQUARE, structure=_l_ellipse_layer(690.0), **KW)
     record = inside.freeze_geometry()
     assert record.gamma_plans[0].pieces[0].imgs == ((0, 0),)
     with pytest.raises(StaleGeometryError, match='Wigner-Seitz'):
@@ -916,7 +916,7 @@ def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
     import jax.numpy as jnp
     wavebit.enable_x64()
 
-    solver = wavebit.rcwa(backend=1, lattice=SQUARE, structure=_l_ellipse_layer(720.0), **KW)
+    solver = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=_l_ellipse_layer(720.0), **KW)
     frozen = solver.freeze_geometry()
     assert len(frozen.gamma_plans[0].pieces[0].imgs) == 11
 
@@ -929,7 +929,7 @@ def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
     replayed = float(jax.jit(lambda lx: total(lx, frozen))(jnp.asarray(720.0)))
     assert replayed == pytest.approx(eager, abs=1e-12)
     P._PROJECTOR_CACHE.clear()
-    plain = float(np.sum(np.asarray(wavebit.rcwa(backend=0, lattice=SQUARE,
+    plain = float(np.sum(np.asarray(wavebit.rcwa(backend='numpy', lattice=SQUARE,
                                                  structure=_l_ellipse_layer(720.0),
                                                  **KW).solve().T)))
     assert eager == pytest.approx(plain, abs=1e-12)
@@ -938,7 +938,7 @@ def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
         return [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=lx,
                                                  material=12.25)])]
 
-    disc = wavebit.rcwa(backend=1, lattice=SQUARE, structure=circle_layer(693.0), **KW)
+    disc = wavebit.rcwa(backend='jax', lattice=SQUARE, structure=circle_layer(693.0), **KW)
 
     def disc_total(lx):
         return jnp.sum(disc.solve(structure=circle_layer(lx)).T).real
@@ -956,10 +956,10 @@ def test_a_jitted_ellipse_with_no_record_is_refused_and_a_circle_builds():
 ])
 def test_every_backend_builds_the_same_field(name, lattice, structure):
     """NumPy, JAX and Torch through three namespaces, one plan, one answer to 1e-12."""
-    totals = [_total(structure, lattice, backend=0)]
-    for backend in (1, 2):
-        pytest.importorskip({1: 'jax', 2: 'torch'}[backend])
-        if backend == 1:
+    totals = [_total(structure, lattice, backend='numpy')]
+    for backend in ('jax', 'torch'):
+        pytest.importorskip(backend)
+        if backend == 'jax':
             wavebit.enable_x64()
         totals.append(_total(structure, lattice, backend=backend))
     assert max(abs(t - totals[0]) for t in totals) < 1e-12, (name, totals)

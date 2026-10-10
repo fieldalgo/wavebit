@@ -20,7 +20,7 @@ cost exponent is 2.86 -- so it cost **7.3x**. Pass the basis instead:
 import numpy as np, wavebit
 
 solver = wavebit.rcwa(
-    backend=0, structure=cell, truncation_order=dict(x=10, y=10), thickness=[300.0], wavelength=900.0,
+    backend='numpy', structure=cell, truncation_order=dict(x=10, y=10), thickness=[300.0], wavelength=900.0,
     factorization='nvf',                       # required — see "What is refused"
     lattice=wavebit.Lattice.hexagonal(400.0),          # or lattice=np.column_stack((a1, a2))
 )

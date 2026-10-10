@@ -45,7 +45,7 @@ def slots(t):
             np.stack([-t[0, 1] * I1]), np.stack([-t[1, 0] * I1])]
 
 
-def solve(eps, mu=None, theta=0.0, algo='ETM', backend=0, truncation_order=(0, 0), period=None):
+def solve(eps, mu=None, theta=0.0, algo='ETM', backend='numpy', truncation_order=(0, 0), period=None):
     mee = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(theta),
                        phi=0.0, psi=0.0, truncation_order=truncation_order, period=period or (PERIOD, PERIOD),
                        wavelength=WL, thickness=[THICK], layer_algorithm=algo)
@@ -122,12 +122,12 @@ def test_the_two_connecting_algorithms_agree_with_mu(name, eps, mu):
                   - solve(eps, mu, theta=39.0, algo='SMM')).max() < 1e-10
 
 
-@pytest.mark.parametrize('backend, name', [(1, 'jax'), (2, 'torch')])
-def test_the_other_backends_carry_mu_too(backend, name):
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_the_other_backends_carry_mu_too(backend):
     """Same answer under jax and torch as under numpy."""
-    pytest.importorskip(name)
-    lift = {1: lambda a: __import__('jax.numpy', fromlist=['x']).asarray(a),
-            2: lambda a: __import__('torch').as_tensor(a)}[backend]
+    pytest.importorskip(backend)
+    lift = {'jax': lambda a: __import__('jax.numpy', fromlist=['x']).asarray(a),
+            'torch': lambda a: __import__('torch').as_tensor(a)}[backend]
 
     eps, mu = CASES[3][1], CASES[3][2]                # the gyromagnetic one
     want = solve(eps, mu, theta=39.0)
@@ -176,7 +176,7 @@ def test_a_diagonal_mu_on_a_one_dimensional_structure_now_solves():
     when the permeability was being dropped on the floor. It is that the answer moves at all:
     a solver still ignoring ``mu`` returns the non-magnetic number, exactly.
     """
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
@@ -188,7 +188,7 @@ def test_a_diagonal_mu_on_a_one_dimensional_structure_now_solves():
 
 def test_mu_with_a_z_coupled_permittivity_is_used():
     """The full tensor route must retain permeability as well as epsilon."""
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     e = slots(tensor(2.6, 2.6, 2.6))
     z_row = [np.stack([0.2j * I1])] + [np.stack([0.0 * I1])] * 3
@@ -210,7 +210,7 @@ def test_mu_with_a_z_coupled_permittivity_is_used():
 # `structure` setters, one per backend, and a copy that forgot the call would leave exactly the
 # silent drop above on that backend alone -- with the other two green.
 
-BACKENDS = [(0, 'numpy'), (1, 'jax'), (2, 'torch')]
+BACKENDS = ['numpy', 'jax', 'torch']
 
 # Two rows in y: with one, the scene routes to a 1D solve, where `mu` is refused for an
 # unrelated (and correct) reason and the refusal under test would not be the one observed.
@@ -219,33 +219,32 @@ MU_RASTER = np.array([[[1.7, 1.7, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]]])
 SHAPE_LAYER = [dict(background=1.0,
                     shapes=[dict(type='rectangle', cx=-PERIOD / 4, cy=-PERIOD / 4,
                                  lx=PERIOD / 4, ly=PERIOD / 4, angle=0.0, material=2.6)])]
-def _raster_solver_with_mu(backend=0):
+def _raster_solver_with_mu(backend='numpy'):
     return wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                         truncation_order=(2, 2), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                         structure=RASTER, mu=MU_RASTER)
 
 
-@pytest.mark.parametrize('backend,name', BACKENDS)
+@pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('replacement,match', [
     (SHAPE_LAYER, 'no region'),
     (np.array([[[2.6, 2.6, 2.6, 1.0, 1.0, 1.0]]]), 'sampled on one raster'),
 ], ids=['analytic', 'wrong_grid'])
-def test_replacing_the_structure_rechecks_the_mu_beside_it(replacement, match, backend, name):
+def test_replacing_the_structure_rechecks_the_mu_beside_it(replacement, match, backend):
     """Assigning over the permittivity re-asks what the permeability may sit beside.
 
     Two ways for the swap to invalidate the pair, and both are checked because both are the
     *same* omission: a shape recipe leaves a layer-shaped ``mu`` with no region to attach to,
     and a differently-shaped raster leaves two fields that no longer sample one grid.
     """
-    if backend:
-        pytest.importorskip(name)
+    pytest.importorskip(backend)
     mee = _raster_solver_with_mu(backend)
     with pytest.raises(ValueError, match=match):
         mee.structure = replacement
 
 
-@pytest.mark.parametrize('backend,name', BACKENDS)
-def test_a_same_shaped_raster_swap_keeps_the_mu(backend, name):
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_a_same_shaped_raster_swap_keeps_the_mu(backend):
     """The re-check must not become a refusal of every reassignment.
 
     The legal swap -- a new permittivity raster on the same grid -- has to go through with the
@@ -253,8 +252,7 @@ def test_a_same_shaped_raster_swap_keeps_the_mu(backend, name):
     pass the test above is to clear or reject ``mu`` on any ``structure`` write, which trades a
     silently dropped field for a loudly dropped one.
     """
-    if backend:
-        pytest.importorskip(name)
+    pytest.importorskip(backend)
     mee = _raster_solver_with_mu(backend)
     mee.structure = np.array([[[9.0, 9.0, 1.0, 1.0], [9.0, 1.0, 1.0, 1.0]]])
     assert mee.mu is not None
@@ -403,7 +401,7 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     # than through the layer slots, and it reaches the interior by changing the s admittance
     # `kz/mu` at the bottom interface -- so the standing wave above it moves.
     bot = eps_bot if mu_bot == 1.0 else wavebit.Material(eps_bot, mu=mu_bot)
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=bot, theta=theta, phi=0.0,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=bot, theta=theta, phi=0.0,
                           truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=FIELD_WL,
                           thickness=list(thick)[::-1], layer_algorithm=algo, answers='field')
     solver.structure = tile(eps[::-1])
@@ -521,7 +519,7 @@ TWO_LAYER_MU = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]],
 
 
 def _two_layer_cell(algo, side):
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=np.deg2rad(31.0),
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=np.deg2rad(31.0),
                           phi=np.deg2rad(17.0), truncation_order=(2, 2), period=(PERIOD, PERIOD),
                           wavelength=FIELD_WL, thickness=[120.0, 180.0], answers='field',
                           layer_algorithm=algo, incidence_side=side)
@@ -565,21 +563,21 @@ EPS_PATTERN = np.array([[[2.6, 2.6, 1.0, 1.0], [2.6, 1.0, 1.0, 1.0]]])
 MU_PATTERN = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]]])
 
 
-def _patterned_cell(eps, mu, variant, backend=0):
+def _patterned_cell(eps, mu, variant, backend='numpy'):
     """One patterned magnetic cell. Vacuum half-spaces, which are self-dual."""
     solver = wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(37.0),
                           phi=np.deg2rad(23.0), truncation_order=(2, 2), period=(PERIOD, PERIOD),
                           wavelength=FIELD_WL, thickness=[THICK], answers='field')
-    solver.structure = eps if backend == 0 else _lift(backend, eps)
-    solver.mu = mu if backend == 0 else _lift(backend, mu)
+    solver.structure = eps if backend == 'numpy' else _lift(backend, eps)
+    solver.mu = mu if backend == 'numpy' else _lift(backend, mu)
     solver.solve()
     cell = solver.reconstruct_field(sample_x=5, sample_y=5, sample_z=4, incidences=variant)
     return np.asarray(cell.detach() if hasattr(cell, 'detach') else cell)[0]
 
 
 def _lift(backend, a):
-    return {1: lambda x: __import__('jax.numpy', fromlist=['x']).asarray(x),
-            2: lambda x: __import__('torch').as_tensor(x)}[backend](a)
+    return {'jax': lambda x: __import__('jax.numpy', fromlist=['x']).asarray(x),
+            'torch': lambda x: __import__('torch').as_tensor(x)}[backend](a)
 
 
 def test_a_patterned_magnetic_cell_obeys_the_field_level_duality():
@@ -616,8 +614,8 @@ def test_the_field_duality_is_not_vacuous_on_the_longitudinal_components():
         assert moved > 1e-2, (label, moved)
 
 
-@pytest.mark.parametrize('backend,name', [(1, 'jax'), (2, 'torch')])
-def test_the_other_backends_reconstruct_the_magnetic_field_too(backend, name):
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_the_other_backends_reconstruct_the_magnetic_field_too(backend):
     """One implementation, three namespaces, and ``muz_conv_i @ Uz`` is new arithmetic in each.
 
     Against numpy rather than against the closed form: what is under test here is that the
@@ -627,7 +625,7 @@ def test_the_other_backends_reconstruct_the_magnetic_field_too(backend, name):
     arrays are lifted, because importing the jax backend is what raises ``jax_enable_x64``,
     and an array built before that is silently ``complex64``.
     """
-    pytest.importorskip(name)
+    pytest.importorskip(backend)
     want = _patterned_cell(EPS_PATTERN, MU_PATTERN, S_INC)
     got = _patterned_cell(EPS_PATTERN, MU_PATTERN, S_INC, backend=backend)
     assert np.abs(got - want).max() < 1e-9 * float(np.abs(want).max())
@@ -651,7 +649,7 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
     import jax.numpy as jnp
 
     def loss(mu):
-        solver = wavebit.rcwa(backend=1, top=1.0, bot=1.0, theta=np.deg2rad(37.0),
+        solver = wavebit.rcwa(backend='jax', top=1.0, bot=1.0, theta=np.deg2rad(37.0),
                               phi=np.deg2rad(23.0), truncation_order=(1, 1), period=(PERIOD, PERIOD),
                               wavelength=FIELD_WL, thickness=[THICK], answers='field')
         solver.structure = jnp.asarray(EPS_PATTERN)
@@ -673,7 +671,7 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
 
 def test_mu_on_the_forced_first_order_path_matches_second_order():
     """Forcing the first-order path keeps the same magnetic material and half-space conventions."""
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     mee.formulation = 'first_order'
     e = slots(tensor(2.6, 2.6, 2.6))
@@ -734,7 +732,7 @@ def _dual_pair(basis, order=4):
     mu_field = _disc_raster(basis, 0.25, 0.7, 80.0, 2.25, 1.0)
 
     def build(eps, mu, above, below):
-        s = wavebit.rcwa(backend=0, top=above, bot=below, theta=np.deg2rad(37.0),
+        s = wavebit.rcwa(backend='numpy', top=above, bot=below, theta=np.deg2rad(37.0),
                          phi=np.deg2rad(23.0), truncation_order=(order, order),
                          wavelength=WL, thickness=[THICK],
                          factorization='nvf', lattice=basis)

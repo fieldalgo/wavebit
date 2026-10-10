@@ -13,7 +13,7 @@ def design(width):
                                            ly=100., angle=0., material=4.)])]
 
 
-def solver(backend=1, **kwargs):
+def solver(backend='jax', **kwargs):
     cfg = dict(period=(600., 750.), structure=design(100.), thickness=(100.,),
                wavelength=900., truncation_order=(0, 0), theta=.13, phi=.21,
                factorization='li', answers='field')
@@ -52,7 +52,7 @@ def test_derived_conditions_and_recipe_edits_are_temporary(write, failure):
         def reference(t):
             changes = ({'structure': design(t)} if write != 'wavelength'
                        else {'wavelength': 800.+t})
-            return float(solver(0, thickness=(t,), **changes).solve().T.sum().real)
+            return float(solver('numpy', thickness=(t,), **changes).solve().T.sum().real)
         h = 1e-3
         expected = (reference(100.+h)-reference(100.-h))/(2*h)
         assert abs(expected) > 1e-7
@@ -90,7 +90,7 @@ def test_the_loss_uses_the_same_temporary_state_scope(failure):
     assert original[0]['shapes'][0]['lx'] == 100.
     assert complex(s.theta) == .13
     assert not any(_holds_tracer(value) for value in vars(s).values())
-    np.testing.assert_allclose(s.solve().T, solver(0).solve().T, atol=1e-11)
+    np.testing.assert_allclose(s.solve().T, solver('numpy').solve().T, atol=1e-11)
 
 
 def test_concrete_custom_conditions_do_not_change_the_original_scene():
@@ -102,9 +102,9 @@ def test_concrete_custom_conditions_do_not_change_the_original_scene():
         return s.solve()
     got = float(s.grad(['thickness'], forward, lambda r: r.T.sum().real)['thickness'][0])
     def reference(t):
-        return float(solver(0, thickness=(t,), wavelength=850., structure=design(120.)).solve().T.sum().real)
+        return float(solver('numpy', thickness=(t,), wavelength=850., structure=design(120.)).solve().T.sum().real)
     h = 1e-3
     assert got == pytest.approx((reference(100.+h)-reference(100.-h))/(2*h), abs=1e-9, rel=2e-6)
     assert s.structure is original
     assert float(s.wavelength) == 900.
-    np.testing.assert_allclose(s.solve().T, solver(0).solve().T, atol=1e-11)
+    np.testing.assert_allclose(s.solve().T, solver('numpy').solve().T, atol=1e-11)

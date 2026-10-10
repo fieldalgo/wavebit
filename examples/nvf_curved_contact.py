@@ -8,7 +8,7 @@ jax.config.update('jax_enable_x64', True)
 
 def solver(gap, epsilon):
     return wavebit.rcwa(
-        backend=1, period=(700., 700.), wavelength=900., top=1., bot=2.25,
+        backend='jax', period=(700., 700.), wavelength=900., top=1., bot=2.25,
         theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(3, 3),
         factorization='nvf', nvf_projector='circular', shape_nvf_grid_size=128,
         structure=[dict(background=1., shapes=[

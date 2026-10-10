@@ -36,7 +36,7 @@ NUDGE = 1 + 1e-14
 
 
 def uniform(d, alg, to=(2, 2), theta=0.5+0.3j):
-    return wavebit.rcwa(backend=0, wavelength=730., period=(2000., 2000.), thickness=[d],
+    return wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=[d],
                         truncation_order=to, theta=theta, phi=.19, psi=0.7, factorization='li',
                         top=1., bot=2.25, layer_algorithm=alg,
                         structure=[dict(background=wavebit.Material(E_GYRO, M_GYRO), shapes=[])])
@@ -49,7 +49,7 @@ def amplitudes(solver):
 
 
 def grating(theta, alg, d, structure=S0, formulation='first_order'):
-    s = wavebit.rcwa(backend=0, top=1.0, bot=25.0, theta=theta, truncation_order=[10],
+    s = wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, truncation_order=[10],
                      wavelength=900e-9, period=[2000e-9], structure=structure, thickness=[d],
                      complex_dtype=0, fourier_coefficients='integrated', factorization='li',
                      layer_algorithm=alg, psi=np.pi/2, phi=0.3)
@@ -164,7 +164,7 @@ def test_the_coherent_source_door_is_capped_too(d, control):
     on its run's thickness, as the ordinary first-order solve is, it is at 2e-15 and 7e-15 in ``R``.
     """
     gain = np.where(S0 > 1, 25-0.5j, 1.0+0j)
-    s = wavebit.rcwa(backend=0, top=1.0, bot=25.0, theta=0.5, phi=0.3, polarization=(1., 0.),
+    s = wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=0.5, phi=0.3, polarization=(1., 0.),
                      truncation_order=(10, 0), wavelength=900e-9, period=(2000e-9, 2000e-9),
                      structure=gain, thickness=[d], fourier_coefficients='integrated',
                      factorization='li', layer_algorithm='SMM')
@@ -211,7 +211,7 @@ def test_swaps_are_balanced_within_blocks_and_ignore_a_common_shift():
 
 def split_uniform(ds, alg, theta=0.5+0.3j):
     """The gyrotropic layer as adjacent slices of one material, thicknesses ``ds``."""
-    return wavebit.rcwa(backend=0, wavelength=730., period=(2000., 2000.), thickness=list(ds),
+    return wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=list(ds),
                         truncation_order=(2, 2), theta=theta, phi=.19, psi=0.7,
                         factorization='li', top=1., bot=2.25, layer_algorithm=alg,
                         structure=[dict(background=wavebit.Material(E_GYRO, M_GYRO), shapes=[])
@@ -249,7 +249,7 @@ def test_a_layer_written_twice_to_rounding_is_one_run(monkeypatch):
     grating = dict(background=1., shapes=[dict(type='rectangle', lx=800., ly=900., material=6.25)])
 
     def solver(materials, thickness, alg):
-        return wavebit.rcwa(backend=0, wavelength=730., period=(2000., 2000.), thickness=thickness,
+        return wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=thickness,
                             truncation_order=(2, 2), theta=0.5+0.3j, phi=.19, psi=0.7,
                             factorization='li', top=1., bot=2.25, layer_algorithm=alg,
                             structure=[grating] + [dict(background=m, shapes=[])
@@ -282,7 +282,7 @@ def test_a_slot_zero_in_one_spelling_still_joins_the_run(monkeypatch):
     tilted = wavebit.Material((R @ np.diag([2.4, 2.4, 3.2]) @ R.T).astype(complex))
 
     def solve(materials, thickness, alg):
-        s = wavebit.rcwa(backend=0, wavelength=730., period=(2000., 2000.), thickness=thickness,
+        s = wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=thickness,
                          truncation_order=(2, 2), theta=0.5+0.05j, phi=.19, psi=0.7,
                          factorization='li', top=1., bot=2.25, layer_algorithm=alg,
                          structure=[dict(background=m, shapes=[]) for m in materials])
@@ -316,11 +316,11 @@ def test_traced_thickness_matches_eager():
                          factorization='li', top=1., bot=2.25, layer_algorithm='SMM',
                          structure=[dict(background=wavebit.Material(E_GYRO, M_GYRO), shapes=[])]
                          ).solve(geometry=frozen, auto_detune=False)
-        xp = jnp if b == 1 else np
+        xp = jnp if b == 'jax' else np
         return xp.sum(xp.abs(r.s_inc.r_s) ** 2)
-    compiled = jax.jit(lambda d: loss(1, d))
+    compiled = jax.jit(lambda d: loss('jax', d))
     for d in (3e3, 8e3, 1.2e4, 5e4):                 # none, some, more and all labels swapped
-        assert float(compiled(jnp.asarray(d))) == pytest.approx(loss(0, d), rel=1e-12)
+        assert float(compiled(jnp.asarray(d))) == pytest.approx(loss('numpy', d), rel=1e-12)
 
 
 def test_unsettled_coupling_graph_is_one_block():

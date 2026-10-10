@@ -56,7 +56,7 @@ if __name__ == '__main__':
     si3n4 = wavebit.eps_from_index(2.0056)
 
     # The silicon underneath is the substrate, so it goes in `bot`.
-    rcwa_options = dict(backend=0, thickness=[205], period=dict(x=300, y=300),
+    rcwa_options = dict(backend='numpy', thickness=[205], period=dict(x=300, y=300),
                         truncation_order=dict(x=3, y=0),
                         top=1, bot=si,
                         wavelength=900,
@@ -116,9 +116,9 @@ if __name__ == '__main__':
         ],
     ]
 
-    de_ri_v_0, de_ti_v_0 = run_shapes(rcwa_options, 0)  # NumPy
-    de_ri_v_1, de_ti_v_1 = run_shapes(rcwa_options, 1)  # JAX
-    de_ri_v_2, de_ti_v_2 = run_shapes(rcwa_options, 2)  # PyTorch
+    de_ri_v_0, de_ti_v_0 = run_shapes(rcwa_options, 'numpy')  # NumPy
+    de_ri_v_1, de_ti_v_1 = run_shapes(rcwa_options, 'jax')  # JAX
+    de_ri_v_2, de_ti_v_2 = run_shapes(rcwa_options, 'torch')  # PyTorch
 
     de_ri_v_1, de_ti_v_1 = np.array(de_ri_v_1), np.array(de_ti_v_1)
     de_ri_v_2, de_ti_v_2 = np.array(de_ri_v_2), np.array(de_ti_v_2)
@@ -134,12 +134,12 @@ if __name__ == '__main__':
     print(f'Norm of difference JAX and Torch; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
     print(f'Norm of difference Torch and NumPy; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
 
-    de_ri_r_0_dfs, de_ti_r_0_dfs = run_raster(rcwa_options, 0, 'sampled')  # NumPy
-    de_ri_r_0_cfs, de_ti_r_0_cfs = run_raster(rcwa_options, 0, 'integrated')  # NumPy
-    de_ri_r_1_dfs, de_ti_r_1_dfs = run_raster(rcwa_options, 1, 'sampled')  # JAX
-    de_ri_r_1_cfs, de_ti_r_1_cfs = run_raster(rcwa_options, 1, 'integrated')  # JAX
-    de_ri_r_2_dfs, de_ti_r_2_dfs = run_raster(rcwa_options, 2, 'sampled')  # PyTorch
-    de_ri_r_2_cfs, de_ti_r_2_cfs = run_raster(rcwa_options, 2, 'integrated')  # PyTorch
+    de_ri_r_0_dfs, de_ti_r_0_dfs = run_raster(rcwa_options, 'numpy', 'sampled')  # NumPy
+    de_ri_r_0_cfs, de_ti_r_0_cfs = run_raster(rcwa_options, 'numpy', 'integrated')  # NumPy
+    de_ri_r_1_dfs, de_ti_r_1_dfs = run_raster(rcwa_options, 'jax', 'sampled')  # JAX
+    de_ri_r_1_cfs, de_ti_r_1_cfs = run_raster(rcwa_options, 'jax', 'integrated')  # JAX
+    de_ri_r_2_dfs, de_ti_r_2_dfs = run_raster(rcwa_options, 'torch', 'sampled')  # PyTorch
+    de_ri_r_2_cfs, de_ti_r_2_cfs = run_raster(rcwa_options, 'torch', 'integrated')  # PyTorch
 
     de_ri_r_1_dfs, de_ti_r_1_dfs = np.array(de_ri_r_1_dfs), np.array(de_ti_r_1_dfs)
     de_ri_r_1_cfs, de_ti_r_1_cfs = np.array(de_ri_r_1_cfs), np.array(de_ti_r_1_cfs)
@@ -193,9 +193,9 @@ if __name__ == '__main__':
     # whether either was right.
     print('\nshapes vs raster, against truncation_order (integrated raster, NumPy)\n')
     for order in (3, 10, 20, 40):
-        opts = dict(rcwa_options, backend=0, truncation_order=dict(x=order, y=0))
-        r_s, t_s = run_shapes(dict(opts), 0)
-        r_r, t_r = run_raster(dict(opts), 0, 'integrated')
+        opts = dict(rcwa_options, backend='numpy', truncation_order=dict(x=order, y=0))
+        r_s, t_s = run_shapes(dict(opts), 'numpy')
+        r_r, t_r = run_raster(dict(opts), 'numpy', 'integrated')
         print(f'  truncation_order = {order:3d}   '
               f'R: {np.linalg.norm(r_s - r_r):.3e}   T: {np.linalg.norm(t_s - t_r):.3e}   '
               f'sum(T) = {float(np.sum(t_s)):.9f}')

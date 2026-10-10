@@ -6,13 +6,13 @@ import wavebit
 from wavebit._core.parametric import _sampled_coeffs
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('bits', [32, 64])
 @pytest.mark.parametrize('complex_field', [False, True])
 def test_dc_values_and_precision_agree_with_the_full_transform(backend, bits, complex_field):
-    if backend == 0:
+    if backend == 'numpy':
         import array_api_compat.numpy as xp
-    elif backend == 1:
+    elif backend == 'jax':
         pytest.importorskip('jax')
         import jax.numpy as xp
         wavebit.enable_x64()
@@ -64,7 +64,7 @@ def test_zero_order_shape_gradient_matches_fresh_numpy(kind, transform):
     cfg = dict(period=(600., 750.), wavelength=900., thickness=(170.,),
                truncation_order=(0, 0), theta=.13, phi=.21,
                shape_nvf_grid_size=32, factorization='nvf')
-    s = wavebit.rcwa(backend=1, **cfg, structure=structure(100.))
+    s = wavebit.rcwa(backend='jax', **cfg, structure=structure(100.))
     geometry = s.freeze_geometry()
     def loss(width):
         return s.solve(structure=structure(width), geometry=geometry).T.sum().real
@@ -73,7 +73,7 @@ def test_zero_order_shape_gradient_matches_fresh_numpy(kind, transform):
         derivative = jax.jit(derivative)
     got = float(derivative(100.))
     def reference(width):
-        return wavebit.rcwa(backend=0, **cfg, structure=structure(width)).solve().T.sum().real
+        return wavebit.rcwa(backend='numpy', **cfg, structure=structure(width)).solve().T.sum().real
     h = 1e-3
     expected = (reference(100.+h)-reference(100.-h))/(2*h)
     assert abs(expected) > 1e-8

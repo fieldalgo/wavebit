@@ -6,7 +6,7 @@ import wavebit
 
 PILLAR=np.ones((1,20));PILLAR[:,6:14]=12.25
 STRUCTURE=np.stack([np.full((1,20),2.25),PILLAR])
-CFG=dict(backend=2,period=[1000.],truncation_order=(3,0),top=1.21,bot=1.69,
+CFG=dict(backend='torch',period=[1000.],truncation_order=(3,0),top=1.21,bot=1.69,
          theta=0.,phi=0.,psi=np.pi/2,structure=STRUCTURE,answers='field')
 
 

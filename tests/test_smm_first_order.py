@@ -6,7 +6,7 @@ import wavebit
 from test_full_tensor_patterns import host, tensors
 
 
-def make_solver(algorithm='SMM', backend=0, side='top', **overrides):
+def make_solver(algorithm='SMM', backend='numpy', side='top', **overrides):
     e, m = tensors(.04)
     options = dict(
         backend=backend, wavelength=730., period=(600., 570.),
@@ -33,7 +33,7 @@ def compare_results(actual, expected, atol=3e-11):
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_tilted_magnetic_pattern_fields_match_etm(side, backend):
     smm = make_solver(backend=backend, side=side)
     etm = make_solver('ETM', side=side)

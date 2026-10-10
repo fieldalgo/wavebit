@@ -129,7 +129,7 @@ def test_the_advice_beside_a_z_row_is_the_same_light(tetm):
 def test_the_z_row_refusal_holds_under_jit_and_grad():
     """A traced z row is still a *given* one: the test reads ``is None``, never a value."""
     jax = pytest.importorskip('jax')
-    solver = wavebit.rcwa(backend=1, structure=RASTER_1D, tetm='te', **KW)
+    solver = wavebit.rcwa(backend='jax', structure=RASTER_1D, tetm='te', **KW)
     import jax.numpy as jnp
     conv = solver.eps_conv_matrices()
     z = jnp.asarray(0.1 * np.eye(conv.epx.shape[-1], dtype=complex)[None])
@@ -315,7 +315,7 @@ def test_the_advice_on_a_shape_structure_solves():
 def test_the_shape_refusal_holds_under_jit_and_grad():
     """Traced through a frozen geometry and through an un-jitted gradient alike."""
     jax = pytest.importorskip('jax')
-    solver = wavebit.rcwa(backend=1, structure=SHAPES, tetm='te', **KW)
+    solver = wavebit.rcwa(backend='jax', structure=SHAPES, tetm='te', **KW)
     geometry = solver.freeze_geometry()
     import jax.numpy as jnp
 

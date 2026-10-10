@@ -1,12 +1,13 @@
-"""The NumPy backend: the namespace it computes in, and the classes `rcwa(backend=0)` builds.
+"""The NumPy backend: the namespace it computes in, and the classes `rcwa(backend='numpy')` builds.
 
 Was `wavebit/on_numpy/`, three files and two `__init__.py` deep -- a layout that was accurate
 when `on_numpy` held a whole solver. It holds no solver now; the physics is in `_core` and what
-is left here is which namespace to call and which integer this backend is.
+is left here is which namespace to call and which `Backend` member this is.
 """
 import array_api_compat.numpy as _xp
 
 from .._core.engine import _NO_AUTODIFF, CoreFactorizationMixin, CoreSolveMixin
+from .._core.enums import Backend
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS
 
 
@@ -20,12 +21,12 @@ class _BaseRCWA(CoreSolveMixin):
     #: keeps `_core` from naming an optional dependency.
     xp = _xp
 
-    #: Which backend this class is, as the integer `rcwa(backend=...)` takes. A declared
+    #: Which backend this class is, as the member `rcwa(backend=...)` parses to. A declared
     #: member because the shared constructor cannot spell three literals -- and it has to
     #: stay an accepted *keyword* as well: `SolverJax._tree_flatten` puts `backend` in
     #: aux_data, so it is part of the treedef and of every jit cache key, and
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
-    _BACKEND_ID = 0
+    _BACKEND_ID = Backend.NUMPY
 
     #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
     #: so `manifest.py` can publish this without importing this module to ask.
@@ -38,7 +39,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
 
     Empty on purpose. Everything this class used to hold -- a 104-line constructor -- is in
     `CoreFactorizationMixin.__init__`, and everything NumPy does differently is a declared
-    member one level down. The class survives because it is the name `rcwa(backend=0)` builds
+    member one level down. The class survives because it is the name `rcwa(backend='numpy')` builds
     and the MRO position that pairs the two halves.
     """
 

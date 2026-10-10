@@ -12,7 +12,7 @@ def pair(gap=0.,epsilon=9.):
             dict(type='rectangle',lx=300.,ly=300.,cx=150.+gap/2,material=epsilon)]
 
 
-def solver(shapes,backend=0,grid=128,**kwargs):
+def solver(shapes,backend='numpy',grid=128,**kwargs):
     options=dict(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
         theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(3,3),
         shape_nvf_grid_size=grid,nvf_projector='circular',factorization='nvf',
@@ -49,7 +49,7 @@ def test_frozen_jit_derivative_matches_two_finite_differences(kind):
                 if kind=='period' else pair(epsilon=4.+v) if kind=='material' else pair(v))
     center=1e-4;geometry=solver(shapes(center)).freeze_geometry()
     def loss(v):
-        return jnp.sum(solver(shapes(v),backend=1).solve(geometry=geometry).T).real
+        return jnp.sum(solver(shapes(v),backend='jax').solve(geometry=geometry).T).real
     got=float(jax.jit(jax.grad(loss))(jnp.asarray(center)))
     assert np.isfinite(got) and abs(got)>1e-5
     for h in (1e-5,1e-6):
@@ -88,10 +88,9 @@ def test_tiled_dyads_equal_full_grid(monkeypatch):
         np.testing.assert_array_equal(a,b)
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 def test_painted_magnetic_rectangles_and_single_precision(backend):
-    if backend:
-        pytest.importorskip('jax' if backend==1 else 'torch')
+    pytest.importorskip(backend)
     shapes=[dict(type='rectangle',lx=300.,ly=250.,angle=.1,material=wavebit.Material(4.+.02j,mu=1.1)),
             dict(type='rectangle',lx=180.,ly=150.,cx=30.,angle=.2,material=wavebit.Material(7.+.04j,mu=1.2))]
     want=solver(shapes,truncation_order=(1,1),grid=32).solve()
@@ -110,7 +109,7 @@ def test_square_alias_uses_the_same_rectangle_projector():
 
 def test_jitted_fields_through_public_api():
     jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
-    s=solver(pair(1.),backend=1,grid=32,truncation_order=(1,1),answers='field')
+    s=solver(pair(1.),backend='jax',grid=32,truncation_order=(1,1),answers='field')
     g=s.freeze_geometry()
     a,af=s.solve_field_eager(3,3,2,geometry=g)
     b,bf=s.solve_field(3,3,2,geometry=g)
@@ -130,7 +129,7 @@ def test_frozen_contact_can_open_and_retains_one_sided_jit_derivative(kind):
         s=solver(shapes(gap))
         np.testing.assert_allclose(s.solve(geometry=geometry).T,s.solve().T,rtol=0,atol=2e-12)
     def loss(gap):
-        return jnp.sum(solver(shapes(gap),backend=1).solve(geometry=geometry).T).real
+        return jnp.sum(solver(shapes(gap),backend='jax').solve(geometry=geometry).T).real
     derivative=float(jax.jit(jax.grad(loss))(jnp.asarray(0.)))
     assert np.isfinite(derivative) and abs(derivative)>1e-5
     zero=solver(shapes(0.)).solve().T.sum()
@@ -153,10 +152,10 @@ def test_circular_record_rejects_changed_shape_count():
         solver(pair()[:1]).solve(geometry=geometry)
 
 
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_skew_cell_and_rotated_rectangle_agree_across_backends(backend):
-    pytest.importorskip('jax' if backend==1 else 'torch')
-    if backend==1:
+    pytest.importorskip(backend)
+    if backend=='jax':
         import jax;jax.config.update('jax_enable_x64',True)
     shapes=[dict(type='rectangle',lx=210.,ly=160.,angle=.31,material=4.+.03j)]
     options=dict(lattice=((700.,130.),(0.,600.)),grid=32,truncation_order=(1,1))
@@ -175,13 +174,13 @@ def test_torch_width_and_permeability_gradients_stay_live():
                       grid=32,truncation_order=(1,1),phi=.13,psi=.23)
     width=torch.tensor(310.,dtype=torch.float64,requires_grad=True)
     mu=torch.tensor(1.2,dtype=torch.float64,requires_grad=True)
-    s=scene(width,mu,2)
+    s=scene(width,mu,'torch')
     derivatives=torch.autograd.grad(s.solve(geometry=s.freeze_geometry()).T.sum().real,(width,mu))
     for i,got in enumerate(derivatives):
         assert np.isfinite(got.item()) and abs(got.item())>1e-7
         for h in (1e-4,1e-5):
             a=[310.,1.2];b=a.copy();a[i]+=h;b[i]-=h
-            fd=(scene(*a,0).solve().T.sum()-scene(*b,0).solve().T.sum())/(2*h)
+            fd=(scene(*a,'numpy').solve().T.sum()-scene(*b,'numpy').solve().T.sum())/(2*h)
             assert got.item()==pytest.approx(fd,rel=3e-4,abs=2e-7)
 
 
@@ -190,7 +189,7 @@ def test_torch_width_and_permeability_gradients_stay_live():
 def test_uniform_layer_agrees_with_uniform_raster(shapes,background):
     s=solver(shapes,grid=32,truncation_order=(1,1),
              structure=[dict(background=background,shapes=shapes)])
-    want=wavebit.rcwa(backend=0,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
+    want=wavebit.rcwa(backend='numpy',period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
         theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(1,1),
         structure=np.full((1,2,2),4.)).solve()
     got=s.solve(geometry=s.freeze_geometry())

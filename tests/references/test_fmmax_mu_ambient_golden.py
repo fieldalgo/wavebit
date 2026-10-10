@@ -77,7 +77,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
     pair, which agrees to round-off but says the same thing twice.
     """
     (eps_t, mu_t), (eps_b, mu_b) = top, bot
-    mee = wavebit.rcwa(backend=0,
+    mee = wavebit.rcwa(backend='numpy',
                        top=wavebit.Material(eps_t, mu_t),
                        bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=0.0, truncation_order=(0, 0),
@@ -177,7 +177,7 @@ def test_the_ambient_permeability_is_not_silently_dropped(name):
 
 def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
     (eps_t, mu_t), (eps_b, mu_b) = top, bot
-    mee = wavebit.rcwa(backend=0,
+    mee = wavebit.rcwa(backend='numpy',
                        top=wavebit.Material(eps_t, mu_t),
                        bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=np.deg2rad(psi_deg),
@@ -278,7 +278,7 @@ def test_a_magnetic_ambient_on_a_one_dimensional_structure_now_solves():
     """
     # 4.41 is the index-2.1 substrate this case always had, said as a permittivity.
     n_bot, mu_bot = 2.1, 1.7
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=n_bot ** 2, theta=0.0, phi=0.0, tetm='te',
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=n_bot ** 2, theta=0.0, phi=0.0, tetm='te',
                        truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.ones((1, 1, 8)))
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (1.0, 1.0, 1.0)]

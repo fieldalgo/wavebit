@@ -306,8 +306,8 @@ def test_hybrid_j1_gradients_at_crossover_and_large_arguments(lib, precision, j1
 # `np.rot90`, `np.flip` and `a[::-1]` return views with a negative stride. NumPy and JAX take
 # those; PyTorch refuses them ("At least one stride in the given numpy array is negative"), so
 # before `forward_strided` the natural spelling of a rotated cell -- the one a user reaches for
-# to check the phi=90 / transposed-grating equivalence -- was a crash on backend=2 and an answer
-# on backends 0 and 1. The strides are an artifact of how the array was built, not part of the
+# to check the phi=90 / transposed-grating equivalence -- was a crash on PyTorch and an answer on
+# NumPy and JAX. The strides are an artifact of how the array was built, not part of the
 # structure being described, so which backend is running must not be able to see them.
 
 STRIDED_CFG = dict(period=(500., 800.), thickness=(180.,), wavelength=620.,
@@ -323,7 +323,7 @@ def _totals(res):
     return float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T)))
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2], ids=['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
     """Every backend takes a negative-stride `structure`, and gets the contiguous answer.
 
@@ -331,9 +331,9 @@ def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
     and a normalisation that copied the buffer the wrong way round would now return a *wrong*
     number instead. The copy is the reference.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     assert any(s < 0 for s in STRIDED_CELL.strides), 'premise: the input is a reversed view'
 
@@ -358,9 +358,9 @@ def test_torch_takes_a_reversed_period_and_thickness():
     stack = np.concatenate([1.0 + 0.5 * cell, cell])
     cfg = dict(wavelength=620., truncation_order=(2, 2), theta=0.2, psi=0.3)
 
-    reversed_ = wavebit.rcwa(backend=2, structure=stack, period=np.flip(np.array([800., 500.])),
+    reversed_ = wavebit.rcwa(backend='torch', structure=stack, period=np.flip(np.array([800., 500.])),
                              thickness=np.flip(np.array([180., 90.])), **cfg).solve()
-    plain = wavebit.rcwa(backend=2, structure=stack, period=(500., 800.),
+    plain = wavebit.rcwa(backend='torch', structure=stack, period=(500., 800.),
                          thickness=(90., 180.), **cfg).solve()
     assert _totals(reversed_) == _totals(plain)
 
@@ -375,7 +375,7 @@ def test_normalising_strides_does_not_detach_the_structure():
     torch = pytest.importorskip('torch')
     uc = torch.tensor(np.ascontiguousarray(STRIDED_CELL), dtype=torch.float64,
                       requires_grad=True)
-    torch.sum(wavebit.rcwa(backend=2, structure=uc, **STRIDED_CFG).solve().T).backward()
+    torch.sum(wavebit.rcwa(backend='torch', structure=uc, **STRIDED_CFG).solve().T).backward()
     assert uc.requires_grad, 'the leaf was flipped in place'
     assert int((uc.grad.abs() > 1e-14).sum()) == uc.numel()
 
@@ -445,7 +445,7 @@ def test_as_array_places_what_it_returns_on_the_device_it_was_given():
     assert as_array(txp, cpu, dtype=txp.float64, device=cpu.device) is cpu
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_solver_does_not_share_the_array_it_was_configured_from(backend):
     """`period` and `thickness` are stored, so they may not alias a buffer the caller keeps.
 
@@ -458,9 +458,9 @@ def test_a_solver_does_not_share_the_array_it_was_configured_from(backend):
 
     The other half of the contract has its own test below. A native array is shared on purpose.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     period = np.array([400.0, 500.0])
     thickness = np.array([100.0])
@@ -482,7 +482,7 @@ def test_a_torch_leaf_is_kept_rather_than_copied():
     """
     torch = pytest.importorskip('torch')
     leaf = torch.tensor([400.0, 500.0], dtype=torch.float64, requires_grad=True)
-    solver = wavebit.rcwa(backend=2, structure=np.ones((1, 4, 4)), period=leaf,
+    solver = wavebit.rcwa(backend='torch', structure=np.ones((1, 4, 4)), period=leaf,
                           thickness=[100.0], truncation_order=(1, 1), wavelength=620.,
                           top=1.0, bot=1.0)
     with torch.no_grad():
@@ -491,7 +491,7 @@ def test_a_torch_leaf_is_kept_rather_than_copied():
     assert solver.period.requires_grad or solver.period.grad_fn is not None
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_every_spelling_of_a_cell_and_a_stack_arrives_as_the_same_array(backend):
     """The shapes the geometry setters promise, read back rather than solved through.
 
@@ -506,9 +506,9 @@ def test_every_spelling_of_a_cell_and_a_stack_arrives_as_the_same_array(backend)
     duplicate nothing, which is the whole difference between the two and the reason
     `_as_lengths` takes a flag rather than being written twice.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     base = dict(backend=backend, truncation_order=(1, 1), wavelength=620., top=1.0, bot=1.0)
     one, two = np.ones((1, 4, 4)), np.ones((2, 4, 4))
@@ -536,7 +536,7 @@ def test_every_spelling_of_a_cell_and_a_stack_arrives_as_the_same_array(backend)
         built(period={'u': 400.0, 'v': 400.0})       # x and y, because it is the aligned cell
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_solver_does_not_share_the_raster_it_was_configured_from(backend):
     """The same contract as `period`, on the two fields that carry the whole structure.
 
@@ -550,9 +550,9 @@ def test_a_solver_does_not_share_the_raster_it_was_configured_from(backend):
     Twenty trials rather than one, because a single trial passed on JAX more often than not and
     would have pinned nothing.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     cfg = dict(backend=backend, truncation_order=(1, 1), wavelength=620., top=1.0, bot=1.0,
                period=[400.0, 400.0], thickness=[150.0])
@@ -572,13 +572,13 @@ def test_a_torch_raster_leaf_is_kept_rather_than_copied():
     """
     torch = pytest.importorskip('torch')
     leaf = torch.tensor(np.ones((1, 4, 4)) * 2.0, dtype=torch.float64, requires_grad=True)
-    solver = wavebit.rcwa(backend=2, structure=leaf, truncation_order=(1, 1), wavelength=620.,
+    solver = wavebit.rcwa(backend='torch', structure=leaf, truncation_order=(1, 1), wavelength=620.,
                           top=1.0, bot=1.0, period=[400.0, 400.0], thickness=[150.0])
     assert solver.structure is leaf
     assert solver.structure.requires_grad
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_reversed_view_on_a_length_one_axis_crosses_too(backend):
     """The case `forward_strided` does *not* fix, which is why the raster is also copied.
 
@@ -593,9 +593,9 @@ def test_a_reversed_view_on_a_length_one_axis_crosses_too(backend):
     `ascontiguousarray` does not, so the copy the stored-raster contract needs closes this as
     a side effect rather than by a second mechanism.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     one_layer = np.ones((1, 4, 6)) * 2.0
     one_layer[0, 1:3, 2:5] = 5.76
@@ -612,7 +612,7 @@ def test_a_reversed_view_on_a_length_one_axis_crosses_too(backend):
     assert np.array_equal(np.asarray(got.T), np.asarray(want.T))
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
     """What `_coerce_raster` takes and what it refuses, which nothing pinned before.
 
@@ -632,9 +632,9 @@ def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
     caller with no type dispatch of its own in front of it: `structure` pre-filters with the
     same predicate, so `_coerce_raster`'s own type refusal is reachable only through `mu`.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     cfg = dict(backend=backend, truncation_order=(1, 1), wavelength=620., top=1.0, bot=1.0,
                period=[400.0, 400.0], thickness=[150.0])
@@ -660,7 +660,7 @@ def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
                      mu=np.ones((1, 4, 4), dtype=np.uint8), **cfg)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
     """The setter settles two attributes, and it used to settle them before it could refuse.
 
@@ -681,9 +681,9 @@ def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
     the answer is what actually goes wrong. A solver that reports the right `modeling_path`
     while solving a different scene would pass the first half alone.
     """
-    if backend == 1:
+    if backend == 'jax':
         pytest.importorskip('jax')
-    elif backend == 2:
+    elif backend == 'torch':
         pytest.importorskip('torch')
     cfg = dict(backend=backend, truncation_order=(2, 2), wavelength=620., top=1.0, bot=1.0,
                period=[400.0, 400.0], thickness=[150.0])

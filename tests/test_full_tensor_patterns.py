@@ -21,7 +21,7 @@ def tensors(loss=0.):
     return e,m
 
 
-def solver(backend=0, factorization='li', **kw):
+def solver(backend='numpy', factorization='li', **kw):
     formulation=kw.pop("formulation",None)
     e,m = tensors()
     opts = dict(backend=backend, wavelength=730., period=(600.,600.),
@@ -138,11 +138,11 @@ def test_full_laminate_against_independent_integrals_and_transfer(axis,factoriza
         else: assert R+T<1.
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 @pytest.mark.parametrize('factorization',['li','nvf'])
 def test_full_pattern_solve_and_field_across_backends(backend,factorization):
     s=solver(backend,factorization,answers='field')
-    reference=solver(0,factorization,answers='field')
+    reference=solver('numpy',factorization,answers='field')
     solve_field=getattr(s,'solve_field_eager',s.solve_field)
     r,f=solve_field(3,3,3,geometry=s.freeze_geometry())
     want,fw=reference.solve_field(3,3,3,geometry=reference.freeze_geometry())
@@ -178,7 +178,7 @@ def test_magnetic_halfspaces_forced_first_order_agrees_with_second_order(side):
 
 
 @pytest.mark.parametrize('factorization',['li','nvf'])
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 @pytest.mark.parametrize('angle',[0.,.27])
 @pytest.mark.parametrize('algorithm',['ETM','SMM'])
 def test_full_tensor_tilt_gradients_include_zero_coupling(factorization,backend,angle, algorithm):
@@ -190,8 +190,8 @@ def test_full_tensor_tilt_gradients_include_zero_coupling(factorization,backend,
                  structure=[dict(background=1.,shapes=[dict(type='rectangle',lx=237.,ly=310.,material=mat)])])
         return s.solve(geometry=frozen,auto_detune=False).p_inc.R.sum()
     delta=2e-5
-    fd=(float(loss(angle+delta,0))-float(loss(angle-delta,0)))/(2*delta)
-    if backend==1:
+    fd=(float(loss(angle+delta,'numpy'))-float(loss(angle-delta,'numpy')))/(2*delta)
+    if backend=='jax':
         import jax
         import jax.numpy as jnp
         value,gradient=jax.jit(jax.value_and_grad(loss))(jnp.asarray(angle))
@@ -252,7 +252,7 @@ def test_z_coupling_in_only_mu_selects_first_order_and_survives_backside():
 @pytest.mark.parametrize('factorization',['li','nvf'])
 @pytest.mark.parametrize('algorithm',['ETM','SMM'])
 def test_jitted_full_tensor_field_reconstruction(factorization, algorithm):
-    s=solver(1,factorization,answers='field',layer_algorithm=algorithm)
+    s=solver('jax',factorization,answers='field',layer_algorithm=algorithm)
     frozen=s.freeze_geometry()
     eager=s.solve_field_eager(2,2,2,geometry=frozen)
     compiled=s.solve_field(2,2,2,geometry=frozen)
@@ -298,18 +298,18 @@ def test_full_magnetic_field_satisfies_both_maxwell_curls(side, algorithm):
 
 
 @pytest.mark.parametrize('factorization',['li','nvf'])
-@pytest.mark.parametrize('backend',[1,2])
+@pytest.mark.parametrize('backend',['jax','torch'])
 def test_full_tensor_rectangle_geometry_derivative(factorization,backend):
     e,m=tensors(.04)
     def make(width,b):
         return solver(b,factorization,structure=[dict(background=1.,shapes=[
             dict(type='rectangle',lx=width,ly=310.,material=wavebit.Material(e,m))])])
-    frozen=make(237.,0).freeze_geometry()
+    frozen=make(237.,'numpy').freeze_geometry()
     def loss(width,b=backend):
         return make(width,b).solve(geometry=frozen,auto_detune=False).s_inc.R.sum()
     step=2e-3
-    fd=float((loss(237.+step,0)-loss(237.-step,0))/(2*step))
-    if backend==1:
+    fd=float((loss(237.+step,'numpy')-loss(237.-step,'numpy'))/(2*step))
+    if backend=='jax':
         import jax
         import jax.numpy as jnp
         derivative=jax.jit(jax.grad(loss))(jnp.asarray(237.))
@@ -349,13 +349,13 @@ def test_coarse_nvf_refuses_ambiguous_modes_and_refinement_recovers():
     assert abs(float(r.R.sum()+r.T.sum())-1.)<5e-6
 
 
-@pytest.mark.parametrize('backend',[0,1,2])
+@pytest.mark.parametrize('backend',['numpy','jax','torch'])
 @pytest.mark.parametrize('factorization',['li','nvf'])
 def test_full_tensor_single_precision(backend,factorization):
     s=solver(backend,factorization,complex_dtype=1,answers='field')
     solve_field=getattr(s,'solve_field_eager',s.solve_field)
     result,field=solve_field(2,2,2,geometry=s.freeze_geometry())
-    ref,ref_field=solver(0,factorization,answers='field').solve_field(2,2,2)
+    ref,ref_field=solver('numpy',factorization,answers='field').solve_field(2,2,2)
     assert field.dtype==s.xp.complex64
     np.testing.assert_allclose(host(field),ref_field,atol=2e-5,rtol=2e-5)
     for inc in ('s_inc','p_inc'):

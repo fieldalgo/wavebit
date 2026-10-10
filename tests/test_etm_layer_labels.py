@@ -41,7 +41,7 @@ NUDGE = 1 + 1e-14
 
 def _r0(theta, algorithm, thickness=100e-9, phi=0.3):
     """The s-polarised zeroth-order reflection amplitude of the scene above."""
-    solver = wavebit.rcwa(backend=0, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=phi,
+    solver = wavebit.rcwa(backend='numpy', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=phi,
                           truncation_order=[30], wavelength=900e-9, period=[2000e-9],
                           structure=STRUCTURE, thickness=[thickness], complex_dtype=0,
                           fourier_coefficients='integrated', factorization='li',
@@ -152,7 +152,7 @@ def test_evanescent_incidence_needs_no_override(offset):
 
 def _r0_tetm(theta, algorithm, tetm):
     """The same grating on the pure TE / TM path (``phi = 0``), at its own amplitude."""
-    solver = wavebit.rcwa(backend=0, tetm=tetm, top=1.0, bot=25.0, theta=theta,
+    solver = wavebit.rcwa(backend='numpy', tetm=tetm, top=1.0, bot=25.0, theta=theta,
                           truncation_order=[30], wavelength=900e-9, period=[2000e-9],
                           structure=STRUCTURE, thickness=[100e-9], complex_dtype=0,
                           fourier_coefficients='integrated', factorization='li',
@@ -186,7 +186,7 @@ def _r0_2d(theta, algorithm):
     cell = np.full((6, 6), 25.0)
     cell[0, :] = 1.0
     cell[:, 0] = 1.0
-    solver = wavebit.rcwa(backend=0, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3,
+    solver = wavebit.rcwa(backend='numpy', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3,
                           truncation_order=[6, 6], wavelength=900e-9,
                           period=[2000e-9, 2000e-9], structure=cell[None],
                           thickness=[100e-9], complex_dtype=0,

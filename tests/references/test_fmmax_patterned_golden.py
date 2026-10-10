@@ -56,7 +56,7 @@ def solve(n_in, g, truncation_order=MAX_ORDER):
     # that used to sit here existed only because the constructor took an index and squared it
     # back. It selects the modeling path and the grating type; the convolution matrices the
     # solve actually uses are the ones passed to `solve_conv` below.
-    mee = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
+    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee._solve_conv(np.stack([epx]), np.stack([epy]), np.stack([epz_i]),

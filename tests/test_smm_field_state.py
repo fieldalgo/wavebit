@@ -102,7 +102,7 @@ def _sampled_cell(kind, form, algo, theta, eps, mu, side, eps_inc, thick, z):
     """``{polarization: (Ex, Ey, Ez, Hx, Hy, Hz)}`` at the cell centre and heights ``z``."""
     layer = _medium(eps, mu)
     top, bot = (eps_inc, layer) if side == 'top' else (layer, layer)
-    kw = dict(backend=0, top=top, bot=bot, theta=theta, wavelength=WL, thickness=[thick],
+    kw = dict(backend='numpy', top=top, bot=bot, theta=theta, wavelength=WL, thickness=[thick],
               layer_algorithm=algo, answers='field', incidence_side=side)
     if kind == '2d':
         kw.update(psi=np.pi / 2, phi=PHI, truncation_order=[0, 0], period=[2000., 2000.])
@@ -213,7 +213,7 @@ GRATING_CASES = {
 
 
 def _grating(algo, case, theta=THETA, answers='field', thickness=(100., 60.), **extra):
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=25.0, theta=theta, wavelength=WL,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, wavelength=WL,
                           thickness=list(thickness), layer_algorithm=algo, answers=answers,
                           **GRATING_CASES[case], **extra)
     return solver, solver.solve()
@@ -249,7 +249,7 @@ def test_a_root_growing_below_another_layer_costs_no_digits():
     """
     def field(algo, kind):
         kw = dict(tetm=kind) if kind in ('te', 'tm') else dict(psi=np.pi / 2, phi=PHI)
-        solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=THETA, wavelength=WL,
+        solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=THETA, wavelength=WL,
                               thickness=[8500., 500.], truncation_order=[0], period=[2000.],
                               structure=np.array([[[1.] * 4], [[4.] * 4]], dtype=complex),
                               layer_algorithm=algo, answers='field', **kw)
@@ -262,7 +262,7 @@ def test_a_root_growing_below_another_layer_costs_no_digits():
 
 
 def _chip(algo, form='second_order', nudge=1.0):
-    solver = wavebit.rcwa(backend=0, top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41,
+    solver = wavebit.rcwa(backend='numpy', top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41,
                           psi=0.27, wavelength=1000., period=[1654.489947568981],
                           truncation_order=[7], thickness=[4869.],
                           structure=np.full((1, 1, 8), 2.25 + 0j), layer_algorithm=algo,
@@ -312,7 +312,7 @@ def test_a_layer_light_line_costs_no_digits(kind):
     two = kind == '2d'
 
     def field(algo):
-        solver = wavebit.rcwa(backend=0, top=1.0, bot=4.0, theta=0.0, wavelength=WL,
+        solver = wavebit.rcwa(backend='numpy', top=1.0, bot=4.0, theta=0.0, wavelength=WL,
                               thickness=[150., 400.], period=[600.] * (2 if two else 1),
                               structure=GRAZE_RASTER if two else GRAZE_GRATING,
                               truncation_order=[2, 2] if two else [4], layer_algorithm=algo,
@@ -364,7 +364,7 @@ def test_the_field_meets_itself_and_its_ports(scene, kind, side):
     for i, (background, block) in enumerate(sc['layers']):
         structure[i] = background
         structure[i, ..., :grid[-1] // 2] = block
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=sc['theta'], wavelength=WL,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=sc['theta'], wavelength=WL,
                           thickness=sc['thickness'], layer_algorithm='SMM', answers='field',
                           incidence_side=side, structure=structure,
                           truncation_order=[2, 2] if two else [4],
@@ -399,7 +399,7 @@ def _raster(eps_hi, eps_lo=1.0, n=16):
 
 
 def _metal_field(algo, form, theta, thickness, eps_hi=-15 + 0.8j, factorization='li', to=5):
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=2.25, theta=theta, wavelength=600.,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=theta, wavelength=600.,
                           psi=np.pi / 3, phi=0.4, structure=_raster(eps_hi),
                           truncation_order=[to, to], period=[400., 400.], thickness=thickness,
                           layer_algorithm=algo, answers='field', factorization=factorization)
@@ -438,7 +438,7 @@ def test_single_precision_at_a_real_angle(kind, theta):
     kw = dict(tetm='tm') if kind == 'tm' else dict(psi=np.pi / 2, phi=PHI)
 
     def field(algo, width):
-        solver = wavebit.rcwa(backend=0, top=1.0, bot=25.0, theta=theta, wavelength=WL,
+        solver = wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, wavelength=WL,
                               thickness=[100., 60.], structure=GRATING, truncation_order=[15],
                               period=[2000.], layer_algorithm=algo, answers='field',
                               complex_dtype=width, **kw)
@@ -463,7 +463,7 @@ def test_an_active_patterned_double_negative_at_a_real_angle():
     eps[RASTER == 25.0], mu[RASTER == 25.0] = -4 - 0.1j, -1 - 0.05j
 
     def field(algo, form):
-        solver = wavebit.rcwa(backend=0, top=1.0, bot=2.0, theta=0.5, phi=PHI, psi=np.pi / 2,
+        solver = wavebit.rcwa(backend='numpy', top=1.0, bot=2.0, theta=0.5, phi=PHI, psi=np.pi / 2,
                               wavelength=WL, thickness=[100., 60.], truncation_order=[3, 3],
                               period=[1200., 1200.], layer_algorithm=algo, answers='field')
         solver.structure, solver.mu = eps, mu
@@ -476,7 +476,7 @@ def test_an_active_patterned_double_negative_at_a_real_angle():
 
 def _double_negative_cell(algo, theta, form='second_order'):
     eps, mu = -4.0, -1.0
-    solver = wavebit.rcwa(backend=0, top=1.0, bot=wavebit.Material(eps, mu=mu), theta=theta,
+    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=wavebit.Material(eps, mu=mu), theta=theta,
                           wavelength=WL, thickness=[100.], layer_algorithm=algo,
                           answers='field', psi=np.pi / 2, phi=PHI, truncation_order=[0, 0],
                           period=[2000., 2000.])
@@ -563,7 +563,7 @@ def test_a_field_solve_past_the_cap_neither_raises_nor_detunes(kind):
     kw = dict(tetm=kind) if kind in ('te', 'tm') else dict(psi=np.pi / 2, phi=PHI)
 
     def solve(answers):
-        solver = wavebit.rcwa(backend=0, top=1.0, bot=1.0, theta=THETA, wavelength=WL,
+        solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=THETA, wavelength=WL,
                               thickness=[1e4], truncation_order=[0], period=[2000.],
                               structure=np.ones((1, 1, 4), dtype=complex), layer_algorithm='SMM',
                               answers=answers, **kw)
@@ -599,14 +599,14 @@ def test_the_state_differentiates_as_the_etms_does(case, backend):
             import jax.numpy as jnp
 
             def loss(s):
-                solver = wavebit.rcwa(backend=1, top=1.0, bot=25.0, theta=THETA, wavelength=WL,
+                solver = wavebit.rcwa(backend='jax', top=1.0, bot=25.0, theta=THETA, wavelength=WL,
                                       thickness=[100., 60.], layer_algorithm=algo,
                                       answers='field', structure=jnp.asarray(base) * (1 + s), **kw)
                 return jnp.sum(jnp.abs(solver.solve_field_eager(**samples)[1]) ** 2)
             return float(jax.grad(loss)(0.0))
         import torch
         s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-        solver = wavebit.rcwa(backend=2, top=1.0, bot=25.0, theta=THETA, wavelength=WL,
+        solver = wavebit.rcwa(backend='torch', top=1.0, bot=25.0, theta=THETA, wavelength=WL,
                               thickness=[100., 60.], layer_algorithm=algo, answers='field',
                               structure=torch.as_tensor(base) * (1 + s), **kw)
         torch.sum(torch.abs(solver.solve_field(**samples)[1]) ** 2).backward()
@@ -645,7 +645,7 @@ def test_the_state_differentiates_past_the_cap(case):
     wavelength = 1000. if case == 'chip-conical' else WL
 
     def loss(s):
-        solver = wavebit.rcwa(backend=1, top=medium, bot=medium, theta=theta,
+        solver = wavebit.rcwa(backend='jax', top=medium, bot=medium, theta=theta,
                               wavelength=wavelength, thickness=[thickness], period=period,
                               truncation_order=order, incidence_side=side,
                               structure=jnp.full((1, 1, 8), eps + 0j) * (1 + s),

@@ -40,7 +40,7 @@ def _run_and_inputs(tetm, structure, thickness, n_top, n_bot, wl, period, trunca
     """Solve via the public API and return (its R/T, the same inputs)."""
     # Two quantities, one pair of half-spaces. The constructor takes permittivity; `solve_1d`
     # below takes the index, which is what the amplitude ratios in it actually are.
-    solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=None,
+    solver = wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=None,
                           tetm=tetm, truncation_order=truncation_order, period=period, wavelength=wl,
                           thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()
@@ -183,7 +183,7 @@ def test_core_gradient_jax_torch_fd(tetm):
 
 def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi):
     """Same, forced onto the conical path."""
-    solver = wavebit.rcwa(backend=0, top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
+    solver = wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, truncation_order=truncation_order, period=period, wavelength=wl,
                           thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()

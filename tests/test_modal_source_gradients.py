@@ -34,7 +34,7 @@ def loss(s, xp, t, geometry=None):
 @pytest.mark.parametrize('backend', ['jax', 'jit', 'torch'])
 @pytest.mark.parametrize('source', [False, True])
 def test_retained_tensor_field_sensitivity(backend, source):
-    s = solver(2 if backend == 'torch' else 1, source)
+    s = solver('torch' if backend == 'torch' else 'jax', source)
     if backend in ('jax', 'jit'):
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
@@ -55,8 +55,8 @@ def test_retained_tensor_field_sensitivity(backend, source):
         loss(s, torch, t).backward()
         got = float(t.grad)
     h=1e-4
-    expected = (float(loss(solver(0, source), np, h))
-                -float(loss(solver(0, source), np, -h)))/(2*h)
+    expected = (float(loss(solver('numpy', source), np, h))
+                -float(loss(solver('numpy', source), np, -h)))/(2*h)
     assert abs(expected) > 1e-5
     assert got == pytest.approx(expected, rel=2e-5, abs=2e-8)
 
@@ -65,7 +65,7 @@ def test_compiled_modal_gradient_recomputes_the_basis_on_each_call_and_under_vma
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    s = solver(1, False)
+    s = solver('jax', False)
     geometry = s.freeze_geometry()
     calculate = jax.jit(jax.value_and_grad(lambda t: loss(s, jnp, t, geometry)))
     points = np.array([0., .02, -.2, .13, 0.])
@@ -74,17 +74,17 @@ def test_compiled_modal_gradient_recomputes_the_basis_on_each_call_and_under_vma
         batched = np.array(jax.jit(jax.vmap(calculate))(jnp.asarray(points))).T
     np.testing.assert_allclose(batched, sequential, rtol=2e-12, atol=2e-12)
     for t, (value, gradient) in zip(points, sequential):
-        expected_value = loss(solver(0, False), np, t)
+        expected_value = loss(solver('numpy', False), np, t)
         h = 1e-4
-        expected_gradient = (loss(solver(0, False), np, t+h)
-                             -loss(solver(0, False), np, t-h))/(2*h)
+        expected_gradient = (loss(solver('numpy', False), np, t+h)
+                             -loss(solver('numpy', False), np, t-h))/(2*h)
         assert value == pytest.approx(expected_value, abs=2e-12)
         assert gradient == pytest.approx(expected_gradient, rel=2e-5, abs=2e-8)
 
 
 @pytest.mark.parametrize('backend', ['jax', 'jit', 'torch'])
 def test_single_precision_degenerate_field_gradient_has_an_independent_reference(backend):
-    s = solver(2 if backend == 'torch' else 1, False)
+    s = solver('torch' if backend == 'torch' else 'jax', False)
     s.complex_dtype = 1
     if backend in ('jax', 'jit'):
         jax = pytest.importorskip('jax')
@@ -100,6 +100,6 @@ def test_single_precision_degenerate_field_gradient_has_an_independent_reference
         loss(s, torch, t).backward()
         got = float(t.grad)
     h = 1e-4
-    expected = (float(loss(solver(0, False), np, h))
-                -float(loss(solver(0, False), np, -h)))/(2*h)
+    expected = (float(loss(solver('numpy', False), np, h))
+                -float(loss(solver('numpy', False), np, -h)))/(2*h)
     assert got == pytest.approx(expected, rel=2e-4, abs=2e-6)

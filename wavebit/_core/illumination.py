@@ -9,7 +9,7 @@ from dataclasses import dataclass, fields
 import numpy as np
 
 from .backend import GainCutoffWarning, _concrete, as_array, check_finite
-from .enums import Answers, answers_of
+from .enums import Answers, answers_of, backend_of
 from .field_result import ResultFields, source_state
 from .conventions import boundary_kz, gain_cutoff_band, parse_excitation, signed_index
 from .engine import _GAIN_CUTOFF_MESSAGE, _unknown_attribute, _holds_tracer
@@ -339,6 +339,7 @@ class CoherentSolver:
 
     def __init__(self, backend, args, kwargs):
         from ..main import rcwa
+        backend = backend_of(backend)
         kwargs = dict(kwargs)
         self.excitation = kwargs.pop('excitation')
         self.power_region = kwargs.pop('power_region', None)

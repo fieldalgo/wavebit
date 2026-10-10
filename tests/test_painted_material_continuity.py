@@ -21,7 +21,7 @@ def layer(left=9., right=9.):
 
 
 def total(left=9., right=9., **kwargs):
-    return float(np.sum(wavebit.rcwa(backend=0, structure=layer(left, right),
+    return float(np.sum(wavebit.rcwa(backend='numpy', structure=layer(left, right),
                                      **dict(KW, **kwargs)).solve().T))
 
 
@@ -49,7 +49,7 @@ def test_painted_materials_preserve_reflection_and_rotation(materials):
     values = []
     for shape, kwargs in ((original, {}), (reflected, dict(phi=-KW['phi'])),
                           (rotated, dict(lattice=lattice, phi=KW['phi']+angle))):
-        result = wavebit.rcwa(backend=0, structure=[dict(background=1., shapes=shape)],
+        result = wavebit.rcwa(backend='numpy', structure=[dict(background=1., shapes=shape)],
                               **dict(KW, **kwargs)).solve()
         values.append(float(np.sum(result.T)))
         power = float(np.sum(result.R+result.T))
@@ -108,7 +108,7 @@ def test_jit_and_material_gradient_through_painted_equality():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     wavebit.enable_x64()
-    solver = wavebit.rcwa(backend=1, structure=layer(), **KW)
+    solver = wavebit.rcwa(backend='jax', structure=layer(), **KW)
     geometry = solver.freeze_geometry()
     def response(d):
         return jnp.sum(solver.solve(structure=layer(9.+d, 9.), geometry=geometry).T).real
@@ -122,7 +122,7 @@ def test_jit_and_material_gradient_through_painted_equality():
 def test_torch_material_gradient_and_cross_backend_value():
     torch = pytest.importorskip('torch')
     d = torch.tensor(0., dtype=torch.float64, requires_grad=True)
-    result = wavebit.rcwa(backend=2, structure=layer(9.+d, 9.), **KW).solve().T.sum()
+    result = wavebit.rcwa(backend='torch', structure=layer(9.+d, 9.), **KW).solve().T.sum()
     result.backward()
     assert float(result.detach()) == pytest.approx(total(), abs=2e-11)
     secant = (total(9.+1e-5)-total(9.-1e-5))/2e-5
@@ -180,10 +180,10 @@ def test_float32_blend_gradients_are_finite_in_any_length_unit(scene):
     import jax.numpy as jnp
     wavebit.enable_x64()
     point = np.array([160., 100.])
-    geometry = blend_solver(0, np, scene, point, 1., 0).freeze_geometry()
+    geometry = blend_solver('numpy', np, scene, point, 1., 0).freeze_geometry()
 
     def transmission(p, scale, precision):
-        s = blend_solver(1, jnp, scene, p, scale, precision)
+        s = blend_solver('jax', jnp, scene, p, scale, precision)
         return jnp.real(s.solve(geometry=geometry, auto_detune=False).T.sum())
 
     expected, slope = jax.jit(jax.value_and_grad(lambda p: transmission(p, 1., 0)))(

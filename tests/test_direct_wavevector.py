@@ -12,7 +12,7 @@ def _numpy(value):
     return value.detach().cpu().numpy() if hasattr(value, 'detach') else np.asarray(value)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 @pytest.mark.parametrize('eps', [2.25, 4. + 3j])
 @pytest.mark.parametrize('theta,phi', [(.4, .7), (-.3, 2.4), (0., 0.)])
@@ -53,7 +53,7 @@ def test_direct_k_matches_independent_magnetic_lossy_interface(route, side, pol,
     np.testing.assert_allclose(getattr(result.incident, 't_' + 'sp'[j]), t[j], atol=3e-12)
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_direct_k_stays_fixed_during_wavelength_and_material_sweep(backend):
     s = wavebit.rcwa(backend=backend, kx=.003, ky=-.002, wavelength=500.,
                      top=wavebit.TabulatedMaterial([500., 700.], [2.25, 4.+3j]),
@@ -77,7 +77,7 @@ def test_direction_inputs_are_exclusive(kwargs):
     assert any('alternative incident directions' in p for p in wavebit.Incidence(**kwargs).check())
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('value', [.01j, float('nan'), float('inf'), [0.], np.array([0.])])
 def test_bad_k_is_not_silently_coerced(backend, value):
     with pytest.raises(ValueError, match='finite real scalar'):
@@ -85,7 +85,7 @@ def test_bad_k_is_not_silently_coerced(backend, value):
     assert wavebit.Incidence(kx=value).check()
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('value', [.01 + .002j, np.complex128(.01 + .002j)])
 def test_complex_k_refusal_points_to_the_angles(backend, value):
     """A complex kx is refused on purpose, and the refusal says where the door is.
@@ -104,7 +104,7 @@ def test_complex_k_refusal_points_to_the_angles(backend, value):
     assert 'arcsin' not in str(short.value), 'a NaN is not a complex wavevector'
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_complex_theta_is_the_only_input_that_warns(backend):
     """``ComplexIncidenceWarning`` fires exactly when the incident kx is complex.
 
@@ -165,7 +165,7 @@ def test_incidence_spec_roundtrip_and_sweep():
     assert abs(actual[0]-actual[1]) > 1e-4
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_direct_conditions_recast_and_stale_field(backend):
     s = wavebit.rcwa(backend=backend, kx=.002, ky=.001, wavelength=500.,
                      period=700., structure=np.full((1, 2, 2), 2.25),
@@ -189,7 +189,7 @@ def test_fixed_k_absorption_gradient_matches_independent_heat(backend):
         import torch as xp
     k0 = 2*np.pi/500.
     def objective(v):
-        s = wavebit.rcwa(backend=1 if backend == 'jax' else 2, kx=v[0], ky=v[1],
+        s = wavebit.rcwa(backend='jax' if backend == 'jax' else 'torch', kx=v[0], ky=v[1],
                          top=2.25+.7j, bot=1., wavelength=500., period=700.,
                          structure=np.full((1, 2, 2), 4.+.8j), thickness=[75.],
                          polarization=(.6, .8j))
@@ -218,7 +218,7 @@ def test_jax_pytree_and_traced_condition_restore():
     import jax
     import jax.numpy as jnp
     wavebit.enable_x64()
-    s = wavebit.rcwa(backend=1, kx=.002, ky=.001, wavelength=500.,period=700.,
+    s = wavebit.rcwa(backend='jax', kx=.002, ky=.001, wavelength=500.,period=700.,
                      structure=np.full((1, 2, 2), 2.25), thickness=[100.], answers='field')
     leaves, tree = jax.tree_util.tree_flatten(s)
     clone = jax.tree_util.tree_unflatten(tree, leaves)
@@ -235,7 +235,7 @@ def test_jax_pytree_and_traced_condition_restore():
     np.testing.assert_allclose(s.solve().T, original, atol=1e-14)
     @jax.jit
     def order(k):
-        return wavebit.rcwa(backend=1, kx=k).order_kxy()[0]
+        return wavebit.rcwa(backend='jax', kx=k).order_kxy()[0]
     assert np.isnan(order(jnp.asarray(.01j))).all()
 
 
@@ -264,7 +264,7 @@ def test_spec_and_sweep_reject_invalid_components(value):
         wavebit.Sweep.from_dict({'ky': [value]})
 
 
-@pytest.mark.parametrize('backend', [0, 1, 2])
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_ky_only_and_single_precision(backend):
     s = wavebit.rcwa(backend=backend, ky=.002, wavelength=500.,complex_dtype=1)
     x, y = map(_numpy, s.order_kxy())

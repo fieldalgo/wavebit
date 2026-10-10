@@ -69,7 +69,7 @@ def test_saved_field_coordinate_gradient_matches_vacuum_maxwell_wave(backend, ki
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
         wavebit.enable_x64()
-    solver = vacuum(2 if backend == 'torch' else 1, kind, side, algorithm)
+    solver = vacuum('torch' if backend == 'torch' else 'jax', kind, side, algorithm)
     result = solver.solve(auto_detune=False)
     expected, derivative = plane_wave(kind, side, Z)
     field = result.reconstruct_field([.03], [.02], Z)[:, 0, 0]
@@ -93,7 +93,7 @@ def test_moving_an_artificial_interface_cannot_change_a_fixed_field(backend, kin
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
         wavebit.enable_x64()
-    solver = vacuum(2 if backend == 'torch' else 1, kind, side, 'SMM')
+    solver = vacuum('torch' if backend == 'torch' else 'jax', kind, side, 'SMM')
     geometry = solver.freeze_geometry() if backend == 'jit' else None
     expected, _ = plane_wave(kind, side, np.array([.4]))
     expected_value = np.real(np.sum(expected*WEIGHT))
@@ -136,7 +136,7 @@ def test_eager_source_snapshot_has_the_correct_observation_height_derivative(bac
         source = wavebit.PlaneWave(side=source_kind, theta=THETA, phi=.31,
                                   polarization=(.6, .8j))
         expected, derivative = plane_wave('first_order', source_kind, Z)
-    solver = wavebit.rcwa(backend=2 if backend == 'torch' else 1, excitation=source,
+    solver = wavebit.rcwa(backend='torch' if backend == 'torch' else 'jax', excitation=source,
                          length_unit=1e-6, wavelength=WAVELENGTH, period=(1.7, 1.9),
                          structure=np.ones((2, 1, 1)), thickness=(.4, .6),
                          truncation_order=0, answers='field')
@@ -162,7 +162,7 @@ def test_unused_evanescent_layers_still_cannot_poison_the_field_gradient(backend
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
         wavebit.enable_x64()
-    solver = vacuum(2 if backend == 'torch' else 1, kind, side, 'SMM')
+    solver = vacuum('torch' if backend == 'torch' else 'jax', kind, side, 'SMM')
     solver.period = (.17, .19)
     solver.thickness = (400., 600.)
     points = np.array([0., 200., 400., 700., 1000.])

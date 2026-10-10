@@ -23,7 +23,7 @@ def _solver(backend, quantity, rule, pixels):
 @lru_cache(maxsize=None)
 def _reference(quantity, rule):
     def fresh(pixels):
-        return float(_solver(0, quantity, rule, pixels).solve().T.sum().real)
+        return float(_solver('numpy', quantity, rule, pixels).solve().T.sum().real)
     gradient = np.empty_like(PIXELS)
     for index in np.ndindex(PIXELS.shape):
         plus, minus = PIXELS.copy(), PIXELS.copy()
@@ -41,7 +41,7 @@ def test_every_pixel_gradient_matches_fresh_numpy_under_compression(mode, quanti
     if mode == 'torch':
         torch = pytest.importorskip('torch')
         pixels = torch.tensor(PIXELS, dtype=torch.float64, requires_grad=True)
-        solver = _solver(2, quantity, rule, pixels)
+        solver = _solver('torch', quantity, rule, pixels)
         geometry = solver.freeze_geometry()
         value = solver.solve(**{quantity: pixels}, geometry=geometry).T.sum().real
         value.backward()
@@ -50,7 +50,7 @@ def test_every_pixel_gradient_matches_fresh_numpy_under_compression(mode, quanti
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
         wavebit.enable_x64()
-        solver = _solver(1, quantity, rule, PIXELS)
+        solver = _solver('jax', quantity, rule, PIXELS)
         geometry = solver.freeze_geometry()
         def objective(pixels):
             return solver.solve(**{quantity: pixels}, geometry=geometry).T.sum().real
@@ -82,7 +82,7 @@ def test_fit_updates_every_uniform_pixel_using_independent_derivatives(quantity)
     pixels = np.full((1, 3, 3), 4.)
     if quantity == 'mu':
         cfg['structure'] = np.full_like(pixels, 2.25)
-    solver = wavebit.rcwa(backend=1, **cfg, **{quantity: pixels})
+    solver = wavebit.rcwa(backend='jax', **cfg, **{quantity: pixels})
     observed = []
     optimizer = optax.sgd(.1)
 
@@ -98,7 +98,7 @@ def test_fit_updates_every_uniform_pixel_using_independent_derivatives(quantity)
     assert len(observed) == 2
     expected = pixels.copy()
     def fresh(p):
-        return float(wavebit.rcwa(backend=0, **cfg, **{quantity: p}).solve().T.sum().real)
+        return float(wavebit.rcwa(backend='numpy', **cfg, **{quantity: p}).solve().T.sum().real)
     for point, actual in observed:
         np.testing.assert_allclose(point, expected, atol=1e-9, rtol=0)
         want = np.empty_like(point)

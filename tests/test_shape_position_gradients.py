@@ -69,7 +69,7 @@ def _shape(kind, param, value):
 def _position_gradients(kind, param):
     """``d(sum R)/d(param)`` at each position. Every entry should be zero."""
     def objective(v):
-        res = wavebit.rcwa(backend=1, structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
+        res = wavebit.rcwa(backend='jax', structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).solve()
         return jnp.real(jnp.sum(res.R))
 
@@ -87,7 +87,7 @@ def test_translation_invariance_holds_in_the_objective(kind, param):
     bound is where a real regression, not a rounding difference, would land.
     """
     def total(v):
-        res = wavebit.rcwa(backend=0, structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
+        res = wavebit.rcwa(backend='numpy', structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).solve()
         return float(np.sum(np.asarray(res.R)).real)
 
@@ -238,12 +238,12 @@ def _stack(cx0, cx1):
 
 
 def _stack_total(cx0, cx1):
-    res = wavebit.rcwa(backend=0, structure=_stack(cx0, cx1), **STACK).solve()
+    res = wavebit.rcwa(backend='numpy', structure=_stack(cx0, cx1), **STACK).solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _stack_jtotal(cx0, cx1):
-    res = wavebit.rcwa(backend=1, structure=_stack(cx0, cx1), **STACK).solve()
+    res = wavebit.rcwa(backend='jax', structure=_stack(cx0, cx1), **STACK).solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -338,7 +338,7 @@ def _two(pair, ca, cb):
 
 
 def _two_total(pair, ca, cb):
-    res = wavebit.rcwa(backend=0, structure=_two(pair, ca, cb), **TWO_CFG).solve()
+    res = wavebit.rcwa(backend='numpy', structure=_two(pair, ca, cb), **TWO_CFG).solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
@@ -350,11 +350,11 @@ def _two_frozen(pair, ca, cb):
     and replayed. Every pair below stays disjoint across its window, so one freeze covers the
     whole sweep and the record never goes stale.
     """
-    return wavebit.rcwa(backend=0, structure=_two(pair, ca, cb), **TWO_CFG).freeze_geometry()
+    return wavebit.rcwa(backend='numpy', structure=_two(pair, ca, cb), **TWO_CFG).freeze_geometry()
 
 
 def _two_jtotal(pair, ca, cb, geometry=None):
-    solver = wavebit.rcwa(backend=1, structure=_two(pair, ca, cb), **TWO_CFG)
+    solver = wavebit.rcwa(backend='jax', structure=_two(pair, ca, cb), **TWO_CFG)
     res = solver.solve(geometry=geometry)
     return jnp.real(jnp.sum(res.R))
 
@@ -439,7 +439,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
     is what this measured; a shift landing on the grid was exact even then. Both are at
     rounding now and both are asserted there.
     """
-    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
+    cfg = dict(backend='numpy', period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(d, grid=256):
@@ -504,7 +504,7 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
     test replaced ``test_a_multishape_layer_is_not_periodic_across_the_cell_edge`` on
     2026-08-17, which existed to fail loudly on the day the path was repaired.
     """
-    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
+    cfg = dict(backend='numpy', period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
     fixed = dict(type='rectangle', cx=0.22, cy=0.12, lx=0.26, ly=0.30, angle=0.0, material=4.41)
 
@@ -543,7 +543,7 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
     different points and leave ~6e-5 of discretization. Since the layer is built with its first
     shape at the centre and carried by a phase (2026-09-11) the fractional shifts are exact too.
     """
-    cfg = dict(backend=0, period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
+    cfg = dict(backend='numpy', period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncation_order=(4, 4),
                top=1.0, bot=2.1025, theta=0.0, phi=None, psi=np.pi / 2)
 
     def total(shift):

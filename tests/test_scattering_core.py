@@ -105,7 +105,7 @@ EFFICIENCIES = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _solve(algo, kwargs):
-    return wavebit.rcwa(backend=0, layer_algorithm=algo, **kwargs).solve()
+    return wavebit.rcwa(backend='numpy', layer_algorithm=algo, **kwargs).solve()
 
 
 # ------------------------------------------------------------------------------- agreement
@@ -179,7 +179,7 @@ def test_half_space_permittivity_reaches_both_connecting_algorithms(slot):
 
 def _core_inputs(kwargs):
     """Solver-built arguments for a direct core call (same route the mixin takes)."""
-    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
+    solver = wavebit.rcwa(backend='numpy', layer_algorithm='SMM', **kwargs)
     solver.solve()                    # assigns the grating type
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.truncation_order[0], solver.truncation_order[1])
@@ -245,7 +245,7 @@ def _incidences_of(solver):
 
 
 def _field(algo, kwargs, **res):
-    solver = wavebit.rcwa(backend=0, layer_algorithm=algo, answers='field', **kwargs)
+    solver = wavebit.rcwa(backend='numpy', layer_algorithm=algo, answers='field', **kwargs)
     solver.solve()
     cell = solver.reconstruct_field(incidences=_incidences_of(solver), **res)
     return solver, np.array(cell)
@@ -298,8 +298,8 @@ def test_smm_field_state_matches_tmm(name, kwargs, kind):
     mode alike. So each layer's ``+`` amplitude at its top and ``-`` amplitude at its bottom must
     agree, the bottom layer included (the ``M`` walk this replaced could only fix a product there).
     """
-    tmm = wavebit.rcwa(backend=0, layer_algorithm='ETM', answers='field', **kwargs)
-    smm = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='field', **kwargs)
+    tmm = wavebit.rcwa(backend='numpy', layer_algorithm='ETM', answers='field', **kwargs)
+    smm = wavebit.rcwa(backend='numpy', layer_algorithm='SMM', answers='field', **kwargs)
     tmm.solve()
     smm.solve()
 
@@ -326,7 +326,7 @@ CUTOFF = dict(structure=np.array([[[4., 4., 4., 1., 1., 1.]], [[9., 9., 1., 1., 
 def test_smm_field_with_an_order_exactly_at_the_substrate_cutoff(extra):
     """A retained order sitting at kz_bot = 0 is a real configuration, not a pathology."""
     kwargs = dict(CUTOFF, **extra)
-    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
+    solver = wavebit.rcwa(backend='numpy', layer_algorithm='SMM', **kwargs)
     kz = np.sqrt(np.array(solver.n_bot, dtype=complex) ** 2
                  - np.array(solver.order_kxy()[0]) ** 2)
     assert np.min(np.abs(kz)) < 1e-12, 'premise: an order must sit exactly at cutoff'
@@ -384,7 +384,7 @@ def test_field_before_solve_raises():
     `answers` check ahead of it; that one has its own coverage in
     `test_answers_declaration.py` and matches on a different sentence.
     """
-    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='field', **CASES_1D[0][1])
+    solver = wavebit.rcwa(backend='numpy', layer_algorithm='SMM', answers='field', **CASES_1D[0][1])
     with pytest.raises(RuntimeError, match='run solve'):
         solver.reconstruct_field(sample_x=4, sample_z=4)
 
@@ -392,7 +392,7 @@ def test_field_before_solve_raises():
 def test_frozen_geometry_does_not_change_the_smm_answer():
     """SMM decides nothing discrete, so freezing must be a no-op for it, bit for bit."""
     kwargs = dict(CASES_1D[4][1])          # a substrate-matched bottom layer
-    solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', **kwargs)
+    solver = wavebit.rcwa(backend='numpy', layer_algorithm='SMM', **kwargs)
     with_geom = solver.solve(geometry=solver.freeze_geometry())
     without = _solve('SMM', kwargs)
     assert np.allclose(np.array(with_geom.R), np.array(without.R), atol=0, rtol=0)
@@ -484,7 +484,7 @@ def _negative_permittivity_amplitudes(algo, path, region, background, width, wav
     rows = 5 if path == '2d' else 1
     eps = np.full((1, 8 if path == '2d' else 1, 20), background, dtype=complex)
     eps[0, :rows, :width] = region[0]
-    kw = dict(backend=0, layer_algorithm=algo, answers='amplitude', structure=eps, top=1.0,
+    kw = dict(backend='numpy', layer_algorithm=algo, answers='amplitude', structure=eps, top=1.0,
               bot=1.0, theta=theta, wavelength=wavelength, thickness=[thickness],
               truncation_order=truncation)
     if region[1] is not None:
@@ -533,7 +533,7 @@ def test_the_gap_has_waves_at_an_imaginary_k_par(extra, monkeypatch):
     complex ``k_par``.
     """
     from wavebit._core import scattering
-    kw = dict(backend=0, structure=np.array([[[4., 4., 1., 1., 1., 1.]]]), thickness=[200.0],
+    kw = dict(backend='numpy', structure=np.array([[[4., 4., 1., 1., 1., 1.]]]), thickness=[200.0],
               top=1.0, bot=2.25, theta=1j * np.arcsinh(1.0), wavelength=900.0, period=[700.0],
               truncation_order=4, answers='amplitude', **extra)
     solver = wavebit.rcwa(**kw)
@@ -582,13 +582,13 @@ def test_cross_backend(name, kwargs, kind, backend):
     assert np.allclose(np.array(ti0), np.asarray(ti), atol=1e-10, rtol=0)
 
 
-@pytest.mark.parametrize('backend,name', [(1, 'jax'), (2, 'torch')], ids=['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('case', [CASES_1D[2], CASES_CONICAL[1], CASES_2D[0]],
                          ids=['1d', 'conical', '2d'])
-def test_smm_field_cross_backend(case, backend, name):
+def test_smm_field_cross_backend(case, backend):
     """The amplitude recovery is Array-API code like the rest — same field on every backend."""
-    pytest.importorskip(name)
-    if name == 'jax':
+    pytest.importorskip(backend)
+    if backend == 'jax':
         wavebit.enable_x64()
     kwargs = case[1]
     _, reference = _field('SMM', kwargs, sample_x=5, sample_y=5, sample_z=4)
@@ -681,7 +681,7 @@ S_KW = dict(structure=UC_1D[::-1], thickness=[0.22, 0.15], top=4.0, bot=2.25, te
 def _lit(side='top', algo='SMM', **over):
     kw = dict(S_KW, theta=0.3, incidence_side=side, layer_algorithm=algo)
     kw.update(over)
-    solver = wavebit.rcwa(backend=0, **kw)
+    solver = wavebit.rcwa(backend='numpy', **kw)
     return solver, solver.solve()
 
 
@@ -745,7 +745,7 @@ def test_two_reasons_at_once_name_the_one_that_would_still_bite():
 
 def test_the_unsolved_solver_is_told_to_solve_and_not_to_reconfigure():
     """Declared right, just not run -- the one reason where "solve" is the whole answer."""
-    solver = wavebit.rcwa(backend=0, **dict(S_KW, theta=0.3, layer_algorithm='SMM'))
+    solver = wavebit.rcwa(backend='numpy', **dict(S_KW, theta=0.3, layer_algorithm='SMM'))
     with pytest.raises(RuntimeError, match='run solve'):
         solver.scattering
 
@@ -912,7 +912,7 @@ JOINT_KW = dict(tetm='te', wavelength=0.777, period=[0.77], truncation_order=[5,
 
 
 def _piece(structure, thickness, top, bot, theta, side='top', tetm='te'):
-    solver = wavebit.rcwa(backend=0, structure=structure[::-1], thickness=thickness[::-1], top=top,
+    solver = wavebit.rcwa(backend='numpy', structure=structure[::-1], thickness=thickness[::-1], top=top,
                           bot=bot, theta=theta, incidence_side=side,
                           **dict(JOINT_KW, tetm=tetm))
     solver.solve()
@@ -1044,7 +1044,7 @@ CUT_HEX = [dict(background=1.0,
            dict(background=6.25,
                 shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=240.0, material=1.0)])]
 CUT_HEX_TH = [150.0, 220.0]
-CUT_HEX_KW = dict(backend=0, wavelength=900.0, truncation_order=[3, 3], theta=0.0, phi=0.0,
+CUT_HEX_KW = dict(backend='numpy', wavelength=900.0, truncation_order=[3, 3], theta=0.0, phi=0.0,
                   psi=0.7, answers='amplitude', layer_algorithm='SMM')
 
 
@@ -1113,7 +1113,7 @@ def test_cascading_across_a_respelt_oblique_cell_is_refused():
 def _coupled_piece(structure, thickness, top, bot, theta, side='top'):
     """:func:`_piece` on the coupled path: the same scene lit by a pair at ``phi = 0``."""
     kw = dict(JOINT_KW, tetm=None, psi=0.7, phi=0.0)
-    solver = wavebit.rcwa(backend=0, structure=structure[::-1], thickness=thickness[::-1],
+    solver = wavebit.rcwa(backend='numpy', structure=structure[::-1], thickness=thickness[::-1],
                           top=top, bot=bot, theta=theta, incidence_side=side, **kw)
     solver.solve()
     return solver.scattering
@@ -1138,7 +1138,7 @@ def test_every_port_says_which_polarization_it_counts(side):
         ports = solver.scattering.entry_port, solver.scattering.exit_port
         assert tuple(p.channel for p in ports) == (channel, channel), kw
     for formulation in ('second_order', 'first_order'):
-        solver = wavebit.rcwa(backend=0, layer_algorithm='SMM', answers='amplitude',
+        solver = wavebit.rcwa(backend='numpy', layer_algorithm='SMM', answers='amplitude',
                               incidence_side=side, **CASES_2D[0][1])
         solver.formulation = formulation
         solver.solve()
@@ -1227,7 +1227,7 @@ def test_the_channel_crosses_a_jit_boundary_as_aux_data(kw, channel):
     names a bad leaf names its field rather than a flat index.
     """
     jax = pytest.importorskip('jax')
-    solver = wavebit.rcwa(backend=1, **dict(S_KW, theta=0.3, layer_algorithm='SMM', **kw))
+    solver = wavebit.rcwa(backend='jax', **dict(S_KW, theta=0.3, layer_algorithm='SMM', **kw))
     conv = solver.eps_conv_matrices()
 
     def matrix(epx):
@@ -1251,8 +1251,8 @@ def test_the_channel_crosses_a_jit_boundary_as_aux_data(kw, channel):
 #: and ``wavebit.enable_x64()``, the documented call for JAX arriving after wavebit. The last
 #: two must not import that backend, or they would be the first case again.
 REPAIRS = {
-    'a JAX solver built': 'wavebit.rcwa(backend=1, **kw)',
-    'another matrix built': ('wavebit.rcwa(backend=0, **kw).solve(); '
+    'a JAX solver built': 'wavebit.rcwa(backend="jax", **kw)',
+    'another matrix built': ('wavebit.rcwa(backend="numpy", **kw).solve(); '
                              "assert 'wavebit.backends.jax_backend' not in sys.modules"),
     'wavebit.enable_x64()': ('wavebit.enable_x64(); '
                              "assert 'wavebit.backends.jax_backend' not in sys.modules"),
@@ -1279,7 +1279,7 @@ def test_a_matrix_built_before_jax_is_imported_is_repaired(repair):
         kw = dict(structure=np.array([[[1.0, 12.25, 12.25, 1.0]]]), tetm='te', top=1.0,
                   bot=2.25, theta=0.2, truncation_order=[2, 0], wavelength=900.0,
                   period=[700.0], thickness=[300.0], answers='amplitude', layer_algorithm='SMM')
-        solver = wavebit.rcwa(backend=0, **kw)
+        solver = wavebit.rcwa(backend='numpy', **kw)
         solver.solve()
         early = solver.scattering
         assert 'jax' not in sys.modules

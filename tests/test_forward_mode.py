@@ -42,9 +42,9 @@ pytestmark = pytest.mark.filterwarnings('ignore')
 # ------------------------------------------------------------------------------- the scenes
 
 def _lift(backend, a):
-    if backend == 0:
+    if backend == 'numpy':
         return np.asarray(a)
-    if backend == 1:
+    if backend == 'jax':
         import jax.numpy as jnp
         return jnp.asarray(a)
     import torch
@@ -52,9 +52,9 @@ def _lift(backend, a):
 
 
 def _stack(backend, items):
-    if backend == 0:
+    if backend == 'numpy':
         return np.array([float(np.real(np.asarray(i))) for i in items])
-    if backend == 1:
+    if backend == 'jax':
         import jax.numpy as jnp
         return jnp.stack([jnp.real(i) for i in items])
     import torch
@@ -226,7 +226,7 @@ def tensor(parameter, coupled, formulation=None):
             solver.formulation = formulation
         # JAX traces a tensor raster only against a record of its phases.
         geometry = (wavebit.rcwa(backend=b, structure=_lift(b, base), **cfg).freeze_geometry()
-                    if b == 1 else None)
+                    if b == 'jax' else None)
         return _read_out(b, solver.solve(geometry=geometry), 'r_s', 4, point=([10.], [20.], [60.]))
     return f
 
@@ -243,7 +243,7 @@ def field_door(b, p):
     cfg = {k: v for k, v in TWO_D.items() if k != 'answers'}
     solver = wavebit.rcwa(backend=b, structure=_lift(b, RASTER), answers='field', **cfg)
     structure = _lift(b, RASTER) + p * _lift(b, PIXELS)
-    if b == 1:
+    if b == 'jax':
         result, cell = solver.solve_field(3, 2, 2, geometry=solver.freeze_geometry(),
                                           structure=structure)
     else:
@@ -284,9 +284,9 @@ def nvf_cell(parameter):
 
 
 def _xp(b):
-    if b == 0:
+    if b == 'numpy':
         return np
-    if b == 1:
+    if b == 'jax':
         import jax.numpy as jnp
         return jnp
     import torch
@@ -311,7 +311,7 @@ def spelled_cell(spelling):
             rows = [[_lift(b, 400.0), 400.0 * xp.cos(p)], [_lift(b, 0.0), 400.0 * xp.sin(p)]]
             if spelling == 'lists':
                 lattice = rows
-            elif b == 0:
+            elif b == 'numpy':
                 lattice = np.array(rows, dtype=float)
             else:
                 lattice = xp.stack([xp.stack(row) for row in rows])
@@ -385,9 +385,9 @@ PATHS_AND_JAX_ONLY = {**PATHS, **JAX_ONLY}
 def _difference(name):
     """The read-out and its central difference on NumPy, Richardson-extrapolated: O(h^4)."""
     f, at, h = PATHS_AND_JAX_ONLY[name]
-    near = (f(0, at + h) - f(0, at - h)) / (2 * h)
-    far = (f(0, at + 2 * h) - f(0, at - 2 * h)) / (4 * h)
-    return f(0, at), (4 * near - far) / 3
+    near = (f('numpy', at + h) - f('numpy', at - h)) / (2 * h)
+    far = (f('numpy', at + 2 * h) - f('numpy', at - 2 * h)) / (4 * h)
+    return f('numpy', at), (4 * near - far) / 3
 
 
 def _weights(n):
@@ -427,11 +427,11 @@ def test_jax_forward_mode_is_the_reverse_mode_derivative(name):
     value, finite = _difference(name)
     w = _weights(value.size)
     x = jnp.asarray(at, dtype=jnp.float64)
-    primal, tangent = jax.jvp(lambda p: f(1, p), (x,), (jnp.asarray(1.0),))
-    gradient = jax.grad(lambda p: jnp.sum(jnp.asarray(w) * f(1, p)))(x)
+    primal, tangent = jax.jvp(lambda p: f('jax', p), (x,), (jnp.asarray(1.0),))
+    gradient = jax.grad(lambda p: jnp.sum(jnp.asarray(w) * f('jax', p)))(x)
     np.testing.assert_allclose(np.asarray(primal), value, rtol=0, atol=1e-10)
     if name in JACFWD:
-        assert _close(jax.jacfwd(lambda p: f(1, p))(x), tangent, 1e-13)
+        assert _close(jax.jacfwd(lambda p: f('jax', p))(x), tangent, 1e-13)
     assert float(w @ np.asarray(tangent)) == pytest.approx(float(gradient), rel=1e-11)
     assert _close(tangent, finite, 1e-6), (np.asarray(tangent), finite)
 
@@ -448,8 +448,8 @@ def test_jax_forward_mode_on_an_oblique_cell_under_jit(parameter, at):
     jax = pytest.importorskip('jax')
     wavebit.enable_x64()
     import jax.numpy as jnp
-    geometry = _oblique_solver(1).freeze_geometry()
-    f = jax.jit(lambda p: oblique_cell(parameter)(1, p, geometry))
+    geometry = _oblique_solver('jax').freeze_geometry()
+    f = jax.jit(lambda p: oblique_cell(parameter)('jax', p, geometry))
     x = jnp.asarray(at, dtype=jnp.float64)
     w = _weights(np.asarray(f(x)).size)
     _, tangent = jax.jit(lambda p: jax.jvp(f, (p,), (jnp.ones_like(p),)))(x)
@@ -472,13 +472,13 @@ def test_torch_forward_ad_on_an_oblique_cell_angle():
     torch = pytest.importorskip('torch')
     from torch.autograd import forward_ad
     f = oblique_cell('angle')
-    w = _weights(f(0, OBLIQUE).size)
+    w = _weights(f('numpy', OBLIQUE).size)
     with forward_ad.dual_level():
         dual = forward_ad.make_dual(torch.tensor(OBLIQUE, dtype=torch.float64),
                                     torch.tensor(1.0, dtype=torch.float64))
-        tangent = forward_ad.unpack_dual(f(2, dual)).tangent.numpy()
+        tangent = forward_ad.unpack_dual(f('torch', dual)).tangent.numpy()
     x = torch.tensor(OBLIQUE, dtype=torch.float64, requires_grad=True)
-    (torch.as_tensor(w) * f(2, x)).sum().backward()
+    (torch.as_tensor(w) * f('torch', x)).sum().backward()
     assert float(w @ tangent) == pytest.approx(float(x.grad), rel=1e-11)
 
 
@@ -495,14 +495,14 @@ def test_torch_forward_ad_is_the_reverse_mode_derivative(name):
     f, at, _ = PATHS[name]
     value, finite = _difference(name)
     w = _weights(value.size)
-    plain = f(2, torch.tensor(at, dtype=torch.float64))
+    plain = f('torch', torch.tensor(at, dtype=torch.float64))
     with forward_ad.dual_level():
         dual = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64),
                                     torch.tensor(1.0, dtype=torch.float64))
-        primal, tangent = forward_ad.unpack_dual(f(2, dual))
+        primal, tangent = forward_ad.unpack_dual(f('torch', dual))
         tangent = np.zeros(value.shape) if tangent is None else tangent.numpy()
     x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
-    (torch.as_tensor(w) * f(2, x)).sum().backward()
+    (torch.as_tensor(w) * f('torch', x)).sum().backward()
     np.testing.assert_allclose(plain.numpy(), value, rtol=0, atol=1e-10)
     np.testing.assert_allclose(primal.detach().numpy(), value, rtol=0, atol=1e-10)
     assert float(w @ tangent) == pytest.approx(float(x.grad), rel=1e-11)
@@ -519,7 +519,7 @@ def test_a_sampled_tensor_shape_refuses_a_forward_mode_geometry_derivative():
         lx = forward_ad.make_dual(torch.tensor(270.0, dtype=torch.float64),
                                   torch.tensor(1.0, dtype=torch.float64))
         solver = wavebit.rcwa(
-            backend=2, wavelength=700., period=(600., 600.), thickness=[170.],
+            backend='torch', wavelength=700., period=(600., 600.), thickness=[170.],
             structure=[dict(background=1., shapes=[dict(type='circle', lx=lx,
                                                           material=wavebit.Material([2., 3., 4.]))])],
             truncation_order=(1, 1), shape_nvf_grid_size=24, phi=.1, fourier_coefficients='sampled')
@@ -551,15 +551,15 @@ def test_forward_mode_reaches_the_detuned_retry():
     torch = pytest.importorskip('torch')
     from torch.autograd import forward_ad
     h = 1e-4
-    finite = (float(_rayleigh(0, 2.25 + h)) - float(_rayleigh(0, 2.25 - h))) / (2 * h)
-    plain = float(_rayleigh(2, torch.tensor(2.25, dtype=torch.float64)))
+    finite = (float(_rayleigh('numpy', 2.25 + h)) - float(_rayleigh('numpy', 2.25 - h))) / (2 * h)
+    plain = float(_rayleigh('torch', torch.tensor(2.25, dtype=torch.float64)))
     with forward_ad.dual_level():
-        assert float(_rayleigh(2, torch.tensor(2.25, dtype=torch.float64))) == plain
+        assert float(_rayleigh('torch', torch.tensor(2.25, dtype=torch.float64))) == plain
         dual = forward_ad.make_dual(torch.tensor(2.25, dtype=torch.float64),
                                     torch.tensor(1.0, dtype=torch.float64))
-        tangent = float(forward_ad.unpack_dual(_rayleigh(2, dual)).tangent)
+        tangent = float(forward_ad.unpack_dual(_rayleigh('torch', dual)).tangent)
     x = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
-    reverse = float(torch.autograd.grad(_rayleigh(2, x), x)[0])
+    reverse = float(torch.autograd.grad(_rayleigh('torch', x), x)[0])
     # The detuned solve sits next to a grazing order and loses digits: the two modes agree to
     # 2e-10 here, not to the 1e-11 of an ordinary point.
     assert tangent == pytest.approx(reverse, rel=1e-8)
@@ -609,9 +609,9 @@ def test_jax_forward_mode_stops_at_first_order(route, jit):
     import jax.numpy as jnp
     geometry = None
     if jit:
-        geometry = wavebit.rcwa(backend=1, structure=jnp.asarray(RASTER),
+        geometry = wavebit.rcwa(backend='jax', structure=jnp.asarray(RASTER),
                                 **dict(TWO_D, truncation_order=[1, 1])).freeze_geometry()
-    scene = lambda p: _second_order_scene(1, p, geometry)
+    scene = lambda p: _second_order_scene('jax', p, geometry)
     first = lambda p: jax.jvp(scene, (p,), (jnp.ones_like(p),))[1]
     reverse = jax.grad(scene)
     second = JAX_ROUTES[route](jax, scene)
@@ -635,10 +635,10 @@ def test_a_torch_mixed_second_derivative_is_refused_by_name(route):
     with forward_ad.dual_level(), pytest.raises(RuntimeError, match='first order'):
         dual = forward_ad.make_dual(x, torch.tensor(1.0, dtype=torch.float64))
         if route == 'forward_ad over backward':
-            gradient, = torch.autograd.grad(_second_order_scene(2, dual), x)
+            gradient, = torch.autograd.grad(_second_order_scene('torch', dual), x)
             forward_ad.unpack_dual(gradient)
         else:
-            tangent = forward_ad.unpack_dual(_second_order_scene(2, dual)).tangent
+            tangent = forward_ad.unpack_dual(_second_order_scene('torch', dual)).tangent
             torch.autograd.grad(tangent, x)
 
 
@@ -664,12 +664,12 @@ def test_a_hessian_that_moves_no_modal_operator_is_exact():
         v = f(b, d)
         return v[0] + 0.3 * v[1] + 0.2 * v[2]
 
-    first = jax.grad(lambda d: scalar(1, d))
+    first = jax.grad(lambda d: scalar('jax', d))
     finite = (float(first(jnp.asarray(at + h))) - float(first(jnp.asarray(at - h)))) / (2 * h)
-    assert float(jax.hessian(lambda d: scalar(1, d))(jnp.asarray(at))) == pytest.approx(finite, rel=1e-6)
+    assert float(jax.hessian(lambda d: scalar('jax', d))(jnp.asarray(at))) == pytest.approx(finite, rel=1e-6)
 
     x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
-    g, = torch.autograd.grad(scalar(2, x), x, create_graph=True)
+    g, = torch.autograd.grad(scalar('torch', x), x, create_graph=True)
     assert float(torch.autograd.grad(g, x)[0]) == pytest.approx(finite, rel=1e-6)
 
 
@@ -702,17 +702,17 @@ def test_a_mixed_second_derivative_differentiates_the_rule_once():
     import jax.numpy as jnp
     eps0, d0, h = 0.0, 0.2, 1e-5
 
-    d_eps = jax.grad(lambda e, d: _mixed_scene(1, e, d, 'ETM'))
+    d_eps = jax.grad(lambda e, d: _mixed_scene('jax', e, d, 'ETM'))
     finite = (float(d_eps(jnp.asarray(eps0), jnp.asarray(d0 + h)))
               - float(d_eps(jnp.asarray(eps0), jnp.asarray(d0 - h)))) / (2 * h)
     routes = {
         'jvp in d of grad in eps':
             lambda: jax.jvp(lambda d: d_eps(jnp.asarray(eps0), d), (jnp.asarray(d0),), (jnp.asarray(1.0),))[1],
         'jvp in eps of grad in d':
-            lambda: jax.jvp(lambda e: jax.grad(lambda d: _mixed_scene(1, e, d, 'ETM'))(jnp.asarray(d0)),
+            lambda: jax.jvp(lambda e: jax.grad(lambda d: _mixed_scene('jax', e, d, 'ETM'))(jnp.asarray(d0)),
                             (jnp.asarray(eps0),), (jnp.asarray(1.0),))[1],
         'grad in eps of grad in d':
-            lambda: jax.grad(lambda e: jax.grad(lambda d: _mixed_scene(1, e, d, 'ETM'))(jnp.asarray(d0)))(
+            lambda: jax.grad(lambda e: jax.grad(lambda d: _mixed_scene('jax', e, d, 'ETM'))(jnp.asarray(d0)))(
                 jnp.asarray(eps0)),
     }
     for name, run in routes.items():
@@ -720,24 +720,24 @@ def test_a_mixed_second_derivative_differentiates_the_rule_once():
 
     e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
     d = torch.tensor(d0, dtype=torch.float64, requires_grad=True)
-    g, = torch.autograd.grad(_mixed_scene(2, e, d, 'ETM'), d, create_graph=True)
+    g, = torch.autograd.grad(_mixed_scene('torch', e, d, 'ETM'), d, create_graph=True)
     assert float(torch.autograd.grad(g, e)[0]) == pytest.approx(finite, rel=1e-6)
 
     def d_eps_torch(d):
         e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
-        return float(torch.autograd.grad(_mixed_scene(2, e, torch.tensor(d, dtype=torch.float64), 'SMM'), e)[0])
+        return float(torch.autograd.grad(_mixed_scene('torch', e, torch.tensor(d, dtype=torch.float64), 'SMM'), e)[0])
 
     finite = (d_eps_torch(d0 + h) - d_eps_torch(d0 - h)) / (2 * h)
     one = torch.tensor(1.0, dtype=torch.float64)
     e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
     with forward_ad.dual_level():
         dual = forward_ad.make_dual(torch.tensor(d0, dtype=torch.float64), one)
-        gradient, = torch.autograd.grad(_mixed_scene(2, e, dual, 'SMM'), e)
+        gradient, = torch.autograd.grad(_mixed_scene('torch', e, dual, 'SMM'), e)
         forward_over_backward = float(forward_ad.unpack_dual(gradient).tangent)
     e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
     with forward_ad.dual_level():
         dual = forward_ad.make_dual(torch.tensor(d0, dtype=torch.float64), one)
-        tangent = forward_ad.unpack_dual(_mixed_scene(2, e, dual, 'SMM')).tangent
+        tangent = forward_ad.unpack_dual(_mixed_scene('torch', e, dual, 'SMM')).tangent
     backward_over_forward = float(torch.autograd.grad(tangent, e)[0])
     assert forward_over_backward == pytest.approx(finite, rel=1e-6)
     assert backward_over_forward == pytest.approx(finite, rel=1e-6)
@@ -762,9 +762,9 @@ def test_native_j1_forward_mode():
         with forward_ad.dual_level():
             dual = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64),
                                         torch.tensor(1.0, dtype=torch.float64))
-            tangent = forward_ad.unpack_dual(f(2, dual)).tangent.numpy()
+            tangent = forward_ad.unpack_dual(f('torch', dual)).tangent.numpy()
         x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
-        (torch.as_tensor(w) * f(2, x)).sum().backward()
+        (torch.as_tensor(w) * f('torch', x)).sum().backward()
         assert float(w @ tangent) == pytest.approx(float(x.grad), rel=1e-11)
         # The native J1 is accurate to ~4e-7 in float64 (docs/bessel-j1.md), so the scene's
         # derivative is too.
@@ -790,7 +790,7 @@ def test_torch_func_is_refused_by_name(transform):
     error at the eigensolve, a function no derivative ever flows through."""
     torch = pytest.importorskip('torch')
     x = torch.tensor(0.0, dtype=torch.float64)
-    scene = lambda p: _second_order_scene(2, p)
+    scene = lambda p: _second_order_scene('torch', p)
     run = {'jvp': lambda: torch.func.jvp(scene, (x,), (torch.ones_like(x),)),
            'grad': lambda: torch.func.grad(scene)(x),
            'jacrev': lambda: torch.func.jacrev(scene)(x),
