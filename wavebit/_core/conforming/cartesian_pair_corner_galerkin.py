@@ -13,8 +13,10 @@ from .pair_junction_quadrature import quadrature as junction_quadrature
 from .pair_corner_contact import solve as solve_contact
 from .pair_corner_positive import response as solve_positive, verify as verify_energy
 from .real_trace_coupling import coupled_positive
+from ..backend import eager_under_torch_compile
 
 
+@eager_under_torch_compile
 class CartesianPairCornerGalerkinGapCell:
     """Cubic/quartic pair potentials, outer-corner powers and real gap traces.
 

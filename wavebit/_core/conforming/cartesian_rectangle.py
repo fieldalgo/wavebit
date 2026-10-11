@@ -17,6 +17,7 @@ from ..factorization import ConvMatrices
 from ..conventions import swap_fourier_origin
 from ..backend import _concrete
 from ..polygon import polygon_ft, rect_verts
+from ..backend import eager_under_torch_compile
 
 
 def _require(condition, message):
@@ -300,6 +301,7 @@ class _CartesianRectangleNVFPlan:
     layers: tuple
 
 
+@eager_under_torch_compile
 class CartesianRectangleNVF:
     """Experimental finite NVF for one separated physical rectangle per layer.
 

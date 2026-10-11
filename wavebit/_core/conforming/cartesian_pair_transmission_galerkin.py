@@ -4,8 +4,10 @@ from ..conventions import swap_fourier_origin
 import numpy as np
 from .cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
 from .pair_transmission_fields import PairTransmissionFields
+from ..backend import eager_under_torch_compile
 
 
+@eager_under_torch_compile
 class CartesianPairTransmissionGalerkinGapCell(CartesianPairCornerGalerkinGapCell):
     """Experimental complete tensor/JVP with a fixed reference corner space.
 

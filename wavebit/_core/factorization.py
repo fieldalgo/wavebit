@@ -110,8 +110,10 @@ from .backend import (_concrete, array_namespace, as_array, carries_autodiff, co
 from .enums import DEFAULT_NESTING, Nesting, nesting_of
 from .modal_gradient import _CREATE_GRAPH, _DUAL
 from .geometry import StaleGeometryError
+from .backend import eager_under_torch_compile
 
 
+@eager_under_torch_compile
 class ConvMatrices(NamedTuple):
     """The five convolution matrices of a layer stack, in ``solve_conv`` order.
 

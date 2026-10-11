@@ -19,6 +19,7 @@ from ..polygon import polygon_ft
 from .material_sector import (
     passive_pair_materials, phase_from_angle, minimum_rotated_storage,
 )
+from ..backend import eager_under_torch_compile
 
 
 COMPONENTS = ("Bxx", "Bxy", "Byx", "Byy", "Gxx", "Gxy", "Gyy", "epsilon", "Gyx")
@@ -56,6 +57,7 @@ def validate_geometry(basis, widths, height, offset):
     return dict(basis=a, widths=w, height=h, offset=o, gap=0.0)
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class CartesianPairOpeningPlan:
     """Contact/open topologies share a concrete cyclic index and refinement."""

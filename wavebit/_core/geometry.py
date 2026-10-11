@@ -69,12 +69,14 @@ freeze.
 """
 from dataclasses import dataclass
 from typing import Any, Optional
+from .backend import eager_under_torch_compile
 
 
 class StaleGeometryError(RuntimeError):
     """A frozen geometry no longer describes the structure it is being replayed onto."""
 
 
+@eager_under_torch_compile
 @dataclass(eq=False)
 class StaticGeometry:
     """The discrete geometry decisions of one structure, taken once.

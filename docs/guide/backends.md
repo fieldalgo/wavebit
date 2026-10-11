@@ -15,7 +15,9 @@ not a claim.
   `torch.func` grad and jvp transforms are refused by name where their input reaches a modal
   operator, and nested ones wherever the operator carries a derivative (one over a thickness
   is exact) ([`autodiff.md`](autodiff.md#forward-mode)).
-  `torch.compile` is not a supported path here.
+  Under `torch.compile` wavebit runs eagerly inside the compiled caller, so its values and
+  gradients are eager torch's; `fullgraph=True`, `torch.export` and `torch.jit.trace` are
+  refused by name ([`../torch-compile.md`](../torch-compile.md)).
 
 ```python
 solver = wavebit.rcwa(backend='numpy', ...)               # 'numpy', 'jax' or 'torch'
@@ -125,6 +127,12 @@ accuracy, not by taste, since it is a rectangle's *angle* that sets the grid.
 All of it is measured in [`../backend-choice.md`](../backend-choice.md), on one CPU host, with
 the run's own repeatability printed next to the numbers.
 
-`torch.compile` is not among the choices. It buys nothing here — the solve is almost entirely
-LAPACK calls the compiler forwards untouched — and on torch below 2.13 it does not even run,
-which is why that is the floor. See [`../torch-compile.md`](../torch-compile.md).
+`torch.compile` is no speed choice. A compiled caller is exact: every public wavebit callable
+keeps itself out of the graph (`torch.compiler.disable`), so wavebit runs eagerly inside it and
+only your own arithmetic on its outputs is compiled. That is also why it buys wavebit's part
+nothing — and it would buy little anyway, since the solve is almost entirely LAPACK calls the
+compiler forwards untouched. Until 2026-10 nothing kept wavebit out of the graph, and default
+mode returned wrong values and gradients with no error: Inductor (torch 2.13) miscompiled the
+complex identity the modal exponential is built on. `fullgraph=True`, `torch.export` and
+`torch.jit.trace` are refused by name. On torch below 2.13 compiling does not run at all, which
+is why that is the floor. See [`../torch-compile.md`](../torch-compile.md).

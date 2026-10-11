@@ -45,6 +45,7 @@ from .scattering import smm_1d as _smm_1d, smm_1d_conical as _smm_1d_conical, sm
 from .solve_1d import solve_1d as _etm_1d, solve_1d_conical as _etm_1d_conical
 from .solve_2d import solve_2d as _etm_2d
 from .solve_2d_first_order import solve_2d_first_order as _solve_2d_first_order
+from .backend import eager_under_torch_compile
 
 # The four convolution slots that hold the permittivity's z row and column, in the order the
 # solve methods take them. Naming them once keeps the dispatch message specific about which
@@ -787,6 +788,7 @@ def device_scoped(func):
     return wrapped
 
 
+@eager_under_torch_compile
 class CoreSolveMixin:
     """Provides ``_solve_1d`` / ``_solve_1d_conical`` / ``_solve_2d`` backed by the core.
 
@@ -3094,6 +3096,7 @@ _COEFFICIENTS_REASON = {
 }
 
 
+@eager_under_torch_compile
 class CoreFactorizationMixin:
     """Provides ``solve`` — factorization through the core, then the core solve.
 

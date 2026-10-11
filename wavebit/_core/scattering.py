@@ -80,6 +80,7 @@ from .solve_1d import (_block, _diag, _is_backside, _layer_mu, _pack,
 from .solve_2d import layer_modes_2d, order_grid_kxy, sp_modes_2d
 from .power import (incident_power, net_power, power_for_real_k,
                     sp_incident_power, wave_power)
+from .backend import eager_under_torch_compile
 
 _PI = 3.141592653589793
 
@@ -342,6 +343,7 @@ _CHANNELS = {
 }
 
 
+@eager_under_torch_compile
 class Port(NamedTuple):
     """The basis one end of a :class:`ScatteringMatrix` expresses its amplitudes in.
 
@@ -424,6 +426,7 @@ def _register_pytree_if_jax_loaded():
     _PYTREE_REGISTERED = True
 
 
+@eager_under_torch_compile
 class ScatteringMatrix(NamedTuple):
     """The stack's scattering matrix -- both sides, every order -- kept instead of dropped.
 

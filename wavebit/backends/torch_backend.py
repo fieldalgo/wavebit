@@ -10,8 +10,10 @@ from tqdm import tqdm
 from .._core.engine import CoreFactorizationMixin, CoreSolveMixin
 from .._core.enums import Backend
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS
+from .._core.backend import eager_under_torch_compile as _eager_under_torch_compile
 
 
+@_eager_under_torch_compile
 class _BaseRCWA(CoreSolveMixin):
     #: The array namespace this solver's arrays live in. A class attribute rather than a
     #: lookup, because the one caller that needs it -- the parametric builder, which starts from
@@ -62,10 +64,12 @@ class _BaseRCWA(CoreSolveMixin):
             f'got {value!r}.')
 
 
+@_eager_under_torch_compile
 class RCWATorch(CoreFactorizationMixin, _BaseRCWA):
     """The Torch solver. Empty for the same reason as :class:`RCWANumpy`."""
 
 
+@_eager_under_torch_compile
 class OptimizerTorch:
 
     def __init__(self, *args, **kwargs):
@@ -107,6 +111,7 @@ class OptimizerTorch:
         return [getattr(self, name) for name in parameters]
 
 
+@_eager_under_torch_compile
 class SolverTorch(RCWATorch, OptimizerTorch):
 
     # `(*args, **kwargs)` and nothing else, which is what `SolverNumpy` and `SolverJax` are.

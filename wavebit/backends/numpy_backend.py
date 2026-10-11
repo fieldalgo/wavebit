@@ -9,8 +9,10 @@ import array_api_compat.numpy as _xp
 from .._core.engine import _NO_AUTODIFF, CoreFactorizationMixin, CoreSolveMixin
 from .._core.enums import Backend
 from .._core.enums import DIFFERENTIABLE_BACKENDS as _DIFFERENTIABLE_BACKENDS
+from .._core.backend import eager_under_torch_compile as _eager_under_torch_compile
 
 
+@_eager_under_torch_compile
 class _BaseRCWA(CoreSolveMixin):
     #: The array namespace this solver's arrays live in. A class attribute rather than a
     #: lookup, because the one caller that needs it -- the parametric builder, which starts from
@@ -34,6 +36,7 @@ class _BaseRCWA(CoreSolveMixin):
 
 
 
+@_eager_under_torch_compile
 class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     """The NumPy solver, which is the two mixins and the declared members on `_BaseRCWA`.
 
@@ -44,6 +47,7 @@ class RCWANumpy(CoreFactorizationMixin, _BaseRCWA):
     """
 
 
+@_eager_under_torch_compile
 class SolverNumpy(RCWANumpy):
     """The NumPy solver. It solves and it differentiates nothing.
 

@@ -32,6 +32,10 @@ def _enable_jax_x64_if_already_imported():
 _enable_jax_x64_if_already_imported()
 
 
+from ._core.backend import eager_under_torch_compile as _eager_under_torch_compile  # noqa: E402
+
+
+@_eager_under_torch_compile
 def enable_x64():
     """Lift JAX's 32-bit cap now, so arrays built from here on can hold double precision.
 

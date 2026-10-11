@@ -28,6 +28,7 @@ from . import factorization as _fac
 from .domain import as_material, index_from_eps
 from .enums import ModelingPath
 from .lattice import meshgrid_xy, reduced_basis, sample_grid
+from .backend import eager_under_torch_compile
 
 #: Periodic images drawn around the cell. A shape's transform is periodic by construction, so
 #: the part that leaves one edge returns at the other and the picture has to show it. One ring
@@ -364,6 +365,7 @@ def _refuse_layer(solver, layer):
                     ) from None
 
 
+@eager_under_torch_compile
 def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False, *, component=None):
     """The structure of one layer, as a NumPy array. **Geometry, not the truncated series.**
 
@@ -461,6 +463,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False, *, c
     return values if show == 'eps' else index_from_eps(_passive(values))
 
 
+@eager_under_torch_compile
 def plot_structure(solver, layer=0, n=512, show='eps', ax=None, band_limited=False, *, component=None):
     """Draw one layer of the structure. Arguments are :func:`slice_structure`'s; read it first.
 

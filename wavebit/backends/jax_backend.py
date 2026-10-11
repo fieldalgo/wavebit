@@ -14,6 +14,7 @@ in the package this module replaces: whatever runs first must not build an array
 JAX arrays *before* the first solve needs -- see :class:`~wavebit._core.backend.PrecisionLossWarning`.
 """
 import jax
+from .._core.backend import eager_under_torch_compile as _eager_under_torch_compile
 
 # Above the rest, and before anything here can build an array. See the module docstring.
 jax.config.update('jax_enable_x64', True)
@@ -40,6 +41,7 @@ from .._core.result import Result, ResultSub                     # noqa: E402
 from .._core.geometry import StaticGeometry                      # noqa: E402
 
 
+@_eager_under_torch_compile
 class _BaseRCWA(CoreSolveMixin):
     #: The array namespace this solver's arrays live in. A class attribute rather than a
     #: lookup, because the one caller that needs it -- the parametric builder, which starts from
@@ -140,16 +142,19 @@ from .._core import scattering as _scattering
 _scattering._register_pytree_if_jax_loaded()
 
 
+@_eager_under_torch_compile
 @jax.tree_util.register_pytree_node_class
 class ResultJax(Result):
     """Shared container, registered as a pytree so a jitted method can return one."""
 
 
+@_eager_under_torch_compile
 @jax.tree_util.register_pytree_node_class
 class ResultSubJax(ResultSub):
     """Shared container; a pytree for the same reason as :class:`ResultJax`."""
 
 
+@_eager_under_torch_compile
 class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
     #: The pytree-registered pair, so a jitted `solve_field` can return one. See the
     #: declaration in `CoreFactorizationMixin`.
@@ -409,6 +414,7 @@ def _same_prepared_geometry(left, right):
     return True
 
 
+@_eager_under_torch_compile
 class OptimizerJax:
 
     def __init__(self, *args, **kwargs):
@@ -592,6 +598,7 @@ _SLOTS = {'chi': '_chi', 'polarization': '_polarization', 'mu': '_mu',
           'lattice': '_lattice_basis', 'structure_drawn_on': '_structure_drawn_on'}
 
 
+@_eager_under_torch_compile
 @tree_util.register_pytree_node_class
 class _ShapeStructure:
     """Internal pytree view: shape strings are declarations, numbers remain children.
@@ -619,6 +626,7 @@ class _ShapeStructure:
         return cls(tree_util.tree_unflatten(tree, leaves))
 
 
+@_eager_under_torch_compile
 class SolverJax(RCWAJax, OptimizerJax):
 
     def __init__(self, *args, **kwargs):

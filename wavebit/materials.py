@@ -10,6 +10,7 @@ from importlib.resources import files
 import numpy as np
 
 from ._core.materials import TabulatedMaterial
+from ._core.backend import eager_under_torch_compile as _eager_under_torch_compile
 
 __all__ = ['available', 'load']
 
@@ -23,6 +24,7 @@ _CATALOG = {
 _UNIT_METRES = {'nm': 1e-9, 'um': 1e-6, 'mm': 1e-3, 'm': 1.}
 
 
+@_eager_under_torch_compile
 def available():
     """Return the sorted, source-qualified material identifiers, without file I/O.
 
@@ -33,6 +35,7 @@ def available():
     return tuple(sorted(_CATALOG))
 
 
+@_eager_under_torch_compile
 def load(name, *, wavelength_unit='nm'):
     """Load one bundled material as an immutable :class:`wavebit.TabulatedMaterial`.
 

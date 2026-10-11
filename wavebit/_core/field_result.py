@@ -8,6 +8,7 @@ import numpy as np
 from .backend import array_namespace, as_array
 from .fields import (LayerSamples, is_count, field_1d, field_1d_conical,
                      field_2d, field_2d_first_order)
+from .backend import eager_under_torch_compile
 
 
 def _host_value(value):
@@ -94,6 +95,7 @@ def _local_height(xp, z, start, thickness, selected):
     return xp.where(selected, local, safe)
 
 
+@eager_under_torch_compile
 class FieldState:
     """Numeric solve snapshot and a static adapter name; a JAX pytree when registered.
 
@@ -242,6 +244,7 @@ class FieldState:
         return coefficient
 
 
+@eager_under_torch_compile
 class ResultFields:
     """Public field API shared by every solve result."""
 

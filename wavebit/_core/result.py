@@ -62,8 +62,10 @@ nothing aliases the old names.
 import numpy as np
 
 from .field_result import ResultFields
+from .backend import eager_under_torch_compile
 
 
+@eager_under_torch_compile
 class ResultSub:
     """One incidence's per-order efficiencies and Fresnel amplitudes."""
 
@@ -109,6 +111,7 @@ class ResultSub:
         return cls(*children)
 
 
+@eager_under_torch_compile
 class OrderView:
     """Everything the solve knows about one diffraction order, as scalars."""
 
@@ -127,6 +130,7 @@ class OrderView:
                 f'r_xyz={self.r_xyz!r}, t_xyz={self.t_xyz!r})')
 
 
+@eager_under_torch_compile
 class Result(ResultFields):
     """Solve result: the actual incident state and the pure-s/p variants.
 

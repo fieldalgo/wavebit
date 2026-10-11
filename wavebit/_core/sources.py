@@ -2,12 +2,15 @@
 from dataclasses import dataclass, replace
 
 import numpy as np
+from .backend import eager_under_torch_compile
 
 
+@eager_under_torch_compile
 class Source:
     """Common type for prescribed sources at the calculation's wavelength."""
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class _ExternalSource(Source):
     """Shared direction, polarization and boundary-side inputs."""
@@ -30,6 +33,7 @@ class _ExternalSource(Source):
             raise ValueError('A PlaneWave takes polarization or psi/chi, not both.')
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class PlaneWave(_ExternalSource):
     """One incident plane wave, referenced at x=y=0 on its outside boundary.
@@ -40,6 +44,7 @@ class PlaneWave(_ExternalSource):
     """
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class OrderExcitation(_ExternalSource):
     """Plane waves specified by order weights around a reference direction.
@@ -55,6 +60,7 @@ class OrderExcitation(_ExternalSource):
 Beam = OrderExcitation
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class GaussianBeam(_ExternalSource):
     """Forward propagating Gaussian angular spectrum in a lossless exterior.
@@ -80,6 +86,7 @@ class GaussianBeam(_ExternalSource):
         _grid(self.sampling)
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class ElectricDipole(Source):
     """Prescribed electric dipole moment in C m, with exp(-i omega t).

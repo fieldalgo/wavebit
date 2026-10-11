@@ -20,6 +20,7 @@ from .solve_2d_first_order import (
     _conv_layers, _interface_s, _propagate_s, _run_k0_ds, layer_matrix_first_order,
     split_forward_backward,
 )
+from .backend import eager_under_torch_compile
 
 
 def _source_holds_tracer(value):
@@ -165,6 +166,7 @@ def _inside_amplitudes(xp, state, incoming_bottom, incoming_top):
     return records
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class BoundaryPower:
     """Area-averaged fluxes, with the common 1/Z0 factor omitted.
@@ -210,6 +212,7 @@ def _sinc(xp, value):
     return xp.where(small, 1 - value**2/6 + value**4/120, xp.sin(safe)/safe)
 
 
+@eager_under_torch_compile
 class CoherentResult(ResultFields):
     """Power and retained fields from one wavelength.
 
@@ -318,6 +321,7 @@ class CoherentResult(ResultFields):
                              net/incident if periodic and not self.has_internal_sources else None,
                              self.has_internal_sources)
 
+@eager_under_torch_compile
 class CoherentSolver:
     """Eager, side-resolved illumination using the Cartesian first-order SMM.
 

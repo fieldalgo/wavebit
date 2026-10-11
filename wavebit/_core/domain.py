@@ -39,6 +39,7 @@ from typing import Any, Optional
 from .conventions import (_COMPLEX_CHI, _DIRECTION_CLASH, incidence_clashes, reject_complex_angle,
                           transverse_component_problem, wavelength_problem)
 from .backend import _concrete, array_namespace, principal_sqrt
+from .backend import eager_under_torch_compile
 from .enums import Tetm  # noqa: F401  (re-exported for spec's tetm parsing)
 
 
@@ -100,6 +101,7 @@ def _register_pytree_if_jax_loaded():
     _PYTREE_REGISTERED = True
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True)
 class Material:
     """What fills a region: relative permittivity, and the permeability that goes with it.
@@ -325,6 +327,7 @@ def as_material(value, where='material') -> Material:
     return Material(value)
 
 
+@eager_under_torch_compile
 def eps_from_index(n, *, mu=None):
     """Convert isotropic refractive index to relative permittivity.
 
@@ -355,6 +358,7 @@ def eps_from_index(n, *, mu=None):
     return xp.where(valid, n ** 2 / safe_mu, float('nan'))
 
 
+@eager_under_torch_compile
 def index_from_eps(eps):
     """Refractive index of a medium with relative permittivity ``eps`` -- the passive root.
 
@@ -424,6 +428,7 @@ def _declared_fields(cls):
     return frozenset(f.name for f in fields(cls))
 
 
+@eager_under_torch_compile
 class _DeclaredFieldsOnly:
     """Base of the mutable spec dataclasses: an assignment to a name that is no field is refused.
 
@@ -472,6 +477,7 @@ class _DeclaredFieldsOnly:
 #: read as permittivities). They are deliberately *close*: a migration that broke loudly would
 #: not need refusing. 0.2053 against 0.1753 is the size of a truncation-order wobble, which is
 #: what a user would take it for. Re-measure them if the quickstart scene ever changes.
+@eager_under_torch_compile
 @dataclass
 class Layer(_DeclaredFieldsOnly):
     """One layer of a :class:`Stack`: a thickness paired with the structure filling it.
@@ -505,6 +511,7 @@ class Layer(_DeclaredFieldsOnly):
         return _is_raster(self.structure)
 
 
+@eager_under_torch_compile
 @dataclass
 class Stack(_DeclaredFieldsOnly):
     """An ordered list of :class:`Layer` plus the media that bound it.
@@ -687,6 +694,7 @@ class Stack(_DeclaredFieldsOnly):
         return self.layers[index]
 
 
+@eager_under_torch_compile
 @dataclass
 class Incidence(_DeclaredFieldsOnly):
     """The incident illumination: wavelength, angles, polarization, and which side it hits.

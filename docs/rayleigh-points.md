@@ -377,8 +377,11 @@ the general layout. The rebuild is an exact change of basis for any masks, so an
 the family construction re-expressed. ETM, SMM's field state and field reconstruction already
 read the layout structurally (`len(modes) == 3`, the record's `W.shape`), so no consumer, record
 slot or pytree changed; a jit-built conical record is simply `2n x 2n`. `jax.grad`, `jvp`,
-`jacfwd` and `jacrev` keep a concrete primal and are gated as an eager solve is, and so is
-`torch.compile` in its default mode, whose graph break reads the value.
+`jacfwd` and `jacrev` keep a concrete primal and are gated as an eager solve is, and so is a
+solve under `torch.compile`, because wavebit runs eagerly inside a compiled caller
+([`torch-compile.md`](torch-compile.md) §6) and the gate reads a real value. (This record first
+read it as a graph break reading the value; that compile differentiated nothing, and a
+value-only compile was right even before wavebit ran eagerly under it.)
 
 The one piece that had to be new is the coupled exponential's tangent. Its eager rule, `expm`,
 needs a squaring count; under a trace that count is traced, and undoing it takes a fixed scan of
@@ -452,7 +455,8 @@ eigensolves dominate, not the `4n`-sized solve of the modal variation.
   none, every patterned point measured couples one, and a rebuilt layer's rows and columns are
   disjoint by construction.
 - Second derivatives through the modal operator still raise, as do `torch.func.grad` and `jvp`;
-  `torch.compile(fullgraph=True)` raises `Unsupported`.
+  `torch.compile(fullgraph=True)` raises `Unsupported`, now at wavebit's first door
+  ([`torch-compile.md`](torch-compile.md) §6).
 - Not measured: GPU, `pmap` and `shard_map`, patterned double negatives under a trace.
 
 **Why not a `lax.cond`.** A design that keeps the family construction off the band and the

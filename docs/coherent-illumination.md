@@ -426,8 +426,9 @@ amplitude scale, coordinate axes and phase conventions.
 The side-keyed form returns `CoherentSolver` and uses the Cartesian **first-order formulation
 with SMM**. NumPy, JAX and PyTorch are supported in eager execution. PlaneWave grouping requires
 concrete directions; this facade is not a JAX pytree and does not support
-`jit`, `vmap`, `torch.compile`, or `JobSpec` serialization. Its autodiff behavior is
-not a supported contract. It does not expose the ordinary single-sided `R`, `T`,
+`jit`, `vmap`, or `JobSpec` serialization. Under `torch.compile` it runs eagerly inside the
+compiled caller, as every public wavebit callable does ([`torch-compile.md`](torch-compile.md)
+§6). Its autodiff behavior is not a supported contract. It does not expose the ordinary single-sided `R`, `T`,
 Jones-response or `ScatteringMatrix` result interfaces.
 
 External plane waves have one wavelength, real kx/ky and positive incident normal power.

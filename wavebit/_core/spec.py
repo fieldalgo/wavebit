@@ -62,6 +62,7 @@ from .domain import Layer, Material, Stack, Incidence, _DeclaredFieldsOnly
 from .materials import TabulatedMaterial
 from .enums import (Answers, Backend, Factorization, FourierCoefficients, Nesting, NormalMethod,
                     Projector, Tetm, backend_of, near_match_hint)
+from .backend import eager_under_torch_compile
 
 SPEC_VERSION = '10'   # '2': result fields renamed de_ri/de_ti -> R/T (2026-08-12)
 #                     '3': the material convention. `stack.layers[i].eps` -> `.structure`,
@@ -475,6 +476,7 @@ def _revive_materials(value, where='material'):
 
 # ------------------------------------------------------------------ numerics
 
+@eager_under_torch_compile
 @dataclass
 class Numerics(_DeclaredFieldsOnly):
     """Discretisation and backend choices — everything that is not the physical scene.
@@ -651,6 +653,7 @@ class Numerics(_DeclaredFieldsOnly):
 
 # ------------------------------------------------------------------ sweep
 
+@eager_under_torch_compile
 @dataclass
 class Sweep(_DeclaredFieldsOnly):
     """Declared axes to vary, as ``{field: [values]}`` after resolution.
@@ -725,6 +728,7 @@ class Sweep(_DeclaredFieldsOnly):
 
 # ------------------------------------------------------------------ the spec
 
+@eager_under_torch_compile
 @dataclass
 class JobSpec(_DeclaredFieldsOnly):
     """A complete, serialisable description of one run (or one sweep of runs)."""
@@ -1104,6 +1108,7 @@ def _incidence_to_dict(inc: Incidence) -> dict:
 
 # ------------------------------------------------------------------ execution
 
+@eager_under_torch_compile
 def run(spec, geometry=None):
     """Execute one :class:`JobSpec` and return the solver's result.
 

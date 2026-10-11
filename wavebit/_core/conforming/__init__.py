@@ -13,6 +13,7 @@ from ..lattice import reduction_transform
 from ..parametric import check_layer_spec, check_shape_spec
 from .polynomial_body import ComplexMaterialGapModel
 from .thin_gap import PERIOD, CONTACT_ROUNDOFF
+from ..backend import eager_under_torch_compile
 
 
 _IDENTITY = ((1, 0), (0, 1))
@@ -45,6 +46,7 @@ def _epsilon(value, xp):
     return xp.where(valid, epsilon, xp.nan)
 
 
+@eager_under_torch_compile
 class ConformingNVF:
     """Build energy-factorized matrices from ordinary rectangle layer dictionaries.
 

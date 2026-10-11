@@ -8,6 +8,7 @@ from ..conventions import swap_fourier_origin
 from . import _epsilon, _real, _require
 from .affine_cell import AffineCellGapModel
 from .thin_gap import CONTACT_ROUNDOFF, PERIOD
+from ..backend import eager_under_torch_compile
 
 
 def _keys(mapping, allowed, required, name):
@@ -29,6 +30,7 @@ def _vector(value, xp, name, length=None):
     return xp.where(valid, xp.real(array), xp.nan)
 
 
+@eager_under_torch_compile
 class AffineProfileNVF:
     """Construct finite NVF matrices from explicit fractional reference profiles.
 

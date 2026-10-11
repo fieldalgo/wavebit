@@ -15,6 +15,7 @@ from ..backend import _concrete
 from ..factorization import ConvMatrices
 from ..conventions import swap_fourier_origin
 from ..polygon import polygon_ft
+from ..backend import eager_under_torch_compile
 
 __all__ = ['CartesianPairPlan', 'CartesianPairCell', 'CartesianRectanglePairNVF']
 
@@ -347,6 +348,7 @@ class _CartesianRectanglePairNVFPlan:
     layers: tuple
 
 
+@eager_under_torch_compile
 class CartesianRectanglePairNVF:
     """Experimental finite NVF for two horizontal equal-height rectangles.
 

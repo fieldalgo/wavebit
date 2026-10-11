@@ -59,6 +59,7 @@ import numpy as np
 
 from .backend import array_namespace, as_array, carries_autodiff, checked_float, constant_array
 from .enums import Backend, backend_of
+from .backend import eager_under_torch_compile
 
 __all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
            'order_kxy', 'periods_of', 'reduced_basis', 'reduction_transform', 'sample_grid']
@@ -66,6 +67,7 @@ __all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned',
 _PYTREE_REGISTERED = False
 
 
+@eager_under_torch_compile
 @dataclasses.dataclass(frozen=True)
 class DrawnOn:
     """A raster together with the cell it was drawn on -- what :meth:`Lattice.drawn` returns.
@@ -86,6 +88,7 @@ class DrawnOn:
     lattice: Any
 
 
+@eager_under_torch_compile
 @dataclasses.dataclass(frozen=True)
 class Lattice:
     """The cell basis, with the one fact about it that must not be traced.
@@ -791,6 +794,7 @@ def order_kxy(xp, A, half_width_u, half_width_v, wavelength, k_inc_x, k_inc_y,
             xp.astype(xp.broadcast_to(ky, (n_orders_v, n_orders_u)), dtype))
 
 
+@eager_under_torch_compile
 def meshgrid_xy(grid_shape, period=None, lattice=None, backend='numpy', dtype=None):
     """Cartesian coordinates of a raster's pixel centres: ``(X, Y)``, both that shape.
 

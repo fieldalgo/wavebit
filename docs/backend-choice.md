@@ -356,11 +356,12 @@ half is exactly that while a raster's is one array already.
 - **CPU only.** Every number here was measured on one CPU host, and none of it has been run on
   a GPU. Do not extrapolate: the per-step times and the compilation cost need not move in the
   same direction, so neither the ratios nor the break-even table carries over on its own.
-- **PyTorch was measured eager, which is the only way it runs today.** `torch.compile` fails
-  on every Wavebit path before torch 2.13, and once it works it measures 0.85–1.02x — see
-  `docs/torch-compile.md`, which also profiles why (97.9% of the runtime at `truncation_order=10` is inside
-  LAPACK/BLAS calls Inductor forwards verbatim). So `torch` here means eager torch, and that is
-  not a limitation of the measurement.
+- **PyTorch was measured eager, which is how it always computes.** Under `torch.compile`
+  wavebit runs eagerly inside the compiled caller (since 2026-10; before that, Inductor
+  silently miscompiled it). When it was last compiled natively, in 2026-08, it measured
+  0.85–1.02x — see `docs/torch-compile.md`, which also profiles why (97.9% of the runtime at
+  `truncation_order=10` is inside LAPACK/BLAS calls Inductor forwards verbatim). So `torch`
+  here means eager torch, and that is not a limitation of the measurement.
 - **Single process, no batching.** Nothing here says how the modes behave under `vmap`, across
   a wavelength sweep, or on several devices — and a wavelength sweep is the case where one
   compilation is amortised over many solves, which would favour jit well beyond what is

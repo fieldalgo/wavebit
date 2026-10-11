@@ -11,9 +11,159 @@ eigenvalues and return NaN when that fails, which an ordinary structure can caus
 note above :func:`eig`. NumPy needs no gradient.
 """
 import contextvars
+import functools
+import sys
 
 import array_api_compat as ac
 import numpy as _np
+
+
+#: What Dynamo prints when it meets a wavebit door: ``torch.compile(fullgraph=True)`` and a
+#: strict ``torch.export`` raise ``Unsupported`` carrying it.
+EAGER_REASON = ('wavebit runs eagerly under torch.compile: Inductor (torch 2.13) silently '
+                'miscompiles its complex arithmetic -- see docs/torch-compile.md')
+
+#: Each door's ``torch.compiler.disable`` wrapper, keyed by the function it runs.
+_EAGER_DOORS = {}
+
+#: Why a graph capture that runs Python natively is refused (non-strict ``torch.export``).
+EXPORT_REFUSAL = (
+    'wavebit cannot be exported: torch.export records one branch of each value-dependent decision '
+    'wavebit takes, and from an example input that needs no gradient none of its modal derivative '
+    '-- measured, the exported module returns eager values and no gradient. Call wavebit eagerly '
+    '(torch.compile of a caller is exact: wavebit runs eagerly inside it).')
+
+#: Why ``torch.jit.trace`` is refused (by every door, :func:`_eager_function`).
+JIT_TRACE_REFUSAL = (
+    'wavebit cannot be traced by torch.jit.trace: the trace records each value-dependent decision '
+    'wavebit takes as a constant and drops the gradient wavebit contributes -- measured, a loss '
+    'mixing a traced solve with another term read a gradient of 0.0 where eager torch reads '
+    '0.272, with no error. Call wavebit eagerly, or from a torch.compile\'d function, inside '
+    'which wavebit runs eagerly.')
+
+
+def _refusing_export(fn):
+    """``fn``, refused while ``torch.export`` records it.
+
+    A strict export goes through Dynamo and stops at the door's ``torch.compiler.disable`` with
+    :data:`EAGER_REASON`; a non-strict export runs the door natively under a fake-tensor proxy
+    mode, where ``disable`` does not apply (it only annotates), so it is refused here. It needs
+    no Dynamo-free twin: a non-strict export imports ``torch._dynamo`` (its ``make_fx`` does), so
+    it always takes the door's Dynamo route. The flag is PyTorch's public
+    ``torch.compiler.is_exporting()`` (in ``torch.compiler.__all__``;
+    docs.pytorch.org/docs/2.13/generated/torch.compiler.is_exporting.html), which "would only be
+    set to True when torch.export is used".
+    """
+    @functools.wraps(fn)
+    def eager(*args, **kwargs):
+        if sys.modules['torch'].compiler.is_exporting():
+            raise NotImplementedError(EXPORT_REFUSAL)
+        return fn(*args, **kwargs)
+    return eager
+
+
+def _eager_function(fn):
+    """``fn`` as a door ``torch.compile`` never traces into; the arithmetic is ``fn``'s own.
+
+    Inductor (torch 2.13, CPU, complex128 with an input that requires grad) returns wrong values
+    and gradients for this solver with no error: it emits the in-place diagonal write of
+    ``array_api_compat``'s ``eye`` after the kernels that read it, so the modal exponential's
+    identity reads as zero. Dynamo alone and AOTAutograd alone are exact, so the cure is to keep
+    wavebit's frames out of the compiled graph, not to change its arithmetic.
+
+    Two shortcuts that look equivalent are not:
+
+    * **A refusal cannot be raised instead.** Dynamo turns an exception raised while tracing
+      into a graph break and reruns the frame natively, where
+      ``torch.compiler.is_compiling()`` is False, so the refusal is swallowed.
+    * **``is_compiling()`` cannot choose the route.** Dynamo stops tracing a wrapper whose
+      frame compiled to nothing and runs it natively from then on, with the door's own frames
+      still intercepted and compiled.
+
+    So whenever Dynamo is loaded every call goes through the door's ``torch.compiler.disable``
+    wrapper -- PyTorch's documented way to keep a function and everything it calls out of
+    ``torch.compile`` (docs.pytorch.org/docs/2.13/generated/torch.compiler.disable.html) -- which
+    clears Dynamo's frame hook for the call and restores it after; nested doors pay it again,
+    because a caller's compiled callable can set the hook back inside an outer door. The wrapper
+    is built on the door's first call with Dynamo loaded, the idea of PyTorch's own
+    ``torch._compile._disable_dynamo`` (torch 2.13), which wraps lazily to keep ``import torch``
+    from importing Dynamo. Unlike it, a door never imports Dynamo: when ``torch._dynamo`` is not
+    in ``sys.modules`` nothing can be compiling (``torch.compile`` imports it), and the door
+    calls ``fn`` directly.
+
+    **Every door refuses ``torch.jit.trace``, by name** (:data:`JIT_TRACE_REFUSAL`), on both
+    routes. Dynamo is not involved and the values are concrete, so nothing else notices it, and
+    it is silently wrong: it records each value-dependent decision as a constant and returns an
+    output with no ``grad_fn``. The door is the one place every public call passes. A check
+    where a solve reads a value (``_concrete``) missed what never reaches it:
+    ``reconstruct_field`` of a solved result at a traced height replayed one layer's formula
+    across an interface (d/dz -0.00406 where eager reads 0.00344) and answered outside the
+    stack, where eager refuses, and a ``Lattice`` built from a traced length became a NumPy
+    constant (``meshgrid_xy`` replayed the example's value, with no gradient). The check reads
+    PyTorch's public ``torch.jit.is_tracing()``
+    (docs.pytorch.org/docs/2.13/generated/torch.jit.is_tracing.html) from ``sys.modules``, so a
+    NumPy or JAX caller never imports torch for it; Dynamo folds it to ``False`` while it traces
+    (``torch._dynamo.variables.torch.tracing_state_functions``, torch 2.13). It adds about
+    100 ns to a door call (``docs/torch-compile.md`` §6).
+    """
+    @functools.wraps(fn)
+    def door(*args, **kwargs):
+        modules = sys.modules
+        torch = modules.get('torch')
+        if torch is not None and torch.jit.is_tracing():
+            raise NotImplementedError(JIT_TRACE_REFUSAL)
+        if 'torch._dynamo' not in modules:
+            return fn(*args, **kwargs)
+        run = _EAGER_DOORS.get(fn)
+        if run is None:
+            run = _EAGER_DOORS[fn] = modules['torch'].compiler.disable(
+                _refusing_export(fn), reason=EAGER_REASON)
+        return run(*args, **kwargs)
+
+    door._wavebit_eager_door = fn
+    return door
+
+
+#: Class members a door would not protect: hooks Python calls while *building* a class.
+_NOT_DOORS = frozenset({'__init_subclass__', '__class_getitem__', '__set_name__'})
+
+
+def _eager_member(name, member):
+    if name in _NOT_DOORS or (name.startswith('_') and not
+                              (name.startswith('__') and name.endswith('__'))):
+        return member                         # private: reached only from inside a door
+    if isinstance(member, property):
+        return property(*(None if f is None else _eager_function(f)
+                          for f in (member.fget, member.fset, member.fdel)), member.__doc__)
+    if isinstance(member, (classmethod, staticmethod)):
+        return type(member)(_eager_function(member.__func__))
+    if callable(member) and hasattr(member, '__code__'):
+        return _eager_function(member)
+    return member
+
+
+def eager_under_torch_compile(target):
+    """Keep a public function, or every public member of a class, out of ``torch.compile``.
+
+    On a class: each public method, property accessor, ``classmethod`` / ``staticmethod`` and
+    dunder in the class's *own* namespace becomes a door (see :func:`_eager_function`);
+    single-underscore members are reached only from inside a door and stay as they are. An
+    inherited member is a door when the class that defines it carries this decorator, which
+    is why every wavebit class in a public class's MRO carries it.
+
+    The rule, which ``tests/test_torch_compile.py`` walks on every installed backend: each
+    class in ``wavebit.__all__``, each type a public call hands back (an attribute, a pytree
+    node, ``Lattice.drawn``'s return) and every wavebit base of either. A class only ever built
+    and used inside a door needs none, since everything a door calls is already kept out.
+    """
+    if isinstance(target, type):
+        for name, member in list(vars(target).items()):
+            door = _eager_member(name, member)
+            if door is not member:
+                setattr(target, name, door)
+        target._wavebit_eager_class = target
+        return target
+    return _eager_function(target)
 
 
 def array_namespace(*xs):
@@ -398,11 +548,16 @@ def checked_float(v):
 def _concrete(flag):
     """``bool(flag)`` for a 0-d reduction, or ``None`` when the value cannot be read.
 
-    ``None`` means the value is *abstract* — a ``jax.jit`` tracer, a PyTorch ``FakeTensor``
-    under ``compile`` — where there is genuinely no number to look at. That, and not the
-    namespace, is what the guards below are keyed on. Keying on the namespace was the bug:
-    an ordinary eager ``backend='jax'`` / ``backend='torch'`` call has its values right there,
-    and was skipped anyway.
+    ``None`` means the value is *abstract* — a ``jax.jit`` tracer — where there is genuinely no
+    number to look at. That, and not the namespace, is what the guards below are keyed on.
+    Keying on the namespace was the bug: an ordinary eager ``backend='jax'`` /
+    ``backend='torch'`` call has its values right there, and was skipped anyway.
+
+    PyTorch does not hand an abstract value over under ``torch.compile``: wavebit runs eagerly
+    inside a compiled caller (:func:`eager_under_torch_compile`), so the value here is concrete.
+    A non-strict ``torch.export`` and ``torch.jit.trace`` are refused at the door before they
+    get here: a ``torch.jit.trace`` value is concrete too, and every branch this read decides
+    would be recorded as a constant.
 
     ``jax.grad`` sits on the *checked* side of the line, which is the whole point. An
     un-jitted grad tracer carries a concrete primal, so the reduction narrows to a real
@@ -1123,6 +1278,7 @@ _J1_CHOICES = ('auto', 'hybrid', 'native')
 _j1_impl = 'auto'
 
 
+@eager_under_torch_compile
 def set_j1_implementation(name):
     """Choose which ``J_1`` the traced backends use. Returns the previous setting.
 
@@ -1157,6 +1313,7 @@ def set_j1_implementation(name):
     return previous
 
 
+@eager_under_torch_compile
 def get_j1_implementation():
     """The current :func:`set_j1_implementation` setting."""
     return _j1_impl

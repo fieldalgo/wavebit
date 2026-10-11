@@ -1,3 +1,6 @@
+from ._core.backend import eager_under_torch_compile as _eager_under_torch_compile
+
+
 def _merge_domain(kwargs, domain_kwargs, source):
     """Fold a domain object's keyword arguments into ``kwargs``, rejecting duplicates.
 
@@ -13,6 +16,7 @@ def _merge_domain(kwargs, domain_kwargs, source):
     return merged
 
 
+@_eager_under_torch_compile
 def rcwa(backend='numpy', *args, stack=None, incidence=None, **kwargs):
     """
     decide backend and return RCWA solver instance

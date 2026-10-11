@@ -14,6 +14,7 @@ from .backend import array_namespace, as_array, _concrete, carries_autodiff, tor
 from .domain import Material, as_material
 from .geometry import StaticGeometry, StaleGeometryError
 from . import factorization as fac
+from .backend import eager_under_torch_compile
 
 
 #: ``tetm`` beside a tensor material. One sentence for the two places that refuse it:
@@ -23,6 +24,7 @@ TETM_REFUSAL = ('tensor materials require the coupled polarization solve; use po
                 'instead of tetm')
 
 
+@eager_under_torch_compile
 class TensorConvMatrices(NamedTuple):
     """Nine constitutive blocks (epsilon or mu), in ``solve_conv`` slot order.
 

@@ -1,18 +1,31 @@
-# `torch.compile` — why it failed, and why it is not worth chasing
+# `torch.compile` — why it failed, why it is not worth chasing, and why wavebit runs eagerly under it
 
 Written: 2026-08. Measured on macOS arm64 (CPU only) against `develop` at `8257e2c`, with
-NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0.
+NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0. **Updated 2026-10 (§6)**, on torch 2.13.0.
 
 Targets:
 - `wavebit/_core/engine.py::CoreSolveMixin.period` — where the first failure was raised (it was the block modeller's own `period` setter until that path was removed)
 - `wavebit/_core/backend.py::eig` — the primitive the remaining failures are about
 - `pyproject.toml` — the torch floor, raised from 2.7 to 2.13 as a result; see §3
+- `wavebit/_core/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of the
+  compiled graph since 2026-10; see §6
 
 ---
 
 ## TL;DR
 
-`torch.compile` failed on **every** Wavebit path with `InternalTorchDynamoError`. None of
+**Since 2026-10 a compiled caller is exact, because wavebit is never compiled (§6).** Every
+public wavebit callable is a `torch.compiler.disable` door, so wavebit runs eagerly inside a
+`torch.compile`d function and its values and gradients are eager torch's; only the caller's own
+arithmetic on wavebit's outputs is compiled. `fullgraph=True` and `torch.export` are refused by
+name, and so is `torch.jit.trace`, at every public call (a solved result's read-outs included).
+Until then, default-mode `torch.compile` on torch 2.13 returned **wrong values and wrong
+gradients with no error** (a 1D TE loss of -4.43 for an eager -0.895, its gradient -0.118 for
+0.272): Inductor emits the in-place diagonal write of `array_api_compat`'s complex `eye` after
+the kernels that read it. That defect arrived with the modal exponential (`modal_gradient.py`,
+2026-09-29), after everything §1–§5 measured, so §3's and §4's "bit-identical" are history.
+
+The 2026-08 investigation, §1–§5, stands as written below: `torch.compile` failed on **every** Wavebit path with `InternalTorchDynamoError`. None of
 the four causes was in Wavebit: all four are PyTorch defects, present in **torch 2.7.0** (the
 version the floor used to allow) and **all fixed by torch 2.13.0**, where the failing snippet
 runs unmodified and returns bit-identical values.
@@ -23,7 +36,8 @@ either way. The reason is structural, not a bug: at `truncation_order=10`, **98%
 LAPACK/BLAS calls that Inductor forwards verbatim**, and Inductor declines to generate code for
 complex operators at all, which is essentially the entire remainder.
 
-**Recommendation: do not add `torch.compile` support.** The torch floor was nonetheless raised
+**Recommendation (2026-08): do not add `torch.compile` support.** It still holds for speed —
+§6 keeps wavebit eager under a compiler, which by construction buys wavebit's part nothing. The torch floor was nonetheless raised
 to 2.13 — not to enable compiling, but because this project's stated rule is that floors are the
 versions the suite is verified against (`pyproject.toml`), and 2.13 is what it is now verified
 against. Eager torch and `.backward()` work fine on 2.7.0; only `torch.compile` does not.
@@ -119,6 +133,11 @@ flags, no source edits — and returns the same value as eager.
 | full Wavebit solve, compiled | fails | passes, `diff = 0.0` |
 | compiled `.backward()` | fails | passes, `max|Δgrad| ≤ 8.5e-20` |
 
+Those two "passes" were measured at `8257e2c`, before `modal_gradient.py` existed (it was created
+by `8ac44120`, 2026-09-29). They are no longer true of a compiled wavebit: once the modal
+exponential's complex `eye` reached the graph, Inductor got values and gradients wrong (§6), and
+the cure was to stop compiling wavebit.
+
 Blocker 3 has no standalone repro, so it is only known to be absent from the full 2.13.0 run.
 Which release fixed each one was not bisected — the useful fact is that 2.7 fails and 2.13 does
 not. Both halves were re-checked on `8257e2c` after the same-material short-circuit was removed
@@ -151,7 +170,9 @@ works:
 | 6 | 0.1810 s | 0.1905 s | **0.95x** | 0.2992 s | 0.2940 s | **1.02x** |
 | 10 | 1.9800 s | 1.9996 s | **0.99x** | 3.0386 s | 3.0172 s | **1.01x** |
 
-Values were bit-identical (`diff = 0.0`) and gradients agreed to `8.5e-20`.
+Values were bit-identical (`diff = 0.0`) and gradients agreed to `8.5e-20` — at `8257e2c`, before
+`modal_gradient.py` existed; not true of a compiled wavebit since (§6). The timings are history
+too: wavebit now runs eagerly under `torch.compile`, so the "compiled" columns would read as eager.
 
 For scale, `jax.jit` — the analogue that does work — bought roughly 1.9x at `truncation_order=3` falling to
 1.3x at `truncation_order=10` when last measured -- the same collapsing trend, measured the same way.
@@ -205,3 +226,169 @@ This would be worth revisiting if any of the following changed:
 
 Until then, `jax.jit` is the working answer for a traced solve; see "Differentiating a
 simulation" in the README.
+
+## 6. 2026-10: Inductor miscompiles the complex identity, so wavebit runs eagerly
+
+Measured 2026-10-12 on torch 2.13.0, Python 3.12.9, macOS arm64 (CPU), on `develop` at
+`01815aa0` and on this change.
+
+### The defect
+
+`array_api_compat`'s torch `eye` is a zeros tensor whose diagonal is then written in place
+(`diagonal().fill_(1)`). When that tensor is complex and the input requires grad, Inductor emits
+the in-place write *after* the kernels that read the tensor, so they read zeros. The modal
+exponential (`wavebit/_core/modal_gradient.py`, created 2026-09-29) is built exactly so:
+`eye*phases + (q - eye*values)*divided`. No wavebit is needed to see it:
+
+```python
+import torch, array_api_compat.torch as act
+
+def f(q):
+    eye = act.eye(q.shape[0], dtype=q.dtype)
+    return eye * torch.exp(q) + (q - eye * q)
+
+q = torch.randn(4, 4, dtype=torch.complex128, generator=torch.Generator().manual_seed(11))
+print((torch.compile(f)(q.clone().requires_grad_()) - f(q)).abs().max())   # 1.381; eagerly 0
+```
+
+| `f` compiled with Inductor | max \|compiled − eager\| |
+|---|---|
+| complex128, input requires grad | **1.381** |
+| complex64, input requires grad | **5.709** |
+| complex128 without grad; float64 with or without grad | 0 |
+| `backend='aot_eager'` or `backend='eager'` | 0 |
+| `torch.eye` in place of `array_api_compat`'s `eye` | 0 |
+| `torch._inductor.config.reorder_for_peak_memory = False` | 0 |
+
+So Dynamo and AOTAutograd are exact and Inductor's peak-memory reordering moves the write;
+turning that pass off cures this repro (a fact, not a recommendation: nothing here depends on
+it). A search of PyTorch's issues on 2026-10-11 found none that matches.
+
+In wavebit it was silent in value **and** gradient. One solve and a backward of a weighted
+read-out (`tests/test_forward_mode.py`'s scenes), default mode, before this change:
+
+| scene | compiled loss | eager loss | compiled gradient | eager gradient |
+|---|---|---|---|---|
+| 1D TE, permittivity, ETM | **-4.434983049888** | -0.8953932051167 | **-0.1182433628003** | 0.2721483665790 |
+| 2D Li raster with fields | **-5.512585863438** | -0.8677333191407 | **0.02838407891956** | 0.01971995024377 |
+
+The same 1D scene was exact under `backend='aot_eager'` (gradient rel 6.1e-16) and
+`backend='eager'` (0). A TM thickness and a theta setter on a solver built outside raised
+`InternalTorchDynamoError: TypeError: Cannot interpret 'torch.complex128' as a data type`, and
+`fullgraph=True` raised `Unsupported` at `cmath.sqrt`. The two wrong rows raised nothing.
+
+### The doors
+
+A refusal cannot be raised from inside the trace: Dynamo turns an exception raised while tracing
+into a graph break and reruns the frame natively, where it is swallowed (a toy with no wavebit
+returned 5.0 with no error). And the arithmetic is not wrong; the compiler is. So wavebit keeps
+its frames out of the graph. `wavebit/_core/backend.py::eager_under_torch_compile` decorates
+every class in `wavebit.__all__`, every type a public call returns and every wavebit base of
+either — each public method, property accessor, `classmethod`/`staticmethod` and dunder of the
+class's own namespace — and the public functions: 65 sites. A class only ever built and used
+inside a door, and never handed to a caller, needs none: everything a door calls is already
+kept out. A door
+
+- calls straight through while `torch._dynamo` is not in `sys.modules`. Nothing can be compiling
+  then, since `torch.compile` imports it, and an eager solve and backward never import it;
+- otherwise calls through a cached `torch.compiler.disable(fn, reason=...)` wrapper, PyTorch's
+  documented way to keep a function and everything it calls out of `torch.compile`
+  (docs.pytorch.org/docs/2.13/generated/torch.compiler.disable.html). Building it lazily on
+  the first call is the idea of PyTorch's own `torch._compile._disable_dynamo`.
+
+Two shortcuts that look equivalent are wrong. Choosing the route by
+`torch.compiler.is_compiling()` gets all five tripwire scenes of `tests/test_torch_compile.py`
+wrong: Dynamo stops tracing a wrapper whose frame compiled to nothing and runs it natively,
+with the door's own frames still compiled. Skipping the wrapper when already inside a door
+lets Dynamo trace wavebit again whenever a user callable compiled with `torch.compile` is called
+from inside it, because that callable sets the frame hook back: `solver.grad` with a compiled
+`forward` then returned a permittivity gradient up to 0.8165 off (eager's largest entry is
+0.1539), with the loss right and no error.
+
+**What it gives.** Values within 2.6e-16 of eager and gradients within 9.5e-16 — the remainder
+is the caller's own compiled weighted sum — in default mode, `mode='reduce-overhead'` and
+`dynamic=True`, for a solver built inside or outside the compiled function, property setters,
+`solve(...)` keywords, a result's read-outs, `ScatteringMatrix`, `Lattice`, `Material` and
+`TabulatedMaterial`, `CoherentSolver` and `excitation=`. `torch.compile` around `torch.func`
+routes and double backward returns the eager derivative: around `create_graph=True` twice it
+reads 1.1001006774e-04 against a NumPy second difference of 1.1001006765e-04, where it raised
+`InternalTorchDynamoError` before. Around `jvp(jvp)` and `vmap(jacfwd)` it is the eager
+derivative too, so it is exact where eager is: these two go through `torch.linalg.solve`'s
+forward rule, which is exact eagerly only with `backend.linear_solve` (the `torch.func` row of
+[`guide/autodiff.md`](guide/autodiff.md#what-cannot-be-traced)). `tests/test_torch_compile.py`
+checks all three against NumPy, the two as strict expected failures while that function is
+absent.
+
+**What is refused, by name.**
+
+- `fullgraph=True`, and a strict `torch.export`, raise `torch._dynamo.exc.Unsupported: Skip
+  calling torch.compiler.disable()d function ... (reason: wavebit runs eagerly under
+  torch.compile: Inductor (torch 2.13) silently miscompiles its complex arithmetic -- see
+  docs/torch-compile.md)`. A door carries the reason only once it has run with Dynamo
+  loaded: the first `fullgraph` compile or strict export in a process names
+  `torch.compiler.disable` without the reason, even after eager wavebit calls (those take the
+  fast path and cache nothing) -- still loud, `Unsupported`.
+- A non-strict `torch.export` runs the door natively, where `disable` does not apply, so the
+  door refuses it with `NotImplementedError` ("wavebit cannot be exported: ...") while
+  `torch.compiler.is_exporting()` is true. Without that, the exported module returned eager
+  values and no `grad_fn`.
+- `torch.jit.trace` raises `NotImplementedError` ("wavebit cannot be traced by
+  torch.jit.trace: ...") at every public wavebit call. Dynamo is not involved and the values
+  are concrete, so `disable` does not catch it; each door refuses while the public
+  `torch.jit.is_tracing()` is true. Before that it was silent wherever it reached:
+  - a solve traced with 66 `TracerWarning`s and returned an output with no `grad_fn`, so a
+    loss mixing the traced solve with another term lost wavebit's share of its gradient: 0.0
+    at p = 0 where eager reads 0.2721483665790, and 0.1 at p = 0.05 (that is, 2p alone) where
+    eager reads 0.3733920308334;
+  - a solved two-layer grating's `reconstruct_field`, traced at a height in one layer and
+    replayed in the other, read d/dz -0.004063805947 where eager and a central difference read
+    0.003442581948, and replayed outside the stack it answered 0.9016 where eager refuses;
+  - `Lattice.hexagonal(a)` from a traced length became a NumPy constant, so
+    `meshgrid_xy(lattice=...)` replayed the example's cell: +2.922e5 for an eager +3.393e5,
+    with no gradient for eager's 1574.35.
+
+  A first version refused only where a solve reads a value at a decision
+  (`backend._concrete`); the last two never reach it, so the check is in the door, which every
+  public call passes.
+
+**Not covered.**
+
+- `make_fx` on real tensors returns values with no `grad_fn`; it has no public flag to refuse on.
+- Compiled autograd (`torch._dynamo.config.compiled_autograd = True`) compiles wavebit's custom
+  `autograd.Function` backward rules, which are not doors. It was measured within 7.2e-13 of
+  eager (2026-10-11); that is not a contract.
+- A `forward_ad` tangent through any compiled function comes back `None`. It does without
+  wavebit too, so it is torch's.
+
+### What it costs, and what it relies on
+
+About 90 ns per door call while Dynamo is not loaded and about 490 ns once it is, at 374–548
+door calls per forward (counted 2026-10-11, with 67 sites). Minimum of three alternating rounds, one
+thread, `develop` → this change: a 1D TE (3,0) value-only solve 2.14 → 2.17 ms without Dynamo
+and 2.17 → 2.40 ms with it; a 2D (2,2) solve with fields 7.66 → 8.04 ms and 7.64 → 7.96 ms. A
+forward-mode dual, `torch.func.grad` and every `torch.optim` step import Dynamo, so an
+optimisation loop pays the second figure after its first step: a fixed ~0.2–0.3 ms per forward,
+under 0.1% at orders (15,15) and above, where a solve takes hundreds of milliseconds. The
+`torch.jit.trace` check adds about 100 ns to every door call on either route: a door around a
+no-op went from 61 to 158 ns without Dynamo and from 346 to 449 ns with it (2026-10-12, the mean
+of two runs, each the minimum of seven million-call repeats), at 373, 390 and 392 door calls
+per forward on the 1D TE, conical and 2D scenes — about 0.04 ms per forward.
+
+Two implementation facts are relied on, and both would fail silently if they changed:
+
+1. `torch.compile` and a non-strict `torch.export` import a module named `torch._dynamo` before
+   compiling anything — the fast path's premise.
+2. `torch.compiler.disable` is recursive (its documented default `recursive=True`), so
+   everything a door calls stays eager.
+
+`tests/test_torch_compile.py` catches either (its tripwire compares a compiled solve with eager
+autograd at 1e-12), so run it on every torch upgrade. Its canary,
+`test_canary_inductor_still_reorders_the_eye_write`, fails once a torch compiles the five-line
+`f` above correctly. Then update this section; the doors stay, because they keep wavebit out of
+every future Inductor defect at the cost above.
+
+Everything in this section was measured on macOS arm64 (CPU) with torch 2.13.0 only. CI runs on
+Linux x86-64 with the CPU index's latest torch, where nobody has measured the reorder: Inductor
+writes its own C++ per platform. So the canary asserts only on macOS arm64, and elsewhere a gap
+that does not reproduce skips with the gap and the torch version it read. Record what such a
+platform does here.

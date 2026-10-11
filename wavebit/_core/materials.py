@@ -10,10 +10,12 @@ import numpy as np
 
 from .backend import _concrete, array_namespace, as_array
 from .domain import Material, eps_from_index
+from .backend import eager_under_torch_compile
 
 _PYTREE_REGISTERED = False
 
 
+@eager_under_torch_compile
 @dataclass(frozen=True, init=False, repr=False)
 class TabulatedMaterial:
     """A wavelength-dependent material, assigned once to a region.
