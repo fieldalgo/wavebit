@@ -31,11 +31,15 @@ basis with an upper-triangular propagator, gated by
    raster, the wavelength, the thickness and the angles (``theta``, ``phi``: they move ``ky``);
 7. fields, against the 2D path and SMM against ETM, values and gradients, on one layer and two,
    lit from either side; and an eager record differentiated under ``jax.jit``;
-8. inertness off the band, and under an abstract trace -- ``jax.jit`` and ``jax.vmap`` (the
-   documented gap: no rebuild there);
+8. inertness off the band (eager: every bit; under ``jax.jit``: equal accuracy), and the
+   rebuild under every abstract trace -- ``jax.jit``, ``jax.vmap``, ``jax.lax.map``,
+   ``jax.checkpoint``, ``torch.func.vmap`` -- with the gate's masks as data: values, first and
+   second derivatives, fields and field gradients, and the gate itself under ``jax.jit``;
 9. the ``ky == 0`` Rayleigh contract, untouched;
 11. complex64; 12. a cutoff and a near-graze in one layer; 13. ``excitation=`` and SMM's
-    ``scattering``. (Item 10 lives in ``test_rayleigh_guard.py``, ``[1D ky]``.)
+    ``scattering``; and the coupled exponential itself: its eager ``expm`` tangent, its traced
+    closed-form Frechet tangent against SciPy's ``expm_frechet``, and which one runs where.
+    (Item 10 lives in ``test_rayleigh_guard.py``, ``[1D ky]``.)
 
 Sizes stay at ``truncation_order=5``. ``docs/rayleigh-points.md`` section 7 has the story and
 the measurements behind every tolerance below.
@@ -290,6 +294,64 @@ def test_the_gate_refuses_a_root_under_the_floor_and_opposite_labels():
     assert _synthetic(wA, wB, ky, q1=q, q2=q) is not None
     assert _synthetic(wA, wB, ky, q1=[1e-10, q[1]], q2=q) is None
     assert _synthetic(wA, wB, ky, q1=q, q2=[-q[0], q[1]]) is None
+
+
+def _gate_cases():
+    """``(name, engages, (wA, wB, ky, q1, q2))`` for the cases above; ``q`` from
+    ``sqrt(w + ky**2)`` where ``None``. ``engages`` is the expected answer, not the eager one."""
+    out = []
+    for ky in (0.3, 1.2):
+        g = _gate(ky)
+        out.append((f'inside, ky {ky}', True, ([0.9 * g, 0.7], [-0.9 * g, 0.5], ky, None, None)))
+        out.append((f'outside, ky {ky}', False, ([1.1 * g, 0.7], [-1.1 * g, 0.5], ky, None, None)))
+    ky = 1e-4
+    out.append(('Rayleigh bound, inside', True,
+                ([0.9 * ky ** 2 / 2, 0.5], [0.9 * ky ** 2 / 2, 0.5], ky, None, None)))
+    out.append(('Rayleigh bound, outside', False,
+                ([1.1 * ky ** 2 / 2, 0.5], [1.1 * ky ** 2 / 2, 0.5], ky, None, None)))
+    ky, g = 0.3, _gate(0.3)
+    wA, wB = [0.5 * g, 0.7], [0.5 * g, 0.5]
+    q = list(np.sqrt(np.asarray(wA, dtype=complex) + ky ** 2))
+    out.append(('a cluster', True, (wA, wB, ky, q, q)))
+    out.append(('a root under the floor', False, (wA, wB, ky, [1e-10, q[1]], q)))
+    out.append(('opposite labels', False, (wA, wB, ky, q, [-q[0], q[1]])))
+    out.append(('ky 0, exact zero', False, ([0.0, 0.3], [0.0, 0.5], 0.0, None, None)))
+    out.append(('ky 0, +-1e-300', False, ([1e-300, 0.3], [-1e-300, 0.5], 0.0, None, None)))
+    out.append(('ky 0, roots above the floor', False,
+                ([0.0, 0.3], [0.0, 0.5], 0.0, [0.5, 0.6], [0.5, 0.7])))
+    return out
+
+
+@pytest.mark.parametrize('name, engages, case', _gate_cases(),
+                         ids=[name for name, _, _ in _gate_cases()])
+def test_the_gate_under_jit_matches_the_eager_gate(name, engages, case):
+    """Under ``jax.jit`` the gate hands its masks on as data: the eager masks where the gate
+    engages, all-False wherever it must not -- outside the edge, a root under the floor,
+    opposite labels, ``ky == 0``.
+
+    The only check that sees the refusal fold (a refused cluster's masks dropped to empty): the
+    solver-level tests never build a refused cluster. Also pins the strict comparison at
+    ``ky == 0`` under a trace, where nothing refuses afterwards.
+    """
+    jax = pytest.importorskip('jax')
+    wavebit.enable_x64()
+    jnp = jax.numpy
+    wA, wB, ky, q1, q2 = case
+    wA, wB = np.asarray(wA, dtype=complex), np.asarray(wB, dtype=complex)
+    q1 = np.sqrt(wA + ky ** 2) if q1 is None else np.asarray(q1, dtype=complex)
+    q2 = np.sqrt(wB + ky ** 2) if q2 is None else np.asarray(q2, dtype=complex)
+    ky = np.asarray(ky, dtype=complex)
+    eager = solve_1d._cutoff_cluster(np, wA, wB, q1, q2, ky)
+    traced = jax.jit(lambda *a: solve_1d._cutoff_cluster(jnp, *a))(wA, wB, q1, q2, ky)
+    assert traced is not None, 'under a trace the gate must hand its masks on, never None'
+    got = [np.asarray(m).tolist() for m in traced]
+    if engages:
+        assert eager is not None, f'{name}: the eager gate did not engage'
+        want = [np.asarray(m).tolist() for m in eager]
+        assert any(want[0] + want[1])
+    else:
+        want = [[False] * len(wA), [False] * len(wB)]
+    assert got == want, f'{name}: traced {got}, expected {want}'
 
 
 # ------------------------------------------------------- 3. patterned exceptional points
@@ -704,11 +766,12 @@ def test_a_patterned_cutoff_field_and_its_gradient_agree_across_algorithms(name)
 def test_an_eager_field_record_differentiates_alike_under_jit(algo):
     """A PA616 record built eagerly, passed into ``jax.jit(jax.grad(...))``: the eager derivative.
 
-    Passed in, the record's ``q`` is a tracer, so the coupled exponential takes its tangent from
-    ``_expm`` with an abstract norm; eagerly ``q`` is a constant and the formula's exact ``scale``
-    derivative is used. The traced squaring count keeps the two together (measured 4.1e-16 ..
-    8.0e-16 in ``d/dz``); falling back to ``jax.scipy.linalg.expm``'s own floor count there was
-    6.4e-11 off.
+    Passed in, the record's ``q`` is a tracer, so the coupled exponential's norm is abstract and
+    its tangent is the closed-form Frechet derivative
+    (:func:`~wavebit._core.modal_gradient._coupled_frechet`); eagerly ``q`` is a constant and the
+    formula's exact ``scale`` derivative is used. Measured 9.9e-17 in ``d/dz``. Before, ``_expm``
+    formed its squaring count traced there (4.1e-16 .. 8.0e-16), and before that fell back to
+    ``jax.scipy.linalg.expm``'s own floor count (6.4e-11).
     """
     jax = pytest.importorskip('jax')
     jnp = jax.numpy
@@ -726,7 +789,72 @@ def test_an_eager_field_record_differentiates_alike_under_jit(algo):
     assert err < 1e-13, f'jit(grad) {err:.1e} from eager grad'
 
 
-# ---------------------------------------------------------------- 8. inert off the band
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_a_uniform_cutoff_field_under_jit_matches_the_2d_path(algo, rebuilds):
+    """R1's field from ``jax.jit(solve + reconstruct_field)`` at the exact point: the 2D field.
+
+    Before, the traced solve kept the family construction and its field was NaN here. Measured
+    <= 8.6e-15 of ``max|F|``, the cell-centre phase removed as in the eager test above.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    ref = _field(R1, two_d=True)
+    s = _solver(R1, algo=algo, backend='jax')
+    got = np.asarray(jax.jit(lambda w: s.solve(wavelength=w, auto_detune=False, answers='field')
+                             .reconstruct_field(sample_x=12, sample_y=1, sample_z=8))(
+        jnp.asarray(500.)))
+    assert rebuilds
+    phase = np.exp(1j * np.angle(np.vdot(got.ravel(), ref.ravel())))
+    err = np.max(np.abs(got * phase - ref)) / np.max(np.abs(ref))
+    assert np.isfinite(err) and err < 1e-12, f'{algo}: {err:.1e}'
+
+
+@pytest.mark.parametrize('name', list(_PATTERNED_FIELDS))
+def test_a_patterned_cutoff_field_under_jit(name):
+    """``jax.jit(solve + reconstruct_field)`` at an exceptional point is the eager field, SMM's
+    is the ETM's, and the field gradient under ``jax.jit(jax.grad)`` is the eager one.
+
+    Under a trace every layer is rebuilt, so SMM's field state reads it with
+    ``two_face(coupled=True)`` and the fields path takes the coupled exponential's closed-form
+    tangent. Measured: fields <= 5.1e-14 of ``max|F|`` (MU614; the others <= 6.3e-15), SMM vs
+    ETM <= 3.2e-15, gradients in the raster and the wavelength <= 1.2e-13; before, 8.6e-3 .. 2.5,
+    1.6 .. 2.0 and 7e11 .. 3e28.
+    Catches the field state reading a coupled traced layer with plain ``two_face``
+    (2.1e-3 .. 4.1e-3) and the fields path taking the formula's tangent.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    scene = _PATTERNED_FIELDS[name]
+    xs = jnp.asarray([-200., 0., 130.])
+    zs = jnp.asarray(np.array([0.13, 0.5, 0.87]) * sum(scene['thickness']))
+    u0 = jnp.asarray(scene['structure'], dtype=float)
+    w0 = jnp.asarray(scene['wavelength'])
+    jitted = {}
+    for algo in ('ETM', 'SMM'):
+        s = _solver(scene, algo=algo, backend='jax')
+
+        def field(u, w):
+            r = s.solve(structure=u, wavelength=w, auto_detune=False, answers='field')
+            return r.reconstruct_field(sample_x=xs, sample_y=jnp.asarray([0.]), sample_z=zs)
+
+        def F(u, w):
+            return jnp.sum(jnp.abs(field(u, w)[..., :3]) ** 2)
+        eager = np.asarray(field(u0, w0))
+        jitted[algo] = np.asarray(jax.jit(field)(u0, w0))
+        err = np.max(np.abs(jitted[algo] - eager)) / np.max(np.abs(eager))
+        assert np.isfinite(err) and err < 1e-12, f'{algo} jit field: {err:.1e} from eager'
+        g_eager = jax.grad(F, argnums=(0, 1))(u0, w0)
+        g_jit = jax.jit(jax.grad(F, argnums=(0, 1)))(u0, w0)
+        for var, a, b in zip(('raster', 'wavelength'), g_jit, g_eager):
+            a, b = np.asarray(a), np.asarray(b)
+            err = np.max(np.abs(a - b)) / np.max(np.abs(b))
+            assert np.isfinite(err) and err < 1e-11, f'{algo} jit(grad) {var}: {err:.1e}'
+    scale = np.max(np.abs(jitted['ETM']))
+    err = np.max(np.abs(jitted['SMM'] - jitted['ETM'])) / scale
+    assert err < 1e-12, f'jitted SMM field {err:.1e} from the jitted ETM field'
+
+
+# ------------------------------------------- 8. off the band, and under every abstract trace
 
 def _random_scenes(count, seed=20261010):
     rng = np.random.default_rng(seed)
@@ -749,51 +877,198 @@ def _random_scenes(count, seed=20261010):
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_off_the_band_nothing_moves(algo, rebuilds):
-    """R1 at ``rel = 5e-2`` and random scenes: no rebuild, and every bit the gate-off solve's."""
-    for scene in [dict(R1, wavelength=500. * 1.05)] + _random_scenes(4):
+    """R1 at ``rel = 5e-2`` and random scenes: eagerly no rebuild and every bit the gate-off
+    solve's; under ``jax.jit`` the rebuild in the general layout, at the eager answer.
+
+    A traced conical layer cannot be gated, so it takes the general layout whatever its masks
+    (all empty off the band) and is rounded differently from the eager solve: under a trace the
+    test pins accuracy, not bits (measured <= 1.6e-14 of the largest output). The rebuild must
+    run there -- a traced gate that answered ``None``, the old behaviour, fails it.
+    """
+    scenes = [dict(R1, wavelength=500. * 1.05)] + _random_scenes(4)
+    for scene in scenes:
         got = _numbers(_solver(scene, algo=algo).solve(auto_detune=False))
         with _family_construction():
             old = _numbers(_solver(scene, algo=algo).solve(auto_detune=False))
         for key in got:
             assert np.array_equal(got[key], old[key]), key
     assert not rebuilds
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    for index, scene in enumerate(scenes):
+        ref = _flat(_numbers(_solver(scene, algo=algo).solve(auto_detune=False)))
+        s = _solver(scene, algo=algo, backend='jax')
+        del rebuilds[:]
+        r = jax.jit(lambda u: s.solve(structure=u, auto_detune=False))(
+            jnp.asarray(scene['structure'], dtype=float))
+        assert rebuilds, f'scene {index}: no rebuild under jax.jit'
+        err = np.max(np.abs(_flat(_numbers(r)) - ref)) / np.max(np.abs(ref))
+        assert err < 1e-12, f'scene {index}: jit {err:.1e} from the eager solve'
 
 
-def test_under_an_abstract_trace_the_family_construction_ships(rebuilds):
-    """The documented gap: a traced solve cannot read the gate, so no layer is rebuilt.
+def _flat(n):
+    return np.concatenate([n['R'], n['T'], n['r'], n['t']])
 
-    The gate's masks decide the layer's *structure*, so wherever its values are abstract the old
-    construction runs, bit for bit -- including its NaN at R1's exact zero
-    (``docs/rayleigh-points.md`` section 7). Not only ``jax.jit``: ``jax.vmap`` over the
-    wavelength, the common sweep idiom, is abstract too (measured: NaN at the point, 2.6e-2 off
-    at ``+-1e-12``, no warning), and so are a ``jax.lax.map`` body, ``jax.checkpoint`` and
-    ``torch.func.vmap`` (2.5e-2..2.7e-2). If this starts failing because a trace got the
-    rebuild, update the docs with it.
+
+def test_under_an_abstract_trace_the_layer_is_rebuilt(rebuilds):
+    """Every abstract trace rebuilds R1's spacer: the gate hands its masks on as data.
+
+    ``jax.jit``, ``jax.vmap`` (the sweep idiom), ``jit(vmap)``, ``jax.lax.map``,
+    ``jax.checkpoint`` and ``torch.func.vmap``, at the exact point, one ULP either side,
+    ``+1e-12`` and ``+1e-3`` (off the band, in the same trace), against the 2D path. Measured
+    <= 4.4e-14 in amplitudes; before, the family construction shipped under every one of them:
+    NaN at the point and 0.27 .. 0.78 one ULP away, silently. One ``jit`` trace serves every
+    wavelength. Catches the gate answering ``None`` under a trace (NaN), ``torch.func.vmap``
+    left on the family construction, and the refusal fold applied to every layer, i.e. masks
+    always empty (NaN).
     """
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     jnp = jax.numpy
-    wls = [500. * (1 - 1e-12), 500., 500. * (1 + 1e-12)]
+    wls = list(_offsets(500.).values()) + [500. * (1 + 1e-3)]
+    for algo in ('ETM', 'SMM'):
+        ref = np.stack([_flat(_numbers(_solver(R1, algo=algo, two_d=True, wavelength=w)
+                                       .solve(auto_detune=False), two_d=True)) for w in wls])
+        s = _solver(R1, algo=algo, backend='jax')
+        traces = []
 
-    def traced():
-        s = _solver(R1, backend='jax')
-        r = jax.jit(lambda u: s.solve(structure=u, auto_detune=False))(jnp.asarray(R1['structure']))
+        def one(w):
+            traces.append(1)
+            r = s.solve(wavelength=w, auto_detune=False)
+            return jnp.concatenate([jnp.real(r.R).ravel(), jnp.real(r.T).ravel(),
+                                    r.r_xyz.ravel(), r.t_xyz.ravel()])
         sweep = jnp.asarray(wls)
-        one = lambda w: s.solve(wavelength=w, auto_detune=False).R
-        v = jax.vmap(one)(sweep)
-        m = jax.lax.map(one, sweep)
-        c = [jax.checkpoint(one)(w) for w in sweep]
-        st = _solver(R1, backend='torch')
-        t = torch.func.vmap(lambda w: st.solve(wavelength=w, auto_detune=False).R)(
-            torch.tensor(wls, dtype=torch.float64))
-        return (np.asarray(r.R), np.asarray(r.r_xyz), np.asarray(v), np.asarray(m),
-                np.asarray(c), t.detach().numpy())
-    got = traced()
-    assert not rebuilds
-    with _family_construction():
-        old = traced()
-    for a, b in zip(got, old):
-        np.testing.assert_array_equal(a, b)
+        jf, ck = jax.jit(one), jax.checkpoint(one)
+        got = {'jit': np.stack([np.asarray(jf(w)) for w in sweep])}
+        assert len(traces) == 1, 'one jit trace serves on- and off-band wavelengths'
+        got.update({'vmap': np.asarray(jax.vmap(one)(sweep)),
+                    'jit(vmap)': np.asarray(jax.jit(jax.vmap(one))(sweep)),
+                    'lax.map': np.asarray(jax.lax.map(one, sweep)),
+                    'checkpoint': np.stack([np.asarray(ck(w)) for w in sweep])})
+        st = _solver(R1, algo=algo, backend='torch')
+        got['torch.func.vmap'] = torch.func.vmap(lambda w: (lambda r: torch.cat([
+            r.R.real.reshape(-1), r.T.real.reshape(-1), r.r_xyz.reshape(-1),
+            r.t_xyz.reshape(-1)]))(st.solve(wavelength=w, auto_detune=False)))(
+            torch.tensor(wls, dtype=torch.float64)).numpy()
+        for name, g in got.items():
+            err = np.max(np.abs(g - ref))
+            assert np.isfinite(err) and err < 1e-12, f'{algo} {name}: {err:.1e}'
+    assert rebuilds
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('name', ['PA616', 'MU614'])
+def test_a_patterned_cutoff_under_an_abstract_trace(name, algo, rebuilds):
+    """At a patterned exceptional point every trace gives the eager answer, derivatives too.
+
+    Values under ``jit`` and ``jit(vmap)`` at ``rel`` 0 and ``+-1e-12`` against the eager NumPy
+    rebuild (measured <= 3.6e-14; before 3.9e-3 .. 1.5). ``d(sum R)`` in the wavelength, the
+    raster and the thickness under ``jit(grad)`` and ``grad(checkpoint)``, ``jit(jvp)`` in the
+    wavelength, and the sweep idioms ``jit(grad(sum vmap))`` and ``jit(vmap(grad))`` per lane,
+    against eager ``jax.grad`` (measured <= 2.0e-12, MU614's thickness under ``jit``; PA616
+    <= 3.3e-14; before 1e10 .. 3e28). The thickness is the one parameter that reaches the
+    coupled exponential's ``scale``: without the traced rule's ``ds q exp(s q)`` term every
+    thickness derivative here is lost (relative error 1.0). Also
+    catches the closed form replaced by the formula's own tangent (6.1e-4 PA616, 6.4e-3 MU614),
+    either second-order term dropped (3.1e-4 .. 3.3e-2), divided differences by the series
+    alone (4.7e-3 .. 28) and a coupling cap of 0 (NaN).
+    """
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    scene = PATTERNED[name]
+    wl0 = scene['wavelength']
+    wls = [wl0, wl0 * (1 - 1e-12), wl0 * (1 + 1e-12)]
+    ref = np.stack([_flat(_numbers(_solver(scene, algo=algo, wavelength=w)
+                                   .solve(auto_detune=False))) for w in wls])
+    s = _solver(scene, algo=algo, backend='jax')
+
+    def one(w):
+        r = s.solve(wavelength=w, auto_detune=False)
+        return jnp.concatenate([jnp.real(r.R).ravel(), jnp.real(r.T).ravel(),
+                                r.r_xyz.ravel(), r.t_xyz.ravel()])
+    sweep = jnp.asarray(wls)
+    jf = jax.jit(one)
+    del rebuilds[:]
+    values = {'jit': np.stack([np.asarray(jf(w)) for w in sweep]),
+              'jit(vmap)': np.asarray(jax.jit(jax.vmap(one))(sweep))}
+    assert rebuilds
+    for label, got in values.items():
+        err = np.max(np.abs(got - ref))
+        assert np.isfinite(err) and err < 1e-12, f'{label}: {err:.1e}'
+
+    u0 = jnp.asarray(scene['structure'], dtype=float)
+    t0 = jnp.asarray(scene['thickness'][0])
+
+    def F(w, u, t):
+        r = s.solve(wavelength=w, structure=u, thickness=jnp.stack([t]), auto_detune=False)
+        return jnp.sum(jnp.real(r.R))
+    args = (jnp.asarray(wl0), u0, t0)
+    eager = jax.grad(F, argnums=(0, 1, 2))(*args)
+    traced = {'jit(grad)': jax.jit(jax.grad(F, argnums=(0, 1, 2)))(*args),
+              'grad(checkpoint)': jax.grad(jax.checkpoint(F), argnums=(0, 1, 2))(*args)}
+    for label, g in traced.items():
+        for var, a, b in zip(('wavelength', 'raster', 'thickness'), g, eager):
+            err = _rel(a, b)
+            assert np.isfinite(err) and err < 1e-11, f'{label} {var}: {err:.1e}'
+    jvp = jax.jit(lambda w: jax.jvp(lambda x: F(x, u0, t0), (w,), (jnp.asarray(1.0),))[1])(
+        args[0])
+    err = _rel(jvp, eager[0])
+    assert np.isfinite(err) and err < 1e-11, f'jit(jvp) wavelength: {err:.1e}'
+
+    def Fw(w):
+        return F(w, u0, t0)
+    lanes = np.array([float(jax.grad(Fw)(w)) for w in sweep])
+    sweeps = {'jit(grad(sum vmap))': jax.jit(jax.grad(lambda ws: jnp.sum(jax.vmap(Fw)(ws))))(sweep),
+              'jit(vmap(grad))': jax.jit(jax.vmap(jax.grad(Fw)))(sweep)}
+    for label, g in sweeps.items():
+        err = np.max(np.abs(np.asarray(g) - lanes) / np.abs(lanes))
+        assert np.isfinite(err) and err < 1e-11, f'{label}: {err:.1e}'
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_second_derivatives_through_a_traced_cutoff(algo):
+    """PA616 under ``jax.jit``: ``d2(sum R)/dt2`` and the mixed thickness x raster derivative in
+    both orders (``jacfwd`` of a ``grad``, ``grad`` of a ``jvp``) and reverse over reverse
+    (``jacrev`` of a ``grad``), against eager.
+
+    The traced rule's tangent is ``L(s q, s dq) + ds q exp(s q)`` with ``L`` at the stopped
+    ``q``, so an outer derivative must still find every term: an outer ``scale`` moves ``L``
+    along ``q``, an outer ``q`` reaches ``q exp(s q)``. Measured <= 7.7e-14; without the
+    ``ds q exp(s q)`` term 0.57 .. 1.0.
+
+    Reverse over reverse across the two variables -- the raster inside, the thickness outside --
+    is the one probe here that sends a cotangent into the closed form's divided differences
+    through ``scale``, to every lane, the exactly confluent ones included (``F1``'s diagonal,
+    the padded ``J = K = 0`` sets): measured 1.5e-14 .. 1.7e-14, and NaN with either divisor
+    guard dropped (``_dd_from_subsets``'s, ``F1``'s), where the other three stay finite and
+    exact. (``d2/dt2`` is reverse over reverse too, but in ``t`` alone the variation ``dq`` is
+    zero, so no cotangent reaches ``L``.)
+    """
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    scene = PATTERNED['PA616']
+    s = _solver(scene, algo=algo, backend='jax')
+    u0 = jnp.asarray(scene['structure'], dtype=float)
+    t0 = jnp.asarray(scene['thickness'][0])
+    one = jnp.asarray(1.0)
+
+    def F(u, t):
+        r = s.solve(structure=u, thickness=jnp.stack([t]), auto_detune=False)
+        return jnp.sum(jnp.real(r.R))
+    probes = {
+        'd2/dt2': lambda u, t: jax.grad(jax.grad(F, argnums=1), argnums=1)(u, t),
+        'd/dt (d/du), jacfwd(grad)': lambda u, t: jax.jacfwd(
+            lambda x: jax.grad(F, argnums=0)(u, x))(t),
+        'd/du (d/dt), grad(jvp)': lambda u, t: jax.grad(
+            lambda v: jax.jvp(lambda x: F(v, x), (t,), (one,))[1])(u),
+        'd/dt (d/du), jacrev(grad)': lambda u, t: jax.jacrev(
+            lambda x: jax.grad(F, argnums=0)(u, x))(t),
+    }
+    for label, probe in probes.items():
+        eager = np.asarray(probe(u0, t0))
+        jitted = np.asarray(jax.jit(probe)(u0, t0))
+        err = np.max(np.abs(jitted - eager)) / np.max(np.abs(eager))
+        assert np.isfinite(err) and err < 1e-11, f'{label}: {err:.1e}'
 
 
 # ------------------------------------------------------------------ 9. ky = 0 untouched
@@ -902,14 +1177,16 @@ def test_the_scattering_matrix_is_finite_and_continuous_at_a_cutoff():
 
 # ---------------------------------------------------------- the coupled exponential itself
 
-@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('backend', ['jax', 'jax-jit', 'torch'])
 def test_the_coupled_exponential_is_the_matrix_exponential(backend):
-    """``exponential(coupled=True)``: the value from the formula, the derivative from ``expm``.
+    """``exponential(coupled=True)``: the value from the formula, the derivative exact.
 
     A propagator shaped like a rebuilt layer's (two cluster pairs coupled, at ``|A|_1 ~ 10``,
     where ``jax.scipy.linalg.expm`` unscaled was 4e-9 off), differentiated in a direction with
-    entries everywhere, against a central difference of SciPy's ``expm``. The formula's own
-    derivative misses the coupling chained behind the variation; ``coupled=False`` must show it.
+    entries everywhere, against a central difference of SciPy's ``expm``: eager JAX and PyTorch
+    take the tangent from ``expm``, ``jax.jit`` from the closed-form Frechet derivative. The
+    formula's own derivative misses the coupling chained behind the variation;
+    ``coupled=False`` must show it, traced or not.
     """
     scipy_linalg = pytest.importorskip('scipy.linalg')
     rng = np.random.default_rng(7)
@@ -922,7 +1199,7 @@ def test_the_coupled_exponential_is_the_matrix_exponential(backend):
     h = 1e-6
     fd = (scipy_linalg.expm(scale * (q + h * direction))
           - scipy_linalg.expm(scale * (q - h * direction))) / (2 * h)
-    if backend == 'jax':
+    if backend.startswith('jax'):
         jax = pytest.importorskip('jax')
         jnp = jax.numpy
 
@@ -930,8 +1207,12 @@ def test_the_coupled_exponential_is_the_matrix_exponential(backend):
             def f(t):
                 return modal_gradient.exponential(
                     jnp, jnp.asarray(q) + t * jnp.asarray(direction), scale, coupled=coupled)
-            value, tangent = jax.jvp(f, (jnp.asarray(0.0, dtype=jnp.complex128),),
-                                     (jnp.asarray(1.0, dtype=jnp.complex128),))
+
+            def pushed(t):
+                return jax.jvp(f, (t,), (jnp.asarray(1.0, dtype=jnp.complex128),))
+            if backend == 'jax-jit':
+                pushed = jax.jit(pushed)
+            value, tangent = pushed(jnp.asarray(0.0, dtype=jnp.complex128))
             return np.asarray(value), np.asarray(tangent)
     else:
         torch = pytest.importorskip('torch')
@@ -950,3 +1231,144 @@ def test_the_coupled_exponential_is_the_matrix_exponential(backend):
     assert np.max(np.abs(tangent - fd)) < 1e-8 * np.max(np.abs(fd))
     _, formula = run(False)
     assert np.max(np.abs(formula - fd)) > 1e-4 * np.max(np.abs(fd))
+
+
+#: Couplings of a synthetic ``q`` (``m = 10``): ``(rows x columns)`` entries, and which diagonal
+#: entry of a column is moved next to a row's (``(k, j, gap)``: ``q_kk = q_jj + gap``).
+_COUPLED_SHAPES = {
+    'tau = 0': ([], []),
+    'one pair, gap 0.3': ([(1, 6)], [(6, 1, 0.3)]),
+    'an exact confluent pair': ([(1, 6)], [(6, 1, 0.0)]),
+    'a pair at a gap of 2e-15': ([(1, 6)], [(6, 1, 2e-15 * (1 + 1j))]),
+    'two pairs, a full 2x2 coupling': ([(0, 5), (0, 6), (1, 5), (1, 6)],
+                                       [(5, 0, 1e-9), (6, 1, 0.0)]),
+    'four rows (the cap)': ([(j, k) for j in range(4) for k in range(4, 8)],
+                            [(4, 0, 0.0), (5, 1, 0.1)]),
+    'five rows (past the cap)': ([(j, 5 + j) for j in range(5)], []),
+    'a row that is also a column': ([(1, 5), (5, 6)], []),
+}
+
+#: The shapes the closed form refuses, each a half of its ``ok``: more coupled rows than
+#: :data:`~wavebit._core.modal_gradient._COUPLED_CAP`, and its premise broken (row 1 couples to
+#: column 5, and 5 couples on to column 6: a row that is also a column, two couplings chained).
+_REFUSED_SHAPES = ('five rows (past the cap)', 'a row that is also a column')
+
+
+def _coupled_q(shape, m=10, seed=5):
+    """A diagonal-plus-coupling ``q`` and a direction ``E`` with entries everywhere."""
+    rng = np.random.default_rng(seed)
+    q = np.diag(rng.uniform(0.2, 1.6, m) + 1j * rng.uniform(0, 0.3, m))
+    entries, moves = _COUPLED_SHAPES[shape]
+    for k, j, gap in moves:
+        q[k, k] = q[j, j] + gap
+    for j, k in entries:
+        q[j, k] = rng.normal() * 0.6 + 1j * rng.normal() * 0.4
+    return q, rng.normal(size=(m, m)) + 1j * rng.normal(size=(m, m))
+
+
+def _coupled_tangent(q, E, scale, jit):
+    """``(value, tangent)`` of ``exponential(q + t E, scale, coupled=True)`` at ``t = 0``."""
+    import jax
+    jnp = jax.numpy
+
+    def pushed(t):
+        return jax.jvp(lambda x: modal_gradient.exponential(
+            jnp, jnp.asarray(q) + x * jnp.asarray(E), scale, coupled=True),
+            (t,), (jnp.asarray(1.0 + 0j),))
+    value, tangent = (jax.jit(pushed) if jit else pushed)(jnp.asarray(0j))
+    return np.asarray(value), np.asarray(tangent)
+
+
+@pytest.mark.parametrize('shape', [s for s in _COUPLED_SHAPES if s not in _REFUSED_SHAPES])
+def test_the_coupled_exponential_tangent_under_a_trace_is_the_frechet_derivative(shape):
+    """Under ``jax.jit`` the coupled exponential's tangent is ``L(s q, s E)``, SciPy's
+    ``expm_frechet``, to 1e-13 of its largest entry -- confluent, near-confluent and spread
+    roots, one coupling to the cap of four -- at ``s`` = -5, -0.7, 0 and -12+3i and for a
+    batched ``s``; and it is the eager (``expm``) tangent to the same 1e-13. Measured
+    <= 1.2e-15 against SciPy, <= 8.7e-16 against the eager tangent.
+
+    The closed form's fourth term (coupling, direction, coupling) is invisible at solver level,
+    since a physical tangent's ``K x J`` entries vanish with the root gap: only this check and
+    the ``jax-jit`` case of ``test_the_coupled_exponential_is_the_matrix_exponential`` see it
+    dropped (1.3e-3). Also catches divided differences by the recurrence alone (6.8e9 at a pair
+    2e-15 apart) or by the series alone (0.15).
+    """
+    jax = pytest.importorskip('jax')
+    scipy_linalg = pytest.importorskip('scipy.linalg')
+    wavebit.enable_x64()
+    jnp = jax.numpy
+    q, E = _coupled_q(shape)
+    for s in (-5.0, -0.7, 0.0, -12 + 3j):
+        value, traced = _coupled_tangent(q, E, s, jit=True)
+        ref = scipy_linalg.expm_frechet(s * q, s * E, compute_expm=False)
+        exact = scipy_linalg.expm(s * q)
+        assert np.max(np.abs(value - exact)) <= 1e-13 * np.max(np.abs(exact)), f's {s}: value'
+        err = np.max(np.abs(traced - ref))
+        assert err <= 1e-13 * np.max(np.abs(ref)), (
+            f's {s}: {err / max(np.max(np.abs(ref)), 1e-300):.1e} from expm_frechet')
+        _, eager = _coupled_tangent(q, E, s, jit=False)
+        assert np.max(np.abs(traced - eager)) <= 1e-13 * np.max(np.abs(ref)), f's {s}: eager'
+    batch = np.array([-5.0, 0.0, -0.7, -12 + 3j])
+    _, traced = _coupled_tangent(q, E, jnp.asarray(batch), jit=True)
+    for lane, s in enumerate(batch):
+        ref = scipy_linalg.expm_frechet(s * q, s * E, compute_expm=False)
+        assert np.max(np.abs(traced[lane] - ref)) <= 1e-13 * np.max(np.abs(ref)), f'lane {s}'
+
+
+@pytest.mark.parametrize('shape', _REFUSED_SHAPES)
+def test_a_refused_coupling_gives_a_nan_traced_tangent(shape):
+    """A coupling the closed form refuses gives a traced tangent NaN in every entry -- loud,
+    never a silently partial derivative -- and leaves the value alone.
+
+    The two halves of the closed form's ``ok``. Five coupled rows (the cap is four): the value
+    is still exact. A row that is also a column (``_coupled_frechet``'s premise broken; no
+    rebuilt layer forms one): the value is the divided-difference formula's, finite, and no
+    longer ``exp`` (a product of two couplings survives: 5.7e-2 off), so it is checked against
+    the formula. Nothing else in this file reaches either refusal: a refusal made silent, or
+    the premise check dropped, fails here alone.
+    """
+    jax = pytest.importorskip('jax')
+    scipy_linalg = pytest.importorskip('scipy.linalg')
+    wavebit.enable_x64()
+    assert modal_gradient._COUPLED_CAP == 4
+    q, E = _coupled_q(shape)
+    value, tangent = _coupled_tangent(q, E, -5.0, jit=True)
+    assert np.all(np.isfinite(value))
+    if shape == 'a row that is also a column':
+        expected = modal_gradient.exponential(np, q, -5.0)
+        off = np.max(np.abs(scipy_linalg.expm(-5.0 * q) - expected))
+        assert off > 1e-2 * np.max(np.abs(expected)), 'premise: two couplings chain'
+    else:
+        expected = scipy_linalg.expm(-5.0 * q)
+    assert np.max(np.abs(value - expected)) <= 1e-13 * np.max(np.abs(expected))
+    assert np.all(np.isnan(tangent))
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_eager_takes_expm_and_a_trace_the_closed_form(algo, monkeypatch):
+    """Which tangent rule runs where, at PA616: eager ``jax.grad`` calls ``_expm`` and never the
+    closed form, ``jax.jit(jax.grad)`` the closed form and never ``_expm``.
+
+    The two rules give eager gradients 2.4e-14 apart, below every tolerance here, so a dispatch
+    reversed, or the closed form serving eager solves too, would move eager bits at every rebuilt
+    point and fail nothing else.
+    """
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    calls = {'_expm': 0, '_coupled_frechet': 0}
+    for name in calls:
+        def spy(*args, _name=name, _original=getattr(modal_gradient, name), **kwargs):
+            calls[_name] += 1
+            return _original(*args, **kwargs)
+        monkeypatch.setattr(modal_gradient, name, spy)
+    scene = PATTERNED['PA616']
+    s = _solver(scene, algo=algo, backend='jax')
+
+    def F(w):
+        return jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R))
+    w0 = jnp.asarray(scene['wavelength'])
+    jax.grad(F)(w0)
+    assert calls['_expm'] and not calls['_coupled_frechet'], f'eager: {calls}'
+    calls.update({name: 0 for name in calls})
+    jax.jit(jax.grad(F))(w0)
+    assert calls['_coupled_frechet'] and not calls['_expm'], f'jit: {calls}'

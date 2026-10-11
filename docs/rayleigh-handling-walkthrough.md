@@ -126,10 +126,10 @@ a Rayleigh point: its `kz` is `abs(ky)`, nothing grazes, and none of the machine
 involved. What breaks there is the conical path's two mode families, which collapse onto one
 field; the layer is rebuilt in a regular basis inside the 1D builder
 (`solve_1d.py::_regular_conical_modes`), exactly, with no warning and no detune, so the default
-solve and `auto_detune=False` return the same answer. Under an abstract trace — `jax.jit`, and
-`jax.vmap` too, so a wavelength sweep written as a `vmap`; a `jax.lax.map` or `scan` body,
-`jax.checkpoint` and `torch.func.vmap` the same — the rebuild cannot engage and the
-old construction ships silently. `rayleigh-points.md` §7 has the construction, the gate and the
+solve and `auto_detune=False` return the same answer — and under every trace the same:
+`jax.jit`, `jax.vmap` (so a wavelength sweep written as a `vmap`), a `jax.lax.map` or `scan`
+body, `jax.checkpoint` and `torch.func.vmap` rebuild the layer too, the gate's masks carried as
+data. `rayleigh-points.md` §7 has the construction, the gate, how traces are handled and the
 measurements.
 
 ## Where the proofs live

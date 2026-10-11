@@ -946,9 +946,10 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     mode matrices in the s/p boundary basis that the cascade joins layers through, then the raw
     (unrotated) pair that field reconstruction expands the same amplitudes with, and a Python
     boolean saying whether ``q``'s value couples modes -- a conical x-cutoff layer
-    (:func:`~wavebit._core.solve_1d._regular_conical_modes`), whose exponential then takes its
-    tangent from a matrix exponential and whose coupled rows the field state reads off the
-    bottom face (:func:`_field_state`). Structural, so it is never read off a traced value.
+    (:func:`~wavebit._core.solve_1d._regular_conical_modes`), whose exponential then takes an
+    exact Frechet tangent (:func:`~wavebit._core.modal_gradient.exponential`) and whose coupled
+    rows the field state reads off the bottom face (:func:`_field_state`). Structural, so it is
+    never read off a traced value; under an abstract trace every conical layer arrives coupled.
     Everything
     else — half-spaces, gap, cascade, incidence, efficiencies — is common.
 

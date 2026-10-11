@@ -258,9 +258,32 @@ def exponential(xp, q, scale, coupled=False):
     ``coupled=True`` -- the caller's *structural* word that ``q``'s value carries a coupling, set
     where the layer was rebuilt and never read off the value, since a pytree child cannot be
     branched on -- takes, when ``q`` carries autodiff, the value from the formula and the tangent
-    from the backend's matrix exponential (:func:`_expm`), whose derivative is its Frechet
-    derivative. Without autodiff, or with ``coupled=False`` (the default, and every other
-    layer), the arithmetic is the formula alone, as it always was.
+    from an exact Frechet derivative, by one of two rules:
+
+    * **eager** (a concrete norm: an eager solve, ``jax.grad``, ``jvp``, ``jacfwd``, torch
+      autograd and ``forward_ad``): the backend's matrix exponential (:func:`_expm`), whose
+      derivative is its Frechet derivative, with JAX's squaring count read off the value;
+    * **traced** (an abstract norm on JAX: ``jax.jit``, ``jax.vmap``, a ``lax.map`` or ``scan``
+      body, ``jax.checkpoint``, an eager record passed into a trace): a ``jax.custom_jvp``
+      whose tangent is the closed-form Frechet derivative of the triangular exponential
+      (:func:`_jax_coupled_exponential`, :func:`_coupled_frechet`) -- no ``expm``, no
+      squarings, nothing formed in a value-only trace. An ``expm`` there needs its squaring
+      count traced, and undoing a traced count takes a fixed scan of conditional squarings,
+      which ``vmap`` turns into selects that run all of them: measured with that tangent, a
+      jitted 16-wavelength ``vmap`` sweep cost 2.4x .. 3.2x per call and its gradient
+      3.4x .. 5.9x of what they cost before traced layers were rebuilt, against 1.01x .. 1.20x
+      and 1.12x .. 1.46x with the closed form.
+
+    Both are exact: the closed form matched a 40-digit ``expm`` of ``[[A, E], [0, A]]`` to 4e-16
+    of ``max|L|`` over confluent, near-confluent, widely spread and complex-scaled cases (SciPy's
+    ``expm_frechet`` 1.8e-16 .. 2.8e-14), and with either rule the eager gradients at the
+    rebuilt test points agree to 2.4e-14. They are kept apart so that an eager tangent stays the
+    bits it was.
+
+    PyTorch never takes the closed form: under ``torch.func.vmap`` nothing carries autodiff (the
+    formula), under autograd ``matrix_exp`` is used as it is. Without autodiff, or with
+    ``coupled=False`` (the default, and every other layer), the arithmetic is the formula
+    alone, as it always was.
     """
     if 'jax' in xp.__name__ and in_namespace(xp, scale):
         # Already a JAX array: a cast, not a placement. JAX cannot batch `asarray(..., device=)`
@@ -274,7 +297,16 @@ def exponential(xp, q, scale, coupled=False):
         eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
         return eye*xp.exp(scale[..., None]*q)[..., None, :]
     if coupled and carries_autodiff(q):
-        exact = _expm(xp, scale[..., None, None]*q)
+        a = scale[..., None, None]*q
+        count = None
+        if 'jax' in xp.__name__:
+            count = _squarings(xp.max(xp.sum(xp.abs(_stop(a)), axis=-2)))
+            if count is None:
+                # Abstract norm (jit, vmap, a lax.map / scan body, checkpoint, an eager record
+                # passed into a trace): the formula for the value, the closed-form Frechet
+                # derivative for the tangent (:func:`_jax_coupled_exponential`).
+                return _jax_coupled_exponential()(q, scale)
+        exact = _expm(xp, a, count)
         return exponential(xp, _stop(q), _stop(scale)) + (exact - _stop(exact))
     values = xp.linalg.diagonal(q)
     eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
@@ -297,8 +329,7 @@ def exponential(xp, q, scale, coupled=False):
 _THETA_13 = 5.371920351148152
 
 #: The most squarings :func:`_expm` takes: a 1-norm up to ``theta_13 * 2**64`` (about 1e20),
-#: far past where ``exp`` of the layer overflows anyway. It bounds the eager count's loop and
-#: is the traced count's fixed number of conditional steps.
+#: far past where ``exp`` of the layer overflows anyway. It bounds the count's loop.
 _MAX_SQUARINGS = 64
 
 
@@ -307,8 +338,8 @@ def _squarings(norm):
 
     Read one comparison at a time through :func:`~wavebit._core.backend._concrete`, the house's
     one door to a concrete value, so an abstract ``norm`` (``jax.jit``, ``jax.vmap``) answers
-    ``None`` instead of raising. A NaN norm answers 0 (nothing to scale); a norm past the cap
-    answers the cap.
+    ``None`` instead of raising -- which is what sends :func:`exponential` to the closed form.
+    A NaN norm answers 0 (nothing to scale); a norm past the cap answers the cap.
     """
     from .backend import _concrete
     for s in range(_MAX_SQUARINGS):
@@ -320,55 +351,259 @@ def _squarings(norm):
     return _MAX_SQUARINGS
 
 
-def _expm(xp, a):
+def _expm(xp, a, count):
     """``expm(a)`` (batched over leading axes) on the backend, for its Frechet derivative.
 
-    Reached only from :func:`exponential` with ``coupled=True`` under autodiff, so only on JAX
-    and PyTorch; NumPy carries no derivative. PyTorch's ``matrix_exp`` is used as it is.
+    Reached only from :func:`exponential` with ``coupled=True`` under autodiff and a concrete
+    norm, so only on JAX and PyTorch; NumPy carries no derivative. PyTorch's ``matrix_exp`` is
+    used as it is, and ``count`` is ignored there.
     ``jax.scipy.linalg.expm`` takes ``floor(log2(|A|_1 / theta_13))`` squarings, so a norm up to
     ``2 theta_13`` reaches the Pade approximant unscaled: measured (jax 0.11.0) 4e-9 in the value
     and 8e-9 in the derivative on a cutoff layer's ``q`` at ``|A|_1 = 10.5``, where torch was
     3e-15. So it is scaled here to ``|A|_1 <= theta_13`` -- the *ceiling* of that ``log2``,
-    Higham's count -- and squared back, and the squarings differentiate exactly.
+    Higham's count, which the caller reads off the value (:func:`_squarings`) and passes as
+    ``count`` -- and squared back in ``count`` plain squarings, which differentiate exactly.
 
-    The count is read off the value where there is one (:func:`_squarings`), so eager arithmetic
-    is ``s`` plain squarings. Where the norm is abstract -- a record built eagerly and then
-    differentiated under ``jax.jit`` or ``jax.vmap`` with the record passed in, which makes its
-    ``q`` a tracer -- the same count is formed traced and the squarings run as a fixed scan of
-    ``_MAX_SQUARINGS`` conditional steps -- borrowed from ``jax.scipy.linalg.expm``, which undoes
-    its own scaling that way, so a traced count differentiates -- rather than falling back to
-    jax's floor count. Measured on a field's ``z`` derivative at a patterned
-    exceptional point, ``jax.jit(jax.grad)`` against eager ``jax.grad``: 6.4e-11 with that
-    fallback, 4e-16 .. 1.3e-15 with the traced count.
+    On JAX ``count`` must be that concrete integer. An abstract norm never comes here: it takes
+    the closed form (:func:`_jax_coupled_exponential`), which needs no count. Until 2026-10-11 an
+    abstract norm -- then only an eager record differentiated under a trace -- formed the count
+    traced and ran a fixed scan of ``_MAX_SQUARINGS`` conditional squarings (and before that fell
+    back to jax's own floor count, 6.4e-11 off on a field's ``z`` derivative at a patterned
+    exceptional point). ``None`` raises, so that path cannot come back unnoticed.
     """
     if 'jax' in xp.__name__:
         import jax
-        norm = xp.max(xp.sum(xp.abs(_stop(a)), axis=-2))
-        s = _squarings(norm)
+        if count is None:
+            raise RuntimeError('internal: _expm needs a concrete squaring count on JAX; an '
+                               'abstract norm takes the closed form (_jax_coupled_exponential)')
 
         def expm(b):
             if b.ndim == 2:
                 return jax.scipy.linalg.expm(b)
             r = jax.vmap(jax.scipy.linalg.expm)(xp.reshape(b, (-1,) + b.shape[-2:]))
             return xp.reshape(r, b.shape)
-        if s is not None:
-            r = expm(a / (2.0 ** s))
-            for _ in range(s):
-                r = r @ r
-            return r
-        tiny = xp.finfo(norm.dtype).tiny
-        count = xp.clip(xp.ceil(xp.log2(xp.maximum(norm, tiny) / _THETA_13)), 0, _MAX_SQUARINGS)
-        r = expm(a / (2.0 ** count).astype(a.dtype))
-
-        def square(r, step):
-            return jax.lax.cond(step < count, lambda m: m @ m, lambda m: m, r), None
-        r, _ = jax.lax.scan(square, r, xp.arange(_MAX_SQUARINGS))
+        r = expm(a / (2.0 ** count))
+        for _ in range(count):
+            r = r @ r
         return r
     if 'torch' in xp.__name__:
         import torch
         return torch.linalg.matrix_exp(a)
     import scipy.linalg
     return scipy.linalg.expm(a)
+
+
+#: At most this many coupled rows, and as many columns, in one coupled ``q`` take the closed
+#: form's higher terms (:func:`_coupled_frechet`); more gives a NaN tangent (loud), the value
+#: untouched. A rebuilt layer couples one family-1 mode per cluster pair -- every patterned
+#: point measured couples one -- and a uniform layer none (its coupling is exactly zero).
+_COUPLED_CAP = 4
+
+#: At or below this diameter a set of points takes the Taylor series of its divided difference
+#: (:func:`_series_about_first`); above it, the recurrence divided by its widest pair
+#: (:func:`_dd_from_subsets`).
+_DD_SERIES_DIAMETER = 0.5
+
+#: Terms of that series. Every ``|p - p_0|`` is at most the diameter, 0.5, so the tail is below
+#: about ``0.5**19/19!`` (1.6e-23) of the leading term.
+_DD_SERIES_TERMS = 18
+
+
+def _series_about_first(y, e0, k):
+    """``exp[p_0, ..., p_k]`` as ``e0 sum_j h_j(y_1, ..., y_k)/(j + k)!``, ``y_r = p_r - p_0``.
+
+    ``e0 = exp(p_0)`` and ``y`` is the list ``[y_1, ..., y_k]``; ``h_j`` is the complete
+    homogeneous symmetric polynomial of degree ``j``, built one variable at a time
+    (``h_j <- h_j + y_r h_{j-1}``). It is the Taylor series of the divided difference about
+    ``p_0`` (``x**n[p_0, ..., p_k] = h_{n-k}(p_0, ..., p_k)``) -- the clustered-points half of
+    the hybrid of A. McCurdy, K. C. Ng and B. N. Parlett (Math. Comp. 43, 501, 1984). Used where
+    the points' diameter is at most :data:`_DD_SERIES_DIAMETER`, to :data:`_DD_SERIES_TERMS`
+    terms.
+    """
+    import math
+    import jax.numpy as jnp
+    h = [jnp.ones_like(y[0])]
+    for _ in range(_DD_SERIES_TERMS):
+        h.append(h[-1] * y[0])
+    for r in range(1, len(y)):
+        for j in range(1, _DD_SERIES_TERMS + 1):
+            h[j] = h[j] + y[r] * h[j - 1]
+    total = jnp.zeros_like(y[0])
+    for j in range(_DD_SERIES_TERMS, -1, -1):
+        total = total + h[j] * (1.0 / math.factorial(j + k))
+    return e0 * total
+
+
+def _dd_from_subsets(points, subs, e0):
+    """``exp[p_0, ..., p_k]`` from the ``k + 1`` divided differences of order ``k - 1`` that each
+    omit one point (``subs[j]`` omits ``p_j``) -- gathered, never recomputed.
+
+    A spread set takes the recurrence ``(f[P - p_j] - f[P - p_i]) / (p_i - p_j)`` with ``(i, j)``
+    its widest pair, so the divisor is the diameter (above :data:`_DD_SERIES_DIAMETER`) and the
+    subtraction loses about ``log2(1/diameter)`` bits at most; a tight set takes
+    :func:`_series_about_first`, about ``p_0`` with ``e0 = exp(p_0)`` -- the hybrid of McCurdy,
+    Ng and Parlett (Math. Comp. 43, 501, 1984). Both are formed for every lane and one is
+    selected; every divisor is guarded, here and in ``F1`` (:func:`_coupled_frechet`), so no
+    lane forms an inf a reverse pass could read. One does read them all: reverse over reverse,
+    the inner variation in ``q`` and the outer in ``scale`` (a raster gradient differentiated in
+    the thickness), NaN with either guard dropped
+    (``test_second_derivatives_through_a_traced_cutoff``).
+    """
+    import jax.numpy as jnp
+    k = len(points) - 1
+    dist, cand = [], []
+    for i in range(k + 1):
+        for j in range(i + 1, k + 1):
+            diff = points[i] - points[j]
+            gap = jnp.abs(diff)
+            dist.append(gap)
+            cand.append((subs[j] - subs[i]) / jnp.where(gap > 0, diff, jnp.ones_like(diff)))
+    dist = jnp.stack(dist, axis=-1)
+    cand = jnp.stack(cand, axis=-1)
+    widest = jnp.argmax(dist, axis=-1)
+    recurrence = jnp.take_along_axis(cand, widest[..., None], axis=-1)[..., 0]
+    series = _series_about_first([p - points[0] for p in points[1:]], e0, k)
+    return jnp.where(jnp.max(dist, axis=-1) > _DD_SERIES_DIAMETER, recurrence, series)
+
+
+def _coupled_frechet(q, scale, E):
+    """``L(scale q, E)``: the Frechet derivative of ``exp`` at a coupled ``scale * q`` in direction
+    ``E``, in closed form. JAX only; ``scale`` may carry leading (batch) axes, and ``E`` with it.
+
+    ``q``'s value is diagonal plus a coupling ``tau`` whose nonzero rows ``J`` and columns ``K``
+    are disjoint (a rebuilt conical layer, :func:`~wavebit._core.solve_1d._regular_conical_modes`).
+    With ``A = scale q = diag(a) + n``, ``n = scale tau``, no product of two couplings survives
+    (``n D n = 0`` for every diagonal ``D``), so
+
+        exp(uA) = diag(e^{u a}) + n o exp_u[a_j, a_k]
+
+    exactly: the divided-difference form of a function of a triangular matrix (G. Opitz, ZAMM 44,
+    T52, 1964; C. Davis, Linear Algebra Appl. 6, 193, 1973), whose paths are one step long here
+    -- what Parlett's recurrence gives too (:func:`exponential`). The integral form of the
+    Frechet derivative, ``L(A, E) = int_0^1 exp((1-u)A) E exp(uA) du`` (N. J. Higham, Functions
+    of Matrices, SIAM 2008, eq. (10.15)), then closes term by term into divided differences of
+    ``exp``, each integral of a product of exponentials being one (the Hermite-Genocchi
+    formula)::
+
+        L_il = exp[a_i, a_l] E_il
+             + sum_k n_ik exp[a_i, a_k, a_l] E_kl  +  sum_k E_ik n_kl exp[a_i, a_k, a_l]
+             + sum_km n_ik E_km n_ml exp[a_i, a_k, a_m, a_l]
+
+    The first term is the Daleckii-Krein kernel (Ju. L. Daleckii and S. G. Krein, Amer. Math.
+    Soc. Transl. (2) 47, 1, 1965), all of ``L`` for a diagonal ``A``. The same four terms are the
+    paths of the doubled matrix ``[[A, E], [0, A]]``, whose ``exp`` carries ``L(A, E)`` in its
+    upper-right block (R. Mathias, SIAM J. Matrix Anal. Appl. 17, 610, 1996) -- the identity the
+    tests check this against. Exact for any ``E``, and linear in it.
+
+    Every divided difference is built from the one below it and gathered: the first order
+    ``F1 = exp[a_i, a_l]`` (``m x m``, one ``expm1`` per pair, spelled as :func:`exponential`
+    spells its ``divided``), the second on the triples that touch the coupling, ``(J, K, .)``
+    and ``(., J, K)``, from ``F1``, and the third on ``(J, K, J, K)`` from the second
+    (:func:`_dd_from_subsets`) -- so the only transcendentals are ``exp(a)`` and those
+    ``expm1``. Measured against a 40-digit ``expm`` of the doubled matrix: <= 4e-16 of
+    ``max|L|`` across the series/recurrence switch, ``J``/``K`` gaps of 1e-8, 1e-12 and exactly
+    0, a decaying spread to ``|scale q| = 600``, complex scale and a tight cluster at
+    ``|a| ~ 50``, where SciPy's ``expm_frechet`` scored 1.8e-16 .. 2.8e-14.
+
+    ``J`` and ``K`` are read off the value (``tau != 0``: exact, no threshold) and gathered to a
+    static size, :data:`_COUPLED_CAP` each, so no shape depends on a value. More coupled rows or
+    columns than that, or a row that is also a column (the premise broken), multiply the result
+    by NaN -- loud, and still linear in ``E``, as a tangent rule must be.
+    """
+    import jax.numpy as jnp
+    m = q.shape[-1]
+    v = jnp.diagonal(q)
+    tau = q - jnp.diag(v)
+    a = scale[..., None] * v                                         # (..., m)
+    ea = jnp.exp(a)
+    d = a[..., :, None] - a[..., None, :]
+    right = jnp.real(d) >= 0
+    x = jnp.expm1(jnp.where(right, -d, d))
+    num = jnp.where(right, ea[..., :, None] * (-x), ea[..., None, :] * x)
+    nz = d != 0
+    F1 = jnp.where(nz, num / jnp.where(nz, d, jnp.ones_like(d)),
+                   jnp.broadcast_to(ea[..., :, None], d.shape))
+    L = F1 * E
+    rows = jnp.any(tau != 0, axis=1)
+    cols = jnp.any(tau != 0, axis=0)
+    c = min(_COUPLED_CAP, m)
+    nr, nc = jnp.sum(rows), jnp.sum(cols)
+    ok = (nr <= c) & (nc <= c) & ~jnp.any(rows & cols)
+    J = jnp.nonzero(rows, size=c, fill_value=0)[0]
+    K = jnp.nonzero(cols, size=c, fill_value=0)[0]
+    vJ = jnp.arange(c) < nr
+    vK = jnp.arange(c) < nc
+    t = jnp.where(vJ[:, None] & vK[None, :], tau[J][:, K], 0)
+    n = scale[..., None, None] * t                                   # (..., c, c)
+    idx = jnp.arange(m)
+
+    def F2(i0, i1, i2):
+        i0, i1, i2 = jnp.broadcast_arrays(i0, i1, i2)
+        return _dd_from_subsets([a[..., i0], a[..., i1], a[..., i2]],
+                                [F1[..., i1, i2], F1[..., i0, i2], F1[..., i0, i1]], ea[..., i0])
+    F2a = F2(J[:, None, None], K[None, :, None], idx[None, None, :])   # (..., c, c, m): J_p K_q l
+    F2b = F2(idx[:, None, None], J[None, :, None], K[None, None, :])   # (..., m, c, c): i J_r K_s
+    p_, q_, r_, s_ = (jnp.arange(c).reshape(sh) for sh in ((c, 1, 1, 1), (1, c, 1, 1),
+                                                          (1, 1, c, 1), (1, 1, 1, c)))
+    p_, q_, r_, s_ = jnp.broadcast_arrays(p_, q_, r_, s_)
+    F3 = _dd_from_subsets(
+        [a[..., J[p_]], a[..., K[q_]], a[..., J[r_]], a[..., K[s_]]],
+        [F2b[..., K[q_], r_, s_], F2b[..., J[p_], r_, s_], F2a[..., p_, q_, K[s_]],
+         F2a[..., p_, q_, J[r_]]], ea[..., J[p_]])                   # (..., c, c, c, c)
+    E_K = E[..., K, :]
+    E_J = E[..., :, J]
+    E_KJ = E_K[..., :, J]
+    term2 = jnp.einsum('...pq,...pql,...ql->...pl', n, F2a, E_K)
+    term3 = jnp.einsum('...ir,...rs,...irs->...is', E_J, n, F2b)
+    term4 = jnp.einsum('...pq,...qr,...rs,...pqrs->...ps', n, E_KJ, n, F3)
+    OJ = jnp.astype(vJ[:, None] & (idx[None, :] == J[:, None]), q.dtype)   # (c, m)
+    OK = jnp.astype(vK[:, None] & (idx[None, :] == K[:, None]), q.dtype)
+    L = L + OJ.T @ term2 + term3 @ OK + OJ.T @ term4 @ OK
+    return L * jnp.where(ok, 1.0, float('nan'))
+
+
+_JAX_COUPLED_EXP = None
+
+
+def _jax_coupled_exponential():
+    """``exp(scale * q)`` for a coupled ``q`` under an abstract trace, as a ``jax.custom_jvp``.
+
+    The value is :func:`exponential`'s divided-difference formula, exact for a coupled value
+    and all that a value-only trace forms; the tangent is exact for any variation::
+
+        d exp(s q) = L(s q, s dq) + ds q exp(s q)
+
+    with ``L`` the closed form (:func:`_coupled_frechet`) at the *stopped* ``q``, and the
+    ``scale`` part through the commuting identity ``d/ds exp(s q) = q exp(s q)``. So ``L`` is
+    only ever evaluated on its structured manifold, and an outer derivative never differentiates
+    it off it: an outer ``scale`` moves ``L``'s ``s q`` along ``q`` (structured), and an outer
+    ``q`` reaches ``q exp(s q)``, whose own tangent is this rule -- which keeps a thickness
+    second derivative and a mixed thickness x permittivity one exact, in both orders. Without
+    the ``ds`` term a rebuilt layer's thickness derivative is lost (measured under ``jax.jit``
+    at a patterned exceptional point: relative error 1.0). Stopping ``q`` inside ``L`` is
+    hygiene that no reachable transform observes: a second derivative that would see it needs
+    two directions in ``q``, and those raise at the modal operator's first-order guard
+    (measured bit-identical with ``L`` at the live ``q``).
+    """
+    global _JAX_COUPLED_EXP
+    if _JAX_COUPLED_EXP is None:
+        import jax
+
+        @jax.custom_jvp
+        def coupled_exp(q, scale):
+            return exponential(array_namespace(q), q, scale)
+
+        @coupled_exp.defjvp
+        def coupled_exp_tangent(primals, tangents):
+            q, scale = primals
+            dq, d_scale = tangents
+            out = coupled_exp(q, scale)
+            tangent = (_coupled_frechet(_stop(q), scale, scale[..., None, None] * dq)
+                       + d_scale[..., None, None] * (q @ out))
+            return out, tangent
+
+        _JAX_COUPLED_EXP = coupled_exp
+    return _JAX_COUPLED_EXP
 
 
 def two_face(xp, q, scale, top, bottom, keep, coupled=False):

@@ -37,7 +37,7 @@ hunt for a *configuration* that separates failing from working cases found none,
 | half-space graze (any path) | always fine | no mode matrix is built for a half-space |
 | 1D pure TE/TM (`tetm=`) | always fine | `V = W*q` — nothing singular is ever inverted |
 | 1D conical (`psi`/pair), `ky == 0` | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
-| 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, except under an abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint` (under `jax.grad` too), `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike |
+| 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, eagerly and, since 2026-10-11, under every abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint`, `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike |
 | 2D | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice; quiet-wrong is gone |
 | any path, eigenvalue *exactly* `0.0` — and, on 2D, any cluster whose coupled rates split below ~1e-10 of the modal scale | refuses, unless the ladder clears it | the exponential mode basis is degenerate at the point itself (the limit basis is `{1, z}`) |
 
@@ -293,10 +293,11 @@ path's to 8.2e-14 on the tested scenes and to 2.9e-13 over nine uniform ones (ma
 double-negative spacers, backside, `theta = 1.4`, the incidence permittivity). Two consumers of a coupled `q` had to learn about it, both told
 *structurally* by the code that rebuilt the layer, never by reading the value:
 
-- `exponential(coupled=True)` takes the value from the formula and the tangent from the
-  backend's matrix exponential (its Fréchet derivative). The formula's own tangent misses the
-  coupling chained behind a variation (6.4e-3 on `dR/dwl`). JAX's `expm` is pre-scaled by the
-  ceiling of `log2(norm/theta_13)` and squared back: unscaled it was 4e-9 off at `norm = 10.5`.
+- `exponential(coupled=True)` takes the value from the formula and the tangent from an exact
+  Fréchet derivative: eagerly the backend's matrix exponential's, under an abstract trace a
+  closed form (below). The formula's own tangent misses the coupling chained behind a variation
+  (6.4e-3 on `dR/dwl`). JAX's `expm` is pre-scaled by the ceiling of `log2(norm/theta_13)` and
+  squared back: unscaled it was 4e-9 off at `norm = 10.5`.
 - SMM's field state reads the rows that carry the coupling off the bottom face and adds, for
   every other kept row, the one term `two_face` would miss beside a coupling
   (`two_face(coupled=True)`). Plain `two_face` was 6.8e-3 off on a field gradient; dropping only
@@ -306,7 +307,8 @@ double-negative spacers, backside, `theta = 1.4`, the incidence permittivity). T
   order 2's cutoff.
 
 **The gate.** A mode is in when `abs(wA)` (or `abs(wB)`) is below
-`g = min(0.04 * abs(ky)**1.5, abs(ky)**2 / 2)`, read once per layer through `_concrete`.
+`g = min(0.04 * abs(ky)**1.5, abs(ky)**2 / 2)`, read once per layer through `_concrete` (under
+an abstract trace there is nothing to read, and the masks travel as data: below).
 
 - `0.04 * abs(ky)**1.5` (`_CUTOFF_REL`): the family construction's error follows
   `K0 u abs(ky)**3 / abs(w)**2` (`K0 <= 0.074` over twelve scenes), so at the gate's edge it is
@@ -340,36 +342,136 @@ through 16 offsets at relative 1e-4..1e-3, where its own error is below 1e-12):
 | complex64, R1 (vs 2D complex64) | refused, and the 1e-12 retry cannot move a float32 | 3.8e-7 in amplitudes |
 | `theta = pi/3`: order 2 at the cutoff, order 1 grazing | 0.30 in `R` | 3.8e-9 — a Rayleigh-type sensitivity of the grazing order, not the rebuild: 8.9e-13 at relative 1e-9 |
 
-Every solve outside the gate is byte-identical, eager and under `jit`: a 312-line `sha256`
-digest of `R`, `T`, `r_xyz`, `t_xyz` and fields over random conical, magnetic, backside,
-`ky == 0`, TE/TM and 2D scenes on NumPy, JAX and PyTorch, with eager `jax.grad`, field
-gradients, torch backward and forward mode, `jit` and `jit(grad)`, run twice per tree, differs
-in 10 lines, all of them the three random scenes the gate routes. Two are a lossy metal grating
-and a uniform layer inside the band: rebuilt, they sit 1.6e-14..2.1e-14 from the 2D path, where
-the old construction sat 1.8e-14..5.1e-13 from it. The third, a field gradient, moved 1.3e-14
-and is 2.7e-13 from the 2D path's on either tree.
+**Byte identity: eager only.** Every *eager* solve outside the gate is byte-identical. At the
+fix, a 312-line `sha256` digest of `R`, `T`, `r_xyz`, `t_xyz` and fields over random conical,
+magnetic, backside, `ky == 0`, TE/TM and 2D scenes on NumPy, JAX and PyTorch, with eager
+`jax.grad`, field gradients, torch backward and forward mode, `jit` and `jit(grad)`, run twice
+per tree, differed in 10 lines, all of them the three random scenes the gate routes. Two are a
+lossy metal grating and a uniform layer inside the band: rebuilt, they sit 1.6e-14..2.1e-14 from
+the 2D path, where the old construction sat 1.8e-14..5.1e-13 from it. The third, a field
+gradient, moved 1.3e-14 and is 2.7e-13 from the 2D path's on either tree. The trace handling
+below kept every eager bit: run twice per tree against the tree before it, all 212 eager lines
+of a 232-line digest of that kind, and all 64 lines of an eager digest at the routed points
+themselves (R1, PA616, MU614, glass over PA616 lit from below: NumPy, JAX and PyTorch solves and
+fields, eager `jax.grad` in the wavelength, the raster and `theta`, a field gradient, torch
+backward), are identical. Under a trace that holds for 2D, TE/TM and every other non-conical
+solve, which the trace handling cannot reach — but no longer for a conical one: under any
+abstract trace every conical layer takes the general layout, `ky == 0` included, so its outputs
+are rounded differently, once (the 232-line digest's 20 jitted conical lines among them).
+Re-baselined on a 378-line digest of 36 random off-band scenes (ETM and SMM; eager NumPy and JAX,
+eager and jitted `grad`, `jit`, `jit(vmap)` over three wavelengths, eager and jitted fields,
+`torch.func.vmap`), run twice per tree: every eager line and every 2D and TE/TM line is
+identical (246 of 378), and every traced conical line moved — values by up to 7.0e-14 of their
+largest entry
+(conical + `mu`; 3.5e-14 patterned, 5.7e-15 backside, 4.4e-15 at `ky == 0`), fields 8.8e-14,
+`jit(vmap)` 6.9e-14, `torch.func.vmap` 1.8e-14, `jit(grad)` 6.7e-13. They are as close to the
+eager solve as they were: jitted patterned values 2.7e-14 from eager (5.6e-14 before),
+`jit(grad)` 1.3e-13 (5.8e-13), fields 6.4e-14 (6.1e-14); conical + `mu` 8.9e-14 (3.0e-14).
 
-**The abstract-trace gap.** The masks decide the layer's *structure*, so wherever the gate's
-values are abstract — `jax.jit`, and just as much `jax.vmap` (the usual way to sweep a
-wavelength), a `jax.lax.map` or `scan` body, `jax.checkpoint` and `torch.func.vmap` — it declines and the family construction ships, as the 2D rebuild does on its
-fallback paths and as `check_finite` is skipped. Measured under `jit`: NaN at an exact zero,
-2.5e-2..7.3e-2 off one ULP away and at `+1e-12`, 3e-4..0.3 off at a patterned point, and
-`jit(grad)` NaN or 1e12..1e24 off — silent. Under `vmap` over the wavelength: NaN at R1's exact
-point and 2.6e-2 off at `+-1e-12`, no warning, no rebuild; `jax.lax.map` and `jax.checkpoint`
-alike (2.6e-2..2.7e-2), and `torch.func.vmap` (2.5e-2). `jax.grad`, `jvp`, `jacfwd` and `jacrev`
-keep a concrete primal and are not in the gap, unless the function is wrapped in
-`jax.checkpoint`, which stages it: `jax.grad(jax.checkpoint(f))` is NaN at R1's point and
-7.9e-7 off at relative 1e-6. Nor is `torch.compile` in its default mode, whose graph break
-reads the value (measured: rebuilt, 3.2e-15 at R1's point); with `fullgraph=True` it refuses,
-as do the `torch.func` derivative transforms. A traced-mask variant
-was measured and not taken: `jit` values exact, but `jit(grad)` at a patterned point 6e-4..6e-3
-off (the formula's tangent beside a coupled value, which needs confluent second and third
-divided differences to fix), and every jitted output moved by up to 1e-14.
+**Under an abstract trace** — `jax.jit`, and just as much `jax.vmap` (the usual way to sweep a
+wavelength), a `jax.lax.map` or `scan` body, `jax.checkpoint` (so `jax.grad(jax.checkpoint(f))`
+too) and `torch.func.vmap` — the gate cannot read its values, and its masks decide the layer's
+*structure*. So it does not decide there: `_cutoff_cluster` hands its masks on as traced data,
+a refused cluster folded to empty masks, and *every* traced conical layer takes the rebuild in
+the general layout. The rebuild is an exact change of basis for any masks, so an empty mask is
+the family construction re-expressed. ETM, SMM's field state and field reconstruction already
+read the layout structurally (`len(modes) == 3`, the record's `W.shape`), so no consumer, record
+slot or pytree changed; a jit-built conical record is simply `2n x 2n`. `jax.grad`, `jvp`,
+`jacfwd` and `jacrev` keep a concrete primal and are gated as an eager solve is, and so is
+`torch.compile` in its default mode, whose graph break reads the value.
 
-A record built *eagerly* keeps its rebuilt layer under any trace — `W`'s shape says so — and its
-fields differentiate alike under `jax.jit`: the coupled exponential's JAX `expm` takes the same
-ceiling squaring count there, formed traced (`modal_gradient.py::_expm`), where falling back to
-jax's own floor count put 6.4e-11 on a field's `z` derivative at PA616 (now 4e-16..1.3e-15).
+The one piece that had to be new is the coupled exponential's tangent. Its eager rule, `expm`,
+needs a squaring count; under a trace that count is traced, and undoing it takes a fixed scan of
+conditional squarings, which `vmap` turns into selects that all run (with that tangent, a jitted
+16-wavelength sweep cost 2.4–3.2x per call of what it did before, its gradient 3.4–5.9x). So
+under an abstract norm
+`exponential(coupled=True)` is a `jax.custom_jvp` (`modal_gradient.py::_jax_coupled_exponential`)
+whose value is the divided-difference formula and whose tangent is a closed-form Fréchet
+derivative of the triangular exponential (`modal_gradient.py::_coupled_frechet`). With
+`A = s q = diag(a) + n`, the coupling `n` on disjoint rows `J` and columns `K`,
+`exp(uA) = diag(e^{ua}) + n o exp_u[a_j, a_k]` exactly (the divided-difference form of a function
+of a triangular matrix: G. Opitz, ZAMM 44, T52, 1964; C. Davis, Linear Algebra Appl. 6, 193,
+1973), and `L(A, E) = int_0^1 exp((1-u)A) E exp(uA) du` (N. J. Higham, *Functions of Matrices*,
+SIAM 2008, eq. 10.15) closes into
+
+```
+L_il = exp[a_i,a_l] E_il + sum_k n_ik exp[a_i,a_k,a_l] E_kl + sum_k E_ik n_kl exp[a_i,a_k,a_l]
+     + sum_km n_ik E_km n_ml exp[a_i,a_k,a_m,a_l]
+```
+
+— the Daleckii–Krein kernel first. The divided differences are gathered one order from the one
+below: by the recurrence over the widest pair, or, for a set within a diameter of 0.5, by the
+Taylor series about its first point (18 terms; A. McCurdy, K. C. Ng and B. N. Parlett, Math.
+Comp. 43, 501, 1984). Against a 40-digit `expm` of `[[A, E], [0, A]]` it is within 4e-16 of
+`max|L|` across the series/recurrence switch, exact and 1e-12-near confluent pairs, a decaying
+spread to `|s q| = 600` and complex `s` (SciPy's `expm_frechet`: 1.8e-16..2.8e-14). The scale
+part of the tangent is `ds q exp(s q)`, which keeps thickness second derivatives and mixed
+thickness × raster ones exact (1.1e-15 and 7.7e-14 from eager at PA616; without it every
+thickness derivative through the layer is lost). Eagerly the tangent stays `expm`'s, so eager
+gradients keep their bits; the two rules give eager gradients 2.4e-14 apart at the rebuilt test
+points.
+
+| under a trace (against the 2D path, or eager) | before | now |
+| --- | --- | --- |
+| R1 under `jit`, ETM / SMM: the point, one ULP and `1e-12` either side | NaN at the point; 0.27–0.34 / 0.52–0.78 | ≤ 3.7e-14 |
+| R1 under `jax.vmap`, `jit(vmap)`, `jax.lax.map`, `jax.checkpoint` | NaN; 0.3 / 0.5–0.8 | ≤ 4.4e-14 |
+| R1 under `torch.func.vmap` | NaN; 0.3 / 0.5–0.6 | ≤ 3.8e-14 |
+| R1 `dR/dwl` through the point: `jit(grad)`, `jit(grad(sum vmap))`, `jit(vmap(grad))` | NaN | 1.7e-13–2.0e-13 |
+| PA616 / MU614 values, `jit` and `jit(vmap)` | 3.9e-3–1.5 / 0.15–1.4 | ≤ 2.6e-15 / ≤ 3.6e-14 |
+| PA616 `jit(grad)`, wavelength / raster / thickness | 1.0e12–2.4e22 / 2.9e12–3.2e24 / — | ≤ 1.6e-14 / ≤ 3.7e-14 / ≤ 1.2e-14 |
+| MU614 `jit(grad)`, wavelength and raster / thickness; both under `grad(checkpoint)` | 1e12–2e25; 2e15–3e28 | ≤ 6.1e-13 / ≤ 2.0e-12; ≤ 4.7e-14 |
+| fields under `jit` (five patterned scenes, R1) | 8.6e-3–2.5, NaN at R1 | ≤ 5.1e-14 (MU614; the others ≤ 8.6e-15) |
+| field gradients under `jit`, raster and wavelength | 7e11–3e28, NaN | ≤ 1.2e-13 |
+| jitted SMM field against jitted ETM field | 1.6–2.0 | ≤ 3.2e-15 |
+
+Measured before, in other words: under `jit` NaN at an exact zero, 2.5e-2..7.3e-2 off in `R` one
+ULP away, 3e-4..0.3 off at a patterned point, `jit(grad)` NaN or 1e12..1e24 off; under `vmap`
+over the wavelength NaN at R1's point and 2.6e-2 off at `+-1e-12`; `jax.lax.map` and
+`jax.checkpoint` alike (2.6e-2..2.7e-2), `torch.func.vmap` 2.5e-2; `jax.grad(jax.checkpoint(f))`
+NaN at R1's point and 7.9e-7 off at relative 1e-6 — all silent. One trace now serves on- and
+off-band wavelengths alike: a single compilation across the sweep.
+
+**What it costs.** Every traced conical layer pays for the general layout, off the band too and
+at `ky == 0`, which is not knowable under a trace. Per call against develop, off the band (R1 at
+520 nm, and two 64-pixel patterned layers at truncation 10; ETM and SMM): `jit(solve)`
+1.10–1.17x, `jit(grad)` 1.22–1.43x, a 16-wavelength `jit(vmap)` 1.01–1.20x and its gradient
+1.12–1.46x, `jit(solve + fields)` 0.65–1.02x, a jitted field gradient 1.90–3.46x (the largest:
+the closed form's second and third divided differences batched over `z`), `torch.func.vmap`
+1.02–1.08x, compile 1.11–1.96x, XLA scratch memory 1.1–1.45x. At truncation 40 the ratios are
+the same (an 8-wavelength `vmap` gradient 1.20–1.37x, 275 MiB of scratch against 228): the
+eigensolves dominate, not the `4n`-sized solve of the modal variation.
+
+**What stays as it was.**
+- Nothing refuses under a trace: `check_finite` and `auto_detune` are skipped there, as before.
+- A refused cluster (a root under the 1e-9 floor, or opposite labels) gets empty masks: the
+  family construction's arithmetic in the general layout, NaN at an exact zero included, silent.
+- `ky == 0` at a Rayleigh point under a trace: NaN, unchanged (the `check_finite` gap).
+- More than 4 coupled rows or columns in one layer (`_COUPLED_CAP`), or a coupled row that is
+  also a coupled column, gives a NaN tangent, the value unaffected. A uniform layer couples
+  none, every patterned point measured couples one, and a rebuilt layer's rows and columns are
+  disjoint by construction.
+- Second derivatives through the modal operator still raise, as do `torch.func.grad` and `jvp`;
+  `torch.compile(fullgraph=True)` raises `Unsupported`.
+- Not measured: GPU, `pmap` and `shard_map`, patterned double negatives under a trace.
+
+**Why not a `lax.cond`.** A design that keeps the family construction off the band and the
+rebuild on it, chosen at run time, was built and measured beside this one. Under `vmap` the
+predicate is batched, the `cond` becomes a select and both branches run: 2.7–3.6x per call on a
+16-wavelength sweep and 3.5–5.9x on its gradient with `expm` in the rebuilt branch, 1.25–1.45x
+and 1.19–1.69x with the closed form, at 1.3–5x the memory (an 8-wavelength gradient at
+truncation 40 needed 1.1 GiB of XLA scratch, against 228 MiB). The byte identity it would buy is
+partial — its `jit(grad)` bits moved anyway, the `cond`'s presence in the graph alone moves them
+— and it needs a traced record slot, so eager- and jit-built records differ in pytree structure.
+And it is a trap for later: a `custom_jvp` whose tangent solves a system (a
+`custom_linear_solve`, as `modal_gradient.py::_variation` does), placed inside a branch under
+`vmap`, raises `TypeError` when differentiated outside the `vmap` (jax 0.11.0); that design had
+to respell the modal variation to get past it.
+
+A record built *eagerly* keeps its layout under any trace — `W`'s shape says so — and its
+fields differentiate alike under `jax.jit`: passed in, its `q` is a tracer, so the coupled
+exponential takes the closed-form tangent (9.9e-17 from eager on a field's `z` derivative at
+PA616). Before, `_expm` formed jax's ceiling squaring count traced and ran a scan of conditional
+squarings (4e-16..8e-16); before that, falling back to jax's own floor count put 6.4e-11 there.
 
 **Still open, and separate.**
 

@@ -243,13 +243,20 @@ def _cutoff_cluster(xp, wA, wB, q1, q2, ky):
     ``None`` also where the masks cannot be handed to the rebuild: a cluster root at or below
     :data:`_CUTOFF_Q_FLOOR`, or a family-1 / family-2 pair with opposite root labels
     (``|q1_j - q2_k| >= |q1_j + q2_k|``), which would put an up- and a down-going mode in one
-    cluster. And ``None`` whenever the values are abstract -- ``jax.jit``, and ``jax.vmap`` just
-    as much (a wavelength sweep under ``vmap`` ships NaN at an exact zero), a ``jax.lax.map``
-    or ``scan`` body, ``jax.checkpoint`` and ``torch.func.vmap``: the masks decide the layer's
-    *structure*, so they must be concrete, and a traced solve keeps the family construction --
-    the 2D grazing gate's precedent, and a documented gap (``docs/rayleigh-points.md`` section
-    7). ``jax.grad``, ``jvp``, ``jacfwd`` and ``jacrev`` carry a concrete primal and are gated as
-    an eager solve is, unless ``jax.checkpoint`` stages them.
+    cluster.
+
+    **Never ``None`` under an abstract trace** -- ``jax.jit``, ``jax.vmap`` (the wavelength-sweep
+    idiom), a ``jax.lax.map`` or ``scan`` body, ``jax.checkpoint``, ``torch.func.vmap``. There
+    the masks cannot choose the layer's structure, so they come back as traced arrays and every
+    traced conical layer takes the rebuild in the general layout, its masks as data. That is
+    exact for any masks, the rebuild being a change of basis, so an all-False mask (no mode at a
+    cutoff, ``ky == 0``, or a refused cluster, folded to empty here) is the family construction
+    re-expressed -- a refused cluster's exact-zero NaN included, as eagerly, though nothing
+    checks it under a trace. Until 2026-10-11 a traced solve kept the family construction
+    instead: NaN at an exact zero, up to 0.78 off one ULP away, ``jit(grad)`` 1e12 .. 1e24 off
+    at a patterned point, all silent (``docs/rayleigh-points.md`` section 7). ``jax.grad``,
+    ``jvp``, ``jacfwd`` and ``jacrev`` carry a concrete primal and are gated as an eager solve
+    is, unless ``jax.checkpoint`` stages them.
 
     ``wA`` and ``wB`` come from the stopped eigensolve; ``q1`` and ``q2`` may be modal
     generators, whose diagonal is the value. Every test is one vectorised expression read once
@@ -269,7 +276,17 @@ def _cutoff_cluster(xp, wA, wB, q1, q2, ky):
         xp.logical_or(xp.any(xp.logical_and(mJ, xp.abs(v1) <= _CUTOFF_Q_FLOOR)),
                       xp.any(xp.logical_and(mK, xp.abs(v2) <= _CUTOFF_Q_FLOOR))))
     engaged = xp.logical_and(xp.logical_or(xp.any(mJ), xp.any(mK)), xp.logical_not(refused))
-    if not _concrete(engaged):       # False, or None for an abstract value
+    decided = _concrete(engaged)
+    if decided is None:
+        # Abstract (jax.jit, jax.vmap, a lax.map / scan body, jax.checkpoint,
+        # torch.func.vmap): the masks cannot choose the structure here, so every traced layer
+        # takes the general layout and the masks ride along as data. The rebuild is an exact
+        # change of basis for any masks, so an empty mask is the family construction
+        # re-expressed; a refused cluster folds into empty masks -- the old construction's
+        # arithmetic, its exact-zero NaN included, as eagerly.
+        keep = xp.logical_not(refused)
+        return xp.logical_and(mJ, keep), xp.logical_and(mK, keep)
+    if not decided:
         return None
     return mJ, mK
 
@@ -520,11 +537,13 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     refused point landed 2.6e-2 to 0.1 off.
     Such a layer is now rebuilt in a regular basis with an upper-triangular propagator, exact at
     the point (:func:`_cutoff_cluster` decides, :func:`_regular_conical_modes` builds), and
-    everywhere outside that gate the arithmetic below is the one that was here, bit for bit.
-    Under an abstract trace (``jax.jit``, ``jax.vmap``, a ``jax.lax.map`` or ``scan`` body,
-    ``jax.checkpoint`` -- under ``jax.grad`` too -- and ``torch.func.vmap``) the gate cannot
-    read its values and the family construction ships: a documented gap,
-    ``docs/rayleigh-points.md`` section 7.
+    everywhere outside that gate the arithmetic below is the one that was here, bit for bit,
+    eagerly. Under an abstract trace (``jax.jit``, ``jax.vmap``, a ``jax.lax.map`` or ``scan``
+    body, ``jax.checkpoint`` -- under ``jax.grad`` too -- and ``torch.func.vmap``) the gate cannot
+    read its values, so it hands its masks on as data and *every* traced layer takes the rebuild
+    in the general layout -- exact for any masks, so an empty one is the family construction
+    re-expressed, rounded differently (``docs/rayleigh-points.md`` section 7). Under any abstract
+    trace the family construction below is therefore never reached.
 
     ``mu`` is the optional ``(mux_conv, muy_conv, muz_conv_i)`` triple and ``k0_d`` / ``dng``
     the label choice :func:`layer_modes_1d` documents, ``None`` for a non-magnetic layer, for
@@ -595,7 +614,9 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     W2_i = xp.linalg.inv(W2)
 
     # A mode at its x-cutoff (`ky != 0`): the layer leaves the family layout. `None` -- no
-    # such mode, `ky == 0`, or an abstract value -- keeps every statement below as it was.
+    # such mode, `ky == 0`, or a refused cluster, all decided on concrete values -- keeps every
+    # statement below as it was. An abstract value always gets masks (possibly empty), so every
+    # traced layer is rebuilt.
     cluster = _cutoff_cluster(xp, wA, wB, q1, q2, ky)
     if cluster is not None:
         if q1.ndim == 2 or q2.ndim == 2:
@@ -630,12 +651,11 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
         # `wA` and `wB` are exactly zero where an order's `kx**2` meets the layer's permittivity.
         # With `ky == 0` that is a Rayleigh point, the quotients are 0/0, and `check_finite`
         # refuses the result downstream. With `ky != 0` it is an x-cutoff, which the rebuild
-        # above takes. It reaches this block only under an abstract trace (`jax.jit`,
-        # `jax.vmap`, `jax.checkpoint` and the like), where nothing warns and nothing is
-        # checked, or when the gate refused its cluster (a root under the floor, opposite
-        # labels), where an exact zero makes the quotients inf, the products below NaN, and
-        # `check_finite` refuses that too. So NumPy's own warnings are silenced over the whole
-        # block (see `division_at_a_cutoff`).
+        # above takes. It reaches this block only when the gate refused its cluster (a root
+        # under the floor, opposite labels), where an exact zero makes the quotients inf, the
+        # products below NaN, and `check_finite` refuses that too -- never under an abstract
+        # trace, where every layer is rebuilt (a refused cluster with empty masks). So NumPy's
+        # own warnings are silenced over the whole block (see `division_at_a_cutoff`).
         with division_at_a_cutoff():
             V_11 = W1 * (q1 / wA)
             V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None

@@ -258,8 +258,9 @@ def check_finite(xp, **named):
     takes ``|ky|`` under about 1.4e-9, or a pair with opposite labels), where an exact zero still
     lands here as before. Under an abstract trace (``jax.jit``, ``jax.vmap``, a ``jax.lax.map``
     or ``scan`` body, ``jax.checkpoint`` -- under ``jax.grad`` too -- and ``torch.func.vmap``)
-    the old construction still ships there, NaN at an exact zero, and this check cannot see it
-    -- the gap noted above (``docs/rayleigh-points.md`` section 7).
+    the layer is rebuilt as well, its masks carried as data (``docs/rayleigh-points.md``
+    section 7); only a cluster the gate refuses keeps the old construction's arithmetic there,
+    NaN at an exact zero, which this check cannot see under a trace.
     """
     bad = []
     for name, v in named.items():
@@ -465,11 +466,11 @@ def division_at_a_cutoff():
     (:func:`wavebit._core.solve_2d._rebuild_grazing_cluster`), or :func:`check_finite` refuses
     the NaN with a structural hint. A conical x-cutoff (``ky != 0``) is rebuilt before these
     blocks run (:func:`wavebit._core.solve_1d._regular_conical_modes`), whose divisors are
-    guarded instead; it reaches them only under an abstract trace (``jax.jit``, ``jax.vmap``,
-    a ``jax.lax.map`` or ``scan`` body, ``jax.checkpoint``, ``torch.func.vmap``), where nothing
-    warns, or where its gate refuses the cluster. The block covered includes the
-    products that carry an ``inf`` quotient into NaN. NumPy's own ``RuntimeWarning`` adds
-    nothing to either outcome.
+    guarded instead -- under an abstract trace (``jax.jit``, ``jax.vmap``, a ``jax.lax.map`` or
+    ``scan`` body, ``jax.checkpoint``, ``torch.func.vmap``) too, where every conical layer is
+    rebuilt; it reaches these blocks only where its gate refuses the cluster. The block covered
+    includes the products that carry an ``inf`` quotient into NaN. NumPy's own
+    ``RuntimeWarning`` adds nothing to either outcome.
     It did harm: from an attempt the ``auto_detune`` ladder discarded it reached the caller,
     and under a caller's ``simplefilter('error', RuntimeWarning)`` it raised before the ladder
     could retry (``tests/test_rayleigh_guard.py::test_auto_detune_retries_under_an_error_filter``).
