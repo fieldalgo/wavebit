@@ -11,7 +11,11 @@ not a claim.
 * [JAX](https://github.com/google/jax) — autodiff and XLA. `jax.grad` works straight off the
   public API; `jax.jit` additionally needs a frozen geometry ([`autodiff.md`](autodiff.md)).
 * [PyTorch](https://github.com/pytorch/pytorch) — autodiff eagerly, with no record to freeze
-  and so none to go stale. `torch.compile` is not a supported path here.
+  and so none to go stale; `torch.autograd` works through `torch.func.vmap`, while the
+  `torch.func` grad and jvp transforms are refused by name where their input reaches a modal
+  operator, and nested ones wherever the operator carries a derivative (one over a thickness
+  is exact) ([`autodiff.md`](autodiff.md#forward-mode)).
+  `torch.compile` is not a supported path here.
 
 ```python
 solver = wavebit.rcwa(backend='numpy', ...)               # 'numpy', 'jax' or 'torch'

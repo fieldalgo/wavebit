@@ -34,12 +34,16 @@ _DUAL = (' is not supported: it is a mixed second order, or a first-order backwa
          'graph built while a forward_ad dual level was open -- build the reverse pass outside the '
          'dual level')
 
-#: What a ``torch.func`` transform through the modal operator raises with.
+#: What a ``torch.func`` grad or jvp transform through the modal operator raises with. The
+#: rule has a functorch ``vmap`` rule, so ``torch.func.vmap`` with ``torch.autograd`` is exact;
+#: what it cannot do is tell a ``torch.func`` grad or jvp level from a second derivative (see
+#: :func:`_variation`), so those are refused at its door where they differentiate the operator.
 _FUNCTORCH = ('modal generator derivatives are not differentiable under torch.func transforms '
-              '(grad, jvp, jacrev, jacfwd, vmap of a derivative): their torch.autograd.Function '
-              'has no functorch rule. Use torch.autograd instead -- backward(), '
-              'torch.autograd.grad or torch.autograd.forward_ad -- which they support to first '
-              'order')
+              '(grad, vjp, jvp, jacrev, jacfwd, hessian, or any of them composed with vmap): '
+              'their first-order guard cannot tell such a level from a second derivative. Use '
+              'torch.autograd instead -- backward(), torch.autograd.grad or '
+              'torch.autograd.forward_ad, also through torch.func.vmap -- which they support to '
+              'first order')
 
 _JAX_DELTA = None
 _TORCH_DELTA = None
@@ -76,21 +80,30 @@ def _variation(operator, basis):
     backward runs with grad mode on and refuses), while PyTorch's two mixed orders there
     carry ``torch.linalg.solve``'s own forward-over-reverse error wherever the stack solves
     through it (the autodiff guide, "Forward mode").
+
+    **Under** ``torch.func``. The PyTorch Function carries a ``vmap`` rule, so
+    ``torch.autograd`` through ``torch.func.vmap`` -- ``backward()``, ``torch.autograd.grad``,
+    ``forward_ad``, a captured parameter beside a batched input -- takes this rule per lane and
+    is the eager derivative. A ``torch.func`` grad or jvp level (``grad``, ``vjp``, ``jvp``,
+    ``jacrev``, ``jacfwd``, ``hessian``, and each of them composed with ``vmap``) is refused at
+    the door with ``NotImplementedError`` (:data:`_FUNCTORCH`) where it differentiates the
+    operator: the transform's own level by its liveness, any level nested beneath it by its type
+    (:func:`~wavebit._core.backend.functorch_differentiates`); a transform over something that
+    moves no operator, such as a thickness, passes, also with a captured ``requires_grad``
+    tensor in the operator, and the rule runs on that tensor's level only. The refusal is the
+    guard's, not a missing rule: under ``torch.func.grad`` the backward runs with grad mode on,
+    where the ``torch.is_grad_enabled()`` test cannot tell it from ``create_graph=True``, and
+    under ``torch.func.jvp`` the ``jvp`` has no guard at all, so ``jvp(jvp)`` would
+    differentiate the fixed-basis rule again and return a partial Hessian with no error.
     """
     xp = array_namespace(operator)
     if 'jax' in xp.__name__:
         return _jax_variation()(operator, basis)
     if 'torch' in xp.__name__:
-        try:
-            return _torch_variation()(operator, basis, forward_tangent(operator))
-        except RuntimeError as error:
-            # `torch.func` refuses an `autograd.Function` without a functorch rule, naming
-            # `setup_context`; that is said here in this rule's own terms. There is no rule to
-            # offer: the first-order guard below reads `torch.is_grad_enabled()`, which
-            # `torch.func.grad` turns on for every backward pass.
-            if 'setup_context' not in str(error):
-                raise
-            raise NotImplementedError(_FUNCTORCH) from error
+        from .backend import functorch_differentiates
+        if functorch_differentiates(operator):
+            raise NotImplementedError(_FUNCTORCH)
+        return _torch_variation()(operator, basis, forward_tangent(operator))
     return xp.zeros_like(operator)
 
 
@@ -141,19 +154,45 @@ def _jax_variation():
 
 
 def _torch_variation():
-    """The PyTorch rule: an ``autograd.Function`` with a ``backward`` and a ``jvp``."""
+    """The PyTorch rule: an ``autograd.Function`` with a ``backward``, a ``jvp`` and a ``vmap``.
+
+    ``forward`` takes no ``ctx`` and a ``setup_context`` saves what it did, so that
+    ``torch.func.vmap`` can take the Function; its ``vmap`` rule moves each batched input's
+    batch axis to the front, **expands an unbatched one** to the batch, and applies the
+    Function once on the plain tensors, whose ``backward`` and ``jvp`` already work over
+    leading batch axes. Both inputs are expanded because the output must be batched whenever
+    either input is: a generated rule (``generate_vmap_rule = True``) returns ``zeros_like(v)``
+    unbatched beside a batched operator, and the cotangent summed over the lanes then lands on
+    every lane -- n times too large, silently (exactly 3 times on 3 lanes, the operator batched
+    and the basis captured). This is the pattern of PyTorch's "Extending torch.func with
+    autograd.Function" (docs.pytorch.org/docs/2.13/notes/extending.func.html), which
+    ``backend._TorchBesselJ1`` follows with a generated rule -- right for an elementwise
+    Function of one input, wrong for this one.
+    """
     global _TORCH_DELTA
     if _TORCH_DELTA is None:
         import torch
 
         class Variation(torch.autograd.Function):
             @staticmethod
-            def forward(ctx, a, v, dual):
+            def forward(a, v, dual):
+                return torch.zeros_like(v)
+
+            @staticmethod
+            def setup_context(ctx, inputs, output):
+                a, v, dual = inputs
                 ctx.save_for_backward(v)
                 ctx.save_for_forward(v)
                 ctx.real_input = not torch.is_complex(a)
                 ctx.dual = dual
-                return torch.zeros_like(v)
+
+            @staticmethod
+            def vmap(info, in_dims, a, v, dual):
+                a_dim, v_dim, _ = in_dims
+                n = info.batch_size
+                a = a.movedim(a_dim, 0) if a_dim is not None else a.expand(n, *a.shape)
+                v = v.movedim(v_dim, 0) if v_dim is not None else v.expand(n, *v.shape)
+                return Variation.apply(a, v, dual), 0
 
             @staticmethod
             def jvp(ctx, da, *constants):
@@ -261,8 +300,10 @@ def exponential(xp, q, scale, coupled=False):
     from an exact Frechet derivative, by one of two rules:
 
     * **eager** (a concrete norm: an eager solve, ``jax.grad``, ``jvp``, ``jacfwd``, torch
-      autograd and ``forward_ad``): the backend's matrix exponential (:func:`_expm`), whose
-      derivative is its Frechet derivative, with JAX's squaring count read off the value;
+      autograd and ``forward_ad``; on PyTorch, which reads no norm, torch autograd and
+      ``forward_ad`` through ``torch.func.vmap`` as well): the backend's matrix exponential
+      (:func:`_expm`), whose derivative is its Frechet derivative, with JAX's squaring count
+      read off the value;
     * **traced** (an abstract norm on JAX: ``jax.jit``, ``jax.vmap``, a ``lax.map`` or ``scan``
       body, ``jax.checkpoint``, an eager record passed into a trace): a ``jax.custom_jvp``
       whose tangent is the closed-form Frechet derivative of the triangular exponential
@@ -280,8 +321,9 @@ def exponential(xp, q, scale, coupled=False):
     rebuilt test points agree to 2.4e-14. They are kept apart so that an eager tangent stays the
     bits it was.
 
-    PyTorch never takes the closed form: under ``torch.func.vmap`` nothing carries autodiff (the
-    formula), under autograd ``matrix_exp`` is used as it is. Without autodiff, or with
+    PyTorch never takes the closed form: under ``torch.autograd`` and ``forward_ad``, through
+    ``torch.func.vmap`` too, where it batches, ``matrix_exp`` is used as it is (PyTorch reads no
+    norm). A ``torch.func.vmap`` with no derivative takes the formula. Without autodiff, or with
     ``coupled=False`` (the default, and every other layer), the arithmetic is the formula
     alone, as it always was.
     """
@@ -354,9 +396,10 @@ def _squarings(norm):
 def _expm(xp, a, count):
     """``expm(a)`` (batched over leading axes) on the backend, for its Frechet derivative.
 
-    Reached only from :func:`exponential` with ``coupled=True`` under autodiff and a concrete
-    norm, so only on JAX and PyTorch; NumPy carries no derivative. PyTorch's ``matrix_exp`` is
-    used as it is, and ``count`` is ignored there.
+    Reached only from :func:`exponential` with ``coupled=True`` under autodiff and, on JAX, a
+    concrete norm (PyTorch reads none, so ``torch.autograd`` through ``torch.func.vmap``,
+    ``forward_ad`` included, reaches here, batched), so only on JAX and PyTorch; NumPy carries no
+    derivative. PyTorch's ``matrix_exp`` is used as it is, and ``count`` is ignored there.
     ``jax.scipy.linalg.expm`` takes ``floor(log2(|A|_1 / theta_13))`` squarings, so a norm up to
     ``2 theta_13`` reaches the Pade approximant unscaled: measured (jax 0.11.0) 4e-9 in the value
     and 8e-9 in the derivative on a cutoff layer's ``q`` at ``|A|_1 = 10.5``, where torch was

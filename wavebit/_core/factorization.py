@@ -105,7 +105,8 @@ worked (``tests/test_conv_matrices_accessor.py``). The builders are what disagre
 import math
 from typing import NamedTuple
 
-from .backend import array_namespace, as_array, carries_autodiff, constant_array, forward_tangent
+from .backend import (_concrete, array_namespace, as_array, carries_autodiff, constant_array,
+                      forward_tangent, functorch_differentiates)
 from .enums import DEFAULT_NESTING, Nesting, nesting_of
 from .modal_gradient import _CREATE_GRAPH, _DUAL
 from .geometry import StaleGeometryError
@@ -1801,12 +1802,18 @@ def _floor_singular_values(xp, B, floor):
     False, which is why :func:`~wavebit._core.backend.carries_autodiff` asks
     :func:`~wavebit._core.backend.forward_tangent` as well; without it a forward-mode derivative
     went down the plain branch and came back with the floored part's tangent zero, silently.
-    ``torch.func`` transforms, for which the Function has no rule, are refused by name
-    (:data:`_FUNCTORCH`) where the floor binds. Where the floor does not bind,
-    the ``where`` returns ``B`` and the derivative is precisely what it was before the floor
-    existed. Where it binds the derivative is exact. The lift held as a bare constant instead
-    would return the *unfloored* closing's derivative at the floored point: measured 39x too
-    large and of the wrong sign in ``d(R + T)/d(diameter)`` on the gold disks at 121 harmonics.
+    ``torch.autograd`` through ``torch.func.vmap`` -- a batch of wavelengths or designs, the
+    lanes binding or not -- is exact: the Function has a ``vmap`` rule, and a lane where the
+    floor does not bind gets ``B`` itself from the per-lane ``where``. A ``torch.func`` grad or
+    jvp level that differentiates ``B`` or the floor
+    (:func:`~wavebit._core.backend.functorch_differentiates`) is refused by name
+    (:data:`_FUNCTORCH`) where the floor binds, and under ``vmap`` wherever whether it binds is
+    a per-lane answer, as the modal rule refuses it.
+    Where the floor does not bind, the ``where`` returns ``B`` and the derivative is precisely
+    what it was before the floor existed. Where it binds the derivative is exact. The lift held
+    as a bare constant instead would return the *unfloored* closing's derivative at the floored
+    point: measured 39x too large and of the wrong sign in ``d(R + T)/d(diameter)`` on the gold
+    disks at 121 harmonics.
 
     **First derivatives only, where it binds.** :func:`_floor_derivative` is linear in ``dB`` with
     coefficients from the detached factors, so differentiating it again would drop the floor's
@@ -1836,17 +1843,19 @@ def _floor_singular_values(xp, B, floor):
     if not (carries_autodiff(B) or carries_autodiff(floor)):
         return xp.where(xp.any(clip), B + (lifted - B), B)
     if 'torch' in xp.__name__:
-        # Eager, so whether the floor binds is known here, and a layer where it does not is
-        # handed back untouched: its derivatives, of any order, are the identity's.
-        if not bool(xp.any(clip)):
+        # Eager, whether the floor binds is known here, and a layer where it does not is handed
+        # back untouched: its derivatives, of any order, are the identity's. Under
+        # `torch.func.vmap` it is a per-lane answer `_concrete` cannot read (None): the Function
+        # then runs on every lane and the `where` hands each lane where nothing binds `B`
+        # itself, bit for bit, as the JAX branch below does.
+        binds = _concrete(xp.any(clip))
+        if binds is False:
             return B
+        if functorch_differentiates(B) or functorch_differentiates(floor):
+            raise NotImplementedError(_FUNCTORCH)
         dual = forward_tangent(B) or forward_tangent(floor)
-        try:
-            return _torch_floor()(B, floor, U, s, Vh, lifted, clip, dual)
-        except RuntimeError as error:
-            if 'setup_context' not in str(error):
-                raise
-            raise NotImplementedError(_FUNCTORCH) from error
+        floored = _torch_floor()(B, floor, U, s, Vh, lifted, clip, dual)
+        return floored if binds else xp.where(xp.any(clip), floored, B)
     return xp.where(xp.any(clip), _jax_floor()(B, floor, U, s, Vh, lifted, clip), B)
 
 
@@ -1856,12 +1865,19 @@ _SECOND_ORDER = ('the NVF inverse-rule floor supports first order only where it 
                  'whether it binds is not known when the trace is built): its curvature is not '
                  'implemented')
 
-#: What a ``torch.func`` transform through a floored layer raises with.
+#: What a ``torch.func`` grad or jvp transform through a floored layer raises with. The rule has
+#: a functorch ``vmap`` rule, so ``torch.func.vmap`` with ``torch.autograd`` is exact; a
+#: ``torch.func`` grad or jvp level would reach the same first-order guard as the modal rule's
+#: (``modal_gradient._FUNCTORCH``), so it is refused at the door where it differentiates the
+#: floor (:func:`~wavebit._core.backend.functorch_differentiates`). Under
+#: ``vmap`` with such a level the door is reached on a dielectric layer too, since whether the
+#: floor binds is then a per-lane answer that cannot be read.
 _FUNCTORCH = ('the NVF inverse-rule floor is not differentiable under torch.func transforms '
-              '(grad, jvp, jacrev, jacfwd, vmap of a derivative) where it binds, a metal beside a '
-              'dielectric: its torch.autograd.Function has no functorch rule. Use torch.autograd '
-              'instead -- backward(), torch.autograd.grad or torch.autograd.forward_ad -- which '
-              'it supports to first order')
+              '(grad, vjp, jvp, jacrev, jacfwd, hessian, or any of them composed with vmap) where '
+              'it binds, a metal beside a dielectric, or, under torch.func.vmap, where whether it '
+              'binds is a per-lane answer. Use torch.autograd instead -- backward(), '
+              'torch.autograd.grad or torch.autograd.forward_ad, also through torch.func.vmap -- '
+              'which it supports to first order')
 
 _JAX_FLOOR = None
 _TORCH_FLOOR = None
@@ -1926,8 +1942,19 @@ def _torch_floor():
     ``Variation`` does, and any backward pass through a node built from a forward-mode dual
     (``dual``): that is PyTorch's two mixed second orders, a tangent carried through the backward
     and a backward pass through the tangent, each of which reaches this backward and would
-    differentiate the linear map above with its detached factors -- a partial Hessian. Under
-    ``torch.func`` it raises, having no functorch rule; the caller turns that into
+    differentiate the linear map above with its detached factors -- a partial Hessian.
+
+    ``forward`` takes no ``ctx`` and a ``setup_context`` saves exactly what it did, so that
+    ``torch.func.vmap`` takes the Function, by an explicit ``vmap`` rule: each input's batch
+    axis is moved to the front or an unbatched input is expanded to the batch, the floor is
+    given one value per lane that broadcasts as the eager 0-d floor does, and the Function is
+    applied once on the plain tensors, whose ``backward`` and ``jvp`` work over leading batch
+    axes. Its ``backward`` is then an ordinary autograd backward, which is what lets the
+    ``torch.autograd.grad`` inside it run; a generated rule raised there, and that call is
+    kept because it is what keeps eager reverse mode's bytes. The pattern is PyTorch's
+    "Extending torch.func with autograd.Function"
+    (docs.pytorch.org/docs/2.13/notes/extending.func.html). A ``torch.func`` grad or jvp level
+    never reaches this: :func:`_floor_singular_values` refuses it first with
     :data:`_FUNCTORCH`."""
     global _TORCH_FLOOR
     if _TORCH_FLOOR is None:
@@ -1935,11 +1962,31 @@ def _torch_floor():
 
         class Floored(torch.autograd.Function):
             @staticmethod
-            def forward(ctx, B, floor, U, s, Vh, lifted, clip, dual):
+            def forward(B, floor, U, s, Vh, lifted, clip, dual):
+                return B + (lifted - B)
+
+            @staticmethod
+            def setup_context(ctx, inputs, output):
+                B, floor, U, s, Vh, lifted, clip, dual = inputs
                 ctx.save_for_backward(U, s, Vh, floor, clip)
                 ctx.save_for_forward(U, s, Vh, floor, clip)
                 ctx.dual = dual
-                return B + (lifted - B)
+
+            @staticmethod
+            def vmap(info, in_dims, B, floor, U, s, Vh, lifted, clip, dual):
+                n = info.batch_size
+
+                def lead(x, d):
+                    return x.movedim(d, 0) if d is not None else x.expand(n, *x.shape)
+                B, U, s, Vh, lifted, clip = (lead(x, d) for x, d in zip(
+                    (B, U, s, Vh, lifted, clip), (in_dims[0],) + tuple(in_dims[2:7])))
+                # The floor is one number per lane. Eager it is 0-d and broadcasts against the
+                # singular values `s`; here it is given singleton axes up to `s`'s rank, or it
+                # broadcasts along the singular-value axis instead -- an error where the batch
+                # and that axis differ in length, and a silently wrong floor where they agree.
+                floor = lead(floor, in_dims[1])
+                floor = floor.reshape((n,) + (1,) * (s.ndim - floor.ndim) + floor.shape[1:])
+                return Floored.apply(B, floor, U, s, Vh, lifted, clip, dual), 0
 
             @staticmethod
             def jvp(ctx, dB, dfloor, *constants):

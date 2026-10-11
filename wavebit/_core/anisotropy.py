@@ -10,7 +10,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import array_namespace, as_array, _concrete, carries_autodiff, forward_tangent
+from .backend import array_namespace, as_array, _concrete, carries_autodiff, torch_autodiff
 from .domain import Material, as_material
 from .geometry import StaticGeometry, StaleGeometryError
 from . import factorization as fac
@@ -258,8 +258,11 @@ def _geometry_derivative(value):
     if isinstance(value, (tuple, list)):
         return any(_geometry_derivative(v) for v in value)
     # JIT's constant tracers are allowed; a JVP/linearization of geometry is not, and neither
-    # is either PyTorch mode: `requires_grad` or a `forward_ad` dual, which does not set it.
-    return (getattr(value, 'requires_grad', False) or forward_tangent(value)
+    # is either PyTorch mode: `requires_grad` or a `forward_ad` dual, which does not set it --
+    # under `torch.func.vmap` as well, where both sit under a `BatchedTensor` that reads
+    # neither, and the value went on to a raw "Cannot access data pointer" error instead of
+    # this refusal (`torch_autodiff`).
+    return (torch_autodiff(value)
             or type(value).__name__ in ('JVPTracer', 'LinearizeTracer'))
 
 

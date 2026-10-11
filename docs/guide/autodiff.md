@@ -259,11 +259,16 @@ diameter and in `Re eps` and `Im eps` match central differences to 1e-8, on JAX
 and PyTorch alike, at normal and at oblique incidence.
 
 Forward mode gets the same derivative: `jax.jvp` and `jax.jacfwd`, and
-`torch.autograd.forward_ad` on PyTorch. `torch.func` transforms (`jvp`, `grad`,
-`jacfwd`, ...) raise `NotImplementedError` where the floor binds, since the
-floor's `torch.autograd.Function` has no functorch rule; use `torch.autograd`
-there. Forward mode through a whole `solve()` works too; see
-[Forward mode](#forward-mode).
+`torch.autograd.forward_ad` on PyTorch. `torch.autograd` through
+`torch.func.vmap` -- a batch of wavelengths or designs, differentiated by
+`backward()` or `forward_ad` -- is exact where the floor binds too, with the
+lanes binding or not: a lane where it does not bind gets `<1/eps>` itself, bit
+for bit. The `torch.func` grad and jvp transforms (`grad`, `vjp`, `jvp`,
+`jacrev`, `jacfwd`, `hessian`, alone or composed with `vmap`) raise
+`NotImplementedError` by name where the floor binds and their input reaches the
+floored matrix, as they do at the modal rule; use `torch.autograd` there.
+Forward mode through a whole `solve()` works
+too; see [Forward mode](#forward-mode).
 
 It supports first derivatives only. The closed form is linear in the change of
 `<1/eps>`, so a second derivative through it would lack the floor's curvature.
@@ -406,24 +411,69 @@ or beside a permittivity. These second derivatives are exact:
   in the permittivity first, the backward pass runs the rule with grad mode on,
   and is refused.
 
-PyTorch's `forward_ad` combined with a backward pass is not exact here on ETM.
-`torch.linalg.solve`'s backward does not carry its matrix's tangent under
-forward mode (torch 2.13; its `linalg.inv` and `lu_solve` are exact), and the 2D
-ETM path solves through it. Measured on a 2D raster:
+PyTorch's `forward_ad` combined with a backward pass is not exact here on
+conical and 2D ETM, nor on SMM's field values. `torch.linalg.solve`'s backward
+does not carry its matrix's tangent under forward mode (torch 2.13; its
+`linalg.inv` and `lu_solve` are exact), and the conical and 2D ETM paths solve
+through it in their final matching, as SMM's field state does. The 1D TE/TM ETM
+path inverts with `linalg.inv` and is exact. Measured on a 2D raster:
 
 - a thickness Hessian by `forward_ad` over a backward pass read 1.284 against
   11.18;
 - `d2/(d eps d thickness)`, by either mixed order, read 0.004266 and 0.004953
   against 0.002997.
 
-Both come back with no error. SMM is exact in all of them (11.18 and 0.002997).
-Use `layer_algorithm='SMM'`, or `create_graph=True` with the order above, for
-these second derivatives on PyTorch.
+Both come back with no error. SMM's `R` and `T` are exact in all of them (11.18
+and 0.002997); its field values are not (1.7 relative on a 1D TE grating's
+`E_y`). Use `layer_algorithm='SMM'` for `R` and `T`, or `create_graph=True` with
+the order above, for these second derivatives on PyTorch.
 
-`torch.func` transforms (`jvp`, `grad`, `jacrev`, `jacfwd`) raise
-`NotImplementedError` naming `torch.func` through any solve that reaches the
-modal rule, whose `torch.autograd.Function` has no functorch rule. Use
-`torch.autograd` there.
+`torch.func`'s grad and jvp transforms (`grad`, `vjp`, `jvp`, `jacrev`,
+`jacfwd`, `hessian`, and each of them composed with `vmap`) raise
+`NotImplementedError` naming `torch.func` wherever the transform differentiates
+a modal operator, that is, wherever its input reaches one. The rule's first-order
+guard cannot tell such a level from a second derivative: under `torch.func.grad`
+its backward runs with grad mode on, which is what `create_graph=True` looks
+like, and under `torch.func.jvp` nothing would stop `jvp(jvp)` from returning a
+partial Hessian. Use `torch.autograd` there.
+
+A transform whose input moves no operator, such as a thickness, is exact. That
+holds even when a tensor captured with `requires_grad`, such as an
+`nn.Parameter` permittivity, feeds the operator: `torch.func.grad`, `jvp`,
+`jacrev`, `jacfwd` and their compositions with `vmap` return the eager
+derivative. After `torch.func.grad`, `jacrev` and their `vmap` compositions
+(reverse over reverse), a later `backward()` to the captured tensor returns the
+eager mixed derivative too. So does a `forward_ad` dual outside
+`torch.func.grad`, on ETM as well, where eager `forward_ad` over a backward pass
+is not exact. After `torch.func.jvp`, `jacfwd` or `jvp(vmap)`, that backward
+pass is reverse over forward. It returns what eager `forward_ad` combined with a
+backward pass returns, so it carries the caveat above wherever the read-out goes
+through `torch.linalg.solve`, with no error: conical and 2D ETM (0.004953
+against 0.002997 on the 2D raster above), and SMM's field values (0.12 relative
+on a 1D TM grating's field read-out). 1D TE/TM ETM is exact, and so are SMM's
+`R` and `T`. The door reads each level's own flag. A value computed inside a
+grad transform carries that level's wrapper even when it does not depend on the
+input, so asking the wrapper's type alone refused all of these. Nested grad and
+jvp transforms (`hessian`, `grad(grad)`, `jvp(jvp)`, a mixed partial such as
+`jacfwd` over a permittivity of `torch.func.grad` over a thickness) are exact
+over a thickness only while the operator carries no derivative at all. Where it
+carries one, the inner levels count by their type and the solve is refused.
+Until 2026-10-11 the mixed partials came back 0.15 relative off, with no error,
+on a 1D TM grating: a tangent beneath another grad or jvp level could not be
+read.
+
+`torch.autograd` through `torch.func.vmap` is supported and exact:
+`backward()` or `torch.autograd.grad` of a batched solve, nested `vmap`, a
+parameter captured with `requires_grad` beside a batched wavelength, and
+`forward_ad` through `vmap` each return eager autograd's derivative, lane by
+lane (`tests/test_torch_vmap_autograd.py`; at a conical x-cutoff,
+`tests/test_conical_cutoff.py`). Until 2026-10-11 they returned the
+derivative without the eigen-derivative, with no error: `vmap` hands the solve
+wrappers whose `requires_grad` reads False, so the modal rule never ran. On a
+conical grating `dR/d(wavelength)` read -0.003033 where eager autograd and a
+central difference read -0.004225; a census of 34 scenes under ten transforms,
+at 806661e4, found 60 of 340 cells wrong. `create_graph=True` through `vmap`
+returned a partial Hessian then; it is refused now, as it is eager.
 
 ## What cannot be traced
 
@@ -431,7 +481,7 @@ modal rule, whose `torch.autograd.Function` has no functorch rule. Use
 | --- | --- |
 | An **explicit `sample_z`** in the legacy `solver.reconstruct_field`, with respect to `thickness` | this solver method buckets using concrete thicknesses and refuses traced ones; counts stay traceable. The result-owned `result.reconstruct_field` supports explicit heights and thickness derivatives while each point stays in its layer; see [fields](fields.md#differentiating-internal-fields) |
 | `torch.compile` | not a supported path — the solve is almost entirely LAPACK calls the compiler forwards untouched, and below torch 2.13 it does not run at all ([`../torch-compile.md`](../torch-compile.md)) |
-| **`torch.func` transforms through `solve()`** (`torch.func.jvp`, `grad`, `jacrev`, `jacfwd`) | refused by name where a solve reaches the modal rule, whose `torch.autograd.Function` has no functorch rule; use `torch.autograd`, whose reverse mode and `forward_ad` both work ([Forward mode](#forward-mode)). A parameter that reaches no rule, such as a thickness, is exact under `torch.func` |
+| **`torch.func` grad and jvp transforms through `solve()`** (`torch.func.grad`, `vjp`, `jvp`, `jacrev`, `jacfwd`, `hessian`, alone or composed with `vmap`) | refused by name where the transform's input reaches a modal operator, whose first-order rule's guard cannot tell such a level from a second derivative; use `torch.autograd`, whose reverse mode and `forward_ad` both work, also through `torch.func.vmap` ([Forward mode](#forward-mode)). A parameter that reaches no operator, such as a thickness, is exact under each of them, also with a captured `requires_grad` tensor in the operator. Nested grad and jvp transforms are exact there only while the operator carries no derivative; with one they are refused |
 | **Second derivatives where a layer's modal operator moves under both** (`jax.hessian`, `jacfwd(jacrev)`, `jvp(grad)`, `create_graph=True`, PyTorch's mixed orders) | refused by name; the modal rule is first order. One parameter that moves no operator, such as a thickness, is not refused ([Forward mode](#forward-mode)) |
 
 One trap worth naming because it passes: **build the solver outside the trace.** A jit test

@@ -28,6 +28,11 @@ raster's cell metric, the solver's own field sampler, and the ``auto_detune`` re
 Second order stays refused by name wherever the modal operator moves under both derivatives:
 the modal rule holds the basis fixed, so differentiating it again would drop the eigenvectors'
 own variation and return a partial Hessian.
+
+``torch.autograd`` through ``torch.func.vmap`` -- reverse mode, ``forward_ad`` and a captured
+parameter beside a batched input -- is checked against eager autograd lane by lane in
+``test_torch_vmap_autograd.py``, which builds on the scenes here; the ``torch.func`` grad and jvp
+transforms are refused by name, here and there.
 """
 import functools
 
@@ -783,11 +788,14 @@ def test_native_j1_forward_mode():
 
 @pytest.mark.parametrize('transform', ['jvp', 'grad', 'jacrev', 'jacfwd'])
 def test_torch_func_is_refused_by_name(transform):
-    """``torch.func`` needs a functorch rule the modal ``autograd.Function`` does not have (its
-    first-order guard reads ``torch.is_grad_enabled()``, which ``torch.func.grad`` sets on every
-    backward pass), so through ``solve()`` it is refused by name, pointing at ``torch.autograd``.
-    Before, every ``torch.func`` transform of a solve died on PyTorch's own ``setup_context``
-    error at the eigensolve, a function no derivative ever flows through."""
+    """``torch.func``'s grad and jvp transforms through ``solve()`` are refused by name, pointing
+    at ``torch.autograd``. The modal ``autograd.Function`` has a functorch ``vmap`` rule now; the
+    refusal is its first-order guard's: that reads ``torch.is_grad_enabled()``, which
+    ``torch.func.grad`` sets on every backward pass, and its ``jvp`` has none, so a ``torch.func``
+    grad or jvp level is turned away at the door (``backend.functorch_differentiates``). Before
+    2026-10-02 every ``torch.func`` transform of a solve died on PyTorch's own ``setup_context``
+    error at the eigensolve, a function no derivative ever flows through. Every composition with
+    ``vmap`` is refused as well: ``test_torch_vmap_autograd.py``."""
     torch = pytest.importorskip('torch')
     x = torch.tensor(0.0, dtype=torch.float64)
     scene = lambda p: _second_order_scene('torch', p)

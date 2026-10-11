@@ -31,14 +31,162 @@ def carries_autodiff(value):
     which has ``requires_grad`` False -- asking only the first sent every dual down the
     constant branch of each dispatch that reads this, and the tangent came back wrong with no
     error. Eager arrays need no special treatment.
+
+    Inside a ``torch.func`` transform the PyTorch answer is :func:`torch_autodiff`'s, which
+    asks every wrapper level under the value as well as the value itself. ``torch.func.vmap``
+    hands the solve ``BatchedTensor`` wrappers, and a wrapper reads ``requires_grad`` False
+    even when the tensor it batches requires grad, so until 2026-10-11 every modal gate took
+    its constant branch under ``vmap`` and ``backward()`` through it returned the derivative
+    with the eigen-derivative missing, with no error: ``dR/d(wavelength)`` on a conical
+    grating read -0.003033 where eager autograd and a central difference read -0.004225, and
+    ``create_graph=True`` through ``vmap`` returned a partial Hessian where eager refuses.
     """
-    if getattr(value, 'requires_grad', False):
-        return True
-    if forward_tangent(value):
+    if torch_autodiff(value):
         return True
     import sys
     jax = sys.modules.get('jax')
     return jax is not None and isinstance(value, jax.core.Tracer)
+
+
+def torch_autodiff(value):
+    """Whether ``value`` is a PyTorch tensor that some PyTorch autodiff level differentiates.
+
+    That is ``requires_grad`` or a forward-mode tangent (:func:`forward_tangent`) at the tensor
+    itself or, inside a ``torch.func`` transform, at any level under its wrappers. A
+    ``torch.func.vmap`` ``BatchedTensor`` reads ``requires_grad`` False even when the tensor it
+    batches requires grad -- a captured parameter, or the input of ``vmap(f)(x).sum().backward()``
+    -- so asking the outermost wrapper alone sent every modal gate down its constant branch under
+    ``vmap``, silently: ``dR/d(wavelength)`` of a conical grating read -0.003033 where eager
+    autograd and a central difference read -0.004225, and a census of 34 scenes under ten
+    transforms found 60 of its 340 cells wrong with no error, by up to a factor of 20.
+
+    Each level's *own* flag is asked, never the wrapper's type. A ``torch.func.grad`` wrapper
+    detached inside the transform is still a ``GradTrackingTensor``, and counting it as live
+    would send an operator the solve stopped on purpose into the first-order rules. A level's
+    tangent is read at that level (:func:`_own_tangent`): read from above, a jvp level beneath
+    another ``torch.func`` grad or jvp level, or a ``forward_ad`` dual beneath one, reads no
+    tangent, and a mixed partial such as ``torch.func.jacfwd`` over a permittivity of
+    ``torch.func.grad`` over a thickness went down the constant branch and came back 0.15
+    relative off with no error (806661e4 and before) -- it is refused at the rule's door now.
+    The door itself is :func:`functorch_differentiates`.
+
+    The walk is ``torch.func.debug_unwrap``'s, in PyTorch's ``torch._functorch.eager_transforms``:
+    ``is_functorch_wrapped_tensor`` and ``get_unwrapped`` from ``torch._C._functorch``, which is
+    private (:func:`_functorch` refuses by name a PyTorch without them). It runs only while a
+    transform is active (:func:`_functorch_active`); wrappers exist only inside one, so eager
+    PyTorch never calls ``torch._C._functorch`` while the transforms-active probe exists, and
+    takes exactly the path it took before; the probe itself is read on every call. ``False``
+    for anything that is not a PyTorch tensor, without importing PyTorch -- which is why the
+    raw readers of a geometry or a cache key call this rather than :func:`carries_autodiff`:
+    that one also counts every JAX tracer.
+    """
+    if getattr(value, 'requires_grad', False):
+        return True
+    import sys
+    torch = sys.modules.get('torch')
+    if torch is None or not isinstance(value, torch.Tensor):
+        return False
+    active = _functorch_active(torch)
+    if _forward_tangent(torch, value, active):
+        return True
+    if not active:
+        return False
+    functorch = _functorch(torch)
+    # The tangents below were all asked above; what is left is each level's own `requires_grad`.
+    while functorch.is_functorch_wrapped_tensor(value):
+        value = functorch.get_unwrapped(value)
+        if value.requires_grad:
+            return True
+    return False
+
+
+#: The private ``torch._C._functorch`` calls the wrapper walks need: the two the public
+#: ``torch.func.debug_unwrap`` is written with (in ``torch._functorch.eager_transforms``), the
+#: two that name a level's kind, and the four that read a tangent at its own level
+#: (:func:`_own_tangent`): a tensor's level, the top interpreter's, and popping and pushing the
+#: interpreter stack, as ``torch._functorch.pyfunctorch.temporarily_pop_interpreter_stack`` and
+#: ``temporarily_clear_interpreter_stack`` do (the latter's pop loop and reverse push).
+_FUNCTORCH_CALLS = ('is_functorch_wrapped_tensor', 'get_unwrapped', 'is_batchedtensor',
+                    'is_gradtrackingtensor', 'maybe_get_level', 'maybe_current_level',
+                    'pop_dynamic_layer_stack', 'push_dynamic_layer_stack')
+
+
+def _functorch_active(torch):
+    """Whether a ``torch.func`` transform is active: the private
+    ``torch._C._are_functorch_transforms_active``.
+
+    Wrappers exist only inside a transform, so outside one there is nothing to walk and the
+    eager answers are the plain flags. Where this PyTorch lacks the probe, a transform is
+    assumed active, so the walk runs -- correct, at the walk's cost -- and :func:`_functorch`
+    names any call it is missing. The probe is private: if it read False inside a transform,
+    the walks would be skipped and the silent ``vmap`` defect :func:`torch_autodiff` describes
+    would return, which ``tests/test_torch_vmap_autograd.py`` trips on.
+    """
+    active = getattr(torch._C, '_are_functorch_transforms_active', None)
+    return True if active is None else bool(active())
+
+
+def _functorch(torch):
+    """``torch._C._functorch``, refusing by name a PyTorch without a call the walks need.
+
+    Those calls are private (:data:`_FUNCTORCH_CALLS`), and a PyTorch that renamed one would
+    otherwise raise ``AttributeError`` deep in a solve -- or, worse, be taken for a tensor with
+    no derivative. Called only inside a transform -- or on every call, eager included, on a
+    PyTorch without the transforms-active probe (:func:`_functorch_active`), where eager solves
+    would then raise this too if a call were missing as well.
+    """
+    functorch = getattr(torch._C, '_functorch', None)
+    missing = [name for name in _FUNCTORCH_CALLS if not hasattr(functorch, name)]
+    if missing:
+        raise RuntimeError(
+            f'wavebit reads autodiff through torch.func transforms with torch._C._functorch.'
+            f'{missing[0]}, which PyTorch {torch.__version__} does not have, so a derivative '
+            f'through this transform cannot be taken correctly; use torch.autograd outside '
+            f'torch.func')
+    return functorch
+
+
+def functorch_differentiates(value):
+    """Whether a ``torch.func`` grad or jvp level may differentiate ``value``: the door of the
+    first-order rules (``modal_gradient._variation`` and the NVF floor), which refuse it.
+
+    ``torch.func.grad``, ``vjp``, ``jvp``, ``jacrev``, ``jacfwd`` and ``hessian`` all record
+    with ``GradTrackingTensor`` wrappers, and so do their compositions with ``vmap`` in either
+    order; ``vmap`` alone wraps in ``BatchedTensor`` only. Every tensor computed inside a grad or
+    jvp transform carries that level's wrapper, live or not: a value built from a parameter
+    captured with ``requires_grad`` -- an ``nn.Parameter``-style permittivity -- is lifted to a
+    ``GradTrackingTensor`` whose own ``requires_grad`` is False while the level under it
+    requires grad. So the first such level in the chain, the transform's own, counts only when
+    it is live there: its ``requires_grad``, or a tangent read at that level
+    (:func:`_own_tangent`). ``torch.func.grad`` or ``jvp`` over a thickness stays exact with
+    a captured ``requires_grad`` permittivity in the operator (-0.0005768798063578665 on the 1D
+    TM SMM scene, eager's, as at 806661e4), and a later ``backward()`` to that permittivity is
+    the eager mixed derivative. Counted by its type, that level refused both: a value computed
+    inside the transform carries its wrapper whether or not it depends on the input.
+
+    Any further grad or jvp level, beneath that one, counts by its *type*, live or not -- a
+    nested composition, ``hessian``, ``grad(grad)``, ``jvp(jvp)`` or a mixed partial, where the
+    operator carries any derivative: a refusal must not miss a level that could differentiate
+    the rules, and two levels that do would differentiate the first-order rule twice, a partial
+    Hessian, should a level's tangent ever read wrong. A solve under nested transforms reaches
+    this door only where the operator carries a derivative at all (:func:`torch_autodiff`),
+    so over a thickness with a constant permittivity it stays exact. ``False`` outside a
+    transform and for anything that is not a PyTorch tensor, without importing PyTorch.
+    """
+    import sys
+    torch = sys.modules.get('torch')
+    if torch is None or not isinstance(value, torch.Tensor) or not _functorch_active(torch):
+        return False
+    functorch = _functorch(torch)
+    from torch.autograd import forward_ad
+    nested = False
+    while functorch.is_functorch_wrapped_tensor(value):
+        if functorch.is_gradtrackingtensor(value):
+            if nested or value.requires_grad or _own_tangent(functorch, forward_ad, value):
+                return True
+            nested = True
+        value = functorch.get_unwrapped(value)
+    return False
 
 
 def forward_tangent(x):
@@ -54,13 +202,68 @@ def forward_tangent(x):
     A tensor, not anything of PyTorch's: inside a dual level ``unpack_dual`` raises
     ``TypeError`` for a ``torch.dtype``, ``device`` or ``Size``, which the solver holds and
     ``engine._holds_autodiff`` walks on an ``auto_detune`` retry -- a plain solve at a Rayleigh
-    point raised there whenever a dual level was open."""
+    point raised there whenever a dual level was open.
+
+    Inside a ``torch.func`` transform the levels under ``x``'s wrappers are asked too, as
+    :func:`torch_autodiff` asks them: ``forward_ad`` through ``torch.func.vmap`` puts the dual
+    *under* a ``BatchedTensor``. A batched level is skipped rather than asked -- ``unpack_dual``
+    has no batching rule, and inside a dual level it raises "Batching rule not implemented for
+    aten::_unpack_dual" on one -- and the level under it is asked instead, at its own level
+    (:func:`_own_tangent`). Outside a transform this is exactly the plain ``unpack_dual`` test
+    it always was."""
     import sys
     torch = sys.modules.get('torch')
     if torch is None or not isinstance(x, torch.Tensor):
         return False
+    return _forward_tangent(torch, x, _functorch_active(torch))
+
+
+def _forward_tangent(torch, x, active):
+    """:func:`forward_tangent` of a tensor ``x``, with :func:`_functorch_active` already asked."""
     from torch.autograd import forward_ad
-    return forward_ad.unpack_dual(x).tangent is not None
+    if not active:
+        return forward_ad.unpack_dual(x).tangent is not None
+    functorch = _functorch(torch)
+    while True:
+        if not functorch.is_batchedtensor(x) and _own_tangent(functorch, forward_ad, x):
+            return True
+        if not functorch.is_functorch_wrapped_tensor(x):
+            return False
+        x = functorch.get_unwrapped(x)
+
+
+def _own_tangent(functorch, forward_ad, x):
+    """Whether ``x``, one level of a wrapper chain inside a ``torch.func`` transform, carries a
+    forward-mode tangent at its own level.
+
+    ``unpack_dual`` is an operator, dispatched at the top of the interpreter stack, and a grad or
+    jvp interpreter there lifts a tensor of a level below it into a fresh wrapper of its own,
+    which has no tangent. Read plainly, a jvp level beneath a ``torch.func.grad`` or another
+    jvp reads None, and so does a ``forward_ad`` dual made outside ``torch.func.grad``: measured
+    on toy tensors, and on mixed partials -- ``jacfwd`` or ``jvp`` over a permittivity of
+    ``torch.func.grad`` or ``jvp`` over a thickness, or a ``forward_ad`` dual permittivity
+    outside ``torch.func.grad`` -- that took the constant branch and returned 0.15 relative off
+    on the 1D TM SMM scene, silently (806661e4 and before). So the interpreters above ``x``'s
+    level are popped for the read and pushed back after it, as PyTorch's
+    ``torch._functorch.pyfunctorch.temporarily_pop_interpreter_stack`` and
+    ``temporarily_clear_interpreter_stack`` do (the latter's pop loop and reverse push, stopped
+    at ``x``'s level); a level the stack
+    tops already is read with nothing popped. The calls are private (:data:`_FUNCTORCH_CALLS`):
+    should popping stop moving the dispatch, the reads would go back to None -- the silent
+    mixed partials -- which ``tests/test_torch_vmap_autograd.py`` trips on.
+    """
+    level = functorch.maybe_get_level(x)
+    popped = []
+    try:
+        while True:
+            top = functorch.maybe_current_level()
+            if top is None or top <= level:
+                break
+            popped.append(functorch.pop_dynamic_layer_stack())
+        return forward_ad.unpack_dual(x).tangent is not None
+    finally:
+        while popped:
+            functorch.push_dynamic_layer_stack(popped.pop())
 
 
 def constant_array(value, dtype=float):
@@ -777,7 +980,18 @@ def eig(A):
         # `torch.func` transform, which refuses any `autograd.Function` without a functorch
         # rule, from dying here with PyTorch's `setup_context` error before it reaches the rule
         # that names its limit.
-        return _torch_eig(A) if carries_autodiff(A) else _eig_raw(A)
+        #
+        # Liveness is asked of `A` as handed in -- its own `requires_grad`, and a forward-mode
+        # tangent, which `forward_tangent` reads under a batched level since `unpack_dual` cannot
+        # read one -- and not through `carries_autodiff`, which also asks the `requires_grad` of
+        # every level under a `torch.func` wrapper. That is the answer `carries_autodiff` gave
+        # here for every eager value. Under `torch.func.vmap` an operator whose batched tensor
+        # requires grad keeps going to the native `torch.linalg.eig`, as it did, and one that
+        # carries a `forward_ad` tangent reaches `_Eig`, which stays an old-style Function with
+        # no functorch rule, so PyTorch refuses it by its `setup_context` error. No solve hands
+        # this either: each one passes the operator through `modal_gradient._stop`.
+        live = getattr(A, 'requires_grad', False) or forward_tangent(A)
+        return _torch_eig(A) if live else _eig_raw(A)
     if 'jax' in name:
         return _jax_eig(A)
     return _eig_raw(A)

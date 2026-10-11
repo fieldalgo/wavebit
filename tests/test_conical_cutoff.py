@@ -34,7 +34,8 @@ basis with an upper-triangular propagator, gated by
 8. inertness off the band (eager: every bit; under ``jax.jit``: equal accuracy), and the
    rebuild under every abstract trace -- ``jax.jit``, ``jax.vmap``, ``jax.lax.map``,
    ``jax.checkpoint``, ``torch.func.vmap`` -- with the gate's masks as data: values, first and
-   second derivatives, fields and field gradients, and the gate itself under ``jax.jit``;
+   second derivatives (``torch.autograd`` and ``forward_ad`` through ``torch.func.vmap``
+   among them), fields and field gradients, and the gate itself under ``jax.jit``;
 9. the ``ky == 0`` Rayleigh contract, untouched;
 11. complex64; 12. a cutoff and a near-graze in one layer; 13. ``excitation=`` and SMM's
     ``scattering``; and the coupled exponential itself: its eager ``expm`` tangent, its traced
@@ -1023,6 +1024,100 @@ def test_a_patterned_cutoff_under_an_abstract_trace(name, algo, rebuilds):
     for label, g in sweeps.items():
         err = np.max(np.abs(np.asarray(g) - lanes) / np.abs(lanes))
         assert np.isfinite(err) and err < 1e-11, f'{label}: {err:.1e}'
+
+
+#: One ``torch.func.vmap`` batch per scene: the lane off the band (R1 at 520 nm, a patterned
+#: point at ``rel +1e-2``) and the raster pixel the derivative takes (R1's in its rebuilt
+#: spacer, a patterned one at the pillar's edge).
+_TORCH_VMAP_SCENES = {
+    'R1': (R1, 520., (0, 0, 3)),
+    'PA616': (PATTERNED['PA616'], PATTERNED['PA616']['wavelength'] * (1 + 1e-2), (0, 0, 6)),
+    'MU614': (PATTERNED['MU614'], PATTERNED['MU614']['wavelength'] * (1 + 1e-2), (0, 0, 6)),
+}
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('name', list(_TORCH_VMAP_SCENES))
+def test_torch_autograd_through_vmap_at_a_cutoff(name, algo, monkeypatch):
+    """``torch.autograd`` through ``torch.func.vmap`` at a cutoff is eager autograd, lane by lane.
+
+    One ``vmap`` over the wavelength at ``rel`` -1e-12, 0, +1e-12 and a lane off the band, a
+    raster pixel ``p`` captured with ``requires_grad``. ``vmap(f)(wl).sum().backward()`` must
+    give each lane's eager ``dR/dwl`` and the lanes' summed eager ``dR/dp``; ``forward_ad``
+    through the ``vmap`` -- a batched dual wavelength, then a captured dual pixel -- each lane's
+    eager tangent. Under the ``vmap`` the masks are data, so every lane takes the rebuild's AD
+    build (``_regular_conical_modes_ad``) and its coupled exponential's ``expm`` tangent,
+    batched; both are spied under the transform. Measured <= 7.3e-13 against eager; with the
+    eigen-derivative missing under ``vmap``, as before 2026-10-11, 0.2 .. 3.3 relative off in
+    band, silently, and ``forward_ad`` through ``vmap`` raised. Catches the coupled exponential
+    taking the formula's tangent under a ``torch.func`` transform -- PA616 6.1e-4 (wavelength)
+    and 1.0e-2 .. 1.1e-2 (pixel), MU614 6.4e-3 and 7.1e-3 .. 1.0e-2 -- which every other test
+    here and in ``test_torch_vmap_autograd.py`` passes. R1's uniform spacer couples nothing, so
+    the formula's tangent is exact there and only the spy sees it.
+    """
+    torch = pytest.importorskip('torch')
+    from torch.autograd import forward_ad
+    f64 = torch.float64
+    scene, off_band, pixel = _TORCH_VMAP_SCENES[name]
+    wl0 = scene['wavelength']
+    lanes = [wl0 * (1 - 1e-12), wl0, wl0 * (1 + 1e-12), off_band]
+    base = torch.tensor(np.asarray(scene['structure'], dtype=float), dtype=f64)
+    bump = torch.zeros_like(base)
+    bump[pixel] = 1.0
+    s = _solver(scene, algo=algo, backend='torch')
+
+    def f(w, p):
+        return s.solve(wavelength=w, structure=base + p * bump, auto_detune=False).R.real.sum()
+
+    def scalar(x, grad=False):
+        return torch.tensor(x, dtype=f64, requires_grad=grad)
+
+    eager_rev, eager_fwd = [], []
+    for w in lanes:
+        wt, pt = scalar(w, True), scalar(0., True)
+        f(wt, pt).backward()
+        eager_rev.append([float(wt.grad), float(pt.grad)])
+        tangents = []
+        for which in (0, 1):
+            with forward_ad.dual_level():
+                args = [scalar(w), scalar(0.)]
+                args[which] = forward_ad.make_dual(args[which], scalar(1.))
+                tangents.append(float(forward_ad.unpack_dual(f(*args)).tangent))
+        eager_fwd.append(tangents)
+    eager_rev, eager_fwd = np.array(eager_rev), np.array(eager_fwd)
+
+    under = {'_regular_conical_modes_ad': 0, '_expm': 0}
+    for module, attr in ((solve_1d, '_regular_conical_modes_ad'), (modal_gradient, '_expm')):
+        def spy(*args, _attr=attr, _original=getattr(module, attr), **kwargs):
+            under[_attr] += bool(torch._C._are_functorch_transforms_active())
+            return _original(*args, **kwargs)
+        monkeypatch.setattr(module, attr, spy)
+
+    wl = torch.tensor(lanes, dtype=f64, requires_grad=True)
+    p = scalar(0., True)
+    torch.func.vmap(lambda w: f(w, p))(wl).sum().backward()
+    with forward_ad.dual_level():
+        dual = forward_ad.make_dual(torch.tensor(lanes, dtype=f64), torch.ones(4, dtype=f64))
+        fwd_wl = forward_ad.unpack_dual(
+            torch.func.vmap(lambda w: f(w, scalar(0.)))(dual)).tangent.numpy()
+    with forward_ad.dual_level():
+        captured = forward_ad.make_dual(scalar(0.), scalar(1.))
+        fwd_p = forward_ad.unpack_dual(torch.func.vmap(lambda w: f(w, captured))(
+            torch.tensor(lanes, dtype=f64))).tangent.numpy()
+
+    def lane_rel(got, want):
+        return float(np.max(np.abs(np.asarray(got) - want) / np.abs(want)))
+    errors = {
+        'vmap + backward, wavelength per lane': lane_rel(wl.grad.numpy(), eager_rev[:, 0]),
+        'vmap + backward, captured pixel, lanes summed': lane_rel(float(p.grad),
+                                                                   eager_rev[:, 1].sum()),
+        'forward_ad + vmap, wavelength per lane': lane_rel(fwd_wl, eager_fwd[:, 0]),
+        'forward_ad + vmap, captured pixel per lane': lane_rel(fwd_p, eager_fwd[:, 1]),
+    }
+    off = {label: f'{err:.1e}' for label, err in errors.items()
+           if not (np.isfinite(err) and err < 1e-11)}
+    assert not off, off
+    assert all(under.values()), f'calls under the transform: {under}'
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])

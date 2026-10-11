@@ -189,14 +189,23 @@ asks for a forward-mode tangent as well; until it did, a dual went down the plai
 floored part is a constant, and its tangent came back zero, with no error. Through
 `eps_conv_matrices()` on the disks at 81 harmonics (read-out `Re Σ conj(W) ∘ eps_xx`) that gave
 −0.538854 in the diameter and +3.423643 in `Re eps`, where reverse mode and a central difference
-read −27.626431 and −17.338962; it now gives the reverse-mode values to 1e-14. `torch.func`
-transforms (`jvp`, `grad`, `jacfwd`, …) need a functorch rule the floor's `autograd.Function`
-does not have, and where the floor binds they raise a `NotImplementedError` that says so and
-points at `torch.autograd`; before, `torch.func.jvp` returned the same −0.538854. On a layer
-where the floor does not bind it is never reached and `torch.func` is exact. A whole `solve()`
-is exact in forward mode too: its modal operator, which asked `requires_grad` as well and gave a
-wrong `forward_ad` derivative of `R + T` on a dielectric, floor or none, has carried a forward
-rule since 2026-10-02 (the autodiff guide's "Forward mode").
+read −27.626431 and −17.338962; it now gives the reverse-mode values to 1e-14. `torch.autograd`
+through `torch.func.vmap` -- a batch of wavelengths or designs, differentiated by `backward()` or
+`forward_ad` -- is exact too, with the lanes binding or not: the floor's `autograd.Function` has a
+`vmap` rule, and a per-lane `where` hands a lane where the floor does not bind `<1/eps>` itself,
+bit for bit. The `torch.func` grad and jvp transforms (`grad`, `vjp`, `jvp`, `jacrev`, `jacfwd`,
+`hessian`, alone or composed with `vmap`) would reach the rule's first-order guard, which cannot
+tell such a level from a second derivative, so where the floor binds and their input reaches the
+floored matrix they raise a `NotImplementedError` that says so and points at `torch.autograd`
+(a captured `requires_grad` permittivity beside a transform over something else is not their
+level, and passes); before, `torch.func.jvp` returned the same −0.538854. On a layer where the
+floor does not bind it is never reached and `torch.func` is exact -- without `vmap`: under a
+`vmap` whose batch reaches the floored matrix, with a grad or jvp level whose input reaches it
+too, whether the floor binds is a per-lane answer that cannot be read, so a dielectric layer is
+refused there too. A whole `solve()` is exact in forward mode too: its modal operator, which
+asked `requires_grad` as well and gave a wrong `forward_ad` derivative of `R + T` on a
+dielectric, floor or none, has carried a forward rule since 2026-10-02 (the autodiff guide's
+"Forward mode").
 
 **First derivatives only.** The closed form is linear in `dB` with coefficients from the
 detached SVD, so a second derivative taken through it would lack the floor's curvature. Through

@@ -417,6 +417,7 @@ points.
 | R1 under `jax.vmap`, `jit(vmap)`, `jax.lax.map`, `jax.checkpoint` | NaN; 0.3 / 0.5–0.8 | ≤ 4.4e-14 |
 | R1 under `torch.func.vmap` | NaN; 0.3 / 0.5–0.6 | ≤ 3.8e-14 |
 | R1 `dR/dwl` through the point: `jit(grad)`, `jit(grad(sum vmap))`, `jit(vmap(grad))` | NaN | 1.7e-13–2.0e-13 |
+| R1 / PA616 / MU614 `torch.autograd` and `forward_ad` through `torch.func.vmap`, wavelength and raster (against eager, per lane) | eigen-derivative missing (until `torch.autograd` through `vmap` carried it): 0.2–3.3 off in band, silent; `forward_ad` raised | ≤ 7.6e-13 |
 | PA616 / MU614 values, `jit` and `jit(vmap)` | 3.9e-3–1.5 / 0.15–1.4 | ≤ 2.6e-15 / ≤ 3.6e-14 |
 | PA616 `jit(grad)`, wavelength / raster / thickness | 1.0e12–2.4e22 / 2.9e12–3.2e24 / — | ≤ 1.6e-14 / ≤ 3.7e-14 / ≤ 1.2e-14 |
 | MU614 `jit(grad)`, wavelength and raster / thickness; both under `grad(checkpoint)` | 1e12–2e25; 2e15–3e28 | ≤ 6.1e-13 / ≤ 2.0e-12; ≤ 4.7e-14 |

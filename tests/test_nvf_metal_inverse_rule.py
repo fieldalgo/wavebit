@@ -25,9 +25,11 @@ which binds only where the hull of ``1/eps`` passes the origin. What these tests
   which is why the bound asserted is the measured one with room, not zero;
 * the floor is differentiated exactly, in a shape length and in the metal's permittivity, on
   JAX and Torch alike, in reverse and in forward mode, where it binds on modes that reach the
-  far field and through degenerate singular values; ``torch.func``, which it has no rule for,
-  is refused by name; and a second derivative through it, mixed orders included, is refused
-  where it binds, rather than returned without the floor's curvature.
+  far field and through degenerate singular values; ``torch.func``'s grad and jvp transforms,
+  which its first-order guard cannot tell from a second derivative, are refused by name where it
+  binds (``torch.autograd`` through ``torch.func.vmap`` is exact: ``test_torch_vmap_autograd.py``);
+  and a second derivative through it, mixed orders included, is refused where it binds, rather
+  than returned without the floor's curvature.
 
 The metal permittivities are Johnson & Christy gold, interpolated linearly in ``n`` and ``k``.
 """
@@ -713,11 +715,14 @@ def test_forward_mode_through_the_floor_is_the_exact_derivative(mode, parameter)
 @pytest.mark.parametrize('transform', ['jvp', 'grad'])
 @pytest.mark.parametrize('metal', [True, False], ids=['gold, floor binds', 'dielectric'])
 def test_torch_func_is_refused_by_name_where_the_floor_binds(transform, metal):
-    """``torch.func`` needs a functorch rule the floor's ``autograd.Function`` does not have, so
-    where the floor binds it refuses by name and points at ``torch.autograd``, which it supports.
-    Before, ``torch.func.jvp`` took the plain branch and returned -0.538854 where the derivative
-    is -27.626431, and ``torch.func.grad`` raised PyTorch's own error about ``setup_context``.
-    Where the floor does not bind it is never reached, and ``torch.func`` stays exact.
+    """Where the floor binds, ``torch.func``'s grad and jvp transforms are refused by name,
+    pointing at ``torch.autograd``, which it supports. The floor's ``autograd.Function`` has a
+    functorch ``vmap`` rule, so ``torch.autograd`` through ``torch.func.vmap`` is exact; a grad
+    or jvp level would reach its first-order guard, which cannot tell one from a second
+    derivative, so it is turned away at the door. Before, ``torch.func.jvp`` took the plain
+    branch and returned -0.538854 where the derivative is -27.626431, and ``torch.func.grad``
+    raised PyTorch's own error about ``setup_context``. Where the floor does not bind it is never
+    reached, and ``torch.func`` stays exact (without ``vmap``; under it, binding is per lane).
     """
     torch = pytest.importorskip('torch')
     material = GOLD if metal else DIELECTRIC
