@@ -30,7 +30,7 @@ from cmath import sqrt as _csqrt
 
 import numpy as np
 
-from .backend import array_namespace, as_array, eig, in_namespace
+from .backend import array_namespace, as_array, eig, in_namespace, linear_solve
 from .modal_gradient import _stop, split_generator, exponential, combine
 from .conventions import boundary_kz, half_space_medium, layer_runs, order_azimuth, run_k0_d
 from .enums import Answers, answers_of
@@ -338,13 +338,13 @@ def _run_pq(xp, psi_f, psi_b, G, below, join):
     """
     basis = xp.concat([psi_f, psi_b], axis=1)
     if join is not True:
-        PQ = xp.linalg.solve(basis, G)
+        PQ = linear_solve(xp, basis, G)
         if join is False:
             return PQ
     f_b, b_b, Y = below
     n = Y.shape[0]
     eye = xp.eye(n, dtype=Y.dtype, device=getattr(Y, 'device', None))
-    run_PQ = xp.concat([eye, Y], axis=0) + xp.linalg.solve(basis, (f_b - psi_f) + (b_b - psi_b) @ Y)
+    run_PQ = xp.concat([eye, Y], axis=0) + linear_solve(xp, basis, (f_b - psi_f) + (b_b - psi_b) @ Y)
     if join is True:
         return run_PQ
     return xp.where(join, run_PQ, PQ)
@@ -472,7 +472,7 @@ def _interface_s(xp, psi1_f, psi1_b, psi2_f, psi2_b):
     n = psi1_f.shape[1]
     out = xp.concat([psi1_b, -psi2_f], axis=1)
     inn = xp.concat([-psi1_f, psi2_b], axis=1)
-    S = xp.linalg.solve(out, inn)
+    S = linear_solve(xp, out, inn)
     return S[:n, :n], S[:n, n:], S[n:, :n], S[n:, n:]
 
 
@@ -538,7 +538,7 @@ def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
         # Reflection at the entrance of this layer, including both bounded
         # propagation factors. Close the loop across its entrance interface.
         reflected_at_entry = propagation[1] @ reflection @ propagation[2]
-        advance = xp.linalg.solve(I - interface[3] @ reflected_at_entry, interface[2])
+        advance = linear_solve(xp, I - interface[3] @ reflected_at_entry, interface[2])
         reflection = interface[0] + interface[1] @ reflected_at_entry @ advance
     return S, layer_info_list, advance
 
@@ -550,8 +550,8 @@ def _forward_amplitudes(xp, incident, psi_vf, psi_vb, n_orders):
     system square and costs nothing, since the backward half is the thing worth testing: a state
     with any backward content is not an incident wave, and would otherwise be silently projected.
     """
-    coef = xp.linalg.solve(xp.concat([psi_vf, psi_vb], axis=1),
-                           xp.reshape(incident, (-1, 1)))[:, 0]
+    coef = linear_solve(xp, xp.concat([psi_vf, psi_vb], axis=1),
+                            xp.reshape(incident, (-1, 1)))[:, 0]
     leak = float(xp.max(xp.abs(coef[2 * n_orders:])))
     if leak > 1e-10 * max(float(xp.max(xp.abs(coef[:2 * n_orders]))), 1e-300):
         raise ValueError(f'the incident state has backward content ({leak:.2e}); it is not a '
@@ -580,8 +580,8 @@ def _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     G, T_acc, _ = _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, psi_vf, keep_field=False)
 
     # incident + reflected on the top side must be whatever the recursion says arrives there
-    sol = xp.linalg.solve(xp.concat([psi_vb, -G], axis=1),
-                          xp.reshape(-incident, (-1, 1)))[:, 0]
+    sol = linear_solve(xp, xp.concat([psi_vb, -G], axis=1),
+                           xp.reshape(-incident, (-1, 1)))[:, 0]
     return psi_vb @ sol[:2 * n_orders], psi_vf @ (T_acc @ sol[2 * n_orders:])
 
 
@@ -669,7 +669,7 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     # Matching at both interfaces at once: incident + reflected on the input side must transfer
     # to transmitted only on the output side, so P (a + psi_vb r) = psi_vf t.
     A = xp.concat([P @ psi_vb, -psi_vf], axis=1)
-    sol = xp.linalg.solve(A, xp.reshape(-(P @ incident), (-1, 1)))[:, 0]
+    sol = linear_solve(xp, A, xp.reshape(-(P @ incident), (-1, 1)))[:, 0]
     return psi_vb @ sol[:2 * n_orders], psi_vf @ sol[2 * n_orders:]
 
 

@@ -19,7 +19,8 @@ What each test is there to catch:
   ``is_compiling()``, or skips the wrapper when already inside a door (a compiled ``forward``
   handed to ``solver.grad``), gives the wrong numbers the tripwire compares;
 * the doors compose: ``torch.compile`` around ``torch.func`` second-order and vmapped routes
-  is the eager derivative, against NumPy (two of the routes also need ``backend.linear_solve``);
+  is the eager derivative, against NumPy (two of the routes, ``jvp(jvp)`` and ``vmap(jacfwd)``,
+  are exact eagerly because ``backend.linear_solve`` is);
 * the doors keep their fast path: Dynamo is never imported by an eager solve and a backward;
 * the refusals are loud and named: ``fullgraph=True``, either ``torch.export`` mode, and
   ``torch.jit.trace`` (refused at every door; its values are concrete, so nothing else noticed
@@ -254,16 +255,11 @@ def test_a_compiled_forward_called_from_inside_a_door_stays_eager():
 
 # ---------------------------------------------------------------------------- compile x torch.func
 #: ``torch.compile`` around these routes returns the eager derivative, so it is exact where eager
-#: is. Eagerly, ``jvp(jvp)`` and ``vmap(jacfwd)`` are exact only with ``backend.linear_solve``
-#: (issue F), which keeps ``torch.linalg.solve``'s derivatives exact when a forward rule is
-#: differentiated again or runs under two ``vmap`` levels; without it they read 1.1801616522e-04
-#: for 1.1001006765e-04, and lanes 196.4 and -2.08e5 for 0.01146 and 0.01160. The mark follows
-#: that function and is strict both ways: absent, the two routes must fail; present, they must
-#: pass, and the mark is inert (drop it once F is on ``develop``).
-_NEEDS_F = pytest.mark.xfail(
-    not hasattr(B, 'linear_solve'), strict=True,
-    reason='needs issue F (backend.linear_solve): torch.linalg.solve loses a second-order term '
-           'under nested forward mode and under two vmap levels')
+#: is. Eagerly, ``jvp(jvp)`` and ``vmap(jacfwd)`` are exact because every solve goes through
+#: ``backend.linear_solve``, which keeps ``torch.linalg.solve``'s derivatives exact when a forward
+#: rule is differentiated again or runs under two ``vmap`` levels; through ``torch.linalg.solve``
+#: itself they read 1.1801616522e-04 for 1.1001006765e-04, and lanes 196.4 and -2.08e5 for 0.01146
+#: and 0.01160 (``tests/test_linear_solve_derivatives.py`` holds that rule to a closed form).
 _LANES = (170.0, 170.7, 172.0)
 
 
@@ -296,11 +292,7 @@ def _create_graph_twice(g):
     return d2
 
 
-@pytest.mark.parametrize('route', [
-    pytest.param('jvp(jvp)', marks=_NEEDS_F),
-    'create_graph x2',
-    pytest.param('vmap(jacfwd)', marks=_NEEDS_F),
-])
+@pytest.mark.parametrize('route', ['jvp(jvp)', 'create_graph x2', 'vmap(jacfwd)'])
 def test_compiling_around_a_second_order_route_is_exact(route, thickness_scene):
     """``torch.compile`` around ``torch.func`` and double backward: wavebit runs eagerly inside,
     so the compiled derivative is the eager one -- checked against NumPy, which shares no

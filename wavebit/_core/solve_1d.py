@@ -25,7 +25,7 @@ Stages (matching the legacy chain, kept as one function each to make bit-parity 
   3. final matching      — incident field -> R, T -> diffraction efficiency
 """
 from .backend import (_concrete, _readable, array_namespace, as_array, check_finite,
-                      division_at_a_cutoff, eig)
+                      division_at_a_cutoff, eig, linear_solve)
 from .conventions import (boundary_kz, half_space_medium, incident_column, incident_kz,
                           layer_label_rule, layer_root, order_azimuth, order_frame_sign,
                           layer_runs, power_down_labels, run_k0_d)
@@ -381,7 +381,7 @@ def _regular_conical_modes(xp, Kx, ky, epx_conv, epz_conv_i, A, mux_conv, muz_co
     D = W1_i @ (Kx @ Mz(W2))
     drop = xp.where(mJ, xp.zeros_like(wA), 1 / wA_s)
     E2y_c = ky * Mx(W1 @ (drop[:, None] * D))
-    N = W1_i @ (xp.linalg.solve(mux_conv, y) if mu_given else y)
+    N = W1_i @ (linear_solve(xp, mux_conv, y) if mu_given else y)
     total = q1[:, None] + q2[None, :]
     pair = xp.logical_and(xp.logical_and(mJ[:, None], mK[None, :]),
                           xp.abs(q1[:, None] - q2[None, :]) < xp.abs(total))
@@ -1354,10 +1354,10 @@ def final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,
             s_p = xp.sin(xp.asarray(psi_v, dtype=C))
             c_p = xp.cos(xp.asarray(psi_v, dtype=C))
             cols.append(incident_column_sp(s_p, c_p))
-        solved = xp.linalg.solve(final_A, xp.concat(cols, axis=1))
+        solved = linear_solve(xp, final_A, xp.concat(cols, axis=1))
         final_RT, final_RT_tetm = solved[:, :1], solved[:, 1:]
     else:
-        final_RT = xp.linalg.solve(final_A, final_B)
+        final_RT = linear_solve(xp, final_A, final_B)
     del final_A, final_B
     R_s = xp.reshape(final_RT[:n_orders, :], (n_orders_v, n_orders_u))
     R_p = xp.reshape(final_RT[n_orders:2 * n_orders, :], (n_orders_v, n_orders_u))

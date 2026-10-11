@@ -654,11 +654,10 @@ def test_a_hessian_that_moves_no_modal_operator_is_exact():
     difference of the first derivative. ``jax.hessian`` raised here before 2026-10-02, on the
     modal exponential's ``asarray(..., device=)``.
 
-    Not PyTorch's ``forward_ad`` over a backward pass: there ``torch.linalg.solve``'s own
-    backward is not exact under forward mode (torch 2.13, measured on a bare 4x4 solve, real and
-    complex alike; ``linalg.inv`` and ``lu_solve`` are exact), and this scene's ETM matching
-    solves through it -- 1.284 against 11.18 here. A mixed second derivative with a permittivity
-    carries the same error there: :func:`test_a_mixed_second_derivative_differentiates_the_rule_once`."""
+    PyTorch's ``forward_ad`` over a backward pass, and a backward pass over ``forward_ad``, too:
+    this scene's ETM matching solves through ``backend.linear_solve``, whose derivative PyTorch
+    can take again. Through ``torch.linalg.solve`` itself the first read 1.284 against 11.18 here
+    (its backward reuses non-differentiable LU factors with grad mode off; torch 2.13)."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     wavebit.enable_x64()
@@ -677,6 +676,17 @@ def test_a_hessian_that_moves_no_modal_operator_is_exact():
     g, = torch.autograd.grad(scalar('torch', x), x, create_graph=True)
     assert float(torch.autograd.grad(g, x)[0]) == pytest.approx(finite, rel=1e-6)
 
+    from torch.autograd import forward_ad
+    one = torch.tensor(1.0, dtype=torch.float64)
+    with forward_ad.dual_level():
+        x = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64), one).requires_grad_()
+        g, = torch.autograd.grad(scalar('torch', x), x)
+        assert float(forward_ad.unpack_dual(g).tangent) == pytest.approx(finite, rel=1e-6)
+    x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+    with forward_ad.dual_level():
+        tangent = forward_ad.unpack_dual(scalar('torch', forward_ad.make_dual(x, one))).tangent
+    assert float(torch.autograd.grad(tangent, x)[0]) == pytest.approx(finite, rel=1e-6)
+
 
 def _mixed_scene(b, eps, d, algorithm):
     cfg = dict(TWO_D, truncation_order=[1, 1], thickness=[d], layer_algorithm=algorithm)
@@ -694,11 +704,11 @@ def test_a_mixed_second_derivative_differentiates_the_rule_once():
     under both derivatives. (``create_graph=True`` in the permittivity first runs the rule's
     backward with grad mode on, which is the refusal's signal, and is refused.)
 
-    PyTorch's two mixed orders take ``torch.linalg.solve``'s backward under forward mode, which is
-    not exact (see the thickness Hessian above). On SMM they are exact. On this scene's ETM
-    matching, ``forward_ad`` in the thickness over a backward pass in the permittivity read
-    0.004266 and a backward pass over it 0.004953, where the difference reads 0.002997 -- 42% and
-    65% off, with no error, and the same two numbers with the parameters' roles swapped.
+    PyTorch's two mixed orders are exact too, on ETM and SMM alike: the matching solves through
+    ``backend.linear_solve``. Through ``torch.linalg.solve`` itself, ``forward_ad`` in the
+    thickness over a backward pass in the permittivity read 0.004266 on this scene's ETM matching
+    and a backward pass over it 0.004953, where the difference reads 0.002997 -- 42% and 65% off,
+    with no error.
     """
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
@@ -728,24 +738,26 @@ def test_a_mixed_second_derivative_differentiates_the_rule_once():
     g, = torch.autograd.grad(_mixed_scene('torch', e, d, 'ETM'), d, create_graph=True)
     assert float(torch.autograd.grad(g, e)[0]) == pytest.approx(finite, rel=1e-6)
 
-    def d_eps_torch(d):
-        e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
-        return float(torch.autograd.grad(_mixed_scene('torch', e, torch.tensor(d, dtype=torch.float64), 'SMM'), e)[0])
+    for algorithm in ('ETM', 'SMM'):
+        def d_eps_torch(d):
+            e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
+            return float(torch.autograd.grad(
+                _mixed_scene('torch', e, torch.tensor(d, dtype=torch.float64), algorithm), e)[0])
 
-    finite = (d_eps_torch(d0 + h) - d_eps_torch(d0 - h)) / (2 * h)
-    one = torch.tensor(1.0, dtype=torch.float64)
-    e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
-    with forward_ad.dual_level():
-        dual = forward_ad.make_dual(torch.tensor(d0, dtype=torch.float64), one)
-        gradient, = torch.autograd.grad(_mixed_scene('torch', e, dual, 'SMM'), e)
-        forward_over_backward = float(forward_ad.unpack_dual(gradient).tangent)
-    e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
-    with forward_ad.dual_level():
-        dual = forward_ad.make_dual(torch.tensor(d0, dtype=torch.float64), one)
-        tangent = forward_ad.unpack_dual(_mixed_scene('torch', e, dual, 'SMM')).tangent
-    backward_over_forward = float(torch.autograd.grad(tangent, e)[0])
-    assert forward_over_backward == pytest.approx(finite, rel=1e-6)
-    assert backward_over_forward == pytest.approx(finite, rel=1e-6)
+        finite = (d_eps_torch(d0 + h) - d_eps_torch(d0 - h)) / (2 * h)
+        one = torch.tensor(1.0, dtype=torch.float64)
+        e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
+        with forward_ad.dual_level():
+            dual = forward_ad.make_dual(torch.tensor(d0, dtype=torch.float64), one)
+            gradient, = torch.autograd.grad(_mixed_scene('torch', e, dual, algorithm), e)
+            forward_over_backward = float(forward_ad.unpack_dual(gradient).tangent)
+        e = torch.tensor(eps0, dtype=torch.float64, requires_grad=True)
+        with forward_ad.dual_level():
+            dual = forward_ad.make_dual(torch.tensor(d0, dtype=torch.float64), one)
+            tangent = forward_ad.unpack_dual(_mixed_scene('torch', e, dual, algorithm)).tangent
+        backward_over_forward = float(torch.autograd.grad(tangent, e)[0])
+        assert forward_over_backward == pytest.approx(finite, rel=1e-6), algorithm
+        assert backward_over_forward == pytest.approx(finite, rel=1e-6), algorithm
 
 
 # ------------------------------------------------------------------------------- the other rules

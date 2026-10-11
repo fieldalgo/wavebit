@@ -313,11 +313,11 @@ is the caller's own compiled weighted sum — in default mode, `mode='reduce-ove
 routes and double backward returns the eager derivative: around `create_graph=True` twice it
 reads 1.1001006774e-04 against a NumPy second difference of 1.1001006765e-04, where it raised
 `InternalTorchDynamoError` before. Around `jvp(jvp)` and `vmap(jacfwd)` it is the eager
-derivative too, so it is exact where eager is: these two go through `torch.linalg.solve`'s
-forward rule, which is exact eagerly only with `backend.linear_solve` (the `torch.func` row of
-[`guide/autodiff.md`](guide/autodiff.md#what-cannot-be-traced)). `tests/test_torch_compile.py`
-checks all three against NumPy, the two as strict expected failures while that function is
-absent.
+derivative too, and so exact: these two differentiate a linear solve's forward rule again or
+run it under two `vmap` levels, which `torch.linalg.solve`'s own rule gets wrong (torch 2.13)
+and `backend.linear_solve`, which every solve goes through, gets right (the autodiff guide's
+[Forward mode](guide/autodiff.md#forward-mode)). `tests/test_torch_compile.py` checks all
+three against NumPy.
 
 **What is refused, by name.**
 

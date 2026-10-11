@@ -75,11 +75,12 @@ def _variation(operator, basis):
     a backward pass through a node built from a forward-mode dual, which is where both mixed
     orders reach it. A second derivative in which one parameter moves no operator -- a
     thickness beside a permittivity -- differentiates the rule once, in the other parameter,
-    and is not refused: it is exact on JAX in every order and on PyTorch through
+    and is not refused: it is exact on JAX in every order, and on PyTorch through
     ``create_graph=True`` taken in that parameter first (the other way round, the rule's own
-    backward runs with grad mode on and refuses), while PyTorch's two mixed orders there
-    carry ``torch.linalg.solve``'s own forward-over-reverse error wherever the stack solves
-    through it (the autodiff guide, "Forward mode").
+    backward runs with grad mode on and refuses) and through its two mixed orders, because the
+    stack solves through :func:`~wavebit._core.backend.linear_solve`, whose derivatives PyTorch
+    can take again; through ``torch.linalg.solve`` itself they read 42% and 65% off on a 2D ETM
+    raster, with no error (the autodiff guide, "Forward mode").
 
     **Under** ``torch.func``. The PyTorch Function carries a ``vmap`` rule, so
     ``torch.autograd`` through ``torch.func.vmap`` -- ``backward()``, ``torch.autograd.grad``,

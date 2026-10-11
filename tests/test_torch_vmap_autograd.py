@@ -369,9 +369,17 @@ def _captured_route(route, g, q, lanes):
     return func.jvp(func.vmap(h), (x,), (torch.ones_like(x),))[1]
 
 
-CAPTURED_ROUTES = ['torch.func.grad', 'torch.func.jvp', 'jacrev', 'jacfwd', 'vmap(grad)',
-                   'grad(vmap)', 'jvp(vmap)', 'torch.func.grad, then backward()',
-                   'forward_ad dual outside torch.func.grad']
+#: A transform over the thickness, then ``backward()`` to the captured permittivity.
+THEN_BACKWARD = {
+    'torch.func.grad': lambda h, d: func.grad(h)(_t(d)),
+    'torch.func.jvp': lambda h, d: func.jvp(h, (_t(d),), (_t(1.0),))[1],
+    'jacfwd': lambda h, d: func.jacfwd(h)(_t(d)),
+    'jvp(vmap)': lambda h, d: func.jvp(func.vmap(h), (_t([d]),), (_t([1.0]),))[1].sum(),
+}
+CAPTURED_ROUTES = (['torch.func.grad', 'torch.func.jvp', 'jacrev', 'jacfwd', 'vmap(grad)',
+                    'grad(vmap)', 'jvp(vmap)']
+                   + [f'{transform}, then backward()' for transform in THEN_BACKWARD]
+                   + ['forward_ad dual outside torch.func.grad'])
 
 
 @pytest.mark.parametrize('route', CAPTURED_ROUTES)
@@ -382,11 +390,12 @@ def test_a_captured_parameter_leaves_a_thickness_exact(name, route):
     inside the transform carries its ``GradTrackingTensor`` wrapper, the operator's included,
     whose own ``requires_grad`` is False while the level under it requires grad. The transform
     differentiates no operator, so its derivative is eager's; and the mixed derivative to the
-    captured permittivity, by a later ``backward()`` after ``torch.func.grad`` or by a
-    ``forward_ad`` dual outside it, is eager's ``create_graph`` one, on ETM and SMM alike. A
-    ``backward()`` after ``torch.func.jvp`` or ``jacfwd`` is reverse over forward and is not
-    asserted here: it carries the autodiff guide's ``torch.linalg.solve`` caveat, 0.12 off on
-    the SMM scene's field read-out and 0.018 on the gold disks. A door that counted the
+    captured permittivity, by a later ``backward()`` or by a ``forward_ad`` dual outside
+    ``torch.func.grad``, is eager's ``create_graph`` one, on ETM and SMM alike. After
+    ``torch.func.jvp``, ``jacfwd`` or ``jvp(vmap)`` that backward pass is reverse over forward,
+    and every solve it differentiates goes through ``backend.linear_solve``; through
+    ``torch.linalg.solve`` it read 0.12 relative off on the SMM scene's field read-out and 0.018
+    on the gold disks, with no error, until 2026-10-12. A door that counted the
     transform's level by its type refused all of these where 806661e4 returned the first orders
     exactly and the mixed ones 0.15 relative off, without the eigen-derivative (the dual one
     through a tangent read beneath the grad level, which reads None unless read at its own
@@ -394,9 +403,9 @@ def test_a_captured_parameter_leaves_a_thickness_exact(name, route):
     g = _thickness_scalar(name)
     _, q, lanes = THICKNESS[name]
     first, mixed = _thickness_eager(name)
-    if route == 'torch.func.grad, then backward()':
+    if route.endswith(', then backward()'):
         e = _t(q).requires_grad_(True)
-        func.grad(lambda d: g(e, d))(_t(lanes[0])).backward()
+        THEN_BACKWARD[route[:-len(', then backward()')]](lambda d: g(e, d), lanes[0]).backward()
         assert float(e.grad) == pytest.approx(mixed, rel=1e-11)
     elif route == 'forward_ad dual outside torch.func.grad':
         with forward_ad.dual_level():

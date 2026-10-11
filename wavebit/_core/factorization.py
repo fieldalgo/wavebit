@@ -106,7 +106,7 @@ import math
 from typing import NamedTuple
 
 from .backend import (_concrete, array_namespace, as_array, carries_autodiff, constant_array,
-                      forward_tangent, functorch_differentiates)
+                      forward_tangent, functorch_differentiates, linear_solve)
 from .enums import DEFAULT_NESTING, Nesting, nesting_of
 from .modal_gradient import _CREATE_GRAPH, _DUAL
 from .geometry import StaleGeometryError
@@ -191,10 +191,10 @@ class ConvMatrices(NamedTuple):
         if _concrete(valid) is False:
             raise ValueError('energy matrices must be finite')
         transpose = xp.matrix_transpose
-        left = xp.linalg.solve(transpose(xp.conj(change)), gram)
-        effective = transpose(xp.linalg.solve(transpose(change), transpose(left)))
+        left = linear_solve(xp, transpose(xp.conj(change)), gram)
+        effective = transpose(linear_solve(xp, transpose(change), transpose(left)))
         identity = xp.eye(count, dtype=dtype, device=_device(xp, longitudinal))
-        z_inverse = xp.linalg.solve(longitudinal, xp.broadcast_to(identity, longitudinal.shape))
+        z_inverse = linear_solve(xp, longitudinal, xp.broadcast_to(identity, longitudinal.shape))
         valid = valid & xp.all(xp.isfinite(effective)) & xp.all(xp.isfinite(z_inverse))
         if _concrete(valid) is False:
             raise ValueError('energy matrices must define finite nonsingular solves')

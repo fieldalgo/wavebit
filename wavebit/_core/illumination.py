@@ -8,7 +8,7 @@ from dataclasses import dataclass, fields
 
 import numpy as np
 
-from .backend import GainCutoffWarning, _concrete, as_array, check_finite
+from .backend import GainCutoffWarning, _concrete, as_array, check_finite, linear_solve
 from .enums import Answers, answers_of, backend_of
 from .field_result import ResultFields, source_state
 from .conventions import boundary_kz, gain_cutoff_band, parse_excitation, signed_index
@@ -106,7 +106,7 @@ def _affine_star(xp, I, a, b):
     """Cascade scattering maps together with their source-generated outputs."""
     A, f = a
     B, g = b
-    middle = xp.linalg.solve(I - A[3] @ B[0], A[3] @ g[0] + f[1])
+    middle = linear_solve(xp, I - A[3] @ B[0], A[3] @ g[0] + f[1])
     return redheffer_star(xp, I, A, B), (f[0] + A[1] @ (B[0] @ middle + g[0]),
                                         g[1] + B[2] @ middle)
 
@@ -135,7 +135,7 @@ def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None):
         lf, pf, lb, pb = cache[id(material)]
         emitted = (zero, zero)
         if j in jumps:
-            v = xp.linalg.solve(xp.concat([prev_b, -pf], axis=1), -jumps[j])
+            v = linear_solve(xp, xp.concat([prev_b, -pf], axis=1), -jumps[j])
             emitted = (v[:2*n], v[2*n:])
         parts.extend([(_interface_s(xp, prev_f, prev_b, pf, pb), emitted),
                       (_propagate_s(xp, lf, lb, k0, d, n), (zero, zero))])
@@ -155,9 +155,9 @@ def _inside_amplitudes(xp, state, incoming_bottom, incoming_top):
     records, entrance = [], None
     for j, (part, source) in enumerate(parts[:-1]):
         rest, emission = suffix[j+1]
-        forward = xp.linalg.solve(I - part[3] @ rest[0],
-                                  part[2] @ forward + part[3] @ (rest[1] @ incoming_top + emission[0])
-                                  + source[1])
+        forward = linear_solve(xp, I - part[3] @ rest[0],
+                                   part[2] @ forward + part[3] @ (rest[1] @ incoming_top + emission[0])
+                                   + source[1])
         backward = rest[0] @ forward + rest[1] @ incoming_top + emission[0]
         if j % 2 == 0:
             entrance = forward

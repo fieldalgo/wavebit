@@ -70,7 +70,7 @@ from typing import NamedTuple
 
 import numpy as np
 
-from .backend import _device_of, array_namespace, as_array, check_finite
+from .backend import _device_of, array_namespace, as_array, check_finite, linear_solve
 from .conventions import boundary_kz, half_space_medium, order_azimuth, order_frame_sign
 from .enums import Answers, answers_of
 from .conventions import incident_column
@@ -239,7 +239,7 @@ def _below_reflections(xp, I, S_layers, S_trn):
     for p in range(n - 1, -1, -1):
         s11, s12, s21, s22 = S_layers[p]
         below = gamma[p + 1]
-        F[p] = xp.linalg.solve(I - s22 @ below, s21)
+        F[p] = linear_solve(xp, I - s22 @ below, s21)
         gamma[p] = s11 + s12 @ (below @ F[p])
     return gamma, F
 
@@ -292,7 +292,7 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc, coupled=None):
         return [], None
 
     gamma, F = _below_reflections(xp, I, S_layers, S_trn)
-    g = xp.linalg.solve(I - S_ref[3] @ gamma[0], S_ref[2] @ c_inc)
+    g = linear_solve(xp, I - S_ref[3] @ gamma[0], S_ref[2] @ c_inc)
     g_top = g
     from .modal_gradient import _stop, two_face
     amplitudes = []

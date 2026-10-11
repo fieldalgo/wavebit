@@ -276,7 +276,15 @@ def _functorch_active(torch):
     return True if active is None else bool(active())
 
 
-def _functorch(torch):
+#: What :func:`linear_solve` reads beside them: which transform owns each level, and the grad
+#: mode a grad level was entered with (``torch._functorch.pyfunctorch`` reads the stack the same
+#: way, and ``GradInterpreter.prev_grad_mode`` through ``CGradInterpreterPtr``). Added to
+#: :data:`_FUNCTORCH_CALLS` when :func:`_functorch` is called, not bound here, so the list is
+#: read at call time.
+_LEVEL_EXTRA = ('get_interpreter_stack', 'TransformType', 'CGradInterpreterPtr')
+
+
+def _functorch(torch, extra=()):
     """``torch._C._functorch``, refusing by name a PyTorch without a call the walks need.
 
     Those calls are private (:data:`_FUNCTORCH_CALLS`), and a PyTorch that renamed one would
@@ -286,7 +294,7 @@ def _functorch(torch):
     would then raise this too if a call were missing as well.
     """
     functorch = getattr(torch._C, '_functorch', None)
-    missing = [name for name in _FUNCTORCH_CALLS if not hasattr(functorch, name)]
+    missing = [name for name in _FUNCTORCH_CALLS + tuple(extra) if not hasattr(functorch, name)]
     if missing:
         raise RuntimeError(
             f'wavebit reads autodiff through torch.func transforms with torch._C._functorch.'
@@ -380,6 +388,354 @@ def _forward_tangent(torch, x, active):
         if not functorch.is_functorch_wrapped_tensor(x):
             return False
         x = functorch.get_unwrapped(x)
+
+
+# --- linear solves, and PyTorch's derivatives of them ----------------------------------
+#
+# Two PyTorch 2.13 defects make a derivative through `torch.linalg.solve` wrong with no error,
+# and both live in the rules PyTorch attaches to it, not in the solve:
+#
+# 1. Its forward-mode rule (`linalg_solve_jvp`, torch/csrc/autograd/FunctionsManual.cpp) is
+#    `dX = lu_solve(LU, dB - dA X)` on the LU factors of the primal, which
+#    tools/autograd/derivatives.yaml marks non-differentiable, and its backward
+#    (`linalg_solve_backward`) reuses them the same way whenever grad mode is off. A derivative
+#    of either rule holds A^-1 fixed and drops `A^-1 A' X'`: `jvp(jvp)` equals the exact second
+#    derivative plus that term to 8e-16, and a thickness second derivative of a 2D ETM raster
+#    by `jvp(jvp)` read 760.7 where it is 812.6 (pytorch#196695). PyTorch's fix
+#    (pytorch#192667, commit 7c2af32, in the 2.15 release candidates, not in 2.14.1) re-solves
+#    the forward rule; the backward's reuse with grad mode off stays.
+# 2. `lu_solve` under two `torch.func.vmap` levels, its factors batched by the outer one and its
+#    right side by the inner one, returns wrong lanes -- the value itself. The forward rule
+#    above calls it so, so `vmap(jacfwd(f))`, a first derivative, read 197.0 for 0.01147 on a
+#    1D TM grating's thickness (lane 0 right, the others wrong or NaN), and `vmap(hessian(f))`
+#    likewise.
+#
+# Where neither can happen this is `xp.linalg.solve` itself -- every eager solve, every first
+# derivative but (2)'s and, under `torch.no_grad()`, `vmap(grad)` and `vmap(vjp)`, and the
+# second-derivative routes PyTorch gets right (`hessian`, `jvp` of `grad`, `create_graph=True`,
+# whose backward runs with grad mode on and re-solves) -- so their arithmetic is unchanged byte for
+# byte, and their cost. Grad mode off is not only `create_graph` left False: `torch.func.vjp`,
+# `jacrev` and `hessian` run their backward with `create_graph` equal to the grad mode they are
+# called in, and PyTorch documents `torch.func`'s grad transforms as ignoring an outer
+# `torch.no_grad()`, so under one their backward reuses the factors: `hessian` of the 2D ETM raster
+# read the 760.7 above, and `vmap(jacrev)`, a first derivative, NaN on lanes 1 and 2, its backward's
+# `lu_solve` running under the outer `vmap` and `jacrev`'s own. Where one can, the solve is spelled
+# in operations whose rules PyTorch differentiates correctly to every order: `lu_factor` +
+# `lu_solve` outside `vmap`, which are the LAPACK calls `linalg.solve` makes itself, so the value is
+# the same bytes; under `vmap`, `lu_factor` + `lu_unpack` + two `solve_triangular`, which avoid
+# `lu_solve`'s batching and agree with it to rounding. Both are the textbook solve by Gaussian
+# elimination with partial pivoting, PA = LU, then a unit lower and an upper triangular solve (G. H.
+# Golub and C. F. Van Loan, Matrix Computations, 4th ed., Johns Hopkins, 2013, sections 3.2-3.4).
+# The decision borrows the test PyTorch's own `linalg_solve_backward` (FunctionsManual.cpp) makes
+# before reusing the factors -- whether grad mode is on, that is, whether its result will be
+# differentiated again -- and asks it of the transform levels. A level's rule holds the factors
+# fixed if the level is forward mode, or a `torch.func` grad level entered with grad mode off (read
+# as `torch._functorch.pyfunctorch`'s `GradInterpreter.prev_grad_mode` reads it). The rule is
+# rewritten only where such a level sits inside another level; where a `forward_ad` dual is made
+# inside a grad level, whose tangent sits on that level's wrapper and whose forward rule the level
+# then differentiates (0.57 relative off on the closed form); or under enough `vmap` levels for (2).
+# A backward whose grad mode differs from the one its level was entered with -- a `vjp_fn` called
+# under `torch.no_grad()` or with `create_graph=False` -- has not run when the solve is taken; where
+# it would be wrong it is refused when it runs (`_guard_the_backward`). Held to a closed form over
+# every nest of up to three `torch.func` transforms under each order of plain autograd and
+# `forward_ad` (`tests/test_linear_solve_derivatives.py`): of 784 nests of first to third order,
+# `torch.linalg.solve` gets 360 wrong, this none, and PyTorch itself refuses 168 ("Nested forward
+# mode AD is not supported"); and on the routes above under `torch.no_grad()`, with a dual made
+# inside `torch.func.grad`, `vjp` or `jacrev`, and with a `vjp_fn` called in another grad mode.
+
+def linear_solve(xp, A, B):
+    """``xp.linalg.solve(A, B)``, whose derivatives are exact on PyTorch at every order.
+
+    Every solve whose operands can carry a derivative goes through here (see the note above).
+    It *is* ``xp.linalg.solve(A, B)`` on NumPy and JAX, and on PyTorch except where a level
+    whose rule holds the factors fixed would have that rule differentiated again: a forward
+    level inside another (``jvp(jvp)``, ``jacfwd(jacfwd)``, ``grad(jvp)``, ``jacrev(jacfwd)``, a
+    backward pass over a ``forward_ad`` tangent, a tangent through a backward pass, any higher
+    nest with a forward level inside another), a grad level entered with grad mode off inside
+    another (``hessian``, ``jvp(jacrev)`` or ``jvp(vjp)`` under ``torch.no_grad()``), or a
+    ``forward_ad`` dual made inside a grad level (``torch.func.grad``, ``vjp`` or ``jacrev`` of
+    a tangent). Or where such a rule would run under two ``vmap`` levels (``vmap(jacfwd)``,
+    ``vmap(hessian)``, and ``vmap(jacrev)`` under ``torch.no_grad()``, and with it ``vmap(grad)``
+    and ``vmap(vjp)``, which cannot be told from it at the solve).
+
+    A grad level is read by the grad mode it was entered with, the mode ``torch.func.vjp``'s
+    ``vjp_fn`` runs its backward in when ``jacrev`` or ``hessian`` calls it. A ``vjp_fn`` called
+    in another mode, or with ``create_graph=False``, cannot be seen here -- its backward has not
+    run yet -- so where that would be wrong it is refused from inside the backward pass
+    (:func:`_guard_the_backward`).
+    """
+    matrix = _derivative_levels(A)
+    # Both cases need a level on the matrix or a torch.func transform; an eager solve stops here.
+    if matrix or _transform_active(A):
+        levels = matrix | _derivative_levels(B)
+        if levels:
+            modes, vmaps, grad_off = _transform_modes()
+            # Outside a transform `modes` is empty: an eager solve reads nothing private.
+            within = _duals_within_grad((A, B), modes) if modes and (matrix or vmaps) else set()
+            if ((matrix and _forward_inside(levels, modes, grad_off, within))
+                    or _forward_under_two_vmaps(levels, modes, vmaps, grad_off, within)):
+                return _differentiable_solve(A, B, batched=bool(vmaps))
+            if modes:
+                solved = xp.linalg.solve(A, B)
+                _guard_the_backward(solved, matrix, levels, modes, vmaps)
+                return solved
+    return xp.linalg.solve(A, B)
+
+
+def _transform_active(value):
+    """Whether ``value`` is a PyTorch tensor while a ``torch.func`` transform is active."""
+    import sys
+    torch = sys.modules.get('torch')
+    return torch is not None and isinstance(value, torch.Tensor) and _functorch_active(torch)
+
+
+def _differentiable_solve(A, B, batched):
+    """``torch.linalg.solve(A, B)`` from operations differentiable at every order, reading ``B``
+    as ``array_api_compat``'s ``solve`` (1.15) does: promoted to a common dtype, a 1-D ``B`` a
+    vector, a ``B`` of ``A``'s shape less its last axis one matrix. ``batched``: a ``vmap`` level
+    is active, so ``lu_solve`` is not used (defect 2 in the note above)."""
+    import torch
+    dtype = torch.promote_types(A.dtype, B.dtype)
+    A, B = A.to(dtype), B.to(dtype)
+    if B.ndim != 1 and A.ndim - 1 == B.ndim and A.shape[:-1] == B.shape:
+        B = B[None]
+    vector = B.ndim == 1
+    B = B[..., None] if vector else B
+    LU, pivots = torch.linalg.lu_factor(A)
+    if batched:
+        P, L, U = torch.lu_unpack(LU, pivots)
+        Y = torch.linalg.solve_triangular(L, P.mT @ B, upper=False, unitriangular=True)
+        X = torch.linalg.solve_triangular(U, Y, upper=True)
+    else:
+        X = torch.linalg.lu_solve(LU, pivots, B)
+    return X[..., 0] if vector else X
+
+
+def _transform_modes():
+    """``({level: TransformType}, [vmap level, ...], {grad level entered with grad mode off,
+    ...})`` for the ``torch.func`` interpreters on the stack -- empty unless a transform is
+    active, so an eager solve reads nothing private.
+
+    The mode is read off each interpreter's ``key()``, as ``torch._functorch.pyfunctorch``'s
+    ``coerce_cinterpreter`` reads it, and compared with ``TransformType.Jvp``, ``Vmap`` and
+    ``Grad``. A key that is not a ``TransformType`` member -- a PyTorch that renumbered the
+    stack's keys, or returned a plain int -- would compare unequal to all three, so every level
+    would read as no forward level and every solve would take PyTorch's own rule: the silent
+    second derivative this routing exists for. It is refused by name instead, as a missing call
+    is.
+
+    A grad level's grad mode at entry is ``CGradInterpreterPtr(interpreter).prevGradMode()``, the
+    call ``torch._functorch.pyfunctorch.GradInterpreter.prev_grad_mode`` makes. ``torch.func``
+    turns grad mode on inside every grad level, so the mode inside says nothing; the mode it was
+    entered with is the one ``torch.func.vjp``, ``jacrev`` and ``hessian`` run their backward in
+    (``create_graph`` defaults to it), and with it off that backward reuses the factors."""
+    import sys
+    torch = sys.modules['torch']
+    if not _functorch_active(torch):
+        return {}, [], set()
+    functorch = _functorch(torch, _LEVEL_EXTRA)
+    kinds = functorch.TransformType
+    members = getattr(kinds, '__members__', {})
+    modes, grad_off = {}, set()
+    for interpreter in functorch.get_interpreter_stack() or ():
+        key = interpreter.key()
+        if not ('Jvp' in members and 'Vmap' in members and 'Grad' in members
+                and key in members.values()):
+            raise RuntimeError(
+                f'wavebit reads which torch.func transform owns each level with '
+                f'torch._C._functorch.get_interpreter_stack, whose interpreter key() PyTorch '
+                f'{torch.__version__} returns as {key!r}, not a member of '
+                f'torch._C._functorch.TransformType with Grad, Jvp and Vmap, so a derivative '
+                f'through this transform cannot be taken correctly; use torch.autograd outside '
+                f'torch.func')
+        modes[interpreter.level()] = key
+        if key == kinds.Grad and not functorch.CGradInterpreterPtr(interpreter).prevGradMode():
+            grad_off.add(interpreter.level())
+    vmap = kinds.Vmap
+    return modes, sorted(level for level, key in modes.items() if key == vmap), grad_off
+
+
+def _forward_inside(levels, modes, grad_off, within):
+    """Whether a level whose rule holds the factors fixed differentiates the solve with another
+    level outside it, or a ``forward_ad`` dual made inside a grad level (``within``, from
+    :func:`_duals_within_grad`) has that level differentiate its forward rule.
+
+    PyTorch's rule is exact wherever every level but the outermost is reverse mode run with
+    grad mode on: each re-solves, and the outermost level's rule is never differentiated. So
+    the question is whether any level *above the outermost* is forward mode, or a grad level
+    entered with grad mode off (``grad_off``; its backward reuses the factors, see
+    :func:`_transform_modes`). Plain autograd and a plain ``forward_ad`` dual sit outside every
+    ``torch.func`` level; their order between themselves cannot be told here -- a backward pass
+    over a tangent, or a tangent through a backward pass that may run with grad mode off -- so
+    the two together count as yes. A ``torch.func`` level's mode is its interpreter's
+    (``TransformType.Jvp`` for ``jvp`` and ``jacfwd``); a level whose transform has exited
+    differentiates nothing and counts as no. ``torch.func.grad`` itself always re-solves, but
+    its interpreter cannot be told from ``vjp``'s, so under ``torch.no_grad()`` it is rewritten
+    too: exact either way.
+    """
+    if within:
+        return True
+    if len(levels) < 2:
+        return False
+    if {'requires_grad', 'dual'} <= levels:
+        return True
+    numbered = sorted(level for level in levels if isinstance(level, int))
+    inside = numbered if len(numbered) < len(levels) else numbered[1:]
+    return any(_is_forward(modes.get(level)) or level in grad_off for level in inside)
+
+
+def _forward_under_two_vmaps(levels, modes, vmaps, grad_off, within):
+    """Whether a rule that calls ``lu_solve`` on the factors runs it beneath two ``vmap`` levels,
+    where it can see factors batched by the outer one and a right side by the inner one (defect
+    2 in the note above): a ``torch.func`` forward level with two ``vmap`` levels numbered below
+    it, or a grad level that reuses the factors (``grad_off``, or one holding a dual made inside
+    it, ``within``) with one -- its backward adds the second, ``jacrev``'s own over the basis.
+    ``vmap(grad)`` and ``vmap(vjp)`` under ``torch.no_grad()`` are rewritten too, exact either
+    way: their levels cannot be told from ``jacrev``'s here. ``jacfwd(vmap(f))`` has one ``vmap``
+    beneath its ``jvp`` and is exact as PyTorch takes it."""
+    for level in levels:
+        if not isinstance(level, int):
+            continue
+        below = sum(v < level for v in vmaps)
+        if below >= 2 and _is_forward(modes.get(level)):
+            return True
+        if below >= 1 and (level in grad_off or level in within):
+            return True
+    return False
+
+
+def _guard_the_backward(solved, matrix, levels, modes, vmaps):
+    """Refuse, from inside the backward pass, a grad level's backward through ``solved`` that
+    runs with grad mode off where :func:`linear_solve` read the level on, and would be wrong.
+
+    :func:`linear_solve` reads a grad level by the grad mode it was entered with. A
+    ``vjp_fn`` that ``torch.func.vjp`` returns may yet be called in another -- under
+    ``torch.no_grad()``, or with ``create_graph=False`` -- and PyTorch's backward then reuses
+    the factors (defect 1 in the note above): a ``jvp`` of it read 0.57 relative off on the
+    closed form, with no error. That backward has not run when the solve is taken, so it cannot
+    be routed; it is refused when it runs. It is wrong only where something differentiates it
+    again -- a forward level outside the grad level that moves the matrix (``jvp``,
+    ``jacfwd``, a plain ``forward_ad`` dual) -- or where it runs under a ``vmap`` added after
+    the level, beside one under it, which batches the factors (defect 2). So a hook goes on
+    ``solved``'s wrapper at each such grad level, and asks when that level's backward reaches
+    it. It returns nothing: every value, and every backward run with grad mode on, is unchanged.
+    """
+    import sys
+    torch = sys.modules['torch']
+    functorch = _functorch(torch, _LEVEL_EXTRA)
+    grad = functorch.TransformType.Grad
+    forward = [level for level in matrix if isinstance(level, int) and _is_forward(modes.get(level))]
+    for level in levels:
+        if not isinstance(level, int) or modes.get(level) != grad:
+            continue
+        # A level entered with grad mode off never gets here with either reason: inside another
+        # level, or above a vmap level, :func:`linear_solve` has rewritten the solve already.
+        outside = 'dual' in matrix or any(f < level for f in forward)
+        below = sum(v < level for v in vmaps)
+        if not (outside or below):
+            continue
+        wrapper = solved
+        while functorch.is_functorch_wrapped_tensor(wrapper) and functorch.maybe_get_level(wrapper) > level:
+            wrapper = functorch.get_unwrapped(wrapper)
+        if functorch.maybe_get_level(wrapper) == level and wrapper.requires_grad:
+            wrapper.register_hook(_grad_mode_check(torch, functorch, outside, below))
+
+
+def _grad_mode_check(torch, functorch, outside, below):
+    """The hook :func:`_guard_the_backward` registers: raise if the backward runs with grad mode
+    off and is differentiated again (``outside``) or batched by a ``vmap`` the level did not see
+    (more ``vmap`` levels on the stack than the ``below`` under it)."""
+    def check(gradient):
+        if torch.is_grad_enabled():
+            return None
+        vmap = functorch.TransformType.Vmap
+        if outside:
+            reason = ('a forward-mode level outside it (torch.func.jvp, jacfwd or a forward_ad dual) '
+                      'differentiates that backward again')
+        elif sum(i.key() == vmap for i in functorch.get_interpreter_stack() or ()) > below:
+            reason = ('it runs under a torch.func.vmap added after the grad level, beside one under '
+                      'it, where lu_solve batches the factors wrongly')
+        else:
+            return None
+        raise RuntimeError(
+            f'wavebit: the backward pass of a torch.func grad level entered with grad mode on '
+            f'(torch.func.vjp) reaches a linear solve with grad mode off -- a vjp_fn called under '
+            f'torch.no_grad() or with create_graph=False -- and {reason}; PyTorch '
+            f'{torch.__version__} then reuses LU factors it does not differentiate, so the '
+            f'derivative would be wrong with no error. Call the vjp_fn in the grad mode '
+            f'torch.func.vjp was entered with, or enter torch.func.vjp under torch.no_grad() too')
+    return check
+
+
+def _is_forward(mode):
+    import sys
+    return mode is not None and mode == sys.modules['torch']._C._functorch.TransformType.Jvp
+
+
+def _derivative_levels(value):
+    """The PyTorch autodiff levels that differentiate ``value``: each ``torch.func`` grad or jvp
+    level, by its wrapper's level number (an outer ``jvp`` level's tangent cannot be read from
+    inside an inner one, so per-level flags would count one where there are two; its wrapper is
+    there), plus ``'requires_grad'`` and ``'dual'`` for plain autograd and a plain ``forward_ad``
+    dual under them, the dual read at its own level (:func:`_own_tangent`). Empty for anything
+    that is not a PyTorch tensor, without importing it."""
+    import sys
+    torch = sys.modules.get('torch')
+    if torch is None or not isinstance(value, torch.Tensor):
+        return set()
+    levels = set()
+    from torch.autograd import forward_ad
+    if _functorch_active(torch):
+        functorch = _functorch(torch, _LEVEL_EXTRA)
+        while functorch.is_functorch_wrapped_tensor(value):
+            if functorch.is_gradtrackingtensor(value):
+                levels.add(functorch.maybe_get_level(value))
+            value = functorch.get_unwrapped(value)
+        # Beneath a grad or jvp interpreter a plain read lifts the base and finds no tangent, so
+        # it is read at its own level: read plainly, a dual and `requires_grad` outside
+        # `torch.func.grad` counted one plain level where there are two, and a third derivative
+        # -- a backward pass over a `forward_ad` tangent of it, or the reverse -- came back 0.34
+        # to 0.52 relative off (48 of the census's 784 nests, per dtype).
+        dual = _own_tangent(functorch, forward_ad, value)
+    else:
+        dual = forward_ad.unpack_dual(value).tangent is not None
+    if value.requires_grad:
+        levels.add('requires_grad')
+    if dual:
+        levels.add('dual')
+    return levels
+
+
+def _duals_within_grad(values, modes):
+    """The ``torch.func`` grad levels at which ``values`` carry a ``forward_ad`` tangent of their
+    own: a dual made inside ``torch.func.grad``, ``vjp`` or ``jacrev``.
+
+    Such a tangent sits on that level's wrapper (read at its own level, :func:`_own_tangent`),
+    not on the base :func:`_derivative_levels` reads, where a dual made outside the transform
+    sits. The forward rule runs inside the level, which then differentiates it -- forward inside
+    reverse, within one level -- and read as the one grad level it looks like, ``torch.func.grad``
+    of a tangent came back 0.57 relative off on the closed form, and 760.746214 for 812.595272 on
+    a 2D ETM raster's thickness, silently. A jvp level's wrapper holds that level's own tangent,
+    which is no dual of this kind, so only grad levels are read; read by type, a single ``jvp``
+    would be rewritten, and its bytes would change."""
+    import sys
+    torch = sys.modules['torch']
+    functorch = _functorch(torch, _LEVEL_EXTRA)
+    grad = {level for level, key in modes.items() if key == functorch.TransformType.Grad}
+    found = set()
+    if not grad:
+        return found
+    from torch.autograd import forward_ad
+    for value in values:
+        if not isinstance(value, torch.Tensor):
+            continue
+        while functorch.is_functorch_wrapped_tensor(value):
+            if functorch.is_gradtrackingtensor(value):
+                level = functorch.maybe_get_level(value)
+                if level in grad and level not in found and _own_tangent(functorch, forward_ad, value):
+                    found.add(level)
+            value = functorch.get_unwrapped(value)
+    return found
 
 
 def _own_tangent(functorch, forward_ad, x):
