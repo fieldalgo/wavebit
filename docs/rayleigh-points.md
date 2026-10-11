@@ -401,7 +401,7 @@ L_il = exp[a_i,a_l] E_il + sum_k n_ik exp[a_i,a_k,a_l] E_kl + sum_k E_ik n_kl ex
 
 — the Daleckii–Krein kernel first. The divided differences are gathered one order from the one
 below: by the recurrence over the widest pair, or, for a set within a diameter of 0.5, by the
-Taylor series about its first point (18 terms; A. McCurdy, K. C. Ng and B. N. Parlett, Math.
+Taylor series about its first point (19 terms, through degree 18; A. McCurdy, K. C. Ng and B. N. Parlett, Math.
 Comp. 43, 501, 1984). Against a 40-digit `expm` of `[[A, E], [0, A]]` it is within 4e-16 of
 `max|L|` across the series/recurrence switch, exact and 1e-12-near confluent pairs, a decaying
 spread to `|s q| = 600` and complex `s` (SciPy's `expm_frechet`: 1.8e-16..2.8e-14). The scale

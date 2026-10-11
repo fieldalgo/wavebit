@@ -404,8 +404,9 @@ _COUPLED_CAP = 4
 #: (:func:`_dd_from_subsets`).
 _DD_SERIES_DIAMETER = 0.5
 
-#: Terms of that series. Every ``|p - p_0|`` is at most the diameter, 0.5, so the tail is below
-#: about ``0.5**19/19!`` (1.6e-23) of the leading term.
+#: The highest degree that series keeps: it sums ``j = 0 .. _DD_SERIES_TERMS``, 19 terms. Every
+#: ``|p - p_0|`` is at most the diameter, 0.5, so the tail, from ``j = 19`` on, is below about
+#: ``0.5**19/19!`` (1.6e-23) of the leading term.
 _DD_SERIES_TERMS = 18
 
 
@@ -417,8 +418,8 @@ def _series_about_first(y, e0, k):
     (``h_j <- h_j + y_r h_{j-1}``). It is the Taylor series of the divided difference about
     ``p_0`` (``x**n[p_0, ..., p_k] = h_{n-k}(p_0, ..., p_k)``) -- the clustered-points half of
     the hybrid of A. McCurdy, K. C. Ng and B. N. Parlett (Math. Comp. 43, 501, 1984). Used where
-    the points' diameter is at most :data:`_DD_SERIES_DIAMETER`, to :data:`_DD_SERIES_TERMS`
-    terms.
+    the points' diameter is at most :data:`_DD_SERIES_DIAMETER`, through degree
+    :data:`_DD_SERIES_TERMS`.
     """
     import math
     import jax.numpy as jnp
