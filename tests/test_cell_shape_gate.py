@@ -77,6 +77,14 @@ _ALLOWED = {
     # the move in both directions at once: the new location was unlisted, and the three old
     # keys had stopped existing, which `test_the_allow_list_has_not_quietly_grown` caught.
     ('src/wavebit/_core/engine.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
+    ('src/wavebit/_core/periodic_fdtd.py', '_public_result'): (
+        3,
+        "the periodic FDTD adapter converts results only after a private engine returns. "
+        "Legacy `_refuse_out_of_scope` and explicit `solve_scene_fdtd` both reject every "
+        "non-None lattice before `_public_result`; only rectangular periods reach its "
+        "order-frame and cell-centre phase arithmetic. "
+        "test_periodic_fdtd_rejects_a_skewed_lattice_before_result_conversion checks "
+        "both incidence sides with backend omitted and NumPy/JAX/Torch selected."),
     ('src/wavebit/_core/draw.py', 'slice_structure'): (
         2,
         "one sample grid, behind a raise rather than behind a declaration: the `mt == 2` pair "
@@ -194,7 +202,7 @@ class _Scan(ast.NodeVisitor):
 
 
 def _offenders():
-    files = [f for f in subprocess.check_output(['git', 'ls-files', 'wavebit'], text=True).split()
+    files = [f for f in subprocess.check_output(['git', 'ls-files', 'src/wavebit'], text=True).split()
              if f.endswith('.py')]
     found = {}
     for f in files:
@@ -301,7 +309,7 @@ def test_a_function_holding_a_lattice_forwards_it_to_every_sibling_that_takes_on
     The rule is narrow on purpose: only a function that *has* a lattice in scope, only a callee
     whose own signature takes one. Neither half is a judgement call, so a hit is a fact.
     """
-    files = [f for f in subprocess.check_output(['git', 'ls-files', 'wavebit'],
+    files = [f for f in subprocess.check_output(['git', 'ls-files', 'src/wavebit'],
                                                 text=True).split() if f.endswith('.py')]
     trees = {f: ast.parse(pathlib.Path(f).read_text(encoding='utf-8')) for f in files}
     takers = _lattice_takers(trees)
@@ -342,6 +350,30 @@ _NON_DIAGONAL_BASES = (
     ((1., 0.), (.1, 1.)),
     ((0., -1.), (1., 0.)),
 )
+
+
+@pytest.mark.parametrize('backend', (None, 'numpy', 'jax', 'torch'),
+                         ids=('legacy', 'numpy', 'jax', 'torch'))
+@pytest.mark.parametrize('side', ('top', 'bottom'))
+def test_periodic_fdtd_rejects_a_skewed_lattice_before_result_conversion(monkeypatch, backend, side):
+    """Both rectangular engines reject skewed cells before the adapter's period arithmetic."""
+    import wavebit
+    from wavebit._core import periodic_fdtd
+
+    if backend in ('jax', 'torch'):
+        pytest.importorskip(backend)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('a skewed lattice reached periodic FDTD result conversion')
+
+    monkeypatch.setattr(periodic_fdtd, '_public_result', forbidden)
+    settings = dict(structure=np.ones((1, 1, 1)), thickness=[.2], top=1., bot=1.,
+                    period=[1., 1.], lattice=np.asarray(_NON_DIAGONAL_BASES[0]),
+                    wavelength=1., tetm='te', incidence_side=side, resolution=10)
+    if backend is not None:
+        settings['backend'] = backend
+    with pytest.raises(ValueError, match='lattice|rectangular period'):
+        wavebit.fdtd(**settings)
 
 
 @pytest.mark.parametrize('basis', _NON_DIAGONAL_BASES)
