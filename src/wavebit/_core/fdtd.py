@@ -79,6 +79,7 @@ import warnings
 
 import numpy as np
 
+from .backend import eager_under_torch_compile
 from .conventions import (incidence_clashes, incident_sp_amplitudes, order_azimuth,
                           parse_order_pair, parse_period_mapping)
 from .domain import as_material
@@ -673,6 +674,7 @@ class _PoleSet:
         return total
 
 
+@eager_under_torch_compile
 def permittivity_at(poles, wavelength, eps_infinity=1.0):
     """``eps(w)`` of a Drude/Lorentz pole list -- what a dispersive scene's material *is*.
 

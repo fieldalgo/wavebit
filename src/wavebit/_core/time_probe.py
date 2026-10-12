@@ -3,6 +3,7 @@ import warnings
 
 import numpy as np
 
+from .backend import eager_under_torch_compile
 from .conventions import time_pole_parameters
 
 _COMPONENTS = ('ex', 'ey', 'ez', 'hx', 'hy', 'hz')
@@ -28,6 +29,7 @@ def _bracket(axis, value, name):
     return lower, upper, (value-axis[lower])/(axis[upper]-axis[lower])
 
 
+@eager_under_torch_compile
 def sample_fdtd_fields(diagnostics, *, z, x=0., y=0., t=None):
     """Sample all six transient fields at one physical point and common times.
 
@@ -117,6 +119,7 @@ def sample_fdtd_fields(diagnostics, *, z, x=0., y=0., t=None):
     return dict(t=target, **point, E=sampled[:, :3], H=sampled[:, 3:], region=region)
 
 
+@eager_under_torch_compile
 def fdtd_poynting(diagnostics, *, z, x=0., y=0., t=None):
     """Compute instantaneous energy flow at a point after Yee interpolation.
 
@@ -132,6 +135,7 @@ def fdtd_poynting(diagnostics, *, z, x=0., y=0., t=None):
     return sampled
 
 
+@eager_under_torch_compile
 def fit_fdtd_modes(t, signal, *, modes=1, start=None, stop=None, pencil=None, rcond=1e-10):
     """Fit a point ringdown to a finite sum of damped complex exponentials.
 

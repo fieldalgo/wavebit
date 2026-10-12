@@ -8,6 +8,8 @@ import warnings
 
 import numpy as np
 
+from .backend import eager_under_torch_compile
+
 
 def _record(diagnostics, component, y, part):
     if 'field_e' not in diagnostics:
@@ -107,6 +109,7 @@ def _title(component, part, t, y):
     return f'{component.capitalize()} ({part}) · t={t:.5g} (c=1) · y={y:.5g}'
 
 
+@eager_under_torch_compile
 def plot_fdtd_field(diagnostics, *, frame=0, component=None, y=0.0, part='real',
                     ax=None, vmax=None):
     """Plot one recorded x-z electric or magnetic field slice; return ``(figure, axes, mesh)``.
@@ -132,6 +135,7 @@ def plot_fdtd_field(diagnostics, *, frame=0, component=None, y=0.0, part='real',
     return fig, ax, mesh
 
 
+@eager_under_torch_compile
 def animate_fdtd_field(diagnostics, *, component=None, y=0.0, part='real',
                        interval=50, ax=None, vmax=None):
     """Animate a recorded x-z slice; return a Matplotlib ``FuncAnimation``.
