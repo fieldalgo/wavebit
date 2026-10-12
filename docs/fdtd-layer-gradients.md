@@ -103,6 +103,11 @@ different reference planes. Wavelengths are 0.98 and 1.02 at normal incidence.
 The scene uses directional extraction, physical PML thickness 1, pulse width 3
 and duration 65. The oracle's two perturbation sizes agree within 8.4e-9.
 
+These reference coordinates use the historical downward z axis from the
+illuminated top face. In current public upward-z coordinates,
+`z_public = D - z_report`: the film occupies `[D-d, D]` and the substrate
+spacer occupies `[0, D-d]`.
+
 Maximum absolute errors across real/imaginary r/t and power R/T at both wavelengths:
 
 | Resolution | d=0.163 value / derivative | d=0.173 value / derivative | d=0.183 value / derivative |

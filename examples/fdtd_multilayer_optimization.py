@@ -2,6 +2,7 @@
 
 Run from the repository root: python -m examples.fdtd_multilayer_optimization
 Continuous dielectric permittivities are design variables, not a material catalog.
+Exported epsilon/thickness arrays follow the public bottom-to-top layer order.
 """
 import argparse
 import json
@@ -18,11 +19,14 @@ BOUNDS = [(-4., 4.)]*3+[(1.1, 4.)]*3
 
 
 def design(parameters):
-    """Three variable coatings plus a substrate spacer keep all planes fixed."""
+    """Decode incident-first parameters into a public bottom-to-top Stack."""
     import jax.numpy as jnp
     thickness = layer_thicknesses(jnp.concatenate((parameters[:3], jnp.zeros(1))), DEPTH, minimum=MINIMUM)
     epsilon = jnp.concatenate((parameters[3:], jnp.array([4.])))
-    return Stack.from_structure(epsilon[:, None, None], thickness, top=1., bot=4., period=.05)
+    # Parameters and the independent references list the coatings before the spacer.
+    # The public layer axis starts at the substrate, so reverse both arrays here.
+    return Stack.from_structure(epsilon[::-1, None, None], thickness[::-1],
+                                top=1., bot=4., period=.05)
 
 
 def spectrum(parameters, resolution=40, smoothing_cells=1., band=BAND, duration=65):
@@ -36,7 +40,7 @@ def spectrum(parameters, resolution=40, smoothing_cells=1., band=BAND, duration=
 
 
 def sharp_reflection(epsilon, thickness, band):
-    """Independent Fresnel recursion for the final sharp physical stack."""
+    """Independent Fresnel recursion; layers run from the top coating to the bottom spacer."""
     indices = np.sqrt(np.r_[1., epsilon, 4.])
     reflection = np.full_like(np.asarray(band), (indices[-2]-indices[-1])/(indices[-2]+indices[-1]), dtype=complex)
     for layer in range(len(thickness)-1, -1, -1):
@@ -73,10 +77,13 @@ def optimize(iterations=30, resolution=40):
     sharp = np.asarray(jax.jit(lambda p: spectrum(p, 2*resolution, smoothing_cells=0.))(jnp.asarray(p)))
     dense_band = np.linspace(BAND.min(), BAND.max(), 81)
     initial_stack = design(jnp.asarray(INITIAL))
-    initial_exact = sharp_reflection(np.asarray(initial_stack.structure).ravel(),
-                                     np.asarray(initial_stack.thickness), dense_band)
-    exact = sharp_reflection(np.asarray(stack.structure).ravel(), np.asarray(stack.thickness), dense_band)
-    return dict(parameters=p.tolist(), thickness=[float(d) for d in stack.thickness],
+    # The oracle is incident-first; Stack arrays and the exported design are bottom-to-top.
+    initial_exact = sharp_reflection(np.asarray(initial_stack.structure).ravel()[::-1],
+                                     np.asarray(initial_stack.thickness)[::-1], dense_band)
+    exact = sharp_reflection(np.asarray(stack.structure).ravel()[::-1],
+                             np.asarray(stack.thickness)[::-1], dense_band)
+    return dict(parameters=p.tolist(), layer_order='bottom_to_top',
+                thickness=[float(d) for d in stack.thickness],
                 epsilon=np.asarray(stack.structure).ravel().tolist(), wavelengths=BAND.tolist(),
                 resolution=resolution, training_reflection=training.tolist(),
                 refined_resolution=2*resolution, refined_reflection=refined.tolist(),

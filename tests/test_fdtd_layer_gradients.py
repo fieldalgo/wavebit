@@ -195,3 +195,26 @@ def test_thickness_sensitivity_error_envelope_refines_to_airy(record_property):
             record_property(f'{name}_error_{resolution}', float(error))
     assert errors[1][0] < .002 and errors[1][1] < .12
     assert np.all(errors[1] < .25*errors[0])
+
+
+@pytest.mark.parametrize('depth', [.12, .173, 1/(4*np.sqrt(1.5))])
+def test_coating_example_matches_airy_through_public_rcwa(monkeypatch, depth):
+    jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
+    from examples import fdtd_layer_optimization as example
+
+    def continuum(stack, incidence, **time_options):
+        # Evaluate the actual example's Stack with independent frequency-domain
+        # optics. Merely checking that its optimizer runs missed a spacer above
+        # the coating, which is a different physical stack despite the same d.
+        return wavebit.rcwa(stack=stack, incidence=incidence, backend='jax',
+                              truncation_order=0).solve()
+
+    monkeypatch.setattr(example, 'fdtd', continuum)
+    n = np.sqrt(1.5)
+    r_air_coating = (1-n)/(1+n)
+    r_coating_substrate = (n-1.5)/(n+1.5)
+    phase = np.exp(4j*np.pi*n*depth)
+    expected = abs((r_air_coating+r_coating_substrate*phase)
+                   /(1+r_air_coating*r_coating_substrate*phase))**2
+    np.testing.assert_allclose(example.reflection(depth, resolution=40), expected,
+                               atol=2e-14, rtol=0)

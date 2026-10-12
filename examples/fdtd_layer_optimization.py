@@ -15,7 +15,8 @@ from wavebit import Incidence, Stack, fdtd
 
 
 def reflection(d, resolution, smoothing_cells=0.):
-    stack = Stack.from_structure(jnp.array([[[1.5]], [[2.25]]]), [d, .4-d],
+    # Public stacks run bottom to top: the spacer touches the substrate.
+    stack = Stack.from_structure(jnp.array([[[2.25]], [[1.5]]]), [.4-d, d],
                                   top=1., bot=2.25, period=.05)
     light = Incidence(wavelength=1., polarization=(1., 0.))
     return fdtd(stack, light, backend='jax', resolution=resolution, mesh_thickness=[.2, .2],

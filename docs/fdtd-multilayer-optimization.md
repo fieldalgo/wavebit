@@ -55,6 +55,12 @@ on 1-by-1, 1-by-4 and 4-by-1 rasters, including compiled JAX execution.
 
 ## Six-variable coating example
 
+The layer arrays recorded here use the historical top-to-bottom order: coatings
+first, substrate spacer last. Current public `Stack` arrays use bottom-to-top
+order, so both permittivity and thickness arrays must be reversed at that
+boundary. The example preserves the original design-parameter order and
+performs this conversion explicitly.
+
 The scene has three dielectric coatings followed by a substrate spacer.
 Top epsilon is 1 and substrate epsilon is 4, with mu=1 throughout. Total
 depth is 0.8 and every layer has minimum length 0.04. All lengths and
