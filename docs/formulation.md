@@ -3,11 +3,11 @@
 Written: 2026-08-11.
 
 Targets:
-- `wavebit/_core/solve_1d.py` — `layer_modes_1d`, `layer_modes_1d_conical`, `solve_1d`,
+- `src/wavebit/_core/solve_1d.py` — `layer_modes_1d`, `layer_modes_1d_conical`, `solve_1d`,
   `final_matching`
-- `wavebit/_core/solve_2d.py` — `layer_modes_2d`
-- `wavebit/_core/factorization.py` — `_circulant_index`, `fourier2d_piecewise_constant`
-- `wavebit/_core/conventions.py` — every square root below
+- `src/wavebit/_core/solve_2d.py` — `layer_modes_2d`
+- `src/wavebit/_core/factorization.py` — `_circulant_index`, `fourier2d_piecewise_constant`
+- `src/wavebit/_core/conventions.py` — every square root below
 - the paper draft (`e^{+jωt}`), via the mapping table in §10
 
 ---

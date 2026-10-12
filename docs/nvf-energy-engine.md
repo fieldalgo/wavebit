@@ -7,9 +7,9 @@ API boundary. The private construction described below is unchanged; see
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/__init__.py`
-- `wavebit/_core/conforming/polynomial_body.py`
-- `wavebit/_core/factorization.py`
+- `src/wavebit/_core/conforming/__init__.py`
+- `src/wavebit/_core/conforming/polynomial_body.py`
+- `src/wavebit/_core/factorization.py`
 - `tests/test_conforming_nvf.py`
 - `tests/test_nvf_energy_builder.py`
 

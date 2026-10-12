@@ -136,7 +136,7 @@ def run_isolated(code, timeout=600):
     root = pathlib.Path(__file__).resolve().parents[1]
     proc = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,
                           timeout=timeout, cwd=str(root),
-                          env=dict(__import__('os').environ, PYTHONPATH=str(root),
+                          env=dict(__import__('os').environ, PYTHONPATH=__import__('os').pathsep.join((str(root / 'src'), str(root))),
                                    PYTHONDONTWRITEBYTECODE='1'))
     return proc.returncode == 0, proc.stderr[-2000:]
 

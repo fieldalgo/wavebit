@@ -1,6 +1,6 @@
 """The first-order layer solve, against the two things that can arbitrate it.
 
-``wavebit/_core/solve_2d_first_order.py`` exists because the second-order reduction does not survive
+``src/wavebit/_core/solve_2d_first_order.py`` exists because the second-order reduction does not survive
 a populated z row — physically, a magnetisation lying in the plane. Nothing dispatches to it yet;
 these tests are what says the formulation is right before anything is built on top.
 

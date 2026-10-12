@@ -4,10 +4,10 @@ Written: 2026-08-10. Measured on CPU, NumPy backend, float64. The ordering defec
 repaired the same day; the measurements are kept as taken, with it in place.
 
 Targets:
-- `wavebit/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
-- `wavebit/_core/factorization.py::_nvf_assemble` — where the sign convention is set
-- `wavebit/_core/engine.py::solve_conv` — the only way to reach the slots by hand
-- `wavebit/_core/solve_2d_first_order.py::_conv_layers` — where the negation is undone for the z row
+- `src/wavebit/_core/solve_2d.py::layer_modes_2d` — the two blocks, and why they must order the pair oppositely
+- `src/wavebit/_core/factorization.py::_nvf_assemble` — where the sign convention is set
+- `src/wavebit/_core/engine.py::solve_conv` — the only way to reach the slots by hand
+- `src/wavebit/_core/solve_2d_first_order.py::_conv_layers` — where the negation is undone for the z row
 - `tests/test_uniform_anisotropic.py`, `tests/test_anisotropic_berreman.py`,
   `tests/references/test_reticolo_anisotropic_golden.py` — every number below
 
@@ -366,7 +366,7 @@ Pinned by `tests/test_anisotropic_berreman.py`.
 ## 6. It is not a time-convention artefact
 
 A reasonable objection: this repo runs `e^{-iwt}` with `Im(n) > 0` as loss
-([`conventions.py`](https://github.com/fieldalgo/wavebit/blob/develop/wavebit/_core/conventions.py)), and handedness conventions decide which
+([`conventions.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_core/conventions.py)), and handedness conventions decide which
 circular state is which. Could the reference above simply have the wrong handedness?
 
 No, for two independent reasons.

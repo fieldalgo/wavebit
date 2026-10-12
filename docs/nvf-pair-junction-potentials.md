@@ -3,14 +3,14 @@
 Written: 2026-09-15
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_corner_galerkin.py`
-- `wavebit/_core/conforming/pair_corner_fields.py`
-- `wavebit/_core/conforming/pair_corner_assembly.py`
-- `wavebit/_core/conforming/pair_corner_contact.py`
-- `wavebit/_core/conforming/pair_junction_partition.py`
-- `wavebit/_core/conforming/pair_junction_thin_partition.py`
-- `wavebit/_core/conforming/pair_junction_transport.py`
-- `wavebit/_core/conforming/pair_junction_quadrature.py`
+- `src/wavebit/_core/conforming/cartesian_pair_corner_galerkin.py`
+- `src/wavebit/_core/conforming/pair_corner_fields.py`
+- `src/wavebit/_core/conforming/pair_corner_assembly.py`
+- `src/wavebit/_core/conforming/pair_corner_contact.py`
+- `src/wavebit/_core/conforming/pair_junction_partition.py`
+- `src/wavebit/_core/conforming/pair_junction_thin_partition.py`
+- `src/wavebit/_core/conforming/pair_junction_transport.py`
+- `src/wavebit/_core/conforming/pair_junction_quadrature.py`
 - `tests/test_nvf_pair_corner_galerkin.py`
 - `tests/test_nvf_pair_junction_quadrature.py`
 

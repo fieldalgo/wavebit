@@ -8,11 +8,11 @@ Written: 2026-09-15
 
 Targets:
 
-- `wavebit/_core/conforming/pair_symmetric_mesh.py`
-- `wavebit/_core/conforming/pair_corner_prefactors.py`
-- `wavebit/_core/conforming/pair_corner_coordinates.py`
-- `wavebit/_core/conforming/pair_contact_refinement.py`
-- `wavebit/_core/conforming/cartesian_pair_corner_galerkin.py`
+- `src/wavebit/_core/conforming/pair_symmetric_mesh.py`
+- `src/wavebit/_core/conforming/pair_corner_prefactors.py`
+- `src/wavebit/_core/conforming/pair_corner_coordinates.py`
+- `src/wavebit/_core/conforming/pair_contact_refinement.py`
+- `src/wavebit/_core/conforming/cartesian_pair_corner_galerkin.py`
 - `tests/test_nvf_pair_symmetric_mesh.py`
 - `tests/test_nvf_pair_centered_origin.py`
 

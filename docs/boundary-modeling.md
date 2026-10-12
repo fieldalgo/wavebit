@@ -1,6 +1,6 @@
 # Boundary modeling — painting an overlap without staircasing the edges
 
-Written: 2026-08. Targets `wavebit/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
+Written: 2026-08. Targets `src/wavebit/_core/boundary.py`, `_core/clipper.py`, `_core/polygon.py`,
 and the overlap route through `_core/parametric.py::to_conv_mat_parametric_layers`.
 
 Curved paintings now also support `nvf_projector='circular'` under NVF. The complex
@@ -77,7 +77,7 @@ matrices still Hermitian and `R + T` still exactly 1. The conversion was also se
 
 Disjoint regions are not sufficient to identify interfaces: two adjacent regions can hold the
 same value. The normal field now keeps material labels through the interval planner/replay in
-`wavebit/_core/interfaces.py`. Collinear edges are partitioned at every contact endpoint,
+`src/wavebit/_core/interfaces.py`. Collinear edges are partitioned at every contact endpoint,
 including periodic contacts, and their oriented contributions are summed per region before
 assigning the two sides. This cancels the clipper's possible zero-area out-and-back spurs
 without erasing a real third edge on the same run. An interval is a distance candidate only

@@ -3,8 +3,8 @@
 Written: 2026-09-14
 
 Targets:
-- `wavebit/_core/conforming/galerkin_error.py`
-- `wavebit/_core/conforming/equilibrated_flux.py`
+- `src/wavebit/_core/conforming/galerkin_error.py`
+- `src/wavebit/_core/conforming/equilibrated_flux.py`
 - `tests/test_nvf_galerkin_error.py`
 - `tests/test_nvf_equilibrated_flux.py`
 - `studies/nvf_galerkin_error.py`

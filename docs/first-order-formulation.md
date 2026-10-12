@@ -3,11 +3,11 @@
 Written: 2026-08-11. Measured on an Apple M4, NumPy 2.5.1 against Accelerate, float64.
 
 Targets:
-- `wavebit/_core/solve_2d_first_order.py` — the whole path, `::solve_2d_first_order` its
+- `src/wavebit/_core/solve_2d_first_order.py` — the whole path, `::solve_2d_first_order` its
   public entry
 - `tests/test_solve_2d_first_order.py` and
   `tests/references/test_first_order_external_goldens.py` — every number here
-- `wavebit/_core/fields.py::field_2d_first_order` and `tests/test_field_first_order.py` — the
+- `src/wavebit/_core/fields.py::field_2d_first_order` and `tests/test_field_first_order.py` — the
   in-cell field (§4b)
 - `tests/test_anisotropic_berreman.py` — the Berreman oracle it is judged against
 - `tests/test_formulation_dispatch.py` — which of the two formulations a call takes, and why
@@ -125,7 +125,7 @@ mode-direction criterion, independent references and convergence examples.
 ## 4b. Field reconstruction, and the three checks that replace the twin (2026-08-14)
 
 The in-cell field landed on this path on 2026-08-14
-(`wavebit/_core/fields.py::field_2d_first_order`, `tests/test_field_first_order.py`). It is the
+(`src/wavebit/_core/fields.py::field_2d_first_order`, `tests/test_field_first_order.py`). It is the
 same validation question this document is about, one level down, so it belongs here rather than
 in a changelog.
 

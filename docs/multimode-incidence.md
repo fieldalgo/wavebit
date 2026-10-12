@@ -1,8 +1,8 @@
 # Multimode incidence — several orders lit at once
 
-**Code**: `wavebit/_core/conventions.py` — `lit_orders`, `incident_column`;
-`wavebit/_core/solve_1d.py` — `_incident_flux`, the two matchings;
-`wavebit/_core/scattering.py` — the SMM twins; `wavebit/_core/engine.py` — `excitation`.
+**Code**: `src/wavebit/_core/conventions.py` — `lit_orders`, `incident_column`;
+`src/wavebit/_core/solve_1d.py` — `_incident_flux`, the two matchings;
+`src/wavebit/_core/scattering.py` — the SMM twins; `src/wavebit/_core/engine.py` — `excitation`.
 **Tests**: `tests/test_excitation.py`.
 
 ```python

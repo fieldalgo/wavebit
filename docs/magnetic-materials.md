@@ -3,8 +3,8 @@
 Landed 2026-08-14. [`anisotropic-materials.md`](anisotropic-materials.md) §5 had scoped this and
 got the location right and the content wrong; §3 below is the difference.
 
-Target: `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
-`wavebit/_core/scattering.py` — `smm_2d`; `wavebit/_core/fields.py` — `_field_coupled`.
+Target: `src/wavebit/_core/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
+`src/wavebit/_core/scattering.py` — `smm_2d`; `src/wavebit/_core/fields.py` — `_field_coupled`.
 
 **Scope.** Layers (§1–§4), half-spaces (§5–§6), patterned layers (§7) and field
 reconstruction (§9, added 2026-08-20) on the **2D path**; the **1D and conical paths** since

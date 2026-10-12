@@ -48,24 +48,24 @@ _SEPARABLE_KXY = (
     "setting grating_type 2 unconditionally.")
 
 _ALLOWED = {
-    ('wavebit/_core/conforming/cartesian_pair_seam_galerkin.py', '_geometry'): (
+    ('src/wavebit/_core/conforming/cartesian_pair_seam_galerkin.py', '_geometry'): (
         2,
         "the explicit Cartesian pair chart checks the complete basis against diag(period) "
         "and requires positive diagonal entries before using either period; "
         "test_cartesian_auxiliary_families_reject_non_diagonal_bases exercises contact and "
         "positive gaps for both seam degrees and both corner meshes."),
-    ('wavebit/_core/conforming/cartesian_pair_seam_galerkin.py', '_free_fourier_energy'): (
+    ('src/wavebit/_core/conforming/cartesian_pair_seam_galerkin.py', '_free_fourier_energy'): (
         2,
         "this exact rectangle Fourier integral refuses any off-diagonal basis entry before "
         "computing an indicator; test_pair_fourier_energy_rejects_non_diagonal_bases "
         "checks the helper directly, independently of the cell's earlier validation."),
-    ('wavebit/_core/conforming/pair_symmetric_mesh.py', '_normalization_length'): (
+    ('src/wavebit/_core/conforming/pair_symmetric_mesh.py', '_normalization_length'): (
         1,
         "the symmetric pair explicitly checks basis == diag(diag(basis)) and positive "
         "periods before multiplying them. Its public closure is covered by "
         "test_cartesian_auxiliary_families_reject_non_diagonal_bases; unit-chart controls "
         "also exercise the direct guard in test_nvf_pair_symmetric_mesh.py."),
-    ('wavebit/_core/conforming/periodic_seam_galerkin.py', '_quadrature'): (
+    ('src/wavebit/_core/conforming/periodic_seam_galerkin.py', '_quadrature'): (
         1,
         "the periodic seam API accepts exactly two axis lengths, never a general lattice. "
         "This function constructs basis=np.diag(period) and calls _chart_geometry, which "
@@ -76,15 +76,15 @@ _ALLOWED = {
     # (module, function) and could not know that, which is what makes it a gate. It failed on
     # the move in both directions at once: the new location was unlisted, and the three old
     # keys had stopped existing, which `test_the_allow_list_has_not_quietly_grown` caught.
-    ('wavebit/_core/engine.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
-    ('wavebit/_core/draw.py', 'slice_structure'): (
+    ('src/wavebit/_core/engine.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
+    ('src/wavebit/_core/draw.py', 'slice_structure'): (
         2,
         "one sample grid, behind a raise rather than behind a declaration: the `mt == 2` pair "
         "sits after an explicit `if not solver.lattice_is_axis_aligned: raise "
         "NotImplementedError`. The add-path branch beside it already goes through "
         "`sample_grid` with the lattice. It was four until the block path was removed -- its "
         "own pair was guarded by `draw._refuse_layer`, and both went with it."),
-    ('wavebit/_core/conforming/__init__.py', '_layers'): (
+    ('src/wavebit/_core/conforming/__init__.py', '_layers'): (
         5,
         "the research conforming cell is a rectangle by construction: `periods` are the reduced "
         "basis's axis lengths behind `_require(valid, 'conforming NVF requires a right-handed "

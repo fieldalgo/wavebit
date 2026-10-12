@@ -3,7 +3,7 @@
 Written: 2026-09-14
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_normal_frame.py`
+- `src/wavebit/_core/conforming/cartesian_pair_normal_frame.py`
 - `tests/test_nvf_paired_frame.py`
 - `tests/test_nvf_pair_normal_frame.py`
 - `studies/nvf_pair_reciprocal_energy.py`

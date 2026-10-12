@@ -72,11 +72,11 @@ Written: 2026-08-17. Measured 2026-08-16/17 on CPU, NumPy backend, float64.
 
 
 Targets:
-- `wavebit/_core/normal_methods.py` — the three constructions added beside the original
-- `wavebit/_core/factorization.py::normal_vector_field` — the dispatcher
+- `src/wavebit/_core/normal_methods.py` — the three constructions added beside the original
+- `src/wavebit/_core/factorization.py::normal_vector_field` — the dispatcher
 - the `raster_normal_method` solver keyword — `'distance'` (default) | `'contour'` | `'spectral'`
   | `'smooth'`
-- `wavebit/_core/factorization.py::jones_projector_fields` — the complex-basis projector
+- `src/wavebit/_core/factorization.py::jones_projector_fields` — the complex-basis projector
 - the `nvf_projector` solver keyword — `'linear'` (default) | `'circular'`; a second, independent
   axis over the same field
 
@@ -430,7 +430,7 @@ circle past radius 109 percolates — and the parametric path refuses such a sha
 raster is the only route to it.
 
 Two further rules were needed, and neither is about percolation. Both are stated at their
-constants in `wavebit/_core/normal_methods.py`, with the mutation numbers.
+constants in `src/wavebit/_core/normal_methods.py`, with the mutation numbers.
 
 * **`_resample` subdivides each segment; it does not walk arc length.** A reassembled curve has
   no intrinsic starting vertex. Arc-length resampling from one end was only ever covariant

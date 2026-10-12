@@ -24,6 +24,7 @@ What this file pins:
 * contamination is loud where it announces itself: a non-finite efficiency raises, pointing
   at the structure rather than at the arithmetic.
 """
+import json
 import pathlib
 import warnings
 
@@ -645,7 +646,7 @@ def test_the_remedy_the_warning_names_actually_removes_it():
 def test_enable_x64_does_not_import_jax_to_find_out_whether_it_can():
     """It uses `importlib.util.find_spec`, and that matters for `import wavebit`.
 
-    `wavebit/__init__.py` defines it, so anything the *body* imports at module scope would be
+    `src/wavebit/__init__.py` defines it, so anything the *body* imports at module scope would be
     pulled in by `import wavebit`, which
     `test_material.py::test_import_wavebit_does_not_import_jax` exists to forbid. The imports
     are inside the function, and `find_spec` answers "is JAX installed" without loading it.
@@ -657,6 +658,223 @@ def test_enable_x64_does_not_import_jax_to_find_out_whether_it_can():
         assert callable(wavebit.enable_x64)
         print('OK')
     """)
+
+
+@pytest.fixture(scope='module')
+def fresh_fdtd_jax_runs():
+    """A NumPy reference and two JAX FDTD runs, all in one interpreter that starts clean.
+
+    The FDTD path reaches JAX through its own door -- ``JaxTimeLoop.__init__``, not
+    ``backends/jax_backend.py`` -- and for a while that door did not lift the cap. The effect
+    was that the *first* ``wavebit.fdtd(backend='jax', ...)`` of a process ran its Maxwell loop at
+    complex64 and every later one ran at complex128, differing in the 5th significant figure,
+    with no warning and with ``R.dtype`` reading float64 in both. (``fdtd_grid``, which never
+    reached the result assembly that happened to import ``jax_backend``, ran at complex64 on
+    *every* call; see the test after these two.) Hence the shape of this:
+
+    * a **subprocess**, because by the time any other test has run, x64 is long since on and
+      the first call is no longer first -- this is the same reason :func:`_in_subprocess`
+      exists for the RCWA orderings above;
+    * a **NumPy** run as the oracle, because NumPy has no cap to lift, so the double-precision
+      answer needs no frozen number to compare against;
+    * the loop **carry** dtype collected on the way past, because the reported result dtype is
+      float64 either way and is exactly what made this invisible.
+
+    One child process, three runs, read by the two tests below.
+    """
+    pytest.importorskip('jax')
+    out = _in_subprocess("""
+        import json
+        import numpy as np
+        import wavebit
+        from wavebit.backends.time_domain import JaxTimeLoop
+
+        # Small on purpose: seconds, and it still separated the two precisions by 9e-07.
+        scene = dict(structure=np.full((1, 1, 1), 2.25), thickness=[.2], top=1., bot=1.,
+                     period=.1, wavelength=[.9, 1., 1.1], resolution=8, n_periods=30,
+                     n_pml=4, truncation_order=0, tetm='te')
+
+        carried = []
+        advance = JaxTimeLoop.advance
+        def spy(self, step, state, steps, checkpoint_steps):
+            import jax
+            carried.extend(str(getattr(v, 'dtype', '')) for v in jax.tree.leaves(state))
+            return advance(self, step, state, steps, checkpoint_steps)
+        JaxTimeLoop.advance = spy
+
+        def efficiencies(backend):
+            given = wavebit.fdtd(**scene, backend=backend)[0].incident
+            return [np.asarray(given.R).tolist(), np.asarray(given.T).tolist()]
+
+        reference = efficiencies('numpy')         # NumPy: no cap, so this is the double answer
+        first = efficiencies('jax')             # the call that used to run at complex64
+        second = efficiencies('jax')
+        print(json.dumps(dict(reference=reference, first=first, second=second,
+                              carried=sorted(set(carried)))))
+    """)
+    return json.loads(out.strip().splitlines()[-1])
+
+
+def test_a_jax_fdtd_run_lifts_the_x64_cap_before_its_own_first_array(fresh_fdtd_jax_runs):
+    """The first FDTD call of a fresh process must already be in double precision.
+
+    No ``enable_x64()`` anywhere: the lift has to come from inside the call, which is what
+    ``JaxTimeLoop.__init__`` now does -- and it is early enough because ``scene_fdtd`` takes
+    ``runtime.xp`` and ``runtime.array`` from that constructor before it builds anything.
+    Asserted on the value against the NumPy run, not on a dtype; ``R.dtype`` read float64
+    throughout the defect.
+    """
+    carried = fresh_fdtd_jax_runs['carried']
+    assert 'complex128' in carried and 'complex64' not in carried, carried
+    np.testing.assert_allclose(fresh_fdtd_jax_runs['first'],
+                               fresh_fdtd_jax_runs['reference'], atol=1e-12)
+
+
+def test_two_identical_fdtd_calls_in_one_process_agree(fresh_fdtd_jax_runs):
+    """Same inputs, same answer -- whatever the precision, it must not depend on call order.
+
+    This is the invariant the defect broke and that nothing else pins: the two calls differed
+    by 9e-07 because the first ran under the cap and the second did not. Exact equality is the
+    right bar; the two runs execute identical code on identical inputs. That is a claim about
+    the CPU this was measured on -- a device with nondeterministic reductions could need a
+    tolerance, which would still have to sit far below the 9e-07 the defect produced.
+    """
+    np.testing.assert_array_equal(fresh_fdtd_jax_runs['first'], fresh_fdtd_jax_runs['second'])
+
+
+def test_a_bare_fdtd_grid_run_is_double_precision_in_a_fresh_process():
+    """``fdtd_grid`` goes through the same time-loop door and needs its own fresh process.
+
+    Before the lift moved into ``JaxTimeLoop.__init__`` this door was worse off than ``fdtd``:
+    it never reaches the scene's result assembly, which is where the ``fdtd`` path happened to
+    import ``jax_backend`` and lift the cap, so a process that had not lifted it elsewhere ran
+    ``fdtd_grid`` at complex64 on every call -- 5.5e-07 from NumPy, first and second call
+    identical, so no call-order invariant can see it. Only a value against NumPy can, and only
+    in a process where nothing else opened a door first. That also pins the lift to the shared
+    constructor rather than to one of its callers.
+    """
+    pytest.importorskip('jax')
+    out = _in_subprocess("""
+        import json
+        import numpy as np
+        import wavebit
+
+        def run(backend):
+            eps = np.ones((16, 3, 3)); eps[6:10] = 2.25
+            src = np.zeros((3, 16, 3, 3), complex); src[0, 7] = 1
+            return np.asarray(wavebit.fdtd_grid(
+                eps, spacing=(1.,)*3, dt=.2, steps=60, pml_cells=3, source=src,
+                pulse=np.sin(np.arange(60)*.2), wavelengths=[4., 5.], monitor_z=[9, 12],
+                backend=backend)['electric_spectrum'])
+
+        reference = run('numpy')                  # NumPy: no cap, so this is the double answer
+        jax_run = run('jax')
+        print(json.dumps(float(np.max(abs(jax_run - reference))/np.max(abs(reference)))))
+    """)
+    assert json.loads(out.strip().splitlines()[-1]) < 1e-12
+
+
+def test_a_jax_rcwa_solve_is_double_precision_in_a_fresh_process():
+    """The RCWA door, ``backends/jax_backend.py``, pinned by value and not by the suite's habit.
+
+    Nearly every JAX test here lifts the cap itself before it starts, so in-process nothing
+    would notice that door's call going missing: measured with it deleted, a fresh-process
+    solve differs from NumPy by 1.0e-06 and warns ``UnresolvedBranchWarning`` -- and the rest
+    of this file stays green, because the gap test above asserts a warning category and the
+    remedy test lifts the cap by hand first.
+    """
+    pytest.importorskip('jax')
+    out = _in_subprocess("""
+        import json
+        import numpy as np
+        import wavebit
+
+        kw = dict(psi=np.pi/2, top=1.0, bot=2.25, theta=0.3, phi=0.2, truncation_order=[5],
+                  wavelength=900e-9, period=[2000e-9],
+                  structure=np.array([[[0, 1, 0, 1, 1, 1]]])*1.25 + 1, thickness=[300e-9],
+                  fourier_coefficients='sampled', factorization='li')
+
+        def efficiencies(backend):
+            given = wavebit.rcwa(backend=backend, **kw).solve().incident
+            return np.r_[np.ravel(np.asarray(given.R)), np.ravel(np.asarray(given.T))]
+
+        reference = efficiencies('numpy')
+        print(json.dumps(float(np.max(abs(efficiencies('jax') - reference)))))
+    """)
+    assert json.loads(out.strip().splitlines()[-1]) < 1e-12
+
+
+def test_meshgrid_xy_on_jax_is_double_precision_in_a_fresh_process():
+    """``meshgrid_xy(backend='jax')`` is a door onto JAX of its own, and asks for float64.
+
+    Under the cap that request came back float32, and the coordinates -- and whatever raster
+    was drawn from them -- were already truncated when the solver's own lift ran later. A
+    period of 0.1 is not representable in float32, so the value comparison separates the two.
+    """
+    pytest.importorskip('jax')
+    out = _in_subprocess("""
+        import json
+        import numpy as np
+        import wavebit
+
+        on_jax = [np.asarray(c) for c in wavebit.meshgrid_xy((4, 5), period=(.1, .3), backend='jax')]
+        on_numpy = wavebit.meshgrid_xy((4, 5), period=(.1, .3), backend='numpy')
+        print(json.dumps(max(float(np.max(abs(a - b)/np.max(abs(b))))
+                             for a, b in zip(on_jax, on_numpy))))
+    """)
+    assert json.loads(out.strip().splitlines()[-1]) < 1e-14
+
+
+def test_a_jax_door_raises_rather_than_run_under_a_cap_it_could_not_lift(monkeypatch):
+    """Every door but ``import wavebit`` asks the shared lift to *require* success.
+
+    ``enable_x64()`` promises to raise rather than quietly do nothing, and the time loop must
+    not start at single precision because a config write was refused. The shared body swallows
+    the failure for the one caller that may run with JAX absent or mid-import, so the other
+    callers' loudness lives entirely in ``required=True`` -- and nothing else here makes the
+    write fail.
+    """
+    jax = pytest.importorskip('jax')
+    from wavebit._core.backend import lift_jax_x64
+    from wavebit.backends.time_domain import JaxTimeLoop
+
+    previous = jax.config.jax_enable_x64
+    try:
+        jax.config.update('jax_enable_x64', False)
+
+        def refused(*args, **kwargs):
+            raise ValueError('refused')
+        monkeypatch.setattr(jax.config, 'update', refused)
+
+        assert lift_jax_x64() is False                  # the tolerant caller: a no-op, said so
+        with pytest.raises(RuntimeError, match='single precision'):
+            wavebit.enable_x64()
+        with pytest.raises(RuntimeError, match='single precision'):
+            JaxTimeLoop()
+        with pytest.raises(RuntimeError, match='single precision'):
+            wavebit.meshgrid_xy((2, 2), period=(1., 1.), backend='jax')
+    finally:
+        monkeypatch.undo()
+        jax.config.update('jax_enable_x64', previous)
+
+
+def test_the_x64_cap_is_lifted_by_one_body():
+    """Exactly one place in the package writes ``jax_enable_x64``: the shared lift.
+
+    The FDTD defect was a door with no call, and the copies it replaced had already drifted
+    apart (two swallowed failures, one raised). A second write would restart both. This is a
+    grep, not a behaviour: it cannot say every door *calls* the body -- the fresh-process tests
+    above do that, door by door -- only that nothing bypasses it.
+    """
+    import re
+    package = pathlib.Path(__file__).resolve().parent.parent / 'src' / 'wavebit'
+    write = re.compile(r'config\.update\(\s*.jax_enable_x64')    # `.`: either quote
+    sites = [f'{path.relative_to(package.parent.parent).as_posix()}:{n}'
+             for path in sorted(package.rglob('*.py'))
+             for n, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1)
+             if write.search(line)]
+    assert [s.split(':')[0] for s in sites] == ['src/wavebit/_core/backend.py'], sites
+
 
 def test_precision_warning_category_is_exported():
     assert wavebit.PrecisionLossWarning is PrecisionLossWarning

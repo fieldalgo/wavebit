@@ -3,7 +3,7 @@
 Written: 2026-09-13.
 
 Targets:
-- `wavebit/_core/passive_nvf.py`
+- `src/wavebit/_core/passive_nvf.py`
 - `tests/test_passive_nvf.py`
 - `studies/nvf_passive_closure.py`
 - `studies/results/nvf_passive_closure.log`

@@ -443,6 +443,7 @@ def test_li_is_refused_on_a_skewed_cell():
         totals(raster(HEX), lattice=HEX, factorization='li')
 
 
+@pytest.mark.slow
 def test_a_painted_overlap_survives_a_unimodular_shear():
     """Resolving an overlap into polygons works skewed: the clipper never sees the cell.
 
@@ -469,6 +470,7 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
     assert painted(None) == pytest.approx(painted(SHEAR), abs=1e-3)
 
 
+@pytest.mark.slow
 def test_a_painted_overlap_is_not_the_same_as_summing_it():
     """Guards the test above from being vacuous: the two rules must give different answers.
 

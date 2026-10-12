@@ -1,14 +1,13 @@
 # What a solve checks about its own result
 
-Written: 2026-10-03, for the RCWA solver on `develop`. The same removal was first written on
-2026-09-03 on a time-domain development branch, which is not part of `develop`; this page
-carries only the reasons that hold for RCWA alone.
+Updated: 2026-10-13. The RCWA guard policy and the FDTD measurement below apply
+to the integrated solvers; their numerical error tolerances remain different.
 
 Targets:
-- `wavebit/_core/backend.py::check_finite` — the one result guard that survives
-- `wavebit/_core/solve_1d.py::final_matching` — where it runs on the 1D path
-- `wavebit/_core/scattering.py` — where it runs on the 2D path
-- `wavebit/_core/engine.py::_refuse_negative_index_half_space` — the one input the removed
+- `src/wavebit/_core/backend.py::check_finite` — the one result guard that survives
+- `src/wavebit/_core/solve_1d.py::final_matching` — where it runs on the 1D path
+- `src/wavebit/_core/scattering.py` — where it runs on the 2D path
+- `src/wavebit/_core/engine.py::_refuse_negative_index_half_space` — the one input the removed
   check flagged that no test covered, refused for a while and now solved on the far side
 - `tests/test_fp_warnings.py` — the unit-level contract
 - `tests/test_rayleigh_guard.py` — the end-to-end case it was written for
@@ -50,7 +49,7 @@ in either direction. If `1.1` can be the correct value, a warning on `1.1` carri
 information about whether this `1.1` is.
 
 The library had already settled the same question the other way once, in
-`wavebit/_core/draw.py`: `index_from_eps` takes the principal root and deliberately does not
+`src/wavebit/_core/draw.py`: `index_from_eps` takes the principal root and deliberately does not
 repair the branch, because a helper cannot know whether a tiny negative `Im` is noise or a
 deliberately active medium. It hands that judgement to its caller. `check_physical` made the
 judgement instead, and made it wrong on every active structure.
@@ -88,7 +87,7 @@ refused where it was set. It is now
 solved with its own root, the mirror of Maystre's cut ([`branch-cuts.md`](branch-cuts.md) §9),
 on either side and lit or not ([`negative-index-media.md`](negative-index-media.md)), and
 refused only where it is active
-(`wavebit/_core/engine.py::_refuse_negative_index_half_space`).
+(`src/wavebit/_core/engine.py::_refuse_negative_index_half_space`).
 `tests/test_negative_index_half_space.py` pins it against closed forms and against a thick
 lossy slab of the same medium, a layer, which keeps both roots and so needs no root rule.
 
@@ -116,3 +115,40 @@ it happened.
 such as a dropped diffraction order, looks exactly like an absorbing structure, and only a
 comparison against a reference solve can see it. That is what the oracle tests in
 `tests/references/` exist to do.
+
+## 5. The FDTD measurement
+
+`check_physical` was instrumented to record `sum(R) + sum(T)` at every call across the 134
+tests of `tests/test_fdtd.py`.
+
+| | |
+| --- | --- |
+| calls | 243 (0 skipped — no complex `n_top` in that suite) |
+| calls exceeding `atol = 1e-3` | **85 (35 %)** |
+| range of those | `[1.001, 1.0214]` |
+| negative efficiencies | 0 |
+
+The hits included `test_a_uniform_slab_matches_the_closed_form` at 1.00128 — a planar slab
+against an exact transfer matrix, which that file's docstring calls the one test that still
+means something if every other part of the package is wrong.
+
+**The excess is truncation error, and it converges.** Uniform slab, TE, normal incidence:
+
+| dx | `R + T` | excess | observed order |
+| --- | --- | --- | --- |
+| 40 nm | 1.005611 | +5.6e-3 | |
+| 20 nm | 1.001282 | +1.3e-3 | 2.13 |
+| 10 nm | 1.000308 | +3.1e-4 | 2.06 |
+| 5 nm | 1.000099 | +9.9e-5 | 1.63 |
+
+A Yee grid does not conserve energy exactly; it conserves it to `O(dz^2)`. "`R + T > 1` means
+gain out of nothing" is a theorem about the continuum and about RCWA's algebra, where the
+scattering matrix is unitary for a lossless stack. It is not a theorem about a time-domain
+discretisation, so the check was applying a frequency-domain tolerance to a method with
+different mathematics.
+
+**This is why the warning could not do its job.** On 2026-08-31 a defect in the conical mount
+returned `R + T = 2.0042` at `theta = 30 deg, phi = 0` — both polarisation legs solving the
+same problem and being added. `check_physical` ran on that result and emitted its message. The
+defect was found by reading the code. A signal present on 35 % of correct solves carries no
+information when it appears on the 36th.

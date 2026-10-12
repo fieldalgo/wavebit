@@ -7,11 +7,11 @@ silicon, single process, float64).
 
 Targets:
 - `studies/benchmark_backends.py` — the sweep this document reports
-- `wavebit/_core/geometry.py::StaticGeometry` — what a freeze records, and what its equality
+- `src/wavebit/_core/geometry.py::StaticGeometry` — what a freeze records, and what its equality
   costs
-- `wavebit/_core/factorization.py::compression_indices`, `normal_field_for_raster` — the two
+- `src/wavebit/_core/factorization.py::compression_indices`, `normal_field_for_raster` — the two
   raster decisions that must be taken eagerly
-- `wavebit/_core/geometry.py::StaticGeometry` — the frozen records and their staleness checks
+- `src/wavebit/_core/geometry.py::StaticGeometry` — the frozen records and their staleness checks
 - [`nvf-upsampling.md`](nvf-upsampling.md) — why NVF's cost fell between the first run of this
   sweep and the one reported here; [`torch-compile.md`](torch-compile.md) — why PyTorch is
   measured eager

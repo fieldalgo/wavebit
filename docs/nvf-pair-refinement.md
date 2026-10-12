@@ -3,8 +3,8 @@
 Written: 2026-09-13.
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair.py`
-- `wavebit/_core/conforming/cartesian_pair_gap_autodiff.py`
+- `src/wavebit/_core/conforming/cartesian_pair.py`
+- `src/wavebit/_core/conforming/cartesian_pair_gap_autodiff.py`
 - `tests/test_nvf_pair_refinement.py`
 - `studies/nvf_pair_material_sector.py`
 - `studies/nvf_pair_assembly_cost.py`

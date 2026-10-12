@@ -3,8 +3,8 @@
 Written: 2026-09-10
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_opening.py`
-- `wavebit/_core/conforming/cartesian_pair.py`
+- `src/wavebit/_core/conforming/cartesian_pair_opening.py`
+- `src/wavebit/_core/conforming/cartesian_pair.py`
 - `tests/test_nvf_cartesian_pair_opening.py`
 - `studies/results/nvf_cartesian_pair_opening.log`
 

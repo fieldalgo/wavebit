@@ -8,8 +8,8 @@ unchanged original acceptance criteria. The measurements below used the
 physical projected solver directly.
 
 Targets:
-- `wavebit/_core/conforming/polynomial_pair_trace.py`
-- `wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
+- `src/wavebit/_core/conforming/polynomial_pair_trace.py`
+- `src/wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
 - `tests/test_nvf_polynomial_trace.py`
 - `tests/test_nvf_pair_seam_galerkin.py`
 - `studies/nvf_coupled_pair_seam_galerkin.py`

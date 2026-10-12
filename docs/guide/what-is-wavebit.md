@@ -26,7 +26,9 @@ Being honest about this saves more time than any feature list:
 * **Structures that vary continuously in `z`.** A smooth sidewall is approximated by slicing it
   into layers, and the slice count is yours to choose.
 * **Broadband time-domain questions** — a pulse, a ring-down, a resonance hunt across a wide
-  band in one shot. That is FDTD's shape rather than RCWA's.
+  band in one shot. That is FDTD's shape rather than RCWA's, and it is why this package ships a
+  second solver: [`wavebit.fdtd()`](time-domain.md) answers exactly those, and a band costs one
+  run rather than one run per wavelength.
 * **Very high index contrast with metals at grazing incidence**, where the retained order count
   needed for convergence can become impractical.
 

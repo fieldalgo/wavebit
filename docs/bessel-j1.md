@@ -3,9 +3,9 @@
 Written: 2026-08-11. Measured against `mpmath` at 40 digits, CPU, float64 unless stated.
 
 Targets:
-- `wavebit/_core/backend.py::j1` — the dispatch
+- `src/wavebit/_core/backend.py::j1` — the dispatch
 - `_J1_THR`, `_J1_THR_F32`, `_J1_ASYM_TERMS` — the constants this document exists to justify
-- `wavebit/_core/backend.py::jinc` — `2 J_1(z)/z`, the only caller that matters: it is the
+- `src/wavebit/_core/backend.py::jinc` — `2 J_1(z)/z`, the only caller that matters: it is the
   Fourier coefficient of a circle or an ellipse
 
 ---

@@ -7,8 +7,8 @@ API boundary. The private construction described below is unchanged; see
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/affine_cell.py`
-- `wavebit/_core/conforming/continuous_flux.py`
+- `src/wavebit/_core/conforming/affine_cell.py`
+- `src/wavebit/_core/conforming/continuous_flux.py`
 - `tests/test_nvf_affine_cell.py`
 - `tests/test_nvf_affine_contact.py`
 - `tests/test_nvf_complex_variational.py`

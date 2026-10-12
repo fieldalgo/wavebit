@@ -2,10 +2,9 @@
 """Run every script under ``examples/`` and fail on any sign it did not work.
 
 Not collected by pytest: the filename has no ``test_`` prefix, deliberately, so ``pytest tests
--q`` does not pick it up. The verification suite takes ~9 minutes and is where the physics is
-checked; this takes well under a minute and only asks whether the examples still *run*. Keeping
-them apart means a broken example is a fast, separately-named red mark rather than nine minutes
-of waiting, and the suite stays the thing that says whether the library is correct.
+-q`` does not pick it up. The verification suite checks the physics; this only asks whether the examples still *run*.
+Keeping them apart gives broken examples a separately named failure. Runtime depends
+on the machine and installed backends.
 
 It is still an assert-first check -- both conditions below can be written down before the
 run -- so by the routing rule in ``CONTRIBUTING.md`` it lives here rather than in ``studies/``.
@@ -35,16 +34,33 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = REPO_ROOT / 'examples'
 
-# Generous. Not a performance budget -- the whole set runs in well under a minute, and a script
-# that takes 15 times its share is hung, not slow. It exists so a deadlock is a failed step in a
-# couple of minutes instead of a job that occupies a runner until GitHub's own limit cuts it off.
+# A per-script timeout prevents a hung example from occupying a runner indefinitely.
+# This is a smoke-test budget, not a promise about solver performance.
 TIMEOUT_S = 300
+
+# Scripts that legitimately need longer, with the measurement behind each. 300 s was set when
+# `examples/` held only the four fast `shapes_*` scripts (30b5b35); the FDTD examples that came
+# later optimise through a time-domain solve and take minutes. Measured on a 12-core desktop
+# (2026-09-16), and the runners have measured 2.4-2.9x slower than it on this repository's own
+# suite, so each budget is about 3x the desktop time:
+#
+#   fdtd_multilayer_optimization.py  472-525 s  30 L-BFGS-B iterations, 36 evaluations,
+#                                               JAX gradients through a 3-wavelength solve
+#   fdtd_layer_optimization.py       115-147 s  the same shape of loop, one layer
+#
+# Keeping the default at 300 s means a new example cannot quietly become a five-minute one:
+# it has to be named here, with its measurement.
+BUDGET_S = {
+    'fdtd_multilayer_optimization.py': 1800,
+    'fdtd_layer_optimization.py': 600,
+}
 
 # Substrings that mean failure even when the script exited 0. Matched against stdout and stderr
 # together, because the traceback goes to one and a print to the other.
@@ -77,35 +93,35 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
     """Run one script and judge it. Returns ``(ok, seconds, reasons, output)``."""
     env = dict(os.environ)
 
-    # Headless, kept as insurance rather than for a current need: nothing under examples/ imports
-    # matplotlib today, but a plotting example that ends in plt.show() would block forever on an
-    # interactive backend -- silently, until this script's timeout -- and setting it here costs
-    # nothing. On a runner there is no display anyway; Agg is what makes the two behave alike.
+    # Plot examples must also finish on runners without an interactive display.
     env['MPLBACKEND'] = 'Agg'
 
-    # The repository ahead of anything installed. Scripts run from their own directory, so the
-    # cwd shadowing that normally makes a worktree import its own copy of `wavebit` does not
-    # apply, and `import wavebit` would resolve to the editable install -- i.e. to the main
-    # checkout, not to the tree being tested. That is a real trap when several worktrees share
-    # one install: the examples would pass or fail on somebody else's edits.
+    # Select this worktree explicitly, including when a shared scientific environment
+    # has an editable installation pointing at another checkout.
     env['PYTHONPATH'] = os.pathsep.join(
-        [str(REPO_ROOT)] + ([env['PYTHONPATH']] if env.get('PYTHONPATH') else []))
+        [str(REPO_ROOT / 'src'), str(REPO_ROOT)] + ([env['PYTHONPATH']] if env.get('PYTHONPATH') else []))
 
+    budget = BUDGET_S.get(script.name, TIMEOUT_S)
     start = time.perf_counter()
     try:
-        proc = subprocess.run(
-            [sys.executable, script.name],
-            cwd=script.parent,  # its own directory: relative data paths and outputs resolve
-            env=env,
-            capture_output=True,
-            text=True,
-            errors='replace',
-            timeout=TIMEOUT_S,
-        )
+        # These plot examples expose --output; keep smoke-run images out of the checkout.
+        with tempfile.TemporaryDirectory(prefix='wavebit-example-') as output_dir:
+            command = [sys.executable, script.name]
+            if script.name in {'fdtd_record.py', 'fdtd_poynting.py'}:
+                command += ['--output', str(Path(output_dir) / f'{script.stem}.png')]
+            proc = subprocess.run(
+                command,
+                cwd=script.parent,  # its own directory: relative data paths resolve
+                env=env,
+                capture_output=True,
+                text=True,
+                errors='replace',
+                timeout=budget,
+            )
     except subprocess.TimeoutExpired as exc:
         elapsed = time.perf_counter() - start
         partial = (exc.stdout or '') + (exc.stderr or '')
-        return False, elapsed, [f'timed out after {TIMEOUT_S}s'], partial
+        return False, elapsed, [f'timed out after {budget}s'], partial
 
     elapsed = time.perf_counter() - start
     output = proc.stdout + proc.stderr

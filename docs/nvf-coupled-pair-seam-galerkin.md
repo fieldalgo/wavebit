@@ -3,8 +3,8 @@
 Written: 2026-09-14
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
-- `wavebit/_core/conforming/real_trace_coupling.py`
+- `src/wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
+- `src/wavebit/_core/conforming/real_trace_coupling.py`
 - `tests/test_nvf_pair_seam_galerkin.py`
 - `studies/nvf_coupled_pair_seam_galerkin.py`
 - `studies/results/nvf_coupled_pair_seam_galerkin.log`

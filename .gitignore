@@ -27,3 +27,13 @@ lab
 # The built documentation site. `sphinx-build` regenerates it from `docs/`, so it is a
 # derived artifact and not a record of anything.
 docs/_build/
+
+# Jupyter autosave copies, written next to a notebook whenever it is opened in Jupyter.
+.ipynb_checkpoints/
+
+# Local build, profiling and comparison outputs.
+artifacts/
+.venv/
+
+# Compiled optional documentation translation catalogs.
+docs/locales/**/*.mo

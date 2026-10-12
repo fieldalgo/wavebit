@@ -11,7 +11,7 @@ Answer these in order and stop at the first **yes**. The point of the order is t
 | **0** | Is this going into git at all? A fragment, a probe, an idea being tried out. | **No → your scratch space, outside the repository.** Stop here. |
 | 1 | Is it the implementation? | `wavebit/` |
 | 2 | Can you write the `assert` line *before* you run it? | `tests/` |
-| 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
+| 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA, Meep, FDTDX)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
 | 4 | Would writing that `assert` mean asserting the very thing you are trying to find out? | `studies/` — **and** a write-up in `docs/` |
 | 5 | Is it prose telling a user **how to use** something — what a keyword takes, what it defaults to, what it refuses? | `docs/guide/` |
 | 6 | Is it prose **about the code** — why a default is what it is, what was measured to decide it? | `docs/` |
@@ -32,7 +32,7 @@ Because it is published, **nothing committed here may name a path outside the ch
 Two more rules that go with the table:
 
 - **Every directory carries a `README.md` whose first table maps each entry to the question it answers.** Not what the script does — what it exists to find out. `studies/README.md` is the model.
-- **Everything committed is in English**: code, comments, docs and commit messages. Your scratch space is exempt, which is part of why it is kept separate.
+- **English is canonical** for code, comments, documentation and commit messages. Optional Korean translations live in `docs/locales/ko/`; keep numerical examples in their canonical source files.
 - **Scratch lives outside the checkout.** An ignored directory inside the repository is not safe — it is what `git clean -xdf` exists to delete. Keep it as a sibling of the checkout and symlink it in as `lab` if you want it on hand (`ln -s ../<your-scratch-dir> lab`); the symlink is ignored, and losing it costs one `ln -s`.
 
 ### Why the directories are named this way
@@ -43,7 +43,10 @@ Three of them are worth a sentence, because the obvious guess is wrong:
 - **`tests/`, not a qualified name.** The suite holds verification (frozen goldens) and validation (an outside solver) alike, so any qualifier would name half of it.
 - **`tests/references/`** exists because external-solver comparison has a known expected answer — so it is a test, not a study — but producing the reference needs Octave and a RETICOLO V10 tree from its Zenodo record (CC BY 4.0; see `tests/references/README.md`). The directory splits by what each piece needs: the bridge and generator need those, the committed numbers and the assertion need nothing and run in CI everywhere.
 
-Two things were considered and rejected, so that they are not proposed again: a `src/` layout, which with many worktrees sharing one editable install would make each worktree silently test the main checkout rather than its own edits; and merging `studies/` into `docs/`, which only three of the write-ups could support since the rest have no script behind them.
+The package uses a `src/` layout so installed-package checks and source-tree tests
+have explicit import paths. Use one editable environment per worktree; see the
+[source checkout guide](docs/developer/source-checkout.md) for setup and line debugging.
+`studies/` keeps executable investigations; their explanations live in `docs/`.
 
 **This file is the operative one.** If a directory name anywhere else disagrees with the table above, the table wins.
 
@@ -65,8 +68,8 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 
 - **Keep PRs small and focused.** One fix or one feature per PR reviews much faster than a grab-bag.
 - **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests/` for the pattern.
-- **Mind the conventions.** All sign and branch-cut choices live in `wavebit/_core/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. Wavebit uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
-- **Backend neutrality.** New solver code should be written against the Array API (`wavebit/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
+- **Mind the conventions.** All sign and branch-cut choices live in `src/wavebit/_core/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. Wavebit uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
+- **Backend neutrality.** New solver code should be written against the Array API (`src/wavebit/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
 
 ### Branches: rebase, then fast-forward
@@ -105,8 +108,12 @@ rebase. Found the hard way by a session that thought it had a backup.
 ```shell
 git clone https://github.com/fieldalgo/wavebit.git
 cd wavebit
-pip install -e .[jax]      # or .[pytorch], or plain -e . for NumPy only
-pytest tests/ -q
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[jax]'  # or .[pytorch], or plain -e . for NumPy only
+python -m pip install pytest
+python -c "import wavebit; print(wavebit.__file__)"
+pytest tests/ -q           # skips the tests marked slow; add --run-slow for all
 ```
 
 That runs the default set, which is also what CI runs. Tests of the NVF research code -- the
@@ -120,8 +127,8 @@ pytest -m "research or not research" tests/ -q   # everything
 pytest tests/test_nvf_pair_galerkin.py -q        # a file you name runs whole
 ```
 
-Run the tier when you work on the research code itself -- `wavebit/_core/conforming/`,
-`wavebit/_core/passive_nvf.py`, a `studies/nvf_*` model or a research test. A change to the rest
+Run the tier when you work on the research code itself -- `src/wavebit/_core/conforming/`,
+`src/wavebit/_core/passive_nvf.py`, a `studies/nvf_*` model or a research test. A change to the rest
 of the package lands on the default set alone. Many research tests drive the ordinary engine, so
 such a change can break one; that does not hold the change back, and the test is repaired when
 research work next runs the tier.

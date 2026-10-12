@@ -28,7 +28,7 @@ The extras are `jax`, `pytorch`, `contour` and `docs`, and they combine —
 ```shell
 git clone https://github.com/fieldalgo/wavebit.git && cd wavebit
 pip install -e '.[jax]'                # or '.[pytorch]', or plain -e . for NumPy only
-pytest tests/ -q
+pytest tests/ -q           # skips the tests marked slow; add --run-slow for all
 ```
 
 `environment.yml` builds the full development environment, including the tools the studies need:

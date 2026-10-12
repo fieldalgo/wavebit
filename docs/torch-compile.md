@@ -4,10 +4,10 @@ Written: 2026-08. Measured on macOS arm64 (CPU only) against `develop` at `8257e
 NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0. **Updated 2026-10 (§6)**, on torch 2.13.0.
 
 Targets:
-- `wavebit/_core/engine.py::CoreSolveMixin.period` — where the first failure was raised (it was the block modeller's own `period` setter until that path was removed)
-- `wavebit/_core/backend.py::eig` — the primitive the remaining failures are about
+- `src/wavebit/_core/engine.py::CoreSolveMixin.period` — where the first failure was raised (it was the block modeller's own `period` setter until that path was removed)
+- `src/wavebit/_core/backend.py::eig` — the primitive the remaining failures are about
 - `pyproject.toml` — the torch floor, raised from 2.7 to 2.13 as a result; see §3
-- `wavebit/_core/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of the
+- `src/wavebit/_core/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of the
   compiled graph since 2026-10; see §6
 
 ---
@@ -237,7 +237,7 @@ Measured 2026-10-12 on torch 2.13.0, Python 3.12.9, macOS arm64 (CPU), on `devel
 `array_api_compat`'s torch `eye` is a zeros tensor whose diagonal is then written in place
 (`diagonal().fill_(1)`). When that tensor is complex and the input requires grad, Inductor emits
 the in-place write *after* the kernels that read the tensor, so they read zeros. The modal
-exponential (`wavebit/_core/modal_gradient.py`, created 2026-09-29) is built exactly so:
+exponential (`src/wavebit/_core/modal_gradient.py`, created 2026-09-29) is built exactly so:
 `eye*phases + (q - eye*values)*divided`. No wavebit is needed to see it:
 
 ```python
@@ -282,7 +282,7 @@ The same 1D scene was exact under `backend='aot_eager'` (gradient rel 6.1e-16) a
 A refusal cannot be raised from inside the trace: Dynamo turns an exception raised while tracing
 into a graph break and reruns the frame natively, where it is swallowed (a toy with no wavebit
 returned 5.0 with no error). And the arithmetic is not wrong; the compiler is. So wavebit keeps
-its frames out of the graph. `wavebit/_core/backend.py::eager_under_torch_compile` decorates
+its frames out of the graph. `src/wavebit/_core/backend.py::eager_under_torch_compile` decorates
 every class in `wavebit.__all__`, every type a public call returns and every wavebit base of
 either — each public method, property accessor, `classmethod`/`staticmethod` and dunder of the
 class's own namespace — and the public functions: 65 sites. A class only ever built and used

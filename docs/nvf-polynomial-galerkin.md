@@ -3,8 +3,8 @@
 Written: 2026-09-14
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_polynomial_galerkin.py`
-- `wavebit/_core/conforming/triangle_polynomials.py`
+- `src/wavebit/_core/conforming/cartesian_pair_polynomial_galerkin.py`
+- `src/wavebit/_core/conforming/triangle_polynomials.py`
 - `tests/test_nvf_polynomial_galerkin.py`
 - `studies/nvf_polynomial_galerkin.py`
 - `studies/results/nvf_polynomial_galerkin.log`

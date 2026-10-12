@@ -12,39 +12,54 @@ calculation — so the same code that predicts a device's response can also opti
 rigorous, fully vectorial RCWA solver whose physics is written once and runs on NumPy, JAX and
 PyTorch, so a result never depends on which you pick.
 
-::::{grid} 1 2 2 2
+Time-domain work has two entry points: the [periodic-stack solver](guide/time-domain.md)
+shares RCWA's scene interface; the [general FDTD engine](guide/general-fdtd.md) uses
+an explicit spatial domain with sources, boundaries and named monitors. The latter
+has its own units, array layout and bounded support contract.
+
+::::{grid} 1 2 2 3
 :gutter: 3
 
 :::{grid-item-card} Getting started
-:link: guide/what-is-wavebit
+:link: getting-started/index
 :link-type: doc
 
-New to Wavebit? What it solves and what it is bad at, how to install it, and a binary grating
-in fifteen lines.
+Install, choose a solver and run a first calculation.
+:::
+
+:::{grid-item-card} Learn
+:link: learn/index
+:link-type: doc
+
+Follow lessons and modify runnable examples.
 :::
 
 :::{grid-item-card} User guide
 :link: guide/README
 :link-type: doc
 
-Describing a scene, saying what the light is, choosing the numerics, near fields, autodiff
-and backends.
+Describe materials, geometry, illumination and numerical settings.
 :::
 
-:::{grid-item-card} Reference
+:::{grid-item-card} API reference
 :link: reference/index
 :link-type: doc
 
-The normative contract, every keyword with its default and its refusals, and the API
-generated from the docstrings.
+Look up signatures, accepted values and result contracts.
 :::
 
-:::{grid-item-card} Decisions
-:link: decisions/index
+:::{grid-item-card} Theory & validation
+:link: theory/index
 :link-type: doc
 
-Why a default is what it is, and what was measured to decide it: the write-ups, cited from
-the code they explain.
+Read derivations, measured comparisons and their limits.
+:::
+
+:::{grid-item-card} Developer guide
+:link: developer/index
+:link-type: doc
+
+Edit the source, debug a worktree and build the documentation.
 :::
 
 ::::
@@ -52,7 +67,9 @@ the code they explain.
 ## The seven conventions
 
 Each is legal, energy-conserving and *wrong* when read backwards — no error, no warning.
-[`conventions.md`](conventions.md) is the normative contract.
+[`conventions.md`](conventions.md) is the normative contract for the interfaces
+summarized here. The [general FDTD guide](guide/general-fdtd.md#units-coordinates-and-backends)
+states that engine's separate coordinate, angle and time conventions.
 
 | | |
 | --- | --- |

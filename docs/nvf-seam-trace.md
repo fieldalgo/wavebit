@@ -3,7 +3,7 @@
 Written: 2026-09-14
 
 Targets:
-- `wavebit/_core/conforming/periodic_seam_trace.py`
+- `src/wavebit/_core/conforming/periodic_seam_trace.py`
 - `tests/test_nvf_seam_trace.py`
 
 TL;DR: A real, continuous positive-gap potential supplies the unrestricted

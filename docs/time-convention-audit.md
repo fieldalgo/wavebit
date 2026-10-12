@@ -38,10 +38,10 @@ angle in an absorbing superstrate fixes a real `k_par` (`docs/conventions.md`, "
 incidence"), so every complex-`k_par` case below is now reached only through a complex `theta`.
 
 Targets:
-- `wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch` (removed 2026-10-02), `mode_q`
-- `wavebit/_core/boundary.py` — `conv_mats`
-- `wavebit/_core/scattering.py` — the SMM incident amplitude (prose only)
-- `wavebit/_core/solve_2d_first_order.py` — `split_forward_backward` (scope note only)
+- `src/wavebit/_core/conventions.py` — `boundary_kz`, `_off_principal_branch` (removed 2026-10-02), `mode_q`
+- `src/wavebit/_core/boundary.py` — `conv_mats`
+- `src/wavebit/_core/scattering.py` — the SMM incident amplitude (prose only)
+- `src/wavebit/_core/solve_2d_first_order.py` — `split_forward_backward` (scope note only)
 - `tests/test_branch_selection.py`, `tests/test_lossy_media.py`
 
 ---

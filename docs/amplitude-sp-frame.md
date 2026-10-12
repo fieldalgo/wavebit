@@ -3,9 +3,9 @@
 Written: 2026-08-16.
 Updated: 2026-09-27 (Sec. 6: the pure 1D path joins the frame; `r_xyz` / `t_xyz`. Sec. 7: the
 lateral phase reference moves to the cell centre).
-Targets: `wavebit/_core/conventions.py`, `wavebit/_core/result.py`,
-`wavebit/_core/solve_1d.py`, `wavebit/_core/scattering.py`, `wavebit/_core/field_result.py`,
-`wavebit/_core/engine.py`,
+Targets: `src/wavebit/_core/conventions.py`, `src/wavebit/_core/result.py`,
+`src/wavebit/_core/solve_1d.py`, `src/wavebit/_core/scattering.py`, `src/wavebit/_core/field_result.py`,
+`src/wavebit/_core/engine.py`,
 `tests/test_amplitude_sp_frame.py`, `tests/test_order_azimuth.py`,
 `tests/test_golden_legacy_parity.py`, `tests/test_scattering_core.py`,
 `tests/test_excitation.py`, `tests/test_cartesian_amplitudes.py`,
@@ -258,7 +258,7 @@ taken because a quantity whose sign means one thing on one path and another on t
 trap Sec. 2 describes, and `excitation` weights inherited it as different *light*, not only a
 different label.
 
-**What moved, on the pure 1D path only** (`order_frame_sign` in `wavebit/_core/conventions.py`
+**What moved, on the pure 1D path only** (`order_frame_sign` in `src/wavebit/_core/conventions.py`
 is the rule; `solve_1d`, `smm_1d` and `field_result` apply it):
 
 * the amplitudes, by the relation above;

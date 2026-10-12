@@ -4,13 +4,13 @@ Written: 2026-09-16
 
 Targets:
 
-- `wavebit/_core/conforming/cartesian_pair_transmission_galerkin.py`
-- `wavebit/_core/conforming/pair_transmission_fields.py`
-- `wavebit/_core/conforming/pair_transmission_modes.py`
-- `wavebit/_core/conforming/pair_transmission_mode_precision.py`
-- `wavebit/_core/conforming/pair_transmission_common_precision.py`
-- `wavebit/_core/conforming/pair_transmission_extended_precision.py`
-- `wavebit/_core/conforming/pair_extended_precision.py`
+- `src/wavebit/_core/conforming/cartesian_pair_transmission_galerkin.py`
+- `src/wavebit/_core/conforming/pair_transmission_fields.py`
+- `src/wavebit/_core/conforming/pair_transmission_modes.py`
+- `src/wavebit/_core/conforming/pair_transmission_mode_precision.py`
+- `src/wavebit/_core/conforming/pair_transmission_common_precision.py`
+- `src/wavebit/_core/conforming/pair_transmission_extended_precision.py`
+- `src/wavebit/_core/conforming/pair_extended_precision.py`
 - `tests/test_nvf_pair_transmission.py`
 - `tests/test_nvf_transmission_common_precision.py`
 - `tests/test_nvf_transmission_mode_precision.py`

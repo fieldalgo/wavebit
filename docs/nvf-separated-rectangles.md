@@ -3,9 +3,9 @@
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/__init__.py`
-- `wavebit/_core/conforming/partitioned_gap.py`
-- `wavebit/_core/conforming/material_grading.py`
+- `src/wavebit/_core/conforming/__init__.py`
+- `src/wavebit/_core/conforming/partitioned_gap.py`
+- `src/wavebit/_core/conforming/material_grading.py`
 - `tests/test_conforming_separated_rectangles.py`
 - `tests/test_nvf_interface_resolution.py`
 

@@ -7,7 +7,7 @@ API boundary. The private construction described below is unchanged; see
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/__init__.py`
+- `src/wavebit/_core/conforming/__init__.py`
 - `tests/test_conforming_layer_axes.py`
 
 `ConformingNVF` accepts nonoverlapping rectangle sequences along either lattice

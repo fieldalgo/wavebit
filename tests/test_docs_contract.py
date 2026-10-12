@@ -37,7 +37,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 # Directories that ship. `studies/` and `tutorials/` are here because the leak reached both.
 # The files at the top of the tree ship too; `published_files` adds them.
-PUBLISHED = ('wavebit', 'docs', 'tests', 'studies', 'tutorials', 'examples')
+PUBLISHED = ('src', 'docs', 'tests', 'studies', 'tutorials', 'examples')
 # `.log` because the results logs are committed records, and one carried a build machine's
 # temporary directories.
 TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.yml', '.yaml', '.txt', '.m', '.log'}
@@ -72,6 +72,9 @@ CITED_BUT_ABSENT = {
     # A file the script writes rather than reads. `*.json` is ignored on purpose -- the log
     # beside it is the committed record, and a second copy would be a second thing to keep true.
     'studies/results/backends.json',
+    'studies/results/fdtd_cpml_slab_cost.json',
+    'studies/results/fdtd_slab_add_cost.json',
+    'studies/results/fdtd_tfsf_oblique_leak.json',
     # Deliberately named as gone. Each appears in prose that says so ("used to live in",
     # "the legacy", "the deleted"), explaining where a test came from or what it replaced.
     'QA/1d_pattern_in_1dc_and_2d.py',
@@ -338,12 +341,12 @@ def test_without_a_checkout_of_its_own_the_tree_on_disk_is_read(tmp_path, where)
 # `file.py::name`, a repository URL to a directory, and a navigation entry -- and the files
 # they name.
 CITING = {
-    'docs/a.md': ('Targets: `wavebit/x.py`, `wavebit/*.py`. See `docs/b.md`, `docs/b.py::f` and '
+    'docs/a.md': ('Targets: `src/wavebit/x.py`, `src/wavebit/*.py`. See `docs/b.md`, `docs/b.py::f` and '
                   'https://github.com/fieldalgo/wavebit/tree/develop/docs/sub.'),
     'docs/_toc.yml': '- file: b',
 }
 CITED = {
-    'wavebit/x.py': 'x = 1',
+    'src/wavebit/x.py': 'x = 1',
     'docs/b.md': 'b',
     'docs/b.py': 'def f():\n    pass',
     'docs/sub/c.md': 'c',
@@ -370,8 +373,8 @@ def test_a_citation_resolves_only_to_what_a_clone_gets(tmp_path, state):
     found = (missing_targets(CITING['docs/a.md'], tmp_path), missing_cited_paths(tmp_path),
              missing_symbols(tmp_path), dangling_repo_urls(tmp_path), missing_toc_pages(tmp_path))
     assert found == (([],) * 5 if state == 'tracked' else (
-        ['wavebit/*.py', 'wavebit/x.py'],
-        ['docs/a.md: docs/b.md', 'docs/a.md: wavebit/x.py'],
+        ['src/wavebit/*.py', 'src/wavebit/x.py'],
+        ['docs/a.md: docs/b.md', 'docs/a.md: src/wavebit/x.py'],
         ['docs/a.md: no such file: docs/b.py::f'],
         ['docs/a.md:1: docs/sub'],
         ['b']))
@@ -485,7 +488,7 @@ def _sources_named(path, citing, root=ROOT):
     `citing` is the repository-relative path of the file that cites it."""
     files = tree(root)
     out = [c for c in (posixpath.normpath(posixpath.join(base, path))
-                       for base in ('', 'wavebit', posixpath.dirname(citing)))
+                       for base in ('', 'src/wavebit', posixpath.dirname(citing)))
            if c in files]
     if not out:
         name = posixpath.basename(path)
@@ -553,7 +556,7 @@ def test_repository_urls_name_something_in_the_tree():
 def docs_with_targets(root=ROOT):
     """Each document directly in `docs/` that names its `Targets`, with its text."""
     for rel in sorted(tree(root)):
-        if posixpath.dirname(rel) == 'docs' and rel.endswith('.md'):
+        if rel.startswith('docs/') and rel.endswith('.md'):
             text = (root / rel).read_text(encoding='utf-8')
             if 'Targets' in text:
                 yield root / rel, text
@@ -586,7 +589,7 @@ def missing_cited_paths(root=ROOT):
                 # `ee70470` deleted it. Widening the rule was tried and rejected on the
                 # numbers. Resolving a bare name *beside the citing file* flags 84 of 330
                 # citations, almost all correct prose (`docs/` saying `boundary.py` for
-                # `wavebit/_core/boundary.py`). Resolving it *anywhere in the tree* is far
+                # `src/wavebit/_core/boundary.py`). Resolving it *anywhere in the tree* is far
                 # better at 17, but 14 of those 17 are legitimate too: files of other projects
                 # (GRCWA's `kbloch.py`, fmmax's `utils.py`), names the prose itself marks as
                 # former (`golden_legacy_field.npz`), things deliberately deleted, and a script
@@ -596,10 +599,12 @@ def missing_cited_paths(root=ROOT):
             # Three bases, and the middle one is a deliberate house style rather than slack:
             # `_core/parametric.py` is how this codebase refers to its own internals, in 13 files
             # and counting, and there is only one `_core/` for it to mean. Spelling it
-            # `wavebit/_core/...` everywhere would be longer and no clearer. The third base
+            # `src/wavebit/_core/...` everywhere would be longer and no clearer. The third base
             # accepts a link relative to the citing file, which is how one doc points at another.
             if any(in_tree(posixpath.join(base, t), root)
-                   for base in ('', 'wavebit', posixpath.dirname(rel))):
+                   for base in ('', 'src/wavebit',
+                                'src' if rel.startswith('studies/results/') else '',
+                                posixpath.dirname(rel))):
                 continue
             bad.append(f'{rel}: {t}')
     return sorted(set(bad))
@@ -624,7 +629,7 @@ def test_paths_cited_anywhere_are_in_the_repository():
 def missing_targets(text, root=ROOT):
     """Each `wavebit/...py` a document's text names that is not in the tree."""
     missing = []
-    for m in re.finditer(r'`(wavebit/[A-Za-z0-9_./*-]+\.py)', text):
+    for m in re.finditer(r'`(src/wavebit/[A-Za-z0-9_./*-]+\.py)', text):
         target = m.group(1)
         found = ([f.relative_to(root).as_posix() for f in root.glob(target)] if '*' in target
                  else [target])
@@ -633,7 +638,7 @@ def missing_targets(text, root=ROOT):
     return sorted(set(missing))
 
 
-@pytest.mark.parametrize('doc', [p.name for p, _ in docs_with_targets()])
+@pytest.mark.parametrize('doc', [p.relative_to(ROOT / 'docs').as_posix() for p, _ in docs_with_targets()])
 def test_every_target_a_document_names_exists(doc):
     """A document explains named code; the names have to be real."""
     missing = missing_targets((ROOT / 'docs' / doc).read_text(encoding='utf-8'))

@@ -3,8 +3,8 @@
 Written: 2026-09-14.
 
 Targets:
-- `wavebit/_core/conforming/periodic_rectangle_galerkin.py`
-- `wavebit/_core/conforming/cartesian_pair_galerkin.py`
+- `src/wavebit/_core/conforming/periodic_rectangle_galerkin.py`
+- `src/wavebit/_core/conforming/cartesian_pair_galerkin.py`
 - `tests/test_nvf_periodic_galerkin.py`
 - `studies/nvf_periodic_galerkin.py`
 - `studies/results/nvf_periodic_galerkin.log`

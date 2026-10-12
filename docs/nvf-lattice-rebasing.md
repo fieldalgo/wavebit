@@ -3,7 +3,7 @@
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/__init__.py`
+- `src/wavebit/_core/conforming/__init__.py`
 - `tests/test_conforming_lattice_rebasing.py`
 
 `ConformingNVF` accepts nonorthogonal basis vectors when they describe an

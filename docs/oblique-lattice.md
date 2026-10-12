@@ -3,10 +3,10 @@
 Written: 2026-08-09. Measured on CPU, NumPy backend, float64.
 
 Targets:
-- `wavebit/_core/lattice.py` — the basis, the reciprocal mapping, the Jacobian
-- `wavebit/_core/solve_2d.py::order_grid_kxy` — the two k-layouts a cell can have
-- `wavebit/_core/engine.py::CoreSolveMixin.lattice` — the entry point
-- `wavebit/_core/engine.py::_reject_unsupported_lattice` — what is still refused, and why
+- `src/wavebit/_core/lattice.py` — the basis, the reciprocal mapping, the Jacobian
+- `src/wavebit/_core/solve_2d.py::order_grid_kxy` — the two k-layouts a cell can have
+- `src/wavebit/_core/engine.py::CoreSolveMixin.lattice` — the entry point
+- `src/wavebit/_core/engine.py::_reject_unsupported_lattice` — what is still refused, and why
 
 ---
 

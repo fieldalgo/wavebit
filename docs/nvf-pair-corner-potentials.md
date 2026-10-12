@@ -3,10 +3,10 @@
 Written: 2026-09-15
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_corner_galerkin.py`
-- `wavebit/_core/conforming/pair_corner_fields.py`
-- `wavebit/_core/conforming/pair_corner_positive.py`
-- `wavebit/_core/conforming/pair_corner_contact.py`
+- `src/wavebit/_core/conforming/cartesian_pair_corner_galerkin.py`
+- `src/wavebit/_core/conforming/pair_corner_fields.py`
+- `src/wavebit/_core/conforming/pair_corner_positive.py`
+- `src/wavebit/_core/conforming/pair_corner_contact.py`
 - `tests/test_nvf_pair_corner_galerkin.py`
 - `tests/test_nvf_pair_angular_fields.py`
 

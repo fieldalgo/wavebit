@@ -1,8 +1,17 @@
 # Reference cases
 
-Validation against solvers that are not ours. The expected answer is known — agreement to
-~1e-13 — so these are tests, not studies. What makes them their own directory is that
-*producing* the reference needs software this project does not ship.
+Validation against solvers that are not ours. The expected answer is known, so these are tests,
+not studies. What makes them their own directory is that *producing* the reference needs
+software this project does not ship.
+
+**How closely "known" means differs by row, and the difference is a fact about the method
+rather than about the harness.** Where the oracle is another RCWA and neither side truncates,
+agreement is ~1e-13 and a golden is a drift detector as well as a correctness one. Where the
+oracle discretises — the Meep rows, which are an FDTD — both sides carry a grid error and
+the agreement is ~1e-2 on the crossed cells and ~1e-3 on the 1D one, whose single planar
+interface per period both grids hold better than a corner. Those rows are oracles for
+*structure*: they separate a right answer from a wrong sign, a swapped axis or a mislabelled
+order, and they say nothing about the last digits. Each row below states which kind it is.
 
 The arrangement is the same for every oracle: the expensive half runs once, by hand, on a
 machine that has the tools; what CI checks on every push is the committed numbers.
@@ -37,9 +46,47 @@ differ are exactly the `__stack` pair above.
 
 ## The oracles
 
+[`lattice.py`](lattice.py) supplies pointwise discrete reciprocity, an independent
+Fourier-pole Green integral, and radiation predicted from the actual source's
+analytic cubic stamp and raw drive. It does not call the production surface
+transform. [Derivation and witnesses](../../docs/fd-lattice-radiation.md).
+
+The analytic sphere and cylinder reference in [`mie.py`](mie.py) requires only
+NumPy and SciPy. Its published coefficient pins, independent radial wave equation,
+energy and angular checks are described in [Mie validation](../../docs/fd-mie-validation.md).
+
+[`mie_fields.py`](mie_fields.py) adds exact exterior E/H for the diagnostic
+radiation study. Both Maxwell curls, concentric-sphere power, complex far limits,
+translation and an independent surface integral validate its component series.
+Its measured truncation scope and source-mutant witnesses are documented in
+[the exact-near-field section](../../docs/fd-mie-validation.md#exact-mie-near-fields-through-the-radiation-transform).
+It does not import the FDTD engine or depend on a captured FDTD answer.
+
+[`gen_star_lift_oracle.py`](gen_star_lift_oracle.py) freezes the FDTD star lift's diagonal
+change, with its first and second derivatives along two directions, on four small regions into
+`star_lift_oracle.npz`. It is written from the definitions in `src/wavebit/fd/_lower/stars.py`'s
+docstring, imports nothing from wavebit, and works at 50 digits: explicit 6x6 stars, bisection to
+`2**-150`, an eigensolver certificate and central differences. It needs mpmath, which wavebit does
+not depend on; `test_fd_star_lift.py` compares JAX, `jax.jit` and Torch's nested derivatives with
+the committed numbers. [The star lift](../../docs/fd-subpixel-occupancy.md#the-star-lift-the-smoothed-operator-positive-by-construction-2026-09-27).
+
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
 | **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + a RETICOLO V10 tree from its Zenodo record, CC BY 4.0 ([terms below](#what-reticolos-records-and-packages-say-about-its-licence)) (`RETICOLO_PATH`) | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
+
+| **Meep**, **transverse rectangle sensitivities** | three TE diffraction orders, rectangle width/centre derivatives, two grids, averaged-profile controls and independent RCWA/translation checks | documented 2D Blocks or global material function; two durations, perturbation sizes and averaging tolerances | `golden_meep_rectangle.npz`, `golden_meep_rectangle_fine.npz`, `golden_meep_rectangle_smoothed.npz`, `golden_meep_rectangle_smoothed_refined.npz`, `test_meep_rectangle.py`, `interface/meep_rectangle.py`; [measurement](../../docs/fdtd-rectangle-gradients.md) |
+| **Meep**, **rotated block sensitivities** | eight complex channels and angle/width derivatives, independent grid refinement with explicit finite-grid gradient limits | documented 3D rotated Blocks; two grids, durations and perturbation sizes | `golden_meep_rotation.npz`, `golden_meep_rotation_coarse.npz`, `test_meep_rotation.py`, `interface/meep_rotation.py`; [measurement](../../docs/fdtd-rotation-gradients.md) |
+| **Meep**, **graded painted rectangles** | Eight complex channels and angle/relative-position/width derivatives | Independent inclusion-exclusion sinc profile, two FDTD grids, durations/steps and a profile refinement | `golden_meep_painted_shapes.npz`, `golden_meep_painted_shapes_coarse.npz`, `golden_meep_painted_shapes_profile.npz`, `test_meep_painted_shapes.py`, `interface/meep_rotation.py`; [measurement](../../docs/fdtd-painted-shapes.md) |
+| **Meep**, **graded ellipse sensitivities** | Eight complex channels and angle/axis derivatives | Independent affine Bessel profile, two FDTD grids, durations/steps and a profile refinement | `golden_meep_ellipse.npz`, `golden_meep_ellipse_coarse.npz`, `golden_meep_ellipse_profile.npz`, `test_meep_ellipses.py`, `interface/meep_rotation.py`; [measurement](../../docs/fdtd-ellipse-gradients.md) |
+| **Meep**, **graded disk sensitivities** | Eight complex channels and a diameter derivative for the translation-averaged disk | Independent Bessel profile, two FDTD resolutions, two durations/steps and a profile-grid control | `golden_meep_circle.npz`, `golden_meep_circle_coarse.npz`, `golden_meep_circle_profile.npz`, `test_meep_circles.py`, `interface/meep_rotation.py`; [measurement](../../docs/fdtd-circle-gradients.md) |
+| **Meep**, **graded rotated block sensitivities** | Eight complex channels and two shape derivatives for a fixed translation-averaged profile | Public MaterialGrid, independent sinc profile, two FDTD grids and profile grids, duration/step controls | `golden_meep_rotation_smoothing.npz`, `golden_meep_rotation_smoothing_coarse.npz`, `golden_meep_rotation_smoothing_profile.npz`, `test_meep_rotation_smoothing.py`, `interface/meep_rotation.py`; [measurement](../../docs/fdtd-rotation-smoothing.md) |
+| **Meep**, **adjoint transmission sensitivities** | Two complex co-polarized transmissions and angle/width sensitivities, with explicit finite-grid adjoint differences | Public adjoint API, analytic sinc-profile chain, matching forward differences and time controls | `golden_meep_adjoint_rotation.npz`, `golden_meep_adjoint_rotation_coarse.npz`, `test_meep_adjoint_rotation.py`, `interface/meep_adjoint_rotation.py`; [measurement](../../docs/fdtd-adjoint-validation.md) |
+| **Meep**, **constrained multilayer design** | three coating weights and three permittivities: complex r/t, six derivatives and separate continuum/grid-refinement checks | documented global material function; two durations, perturbation sizes and averaging tolerances | `golden_meep_multilayer.npz`, `golden_meep_multilayer_refined.npz`, `test_meep_multilayer.py`, `interface/meep_multilayer.py`; [measurement](../../docs/fdtd-multilayer-optimization.md) |
+| **Meep**, **magnetic half-space sensitivities** | normal-incidence slab complex r/t and four exterior epsilon/mu derivatives; two perturbation sizes and two durations | separately installed Meep, documented API only | `golden_meep_halfspace.npz`, `test_meep_halfspace.py`, `interface/meep_halfspace.py` |
+| **Meep**, **internal layer sensitivities** | magnetic film complex r/t and a thickness derivative with fixed output plane; two perturbations and durations, with explicit continuum-error limits | separately installed Meep, documented API only; generator `--parameter thickness` | `golden_meep_layer_thickness.npz`, `test_meep_layer_thickness.py`, `interface/meep_halfspace.py` |
+| **Meep**, **moving total depth** | magnetic film complex r/t and depth derivatives referenced to the moving exit; two grids, durations, steps and averaging controls | public global material function; generator `--parameter depth --smoothing .025` | `golden_meep_variable_depth.npz`, `golden_meep_variable_depth_coarse.npz`, `golden_meep_variable_depth_refined.npz`, `test_meep_variable_depth.py`, `interface/meep_halfspace.py`; [measurement](../../docs/fdtd-variable-depth.md) |
+| **Meep**, **graded internal-interface sensitivities** | magnetic linear epsilon/mu ramp, complex r/t and its translation derivative; perturbation, duration and averaging-tolerance controls | documented global material function in a periodic 3D cell; generator `--parameter thickness --smoothing .0125`, plus `--subpixel-tol 1e-9` for the refined archive | `golden_meep_layer_smoothing.npz`, `golden_meep_layer_smoothing_refined.npz`, `test_meep_layer_smoothing.py`, `interface/meep_halfspace.py` |
+| **RETICOLO** (Li/Lalanne lineage) | diffraction *orders*; uniform layers with a complex 3x3 tensor — **but only up to one off-diagonal pair, at classical mounting**, see below | Octave + a licensed RETICOLO V10 tree (`RETICOLO_PATH`) | `golden_reticolo.npz`, `golden_reticolo_anisotropic.npz` |
 | **RETICOLO**, swept over `(kx, ky)` | conical incidence across the light line, **including complex (evanescent) angles** | nothing — frozen from a 2024-09-09 study, see its generator | `golden_reticolo_conical_sweep.npz` |
 | **RETICOLO**, at a **complex `kx`** | the formal complex-angle path (`kx/k0 = n*sin(theta)`, `Im(kx) != 0`) on interfaces and gratings. Both solvers take Maystre's cut (this one since 2026-10-02). The lossless-top grating cases sit where the earlier rule took the other root, which the test asserts. `R`, `T` per order and `r_0`, 1e-16 .. 4e-15 | Octave + `RETICOLO_PATH` | `golden_reticolo_complex_kx.npz` |
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
@@ -53,9 +100,264 @@ differ are exactly the `__stack` pair above.
 | **PyMoosh** 4.0.1 (MIT), **lossless double negatives** | flat multilayers with a lossless double negative as the substrate, as the lit superstrate, as an inner layer, and all three: `r`, `t`, `R`, `T`, TE and TM, four in-plane wavevectors each, on the TE/TM, 2D and first-order paths, ETM and SMM -- 8.8e-15 at worst. The case fmmax cannot arbitrate | a throwaway venv with PyMoosh 4.0.1 -- see its generator | `golden_pymoosh_dng.npz` |
 | **RETICOLO**, a **crossed** grating in both of Li's nestings | the 2D Li build, `li_nesting='fixed'` against `parm.res1.li = 1` and `'symmetric'` against `li = 0` — the one case here that can tell the two apart (a 1D grating cannot) | Octave + RETICOLO V10, with `li` set by hand: the bridge does not expose it | inline in `test_reticolo_li_nesting.py`, totals to ten decimals (2026-09) |
 
-A fourth oracle lives outside this directory: the Berreman 4x4 in
+| **Meep** (FDTD, GPL) | a **crossed grating in the time domain**: per-order complex amplitudes on a 2D order grid at a conical mount, both incident polarisations. Not RCWA at all, so it is the only entry that can arbitrate `_core/fdtd.py` — and the only external check `_extract_crossed` has ever had | the `meep` env; **never an install dependency**, and its source is not read — see below | `golden_meep_crossed.npz` |
+| **Meep**, **patterned materials in 3D** | selected asymmetric crossed rasters with permeability contrast, electric Drude and electric Lorentz poles; both source polarizations, complex propagating amplitudes at two grids, and a separate doubled-runtime check | `meep` env, public API only; never an install dependency | `golden_meep_crossed_materials.npz`, `golden_meep_crossed_materials_runtime.json` |
+| **Meep**, **damped negative-epsilon metal** | a subwavelength rectangular 3D Drude patch; only zeroth order radiates. Preserved grids 30/60, separate grid 120, runtime control at 60; coarse-reference discrepancy is documented | same public-API-only Meep environment | `golden_meep_crossed_metal.npz`, `golden_meep_crossed_metal_fine.npz` |
+| **Meep**, **source-free ringdown traces** | uniform Lorentz oscillations and a conductive periodic cavity mode; offline fitted frequencies/decay agree with independently derived discrete poles | same public-API-only Meep environment; ordinary tests read the archive | `golden_meep_ringdown.npz`, `test_meep_ringdown.py`, `interface/meep_ringdown.py` |
+| **Meep**, **source spectral zero** | unit-peak delayed-difference source suppresses an undamped Lorentz mode; complex native records match at identical current/field times on all three CPU backends | same public-API-only Meep environment, using `CustomSource` | `golden_meep_source_notch.npz`, `test_meep_source_notch.py`, `interface/meep_source_notch.py` |
+| **Meep**, the **1D benchmark** | the grating `docs/fdtd.md` §2 publishes and `README.md` leans on — pure TE/TM, normal incidence, both polarisations at two resolutions, plus a **planar control against a closed form**. Not new physics: it *is* that table's Meep column, which until 2026-09-06 was quoted from elsewhere. Grade **~1e-3**, structure not drift | same | `golden_meep_1d.npz` |
+| **Meep** + **FDTDX**, **native-grid Yee updates** | slab complex Ex/Hy transfer and power at resolutions 20/40/80 with a runtime control; FDTDX 3D periodic E/H updates and the epsilon derivative | separate Meep and FDTDX interpreters, public API or installed update functions only; frozen by `interface/freeze_grid_references.py` | `golden_native_grid_external.npz`, `test_native_grid_external.py`, `test_native_torch_external.py`, `interface/validate_grid_meep.py`, `interface/validate_grid_fdtdx.py` |
+| **Meep** + **FDTDX**, **CPML and electric ADE** | four dispersive slab models at two resolutions, a low-loss mixed metal, and FDTDX two-pole updates with the oscillator-strength derivative | the same interpreters; frozen by `interface/freeze_grid_material_references.py` | `golden_native_material_external.npz`, `golden_low_loss_metal_meep.json`, `test_native_material_external.py`, `interface/validate_grid_dispersive.py`, `interface/validate_grid_fdtdx_ade.py` |
+| **FDTDX**, **complex Bloch boundaries** | three-axis phase advance, real and imaginary E/H, and the material derivative | FDTDX interpreter; `interface/freeze_grid_references.py --kind bloch` | `golden_native_bloch_external.npz`, `test_native_bloch_external.py`, `interface/validate_grid_fdtdx_bloch.py` |
+| **Meep**, **bottom-incident scene** | two-layer complex r/t with the source physically below the stack | Meep interpreter, public API only | `golden_scene_bottom_meep.json`, `test_scene_bottom_meep.py`, `interface/validate_scene_bottom_meep.py` |
+
+One more oracle lives outside this directory: the Berreman 4x4 in
 `tests/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
-own implementation, so it sits a tier below these three.
+own implementation, so it sits a tier below the rows above. Meep is the only entry that is both
+at once: a different formulation *and* somebody else's code.
+
+### One file here is not an oracle: `golden_fdtd_table.npz`
+
+Every row above freezes somebody else's answer. `golden_fdtd_table.npz` freezes **ours** —
+`docs/fdtd.md` §2's two tables, all three columns, with the conditions they were taken at
+stored beside them — and it exists because a published table is a claim with no owner. §2's
+"this module" column was taken at `pad_scale=2.0`, `PAD_WAVELENGTHS` was then halved, the
+sentence "at the shipped defaults" stayed true-looking, and for three weeks the document
+printed a configuration the library no longer had. Nothing caught it because **nothing in the
+suite read a number out of a document**: `tests/test_docs_contract.py` checks paths, symbols,
+URLs and the toctree, never a value.
+
+So `test_fdtd_table_golden.py` parses §2's markdown tables cell by cell and holds every value
+to half a unit in its last printed place, re-solves the two columns this environment can, and
+— the one that would have caught the original drift on the day it happened — asserts that the
+conditions written out **by value** in `_meep_1d_cases.py` are still the ones
+`src/wavebit/_core/fdtd.py` ships. That case file is the record now, for both sides of the
+comparison: it carries what the harness passes, what it *inherits* (the four largest
+determinants of the Meep column are meep defaults the generator never passes, pinned only by
+the version string), the derived grid in lengths and counts, and a measured sensitivity table
+saying what a deviation costs. A record that names values can be checked against the module;
+a record that says "the defaults" is true by construction and can be checked against nothing.
+
+`gen_goldens_fdtd_table.py` writes it, in the project env, and copies the Meep column across
+from `golden_meep_1d.npz` with that file's digest so a stale copy is a failing test.
+
+### A second file that is not an oracle: `fd_golden_stage0.npz` (2026-09-18)
+
+The general FDTD kernel at `src/wavebit/fd/` runs one body of code on NumPy, JAX and Torch, and
+its fifth gate (`tests/test_fd_backends.py`) holds the three to each other on the scenes of
+gates 1 to 4 — a PEC box, a PMC box, a periodic and a Bloch box each carrying an exact Yee
+eigenmode, and the four half boxes of the symmetry gate — at 1e-12 of each array's peak,
+whole volumes and every recorded series. That agreement is **necessary and nowhere near
+sufficient**: a defect in the plan moves all three backends together, and three backends that
+agree say nothing about a dropped wall mask or a flipped pad sign. So the same test pins
+**each backend to what it itself produced** when this archive was frozen — the probe series,
+the final E and H at eight fixed cells per component, and one whole-volume energy per scene —
+at the same 1e-12. Per backend rather than one shared number, so a red test names the
+backend that moved. The gate's mutant is the argument run: the PEC box's plan with its masks
+dropped passes the agreement half on all three backends and fails the pin on all three by
+O(1) (4e-2 on the energy, 3 to 13 on the series).
+
+What it is not is an oracle for the kernel's correctness. Every number came from `wavebit.fd`,
+so it cannot say the kernel is right — gates 1 to 4 do that against closed forms. What it
+adds is a drift detector with two properties a bare self-capture lacks: the frozen eigenmode
+series are held, in the archive, to the three-term recurrence those gates hold their live
+series to, so what was frozen is known to have been a right answer; and the scene behind
+every key is shown to be the one the test builds — by the plan's skeleton hash for the static
+content and by the sampled initial field for the excitation — so a moved helper reads as a
+moved scene rather than as drift.
+
+`interface/freeze_fd_stage0.py` writes it, in the project env with all three backends, from
+this checkout and no other (it refuses an imported `wavebit` from elsewhere). The archive
+carries the Python, wavebit, numpy, jax and torch versions, the platform, LF-normalised
+digests of the freezer and of the case list, and a SHA-256 over its own numeric content that
+the test recomputes. The freezer validates that digest before it lets it arbitrate anything:
+it freezes **twice in one process and refuses to write unless every array comes back byte
+for byte** — the check that a digest depending on the process (an `id()`, an address in a
+`repr`, an unseeded draw) fails and a digest that is a function of the code passes. Measured
+on the freezing machine: Torch bit-identical to NumPy on every real scene and 2e-15 off on
+the complex one, JAX 1e-15 to 4e-14 off both, so the 1e-12 budget is 25x above the worst of
+that and 1e3 below anything a wrong sign, pad or mask does. Without `--rebaseline` the
+freezer never writes over the committed file: it reproduces the archive and prints, array by
+array, what moved and whether the move is inside the budget. **Regenerating is not how a
+failing test gets fixed** here any more than it is for the rows above.
+
+### Its stage-1 twin: `fd_golden_stage1.npz` (2026-09-18)
+
+Stage 1 added everything in `src/wavebit/fd/` that is not a wall — a stretched CPML slab with
+four psi arrays per face, graded `Absorber` damping, update coefficients built from a
+material, and an ADE pole recurrence carrying its own memory — and an eigenmode in a PEC box
+exercises none of it. So a second archive pins six scenes of its own, one per feature: a 20-cubed
+vacuum box with a PML on all six faces, a 30-degree travelling packet under a Bloch phase (the same
+stretch, complex), a dielectric slab between two PMLs, a Drude + Lorentz half-space running
+out through an `Absorber` face, a conductive slab at 20 degrees, and an `Absorber` box with no PML
+at all. `tests/test_fd_stage1_backends.py` holds the three backends to each other and each to
+its own frozen answer at the same 1e-12, and its two mutants are the argument: a plan with its
+CPML faces dropped, and a pole term whose `drive` is zeroed, both keep all three backends
+agreeing and put every one of them O(1) from its golden.
+
+Two things are new beside the fields and the series. The **lowered numbers are frozen once per
+scene** — the four update coefficient arrays, every CPML profile (`b`, `a`, `1/kappa`) and
+every pole's recurrence coefficients — because they are backend-independent by construction,
+so a failure that touches only those rows says the layer was regraded and one that touches
+only the per-backend rows says the step changed under an unchanged layer. And the scenes are
+built so that **each one empties itself**: the leapfrog conserves the discrete divergence of
+E exactly, so an initial field with a longitudinal part leaves a static charge sitting in the
+box that no absorber could ever remove (measured: 25% of the energy, on a plain Gaussian). The
+cube is driven by the curl of a scalar blob, the oblique lines by an explicit superposition of
+travelling eigenmodes, and the test then holds the frozen energy against the same box with
+PEC in place of every absorbing face — 2e-3 of it in the cube, 5e-2 at 30 degrees where the packet's
+own band reaches grazing and gate 1's table says a 12-cell layer reflects 3e-2.
+
+`interface/freeze_fd_stage1.py` writes it under exactly the stage-0 rules above: this checkout
+only, twice in one process, LF-normalised source digests (its own, its case list's, and the
+stage-0 case list it imports its capture from), a content digest the test recomputes, and
+`--rebaseline` as the only way to overwrite. It adds one line its predecessor has no need of:
+an array whose **shape** moved is reported as a changed scene rather than compared, because
+comparing it raises instead of reporting.
+
+### Its stage-2 twin: `fd_golden_stage2.npz` (2026-09-19)
+
+Stage 2 added the first things in `src/wavebit/fd/` that *drive* the grid rather than start from an
+initial field -- a waveform table built inside the traced function, a dipole's stamp added into
+the curl, and an incident column carried in a term's memory that a TFSF box's six faces and a
+PlaneWave sheet read their corrections from -- so a third archive pins four scenes of its own:
+an electric (B-spline) and a magnetic (tent) dipole in a PML box, a 20-degree p `PlaneWave` in a
+Bloch cell over a glass layer (complex), a `+x` TFSF box in vacuum, and a `-z` TFSF box on a
+glass half-space that crosses it. `tests/test_fd_stage2_backends.py` holds the three backends to
+each other and each to its own frozen answer at the same 1e-12 (measured: Torch bit-identical
+to NumPy on both TFSF scenes and 3e-15 off on the other two, JAX 8e-16 to 4e-15), and its two
+mutants are the argument: a stamp normalised by its sum of squares and one TFSF face with its
+sign flipped both keep all three backends agreeing and put every one of them O(1) (1.9 and 1.2)
+from its golden.
+
+Two things are new. **Every source's reference series is frozen**, per backend, beside the
+fields -- the incident E and H a sheet or a box records, the drive, work and stamp-weighted field
+of a dipole -- because stage 3 normalises by them, and a moved reference is a moved answer even
+when the field is unchanged. And **the samples are not the stage-1 cells**: those sit at the
+ends of the long axis and inside the absorbing layers, which in a TFSF scene is all scattered
+region, exactly 0.0 on NumPy and Torch and 1e-16 on JAX. The first freeze of this archive
+pinned that round-off on all eight final-field arrays of both TFSF scenes (a harmless
+reordering would have moved them by O(1) of their own peak); the stage-2 picks cluster on the
+domain centre, inside every box and next to every dipole. What the frozen numbers are known to
+be right about is asserted against closed forms rather than left to the digest: the drive is
+`Band.waveform` at the slot's half step on every backend, the stamps are partitions of unity
+centred on the dipole, the Bloch pattern is `exp(i k_par . r)` with the `k_par` of
+`Bloch.from_source`, and the TFSF runs behind the pins leave the scattered region at round-off.
+
+**`tfsf_substrate` was re-frozen once, on purpose (2026-09-19).** Its first freeze pinned a
+known defect: the layered TFSF column was driven by a hard source, which reflects the
+substrate's echo back down the column (`r = -1`), and the glass top sits one cell inside the
+6-cell box, so every array of that scene carried the echo -- and a self-captured golden agrees
+with whatever produced it. The fix (a uniform driver column feeding the layered column through
+a one-sided sheet, `src/wavebit/fd/_kernel/sources.py`) moved that scene's arrays by 13-29% of
+their peaks and nothing else: the other three scenes reproduced bit for bit, their skeletons
+changing only because `ColumnTerm` and `Correction` gained fields. What says the new numbers
+are right is `tests/test_fd_tfsf.py`: the box interior over a substrate is the
+`PlaneWave`-driven physical field to round-off at every step, and the discrete Airy field.
+
+**`plane_wave` was re-frozen once, on purpose (2026-09-19).** Its first freeze pinned a launch
+defect: the PlaneWave column's hard source wrote the continuum polarisation into the stored
+`E_x` and `E_y`, without the half-cell stagger phase `exp(i k_c dx/2)` each carries along its
+own axis and not transverse to the grid's discrete `K_par`, so this conical (`phi = 30`) p wave
+was launched with an s part first order in `dx` (an empty conical cell at 20 cells per
+wavelength transmitted `|t_p| = 9.1e-3` for an s wave). The drive now writes the grid's own s
+or p wave (`src/wavebit/fd/_lower/sources.py::plane_wave_drive` derives it). That moved this
+scene's fields, `Record` series and reference series by 2.7e-2 to 4.7e-2 of their peaks and its
+energy by 7.9e-6, and nothing else: the lowered pattern and waveform rows and the other three
+scenes (116 of 140 arrays) reproduced bit for bit, and the stage-0 and stage-1 archives did too
+(143 of 143, 288 of 288). The skeleton changed because the drive weights are now complex
+(a static plan now encodes a Python `complex`). What says the new numbers are right is
+`tests/test_fd_planewave.py` (the forward field is the closed form with the grid's own
+polarisation, and the incident field carries no trace of the other one at `phi = 35`) and the
+leak tests of `tests/test_fd_axis1d.py` and `tests/test_fd_diffraction.py` (1e-16 where they read
+1e-3 to 1e-2).
+
+`interface/freeze_fd_stage2.py` writes it under exactly the stage-0 and stage-1 rules: this
+checkout only, twice in one process, LF-normalised source digests (its own, its case list's,
+and the stage-0 case list it imports its capture from), a content digest the test recomputes,
+a changed shape reported as a moved scene, and `--rebaseline` as the only way to overwrite.
+
+### Its stage-3 twin: `fd_golden_stage3.npz` (2026-09-19)
+
+Stage 3 added one kernel observer -- a running DFT of named components over a region, carried
+in the scan (`DFTRegion`) -- and made everything else post-processing of its accumulators after
+the run: flux over a plane or a box's six faces, `Field` phasors, the near-to-far transform,
+the `Diffraction` orders (index-DFT, direction split, Yee kz de-embedding, s/p frame), and the
+sources' spectra (`power`, `incident_amplitude`, `intensity`). It also added the cell-snapped
+box (`fd.Region` since stage 4 C4, `fd.Box` before) as a structure and the `Axis1D` face. So a fourth archive pins five scenes of its own: two dipoles in
+a PML box with a `Flux` box, a `Flux` plane and a `Field` plane; a 25-degree p `PlaneWave`
+through a glass layer in a Bloch cell with a reflect and a transmit `Diffraction` plane; a
+lamellar `Region` grating at normal incidence with three propagating orders; a magnetic and an
+electric dipole in a `FarField` box; and a conical `Region` grating whose invariant axis is an
+`Axis1D`. `tests/test_fd_stage3_backends.py` holds the three backends to each other and each to
+its own frozen answer at the same 1e-12 (measured: JAX and Torch 1e-15 to 3e-14 off NumPy, the
+worst a dipole's `power()`), and `tests/test_fd_stage3_grad.py` holds `jax.grad` and
+`torch.autograd` to central differences through each new route.
+
+What is frozen is the pipeline end to end, per backend: **every DFT accumulator whole** and its
+energy series (the raw observer output), then **every result built from them** (fluxes and face
+shares, phasors, the ten `Result` arrays of each `Diffraction` monitor and its `theta_at`, the
+far-field intensity and fields at fixed directions), then the sources' spectra. A failure in the
+result rows alone says the post-processing moved under unchanged accumulators, and the gate's
+mutants show that this is not hypothetical: the continuum kz in the de-embedding and the far
+field's magnetic current with its sign flipped both leave every accumulator bit-identical and
+move only the complex amplitudes (1e-2 of their peak) or the far field (O(1)). Not frozen: the
+decay ratios, whose relative round-off on a settled run is 1e-7 of themselves (a difference of
+nearly equal energies), and the stage-2 reference series, which `fd_golden_stage2.npz` pins on
+its own scenes and which would be 60% of this archive; the gate holds the backends to each
+other on those live.
+
+Two traps met on the way are asserted rather than remembered. **A lone `Ez` dipole radiates no
+`Hz`** (its field is TM to z), so the first draft froze four box-face `Hz` accumulators of pure
+round-off -- JAX and Torch 1.0 to 1.8 of their own peaks off NumPy, the stage-2 trap exactly; each
+dipole scene now carries a second dipole, and the gate asserts every frozen array is either an
+exact 0.0 or above 1e-10. **The lamellar grating is TE by symmetry**, so its p arrays and its
+`Ex`/`Hy` accumulators *are* exact zeros on every backend: frozen, and asserted exact, because a
+pin on an exact zero is one any leak of p breaks. The runs are short (300 to 500 steps), so every
+frequency-domain monitor warns `UnsettledFieldWarning`; the gate asserts that it does, naming
+each monitor, rather than silencing it unseen.
+
+The two dipole scenes' boxes are 0.4 on a side, not the first freeze's 0.2: a flux box must
+enclose a dipole's stamp (two cells either side of its centre) with a cell to spare, which
+`src/wavebit/fd/_lower/monitors.py` now refuses otherwise, and the 0.2 boxes cut both scenes'
+stamps -- the first freeze pinned a flux that missed part of the power. They were re-frozen with
+`--rebaseline` for that reason alone (only those two scenes moved; 582 of 582 arrays reproduce
+since).
+
+**`bloch_stack` and `conical` were re-frozen (2026-09-19)** for the PlaneWave launch fix that
+re-froze the stage-2 `plane_wave` scene above: both are conical p waves, and both had been
+frozen with the launch's first-order s part in them. Moved, as a fraction of each array's
+peak and the same on every backend: `bloch_stack`'s accumulators 2.8e-2 to 5.9e-2, sampled
+fields 5.1e-2 / 5.7e-2, `incident_amplitude` 5.1e-2 (the stagger phases), and its energies,
+fluxes, `R`, `T`, `R_p`, `T_p` and `intensity` 8e-6 to 9.5e-5, while its complex `r_p` and
+`t_p` moved 4e-16 (the normalisation by the column divides the launch out); `conical`'s
+accumulators 5.9e-4 to 2.2e-2, fields 7.4e-3 / 1.0e-2, complex amplitudes 1.9e-3 to 3.9e-2,
+efficiencies 1.8e-5 to 2.6e-3, `incident_amplitude` 5.1e-3. The three other scenes reproduce bit
+for bit (414 arrays). **Four arrays left the archive:** the stack's `r_s`, `R_s`, `t_s` and
+`T_s` were the defect itself (`|r_s| = 4.3e-3`, `|t_s| = 8.8e-3`, `R_s = 1.8e-5` -- the
+smallest array the round-off line was calibrated on) and are round-off now, because a layered
+cell couples none of the grid's own s into its own p. A pin on round-off is the trap this
+archive's round-off line exists to refuse, so `_fd_stage3_cases.cross_polarised` leaves them
+out of the capture of a `Region`-free cell and `tests/test_fd_stage3_backends.py` holds them live
+under 1e-13 of the co-polarised amplitude on every backend instead; 570 arrays are frozen.
+
+`interface/freeze_fd_stage3.py` writes it under exactly the earlier stages' rules: this checkout
+only, twice in one process, LF-normalised source digests (its own, its case list's, the stage-0
+case list its digest and gap come from, and the stage-2 one its sampling rule comes from), a
+content digest the test recomputes, a changed shape reported as a moved scene, and
+`--rebaseline` as the only way to overwrite.
+
+**`PML(stabilize=)` moved nothing in any of the four fd archives (2026-09-19).** The PML's
+stabilizing loss -- a matched loss on the component normal to the face, which stops a bound mode
+near the light line from growing under a PEC-backed stretch (`tests/test_fd_pml_stability.py`)
+-- is opt-in, and a pure-stretch face lowers to the same `CpmlFace`, the same skeleton and the
+same arithmetic as before it existed (the kernel skips the loss on the face's static type, and
+`params['cpml_loss']` is empty). All four freezers in compare mode, after the change: stage 0
+143 of 143, stage 1 288 of 288, stage 2 140 of 140, stage 3 570 of 570 arrays bit for bit, no
+rebaseline. Measured with the loss on by default instead, every PML scene of stages 1-3 moved
+(`final__E` by 2e-2 to 0.34 of its peak on the stage-1 PML scenes) -- and so did oracle gates
+the goldens do not arbitrate, which is why it is not the default
+(`src/wavebit/fd/_lower/cpml.py::stabilizing_rate`).
 
 ### Why the field row exists, and what it cost to not have it
 
@@ -313,6 +615,352 @@ layer beside `(4, 1)`, which have the same impedance, returns `R + T = 3.10` at 
 and `1 + 2.6e-10` at 1e-3 rad. The cases avoid both, and the generator refuses any row with
 `|R + T - 1| > 1e-12`. Rerunning the generator reproduces the file byte for byte.
 
+### The Meep row: the first oracle here that is not RCWA, and what it took
+
+Added 2026-09-06. Every other row truncates a Fourier series and inherits whatever
+factorization that forces, which is the formulation `_core/engine.py` uses — so none of them
+can arbitrate `_core/fdtd.py`, whose errors are numerical dispersion, a staircased boundary and
+an imperfect absorber instead. Meep is an FDTD. Nothing is shared but Maxwell's equations.
+
+Two gaps close at once, and the second one is wider than it looks:
+
+* **a crossed grating solved in the time domain.** `_extract_crossed` is a line-for-line copy
+  of `_extract_conical`, and every per-order sign in it — the three `sigma` legs, the
+  `s_hat`/`p_hat` frame, the `n / kz_m` secant — is invisible to `R`, `T` and `R + T`. Its only
+  arbiter was `tests/test_fdtd.py`, against **wavebit's own** RCWA path, which shares those
+  conventions with it by construction: a convention wrong in both moves nothing.
+* **per-order complex amplitudes on a two-dimensional order grid, for either solver.**
+  `docs/amplitude-sp-frame.md` §2 names what every golden here compares — efficiencies, or
+  fields, or 1D amplitudes — and concludes that the per-order s/p half-turn "could not have
+  been reached" by any of them. Both cells below have propagating orders on both sides of
+  `kx = 0`, which is what makes that reachable, and `test_the_half_turn_half_plane_is_covered`
+  is what keeps it so as cases are added.
+
+**Nothing in the map is fitted.** The axis map is the *identity* — a 3D meep cell has three
+real axes, so unlike the 2D bridge nothing is permuted. Meep's DFT phasor is `exp(+i k z)` for
+a wave travelling `+z`, which is wavebit's `e^{-iωt}`, so there is no conjugation. The frame is
+`s_hat = z_hat × k_hat_par` and `p_hat = k_hat × s_hat`, and `E · k_hat = 0` collapses the p
+projection to `∓ (n / kz)(c Ex + s Ey)` with the upper sign downgoing — which *is*
+`_extract_crossed`'s `sigma = (-1, +1, -1)`, so those three signs are geometry rather than a
+convention either side chose. `test_the_leg_signs_are_the_ones_the_generator_derived` pins the
+two spellings together.
+
+**The one free factor is an origin, and it is measured rather than assumed.** wavebit places a
+raster from the cell **centre** (`wavebit.meshgrid_xy` on a 7-column cell of period 0.84 returns
+`-0.36 … +0.36`, and the meep blocks are built on the same rule) but references each order's
+amplitude phase from the cell **corner** — its demodulation kernel runs over cells `0 … n-1`,
+in both solvers. Normalised by the incident order the two differ by
+`exp(-i(k_m - k_inc)P/2)` on each axis, which is `(-1)^m (-1)^l`. Applied, not fitted, and
+scored against four alternatives on the square cell at a deliberately coarse resolution 25:
+
+| rule | worst amplitude gap against wavebit's RCWA |
+| --- | --- |
+| identity | 7.2e-1 |
+| `(-1)^m` alone | 4.6e-1 |
+| `(-1)^l` alone | 7.2e-1 |
+| **`(-1)^(m+l)`** | **3.9e-2** |
+| `exp(-i k_m P_x/2) exp(-i k_l P_y/2)` (the whole field, not the envelope) | 8.2e-1 |
+
+That is a 12x separation at a grid where the FDTD's own energy defect is 5 %, so it is not a
+close call. **It is also a finding for the maintainer rather than a fact about meep**:
+`docs/conventions.md` says every coordinate this library takes or hands back is measured from
+the centre of the cell, and does not carve out the per-order amplitude phase. Nothing here says
+which of the two should move — a translation of the structure and a translation of the phase
+origin are the same operation on an amplitude, so no amplitude comparison can separate them,
+and it is `meshgrid_xy` (which involves no amplitude at all) that says the structure is centred.
+
+#### Five harness faults, each returning a plausible energy-conserving wrong number first
+
+Three were inherited from the 2D bridge that established the pure TE/TM map; two are new to 3D
+and to this file. Every one of them is still live for anyone extending the generator.
+
+| what | what it cost, measured |
+| --- | --- |
+| meep replicates geometry periodically along the **PML axis** too, so a substrate block overhanging the far cell edge wraps into the superstrate | `T = 0.412` against a true 0.684, with `R + T` **exactly 1** |
+| DFT monitor samples are **weighted**, not uniform: a plane spanning one period overhangs it by half a cell at each end | a plain mean put 9.9e-3 of a plane wave into orders a plane wave does not have |
+| an oblique source sheet must carry the **Bloch phase itself** (`amp_func`) | `\|E\|` varied 1.66x along a monitor where a plane wave is 1.00; leak 2.99 |
+| the **z pixel count** decides where meep anchors its grid, and an odd count puts a grid point exactly *on* the structure's interfaces | resolutions 40 and 80 (122 and 244 pixels) give 4.5e-3 and 1.2e-3 on `r`; **60** (183 pixels) gives **4.3e-2** — while `\|r\|` and `R + T` stay exactly on the second-order curve |
+| a **layer thickness that is not an integer number of pixels** gets rounded, which moves the plane the transmitted phase is referenced to | a 0.24 µm layer at resolution 60 is 14.4 pixels; snapping it to 14 put the specular amplitude **4.6e-2** from the converged RCWA answer with `R + T = 0.9954` and every per-order efficiency inside 1.6e-2 |
+
+The last one is the one worth reading twice, because it is this directory's recurring shape in
+a new costume. It survived the **two-tier error bar** as well: resolution 30 rounds 7.2 pixels
+to the same `14/60`, so the coarse and fine runs carried the identical offset and agreed with
+each other to 7e-3 while both were 4.6e-2 wrong. A convergence study cannot see an error that
+does not depend on the grid. What saw it was comparing *amplitudes* against a reference that
+had not made the same choice — which is the same instrument `docs/fdtd.md` §5 records finding
+four defects with. The generator now refuses such a thickness by name.
+
+The two instruments that caught the rest are cheap and are both asserted rather than printed:
+decompose the **incident-only** run into orders and demand that every order a plane wave does
+not have comes back at round-off (1.2e-16 to 2.1e-16 on the committed cases), and decompose the
+incident wave into s and p and demand that the leg not driven is empty (2.4e-5 to 3.3e-4). An
+electric current sheet along `s_hat` drives only the s wave and a magnetic one along `s_hat`
+only the p wave, because the two waves' in-plane fields are orthogonal — so both legs are
+driven by purely transverse sheets and neither needs a z-directed source.
+
+#### What it is worth, and what it is not
+
+**This comparison is bounded by two grids rather than one**, which is the price of the oracle
+being a different method rather than a different implementation of the same one. So the golden
+is frozen at **two resolutions** per case, and `test_the_golden_states_its_own_error_bar`
+asserts the claim rather than an estimate: with a converged RCWA answer in hand, the finer tier
+has to be *nearer* it than the coarser one, by an implied order in a band a crossed grating can
+be in.
+
+**The order is not 2, and that turned out to be the interesting part.** Measured against RCWA
+at `truncation_order` 21, which is converged: over 7, 9, 13, 17, 21 the gap below moves by 5e-5
+on the square cell and 7e-4 on the rectangular one, against gaps of 1.2e-2 to 3.7e-2:
+
+| cell | resolutions (dz) | worst propagating amplitude gap | implied order |
+| --- | --- | --- | --- |
+| square, s | 25 → 50 (40 → 20 nm) | 3.9e-2 → 1.6e-2 | 1.26 |
+| square, p | 25 → 50 | 3.8e-2 → 1.2e-2 | 1.63 |
+| rectangular, s | 30 → 60 (33 → 17 nm) | 6.6e-2 → 3.7e-2 | 0.83 |
+| rectangular, p | 30 → 60 | 5.6e-2 → 3.5e-2 | 0.69 |
+
+with the rectangular cell's s leg measured at four resolutions rather than two — 6.6e-2 /
+5.0e-2 / 4.3e-2 / 3.7e-2 at 30 / 40 / 50 / 60, orders 0.99, 0.65, 0.80 — so the sub-second order
+is a trend and not a pair of points. `R + T` on the same runs converges cleanly at second order (defect 1.90e-2 / 9.96e-3 /
+6.14e-3 / 3.95e-3), which is the usual shape: **the energy check is blind to what is actually
+limiting the answer.**
+
+That is worth having as more than a caveat. `docs/fdtd.md` §8g measures wavebit's own crossed
+convergence at 1.83 and 1.50, with a control that stalled at 0.67, and §9 lists as *unmeasured*
+whether the corner cells where a vertical and a horizontal interface meet cost first order or
+second. Meep's subpixel scheme is a different implementation of the same idea, written by
+somebody else, and it degrades the same way on the same class of geometry — which is as close to
+an independent answer as this directory can give, and it says the ceiling is the geometry rather
+than either code.
+
+Against that, a defect of the kind this row exists to catch moves an amplitude by 1e-1 to 1.2 —
+a single flipped leg sign is `2|t_p|`, which is 1.28 and 1.19 on the two cells — and
+`test_a_leg_sign_would_still_be_visible` asserts that rather than assuming it. So the resolving
+power is 13x to 28x, not the 1e13 an RCWA-against-RCWA golden gets. **It is an oracle for
+structure, exactly as the fmmax field row is**; slow drift is the job of the in-process
+comparisons in `tests/test_fdtd.py`. Five mutants, applied and reverted, are what says the
+bounds are doing work rather than merely being satisfied:
+
+| mutant | killed by |
+| --- | --- |
+| the transmitted p leg sign flipped (`sigma = (-1, +1, +1)`) | 3 tests |
+| the y order ladder written on `Px` instead of `Py` | the **rectangular** case alone — which is that case's entire reason for existing |
+| one demodulation kernel for both transverse components instead of four | the **square** case |
+| the per-order frame half-turn dropped from `order_azimuth` | 7 tests, on *both* solver paths |
+| the raster's y rows reversed | 8 tests |
+
+One consequence decides how the time-domain test is run, and it is a measurement rather than a
+budget: **refining wavebit's own grid past the golden's error buys nothing.** wavebit's crossed
+run converges at a clean second order (2.6e-2 → 6.9e-3 over the square's 25 → 50; 6.9e-2 →
+2.5e-2 → 1.4e-2 over the rectangular one's 20 → 30 → 40), so the golden is the binding
+constraint: taking the rectangular run from 30 to 40 costs 2.7x the wall time and moves the gap
+6.0e-2 → 4.8e-2 against a 3.7e-2 floor that is Meep's alone. The test therefore runs at the
+coarse end on purpose. Whole file: 18 tests in 37 s, of which 36 s is the two time-domain
+runs and the rest is four RCWA solves and arithmetic.
+
+### The Meep 1D row: the published table, put in the repository
+
+Added 2026-09-06, and it is the row with the least new physics in it and the most to say about
+where evidence lives. `docs/fdtd.md` §2 prints a three-way agreement — the RCWA path, this
+project's FDTD, and Meep — on the benchmark binary grating, and `README.md` quotes its worst
+per-order gaps as the FDTD path's headline validation. **Those Meep and gyptis columns were
+computed in a sibling lab repository on 2026-08-25 and quoted, not checked.** Until this pair,
+`grep meep` over this repository returned only the crossed files, so the project's strongest
+published evidence for its second solver was not in the project.
+
+**Grade: an oracle for structure, at ~1e-3, on the pure TE/TM path.** Both codes discretise, so
+this row is bounded by two grids the way the crossed Meep row is, and it belongs in that tier
+rather than the ~1e-13 RCWA-against-RCWA one — with one exception that is genuinely tighter,
+the planar calibration below (1.7e-3 against a closed form, and **9.0e-8** on the p leg's sign).
+
+**The grade is a floor set by configuration, not by the grid, and that is the unusual part of
+this row.** Refining the mesh does not get past ~1e-3 here, because this column is *bimodal*
+in `(dpml, pad)`: at the frozen resolution 200, `dpml` 0.6 → 0.9 moves TE `R0` from 0.204410
+to 0.205985 — **1.6e-3**, on the far side of the RCWA reference, with `Σ` unchanged at 0.99957
+to five decimals. Eleven candidate mechanisms were tested on 2026-09-07 and every one refuted;
+settling it would need meep's source, which this project does not open, so it is recorded as
+unexplained in `_meep_1d_cases.py::MEEP_UNEXPLAINED`. **So no bound here may be tightened
+below 1.6e-3 on the strength of a finer grid** — a run that agrees better than that agrees
+better than the oracle's own spread, and `MEEP_RCWA_BOUND`, `FDTD_MEEP_BOUND` and `LAB_BOUND`
+are all sized above it deliberately. Measured, on `tests/test_fdtd.py::_grating()` at
+meep 1.34.0:
+
+| what is compared | agreement |
+| --- | --- |
+| this Meep column against a converged RCWA answer | **4.9e-4** (TE) / **7.4e-4** (TM) |
+| wavebit's FDTD against this Meep column, same 5 nm cell | **1.1e-3** (TE) / **2.5e-4** (TM) |
+| specular amplitudes, Meep against RCWA | 2.4e-3 / 4.6e-3 (TE `r`/`t`), 1.8e-3 / 3.1e-4 (TM) |
+| the planar calibration against the closed form | 1.7e-3 at 5 nm, 6.9e-3 at 10 nm — order 2.00 |
+| `r_p = -r_s`, two separately driven meep runs | 9.0e-8 |
+| a swapped polarisation label, for scale | 1.9e-1 |
+
+**It reproduces the published table, and re-deriving it moved two of the three columns.** The
+RCWA column comes back to **4.5e-7** — every printed digit, unchanged. The other two did not,
+for two unrelated reasons, and `docs/fdtd.md` §2 now prints the re-derived values with a
+subsection saying what moved:
+
+| | RCWA(80) | this Meep, res 200 | the 2026-08-25 lab column | gap |
+| --- | --- | --- | --- | --- |
+| TE `R0` | 0.204898 | 0.204410 | 0.204162 | 2.5e-4 |
+| TE `T0` | 0.352474 | 0.352379 | 0.352583 | 2.0e-4 |
+| TE `T±1` | 0.221314 | 0.221391 | 0.221396 | 5e-6 |
+| TM `R0` | 0.282393 | 0.283135 | 0.282607 | **5.3e-4** |
+| TM `T0` | 0.163805 | 0.164044 | 0.164495 | 4.5e-4 |
+| TM `T±1` | 0.276901 | 0.276526 / 0.276413 | 0.276318 / 0.276231 | 2.1e-4 |
+
+**5.3e-4 is not machine agreement and cannot be.** §2 recorded the resolution and nothing else
+about how the lab column was produced — not the run length, the pad, the PML depth, the monitor
+distance or the source. `test_meep_1d_golden.py::test_the_2026_08_25_lab_column_is_reproduced`
+holds 1e-3 for that reason rather than for a tolerance chosen to pass, and a pass means "no
+structural disagreement" rather than "the same number".
+
+**That bound's justification changed on 2026-09-07 and the bound did not**, which is worth
+stating because the two are easy to confuse. It used to rest on §2's claim that Meep's two
+readings of a transmitted order differ by 2.5e-4 (TE) and 3.4e-4 (TM). Re-measured here, that
+ambiguity is **≤ 7.2e-5 per order** (2.1e-4 on the total) — the old figure was a statement
+about the *total*, and 2.9x too large on TM — so it cannot carry a 5.3e-4 gap and never could.
+What can, and what the bound now rests on, is the `(dpml, pad)` sensitivity above: 1.6e-3 at
+this very resolution, neither value recorded of the old run. The number the bound is justified
+by moved by a factor of four; the number itself was already the right size for the reason
+nobody had written down.
+
+The headline pair moves with the column: **4.9e-4 (TE) / 7.4e-4 (TM)** against the quoted
+7.4e-4 / 6.9e-4 — better on TE, the same on TM.
+
+**The third column is the one worth reading, because nothing outside this repository was
+involved in it going wrong.** wavebit's own "this module, 5 nm" column reproduced *exactly* —
+all six values and both `Σ` — at `pad_scale=2.0`, and at the shipped default it is 6.6e-4 /
+6.9e-4 rather than the printed 7.4e-4 / 6.2e-4. §2's own following paragraph records halving
+that clearance and taking the dielectric from 7.37e-4 to 6.57e-4, so the table and the
+paragraph beneath it were taken on either side of one change and only the paragraph was
+re-derived; the section disagreed with itself by up to 8e-5 an order, for as long as no test
+re-solved it. **An outside oracle was not what this needed** — a solve at the documented
+settings was, and there had never been one. All three columns are now re-read on every push,
+by `test_fdtd_table_golden.py::test_the_document_prints_the_frozen_three_way_table` (the
+document against the golden, every cell at half a unit in its own last printed place, with
+the row set asserted by name so a deleted row fails saying which),
+`test_fdtd_table_golden.py::test_the_frozen_rcwa_column_is_still_what_the_solver_returns`
+and `test_fdtd_table_golden.py::test_the_frozen_wavebit_column_is_still_what_the_solver_returns`
+(the two solver columns re-solved, the second passing a resolution and *nothing else* so
+that what is under test is the call a reader would type), and
+`test_fdtd_table_golden.py::test_the_meep_column_is_the_committed_meep_golden` (the third
+column, which is a copy, held against `golden_meep_1d.npz` with that file's digest).
+
+Those name the file and the definition together, with a `::` between, rather than giving the
+bare test name on purpose: that is the spelling
+`tests/test_docs_contract.py::test_every_symbol_a_document_names_exists` checks, and a bare
+backticked name is checked by nothing. All three names this paragraph carried until
+2026-09-07 were stale — renamed while the sentence stayed put, which is the defect this whole
+row is about, one level up. The same rewrite was made to the three that `docs/fdtd.md` §2
+names.
+
+#### What this row adds that the crossed one does not
+
+The crossed row reaches further into the solver — a 2D order grid, a conical mount, per-order
+complex amplitudes on both sides of `kx = 0`. What it does not reach is the *scene a reader is
+shown*: a 1D grating at normal incidence in the pure TE/TM formulation, which is a different
+code path (`_extract` rather than `_extract_crossed`) and the one the headline claim, the
+tutorials and most of `tests/test_fdtd.py` run on. Three things follow from the scene being 1D
+and normal rather than crossed and conical:
+
+* **the two legs decouple exactly**, so cross-polarisation purity is 0 rather than the crossed
+  cases' 2.4e-5 to 3.3e-4 — which makes a *swapped polarisation label* the trap this scene is
+  most exposed to, since both legs conserve energy and no theorem separates them. The harness
+  never uses meep's polarisation vocabulary: it drives a named **component** (an electric sheet
+  along `ŷ` for TE, a magnetic one for TM), so the reversal between meep's 2D naming and the
+  grating convention never has to be translated. `test_the_two_legs_are_not_interchangeable`
+  asserts the two answers are 1.9e-1 apart against a 1.2e-3 bound;
+* **both codes keep second order** — measured 1.93 / 1.93 / 2.17 / 1.73 over the four rows —
+  where the crossed cells' corners cost it (0.69 to 1.63 there);
+* **a planar control is available**, because a uniform layer has a closed form.
+
+#### The calibration, which runs before anything is frozen
+
+`slab_uniform` is the same 0.30 µm layer with the patterning removed.
+`_meep_1d_cases.py::airy_rt` writes the planar answer out from the boundary conditions — a
+transfer-matrix chain, no solver of any kind — and `gen_goldens_meep_1d.py::_calibrate` refuses
+to write a golden unless the frozen amplitudes come back within `120 / resolution**2`, a bound
+the grid can explain rather than one chosen to pass. Measured **1.72e-3** at 5 nm cells and
+**6.88e-3** at 10 nm: order **2.00**, the same coefficient 68.8 at both tiers.
+
+It reaches three things no efficiency comparison in this directory can, and all three are
+invisible to `R + T`:
+
+| what | why nothing else here sees it |
+| --- | --- |
+| the **absolute** normalisation | `\|r\|` and `\|t\|` are pinned to a known number, not to each other: a stray `cos(theta)`, `n` or 2 divides out of every efficiency ratio |
+| the **phase** of both | where a misplaced reference plane lives — the fault that cost the crossed golden 4.6e-2 while `R + T` stayed at 0.9954 |
+| the **p leg's sign** | `r_p = -r_s` and `t_p = +t_s` at normal incidence. Two separate meep runs driven by different current sheets, so it is not an identity the harness can arrange, and it comes back to **9.0e-8** against a 1.7e-3 grid error |
+
+#### A sixth harness fault: a block face is an interface whether or not the materials differ
+
+The crossed generator's five faults all carry over. A sixth appeared here, in two costumes, and
+both were caught by a symmetry the answer must have and the harness cannot arrange:
+
+| the symmetry | what a block per raster run gave | what it must be |
+| --- | --- | --- |
+| a planar layer has no grating harmonic, so `T(±1) = 0` — and both first orders propagate in the substrate, so it is a channel with somewhere to go | 4.4e-5 each | 0 |
+| a 50 % duty profile is mirror-symmetric, so `T(+1) = T(-1)` | split 6.2e-3 at resolution 40, **1.7e-3 at the frozen 200** — larger than the 1.3e-3 gap the row exists to measure | 0 |
+
+The grating's split is the instructive one, because three explanations were eliminated before
+the right one. It is **not the extraction**: the same monitor samples through a plain
+uniform-weight quadrature over exactly one period give the same split to six digits. It is
+**not the sample positions**: the monitor abscissae map onto themselves exactly under the
+mirror. It is **not a missing periodic image**: adding image copies of every block changes
+nothing. The monitor *field itself* is asymmetric by 1.9e-2, and the cause is the **air block**
+— the half of the grating whose index equals the ambient. Its face lands on the cell edge with
+`default_material` (the same air) on the other side, and meep smooths across it anyway.
+
+| geometry | `T(-1)` / `T(+1)` at resolution 40 |
+| --- | --- |
+| tooth block + air block | 0.198521 / 0.204668 |
+| **tooth block alone, ambient fills the rest** | **0.203965 / 0.203965** |
+| the same tooth centred elsewhere in the cell | 0.203965 / 0.203965 — translation-invariant, as a periodic scene must be |
+
+That is `memory: self-coincident faces carry no normal` — a face with the same material on both
+sides is not an interface — arrived at independently in another code. `_layer_blocks` now emits
+a full-period background plus only the runs that differ from it, and **which run is the
+background is not free**: meep does not wrap the geometry when it smooths at the low cell edge,
+so the background has to be the material periodicity puts just outside it, which is the *last*
+column's. Backgrounding the first column instead makes the split **worse** (1.3e-2), and that
+asymmetry between the two choices is the whole content of the fix. Meep's own object precedence
+was measured rather than assumed: `[background, tooth]` reproduces the tooth-alone answer to
+every digit while `[tooth, background]` returns a uniform layer, so the **later** object wins.
+
+Two residues survive and both are honest: TE's split is exactly zero (8.3e-17), TM's is not,
+because TM's `Ex` is the component normal to the tooth's vertical faces and therefore the
+discontinuous one — 1.13e-4 fine, 1.92e-4 coarse, well under the gaps being measured.
+`test_the_two_first_orders_are_equal` pins both.
+
+#### One finding the efficiencies could not have produced
+
+The frozen **amplitudes** say something the table does not. The specular ones agree with the
+RCWA path to 2.4e-3 (TE `r`) and 3.1e-4 (TM `t`) — the grid. The **first orders** do not, and
+the reason is that wavebit does not hold the per-order `ŝ` frame in one place:
+
+| spelling | `r_s(-1)` against `r_s(+1)` |
+| --- | --- |
+| the **pure TE/TM** path (`_extract`), which applies no per-order frame at all | `-r_s(+1)` |
+| the **conical** path at the same scene (`psi = 90`, `phi = 0`), which applies `order_azimuth`'s half-turn for `Re(kx) < 0` | `+r_s(+1)` |
+| **Meep**, which holds no wavebit convention at all, read through the crossed generator's frame | `+r_s(+1)`, to 2.5e-3 |
+
+So the two spellings of the same physical answer differ by a sign on every `m < 0` amplitude,
+and an outside solver lands on the conical one. This is a statement about a frame and not a
+verdict — `docs/amplitude-sp-frame.md` is where that question lives, and nothing here settles
+it. `test_the_amplitudes_show_which_frame_each_solver_path_is_in` asserts all three legs of it,
+so a change to either spelling is a failing test rather than a silent disagreement.
+
+#### Cost
+
+Whole file: 22 tests in 17 s, of which 15 s is the two time-domain runs and six RCWA solves.
+The time-domain pair runs at the shipped defaults through one module-scoped fixture — two
+tests read it, and sharing the solve is what stops the number a test measures from drifting
+away from the number the document prints.
+A full regeneration is **30 minutes** on one core — 6 runs at resolution 200 (250 to 600 s each)
+and 6 at 100, with the incident-only run memoised across the two scenes because they share a
+cell. `until_after_sources = 120` is a measurement rather than a budget: over 60 / 120 / 240 /
+480 the answer moves 3.5e-9, 7.1e-10, 3.2e-10, and `R + T`, `T0` and `T(+1)` are identical to
+eight digits.
+
 ### A generator that could not reproduce its own golden
 
 Found 2026-08-15 while building the row above, by regenerating `golden_reticolo.npz` to check
@@ -551,6 +1199,44 @@ texture holding a full 3x3 permittivity tensor, and `nn = 0`.
 
 ### What RETICOLO's records and packages say about its licence
 
+**Meep** (GPL-2.0-or-later).
+
+> A.F. Oskooi, D. Roundy, M. Ibanescu, P. Bermel, J.D. Joannopoulos and S.G. Johnson,
+> *Meep: A flexible free-software package for electromagnetic simulations by the FDTD method*,
+> Comput. Phys. Commun. **181**, 687–702 (2010).
+> [doi:10.1016/j.cpc.2009.11.008](https://doi.org/10.1016/j.cpc.2009.11.008)
+
+### Meep is GPL, and the whole arrangement here is what keeps that a non-issue
+
+wavebit is Apache-2.0, so a GPL dependency is not one of the options. The policy is the same
+one this directory already applies to inkstone, stated up front rather than reached later:
+
+* **no file under the meep package is opened, read, grepped or copied.** Meep is used by
+  *calling* its public Python API and reading the numbers that come back, so every statement
+  this directory makes about its conventions is a black-box measurement. The generator sets
+  `sys.tracebacklimit = 0` so that an uncaught exception cannot print lines of another
+  package's source into the terminal;
+* **nothing in the shipped package imports it**, and it is not a dependency of anything —
+  including the tests. `gen_goldens_meep_crossed.py` and `gen_goldens_meep_1d.py` run by hand
+  in their own environment, exactly as the RETICOLO generator needs Octave and the fmmax ones
+  need `fwref`;
+* what is committed is **our own adapter code plus the numbers meep produced**, which is the
+  same footing as every other row.
+
+The `meep` environment, for the record:
+
+```bash
+conda create -y -n meep -c conda-forge pymeep
+```
+
+A full regeneration of the **crossed** golden is about 25 minutes on ten cores: 154 s and 210 s
+for the square cell's two legs at resolution 50, 498 s and 517 s for the rectangular one at 60,
+plus a tenth of that again for the two coarse control tiers. The **1D** golden is another 30
+minutes on one core: six runs at resolution 200 (250 to 600 s each) and six at 100, with the
+incident-only run memoised across the two scenes because they share a cell.
+
+### What RETICOLO's licence actually says, since the answer is not tidy
+
 Checked 2026-08-15, because this file previously asserted "not redistributable" without a
 source. The declarations do not agree with each other:
 
@@ -621,6 +1307,14 @@ Two consequences worth knowing before touching those generators:
 | `gen_goldens_*.py` — freeze the reference numbers | the oracle; run by hand, rarely |
 | `golden_*.npz` — the frozen numbers, committed | nothing |
 | `test_*_golden.py` — the assertions | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage0.py`, `_fd_stage0_cases.py` — freeze the `src/wavebit/fd/` kernel's own answers, per backend | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage0.npz` — those answers, committed; `tests/test_fd_backends.py` holds them | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage1.py`, `_fd_stage1_cases.py` — the same for stage 1's absorbers and materials, plus the lowered coefficients and profiles | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage1.npz` — those answers, committed; `tests/test_fd_stage1_backends.py` holds them | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage2.py`, `_fd_stage2_cases.py` — the same for stage 2's sources, with every source's reference series and the lowered stamps, pattern and waveform table | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage2.npz` — those answers, committed; `tests/test_fd_stage2_backends.py` holds them | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage3.py`, `_fd_stage3_cases.py` — the same for stage 3's monitors, with every DFT accumulator whole, every result built from it and the sources' spectra, plus the lowered DFT frequencies and Axis1D factor | the project env with NumPy, JAX and Torch; run by hand |
+| `fd_golden_stage3.npz` — those answers, committed; `tests/test_fd_stage3_backends.py` holds them | nothing; **run in CI everywhere** |
 ## A golden frozen ahead of its consumer
 
 `golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no
@@ -632,3 +1326,269 @@ at `mu = 1`, and the `mu = 1` half *is* held to the solver today. If the harness
 conventions were wrong, that subset would fail now, while the answer is independently knowable.
 The magnetic half carries a physical guard instead of a comparative one: every case is Hermitian
 in both tensors, hence lossless, so `R + T = 1` is enforced on the frozen numbers.
+
+### Crossed material reference scope
+
+The three material scenes are specified in `_meep_crossed_material_cases.py` and documented
+in `docs/fdtd-alpha.md`. Their dispersive active permittivity has positive real part at the
+test wavelength; these are not a validation of negative-epsilon metals. The generator
+checks the external material API at three wavelengths, reuses the existing crossed
+monitor/frame bridge, and freezes a new file. `check_meep_crossed_material_runtime.py`
+checks that file with twice the runtime and records its digest, without replacing it.
+The regression suite compares complex amplitudes, checks spatial refinement against RCWA,
+and verifies that omitting the material contrast is distinguishable from discretization.
+No Meep implementation source is used by these tools.
+
+### Damped metal and reference resolution
+
+The negative-epsilon case is separate from the positive-epsilon material file. The original
+Meep-60 comparison failed the selected amplitude/absorption bounds. Those data remain in
+`golden_meep_crossed_metal.npz`; the separately measured Meep-120 tier is tied to it by a
+digest in `golden_meep_crossed_metal_fine.npz`. `refine_meep_crossed_metal.py` reproduces
+the finer tier. Both helpers and case definitions are included in its physics-harness
+digest. The original measurement was made as separate s/p public-API runs, combined without
+changing their values. `docs/fdtd-alpha.md` records the discrepancy and convergence;
+a reference with insufficient resolution is not grounds to loosen the comparison bound.
+
+
+## Native-grid external validation (2026-09-07)
+
+`golden_native_grid_external.npz` stores independently executed Meep 1.34.0 and
+FDTDX 0.6.2 outputs for the new `wavebit.fdtd_grid` engine. It contains no Wavebit
+outputs. Generator/input hashes and the installed FDTDX update-module digest are
+embedded as provenance. Meep implementation source was not opened or searched;
+only its [documented Python API](https://meep.readthedocs.io/en/master/Python_User_Interface/)
+was used. FDTDX update functions are called from the installed external package,
+with no implementation copied into Wavebit.
+
+The Meep case is a vacuum-surrounded epsilon=2.25 slab of thickness 0.5 at normal
+incidence, wavelengths 0.6/0.7/0.8, and resolution 20/40/80. Both implementations
+use a periodic domain of length 32, Courant number 0.4, a prescribed current
+pulse, and a time window of 18 (before wraparound). The monitor is outside the
+slab. Divide slab Ex/Hy Fourier fields and power by a matching empty run, preserving
+complex phase. Meep's interface averaging and native tangential half-cell weights
+represent the same plane. No PML/absorber is involved in this comparison.
+
+| Resolution | Maximum complex transfer difference | Maximum power difference | Meep complex transfer error against Airy |
+| --- | --- | --- | --- |
+| 20 | 1.59e-7 | 1.43e-7 | 0.12984 |
+| 40 | 2.54e-13 | 2.30e-13 | 0.02947 |
+| 80 | 8.26e-14 | 5.23e-14 | 0.00720 |
+
+The Airy errors decrease at orders 2.14 and 2.03. Agreement between two Yee
+implementations does not remove their shared discretization error. Extending the
+resolution-40 window from 18 to 20 changes either solver's complex transfer by
+1.18e-10. An initial shorter window missed internal echoes; that pilot also used
+unmatched interface sampling and is not the frozen reference. The final setup
+matches the physical averaging and captures the decayed transmitted pulse.
+
+The FDTDX case calls its native `update_H` then `update_E` for 37 steps on a
+9×7×5 periodic grid, with deterministic nonuniform diagonal epsilon and mu and
+initial six-component fields. Arrays are transposed between (z,y,x) and (x,y,z).
+Its Courant number is 0.2, matching the c=1 Wavebit time step/spacing. No source,
+PML, geometry placement or detector is being validated by this test. Maximum E/H
+errors are 1.67e-16 / 2.64e-16. The local field objective's epsilon derivative is
+-0.4196157538227005 (FDTDX) and -0.41961575382270005 (Wavebit); both agree with
+central finite differences within 1e-9 absolute error.
+
+These are **CPU checks**. They do not establish GPU execution, general scattering
+accuracy, CPML/ADE parity, or FDTDX source/detector compatibility. Ordinary tests
+consume the frozen external outputs, so passing them is not a fresh external run.
+
+To reproduce live references, run from the repository root with separate Python
+environments. `$MEEP_PYTHON`, `$FDTDX_PYTHON` and `$WAVEBIT_PYTHON` below are paths
+to their interpreters; choose a new output directory first:
+
+```sh
+mkdir -p artifacts/native-grid-reference
+for resolution in 20 40 80; do
+  "$MEEP_PYTHON" tests/references/interface/validate_grid_meep.py --backend meep --resolution "$resolution" --output "artifacts/native-grid-reference/meep-grid-$resolution.json"
+  PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_meep.py --backend wavebit --resolution "$resolution" --output "artifacts/native-grid-reference/wavebit-grid-$resolution.json"
+done
+"$MEEP_PYTHON" tests/references/interface/validate_grid_meep.py --backend meep --resolution 40 --duration 20 --output artifacts/native-grid-reference/meep-grid-runtime.json
+"$FDTDX_PYTHON" tests/references/interface/validate_grid_fdtdx.py --backend fdtdx --output artifacts/native-grid-reference/fdtdx-grid.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_fdtdx.py --backend wavebit --output artifacts/native-grid-reference/wavebit-fdtdx-grid.json
+"$WAVEBIT_PYTHON" tests/references/interface/freeze_grid_references.py --input artifacts/native-grid-reference --output artifacts/native-grid-reference/external.npz
+"$WAVEBIT_PYTHON" -m pytest tests/references/test_native_grid_external.py
+```
+
+Freezing refuses an existing destination. Review a newly generated archive before
+replacing committed external evidence; never regenerate it merely to pass a test.
+
+## Native CPML and dispersive materials (2026-09-08)
+
+The additional `golden_low_loss_metal_meep.json` reference covers a low-loss
+mixed metal with epsilon-infinity 1.5 and poles (0, 0.08, 160), (10, 0.12, 40).
+Its wavelengths are 0.9/1/1.1 and duration is 160; the remaining geometry,
+Courant factor and field normalization follow the worker below. The sine
+carrier period and Gaussian width are 1, centered at time 5. Meep 1.34.0 and
+Wavebit with point-sampled strengths agree within 1.2e-7 for complex Ex/Hy and
+2.7e-9 for power. The test bound is 1e-6 absolute. See the
+[measurement](../../docs/fdtd-mixed-metal.md) for the distinct scene, Airy and
+gradient comparisons. Earlier goldens were not regenerated.
+
+Reproduce the new external runs using a Meep environment; only the public API
+is used, and tracebacks are suppressed to avoid displaying implementation frames:
+
+```sh
+for res in 40 80; do
+  "$MEEP_PYTHON" tests/references/interface/validate_grid_dispersive.py --backend meep --model low-loss-mixed --resolution "$res" --duration 160 --output "artifacts/low-loss-meep-$res.json"
+done
+```
+
+To freeze a separate candidate file, preserving the committed reference:
+
+```python
+import hashlib
+import json
+from datetime import date
+from pathlib import Path
+
+worker = Path('tests/references/interface/validate_grid_dispersive.py')
+payload = dict(
+    description='Low-loss mixed Drude/Lorentz slab; Meep public API execution, no implementation inspection.',
+    generated=date.today().isoformat(), worker=str(worker),
+    worker_sha256=hashlib.sha256(worker.read_bytes()).hexdigest(),
+    epsilon_inf=1.5, poles=[[0., .08, 160.], [10., .12, 40.]],
+    runs=[json.loads(Path(f'artifacts/low-loss-meep-{r}.json').read_text()) for r in (40, 80)])
+with Path('artifacts/golden_low_loss_metal_meep.json').open('x') as output:
+    output.write(json.dumps(payload, indent=2)+'\n')
+```
+
+`golden_native_material_external.npz` contains additional live Meep 1.34.0
+outputs and a two-pole FDTDX 0.6.2 update/gradient reference. External input and
+worker digests are stored in the archive. Meep source was never read; its
+[material API](https://meep.readthedocs.io/en/master/Python_User_Interface/) and
+[subpixel smoothing documentation](https://meep.readthedocs.io/en/latest/Subpixel_Smoothing/)
+specify the conventions used. No external solver implementation was copied.
+
+`tests/references/interface/validate_grid_dispersive.py` uses a length-12 cell, vacuum-end PML of
+width 1, source at z=3, slab at 7..7.5 and measurement at 9. The three wavelengths
+are 0.6/0.7/0.8, resolutions 40/80, cdt/dx=0.4 and duration 24. Meep's own PML
+and Wavebit's CPML need not have the same implementation. The electric current
+has a Gaussian envelope of width 0.7 centered at 3.5 and a period-0.7 sine carrier;
+it has zero DC by symmetry. Both fields and power are divided by an empty run.
+
+| Model | epsilon-infinity | (omega0, gamma, strength), angular c=1 units |
+| --- | --- | --- |
+| dielectric | 2.25 | none |
+| Lorentz | 1.5 | (12, 1.5, 60) |
+| Drude | 1 | (0, 1.2, 100) |
+| mixed | 1.5 | (0, 1.2, 40), (12, 1.5, 60) |
+
+Meep averages epsilon-infinity at interfaces but **does not average the
+frequency-dependent part**. The `--pole-sampling point` Wavebit worker explicitly
+uses the same point sampling of dispersive strength. All four models at both
+resolutions pass a 3e-6 absolute bound for complex Ex/Hy transfer and power.
+This is an actual direct comparison, not a loose allowance for different
+interface discretizations.
+
+The independent `--pole-sampling average` worker uses tangential half-cell
+strength weights. It is checked against the Airy solution, not against Meep's
+point-sampled result. Maximum complex transfer errors are:
+
+| Model | resolution 40 | resolution 80 |
+| --- | --- | --- |
+| dielectric | 0.029475 | 0.007204 |
+| Lorentz | 0.021089 | 0.005210 |
+| Drude | 0.006561 | 0.001631 |
+| mixed | 0.014133 | 0.003494 |
+
+All four converge at approximately second order on this tangential planar case.
+The initial comparison mixed these two discretizations and differed by up to
+0.065 at resolution 40; the difference halved with refinement. Matching Meep's
+documented strength sampling removed that discrepancy without changing the
+solver or relaxing a test tolerance.
+
+CPML controls extend the dielectric runtime to 36 or double PML width to 2;
+complex transfer changes remain below 3e-6. A broader pilot pulse with nonzero
+DC left slowly decaying CPML tails: extending duration from 24 to 48 reduced the
+dielectric Meep difference from 6.7e-4 to 1.2e-4, while width alone did not fix
+it. This behavior is retained as a convergence limitation, not hidden by the
+zero-DC reference pulse. Separate tests require late normal/oblique pulse energy
+to drop below 1e-5/1e-4 of a periodic control. These bounds are not universal
+reflection specifications or grazing-angle validation.
+
+`tests/references/interface/validate_grid_fdtdx_ade.py` independently asks FDTDX's coefficient factory
+for a Drude and a Lorentz pole, then calls its native H/E updates for 53 steps
+on a 9×7×5 periodic grid with nonuniform diagonal epsilon/mu and oscillator
+strength. Frequencies are converted from c=1 to rad/s; no waveform/geometry
+adapter is involved. E/H differences are 9.54e-16 / 7.08e-16. The oscillator
+strength derivative is -0.25818464174803096 (FDTDX) and -0.25818464174803113
+(Wavebit); both match central finite differences to within 1e-10 absolute.
+
+Run each worker with its own environment, as above. Example commands:
+
+```sh
+"$MEEP_PYTHON" tests/references/interface/validate_grid_dispersive.py --backend meep --model lorentz --resolution 40 --output artifacts/meep-lorentz-40-band.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_dispersive.py --backend wavebit --model lorentz --resolution 40 --pole-sampling point --output artifacts/wavebit-lorentz-40-point.json
+"$FDTDX_PYTHON" tests/references/interface/validate_grid_fdtdx_ade.py --backend fdtdx --output artifacts/fdtdx-ade.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_fdtdx_ade.py --backend wavebit --output artifacts/wavebit-fdtdx-ade.json
+"$WAVEBIT_PYTHON" -m pytest tests/test_fdtd_grid_materials.py tests/references/test_native_material_external.py
+```
+
+To regenerate a separate archive, produce every `meep-{model}-{40,80}-band.json`
+for the four models and `fdtdx-ade.json` in one directory, then run
+`tests/references/interface/freeze_grid_material_references.py --input DIR --output NEW.npz`.
+It reads only external outputs and refuses to overwrite an existing archive.
+These are CPU checks of native electric ADE and vacuum-end z CPML. Magnetic
+poles, arbitrary PML backgrounds, full Stack/Incidence dispatch, and actual GPU
+execution remain unsupported or unverified.
+
+## Native Bloch boundaries (2026-09-08)
+
+`tests/references/interface/validate_grid_fdtdx_bloch.py` repeats the live FDTDX comparison with
+complex initial E/H and phase advances `(0.3,-0.2,0.4)` in `(z,y,x)` order.
+These phases enter FDTDX as physical `(kx,ky,kz)` radians per meter, divided by
+the matching cell lengths. The grid is 9×7×5, 37 steps, nonuniform diagonal
+epsilon/mu, Courant number 0.2. No source or CPML is involved in this direct
+boundary check. Maximum real/imaginary field differences are below 2.23e-16;
+the material derivative is 0.43721809199586215 (FDTDX) and
+0.4372180919958624 (Wavebit), with both checked against finite differences.
+
+`golden_native_bloch_external.npz` retains only the external real/imaginary E/H,
+objective/derivative and provenance. Regenerate into a new archive with:
+
+```sh
+"$FDTDX_PYTHON" tests/references/interface/validate_grid_fdtdx_bloch.py --backend fdtdx --output artifacts/fdtdx-bloch.json
+PYTHONPATH=. "$WAVEBIT_PYTHON" tests/references/interface/validate_grid_fdtdx_bloch.py --backend wavebit --output artifacts/wavebit-fdtdx-bloch.json
+"$WAVEBIT_PYTHON" tests/references/interface/freeze_grid_references.py --kind bloch --input /tmp --output artifacts/external-bloch.npz
+"$WAVEBIT_PYTHON" -m pytest tests/test_fdtd_grid_bloch.py tests/references/test_native_bloch_external.py
+```
+
+Independent tests check arbitrary-phase discrete Maxwell propagation in all
+three axes, collocation at a wrapped monitor, derivatives with respect to phase,
+and explicit complex64 scans with x64 enabled. The oblique example couples a
+transverse Bloch phase to the source's spatial phase and differentiates both
+through a CPML solve. These remain CPU checks, not GPU validation or a full
+Stack/Incidence adapter.
+
+
+## Shared Torch FDTD execution (2026-09-08)
+
+After moving device/scan/checkpoint policies into `backends/time_domain.py`, the
+same native Array API core also runs on Torch. `test_native_torch_external.py`
+reproduces the non-dispersive, two-pole and complex-Bloch problem inputs above
+and compares full E/H fields, objective values and material/strength derivatives
+with the existing FDTDX archives. All three pass with 1e-11 relative / 1e-12
+absolute field bounds. No goldens were regenerated for the refactor. The Meep
+CPML/material checks continue through JAX, while direct Torch/NumPy parity tests
+cover the CPML/ADE/Bloch combination and derivatives. This distinguishes frozen
+external regressions from fresh external runs. GPU execution remains unverified.
+
+
+## Bottom-incident common scene (2026-09-08)
+
+`golden_scene_bottom_meep.json` is a fresh Meep 1.34.0 CPU public-API run from
+`tests/references/interface/validate_scene_bottom_meep.py`. Two layers (epsilon 2/3, thickness
+.13/.21) sit at original z=0..0.34 in vacuum. A physical source at z=3 illuminates
+toward -z; field planes at z=2/-2 isolate reflected/transmitted amplitudes using
+an empty reference run. No coordinate reflection is used in this oracle.
+Native vacuum Yee propagation de-embeds r to z=.34 and t to z=0.
+
+Resolution80, Courant.4, duration30, wavelengths.9/1/1.1. A duration40 control
+changed complex r/t components by at most6.1e-15. The common Wavebit scene adapter
+uses its own Courant fraction and sampling; complex r gap<6e-4, t gap<2e-4.
+`test_scene_bottom_meep.py` holds both to1.5e-3. This checks phases/signs, not
+only power. New reference only; no existing goldens were regenerated. The worker
+suppresses implementation tracebacks and reads no Meep source.

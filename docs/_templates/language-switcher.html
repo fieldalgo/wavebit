@@ -1,0 +1,7 @@
+{% if wavebit_language_links %}
+<nav class="d-flex gap-2 align-items-center text-nowrap small" aria-label="Language">
+  {% for item in wavebit_language_links %}
+  <a href="{{ item.href }}" lang="{{ item.code }}" hreflang="{{ item.code }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
+  {% endfor %}
+</nav>
+{% endif %}

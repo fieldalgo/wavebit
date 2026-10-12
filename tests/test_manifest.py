@@ -798,3 +798,263 @@ def test_the_published_fourier_origin_matches_a_centred_stripe():
                          truncation_order=(1, 0), tetm='te')
     coefficient = solver.eps_conv_matrices().epy[0, 2, 1]
     np.testing.assert_allclose(coefficient, 2*.4*np.sinc(.4), atol=2e-14, rtol=0)
+
+# ------------------------------------------------------- the second door, against runtime
+
+def test_both_published_entry_points_exist_and_are_what_they_claim():
+    """A door named in the document has to be callable under that exact name."""
+    from wavebit.manifest import SOLVERS
+    for door, entry in SOLVERS.items():
+        module, _, name = entry['entry_point'].rpartition('.')
+        assert module == 'wavebit', entry['entry_point']
+        assert callable(getattr(wavebit, name)), entry['entry_point']
+    assert SOLVERS['fdtd']['differentiable'] is True
+    assert SOLVERS['fdtd']['backends'] == ('numpy', 'jax', 'torch')
+
+
+def test_the_sections_a_door_claims_are_keys_of_this_document():
+    """`sections` is what scopes `backends` to the door it is true of.
+
+    Without it a consumer reads `backends.differentiable` as a promise about every solve here,
+    whose default time-domain route does not differentiate -- so names resolve
+    independently of each route's additional restrictions.
+    """
+    from wavebit.manifest import SOLVERS
+    keys = set(manifest())
+    for door, entry in SOLVERS.items():
+        missing = set(entry['sections']) - keys
+        assert not missing, (door, sorted(missing))
+
+
+#: One override per published refusal, keyed by the name the manifest publishes. A dict rather
+#: than a list so the two sets can be compared: a refusal published and not exercised, or
+#: exercised and not published, is what fails here.
+FDTD_REFUSALS = {
+    'a complex theta': dict(theta=0.3 + 0.1j),
+    'a complex permittivity': dict(structure=np.array([[[1.0 + 0.3j, 1.0]]])),
+    'Re(eps) <= 0': dict(structure=np.array([[[-2.0, 1.0]]])),
+    'lattice': dict(lattice=[[1.0, 0.0], [0.5, 1.0]]),
+}
+
+FDTD_KW = dict(structure=np.full((1, 1, 2), 12.25), thickness=[300.0], top=1.0, bot=2.25,
+               period=[700.0], wavelength=900.0, tetm='te', resolution=0.02, n_periods=5)
+
+
+def test_every_published_refusal_is_one_the_door_performs():
+    from wavebit.manifest import SOLVERS
+    published = set(SOLVERS['fdtd']['refused'])
+    assert published == set(FDTD_REFUSALS), (
+        f'published and not exercised: {sorted(published - set(FDTD_REFUSALS))}; '
+        f'exercised and not published: {sorted(set(FDTD_REFUSALS) - published)}')
+
+
+@pytest.mark.parametrize('backend', [None, 'numpy'])
+@pytest.mark.parametrize('name', sorted(FDTD_REFUSALS), ids=sorted(FDTD_REFUSALS))
+def test_a_refusal_the_manifest_publishes_is_refused(name, backend):
+    """Each raises before any time stepping, so the whole battery costs milliseconds."""
+    with pytest.raises((ValueError, TypeError)):
+        wavebit.fdtd(**dict(FDTD_KW, backend=backend, **FDTD_REFUSALS[name]))
+
+
+FDTD_COMMON_KW = dict(structure=np.full((1, 1, 1), 2.), thickness=[.2], top=1., bot=1.,
+                      period=.2, wavelength=1., resolution=10, n_pml=4, n_periods=25,
+                      truncation_order=0)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('integration', ['separable', 'area'])
+def test_published_fdtd_rectangles_use_common_route(backend, integration):
+    from wavebit.manifest import SOLVERS
+    if backend != 'numpy':
+        pytest.importorskip(backend)
+    if backend == 'jax':
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert common['parametric_shapes'] == ('rectangle', 'square', 'circle', 'disk', 'ellipse')
+    assert 'rectangle centre' in common['differentiable_parameters']
+    assert 'shape_smoothing' in common['static_parameters']
+    assert common['shape_integration'] == ('separable', 'area')
+    assert 'exact bilinear polygon moments' in common['area_smoothing']
+    assert 'rectangle angle (area)' in common['differentiable_parameters']
+    settings = dict(FDTD_COMMON_KW, period=[.2, .2], structure=[dict(background=2., shapes=[
+        dict(type='square', l=.08, angle=.23 if integration == 'area' else 0., material=2.)])],
+        backend=backend, shape_integration=integration, shape_smoothing=.02)
+    result = wavebit.fdtd(**settings)
+    target = wavebit.fdtd(**dict(settings, structure=np.full((1, 2, 2), 2.), shape_smoothing=0., shape_integration='separable'))
+    np.testing.assert_allclose(result.s_inc.R, target.s_inc.R, atol=1e-13)
+    with pytest.raises((TypeError, ValueError)):
+        wavebit.fdtd(**dict(settings, backend=None))
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('smoothing', [0., .05])
+def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backend, smoothing):
+    from wavebit.manifest import SOLVERS
+    from wavebit.backends.time_domain import time_loop_backend
+    from test_fdtd_scene_angles import value_and_jacobian
+    pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert 'fixed-total layer thickness' in common['differentiable_parameters']
+    assert common['backend_thickness_requires'] == ('mesh_thickness', 'subpixel=True')
+    assert 'layer_smoothing' in common['static_parameters']
+    assert common['positive_layer_smoothing_requires'] == ('mesh_thickness', 'subpixel=True')
+    which = backend
+    def objective(d, backend=backend):
+        return wavebit.fdtd(**dict(FDTD_COMMON_KW, structure=np.array([[[2.]], [[1.]]]),
+                                   thickness=[d, .4-d], mesh_thickness=[.2, .2], layer_smoothing=smoothing,
+                                   backend=backend)).s_inc.T.reshape(1)
+    value, derivative = value_and_jacobian(objective, .173, which)
+    step = 1e-5
+    finite = (objective(.173+step, 'numpy')-objective(.173-step, 'numpy'))/(2*step)
+    np.testing.assert_allclose(value, objective(.173, 'numpy'), atol=1e-10)
+    np.testing.assert_allclose(derivative, finite, atol=2e-8, rtol=3e-5)
+    assert abs(finite).item() > .01
+    with pytest.raises(ValueError, match='fixed total depth'):
+        wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, mesh_thickness=[.3]))
+    with pytest.raises(ValueError, match='explicit mesh_thickness'):
+        wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend,
+                            thickness=time_loop_backend(which).array([.2])))
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_published_variable_depth_uses_live_faces_on_a_fixed_mesh(backend):
+    from wavebit.manifest import SOLVERS
+    pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert 'independent layer thickness (variable_depth)' in common['differentiable_parameters']
+    assert 'variable_depth' in common['static_parameters']
+    assert common['variable_depth_requires'][:2] == ('mesh_thickness', 'subpixel=True')
+    result, out = wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273],
+                                     mesh_thickness=[.2], variable_depth=True, return_diagnostics=True))
+    assert np.isfinite(np.asarray(result.s_inc.T)).all() and out['variable_depth']
+    np.testing.assert_allclose(out['transmission_z'], 0., atol=1e-15)
+    with pytest.raises(ValueError, match='fixed total depth'):
+        wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273], mesh_thickness=[.2]))
+
+
+def test_fdtd_manifest_scopes_backend_omission_to_legacy_numpy():
+    from wavebit.manifest import SOLVERS
+    entry = SOLVERS['fdtd']
+    legacy = entry['routes'][entry['default_route']]
+    assert legacy['backends'] == ('numpy',)
+    assert legacy['differentiable'] is False
+    assert legacy['incidence_sides'] == ('top', 'bottom')
+    result = wavebit.fdtd(**dict(FDTD_COMMON_KW, tetm='te',
+                                incidence_side='bottom', n_periods=60))
+    assert np.isfinite(result.T).all()
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_published_common_fdtd_backends_accept_bottom_jones_and_all_columns(backend):
+    from wavebit.manifest import SOLVERS
+    from wavebit._core.result import Result
+    if backend != 'numpy':
+        pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert backend in common['backends']
+    assert 'bottom' in common['incidence_sides']
+    result = wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, incidence_side='bottom',
+                                 polarization=(1., .6j)))
+    assert isinstance(result, Result)
+    for column in common['results_incidences']:
+        values = getattr(result, column).T
+        if hasattr(values, 'detach'):
+            values = values.detach().numpy()
+        assert np.isfinite(values).all()
+
+
+@pytest.mark.parametrize('polarization', [dict(polarization=(1., .6j)), dict(psi=.6, chi=.2)])
+def test_legacy_fdtd_also_accepts_the_published_polarization_family(polarization):
+    # The legacy source has a longer envelope than the common engine's pulse.
+    result = wavebit.fdtd(**dict(FDTD_COMMON_KW, n_periods=60, **polarization))
+    assert np.isfinite(result.incident.T).all()
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_published_common_fdtd_gradient_and_halfspace_requirements(backend):
+    from wavebit.manifest import SOLVERS
+    from test_fdtd_scene_angles import value_and_jacobian
+    pytest.importorskip(backend)
+    common = SOLVERS['fdtd']['routes']['common']
+    assert backend in common['differentiable_backends']
+    which = backend
+    def objective(epsilon):
+        return wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, top=epsilon,
+                                   mesh_indices=(1., 1.))).s_inc.T.reshape(1)
+    value, gradient = value_and_jacobian(objective, 1.2, which)
+    step = 1e-4
+    def numpy(epsilon):
+        return wavebit.fdtd(**dict(FDTD_COMMON_KW, backend='numpy', top=epsilon,
+                                   mesh_indices=(1., 1.))).s_inc.T.reshape(1)
+    finite = (numpy(1.2+step)-numpy(1.2-step))/(2*step)
+    np.testing.assert_allclose(value, numpy(1.2), atol=1e-10)
+    np.testing.assert_allclose(gradient, finite, rtol=3e-5, atol=1e-8)
+    assert abs(finite).item() > .001
+    from wavebit.backends.time_domain import time_loop_backend
+    epsilon = time_loop_backend(which).array(1.2)
+    for missing in common['array_half_spaces_require']:
+        options = dict(FDTD_COMMON_KW, backend=backend, top=epsilon, mesh_indices=(1., 1.))
+        options[missing] = None
+        with pytest.raises(ValueError, match='explicit mesh_indices and explicit truncation_order'):
+            wavebit.fdtd(**options)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('kind', ['circle', 'disk'])
+def test_published_fdtd_disk_contract_uses_common_area_route(backend, kind):
+    if backend == 'jax':
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    elif backend == 'torch':
+        pytest.importorskip('torch')
+    import wavebit
+    common = manifest()['solvers']['fdtd']['routes']['common']
+    assert 'circle diameter (area)' in common['differentiable_parameters']
+    assert 'fixed 16-point Gaussian' in common['area_smoothing']
+    assert 'no ly' in common['circle_convention']
+    stack = wavebit.Stack.from_structure([dict(shapes=[dict(type=kind, l=.08, material=2.)])],
+        [.1], top=1., bot=1., period=[.2, .2])
+    result, diagnostics = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend=backend,
+        resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
+        return_diagnostics=True)
+    assert np.isfinite(np.asarray(result.incident.r_s)).all()
+    assert diagnostics['geometry_kind'] == 'parametric'
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_published_fdtd_ellipse_is_rotated_and_uses_full_axis_lengths(backend):
+    if backend == 'jax':
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    elif backend == 'torch':
+        pytest.importorskip('torch')
+    common = manifest()['solvers']['fdtd']['routes']['common']
+    assert 'ellipse' in common['parametric_shapes']
+    assert 'ellipse centre/axes/angle (area)' in common['differentiable_parameters']
+    assert 'full principal-axis lengths' in common['ellipse_convention']
+    stack = wavebit.Stack.from_structure([dict(shapes=[
+        dict(type='ellipse', lx=.15, ly=.07, angle=.41, material=2.)])],
+        [.1], top=1., bot=1., period=[.2, .2])
+    result, out = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend=backend,
+        resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
+        shape_smoothing=.02, return_diagnostics=True)
+    assert np.isfinite(np.asarray(result.incident.r_s)).all()
+    assert out['geometry_kind'] == 'parametric' and out['stable']
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_published_fdtd_multiple_area_rectangles_use_last_shape_painting(backend):
+    if backend == 'jax':
+        pytest.importorskip('jax').config.update('jax_enable_x64', True)
+    elif backend == 'torch':
+        pytest.importorskip('torch')
+    common = manifest()['solvers']['fdtd']['routes']['common']
+    assert 'multiple rectangle/square' in common['area_requires']
+    assert 'later rectangles overwrite' in common['area_painting']
+    stack = wavebit.Stack.from_structure([dict(shapes=[
+        dict(lx=.13, ly=.07, cx=-.02, angle=.31, material=1.8),
+        dict(lx=.09, ly=.11, cx=.025, angle=-.2, material=2.3)])],
+        [.1], top=1., bot=1., period=[.2, .2])
+    result, out = wavebit.fdtd(stack, wavebit.Incidence(wavelength=1.), backend=backend,
+        resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
+        shape_smoothing=.02, return_diagnostics=True)
+    assert np.isfinite(np.asarray(result.incident.r_s)).all()
+    assert out['geometry_kind'] == 'parametric' and out['stable']

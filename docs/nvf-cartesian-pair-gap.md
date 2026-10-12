@@ -3,7 +3,7 @@
 Written: 2026-09-10
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_gap.py`
+- `src/wavebit/_core/conforming/cartesian_pair_gap.py`
 - `tests/test_nvf_cartesian_pair_gap.py`
 - `studies/results/nvf_cartesian_pair_gap.log`
 

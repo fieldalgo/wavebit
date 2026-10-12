@@ -24,9 +24,9 @@ off `eps*mu` alone, took the growing root there (glass onto `eps = -2+0.1i`, `mu
 [`negative-index-media.md`](negative-index-media.md).
 
 Targets:
-- `wavebit/_core/conventions.py` — `mode_q`, `etm_mode_q`, `boundary_kz`, `incident_kz`,
+- `src/wavebit/_core/conventions.py` — `mode_q`, `etm_mode_q`, `boundary_kz`, `incident_kz`,
   `_check_resolvable`
-- `wavebit/_core/solve_1d.py` — `solve_1d` stage 3, `final_matching`
+- `src/wavebit/_core/solve_1d.py` — `solve_1d` stage 3, `final_matching`
 - `tests/references/test_reticolo_conical_sweep.py` — the RETICOLO oracle
 - `tests/test_fp_warnings.py` — the three tiers of "this result is not trustworthy"
 
@@ -362,7 +362,7 @@ work.
 
 ### The x64 ordering trap, and why it now warns
 
-`wavebit/backends/jax_backend.py` enables `jax_enable_x64`, and it does so deliberately late: the
+`src/wavebit/backends/jax_backend.py` enables `jax_enable_x64`, and it does so deliberately late: the
 setting is process-wide and belongs to the caller, so it happens when the JAX backend is first
 *used*, not on `import wavebit`. An array built in the gap between the two is silently
 complex64:

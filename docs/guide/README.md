@@ -38,6 +38,9 @@ be runnable as written.
 
 | Page | Question it answers |
 | --- | --- |
+| [`general-fdtd.md`](general-fdtd.md) | Which FDTD entry point uses an explicit domain and named monitors, and what are its planning, units, backend and support contracts? |
+| [`fd-constitutive-absorber.md`](fd-constitutive-absorber.md) | Which coupled dielectric shapes can extend through matched Absorber layers, and which source, boundary and backend combinations are admitted? |
+| [`fd-radiation.md`](fd-radiation.md) | How do continuum and Yee propagation differ for the general engine's FarField monitor, and which readings and derivatives are supported? |
 | [`scene.md`](scene.md) | What is the stack made of, and what cell does it repeat in? |
 | [`materials.md`](materials.md) | How do constants and dispersion tables behave in a wavelength sweep? |
 | [`light.md`](light.md) | Which polarization arrives, on which orders, from which side? |
@@ -53,6 +56,16 @@ be runnable as written.
 | [`fields.md`](fields.md) | How do I get a near field out, why is it off by default, and what shape does it come back in? |
 | [`autodiff.md`](autodiff.md) | How do I differentiate a solve, and what does `jax.jit` need that `jax.grad` does not? |
 | [`backends.md`](backends.md) | What can NumPy, JAX and PyTorch each do here, which should I run, and how do I ask for a device or a precision? |
+| [`time-domain.md`](time-domain.md) | When is the *other* solver the right one, and what does a run in the time domain need that a harmonic one does not? |
+| [`fd-differentiation.md`](fd-differentiation.md) | How do I differentiate the general FDTD engine -- material values, a ranged body's shape, both together -- and why might a traced run return NaN? |
+| [`fd-metasurface.md`](fd-metasurface.md) | How do I solve a periodic metasurface cell with the general FDTD engine, read its diffraction orders, compare them with RCWA, and how fine a grid does it need? |
+| [`../fd-conductive-film.md`](../fd-conductive-film.md) | What does the first C8 conductive-film implementation admit, why does its normal interface need memory, and what validation remains? |
+| [`../fd-single-pole-film.md`](../fd-single-pole-film.md) | Which isolated flat films with one Drude or Lorentz pole are admitted, and which spectral limits and validation results apply? |
+| [`../fd-debye-film.md`](../fd-debye-film.md) | Which isolated Debye films are admitted, how do their relaxation and planning bound change, and what do the measured validation results establish? |
+| [`../fd-two-debye-film.md`](../fd-two-debye-film.md) | Which two-Debye films are admitted, how are their coupled modes represented, and what do the registered measurements and completed numerical gates establish? |
+| [`../fd-debye-sum-film.md`](../fd-debye-sum-film.md) | What is the finite-Debye-count film contract, how does its normal law couple all poles, and what do the registered measurements and completed numerical gates establish? |
+| [`../fd-oscillator-sum-film.md`](../fd-oscillator-sum-film.md) | Which finite Drude/Lorentz sums are admitted in an isolated film, how are their memories coupled, and what do the completed numerical gates and explicit physical exceptions establish? |
+| [`../fd-hybrid-film.md`](../fd-hybrid-film.md) | How does an isolated mixed Debye/Drude/Lorentz film preserve both discrete laws, what do the registered campaign and completed numerical gates establish, and which physical exceptions and scope limits remain? |
 
 ### Advanced
 

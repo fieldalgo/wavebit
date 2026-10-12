@@ -3,11 +3,11 @@
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/__init__.py`
-- `wavebit/_core/conforming/continuous_flux.py`
-- `wavebit/_core/conforming/polynomial_body.py`
-- `wavebit/_core/conforming/partitioned_gap.py`
-- `wavebit/_core/conforming/thin_gap.py`
+- `src/wavebit/_core/conforming/__init__.py`
+- `src/wavebit/_core/conforming/continuous_flux.py`
+- `src/wavebit/_core/conforming/polynomial_body.py`
+- `src/wavebit/_core/conforming/partitioned_gap.py`
+- `src/wavebit/_core/conforming/thin_gap.py`
 - `tests/test_conforming_rectangular_lattice.py`
 - `tests/test_nvf_polynomial_body.py`
 - `tests/test_nvf_gap_convergence.py`

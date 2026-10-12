@@ -13,10 +13,10 @@ quantities this audit set up (`power_entering`, the NaN for a complex transverse
 are unchanged.
 
 Targets:
-- `wavebit/_core/power.py` — `wave_power`, `net_power`, `incident_power`, `transverse_k_is_real`
-- `wavebit/_core/conventions.py` — `incident_phase_index`
-- `wavebit/_core/engine.py` — `_incident_kxy`, `_half_space_index`
-- `wavebit/_core/solve_1d.py`, `wavebit/_core/scattering.py` — the efficiency call sites
+- `src/wavebit/_core/power.py` — `wave_power`, `net_power`, `incident_power`, `transverse_k_is_real`
+- `src/wavebit/_core/conventions.py` — `incident_phase_index`
+- `src/wavebit/_core/engine.py` — `_incident_kxy`, `_half_space_index`
+- `src/wavebit/_core/solve_1d.py`, `src/wavebit/_core/scattering.py` — the efficiency call sites
 - `tests/test_half_space_power.py`, `tests/test_direct_wavevector.py`, `tests/test_lossy_media.py`
 
 ## Verdict
@@ -165,7 +165,7 @@ paths' `r_p` amplitudes agree within `1e-12`.
 
 ## Causes in the implementation
 
-1. `wavebit/_core/solve_1d.py::sp_efficiencies` uses the form `Re(a_out / a_inc)`. That differs
+1. `src/wavebit/_core/solve_1d.py::sp_efficiencies` uses the form `Re(a_out / a_inc)`. That differs
    from `Re(a_out) / Re(a_inc)`, which a power ratio needs, whenever the incident factor is
    complex. The pure-1D path and `scattering.py` have the same form.
 2. The coupled s/p path applies one complex normalization factor to both polarizations even in
@@ -468,12 +468,12 @@ SMM, conical / 2D ───────────────── _smm_sp() 
 
 | Location | Current problem | Required change |
 |---|---|---|
-| `wavebit/_core/solve_1d.py:474–486`, `solve_1d` | both reflection and transmission form the complex ratio first, then take the real part | compute the true incident power first and divide each outgoing wave's real power by it |
-| `wavebit/_core/solve_1d.py:653–684`, `_incident_flux` | the weight for multiple incident orders is only `Re(kz)`; it takes no polarization, ε or μ | take each incident order's actual s/p amplitudes and ε·μ and sum the power |
-| `wavebit/_core/solve_1d.py:838–875`, `final_matching` | the specified-polarization and pure s/p results share one denominator | compute the denominator from the incident amplitudes of each of `incident`, `s_inc`, `p_inc` |
-| `wavebit/_core/solve_1d.py:886–905`, `sp_efficiencies` | uses `Re(admittance / complex_denom)` | compute `Re(admittance) / real_incident_power`, taking the power of the actual incident polarization as the denominator |
-| `wavebit/_core/scattering.py:525–549`, `smm_1d` | the pure-1D efficiency formula is duplicated separately | call the same shared power computation as ETM |
-| `wavebit/_core/scattering.py:700–747`, `_smm_sp` | builds three incident columns but uses one efficiency denominator | compute the power for each column of the actual `c_inc` and divide output column by output column |
+| `src/wavebit/_core/solve_1d.py:474–486`, `solve_1d` | both reflection and transmission form the complex ratio first, then take the real part | compute the true incident power first and divide each outgoing wave's real power by it |
+| `src/wavebit/_core/solve_1d.py:653–684`, `_incident_flux` | the weight for multiple incident orders is only `Re(kz)`; it takes no polarization, ε or μ | take each incident order's actual s/p amplitudes and ε·μ and sum the power |
+| `src/wavebit/_core/solve_1d.py:838–875`, `final_matching` | the specified-polarization and pure s/p results share one denominator | compute the denominator from the incident amplitudes of each of `incident`, `s_inc`, `p_inc` |
+| `src/wavebit/_core/solve_1d.py:886–905`, `sp_efficiencies` | uses `Re(admittance / complex_denom)` | compute `Re(admittance) / real_incident_power`, taking the power of the actual incident polarization as the denominator |
+| `src/wavebit/_core/scattering.py:525–549`, `smm_1d` | the pure-1D efficiency formula is duplicated separately | call the same shared power computation as ETM |
+| `src/wavebit/_core/scattering.py:700–747`, `_smm_sp` | builds three incident columns but uses one efficiency denominator | compute the power for each column of the actual `c_inc` and divide output column by output column |
 
 The p input of `sp_efficiencies` is not the public `r_p` but the phase-multiplied **H
 amplitude**. With `q=kz/k0` and internal interface amplitudes `c_s`, `c_p`, the power of one
@@ -548,17 +548,17 @@ interference term is not distributed into the R/T arrays.
 
 Places to change with it:
 
-- `wavebit/_core/solve_1d.py:908`, `_pack`: pass on each result column's net entering power.
-- `wavebit/_core/result.py:41`, `ResultSub`: connect the result in the constructor and
+- `src/wavebit/_core/solve_1d.py:908`, `_pack`: pass on each result column's net entering power.
+- `src/wavebit/_core/result.py:41`, `ResultSub`: connect the result in the constructor and
   `_FIELDS`. The specified-polarization and unpolarized-average delegation of `Result` follows
   the same definition.
-- `wavebit/_core/engine.py:278`, `_efficiency_only`, `:1845`, `_finish`, `:2870–2874`, result
+- `src/wavebit/_core/engine.py:278`, `_efficiency_only`, `:1845`, `_finish`, `:2870–2874`, result
   construction: tidy the return contract together so that the new value is not lost on the
   efficiency-only path. Whether to change the existing tuple return or to state it per
   supported stage needs a decision.
 - JAX's `ResultSubJax` uses the shared class's pytree handling, so check the `jit` return,
   serialization and differentiation boundary with the new field as well.
-- `wavebit/_core/backend.py:361`, `check_physical`: do not skip the whole check for a complex
+- `src/wavebit/_core/backend.py:361`, `check_physical`: do not skip the whole check for a complex
   incident index. For a passive problem at a real transverse wavevector, check that R/T are
   non-negative and check the absorption budget `power_entering - sum(T)`. Treat gain media
   separately.
@@ -644,7 +644,7 @@ regression run or a completed solver implementation.
 incident-power denominator** were fixed. The investigation results and fix specification in
 the preceding sections record the state before the fix.
 
-The following computation was gathered in `wavebit/_core/power.py`:
+The following computation was gathered in `src/wavebit/_core/power.py`:
 
 ```python
 wave_power = real(amplitude * conj(amplitude)) * real(admittance)

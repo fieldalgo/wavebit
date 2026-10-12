@@ -47,9 +47,9 @@ shape sampling count `shape_nvf_grid_size`. Update consumers of the old option k
 using the [keyword migration](reference/keywords.md#nvf-names-changed-on-2026-09-21).
 
 Targets:
-- `wavebit/manifest.py` — the document
+- `src/wavebit/manifest.py` — the document
 - `tests/test_manifest.py` — what keeps it true
-- `wavebit/_core/engine.py` — the refusal tables it reads, and the `structure` setter whose
+- `src/wavebit/_core/engine.py` — the refusal tables it reads, and the `structure` setter whose
   type dispatch it describes. Those were two entries until the per-backend copies folded into
   `_core`; the second pointed at the NumPy backend, which no longer holds that setter.
 
@@ -67,6 +67,27 @@ deleted a year ago.
 
 `wavebit.manifest` publishes them instead, as one JSON document generated from the code
 and checked against it by the suite.
+
+Since version 10, the manifest describes FDTD's available execution routes separately from its
+default. `solvers.fdtd.backends` lists NumPy/JAX/Torch and `differentiable`
+reports that a differentiable route exists. Consult `routes`: omitting
+`backend` selects `legacy_numpy`, which has no autodiff and supports only top
+incidence. An explicit backend selects `common`; JAX/Torch differentiate
+fixed-mesh angle, raster, pole and half-space parameters. Version 11 also names
+constant-total layer thicknesses, their nominal `mesh_thickness` requirement,
+and the distinction between moving internal boundaries and static mesh geometry.
+Version 12 adds optional C1 internal-interface averaging and its static
+`layer_smoothing` width, required mesh inputs and exterior clearance.
+Array angles and
+half spaces have separately named static-input requirements. The native-grid
+API is not described by this scene entry.
+
+The common route lists guaranteed pure-incidence result columns and CPU
+validation; it makes no GPU-validation claim. Universal `refused` entries
+apply to both scene routes. Jones/chi polarization is supported and bottom
+incidence is supported by the common route, so neither is a universal refusal.
+Runtime tests execute each published common backend, bottom Jones scenes and
+half-space/thickness gradients, and check omissions against the declared requirements.
 
 ```bash
 python -m wavebit.manifest > wavebit-manifest.json
@@ -112,7 +133,7 @@ user's experiment. The section is data *about* the contract; the contract itself
 
 ## Why the tests are not mirror tests
 
-`wavebit/manifest.py` reads `_core/engine.py`'s tables at import, so asserting that the two
+`src/wavebit/manifest.py` reads `_core/engine.py`'s tables at import, so asserting that the two
 agree would assert that a variable equals itself. `tests/test_manifest.py` checks the
 manifest against **runtime behaviour** instead:
 

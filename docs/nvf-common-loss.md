@@ -3,8 +3,8 @@
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/__init__.py`
-- `wavebit/_core/conforming/partitioned_gap.py`
+- `src/wavebit/_core/conforming/__init__.py`
+- `src/wavebit/_core/conforming/partitioned_gap.py`
 - `tests/test_conforming_common_loss.py`
 - `tests/test_conforming_nvf.py`
 

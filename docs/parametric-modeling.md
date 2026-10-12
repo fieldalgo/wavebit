@@ -4,12 +4,12 @@ Written: 2026-08. Paths updated after the single-source rewrite folded the three
 copies into `_core`.
 
 Targets:
-- `wavebit/_core/parametric.py` — the analytic Fourier coefficients, and
+- `src/wavebit/_core/parametric.py` — the analytic Fourier coefficients, and
   `normal_vector_field_analytical` for the normal field
-- `wavebit/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
+- `src/wavebit/_core/solve_2d.py::layer_modes_2d` — the `epxy` / `epyx` off-diagonal slots the
   NVF form fills
-- `wavebit/_core/engine.py::_eps_conv_matrices` — the modeling-type-2 dispatch, selected by the
-  `structure` setter in `wavebit/_core/engine.py`
+- `src/wavebit/_core/engine.py::_eps_conv_matrices` — the modeling-type-2 dispatch, selected by the
+  `structure` setter in `src/wavebit/_core/engine.py`
 
 ---
 

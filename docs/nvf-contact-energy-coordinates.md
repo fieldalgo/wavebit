@@ -2,12 +2,12 @@
 
 Targets:
 
-- `wavebit/_core/conforming/pair_contact_energy_precision.py`
-- `wavebit/_core/conforming/pair_contact_precision.py`
-- `wavebit/_core/conforming/pair_contact_quadrature.py`
-- `wavebit/_core/conforming/pair_contact_normal_precision.py`
-- `wavebit/_core/conforming/pair_contact_normal_mean.py`
-- `wavebit/_core/conforming/real_trace_coupling.py`
+- `src/wavebit/_core/conforming/pair_contact_energy_precision.py`
+- `src/wavebit/_core/conforming/pair_contact_precision.py`
+- `src/wavebit/_core/conforming/pair_contact_quadrature.py`
+- `src/wavebit/_core/conforming/pair_contact_normal_precision.py`
+- `src/wavebit/_core/conforming/pair_contact_normal_mean.py`
+- `src/wavebit/_core/conforming/real_trace_coupling.py`
 - `tests/test_nvf_transmission_common_precision.py`
 - `tests/test_nvf_contact_fourier_precision.py`
 - `tests/test_nvf_contact_map_precision.py`

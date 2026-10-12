@@ -1,11 +1,12 @@
 [build-system]
-requires = ["setuptools>=64"]
+# SPDX license strings require the PEP 639-capable build backend.
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "wavebit"
 version = "0.1.0"
-description = "Electromagnetic simulation (RCWA) & optimization package in Python"
+description = "Differentiable electromagnetic simulation with RCWA and FDTD"
 readme = "README.md"
 license = "Apache-2.0 AND MIT"
 classifiers = ["Development Status :: 3 - Alpha"]
@@ -99,10 +100,16 @@ contour = [
     "contourpy>=1.3",
 ]
 
+# Only plotting imports Matplotlib; numerical solves and minimal installs do not need it.
+plot = [
+    "matplotlib>=3.10.1",
+]
+
 [project.urls]
 Homepage = "https://github.com/fieldalgo/wavebit"
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["wavebit*"]
 
 # Refractive-index tables the modeler reads at runtime. They are data rather than code, so
@@ -141,7 +148,7 @@ select = ["F401", "F811", "F821", "F632", "E711", "E712", "E714"]
 # and tutorials/ stay linted: they look like throwaway comparison harnesses, which is exactly
 # the argument for skipping them -- and the Reticolo bug above was sitting in one of them.
 #
-# `wavebit/__init__.py` is the one file that would ask for an exemption, since it binds the
+# `src/wavebit/__init__.py` is the one file that would ask for an exemption, since it binds the
 # public surface and uses none of it, so every export reads as unused. It declares `__all__`
 # instead, which ruff reads as the use. That puts the surface in the file it describes, and it
 # keeps F401 pointed at that file rather than silenced for it: an export added without a line
@@ -150,6 +157,9 @@ select = ["F401", "F811", "F821", "F632", "E711", "E712", "E714"]
 # itself, and hold itself to.
 
 [tool.pytest.ini_options]
+# Repository-only study helpers are imported by the reference tests. The package
+# itself still comes from the editable src install, checked in tests/conftest.py.
+pythonpath = ["."]
 # Recognize the optional CI timeout plugin marker in base developer installs.
 # `research` is deselected from a run that names only directories -- `pytest tests`, and
 # so CI -- by `tests/conftest.py`; `-m research` runs that tier alone. See `tests/README.md`.

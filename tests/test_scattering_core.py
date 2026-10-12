@@ -1061,7 +1061,7 @@ def test_cascading_across_a_respelt_oblique_cell_is_refused():
     Every other cascade test in this file is 1D (``period=[0.77]``), so both ports carry
     ``ky=None`` and ``_port_disagreement`` returns from the ``kx`` clause before the ``ky`` one
     is ever evaluated. Delete ``or differ(a.ky, b.ky)`` from
-    ``wavebit/_core/scattering.py::_port_disagreement`` and the other 131 tests in this file
+    ``src/wavebit/_core/scattering.py::_port_disagreement`` and the other 131 tests in this file
     still pass; this one is what fails.
 
     The scene is the mistake, not a contrivance. ``HEX`` and ``HEX_RESPELT`` are two bases of

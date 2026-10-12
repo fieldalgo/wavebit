@@ -11,6 +11,14 @@ to a contributor rather than the interface to a caller.
 
 ```
 
+`fdtd()` is the other door. It hands back the answer rather than a solver, because there is no
+per-instance state to keep -- no eigen-decomposition to cache, no frozen geometry, no gradient.
+
+```{eval-rst}
+.. autofunction:: wavebit.fdtd
+
+```
+
 
 ## The solver object
 
@@ -37,6 +45,10 @@ properties every one of them carries.
 .. autofunction:: wavebit.eps_from_index
 
 .. autofunction:: wavebit.index_from_eps
+
+.. autofunction:: wavebit.layer_thicknesses
+
+.. autofunction:: wavebit.permittivity_at
 
 .. autoclass:: wavebit.Lattice
    :members:
@@ -141,12 +153,26 @@ See [Materials and wavelength sweeps](../guide/materials.md) for assignment and 
 ```
 
 
+## Transient point probes
+
+```{eval-rst}
+.. autofunction:: wavebit.sample_fdtd_fields
+
+.. autofunction:: wavebit.fdtd_poynting
+
+.. autofunction:: wavebit.fit_fdtd_modes
+```
+
 ## Plotting
 
 ```{eval-rst}
 .. autofunction:: wavebit.plot_structure
 
 .. autofunction:: wavebit.slice_structure
+
+.. autofunction:: wavebit.plot_fdtd_field
+
+.. autofunction:: wavebit.animate_fdtd_field
 
 ```
 
@@ -208,4 +234,10 @@ See [the guide and flowchart](../coherent-illumination.md) for physical conventi
 
 .. autoclass:: wavebit.BoundaryPower
    :members:
+```
+
+## Native-grid time domain
+
+```{eval-rst}
+.. autofunction:: wavebit.fdtd_grid
 ```

@@ -17,7 +17,7 @@ qualification and a public general-geometry adapter remain open.
 
 The implementation and instruments are:
 
-- `wavebit/_core/conforming/affine_cell.py`: scalar or `(x,y)` retained orders.
+- `src/wavebit/_core/conforming/affine_cell.py`: scalar or `(x,y)` retained orders.
 - `studies/nvf_cell_corrector.py` and `studies/nvf_gap_reference.py`: physical
   gradients on an affine image of an independently fitted periodic mesh.
 - `studies/nvf_affine_convergence.py`: one maximal projection per cell,

@@ -3,7 +3,7 @@
 Written: 2026-09-10
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_gap_autodiff.py`
+- `src/wavebit/_core/conforming/cartesian_pair_gap_autodiff.py`
 - `tests/test_nvf_cartesian_pair_gap_autodiff.py`
 - `studies/results/nvf_cartesian_pair_gap_autodiff.log`
 

@@ -3,8 +3,8 @@
 Written: 2026-09-14.
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_galerkin.py`
-- `wavebit/_core/conforming/triangle_moments.py`
+- `src/wavebit/_core/conforming/cartesian_pair_galerkin.py`
+- `src/wavebit/_core/conforming/triangle_moments.py`
 - `tests/test_nvf_pair_galerkin.py`
 - `studies/nvf_pair_galerkin.py`
 - `studies/results/nvf_pair_galerkin.log`

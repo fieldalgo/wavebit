@@ -3,9 +3,9 @@
 Written: 2026-09-15
 
 Targets:
-- `wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
-- `wavebit/_core/conforming/real_trace_coupling.py`
-- `wavebit/_core/conforming/projected_pair_contact.py`
+- `src/wavebit/_core/conforming/cartesian_pair_seam_galerkin.py`
+- `src/wavebit/_core/conforming/real_trace_coupling.py`
+- `src/wavebit/_core/conforming/projected_pair_contact.py`
 - `tests/test_nvf_contact_solver.py`
 - `tests/test_nvf_pair_seam_galerkin.py`
 - `studies/nvf_coupled_pair_seam_galerkin.py`

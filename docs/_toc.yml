@@ -1,13 +1,17 @@
 root: index
 subtrees:
 - entries:
-  - file: guide/README
+  - file: getting-started/index
+    title: Getting started
     subtrees:
-    - caption: Getting started
-      entries:
+    - entries:
       - file: guide/what-is-wavebit
       - file: guide/installation
       - file: guide/quickstart
+  - file: learn/index
+    title: Learn
+  - file: guide/README
+    subtrees:
     - caption: Fundamentals and usage
       entries:
       - file: guide/scene
@@ -26,120 +30,193 @@ subtrees:
       - file: guide/fields
       - file: guide/autodiff
       - file: guide/backends
+      - file: guide/time-domain
+      - file: guide/general-fdtd
+      - file: guide/fd-constitutive-absorber
+      - file: guide/fd-differentiation
+      - file: guide/fd-radiation
+      - file: guide/fd-metasurface
     - caption: Advanced
       entries:
       - file: guide/specs
+    title: User guide
   - file: reference/index
     subtrees:
     - entries:
       - file: conventions
       - file: reference/keywords
       - file: reference/api
-  - file: decisions/index
+    title: API reference
+  - file: theory/index
+    title: Theory & validation
     subtrees:
-    - caption: Modeling and geometry
+    - entries:
+      - file: decisions/index
+        subtrees:
+        - caption: Modeling and geometry
+          entries:
+          - file: parametric-modeling
+          - file: boundary-modeling
+          - file: oblique-lattice
+          - file: nvf-normal-methods
+          - file: nvf-upsampling
+          - file: nvf-metal-inverse-rule
+          - file: normal-field-known-limits
+          - file: fourier-truncation-shape
+        - caption: Factorization and materials
+          entries:
+          - file: factorization-terms
+          - file: off-diagonal-slot-convention
+          - file: five-slot-limit
+          - file: anisotropic-materials
+          - file: patterned-anisotropic-factorization
+          - file: tensor-li-factorization
+          - file: full-tensor-patterns
+          - file: tensor-shape-integration
+          - file: magnetic-materials
+          - file: negative-index-media
+        - caption: NVF construction and validation
+          entries:
+          - file: nvf-energy-engine
+          - file: nvf-rectangular-cells
+          - file: nvf-layer-axes
+          - file: nvf-separated-rectangles
+          - file: nvf-common-loss
+          - file: nvf-complex-material
+          - file: nvf-lattice-rebasing
+          - file: nvf-affine-cells
+          - file: nvf-cartesian-cell
+          - file: nvf-cartesian-pair
+          - file: nvf-cartesian-pair-opening
+          - file: nvf-cartesian-pair-gap
+          - file: nvf-cartesian-pair-gap-autodiff
+          - file: nvf-pair-material-sector
+          - file: nvf-pair-refinement
+          - file: nvf-pair-quadratic
+          - file: nvf-pair-normal-frame
+          - file: nvf-paired-frame
+          - file: nvf-pair-galerkin
+          - file: nvf-periodic-galerkin
+          - file: nvf-seam-trace
+          - file: nvf-coupled-seam-galerkin
+          - file: nvf-coupled-pair-seam-galerkin
+          - file: nvf-galerkin-error
+          - file: nvf-contact-solver
+          - file: nvf-polynomial-pair-coupling
+          - file: nvf-analytic-polynomial-traces
+          - file: nvf-pair-corner-potentials
+          - file: nvf-pair-junction-potentials
+          - file: nvf-pair-radial-potentials
+          - file: nvf-pair-symmetric-potentials
+          - file: nvf-contact-fourier-precision
+          - file: nvf-contact-energy-coordinates
+          - file: nvf-retained-contact-solve
+          - file: nvf-positive-coordinate-precision
+          - file: nvf-pair-transmission-potentials
+          - file: nvf-polynomial-galerkin
+          - file: nvf-affine-convergence
+          - file: nvf-contact-followup
+          - file: nvf-independent-fem
+          - file: nvf-harmonic-energy
+          - file: nvf-passive-closure
+          - file: nvf-cell-corrector
+          - file: nvf-thin-gap-energy
+          - file: nvf-partitioned-gap-energy
+          - file: nvf-harmonic-coordinates
+          - file: nvf-continuous-flux
+          - file: nvf-gap-convergence
+          - file: nvf-interface-resolution
+          - file: nvf-directional-convergence
+          - file: nvf-polynomial-body
+          - file: nvf-polynomial-flux
+          - file: nvf-local-flux
+          - file: nvf-posed-gap
+          - file: nvf-scattering-doubling
+          - file: nvf-energy-closure
+          - file: nvf-mirror-convergence
+          - file: nvf-mirror-doubling
+          - file: nvf-mirror-modal-memory
+          - file: nvf-mirror-reference
+        - caption: The solve
+          entries:
+          - file: formulation
+          - file: first-order-formulation
+          - file: connecting-algorithms
+          - file: what-a-solve-answers
+          - file: multimode-incidence
+          - file: fdtd
+          - file: fdtd-alpha
+          - file: fdtd-route-parity
+          - file: result-guards
+        - caption: Numerical conventions
+          entries:
+          - file: amplitude-sp-frame
+          - file: branch-cuts
+          - file: rayleigh-points
+          - file: rayleigh-handling-walkthrough
+          - file: time-convention-audit
+          - file: half-space-power-audit
+        - caption: Performance and tooling
+          entries:
+          - file: backend-choice
+          - file: torch-compile
+          - file: torch-upstream-defects
+          - file: bessel-j1
+          - file: capability-manifest
+    - caption: FDTD validation
       entries:
-      - file: parametric-modeling
-      - file: boundary-modeling
-      - file: oblique-lattice
-      - file: nvf-normal-methods
-      - file: nvf-upsampling
-      - file: nvf-metal-inverse-rule
-      - file: normal-field-known-limits
-      - file: fourier-truncation-shape
-    - caption: Factorization and materials
-      entries:
-      - file: factorization-terms
-      - file: off-diagonal-slot-convention
-      - file: five-slot-limit
-      - file: anisotropic-materials
-      - file: patterned-anisotropic-factorization
-      - file: tensor-li-factorization
-      - file: full-tensor-patterns
-      - file: tensor-shape-integration
-      - file: magnetic-materials
-      - file: negative-index-media
-    - caption: NVF construction and validation
-      entries:
-      - file: nvf-energy-engine
-      - file: nvf-rectangular-cells
-      - file: nvf-layer-axes
-      - file: nvf-separated-rectangles
-      - file: nvf-common-loss
-      - file: nvf-complex-material
-      - file: nvf-lattice-rebasing
-      - file: nvf-affine-cells
-      - file: nvf-cartesian-cell
-      - file: nvf-cartesian-pair
-      - file: nvf-cartesian-pair-opening
-      - file: nvf-cartesian-pair-gap
-      - file: nvf-cartesian-pair-gap-autodiff
-      - file: nvf-pair-material-sector
-      - file: nvf-pair-refinement
-      - file: nvf-pair-quadratic
-      - file: nvf-pair-normal-frame
-      - file: nvf-paired-frame
-      - file: nvf-pair-galerkin
-      - file: nvf-periodic-galerkin
-      - file: nvf-seam-trace
-      - file: nvf-coupled-seam-galerkin
-      - file: nvf-coupled-pair-seam-galerkin
-      - file: nvf-galerkin-error
-      - file: nvf-contact-solver
-      - file: nvf-polynomial-pair-coupling
-      - file: nvf-analytic-polynomial-traces
-      - file: nvf-pair-corner-potentials
-      - file: nvf-pair-junction-potentials
-      - file: nvf-pair-radial-potentials
-      - file: nvf-pair-symmetric-potentials
-      - file: nvf-contact-fourier-precision
-      - file: nvf-contact-energy-coordinates
-      - file: nvf-retained-contact-solve
-      - file: nvf-positive-coordinate-precision
-      - file: nvf-pair-transmission-potentials
-      - file: nvf-polynomial-galerkin
-      - file: nvf-affine-convergence
-      - file: nvf-contact-followup
-      - file: nvf-independent-fem
-      - file: nvf-harmonic-energy
-      - file: nvf-passive-closure
-      - file: nvf-cell-corrector
-      - file: nvf-thin-gap-energy
-      - file: nvf-partitioned-gap-energy
-      - file: nvf-harmonic-coordinates
-      - file: nvf-continuous-flux
-      - file: nvf-gap-convergence
-      - file: nvf-interface-resolution
-      - file: nvf-directional-convergence
-      - file: nvf-polynomial-body
-      - file: nvf-polynomial-flux
-      - file: nvf-local-flux
-      - file: nvf-posed-gap
-      - file: nvf-scattering-doubling
-      - file: nvf-energy-closure
-      - file: nvf-mirror-convergence
-      - file: nvf-mirror-doubling
-      - file: nvf-mirror-modal-memory
-      - file: nvf-mirror-reference
-    - caption: The solve
-      entries:
-      - file: formulation
-      - file: first-order-formulation
-      - file: connecting-algorithms
-      - file: what-a-solve-answers
-      - file: multimode-incidence
-      - file: result-guards
-    - caption: Numerical conventions
-      entries:
-      - file: amplitude-sp-frame
-      - file: branch-cuts
-      - file: rayleigh-points
-      - file: rayleigh-handling-walkthrough
-      - file: time-convention-audit
-      - file: half-space-power-audit
-    - caption: Performance and tooling
-      entries:
-      - file: backend-choice
-      - file: torch-compile
-      - file: bessel-j1
-      - file: capability-manifest
+      - file: fd-subpixel-occupancy
+      - file: fd-mie-validation
+      - file: fd-metasurface-validation
+      - file: fd-conductive-film
+      - file: fd-conductive-stack
+      - file: fd-decay-stopping
+      - file: fd-constitutive-absorber
+      - file: fd-single-pole-film
+      - file: fd-debye-film
+      - file: fd-two-debye-film
+      - file: fd-debye-sum-film
+      - file: fd-debye-stack
+      - file: fd-oscillator-stack
+      - file: fd-oscillator-sum-film
+      - file: fd-hybrid-film
+      - file: fd-sphere-clip-jit
+      - file: fd-symmetric-stencil
+      - file: fd-lattice-radiation
+      - file: fdtd-directional
+      - file: fdtd-pml-strength
+      - file: fdtd-ringdown
+      - file: fdtd-pulse-notches
+      - file: fdtd-source-clearance
+      - file: fdtd-lattice-reference
+      - file: fdtd-transverse-resolution
+      - file: fdtd-scene-angles
+      - file: fdtd-scene-azimuth
+      - file: fdtd-halfspace-gradients
+      - file: fdtd-layer-gradients
+      - file: fdtd-layer-smoothing
+      - file: fdtd-multilayer-optimization
+      - file: fdtd-rectangle-gradients
+      - file: fdtd-rotation-gradients
+      - file: fdtd-rotation-smoothing
+      - file: fdtd-adjoint-validation
+      - file: fdtd-painted-shapes
+      - file: fdtd-ellipse-gradients
+      - file: fdtd-circle-gradients
+      - file: fdtd-variable-depth
+      - file: fdtd-rayleigh
+      - file: fdtd-enz
+      - file: fdtd-layer-alignment
+      - file: fdtd-oblique-pulse
+      - file: fdtd-mixed-metal
+      - file: fdtd-lorentz-decay
+      - file: fdtd-bragg-cavity
+      - file: fdtd-dft-sampling
+      - file: fdtd-pulse-convergence
+  - file: developer/index
+    title: Developer guide
+    subtrees:
+    - entries:
+      - file: developer/source-checkout
+      - file: developer/solver-integration
+      - file: developer/documentation

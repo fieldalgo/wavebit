@@ -4,6 +4,11 @@ One implementation of the physics sits behind a thin adapter and runs on all thr
 a result never depends on which you pick — cross-backend agreement is part of the test suite,
 not a claim.
 
+This chapter is about `rcwa()`. The [periodic-stack time-domain guide](time-domain.md)
+distinguishes the legacy NumPy default from the explicit-backend route. The separate
+[general FDTD guide](general-fdtd.md) covers `fd.Scene` and its NumPy/JAX/PyTorch
+CPU backends; the device and precision contracts below belong to RCWA.
+
 ![NumPy, JAX and PyTorch](../figures/backends.png "Backends")
 
 * [NumPy](https://github.com/numpy/numpy) — the baseline. No autodiff, no GPU, nothing to
@@ -87,10 +92,12 @@ Tutorials [`03-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials
 
 JAX caps arrays at 32 bits unless `jax_enable_x64` is on. It is a **cap, not a default**: with
 it off, `jnp.asarray(x, jnp.float64)` still yields float32, so double precision cannot be opted
-into at all. Two things already lift it, and neither covers every ordering:
+into at all. Several things already lift it, and none covers every ordering:
 
 * `import wavebit` lifts it if JAX is **already** imported.
-* The JAX backend lifts it when it is first **used**.
+* The JAX RCWA backend lifts it when it is first **used**.
+* A JAX FDTD run (`fdtd` or `fdtd_grid`) lifts it when it builds its time loop, and
+  `meshgrid_xy(..., backend='jax')` before it samples — each before its first array.
 
 The gap is JAX arriving after wavebit and being used before the first solve — an array built in
 that window is silently `complex64` while `complex_dtype` still reads 128 everywhere. That

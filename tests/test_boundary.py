@@ -464,6 +464,7 @@ def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
 
 
 @pytest.mark.parametrize('truncation_order', [4, 8])
+@pytest.mark.slow
 def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
     """Painted and summed hold the same permittivity for a lone circle -- so it must be round.
 
@@ -636,6 +637,7 @@ def test_a_circle_without_ly_solves_on_the_closed_form_side():
     assert 0.0 < _total(solver.solve()) < 1.0
 
 
+@pytest.mark.slow
 def test_a_circle_without_ly_survives_the_polygon_path():
     """The regression: an overlap sends the same dict through ``shape_vertices``.
 
@@ -658,6 +660,7 @@ def test_a_circle_without_ly_survives_the_polygon_path():
     assert got[0] == got[1], got
 
 
+@pytest.mark.slow
 def test_a_painted_ellipse_is_polygonised():
     """Curved primitives are polygonised for this path; the answer must still be sane."""
     shapes = [dict(type='ellipse', cx=-0.08, cy=-0.04, lx=0.44, ly=0.28, angle=0.5, material=4.0),

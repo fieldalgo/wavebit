@@ -13,16 +13,16 @@ lossless jump, the hull bound with gain and the experimental passive closure's t
 2026-10-02. Gold is Johnson & Christy (1972), interpolated linearly in `n` and `k`.
 
 Targets:
-- `wavebit/_core/factorization.py::_nvf_assemble` — the closing, and the floor it applies first
-- `wavebit/_core/factorization.py::_floor_singular_values` — the floor
-- `wavebit/_core/factorization.py::_floor_derivative` — its derivative, in closed form
-- `wavebit/_core/factorization.py::_jax_floor`, `_torch_floor` — where that derivative enters autodiff (reverse and forward mode), and where a second derivative is refused
-- `wavebit/_core/backend.py::forward_tangent` — how a PyTorch forward-mode dual, which has no `requires_grad`, is recognised (`carries_autodiff` asks it)
-- `wavebit/_core/factorization.py::INVERSE_RULE_BOUND` — the one constant, and why it is 2
-- `wavebit/_core/factorization.py::nvf_conv_matrices`, `nvf_conv_matrices_integrated` — the raster builders' bound, the raster's largest `|eps|`
-- `wavebit/_core/boundary.py::conv_mats` — the boundary path's bound, taken region by region
-- `wavebit/_core/parametric.py::nvf_from_coeffs` — now delegates to `_nvf_assemble` rather than carrying its own copy of the formula
-- `wavebit/_core/parametric.py::largest_eps` — the bound the shape path hands over
+- `src/wavebit/_core/factorization.py::_nvf_assemble` — the closing, and the floor it applies first
+- `src/wavebit/_core/factorization.py::_floor_singular_values` — the floor
+- `src/wavebit/_core/factorization.py::_floor_derivative` — its derivative, in closed form
+- `src/wavebit/_core/factorization.py::_jax_floor`, `_torch_floor` — where that derivative enters autodiff (reverse and forward mode), and where a second derivative is refused
+- `src/wavebit/_core/backend.py::forward_tangent` — how a PyTorch forward-mode dual, which has no `requires_grad`, is recognised (`carries_autodiff` asks it)
+- `src/wavebit/_core/factorization.py::INVERSE_RULE_BOUND` — the one constant, and why it is 2
+- `src/wavebit/_core/factorization.py::nvf_conv_matrices`, `nvf_conv_matrices_integrated` — the raster builders' bound, the raster's largest `|eps|`
+- `src/wavebit/_core/boundary.py::conv_mats` — the boundary path's bound, taken region by region
+- `src/wavebit/_core/parametric.py::nvf_from_coeffs` — now delegates to `_nvf_assemble` rather than carrying its own copy of the formula
+- `src/wavebit/_core/parametric.py::largest_eps` — the bound the shape path hands over
 - `tests/resonant_nvf_probe.py::direct_from_coeffs` — the diagnostic stand-in for `nvf_from_coeffs`, which takes the bound and ignores it
 - `tests/test_nvf_metal_inverse_rule.py`
 

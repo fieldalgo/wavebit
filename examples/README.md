@@ -1,11 +1,24 @@
 # Examples
 
-Wavebit applied to problems, in plain scripts. Everything here is pure Wavebit — no ML
-frameworks, no vendored dependencies, nothing that needs a dataset or a GPU.
+Wavebit applied to problems, in plain scripts. No datasets or GPU are required.
+Some examples use optional JAX/PyTorch backends.
+
+Install `wavebit[plot]` for the FDTD image example; the shape examples use the
+optional JAX/PyTorch backends.
 
 | Entry | Question it answers |
 | --- | --- |
 | [`nvf_method_selection.py`](nvf_method_selection.py) | How do I choose ordinary NVF, explicit Cartesian Li, or the experimental auxiliary pair solver for the same structure? |
+
+| [`fdtd_multilayer_optimization.py`](fdtd_multilayer_optimization.py) | How can three coating thicknesses and permittivities be optimized together while maintaining minimum lengths and checking the final spectrum independently? |
+| [`fdtd_backends.py`](fdtd_backends.py) | Evaluate one FDTD objective on NumPy/JAX/Torch and compare automatic derivatives with finite differences. |
+| [`fdtd_bloch_gradient.py`](fdtd_bloch_gradient.py) | Differentiate oblique plane power through both the source phase and the transverse Bloch boundary. |
+| [`fdtd_dispersive_gradient.py`](fdtd_dispersive_gradient.py) | Differentiate Lorentz oscillator strength while vacuum-end CPML absorbs outgoing waves. |
+| [`fdtd_layer_optimization.py`](fdtd_layer_optimization.py) | Optimize a coating thickness in a typed Stack with optional C1 averaging, then check smoothed and sharp designs at twice the resolution and against quarter-wave optics. |
+| [`fdtd_frequency_planes.py`](fdtd_frequency_planes.py) | Measure six frequency-domain fields and integrated slab R/T without keeping time histories. |
+| [`fdtd_grid_gradient.py`](fdtd_grid_gradient.py) | Differentiate spectral transmission through a native Yee grid with JAX; uses a graded absorber, not CPML. |
+| [`fdtd_poynting.py`](fdtd_poynting.py) | How do you measure instantaneous energy flow at a point with staggered E/H records? Saves a Sz time trace inside a film; requires the plot extra. |
+| [`fdtd_record.py`](fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/fdtd-alpha.md). |
 | [`shapes_1d.py`](shapes_1d.py), [`shapes_2d.py`](shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 
 [`rectilinear_contact.py`](rectilinear_contact.py) selects exact Cartesian shape Li
@@ -34,12 +47,11 @@ that the examples still run.
 
 The `examples smoke` job in [`../.github/workflows/tests.yml`](../.github/workflows/tests.yml)
 runs every script from its own directory with `MPLBACKEND=Agg` and fails on a non-zero exit or
-on `Traceback` in the output. The whole set takes well under a minute, which is why it is a
-separate job from the verification suite rather than part of it.
+on `Traceback` in the output. This is a separate smoke job; runtime depends on the machine and installed backends.
 
 **It cannot tell you the numbers are right.** A green tick means the code ran; it says nothing
 about what was printed. It used to also fail on an `UnphysicalResultWarning`, but that check
-was removed from the solver — see [`../docs/result-guards.md`](../docs/result-guards.md) for why.
+was removed from the solver — see [`../README.md`](../README.md) for why.
 
 Nor does it check what a verification example is *for*. Until 2026-08-11 the 2D one compared a
 shape `structure` against a raster that was the vertical mirror of it — a defect that survived

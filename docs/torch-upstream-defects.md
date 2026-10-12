@@ -5,8 +5,8 @@ pure-torch reproducers (no wavebit, no `array_api_compat`) on torch 2.13.0, 2.14
 (the test channel's release candidate) and the 2.16.0.dev20261011 nightly.
 
 Targets:
-- `wavebit/_core/backend.py::linear_solve` — the solve every derivative-sensitive site goes through
-- `wavebit/_core/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of a compiled graph
+- `src/wavebit/_core/backend.py::linear_solve` — the solve every derivative-sensitive site goes through
+- `src/wavebit/_core/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of a compiled graph
 - `pyproject.toml` — the torch floor (`torch>=2.13`), which decides which of these defects a user can meet
 - `tests/test_linear_solve_derivatives.py` — `test_pytorchs_own_rule_is_still_wrong`, the canary for defect 2
 - `tests/test_torch_compile.py` — `test_canary_inductor_still_reorders_the_eye_write`, the canary for defect 1

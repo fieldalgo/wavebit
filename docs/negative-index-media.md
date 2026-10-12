@@ -29,18 +29,18 @@ published work says (§5, §18), each read in its source -- where a number illus
 statement, the study's section 13 computes it.
 
 Targets:
-- `wavebit/_core/conventions.py` — `signed_index`, `boundary_kz`, `double_negative`,
+- `src/wavebit/_core/conventions.py` — `signed_index`, `boundary_kz`, `double_negative`,
   `incident_phase_index`, `gain_cutoff_band`, `mode_q`, `etm_mode_q`, `layer_label_rule`,
   `power_down_labels`, `order_azimuth`, `order_frame_sign`
-- `wavebit/_core/engine.py` — `_half_space_index`, `_refuse_negative_index_half_space`,
+- `src/wavebit/_core/engine.py` — `_half_space_index`, `_refuse_negative_index_half_space`,
   `_refuse_negative_index_pair`, `_perfect_lens`,
   `CoreFactorizationMixin._refuse_half_space_negation_pair`, `CoreSolveMixin._incident_kxy`,
   `_lit_index_is_negative`, `_frame_azimuth`, `_indices_signed_by_pairs`,
   `CoreFactorizationMixin._layer_double_negative`
-- `wavebit/_core/domain.py` — `index_from_eps`; `wavebit/_core/backend.py` — `principal_sqrt`
-- `wavebit/_core/illumination.py` — `_plane_basis`, the coherent door's ports
-- `wavebit/_core/source_expansion.py` — `resolve_wave`, `gaussian_waves`
-- `wavebit/_core/solve_2d_first_order.py` — `split_forward_backward`
+- `src/wavebit/_core/domain.py` — `index_from_eps`; `src/wavebit/_core/backend.py` — `principal_sqrt`
+- `src/wavebit/_core/illumination.py` — `_plane_basis`, the coherent door's ports
+- `src/wavebit/_core/source_expansion.py` — `resolve_wave`, `gaussian_waves`
+- `src/wavebit/_core/solve_2d_first_order.py` — `split_forward_backward`
 - `studies/negative_index_media.py` — every number below
 - `tests/test_negative_index_half_space.py`, `tests/test_negative_index_layers.py`,
   `tests/references/test_fmmax_dng_golden.py`, `tests/references/test_pymoosh_dng_golden.py`,

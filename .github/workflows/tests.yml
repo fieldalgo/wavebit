@@ -1,4 +1,4 @@
-# Four jobs with different purposes.
+# Six jobs with different purposes.
 #
 #   test     — installs both optional backends and runs the default suite. This is
 #              where the physics is verified. The `research` tier (tests of the
@@ -7,18 +7,20 @@
 #              here runs it: it is a development aid for that research code, run
 #              by hand while the code is worked on, not a gate on other changes.
 #              tests/README.md says how.
-#   minimal  — installs the base package alone and only checks that it imports
-#              and solves. The `test` job cannot catch a stray top-level
-#              `import torch` in the core, because torch is installed there; a
-#              numpy-only user would be the first to find out.
+#   slow     — runs the tests marked `slow` (tests/conftest.py): the FDTD line's
+#              resolution-refinement studies, finite-difference gradient checks
+#              and Meep comparisons, and develop's painted-overlap polygon tests.
+#              Together with `test` it covers the default tier on every push, split so
+#              that neither half runs into the job limit.
+#   minimal  — builds an sdist and its wheel, installs in an isolated venv, and
+#              checks NumPy RCWA/FDTD, bundled data and the optional plot extra.
+#              Runs on Linux, macOS and Windows; no source-tree import fallback.
 #   examples — runs every script under `examples/` and checks it did not fail.
 #              The suite imports the library the way the library likes to be
 #              imported; the examples are the only thing here that exercises the
 #              public API the way a reader of the README would write it, so an
 #              interface the code moved out from under them shows up nowhere else.
-#              Kept out of `test` because it finishes in well under a minute
-#              against that job's ~9, so a broken example is a fast,
-#              separately-named red mark rather than nine minutes of waiting.
+#              Kept separate so a broken example has its own failure report.
 #   lint     — runs ruff on the rules `pyproject.toml` selects. It installs no
 #              package at all, so it answers in seconds; the point is that a
 #              rule nothing enforces is a comment. The config landed with 19
@@ -107,8 +109,9 @@ jobs:
       # is 'distance', and nothing else in the package reads it), so a user who skips
       # it is fine. This job is not that user: it is the one that installs everything
       # precisely so that no part of the suite goes unexercised.
-      - name: Install Wavebit with both optional backends and the contour extra
-        run: pip install -e '.[jax,pytorch,contour]' pytest pytest-timeout pytest-xdist
+      # Install plotting too so time-record coordinate/animation tests cannot silently skip.
+      - name: Install Wavebit with both optional backends, contour, and plotting
+        run: pip install -e '.[jax,pytorch,contour,plot]' pytest pytest-timeout pytest-xdist
 
       # Fails the run if a backend is missing, which would otherwise turn the
       # cross-backend tests into silent skips: the suite guards them with
@@ -121,7 +124,7 @@ jobs:
       # buries the one real failure underneath. Naming it here fails the job in three
       # seconds instead, on the install and not on the physics.
       - name: Verify all three backends and contourpy are importable
-        run: python -c "import numpy, jax, torch, contourpy, wavebit; print(wavebit.__file__)"
+        run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
 
       # Single-threaded BLAS, so that two calls with the same inputs give the same bits.
       #
@@ -176,11 +179,10 @@ jobs:
         # is the claim worth checking, since the speedup is arithmetic and the breakage
         # would not be.
         #
-        # It also splits the six tests that cost 32 of those 77 minutes across two workers:
-        # four are in `test_boundary.py` and two in `test_oblique_lattice.py`, so they land
-        # on different ones. They are slow for a reason -- f453b21 folds polygon segments
-        # over the 3x3 periodic images, which is 9x the segments and is correctness work,
-        # not a regression to revert.
+        # The six tests that cost 32 of those 77 minutes -- four in `test_boundary.py`, two in
+        # `test_oblique_lattice.py` -- are marked slow now and run in `slow` below. They are
+        # slow for a reason -- f453b21 folds polygon segments over the 3x3 periodic images,
+        # which is 9x the segments and is correctness work, not a regression to revert.
         #
         # `--timeout` turns a hung test into a named failure instead of a dead job.
         # Without it the run that hangs reports nothing at all: pytest prints its
@@ -245,8 +247,59 @@ jobs:
         # loop is one copy of the body per chunk, and reverse mode holds them all -- so
         # with `lax.scan` and a rematerialised body the same solve asks for 0.570 GiB
         # and the whole function passes, measured at 2202 MB against this runner's 7.9.
+        #
+        # `-m "not slow and not research"`: the tests marked slow run in their own job, `slow` below, and
+        # the two jobs together are the whole suite. Measured 2026-09-15 on the desktop under
+        # `-n 5`, the FDTD line's full suite was 97 minutes of wall clock and 484
+        # worker-minutes, and 74 cases took 281 of those. develop's own runs take 27 minutes
+        # there and 65 to 78 here, and by that ratio this job was headed for about 260 minutes
+        # against the 180 above. Split, this half took 42 minutes on the desktop, which is
+        # roughly 100 to 120 here by the same ratio.
         run: >
-          pytest tests -v -n 2 --dist loadfile --timeout=1200 --timeout-method=thread
+          pytest tests -v -m "not slow and not research" -n 2 --dist loadfile --timeout=1200 --timeout-method=thread
+
+  slow:
+    name: slow tests
+    runs-on: ubuntu-latest
+    # Provisional, and deliberately above `test`'s 180: this job has not yet run on a
+    # runner. Its 82 cases took 51 minutes of wall clock at `-n 5` on the desktop, and the
+    # rest of the suite 42 (2026-09-15). At the ratio develop's runs show -- 27 minutes there,
+    # 65 to 78 here -- that is roughly 125 to 150 minutes here. Lower this once a run has
+    # measured it.
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # The same installation as `test`, for the same reasons given there.
+      - name: Install CPU-only PyTorch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install Wavebit with both optional backends, contour, and plotting
+        run: pip install -e '.[jax,pytorch,contour,plot]' pytest pytest-timeout pytest-xdist
+
+      - name: Verify all three backends and contourpy are importable
+        run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
+
+      # The environment is `test`'s, and the comments there are the reasons for it. What
+      # differs is the per-test bound, 2400 s rather than 1200 s. The slowest of these took
+      # 752 s at `-n 5` on the desktop, and 1110 s on another run, where 1200 s killed its
+      # worker. These runners are slower than that machine, and the bound is for a hung test,
+      # not a slow one.
+      - name: Run the slow tests
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
+        run: >
+          pytest tests -v -m "slow and not research" -n 2 --dist loadfile --timeout=2400 --timeout-method=thread
 
   examples:
     name: examples smoke
@@ -266,10 +319,9 @@ jobs:
 
       # Both backends, because `shapes_1d` solves on torch,
       # `shapes_2d` on jax, and the two `_verification` ones run all three.
-      # No matplotlib: nothing under examples/ plots any more, and it is not a
-      # dependency of the library and never should be.
+      # The FDTD recording example also exercises the optional plot extra.
       - name: Install Wavebit with both optional backends
-        run: pip install -e '.[jax,pytorch]'
+        run: pip install -e '.[jax,pytorch,plot]'
 
       # Runs every examples/**/*.py from its own directory under MPLBACKEND=Agg and
       # fails on a non-zero exit or a `Traceback`.
@@ -282,35 +334,24 @@ jobs:
         run: python tests/run_examples_smoke.py
 
   minimal:
-    name: minimal install
-    runs-on: ubuntu-latest
+    name: distribution (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # The floor declared in pyproject.toml, and every version up to the one the
-        # full suite runs on. Those coincide at 3.12 today, so this is a single entry
-        # -- kept as a matrix because raising the ceiling means adding to this list,
-        # and because it is the check that keeps requires-python honest: it is what
-        # caught the floor declaring >=3.10 while numpy>=2.5.1 demanded >=3.12.
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.12']
     steps:
       - uses: actions/checkout@v7
-
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-
-      # No extras, and a real (non-editable) install.
-      - name: Install Wavebit alone
-        run: pip install .
-
-      # Isolated Python prevents the checkout, PYTHONPATH and user site from
-      # satisfying missing distribution files. The shared check also verifies
-      # installed version metadata, bundled material data and license notices.
-      - name: Check installed distribution without optional backends
-        working-directory: ${{ runner.temp }}
-        run: python -I "${{ github.workspace }}/tests/run_installed_smoke.py"
+      - name: Install distribution tooling
+        run: python -m pip install build twine
+      - name: Build and exercise an isolated installed distribution
+        run: python tests/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
 
   docs:
     name: docs
@@ -334,5 +375,7 @@ jobs:
       # renamed or moved fails this job instead of leaving a quietly shorter page. It also
       # catches a dead cross-reference and a `_toc.yml` entry with no file. The build is at
       # zero warnings, which is what makes the switch usable.
-      - name: Build the site, warnings as errors
-        run: sphinx-build -W -b html docs docs/_build/html
+      - name: Build English and Korean sites, warnings as errors
+        run: |
+          python -m sphinx -W -b html -D wavebit_bilingual=1 -d docs/_build/doctrees/en docs docs/_build/html
+          python -m sphinx -W -b html -D wavebit_bilingual=1 -D language=ko -d docs/_build/doctrees/ko docs docs/_build/html/ko

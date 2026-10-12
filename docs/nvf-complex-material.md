@@ -3,10 +3,10 @@
 Written: 2026-09-09
 
 Targets:
-- `wavebit/_core/conforming/continuous_flux.py`
-- `wavebit/_core/conforming/polynomial_body.py`
-- `wavebit/_core/conforming/material_grading.py`
-- `wavebit/_core/conforming/__init__.py`
+- `src/wavebit/_core/conforming/continuous_flux.py`
+- `src/wavebit/_core/conforming/polynomial_body.py`
+- `src/wavebit/_core/conforming/material_grading.py`
+- `src/wavebit/_core/conforming/__init__.py`
 - `tests/test_nvf_complex_variational.py`
 - `tests/test_conforming_complex_material.py`
 

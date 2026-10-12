@@ -1,7 +1,7 @@
 # Development environment for Wavebit.
 #
-#   conda env create -f environment.yml   # run from the repo root: pip's "-e ." is relative
-#   conda activate wavebit
+#   conda env create -n wavebit-my-worktree -f environment.yml   # run from the repo root: pip's "-e ." is relative
+#   conda activate wavebit-my-worktree
 #
 # Only Python and the notebook stack come from conda; the scientific stack is
 # installed with pip, matching how the working env on this machine is built.

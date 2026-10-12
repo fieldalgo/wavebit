@@ -5,8 +5,8 @@ solver at its current release (fmmax 1.7.1, inkstone 0.3.15, EMpy 2.2.3, RETICOL
 versions checked against PyPI and Zenodo rather than against notes.
 
 Targets:
-- `wavebit/_core/solve_2d.py::layer_modes_2d` — the five blocks it reads
-- `wavebit/_core/solve_2d_first_order.py` — the formulation that reads all nine
+- `src/wavebit/_core/solve_2d.py::layer_modes_2d` — the five blocks it reads
+- `src/wavebit/_core/solve_2d_first_order.py` — the formulation that reads all nine
 - `tests/test_anisotropic_berreman.py::test_voigt_geometry_matches_the_oracle` — and its
   `::test_a_z_row_is_refused_by_the_formulation_that_cannot_hold_it` twin
 - `tests/references/README.md` — the per-solver measurements summarised in §4
@@ -168,7 +168,7 @@ Reading all nine means abandoning the second-order reduction for the first-order
 
 which is roughly **8x** on the layer solve (`eig` is cubic and the problem doubles), and which
 gives up the free `±` mode pairing every second-order consumer assumes — forward and backward
-become genuinely different mode sets. `wavebit/_core/solve_2d_first_order.py` implements it, and
+become genuinely different mode sets. `src/wavebit/_core/solve_2d_first_order.py` implements it, and
 since 2026-08-13 the public entry does reach it: `solve_conv` takes nine slots rather than five,
 and giving any of the four z-row slots selects the first-order path (`formulation='first_order'`
 forces it, `'second_order'` refuses a z row rather than dropping it). What crossing the edge still

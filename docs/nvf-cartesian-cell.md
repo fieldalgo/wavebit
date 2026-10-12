@@ -3,7 +3,7 @@
 Written: 2026-09-10
 
 Targets:
-- `wavebit/_core/conforming/cartesian_rectangle.py`
+- `src/wavebit/_core/conforming/cartesian_rectangle.py`
 - `studies/nvf_cartesian_cell.py`
 - `tests/test_nvf_cartesian_cell.py`
 - `tests/test_nvf_cartesian_rectangle_api.py`

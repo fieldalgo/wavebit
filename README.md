@@ -13,8 +13,8 @@
 
 **Differentiable electromagnetic simulation suite — by [FieldAlgo](https://fieldalgo.com)**
 
-Wavebit simulates how light interacts with nanostructures, and differentiates through the whole
-calculation — so the same code that predicts a device's response can also optimize it.
+Wavebit simulates how light interacts with nanostructures. Its RCWA path differentiates
+through the calculation, so the same model can predict and optimize a device response.
 
 **Alpha candidate: 0.1.0.** The API may change. The ordinary RCWA/NVF solver and the
 experimental contact auxiliary solver have different validation scopes. The auxiliary solver
@@ -30,6 +30,21 @@ that experimental path.
 The ordinary solver uses one implementation of the physics on NumPy, JAX and PyTorch;
 cross-backend agreement is checked in the test suite. Experimental auxiliary families have
 the narrower backend and derivative support stated in their guides.
+
+**The periodic-stack FDTD entry point, `wavebit.fdtd(...)`, is an experimental
+research-alpha path.** It supports periodic raster scenes and shares the RCWA
+scene and result interfaces. An explicit `backend`
+selects the common NumPy/JAX/PyTorch engine; JAX and PyTorch support angle,
+material and constant-total layer-thickness derivatives on a fixed mesh. Omitting `backend` selects the legacy
+NumPy path. CPU execution is tested; GPU validation remains outstanding.
+See the [FDTD scope and validation report](docs/fdtd-alpha.md) before relying on a new
+geometry, angle or material combination.
+
+The separate general engine, `import wavebit.fd as fd`, uses explicit `fd.Scene`
+domains, boundaries, sources and monitors for finite or periodic problems, on
+NumPy, JAX and PyTorch CPU backends. Its own material, coordinate and angle
+contracts are in the [general FDTD guide](docs/guide/general-fdtd.md), including
+its current geometry and validation limits.
 
 ## Install
 
@@ -99,6 +114,9 @@ same scene in full, and the tutorials after it take one topic each.
 Seven rows decide whether your input means what you think it means. Every one of them is legal,
 energy-conserving and *wrong* when read backwards — no error, no warning — which is why they are
 worth the two minutes. [`docs/conventions.md`](docs/conventions.md) is the normative contract.
+This table describes the RCWA and periodic-stack interfaces; the separate
+[general FDTD conventions](docs/guide/general-fdtd.md#units-coordinates-and-backends)
+include degrees for incidence angles and normalized time units.
 
 | | |
 | --- | --- |
@@ -142,10 +160,29 @@ The ordinary solver is checked against references, not only against itself. Thes
 cover their recorded cases; they do not certify the experimental contact auxiliary solver's
 optical convergence or opening derivative:
 
-* **Three outside solvers** — RETICOLO through an Octave bridge, plus fmmax and S4. Their
+* **Three outside RCWA solvers** — RETICOLO through an Octave bridge, plus fmmax and S4. Their
   numbers are committed as goldens and checked in CI, so the half that needs software this
   project does not ship runs once, by hand. RETICOLO agrees to ~1e-13 and is the only reference
   here that validates individual diffraction *orders* rather than totals.
+* **A different method entirely** — Wavebit's own FDTD ([`docs/fdtd.md`](docs/fdtd.md)) solves
+  the same scene in the time domain, and Meep is the outside reference for it. RCWA truncates a
+  Fourier series and FDTD discretises space and time, so a defect surviving both belongs to
+  neither. Meep's answers are committed as
+  [`tests/references/golden_meep_1d.npz`](tests/references/golden_meep_1d.npz) (the 1D
+  benchmark, both polarisations, two resolutions, with a planar closed-form calibration
+  gating the run) and `golden_meep_crossed.npz` (a crossed grating at a conical mount,
+  per-order complex amplitudes), and CI reads them on every push: on the benchmark grating at
+  the 5 nm grid, our worst per-order gap against the converged RCWA answer is 6.6e-4 (TE) /
+  6.9e-4 (TM), against Meep's own 4.9e-4 / 7.4e-4 on that grid — read both against the fact
+  that the Meep column moves by 1.6e-3 between two of its own PML settings at that same
+  resolution, for reasons §2 records as unexplained, so neither figure is tighter than the
+  oracle's own spread. Those four numbers, and every
+  cell of the table they summarise, are read back out of the markdown and compared to
+  [`golden_fdtd_table.npz`](tests/references/golden_fdtd_table.npz) — with the conditions all
+  three columns were taken at written out by value in `tests/references/_meep_1d_cases.py`,
+  because until 2026-09-07 they were the phrase "at the shipped defaults" and one column had
+  quietly gone stale behind it. Meep is GPL and this project is Apache-2.0, so it is run as a
+  black-box oracle and is not a dependency of anything here.
 * **Published benchmark tables** — Li's 1997 crossed-grating checkerboard as tabulated by
   Demésy et al. (2012). All nine transmitted orders agree to a worst 2.06e-4, on the oblique
   primitive cell, which puts that path against numbers from outside this project.

@@ -6,18 +6,18 @@ rebuilt from Li's paper and gained the second nesting. §9 added 2026-09-27, whe
 became a value of `factorization=`.
 
 Targets:
-- `wavebit/_core/parametric.py::conv_matrix_2d` — the builder the collision used to be in; it
+- `src/wavebit/_core/parametric.py::conv_matrix_2d` — the builder the collision used to be in; it
   was called `laurent_conv_2d` until this document was written
-- `wavebit/_core/parametric.py::_grid`, `wavebit/_core/parametric.py::assemble_eps_coeffs` —
+- `src/wavebit/_core/parametric.py::_grid`, `src/wavebit/_core/parametric.py::assemble_eps_coeffs` —
   the doubled reciprocal grid the builder consumes, and why it is doubled
-- `wavebit/_core/factorization.py::fourier2d_piecewise_constant` — the raster twin, and where
+- `src/wavebit/_core/factorization.py::fourier2d_piecewise_constant` — the raster twin, and where
   `inverse_rule` chooses the rule
 - `tests/test_parametric.py` — `test_conv_matrix_matches_grid_convention`, which pins the ordering
   the two builders share
-- `wavebit/_core/factorization.py::_li_slot` and `wavebit/_core/enums.py::Nesting` — the two
+- `src/wavebit/_core/factorization.py::_li_slot` and `src/wavebit/_core/enums.py::Nesting` — the two
   nestings of Li's rules, and the keyword that chooses between them (§6)
-- `wavebit/_core/factorization.py::laurent_conv_matrices` and
-  `wavebit/_core/parametric.py::laurent_from_coeffs` — Laurent's rule as a factorization
+- `src/wavebit/_core/factorization.py::laurent_conv_matrices` and
+  `src/wavebit/_core/parametric.py::laurent_from_coeffs` — Laurent's rule as a factorization
   option, on the raster and on shapes (§9)
 
 ---
@@ -161,7 +161,7 @@ word out of the repository would have broken that and fixed nothing.
 Rewritten 2026-09-25. Until then this section said the `li` builder's x/y asymmetry "is intrinsic
 to Li's crossed-grating scheme". It is not. It comes from using **one nesting order for both
 field components**, and Li's own construction, which picks the order per component, does not
-have it. Both are now built; `li_nesting=` chooses (`wavebit/_core/enums.py::Nesting`).
+have it. Both are now built; `li_nesting=` chooses (`src/wavebit/_core/enums.py::Nesting`).
 
 Applying the rules in 2D means nesting them (L. Li, JOSA A 14, 2758, 1997): one axis is
 transformed inside, one line of cells at a time; the result is a matrix-valued function of the

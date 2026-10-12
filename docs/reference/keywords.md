@@ -3,6 +3,12 @@
 Every keyword `wavebit.rcwa()` takes, what it accepts and what it defaults to. Grouped by the
 question it answers rather than by the constructor's order, which is chronological.
 
+`wavebit.fdtd()` is the other solver, and it reads the scene keywords below unchanged -- the
+same `Stack` and `Incidence` reach both. What it adds are keywords about a time-domain run
+rather than about the scene (`resolution`, `n_periods`, `courant`, `n_pml`, `pml_reflection`,
+`grading`, `subpixel`, `record_field`, `dispersion`), and what it refuses it refuses by name. Both lists
+are in [`fdtd.md`](../fdtd.md) beside the measurement that decided each default.
+
 This page is the lookup. For what the choices *mean* and how to pick between them, the user
 guide takes them one subject at a time: [the light](../guide/light.md),
 [the scene](../guide/scene.md), [the numerics](../guide/numerics.md),

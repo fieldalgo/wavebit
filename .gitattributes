@@ -1,2 +1,154 @@
 # Notebooks are ours, but counting them would report the repository as mostly Jupyter.
 tutorials/** linguist-documentation
+
+# C8 registrations and mutation witnesses identify exact source and evidence bytes.
+# Keep the tested source line endings and preserve mixed raw-log/snapshot endings.
+studies/fdtd_conductive_film_*.py text eol=lf
+docs/fd-conductive-film.md text eol=lf
+tests/test_fd_conductive_film.py text eol=lf
+src/wavebit/fd/_lower/conductive_film.py text eol=lf
+src/wavebit/fd/_lower/checks.py text eol=crlf
+src/wavebit/fd/_lower/params.py text eol=crlf
+src/wavebit/fd/_kernel/observe.py text eol=crlf
+studies/results/fdtd_conductive_film* -text
+studies/results/fdtd_conductive_film*/** -text
+
+# Single-pole film registration and raw mutation/evidence bytes.
+studies/fdtd_single_pole_film_*.py text eol=lf
+docs/fd-single-pole-film.md text eol=lf
+tests/test_fd_single_pole_film.py text eol=lf
+src/wavebit/fd/_lower/single_pole_film.py text eol=lf
+src/wavebit/fd/_lower/single_pole_resolution.py text eol=lf
+src/wavebit/fd/_lower/plan.py text eol=crlf
+src/wavebit/fd/_lower/coefficients.py text eol=crlf
+studies/results/fdtd_single_pole_film* -text
+studies/results/fdtd_single_pole_film*/** -text
+
+# Debye film registrations preserve tested source and original evidence bytes.
+studies/fdtd_debye_film_*.py text eol=lf
+docs/fd-debye-film.md text eol=lf
+tests/test_fd_debye_film.py text eol=lf
+src/wavebit/fd/_lower/debye_film.py text eol=lf
+src/wavebit/fd/_lower/debye_resolution.py text eol=lf
+studies/results/fdtd_debye_film* -text
+studies/results/fdtd_debye_film*/** -text
+
+# Two-Debye film source and raw evidence preserve their validated bytes.
+studies/fdtd_two_debye_film_*.py text eol=lf
+docs/fd-two-debye-film.md text eol=lf
+tests/test_fd_two_debye_film.py text eol=lf
+src/wavebit/fd/_lower/two_debye_film.py text eol=lf
+src/wavebit/fd/_lower/two_debye_resolution.py text eol=lf
+studies/results/fdtd_two_debye_film* -text
+studies/results/fdtd_two_debye_film*/** -text
+
+# General Debye-sum source and raw evidence preserve validated bytes.
+studies/fdtd_debye_sum_film_*.py text eol=lf
+docs/fd-debye-sum-film.md text eol=lf
+tests/test_fd_debye_sum_film.py text eol=lf
+src/wavebit/fd/_lower/debye_sum_film.py text eol=lf
+src/wavebit/fd/_lower/debye_sum_resolution.py text eol=lf
+studies/results/fdtd_debye_sum_film* -text
+studies/results/fdtd_debye_sum_film*/** -text
+
+# Oscillator-sum source and raw evidence preserve validated bytes.
+studies/fdtd_oscillator_sum_film_*.py text eol=lf
+docs/fd-oscillator-sum-film.md text eol=lf
+tests/test_fd_oscillator_sum_film.py text eol=lf
+src/wavebit/fd/_lower/oscillator_sum_film.py text eol=lf
+src/wavebit/fd/_lower/oscillator_sum_resolution.py text eol=lf
+src/wavebit/fd/_kernel/observe.py text eol=crlf
+studies/results/fdtd_oscillator_sum_film* -text
+studies/results/fdtd_oscillator_sum_film*/** -text
+
+# State-byte report source and raw evidence preserve verified checkout bytes.
+studies/fdtd_state_bytes_*.py text eol=lf
+tests/test_fd_state_bytes.py text eol=lf
+src/wavebit/fd/_check.py text eol=crlf
+studies/results/fdtd_state_bytes* -text
+studies/results/fdtd_state_bytes*/** -text
+
+# Hybrid-film source and original evidence retain verified checkout bytes.
+studies/fdtd_hybrid_film_*.py text eol=lf
+docs/fd-hybrid-film.md text eol=lf
+tests/test_fd_hybrid_film.py text eol=lf
+src/wavebit/fd/_lower/hybrid_film.py text eol=lf
+src/wavebit/fd/_lower/hybrid_resolution.py text eol=lf
+studies/results/fdtd_hybrid_film* -text
+studies/results/fdtd_hybrid_film*/** -text
+
+# Inactive Lorentz analytic correction and raw validation evidence.
+src/wavebit/fd/materials.py text eol=crlf
+studies/fdtd_inactive_lorentz_*.py text eol=lf
+tests/test_fd_inactive_lorentz.py text eol=lf
+studies/results/fdtd_inactive_lorentz* -text
+studies/results/fdtd_inactive_lorentz*/** -text
+docs/guide/general-fdtd.md text eol=lf
+
+# Conductive-stack source and raw evidence preserve validated bytes.
+src/wavebit/fd/_lower/conductive_stack.py text eol=lf
+studies/fdtd_conductive_stack_*.py text eol=lf
+tests/test_fd_conductive_stack.py text eol=lf
+docs/fd-conductive-stack.md text eol=lf
+studies/results/fdtd_conductive_stack* -text
+studies/results/fdtd_conductive_stack*/** -text
+
+# These three runners were validated and archived with CRLF bytes.
+studies/fdtd_conductive_stack_documentation.py text eol=crlf
+studies/fdtd_conductive_stack_targeted.py text eol=crlf
+studies/fdtd_conductive_stack_validation.py text eol=crlf
+
+# Automatic stopping source and original validation records retain tested bytes.
+src/wavebit/fd/__init__.py text eol=crlf
+src/wavebit/fd/_check.py text eol=crlf
+src/wavebit/fd/_decay.py text eol=lf
+src/wavebit/fd/_lower/fields.py text eol=crlf
+src/wavebit/fd/_lower/params.py text eol=crlf
+src/wavebit/fd/_lower/plan.py text eol=crlf
+src/wavebit/fd/_run.py text eol=crlf
+src/wavebit/fd/monitors.py text eol=crlf
+src/wavebit/fd/results.py text eol=crlf
+src/wavebit/fd/scene.py text eol=crlf
+studies/fdtd_decay_stop_*.py text eol=lf
+tests/test_fd_decay_stop.py text eol=lf
+docs/fd-decay-stopping.md text eol=lf
+studies/results/fdtd_decay_stop* -text
+studies/results/fdtd_decay_stop*/** -text
+tests/test_fd_monitors_doors.py text eol=crlf
+tests/test_fd_contract.py text eol=crlf
+tests/test_fd_scene.py text eol=crlf
+src/wavebit/fd/_runtime.py text eol=crlf
+tests/test_fd_junction.py text eol=crlf
+
+# Coupled Absorber source and raw evidence retain applied bytes.
+src/wavebit/fd/_kernel/constitutive_absorber.py text eol=lf
+src/wavebit/fd/_lower/constitutive_absorber.py text eol=lf
+src/wavebit/fd/_lower/constitutive.py text eol=crlf
+src/wavebit/fd/_lower/params.py text eol=crlf
+src/wavebit/fd/_lower/plan.py text eol=crlf
+tests/test_fd_constitutive_absorber.py text eol=lf
+studies/fdtd_constitutive_absorber_*.py text eol=lf
+docs/fd-constitutive-absorber.md text eol=lf
+docs/guide/fd-constitutive-absorber.md text eol=lf
+studies/results/fdtd_constitutive_absorber* -text
+studies/results/fdtd_constitutive_absorber*/** -text
+
+# Separated Debye-stack source and raw evidence preserve validated bytes.
+src/wavebit/fd/_lower/debye_stack.py text eol=lf
+studies/fdtd_debye_stack_*.py text eol=lf
+tests/test_fd_debye_stack.py text eol=lf
+docs/fd-debye-stack.md text eol=lf
+studies/results/fdtd_debye_stack* -text
+studies/results/fdtd_debye_stack*/** -text
+
+# Separated oscillator-stack source and raw evidence preserve validated bytes.
+src/wavebit/fd/_lower/oscillator_stack.py text eol=lf
+studies/fdtd_oscillator_stack_*.py text eol=lf
+tests/test_fd_oscillator_stack.py text eol=lf
+docs/fd-oscillator-stack.md text eol=lf
+studies/results/fdtd_oscillator_stack* -text
+studies/results/fdtd_oscillator_stack*/** -text
+
+# Validation registries and redaction receipts hash exact recorded bytes.
+# Preserve them on checkouts with any platform line-ending defaults.
+studies/results/** -text

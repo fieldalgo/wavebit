@@ -6,10 +6,10 @@ matrices. All entries come from the same original triangle measures. The
 physical energy and equation guards retain their existing limits.
 
 Targets:
-- `wavebit/_core/conforming/pair_complex_precision.py`
-- `wavebit/_core/conforming/triangle_exponential_precision.py`
-- `wavebit/_core/conforming/pair_contact_fourier.py`
-- `wavebit/_core/conforming/pair_contact_precision.py`
+- `src/wavebit/_core/conforming/pair_complex_precision.py`
+- `src/wavebit/_core/conforming/triangle_exponential_precision.py`
+- `src/wavebit/_core/conforming/pair_contact_fourier.py`
+- `src/wavebit/_core/conforming/pair_contact_precision.py`
 - `tests/test_nvf_contact_fourier_precision.py`
 - `tests/test_nvf_pair_compensated_product.py`
 - `tests/test_nvf_transmission_common_precision.py`

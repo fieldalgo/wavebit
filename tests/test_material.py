@@ -351,7 +351,7 @@ def test_the_two_conversions_round_trip():
 def test_import_wavebit_does_not_import_jax():
     """Registration is lazy, and this is what "lazy" has to mean.
 
-    ``wavebit/backends/jax_backend.py`` flips ``jax_enable_x64`` process-wide the moment it is
+    ``src/wavebit/backends/jax_backend.py`` flips ``jax_enable_x64`` process-wide the moment it is
     imported -- a real side effect on the caller's own arrays -- so ``import wavebit`` must
     not drag JAX in on behalf of somebody who will never use it. A module-scope
     ``import jax`` in ``_core/domain.py`` would do exactly that, and nothing in the rest of

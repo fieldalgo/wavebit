@@ -8,12 +8,12 @@ narrative walkthrough of how the pieces hand off to each other at solve time, re
 `rayleigh-handling-walkthrough.md`.
 
 Targets:
-- `wavebit/_core/solve_1d.py` — `layer_modes_1d_conical` (the reformulation), `layer_modes_1d`,
+- `src/wavebit/_core/solve_1d.py` — `layer_modes_1d_conical` (the reformulation), `layer_modes_1d`,
   `_cutoff_cluster` and `_regular_conical_modes` (§7)
-- `wavebit/_core/solve_2d.py` — `layer_modes_2d`, `_rebuild_grazing_cluster` (§6)
-- `wavebit/_core/backend.py` — `check_mode_cutoff`, `check_finite`,
+- `src/wavebit/_core/solve_2d.py` — `layer_modes_2d`, `_rebuild_grazing_cluster` (§6)
+- `src/wavebit/_core/backend.py` — `check_mode_cutoff`, `check_finite`,
   `RayleighPointWarning`, `AutoDetuneWarning`
-- `wavebit/_core/engine.py` — `solve` (the `auto_detune` ladder)
+- `src/wavebit/_core/engine.py` — `solve` (the `auto_detune` ladder)
 - `tests/test_rayleigh_guard.py` — every contract below, pinned; `tests/test_conical_cutoff.py`
   — §7
 

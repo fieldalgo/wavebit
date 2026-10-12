@@ -71,6 +71,47 @@ where a parametric shape's absolute Cartesian lengths tilt the cell only. They d
 a plain scene — see [`../oblique-lattice.md`](../oblique-lattice.md), "Differentiating the
 cell".
 
+## Constraining several layer thicknesses
+
+`layer_thicknesses(logits, total, minimum=0.)` maps one real design weight per
+layer to positive physical thicknesses with a fixed sum. Pass its output to
+`Stack.from_structure` or the solver's ordinary `thickness` argument. The
+same function works with NumPy, JAX and Torch arrays; no FDTD-specific shape
+object is introduced.
+
+```python
+from wavebit import layer_thicknesses, Stack
+
+# Use float64 design variables for FDTD geometry and gradient comparisons.
+weights = jnp.array([-.2, .3, 0.], dtype=jnp.float64)
+lengths = layer_thicknesses(weights, total=.6, minimum=[.04, .03, .04])
+scene = Stack.from_structure(structure, lengths, top=1., bot=4., period=.05)
+```
+
+`total` must be a positive static host scalar. `minimum` is a nonnegative
+static host scalar or one value per layer, whose sum is strictly less than
+`total`. Neither accepts backend tensors, and neither is differentiated.
+The one-dimensional `logits` array chooses the array framework and preserves
+its floating dtype and device. A plain numeric list uses NumPy; integer
+weights are promoted to float64.
+
+The mapping is `minimum + (total-sum(minimum))*softmax(logits)`. Adding the
+same constant to all weights does not change any length; fixing the last
+weight to zero removes that redundant optimizer direction. Widely separated
+weights can saturate the transform and produce small gradients. Positive
+minima keep saturated layers present. With zero minima, underflow to a zero
+length raises rather than silently removing a layer. Other nonfinite concrete
+weights also raise; invalid JAX-traced weights return NaN lengths.
+
+FDTD needs static `mesh_thickness`, with the same total by default. Explicit
+[`variable_depth=True`](time-domain.md#changing-the-total-stack-depth) permits
+independent physical lengths with a changing total; this fixed-total mapping
+continues to hold its chosen total constant. With interface
+averaging width h, first and last layer minima of at least h/2 keep internal
+supports inside the outer faces. The [multilayer example](../../examples/fdtd_multilayer_optimization.py)
+varies three coating thicknesses and three permittivities together, then
+checks the final design on a finer mesh and against independent optics.
+
 ## Why `jax.jit` needs more
 
 One step in the raster pipeline decides something structural rather than computing a value —

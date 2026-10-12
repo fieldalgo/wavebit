@@ -1157,7 +1157,7 @@ def test_a_basis_built_before_jax_was_imported_crosses_the_jitted_door():
     root = pathlib.Path(__file__).resolve().parent.parent
     env = {k: v for k, v in os.environ.items() if not k.startswith('JAX')}
     env['JAX_PLATFORMS'] = 'cpu'
-    env['PYTHONPATH'] = str(root)
+    env['PYTHONPATH'] = os.pathsep.join((str(root / 'src'), str(root)))
     out = subprocess.run([sys.executable, '-c', child], capture_output=True, text=True, env=env,
                          cwd=str(root))
     assert out.returncode == 0, out.stderr[-3000:]

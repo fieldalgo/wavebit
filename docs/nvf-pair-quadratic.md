@@ -6,8 +6,8 @@ materials, a finite analytical gap derivative at contact, and polynomial
 Fourier integration. It is an experimental constitutive instrument, not an
 optically qualified replacement for ordinary NVF.
 
-Targets: `wavebit/_core/conforming/cartesian_pair_quadratic.py`,
-`wavebit/_core/conforming/triangle_moments.py`,
+Targets: `src/wavebit/_core/conforming/cartesian_pair_quadratic.py`,
+`src/wavebit/_core/conforming/triangle_moments.py`,
 `tests/test_nvf_pair_quadratic.py`, `studies/nvf_pair_quadratic.py`.
 
 ## What changes in the finite space

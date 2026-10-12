@@ -24,21 +24,23 @@ and a hook stripped them; here they resolve to links, and `intersphinx` carries 
 numpy, jax and torch.
 """
 import pathlib
-import sys
+import posixpath
+import wavebit
 
-# The package is not pip-installed in the development environment -- every `import wavebit` in
-# this repository works because it is run from the repository root, with the root on sys.path
-# implicitly. `sphinx-build` runs with `docs/` as the source dir, so it does not get that.
-#
-# Resolved from `__file__` rather than from the working directory on purpose: several worktrees
-# share this clone, and a cwd-relative path would let a build in one of them document the
-# checkout in another -- silently, since the module would import fine and be the wrong copy.
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+# An editable environment must point at the same checkout as these documents.
+# Refuse a stale/shared installation rather than documenting another worktree.
+expected_package = pathlib.Path(__file__).resolve().parents[1] / 'src/wavebit/__init__.py'
+if pathlib.Path(wavebit.__file__).resolve() != expected_package:
+    raise RuntimeError('Documentation must import this checkout: install it with '
+                       "python -m pip install -e '.[docs]' or set PYTHONPATH to its src directory.")
 
 project = 'Wavebit'
 author = 'FieldAlgo'
 copyright = '2026, FieldAlgo'
 release = '0.1.0'
+language = 'en'
+locale_dirs = ['locales/']
+gettext_compact = False
 
 extensions = [
     'myst_parser',              # the docs are markdown, and stay markdown
@@ -91,7 +93,8 @@ intersphinx_timeout = 15
 autodoc_member_order = 'bysource'
 autodoc_typehints = 'description'
 
-exclude_patterns = ['_build', 'README.md', 'figures']
+exclude_patterns = ['_build', '_templates', 'README.md', 'figures', 'locales']
+templates_path = ['_templates']
 
 html_theme = 'pydata_sphinx_theme'
 html_title = 'Wavebit'
@@ -99,5 +102,32 @@ html_theme_options = {
     'github_url': 'https://github.com/fieldalgo/wavebit',
     'show_prev_next': True,
     'navbar_align': 'left',
+    'navbar_persistent': ['language-switcher.html'],
     'show_toc_level': 2,
 }
+
+
+def _language_links(app, pagename, templatename, context, doctree):
+    """Link matching HTML pages without assuming the site's hosting prefix."""
+    context['wavebit_language_links'] = []
+    if not app.config.wavebit_bilingual or app.builder.name != 'html':
+        return
+    language = app.config.language
+    if language not in ('en', 'ko'):
+        raise ValueError('The bilingual site supports language=en or language=ko.')
+    page = app.builder.get_target_uri(pagename)
+    current = posixpath.join('ko' if language == 'ko' else '', page)
+    directory = posixpath.dirname(current) or '.'
+    for code, label in (('en', 'English'), ('ko', '한국어')):
+        target = posixpath.join('ko' if code == 'ko' else '', page)
+        context['wavebit_language_links'].append({
+            'code': code, 'label': label,
+            'href': posixpath.relpath(target, directory), 'active': code == language,
+        })
+
+
+def setup(app):
+    # Opt in only when both language trees will be present in the same artifact.
+    app.add_config_value('wavebit_bilingual', False, 'html', types=[bool])
+    app.connect('html-page-context', _language_links)
+    return {'parallel_read_safe': True, 'parallel_write_safe': True}

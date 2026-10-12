@@ -16,7 +16,7 @@ is the historical derivation and development record, not the current input guide
 Landed 2026-08-14. [`anisotropic-materials.md`](anisotropic-materials.md) §3 scoped this as "the
 actual work item"; this is what it turned into.
 
-Target: `wavebit/_core/factorization.py` — `_pn_fields`, `pn_eps_conv_matrices`,
+Target: `src/wavebit/_core/factorization.py` — `_pn_fields`, `pn_eps_conv_matrices`,
 `to_conv_mat_raster_pn_eps`.
 
 **Scope.** This derivation introduces the in-plane five-slot case. The production

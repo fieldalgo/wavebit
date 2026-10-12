@@ -1,7 +1,7 @@
 # Decisions
 
 **Why a default is what it is, and what was measured to decide it.** These are not the manual;
-they are the record behind it, and `wavebit/_core/` cites several of them from code comments —
+they are the record behind it, and `src/wavebit/_core/` cites several of them from code comments —
 a document here is why a constant has the value it has.
 
 The equivalent elsewhere is NumPy's NEPs or JAX's JEPs: a series that sits beside the manual

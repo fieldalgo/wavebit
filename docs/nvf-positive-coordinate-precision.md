@@ -3,11 +3,11 @@
 Written: 2026-09-16
 
 Targets:
-- `wavebit/_core/conforming/pair_positive_fields.py`
-- `wavebit/_core/conforming/pair_positive_precision.py`
-- `wavebit/_core/conforming/pair_positive_energy_precision.py`
-- `wavebit/_core/conforming/real_trace_coupling.py`
-- `wavebit/_core/conforming/pair_complex_exponential.py`
+- `src/wavebit/_core/conforming/pair_positive_fields.py`
+- `src/wavebit/_core/conforming/pair_positive_precision.py`
+- `src/wavebit/_core/conforming/pair_positive_energy_precision.py`
+- `src/wavebit/_core/conforming/real_trace_coupling.py`
+- `src/wavebit/_core/conforming/pair_complex_exponential.py`
 - `tests/test_nvf_positive_field_precision.py`
 - `tests/test_nvf_positive_metric_precision.py`
 - `tests/test_nvf_positive_energy_precision.py`

@@ -16,11 +16,11 @@ solver picks the formulation (§8, no longer conditional). See
 checked. This document keeps the scoping question: what each *remaining* gap costs.
 
 Targets:
-- `wavebit/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
-- `wavebit/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
-- `wavebit/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
-- `wavebit/_core/engine.py::solve_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
-- `wavebit/_core/solve_2d_first_order.py::solve_2d_first_order` — the nine-slot twin of the 2D solve
+- `src/wavebit/_core/solve_2d.py::layer_modes_2d` — the five permittivity slots the mode operator reads
+- `src/wavebit/_core/factorization.py` — what `epx` / `epy` / `epz_i` actually are (not what they look like)
+- `src/wavebit/_core/conventions.py::boundary_kz` — where `mu` would have to land besides the layer
+- `src/wavebit/_core/engine.py::solve_conv` — the injection point that bypasses `structure`, and where the formulation is chosen
+- `src/wavebit/_core/solve_2d_first_order.py::solve_2d_first_order` — the nine-slot twin of the 2D solve
 
 ---
 
@@ -337,7 +337,7 @@ reconstruction in `fields.py`. All of it assumes the second-order shape.
 Cost is not only structural: `eig` is `O(N³)`, so second-order → first-order is roughly **8x** on
 the layer solve.
 
-**Part of this now exists.** `wavebit/_core/solve_2d_first_order.py` carries the first-order
+**Part of this now exists.** `src/wavebit/_core/solve_2d_first_order.py` carries the first-order
 operator `M`, the forward/backward split, and a stack solve, pinned by
 `tests/test_solve_2d_first_order.py` against both the second-order path (where that path is valid,
 eigenvalues agree at `lam = i q` to 1e-15) and the Berreman oracle (entry for entry, to 1e-16, on

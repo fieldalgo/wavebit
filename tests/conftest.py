@@ -1,7 +1,7 @@
-"""The suite's one collection rule: research tests run when they are asked for.
+"""Suite-wide collection rules for the research and slow tiers.
 
 `research` (registered in `pyproject.toml`) marks the tests whose subject is NVF research code
--- the experimental conforming module `wavebit/_core/conforming/`, the NVF study instruments
+-- the experimental conforming module `src/wavebit/_core/conforming/`, the NVF study instruments
 under `studies/`, and the unused passive closure kernel. They are asserted like everything else
 here. They are left out of the default run because they study that experimental code rather
 than the ordinary solver and because they are where the suite's time goes. They are a
@@ -20,8 +20,14 @@ They run when asked for, in any of three ways:
 Any explicit `-m` decides on its own, so this hook only supplies the default. Naming a file
 counts as asking for it: the published write-ups under `docs/` reproduce their numbers with
 `pytest <file>`, and those commands must keep running what they name.
+
+``slow`` marks expensive physical convergence/gradient checks. Directory runs skip them;
+naming a file, ``-k``, ``-m``, ``--run-slow`` or a cached failure rerun opts them in. This
+rule is independent of research selection: ``--run-slow`` does not enable research tests.
 """
 import pathlib
+
+import pytest
 
 
 def _named_files(config):
@@ -34,7 +40,18 @@ def _named_files(config):
     return named
 
 
+def pytest_addoption(parser):
+    parser.addoption('--run-slow', action='store_true', default=False,
+                     help='also run tests marked slow when collecting a whole directory')
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        'markers', 'slow: costs minutes; a directory run skips it unless --run-slow or -m asks')
+
+
 def pytest_collection_modifyitems(config, items):
+    # An explicit marker expression owns selection for both tiers.
     if config.option.markexpr:
         return
     named = _named_files(config)
@@ -46,3 +63,37 @@ def pytest_collection_modifyitems(config, items):
     if deselected:
         config.hook.pytest_deselected(items=deselected)
         items[:] = selected
+
+    if config.getoption('--run-slow') or config.getoption('keyword'):
+        return
+    # Skipping a cached failure would clear pytest's last-failed record. Reruns
+    # therefore execute those slow cases, as an explicitly named test would.
+    failed = set()
+    if any(config.getoption(name, False) for name in ('lf', 'failedfirst', 'stepwise')):
+        cache = getattr(config, 'cache', None)
+        if cache is not None:
+            failed = set(cache.get('cache/lastfailed', {}))
+            stepwise = cache.get('cache/stepwise', None)
+            if isinstance(stepwise, str):
+                failed.add(stepwise)
+    skip = pytest.mark.skip(reason='slow tier: pass --run-slow or -m slow, or name the file')
+    for item in items:
+        if (item.get_closest_marker('slow') and item.nodeid not in failed
+                and pathlib.Path(item.path).resolve() not in named):
+            item.add_marker(skip)
+
+
+def pytest_sessionstart(session):
+    """Refuse an editable installation belonging to another worktree."""
+    import importlib.util
+    from pathlib import Path
+    expected = Path(__file__).resolve().parents[1] / 'src/wavebit/__init__.py'
+    if not expected.is_file():
+        return  # Collection-policy unit fixtures do not contain the package.
+    spec = importlib.util.find_spec('wavebit')
+    origin = None if spec is None or spec.origin is None else Path(spec.origin).resolve()
+    if origin != expected:
+        raise pytest.UsageError(
+            'Tests must import this worktree: install it with python -m pip install -e . '
+            'in its own environment, or set PYTHONPATH to its src directory. '
+            f'Expected {expected}, found {origin}.')

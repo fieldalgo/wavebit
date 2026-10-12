@@ -3,10 +3,10 @@
 Written: 2026-09-13.
 
 Targets:
-- `wavebit/_core/conforming/material_sector.py`
-- `wavebit/_core/conforming/cartesian_pair_opening.py`
-- `wavebit/_core/conforming/cartesian_pair_gap.py`
-- `wavebit/_core/conforming/cartesian_pair_gap_autodiff.py`
+- `src/wavebit/_core/conforming/material_sector.py`
+- `src/wavebit/_core/conforming/cartesian_pair_opening.py`
+- `src/wavebit/_core/conforming/cartesian_pair_gap.py`
+- `src/wavebit/_core/conforming/cartesian_pair_gap_autodiff.py`
 - `tests/test_nvf_pair_material_sector.py`
 - `studies/nvf_pair_material_sector.py`
 - `studies/results/nvf_pair_material_sector.log`

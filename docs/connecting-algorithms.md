@@ -6,11 +6,11 @@ warm-up matters, and leaving it out reported SMM as **twice as fast** as ETM on 
 before the first-call overhead had been paid.
 
 Targets:
-- `wavebit/_core/engine.py` — `_SOLVES`, where `layer_algorithm` becomes a function
-- `wavebit/_core/solve_2d.py`, `solve_1d.py` — the ETM recursion (`big_A_i`, `big_T`)
-- `wavebit/_core/scattering.py` — the SMM cascade
-- `wavebit/_core/solve_2d_first_order.py` — all three, on the first-order path
-- `wavebit/_core/conventions.py` — `etm_mode_q` / `layer_root`, the one place the two algorithms
+- `src/wavebit/_core/engine.py` — `_SOLVES`, where `layer_algorithm` becomes a function
+- `src/wavebit/_core/solve_2d.py`, `solve_1d.py` — the ETM recursion (`big_A_i`, `big_T`)
+- `src/wavebit/_core/scattering.py` — the SMM cascade
+- `src/wavebit/_core/solve_2d_first_order.py` — all three, on the first-order path
+- `src/wavebit/_core/conventions.py` — `etm_mode_q` / `layer_root`, the one place the two algorithms
   label a layer's modes differently (§10), and `layer_label_rule` / `power_down_labels`, how a
   double-negative layer is labelled (§11)
 
@@ -108,7 +108,7 @@ overflows:
 | 34.0 | — | 5.1e+25 |
 
 The prediction and the measurement agree, which is what makes the bound derivable rather than
-tuned. `wavebit/_core/solve_2d_first_order.py::_MAX_EXPONENT` is set from it.
+tuned. `src/wavebit/_core/solve_2d_first_order.py::_MAX_EXPONENT` is set from it.
 
 **ETM removes the growing term instead of cancelling it.** Sweeping upward with the state below a
 layer written as `psi = G t`, decomposing in that layer's modes gives `a_f = X_f⁻¹ P t` — and

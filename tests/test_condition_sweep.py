@@ -686,10 +686,10 @@ def test_the_public_class_declares_which_backend_it_is_and_nothing_else(backend)
 def test_importing_a_backend_does_not_import_the_other_two():
     """One module per backend, and reaching for one must not load the frameworks it does not need.
 
-    `wavebit/backends/` replaced `on_numpy/`, `on_jax/` and `on_torch/`, three packages that
+    `src/wavebit/backends/` replaced `on_numpy/`, `on_jax/` and `on_torch/`, three packages that
     were four levels deep and held about 500 lines between them. A package `__init__` that
     imported all three would make `rcwa(backend='numpy')` pull in JAX and PyTorch -- which is what
-    the empty `wavebit/backends/__init__.py` is for, and empty is not self-evidently deliberate.
+    the empty `src/wavebit/backends/__init__.py` is for, and empty is not self-evidently deliberate.
 
     Checked in a subprocess, because `sys.modules` is process state and this whole suite has
     every backend loaded by the time it runs.

@@ -4,9 +4,9 @@ Written: 2026-09-16
 
 Targets:
 
-- `wavebit/_core/conforming/pair_contact_retained.py`
-- `wavebit/_core/conforming/pair_complete_solve.py`
-- `wavebit/_core/conforming/pair_contact_precision.py`
+- `src/wavebit/_core/conforming/pair_contact_retained.py`
+- `src/wavebit/_core/conforming/pair_complete_solve.py`
+- `src/wavebit/_core/conforming/pair_contact_precision.py`
 - `tests/test_nvf_complete_solve.py`
 - `tests/test_nvf_contact_geometric_frame.py`
 

@@ -138,6 +138,26 @@ def test_dfs_coefficients_are_the_exact_ones(case):
         name, np.abs(got - want).max())
 
 
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('shape', [(1, 1), (1, 4), (4, 1)])
+def test_singleton_axis_transform_matches_independent_pixel_integrals(backend, shape):
+    if backend != 'numpy':
+        pytest.importorskip(backend)
+    epsilon = np.linspace(1.3, 2.7, np.prod(shape)).reshape(shape)+.1j
+    from wavebit._core.backend import array_namespace
+    cell = np.asarray(epsilon) if backend == 'numpy' else _to(backend, epsilon)
+    xp = array_namespace(cell)
+    def transform(c):
+        return fourier2d_piecewise_constant(xp, c, 1, 1, inverse_rule=None)
+    if backend == 'jax':
+        import jax
+        transform = jax.jit(transform)
+    actual = np.asarray(transform(cell))
+    expected = _exact_matrix(epsilon, np.arange(1, shape[1]+1)/shape[1],
+                              np.arange(1, shape[0]+1)/shape[0], 1, 1)
+    np.testing.assert_allclose(actual, expected, atol=2e-14)
+
+
 def _to(backend, x):
     if backend == 'jax':
         import jax.numpy as jnp
@@ -952,7 +972,7 @@ def test_the_normal_field_of_a_straight_interface_is_the_axis_normal(axis):
     the field a golden captured from the same builder can never arbitrate.
 
     The x/y pair getting swapped is a live failure mode in this codebase --
-    ``wavebit/_core/lattice.py`` records that unpacking a period as ``(Py, Px)`` is "a mistake
+    ``src/wavebit/_core/lattice.py`` records that unpacking a period as ``(Py, Px)`` is "a mistake
     nothing reacts to" -- and this is the cheapest statement of it that needs no solve.
     """
     cell = np.ones((1, 16, 16), dtype=complex)
