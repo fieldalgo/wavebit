@@ -393,7 +393,8 @@ def _forward_tangent(torch, x, active):
 # --- linear solves, and PyTorch's derivatives of them ----------------------------------
 #
 # Two PyTorch 2.13 defects make a derivative through `torch.linalg.solve` wrong with no error,
-# and both live in the rules PyTorch attaches to it, not in the solve:
+# and both live in the rules PyTorch attaches to it, not in the solve. Their status per torch
+# version, and when this routing can be narrowed or removed: docs/torch-upstream-defects.md.
 #
 # 1. Its forward-mode rule (`linalg_solve_jvp`, torch/csrc/autograd/FunctionsManual.cpp) is
 #    `dX = lu_solve(LU, dB - dA X)` on the LU factors of the primal, which
@@ -403,12 +404,16 @@ def _forward_tangent(torch, x, active):
 #    derivative plus that term to 8e-16, and a thickness second derivative of a 2D ETM raster
 #    by `jvp(jvp)` read 760.7 where it is 812.6 (pytorch#196695). PyTorch's fix
 #    (pytorch#192667, commit 7c2af32, in the 2.15 release candidates, not in 2.14.1) re-solves
-#    the forward rule; the backward's reuse with grad mode off stays.
+#    the forward rule; the backward's reuse with grad mode off stays (pytorch#200600, open; still
+#    wrong on the 2.16 nightly).
 # 2. `lu_solve` under two `torch.func.vmap` levels, its factors batched by the outer one and its
 #    right side by the inner one, returns wrong lanes -- the value itself. The forward rule
 #    above calls it so, so `vmap(jacfwd(f))`, a first derivative, read 197.0 for 0.01147 on a
 #    1D TM grating's thickness (lane 0 right, the others wrong or NaN), and `vmap(hessian(f))`
-#    likewise.
+#    likewise. The cause is the CPU kernel's batch stride: `apply_lu_solve` reads the distance
+#    between LU matrices from `LU.stride(-3)`, which a size-1 axis inserted there does not carry
+#    -- it reproduces without `vmap` on `LU[:, None]` (pytorch#200599, open; still wrong on the
+#    2.16 nightly).
 #
 # Where neither can happen this is `xp.linalg.solve` itself -- every eager solve, every first
 # derivative but (2)'s and, under `torch.no_grad()`, `vmap(grad)` and `vmap(vjp)`, and the
