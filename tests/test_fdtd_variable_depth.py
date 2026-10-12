@@ -147,19 +147,31 @@ def test_jit_keeps_laboratory_mesh_sources_monitors_and_records_fixed(side):
         r, out = wavebit.fdtd(**options(backend='jax', thickness=p, incidence_side=side, align_layers=True,
             return_diagnostics=True, field_monitors={'probe': .11}, record_field=173,
             record_components=['ey', 'hz'], record_bounds={'z': (.05, .15)}))
-        return r.incident.T, out['stable'], out['z_nodes'], out['source_z'], out['reflection_z'], out['transmission_z'], out['layer_planes'], out['field_z'], out['field_e'], out['monitors']['probe']['fields']['ey'], out['monitors']['probe']['z']
+        return dict(T=r.incident.T,
+            **{key: out[key] for key in ('stable', 'z_nodes', 'source_z', 'reflection_z',
+                                         'transmission_z', 'layer_planes', 'field_z', 'field_e')},
+            probe_ey=out['monitors']['probe']['fields']['ey'],
+            probe_z=out['monitors']['probe']['z'],
+            **{key: out['diffraction'][key]
+               for key in ('reflection_monitor_z', 'transmission_monitor_z')})
     compiled = jax.jit(solve)
     a, b = compiled(np.array([.173, .227])), compiled(np.array([.213, .287]))
-    for item in (2, 3, 7, 10):
-        np.testing.assert_array_equal(a[item], b[item])
-    assert a[1] and b[1]
-    np.testing.assert_allclose(a[10], .11, atol=1e-15, rtol=0)
-    np.testing.assert_allclose(b[6], [0., .213, .5], atol=1e-15)
-    assert b[4 if side == 'bottom' else 5] == .5
+    # Actual extraction planes, current sheets and field samples stay fixed in the lab.
+    for key in ('z_nodes', 'source_z', 'field_z', 'probe_z',
+                'reflection_monitor_z', 'transmission_monitor_z'):
+        np.testing.assert_array_equal(a[key], b[key])
+    assert a['stable'] and b['stable']
+    np.testing.assert_allclose(a['probe_z'], .11, atol=1e-15, rtol=0)
+    np.testing.assert_allclose(b['layer_planes'], [0., .213, .5], atol=1e-15)
+    # Public +z points up: the bottom reference remains at zero and the top follows D.
+    # Reflection is at the incident interface; transmission is at the opposite one.
+    for out, depth in ((a, .4), (b, .5)):
+        expected = (depth, 0.) if side == 'top' else (0., depth)
+        np.testing.assert_array_equal((out['reflection_z'], out['transmission_z']), expected)
     invalid = compiled(np.array([.173, 3.]))
-    assert not invalid[1]
-    for item in (0, 8, 9):
-        assert np.isnan(invalid[item]).all()
+    assert not invalid['stable']
+    for key in ('T', 'field_e', 'probe_ey'):
+        assert np.isnan(invalid[key]).all()
     assert len(traces) == 1
 
 

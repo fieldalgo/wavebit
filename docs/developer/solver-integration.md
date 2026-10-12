@@ -54,6 +54,9 @@ axes. Invariant-y records represent `y=0`, without an artificial phase depending
 on an unused second period.
 
 Use the public `source_z`, `z_nodes`, `layer_planes` and `pml_bounds` metadata.
+For explicit backends, `mesh_indices` and `background` use physical top-then-bottom
+half-space order; each `background` row contains `(epsilon, mu)`. Layer-indexed
+arrays instead run bottom-to-top.
 The legacy `diagnostics['grid']` remains an internal numerical-grid object with
 its original coordinate interpretation; it is not a public field-coordinate
 map. The public sampling and plotting helpers read the adapted metadata.

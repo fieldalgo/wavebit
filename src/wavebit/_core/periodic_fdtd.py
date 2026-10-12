@@ -175,13 +175,13 @@ def solve_periodic_fdtd(options, backend=None):
         from .fdtd import solve_fdtd
         raw = solve_fdtd(**_legacy_inputs(options, side))
     else:
-        from .scene_fdtd import solve_scene_fdtd
+        from .scene_fdtd import _validate_mesh_indices, solve_scene_fdtd
         # Internal start/end ports run along increasing z. This is the same
         # binding as RCWA's kernels: start is the public lower half-space.
         internal = dict(options, top=options['bot'], bot=options['top'],
                         incidence_side='bottom' if side == 'top' else 'top', _public_order_frame=True)
         if options.get('mesh_indices') is not None:
-            internal['mesh_indices'] = options['mesh_indices'][::-1]
+            internal['mesh_indices'] = _validate_mesh_indices(options['mesh_indices'])[::-1]
         raw = solve_scene_fdtd(backend=backend, **internal)
     result, diagnostics = raw if options.get('return_diagnostics') else (raw, None)
     invariant_y = False
@@ -195,6 +195,8 @@ def solve_periodic_fdtd(options, backend=None):
     else:
         if diagnostics.get('mesh_indices') is not None:
             diagnostics['mesh_indices'] = diagnostics['mesh_indices'][::-1]
+        background = diagnostics['background']
+        diagnostics['background'] = array_namespace(background).flip(background, axis=0)
         for plane in diagnostics.get('monitors', {}).values():
             plane['normalization'] = f'unit incident E at {side} interface'
     diagnostics['invariant_y'] = invariant_y
