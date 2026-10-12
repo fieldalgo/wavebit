@@ -108,7 +108,7 @@ def test_flux_weight_falls_back_per_order_when_first_basis_has_a_dark_channel():
         a = np.array([amplitude], dtype=complex)
         power = abs(a)**2*np.array([[.4, .7]])
         sub = ResultSub(a, a, a, a, 2*power, power, power, 2*power, power, power)
-        return Result(given=sub)
+        return Result(incident=sub)
     s, p = leg([1, 0]), leg([0, 1])
     a = np.array([[1, 1j]])/np.sqrt(2)
     mixed = ResultSub(a, a, a, a, *([None]*6))
