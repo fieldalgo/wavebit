@@ -2,7 +2,7 @@
 
     conda run -n fwref python tests/references/gen_goldens_fmmax_magnetic.py
 
-**Nothing in this solver can consume the mu rows yet.** ``docs/anisotropic-materials.md`` §5
+**Nothing in this solver can consume the mu rows yet.** ``docs/guide/rcwa/anisotropic-materials.md`` §5
 records that permeability has no slot anywhere: ``layer_modes_2d`` writes ``I`` where a
 ``mu_conv`` would go, and ``boundary_kz`` takes one material argument. This golden is laid down
 *before* that work rather than after, for one reason — an oracle chosen after the fact is an
@@ -25,12 +25,17 @@ RETICOLO is the oracle if that is ever wanted.
 
 Environment and float64 caveats are the same as ``gen_goldens_fmmax.py``; read that first.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_fmmax_magnetic.npz'

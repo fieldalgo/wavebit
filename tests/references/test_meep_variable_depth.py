@@ -1,14 +1,19 @@
 """Public Meep moving-exit differences and independently controlled film optics."""
-from pathlib import Path
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
-from studies.fdtd_variable_depth import reference, response, complex_amplitudes
+from studies.fdtd.variable_depth.fdtd_variable_depth import reference, response, complex_amplitudes
 
 
 def test_meep_moving_exit_reference_controls_and_refinement(record_property):
-    base = Path(__file__).parent
+    base = repository_path('tests/references')
     archives = {k: dict(np.load(base/f'golden_meep_variable_depth{suffix}.npz'))
                 for k, suffix in ((40, '_coarse'), (80, ''), ('refined', '_refined'))}
     target, derivative = map(complex_amplitudes, reference(.173))
@@ -41,7 +46,7 @@ def test_meep_moving_exit_reference_controls_and_refinement(record_property):
 
 def test_total_depth_autodiff_matches_the_public_meep_perturbations(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
-    data = np.load(Path(__file__).parent/'golden_meep_variable_depth.npz')
+    data = np.load(repository_path('tests/references/golden_meep_variable_depth.npz'))
     f = lambda d: response(d, 80)
     value, derivative = map(complex_amplitudes, jax.jit(lambda d: (f(d), jax.jacfwd(f)(d)))(np.array(.173)))
     amplitude_gap = float(np.max(abs(value-data['amplitudes'][-1])))

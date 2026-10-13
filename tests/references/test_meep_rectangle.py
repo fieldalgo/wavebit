@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from studies.fdtd_rectangle_gradients import rcwa_reference
+from studies.cross_solver.rectangle_gradients.fdtd_rectangle_gradients import rcwa_reference
 
 
 def reference(fine=False):
@@ -40,7 +40,7 @@ def test_meep_reference_uncertainty_and_independent_fourier_optics(record_proper
 
 def test_wavebit_shape_derivatives_refine_against_independent_phase_and_rcwa(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
-    from studies.fdtd_rectangle_gradients import response
+    from studies.cross_solver.rectangle_gradients.fdtd_rectangle_gradients import response
     data = reference()
     p = data['parameters']
     target = rcwa_reference(p)
@@ -72,7 +72,7 @@ def test_wavebit_shape_derivatives_refine_against_independent_phase_and_rcwa(rec
 
 def test_averaged_rectangle_derivatives_against_independent_meep(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
-    from studies.fdtd_rectangle_gradients import response
+    from studies.cross_solver.rectangle_gradients.fdtd_rectangle_gradients import response
     def load(name):
         with np.load(Path(__file__).with_name(name)) as data:
             return dict(data)

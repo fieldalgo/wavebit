@@ -19,7 +19,7 @@ its ``coefficient_S`` function, in ``core.py``, not in the paper). Read in PyMoo
 * inner layers are flipped to ``Im(gamma) >= 0``, a label that moves no exact answer.
 
 For every lossless medium that is this solver's root: Maystre's cut for a positive medium and its
-mirror for a double negative (``wavebit._core.conventions.boundary_kz``). The two codes share no
+mirror for a double negative (``wavebit._common.conventions.boundary_kz``). The two codes share no
 code and no formulation beyond Maxwell's equations: PyMoosh composes 2x2 scattering matrices of
 scalar TE / TM interfaces, this solver an RCWA stack with ``truncation_order = 0``.
 

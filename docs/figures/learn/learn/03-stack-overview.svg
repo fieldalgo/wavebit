@@ -1,0 +1,109 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="stack-title stack-desc">
+<title id="stack-title">Periodic patterns, stacked layers and incident light</title>
+<desc id="stack-desc">Perspective schematic of two layers on an orthogonal lattice. One cell repeats in x and y, with the first layer below the second. The structure begins at z=0. Light enters obliquely from above, with a negative z propagation component. theta is the angle between propagation and the inward normal −z; phi is the angle between the xy projection and +x. The pale plane of incidence is not a material.</desc>
+<defs>
+<marker id="dark-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#42566b" /></marker>
+<marker id="light-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#c44738" /></marker>
+<marker id="gold-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#a86508" /></marker>
+</defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;} .halo{paint-order:stroke;stroke:white;stroke-width:6;stroke-linejoin:round;} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}</style>
+<rect width="1200" height="900" fill="white" />
+
+<text x="30.00" y="44.00" font-size="31" fill="#182b3e" font-weight="750">An overview of the whole structure</text>
+<text x="30.00" y="79.00" font-size="20" fill="#52677c" font-weight="400">Cells repeat laterally; layers stack upward. This example has oblique incidence from above.</text>
+<polygon points="737.50,417.00 557.50,582.00 557.50,644.00 737.50,479.00" fill="#c1cad4" stroke="#a6b6c3" stroke-width="1.6" data-layer="0" />
+<polygon points="122.50,507.00 557.50,582.00 557.50,644.00 122.50,569.00" fill="#dce2e9" stroke="#a6b6c3" stroke-width="1.6" data-layer="0" />
+<polygon points="737.50,355.00 557.50,520.00 557.50,582.00 737.50,417.00" fill="#c1cad4" stroke="#a6b6c3" stroke-width="1.6" data-layer="1" />
+<polygon points="122.50,445.00 557.50,520.00 557.50,582.00 122.50,507.00" fill="#dce2e9" stroke="#a6b6c3" stroke-width="1.6" data-layer="1" />
+<polygon points="302.50,280.00 737.50,355.00 557.50,520.00 122.50,445.00" fill="#f1f5f7" stroke="#a6b6c3" stroke-width="1.6" />
+<line x1="447.50" y1="305.00" x2="267.50" y2="470.00" stroke="#b7c6d1" stroke-width="1.3" stroke-dasharray="5 5" />
+<line x1="242.50" y1="335.00" x2="677.50" y2="410.00" stroke="#b7c6d1" stroke-width="1.3" stroke-dasharray="5 5" />
+<line x1="592.50" y1="330.00" x2="412.50" y2="495.00" stroke="#b7c6d1" stroke-width="1.3" stroke-dasharray="5 5" />
+<line x1="182.50" y1="390.00" x2="617.50" y2="465.00" stroke="#b7c6d1" stroke-width="1.3" stroke-dasharray="5 5" />
+<polygon points="325.45,301.60 392.15,313.10 364.55,338.40 297.85,326.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="265.45,356.60 332.15,368.10 304.55,393.40 237.85,381.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="205.45,411.60 272.15,423.10 244.55,448.40 177.85,436.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="470.45,326.60 537.15,338.10 509.55,363.40 442.85,351.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="410.45,381.60 477.15,393.10 449.55,418.40 382.85,406.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="350.45,436.60 417.15,448.10 389.55,473.40 322.85,461.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="615.45,351.60 682.15,363.10 654.55,388.40 587.85,376.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="555.45,406.60 622.15,418.10 594.55,443.40 527.85,431.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="495.45,461.60 562.15,473.10 534.55,498.40 467.85,486.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" data-motif="true" />
+<polygon points="182.50,390.00 327.50,415.00 267.50,470.00 122.50,445.00" fill="#ffefb5" stroke="#a86508" stroke-width="1.6" fill-opacity="0.35" style="stroke-width:3" data-unit-cell="true" />
+<polygon points="205.45,411.60 272.15,423.10 244.55,448.40 177.85,436.90" fill="#117c77" stroke="#0f6965" stroke-width="1.6" />
+<text x="179.00" y="407.00" font-size="19" fill="#7f4b03" font-weight="700" class="halo">One cell</text>
+<line x1="134.30" y1="440.50" x2="267.70" y2="463.50" stroke="#a86508" stroke-width="1.8" marker-start="url(#gold-arrow)" marker-end="url(#gold-arrow)" />
+<text x="175.00" y="449.00" font-size="19" fill="#7f4b03" font-weight="700" class="halo">Px</text>
+<line x1="190.50" y1="395.30" x2="138.30" y2="443.15" stroke="#a86508" stroke-width="1.8" marker-start="url(#gold-arrow)" marker-end="url(#gold-arrow)" />
+<text x="137.00" y="409.00" font-size="19" fill="#7f4b03" font-weight="700" class="halo">Py</text>
+<polygon points="207.87,181.05 514.26,158.91 514.26,393.91 207.87,416.05" fill="#dfeaf5" stroke="#9aafc0" stroke-width="1.6" fill-opacity="0.38" stroke-dasharray="5 5" />
+<text x="470.00" y="165.00" font-size="20" fill="#536f88" font-weight="650">Plane of incidence</text>
+<text x="470.00" y="191.00" font-size="16" fill="#536f88" font-weight="400">An imaginary plane illustrating direction</text>
+<line x1="245.48" y1="241.31" x2="430.00" y2="400.00" stroke="#c44738" stroke-width="3.8" marker-end="url(#light-arrow)" />
+<text x="222.48" y="218.31" font-size="23" fill="#af372c" font-weight="700">Incident wave k</text>
+<line x1="430.00" y1="175.00" x2="430.00" y2="400.00" stroke="#5e7285" stroke-width="1.8" stroke-dasharray="5 5" />
+<text x="385.00" y="158.00" font-size="17" fill="#53677c" font-weight="400">Vertical line</text>
+<path d="M430.00,297.00 L427.59,297.19 L425.18,297.40 L422.77,297.63 L420.37,297.89 L417.96,298.17 L415.56,298.48 L413.16,298.80 L410.77,299.16 L408.38,299.53 L406.00,299.93 L403.62,300.36 L401.25,300.80 L398.88,301.27 L396.52,301.76 L394.17,302.28 L391.83,302.82 L389.49,303.38 L387.17,303.96 L384.86,304.57 L382.55,305.20 L380.26,305.85 L377.98,306.52 L375.71,307.21 L373.45,307.93 L371.21,308.66 L368.98,309.42 L366.77,310.20 L364.57,311.00 L362.38,311.82 L360.21,312.66 L358.06,313.53 L355.92,314.41 L353.80,315.31 L351.70,316.23 L349.62,317.17 L347.56,318.13 L345.51,319.11 L343.49,320.11 L341.48,321.13 L339.50,322.17" fill="none" stroke="#a86508" stroke-width="2.2" />
+<text x="398.00" y="285.00" font-size="27" fill="#965d0c" font-weight="650" class="halo">θ</text>
+<line x1="430.00" y1="400.00" x2="659.10" y2="439.50" stroke="#677c8e" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#dark-arrow)" />
+<text x="657.00" y="436.00" font-size="19" fill="#42566b" font-weight="650" class="halo">+x</text>
+<line x1="430.00" y1="400.00" x2="514.00" y2="323.00" stroke="#677c8e" stroke-width="1.6" stroke-dasharray="4 4" marker-end="url(#dark-arrow)" />
+<text x="505.00" y="320.00" font-size="19" fill="#42566b" font-weight="650" class="halo">+y</text>
+<line x1="430.00" y1="400.00" x2="675.11" y2="382.29" stroke="#c44738" stroke-width="2.0" stroke-dasharray="5 4" marker-end="url(#light-arrow)" />
+<text x="650.00" y="385.00" font-size="17" fill="#af372c" font-weight="600" class="halo">xy component of k</text>
+<path d="M592.40,428.00 L593.41,427.06 L594.38,426.11 L595.31,425.15 L596.20,424.19 L597.05,423.22 L597.87,422.25 L598.64,421.27 L599.38,420.28 L600.08,419.30 L600.73,418.30 L601.35,417.31 L601.93,416.31 L602.46,415.30 L602.96,414.29 L603.42,413.28 L603.83,412.27 L604.21,411.25 L604.54,410.23 L604.84,409.21 L605.09,408.18 L605.30,407.15 L605.48,406.13 L605.61,405.10 L605.70,404.06 L605.74,403.03 L605.75,402.00 L605.72,400.97 L605.65,399.93 L605.53,398.90 L605.37,397.87 L605.18,396.83 L604.94,395.80 L604.66,394.77 L604.34,393.74 L603.98,392.71 L603.58,391.69 L603.14,390.66 L602.66,389.64 L602.14,388.62 L601.57,387.60" fill="none" stroke="#a86508" stroke-width="2.2" />
+<text x="586.00" y="414.00" font-size="26" fill="#965d0c" font-weight="650" class="halo">φ</text>
+<circle cx="430" cy="400" r="4" fill="#c44738" />
+<text x="0.00" y="0.00" font-size="22" fill="#182b3e" font-weight="650" text-anchor="middle" dominant-baseline="central" transform="matrix(1 0.17241379 0 1 340.00 513.50)" data-layer-label="1">structure[1]</text>
+<text x="0.00" y="0.00" font-size="22" fill="#182b3e" font-weight="650" text-anchor="middle" dominant-baseline="central" transform="matrix(1 0.17241379 0 1 340.00 575.50)" data-layer-label="0">structure[0]</text>
+<line x1="100.00" y1="448.00" x2="100.00" y2="504.00" stroke="#42566b" stroke-width="1.6" marker-start="url(#dark-arrow)" marker-end="url(#dark-arrow)" />
+<text x="65.00" y="482.00" font-size="20" fill="#182b3e" font-weight="650">d1</text>
+<line x1="100.00" y1="510.00" x2="100.00" y2="566.00" stroke="#42566b" stroke-width="1.6" marker-start="url(#dark-arrow)" marker-end="url(#dark-arrow)" />
+<text x="65.00" y="544.00" font-size="20" fill="#182b3e" font-weight="650">d0</text>
+<circle cx="340.0" cy="606.5" r="3.5" fill="#52677c" />
+<path d="M340.00,606.50 L340.00,666.00 L374.00,666.00" fill="none" stroke="#8193a4" stroke-width="1.5" />
+<text x="392.00" y="674.00" font-size="21" fill="#182b3e" font-weight="650">z = 0 · structure bottom</text>
+<rect x="30" y="730" width="1144" height="122" rx="12" fill="#f6f8fa" stroke="#dce4ea" />
+<line x1="547.00" y1="752.00" x2="547.00" y2="831.00" stroke="#dce4ea" stroke-width="1" />
+<line x1="877.00" y1="752.00" x2="877.00" y2="831.00" stroke="#dce4ea" stroke-width="1" />
+<line x1="94.00" y1="816.00" x2="163.00" y2="828.00" stroke="#42566b" stroke-width="2" marker-end="url(#dark-arrow)" />
+<line x1="94.00" y1="816.00" x2="139.00" y2="775.00" stroke="#42566b" stroke-width="2" marker-end="url(#dark-arrow)" />
+<line x1="94.00" y1="816.00" x2="94.00" y2="759.00" stroke="#42566b" stroke-width="2" marker-end="url(#dark-arrow)" />
+<text x="173.00" y="835.00" font-size="18" fill="#182b3e" font-weight="650">+x</text>
+<text x="146.00" y="777.00" font-size="18" fill="#182b3e" font-weight="650">+y</text>
+<text x="76.00" y="751.00" font-size="18" fill="#182b3e" font-weight="650">+z</text>
+<text x="220.00" y="763.00" font-size="17" fill="#52677c" font-weight="600">Coordinate directions</text>
+<text x="220.00" y="795.00" font-size="23" fill="#182b3e" font-weight="700">+z points upward</text>
+<text x="220.00" y="827.00" font-size="18" fill="#182b3e" font-weight="400">Right-hand rule: x × y = z</text>
+<text x="575.00" y="763.00" font-size="17" fill="#52677c" font-weight="600">Height reference</text>
+<text x="575.00" y="795.00" font-size="20" fill="#182b3e" font-weight="650">Bottom set to z=0</text>
+<text x="575.00" y="827.00" font-size="18" fill="#182b3e" font-weight="400" class="mono">h_total = d0 + d1</text>
+<text x="905.00" y="763.00" font-size="17" fill="#52677c" font-weight="600">Colour key</text>
+<rect x="905" y="782" width="17" height="17" rx="3" fill="#dce2e9" stroke="#a6b6c3" />
+<text x="935.00" y="797.00" font-size="18" fill="#182b3e" font-weight="400">Grey · layer divisions</text>
+<rect x="905" y="813" width="17" height="17" rx="3" fill="#117c77" />
+<text x="935.00" y="828.00" font-size="18" fill="#182b3e" font-weight="400">Teal · repeating shapes</text>
+<rect x="825" y="117" width="349" height="172" rx="14" fill="#f6f8fa" stroke="#dce4ea" />
+<circle cx="853" cy="148" r="14" fill="#243b53" />
+<text x="848.00" y="154.00" font-size="17" fill="white" font-weight="700">1</text>
+<text x="878.00" y="155.00" font-size="22" fill="#182b3e" font-weight="700">One laterally repeated cell</text>
+<text x="846.00" y="194.00" font-size="18" fill="#182b3e" font-weight="400">Yellow outline = simulated repeat unit</text>
+<text x="846.00" y="221.00" font-size="18" fill="#182b3e" font-weight="400">period = (Px, Py)</text>
+<text x="846.00" y="248.00" font-size="18" fill="#182b3e" font-weight="400">Repetition continues beyond the shown 3×3 cells</text>
+<rect x="825" y="311" width="349" height="172" rx="14" fill="#f6f8fa" stroke="#dce4ea" />
+<circle cx="853" cy="342" r="14" fill="#243b53" />
+<text x="848.00" y="348.00" font-size="17" fill="white" font-weight="700">2</text>
+<text x="878.00" y="349.00" font-size="22" fill="#182b3e" font-weight="700">Layers stack from bottom to top</text>
+<text x="846.00" y="388.00" font-size="18" fill="#182b3e" font-weight="400">Lower structure[0] → upper structure[1]</text>
+<text x="846.00" y="415.00" font-size="18" fill="#182b3e" font-weight="400">thickness = [d0, d1]</text>
+<text x="846.00" y="442.00" font-size="18" fill="#182b3e" font-weight="400">Height increases from the bottom at z=0</text>
+<rect x="825" y="505" width="349" height="172" rx="14" fill="#f6f8fa" stroke="#dce4ea" />
+<circle cx="853" cy="536" r="14" fill="#243b53" />
+<text x="848.00" y="542.00" font-size="17" fill="white" font-weight="700">3</text>
+<text x="878.00" y="543.00" font-size="22" fill="#182b3e" font-weight="700">Light entering from above</text>
+<text x="846.00" y="582.00" font-size="18" fill="#182b3e" font-weight="400">θ · tilt from the vertical</text>
+<text x="846.00" y="609.00" font-size="18" fill="#182b3e" font-weight="400">φ · direction from +x in the xy plane</text>
+<text x="846.00" y="636.00" font-size="18" fill="#182b3e" font-weight="400">Polarization is separate → Chapter 8</text>
+<text x="30.00" y="882.00" font-size="16" fill="#52677c" font-weight="400">Orthogonal cell, top incidence, two layers. Colours do not specify materials; dimensions are not to scale.</text>
+</svg>

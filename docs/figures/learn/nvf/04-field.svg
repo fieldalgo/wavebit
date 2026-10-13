@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" role="img" aria-labelledby="title desc">
+<title id="title">n is the boundary direction; J extends it; P projects</title><desc id="desc">Find shape-boundary normals, construct an auxiliary vector and projector, then solve for E.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="560" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">n is the boundary direction; J extends it; P projects</text>
+<rect x="35" y="85" width="390" height="350" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" stroke-dasharray="7 5" />
+<circle cx="230" cy="236" r="90" fill="#e5f4ef" stroke="#117c77" stroke-width="3" />
+<line x1="320.0" y1="236.0" x2="354.0" y2="236.0" stroke="#117c77" stroke-width="3" />
+<polygon points="354.0,236.0 344.0,240.0 344.0,232.0" fill="#117c77" />
+<line x1="293.6396103067893" y1="299.6396103067893" x2="317.6812408671319" y2="323.6812408671319" stroke="#117c77" stroke-width="3" />
+<polygon points="317.6812408671319,323.6812408671319 307.78174593052023,319.43860018001266 313.43860018001266,313.78174593052023" fill="#117c77" />
+<line x1="230.0" y1="326.0" x2="230.0" y2="360.0" stroke="#117c77" stroke-width="3" />
+<polygon points="230.0,360.0 226.0,350.0 234.0,350.0" fill="#117c77" />
+<line x1="166.36038969321072" y1="299.6396103067893" x2="142.3187591328681" y2="323.6812408671319" stroke="#117c77" stroke-width="3" />
+<polygon points="142.3187591328681,323.6812408671319 146.5613998199874,313.78174593052023 152.21825406947977,319.43860018001266" fill="#117c77" />
+<line x1="140.0" y1="236.0" x2="106.0" y2="236.00000000000003" stroke="#117c77" stroke-width="3" />
+<polygon points="106.0,236.00000000000003 116.0,232.00000000000003 116.0,240.00000000000003" fill="#117c77" />
+<line x1="166.36038969321072" y1="172.36038969321072" x2="142.31875913286808" y2="148.3187591328681" stroke="#117c77" stroke-width="3" />
+<polygon points="142.31875913286808,148.3187591328681 152.21825406947974,152.5613998199874 146.56139981998737,158.21825406947977" fill="#117c77" />
+<line x1="229.99999999999997" y1="146.0" x2="229.99999999999997" y2="112.0" stroke="#117c77" stroke-width="3" />
+<polygon points="229.99999999999997,112.0 233.99999999999997,122.0 225.99999999999997,122.0" fill="#117c77" />
+<line x1="293.6396103067893" y1="172.36038969321072" x2="317.68124086713186" y2="148.31875913286808" stroke="#117c77" stroke-width="3" />
+<polygon points="317.68124086713186,148.31875913286808 313.4386001800126,158.21825406947974 307.7817459305202,152.56139981998737" fill="#117c77" />
+<circle cx="230" cy="236" r="4" fill="#a85116" />
+<text x="230" y="269" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">Centre: no actual boundary normal</text>
+<text x="230" y="121" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">Arrows n: normal to the boundary</text>
+<text x="230" y="410" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">J is also defined in the interior and background</text>
+<rect x="480" y="85" width="490" height="106" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="498" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">① n · actual boundary normal</text>
+<text x="498" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Obtained from geometry; no electric field needed.</text>
+<line x1="725" y1="194" x2="725" y2="218" stroke="#546779" stroke-width="2" />
+<polygon points="725,218 721.0,208.0 729.0,208.0" fill="#546779" />
+<rect x="480" y="230" width="490" height="106" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="498" y="264" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">② J · auxiliary vector over the domain</text>
+<text x="498" y="300" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Extend the decomposition basis into interior and background</text>
+<line x1="725" y1="339" x2="725" y2="363" stroke="#546779" stroke-width="2" />
+<polygon points="725,363 721.0,353.0 729.0,353.0" fill="#546779" />
+<rect x="480" y="375" width="490" height="106" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="498" y="409" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">③ P · projection matrix</text>
+<text x="498" y="445" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Computed from J; extracts a selected component</text>
+<text x="40" y="510" style="fill:#285ab0;font-size:22px;font-weight:400" text-anchor="start">Build equations using P → then solve for electric field E.</text>
+<text x="30" y="543" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Roles of n → J → P · this does not imply that code always stores a separate J array</text>
+</svg>

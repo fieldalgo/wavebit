@@ -8,36 +8,36 @@ optional JAX/PyTorch backends.
 
 | Entry | Question it answers |
 | --- | --- |
-| [`nvf_method_selection.py`](nvf_method_selection.py) | How do I choose ordinary NVF, explicit Cartesian Li, or the experimental auxiliary pair solver for the same structure? |
+| [`nvf_method_selection.py`](rcwa/nvf_method_selection.py) | How do I choose ordinary NVF, explicit Cartesian Li, or the experimental auxiliary pair solver for the same structure? |
 
-| [`fdtd_multilayer_optimization.py`](fdtd_multilayer_optimization.py) | How can three coating thicknesses and permittivities be optimized together while maintaining minimum lengths and checking the final spectrum independently? |
-| [`fdtd_backends.py`](fdtd_backends.py) | Evaluate one FDTD objective on NumPy/JAX/Torch and compare automatic derivatives with finite differences. |
-| [`fdtd_bloch_gradient.py`](fdtd_bloch_gradient.py) | Differentiate oblique plane power through both the source phase and the transverse Bloch boundary. |
-| [`fdtd_dispersive_gradient.py`](fdtd_dispersive_gradient.py) | Differentiate Lorentz oscillator strength while vacuum-end CPML absorbs outgoing waves. |
-| [`fdtd_layer_optimization.py`](fdtd_layer_optimization.py) | Optimize a coating thickness in a typed Stack with optional C1 averaging, then check smoothed and sharp designs at twice the resolution and against quarter-wave optics. |
-| [`fdtd_frequency_planes.py`](fdtd_frequency_planes.py) | Measure six frequency-domain fields and integrated slab R/T without keeping time histories. |
-| [`fdtd_grid_gradient.py`](fdtd_grid_gradient.py) | Differentiate spectral transmission through a native Yee grid with JAX; uses a graded absorber, not CPML. |
-| [`fdtd_poynting.py`](fdtd_poynting.py) | How do you measure instantaneous energy flow at a point with staggered E/H records? Saves a Sz time trace inside a film; requires the plot extra. |
-| [`fdtd_record.py`](fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/fdtd-alpha.md). |
-| [`shapes_1d.py`](shapes_1d.py), [`shapes_2d.py`](shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
+| [`fdtd_multilayer_optimization.py`](fdtd/fdtd_multilayer_optimization.py) | How can three coating thicknesses and permittivities be optimized together while maintaining minimum lengths and checking the final spectrum independently? |
+| [`fdtd_backends.py`](fdtd/fdtd_backends.py) | Evaluate one FDTD objective on NumPy/JAX/Torch and compare automatic derivatives with finite differences. |
+| [`fdtd_bloch_gradient.py`](fdtd/fdtd_bloch_gradient.py) | Differentiate oblique plane power through both the source phase and the transverse Bloch boundary. |
+| [`fdtd_dispersive_gradient.py`](fdtd/fdtd_dispersive_gradient.py) | Differentiate Lorentz oscillator strength while vacuum-end CPML absorbs outgoing waves. |
+| [`fdtd_layer_optimization.py`](fdtd/fdtd_layer_optimization.py) | Optimize a coating thickness in a typed Stack with optional C1 averaging, then check smoothed and sharp designs at twice the resolution and against quarter-wave optics. |
+| [`fdtd_frequency_planes.py`](fdtd/fdtd_frequency_planes.py) | Measure six frequency-domain fields and integrated slab R/T without keeping time histories. |
+| [`fdtd_grid_gradient.py`](fdtd/fdtd_grid_gradient.py) | Differentiate spectral transmission through a native Yee grid with JAX; uses a graded absorber, not CPML. |
+| [`fdtd_poynting.py`](fdtd/fdtd_poynting.py) | How do you measure instantaneous energy flow at a point with staggered E/H records? Saves a Sz time trace inside a film; requires the plot extra. |
+| [`fdtd_record.py`](fdtd/fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/guide/fdtd/fdtd-alpha.md). |
+| [`shapes_1d.py`](rcwa/shapes_1d.py), [`shapes_2d.py`](rcwa/shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
 
-[`rectilinear_contact.py`](rectilinear_contact.py) selects exact Cartesian shape Li
+[`rectilinear_contact.py`](rcwa/rectilinear_contact.py) selects exact Cartesian shape Li
 and prints JIT transmission, gap derivatives, and material derivatives through contact.
 It requires the JAX extra. Unlike the default NVF examples, it uses fixed zero-angle
 rectangles wholly inside the cell.
 
-[`nvf_contact.py`](nvf_contact.py) keeps `factorization='nvf'` and uses the
+[`nvf_contact.py`](rcwa/nvf_contact.py) keeps `factorization='nvf'` and uses the
 rectangular circular projector for contact and material gradients, including a
 frozen plan at contact. It requires JAX. See
-[shape NVF projector details](../docs/parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
+[shape NVF projector details](../docs/guide/rcwa/parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
 
-[`nvf_curved_contact.py`](nvf_curved_contact.py) exercises the same NVF options on
+[`nvf_curved_contact.py`](rcwa/nvf_curved_contact.py) exercises the same NVF options on
 tangent ellipses and compares the contact derivative with an eager one-sided
-difference. See [curved shape support](../docs/parametric-modeling.md#disjoint-circles-and-ellipses).
+difference. See [curved shape support](../docs/guide/rcwa/parametric-modeling.md#disjoint-circles-and-ellipses).
 
-[`nvf_curved_painting.py`](nvf_curved_painting.py) uses circular NVF on overlapping
+[`nvf_curved_painting.py`](rcwa/nvf_curved_painting.py) uses circular NVF on overlapping
 curves and checks the live width derivative. The projector follows the polygon
-facets used by the painting; see [scope and approximation limits](../docs/parametric-modeling.md#overlapping-circles-and-ellipses).
+facets used by the painting; see [scope and approximation limits](../docs/guide/rcwa/parametric-modeling.md#overlapping-circles-and-ellipses).
 
 ## How maintained is this?
 
@@ -81,7 +81,7 @@ datasheet number arrives rather than folding it into a literal.
 The same check runs locally, from the repository root:
 
 ```bash
-python tests/run_examples_smoke.py
+python tools/run_examples_smoke.py
 ```
 
-It takes a path to narrow the run — `python tests/run_examples_smoke.py examples/shapes_2d.py`.
+It takes a path to narrow the run — `python tools/run_examples_smoke.py examples/rcwa/shapes_2d.py`.

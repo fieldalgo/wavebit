@@ -1,9 +1,9 @@
 """The scenes, samples and digest that ``fd_golden_stage0.npz`` and its test share.
 
 One module, imported by both ``interface/freeze_fd_stage0.py`` (which writes the golden) and
-``tests/test_fd_backends.py`` (which reads it), so that the two cannot disagree about which
+``tests/fdtd/test_fd_backends.py`` (which reads it), so that the two cannot disagree about which
 scene a key names or which cells a sample holds. The scenes are the gate 1-4 boxes of
-``tests/fd_helpers.py``, built here under fixed names; nothing in this module solves
+``tests/fixtures/fdtd/fd_helpers.py``, built here under fixed names; nothing in this module solves
 anything.
 
 What is frozen per scene and per backend is deliberately small: the probe series the
@@ -20,15 +20,20 @@ before any number is compared. The freezer validates the digest before it lets i
 arbitrate anything: two independent freezes must agree byte for byte before one is
 written, which is what says the value is a function of the code and not of the process.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import hashlib
-import pathlib
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE.parent))                   # tests/, for fd_helpers
-from fd_helpers import cavity_box, plane_wave_box, symmetry_pair, to_numpy   # noqa: E402
+from tests.fixtures.fdtd.fd_helpers import cavity_box, plane_wave_box, symmetry_pair, to_numpy   # noqa: E402
 
 #: The committed golden.
 GOLDEN = HERE / 'fd_golden_stage0.npz'

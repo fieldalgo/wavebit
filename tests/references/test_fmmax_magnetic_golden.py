@@ -12,7 +12,7 @@ came out exact at both normal and oblique incidence while a *uniaxial* one was w
 s only, and a gyromagnetic one broke energy conservation outright (``R + T = 1.035``). The cause
 was ``Omega2_LR``'s hand-expanded form: its four bare ``K @ K`` terms are not geometry that
 passed through untouched, they are what other terms collapse to when the K factors commute past
-a ``muz_conv_i`` of one. See :func:`~wavebit._core.solve_2d.layer_modes_2d`.
+a ``muz_conv_i`` of one. See :func:`~wavebit.rcwa._engine.solve_2d.layer_modes_2d`.
 
 What the file holds, and what each half is for:
 
@@ -31,17 +31,23 @@ out of fmmax's reach as ours. And both half-spaces are **vacuum** in every case,
 these rows validate the layer operator alone — a magnetic ``n_top`` / ``n_bot`` needs the
 boundary admittance, which nothing here checks and which is not implemented.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from gen_goldens_fmmax_magnetic import CASES, WL, PERIOD, THICK, ONE     # noqa: E402
+from tests.references.gen_goldens_fmmax_magnetic import CASES, WL, PERIOD, THICK, ONE     # noqa: E402
 
 GOLDEN_PATH = HERE / 'golden_fmmax_magnetic.npz'
 
@@ -64,7 +70,7 @@ def _slots(tensor):
 
 def solve(eps, theta_deg, mu=None, algo='ETM'):
     """``[R_s, T_s, R_p, T_p]`` for one uniform slab between vacuum."""
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK], layer_algorithm=algo)
     res = mee.solve_conv(*_slots(eps),

@@ -1,5 +1,10 @@
 """Fixed-reference-plane thickness AD versus independently perturbed Meep runs."""
-from pathlib import Path
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
@@ -7,8 +12,8 @@ import pytest
 
 def test_magnetic_film_thickness_derivative_against_meep(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
-    from studies.fdtd_layer_gradients import airy, scene_vector
-    with np.load(Path(__file__).with_name('golden_meep_layer_thickness.npz')) as data:
+    from studies.fdtd.layer_gradients.fdtd_layer_gradients import airy, scene_vector
+    with np.load(repository_path('tests/references/golden_meep_layer_thickness.npz')) as data:
         ref = {key: data[key] for key in data.files}
     values, derivatives = ref['amplitudes'], ref['jacobians'][..., 0]
     np.testing.assert_allclose(values[0], values[1], atol=1e-8, rtol=0)

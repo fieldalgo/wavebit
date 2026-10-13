@@ -1,7 +1,7 @@
 """Anisotropic uniform slabs against fmmax, from a checked-in golden.
 
 The third oracle over these cases, after the Berreman 4x4 in
-``tests/test_anisotropic_berreman.py`` and the RETICOLO golden beside this file. Three is not
+``tests/rcwa/test_anisotropic_berreman.py`` and the RETICOLO golden beside this file. Three is not
 excessive here: the first is an independent *formulation* but our own *implementation*, and the
 second needed Octave and a convention gate before it could be trusted. fmmax is MIT, installs
 with pip, and reproduced the analytic slab at 1e-17 and Berreman at ~1e-16 with **no convention
@@ -21,17 +21,23 @@ numbers would not be telling us much.
 Values are frozen in ``golden_fmmax.npz`` by ``gen_goldens_fmmax.py``, which needs an
 environment with fmmax in it (``fwref``, see that file). This one needs only numpy.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _fmmax_cases import CASES, WL, PERIOD, THICK          # noqa: E402
+from tests.references._fmmax_cases import CASES, WL, PERIOD, THICK          # noqa: E402
 
 GOLDEN_PATH = HERE / 'golden_fmmax.npz'
 
@@ -40,11 +46,11 @@ def solve(eps, theta_deg):
     """``[R_s, T_s, R_p, T_p]`` for one uniform anisotropic layer between vacuum.
 
     ``_fmmax_cases`` states the physical tensor; the slots take its negation off the diagonal
-    — see ``docs/off-diagonal-slot-convention.md`` §2.
+    — see ``docs/theory/rcwa/off-diagonal-slot-convention.md`` §2.
     """
     I = np.eye(1, dtype=np.complex128)
     e = np.asarray(eps, dtype=complex)
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK])
     res = mee.solve_conv(np.stack([e[0, 0] * I]), np.stack([e[1, 1] * I]),
@@ -99,8 +105,7 @@ def test_the_two_external_oracles_are_not_the_same_configurations():
     obvious case in both files, and does. What must differ is the configuration, which the
     stack geometry already guarantees.
     """
-    from test_reticolo_anisotropic_golden import (WL as RETI_WL, PERIOD as RETI_PERIOD,
-                                                  THICK as RETI_THICK)
+    from tests.references.test_reticolo_anisotropic_golden import WL as RETI_WL, PERIOD as RETI_PERIOD, THICK as RETI_THICK
 
     assert (WL, PERIOD, THICK) != (RETI_WL, RETI_PERIOD, RETI_THICK), (
         'the two oracle sets share a stack geometry, so every case in one has a twin in the '

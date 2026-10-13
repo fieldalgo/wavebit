@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 435" role="img" aria-labelledby="14-layers-title 14-layers-desc">
+<title id="14-layers-title">같은 층 모드, 서로 다른 연결 방식</title><desc id="14-layers-desc">ETM과 SMM은 같은 모드를 공유하며 SMM만 산란행렬을 제공</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="435" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">같은 층 모드, 서로 다른 연결 방식</text>
+<rect x="35" y="90" width="235" height="72" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="53" y="124" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">층 2의 모드</text>
+<rect x="35" y="181" width="235" height="72" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="53" y="215" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">층 1의 모드</text>
+<rect x="35" y="272" width="235" height="72" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="53" y="306" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">층 0의 모드</text>
+<line x1="280" y1="210" x2="359" y2="141" stroke="#546779" stroke-width="2"/>
+<polygon points="359,141 354.0996477575976,150.59096178182259 348.83701266458957,144.56562595069747" fill="#546779"/>
+<line x1="280" y1="210" x2="359" y2="312" stroke="#546779" stroke-width="2"/>
+<polygon points="359,312 349.71429423085567,306.54329143449286 356.0391155226936,301.6446553359125" fill="#546779"/>
+<rect x="380" y="83" width="320" height="135" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="398" y="117" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">ETM · 기본값</text>
+<text x="398" y="153" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">주어진 입사 응답 계산</text>
+<text x="398" y="180" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">안정화된 층 연결</text>
+<rect x="380" y="253" width="320" height="135" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="398" y="287" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">SMM</text>
+<text x="398" y="323" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">입사 ↔ 출사 산란행렬</text>
+<text x="398" y="350" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">포트 정보를 가지고 연결</text>
+<line x1="715" y1="153" x2="765" y2="200" stroke="#546779" stroke-width="2"/>
+<polygon points="765,200 754.9740832759084,196.06541058792916 760.4533633460516,190.2363892367131" fill="#546779"/>
+<line x1="715" y1="320" x2="765" y2="240" stroke="#546779" stroke-width="2"/>
+<polygon points="765,240 763.0920038159885,250.5999788000636 756.3080173839479,246.35998728003815" fill="#546779"/>
+<rect x="780" y="163" width="185" height="109" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="798" y="197" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">R / T</text>
+<text x="798" y="233" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">같은 물리 문제</text>
+<text x="30" y="418" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">개념도 · ETM/SMM 일치는 연결 방법 확인; 독립된 물리 기준을 대신하지 않는다</text>
+</svg>

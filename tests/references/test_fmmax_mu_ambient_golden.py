@@ -1,6 +1,6 @@
 """Magnetic **half-spaces** against fmmax, from a golden frozen before the boundary could hold one.
 
-``docs/anisotropic-materials.md`` §5 said to change the boundary conventions "with a golden in
+``docs/guide/rcwa/anisotropic-materials.md`` §5 said to change the boundary conventions "with a golden in
 hand", because ``conventions.py`` is the module that exists after a sign seam there once turned
 absorbing media into gain media. This is that golden. It was generated while ``boundary_kz``
 took one material argument and the p-channel admittance was spelled ``/ eps_bot`` — there was
@@ -34,7 +34,14 @@ regenerated if it changed". The decision came on 2026-08-20 and it is
 transcription rather than a conversion, and the ``sqrt(eps*mu)`` this file used to compute has
 moved inside the solver, where the branch is argued once.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
@@ -42,10 +49,9 @@ import pytest
 
 import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _fmmax_mu_ambient_cases import (                                           # noqa: E402
-    CASES, PERIOD, THICK, WL, ZERO_THICKNESS_CASES, fresnel)
+from tests.references._fmmax_mu_ambient_cases import CASES, PERIOD, THICK, WL, ZERO_THICKNESS_CASES, fresnel
 
 GOLDEN_PATH = HERE / 'golden_fmmax_mu_ambient.npz'
 I1 = np.eye(1, dtype=np.complex128)
@@ -77,7 +83,7 @@ def solve(top, bot, layer_eps, layer_mu, theta_deg, thick=THICK, algo='ETM'):
     pair, which agrees to round-off but says the same thing twice.
     """
     (eps_t, mu_t), (eps_b, mu_b) = top, bot
-    mee = wavebit.rcwa(backend='numpy',
+    mee = _legacy_wavebit.rcwa(backend='numpy',
                        top=wavebit.Material(eps_t, mu_t),
                        bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=0.0, truncation_order=(0, 0),
@@ -177,7 +183,7 @@ def test_the_ambient_permeability_is_not_silently_dropped(name):
 
 def _solve_psi(top, bot, layer_eps, theta_deg, psi_deg, algo='ETM', side='top'):
     (eps_t, mu_t), (eps_b, mu_b) = top, bot
-    mee = wavebit.rcwa(backend='numpy',
+    mee = _legacy_wavebit.rcwa(backend='numpy',
                        top=wavebit.Material(eps_t, mu_t),
                        bot=wavebit.Material(eps_b, mu_b),
                        theta=np.deg2rad(theta_deg), phi=0.0, psi=np.deg2rad(psi_deg),
@@ -278,7 +284,7 @@ def test_a_magnetic_ambient_on_a_one_dimensional_structure_now_solves():
     """
     # 4.41 is the index-2.1 substrate this case always had, said as a permittivity.
     n_bot, mu_bot = 2.1, 1.7
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=n_bot ** 2, theta=0.0, phi=0.0, tetm='te',
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=n_bot ** 2, theta=0.0, phi=0.0, tetm='te',
                        truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.ones((1, 1, 8)))
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (1.0, 1.0, 1.0)]

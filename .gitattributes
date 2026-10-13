@@ -3,152 +3,314 @@ tutorials/** linguist-documentation
 
 # C8 registrations and mutation witnesses identify exact source and evidence bytes.
 # Keep the tested source line endings and preserve mixed raw-log/snapshot endings.
-studies/fdtd_conductive_film_*.py text eol=lf
-docs/fd-conductive-film.md text eol=lf
-tests/test_fd_conductive_film.py text eol=lf
-src/wavebit/fd/_lower/conductive_film.py text eol=lf
-src/wavebit/fd/_lower/checks.py text eol=crlf
-src/wavebit/fd/_lower/params.py text eol=crlf
-src/wavebit/fd/_kernel/observe.py text eol=crlf
-studies/results/fdtd_conductive_film* -text
-studies/results/fdtd_conductive_film*/** -text
+studies/fdtd/conductive_film/fdtd_conductive_film_campaign.py text eol=lf
+studies/fdtd/conductive_film/fdtd_conductive_film_final_confirmation.py text eol=lf
+studies/fdtd/conductive_film/fdtd_conductive_film_mutations.py text eol=lf
+studies/fdtd/conductive_film/fdtd_conductive_film_probe.py text eol=lf
+studies/fdtd/conductive_film/fdtd_conductive_film_report_recovery.py text eol=lf
+studies/fdtd/conductive_film/fdtd_conductive_film_validation.py text eol=lf
+docs/validation/fdtd/fd-conductive-film.md text eol=lf
+tests/fdtd/test_fd_conductive_film.py text eol=lf
+src/wavebit/fdtd/_prepare/conductive_film.py text eol=lf
+src/wavebit/fdtd/_prepare/checks.py text eol=crlf
+src/wavebit/fdtd/_prepare/params.py text eol=crlf
+src/wavebit/fdtd/_kernel/observe.py text eol=crlf
 
 # Single-pole film registration and raw mutation/evidence bytes.
-studies/fdtd_single_pole_film_*.py text eol=lf
-docs/fd-single-pole-film.md text eol=lf
-tests/test_fd_single_pole_film.py text eol=lf
-src/wavebit/fd/_lower/single_pole_film.py text eol=lf
-src/wavebit/fd/_lower/single_pole_resolution.py text eol=lf
-src/wavebit/fd/_lower/plan.py text eol=crlf
-src/wavebit/fd/_lower/coefficients.py text eol=crlf
-studies/results/fdtd_single_pole_film* -text
-studies/results/fdtd_single_pole_film*/** -text
+studies/fdtd/single_pole_film/fdtd_single_pole_film_backends.py text eol=lf
+studies/fdtd/single_pole_film/fdtd_single_pole_film_calibration.py text eol=lf
+studies/fdtd/single_pole_film/fdtd_single_pole_film_campaign.py text eol=lf
+studies/fdtd/single_pole_film/fdtd_single_pole_film_mutations.py text eol=lf
+studies/fdtd/single_pole_film/fdtd_single_pole_film_probe.py text eol=lf
+studies/fdtd/single_pole_film/fdtd_single_pole_film_refinement.py text eol=lf
+studies/fdtd/single_pole_film/fdtd_single_pole_film_targeted.py text eol=lf
+studies/fdtd/single_pole_film/fdtd_single_pole_film_validation.py text eol=lf
+docs/validation/fdtd/fd-single-pole-film.md text eol=lf
+tests/fdtd/test_fd_single_pole_film.py text eol=lf
+src/wavebit/fdtd/_prepare/single_pole_film.py text eol=lf
+src/wavebit/fdtd/_prepare/single_pole_resolution.py text eol=lf
+src/wavebit/fdtd/_prepare/plan.py text eol=crlf
+src/wavebit/fdtd/_prepare/coefficients.py text eol=crlf
 
 # Debye film registrations preserve tested source and original evidence bytes.
-studies/fdtd_debye_film_*.py text eol=lf
-docs/fd-debye-film.md text eol=lf
-tests/test_fd_debye_film.py text eol=lf
-src/wavebit/fd/_lower/debye_film.py text eol=lf
-src/wavebit/fd/_lower/debye_resolution.py text eol=lf
-studies/results/fdtd_debye_film* -text
-studies/results/fdtd_debye_film*/** -text
+studies/fdtd/debye_film/fdtd_debye_film_calibration.py text eol=lf
+studies/fdtd/debye_film/fdtd_debye_film_campaign.py text eol=lf
+studies/fdtd/debye_film/fdtd_debye_film_mutations.py text eol=lf
+studies/fdtd/debye_film/fdtd_debye_film_probe.py text eol=lf
+studies/fdtd/debye_film/fdtd_debye_film_targeted.py text eol=lf
+studies/fdtd/debye_film/fdtd_debye_film_validation.py text eol=lf
+docs/validation/fdtd/fd-debye-film.md text eol=lf
+tests/fdtd/test_fd_debye_film.py text eol=lf
+src/wavebit/fdtd/_prepare/debye_film.py text eol=lf
+src/wavebit/fdtd/_prepare/debye_resolution.py text eol=lf
 
 # Two-Debye film source and raw evidence preserve their validated bytes.
-studies/fdtd_two_debye_film_*.py text eol=lf
-docs/fd-two-debye-film.md text eol=lf
-tests/test_fd_two_debye_film.py text eol=lf
-src/wavebit/fd/_lower/two_debye_film.py text eol=lf
-src/wavebit/fd/_lower/two_debye_resolution.py text eol=lf
-studies/results/fdtd_two_debye_film* -text
-studies/results/fdtd_two_debye_film*/** -text
+studies/fdtd/two_debye_film/fdtd_two_debye_film_calibration.py text eol=lf
+studies/fdtd/two_debye_film/fdtd_two_debye_film_campaign.py text eol=lf
+studies/fdtd/two_debye_film/fdtd_two_debye_film_mutations.py text eol=lf
+studies/fdtd/two_debye_film/fdtd_two_debye_film_probe.py text eol=lf
+studies/fdtd/two_debye_film/fdtd_two_debye_film_targeted.py text eol=lf
+studies/fdtd/two_debye_film/fdtd_two_debye_film_validation.py text eol=lf
+docs/validation/fdtd/fd-two-debye-film.md text eol=lf
+tests/fdtd/test_fd_two_debye_film.py text eol=lf
+src/wavebit/fdtd/_prepare/two_debye_film.py text eol=lf
+src/wavebit/fdtd/_prepare/two_debye_resolution.py text eol=lf
 
 # General Debye-sum source and raw evidence preserve validated bytes.
-studies/fdtd_debye_sum_film_*.py text eol=lf
-docs/fd-debye-sum-film.md text eol=lf
-tests/test_fd_debye_sum_film.py text eol=lf
-src/wavebit/fd/_lower/debye_sum_film.py text eol=lf
-src/wavebit/fd/_lower/debye_sum_resolution.py text eol=lf
-studies/results/fdtd_debye_sum_film* -text
-studies/results/fdtd_debye_sum_film*/** -text
+studies/fdtd/debye_sum_film/fdtd_debye_sum_film_calibration.py text eol=lf
+studies/fdtd/debye_sum_film/fdtd_debye_sum_film_campaign.py text eol=lf
+studies/fdtd/debye_sum_film/fdtd_debye_sum_film_mutations.py text eol=lf
+studies/fdtd/debye_sum_film/fdtd_debye_sum_film_probe.py text eol=lf
+studies/fdtd/debye_sum_film/fdtd_debye_sum_film_targeted.py text eol=lf
+studies/fdtd/debye_sum_film/fdtd_debye_sum_film_validation.py text eol=lf
+docs/validation/fdtd/fd-debye-sum-film.md text eol=lf
+tests/fdtd/test_fd_debye_sum_film.py text eol=lf
+src/wavebit/fdtd/_prepare/debye_sum_film.py text eol=lf
+src/wavebit/fdtd/_prepare/debye_sum_resolution.py text eol=lf
 
 # Oscillator-sum source and raw evidence preserve validated bytes.
-studies/fdtd_oscillator_sum_film_*.py text eol=lf
-docs/fd-oscillator-sum-film.md text eol=lf
-tests/test_fd_oscillator_sum_film.py text eol=lf
-src/wavebit/fd/_lower/oscillator_sum_film.py text eol=lf
-src/wavebit/fd/_lower/oscillator_sum_resolution.py text eol=lf
-src/wavebit/fd/_kernel/observe.py text eol=crlf
-studies/results/fdtd_oscillator_sum_film* -text
-studies/results/fdtd_oscillator_sum_film*/** -text
+studies/fdtd/oscillator_sum_film/fdtd_oscillator_sum_film_calibration.py text eol=lf
+studies/fdtd/oscillator_sum_film/fdtd_oscillator_sum_film_campaign.py text eol=lf
+studies/fdtd/oscillator_sum_film/fdtd_oscillator_sum_film_mutations.py text eol=lf
+studies/fdtd/oscillator_sum_film/fdtd_oscillator_sum_film_probe.py text eol=lf
+studies/fdtd/oscillator_sum_film/fdtd_oscillator_sum_film_targeted.py text eol=lf
+studies/fdtd/oscillator_sum_film/fdtd_oscillator_sum_film_validation.py text eol=lf
+docs/validation/fdtd/fd-oscillator-sum-film.md text eol=lf
+tests/fdtd/test_fd_oscillator_sum_film.py text eol=lf
+src/wavebit/fdtd/_prepare/oscillator_sum_film.py text eol=lf
+src/wavebit/fdtd/_prepare/oscillator_sum_resolution.py text eol=lf
+src/wavebit/fdtd/_kernel/observe.py text eol=crlf
 
 # State-byte report source and raw evidence preserve verified checkout bytes.
-studies/fdtd_state_bytes_*.py text eol=lf
-tests/test_fd_state_bytes.py text eol=lf
-src/wavebit/fd/_check.py text eol=crlf
-studies/results/fdtd_state_bytes* -text
-studies/results/fdtd_state_bytes*/** -text
+studies/fdtd/state_bytes/fdtd_state_bytes_audit.py text eol=lf
+studies/fdtd/state_bytes/fdtd_state_bytes_documentation.py text eol=lf
+studies/fdtd/state_bytes/fdtd_state_bytes_mutations.py text eol=lf
+studies/fdtd/state_bytes/fdtd_state_bytes_prepare.py text eol=lf
+studies/fdtd/state_bytes/fdtd_state_bytes_support.py text eol=lf
+studies/fdtd/state_bytes/fdtd_state_bytes_targeted.py text eol=lf
+studies/fdtd/state_bytes/fdtd_state_bytes_validation.py text eol=lf
+tests/fdtd/test_fd_state_bytes.py text eol=lf
+src/wavebit/fdtd/_prepare/report.py text eol=crlf
 
 # Hybrid-film source and original evidence retain verified checkout bytes.
-studies/fdtd_hybrid_film_*.py text eol=lf
-docs/fd-hybrid-film.md text eol=lf
-tests/test_fd_hybrid_film.py text eol=lf
-src/wavebit/fd/_lower/hybrid_film.py text eol=lf
-src/wavebit/fd/_lower/hybrid_resolution.py text eol=lf
-studies/results/fdtd_hybrid_film* -text
-studies/results/fdtd_hybrid_film*/** -text
+studies/fdtd/hybrid_film/fdtd_hybrid_film_calibration.py text eol=lf
+studies/fdtd/hybrid_film/fdtd_hybrid_film_campaign.py text eol=lf
+studies/fdtd/hybrid_film/fdtd_hybrid_film_mutations.py text eol=lf
+studies/fdtd/hybrid_film/fdtd_hybrid_film_probe.py text eol=lf
+studies/fdtd/hybrid_film/fdtd_hybrid_film_targeted.py text eol=lf
+studies/fdtd/hybrid_film/fdtd_hybrid_film_validation.py text eol=lf
+docs/validation/fdtd/fd-hybrid-film.md text eol=lf
+tests/fdtd/test_fd_hybrid_film.py text eol=lf
+src/wavebit/fdtd/_prepare/hybrid_film.py text eol=lf
+src/wavebit/fdtd/_prepare/hybrid_resolution.py text eol=lf
 
 # Inactive Lorentz analytic correction and raw validation evidence.
-src/wavebit/fd/materials.py text eol=crlf
-studies/fdtd_inactive_lorentz_*.py text eol=lf
-tests/test_fd_inactive_lorentz.py text eol=lf
-studies/results/fdtd_inactive_lorentz* -text
-studies/results/fdtd_inactive_lorentz*/** -text
-docs/guide/general-fdtd.md text eol=lf
+src/wavebit/materials/time_domain.py text eol=crlf
+studies/fdtd/inactive_lorentz/fdtd_inactive_lorentz_audit.py text eol=lf
+studies/fdtd/inactive_lorentz/fdtd_inactive_lorentz_documentation.py text eol=lf
+studies/fdtd/inactive_lorentz/fdtd_inactive_lorentz_mutations.py text eol=lf
+studies/fdtd/inactive_lorentz/fdtd_inactive_lorentz_prepare.py text eol=lf
+studies/fdtd/inactive_lorentz/fdtd_inactive_lorentz_support.py text eol=lf
+studies/fdtd/inactive_lorentz/fdtd_inactive_lorentz_targeted.py text eol=lf
+studies/fdtd/inactive_lorentz/fdtd_inactive_lorentz_validation.py text eol=lf
+tests/fdtd/test_fd_inactive_lorentz.py text eol=lf
+docs/guide/fdtd/general-fdtd.md text eol=lf
 
 # Conductive-stack source and raw evidence preserve validated bytes.
-src/wavebit/fd/_lower/conductive_stack.py text eol=lf
-studies/fdtd_conductive_stack_*.py text eol=lf
-tests/test_fd_conductive_stack.py text eol=lf
-docs/fd-conductive-stack.md text eol=lf
-studies/results/fdtd_conductive_stack* -text
-studies/results/fdtd_conductive_stack*/** -text
+src/wavebit/fdtd/_prepare/conductive_stack.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_audit.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_calibration.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_campaign.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_documentation.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_mutations.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_prepare.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_probe.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_support.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_targeted.py text eol=lf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_validation.py text eol=lf
+tests/fdtd/test_fd_conductive_stack.py text eol=lf
+docs/validation/fdtd/fd-conductive-stack.md text eol=lf
 
 # These three runners were validated and archived with CRLF bytes.
-studies/fdtd_conductive_stack_documentation.py text eol=crlf
-studies/fdtd_conductive_stack_targeted.py text eol=crlf
-studies/fdtd_conductive_stack_validation.py text eol=crlf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_documentation.py text eol=crlf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_targeted.py text eol=crlf
+studies/fdtd/conductive_stack/fdtd_conductive_stack_validation.py text eol=crlf
 
 # Automatic stopping source and original validation records retain tested bytes.
-src/wavebit/fd/__init__.py text eol=crlf
-src/wavebit/fd/_check.py text eol=crlf
-src/wavebit/fd/_decay.py text eol=lf
-src/wavebit/fd/_lower/fields.py text eol=crlf
-src/wavebit/fd/_lower/params.py text eol=crlf
-src/wavebit/fd/_lower/plan.py text eol=crlf
-src/wavebit/fd/_run.py text eol=crlf
-src/wavebit/fd/monitors.py text eol=crlf
-src/wavebit/fd/results.py text eol=crlf
-src/wavebit/fd/scene.py text eol=crlf
-studies/fdtd_decay_stop_*.py text eol=lf
-tests/test_fd_decay_stop.py text eol=lf
-docs/fd-decay-stopping.md text eol=lf
-studies/results/fdtd_decay_stop* -text
-studies/results/fdtd_decay_stop*/** -text
-tests/test_fd_monitors_doors.py text eol=crlf
-tests/test_fd_contract.py text eol=crlf
-tests/test_fd_scene.py text eol=crlf
-src/wavebit/fd/_runtime.py text eol=crlf
-tests/test_fd_junction.py text eol=crlf
+src/wavebit/fdtd/_legacy.py text eol=crlf
+src/wavebit/fdtd/_prepare/report.py text eol=crlf
+src/wavebit/fdtd/_decay.py text eol=lf
+src/wavebit/fdtd/_prepare/fields.py text eol=crlf
+src/wavebit/fdtd/_prepare/params.py text eol=crlf
+src/wavebit/fdtd/_prepare/plan.py text eol=crlf
+src/wavebit/fdtd/_execution.py text eol=crlf
+src/wavebit/fdtd/_legacy_monitors.py text eol=crlf
+src/wavebit/fdtd/results.py text eol=crlf
+src/wavebit/fdtd/_scene.py text eol=crlf
+studies/fdtd/decay_stop/fdtd_decay_stop_campaign.py text eol=lf
+studies/fdtd/decay_stop/fdtd_decay_stop_gates.py text eol=lf
+studies/fdtd/decay_stop/fdtd_decay_stop_mutations.py text eol=lf
+studies/fdtd/decay_stop/fdtd_decay_stop_probe.py text eol=lf
+studies/fdtd/decay_stop/fdtd_decay_stop_support.py text eol=lf
+tests/fdtd/test_fd_decay_stop.py text eol=lf
+docs/validation/fdtd/fd-decay-stopping.md text eol=lf
+tests/fdtd/test_fd_monitors_doors.py text eol=crlf
+tests/fdtd/test_fd_contract.py text eol=crlf
+tests/fdtd/test_fd_scene.py text eol=crlf
+src/wavebit/fdtd/_runtime.py text eol=crlf
+tests/fdtd/test_fd_junction.py text eol=crlf
 
 # Coupled Absorber source and raw evidence retain applied bytes.
-src/wavebit/fd/_kernel/constitutive_absorber.py text eol=lf
-src/wavebit/fd/_lower/constitutive_absorber.py text eol=lf
-src/wavebit/fd/_lower/constitutive.py text eol=crlf
-src/wavebit/fd/_lower/params.py text eol=crlf
-src/wavebit/fd/_lower/plan.py text eol=crlf
-tests/test_fd_constitutive_absorber.py text eol=lf
-studies/fdtd_constitutive_absorber_*.py text eol=lf
-docs/fd-constitutive-absorber.md text eol=lf
-docs/guide/fd-constitutive-absorber.md text eol=lf
-studies/results/fdtd_constitutive_absorber* -text
-studies/results/fdtd_constitutive_absorber*/** -text
+src/wavebit/fdtd/_kernel/constitutive_absorber.py text eol=lf
+src/wavebit/fdtd/_prepare/constitutive_absorber.py text eol=lf
+src/wavebit/fdtd/_prepare/constitutive.py text eol=crlf
+src/wavebit/fdtd/_prepare/params.py text eol=crlf
+src/wavebit/fdtd/_prepare/plan.py text eol=crlf
+tests/fdtd/test_fd_constitutive_absorber.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_algebra.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_calibration.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_campaign.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_gate_support.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_gates.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_mutations.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_probe.py text eol=lf
+studies/fdtd/constitutive_absorber/fdtd_constitutive_absorber_support.py text eol=lf
+docs/validation/fdtd/fd-constitutive-absorber.md text eol=lf
+docs/guide/fdtd/fd-constitutive-absorber.md text eol=lf
 
 # Separated Debye-stack source and raw evidence preserve validated bytes.
-src/wavebit/fd/_lower/debye_stack.py text eol=lf
-studies/fdtd_debye_stack_*.py text eol=lf
-tests/test_fd_debye_stack.py text eol=lf
-docs/fd-debye-stack.md text eol=lf
-studies/results/fdtd_debye_stack* -text
-studies/results/fdtd_debye_stack*/** -text
+src/wavebit/fdtd/_prepare/debye_stack.py text eol=lf
+studies/fdtd/debye_stack/fdtd_debye_stack_audit.py text eol=lf
+studies/fdtd/debye_stack/fdtd_debye_stack_calibration.py text eol=lf
+studies/fdtd/debye_stack/fdtd_debye_stack_campaign.py text eol=lf
+studies/fdtd/debye_stack/fdtd_debye_stack_gates.py text eol=lf
+studies/fdtd/debye_stack/fdtd_debye_stack_mutations.py text eol=lf
+studies/fdtd/debye_stack/fdtd_debye_stack_probe.py text eol=lf
+studies/fdtd/debye_stack/fdtd_debye_stack_support.py text eol=lf
+tests/fdtd/test_fd_debye_stack.py text eol=lf
+docs/validation/fdtd/fd-debye-stack.md text eol=lf
 
 # Separated oscillator-stack source and raw evidence preserve validated bytes.
-src/wavebit/fd/_lower/oscillator_stack.py text eol=lf
-studies/fdtd_oscillator_stack_*.py text eol=lf
-tests/test_fd_oscillator_stack.py text eol=lf
-docs/fd-oscillator-stack.md text eol=lf
-studies/results/fdtd_oscillator_stack* -text
-studies/results/fdtd_oscillator_stack*/** -text
+src/wavebit/fdtd/_prepare/oscillator_stack.py text eol=lf
+studies/fdtd/oscillator_stack/fdtd_oscillator_stack_audit.py text eol=lf
+studies/fdtd/oscillator_stack/fdtd_oscillator_stack_calibration.py text eol=lf
+studies/fdtd/oscillator_stack/fdtd_oscillator_stack_campaign.py text eol=lf
+studies/fdtd/oscillator_stack/fdtd_oscillator_stack_gates.py text eol=lf
+studies/fdtd/oscillator_stack/fdtd_oscillator_stack_mutations.py text eol=lf
+studies/fdtd/oscillator_stack/fdtd_oscillator_stack_probe.py text eol=lf
+studies/fdtd/oscillator_stack/fdtd_oscillator_stack_support.py text eol=lf
+tests/fdtd/test_fd_oscillator_stack.py text eol=lf
+docs/validation/fdtd/fd-oscillator-stack.md text eol=lf
 
 # Validation registries and redaction receipts hash exact recorded bytes.
 # Preserve them on checkouts with any platform line-ending defaults.
-studies/results/** -text
+
+# Relocated historical records and instruments are immutable byte evidence.
+studies/**/records/** -text whitespace=-trailing-space,cr-at-eol
+studies/**/instruments/** -text whitespace=-trailing-space,cr-at-eol
+# Original Korean course illustrations keep their imported source bytes.
+docs/locales/ko/assets/** -text whitespace=-trailing-space,cr-at-eol
+# Imported measurement and provenance records also retain their exact bytes.
+docs/validation/learning-records/chapter03-material-examples.json -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/complex-kx-roots.json -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/learn-measurements.json -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/nvf-measurements.json -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/power-example.json -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/power-plot-toolchain.json -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/tensor-integrated-expanded.log -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/tensor-integrated-regression.log -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/tensor-material-api-tests.log -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/tensor-material-api.json -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/tensor-material-regression.log -text whitespace=-trailing-space,cr-at-eol
+docs/validation/learning-records/tensor-shape-integration.json -text whitespace=-trailing-space,cr-at-eol
+docs/development/learning-provenance/migration.json -text whitespace=-trailing-space,cr-at-eol
+docs/development/learning-provenance/verification.json -text whitespace=-trailing-space,cr-at-eol
+docs/development/learning-provenance/example-verification.json -text whitespace=-trailing-space,cr-at-eol
+docs/development/learning-provenance/direct-k-verification.json -text whitespace=-trailing-space,cr-at-eol
+docs/development/learning-provenance/toolchain.json -text whitespace=-trailing-space,cr-at-eol
+
+# Other immutable reference inputs, goldens, and original branding assets.
+assets/branding/wavebit_logo.svg -text whitespace=-trailing-space,cr-at-eol
+assets/branding/wavebit_logo_dark.svg -text whitespace=-trailing-space,cr-at-eol
+assets/branding/wavebit_logo_stacked.svg -text whitespace=-trailing-space,cr-at-eol
+assets/branding/wavebit_logo_stacked_dark.svg -text whitespace=-trailing-space,cr-at-eol
+tests/fixtures/legacy_rcwa/golden_field.npz -text whitespace=-trailing-space,cr-at-eol
+tests/fixtures/legacy_rcwa/golden_legacy.npz -text whitespace=-trailing-space,cr-at-eol
+tests/fixtures/legacy_rcwa/golden_nvf.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/fd_golden_stage0.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/fd_golden_stage1.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/fd_golden_stage2.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/fd_golden_stage3.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/fd_junction_study_rows.json -text whitespace=-trailing-space,cr-at-eol
+tests/references/fd_metasurface_rows.json -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fdtd_table.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax_dng.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax_field.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax_laurent.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax_magnetic.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax_mu_ambient.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax_patterned.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_fmmax_patterned_mu.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_low_loss_metal_meep.json -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_1d.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_adjoint_rotation.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_adjoint_rotation_coarse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_circle.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_circle_coarse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_circle_profile.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_crossed.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_crossed_materials.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_crossed_materials_runtime.json -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_crossed_metal.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_crossed_metal_fine.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_ellipse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_ellipse_coarse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_ellipse_profile.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_halfspace.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_layer_smoothing.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_layer_smoothing_refined.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_layer_thickness.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_multilayer.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_multilayer_refined.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_painted_shapes.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_painted_shapes_coarse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_painted_shapes_profile.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rectangle.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rectangle_fine.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rectangle_smoothed.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rectangle_smoothed_refined.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_ringdown.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rotation.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rotation_coarse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rotation_smoothing.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rotation_smoothing_coarse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_rotation_smoothing_profile.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_source_notch.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_variable_depth.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_variable_depth_coarse.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_meep_variable_depth_refined.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_native_bloch_external.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_native_grid_external.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_native_material_external.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_pymoosh_dng.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_reticolo.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_reticolo_anisotropic.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_reticolo_complex_kx.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_reticolo_conical_field.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_reticolo_conical_sweep.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_reticolo_field.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_s4.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_s4_field.npz -text whitespace=-trailing-space,cr-at-eol
+tests/references/golden_scene_bottom_meep.json -text whitespace=-trailing-space,cr-at-eol
+tests/references/interface/reti_aniso.m -text whitespace=-trailing-space,cr-at-eol
+tests/references/interface/reticolo_res2.m -text whitespace=-trailing-space,cr-at-eol
+tests/references/interface/reticolo_res2_all_modes.m -text whitespace=-trailing-space,cr-at-eol
+tests/references/interface/reticolo_res3.m -text whitespace=-trailing-space,cr-at-eol
+tests/references/star_lift_oracle.npz -text whitespace=-trailing-space,cr-at-eol
+tutorials/rcwa/oblique_li_benchmark.png -text whitespace=-trailing-space,cr-at-eol
+tutorials/rcwa/oblique_metalens_library.png -text whitespace=-trailing-space,cr-at-eol
+
+# Original third-party attribution: preserve the source text and whitespace.
+docs/_static/learning/notices/pygments-AUTHORS -text whitespace=-trailing-space,cr-at-eol
+docs/development/learning-provenance/source-evidence/** -text whitespace=-trailing-space,cr-at-eol

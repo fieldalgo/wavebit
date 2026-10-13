@@ -1,0 +1,48 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 58 1000 592" role="img" aria-labelledby="title desc">
+<title id="title">Read power at entrance and exit; find absorption between them</title><desc id="desc">Top incidence. Purple lines mark ② entrance and ③ exit interfaces. Distinguish net entering power of incident plus reflected waves, transmitted power, and absorption between the interfaces.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px}</style>
+<rect width="1000" height="650" fill="white" />
+<rect x="30" y="78" width="555" height="473" rx="12" fill="#f6fafc" stroke="#cad7df" stroke-width="1.5" />
+<text x="53" y="110" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">top · incident medium</text>
+<line x1="224" y1="137" x2="224" y2="235" stroke="#2d60a1" stroke-width="5" />
+<polygon points="224,235 216,220 232,220" fill="#2d60a1" />
+<line x1="396" y1="235" x2="396" y2="137" stroke="#b56626" stroke-width="5" />
+<polygon points="396,137 388,152 404,152" fill="#b56626" />
+<text x="194" y="132" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">Incident wave</text>
+<text x="366" y="132" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">Reflected wave</text>
+<text x="140" y="195" text-anchor="start" style="font-size:24px;fill:#2d60a1;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="441" y="195" text-anchor="start" style="font-size:24px;fill:#b56626;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<rect x="53" y="253" width="509" height="158" rx="0" fill="#e7edf1" stroke="none" stroke-width="1.5" />
+<line x1="53" y1="252" x2="562" y2="252" stroke="#745e97" stroke-width="3" />
+<text x="65" y="239" text-anchor="start" style="font-size:18px;fill:#745e97;font-weight:600">② Entrance interface</text>
+<line x1="53" y1="330" x2="562" y2="330" stroke="#ccd7df" stroke-width="1" />
+<text x="78" y="299" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">Layers with specified thickness</text>
+<text x="78" y="364" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:400">Power absorbed in the layers</text>
+<line x1="462" y1="279" x2="462" y2="385" stroke="#117c77" stroke-width="5" />
+<polygon points="462,385 454,370 470,370" fill="#117c77" />
+<text x="503" y="352" text-anchor="start" style="font-size:16px;fill:#117c77;font-weight:400">Net power</text>
+<line x1="53" y1="412" x2="562" y2="412" stroke="#745e97" stroke-width="3" />
+<text x="65" y="438" text-anchor="start" style="font-size:18px;fill:#745e97;font-weight:600">③ Exit interface</text>
+<line x1="307" y1="437" x2="307" y2="499" stroke="#2d60a1" stroke-width="5" />
+<polygon points="307,499 299,484 315,484" fill="#2d60a1" />
+<text x="337" y="474" text-anchor="start" style="font-size:21px;fill:#2d60a1;font-weight:400"><tspan baseline-shift="baseline">Transmitted wave </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="53" y="530" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">bot · exit medium</text>
+<text x="651" y="105" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">① Use the incident wave's power as reference</text>
+<text x="651" y="144" text-anchor="start" style="font-size:19px;fill:#182b3e;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline">to obtain dimensionless ratios.</tspan></text>
+<text x="651" y="192" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">② Net power at the entrance</text>
+<text x="651" y="224" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">Add incident and reflected complex amplitudes</text>
+<text x="651" y="254" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:400"><tspan baseline-shift="baseline">E = </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline">,  H = </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<text x="651" y="284" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">Compute power from the combined E and H.</text>
+<text x="651" y="317" text-anchor="start" style="font-size:20px;fill:#117c77;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">enter</tspan><tspan baseline-shift="baseline"> = net entering power / </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="651" y="366" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">③ Transmitted power at the exit</text>
+<text x="651" y="404" text-anchor="start" style="font-size:23px;fill:#2d60a1;font-weight:400"><tspan baseline-shift="baseline">T = </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan><tspan baseline-shift="baseline"> / </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<rect x="637" y="443" width="334" height="88" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="1.5" />
+<text x="657" y="480" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">Total absorption in the finite stack</text>
+<text x="657" y="513" text-anchor="start" style="font-size:24px;fill:#117c77;font-weight:600"><tspan baseline-shift="baseline">A = </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">enter</tspan><tspan baseline-shift="baseline"> − T</tspan></text>
+<line x1="65" y1="610" x2="65" y2="570" stroke="#546779" stroke-width="5" />
+<polygon points="65,570 57,585 73,585" fill="#546779" />
+<text x="88" y="583" text-anchor="start" style="font-size:19px;fill:#182b3e;font-weight:400">+z</text>
+<text x="165" y="585" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">Top incidence is shown: inward means −z.</text>
+<text x="165" y="617" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">A excludes absorption in the top and bot half-spaces.</text>
+</svg>

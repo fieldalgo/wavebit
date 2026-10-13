@@ -40,7 +40,14 @@ cases avoid such pairs; the generator refuses any row with ``|R + T - 1| > 1e-12
 Values are frozen by ``gen_goldens_pymoosh_dng.py`` in an environment of its own. Nothing here
 imports PyMoosh. Never regenerate to make this pass.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 import warnings
 
@@ -49,10 +56,9 @@ import pytest
 
 import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _pymoosh_dng_cases import (CASES, PYMOOSH_VERSION, WL, media,   # noqa: E402
-                                pymoosh_kx)
+from tests.references._pymoosh_dng_cases import CASES, PYMOOSH_VERSION, WL, media, pymoosh_kx
 
 GOLDEN_PATH = HERE / 'golden_pymoosh_dng.npz'
 
@@ -101,10 +107,10 @@ def _solve(name, index, path, algo, pol, door='k', stack=None):
         lit_negative = _signed_index(*stack[0]).real < 0
         kw.update(theta=-theta if lit_negative else theta, phi=0.0)
     if one_d:
-        solver = wavebit.rcwa(**kw, period=[1000.0], truncation_order=0,
+        solver = _legacy_wavebit.rcwa(**kw, period=[1000.0], truncation_order=0,
                               tetm='te' if pol == 0 else 'tm')
     else:
-        solver = wavebit.rcwa(**kw, period=(1000.0, 1000.0), truncation_order=(0, 0),
+        solver = _legacy_wavebit.rcwa(**kw, period=(1000.0, 1000.0), truncation_order=(0, 0),
                               polarization=(1.0, 0.0) if pol == 0 else (0.0, 1.0))
         if path == 'first_order':
             solver.formulation = 'first_order'

@@ -1,6 +1,6 @@
 """Gratings on, containing and lit from a **lossy double negative**, against fmmax's ``FFT``.
 
-The outside check on the negative-index work (``docs/branch-cuts.md`` §9): the
+The outside check on the negative-index work (``docs/theory/rcwa/branch-cuts.md`` §9): the
 double-negative half-space root (the mirror of Maystre's cut), the incidence rule for a lit
 negative-index side (``k_par = s*N*sin(theta)``, through the ``theta`` door), and patterned
 ``eps`` *and* ``mu`` with double-negative regions, on ETM and on SMM. fmmax made none of those
@@ -14,7 +14,7 @@ Measured with each rule reverted: the mirror cut switched off fails every case, 
 ETM's *labelling* of a double-negative layer's modes: on these lossy scenes the labels move
 only conditioning (ETM against SMM to 1e-15 with either label rule), and the scenes where they
 decide a ``LinAlgError`` are lossless ones, where fmmax's own mode choice has no loss to read.
-``tests/test_negative_index_layers.py`` holds those, against SMM and closed forms.
+``tests/rcwa/test_negative_index_layers.py`` holds those, against SMM and closed forms.
 
 **Identity, not convergence.** ``factorization='laurent'`` assembles the operator fmmax's
 ``Formulation.FFT`` does, for ``eps`` and ``mu`` alike, so what separates the two codes is
@@ -40,7 +40,7 @@ case                    Wavebit     tolerance used   fmmax stock  Li rule   mirr
 The tolerance is the extrapolation's own -- the distance between the estimates from the coarser
 and the finer three samplings, which bounds the finer one's error from above -- plus 1e-12 of
 round-off (``ROUND_OFF``); the column includes both. Under numpy 2.5.1 the Wavebit column reads
-5.9e-14, 7.5e-14, 6.1e-12 and 2.7e-14 (``studies/negative_index_media.py``, section 8 of its
+5.9e-14, 7.5e-14, 6.1e-12 and 2.7e-14 (``studies/rcwa/negative_index_media/negative_index_media.py``, section 8 of its
 log): another BLAS, the last digit. The raw gap falls by 4.00 per doubling of the samples at every level, the premise the
 extrapolation rests on, and the test checks it before using it.
 
@@ -48,7 +48,14 @@ Values are frozen by ``gen_goldens_fmmax_dng.py``, which needs the ``fwref`` env
 imports fmmax. Never regenerate to make this pass: the numbers did not come from this codebase,
 which is the whole of their worth.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 import warnings
 
@@ -57,10 +64,10 @@ import pytest
 
 import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _fmmax_dng_cases import CASES, LEVELS, THICK, WL, incident_kxy, orders   # noqa: E402
-from _fmmax_laurent_cases import richardson                                    # noqa: E402
+from tests.references._fmmax_dng_cases import CASES, LEVELS, THICK, WL, incident_kxy, orders   # noqa: E402
+from tests.references._fmmax_laurent_cases import richardson                                    # noqa: E402
 
 GOLDEN_PATH = HERE / 'golden_fmmax_dng.npz'
 
@@ -96,7 +103,7 @@ def _solve(name, algo='SMM', door='k', factorization='laurent', top=None, bot=No
         kw.update(theta=case['theta'], phi=case['phi'])
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        return wavebit.rcwa(**kw).solve(auto_detune=False)
+        return _legacy_wavebit.rcwa(**kw).solve(auto_detune=False)
 
 
 def _unpolarized(result, name, mirrored=False):

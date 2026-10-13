@@ -7,15 +7,9 @@
 [Contributing](https://github.com/fieldalgo/wavebit/blob/develop/CONTRIBUTING.md) |
 [FieldAlgo](https://fieldalgo.com)
 
-Wavebit simulates how light interacts with nanostructures, and differentiates through the whole
-calculation — so the same code that predicts a device's response can also optimize it. It is a
-rigorous, fully vectorial RCWA solver whose physics is written once and runs on NumPy, JAX and
-PyTorch, so a result never depends on which you pick.
+Wavebit simulates electromagnetic waves with RCWA and FDTD, and supports differentiating supported calculations with JAX and PyTorch. Shared physical materials, explicit units and an immutable problem lifecycle connect the two solver modules. Each method has its own numerical approximation and validated feature scope.
 
-Time-domain work has two entry points: the [periodic-stack solver](guide/time-domain.md)
-shares RCWA's scene interface; the [general FDTD engine](guide/general-fdtd.md) uses
-an explicit spatial domain with sources, boundaries and named monitors. The latter
-has its own units, array layout and bounded support contract.
+Start with the [RCWA calculation](getting-started/rcwa.md) for periodic layered structures or the [FDTD pulse calculation](getting-started/fdtd.md) for a spatial domain with sources and named observations. The [learning courses](learn/index.md) explain the underlying physics, while [migration](migration/index.md) keeps earlier scientific workflows explicit.
 
 ::::{grid} 1 2 2 3
 :gutter: 3
@@ -35,7 +29,7 @@ Follow lessons and modify runnable examples.
 :::
 
 :::{grid-item-card} User guide
-:link: guide/README
+:link: guide/index
 :link-type: doc
 
 Describe materials, geometry, illumination and numerical settings.
@@ -56,7 +50,7 @@ Read derivations, measured comparisons and their limits.
 :::
 
 :::{grid-item-card} Developer guide
-:link: developer/index
+:link: development/index
 :link-type: doc
 
 Edit the source, debug a worktree and build the documentation.
@@ -64,25 +58,22 @@ Edit the source, debug a worktree and build the documentation.
 
 ::::
 
-## The seven conventions
+## Seven conventions to check
 
-Each is legal, energy-conserving and *wrong* when read backwards — no error, no warning.
-[`conventions.md`](conventions.md) is the normative contract for the interfaces
-summarized here. The [general FDTD guide](guide/general-fdtd.md#units-coordinates-and-backends)
-states that engine's separate coordinate, angle and time conventions.
+The [common conventions](reference/common/conventions.md) and [current lifecycle](guide/common/lifecycle.md) explain the physical meaning and the boundary between current and compatibility interfaces.
 
-| | |
+| Convention | Meaning |
 | --- | --- |
-| **Materials are relative permittivity** | not refractive index; `eps_from_index` converts |
-| **Time convention is `e^{-iωt}`** | `Im(eps) > 0` is loss |
-| **Layers run bottom to top** | `z=0` at the bottom interface; `+z` points upward |
-| **Uppercase is power, lowercase is amplitude** | `R` / `T` against `r_s` / `t_p` |
-| **Arrays run `v` first, written pairs run `x` first** | they meet at `truncation_order` |
-| **The cell is centred at the origin** | and shape lengths are absolute |
-| **Units are yours** | `wavelength`, `period` and `thickness` share one |
+| **Material values are relative permittivity** | Use `eps_from_index` when starting from refractive index. |
+| **Phasors use `e^{-iωt}`** | Positive imaginary permittivity represents passive electric loss. |
+| **Stack layers run bottom to top** | z starts at the bottom interface and increases upward. |
+| **Power and amplitude differ** | Efficiencies are power ratios; complex amplitudes retain phase. |
+| **Diffraction arrays retain wavelength first** | Followed by order v, then order u; written order pairs are `(u,v)`. |
+| **Periodic cells are centered** | Shape coordinates use the cell center and physical length units. |
+| **Units are declared explicitly** | Lengths follow `Units`; time is seconds, rates SI, angles radians, E V/m and H A/m. |
 
-## Where the rest lives
+## Continue learning
 
-Tutorials — lessons in order, for someone who has not used the API yet — are runnable
-notebooks in the repository under
-[`tutorials/`](https://github.com/fieldalgo/wavebit/tree/develop/tutorials).
+The [fundamentals course](learn/fundamentals/index.md) develops geometry, materials, light, diffraction, power, fields and differentiation in order. The [NVF course](learn/nvf/index.md) covers Fourier products and material interfaces. The [FDTD course](learn/fdtd/index.md) connects sources, absorbers, observations and refinement to published validation.
+
+Runnable [teaching examples](learn/examples.md), solver examples and [notebooks](https://github.com/fieldalgo/wavebit/tree/develop/tutorials) accompany the text. Historical courses state when they use compatibility interfaces; their numerical records were preserved rather than rerun.

@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 720" role="img" aria-labelledby="coordinates-title coordinates-desc">
+<title id="coordinates-title">좌표와 층 순서를 구분해서 읽기</title>
+<desc id="coordinates-desc">좌표축, 셀 중심 원점, 층 순서는 래스터와 도형 방식에 공통이다. 왼쪽 xy 좌표도에는 래스터 방식의 4행 4열 배열을 예시로 겹쳐 표시했다. 재료값은 생략하고 단색 격자로 행과 열의 위치만 표시한다. 0번 행은 음의 y 쪽이고 원점은 셀 중심이다. x는 오른쪽, y는 위쪽, z는 화면 밖인 오른손 좌표도이다. 오른쪽은 재료 무늬를 생략한 두 층의 순서도이다. 회색은 재료를 뜻하지 않으며 첫째 층 두께는 d0, 둘째 층은 d1이다. 바닥 z=0에서 위로 z가 증가한다.</desc>
+<defs><marker id="coord-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#435466"/></marker></defs>
+<style>
+text { font-family: -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; fill:#182b3e; }
+.axis { stroke:#435466; stroke-width:2; marker-end:url(#coord-arrow); }
+.dimension { stroke:#657584; stroke-width:1.6; marker-start:url(#coord-arrow); marker-end:url(#coord-arrow); }
+</style>
+<rect width="1000" height="720" fill="white"/>
+
+<text x="28" y="41" font-size="28" font-weight="750" text-anchor="start" fill="#182b3e">좌표와 층 순서를 구분해서 읽기</text>
+<text x="28" y="76" font-size="18" font-weight="400" text-anchor="start" fill="#536678">좌표축·원점·층 순서는 래스터와 도형(쉐입) 방식에 공통입니다.</text>
+<rect x="24" y="101" width="464" height="566" rx="14" fill="#ffffff" stroke="#d6e0e5" stroke-width="1.6" />
+<rect x="512" y="101" width="464" height="566" rx="14" fill="#ffffff" stroke="#d6e0e5" stroke-width="1.6" />
+<text x="48" y="136" font-size="23" font-weight="700" text-anchor="start" fill="#182b3e">A · 한 층의 xy 좌표</text>
+<text x="48" y="166" font-size="18" font-weight="400" text-anchor="start" fill="#536678">아래 격자는 래스터 배열의 예시입니다.</text>
+<text x="536" y="136" font-size="23" font-weight="700" text-anchor="start" fill="#182b3e">B · 옆에서 본 층 순서 (z)</text>
+<text x="536" y="166" font-size="18" font-weight="400" text-anchor="start" fill="#536678">각 층의 재료 무늬는 생략했습니다.</text>
+<rect x="135" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="0"/>
+<rect x="195" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="1"/>
+<rect x="255" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="2"/>
+<rect x="315" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="3"/>
+<text x="115" y="445" font-size="20" font-weight="700" text-anchor="middle" fill="#182b3e">0</text>
+<rect x="135" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="0"/>
+<rect x="195" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="1"/>
+<rect x="255" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="2"/>
+<rect x="315" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="3"/>
+<text x="115" y="385" font-size="20" font-weight="400" text-anchor="middle" fill="#182b3e">1</text>
+<rect x="135" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="0"/>
+<rect x="195" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="1"/>
+<rect x="255" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="2"/>
+<rect x="315" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="3"/>
+<text x="115" y="325" font-size="20" font-weight="400" text-anchor="middle" fill="#182b3e">2</text>
+<rect x="135" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="0"/>
+<rect x="195" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="1"/>
+<rect x="255" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="2"/>
+<rect x="315" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="3"/>
+<text x="115" y="265" font-size="20" font-weight="400" text-anchor="middle" fill="#182b3e">3</text>
+<text x="165.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">0</text>
+<text x="225.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">1</text>
+<text x="285.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">2</text>
+<text x="345.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">3</text>
+<text x="97" y="215" font-size="17" font-weight="400" text-anchor="middle" fill="#536678">행 y</text>
+<text x="391" y="492" font-size="17" font-weight="400" text-anchor="start" fill="#536678">열 x</text>
+<line x1="255" y1="480" x2="255" y2="187" class="axis"/>
+<line x1="101" y1="348" x2="423" y2="348" class="axis"/>
+<text x="269" y="197" font-size="20" font-weight="650" text-anchor="start" fill="#182b3e">+y</text>
+<text x="432" y="355" font-size="20" font-weight="650" text-anchor="start" fill="#182b3e">+x</text>
+<circle cx="255" cy="348" r="5" fill="#182b3e"/>
+<rect x="266" y="358" width="98" height="27" rx="4" fill="white" stroke="none" stroke-width="1.6" />
+<text x="315" y="378" font-size="18" font-weight="600" text-anchor="middle" fill="#182b3e">(0, 0)</text>
+<text x="48" y="533" font-size="18" font-weight="400" text-anchor="start" fill="#536678">래스터 예시 · 4 × 4 배열 (재료값 생략)</text>
+<text x="48" y="576" font-size="19" font-weight="400" text-anchor="start" fill="#182b3e">0번 행은 아래쪽(−y)에 있습니다.</text>
+<text x="48" y="615" font-size="21" font-weight="650" text-anchor="start" fill="#182b3e">래스터 배열: [층, 행 y, 열 x]</text>
+<circle cx="58" cy="638" r="8" fill="none" stroke="#435466" stroke-width="1.8"/><circle cx="58" cy="638" r="2.5" fill="#435466"/>
+<text x="77" y="644" font-size="17" font-weight="400" text-anchor="start" fill="#536678">+z: 화면 밖 · 원점 (0, 0)은 셀 중심</text>
+<rect x="545" y="208" width="285" height="72" rx="0" fill="#fafbfc" stroke="#c1cdd5" stroke-width="1.6" />
+<rect x="545" y="280" width="285" height="105" rx="0" fill="#edf0f3" stroke="#a9b7c2" stroke-width="1.6" data-layer="1"/>
+<rect x="545" y="385" width="285" height="105" rx="0" fill="#edf0f3" stroke="#a9b7c2" stroke-width="1.6" data-layer="0"/>
+<rect x="545" y="490" width="285" height="72" rx="0" fill="#fafbfc" stroke="#c1cdd5" stroke-width="1.6" />
+<text x="565" y="239" font-size="20" font-weight="600" text-anchor="start" fill="#182b3e">top · 위쪽 매질</text>
+<text x="565" y="265" font-size="16" font-weight="400" text-anchor="start" fill="#536678">반무한 공간</text>
+<text x="565" y="322" font-size="23" font-weight="650" text-anchor="start" fill="#182b3e">structure[1]</text>
+<text x="565" y="354" font-size="18" font-weight="400" text-anchor="start" fill="#182b3e">두 번째로 쌓은 층</text>
+<text x="565" y="427" font-size="23" font-weight="650" text-anchor="start" fill="#182b3e">structure[0]</text>
+<text x="565" y="459" font-size="18" font-weight="400" text-anchor="start" fill="#182b3e">첫 번째로 쌓은 층</text>
+<text x="565" y="520" font-size="20" font-weight="600" text-anchor="start" fill="#182b3e">bot · 아래쪽 매질</text>
+<text x="565" y="547" font-size="16" font-weight="400" text-anchor="start" fill="#536678">반무한 공간</text>
+<line x1="852" y1="284" x2="852" y2="381" class="dimension"/>
+<line x1="852" y1="389" x2="852" y2="486" class="dimension"/>
+<text x="868" y="340" font-size="19" font-weight="650" text-anchor="start" fill="#182b3e">d1</text>
+<text x="868" y="445" font-size="19" font-weight="650" text-anchor="start" fill="#182b3e">d0</text>
+<line x1="934" y1="551" x2="934" y2="220" class="axis"/>
+<text x="838" y="505" font-size="17" font-weight="650" text-anchor="start" fill="#182b3e">z=0</text>
+<text x="944" y="397" font-size="19" font-weight="650" text-anchor="start" fill="#182b3e">+z</text>
+<text x="536" y="615" font-size="22" font-weight="650" text-anchor="start" fill="#182b3e">thickness = [d0, d1]</text>
+<text x="536" y="644" font-size="16" font-weight="400" text-anchor="start" fill="#536678">회색은 층 구획이며 재료값을 뜻하지 않습니다.</text>
+<text x="28" y="700" font-size="17" font-weight="400" text-anchor="start" fill="#536678">직교 셀의 개념도 · 사선 셀의 래스터 배열 축은 [층, v, u]로 읽습니다.</text>
+</svg>

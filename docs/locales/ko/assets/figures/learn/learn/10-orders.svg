@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 390" role="img" aria-labelledby="09-orders-title 09-orders-desc">
+<title id="09-orders-title">x 방향 5개 × y 방향 3개 = 총 15개</title><desc id="09-orders-desc">차수 번호와 결과 배열 모양의 대응</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="390" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">x 방향 5개 × y 방향 3개 = 총 15개</text>
+<text x="30" y="69" style="font-size:19px">최대 차수: N<tspan baseline-shift="sub" font-size="14">x</tspan> = 2, N<tspan baseline-shift="sub" font-size="14">y</tspan> = 1 · 전체 성분 수: H = 15</text>
+<text x="52" y="134" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">n=1</text>
+<rect x="130" y="91" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="168" y="134" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">-2,1</text>
+<rect x="207" y="91" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="245" y="134" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">-1,1</text>
+<rect x="284" y="91" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="322" y="134" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">0,1</text>
+<rect x="361" y="91" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="399" y="134" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">1,1</text>
+<rect x="438" y="91" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="476" y="134" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">2,1</text>
+<text x="52" y="204" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">n=0</text>
+<rect x="130" y="161" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="168" y="204" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">-2,0</text>
+<rect x="207" y="161" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="245" y="204" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">-1,0</text>
+<rect x="284" y="161" width="77" height="70" rx="0" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="322" y="204" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">0,0</text>
+<rect x="361" y="161" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="399" y="204" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">1,0</text>
+<rect x="438" y="161" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="476" y="204" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">2,0</text>
+<text x="52" y="274" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">n=-1</text>
+<rect x="130" y="231" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="168" y="274" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">-2,-1</text>
+<rect x="207" y="231" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="245" y="274" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">-1,-1</text>
+<rect x="284" y="231" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="322" y="274" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">0,-1</text>
+<rect x="361" y="231" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="399" y="274" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">1,-1</text>
+<rect x="438" y="231" width="77" height="70" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="476" y="274" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">2,-1</text>
+<text x="150" y="341" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">그림의 위쪽은 +n 방향</text>
+<rect x="600" y="91" width="345" height="167" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="618" y="125" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">배열에서는 v 차수가 행</text>
+<text x="618" y="161" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">orders_v = [−1, 0, 1]</text>
+<text x="618" y="188" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">orders_u = [−2, −1, 0, 1, 2]</text>
+<text x="618" y="215" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R.shape = (3, 5)</text>
+<text x="600" y="319" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">order(m, n)으로 직접 읽기</text>
+<text x="30" y="373" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">기본 0차 단일 입사 · 그림의 기하학적 위/아래와 배열 행 증가 방향을 구별</text>
+</svg>

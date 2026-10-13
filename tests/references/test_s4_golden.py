@@ -17,22 +17,28 @@ misdiagnosed once, and both would be rediscovered by the next person to reach fo
 **Real tensors only.** This build rejects a complex ``Epsilon``, so the antisymmetric cases
 here are active media rather than gyrotropic ones; ``R + T`` above 1 is their correct answer.
 They discriminate the same algebra the imaginary off-diagonal does — which is the whole reason
-the ordering defect in ``_core/solve_2d.py`` was reachable from a real tensor at all.
+the ordering defect in ``src/wavebit/rcwa/_engine/solve_2d.py`` was reachable from a real tensor at all.
 
 Values are frozen in ``golden_s4.npz`` by ``gen_goldens_s4.py``, which needs the S4 extension.
 This file needs only numpy.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from gen_goldens_s4 import CASES, WL, PERIOD, THICK, SWAP      # noqa: E402
+from tests.references.gen_goldens_s4 import CASES, WL, PERIOD, THICK, SWAP      # noqa: E402
 
 GOLDEN_PATH = HERE / 'golden_s4.npz'
 
@@ -41,7 +47,7 @@ def solve(eps, theta_deg):
     """``[R_s, T_s, R_p, T_p]`` for one uniform anisotropic layer between vacuum."""
     I = np.eye(1, dtype=np.complex128)
     e = np.asarray(eps, dtype=complex)
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK])
     res = mee.solve_conv(np.stack([e[0, 0] * I]), np.stack([e[1, 1] * I]),

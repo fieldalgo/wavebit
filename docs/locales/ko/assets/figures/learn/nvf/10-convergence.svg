@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 412" role="img" aria-labelledby="title desc">
+<title id="title">해상도는 하나씩 바꿔 비교한다</title><desc id="desc">Fourier 모드 수와 법선장 적분 격자는 서로 다른 오차를 조절한다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="412" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">해상도는 하나씩 바꿔 비교한다</text>
+<rect x="30" y="85" width="440" height="233" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">A. 광학 Fourier 공간</text>
+<text x="48" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">shape_nvf_grid_size = 128 고정</text>
+<text x="48" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">차수 (1,1) → (2,2) → (3,3)</text>
+<text x="48" y="209" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">유지하는 전자기 모드가 늘어난다.</text>
+<text x="48" y="236" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R, T, 위상, 관심 회절차수를 비교한다.</text>
+<rect x="520" y="85" width="450" height="233" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="538" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">B. shape 투영 계수 적분</text>
+<text x="538" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">차수 (3,3) 고정</text>
+<text x="538" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">shape_nvf_grid_size 64 → 128 → 256</text>
+<text x="538" y="209" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">같은 유한 광학 공간을 더 잘 조립한다.</text>
+<text x="538" y="236" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">최적화라면 기울기도 비교한다.</text>
+<text x="40" y="365" style="fill:#a85116;font-size:23px;font-weight:400" text-anchor="start">R + T ≈ 1은 에너지 점검이다. 참값까지의 오차를 주지는 않는다.</text>
+<text x="30" y="395" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">그림의 수치는 이 교재의 짧은 연습 사다리이며, 권장 수렴 설정을 뜻하지 않음</text>
+</svg>

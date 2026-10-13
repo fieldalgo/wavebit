@@ -23,12 +23,17 @@ scattering-matrix method, the one with the switch). Refuses to freeze unless eve
 energy, ``|R + T - 1| < 1e-12``: every medium is lossless, lit or not, so nothing else is
 possible, and a root that grew or ran toward the interface would break it.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_pymoosh_dng.npz'
@@ -37,7 +42,7 @@ OUT = HERE / 'golden_pymoosh_dng.npz'
 def main():
     from importlib.metadata import version
     import PyMoosh
-    from _pymoosh_dng_cases import CASES, PYMOOSH_VERSION, WL, media, pymoosh_kx, thicknesses
+    from tests.references._pymoosh_dng_cases import CASES, PYMOOSH_VERSION, WL, media, pymoosh_kx, thicknesses
 
     if version('PyMoosh') != PYMOOSH_VERSION:
         raise SystemExit(f'PyMoosh {version("PyMoosh")} is not {PYMOOSH_VERSION}; read its '

@@ -1,0 +1,1051 @@
+{
+  "kind": "disclosed calibration, not a registered convergence verdict",
+  "attempt": 1,
+  "started_utc": "2026-10-07T00:30:53.761565+00:00",
+  "source_identity": {
+    "helper_sha256": "8baebd8ce66b890cffe85f9f4e23be916255b4e98f2e2a127dad79f26e1d621b",
+    "fd_source_sha256": "2f6343bb16379005a543426575be9dcfb50fa8c17713a8459bd2d5baedbf9b69",
+    "wavebit_source_sha256": "c6d176178fd90aedd73e041e706fb712354130a2b680c85a719d37ff99112e91",
+    "reference_dependencies": {
+      "studies/fdtd_layer_alignment.py": "91433f49dffb84ceb1441fd1455a7e49ea104a276875402d127b20192cf2c008",
+      "studies/fdtd_oblique_pulse.py": "ac840bd60b50a0e6c5b8864e0883f79f6bf5bd8edb2113629ed151f6ffaef1b2",
+      "studies/fdtd_conductive_film_probe.py": "0c9a8d36de9db69d1c13484b9dfbe0b6a134cc9da4baa48763203df7da37b4f7"
+    },
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "analytic_preflight": {
+    "analytic_controls": "passed",
+    "residuals": {
+      "fixed-kx-transverse": 1.1102230246251565e-16,
+      "lossy-pair-n40-f0.3-phases": 4.274358644806853e-15,
+      "lossy-pair-n40-f0.1-phases": 1.2795320358804929e-14,
+      "lossy-pair-n80-f0.3-phases": 2.831068712794149e-15,
+      "lossy-pair-n80-f0.1-phases": 1.990074771640593e-14,
+      "lossy-pair-n160-f0.3-phases": 3.980149543281186e-14,
+      "lossy-pair-n160-f0.1-phases": 5.689893001203927e-15,
+      "lossy-pair-s-matched-r": 1.3970443064985195e-16,
+      "lossy-pair-s-matched-t": 8.005932084973443e-16,
+      "lossy-pair-s-lossless-power": 4.440892098500626e-16,
+      "lossy-pair-s-reciprocal-t": 1.1857187100668868e-16,
+      "lossy-pair-s-reflection-asymmetry": 0.27195212708336924,
+      "lossy-pair-s-single-0": 4.335559509131367e-16,
+      "lossy-pair-s-zero-depth-0": 2.482534153247273e-16,
+      "lossy-pair-s-single-1": 2.220446049250313e-16,
+      "lossy-pair-s-zero-depth-1": 2.482534153247273e-16,
+      "lossy-pair-p-matched-r": 1.076689353332586e-16,
+      "lossy-pair-p-matched-t": 8.005932084973443e-16,
+      "lossy-pair-p-lossless-power": 0.0,
+      "lossy-pair-p-reciprocal-t": 1.2412670766236366e-16,
+      "lossy-pair-p-reflection-asymmetry": 0.26025768600408955,
+      "lossy-pair-p-single-0": 2.2887833992611187e-16,
+      "lossy-pair-p-zero-depth-0": 3.510833468576701e-16,
+      "lossy-pair-p-single-1": 3.433175098891678e-16,
+      "lossy-pair-p-zero-depth-1": 3.510833468576701e-16,
+      "lossy-pair-normal-r-sign": 3.3306690738754696e-16,
+      "lossy-pair-normal-t": 1.2412670766236366e-16,
+      "mixed-triple-n40-f0.3-phases": 4.274358644806853e-15,
+      "mixed-triple-n40-f0.1-phases": 8.520961713998076e-15,
+      "mixed-triple-n80-f0.3-phases": 2.5590640717609858e-14,
+      "mixed-triple-n80-f0.1-phases": 3.4111602431607935e-14,
+      "mixed-triple-n160-f0.3-phases": 3.980149543281186e-14,
+      "mixed-triple-n160-f0.1-phases": 5.115352585960409e-14,
+      "mixed-triple-s-matched-r": 1.1453599562709057e-16,
+      "mixed-triple-s-matched-t": 7.301351988545592e-16,
+      "mixed-triple-s-lossless-power": 2.220446049250313e-16,
+      "mixed-triple-s-reciprocal-t": 6.206335383118183e-17,
+      "mixed-triple-s-reflection-asymmetry": 0.5642956264986421,
+      "mixed-triple-s-single-0": 2.7755575615628914e-16,
+      "mixed-triple-s-zero-depth-0": 2.482534153247273e-16,
+      "mixed-triple-s-single-1": 2.0014830212433607e-16,
+      "mixed-triple-s-zero-depth-1": 2.482534153247273e-16,
+      "mixed-triple-s-single-2": 2.7755575615628914e-16,
+      "mixed-triple-s-zero-depth-2": 2.482534153247273e-16,
+      "mixed-triple-p-matched-r": 1.076689353332586e-16,
+      "mixed-triple-p-matched-t": 8.95090418262362e-16,
+      "mixed-triple-p-lossless-power": 4.440892098500626e-16,
+      "mixed-triple-p-reciprocal-t": 6.938893903907228e-17,
+      "mixed-triple-p-reflection-asymmetry": 0.4246740428892947,
+      "mixed-triple-p-single-0": 2.618455766672135e-16,
+      "mixed-triple-p-zero-depth-0": 3.510833468576701e-16,
+      "mixed-triple-p-single-1": 2.7755575615628914e-16,
+      "mixed-triple-p-zero-depth-1": 3.510833468576701e-16,
+      "mixed-triple-p-single-2": 4.718447854656915e-16,
+      "mixed-triple-p-zero-depth-2": 3.510833468576701e-16,
+      "mixed-triple-normal-r-sign": 5.530259263078839e-16,
+      "mixed-triple-normal-t": 1.6653345369377348e-16
+    },
+    "bulk_bounds": {
+      "lossy-pair": {
+        "angular_band": [
+          2.980415272118947,
+          9.585955342240226
+        ],
+        "member_modulus_bounds": [
+          19.37722745966655,
+          14.501007286824402
+        ],
+        "host_modulus_bound": 9.585955342240226
+      },
+      "mixed-triple": {
+        "angular_band": [
+          2.980415272118947,
+          9.585955342240226
+        ],
+        "member_modulus_bounds": [
+          16.603361691846377,
+          13.876991107446603,
+          21.664398907644987
+        ],
+        "host_modulus_bound": 9.585955342240226
+      }
+    },
+    "support_controls": {
+      "lossy-pair": [
+        {
+          "n": 40,
+          "fraction": 0.3,
+          "spans": [
+            [
+              68,
+              75
+            ],
+            [
+              56,
+              65
+            ]
+          ],
+          "face_fractions": [
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.30000000000000426
+          ]
+        },
+        {
+          "n": 40,
+          "fraction": 0.1,
+          "spans": [
+            [
+              68,
+              75
+            ],
+            [
+              56,
+              65
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999998721
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.3,
+          "spans": [
+            [
+              112,
+              123
+            ],
+            [
+              88,
+              103
+            ]
+          ],
+          "face_fractions": [
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.1,
+          "spans": [
+            [
+              112,
+              123
+            ],
+            [
+              88,
+              103
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.0999999999999801,
+            0.09999999999999432,
+            0.09999999999999432
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.3,
+          "spans": [
+            [
+              200,
+              219
+            ],
+            [
+              152,
+              179
+            ]
+          ],
+          "face_fractions": [
+            0.3000000000000398,
+            0.30000000000001137,
+            0.3000000000000398,
+            0.3000000000000398
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.1,
+          "spans": [
+            [
+              200,
+              219
+            ],
+            [
+              152,
+              179
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432
+          ]
+        }
+      ],
+      "mixed-triple": [
+        {
+          "n": 40,
+          "fraction": 0.3,
+          "spans": [
+            [
+              78,
+              85
+            ],
+            [
+              69,
+              76
+            ],
+            [
+              56,
+              65
+            ]
+          ],
+          "face_fractions": [
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.30000000000000426
+          ]
+        },
+        {
+          "n": 40,
+          "fraction": 0.1,
+          "spans": [
+            [
+              78,
+              85
+            ],
+            [
+              69,
+              76
+            ],
+            [
+              56,
+              65
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.10000000000000853,
+            0.10000000000000142,
+            0.10000000000000853
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.3,
+          "spans": [
+            [
+              132,
+              143
+            ],
+            [
+              114,
+              125
+            ],
+            [
+              88,
+              103
+            ]
+          ],
+          "face_fractions": [
+            0.30000000000001137,
+            0.30000000000001137,
+            0.30000000000001137,
+            0.3000000000000256,
+            0.3000000000000256,
+            0.3000000000000256
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.1,
+          "spans": [
+            [
+              132,
+              143
+            ],
+            [
+              114,
+              125
+            ],
+            [
+              88,
+              103
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.0999999999999659,
+            0.0999999999999801,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.3,
+          "spans": [
+            [
+              240,
+              259
+            ],
+            [
+              204,
+              223
+            ],
+            [
+              152,
+              179
+            ]
+          ],
+          "face_fractions": [
+            0.30000000000001137,
+            0.30000000000001137,
+            0.30000000000001137,
+            0.3000000000000398,
+            0.3000000000000398,
+            0.3000000000000398
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.1,
+          "spans": [
+            [
+              240,
+              259
+            ],
+            [
+              204,
+              223
+            ],
+            [
+              152,
+              179
+            ]
+          ],
+          "face_fractions": [
+            0.10000000000002274,
+            0.10000000000002274,
+            0.10000000000002274,
+            0.10000000000005116,
+            0.10000000000002274,
+            0.10000000000002274
+          ]
+        }
+      ]
+    },
+    "sampled_cells": {
+      "lossy-pair": [
+        {
+          "phase_cells": [
+            17.821668562158187,
+            19.757297862174948,
+            21.679730319917812
+          ],
+          "skin_cells": [
+            20.200128778312568,
+            20.24568353376876,
+            20.295455409597924
+          ]
+        },
+        {
+          "phase_cells": [
+            23.810780264416493,
+            26.408740630906877,
+            28.992396416508775
+          ],
+          "skin_cells": [
+            30.23840428597749,
+            30.293000759897573,
+            30.352785860050975
+          ]
+        }
+      ],
+      "mixed-triple": [
+        {
+          "phase_cells": [
+            20.784609690826528,
+            23.094010767585033,
+            25.403411844343537
+          ],
+          "skin_cells": [
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "phase_cells": [
+            24.911139306882518,
+            27.549285590564825,
+            30.15160210871528
+          ],
+          "skin_cells": [
+            19.268488449558156,
+            19.35924369363651,
+            19.457230317359873
+          ]
+        },
+        {
+          "phase_cells": [
+            15.94018495098266,
+            17.67146442861378,
+            19.390940291679794
+          ],
+          "skin_cells": [
+            18.067544441022672,
+            18.108289852982036,
+            18.15280717207072
+          ]
+        }
+      ]
+    },
+    "reference_theta_at": [
+      31.0789556338119,
+      35.0,
+      39.11907093337352
+    ],
+    "field_solves": 0
+  },
+  "production_sources": {
+    "wavebit/__init__.py": "00c717c323380e25cb571144d3495fa9f898e406b8b4d068ad954d0fdb09eb17",
+    "wavebit/_core/__init__.py": "dac2c8c684c1dfd3b8175be1ec8a2f66a3eecf4f5c06013afe2fe9631d2801fc",
+    "wavebit/_core/backend.py": "b7a44dc46eeda58b39e1c76b4b7709fd904ba94962c218dea2a89d8631e89cb7",
+    "wavebit/_core/boundary.py": "d4b92cdd4036b3ff60a3723d9ac5ebda417ea5ca0af344791865eb53f54c589c",
+    "wavebit/_core/clipper.py": "8673c4327d1929614b008f4a776a76dd2e934d49e5150b87eb38569183e9a719",
+    "wavebit/_core/conventions.py": "907271cae8917aea37c488a70f53d4303d9803f64b049e41e1264e14993156be",
+    "wavebit/_core/domain.py": "9a4bc699078daa2b6e4c372f303f0cce9a8234967b2c85c4e48ea14545763f9b",
+    "wavebit/_core/draw.py": "583273001a339211084d7794c084850e36e7be660bfbdafb51d1aeafb46cdb1f",
+    "wavebit/_core/engine.py": "eed9891d86088d9a38956c36d4396b43d8cd694ecfcbc76b7b8710a5d6b1383d",
+    "wavebit/_core/enums.py": "f0956ac431b6735c863e3c9534c28aef8f50d46a6c6213ce79129a1059980a48",
+    "wavebit/_core/factorization.py": "71f5234e07831197777c567ea5ba1357e147b84f9b804129fe02df53c469cd72",
+    "wavebit/_core/fdtd.py": "e840b5e72caadf09707304cd11441c98ad46ca98a231d3ad00034b7ee841cf7b",
+    "wavebit/_core/fields.py": "f80f36e4360cd39620f07fce1d12023c6748e37a48e2f7262c3274ea004625ca",
+    "wavebit/_core/frequency_monitor.py": "97dc5a54b82fa825b2c8778bb42d5a6e89c69b1b84b4a8fa422406047658729f",
+    "wavebit/_core/geometry.py": "ab18542cc727a22c93dfd9ae99b2d1c2941779cad2d30329fb99ac5bf5e63ecf",
+    "wavebit/_core/grid_fdtd.py": "252fc90c5b4521d6e03959865fc59cc5761d24e9ce535413d66ad15638b6ca2b",
+    "wavebit/_core/lattice.py": "511308915f15c29fe620be1085a7de8ab888d7b2e297e4be4b0758bb3e3ae301",
+    "wavebit/_core/modeler.py": "e2cc9548c3a3e50df705df1abb3f911bbcabec1030bbc76073ff95613aacc06b",
+    "wavebit/_core/normal_methods.py": "8bd5ecfefca48d842746bb695350211ecb299405e44f1d4b95ef9356c14d92ed",
+    "wavebit/_core/overlap.py": "e72676814773b8b1da6622316d76bd4e12422998022e4696e688baf15bd94a2c",
+    "wavebit/_core/parametric.py": "8dc7e42cc80dae260e2cc39ef568b89cd27ae1ac4a1aa85964849b324d76dd55",
+    "wavebit/_core/polygon.py": "13f93526dea9e3430be0bc4390b0cd8c630a5a083f3df8699bb3d8e781d5acd7",
+    "wavebit/_core/result.py": "5ee93546768aae655dfeba87f7db8bda359d48b4c70ec083c86354a5103e7949",
+    "wavebit/_core/scattering.py": "9504c8ce43a0c3a82f3745ee585dcb1cf77f2aaea6cbb5554696f228b3e97ed6",
+    "wavebit/_core/scene_fdtd.py": "b97e935c2514b6c0cc0f34100d6e7418a5abc0a064ad190beb1a303103afdec4",
+    "wavebit/_core/solve_1d.py": "37981c1b39b56343d2975eb8a47d0ca98b3741219c3b74464c08add927deaab4",
+    "wavebit/_core/solve_2d.py": "2afaa48b9ac7d9e33d1daf2d4b2804ea36e6c334b9e4b21a367b56e9dbb4c405",
+    "wavebit/_core/solve_2d_4ff.py": "1f31b99c5b620239f49ef8a86331ae8f8f4df4532fe0d971e9f209fad462600a",
+    "wavebit/_core/spec.py": "963bbefb0c8950a59cdf9dd9f4b50b998fb66d59b4ff332825fc81a0269da8b3",
+    "wavebit/_core/time_plot.py": "a562f0f7b34d0e5753bf3b166a83cae70d154e045e5a029337ea87a96cd24d5c",
+    "wavebit/_core/time_probe.py": "584d9238c5d4d881fd19c7c720d1bf152924fee03ae1a2f2379374fa75d23a51",
+    "wavebit/backends/__init__.py": "f38fd1a2281dfe8fac56f10a6fe74960b0aa550a7d94d3006531622d31d243d1",
+    "wavebit/backends/jax_backend.py": "8d4804396246466d46f271e442b21568107ffbbbbacf76a5540ffedd64ac98bf",
+    "wavebit/backends/numpy_backend.py": "d0a8d000ce65911bbffe8bf4dfff5f731762e7634884fdd07650af5d60c7586c",
+    "wavebit/backends/time_domain.py": "f5b28c0160d1fc238fce1bf0c560e60e2d3a7715396299473bf7a6f0fd96bdd6",
+    "wavebit/backends/torch_backend.py": "c5407f7fac2fb80357295331f3660486c0d0c311aac4820de2df14b1d5eee795",
+    "wavebit/fd/__init__.py": "9a1d3c12b64cbee79716630f860d49843406e39597a70dac312fe00e7aad0f30",
+    "wavebit/fd/_assemble.py": "d3d55a525e71470cb178e08965c27f5b43ffee5e3e2cb8bf416bd1e22d2361f0",
+    "wavebit/fd/_check.py": "73c3fa96ba464245b623f559ff78c2c94db026e7cd1185e2c93e888c33581f63",
+    "wavebit/fd/_kernel/__init__.py": "a1809e1a1a6432f5a83c75c7f18491d50665ac1ec96db41ada8c5c5454455129",
+    "wavebit/fd/_kernel/constitutive.py": "3d395084b7087ab0d7dbd4bef1ac7651cbc41345dfa522bdf1009bee1f8ba64e",
+    "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+    "wavebit/fd/_kernel/curl.py": "29b0a61d7a2ca51667dc84e0fadf38eb0c889d991ff12fcd5884a2e7cdb3b4d0",
+    "wavebit/fd/_kernel/faces.py": "ed0f80e453b07a0803c36b4d733f0008ee5fcce580786d5dffb82d26f9cef06f",
+    "wavebit/fd/_kernel/grid.py": "3b1874dc3cf1dbac36cd74cc016c285cc0b40b092481b167fb2ff7c2c6c12ae2",
+    "wavebit/fd/_kernel/masks.py": "dc97a811286ea8b0cda2e13179879181a83b99f9c78329c2810e4c796c978c89",
+    "wavebit/fd/_kernel/observe.py": "c247f6e981b87c6d94b5e0b3d2e7b05b004d879dc817fc5a75d8cdbabcea0acc",
+    "wavebit/fd/_kernel/poles.py": "3657cb4d8549e278e5f28a2b6135933e87d3b5ea2eb94a613ded653c2a1be1ab",
+    "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+    "wavebit/fd/_kernel/stencil.py": "d3fdab3f5b0a96068752bb11e1d5967e77539166b33e9da9ccf47dfc679fa84b",
+    "wavebit/fd/_kernel/step.py": "ea03ef133830060988764567b29d19b2eca8eb221882dfb4c9e0bdb808ac10cd",
+    "wavebit/fd/_lower/__init__.py": "ee125aae60bfb926b09f8fa1bd0ae9f7714bf6d18f3145a4a5c67926e377c5fc",
+    "wavebit/fd/_lower/checks.py": "699de0a942e07980e11eccc2a3671605ce388669fa1ab422f6e4fd55602c7059",
+    "wavebit/fd/_lower/coefficients.py": "581ff8abb561085c294d07b94d45c5dbe7db4de12abee1f81457615b21f5a15a",
+    "wavebit/fd/_lower/conductive_film.py": "5918685b34b56eb801743a1cbc08b57b499647eedadb672178b71b204c4b90f4",
+    "wavebit/fd/_lower/conductive_stack.py": "52c975a8450965adff436177a951d861ce4dcdf58bf154d1177510a36251b54e",
+    "wavebit/fd/_lower/constitutive.py": "2236d76bd0a1fa66aa56e511ee3640457f864182e1bf64c54b7ec6ef20429c00",
+    "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+    "wavebit/fd/_lower/debye_film.py": "b9ca1b691ad1b97daba8d6fe8fdef540eb39546ab58097102908b3aaa5b6086b",
+    "wavebit/fd/_lower/debye_resolution.py": "d08cf07a121c9136c11fcbf663bc11b2f9c9a8cf3929387762cd1726eed9ad3b",
+    "wavebit/fd/_lower/debye_sum_film.py": "114cfc5b5627701172193a73e98cfd9d3dec13a66187f844fcac3e78f5d806f6",
+    "wavebit/fd/_lower/debye_sum_resolution.py": "f29f6b39b6aaeead7948b5db6dd2407b273e31db202da290314367fb1c8880d4",
+    "wavebit/fd/_lower/fields.py": "12d0ca063c914b83650535ae1a721677a9fb19921198891314d4f3404fd363d9",
+    "wavebit/fd/_lower/grazing.py": "9981adf16ceba0b22adfb170735d7dda8a24afe592612d5018abbfe89d93a608",
+    "wavebit/fd/_lower/hybrid_film.py": "052c72703ac4031ad567c3e96b035c6eb48d705db768a6f1615920753fafa4f4",
+    "wavebit/fd/_lower/hybrid_resolution.py": "4f1abcf3b8db26dd4a80e17569eaa42ad05483d7c60329dc951cad2baf192ba7",
+    "wavebit/fd/_lower/junction.py": "d2a7ccd4db43e5704df5e812c64f20dcfff928b3a20441fe93555b7912e48c45",
+    "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+    "wavebit/fd/_lower/monitors.py": "32194b67e1d74d9eed5ab67fb8b3dabffbbf51299c2a7e8c05b150e36103bf92",
+    "wavebit/fd/_lower/occupancy.py": "8c7954181527b08ae6297d07491c0684469986dd936a9c5c1e7edfa1878eb0b0",
+    "wavebit/fd/_lower/oscillator_sum_film.py": "0b72ad5081aaaf07a17be7deba5344b7d79ba60544fc2c1f2773e5d288132cf7",
+    "wavebit/fd/_lower/oscillator_sum_resolution.py": "69c72f34b0eaac044c97dbdd365bf23cca53670b6ae72cf7d7319f831f991c79",
+    "wavebit/fd/_lower/params.py": "b08d24047254c0d11c2d93128fc6db304af5e778946dbcf261577bea8734ad5c",
+    "wavebit/fd/_lower/plan.py": "9aa25dce4df2a59f0214f877d5544cdd3afa2e75b26e5bbc5d80a6aef8b74a40",
+    "wavebit/fd/_lower/shape_ranges.py": "81e6c6f3e355098fa2c5935b5a5b8f0a2c6710db12c766f1a7ae16a059d8bdd3",
+    "wavebit/fd/_lower/single_pole_film.py": "0b6b535865e67d7bff55ff3d184d2966406c2818c8dcd51dfa506aa23645f930",
+    "wavebit/fd/_lower/single_pole_resolution.py": "afab7900c5aab9983e5fbd20d1fda65b9ece5d33e9f9e8dccd33cd6c8624a48d",
+    "wavebit/fd/_lower/sources.py": "e4fa10963601949f64751cb615c8793cc9ad42874afd80997df7f4d166b04d64",
+    "wavebit/fd/_lower/stars.py": "0a0b49e5a1a3761613484e179231e577874431d8b873088812f6488718a55de4",
+    "wavebit/fd/_lower/stencil.py": "8dfb69895f1cea5ebf8fa8a4367e7de799ef7e15ec27b21c777f962475a35fce",
+    "wavebit/fd/_lower/triplet.py": "c42295e47715763ce759b25cfd0bda2997951b60601d3c7a36c68655b6077b3c",
+    "wavebit/fd/_lower/two_debye_film.py": "d06b121494a9df485cb8eea87056663781a902f28f2415cdf954d07d6ab5f6e4",
+    "wavebit/fd/_lower/two_debye_resolution.py": "439a065280d9571251bb7e83081d7e37827f5eb9e3e484670bebe5f48447fbc0",
+    "wavebit/fd/_post.py": "e47607f1b93e51882d245b95d76c87af25ea018233903c18f7379de05f4d4a61",
+    "wavebit/fd/_radiation.py": "3eb42e4276e58288ea72cab1e895021d93985a52e37a24f4bfe16a45282bd0b5",
+    "wavebit/fd/_run.py": "a0b04d7e0685bbd41b39498c47af2d3472188f51ab3e69d1029a2926e1cfdd1b",
+    "wavebit/fd/_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+    "wavebit/fd/_shapes/__init__.py": "afbeaa1bd157f993f7615476c7f70f43c96ebc10eab4826720933c8469e1399d",
+    "wavebit/fd/_shapes/_bodies.py": "09b94a186fb55438a8e65df3760ff4f49dfac842c39a5c0adcb958ce00926d1b",
+    "wavebit/fd/_shapes/_cut.py": "e0a75e30874507d795ef42c5dfb474d19cebcdded53195a3893c172a4c85e4ad",
+    "wavebit/fd/_shapes/_exact.py": "2a9e39fac0e6f5abb01f87d4025a27c97896a94865d0db5a8354cc881d01e937",
+    "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+    "wavebit/fd/_spec.py": "a4914554f8f9c3282e325b4eb274370b5d3019f283b0e54d9b8314948f29c313",
+    "wavebit/fd/_testing.py": "e56b769e9e5c1521bebfded05f297fb39922f65343c7df0217e912463bebf5b8",
+    "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+    "wavebit/fd/diagnostics.py": "ef76eedf65ea0a336923bfdf411f753fa95548d255be6f4a66170393e0010ac0",
+    "wavebit/fd/geometry.py": "9bbefa43435eaac15b7b581edc39a8f3ca659cb3228e85ea5ad0d7fa0a805b8a",
+    "wavebit/fd/materials.py": "44780da74b37a7a6b826af575cde6089ca21941303285526d8a8f1f708bf73bd",
+    "wavebit/fd/monitors.py": "a3d948058305325c9ac9accd166d2f05504b05751bdf1fbd1fe214696d9bbedb",
+    "wavebit/fd/results.py": "ef8cd76b317cf52b1058adc44ad7bf118bb4366529f95dd99cee957e8cd281d4",
+    "wavebit/fd/scene.py": "f06977c1288726711913dd9925f99cd8780ab07db0a2c73942c72fa4be80bcaf",
+    "wavebit/fd/sources.py": "a7973917e3080cc0fd2191c300bc5f29eb3e6d7c04a85adb3d5dc668b5878688",
+    "wavebit/main.py": "7dd39a5376898eecce12d88f47758ed93843551dfbd73fa6e2a3f61c306ba030",
+    "wavebit/manifest.py": "586747ea09cc7c55b3f9e581dbaf16d58587bd585a3df8126239d6fd1d78bbe4"
+  },
+  "production_archive": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\production_sources.zip",
+  "production_archive_sha256": "bc27054f5d3514cd4d987d0846569bbc2f7f61c9703c6a9dc36cc24cf03acd30",
+  "python": "3.12.14 | packaged by Anaconda, Inc. | (main, Aug 27 2026, 14:37:13) [MSC v.1942 64 bit (AMD64)]",
+  "executable": "C:\\<conda env>\\python.exe",
+  "backend_versions": {
+    "numpy": "2.5.1",
+    "jax": "0.11.0",
+    "jaxlib": "0.11.0",
+    "torch": "2.13.0"
+  },
+  "environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "PYTHONUTF8": "1"
+  },
+  "frozen_sources": [
+    {
+      "file": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\probe.py.raw",
+      "sha256": "8baebd8ce66b890cffe85f9f4e23be916255b4e98f2e2a127dad79f26e1d621b"
+    },
+    {
+      "file": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\controller.py.raw",
+      "sha256": "31d3249fa0b01d25fe04d2ea9705794701c036947c285627dbd18748d3107467"
+    },
+    {
+      "file": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\studies__fdtd_layer_alignment.py.py.raw",
+      "sha256": "91433f49dffb84ceb1441fd1455a7e49ea104a276875402d127b20192cf2c008"
+    },
+    {
+      "file": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\studies__fdtd_oblique_pulse.py.py.raw",
+      "sha256": "ac840bd60b50a0e6c5b8864e0883f79f6bf5bd8edb2113629ed151f6ffaef1b2"
+    },
+    {
+      "file": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\studies__fdtd_conductive_film_probe.py.py.raw",
+      "sha256": "0c9a8d36de9db69d1c13484b9dfbe0b6a134cc9da4baa48763203df7da37b4f7"
+    }
+  ],
+  "planned_rows": [
+    {
+      "family": "lossy-pair",
+      "backend": "numpy",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          4.0,
+          8.0,
+          0.1
+        ],
+        [
+          2.25,
+          4.0,
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.15
+      ]
+    },
+    {
+      "family": "lossy-pair",
+      "backend": "jax",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          4.0,
+          8.0,
+          0.1
+        ],
+        [
+          2.25,
+          4.0,
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.15
+      ]
+    },
+    {
+      "family": "lossy-pair",
+      "backend": "torch",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          4.0,
+          8.0,
+          0.1
+        ],
+        [
+          2.25,
+          4.0,
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.15
+      ]
+    },
+    {
+      "family": "mixed-triple",
+      "backend": "numpy",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          3.0,
+          0.0,
+          0.1
+        ],
+        [
+          2.0,
+          6.0,
+          0.1
+        ],
+        [
+          5.0,
+          10.0,
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.125,
+        0.175
+      ]
+    },
+    {
+      "family": "mixed-triple",
+      "backend": "jax",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          3.0,
+          0.0,
+          0.1
+        ],
+        [
+          2.0,
+          6.0,
+          0.1
+        ],
+        [
+          5.0,
+          10.0,
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.125,
+        0.175
+      ]
+    },
+    {
+      "family": "mixed-triple",
+      "backend": "torch",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          3.0,
+          0.0,
+          0.1
+        ],
+        [
+          2.0,
+          6.0,
+          0.1
+        ],
+        [
+          5.0,
+          10.0,
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.125,
+        0.175
+      ]
+    }
+  ],
+  "optical_ceilings": null,
+  "ceiling_qualification": "No optical ceiling selected before disclosure. A separate acceptance record must follow all six measured rows.",
+  "backend_pair_budget": 2.842170943040401e-14,
+  "adaptation": "None within this attempt. Preserve any failure and review before new work.",
+  "workers": [
+    {
+      "backend": "numpy",
+      "family": "lossy-pair",
+      "started_utc": "2026-10-07T00:30:53.811454+00:00",
+      "ended_utc": "2026-10-07T00:31:02.187272+00:00",
+      "wall_s": 8.375587399990764,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_conductive_stack_probe",
+        "--family",
+        "lossy-pair",
+        "--backend",
+        "numpy",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_numpy.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_numpy.log",
+      "raw_log_sha256": "2daca4949292f9a613719400d417115c724b16c87dd4313c1efa0dd4db93df5d",
+      "result": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_numpy.json",
+      "result_sha256": "2f55d6c5b0c40981ddcb4db3c6998ca49af6f761ba5952119909c035217a5e47"
+    },
+    {
+      "backend": "jax",
+      "family": "lossy-pair",
+      "started_utc": "2026-10-07T00:31:02.271535+00:00",
+      "ended_utc": "2026-10-07T00:31:07.491875+00:00",
+      "wall_s": 5.220846500014886,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_conductive_stack_probe",
+        "--family",
+        "lossy-pair",
+        "--backend",
+        "jax",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_jax.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_jax.log",
+      "raw_log_sha256": "29d18335270e1aff44fa917781d1a3c39b2abe6c8916f855aad447755ca35da9",
+      "result": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_jax.json",
+      "result_sha256": "f1952aab365927b8a512f5f31e132709c33eea80b5595eef2eff2a46970c0570"
+    },
+    {
+      "backend": "torch",
+      "family": "lossy-pair",
+      "started_utc": "2026-10-07T00:31:07.574877+00:00",
+      "ended_utc": "2026-10-07T00:31:34.668993+00:00",
+      "wall_s": 27.094205200031865,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_conductive_stack_probe",
+        "--family",
+        "lossy-pair",
+        "--backend",
+        "torch",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_torch.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_torch.log",
+      "raw_log_sha256": "e3a80a833064cb86a3d4a31b4d78d28e76a4d5ff47d6eb78f1fa5c13e680f751",
+      "result": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\lossy-pair_torch.json",
+      "result_sha256": "599c2783ee677cd851235e913d3b9504b179a465a8af141ca5b4d1a0d2235846"
+    },
+    {
+      "backend": "numpy",
+      "family": "mixed-triple",
+      "started_utc": "2026-10-07T00:31:34.748996+00:00",
+      "ended_utc": "2026-10-07T00:31:43.106499+00:00",
+      "wall_s": 8.357695999962743,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_conductive_stack_probe",
+        "--family",
+        "mixed-triple",
+        "--backend",
+        "numpy",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_numpy.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_numpy.log",
+      "raw_log_sha256": "0b8652c27206c4d4d8145e178f47330fae6fdea22fabf96d8ef721cd800962d1",
+      "result": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_numpy.json",
+      "result_sha256": "16d4401608762a4fe96d510445bf7ab68b2891618ab0d55d58e560114e15c31f"
+    },
+    {
+      "backend": "jax",
+      "family": "mixed-triple",
+      "started_utc": "2026-10-07T00:31:43.192501+00:00",
+      "ended_utc": "2026-10-07T00:31:48.904484+00:00",
+      "wall_s": 5.712729700026102,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_conductive_stack_probe",
+        "--family",
+        "mixed-triple",
+        "--backend",
+        "jax",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_jax.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_jax.log",
+      "raw_log_sha256": "8bfa330dce398e46792fedfd807eef20b53ae3f2e4c7189eff43e1363ecd0de3",
+      "result": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_jax.json",
+      "result_sha256": "5b819ba4b00776010da4a1554567e3f5174116c5c56c5169464d44dadb9cb6a4"
+    },
+    {
+      "backend": "torch",
+      "family": "mixed-triple",
+      "started_utc": "2026-10-07T00:31:48.985482+00:00",
+      "ended_utc": "2026-10-07T00:32:17.597275+00:00",
+      "wall_s": 28.612599999993108,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_conductive_stack_probe",
+        "--family",
+        "mixed-triple",
+        "--backend",
+        "torch",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_torch.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_torch.log",
+      "raw_log_sha256": "133bc48781ccfb3d3869a3807525435fc320846f6df8c987b60357aff87cecb0",
+      "result": "studies\\results\\fdtd_conductive_stack_calibration_attempt1\\mixed-triple_torch.json",
+      "result_sha256": "a5bd6fa82ddff87617e42d8d6995e993a6aab69a864258a6583d5b1dae6897a5"
+    }
+  ],
+  "complete": true,
+  "source_unchanged": true,
+  "backend_pair_scaled_differences": {
+    "lossy-pair": {
+      "jax": {
+        "r": [
+          5.003707553108401e-16,
+          1.0179146870343963e-15,
+          2.6945789820192466e-16
+        ],
+        "t": [
+          2.8305244335018383e-16,
+          3.510833468576701e-16,
+          4.355503409735122e-16
+        ]
+      },
+      "torch": {
+        "r": [
+          4.996003610813204e-16,
+          7.164218939837044e-16,
+          1.0857539863889182e-15
+        ],
+        "t": [
+          5.900916318210353e-16,
+          1.7817696036042146e-15,
+          2.036633330088357e-15
+        ]
+      }
+    },
+    "mixed-triple": {
+      "jax": {
+        "r": [
+          6.662783593823664e-16,
+          2.383840817285749e-16,
+          2.8609792490763985e-16
+        ],
+        "t": [
+          1.8875832159447664e-16,
+          6.004449063730082e-16,
+          7.850462293418876e-16
+        ]
+      },
+      "torch": {
+        "r": [
+          4.726604209672303e-16,
+          1.020560098144454e-15,
+          9.806206306378359e-16
+        ],
+        "t": [
+          7.438546047598635e-16,
+          1.790180836524724e-15,
+          1.4027553686157966e-15
+        ]
+      }
+    }
+  },
+  "backend_pairs_within_budget": true,
+  "measured_max_absolute_complex_errors": {
+    "r": 0.005551693331482326,
+    "t": 0.010841844816499236
+  },
+  "measured_max_errors_by_family": {
+    "lossy-pair": {
+      "r": 0.0015464762804496444,
+      "t": 0.004865877549259704
+    },
+    "mixed-triple": {
+      "r": 0.005551693331482326,
+      "t": 0.010841844816499236
+    }
+  },
+  "finite_stable_all_rows": true,
+  "max_decay": 1.329755298531103e-08,
+  "all_decay_records_present": true,
+  "production_unchanged": true,
+  "ended_utc": "2026-10-07T00:32:17.663277+00:00"
+}

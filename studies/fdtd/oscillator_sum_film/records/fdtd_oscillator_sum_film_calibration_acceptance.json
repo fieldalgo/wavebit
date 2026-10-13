@@ -1,0 +1,36 @@
+{
+  "accepted_utc": "2026-10-06T17:15:42.248443+00:00",
+  "calibration": "studies/results/fdtd_oscillator_sum_film_calibration_attempt1.json",
+  "calibration_sha256": "af4d5b73f997d299a095fb290238a197042082e73b96a14aef512c4a1ec6001e",
+  "source_identity": {
+    "helper_sha256": "7d0c851d9c05447d1e64d3836519574c05ab0e7260101d57a6929bffe206f4ca",
+    "fd_source_sha256": "86e2f7078c49a546d63f20b9acfc822d7c3c519363577599b56659572dcf193f",
+    "wavebit_source_sha256": "419700870cb89df8555115f0b6754744eacd846d6c782721a11736123589b297",
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "accepted_ceilings": {
+    "r": 0.005,
+    "t": 0.01
+  },
+  "inherited_candidates_unchanged": true,
+  "measured_max_absolute_complex_errors": {
+    "r": 0.0022725919535853773,
+    "t": 0.0020729978337182195
+  },
+  "measured_max_errors_by_family": {
+    "mixed-metal": {
+      "r": 0.0022725919535853773,
+      "t": 0.0009530150182561663
+    },
+    "multi-lorentz": {
+      "r": 0.000653307178840436,
+      "t": 0.0020729978337182195
+    }
+  },
+  "margin": {
+    "r": 0.0027274080464146228,
+    "t": 0.00792700216628178
+  },
+  "backend_scaled_max": 2.8288909673081856e-15,
+  "scope": "Two disclosed fixed n40 p-polarized film configurations only (mixed-metal and multi-lorentz); not unseen corroboration or convergence/arbitrary-material guarantee. Include all known responses in later registration."
+}

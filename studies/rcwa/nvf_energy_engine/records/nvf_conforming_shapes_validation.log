@@ -1,0 +1,44 @@
+Conforming NVF public shape construction validation
+Date: 2026-09-09
+Platform: Darwin arm64
+NumPy 2.5.1; SciPy 1.18.0; JAX 0.11.0; Torch 2.13.0
+Environment: PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+The environment settings do not establish Apple Accelerate's actual thread count.
+
+Public API:
+python -m pytest tests/test_conforming_nvf.py -q --tb=short
+48 passed in 33.43s.
+
+Shared-kernel regression:
+python -m pytest tests/test_nvf_thin_gap_energy.py tests/test_nvf_partitioned_gap_energy.py tests/test_nvf_continuous_flux.py tests/test_nvf_interface_resolution.py tests/test_nvf_polynomial_body.py tests/test_nvf_local_flux.py tests/test_nvf_posed_gap.py tests/test_nvf_energy_builder.py tests/test_slot_order.py -q --tb=short
+204 passed, 1 xfailed in 570.27s.
+The strict expected failure is the historical fixed-P1 moving-interface
+control on PartitionedGapEnergyModel. The polynomial-body model used by
+ConformingNVF passes that control. No expected-failure marks were added.
+
+AST comparison against 69c4e36:
+18 top-level numerical function/class definitions in the five moved modules
+match exactly after excluding optical readout methods. Those methods now
+live in the study-only GapOptics mixin. Core modules do not import studies.
+
+Manual examples: both Python blocks in docs/guide/conforming-nvf.md executed.
+Example 1: p T=0.92875236018067, s T=0.812354493364106.
+Example 2: JAX gap derivative shape (1, 9, 9).
+
+Documentation contract:
+python -m pytest tests/test_docs_contract.py -q
+29 passed.
+
+Strict documentation build:
+python -m sphinx -b html -W --keep-going docs <temporary-output-directory>
+Build succeeded, with existing official intersphinx inventory cache.
+
+Lint:
+python -m ruff check wavebit/_core/conforming wavebit/__init__.py studies/nvf_thin_gap_energy.py studies/nvf_partitioned_gap_energy.py studies/nvf_continuous_flux.py studies/nvf_interface_resolution.py studies/nvf_polynomial_body.py studies/nvf_gap_optics.py tests/test_conforming_nvf.py
+All checks passed. git diff --check: passed.
+
+Combined: 281 passing checks and one historical expected failure.
+
+Scope: finite-model construction and integration checks, not the whole
+repository suite or certification of optical accuracy. The provisional
+1e-5 research increment is not used as a product release gate here.

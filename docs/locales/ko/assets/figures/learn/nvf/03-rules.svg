@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" role="img" aria-labelledby="title desc">
+<title id="title">같은 ε라도 행렬을 만드는 순서가 다르다</title><desc id="desc">접선은 직접 곱, 법선은 역수 유전율의 행렬을 역행렬로 만든다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="430" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">같은 ε라도 행렬을 만드는 순서가 다르다</text>
+<rect x="30" y="90" width="450" height="175" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="124" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">접선 성분</text>
+<text x="48" y="160" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Eₜ가 연속 → Dₜ/ε₀ = εEₜ</text>
+<text x="48" y="187" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">공간의 곱 → 컨볼루션 행렬 A = C(ε)</text>
+<text x="48" y="214" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">직접 규칙: [Dₜ/ε₀] ≈ A [Eₜ]</text>
+<rect x="520" y="90" width="450" height="175" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="538" y="124" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">법선 성분</text>
+<text x="538" y="160" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Dₙ이 연속 → Eₙ = (1/ε)Dₙ/ε₀</text>
+<text x="538" y="187" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">먼저 B = C(1/ε), 다음 B⁻¹</text>
+<text x="538" y="214" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">역 규칙: [Dₙ/ε₀] ≈ B⁻¹ [Eₙ]</text>
+<text x="45" y="314" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">0차만 남긴 50:50 예: ε = 1 또는 4</text>
+<text x="45" y="355" style="fill:#285ab0;font-size:24px;font-weight:400" text-anchor="start">A = (1 + 4)/2 = 2.5</text>
+<text x="520" y="355" style="fill:#117c77;font-size:23px;font-weight:400" text-anchor="start">B⁻¹ = 1/[(1 + 1/4)/2] = 1.6</text>
+<text x="30" y="413" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">잘린 Fourier 공간에서 C(ε) ≠ C(1/ε)⁻¹임을 보여 주는 손계산</text>
+</svg>

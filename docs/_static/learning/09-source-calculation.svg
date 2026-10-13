@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="1350" viewBox="0 0 1040 1350" role="img" aria-labelledby="title desc">
+<title id="title">Multiple-source calculation flow</title>
+<desc id="desc">External plane waves and Gaussian beams enter as incident boundary amplitudes; internal electric dipoles enter as current terms. Components sharing a Fourier grid are computed together, then complex electric and magnetic fields are summed. External-only illumination is normalized by incident power; with dipoles present, read directional output powers.</desc>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#546878" /></marker></defs>
+<rect width="1040" height="1350" rx="18" fill="#f4f7fa" />
+<g font-family="Arial, Noto Sans KR, sans-serif" fill="#142c40" text-anchor="middle">
+<text x="520" y="43" font-size="28" font-weight="700" text-anchor="middle">Multiple-source calculation flow</text>
+<text x="520" y="75" font-size="19" font-weight="400" text-anchor="middle">Same wavelength · linear materials · specify each source's magnitude and phase</text>
+<text x="65" y="115" font-size="19" font-weight="700" text-anchor="start">Legend</text>
+<rect x="135" y="96" width="24" height="24" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="174" y="115" font-size="18" font-weight="400" text-anchor="start">Grey: input · RCWA · field reconstruction</text>
+<rect x="577" y="96" width="24" height="24" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2" />
+<text x="616" y="115" font-size="18" font-weight="400" text-anchor="start">Green: field sum · power · results</text>
+<rect x="140" y="145" width="760" height="60" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="520" y="182" font-size="23" font-weight="700" text-anchor="middle">Shared settings: layers · materials · lattice · wavelength</text>
+<path d="M520 205 V222 H280 V240" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<path d="M520 222 H760 V240" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<rect x="50" y="240" width="460" height="145" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="280" y="269" font-size="23" font-weight="700" text-anchor="middle">External incidence</text>
+<text x="280" y="298" font-size="20" font-weight="400" text-anchor="middle">Plane waves · order amplitudes · Gaussian beams</text>
+<text x="280" y="326" font-size="19" font-weight="400" text-anchor="middle">A Gaussian beam comprises multiple plane waves</text>
+<text x="280" y="359" font-size="21" font-weight="700" text-anchor="middle">→ incident amplitudes at top/bottom boundaries</text>
+<rect x="530" y="240" width="460" height="145" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="760" y="269" font-size="23" font-weight="700" text-anchor="middle">Electric dipole inside a layer</text>
+<text x="760" y="298" font-size="20" font-weight="400" text-anchor="middle">Position · complex moment · repetition</text>
+<text x="760" y="326" font-size="19" font-weight="400" text-anchor="middle">Periodic array or isolated-source approximation</text>
+<text x="760" y="359" font-size="21" font-weight="700" text-anchor="middle">→ current term at the source position</text>
+<path d="M280 385 V405 H520 V425" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<path d="M760 385 V405 H520" fill="none" stroke="#546878" stroke-width="2.5" />
+<rect x="140" y="425" width="760" height="86" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="520" y="460" font-size="23" font-weight="700" text-anchor="middle">Group components sharing one Fourier grid</text>
+<text x="520" y="491" font-size="21" font-weight="400" text-anchor="middle">Transverse-wavevector difference = integer reciprocal-lattice combination</text>
+<path d="M520 511 V543" fill="none" stroke="#546878" stroke-width="2.5" />
+<path d="M520 543 H280 V570" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<path d="M520 543 H760 V570" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<rect x="50" y="570" width="460" height="77" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="280" y="600" font-size="23" font-weight="700" text-anchor="middle">One group</text>
+<text x="280" y="629" font-size="21" font-weight="400" text-anchor="middle">Shared RCWA calculation</text>
+<rect x="530" y="570" width="460" height="77" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="760" y="600" font-size="23" font-weight="700" text-anchor="middle">Multiple groups</text>
+<text x="760" y="629" font-size="21" font-weight="400" text-anchor="middle">RCWA calculation per group</text>
+<path d="M280 647 V675 H520 V699" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<path d="M760 647 V675 H520" fill="none" stroke="#546878" stroke-width="2.5" />
+<rect x="140" y="700" width="760" height="82" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="520" y="733" font-size="23" font-weight="700" text-anchor="middle">Compute complex fields at top and bottom</text>
+<text x="520" y="764" font-size="21" font-weight="400" text-anchor="middle">Include both external incidence and internal-source contributions</text>
+<path d="M520 782 V798 H417 V817" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<rect x="65" y="818" width="705" height="85" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2" />
+<text x="417" y="853" font-size="22" font-weight="700" text-anchor="middle">Sum E and H in common coordinates and phase references</text>
+<text x="417" y="884" font-size="22" font-weight="400" text-anchor="middle">E = Σ Eⱼ    ·    H = Σ Hⱼ</text>
+<path d="M900 741 H990 V802 H901 V838" fill="none" stroke="#546878" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#arrow)" />
+<rect x="794" y="839" width="215" height="76" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2" />
+<text x="901" y="869" font-size="21" font-weight="700" text-anchor="middle">When requested</text>
+<text x="901" y="897" font-size="20" font-weight="400" text-anchor="middle">Reconstruct internal E and H</text>
+<path d="M417 903 V922 H520 V943" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<rect x="140" y="944" width="760" height="87" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2" />
+<text x="520" y="978" font-size="23" font-weight="700" text-anchor="middle">Compute power flow over the observation region</text>
+<text x="520" y="1010" font-size="22" font-weight="400" text-anchor="middle">⟨S⟩ = ½ Re(E × H*)</text>
+<text x="520" y="1080" font-size="20" font-weight="700" text-anchor="middle">Read results according to included source types</text>
+<path d="M520 1031 V1048 H280 V1100" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<path d="M520 1048 H760 V1100" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)" />
+<rect x="50" y="1100" width="460" height="160" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2" />
+<text x="280" y="1132" font-size="22" font-weight="700" text-anchor="middle">External incidence only</text>
+<text x="280" y="1163" font-size="20" font-weight="400" text-anchor="middle">Divide by incident power over the observation region</text>
+<text x="280" y="1194" font-size="20" font-weight="400" text-anchor="middle">output_top · output_bottom</text>
+<text x="280" y="1230" font-size="18" font-weight="400" text-anchor="middle">Output-power ratios for that region</text>
+<rect x="530" y="1100" width="460" height="160" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2" />
+<text x="760" y="1132" font-size="22" font-weight="700" text-anchor="middle">With an internal dipole</text>
+<text x="760" y="1163" font-size="20" font-weight="400" text-anchor="middle">No incident-power normalization</text>
+<text x="760" y="1194" font-size="18" font-weight="400" text-anchor="middle">power.outgoing_top · outgoing_bottom</text>
+<text x="760" y="1230" font-size="18" font-weight="400" text-anchor="middle">Divide by Z₀ for mean power density (W/m²)</text>
+<text x="520" y="1300" font-size="19" font-weight="400" text-anchor="middle">Sum all complex source fields before computing power, retaining interference.</text>
+<text x="520" y="1330" font-size="17" font-weight="400" text-anchor="middle">H in the formula is the physical magnetic field. With returned legacy Z₀H, include 1/Z₀ in the power formula.</text>
+</g></svg>

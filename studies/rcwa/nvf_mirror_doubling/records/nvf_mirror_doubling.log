@@ -1,0 +1,77 @@
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "closure_start", "seconds": 0.001287165971007198}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "closure_ready", "seconds": 0.4071369159501046}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "factors_ready", "seconds": 0.5711238749790937}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "slice_ready", "taylor_tail_bound": 3.9737501516634105e-22, "doublings": 6, "terms": 12, "seconds": 2.4344942909665406}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "doubling_ready", "doubling": 1, "seconds": 2.78791866597021}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "doubling_ready", "doubling": 2, "seconds": 3.134151790989563}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "doubling_ready", "doubling": 3, "seconds": 3.4867355409660377}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "doubling_ready", "doubling": 4, "seconds": 3.830005457974039}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "doubling_ready", "doubling": 5, "seconds": 4.172866790962871}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "doubling_ready", "doubling": 6, "seconds": 4.510803499957547}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "matching_ready", "seconds": 4.771935957949609}
+{"kind": "mirror_progress", "order": 16, "polarization": "p", "stage": "power_ready", "T": 0.9071663955791972, "R": 0.09283360442049342, "energy_error": 3.0941915696303113e-13, "seconds": 4.774349582963623}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "closure_start", "seconds": 4.774452082987409}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "closure_ready", "seconds": 5.172037249954883}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "factors_ready", "seconds": 5.356010832998436}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "slice_ready", "taylor_tail_bound": 5.050461884667053e-22, "doublings": 6, "terms": 12, "seconds": 7.327137999993283}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "doubling_ready", "doubling": 1, "seconds": 7.6729982499964535}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "doubling_ready", "doubling": 2, "seconds": 8.039843915961683}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "doubling_ready", "doubling": 3, "seconds": 8.393139290972613}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "doubling_ready", "doubling": 4, "seconds": 8.772788249945734}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "doubling_ready", "doubling": 5, "seconds": 9.133771124994382}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "doubling_ready", "doubling": 6, "seconds": 9.505018208001275}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "matching_ready", "seconds": 9.793689832964446}
+{"kind": "mirror_progress", "order": 16, "polarization": "s", "stage": "power_ready", "T": 0.9414823004338241, "R": 0.058517699565836065, "energy_error": 3.398392678377604e-13, "seconds": 9.795789040974341}
+{"kind": "mirror_gap", "order": 16, "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "grading_strength": 8.0, "grading_radius": 0.01, "rows": 8, "x_subdivisions": 3, "body_degree": 4, "gap_degree": 6, "edge_fraction": 1e-05}, "propagation": "doubling", "doublings": 6, "terms": 12, "mirror_error": 1.9047048445498253e-11, "p_T": 0.9071663955791972, "s_T": 0.9414823004338241, "p_R": 0.09283360442049342, "s_R": 0.058517699565836065, "energy_error": 3.398392678377604e-13, "seconds": 9.799449040961917}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "closure_start", "seconds": 0.0017710840329527855}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "closure_ready", "seconds": 4.841159542032983}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "factors_ready", "seconds": 6.714323166990653}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "slice_ready", "taylor_tail_bound": 3.220840914254145e-16, "doublings": 6, "terms": 12, "seconds": 27.56488891702611}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 1, "seconds": 31.108386084029917}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 2, "seconds": 34.596007791988086}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 3, "seconds": 37.76750474999426}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 4, "seconds": 40.97095470898785}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 5, "seconds": 44.60992641700432}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 6, "seconds": 47.79529704200104}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "matching_ready", "seconds": 49.904723624989856}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "power_ready", "T": 0.9067946406787161, "R": 0.09320535932066279, "energy_error": 6.211697822777751e-13, "seconds": 49.91868537501432}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "closure_start", "seconds": 49.918785125017166}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "closure_ready", "seconds": 52.91619845898822}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "factors_ready", "seconds": 54.82453812501626}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "slice_ready", "taylor_tail_bound": 1.4623425883354617e-16, "doublings": 6, "terms": 12, "seconds": 71.74677041702671}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 1, "seconds": 74.96424091700464}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 2, "seconds": 78.13722833403153}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 3, "seconds": 81.35292708402267}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 4, "seconds": 84.64785383403068}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 5, "seconds": 87.88367758400273}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 6, "seconds": 91.20027725002728}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "matching_ready", "seconds": 93.24562333401991}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "power_ready", "T": 0.9415696185406299, "R": 0.05843038145922736, "energy_error": 1.4266365866433262e-13, "seconds": 93.25472133402945}
+{"kind": "mirror_gap", "order": 24, "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "grading_strength": 8.0, "grading_radius": 0.01, "rows": 8, "x_subdivisions": 3, "body_degree": 4, "gap_degree": 6, "edge_fraction": 1e-05}, "propagation": "doubling", "doublings": 6, "terms": 12, "mirror_error": 1.9047048445498253e-11, "p_T": 0.9067946406787161, "s_T": 0.9415696185406299, "p_R": 0.09320535932066279, "s_R": 0.05843038145922736, "energy_error": 6.211697822777751e-13, "seconds": 93.25940849998733}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "closure_start", "seconds": 0.0008637500577606261}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "closure_ready", "seconds": 2.9234898750437424}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "factors_ready", "seconds": 4.699358417012263}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "slice_ready", "taylor_tail_bound": 2.407888098178137e-24, "doublings": 7, "terms": 12, "seconds": 19.606802250025794}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 1, "seconds": 22.968207375030033}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 2, "seconds": 25.63658487505745}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 3, "seconds": 28.654685542045627}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 4, "seconds": 31.784175833046902}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 5, "seconds": 34.7774436250329}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 6, "seconds": 37.87701079202816}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "doubling_ready", "doubling": 7, "seconds": 40.89186770800734}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "matching_ready", "seconds": 42.6874499580008}
+{"kind": "mirror_progress", "order": 24, "polarization": "p", "stage": "power_ready", "T": 0.9067946406779993, "R": 0.09320535932024077, "energy_error": 1.7599255386357981e-12, "seconds": 42.69728145800764}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "closure_start", "seconds": 42.697352250048425}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "closure_ready", "seconds": 45.61968275002437}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "factors_ready", "seconds": 47.16270625003381}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "slice_ready", "taylor_tail_bound": 1.0946697333891461e-24, "doublings": 7, "terms": 12, "seconds": 62.333978292008396}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 1, "seconds": 65.10275450005429}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 2, "seconds": 68.13018841703888}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 3, "seconds": 70.90120829205262}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 4, "seconds": 74.96297279204009}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 5, "seconds": 77.73554391704965}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 6, "seconds": 80.59390787500888}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "doubling_ready", "doubling": 7, "seconds": 84.71833020803751}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "matching_ready", "seconds": 86.53450337500544}
+{"kind": "mirror_progress", "order": 24, "polarization": "s", "stage": "power_ready", "T": 0.9415696185398769, "R": 0.05843038145923604, "energy_error": 8.870681966755001e-13, "seconds": 86.54317470802926}
+{"kind": "mirror_gap", "order": 24, "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "grading_strength": 8.0, "grading_radius": 0.01, "rows": 8, "x_subdivisions": 3, "body_degree": 4, "gap_degree": 6, "edge_fraction": 1e-05}, "propagation": "doubling", "doublings": 7, "terms": 12, "mirror_error": 1.9047048445498253e-11, "p_T": 0.9067946406779993, "s_T": 0.9415696185398769, "p_R": 0.09320535932024077, "s_R": 0.05843038145923604, "energy_error": 1.7599255386357981e-12, "seconds": 86.54715879203286}

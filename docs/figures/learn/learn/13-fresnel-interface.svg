@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 58 1000 596" role="img" aria-labelledby="title desc">
+<title id="title">Fresnel boundary conditions at normal incidence</title><desc id="desc">A normal-incidence interface between two lossless isotropic nonmagnetic media. Match the combined tangential electric and magnetic fields of incident and reflected waves to the transmitted wave. The reflected wave's reversed direction introduces a minus sign in its magnetic-field relation.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px}</style>
+<rect width="1000" height="654" fill="white" />
+<rect x="24" y="78" width="458" height="524" rx="12" fill="#f6fafc" stroke="#cad7df" stroke-width="1.5" />
+<rect x="500" y="78" width="476" height="524" rx="12" fill="#f6fafc" stroke="#cad7df" stroke-width="1.5" />
+<text x="48" y="114" text-anchor="start" style="font-size:23px;fill:#182b3e;font-weight:650">① Incident, reflected and transmitted waves</text>
+<text x="48" y="146" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">Normal incidence · one interface between two media</text>
+<rect x="48" y="166" width="410" height="190" rx="0" fill="#f3f7fa" stroke="none" stroke-width="1.5" />
+<rect x="48" y="356" width="410" height="192" rx="0" fill="#e2edf6" stroke="none" stroke-width="1.5" />
+<text x="70" y="197" text-anchor="start" style="font-size:20px;fill:#182b3e"><tspan baseline-shift="baseline">Incident medium  </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="70" y="525" text-anchor="start" style="font-size:20px;fill:#182b3e"><tspan baseline-shift="baseline">Exit medium  </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">out</tspan></text>
+<line x1="48" y1="356" x2="458" y2="356" stroke="#879ba9" stroke-width="2" />
+<text x="440" y="345" text-anchor="end" style="font-size:17px;fill:#546779;font-weight:400">Boundary</text>
+<text x="160" y="234" text-anchor="middle" style="font-size:20px;fill:#2d60a1;font-weight:400">Incident wave</text>
+<text x="350" y="234" text-anchor="middle" style="font-size:20px;fill:#b56626;font-weight:400">Reflected wave</text>
+<line x1="160" y1="248" x2="160" y2="344" stroke="#2d60a1" stroke-width="5" />
+<polygon points="160,344 152,329 168,329" fill="#2d60a1" />
+<line x1="350" y1="344" x2="350" y2="248" stroke="#b56626" stroke-width="5" />
+<polygon points="350,248 342,263 358,263" fill="#b56626" />
+<text x="130" y="280" text-anchor="end" style="font-size:26px;fill:#2d60a1"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="130" y="317" text-anchor="end" style="font-size:26px;fill:#2d60a1"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="379" y="280" text-anchor="start" style="font-size:26px;fill:#b56626"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<text x="379" y="317" text-anchor="start" style="font-size:26px;fill:#b56626"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<line x1="160" y1="370" x2="160" y2="476" stroke="#117c77" stroke-width="5" />
+<polygon points="160,476 152,461 168,461" fill="#117c77" />
+<text x="198" y="397" text-anchor="start" style="font-size:20px;fill:#117c77;font-weight:400">Transmitted wave</text>
+<text x="198" y="434" text-anchor="start" style="font-size:26px;fill:#117c77"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="198" y="471" text-anchor="start" style="font-size:26px;fill:#117c77"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="253" y="580" text-anchor="middle" style="font-size:18px;fill:#546779;font-weight:400">Arrows show propagation directions.</text>
+<text x="524" y="114" text-anchor="start" style="font-size:23px;fill:#182b3e;font-weight:650">② Two conditions at the interface</text>
+<text x="524" y="146" text-anchor="start" style="font-size:17px;fill:#546779;font-weight:400">Read E and H along consistent component directions.</text>
+<rect x="524" y="172" width="428" height="100" rx="10" fill="#e8f1f9" stroke="none" stroke-width="1.5" />
+<text x="546" y="205" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">Electric-field continuity</text>
+<text x="738" y="247" text-anchor="middle" style="font-size:29px;fill:#2d60a1"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline"> = </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<rect x="524" y="287" width="428" height="137" rx="10" fill="#e5f4ef" stroke="none" stroke-width="1.5" />
+<text x="546" y="320" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">Magnetic-field continuity</text>
+<text x="738" y="358" text-anchor="middle" style="font-size:26px;fill:#117c77"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline"> = </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="738" y="402" text-anchor="middle" style="font-size:25px;fill:#117c77"><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline">(</tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> − </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline">) = </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">out</tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="738" y="453" text-anchor="middle" style="font-size:18px;fill:#182b3e;font-weight:400">The reflected wave propagates in the opposite direction</text>
+<text x="738" y="485" text-anchor="middle" style="font-size:24px;fill:#b56626"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline"> = −(</tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> / </tspan><tspan baseline-shift="baseline">Z</tspan><tspan baseline-shift="sub" style="font-size:70%">0</tspan><tspan baseline-shift="baseline">) </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<text x="738" y="523" text-anchor="middle" style="font-size:18px;fill:#546779;font-weight:400">Solving the two conditions together</text>
+<text x="567" y="574" text-anchor="start" style="font-size:26px;fill:#182b3e;font-weight:400">t =</text>
+<text x="646" y="552" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="646" y="586" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<line x1="618" y1="561" x2="674" y2="561" stroke="#182b3e" stroke-width="1.6" />
+<text x="689" y="574" text-anchor="start" style="font-size:26px;fill:#182b3e;font-weight:400">=</text>
+<text x="820" y="552" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">2</tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="820" y="586" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">out</tspan></text>
+<line x1="739" y1="561" x2="901" y2="561" stroke="#182b3e" stroke-width="1.6" />
+<text x="500" y="636" text-anchor="middle" style="font-size:17px;fill:#546779;font-weight:400">Lossless isotropic nonmagnetic media · E and H are complex amplitudes at the interface</text>
+</svg>

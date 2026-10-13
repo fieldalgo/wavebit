@@ -48,13 +48,18 @@ Setup notes, all of them things that cost an afternoon once:
   disagreement about which orders propagate fails at generation time instead of becoming a
   golden that quietly compares the wrong entries.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import os
-import pathlib
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE.parents[1]))   # repo root, for `import wavebit`
 sys.path.insert(0, str(HERE))              # the bridge and the test module beside it
 
@@ -108,7 +113,7 @@ def main():
     octave.addpath(octave.genpath(RETICOLO_PATH))
 
     from interface.Reticolo import Reticolo
-    from test_reticolo_golden import CASES
+    from tests.references.test_reticolo_golden import CASES
 
     reti = Reticolo()
     out = {}

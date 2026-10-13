@@ -1,0 +1,61 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 710" role="img" aria-labelledby="06c-phase-lines-title 06c-phase-lines-desc">
+<title id="06c-phase-lines-title">Why is b₁ perpendicular to a₂?</title><desc id="06c-phase-lines-desc">Equal-phase lines of the (1,0) Fourier component run parallel to a₂. They are vertical in an orthogonal cell, so b₁ points right; in a 60° cell they tilt, and b₁ points down and right.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="710" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Why is b₁ perpendicular to a₂?</text>
+<text x="30" y="82" style="fill:#182b3e;font-size:22px;font-weight:400" text-anchor="start">Phase is constant along each line · both diagrams use physical xy coordinates</text>
+<rect x="25" y="112" width="460" height="522" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<text x="49" y="151" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">① Orthogonal cell · 90°</text>
+<text x="49" y="185" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">Phase: the current stage of an oscillation</text>
+<polygon points="100.0000,419.0000 300.0000,419.0000 300.0000,219.0000 100.0000,219.0000" fill="#e8f1ff" stroke="#cad7df" stroke-width="1.5" />
+<line x1="100.0" y1="431.0" x2="100.00000000000001" y2="207.0" stroke="#546779" stroke-width="1.6" />
+<line x1="150.0" y1="431.0" x2="150.0" y2="207.0" stroke="#546779" stroke-width="1.6" />
+<line x1="200.0" y1="431.0" x2="200.00000000000003" y2="207.0" stroke="#546779" stroke-width="1.6" />
+<line x1="250.0" y1="431.0" x2="250.00000000000003" y2="207.0" stroke="#546779" stroke-width="1.6" />
+<line x1="300.0" y1="431.0" x2="300.0" y2="207.0" stroke="#546779" stroke-width="1.6" />
+<line x1="100.0" y1="419.0" x2="300.0" y2="419.0" stroke="#285ab0" stroke-width="3" />
+<polygon points="300.0,419.0 290.0,423.0 290.0,415.0" fill="#285ab0" />
+<line x1="100.0" y1="419.0" x2="100.00000000000001" y2="219.0" stroke="#117c77" stroke-width="3" />
+<polygon points="100.00000000000001,219.0 104.00000000000001,229.0 96.00000000000001,229.0" fill="#117c77" />
+<text x="200.0" y="450.0" style="fill:#285ab0;font-size:24px;font-weight:650" text-anchor="middle">a₁</text>
+<text x="71.0" y="316.0" style="fill:#117c77;font-size:24px;font-weight:650" text-anchor="middle">a₂</text>
+<line x1="200.0" y1="319.0" x2="332.0" y2="319.0" stroke="#a85116" stroke-width="4" />
+<polygon points="332.0,319.0 322.0,323.0 322.0,315.0" fill="#a85116" />
+<circle cx="200.0" cy="319.0" r="3" fill="#a85116" />
+<text x="343.0" y="312.0" style="fill:#a85116;font-size:25px;font-weight:700" text-anchor="start">b₁</text>
+<line x1="200.0" y1="307.0" x2="212.0" y2="307.0" stroke="#a85116" stroke-width="1.5" />
+<line x1="212.0" y1="307.0" x2="212.0" y2="319.0" stroke="#a85116" stroke-width="1.5" />
+<text x="49" y="491" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">Along a₂ → unchanged phase</text>
+<text x="49" y="526" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">One cell along a₁ → one cycle (2π)</text>
+<rect x="45" y="551" width="420" height="60" rx="8" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="65" y="589" style="fill:#a85116;font-size:23px;font-weight:650" text-anchor="start">b₁ points right (+x)</text>
+<rect x="515" y="112" width="460" height="522" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<text x="539" y="151" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">② Oblique cell · 60°</text>
+<text x="539" y="185" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">Phase: the current stage of an oscillation</text>
+<polygon points="590.0000,419.0000 790.0000,419.0000 890.0000,245.7949 690.0000,245.7949" fill="#e8f1ff" stroke="#cad7df" stroke-width="1.5" />
+<line x1="584.0" y1="429.39230484541326" x2="696.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6" />
+<line x1="634.0" y1="429.39230484541326" x2="746.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6" />
+<line x1="684.0" y1="429.39230484541326" x2="796.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6" />
+<line x1="734.0" y1="429.39230484541326" x2="846.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6" />
+<line x1="784.0" y1="429.39230484541326" x2="896.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6" />
+<line x1="590.0" y1="419.0" x2="790.0" y2="419.0" stroke="#285ab0" stroke-width="3" />
+<polygon points="790.0,419.0 780.0,423.0 780.0,415.0" fill="#285ab0" />
+<line x1="590.0" y1="419.0" x2="690.0" y2="245.79491924311228" stroke="#117c77" stroke-width="3" />
+<polygon points="690.0,245.79491924311228 688.4641016151378,256.45517328095667 681.5358983848622,252.45517328095667" fill="#117c77" />
+<text x="690.0" y="450.0" style="fill:#285ab0;font-size:24px;font-weight:650" text-anchor="middle">a₁</text>
+<text x="616.0" y="330.7372055837117" style="fill:#117c77;font-size:24px;font-weight:650" text-anchor="middle">a₂</text>
+<line x1="740.0" y1="332.39745962155615" x2="854.3153532995459" y2="398.39745962155615" stroke="#a85116" stroke-width="4" />
+<polygon points="854.3153532995459,398.39745962155615 843.6550992617015,396.8615612366939 847.6550992617015,389.9333580064184" fill="#a85116" />
+<circle cx="740.0" cy="332.39745962155615" r="3" fill="#a85116" />
+<text x="863.8416327411747" y="391.39745962155615" style="fill:#a85116;font-size:25px;font-weight:700" text-anchor="start">b₁</text>
+<line x1="746.0" y1="322.0051547761429" x2="756.3923048454133" y2="328.0051547761429" stroke="#a85116" stroke-width="1.5" />
+<line x1="756.3923048454133" y1="328.0051547761429" x2="750.3923048454133" y2="338.39745962155615" stroke="#a85116" stroke-width="1.5" />
+<text x="539" y="491" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">Along a₂ → unchanged phase</text>
+<text x="539" y="526" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">One cell along a₁ → one cycle (2π)</text>
+<rect x="535" y="551" width="420" height="60" rx="8" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="555" y="589" style="fill:#a85116;font-size:23px;font-weight:650" text-anchor="start">b₁ points down and right (−30°)</text>
+<text x="30" y="674" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Distinguish motion along a cell vector (a₁) from the direction normal to phase lines (b₁).</text>
+<text x="30" y="693" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Lines show equal phase of the (1,0) component, not material interfaces · +x right, +y up</text>
+</svg>

@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 540" role="img" aria-labelledby="05-geometry-title 05-geometry-desc">
+<title id="05-geometry-title">구조를 입력하는 두 가지 방식</title><desc id="05-geometry-desc">같은 원을 래스터 배열과 도형 매개변수로 표현한 두 칸 비교</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="540" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">구조를 입력하는 두 가지 방식</text>
+<rect x="35" y="75" width="450" height="410" rx="14" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<text x="59" y="111" style="fill:#182b3e;font-size:25px;font-weight:650" text-anchor="start">1 · 래스터</text>
+<text x="59" y="145" style="fill:#546779;font-size:21px;font-weight:400" text-anchor="start">칸마다 상대 유전율 ε를 저장</text>
+<rect x="515" y="75" width="450" height="410" rx="14" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<text x="539" y="111" style="fill:#182b3e;font-size:25px;font-weight:650" text-anchor="start">2 · 도형</text>
+<text x="539" y="145" style="fill:#546779;font-size:21px;font-weight:400" text-anchor="start">중심 · 크기 · 재료를 지정</text>
+<rect x="148" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="177" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="148" y="205" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="205" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="205" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="205" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="205" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="205" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="205" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="205" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="148" y="233" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="233" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="233" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="233" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="233" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="233" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="233" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="233" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="148" y="261" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="261" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="261" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="261" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="261" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="261" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="261" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="261" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="148" y="289" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="289" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="289" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="289" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="289" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="289" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="289" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="289" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="148" y="317" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="317" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="317" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="317" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="317" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="317" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="317" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="317" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="148" y="345" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="345" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="345" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="345" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="345" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="345" width="28" height="28" rx="0" fill="#117c77" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="345" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="345" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="148" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="176" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="204" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="232" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="260" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="288" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="316" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<rect x="344" y="373" width="28" height="28" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<text x="260" y="442" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="middle">배열의 값이 재료 분포를 결정</text>
+<rect x="628" y="177" width="224" height="224" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<circle cx="740" cy="289" r="90" fill="#117c77"/>
+<line x1="650" y1="289" x2="830" y2="289" stroke="#ffffff" stroke-width="2"/>
+<polygon points="830,289 820.0,293.0 820.0,285.0" fill="#ffffff"/>
+<text x="740" y="274" style="fill:#ffffff;font-size:21px;font-weight:400" text-anchor="middle">lx = 지름</text>
+<text x="740" y="442" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">cx · cy · lx · material</text>
+<text x="30" y="523" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">같은 원을 표현한 예시 · 유한한 래스터에서는 경계가 계단 모양으로 근사된다</text>
+</svg>

@@ -1,3 +1,5 @@
+
+from wavebit.compat import legacy as _legacy_wavebit
 import os
 import numpy as np
 
@@ -304,7 +306,7 @@ if __name__ == '__main__':
 
     # Numpy
     backend = 'numpy'
-    nmee = wavebit.rcwa(backend=backend, answers='field', **option)
+    nmee = _legacy_wavebit.rcwa(backend=backend, answers='field', **option)
     n_de_ri, n_de_ti = nmee.solve()
     n_field_cell = nmee.reconstruct_field(sample_z=200, sample_x=5)
     print('numpy R', n_de_ri)

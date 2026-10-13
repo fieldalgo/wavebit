@@ -7,17 +7,8 @@ venv/
 build/
 dist/
 
-*logs*
-*runs*
-*.pt
-*.memmap
-*.ckpt
-*.mp4
-events.*
 venv
 *__pycache__*
-*.json
-*.csv
 devs/
 dev/
 # scratch: the real directory is a sibling of the checkout; this is a symlink.
@@ -37,3 +28,9 @@ artifacts/
 
 # Compiled optional documentation translation catalogs.
 docs/locales/**/*.mo
+
+# Repository validation caches and local example renderings.
+.pytest_cache/
+.ruff_cache/
+/examples/fdtd/fdtd-field.png
+/examples/fdtd/fdtd-poynting.png

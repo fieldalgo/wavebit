@@ -1,0 +1,31 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- [host]/miniconda3\envs\wavebit\python.exe
+rootdir: [host]/<worktrees>\wavebit
+configfile: pyproject.toml
+plugins: anyio-4.12.1, timeout-2.4.0, xdist-3.8.0
+collecting ... collected 1 item
+
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-z-numpy] FAILED [100%]
+
+================================== FAILURES ===================================
+_ test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-z-numpy] _
+tests\test_fd_conductive_stack.py:292: in test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget
+    assert float(to_numpy(got)) == pytest.approx(wanted, rel=5e-13, abs=5e-13)
+E   assert -0.17300358231412155 == 209.1424960860674 ± 1.0e-10
+E     
+E     comparison failed
+E     Obtained: -0.17300358231412155
+E     Expected: 209.1424960860674 ± 1.0e-10
+============================== warnings summary ===============================
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-z-numpy]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 2 films normal to z, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-z-numpy] - assert -0.17300358231412155 == 209.1424960860674 ± 1.0e-10
+  
+  comparison failed
+  Obtained: -0.17300358231412155
+  Expected: 209.1424960860674 ± 1.0e-10
+======================== 1 failed, 1 warning in 6.49s =========================

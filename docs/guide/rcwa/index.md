@@ -1,0 +1,24 @@
+# RCWA user guide
+
+Use `rcwa.Problem`, `rcwa.Numerics` and the shared check/prepare/run lifecycle. Start with [a complete current example](../../getting-started/rcwa.md), then [scene declarations](scene.md), [illumination](light.md), [numerics](numerics.md) and [observations](fields.md). The advanced guides below retain explicit compatibility interfaces where they preserve established scientific workflows.
+
+- [Conforming NVF from affine profiles](affine-profile-nvf.md)
+- [Anisotropic and magnetic materials — what the solver already takes, and what each gap costs](anisotropic-materials.md)
+- [Boundary modeling — painting an overlap without staircasing the edges](boundary-modeling.md)
+- [Differentiating the finite pair gap](cartesian-pair-gap-autodiff.md)
+- [A finite pair across contact and positive gaps](cartesian-pair-gap.md)
+- [A finite right-opening response for two rectangles](cartesian-pair-opening.md)
+- [Cartesian rectangle NVF on an oblique lattice](cartesian-rectangle-nvf.md)
+- [Two Cartesian rectangles on an oblique lattice](cartesian-rectangle-pair-nvf.md)
+- [Coherent illumination and internal sources](coherent-illumination.md)
+- [Conforming NVF from rectangle layers](conforming-nvf.md)
+- [Near fields](fields.md)
+- [Full tensor materials in patterned layers](full-tensor-patterns.md)
+- [Saying what the light is](light.md)
+- [Multimode incidence — several orders lit at once](multimode-incidence.md)
+- [Choosing the numerics](numerics.md)
+- [Selecting NVF and the auxiliary solver](nvf-method-selection.md)
+- [Analytic (staircase-free) modeling — approach and results](parametric-modeling.md)
+- [How a solve handles a Rayleigh point — the end-to-end walkthrough](rayleigh-handling-walkthrough.md)
+- [Describing a scene](scene.md)
+- [Integrated anisotropic shapes](tensor-shape-integration.md)

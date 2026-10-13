@@ -3,20 +3,26 @@
 The two grids measure finite-discretization sensitivity. RCWA is an additional internal
 cross-check, not the source of the golden. No Meep dependency is needed to run this file.
 """
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import hashlib
 import json
-from pathlib import Path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
 
-HERE = Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _meep_crossed_material_cases import CASES, epsilon  # noqa: E402
-from _meep_crossed_cases import margin  # noqa: E402
+from tests.references._meep_crossed_material_cases import CASES, epsilon  # noqa: E402
+from tests.references._meep_crossed_cases import margin  # noqa: E402
 
 GOLDEN = HERE / 'golden_meep_crossed_materials.npz'
 
@@ -36,11 +42,11 @@ def extract(result, case):
             for leg in ('s', 'p') for key in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T')}
 
 
-from _legacy_conventions import AMPLITUDES, centre_phase
+from tests.references._legacy_conventions import AMPLITUDES, centre_phase
 
 
 def frozen(data, name, resolution):
-    from _meep_crossed_metal_case import CASE as METAL
+    from tests.references._meep_crossed_metal_case import CASE as METAL
     case = METAL if name == 'metal' else CASES[name]
     return {f'{leg}.{key}': data[f'{name}__{resolution}__{leg}__{key}']
                             * (centre_phase(case) if key in AMPLITUDES else 1.)
@@ -75,7 +81,7 @@ def comparison(request):
     kw = scene(case)
     results = {}
     for res in (20, 40):
-        result, diag = wavebit.fdtd(**kw, dispersion=case['dispersion'], poles=case['poles'],
+        result, diag = _legacy_wavebit.fdtd(**kw, dispersion=case['dispersion'], poles=case['poles'],
                                    resolution=res, n_periods=160, n_pml=12, pad_scale=1.,
                                    courant=.99, subpixel=True, grading=None,
                                    return_diagnostics=True)
@@ -84,13 +90,13 @@ def comparison(request):
     kw['structure'] = epsilon(case, case['wavelength'])
     for order in (7, 11):
         kw['truncation_order'] = dict(x=order, y=order)
-        results[f'rcwa{order}'] = extract(wavebit.rcwa(backend='numpy', **kw).solve(), case)
+        results[f'rcwa{order}'] = extract(_legacy_wavebit.rcwa(backend='numpy', **kw).solve(), case)
     # A material omission must be distinguishable from the oracle's grid discrepancy.
     if name == 'magnetic':
         kw['mu'] = np.ones_like(case['mu'])
     else:
         kw['structure'] = case['index']**2
-    results['omitted'] = extract(wavebit.rcwa(backend='numpy', **kw).solve(), case)
+    results['omitted'] = extract(_legacy_wavebit.rcwa(backend='numpy', **kw).solve(), case)
     return name, case, results
 
 

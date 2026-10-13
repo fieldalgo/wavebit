@@ -1,0 +1,26 @@
+{
+ "file": "studies/fdtd_metasurface_ridges.py",
+ "sha256": "24dbd29f4a885e7887c13ae5c06b112eb2af34de113296af5c4fb4945b02a867",
+ "registered": "2026-10-04T22:41:09+0900",
+ "commit": "10cbfc7772c022cb171620c48c9907f84272cec6",
+ "dirty": false,
+ "digests": {
+  "fd": "511cad5b5f5014d6",
+  "rcwa": "710256bc8e6fa5cb",
+  "ctrl": "ec3e0285050aa986"
+ },
+ "dependencies": {
+  "fdtd_metasurface_corners.py": "62a4a387d2fffb930fe611f8a340cf82226c95c1cb44807bcffbf642f4d952fa",
+  "fdtd_metasurface_rcwa.py": "b55324fbf5fbefc0a6e21188f9d358a94acb9795c0d0ac1d98913ee57a402097"
+ },
+ "corner_rows": "1097a05f432b6739",
+ "lines": {
+  "TWIN_LINE": 1e-10,
+  "UPPER_LINE": 2.3,
+  "ORDER_LINE": 1.8,
+  "LOW_LINE": 1.75,
+  "REFERENCE_SHARE": 0.02,
+  "CONTROL_SHIFT": 0.03125
+ },
+ "copy": "fdtd_metasurface_ridges_registered_24dbd29f4a885e78.py.txt"
+}

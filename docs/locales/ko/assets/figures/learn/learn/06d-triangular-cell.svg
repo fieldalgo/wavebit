@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 750" role="img" aria-labelledby="06d-triangular-cell-title 06d-triangular-cell-desc">
+<title id="06d-triangular-cell-title">사선 격자가 유용한 예: 원기둥의 삼각 배열</title><desc id="06d-triangular-cell-desc">같은 삼각 배열을 두 가지 반복 셀로 표현한다. 60도 마름모 셀에는 원기둥 한 개, 직사각형 셀에는 두 개가 들어간다. 가장 가까운 이웃 여섯 개의 중심 거리는 모두 a이다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="750" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">사선 격자가 유용한 예: 원기둥의 삼각 배열</text>
+<text x="30" y="82" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">같은 원기둥 배열을, 어떤 모양의 셀로 반복할까?</text>
+<rect x="25" y="111" width="460" height="489" rx="14" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<text x="49" y="151" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">사선 셀 · 가장 작은 반복 단위</text>
+<text x="49" y="184" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">a₁과 a₂의 사잇각 60°</text>
+<rect x="515" y="111" width="460" height="489" rx="14" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<text x="539" y="151" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">직사각형 셀 · 같은 배열</text>
+<text x="539" y="184" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">가로 a × 세로 √3a</text>
+<polygon points="177.7500,399.6003 280.7500,399.6003 332.2500,310.3997 229.2500,310.3997" fill="#fff1df" stroke="none" stroke-width="1"/>
+<circle cx="100.5" cy="444.20061658979716" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="203.5" cy="444.20061658979716" r="20.6" fill="#117c77" opacity="0.66"/>
+<circle cx="306.5" cy="444.20061658979716" r="20.6" fill="#117c77" opacity="0.66"/>
+<circle cx="409.5" cy="444.20061658979716" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="152.0" cy="355.0" r="20.6" fill="#117c77" opacity="0.66"/>
+<circle cx="255.0" cy="355.0" r="20.6" fill="#117c77" opacity="1.0"/>
+<circle cx="255.0" cy="355.0" r="3" fill="#ffffff"/>
+<circle cx="358.0" cy="355.0" r="20.6" fill="#117c77" opacity="0.66"/>
+<circle cx="100.5" cy="265.79938341020284" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="203.5" cy="265.79938341020284" r="20.6" fill="#117c77" opacity="0.66"/>
+<circle cx="306.5" cy="265.79938341020284" r="20.6" fill="#117c77" opacity="0.66"/>
+<circle cx="409.5" cy="265.79938341020284" r="20.6" fill="#117c77" opacity="0.2"/>
+<polygon points="177.7500,399.6003 280.7500,399.6003 332.2500,310.3997 229.2500,310.3997" fill="none" stroke="#a85116" stroke-width="3"/>
+<circle cx="255.0" cy="355.0" r="103.0" fill="none" stroke="#546779" stroke-width="1.4" stroke-dasharray="4 5"/>
+<line x1="255.0" y1="355.0" x2="152.0" y2="355.0" stroke="#cad7df" stroke-width="1.4" stroke-dasharray="7 5"/>
+<line x1="255.0" y1="355.0" x2="203.5" y2="444.20061658979716" stroke="#cad7df" stroke-width="1.4" stroke-dasharray="7 5"/>
+<line x1="255.0" y1="355.0" x2="306.5" y2="444.20061658979716" stroke="#cad7df" stroke-width="1.4" stroke-dasharray="7 5"/>
+<line x1="255.0" y1="355.0" x2="203.5" y2="265.79938341020284" stroke="#cad7df" stroke-width="1.4" stroke-dasharray="7 5"/>
+<line x1="255.0" y1="355.0" x2="358.0" y2="355.0" stroke="#285ab0" stroke-width="3"/>
+<polygon points="358.0,355.0 348.0,359.0 348.0,351.0" fill="#285ab0"/>
+<line x1="255.0" y1="355.0" x2="306.5" y2="265.79938341020284" stroke="#117c77" stroke-width="3"/>
+<polygon points="306.5,265.79938341020284 304.96410161513774,276.4596374480472 298.03589838486226,272.4596374480472" fill="#117c77"/>
+<text x="309.0" y="384.0" style="fill:#285ab0;font-size:23px;font-weight:650" text-anchor="start">a₁</text>
+<text x="303.0" y="303.0" style="fill:#117c77;font-size:23px;font-weight:650" text-anchor="start">a₂</text>
+<path d="M289.0,355.0 A34 34 0 0 0 272.0,325.5551362713291" fill="none" stroke="#a85116" stroke-width="2"/>
+<text x="291.0" y="340.0" style="fill:#a85116;font-size:17px;font-weight:650" text-anchor="start">60°</text>
+<text x="198.0" y="344.0" style="fill:#546779;font-size:20px;font-weight:400" text-anchor="start">a</text>
+<text x="255.0" y="523" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">가까운 이웃 6개 · 중심 거리 모두 a</text>
+<text x="255.0" y="569" style="fill:#117c77;font-size:24px;font-weight:700" text-anchor="middle">선택한 셀 안 원기둥 1개</text>
+<polygon points="693.5000,444.2006 796.5000,444.2006 796.5000,265.7994 693.5000,265.7994" fill="#fff1df" stroke="none" stroke-width="1"/>
+<circle cx="616.25" cy="399.6003082948986" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="719.25" cy="399.6003082948986" r="20.6" fill="#117c77" opacity="1.0"/>
+<circle cx="719.25" cy="399.6003082948986" r="3" fill="#ffffff"/>
+<circle cx="822.25" cy="399.6003082948986" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="925.25" cy="399.6003082948986" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="564.75" cy="310.3996917051014" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="667.75" cy="310.3996917051014" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="770.75" cy="310.3996917051014" r="20.6" fill="#117c77" opacity="1.0"/>
+<circle cx="770.75" cy="310.3996917051014" r="3" fill="#ffffff"/>
+<circle cx="873.75" cy="310.3996917051014" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="616.25" cy="221.19907511530423" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="719.25" cy="221.19907511530423" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="822.25" cy="221.19907511530423" r="20.6" fill="#117c77" opacity="0.2"/>
+<circle cx="925.25" cy="221.19907511530423" r="20.6" fill="#117c77" opacity="0.2"/>
+<polygon points="693.5000,444.2006 796.5000,444.2006 796.5000,265.7994 693.5000,265.7994" fill="none" stroke="#a85116" stroke-width="3"/>
+<line x1="693.5" y1="473.20061658979716" x2="796.5" y2="473.20061658979716" stroke="#546779" stroke-width="2"/>
+<polygon points="796.5,473.20061658979716 786.5,477.20061658979716 786.5,469.20061658979716" fill="#546779"/>
+<text x="745.0" y="497.20061658979716" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">a</text>
+<line x1="824.5" y1="444.20061658979716" x2="824.5" y2="265.79938341020284" stroke="#546779" stroke-width="2"/>
+<polygon points="824.5,265.79938341020284 828.5,275.79938341020284 820.5,275.79938341020284" fill="#546779"/>
+<text x="838.5" y="362.0" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">√3a</text>
+<text x="745.0" y="523" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="middle">위아래·좌우로 반복하면 같은 삼각 배열</text>
+<text x="745.0" y="569" style="fill:#117c77;font-size:24px;font-weight:700" text-anchor="middle">선택한 셀 안 원기둥 2개</text>
+<rect x="25" y="618" width="950" height="75" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="650" style="fill:#182b3e;font-size:23px;font-weight:650" text-anchor="start">사선 셀의 면적은 절반 · 원기둥 하나로 반복 구조를 표현</text>
+<text x="48" y="679" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">예: a = 600 nm  →  가장 가까운 이웃 여섯 개가 모두 600 nm 거리</text>
+<text x="30" y="733" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">주황선: 선택한 반복 셀 · 원: 원기둥 단면 · 두 셀 중심을 각각 화면에 맞춤 · 기하학 도식</text>
+</svg>

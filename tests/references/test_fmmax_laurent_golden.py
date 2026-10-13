@@ -32,18 +32,23 @@ Values are frozen by ``gen_goldens_fmmax_laurent.py``, which needs the ``fwref``
 here imports fmmax. Never regenerate to make this pass: the numbers did not come from this
 codebase, which is the whole of their worth.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _fmmax_laurent_cases import (                                             # noqa: E402
-    CASES, LEVELS, ORDER, THETA, THICK, WL, lossless, richardson)
+from tests.references._fmmax_laurent_cases import CASES, LEVELS, ORDER, THETA, THICK, WL, lossless, richardson
 
 GOLDEN_PATH = HERE / 'golden_fmmax_laurent.npz'
 
@@ -67,7 +72,7 @@ def _solve(name, factorization='laurent', fourier_coefficients='sampled'):
         kw['period'] = (basis[0, 0], basis[1, 1])
     else:
         kw['lattice'] = basis
-    return wavebit.rcwa(**kw).solve()
+    return _legacy_wavebit.rcwa(**kw).solve()
 
 
 def _totals(result):

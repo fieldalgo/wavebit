@@ -33,12 +33,17 @@ reach here — the real antisymmetric cases below are active media rather than p
 which is fine: they discriminate the same algebra. Complex off-diagonal belongs to the fmmax
 and RETICOLO goldens.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_s4.npz'

@@ -1,0 +1,66 @@
+{
+  "accepted_utc": "2026-10-09T02:41:24.399804+00:00",
+  "calibration": "studies/results/fdtd_debye_stack_calibration_attempt1.json",
+  "calibration_sha256": "ee0a2b693152bece67cf787ae77dec468cc22739ef71d07e02304689a0130344",
+  "source_identity": {
+    "helper_sha256": "f72422830afef906237f629835c6cbf1dd0057834f61863c6f78f4fcc2f70f98",
+    "fd_source_sha256": "90c4c12587fb8d736daf5fa0456fd689ad4fef6691b27347e01817b8f52ef1eb",
+    "wavebit_source_sha256": "bcd4a8bf057dc9f7f08bc341d31c4ebc30042586ad676b090c87bc56938587c4",
+    "reference_dependencies": {
+      "studies/fdtd_layer_alignment.py": "91433f49dffb84ceb1441fd1455a7e49ea104a276875402d127b20192cf2c008",
+      "studies/fdtd_oblique_pulse.py": "ac840bd60b50a0e6c5b8864e0883f79f6bf5bd8edb2113629ed151f6ffaef1b2"
+    },
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "parent": {
+    "path": "studies/results/fdtd_debye_stack_controls/calibration_parent_attempt1/exit.json",
+    "sha256": "8c7435c65599a470468ab747685f02159e8c6b1683ad1104fd2a61b73d15c813"
+  },
+  "accepted_ceilings": {
+    "r": 0.005,
+    "t": 0.01
+  },
+  "measured_max_absolute_complex_errors": {
+    "r": 0.004138978324113231,
+    "t": 0.007928025017279098
+  },
+  "qualification": "Post-disclosure regression ceilings for these six known coarse p-polarized rows only. Absolute complex-amplitude errors, not relative power percentages. Not a preregistered unseen optical gate or a convergence claim.",
+  "rationale": "Round decimal ceilings .005 and .01 retain absolute headroom .000861021675886769 and .002071974982720902 above all six disclosed maxima. No measured result or prior threshold was overwritten.",
+  "test_before": {
+    "path": "studies/results/fdtd_debye_stack_calibration_acceptance_sources/test_before.py.raw",
+    "sha256": "cde738e326c00dd6a5984686b687af0f1b0076fbfd4ee7f4a33c2639378e7462"
+  },
+  "test_after": {
+    "path": "studies/results/fdtd_debye_stack_calibration_acceptance_sources/test_after.py.raw",
+    "sha256": "c721f3072a8f80c0cce4ccbfeb005b9cfb37fde23ca94e85f966ea9424ca0d9b"
+  },
+  "allowed_ast_changes": [
+    "module docstring",
+    "CALIBRATED_CEILINGS"
+  ],
+  "remaining_ast_exact": true,
+  "test_sha256_before": "cde738e326c00dd6a5984686b687af0f1b0076fbfd4ee7f4a33c2639378e7462",
+  "test_sha256_after": "c721f3072a8f80c0cce4ccbfeb005b9cfb37fde23ca94e85f966ea9424ca0d9b",
+  "independent_review": {
+    "review.py": {
+      "path": "studies/results/fdtd_debye_stack_calibration_acceptance_sources/review.py.raw",
+      "sha256": "09dc9f81174d4180c5dd1e9bbcd0877d722e798c307629ea1bbfbf05e914247e"
+    },
+    "review.log": {
+      "path": "studies/results/fdtd_debye_stack_calibration_acceptance_sources/review.log.raw",
+      "sha256": "b473fced711b15e42c2e55f2ec4779a9f51cc2d081a63857758743cdd651abc6"
+    },
+    "review.json": {
+      "path": "studies/results/fdtd_debye_stack_calibration_acceptance_sources/review.json.raw",
+      "sha256": "1946c10986fc56221f98de30286806a73af483fc642db9f5df046bb00c4c4a49"
+    },
+    "execution.json": {
+      "path": "studies/results/fdtd_debye_stack_calibration_acceptance_sources/execution.json.raw",
+      "sha256": "700f9192095f9bfbf0f89ea2f76c4c54f8bd384c528a876a975b773be03347cf"
+    }
+  },
+  "test_transition": {
+    "path": "studies/results/fdtd_debye_stack_calibration_acceptance_sources/test_transition.json",
+    "sha256": "bdbab1df5eca4535e1727fca956f8453b3c96b1f26a27a227504cbb158aedeef"
+  }
+}

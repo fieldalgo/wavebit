@@ -1,5 +1,12 @@
 """Frozen public-API Meep differences versus live half-space autodiff."""
-from pathlib import Path
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
@@ -11,7 +18,7 @@ import wavebit
 def test_halfspace_amplitudes_and_jacobian_against_meep(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
-    with np.load(Path(__file__).with_name('golden_meep_halfspace.npz')) as data:
+    with np.load(repository_path('tests/references/golden_meep_halfspace.npz')) as data:
         ref = {key: data[key] for key in data.files}
     values, derivatives = ref['amplitudes'], ref['jacobians']
     # Settling and perturbation controls protect the external derivative oracle.
@@ -19,7 +26,7 @@ def test_halfspace_amplitudes_and_jacobian_against_meep(record_property):
     np.testing.assert_allclose(derivatives[0], derivatives[1], atol=2e-7, rtol=0)
     np.testing.assert_allclose(derivatives[:, 0], derivatives[:, 1], atol=2e-6, rtol=0)
     def objective(p):
-        results = wavebit.fdtd(structure=np.full((1, 1, 1), float(ref['epsilon'])),
+        results = _legacy_wavebit.fdtd(structure=np.full((1, 1, 1), float(ref['epsilon'])),
                                mu=np.full((1, 1, 1), float(ref['mu'])), thickness=[float(ref['thickness'])],
                                top=wavebit.Material(p[0], p[1]), bot=wavebit.Material(p[2], p[3]),
                                period=.05, wavelength=ref['wavelengths'], backend='jax',

@@ -7,8 +7,8 @@ import pytest
 
 def test_averaged_interface_derivative_against_independent_meep(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
-    from studies.fdtd_layer_gradients import scene_vector
-    from studies.fdtd_layer_smoothing import graded_film
+    from studies.fdtd.layer_gradients.fdtd_layer_gradients import scene_vector
+    from studies.fdtd.layer_smoothing.fdtd_layer_smoothing import graded_film
     def load(name):
         with np.load(Path(__file__).with_name(name)) as data:
             return {key: data[key] for key in data.files}

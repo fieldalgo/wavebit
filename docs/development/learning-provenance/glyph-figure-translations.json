@@ -1,0 +1,263 @@
+{
+  "schema_version": 1,
+  "method": "Replace Korean outline-glyph labels by English SVG text; preserve all paths outside text groups and preserve shared glyph definitions. Original Korean SVG bytes remain in locales/ko/assets. No solver or plot-data regeneration.",
+  "figures": [
+    {
+      "source": "wavebit-sphinx-guide/source/figures/learn/incoh01.svg",
+      "target": "docs/figures/learn/learn/incoh01.svg",
+      "source_sha256": "52180368b2e854ba102ee6f2d880b1538b89497c79335b3be0e7b041cfaded52",
+      "published_sha256": "f8f76f5250591c1c6865da540e76096856ce8674722d9e1896bf4ea4580e82c5",
+      "numerical_geometry_unchanged": true,
+      "label_changes": [
+        {
+          "original": "파장 (nm)",
+          "english": "Wavelength (nm)"
+        },
+        {
+          "original": "반사율 R",
+          "english": "Reflectance R"
+        },
+        {
+          "original": "(a) 넓게 보면: 줄무늬가 너무 촘촘해 띠로 보인다",
+          "english": "(a) Dense fringes form a band"
+        },
+        {
+          "original": "코히어런트 (1 mm): 줄무늬가 오가는 범위",
+          "english": "Coherent (1 mm): fringe range"
+        },
+        {
+          "original": "세기로 더한 값 (비간섭)",
+          "english": "Intensity sum (incoherent)"
+        },
+        {
+          "original": "반무한 기판 (뒷면 없음)",
+          "english": "Half-space (no back surface)"
+        },
+        {
+          "original": "파장 (nm)",
+          "english": "Wavelength (nm)"
+        },
+        {
+          "original": "(b) 빨간 줄 1 nm 를 확대 (색은 (a) 와 같다)",
+          "english": "(b) 1 nm close-up; same colors as (a)"
+        }
+      ]
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/figures/learn/incoh02.svg",
+      "target": "docs/figures/learn/learn/incoh02.svg",
+      "source_sha256": "9bf156cb78e33dfbf3a2924d36196d9c53c50b3ced151b9aa48137ab7990f4ec",
+      "published_sha256": "e3d7ce3242d52d898b4fd8e41f2c5879da7d353d80c1df580ff2b97c33332e9b",
+      "numerical_geometry_unchanged": true,
+      "label_changes": [
+        {
+          "original": "기판 왕복 위상 φ (단위 π)",
+          "english": "Round-trip phase φ (units of π)"
+        },
+        {
+          "original": "반사율 R",
+          "english": "Reflectance R"
+        },
+        {
+          "original": "(a) 왕복 위상 한 바퀴",
+          "english": "(a) One round-trip phase cycle"
+        },
+        {
+          "original": "코히어런트 R(φ)",
+          "english": "Coherent R(φ)"
+        },
+        {
+          "original": "φ 로 평균 = 0.2496",
+          "english": "φ average = 0.2496"
+        },
+        {
+          "original": "반무한 기판 = 0.2224",
+          "english": "Half-space = 0.2224"
+        },
+        {
+          "original": "파장 (nm)",
+          "english": "Wavelength (nm)"
+        },
+        {
+          "original": "(b) 분광기가 보는 것",
+          "english": "(b) Spectrometer response"
+        },
+        {
+          "original": "코히어런트 (1 mm)",
+          "english": "Coherent (1 mm)"
+        },
+        {
+          "original": "1 nm 슬릿으로 본 값",
+          "english": "Through a 1 nm slit"
+        },
+        {
+          "original": "세기 공식",
+          "english": "Intensity formula"
+        }
+      ]
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/figures/learn/incoh03.svg",
+      "target": "docs/figures/learn/learn/incoh03.svg",
+      "source_sha256": "df90c8e7d05010982e47206ecb0b7fe1de7869f1a4fdecf779c4f0f820d2a51b",
+      "published_sha256": "2621bf4c7b183b1418e1b8ea4a33951e9591a249e5b4ca98fef3a361bd316100",
+      "numerical_geometry_unchanged": true,
+      "label_changes": [
+        {
+          "original": "막 (100 nm, 흡수)",
+          "english": "Film (100 nm, absorbing)"
+        },
+        {
+          "original": "공기",
+          "english": "Air"
+        },
+        {
+          "original": "공기",
+          "english": "Air"
+        },
+        {
+          "original": "입사 1",
+          "english": "Incident: 1"
+        },
+        {
+          "original": "유리 기판 (1 mm)",
+          "english": "Glass substrate (1 mm)"
+        },
+        {
+          "original": "내려갈 때 L, 올라올 때 L",
+          "english": "Down: L; up: L"
+        },
+        {
+          "original": "위상은 버리고 세기만",
+          "english": "Keep intensity, discard phase"
+        },
+        {
+          "original": "아래로 나가는 빛",
+          "english": "Light leaving downward"
+        },
+        {
+          "original": "(T 의 항)",
+          "english": "(terms of T)"
+        },
+        {
+          "original": "위로 다 더하면  R = 0.2496",
+          "english": "Upward sum: R = 0.2496"
+        },
+        {
+          "original": "아래로 다 더하면 T = 0.6621",
+          "english": "Downward sum: T = 0.6621"
+        }
+      ]
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/figures/learn/incoh04.svg",
+      "target": "docs/figures/learn/learn/incoh04.svg",
+      "source_sha256": "4143ebe23561aa22e57fa6222fc09b6df026b11d0626b62ba641adb4215db0dc",
+      "published_sha256": "da9c1bcba5f9c5fdad00021ec4db780cda0fb873b28c6d545cf97923c102bc4d",
+      "numerical_geometry_unchanged": true,
+      "label_changes": [
+        {
+          "original": "격자",
+          "english": "Grating"
+        },
+        {
+          "original": "유리 기판",
+          "english": "Glass substrate"
+        },
+        {
+          "original": "입사",
+          "english": "Incident"
+        },
+        {
+          "original": "0 차",
+          "english": "Order 0"
+        },
+        {
+          "original": "빠져나감",
+          "english": "Escapes"
+        },
+        {
+          "original": "+1 차 (48°)",
+          "english": "Order +1 (48°)"
+        },
+        {
+          "original": "전반사: R_b = 1, T_b = 0",
+          "english": "TIR: R_b = 1, T_b = 0"
+        },
+        {
+          "original": "(임계각 41.8° 보다 비스듬함)",
+          "english": "(beyond the 41.8° critical angle)"
+        },
+        {
+          "original": "격자가 다시 회절시켜야",
+          "english": "Must be rediffracted"
+        },
+        {
+          "original": "빠져나간다",
+          "english": "at the grating to escape"
+        },
+        {
+          "original": "−1 차",
+          "english": "Order −1"
+        },
+        {
+          "original": "T21 : 공기 → 기판, 차수를 섞는다 (격자)",
+          "english": "T21: air → substrate; grating mixes orders"
+        },
+        {
+          "original": "B = L·R_b·L : 대각 — 평평한 뒷면은 차수를 그대로 둔다",
+          "english": "B = L·R_b·L: diagonal; flat back preserves orders"
+        },
+        {
+          "original": "R22 : 아래에서 온 빛을 격자가 다시 섞는다",
+          "english": "R22: grating remixes light arriving from below"
+        },
+        {
+          "original": "T12 : 기판 → 공기 (격자)",
+          "english": "T12: substrate → air (grating)"
+        }
+      ]
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/figures/learn/incoh05.svg",
+      "target": "docs/figures/learn/learn/incoh05.svg",
+      "source_sha256": "70dc19bd05d2206f3dad2fb49e7e1d730e569af5f643db31d0e4beb60d4c8db8",
+      "published_sha256": "938851f4f90d37a716daf848ebf42e040767162993baf2e825987283f7464e96",
+      "numerical_geometry_unchanged": true,
+      "label_changes": [
+        {
+          "original": "막의 광축 각도 a (도)",
+          "english": "Film optic-axis angle a (deg)"
+        },
+        {
+          "original": "반사율",
+          "english": "Reflectance"
+        },
+        {
+          "original": "(a) 전체 반사율",
+          "english": "(a) Total reflectance"
+        },
+        {
+          "original": "막의 광축 각도 a (도)",
+          "english": "Film optic-axis angle a (deg)"
+        },
+        {
+          "original": "(b) 교차편광 반사율 R_yx",
+          "english": "(b) Cross-polarized reflectance R_yx"
+        },
+        {
+          "original": "결맞음 행렬 (2×2 를 들고 감)",
+          "english": "Coherency matrix (2×2)"
+        },
+        {
+          "original": "편광별 파워만 (x·y)",
+          "english": "Power per polarization (x, y)"
+        },
+        {
+          "original": "φ 평균 (판정 기준)",
+          "english": "φ average (benchmark)"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+Conforming NVF internal background intervals and signed grading validation
+Date: 2026-09-09
+Platform: Darwin arm64
+NumPy 2.5.1; SciPy 1.18.0; JAX 0.11.0; Torch 2.13.0
+Environment: PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+These settings do not establish Apple Accelerate's actual thread count.
+
+Public construction regression:
+python -m pytest tests/test_conforming_nvf.py tests/test_conforming_rectangular_lattice.py tests/test_conforming_layer_axes.py -q --tb=short
+107 passed in 131.34s.
+
+Separated rectangles and collapsing-interval controls:
+python -m pytest tests/test_conforming_separated_rectangles.py -q --tb=short
+26 passed in 63.35s.
+Includes independent material integrals, implicit/explicit background
+representation, a closed equal-material interval versus one rectangle in
+the same frame, all-backend inverse-rule contact stacks, twelve live JAX
+parameters, one-sided opening derivatives, overlap rejection, merged mesh
+interfaces, and vanishing field/energy derivatives for a zero-width
+interval's unused material.
+
+Independent mesh integration and roots:
+python -m pytest tests/test_nvf_interface_resolution.py -q --tb=short
+11 passed in 8.69s.
+The reference integrates sampled positive density in radius units and uses
+Brent roots independently of the implemented Gaussian-product primitive.
+The 8e-15 root comparison and derivative criteria are unchanged. The mesh
+test's CDF residual assertion now includes a half-ULP root rounding term.
+At radius .0001, the closest float has residual 3.008704396734174e-14;
+its neighbors give -4.241051954068098e-14 and 1.0269562977782698e-13.
+The production 2e-12 CDF guard, 1e-8 cell residual guard and 1e-9 Hermitian
+guard are unchanged. No optical threshold or expected-failure mark changed.
+The old invalid-gap replay test now rejects overlap, since gaps are supported.
+
+Shared-kernel and engine regression:
+python -m pytest tests/test_nvf_partitioned_gap_energy.py tests/test_nvf_continuous_flux.py tests/test_nvf_polynomial_flux.py tests/test_nvf_local_flux.py tests/test_nvf_polynomial_body.py tests/test_nvf_gap_convergence.py tests/test_nvf_energy_builder.py tests/test_slot_order.py tests/test_nvf_posed_gap.py -q --tb=short
+221 passed, 1 xfailed in 529.41s.
+The strict expected failure remains the historical fixed-P1 moving-interface
+control in test_nvf_partitioned_gap_energy.py.
+
+Documentation contract:
+python -m pytest tests/test_docs_contract.py -q
+32 passed in 1.18s.
+
+Combined: 397 passing checks and one historical expected failure.
+
+Manual examples: both Python blocks in docs/guide/conforming-nvf.md executed.
+700-by-430 horizontal/uniform/vertical stack with internal gaps:
+p T=0.6472679896766905, s T=0.8377685774616475.
+JAX example: gap derivative shape (1, 9, 9).
+
+Static enclosure control, MaterialGradedGapModel:
+order=0, rows=8, x_subdivisions=2, y_subdivisions=2, edge_fraction=1e-4,
+default gap_degree=4 and global flux basis; width=350, gap=17, seam=31,
+materials=[4,9] and reciprocal=[.25,1/9], radius=.01.
+Mean energies are combined with studies.nvf_cell_bounds.energy_bounds.
+Both runs have 2591 scalar unknowns.
+Strength 0 relative enclosure: 0.001024637860832406
+Strength 8 relative enclosure: 0.0003533665640080235
+Strength 8 lower diagonal: [1.6707613409093882, 3.1839116223292434]
+Strength 8 upper diagonal: [1.6707939496871413, 3.185036710239331]
+The new enclosure is about 65.5% narrower than the fixed mesh in this control.
+The existing independent fitted-cell containment criterion passes for both.
+
+Strict documentation build:
+python -m sphinx -b html -W --keep-going docs <temporary-output-directory>
+Build succeeded with the existing official intersphinx inventory cache.
+
+Lint:
+python -m ruff check wavebit/_core/conforming tests/test_conforming_nvf.py tests/test_conforming_separated_rectangles.py tests/test_nvf_interface_resolution.py
+All checks passed. git diff --check: passed.
+
+Scope: finite-model construction, derivative and integration controls,
+not the entire repository suite or optical convergence certification.
+Signed log-jump grading changes finite-resolution cell values. Earlier
+independent-jump measurements retain their historical meaning; complete
+reproduction uses revision 532489b or the revision in the corresponding log.

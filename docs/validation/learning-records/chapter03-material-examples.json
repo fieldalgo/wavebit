@@ -1,0 +1,28 @@
+{
+  "cylinder": {
+    "R": 0.044163751670280124,
+    "T": 0.9558362483297205,
+    "R_plus_T": 1.0000000000000007,
+    "stdout": "전체 반사율: 0.044164\n전체 투과율: 0.955836\n",
+    "source_sha256": "781e9a5a4c6065e6f12296824ef5a2867c6878686c959b9fbbe93bbb12b29ffc",
+    "wavebit_version": "0.1.0",
+    "truncation_order": [
+      1,
+      1
+    ],
+    "convergence_checked": false
+  },
+  "magnetic": {
+    "R": 0.007885983894610541,
+    "T": 0.9921140161053899,
+    "R_plus_T": 1.0000000000000004,
+    "stdout": "전체 반사율: 0.007886\n전체 투과율: 0.992114\n",
+    "source_sha256": "0701faa66e64f615ccba4308c328d49bbb89f5415debdc5c62fa7c17b93b2cc5",
+    "wavebit_version": "0.1.0",
+    "truncation_order": [
+      1,
+      1
+    ],
+    "convergence_checked": false
+  }
+}

@@ -5,218 +5,290 @@ subtrees:
     title: Getting started
     subtrees:
     - entries:
-      - file: guide/what-is-wavebit
-      - file: guide/installation
-      - file: guide/quickstart
+      - file: getting-started/installation
+      - file: getting-started/overview
+      - file: getting-started/rcwa
+      - file: getting-started/fdtd
   - file: learn/index
     title: Learn
-  - file: guide/README
-    subtrees:
-    - caption: Fundamentals and usage
-      entries:
-      - file: guide/scene
-      - file: guide/materials
-      - file: guide/light
-      - file: coherent-illumination
-      - file: guide/numerics
-      - file: guide/nvf-method-selection
-      - file: guide/conforming-nvf
-      - file: guide/affine-profile-nvf
-      - file: guide/cartesian-rectangle-nvf
-      - file: guide/cartesian-rectangle-pair-nvf
-      - file: guide/cartesian-pair-opening
-      - file: guide/cartesian-pair-gap
-      - file: guide/cartesian-pair-gap-autodiff
-      - file: guide/fields
-      - file: guide/autodiff
-      - file: guide/backends
-      - file: guide/time-domain
-      - file: guide/general-fdtd
-      - file: guide/fd-constitutive-absorber
-      - file: guide/fd-differentiation
-      - file: guide/fd-radiation
-      - file: guide/fd-metasurface
-    - caption: Advanced
-      entries:
-      - file: guide/specs
-    title: User guide
-  - file: reference/index
     subtrees:
     - entries:
-      - file: conventions
-      - file: reference/keywords
-      - file: reference/api
+      - file: learn/fundamentals/index
+        subtrees:
+        - entries:
+          - file: learn/fundamentals/overview
+          - file: learn/fundamentals/rcwa
+          - file: learn/fundamentals/conventions
+          - file: learn/fundamentals/quickstart
+          - file: learn/fundamentals/geometry
+          - file: learn/fundamentals/lattice
+          - file: learn/fundamentals/materials
+          - file: learn/fundamentals/light
+          - file: learn/fundamentals/multiple-beams
+          - file: learn/fundamentals/fourier-orders
+          - file: learn/fundamentals/nvf
+          - file: learn/fundamentals/results
+          - file: learn/fundamentals/power-and-efficiency
+          - file: learn/fundamentals/fields
+          - file: learn/fundamentals/layer-algorithms
+          - file: learn/fundamentals/backends
+          - file: learn/fundamentals/autodiff
+          - file: learn/fundamentals/jobs-and-sweeps
+          - file: learn/fundamentals/convergence
+          - file: learn/fundamentals/code-map
+          - file: learn/fundamentals/complex-kx-roots
+          - file: learn/fundamentals/complex-kx-lossy-gain
+          - file: learn/fundamentals/incoherent-substrate
+      - file: learn/nvf/index
+        subtrees:
+        - entries:
+          - file: learn/nvf/overview
+          - file: learn/nvf/boundary-conditions
+          - file: learn/nvf/fourier-rules
+          - file: learn/nvf/projectors
+          - file: learn/nvf/implementation
+          - file: learn/nvf/settings
+          - file: learn/nvf/shape-example
+          - file: learn/nvf/raster-example
+          - file: learn/nvf/convergence
+          - file: learn/nvf/autodiff
+          - file: learn/nvf/multiple-shapes
+          - file: learn/nvf/code-map
+          - file: learn/nvf/metal-original-plots
+          - file: learn/nvf/metal-inverse-rule
+          - file: learn/nvf/metal-regularization
+      - file: learn/fdtd/index
+      - file: learn/examples
+  - file: guide/index
+    title: User guide
+    subtrees:
+    - entries:
+      - file: guide/common/index
+        subtrees:
+        - entries:
+          - file: guide/common/lifecycle
+          - file: guide/common/autodiff
+          - file: guide/common/backends
+          - file: guide/common/materials
+          - file: guide/common/specs
+      - file: guide/rcwa/index
+        subtrees:
+        - entries:
+          - file: guide/rcwa/affine-profile-nvf
+          - file: guide/rcwa/anisotropic-materials
+          - file: guide/rcwa/boundary-modeling
+          - file: guide/rcwa/cartesian-pair-gap-autodiff
+          - file: guide/rcwa/cartesian-pair-gap
+          - file: guide/rcwa/cartesian-pair-opening
+          - file: guide/rcwa/cartesian-rectangle-nvf
+          - file: guide/rcwa/cartesian-rectangle-pair-nvf
+          - file: guide/rcwa/coherent-illumination
+          - file: guide/rcwa/conforming-nvf
+          - file: guide/rcwa/fields
+          - file: guide/rcwa/full-tensor-patterns
+          - file: guide/rcwa/light
+          - file: guide/rcwa/multimode-incidence
+          - file: guide/rcwa/numerics
+          - file: guide/rcwa/nvf-method-selection
+          - file: guide/rcwa/parametric-modeling
+          - file: guide/rcwa/rayleigh-handling-walkthrough
+          - file: guide/rcwa/scene
+          - file: guide/rcwa/tensor-shape-integration
+      - file: guide/fdtd/index
+        subtrees:
+        - entries:
+          - file: guide/fdtd/fd-constitutive-absorber
+          - file: guide/fdtd/fd-differentiation
+          - file: guide/fdtd/fd-metasurface
+          - file: guide/fdtd/fd-radiation
+          - file: guide/fdtd/fdtd-alpha
+          - file: guide/fdtd/fdtd
+          - file: guide/fdtd/general-fdtd
+          - file: guide/fdtd/time-domain
+  - file: reference/index
     title: API reference
+    subtrees:
+    - entries:
+      - file: reference/common/index
+        subtrees:
+        - entries:
+          - file: reference/common/capability-manifest
+          - file: reference/common/conventions
+          - file: reference/common/result-guards
+          - file: reference/common/what-a-solve-answers
+      - file: reference/rcwa/index
+      - file: reference/fdtd/index
+      - file: reference/api
+      - file: reference/keywords
   - file: theory/index
     title: Theory & validation
     subtrees:
     - entries:
-      - file: decisions/index
+      - file: theory/rcwa/index
         subtrees:
-        - caption: Modeling and geometry
-          entries:
-          - file: parametric-modeling
-          - file: boundary-modeling
-          - file: oblique-lattice
-          - file: nvf-normal-methods
-          - file: nvf-upsampling
-          - file: nvf-metal-inverse-rule
-          - file: normal-field-known-limits
-          - file: fourier-truncation-shape
-        - caption: Factorization and materials
-          entries:
-          - file: factorization-terms
-          - file: off-diagonal-slot-convention
-          - file: five-slot-limit
-          - file: anisotropic-materials
-          - file: patterned-anisotropic-factorization
-          - file: tensor-li-factorization
-          - file: full-tensor-patterns
-          - file: tensor-shape-integration
-          - file: magnetic-materials
-          - file: negative-index-media
-        - caption: NVF construction and validation
-          entries:
-          - file: nvf-energy-engine
-          - file: nvf-rectangular-cells
-          - file: nvf-layer-axes
-          - file: nvf-separated-rectangles
-          - file: nvf-common-loss
-          - file: nvf-complex-material
-          - file: nvf-lattice-rebasing
-          - file: nvf-affine-cells
-          - file: nvf-cartesian-cell
-          - file: nvf-cartesian-pair
-          - file: nvf-cartesian-pair-opening
-          - file: nvf-cartesian-pair-gap
-          - file: nvf-cartesian-pair-gap-autodiff
-          - file: nvf-pair-material-sector
-          - file: nvf-pair-refinement
-          - file: nvf-pair-quadratic
-          - file: nvf-pair-normal-frame
-          - file: nvf-paired-frame
-          - file: nvf-pair-galerkin
-          - file: nvf-periodic-galerkin
-          - file: nvf-seam-trace
-          - file: nvf-coupled-seam-galerkin
-          - file: nvf-coupled-pair-seam-galerkin
-          - file: nvf-galerkin-error
-          - file: nvf-contact-solver
-          - file: nvf-polynomial-pair-coupling
-          - file: nvf-analytic-polynomial-traces
-          - file: nvf-pair-corner-potentials
-          - file: nvf-pair-junction-potentials
-          - file: nvf-pair-radial-potentials
-          - file: nvf-pair-symmetric-potentials
-          - file: nvf-contact-fourier-precision
-          - file: nvf-contact-energy-coordinates
-          - file: nvf-retained-contact-solve
-          - file: nvf-positive-coordinate-precision
-          - file: nvf-pair-transmission-potentials
-          - file: nvf-polynomial-galerkin
-          - file: nvf-affine-convergence
-          - file: nvf-contact-followup
-          - file: nvf-independent-fem
-          - file: nvf-harmonic-energy
-          - file: nvf-passive-closure
-          - file: nvf-cell-corrector
-          - file: nvf-thin-gap-energy
-          - file: nvf-partitioned-gap-energy
-          - file: nvf-harmonic-coordinates
-          - file: nvf-continuous-flux
-          - file: nvf-gap-convergence
-          - file: nvf-interface-resolution
-          - file: nvf-directional-convergence
-          - file: nvf-polynomial-body
-          - file: nvf-polynomial-flux
-          - file: nvf-local-flux
-          - file: nvf-posed-gap
-          - file: nvf-scattering-doubling
-          - file: nvf-energy-closure
-          - file: nvf-mirror-convergence
-          - file: nvf-mirror-doubling
-          - file: nvf-mirror-modal-memory
-          - file: nvf-mirror-reference
-        - caption: The solve
-          entries:
-          - file: formulation
-          - file: first-order-formulation
-          - file: connecting-algorithms
-          - file: what-a-solve-answers
-          - file: multimode-incidence
-          - file: fdtd
-          - file: fdtd-alpha
-          - file: fdtd-route-parity
-          - file: result-guards
-        - caption: Numerical conventions
-          entries:
-          - file: amplitude-sp-frame
-          - file: branch-cuts
-          - file: rayleigh-points
-          - file: rayleigh-handling-walkthrough
-          - file: time-convention-audit
-          - file: half-space-power-audit
-        - caption: Performance and tooling
-          entries:
-          - file: backend-choice
-          - file: torch-compile
-          - file: torch-upstream-defects
-          - file: bessel-j1
-          - file: capability-manifest
-    - caption: FDTD validation
-      entries:
-      - file: fd-subpixel-occupancy
-      - file: fd-mie-validation
-      - file: fd-metasurface-validation
-      - file: fd-conductive-film
-      - file: fd-conductive-stack
-      - file: fd-decay-stopping
-      - file: fd-constitutive-absorber
-      - file: fd-single-pole-film
-      - file: fd-debye-film
-      - file: fd-two-debye-film
-      - file: fd-debye-sum-film
-      - file: fd-debye-stack
-      - file: fd-oscillator-stack
-      - file: fd-oscillator-sum-film
-      - file: fd-hybrid-film
-      - file: fd-sphere-clip-jit
-      - file: fd-symmetric-stencil
-      - file: fd-lattice-radiation
-      - file: fdtd-directional
-      - file: fdtd-pml-strength
-      - file: fdtd-ringdown
-      - file: fdtd-pulse-notches
-      - file: fdtd-source-clearance
-      - file: fdtd-lattice-reference
-      - file: fdtd-transverse-resolution
-      - file: fdtd-scene-angles
-      - file: fdtd-scene-azimuth
-      - file: fdtd-halfspace-gradients
-      - file: fdtd-layer-gradients
-      - file: fdtd-layer-smoothing
-      - file: fdtd-multilayer-optimization
-      - file: fdtd-rectangle-gradients
-      - file: fdtd-rotation-gradients
-      - file: fdtd-rotation-smoothing
-      - file: fdtd-adjoint-validation
-      - file: fdtd-painted-shapes
-      - file: fdtd-ellipse-gradients
-      - file: fdtd-circle-gradients
-      - file: fdtd-variable-depth
-      - file: fdtd-rayleigh
-      - file: fdtd-enz
-      - file: fdtd-layer-alignment
-      - file: fdtd-oblique-pulse
-      - file: fdtd-mixed-metal
-      - file: fdtd-lorentz-decay
-      - file: fdtd-bragg-cavity
-      - file: fdtd-dft-sampling
-      - file: fdtd-pulse-convergence
-  - file: developer/index
+        - entries:
+          - file: theory/rcwa/amplitude-sp-frame
+          - file: theory/rcwa/branch-cuts
+          - file: theory/rcwa/connecting-algorithms
+          - file: theory/rcwa/factorization-terms
+          - file: theory/rcwa/first-order-formulation
+          - file: theory/rcwa/five-slot-limit
+          - file: theory/rcwa/formulation
+          - file: theory/rcwa/fourier-truncation-shape
+          - file: theory/rcwa/magnetic-materials
+          - file: theory/rcwa/negative-index-media
+          - file: theory/rcwa/nvf-metal-inverse-rule
+          - file: theory/rcwa/nvf-normal-methods
+          - file: theory/rcwa/oblique-lattice
+          - file: theory/rcwa/off-diagonal-slot-convention
+          - file: theory/rcwa/patterned-anisotropic-factorization
+          - file: theory/rcwa/rayleigh-points
+          - file: theory/rcwa/tensor-li-factorization
+      - file: validation/index
+        subtrees:
+        - entries:
+          - file: validation/rcwa/index
+            subtrees:
+            - entries:
+              - file: validation/rcwa/backend-choice
+              - file: validation/rcwa/bessel-j1
+              - file: validation/rcwa/half-space-power-audit
+              - file: validation/rcwa/normal-field-known-limits
+              - file: validation/rcwa/nvf-affine-cells
+              - file: validation/rcwa/nvf-affine-convergence
+              - file: validation/rcwa/nvf-analytic-polynomial-traces
+              - file: validation/rcwa/nvf-cartesian-cell
+              - file: validation/rcwa/nvf-cartesian-pair-gap-autodiff
+              - file: validation/rcwa/nvf-cartesian-pair-gap
+              - file: validation/rcwa/nvf-cartesian-pair-opening
+              - file: validation/rcwa/nvf-cartesian-pair
+              - file: validation/rcwa/nvf-cell-corrector
+              - file: validation/rcwa/nvf-common-loss
+              - file: validation/rcwa/nvf-complex-material
+              - file: validation/rcwa/nvf-contact-energy-coordinates
+              - file: validation/rcwa/nvf-contact-followup
+              - file: validation/rcwa/nvf-contact-fourier-precision
+              - file: validation/rcwa/nvf-contact-solver
+              - file: validation/rcwa/nvf-continuous-flux
+              - file: validation/rcwa/nvf-coupled-pair-seam-galerkin
+              - file: validation/rcwa/nvf-coupled-seam-galerkin
+              - file: validation/rcwa/nvf-directional-convergence
+              - file: validation/rcwa/nvf-energy-closure
+              - file: validation/rcwa/nvf-energy-engine
+              - file: validation/rcwa/nvf-galerkin-error
+              - file: validation/rcwa/nvf-gap-convergence
+              - file: validation/rcwa/nvf-harmonic-coordinates
+              - file: validation/rcwa/nvf-harmonic-energy
+              - file: validation/rcwa/nvf-independent-fem
+              - file: validation/rcwa/nvf-interface-resolution
+              - file: validation/rcwa/nvf-lattice-rebasing
+              - file: validation/rcwa/nvf-layer-axes
+              - file: validation/rcwa/nvf-local-flux
+              - file: validation/rcwa/nvf-mirror-convergence
+              - file: validation/rcwa/nvf-mirror-doubling
+              - file: validation/rcwa/nvf-mirror-modal-memory
+              - file: validation/rcwa/nvf-mirror-reference
+              - file: validation/rcwa/nvf-pair-corner-potentials
+              - file: validation/rcwa/nvf-pair-galerkin
+              - file: validation/rcwa/nvf-pair-junction-potentials
+              - file: validation/rcwa/nvf-pair-material-sector
+              - file: validation/rcwa/nvf-pair-normal-frame
+              - file: validation/rcwa/nvf-pair-quadratic
+              - file: validation/rcwa/nvf-pair-radial-potentials
+              - file: validation/rcwa/nvf-pair-refinement
+              - file: validation/rcwa/nvf-pair-symmetric-potentials
+              - file: validation/rcwa/nvf-pair-transmission-potentials
+              - file: validation/rcwa/nvf-paired-frame
+              - file: validation/rcwa/nvf-partitioned-gap-energy
+              - file: validation/rcwa/nvf-passive-closure
+              - file: validation/rcwa/nvf-periodic-galerkin
+              - file: validation/rcwa/nvf-polynomial-body
+              - file: validation/rcwa/nvf-polynomial-flux
+              - file: validation/rcwa/nvf-polynomial-galerkin
+              - file: validation/rcwa/nvf-polynomial-pair-coupling
+              - file: validation/rcwa/nvf-posed-gap
+              - file: validation/rcwa/nvf-positive-coordinate-precision
+              - file: validation/rcwa/nvf-rectangular-cells
+              - file: validation/rcwa/nvf-retained-contact-solve
+              - file: validation/rcwa/nvf-scattering-doubling
+              - file: validation/rcwa/nvf-seam-trace
+              - file: validation/rcwa/nvf-separated-rectangles
+              - file: validation/rcwa/nvf-thin-gap-energy
+              - file: validation/rcwa/nvf-upsampling
+              - file: validation/rcwa/time-convention-audit
+          - file: validation/fdtd/index
+            subtrees:
+            - entries:
+              - file: validation/fdtd/fd-conductive-film
+              - file: validation/fdtd/fd-conductive-stack
+              - file: validation/fdtd/fd-constitutive-absorber
+              - file: validation/fdtd/fd-debye-film
+              - file: validation/fdtd/fd-debye-stack
+              - file: validation/fdtd/fd-debye-sum-film
+              - file: validation/fdtd/fd-decay-stopping
+              - file: validation/fdtd/fd-hybrid-film
+              - file: validation/fdtd/fd-lattice-radiation
+              - file: validation/fdtd/fd-metasurface-validation
+              - file: validation/fdtd/fd-mie-validation
+              - file: validation/fdtd/fd-oscillator-stack
+              - file: validation/fdtd/fd-oscillator-sum-film
+              - file: validation/fdtd/fd-single-pole-film
+              - file: validation/fdtd/fd-sphere-clip-jit
+              - file: validation/fdtd/fd-subpixel-occupancy
+              - file: validation/fdtd/fd-two-debye-film
+              - file: validation/fdtd/fdtd-adjoint-validation
+              - file: validation/fdtd/fdtd-bragg-cavity
+              - file: validation/fdtd/fdtd-circle-gradients
+              - file: validation/fdtd/fdtd-dft-sampling
+              - file: validation/fdtd/fdtd-directional
+              - file: validation/fdtd/fdtd-ellipse-gradients
+              - file: validation/fdtd/fdtd-enz
+              - file: validation/fdtd/fdtd-halfspace-gradients
+              - file: validation/fdtd/fdtd-lattice-reference
+              - file: validation/fdtd/fdtd-layer-alignment
+              - file: validation/fdtd/fdtd-layer-gradients
+              - file: validation/fdtd/fdtd-layer-smoothing
+              - file: validation/fdtd/fdtd-lorentz-decay
+              - file: validation/fdtd/fdtd-mixed-metal
+              - file: validation/fdtd/fdtd-multilayer-optimization
+              - file: validation/fdtd/fdtd-oblique-pulse
+              - file: validation/fdtd/fdtd-painted-shapes
+              - file: validation/fdtd/fdtd-pml-strength
+              - file: validation/fdtd/fdtd-pulse-convergence
+              - file: validation/fdtd/fdtd-pulse-notches
+              - file: validation/fdtd/fdtd-rayleigh
+              - file: validation/fdtd/fdtd-rectangle-gradients
+              - file: validation/fdtd/fdtd-ringdown
+              - file: validation/fdtd/fdtd-rotation-gradients
+              - file: validation/fdtd/fdtd-rotation-smoothing
+              - file: validation/fdtd/fdtd-route-parity
+              - file: validation/fdtd/fdtd-scene-angles
+              - file: validation/fdtd/fdtd-scene-azimuth
+              - file: validation/fdtd/fdtd-source-clearance
+              - file: validation/fdtd/fdtd-transverse-resolution
+              - file: validation/fdtd/fdtd-variable-depth
+  - file: development/index
     title: Developer guide
     subtrees:
     - entries:
-      - file: developer/source-checkout
-      - file: developer/solver-integration
-      - file: developer/documentation
+      - file: development/documentation
+      - file: development/learning-licenses
+      - file: development/learning-provenance
+      - file: development/solver-integration
+      - file: development/source-checkout
+      - file: development/torch-compile
+      - file: development/torch-upstream-defects
+      - file: design/index
+        subtrees:
+        - entries:
+          - file: design/fd-symmetric-stencil
+          - file: design/unified-api
+      - file: migration/index
+        subtrees:
+        - entries:
+          - file: migration/legacy-api
+          - file: migration/general-fdtd-v1
+          - file: migration/materials-v1
+          - file: migration/jobs-v1
+          - file: migration/backends-v1
+          - file: migration/autodiff-v1

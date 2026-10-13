@@ -1,0 +1,7 @@
+2026-09-09: pose and localized-flux validation
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/test_nvf_scattering_doubling.py tests/test_nvf_mirror_doubling.py tests/test_nvf_mirror_convergence.py tests/test_nvf_mirror_cartesian.py tests/test_nvf_posed_gap.py tests/test_nvf_local_flux.py tests/test_nvf_continuous_flux.py tests/test_nvf_interface_resolution.py tests/test_nvf_polynomial_body.py tests/test_nvf_polynomial_flux.py tests/test_nvf_harmonic_energy.py tests/test_nvf_harmonic_energy_jax.py tests/test_nvf_gap_convergence.py
+
+........................................................................ [ 48%]
+........................................................x......x........ [ 96%]
+......                                                                   [100%]
+148 passed, 2 xfailed in 363.66s (0:06:03)

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 440" role="img" aria-labelledby="title desc">
+<title id="title">J가 정한 기준을 P라는 행렬로 적용한다</title><desc id="desc">가로 기준 J=(1,0)에서 전기장 예시 (3,2)는 법선 (3,0)과 접선 (0,2)로 나뉜다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="440" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">J가 정한 기준을 P라는 행렬로 적용한다</text>
+<line x1="95" y1="100" x2="95" y2="355" stroke="#a85116" stroke-width="3"/>
+<line x1="95" y1="325" x2="315" y2="180" stroke="#285ab0" stroke-width="4"/>
+<polygon points="315,180 308.85167140236695,188.84296643980556 304.4491645052964,182.1633008028709" fill="#285ab0"/>
+<line x1="95" y1="325" x2="315" y2="325" stroke="#117c77" stroke-width="5"/>
+<polygon points="315,325 305.0,329.0 305.0,321.0" fill="#117c77"/>
+<line x1="95" y1="325" x2="95" y2="180" stroke="#a85116" stroke-width="4"/>
+<polygon points="95,180 99.0,190.0 91.0,190.0" fill="#a85116"/>
+<line x1="315" y1="180" x2="315" y2="325" stroke="#546779" stroke-width="2" stroke-dasharray="7 5"/>
+<line x1="95" y1="180" x2="315" y2="180" stroke="#546779" stroke-width="2" stroke-dasharray="7 5"/>
+<text x="192" y="151" style="fill:#285ab0;font-size:23px;font-weight:400" text-anchor="start">E = (3, 2)</text>
+<text x="188" y="362" style="fill:#117c77;font-size:22px;font-weight:400" text-anchor="start">PE = (3, 0)</text>
+<text x="113" y="230" style="fill:#a85116;font-size:19px;font-weight:400" text-anchor="start">나머지 (0, 2)</text>
+<text x="41" y="386" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">세로 경계 → 법선은 가로 방향</text>
+<rect x="490" y="85" width="475" height="288" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="508" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">J = (1, 0)ᵀ</text>
+<text x="508" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">J에서 미리 만드는 행렬:</text>
+<text x="508" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">P = [ 1  0 ]</text>
+<text x="508" y="209" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">      [ 0  0 ]</text>
+<text x="508" y="236" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">PE: 가로 성분만 남김</text>
+<text x="508" y="263" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">(I−P)E: 전체에서 가로 성분을 뺌</text>
+<text x="30" y="423" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">E=(3,2)는 분해 작동을 보여 주기 위한 손계산 · J와 P를 구하는 입력이 아님</text>
+</svg>

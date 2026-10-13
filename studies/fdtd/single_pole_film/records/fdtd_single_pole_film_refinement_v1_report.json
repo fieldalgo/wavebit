@@ -1,0 +1,890 @@
+{
+  "complete": true,
+  "stop_reason": null,
+  "registration": "93cc246c0b5ba735ebb8e6baade1fb0a2ee23185a6372189d53db6f7f7546045",
+  "rungs": [
+    80,
+    160,
+    320
+  ],
+  "groups": [
+    {
+      "family": "drude",
+      "fraction": 0.3,
+      "polarization": "s",
+      "complete": true,
+      "selected_periods": [
+        120,
+        120,
+        120
+      ]
+    },
+    {
+      "family": "lorentz",
+      "fraction": 0.3,
+      "polarization": "p",
+      "complete": true,
+      "selected_periods": [
+        120,
+        120,
+        120
+      ]
+    }
+  ],
+  "cells": [
+    {
+      "family": "drude",
+      "fraction": 0.3,
+      "polarization": "s",
+      "coefficient": "r",
+      "wavelength": 0.9,
+      "resolved_input": true,
+      "values": [
+        [
+          -0.11479085784164342,
+          -0.772623384725169
+        ],
+        [
+          -0.11457569647660283,
+          -0.7727240996993944
+        ],
+        [
+          -0.11451905571296093,
+          -0.7727507945517407
+        ]
+      ],
+      "continuum": [
+        -0.11449963107396817,
+        -0.7727599820430162
+      ],
+      "errors": [
+        0.00032167041743627053,
+        8.410403118619849e-05,
+        2.1487824364914723e-05
+      ],
+      "differences": [
+        0.0002375666623062782,
+        6.26162219215424e-05
+      ],
+      "absorption": [
+        0.19455383762098888,
+        0.1945050856686389,
+        0.19449120902312125
+      ],
+      "time_proxy": 1.6029065393385553e-09,
+      "pml_proxy": 1.6422469031941158e-09,
+      "proxy": 3.2451534425326712e-09,
+      "self_order": {
+        "point": 1.9237240289215274,
+        "interval": [
+          1.9235350833285252,
+          1.9239129889377171
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.9353364070011996,
+          "interval": [
+            1.9352661870781906,
+            1.935406628925263
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.9686555341169862,
+          "interval": [
+            1.9683820031342885,
+            1.9689290958566634
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "drude",
+      "fraction": 0.3,
+      "polarization": "s",
+      "coefficient": "r",
+      "wavelength": 1.0,
+      "resolved_input": true,
+      "values": [
+        [
+          -0.28461500502714127,
+          -0.7654462228045337
+        ],
+        [
+          -0.28443869628065627,
+          -0.7655744957675428
+        ],
+        [
+          -0.2843914758604881,
+          -0.7656088793995859
+        ]
+      ],
+      "continuum": [
+        -0.28437513499440786,
+        -0.7656207839215803
+      ],
+      "errors": [
+        0.00029666347295898194,
+        7.862970376233013e-05,
+        2.0217357596049197e-05
+      ],
+      "differences": [
+        0.00021803377519605987,
+        5.841234658303591e-05
+      ],
+      "absorption": [
+        0.19010604554611032,
+        0.19006287324558932,
+        0.19005033076688282
+      ],
+      "time_proxy": 1.1766415576913504e-09,
+      "pml_proxy": 3.9179148779380267e-10,
+      "proxy": 1.568433045485153e-09,
+      "self_order": {
+        "point": 1.9002063894047816,
+        "interval": [
+          1.900108159424837,
+          1.9003046232467176
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.915680980067534,
+          "interval": [
+            1.9156445753813296,
+            1.9157173852874412
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.9594799693845324,
+          "interval": [
+            1.9593392737121587,
+            1.9596206731656365
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "drude",
+      "fraction": 0.3,
+      "polarization": "s",
+      "coefficient": "r",
+      "wavelength": 1.1,
+      "resolved_input": true,
+      "values": [
+        [
+          -0.42728143648974337,
+          -0.727382361760406
+        ],
+        [
+          -0.42714391854283174,
+          -0.7275216517757473
+        ],
+        [
+          -0.42710662538839356,
+          -0.72755939796437
+        ]
+      ],
+      "continuum": [
+        -0.42709363471953465,
+        -0.7275725406692817
+      ],
+      "errors": [
+        0.0002672779868875323,
+        7.154119352177712e-05,
+        1.847939852370367e-05
+      ],
+      "differences": [
+        0.0001957367980134818,
+        5.306179532850755e-05
+      ],
+      "absorption": [
+        0.1829285733051228,
+        0.18288902953695454,
+        0.18287738923688812
+      ],
+      "time_proxy": 2.2640352910751345e-09,
+      "pml_proxy": 8.622262920911297e-10,
+      "proxy": 3.126261583166264e-09,
+      "self_order": {
+        "point": 1.8831696097910409,
+        "interval": [
+          1.882953534702531,
+          1.883385703439301
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.9014949294552843,
+          "interval": [
+            1.9014150120235758,
+            1.9015748494445592
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.952856387025844,
+          "interval": [
+            1.9525492936415505,
+            1.9531635189456331
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "drude",
+      "fraction": 0.3,
+      "polarization": "s",
+      "coefficient": "t",
+      "wavelength": 0.9,
+      "resolved_input": true,
+      "values": [
+        [
+          0.4410802516037589,
+          0.027758572657450367
+        ],
+        [
+          0.44100428083857984,
+          0.027928733126837354
+        ],
+        [
+          0.44098525355975976,
+          0.027971280234888537
+        ]
+      ],
+      "continuum": [
+        0.44097890827171826,
+        0.027985462771883615
+      ],
+      "errors": [
+        0.00024849465784324937,
+        6.214515086650133e-05,
+        1.5537278910618383e-05
+      ],
+      "differences": [
+        0.00018634951704765067,
+        4.660787211208229e-05
+      ],
+      "absorption": [
+        0.19455383762098888,
+        0.1945050856686389,
+        0.19449120902312125
+      ],
+      "time_proxy": 1.1413841092045949e-10,
+      "pml_proxy": 9.38371955635203e-10,
+      "proxy": 1.0525103665556624e-09,
+      "self_order": {
+        "point": 1.9993655270337485,
+        "interval": [
+          1.9992840730169934,
+          1.9994469838092677
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.9995011084452476,
+          "interval": [
+            1.9994705640894592,
+            1.9995316531889755
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.9999079609575579,
+          "interval": [
+            1.999785800547483,
+            2.0000301275741075
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "drude",
+      "fraction": 0.3,
+      "polarization": "s",
+      "coefficient": "t",
+      "wavelength": 1.0,
+      "resolved_input": true,
+      "values": [
+        [
+          0.37520919905929234,
+          -0.04688699502896639
+        ],
+        [
+          0.37515771644353246,
+          -0.04673471980998886
+        ],
+        [
+          0.3751448060717107,
+          -0.04669663749071754
+        ]
+      ],
+      "continuum": [
+        0.37514049878266725,
+        -0.04668394220755465
+      ],
+      "errors": [
+        0.00021435992230739277,
+        5.361728037336391e-05,
+        1.3406078975212942e-05
+      ],
+      "differences": [
+        0.0001607426578109692,
+        4.02112016937959e-05
+      ],
+      "absorption": [
+        0.19010604554611032,
+        0.19006287324558932,
+        0.19005033076688282
+      ],
+      "time_proxy": 4.36331869186579e-11,
+      "pml_proxy": 5.031185678515102e-10,
+      "proxy": 5.467517547701681e-10,
+      "self_order": {
+        "point": 1.999083485363772,
+        "interval": [
+          1.9990344388156767,
+          1.9991325329119944
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.999265249731171,
+          "interval": [
+            1.9992468584264167,
+            1.999283641176558
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.9998107055287506,
+          "interval": [
+            1.9997371563683104,
+            1.9998842569388413
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "drude",
+      "fraction": 0.3,
+      "polarization": "s",
+      "coefficient": "t",
+      "wavelength": 1.1,
+      "resolved_input": true,
+      "values": [
+        [
+          0.31220586074899975,
+          -0.08913136956183451
+        ],
+        [
+          0.3121708974681542,
+          -0.08899786675160055
+        ],
+        [
+          0.31216211624621804,
+          -0.08896447002515229
+        ]
+      ],
+      "continuum": [
+        0.312159185064393,
+        -0.08895333592715421
+      ],
+      "errors": [
+        0.00018405052189817,
+        4.604535511575881e-05,
+        1.1513468857049085e-05
+      ],
+      "differences": [
+        0.00013800518594549256,
+        3.453188665787506e-05
+      ],
+      "absorption": [
+        0.1829285733051228,
+        0.18288902953695454,
+        0.18287738923688812
+      ],
+      "time_proxy": 9.45358549864207e-11,
+      "pml_proxy": 5.846991754326964e-10,
+      "proxy": 6.792350304191171e-10,
+      "self_order": {
+        "point": 1.9987214180310322,
+        "interval": [
+          1.9986504627184767,
+          1.9987923754365144
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.9989743056121956,
+          "interval": [
+            1.9989476996990045,
+            1.999000911819675
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.9997330659015735,
+          "interval": [
+            1.999626674898769,
+            1.9998394616115802
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "lorentz",
+      "fraction": 0.3,
+      "polarization": "p",
+      "coefficient": "r",
+      "wavelength": 0.9,
+      "resolved_input": true,
+      "values": [
+        [
+          0.20421932211848534,
+          0.16647120136222676
+        ],
+        [
+          0.20458324366427788,
+          0.16686334913893958
+        ],
+        [
+          0.20468078370721024,
+          0.16695681309719532
+        ]
+      ],
+      "continuum": [
+        0.2047157455409211,
+        0.16698835439792037
+      ],
+      "errors": [
+        0.0007168566639642372,
+        0.0001821621862155463,
+        4.708697768867015e-05
+      ],
+      "differences": [
+        0.0005349941777933987,
+        0.00013509097478394807
+      ],
+      "absorption": [
+        0.5148046779154324,
+        0.5139583186789225,
+        0.5137453313957449
+      ],
+      "time_proxy": 3.3555409160625873e-06,
+      "pml_proxy": 5.929736957092892e-07,
+      "proxy": 3.948514611771877e-06,
+      "self_order": {
+        "point": 1.9855918974220645,
+        "interval": [
+          1.8821747705214897,
+          2.093633117440605
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.9764611686266915,
+          "interval": [
+            1.9375552041239663,
+            2.0160013591480674
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.951823480855424,
+          "interval": null,
+          "classification": "unresolved",
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "family": "lorentz",
+      "fraction": 0.3,
+      "polarization": "p",
+      "coefficient": "r",
+      "wavelength": 1.0,
+      "resolved_input": true,
+      "values": [
+        [
+          0.2528919097247735,
+          0.1133913560242338
+        ],
+        [
+          0.2530855843379491,
+          0.11335455657428303
+        ],
+        [
+          0.25313667410424934,
+          0.11334104363342197
+        ]
+      ],
+      "continuum": [
+        0.25315543053716144,
+        0.11333568154128745
+      ],
+      "errors": [
+        0.0002693378298957436,
+        7.235163035478872e-05,
+        1.9507839645775686e-05
+      ],
+      "differences": [
+        0.00019713968475524216,
+        5.2846606242300056e-05
+      ],
+      "absorption": [
+        0.2593612401564015,
+        0.25908231483810595,
+        0.25901210194242386
+      ],
+      "time_proxy": 2.7638966381548986e-07,
+      "pml_proxy": 3.9634325853159415e-07,
+      "proxy": 6.72732922347084e-07,
+      "self_order": {
+        "point": 1.8993354928339563,
+        "interval": [
+          1.853184451895535,
+          1.9463547945344015
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.8963194464857462,
+          "interval": [
+            1.8793591301165102,
+            1.9133954955479078
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 1.8909715078793397,
+          "interval": [
+            1.8285813384553307,
+            1.9549536658850921
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "lorentz",
+      "fraction": 0.3,
+      "polarization": "p",
+      "coefficient": "r",
+      "wavelength": 1.1,
+      "resolved_input": true,
+      "values": [
+        [
+          0.22299913006765765,
+          0.030250634916566026
+        ],
+        [
+          0.2230328189868867,
+          0.03020526361225242
+        ],
+        [
+          0.22304185746708305,
+          0.030190921700579597
+        ]
+      ],
+      "continuum": [
+        0.22304790103617317,
+        0.030186056676524527
+      ],
+      "errors": [
+        8.092562299296516e-05,
+        2.4420781943555306e-05,
+        7.758426799516713e-06
+      ],
+      "differences": [
+        5.6511047892779405e-05,
+        1.695242031955077e-05
+      ],
+      "absorption": [
+        0.1656363177247927,
+        0.16552176471335567,
+        0.16549302537742994
+      ],
+      "time_proxy": 1.7895184733429678e-06,
+      "pml_proxy": 7.778191889528798e-07,
+      "proxy": 2.567337662295848e-06,
+      "self_order": {
+        "point": 1.7370416779931142,
+        "interval": null,
+        "classification": "unresolved",
+        "resolved": false
+      },
+      "direct_orders": [
+        {
+          "point": 1.7284871712579424,
+          "interval": null,
+          "classification": "unresolved",
+          "resolved": false
+        },
+        {
+          "point": 1.6542733481842142,
+          "interval": null,
+          "classification": "unresolved",
+          "resolved": false
+        }
+      ]
+    },
+    {
+      "family": "lorentz",
+      "fraction": 0.3,
+      "polarization": "p",
+      "coefficient": "t",
+      "wavelength": 0.9,
+      "resolved_input": true,
+      "values": [
+        [
+          -0.45698843279629164,
+          0.45490515711018265
+        ],
+        [
+          -0.4565749456565635,
+          0.45594223257527133
+        ],
+        [
+          -0.45647106962863826,
+          0.4562017432428029
+        ]
+      ],
+      "continuum": [
+        -0.4564348210447338,
+        0.45628718014127845
+      ],
+      "errors": [
+        0.001488782599959495,
+        0.0003723220784947435,
+        9.280853116067237e-05
+      ],
+      "differences": [
+        0.001116466360894719,
+        0.0002795282020480063
+      ],
+      "absorption": [
+        0.5148046779154324,
+        0.5139583186789225,
+        0.5137453313957449
+      ],
+      "time_proxy": 2.2942347930154955e-06,
+      "pml_proxy": 7.035626362745987e-07,
+      "proxy": 2.997797429290094e-06,
+      "self_order": {
+        "point": 1.997874032109842,
+        "interval": [
+          1.9594885166166172,
+          2.0368818189839226
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 1.9995100243505899,
+          "interval": [
+            1.9850325759720027,
+            2.01407515425222
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 2.00422183754383,
+          "interval": [
+            1.946695252031738,
+            2.063160909363579
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "lorentz",
+      "fraction": 0.3,
+      "polarization": "p",
+      "coefficient": "t",
+      "wavelength": 1.0,
+      "resolved_input": true,
+      "values": [
+        [
+          -0.22040954800647256,
+          0.7843764870047569
+        ],
+        [
+          -0.21987358440964735,
+          0.7846475154774365
+        ],
+        [
+          -0.21973928928107225,
+          0.7847153463870522
+        ]
+      ],
+      "continuum": [
+        -0.2196961779896612,
+        0.7847372023554985
+      ],
+      "errors": [
+        0.0007993824773824041,
+        0.00019878826411236594,
+        4.8334943921071e-05
+      ],
+      "differences": [
+        0.0006005942141952635,
+        0.00015045336107344782
+      ],
+      "absorption": [
+        0.2593612401564015,
+        0.25908231483810595,
+        0.25901210194242386
+      ],
+      "time_proxy": 8.722730843884172e-07,
+      "pml_proxy": 5.036387942902985e-07,
+      "proxy": 1.3759118786787156e-06,
+      "self_order": {
+        "point": 1.9970742404919377,
+        "interval": [
+          1.9643000736075102,
+          2.030300828405797
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 2.007653362105749,
+          "interval": [
+            1.99521682246684,
+            2.0201547445914687
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 2.0400941139158477,
+          "interval": [
+            1.9895794176946053,
+            2.091709217762532
+          ],
+          "classification": "second",
+          "resolved": true
+        }
+      ]
+    },
+    {
+      "family": "lorentz",
+      "fraction": 0.3,
+      "polarization": "p",
+      "coefficient": "t",
+      "wavelength": 1.1,
+      "resolved_input": true,
+      "values": [
+        [
+          0.024524599744414465,
+          0.8849398360107856
+        ],
+        [
+          0.024883623688104494,
+          0.8849875955422595
+        ],
+        [
+          0.024973668755094,
+          0.8849995076586108
+        ]
+      ],
+      "continuum": [
+        0.02500073454247785,
+        0.8850039404961902
+      ],
+      "errors": [
+        0.0004804307764661332,
+        0.0001182459713100475,
+        2.7426390497359876e-05
+      ],
+      "differences": [
+        0.00036218664385830447,
+        9.082958001175479e-05
+      ],
+      "absorption": [
+        0.1656363177247927,
+        0.16552176471335567,
+        0.16549302537742994
+      ],
+      "time_proxy": 7.276886322625982e-07,
+      "pml_proxy": 1.0485721115210322e-06,
+      "proxy": 1.7762607437836302e-06,
+      "self_order": {
+        "point": 1.9954992314850062,
+        "interval": [
+          1.9259275606670492,
+          2.0671407417894363
+        ],
+        "classification": "second",
+        "resolved": true
+      },
+      "direct_orders": [
+        {
+          "point": 2.0225375420847302,
+          "interval": [
+            1.995683055050077,
+            2.0496978930161047
+          ],
+          "classification": "second",
+          "resolved": true
+        },
+        {
+          "point": 2.108154360027167,
+          "interval": null,
+          "classification": "unresolved",
+          "resolved": false
+        }
+      ]
+    }
+  ],
+  "worker_rows": 10,
+  "scope": "Two post-hoc selected groups from the original single-pole film study: Drude fraction.3 s and Lorentz fraction.3 p. All three wavelengths and both complex coefficients remain. No extension of the physical scope.",
+  "selection": "Selection followed the complete original forty-row report: the selected groups contain its four non-second self-order records. This selection is post-hoc; the present follow-up is prospectively registered before its new responses. Original verdicts remain unchanged.",
+  "noise_scope": "The middle-grid time/PML proxy is empirical, not a rigorous fine-grid bound.",
+  "interpretation": "Report all resulting second/low/mixed/unresolved labels. Do not replace the original study classification, reinterpret an unresolved point estimate as an order, or extend the run after mixed/low/unresolved outcomes. The middle-grid proxy remains empirical and is not a rigorous bound on fine-grid noise."
+}

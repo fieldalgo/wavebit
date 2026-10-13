@@ -1,11 +1,17 @@
 """Matched uniform ADE records and mode suppression against public-API Meep."""
-from pathlib import Path
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
-import wavebit
-from wavebit._core.scene_fdtd import _notched_pulse
+from wavebit.fdtd._periodic.scene import _notched_pulse
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -15,7 +21,7 @@ def test_native_source_records_match_meep_at_the_same_current_times(backend, nam
         jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     elif backend == 'torch':
         pytest.importorskip('torch')
-    with np.load(Path(__file__).with_name('golden_meep_source_notch.npz'), allow_pickle=False) as data:
+    with np.load(repository_path('tests/references/golden_meep_source_notch.npz'), allow_pickle=False) as data:
         dt, frequency, width = (float(data[k]) for k in ('dt', 'frequency', 'width'))
         times, expected = data[name+'_t'], data[name+'_signal']
         steps = int(np.ceil(times[-1]/dt))
@@ -29,7 +35,7 @@ def test_native_source_records_match_meep_at_the_same_current_times(backend, nam
             pulse, _ = _notched_pulse(pulse, dt, np.array([.4, .6]), frequency,
                                       np.finfo(float).eps, frequency)
         source = np.zeros((3, 2, 2, 2)); source[1] = 1
-        out = wavebit.fdtd_grid(np.full((2, 2, 2), float(data['epsilon'])), spacing=(.1,)*3,
+        out = _legacy_wavebit.fdtd_grid(np.full((2, 2, 2), float(data['epsilon'])), spacing=(.1,)*3,
                                 dt=dt, steps=steps, backend=backend, source=source, pulse=pulse,
                                 poles=[(float(data['omega0']), 0., float(data['strength']))],
                                 record_field=1, record_components=['ey'], record_region=(slice(0, 1),)*3)
@@ -40,11 +46,11 @@ def test_native_source_records_match_meep_at_the_same_current_times(backend, nam
 
 
 def test_meep_notch_suppresses_the_independent_undamped_material_pole():
-    with np.load(Path(__file__).with_name('golden_meep_source_notch.npz'), allow_pickle=False) as data:
+    with np.load(repository_path('tests/references/golden_meep_source_notch.npz'), allow_pickle=False) as data:
         dt = float(data['dt'])
         rate = float(data['omega0'])**2+float(data['strength'])/float(data['epsilon'])
         expected = np.arccos(1-rate*dt*dt/2)/(2*np.pi*dt)
-        mode = wavebit.fit_fdtd_modes(data['gaussian_t'], data['gaussian_signal'], modes=1)
+        mode = _legacy_wavebit.fit_fdtd_modes(data['gaussian_t'], data['gaussian_signal'], modes=1)
         np.testing.assert_allclose(mode['frequency'], [expected], atol=1e-9)
         np.testing.assert_allclose(mode['decay_rate'], 0, atol=1e-9)
         assert np.linalg.norm(data['gaussian_signal']) > .1

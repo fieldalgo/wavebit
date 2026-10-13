@@ -5,19 +5,25 @@
 Only public Meep APIs are called. The physics harness digest includes all helpers used
 by the exploratory single-polarization runs as well as by this combined reproduction.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import argparse
 import hashlib
 from pathlib import Path
 
 import numpy as np
 
-from _meep_crossed_metal_case import CASE
-from gen_goldens_meep_crossed_materials import material_factory
-from gen_goldens_meep_crossed import _run, _amplitudes
+from tests.references._meep_crossed_metal_case import CASE
+from tests.references.gen_goldens_meep_crossed_materials import material_factory
+from tests.references.gen_goldens_meep_crossed import _run, _amplitudes
 
 
 def metadata():
-    here = Path(__file__).resolve().parent
+    here = repository_path('tests/references')
     files = [here / '_meep_crossed_metal_case.py', here / '_meep_crossed_material_cases.py',
              here / 'gen_goldens_meep_crossed_materials.py', here / 'gen_goldens_meep_crossed.py']
     digest = hashlib.sha256()

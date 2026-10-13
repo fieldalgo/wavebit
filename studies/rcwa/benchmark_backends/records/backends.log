@@ -1,0 +1,128 @@
+# Wavebit backend benchmark -- the run docs/backend-choice.md reports
+#
+# Re-taken 2026-08-27, after the block modeling path was removed: the first table is the
+# *shape* path where a `vector` (block) one used to be, and the `n_split` axis is gone with
+# it. Reproduce with `python studies/benchmark_backends.py`.
+#
+# The raster table is the control. It measures code untouched by that removal and lands within
+# ~12% of the 2026-08-20 run, which is what says this host is comparable and the shape-path
+# changes below are differences between the paths rather than between the machines.
+
+
+### Shape path — d(efficiency)/d(length), ms per step
+
+| config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze | grad spread |
+|---|---|---|---|---|---|---|---|
+| truncation_order=11,L=1 | 5351 | 4766 | 4079 | 4082 | 5092 | 0 | 1.5e-11 |
+| truncation_order=11,L=3 | 13366 | 13719 | 7380 | 7312 | 9801 | 0 | 2.1e-10 |
+| truncation_order=13,L=1 | 12951 | 11899 | 10080 | 9880 | 11178 | 0 | 3.4e-11 |
+| truncation_order=3,L=1 | 141 | 183 | 61 | 66 | 962 | 0 | 2.0e-12 |
+| truncation_order=5,L=1 | 241 | 264 | 131 | 132 | 1012 | 0 | 2.6e-12 |
+| truncation_order=5,L=3 | 687 | 715 | 202 | 199 | 1833 | 0 | 1.3e-10 |
+| truncation_order=7,L=1 | 665 | 593 | 431 | 432 | 1395 | 0 | 5.4e-12 |
+| truncation_order=7,L=3 | 1739 | 1643 | 726 | 743 | 2500 | 0 | 1.4e-10 |
+| truncation_order=9,L=1 | 1944 | 1813 | 1464 | 1463 | 2576 | 0 | 2.3e-11 |
+| truncation_order=9,L=3 | 4813 | 4958 | 2639 | 2663 | 4502 | 1 | 1.5e-10 |
+
+### Raster path — d(efficiency)/d(permittivity), ms per step
+
+| config | torch | jax eager | jit (one freeze) | jit (re-freeze) | compile | freeze | grad spread |
+|---|---|---|---|---|---|---|---|
+| N=128,truncation_order=3,NVF | 27 | 95 | 17 | 724 | 843 | 5 | 5.5e-13 |
+| N=128,truncation_order=3,integrated | 33 | 81 | 16 | 761 | 1061 | 1 | 8.1e-12 |
+| N=128,truncation_order=3,sampled | 23 | 84 | 16 | 16 | 847 | 0 | 5.2e-12 |
+| N=128,truncation_order=5,NVF | 144 | 173 | 88 | 727 | 922 | 5 | 7.1e-13 |
+| N=128,truncation_order=5,integrated | 143 | 154 | 86 | 810 | 1144 | 1 | 7.0e-12 |
+| N=128,truncation_order=5,sampled | 149 | 156 | 90 | 87 | 932 | 0 | 7.9e-12 |
+| N=16,truncation_order=3,NVF | 20 | 87 | 16 | 668 | 808 | 0 | 2.0e-12 |
+| N=16,truncation_order=3,integrated | 19 | 78 | 16 | 709 | 995 | 0 | 4.2e-12 |
+| N=16,truncation_order=3,sampled | 21 | 79 | 16 | 16 | 811 | 0 | 5.1e-12 |
+| N=32,truncation_order=3,NVF | 22 | 87 | 17 | 643 | 755 | 1 | 8.1e-13 |
+| N=32,truncation_order=3,integrated | 21 | 78 | 16 | 709 | 979 | 0 | 7.2e-14 |
+| N=32,truncation_order=3,sampled | 20 | 79 | 15 | 16 | 794 | 0 | 1.0e-13 |
+| N=32,truncation_order=5,NVF | 137 | 168 | 87 | 747 | 898 | 1 | 1.5e-12 |
+| N=32,truncation_order=5,integrated | 140 | 155 | 87 | 770 | 1014 | 0 | 3.8e-12 |
+| N=32,truncation_order=5,sampled | 133 | 154 | 84 | 84 | 815 | 0 | 4.8e-12 |
+| N=64,truncation_order=3,NVF | 23 | 89 | 18 | 677 | 828 | 1 | 1.8e-12 |
+| N=64,truncation_order=3,integrated | 19 | 79 | 16 | 721 | 986 | 0 | 7.2e-13 |
+| N=64,truncation_order=3,sampled | 22 | 80 | 15 | 16 | 844 | 0 | 8.5e-13 |
+| N=64,truncation_order=5,NVF | 148 | 163 | 86 | 704 | 868 | 1 | 7.7e-12 |
+| N=64,truncation_order=5,integrated | 137 | 152 | 84 | 791 | 1077 | 0 | 1.2e-12 |
+| N=64,truncation_order=5,sampled | 133 | 154 | 85 | 86 | 837 | 0 | 1.7e-12 |
+| N=64,truncation_order=7,NVF | 605 | 522 | 399 | 1057 | 1157 | 2 | 1.6e-11 |
+| N=64,truncation_order=7,integrated | 571 | 501 | 403 | 1137 | 1445 | 1 | 4.6e-12 |
+| N=64,truncation_order=7,sampled | 554 | 492 | 379 | 380 | 1172 | 0 | 1.9e-12 |
+
+### Re-freezing every step while lx moves — where the recompilation lands
+
+| lx | ms | grad |
+|---|---|---|
+| 85 | 1045 | -1.148e-03 |
+| 90 | 69 | -5.412e-03 |
+| 95 | 70 | -2.201e-02 |
+| 100 | 62 | -1.990e-03 |
+| 103 | 64 | -9.657e-04 |
+| 106 | 63 | -5.765e-04 |
+| 110 | 65 | -3.500e-04 |
+| 115 | 65 | -2.278e-04 |
+| 120 | 73 | -1.716e-04 |
+| 125 | 65 | -1.434e-04 |
+
+### Where the time goes — one forward call, split in two
+
+| truncation_order | normal_grid | torch modeling | torch solve | jax modeling | jax solve |
+|---|---|---|---|---|---|
+| 3 | 256 | 5.3 | 14.0 | 11.0 | 19.8 |
+| 3 | 1024 | 62.6 | 15.2 | 50.2 | 21.0 |
+| 3 | 2048 | 262.3 | 13.4 | 168.0 | 20.4 |
+| 7 | 1024 | 78.4 | 344.3 | 53.9 | 252.2 |
+| 11 | 1024 | 151.4 | 3181.6 | 109.4 | 2385.6 |
+
+### Re-freezing every step — where a recompilation lands, and where none does
+
+| case | lx | ms | grad |
+|---|---|---|---|
+| one shape | 85 | 1075 | -1.147e-03 |
+| one shape | 90 | 20 | -5.409e-03 |
+| one shape | 95 | 19 | -2.203e-02 |
+| one shape | 100 | 19 | -1.990e-03 |
+| one shape | 103 | 19 | -9.659e-04 |
+| one shape | 106 | 19 | -5.766e-04 |
+| one shape | 110 | 19 | -3.500e-04 |
+| one shape | 115 | 19 | -2.278e-04 |
+| one shape | 120 | 19 | -1.716e-04 |
+| one shape | 125 | 19 | -1.434e-04 |
+| two shapes | 100 | 1033 | -6.061e-03 |
+| two shapes | 105 | 23 | -2.904e-02 |
+| two shapes | 110 | 22 | -1.392e-01 |
+| two shapes | 115 | 23 | -9.745e-03 |
+| two shapes | 118 | 23 | -4.968e-03 |
+| two shapes | 122 | 1070 | -1.701e-03 |
+| two shapes | 126 | 28 | -1.444e-03 |
+| two shapes | 130 | 26 | -1.260e-03 |
+| two shapes | 140 | 28 | -1.000e-03 |
+
+### Machine drift over the run — one fixed configuration, timed three times
+
+| at | ms |
+|---|---|
+| start | 141 |
+| after shapes | 137 |
+| after raster | 141 |
+| spread | 1.02x |
+
+
+### break-even, computed from the shape table
+
+| config | torch - jit(re-freeze) | compile | steps to break even |
+|---|---|---|---|
+| truncation_order=11,L=1 | +1269 ms | 5092 | **5** |
+| truncation_order=11,L=3 | +6054 ms | 9801 | **2** |
+| truncation_order=13,L=1 | +3070 ms | 11178 | **4** |
+| truncation_order=3,L=1 | +75 ms | 962 | **13** |
+| truncation_order=5,L=1 | +110 ms | 1012 | **10** |
+| truncation_order=5,L=3 | +489 ms | 1833 | **4** |
+| truncation_order=7,L=1 | +234 ms | 1395 | **6** |
+| truncation_order=7,L=3 | +995 ms | 2500 | **3** |
+| truncation_order=9,L=1 | +481 ms | 2576 | **6** |
+| truncation_order=9,L=3 | +2150 ms | 4502 | **3** |

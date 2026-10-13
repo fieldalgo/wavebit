@@ -3,6 +3,12 @@
 Only public documentation and black-box execution are used. Cylinder contract:
 https://meep.readthedocs.io/en/latest/Python_User_Interface/#cylinder
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
+from tools.repository_paths import repository_root
 import argparse
 import sys
 import warnings
@@ -26,15 +32,15 @@ def generate(output, resolution=40, duration=80., step=1e-4, subpixel_tol=1e-8, 
     if smoothing:
         # The reference profile is an independent Fourier sinc series. Import
         # only its NumPy helper; no FDTD geometry or solver builds these data.
-        sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+        sys.path.insert(0, str(repository_root()))
         if shape == 'circle':
-            from studies.fdtd_circle_gradients import density
+            from studies.cross_solver.circle_gradients.fdtd_circle_gradients import density
         elif shape == 'ellipse':
-            from studies.fdtd_ellipse_gradients import density
+            from studies.cross_solver.ellipse_gradients.fdtd_ellipse_gradients import density
         elif shape == 'painted_rectangles':
-            from studies.fdtd_painted_shapes import density
+            from studies.cross_solver.painted_shapes.fdtd_painted_shapes import density
         else:
-            from studies.fdtd_rotation_smoothing import density
+            from studies.fdtd.rotation_smoothing.fdtd_rotation_smoothing import density
     if smoothing < 0 or smoothing > .6 or not np.isfinite(smoothing):
         raise ValueError('smoothing must be finite and between zero and the period.')
     if profile_grid < 8:

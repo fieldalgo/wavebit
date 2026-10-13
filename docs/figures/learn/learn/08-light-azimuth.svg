@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 900" role="img" aria-labelledby="title desc">
+<title id="title">Incidence angle θ, azimuth φ and s/p polarization</title>
+<desc id="desc">Perspective view of top incidence with theta 40° and phi 30°. The sample lies in xy and z points upward. The plane of incidence is rotated 30° about z from xz. theta lies between the vertical and the light path; phi lies between +x and the incident wavevector's xy projection. s is normal to the plane of incidence; p lies within it and is perpendicular to the wavevector.</desc>
+<defs>
+<marker id="axis-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker>
+<marker id="light-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#285ab0" /></marker>
+<marker id="s-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#a85116" /></marker>
+<marker id="p-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#117c77" /></marker>
+<marker id="angle-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#a85116" /></marker>
+</defs><style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px}.small{font-size:17px;fill:#546779}</style><rect width="1000" height="900" fill="white" />
+<text x="30" y="37" style="font-size:24px;fill:#182b3e;font-weight:650">Reading incidence and polarization together</text>
+<text x="30" y="78" style="font-size:21px;fill:#182b3e;font-weight:400">Example: top incidence (θ = 40°, φ = 30°)</text>
+<polygon points="68.00,455.60 428.00,556.40 428.00,580.15 68.00,479.35" fill="#cad7df" fill-opacity="1" stroke="#cad7df" stroke-width="2" />
+<polygon points="428.00,556.40 572.00,394.40 572.00,418.15 428.00,580.15" fill="#dbe3eb" fill-opacity="1" stroke="#cad7df" stroke-width="2" />
+<polygon points="68.00,455.60 428.00,556.40 572.00,394.40 212.00,293.60" fill="#f1f5f7" fill-opacity="1" stroke="#cad7df" stroke-width="2" />
+<polygon points="74.81,420.98 565.19,429.02 565.19,129.77 74.81,121.73" fill="#cfe2ff" fill-opacity="0.63" stroke="#cad7df" stroke-width="2" />
+<text x="91" y="151" style="font-size:21px;fill:#285ab0;font-weight:650">Plane of incidence</text>
+<line x1="320.00" y1="425.00" x2="320.00" y2="117.00" stroke="#546779" stroke-width="2" stroke-dasharray="7 5" />
+<text x="337" y="114" style="font-size:18px;fill:#546779;font-weight:400">Line normal to the surface</text>
+<line x1="320.00" y1="425.00" x2="320.00" y2="178.00" stroke="#546779" stroke-width="2" marker-end="url(#axis-arrow)" />
+<text x="332" y="187" style="font-size:19px;fill:#546779;font-weight:400">+z</text>
+<line x1="320.00" y1="425.00" x2="555.00" y2="490.80" stroke="#546779" stroke-width="2" marker-end="url(#axis-arrow)" />
+<text x="563" y="497" style="font-size:19px;fill:#546779;font-weight:400">+x</text>
+<line x1="320.00" y1="425.00" x2="400.00" y2="335.00" stroke="#546779" stroke-width="2" marker-end="url(#axis-arrow)" />
+<text x="408" y="339" style="font-size:19px;fill:#546779;font-weight:400">+y</text>
+<line x1="104.15" y1="192.22" x2="320.00" y2="425.00" stroke="#285ab0" stroke-width="5" marker-end="url(#light-arrow)" />
+<text x="26" y="182" style="font-size:21px;fill:#285ab0;font-weight:650">Incident wave k</text>
+<line x1="320.00" y1="425.00" x2="527.87" y2="428.41" stroke="#285ab0" stroke-width="3.5" marker-end="url(#light-arrow)" stroke-dasharray="8 5" />
+<text x="425" y="407" style="font-size:20px;fill:#285ab0;font-weight:650">xy component of k</text>
+<path d="M320.00,339.50 L318.33,339.49 L316.65,339.50 L314.98,339.53 L313.31,339.60 L311.64,339.69 L309.97,339.80 L308.31,339.95 L306.65,340.11 L304.99,340.31 L303.34,340.53 L301.69,340.77 L300.05,341.04 L298.42,341.34 L296.79,341.66 L295.17,342.01 L293.55,342.38 L291.95,342.78 L290.35,343.20 L288.76,343.65 L287.19,344.12 L285.62,344.61 L284.06,345.14 L282.51,345.68 L280.98,346.25 L279.45,346.85 L277.94,347.46 L276.44,348.10 L274.96,348.77 L273.49,349.46 L272.03,350.17 L270.59,350.90 L269.16,351.66 L267.75,352.44 L266.35,353.24 L264.97,354.06 L263.61,354.90 L262.26,355.77 L260.93,356.66 L259.62,357.56 L258.33,358.49" fill="none" stroke="#285ab0" stroke-width="2.5" />
+<text x="278" y="326" style="font-size:29px;fill:#285ab0;font-weight:650">θ</text>
+<path d="M455.00,462.80 L455.70,462.00 L456.37,461.20 L457.02,460.39 L457.64,459.57 L458.24,458.75 L458.82,457.92 L459.37,457.08 L459.90,456.24 L460.41,455.40 L460.89,454.55 L461.35,453.69 L461.79,452.83 L462.19,451.97 L462.58,451.10 L462.94,450.22 L463.28,449.34 L463.59,448.46 L463.88,447.57 L464.14,446.68 L464.38,445.79 L464.59,444.89 L464.78,443.99 L464.94,443.08 L465.08,442.18 L465.19,441.27 L465.28,440.35 L465.35,439.44 L465.39,438.52 L465.40,437.60 L465.39,436.67 L465.35,435.75 L465.29,434.82 L465.21,433.89 L465.10,432.96 L464.96,432.03 L464.80,431.10 L464.62,430.17 L464.41,429.23 L464.17,428.30 L463.91,427.36" fill="none" stroke="#a85116" stroke-width="2.5" marker-end="url(#angle-arrow)" />
+<text x="486" y="459" style="font-size:29px;fill:#a85116;font-weight:650">φ</text>
+<line x1="213.14" y1="340.70" x2="187.03" y2="250.65" stroke="#a85116" stroke-width="4" marker-end="url(#s-arrow)" marker-start="url(#s-arrow)" />
+<line x1="138.84" y1="340.47" x2="261.33" y2="250.88" stroke="#117c77" stroke-width="4" marker-end="url(#p-arrow)" marker-start="url(#p-arrow)" />
+<circle cx="200.08511379634774" cy="295.6780239007828" r="5" fill="#285ab0" />
+<text x="273" y="248" style="font-size:21px;fill:#117c77;font-weight:650">p: in the plane</text>
+<text x="60" y="358" style="font-size:21px;fill:#a85116;font-weight:650">s: out of the plane</text>
+<line x1="177.00" y1="349.00" x2="211.76" y2="335.94" stroke="#a85116" stroke-width="1.5" />
+<circle cx="320" cy="425" r="5" fill="#285ab0" />
+<text x="34" y="574" style="font-size:22px;fill:#182b3e;font-weight:650">Sample surface (xy)</text>
+<rect x="627" y="113" width="343" height="139" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="645" y="147" style="font-size:22px;fill:#182b3e;font-weight:650">① Incidence: θ and φ</text>
+<text x="645" y="183" style="font-size:18px;fill:#182b3e;font-weight:400">θ: tilt between vertical and light</text>
+<text x="645" y="210" style="font-size:18px;fill:#182b3e;font-weight:400">φ: azimuth measured in xy</text>
+<text x="645" y="237" style="font-size:18px;fill:#182b3e;font-weight:400">     +x axis → xy component of k</text>
+<rect x="627" y="270" width="343" height="135" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="645" y="304" style="font-size:22px;fill:#182b3e;font-weight:650">② s and p: two electric-field directions</text>
+<text x="645" y="340" style="font-size:18px;fill:#182b3e;font-weight:400">s: normal to the incidence plane</text>
+<text x="645" y="367" style="font-size:18px;fill:#182b3e;font-weight:400">p: in that plane, normal to k</text>
+<rect x="627" y="423" width="343" height="152" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="645" y="457" style="font-size:22px;fill:#182b3e;font-weight:650">③ Polarization: amplitudes and phases</text>
+<text x="645" y="493" style="font-size:18px;fill:#182b3e;font-weight:400">(1,0) → oscillation along s</text>
+<text x="645" y="520" style="font-size:18px;fill:#182b3e;font-weight:400">(0,1) → oscillation along p</text>
+<text x="645" y="547" style="font-size:18px;fill:#182b3e;font-weight:400">Mix components for linear or elliptical polarization</text>
+<text x="32" y="615" style="font-size:22px;fill:#182b3e;font-weight:650">θ is the light's tilt; φ is its surface azimuth.</text>
+<text x="32" y="650" style="font-size:18px;fill:#546779;font-weight:400">s and p are electric-field basis directions. Perspective need not show them at right angles.</text>
+<rect x="30" y="683" width="940" height="172" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2" />
+<circle cx="116" cy="767" r="46" fill="#117c77" />
+<line x1="162.0" y1="767.0" x2="184.0" y2="767.0" stroke="#117c77" stroke-width="3" />
+<polygon points="184.0,767.0 174.0,771.0 174.0,763.0" fill="#117c77" />
+<line x1="116.0" y1="813.0" x2="116.0" y2="835.0" stroke="#117c77" stroke-width="3" />
+<polygon points="116.0,835.0 112.0,825.0 120.0,825.0" fill="#117c77" />
+<line x1="70.0" y1="767.0" x2="48.0" y2="767.0" stroke="#117c77" stroke-width="3" />
+<polygon points="48.0,767.0 58.0,763.0 58.0,771.0" fill="#117c77" />
+<line x1="115.99999999999999" y1="721.0" x2="115.99999999999999" y2="699.0" stroke="#117c77" stroke-width="3" />
+<polygon points="115.99999999999999,699.0 119.99999999999999,709.0 111.99999999999999,709.0" fill="#117c77" />
+<text x="221" y="719" style="fill:#182b3e;font-size:23px;font-weight:650" text-anchor="start">NVF normals: material boundaries in xy</text>
+<text x="221" y="758" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">Plan view of the green circle. Arrows are normal to its boundary.</text>
+<text x="221" y="793" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">nvf_projector selects how these boundary directions enter the calculation.</text>
+<text x="221" y="828" style="fill:#117c77;font-size:20px;font-weight:650" text-anchor="start">This setting is separate from incident s/p polarization.</text>
+
+<text x="30" y="883" style="font-size:16px;fill:#546779;font-weight:400">Plane wave in an isotropic incident medium · angle arcs are projected from the same 3D coordinates</text>
+</svg>

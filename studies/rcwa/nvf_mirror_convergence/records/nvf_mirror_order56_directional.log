@@ -1,0 +1,14 @@
+{"kind": "mirror_progress", "order": [56, 40], "polarization": "p", "stage": "closure_start", "seconds": 5.417037755250931e-06}
+{"kind": "mirror_progress", "order": [56, 40], "polarization": "p", "stage": "closure_ready", "seconds": 68.0966961249942}
+{"kind": "mirror_progress", "order": [56, 40], "polarization": "p", "stage": "modes_ready", "seconds": 536.6660220000194}
+{"kind": "mirror_progress", "order": [56, 40], "polarization": "p", "stage": "matching_ready", "seconds": 613.6363705000258}
+{"kind": "mirror_progress", "order": [56, 40], "polarization": "p", "stage": "power_ready", "T": 0.9066145367976928, "R": 0.09338546316108036, "energy_error": 4.12269107741281e-11, "seconds": 628.0529855000204}
+{"kind": "mirror_gap", "order": [56, 40], "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "rows": 8, "x_subdivisions": 3, "body_degree": 4, "gap_degree": 6, "edge_fraction": 1e-05, "flux_basis": "local", "grading_strength": 8.0, "grading_radius": 0.01}, "polarizations": ["p"], "propagation": "modal", "doublings": 6, "terms": 12, "mirror_error": 7.005230777043664e-12, "p_T": 0.9066145367976928, "p_R": 0.09338546316108036, "energy_error": 4.12269107741281e-11, "seconds": 628.0602195000392}
+{"kind": "peak_memory", "order": [56, 40], "polarizations": ["p"], "peak_rss_bytes": 5624758272}
+{"kind": "mirror_progress", "order": [40, 56], "polarization": "s", "stage": "closure_start", "seconds": 5.332985892891884e-06}
+{"kind": "mirror_progress", "order": [40, 56], "polarization": "s", "stage": "closure_ready", "seconds": 70.04985808295896}
+{"kind": "mirror_progress", "order": [40, 56], "polarization": "s", "stage": "modes_ready", "seconds": 528.0696846659994}
+{"kind": "mirror_progress", "order": [40, 56], "polarization": "s", "stage": "matching_ready", "seconds": 594.6810743329697}
+{"kind": "mirror_progress", "order": [40, 56], "polarization": "s", "stage": "power_ready", "T": 0.941546023236661, "R": 0.05845397676552442, "energy_error": 2.185363001672158e-12, "seconds": 608.087106166}
+{"kind": "mirror_gap", "order": [40, 56], "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "rows": 8, "x_subdivisions": 3, "body_degree": 4, "gap_degree": 6, "edge_fraction": 1e-05, "flux_basis": "local", "grading_strength": 8.0, "grading_radius": 0.01}, "polarizations": ["s"], "propagation": "modal", "doublings": 6, "terms": 12, "mirror_error": 7.005230777043664e-12, "s_T": 0.941546023236661, "s_R": 0.05845397676552442, "energy_error": 2.185363001672158e-12, "seconds": 608.0934572909609}
+{"kind": "peak_memory", "order": [40, 56], "polarizations": ["s"], "peak_rss_bytes": 5623676928}

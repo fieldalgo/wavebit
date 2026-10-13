@@ -27,14 +27,21 @@ RETICOLO returns only the *propagating* orders, so the golden carries the order 
 reported and the comparison selects those; that the two agree on **which** orders propagate
 is itself part of the assertion.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
 import wavebit
 
-GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo.npz'
+GOLDEN_PATH = repository_path('tests/references/golden_reticolo.npz')
 
 # 1D binary grating, exact edges on both sides. `structure` is a raster only in spelling: the
 # integrated path reads the block edges off it, and RETICOLO is handed those same edges.
@@ -86,7 +93,7 @@ CASES = {
 
 def _solve(name, backend='numpy'):
     kw = dict(CASES[name])
-    return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
+    return _legacy_wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
                           **kw).solve()
 
 
@@ -138,7 +145,7 @@ def test_reticolo_agreement_holds_on_every_backend(backend):
     """The oracle is about the physics, so it cannot be a NumPy-only result."""
     pytest.importorskip(backend)
     if backend == 'jax':
-        wavebit.enable_x64()
+        _legacy_wavebit.enable_x64()
 
     g = _golden()
     name = 'te_oblique'
@@ -178,7 +185,7 @@ def _solve_bottom(name, backend='numpy'):
 
     RETICOLO answers both sides from one ``res2`` call at one ``k_parallel =
     n_top*sin(theta)``; Wavebit states the bottom-side angle in the incidence medium
-    (``docs/conventions.md``), so the matching solve is ``incidence_side='bottom'`` at
+    (``docs/reference/common/conventions.md``), so the matching solve is ``incidence_side='bottom'`` at
     ``theta_bottom = asin(n_top*sin(theta)/n_bot)`` — same in-plane wavevector, said in the
     other medium's terms. Real for every case here since ``n_bot > n_top`` throughout.
 
@@ -191,7 +198,7 @@ def _solve_bottom(name, backend='numpy'):
     n_top = wavebit.index_from_eps(kw['top']).real
     n_bot = wavebit.index_from_eps(kw['bot']).real
     kw['theta'] = float(np.arcsin(n_top * np.sin(kw['theta']) / n_bot))
-    return wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
+    return _legacy_wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
                           incidence_side='bottom', **kw).solve()
 
 
@@ -200,7 +207,7 @@ def test_bottom_incidence_orders_match_reticolo(name):
     """Backside per-order efficiencies against RETICOLO's own ``inc_bottom`` numbers.
 
     This is the one external solver pinning ``incidence_side='bottom'`` on actual
-    diffraction orders (the analytic oracles in ``tests/test_backside_incidence.py`` stop at
+    diffraction orders (the analytic oracles in ``tests/rcwa/test_backside_incidence.py`` stop at
     uniform stacks). The index sets swap roles relative to the top-side test: bottom-side
     reflection propagates in ``n_bot``, transmission in ``n_top``. Same 1e-11 as the top
     side — measured disagreement is 1e-16..1e-13.
@@ -252,7 +259,7 @@ function, and the exact
     """
     g = _golden()
     kw = dict(CASES[name])
-    res = wavebit.rcwa(backend='numpy', fourier_coefficients='sampled', **kw).solve()
+    res = _legacy_wavebit.rcwa(backend='numpy', fourier_coefficients='sampled', **kw).solve()
     for side, arr in (('ri', res.R), ('ti', res.T)):
         got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)

@@ -1,0 +1,324 @@
+{
+  "packages": [
+    {
+      "name": "sphinx",
+      "version": "9.1.0",
+      "license": "BSD-2-Clause",
+      "files": [
+        "sphinx-LICENSE.txt"
+      ]
+    },
+    {
+      "name": "pydata-sphinx-theme",
+      "version": "0.21.0",
+      "license": "See packaged license",
+      "files": [
+        "pydata-sphinx-theme-LICENSE"
+      ]
+    },
+    {
+      "name": "myst-parser",
+      "version": "5.1.0",
+      "license": "See packaged license",
+      "files": [
+        "myst-parser-LICENSE"
+      ]
+    },
+    {
+      "name": "sphinx-design",
+      "version": "0.7.0",
+      "license": "See packaged license",
+      "files": [
+        "sphinx-design-LICENSE"
+      ]
+    },
+    {
+      "name": "sphinx-external-toc",
+      "version": "1.1.0",
+      "license": "See packaged license",
+      "files": [
+        "sphinx-external-toc-LICENSE"
+      ]
+    },
+    {
+      "name": "sphinxcontrib-applehelp",
+      "version": "2.0.0",
+      "license": "See packaged license",
+      "files": []
+    },
+    {
+      "name": "sphinxcontrib-devhelp",
+      "version": "2.0.0",
+      "license": "See packaged license",
+      "files": []
+    },
+    {
+      "name": "sphinxcontrib-htmlhelp",
+      "version": "2.1.0",
+      "license": "See packaged license",
+      "files": []
+    },
+    {
+      "name": "sphinxcontrib-jsmath",
+      "version": "1.0.1",
+      "license": "BSD",
+      "files": [
+        "sphinxcontrib-jsmath-LICENSE"
+      ]
+    },
+    {
+      "name": "sphinxcontrib-qthelp",
+      "version": "2.0.0",
+      "license": "See packaged license",
+      "files": []
+    },
+    {
+      "name": "sphinxcontrib-serializinghtml",
+      "version": "2.0.0",
+      "license": "See packaged license",
+      "files": []
+    },
+    {
+      "name": "jinja2",
+      "version": "3.1.6",
+      "license": "See packaged license",
+      "files": [
+        "jinja2-LICENSE.txt"
+      ]
+    },
+    {
+      "name": "pygments",
+      "version": "2.19.1",
+      "license": "BSD-2-Clause",
+      "files": [
+        "pygments-AUTHORS",
+        "pygments-LICENSE"
+      ]
+    },
+    {
+      "name": "docutils",
+      "version": "0.22.4",
+      "license": "See packaged license",
+      "files": [
+        "docutils-COPYING.txt",
+        "docutils-BSD-0-Clause.txt",
+        "docutils-BSD-2-Clause.txt",
+        "docutils-gpl-3-0.txt"
+      ]
+    },
+    {
+      "name": "snowballstemmer",
+      "version": "3.1.1",
+      "license": "BSD-3-Clause",
+      "files": [
+        "snowballstemmer-COPYING"
+      ]
+    },
+    {
+      "name": "babel",
+      "version": "2.16.0",
+      "license": "BSD-3-Clause",
+      "files": [
+        "babel-LICENSE"
+      ]
+    },
+    {
+      "name": "alabaster",
+      "version": "1.0.0",
+      "license": "See packaged license",
+      "files": [
+        "alabaster-LICENSE.txt"
+      ]
+    },
+    {
+      "name": "imagesize",
+      "version": "2.0.1",
+      "license": "MIT",
+      "files": [
+        "imagesize-LICENSE.txt"
+      ]
+    },
+    {
+      "name": "requests",
+      "version": "2.32.3",
+      "license": "Apache-2.0",
+      "files": [
+        "requests-LICENSE"
+      ]
+    },
+    {
+      "name": "roman-numerals",
+      "version": "4.1.0",
+      "license": "0BSD OR CC0-1.0",
+      "files": [
+        "roman-numerals-LICENCE.txt"
+      ]
+    },
+    {
+      "name": "packaging",
+      "version": "24.2",
+      "license": "See packaged license",
+      "files": [
+        "packaging-LICENSE",
+        "packaging-LICENSE.APACHE",
+        "packaging-LICENSE.BSD"
+      ]
+    },
+    {
+      "name": "beautifulsoup4",
+      "version": "4.12.3",
+      "license": "MIT License",
+      "files": [
+        "beautifulsoup4-AUTHORS",
+        "beautifulsoup4-LICENSE"
+      ]
+    },
+    {
+      "name": "accessible-pygments",
+      "version": "0.0.5",
+      "license": "BSD-3-Clause",
+      "files": [
+        "accessible-pygments-LICENSE"
+      ]
+    },
+    {
+      "name": "markdown-it-py",
+      "version": "4.2.0",
+      "license": "See packaged license",
+      "files": [
+        "markdown-it-py-LICENSE",
+        "markdown-it-py-LICENSE.markdown-it"
+      ]
+    },
+    {
+      "name": "mdit-py-plugins",
+      "version": "0.6.1",
+      "license": "See packaged license",
+      "files": [
+        "mdit-py-plugins-LICENSE"
+      ]
+    },
+    {
+      "name": "pyyaml",
+      "version": "6.0.2",
+      "license": "MIT",
+      "files": [
+        "pyyaml-LICENSE"
+      ]
+    },
+    {
+      "name": "click",
+      "version": "8.5.0",
+      "license": "BSD-3-Clause",
+      "files": [
+        "click-LICENSE.txt"
+      ]
+    },
+    {
+      "name": "sphinx-multitoc-numbering",
+      "version": "0.1.3",
+      "license": "MIT",
+      "files": [
+        "sphinx-multitoc-numbering-LICENSE"
+      ]
+    },
+    {
+      "name": "markupsafe",
+      "version": "3.0.2",
+      "license": "Copyright 2010 Pallets\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are\nmet:\n\n1.  Redistributions of source code must retain the above copyright\n    notice, this list of conditions and the following disclaimer.\n\n2.  Redistributions in binary form must reproduce the above copyright\n    notice, this list of conditions and the following disclaimer in the\n    documentation and/or other materials provided with the distribution.\n\n3.  Neither the name of the copyright holder nor the names of its\n    contributors may be used to endorse or promote products derived from\n    this software without specific prior written permission.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS\n\"AS IS\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT\nLIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A\nPARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT\nHOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\nSPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED\nTO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR\nPROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF\nLIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING\nNEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS\nSOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n",
+      "files": [
+        "markupsafe-LICENSE.txt"
+      ]
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.3.2",
+      "license": "MIT",
+      "files": [
+        "charset-normalizer-LICENSE"
+      ]
+    },
+    {
+      "name": "idna",
+      "version": "3.7",
+      "license": "See packaged license",
+      "files": [
+        "idna-LICENSE.md"
+      ]
+    },
+    {
+      "name": "urllib3",
+      "version": "2.3.0",
+      "license": "See packaged license",
+      "files": [
+        "urllib3-LICENSE.txt"
+      ]
+    },
+    {
+      "name": "certifi",
+      "version": "2025.4.26",
+      "license": "MPL-2.0",
+      "files": [
+        "certifi-LICENSE"
+      ]
+    },
+    {
+      "name": "soupsieve",
+      "version": "2.5",
+      "license": "MIT",
+      "files": [
+        "soupsieve-LICENSE.md"
+      ]
+    },
+    {
+      "name": "mdurl",
+      "version": "0.1.2",
+      "license": "See packaged license",
+      "files": [
+        "mdurl-LICENSE"
+      ]
+    }
+  ],
+  "notice_sha256": {
+    "soupsieve-LICENSE.md": "ceb7b9053b88addffa3102a457302bd840d123925ee9ed9c2ac90cf6548b33bf",
+    "myst-parser-LICENSE": "4a2260d6e2cd0f5a151a1e86dbfe7d3ed552b1e2beabf9941c1ba5c49cbce484",
+    "requests-LICENSE": "09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b",
+    "sphinxcontrib-jsmath-LICENSE": "d8c25e2e8478ccd32b18375eb3a57c584d31048fe0c23c55905c64c8af6774a9",
+    "urllib3-LICENSE.txt": "130e3a64d5fdd5d096a752694634a7d9df284469de86e5732100268041e3d686",
+    "click-LICENSE.txt": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+    "markupsafe-LICENSE.txt": "489a8e1108509ed98a37bb983e11e0f7e1d31f0bd8f99a79c8448e7ff37d07ea",
+    "markdown-it-py-LICENSE.markdown-it": "792c48c5a849a15fdf9e37e8bcf9e6d1dd13b32b46c642a748a0a46a9919d473",
+    "sphinx-multitoc-numbering-LICENSE": "88d2617b6aa5abba082c722476754a0aa17ddc0aa06e2e46f896e4bbb7d25b3d",
+    "docutils-gpl-3-0.txt": "e6037104443f9a7829b2aa7c5370d0789a7bda3ca65a0b904cdc0c2e285d9195",
+    "pydata-sphinx-theme-LICENSE": "d92fc698623827d7204139dee7874fbd7447f9256b8199acbd71cf8ee53d6f64",
+    "sphinx-LICENSE.txt": "64c96919bbaf3a13baa0f10e418cc1fc88768ce1b9c07f5b7bf49f0fb23db106",
+    "jinja2-LICENSE.txt": "3b49dcee4105eb37bac10faf1be260408fe85d252b8e9df2e0979fc1e094437b",
+    "charset-normalizer-LICENSE": "eb31a0c5a4fb09b8a4e32055d25c1e5f9c358a2752fef3cd720213d1ccfee241",
+    "packaging-LICENSE.BSD": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5",
+    "Font-Awesome-7.2.0-LICENSE.txt": "20c6f40715a567c97b80f6944beb8bb325835cab47ea7dcab89ee3b8e077eced",
+    "pygments-AUTHORS": "0660e318a6f215802adc8731ab85d0c65ff27cfcca3f5d28597f306476195bd9",
+    "beautifulsoup4-AUTHORS": "b9221d6eb05bd6ca1b75797b56b954beebe29b674df64177307e04767d162861",
+    "packaging-LICENSE": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48",
+    "pygments-LICENSE": "a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17",
+    "alabaster-LICENSE.txt": "8253f0abaad05a7dee1a08a43705ac2de1f73bd7d44cfe01010ecc104cc42851",
+    "beautifulsoup4-LICENSE": "55b4d8d4b1e5bc86d10efac91b74c87bcb77526b0f5b9edaf8b9cd2adc7397b2",
+    "idna-LICENSE.md": "a59f0b0ef3635874109a4461ca44ff7a70d50696e814767bfaf721d4c9b0db0f",
+    "babel-LICENSE": "3f9142a40859dfcb33f45c16ad872b500d683cc4a20b17091478b404e900520f",
+    "Bootstrap-5.3.3-LICENSE.txt": "8c14611ae41ac6fd543c13349f22188eb12c69b3e59105c5eca3925a8e4eca3e",
+    "mdit-py-plugins-LICENSE": "4a2260d6e2cd0f5a151a1e86dbfe7d3ed552b1e2beabf9941c1ba5c49cbce484",
+    "docutils-BSD-0-Clause.txt": "42ac50251ab8a6738f77d5707f2a788dbf3446a6ed68edecb6ac17489a78e163",
+    "certifi-LICENSE": "e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7",
+    "imagesize-LICENSE.txt": "d0659c2767a164c2bf2736ee9f7bb619e0f165c89a962839de53fd5f77f62f4e",
+    "markdown-it-py-LICENSE": "4a2260d6e2cd0f5a151a1e86dbfe7d3ed552b1e2beabf9941c1ba5c49cbce484",
+    "pyyaml-LICENSE": "8d3928f9dc4490fd635707cb88eb26bd764102a7282954307d3e5167a577e8a4",
+    "accessible-pygments-LICENSE": "496d114c1451e5ae8c19ca5d9e07bac8b8ca442f867bc8ebba19ba8f838bce30",
+    "docutils-COPYING.txt": "6ab4f27c76c74f96e5e692da5944a6f82968f3bddaac5660a4aa723e70eb5d8f",
+    "mdurl-LICENSE": "7c605df6e28667a9603118e98274f64a49ce3eed0d26fccce9534a345e0ef955",
+    "snowballstemmer-COPYING": "880802872ce34f313df826e96131b1b147dcfa09c76fc82129f25503a922a678",
+    "roman-numerals-LICENCE.txt": "c744ffc7e120b22e6620b613298dc003a2613c0ae489ee414fb1d473f24f916f",
+    "docutils-BSD-2-Clause.txt": "b8f3b31a2f4312401fe4122fe932a333ec0d7e47d849c02da0404e8048fe74d0",
+    "sphinx-external-toc-LICENSE": "1fe66a8141832e7bdfd1c9826336c308f0318686aa90cfec5147f57804c5378d",
+    "sphinx-design-LICENSE": "c06768f1f47e305f8161f514091c433400832617135ce4e49f5287cadec9041f",
+    "packaging-LICENSE.APACHE": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+  }
+}

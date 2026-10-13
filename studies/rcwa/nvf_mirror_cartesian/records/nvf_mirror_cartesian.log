@@ -1,0 +1,33 @@
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "p", "stage": "closure_start", "seconds": 1.7919810488820076e-06}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "p", "stage": "closure_ready", "seconds": 0.3115226249792613}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "p", "stage": "modes_ready", "seconds": 13.808451584016439}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "p", "stage": "matching_ready", "seconds": 16.928052708972245}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "p", "stage": "power_ready", "seconds": 17.32308754196856}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "s", "stage": "closure_start", "seconds": 17.323156833997928}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "s", "stage": "closure_ready", "seconds": 17.541694417013787}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "s", "stage": "modes_ready", "seconds": 29.33818550000433}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "s", "stage": "matching_ready", "seconds": 32.15624216699507}
+{"kind": "cartesian_mirror_progress", "order": 24, "polarization": "s", "stage": "power_ready", "seconds": 32.524612792010885}
+{"kind": "cartesian_mirror", "order": 24, "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.9068054370550859, "s_T": 0.9415720932324826, "p_R": 0.09319456294360119, "s_R": 0.05842790676709326, "energy_error": 1.3129497489217101e-12, "seconds": 32.52475687500555}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "p", "stage": "closure_start", "seconds": 1.8749851733446121e-06}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "p", "stage": "closure_ready", "seconds": 1.0499612499843352}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "p", "stage": "modes_ready", "seconds": 65.4458711669431}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "p", "stage": "matching_ready", "seconds": 85.06142779195216}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "p", "stage": "power_ready", "seconds": 86.78869166696677}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "s", "stage": "closure_start", "seconds": 86.78878799994709}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "s", "stage": "closure_ready", "seconds": 88.07981112494599}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "s", "stage": "modes_ready", "seconds": 163.67903037497308}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "s", "stage": "matching_ready", "seconds": 187.4043294589501}
+{"kind": "cartesian_mirror_progress", "order": 32, "polarization": "s", "stage": "power_ready", "seconds": 190.53801729198312}
+{"kind": "cartesian_mirror", "order": 32, "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.9066999606468387, "s_T": 0.9415384968271453, "p_R": 0.09330003934885997, "s_R": 0.05846150317208334, "energy_error": 4.301337064305244e-12, "seconds": 190.5382781669614}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "p", "stage": "closure_start", "seconds": 2.9579969123005867e-06}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "p", "stage": "closure_ready", "seconds": 4.857915208034683}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "p", "stage": "modes_ready", "seconds": 384.02785733301425}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "p", "stage": "matching_ready", "seconds": 463.2785901669995}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "p", "stage": "power_ready", "T": 0.9066455203733258, "R": 0.09335447962837333, "energy_error": 1.6990853168863396e-12, "seconds": 471.95366783300415}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "s", "stage": "closure_start", "seconds": 471.95380762504647}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "s", "stage": "closure_ready", "seconds": 476.39445595804136}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "s", "stage": "modes_ready", "seconds": 784.0219427919947}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "s", "stage": "matching_ready", "seconds": 900.2917085000081}
+{"kind": "cartesian_mirror_progress", "order": 40, "polarization": "s", "stage": "power_ready", "T": 0.9415209799159808, "R": 0.0584790200798001, "energy_error": 4.21906953818052e-12, "seconds": 910.0888619170291}
+{"kind": "cartesian_mirror", "order": 40, "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.9066455203733258, "s_T": 0.9415209799159808, "p_R": 0.09335447962837333, "s_R": 0.0584790200798001, "energy_error": 4.21906953818052e-12, "seconds": 910.0900865830481}

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 635" role="img" aria-labelledby="06-lattice-title 06-lattice-desc">
+<title id="06-lattice-title">같은 (u, v), 달라지는 실제 위치 (x, y)</title><desc id="06-lattice-desc">600 nm 격자의 사잇각을 90도에서 60도로 바꾸면 같은 격자 좌표 0.75,0.75가 150,150에서 225,129.9 nm로 이동한다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="635" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">같은 (u, v), 달라지는 실제 위치 (x, y)</text>
+<text x="30" y="81" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">두 변의 길이는 모두 600 nm · P의 격자 좌표는 계속 (0.75, 0.75)</text>
+<text x="250" y="126" style="fill:#182b3e;font-size:23px;font-weight:650" text-anchor="middle">① 사잇각 α = 90°</text>
+<polygon points="140.0000,390.0000 360.0000,390.0000 360.0000,170.0000 140.0000,170.0000" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<line x1="195.0" y1="390.0" x2="195.0" y2="170.0" stroke="#cad7df" stroke-width="1"/>
+<line x1="140.0" y1="335.0" x2="360.0" y2="335.0" stroke="#cad7df" stroke-width="1"/>
+<line x1="250.0" y1="390.0" x2="250.0" y2="170.0" stroke="#cad7df" stroke-width="1"/>
+<line x1="140.0" y1="280.0" x2="360.0" y2="280.0" stroke="#cad7df" stroke-width="1"/>
+<line x1="305.0" y1="390.0" x2="305.0" y2="170.0" stroke="#cad7df" stroke-width="1"/>
+<line x1="140.0" y1="225.0" x2="360.0" y2="225.0" stroke="#cad7df" stroke-width="1"/>
+<polygon points="140.0000,390.0000 360.0000,390.0000 360.0000,170.0000 140.0000,170.0000" fill="none" stroke="#546779" stroke-width="2"/>
+<line x1="250.0" y1="280.0" x2="305.0" y2="280.0" stroke="#285ab0" stroke-width="4"/>
+<polygon points="305.0,280.0 295.0,284.0 295.0,276.0" fill="#285ab0"/>
+<line x1="305.0" y1="280.0" x2="305.0" y2="225.0" stroke="#117c77" stroke-width="4"/>
+<polygon points="305.0,225.0 309.0,235.0 301.0,235.0" fill="#117c77"/>
+<circle cx="250.0" cy="280.0" r="4" fill="#546779"/>
+<text x="230" y="307" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">O</text>
+<text x="261" y="307" style="fill:#285ab0;font-size:18px;font-weight:400" text-anchor="start">¼a₁</text>
+<text x="327.0" y="266.5" style="fill:#117c77;font-size:18px;font-weight:400" text-anchor="start">¼a₂</text>
+<circle cx="305.0" cy="225.0" r="7" fill="#a85116"/>
+<text x="318.0" y="213.0" style="fill:#a85116;font-size:22px;font-weight:700" text-anchor="start">P</text>
+<rect x="43" y="422" width="414" height="140" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="61" y="456" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">P = ¼a₁ + ¼a₂</text>
+<text x="61" y="492" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">a₁ = (600, 0) nm</text>
+<text x="61" y="519" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">a₂ = (0, 600) nm</text>
+<text x="250" y="594" style="fill:#a85116;font-size:25px;font-weight:650" text-anchor="middle">P = (150, 150) nm</text>
+<text x="745" y="126" style="fill:#182b3e;font-size:23px;font-weight:650" text-anchor="middle">② 사잇각 α = 60°</text>
+<polygon points="580.0000,375.2628 800.0000,375.2628 910.0000,184.7372 690.0000,184.7372" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<line x1="635.0" y1="375.2627944162882" x2="745.0" y2="184.73720558371176" stroke="#cad7df" stroke-width="1"/>
+<line x1="607.5" y1="327.6313972081441" x2="827.5" y2="327.6313972081441" stroke="#cad7df" stroke-width="1"/>
+<line x1="690.0" y1="375.2627944162882" x2="800.0" y2="184.73720558371176" stroke="#cad7df" stroke-width="1"/>
+<line x1="635.0" y1="280.0" x2="855.0" y2="280.0" stroke="#cad7df" stroke-width="1"/>
+<line x1="745.0" y1="375.2627944162882" x2="855.0" y2="184.73720558371176" stroke="#cad7df" stroke-width="1"/>
+<line x1="662.5" y1="232.3686027918559" x2="882.5" y2="232.3686027918559" stroke="#cad7df" stroke-width="1"/>
+<polygon points="580.0000,375.2628 800.0000,375.2628 910.0000,184.7372 690.0000,184.7372" fill="none" stroke="#546779" stroke-width="2"/>
+<line x1="745.0" y1="280.0" x2="800.0" y2="280.0" stroke="#285ab0" stroke-width="4"/>
+<polygon points="800.0,280.0 790.0,284.0 790.0,276.0" fill="#285ab0"/>
+<line x1="800.0" y1="280.0" x2="827.5" y2="232.3686027918559" stroke="#117c77" stroke-width="4"/>
+<polygon points="827.5,232.3686027918559 825.9641016151378,243.0288568297003 819.0358983848622,239.0288568297003" fill="#117c77"/>
+<circle cx="745.0" cy="280.0" r="4" fill="#546779"/>
+<text x="725" y="307" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">O</text>
+<text x="756" y="307" style="fill:#285ab0;font-size:18px;font-weight:400" text-anchor="start">¼a₁</text>
+<text x="822.0" y="270.18430139592795" style="fill:#117c77;font-size:18px;font-weight:400" text-anchor="start">¼a₂</text>
+<circle cx="827.5" cy="232.3686027918559" r="7" fill="#a85116"/>
+<text x="840.5" y="220.3686027918559" style="fill:#a85116;font-size:22px;font-weight:700" text-anchor="start">P</text>
+<rect x="538" y="422" width="414" height="140" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="556" y="456" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">P = ¼a₁ + ¼a₂</text>
+<text x="556" y="492" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">a₁ = (600, 0) nm</text>
+<text x="556" y="519" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">a₂ ≈ (300, 519.6) nm</text>
+<text x="745" y="594" style="fill:#a85116;font-size:25px;font-weight:650" text-anchor="middle">P ≈ (225, 129.9) nm</text>
+<text x="30" y="618" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">기하학 계산 · O는 셀 중심: (u, v)=(0.5, 0.5), (x, y)=(0, 0) · 광학 계산 결과가 아님</text>
+</svg>

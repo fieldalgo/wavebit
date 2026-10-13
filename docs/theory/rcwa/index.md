@@ -1,0 +1,21 @@
+# RCWA theory
+
+Derivations and mathematical conventions underlying the Fourier-domain solver.
+
+- [The per-order s/p frame the complex amplitudes are quoted in](amplitude-sp-frame.md)
+- [Branch cuts — which square root, and the two ways it went wrong](branch-cuts.md)
+- [Connecting algorithms — ETM, SMM, and why a plain transfer is not on the list](connecting-algorithms.md)
+- [Laurent, direct, inverse, Toeplitz: which word names a rule and which names a matrix](factorization-terms.md)
+- [The first-order path — what it is judged against, when no oracle will do it](first-order-formulation.md)
+- [Five slots out of nine — the shape every second-order RCWA has, and what happens at its edge](five-slot-limit.md)
+- [The formulation, derived in the code's own convention](formulation.md)
+- [Rectangular vs circular Fourier-order truncation — measurements](fourier-truncation-shape.md)
+- [Magnetic materials — `mu` on layers and half-spaces](magnetic-materials.md)
+- [Negative-index media — the signed index, the mirror root, and what `theta` means](negative-index-media.md)
+- [The inverse rule on a metal: the pole in `<1/eps>^-1`, and the floor that closes it](nvf-metal-inverse-rule.md)
+- [The raster normal-field constructions, and the `raster_normal_method` / `nvf_projector` options](nvf-normal-methods.md)
+- [Non-orthogonal (oblique) unit cells — what `lattice` does and what it costs](oblique-lattice.md)
+- [The off-diagonal permittivity slots — what they hold, and why an asymmetric tensor came out wrong](off-diagonal-slot-convention.md)
+- [Patterned anisotropic layers — the Popov–Nevière factorization](patterned-anisotropic-factorization.md)
+- [Rayleigh points — the exact graze, which paths solve it, and what `auto_detune` does](rayleigh-points.md)
+- [Li factorization for anisotropic materials](tensor-li-factorization.md)

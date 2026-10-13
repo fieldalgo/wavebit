@@ -1,0 +1,30 @@
+[
+  {
+    "label": "inside every door",
+    "eps": 2.25,
+    "stable": true,
+    "finite": true,
+    "concrete": "planned"
+  },
+  {
+    "label": "resolution floor",
+    "eps": 2.7,
+    "stable": false,
+    "finite": false,
+    "concrete": "structures[1] is sampled at 7.81 cells per wavelength (index 1.643, wavelength 0.642039, the sources' band.shortest_wavelength, dx 0.05). The measured convergence behind the legacy engine's CELLS_PER_"
+  },
+  {
+    "label": "time-step bound",
+    "eps": 0.2,
+    "stable": false,
+    "finite": false,
+    "concrete": "dt = 0.0144338 is at or past the stability bound 0.0129099 of this scene. The vacuum condition dt < n_min dx / sqrt(3) is tightened by every pole to dt < 1/sqrt(1/dt_vac^2 + rate/4) with rate = max(w0"
+  },
+  {
+    "label": "positivity",
+    "eps": -1.0,
+    "stable": false,
+    "finite": false,
+    "concrete": "Material(eps=...): eps is a finite positive number; got -1.0."
+  }
+]

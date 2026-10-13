@@ -1,0 +1,12 @@
+{"kind": "mirror_projection", "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "grading_strength": 8.0, "grading_radius": 0.01, "rows": 8, "x_subdivisions": 3, "body_degree": 4, "gap_degree": 6, "edge_fraction": 1e-05}, "cap": 80, "cell_residual": 1.3850395288393074e-11, "degrees_of_freedom": 7559, "mirror_error": 1.9047048445498253e-11, "seconds": 33.599697792029474}
+{"kind": "mirror_progress", "order": 40, "polarization": "p", "stage": "closure_start", "seconds": 2.916960511356592e-06}
+{"kind": "mirror_progress", "order": 40, "polarization": "p", "stage": "closure_ready", "seconds": 29.825516459008213}
+{"kind": "mirror_progress", "order": 40, "polarization": "p", "stage": "modes_ready", "seconds": 212.82459487498272}
+{"kind": "mirror_progress", "order": 40, "polarization": "p", "stage": "matching_ready", "seconds": 254.85131062497385}
+{"kind": "mirror_progress", "order": 40, "polarization": "p", "stage": "power_ready", "seconds": 259.0134380419622}
+{"kind": "mirror_progress", "order": 40, "polarization": "s", "stage": "closure_start", "seconds": 259.01350487500895}
+{"kind": "mirror_progress", "order": 40, "polarization": "s", "stage": "closure_ready", "seconds": 285.10296387498965}
+{"kind": "mirror_progress", "order": 40, "polarization": "s", "stage": "modes_ready", "seconds": 496.9707703749882}
+{"kind": "mirror_progress", "order": 40, "polarization": "s", "stage": "matching_ready", "seconds": 570.2908196669887}
+{"kind": "mirror_progress", "order": 40, "polarization": "s", "stage": "power_ready", "seconds": 575.032415624999}
+{"kind": "mirror_gap", "order": 40, "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "grading_strength": 8.0, "grading_radius": 0.01, "rows": 8, "x_subdivisions": 3, "body_degree": 4, "gap_degree": 6, "edge_fraction": 1e-05}, "mirror_error": 1.9047048445498253e-11, "p_T": 0.9066442806115327, "s_T": 0.9415249876959343, "p_R": 0.09335571938808668, "s_R": 0.058475012305126, "energy_error": 1.0602629885170245e-12, "seconds": 575.03750145901}

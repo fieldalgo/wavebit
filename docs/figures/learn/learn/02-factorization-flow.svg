@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 1290" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">From structure and materials to RCWA</title>
+<desc id="flow-desc">Geometry enters either the Li or NVF path. Dashed lines pass material values to both. NVF constructs boundary normals, extends the direction field, builds normal projectors and then convolution matrices. Both paths produce material convolution operators and join the same RCWA engine for layer eigenmodes, interface matching, reflection, transmission and electric fields.</desc>
+<defs>
+<marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker>
+<marker id="data-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#a85116" /></marker>
+</defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e} .flow{fill:none;stroke:#546779;stroke-width:2.4;stroke-linejoin:round} .data{fill:none;stroke:#a85116;stroke-width:2.4;stroke-dasharray:8 6;stroke-linejoin:round}</style>
+<rect width="840" height="1290" fill="white" />
+
+<text x="420" y="36" font-size="26" font-weight="650" text-anchor="middle" style="fill:#182b3e">From structure and materials to RCWA</text>
+<rect x="82" y="62" width="676" height="198" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.6" />
+<text x="106" y="90" font-size="19" font-weight="600" text-anchor="start" style="fill:#182b3e">Common input · raster or shapes</text>
+<rect x="260" y="106" width="320" height="56" rx="12" fill="#fff1df" stroke="#dfb58d" stroke-width="1.6" />
+<text x="420" y="142" font-size="23" font-weight="600" text-anchor="middle" style="fill:#182b3e">Material values ε, μ</text>
+<rect x="260" y="190" width="320" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6" />
+<text x="420" y="224" font-size="22" font-weight="600" text-anchor="middle" style="fill:#182b3e">Geometry · material interfaces</text>
+<rect x="82" y="328" width="676" height="428" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.6" />
+<text x="420" y="356" font-size="20" font-weight="600" text-anchor="middle" style="fill:#182b3e">Build convolution matrices</text>
+<path d="M420 242 V282 H228 V620" class="flow" marker-end="url(#flow-arrow)" />
+<path d="M420 282 H580 V382" class="flow" marker-end="url(#flow-arrow)" />
+<rect x="180" y="291" width="96" height="30" rx="5" fill="#ffffff" stroke="#ffffff" stroke-width="1.6" />
+<text x="228" y="313" font-size="20" font-weight="600" text-anchor="middle" style="fill:#182b3e">Select li</text>
+<rect x="519" y="291" width="122" height="30" rx="5" fill="#ffffff" stroke="#ffffff" stroke-width="1.6" />
+<text x="580" y="313" font-size="20" font-weight="600" text-anchor="middle" style="fill:#182b3e">Select nvf</text>
+<rect x="424" y="382" width="312" height="72" rx="12" fill="#e5f4ef" stroke="#94bfb7" stroke-width="1.6" />
+<text x="580" y="412" font-size="22" font-weight="600" text-anchor="middle" style="fill:#182b3e">Compute boundary normals</text>
+<text x="580" y="440" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">Extend directions across the cell</text>
+<path d="M580 454 V492" class="flow" marker-end="url(#flow-arrow)" />
+<rect x="424" y="492" width="312" height="72" rx="12" fill="#e5f4ef" stroke="#94bfb7" stroke-width="1.6" />
+<text x="580" y="535" font-size="22" font-weight="600" text-anchor="middle" style="fill:#182b3e">Build normal projectors</text>
+<path d="M580 564 V620" class="flow" marker-end="url(#flow-arrow)" />
+<rect x="104" y="620" width="248" height="112" rx="12" fill="#e8f1ff" stroke="#9bb5d8" stroke-width="1.6" />
+<text x="228" y="651" font-size="23" font-weight="650" text-anchor="middle" style="fill:#182b3e">Li factorization</text>
+<text x="228" y="682" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">Along lattice axes u and v</text>
+<text x="228" y="710" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">Apply direct and inverse rules</text>
+<rect x="424" y="620" width="312" height="112" rx="12" fill="#e5f4ef" stroke="#94bfb7" stroke-width="1.6" />
+<text x="580" y="651" font-size="23" font-weight="650" text-anchor="middle" style="fill:#182b3e">NVF factorization</text>
+<text x="580" y="682" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">Combine materials and normal projections</text>
+<text x="580" y="710" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">Build convolution matrices</text>
+<path d="M260 134 H54 V674 H104" class="data" marker-end="url(#data-arrow)" />
+<path d="M580 134 H786 V674 H736" class="data" marker-end="url(#data-arrow)" />
+<g transform="translate(36 473) rotate(-90)">
+<text x="0" y="0" font-size="18" font-weight="400" text-anchor="middle" style="fill:#a85116">Pass material values</text>
+</g><g transform="translate(812 473) rotate(90)">
+<text x="0" y="0" font-size="18" font-weight="400" text-anchor="middle" style="fill:#a85116">Pass material values</text>
+</g>
+<path d="M228 732 V772 H420 V804" class="flow" marker-end="url(#flow-arrow)" />
+<path d="M580 732 V772 H420" class="flow" />
+<circle cx="420" cy="772" r="4" fill="#546779" />
+<rect x="230" y="804" width="380" height="106" rx="12" fill="#e8f1ff" stroke="#9bb5d8" stroke-width="1.6" />
+<text x="420" y="837" font-size="23" font-weight="650" text-anchor="middle" style="fill:#182b3e">Material convolution matrices</text>
+<text x="420" y="868" font-size="21" font-weight="400" text-anchor="middle" style="fill:#182b3e">conv_mat collection</text>
+<text x="420" y="895" font-size="18" font-weight="400" text-anchor="middle" style="fill:#546779">5 or 9 operator blocks</text>
+<rect x="180" y="952" width="480" height="278" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.6" />
+<text x="200" y="979" font-size="20" font-weight="600" text-anchor="start" style="fill:#182b3e">Shared RCWA engine</text>
+<path d="M420 910 V1000" class="flow" marker-end="url(#flow-arrow)" />
+<rect x="214" y="1000" width="412" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6" />
+<text x="420" y="1034" font-size="22" font-weight="400" text-anchor="middle" style="fill:#182b3e">Compute each layer's eigenmodes</text>
+<path d="M420 1052 V1080" class="flow" marker-end="url(#flow-arrow)" />
+<rect x="214" y="1080" width="412" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6" />
+<text x="420" y="1114" font-size="22" font-weight="400" text-anchor="middle" style="fill:#182b3e">Match fields between layers</text>
+<path d="M420 1132 V1160" class="flow" marker-end="url(#flow-arrow)" />
+<rect x="214" y="1160" width="412" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6" />
+<text x="420" y="1194" font-size="22" font-weight="400" text-anchor="middle" style="fill:#182b3e">Compute reflection, transmission and fields</text>
+<path d="M156 1260 H204" class="flow" marker-end="url(#flow-arrow)" />
+<text x="220" y="1267" font-size="17" font-weight="400" text-anchor="start" style="fill:#182b3e">Calculation flow</text>
+<path d="M434 1260 H482" class="data" marker-end="url(#data-arrow)" />
+<text x="498" y="1267" font-size="17" font-weight="400" text-anchor="start" style="fill:#182b3e">Pass material values</text>
+</svg>

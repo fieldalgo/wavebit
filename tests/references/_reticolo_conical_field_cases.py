@@ -27,7 +27,7 @@ requires ours to vanish too rather than dividing.
 """
 import numpy as np
 
-from _reticolo_field_cases import RES_X, RES_Z, layer_rows  # noqa: F401  (re-exported)
+from tests.references._reticolo_field_cases import RES_X, RES_Z, layer_rows  # noqa: F401  (re-exported)
 
 WL = 620.0
 PERIOD = 400.0

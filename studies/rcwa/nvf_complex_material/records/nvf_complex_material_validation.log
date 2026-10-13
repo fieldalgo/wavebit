@@ -1,0 +1,115 @@
+Conforming NVF independent passive material loss validation
+Date: 2026-09-09
+Platform: Darwin arm64
+NumPy 2.5.1; SciPy 1.18.0; JAX 0.11.0; Torch 2.13.0
+Environment: PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+These settings do not establish Apple Accelerate's actual thread count.
+
+Independent and common material-loss controls:
+python -m pytest tests/test_conforming_complex_material.py tests/test_conforming_common_loss.py -q --tb=short
+57 passed in 184.56s before the polynomial-variant and basis controls below
+were added. Includes 27 independent-loss and 30 common-loss cases.
+Coverage includes analytic material integrals, independent contact matrices
+on NumPy/JAX/Torch engines, passivity and absorption, fifteen live JAX
+parameters, contact and lossless-boundary derivatives, and disappearance of
+a collapsed interval's unused complex material.
+
+Body/gap degree variants:
+python -m pytest tests/test_conforming_complex_material.py -q -k polynomial_variants --tb=short
+10 passed, 27 deselected in 2.62s.
+Checks body/gap degree pairs (1,1), (1,4), (2,1), (3,4), (4,6) in both layer
+axes, using periodic field means, positive gaps and analytic contact rules.
+
+Local/global complex basis invariance:
+python -m pytest tests/test_conforming_complex_material.py -q -k local_and_global --tb=short
+3 passed, 37 deselected in 0.91s.
+All nine field/energy/material coefficients match at gaps 0,17,400 within
+the existing 3e-11 absolute basis-invariance tolerance. These three cases
+and the ten polynomial variants bring the independent-loss file to 40 cases.
+
+Public geometry, material and background regression:
+python -m pytest tests/test_conforming_nvf.py tests/test_conforming_rectangular_lattice.py tests/test_conforming_layer_axes.py tests/test_conforming_separated_rectangles.py -q --tb=short
+133 passed in 307.15s.
+The invalid inclusion-material control now uses gain (3-.1j), because the
+former passive inclusion (3+.1j) in a lossless background is supported.
+
+Independent grading roots/derivatives and documentation contract:
+python -m pytest tests/test_nvf_interface_resolution.py tests/test_docs_contract.py -q --tb=short
+51 passed in 22.74s: 17 mesh cases and 34 documentation cases.
+Six mesh cases newly check complex material contrast against independently
+sampled density quadrature and Brent roots at radii .01, .001 and .0001.
+Their root and Jacobian tolerances remain 8e-15 and 2e-8 + 1e-6 relative.
+
+Shared real kernels, complex weak equations and engine regression:
+python -m pytest tests/test_nvf_partitioned_gap_energy.py tests/test_nvf_continuous_flux.py tests/test_nvf_polynomial_flux.py tests/test_nvf_local_flux.py tests/test_nvf_polynomial_body.py tests/test_nvf_gap_convergence.py tests/test_nvf_energy_builder.py tests/test_slot_order.py tests/test_nvf_posed_gap.py tests/test_nvf_complex_variational.py tests/test_nvf_interface_resolution.py -q --tb=short
+251 passed, 1 xfailed in 562.31s.
+This run collected the original 11 mesh cases before the six complex mesh
+controls were added and run in the separate 51-case group above. Those 11
+cases overlap between the groups. The strict expected failure remains the
+historical fixed-P1 moving-interface control. The group also includes 13
+new complex quadrature cases and six independently assembled weak-equation
+controls, retaining the existing real study and engine cases.
+
+Combined: 494 distinct passing cases and one historical expected failure.
+Count: 57+10+3+133+51+251-11 duplicated mesh cases = 494.
+
+Perpendicular-contact derivative comparison:
+Fixture: test_contact_and_independent_lossless_boundary_derivatives,
+zero perpendicular/internal gap, background loss zero, inclusion imaginary
+parts .8 and 2.1, the same frozen geometry plan as the positive-gap scene.
+The weighted all-slot objective has the following JAX derivatives:
+axis 0: -0.18728492675373726
+axis 1: -0.09716002376846102
+At h=1e-6, second-order one-sided extrapolation errors were respectively
+-8.823532961665936e-6 and 1.8287335856639886e-5.
+Fourth-order Richardson extrapolation of one-sided slopes at h,h/2,h/4,h/8:
+axis 0, h=1e-6: error=-1.82166972e-8
+axis 0, h=5e-7: error=2.99159058e-7
+axis 1, h=1e-6: error=-1.20183632e-6
+axis 1, h=5e-7: error=1.00152286e-6
+This removes truncation error on the enrichment's narrow curvature scale;
+the absolute 3e-6 derivative criterion is unchanged. Still smaller steps
+amplify roundoff. Internal-gap and loss-boundary controls use their original
+second-order comparisons, with two step sizes each.
+
+Manual examples: both Python blocks in docs/guide/conforming-nvf.md executed.
+Existing real 700-by-430 mixed-axis stack with internal gaps:
+p T=0.6472679896766852, s T=0.8377685774616426.
+JAX example with a lossy inclusion and lossless background:
+gap and independent inclusion-loss derivative shapes (1,9,9), (1,9,9).
+
+Absorbing mixed-axis contact stack, NumPy engine:
+Fixture: test_independent_loss_mixed_contact_stack_matches_analytic_inverse_rules
+in tests/test_conforming_complex_material.py.
+Lattice R(.31) diag(700,430); zero perpendicular gap and internal gap 23.
+Horizontal layer: background 1.7, ordered input shape materials 9+.8j and
+4+2.1j. Vertical layer: background 1.7+.9j, materials 9 and 4+.3j.
+Middle uniform layer epsilon=2.3+.7j; retained orders (2,1);
+wavelength=585, each layer thickness=112.45; theta=.23, phi=.78;
+top epsilon=1, bottom epsilon=2.25. A=1-T-R.
+p: T=0.2627548923365857, R=0.08156281858163676, A=0.6556822890817776
+s: T=0.19527891734052621, R=0.05208406421021369, A=0.75263701844926
+All three backends match independent contact matrices within the unchanged
+2e-10 power tolerance. These finite-model outputs do not certify optical
+convergence.
+
+Strict documentation build:
+python -m sphinx -b html -W --keep-going docs <temporary-output-directory>
+Build succeeded with the existing official intersphinx inventory cache.
+
+Lint and whitespace:
+python -m ruff check wavebit/_core/conforming tests/test_conforming_complex_material.py tests/test_conforming_common_loss.py tests/test_conforming_nvf.py tests/test_nvf_complex_variational.py tests/test_nvf_continuous_flux.py tests/test_nvf_polynomial_body.py tests/test_nvf_interface_resolution.py
+All checks passed. git diff --check: passed.
+
+The 1e-8 cell residual, 2e-12 mesh CDF and lossless 1e-9 Hermitian guards
+remain. The complex physical closure additionally checks positive storage
+and nonnegative dissipation with an absolute 1e-9 roundoff allowance, without
+modifying its matrices. No optical or derivative threshold was relaxed.
+
+Scope: finite positive-real-part scalar permittivities, nonnegative physical
+imaginary parts, nonmagnetic materials, and the existing orthogonal rectangle
+profiles. Loss can vary independently in each shape and background. The
+real study kernels keep their original eight-coefficient layout; the complex
+subclass adds the independent yx energy coefficient. General geometry,
+nonpositive real permittivities, automatic projector selection and optical
+convergence qualification remain separate work.

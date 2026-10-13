@@ -17,7 +17,7 @@ source into the terminal.
 
 **Why this file exists when ``gen_goldens_meep_crossed.py`` already does.** The crossed
 generator answers a question this one cannot -- per-order amplitudes on a 2D order grid --
-but it does not answer the question ``docs/fdtd.md`` §2 and ``README.md`` actually put to
+but it does not answer the question ``docs/guide/fdtd/fdtd.md`` §2 and ``README.md`` actually put to
 a reader. Those two documents print a three-way table on *this* grating and lean on Meep's
 column as the FDTD path's headline validation -- until 2026-09-06 in the words "our worst
 per-order gap 7.4e-4 (TE) / 6.2e-4 (TM) against Meep's 7.4e-4 / 6.9e-4 -- the same
@@ -64,21 +64,26 @@ The calibration reaches three things no energy check can:
 * the **p leg's sign**. At normal incidence ``r_p = -r_s`` and ``t_p = +t_s`` exactly, and
   no efficiency anywhere in this file can tell that from ``r_p = +r_s``.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 import time
 
 sys.tracebacklimit = 0                     # never print frames from another package
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_meep_1d.npz'
 
 #: The coarse control runs at half the resolution. It is not a second golden: it is what
 #: lets the committed file state its own error bar, and it is what a reader of
-#: ``docs/fdtd.md`` §2 needs in order to see the convergence rather than take one number on
+#: ``docs/guide/fdtd/fdtd.md`` §2 needs in order to see the convergence rather than take one number on
 #: faith. At order q the two tiers differ by ``(2**q - 1)`` times the fine grid's error.
 #: **Measured on this scene q is 1.73 to 2.17** -- 1.93 on the planar case in both legs,
 #: 2.17 (TE) and 1.73 (TM) on the grating, against a converged RCWA answer. A 1D grating with
@@ -116,7 +121,7 @@ def _z_layout(d, resolution, dpml, pad, gap, src_frac):
     The monitors sit ``gap`` from the structure and no further. Below a periodic structure
     the field is exactly a sum of Rayleigh orders at any depth and the spatial transform
     separates them exactly, so an evanescent order on the monitor plane cannot contaminate
-    a propagating one -- the same finding ``docs/fdtd.md`` §2 records for wavebit's own
+    a propagating one -- the same finding ``docs/guide/fdtd/fdtd.md`` §2 records for wavebit's own
     ``pad_scale``. What the distance *does* buy is de-referencing error: the phase is
     undone with the analytic ``kz`` while meep propagates on the numerical one.
 
@@ -234,7 +239,7 @@ def _run(case, leg, resolution, empty):
     **Every setting comes from the case dict.** ``gap`` and ``df_frac`` were function
     defaults here until 2026-09-07; their values are unchanged and the regenerated golden
     is identical, but a determinant that lives in a signature is one a regeneration can
-    move without anybody writing it down -- which is the failure ``docs/fdtd.md`` §2 was
+    move without anybody writing it down -- which is the failure ``docs/guide/fdtd/fdtd.md`` §2 was
     published with. ``gap`` is worth 3.4e-3 at zero and nothing at all over 0.02-0.40;
     ``df_frac`` is worth 1e-7, because the DFT is at a single frequency.
 
@@ -481,7 +486,7 @@ LEG_TAG = {'te': 's', 'tm': 'p'}
 
 def _closed_form(case):
     """``(r, t)`` for the case's stack, in the s convention, from the case file."""
-    from _meep_1d_cases import airy_rt
+    from tests.references._meep_1d_cases import airy_rt
 
     n_list = [float(np.asarray(layer).ravel()[0]) for layer in np.asarray(case['index'])]
     return airy_rt(case['wavelength'], case['n_top'], n_list, list(case['thickness']),
@@ -546,13 +551,13 @@ def _check_build():
     ``eps_averaging``, ``ensure_periodicity``, ``Courant``, the PML profile and
     ``R_asymptotic``, the ``GaussianSource`` cutoff, the decimation factor and the
     subpixel tolerances -- four of them worth 5e-4 to 1.5e-2, which is the size of the
-    agreement ``docs/fdtd.md`` §2 claims. **The version string is the only thing pinning
+    agreement ``docs/guide/fdtd/fdtd.md`` §2 claims. **The version string is the only thing pinning
     them.** So a golden regenerated on another build is a different column wearing the
     same name, and this refuses rather than lets that happen quietly. Updating meep means
     updating ``_meep_1d_cases.py::MEEP_BUILD`` *and* re-deriving the table.
     """
     import meep as mp
-    from _meep_1d_cases import MEEP_BUILD
+    from tests.references._meep_1d_cases import MEEP_BUILD
 
     got, want = str(mp.__version__), MEEP_BUILD['version']
     if got != want:
@@ -560,7 +565,7 @@ def _check_build():
             f'meep {got} is installed and the record names {want}. Eight determinants of '
             f'this column are meep defaults this file never passes, so the version IS '
             f'the record for them: update MEEP_BUILD (version and conda build string) '
-            f'and re-derive docs/fdtd.md section 2 rather than overwriting the golden.')
+            f'and re-derive docs/guide/fdtd/fdtd.md section 2 rather than overwriting the golden.')
     procs = int(mp.count_processors())
     if bool(MEEP_BUILD['parallel']) != (procs > 1):
         raise SystemExit(f'the record says parallel={MEEP_BUILD["parallel"]} and meep '
@@ -574,8 +579,7 @@ def _record_arrays(cases):
     apart, which is exactly what happened to §2's table: the numbers were in a document
     and the conditions were in a phrase about defaults.
     """
-    from _meep_1d_cases import (MEEP_BUILD, MEEP_CONSTRUCTION, MEEP_DERIVED,
-                                MEEP_READING_FLOOR, MEEP_UNEXPLAINED, UNITS)
+    from tests.references._meep_1d_cases import MEEP_BUILD, MEEP_CONSTRUCTION, MEEP_DERIVED, MEEP_READING_FLOOR, MEEP_UNEXPLAINED, UNITS
 
     out = {'record__units': np.array(UNITS)}
     for key, value in MEEP_BUILD.items():
@@ -600,7 +604,7 @@ def _record_arrays(cases):
 
 
 def main():
-    from _meep_1d_cases import CASES
+    from tests.references._meep_1d_cases import CASES
 
     _check_build()
     first = CASES[next(iter(CASES))]

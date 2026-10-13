@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 505" role="img" aria-labelledby="20-code-map-title 20-code-map-desc">
+<title id="20-code-map-title">구현을 읽는 길: 공개 API에서 결과까지</title><desc id="20-code-map-desc">main, engine, geometry, factorization, solvers, result와 백엔드</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="505" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">구현을 읽는 길: 공개 API에서 결과까지</text>
+<rect x="32" y="88" width="275" height="112" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="50" y="122" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">공개 입력</text>
+<text x="50" y="158" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">__init__ · main</text>
+<text x="50" y="185" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">domain · spec</text>
+<rect x="362" y="88" width="275" height="112" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="380" y="122" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">기하학</text>
+<text x="380" y="158" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">lattice · geometry</text>
+<text x="380" y="185" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">parametric · boundary</text>
+<rect x="692" y="88" width="275" height="112" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="710" y="122" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">구성 행렬</text>
+<text x="710" y="158" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">factorization</text>
+<text x="710" y="185" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">normal_methods</text>
+<line x1="318" y1="145" x2="350" y2="145" stroke="#546779" stroke-width="2"/>
+<polygon points="350,145 340.0,149.0 340.0,141.0" fill="#546779"/>
+<line x1="648" y1="145" x2="680" y2="145" stroke="#546779" stroke-width="2"/>
+<polygon points="680,145 670.0,149.0 670.0,141.0" fill="#546779"/>
+<line x1="829" y1="215" x2="829" y2="265" stroke="#546779" stroke-width="2"/>
+<polygon points="829,265 825.0,255.0 833.0,255.0" fill="#546779"/>
+<rect x="692" y="280" width="275" height="112" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="710" y="314" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">모드 · 층 연결</text>
+<text x="710" y="350" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">solve_1d / 2d / first_order</text>
+<text x="710" y="377" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">scattering</text>
+<rect x="362" y="280" width="275" height="112" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="380" y="314" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">결과 · 장</text>
+<text x="380" y="350" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">result · fields</text>
+<text x="380" y="377" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R/T · 복소 진폭</text>
+<rect x="32" y="280" width="275" height="112" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2"/>
+<text x="50" y="314" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">공통 조율과 계산 도구</text>
+<text x="50" y="350" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">engine</text>
+<text x="50" y="377" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">backends + _core/backend</text>
+<line x1="680" y1="335" x2="648" y2="335" stroke="#546779" stroke-width="2"/>
+<polygon points="648,335 658.0,331.0 658.0,339.0" fill="#546779"/>
+<text x="47" y="455" style="fill:#182b3e;font-size:22px;font-weight:400" text-anchor="start">별도 고급 경로: _core/conforming → ConvMatrices → solve_conv</text>
+<text x="30" y="488" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">2026-09-21 작업본 지도 · FDTD 통합 뒤 폴더 구조는 달라질 수 있다</text>
+</svg>

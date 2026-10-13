@@ -1,0 +1,26 @@
+{
+  "scope": "Direct physical kx/ky incidence; chapter 8 examples and chapter 7 cross-reference",
+  "source_sha256": {
+    "source/learn/light.md": "d614ba88ce3ccf3b5fddaa3e51d4fa9786351220c7e320591ae7dbf8fd025e39",
+    "source/learn/materials.md": "8651af6f7decee718713fbc76bd789035f04e6cb6cc75f901bc0a4144e7a15e0"
+  },
+  "regression": {
+    "passed": 2015,
+    "skipped": 48,
+    "warnings": 3
+  },
+  "final_focused": {
+    "passed": 191,
+    "overlaps_regression": true
+  },
+  "new_direct_k_tests": 141,
+  "chapter_8_python_blocks_executed": 2,
+  "equivalent_transmittance": 0.7395557697684563,
+  "sphinx": "Warnings-as-errors build passed; external intersphinx inventories disabled only for offline validation",
+  "site_check": {
+    "html_pages": 179,
+    "broken_internal_links": [],
+    "lesson_images_without_alt": 0
+  },
+  "new_dependencies": []
+}

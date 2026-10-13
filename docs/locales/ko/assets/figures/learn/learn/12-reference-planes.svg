@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 58 1000 592" role="img" aria-labelledby="title desc">
+<title id="title">입사와 출사 경계에서 전력을 읽고, 그 사이의 흡수를 구합니다</title><desc id="desc">위쪽 입사. 보라색 선은 ② 입사 경계면과 ③ 출사 경계면이다. 입사파와 반사파의 순유입 전력, 투과파의 전력, 두 경계면 사이의 흡수를 구분한다.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px}</style>
+<rect width="1000" height="650" fill="white"/>
+<rect x="30" y="78" width="555" height="473" rx="12" fill="#f6fafc" stroke="#cad7df" stroke-width="1.5"/>
+<text x="53" y="110" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">top · 입사 매질</text>
+<line x1="224" y1="137" x2="224" y2="235" stroke="#2d60a1" stroke-width="5"/>
+<polygon points="224,235 216,220 232,220" fill="#2d60a1"/>
+<line x1="396" y1="235" x2="396" y2="137" stroke="#b56626" stroke-width="5"/>
+<polygon points="396,137 388,152 404,152" fill="#b56626"/>
+<text x="194" y="132" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">입사파</text>
+<text x="366" y="132" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">반사파</text>
+<text x="140" y="195" text-anchor="start" style="font-size:24px;fill:#2d60a1;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="441" y="195" text-anchor="start" style="font-size:24px;fill:#b56626;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<rect x="53" y="253" width="509" height="158" rx="0" fill="#e7edf1" stroke="none" stroke-width="1.5"/>
+<line x1="53" y1="252" x2="562" y2="252" stroke="#745e97" stroke-width="3"/>
+<text x="65" y="239" text-anchor="start" style="font-size:18px;fill:#745e97;font-weight:600">② 입사 경계면</text>
+<line x1="53" y1="330" x2="562" y2="330" stroke="#ccd7df" stroke-width="1"/>
+<text x="78" y="299" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">두께를 지정한 층들</text>
+<text x="78" y="364" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:400">층에서 흡수하는 전력</text>
+<line x1="462" y1="279" x2="462" y2="385" stroke="#117c77" stroke-width="5"/>
+<polygon points="462,385 454,370 470,370" fill="#117c77"/>
+<text x="503" y="352" text-anchor="start" style="font-size:16px;fill:#117c77;font-weight:400">순전력</text>
+<line x1="53" y1="412" x2="562" y2="412" stroke="#745e97" stroke-width="3"/>
+<text x="65" y="438" text-anchor="start" style="font-size:18px;fill:#745e97;font-weight:600">③ 출사 경계면</text>
+<line x1="307" y1="437" x2="307" y2="499" stroke="#2d60a1" stroke-width="5"/>
+<polygon points="307,499 299,484 315,484" fill="#2d60a1"/>
+<text x="337" y="474" text-anchor="start" style="font-size:21px;fill:#2d60a1;font-weight:400"><tspan baseline-shift="baseline">투과파 </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="53" y="530" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">bot · 출사 매질</text>
+<text x="651" y="105" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">① 입사파만의 전력을 기준으로</text>
+<text x="651" y="144" text-anchor="start" style="font-size:19px;fill:#182b3e;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline">로 나누어 무차원화합니다.</tspan></text>
+<text x="651" y="192" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">② 입사 경계면의 순유입 전력</text>
+<text x="651" y="224" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">입사파·반사파의 복소 진폭을 합산</text>
+<text x="651" y="254" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:400"><tspan baseline-shift="baseline">E = </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline">,  H = </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<text x="651" y="284" text-anchor="start" style="font-size:18px;fill:#182b3e;font-weight:400">합친 E와 H로 전력을 계산합니다.</text>
+<text x="651" y="317" text-anchor="start" style="font-size:20px;fill:#117c77;font-weight:400"><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">enter</tspan><tspan baseline-shift="baseline"> = 순유입 전력 / </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="651" y="366" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">③ 출사 경계면의 투과 전력</text>
+<text x="651" y="404" text-anchor="start" style="font-size:23px;fill:#2d60a1;font-weight:400"><tspan baseline-shift="baseline">T = </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan><tspan baseline-shift="baseline"> / </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<rect x="637" y="443" width="334" height="88" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="1.5"/>
+<text x="657" y="480" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">쌓은 층 전체의 흡수</text>
+<text x="657" y="513" text-anchor="start" style="font-size:24px;fill:#117c77;font-weight:600"><tspan baseline-shift="baseline">A = </tspan><tspan baseline-shift="baseline">P</tspan><tspan baseline-shift="sub" style="font-size:70%">enter</tspan><tspan baseline-shift="baseline"> − T</tspan></text>
+<line x1="65" y1="610" x2="65" y2="570" stroke="#546779" stroke-width="5"/>
+<polygon points="65,570 57,585 73,585" fill="#546779"/>
+<text x="88" y="583" text-anchor="start" style="font-size:19px;fill:#182b3e;font-weight:400">+z</text>
+<text x="165" y="585" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">그림은 위쪽 입사: 구조 안쪽은 −z 방향입니다.</text>
+<text x="165" y="617" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">top·bot 반무한 매질에서의 흡수는 A에 포함하지 않습니다.</text>
+</svg>

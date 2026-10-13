@@ -1,17 +1,8 @@
-# Theory & validation
+# Theory and validation
 
-Derivations, numerical decisions and validation records state what was measured,
-which inputs were covered and which limits remain.
+Separate the mathematical statement from the numerical evidence used to test it.
 
-| Topic | Starting point |
-| --- | --- |
-| RCWA derivation | [Maxwell equations to scattering amplitudes](../formulation.md). |
-| Numerical decisions | [Method and implementation records](../decisions/index.md). |
-| Solver conventions | [Coordinates, fields, materials and normalization](../conventions.md). |
-| Periodic FDTD | [Scope and validation](../fdtd-alpha.md). |
-| General FDTD | [Geometry validation](../fd-mie-validation.md) and [periodic metasurfaces](../fd-metasurface-validation.md). |
-| Independent references | [Reference generators and frozen data](https://github.com/fieldalgo/wavebit/tree/develop/tests/references). |
-
-A passing implementation test, a converged discretization and agreement with an
-independent physical reference answer different questions. Each record specifies
-which claims its evidence supports.
+- [RCWA theory](rcwa/index.md) derives the Fourier, material and wave conventions.
+- [RCWA validation](../validation/rcwa/index.md) reports convergence, comparisons and unresolved limits.
+- [FDTD validation](../validation/fdtd/index.md) checks spatial and temporal discretization, sources, materials and boundaries.
+- [Design proposals](../design/index.md) record intended changes; a proposal is not a supported API contract.

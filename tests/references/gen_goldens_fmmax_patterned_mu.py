@@ -29,12 +29,17 @@ Both fmmax formulations are frozen — ``FFT``, the plain direct rule, and ``JON
 vector one — because the tolerance the test may claim is the spread between them and nothing
 tighter.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_fmmax_patterned_mu.npz'
@@ -46,7 +51,7 @@ def main():
     import jax.numpy as jnp
     import fmmax
 
-    from _fmmax_patterned_mu_cases import CASES, MAX_ORDER, PERIOD, THETA, THICK, WL, tensors
+    from tests.references._fmmax_patterned_mu_cases import CASES, MAX_ORDER, PERIOD, THETA, THICK, WL, tensors
 
     lat = fmmax.LatticeVectors(u=jnp.array([PERIOD, 0.0]), v=jnp.array([0.0, PERIOD]))
     expansion = fmmax.generate_expansion(lat, approximate_num_terms=(2 * MAX_ORDER + 1) ** 2,

@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 410" role="img" aria-labelledby="material-axes-title material-axes-desc">
+  <title id="material-axes-title">Fixed computational axes and material axes rotated 45°</title>
+  <desc id="material-axes-desc">The grey x axis points right and y points up. The blue material axis x′ points up and right with permittivity 2.25; y′ points up and left with permittivity 4. Only the material rotates 45°; computational axes stay fixed. Both z and z′ point out of the page.</desc>
+  <style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:25px}.label{font-size:23px}.note{font-size:21px;fill:#546779}</style>
+  <defs>
+    <marker id="fixed-axis-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#738497" /></marker>
+    <marker id="material-axis-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#285ab0" /></marker>
+  </defs>
+  <rect width="620" height="410" rx="10" fill="#ffffff" />
+  <line x1="70" y1="270" x2="547" y2="270" stroke="#738497" stroke-width="2" marker-end="url(#fixed-axis-head)" />
+  <line x1="300" y1="316" x2="300" y2="45" stroke="#738497" stroke-width="2" marker-end="url(#fixed-axis-head)" />
+  <text x="560" y="278">x</text><text x="299" y="28" text-anchor="middle">y</text>
+  <line x1="300" y1="270" x2="455" y2="115" stroke="#285ab0" stroke-width="4" marker-end="url(#material-axis-head)" />
+  <line x1="300" y1="270" x2="145" y2="115" stroke="#285ab0" stroke-width="4" marker-end="url(#material-axis-head)" />
+  <text x="474" y="103">x′</text><text x="120" y="103" text-anchor="end">y′</text>
+  <text x="463" y="147" class="label">ε = 2.25</text><text x="139" y="147" class="label" text-anchor="end">ε = 4</text>
+  <path d="M360 270 A60 60 0 0 0 342.426 227.574" fill="none" stroke="#a85116" stroke-width="2" />
+  <text x="378" y="248" class="label">+45°</text>
+  <circle cx="300" cy="270" r="4" fill="#182b3e" />
+  <line x1="42" y1="356" x2="75" y2="356" stroke="#738497" stroke-width="2" />
+  <text x="87" y="363" class="note">Fixed computational axes</text>
+  <line x1="307" y1="356" x2="340" y2="356" stroke="#285ab0" stroke-width="4" />
+  <text x="352" y="363" class="note">Rotated material axes</text>
+  <text x="310" y="394" text-anchor="middle" class="note">xy plane · only material rotates +45°</text>
+</svg>

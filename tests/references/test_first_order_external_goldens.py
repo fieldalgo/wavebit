@@ -1,7 +1,7 @@
 """The first-order solve against two outside solvers, from goldens already checked in.
 
-``tests/test_solve_2d_first_order.py`` pins the first-order formulation against the second-order
-path and against the Berreman 4x4 in ``tests/test_anisotropic_berreman.py``. Both of those are ours.
+``tests/rcwa/test_solve_2d_first_order.py`` pins the first-order formulation against the second-order
+path and against the Berreman 4x4 in ``tests/rcwa/test_anisotropic_berreman.py``. Both of those are ours.
 An error in how this repo reads the problem — a convention, a factor, a transverse-field
 definition — is shared by all three and survives every one of those tests.
 
@@ -22,29 +22,33 @@ on a tensor that is provably lossless. The table and the reasoning are in
 ``gen_goldens_reticolo_anisotropic.py``. So a tilted magnetisation — xy and yz populated at
 once, the ordinary case for a real magnetised film — still has no outside judge; what stands
 behind it is ``test_solve_2d_first_order.py`` and the Berreman cases in
-``tests/test_anisotropic_berreman.py``, both ours.
+``tests/rcwa/test_anisotropic_berreman.py``, both ours.
 
 Every case here is run **twice** since the public route landed: once through the module's own
 entry, and once through ``solve_conv``. The second is not a duplicate — it crosses the
 dispatch, the substrate seed, the s/p rotation and the shared final matching, none of which the
 first touches, and all of which an internal cross-check would share on both sides.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
-from wavebit._core.solve_2d_first_order import solve_uniform_stack, vacuum_sp_states
+from wavebit.rcwa._engine.solve_2d_first_order import solve_uniform_stack, vacuum_sp_states
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
-from _fmmax_cases import CASES as FMMAX_CASES, THICK as FMMAX_THICK, WL as FMMAX_WL  # noqa: E402
-from test_reticolo_anisotropic_golden import (ALL_CASES as RETICOLO_CASES,  # noqa: E402
-                                              THICK as RETICOLO_THICK, WL as RETICOLO_WL,
-                                              is_hermitian)
+from tests.references._fmmax_cases import CASES as FMMAX_CASES, THICK as FMMAX_THICK, WL as FMMAX_WL  # noqa: E402
+from tests.references.test_reticolo_anisotropic_golden import ALL_CASES as RETICOLO_CASES, THICK as RETICOLO_THICK, WL as RETICOLO_WL, is_hermitian
 
 
 def efficiencies(eps, theta_deg, wl, thick):
@@ -79,7 +83,7 @@ def public_efficiencies(eps, theta_deg, wl, thick):
     share them. Here they answer to RETICOLO and fmmax.
 
     The slot convention is the negative of the tensor component for every off-diagonal slot,
-    the z row included — ``docs/off-diagonal-slot-convention.md``.
+    the z row included — ``docs/theory/rcwa/off-diagonal-slot-convention.md``.
     """
     e = np.asarray(eps, dtype=complex)
     # These frozen cases use the former downward propagation frame. Express the
@@ -88,7 +92,7 @@ def public_efficiencies(eps, theta_deg, wl, thick):
     e = Q @ e @ Q
     I = np.eye(1, dtype=complex)
     st = lambda v: np.stack([v * I])                                          # noqa: E731
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, truncation_order=(0, 0), period=(300.0, 300.0),
                          wavelength=wl, thickness=[thick])
     res = mee.solve_conv(st(e[0, 0]), st(e[1, 1]),

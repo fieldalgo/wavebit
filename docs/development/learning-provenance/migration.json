@@ -1,0 +1,172 @@
+{
+  "books": {
+    "learn": {
+      "source_book": "wavebit-learning-guide",
+      "source_sha256": "20ee57934f7495ce0b3783691582847691567795433da6e3a06c229716eb69d8",
+      "chapters": [
+        {
+          "slug": "overview",
+          "title": "1. Wavebit는 어떤 질문에 답할까"
+        },
+        {
+          "slug": "rcwa",
+          "title": "2. RCWA: 복잡한 빛을 여러 파동으로 나눠서 푼다"
+        },
+        {
+          "slug": "conventions",
+          "title": "3. 가장 먼저 지켜야 할 약속: 좌표, 단위, 재료"
+        },
+        {
+          "slug": "quickstart",
+          "title": "4. 설치하고 첫 계산을 끝까지 읽어보기"
+        },
+        {
+          "slug": "geometry",
+          "title": "5. 구조를 만드는 두 언어: 래스터와 도형"
+        },
+        {
+          "slug": "lattice",
+          "title": "6. 정사각형 바깥으로: 격자와 두 좌표계"
+        },
+        {
+          "slug": "materials",
+          "title": "7. 재료: 유전율, 흡수, 파장에 따른 변화"
+        },
+        {
+          "slug": "light",
+          "title": "8. 어떤 빛을 넣는가: 방향과 편광"
+        },
+        {
+          "slug": "multiple-beams",
+          "title": "9. 여러 입사파와 내부 소스"
+        },
+        {
+          "slug": "fourier-orders",
+          "title": "10. 정확도와 비용을 결정하는 Fourier 차수"
+        },
+        {
+          "slug": "nvf",
+          "title": "11. NVF는 전체 계산의 어디에 들어갈까"
+        },
+        {
+          "slug": "results",
+          "title": "12. 결과 읽기: 큰 R/T와 작은 r/t"
+        },
+        {
+          "slug": "power-and-efficiency",
+          "title": "13. 전력 흐름과 회절 효율"
+        },
+        {
+          "slug": "fields",
+          "title": "14. 위치별 전기장과 자기장 구하기"
+        },
+        {
+          "slug": "layer-algorithms",
+          "title": "15. 층을 어떻게 연결하는가: ETM과 SMM"
+        },
+        {
+          "slug": "backends",
+          "title": "16. NumPy, JAX, PyTorch: 같은 물리와 다른 계산 도구"
+        },
+        {
+          "slug": "autodiff",
+          "title": "17. 자동미분과 최적화: 어느 방향으로 바꾸면 좋을까"
+        },
+        {
+          "slug": "jobs-and-sweeps",
+          "title": "18. 한 번의 계산을 실험으로 확장하기: JobSpec과 스윕"
+        },
+        {
+          "slug": "convergence",
+          "title": "19. 좋은 결과인지 판단하기: 에너지 보존만으로는 부족하다"
+        },
+        {
+          "slug": "code-map",
+          "title": "20. 코드 지도와 다음 공부"
+        },
+        {
+          "slug": "complex-kx-roots",
+          "title": "부록 A. 무손실 매질에서 kz 고르기: 두 근, branch point, branch cut"
+        },
+        {
+          "slug": "complex-kx-lossy-gain",
+          "title": "부록 B. 흡수·이득 매질로 넓히기: 흡수 입사 매질, 떠 있는 branch point, 이득 매질"
+        },
+        {
+          "slug": "incoherent-substrate",
+          "title": "부록 C. 두꺼운 기판 — 뒷면 반사와 간섭의 평균"
+        }
+      ],
+      "figures": 32,
+      "examples": 10
+    },
+    "nvf": {
+      "source_book": "nvf-learning-guide",
+      "source_sha256": "1102e9513d494e94da006d11504f21d4c95d59e4b515c86eb1ac99e0f5f28bf1",
+      "chapters": [
+        {
+          "slug": "overview",
+          "title": "1. RCWA 안에서 NVF는 무슨 일을 하나"
+        },
+        {
+          "slug": "boundary-conditions",
+          "title": "2. 경계조건부터: E 전체가 연속인 것은 아니다"
+        },
+        {
+          "slug": "fourier-rules",
+          "title": "3. 직접 규칙과 역 규칙: 무엇의 역행렬인가"
+        },
+        {
+          "slug": "projectors",
+          "title": "4. 경계 법선 n → 보조벡터 J → 투영 행렬 P"
+        },
+        {
+          "slug": "implementation",
+          "title": "5. Wavebit는 NVF를 어떤 식으로 조립하나"
+        },
+        {
+          "slug": "settings",
+          "title": "6. 입력 두 종류와 설정의 역할"
+        },
+        {
+          "slug": "shape-example",
+          "title": "7. 첫 계산: 원형 구조의 NVF 반사·투과"
+        },
+        {
+          "slug": "raster-example",
+          "title": "8. 픽셀 입력으로 사용하고 NVF를 선택하기"
+        },
+        {
+          "slug": "convergence",
+          "title": "9. 결과를 믿기 전에: 수렴을 어떻게 확인하나"
+        },
+        {
+          "slug": "autodiff",
+          "title": "10. JAX로 미분하기: 재료값부터 시작하자"
+        },
+        {
+          "slug": "multiple-shapes",
+          "title": "11. 여러 도형, 보조 솔버, 자주 생기는 오해"
+        },
+        {
+          "slug": "code-map",
+          "title": "12. 코드 읽기 지도와 복습"
+        },
+        {
+          "slug": "metal-original-plots",
+          "title": "13. 금속 계산의 이상 징후를 그림에서 찾기"
+        },
+        {
+          "slug": "metal-inverse-rule",
+          "title": "14. 작은 분모가 큰 응답으로: 금속과 역 규칙"
+        },
+        {
+          "slug": "metal-regularization",
+          "title": "15. 작은 특이값에 하한을 두면: 보정과 검증"
+        }
+      ],
+      "figures": 13,
+      "examples": 5
+    }
+  }
+}

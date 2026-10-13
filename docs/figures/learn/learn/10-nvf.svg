@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 415" role="img" aria-labelledby="10-nvf-title 10-nvf-desc">
+<title id="10-nvf-title">Where NVF joins the shared solver</title><desc id="10-nvf-desc">Auxiliary fields and projectors in the two input paths</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="415" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Where NVF joins the shared solver</text>
+<rect x="30" y="88" width="280" height="119" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="122" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Raster boundaries</text>
+<text x="48" y="158" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">raster_normal_method</text>
+<text x="48" y="185" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Four field-construction choices</text>
+<rect x="30" y="234" width="280" height="119" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="268" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Shape boundaries</text>
+<text x="48" y="304" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Geometry-based field construction</text>
+<text x="48" y="331" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">shape_nvf_grid_size</text>
+<line x1="327" y1="148" x2="386" y2="219" stroke="#546779" stroke-width="2" />
+<polygon points="386,219 376.53238328553306,213.86538864684516 382.6852508985963,208.7524423204969" fill="#546779" />
+<line x1="327" y1="291" x2="386" y2="219" stroke="#546779" stroke-width="2" />
+<polygon points="386,219 382.7556876524919,229.2700748484033 376.5678601287677,224.19949396090712" fill="#546779" />
+<rect x="400" y="150" width="248" height="145" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="418" y="184" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">NVF projector P</text>
+<text x="418" y="220" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">nvf_projector</text>
+<text x="418" y="247" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">linear / circular</text>
+<text x="418" y="274" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Assemble constitutive matrices</text>
+<line x1="663" y1="219" x2="713" y2="219" stroke="#546779" stroke-width="2" />
+<polygon points="713,219 703.0,223.0 703.0,215.0" fill="#546779" />
+<rect x="730" y="150" width="238" height="145" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="748" y="184" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Shared computation</text>
+<text x="748" y="220" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Layer modes</text>
+<text x="748" y="247" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">ETM / SMM</text>
+<text x="748" y="274" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R/T · fields · derivatives</text>
+<text x="30" y="398" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Ordinary NVF path · separate auxiliary builders supply matrices directly through solve_conv</text>
+</svg>

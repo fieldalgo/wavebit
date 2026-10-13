@@ -22,19 +22,24 @@ fmmax was gated first on four questions — a patterned ``mu`` moves its eigenva
 exchanging ``eps`` with ``mu`` trades the s and p channels (3e-14). The last is the one that
 says its permeability is not merely present but dual-correct.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
-from wavebit._core.factorization import to_conv_mat_raster_pn_eps, to_conv_mat_raster_pn_mu
+from wavebit.rcwa._engine.factorization import to_conv_mat_raster_pn_eps, to_conv_mat_raster_pn_mu
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _fmmax_patterned_mu_cases import (                                        # noqa: E402
-    CASES, MAX_ORDER, GRID, PERIOD, THETA, THICK, WL, tensors)
+from tests.references._fmmax_patterned_mu_cases import CASES, MAX_ORDER, GRID, PERIOD, THETA, THICK, WL, tensors
 
 GOLDEN_PATH = HERE / 'golden_fmmax_patterned_mu.npz'
 
@@ -71,7 +76,7 @@ def solve(case, truncation_order=MAX_ORDER, algo='ETM'):
     # this file supplies as finished convolution slots to `solve_conv` rather than as the
     # raster field the constructor takes, because the point of the golden is the factorization
     # under test and not the build in front of it.
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0),
                        layer_algorithm=algo)
@@ -147,7 +152,7 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     shortcut and is wrong; it passes every case where the two shapes coincide, which is why this
     one exists.
     """
-    from wavebit._core.factorization import normal_vector_field
+    from wavebit.rcwa._engine.factorization import normal_vector_field
 
     case = CASES()['different_shapes']
     eps, eps_xy, mu, mu_xy = tensors(case)
@@ -158,7 +163,7 @@ def test_the_two_tensors_get_their_own_normal_fields(golden):
     wrong_field = [normal_vector_field(eps)]        # eps's boundary, applied to mu
     wrong_mu = to_conv_mat_raster_pn_mu(_as33(mu, mu_xy)[None], truncation_order, truncation_order,
                                         normal_field=wrong_field)
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee._solve_conv(epx, epy, epz_i, epxy, epyx, mu=wrong_mu)

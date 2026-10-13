@@ -11,7 +11,7 @@ at all.
 
 It is worth saying what that blind spot cost, because the shape of the bug is the argument
 for keeping this file. The boundary match wrote the incident wave's ``kz`` two ways — once
-as ``n_top * cos(theta)`` and once as :func:`~wavebit._core.conventions.boundary_kz`'s
+as ``n_top * cos(theta)`` and once as :func:`~wavebit._common.conventions.boundary_kz`'s
 root — and those are *the same number* for a real angle. For a complex one they are
 negatives, the two sides of the match cancelled at the incident order, and the solve
 returned ``R = -delta`` with ``T = 0``. Agreement over the propagating 69 points stayed at
@@ -19,17 +19,23 @@ returned ``R = -delta`` with ``T = 0``. Agreement over the propagating 69 points
 
 The golden is the 2024-09-09 RETICOLO run; see ``gen_goldens_reticolo_conical_sweep.py``
 for where it came from. RETICOLO's amplitude convention is the conjugate of this solver's
-(:mod:`wavebit._core.conventions`), so every comparison here is on the real part — which
+(:mod:`wavebit._common.conventions`), so every comparison here is on the real part — which
 is what the original study compared too.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
-import wavebit
 
-GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo_conical_sweep.npz'
+GOLDEN_PATH = repository_path('tests/references/golden_reticolo_conical_sweep.npz')
 
 MAX_ORDER = 80
 # Solving all 441 points takes about a minute. These strides keep the physics — a spread of
@@ -81,7 +87,7 @@ def _solve(g, i, j):
     kx, ky = g['kx'], g['ky']
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
-    res = wavebit.rcwa(backend='numpy', psi=np.pi / 2, **_scene(g),
+    res = _legacy_wavebit.rcwa(backend='numpy', psi=np.pi / 2, **_scene(g),
                          theta=theta, phi=phi, truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
                          thickness=list(g['thickness'])[::-1],
@@ -132,7 +138,7 @@ def test_evanescent_incidence_matches_reticolo():
 
     Every point here has ``Re(theta) == pi/2`` exactly, because ``arcsin`` of a real greater
     than one always lands there. Until the incident order stopped being handed a ``kz`` from
-    the outgoing-wave branch (:func:`~wavebit._core.conventions.incident_kz`) the solve
+    the outgoing-wave branch (:func:`~wavebit._common.conventions.incident_kz`) the solve
     returned ``R_s = -1`` at the centre order and exactly zero at every other order, with
     ``T_s = 0`` — a grating that scatters nothing. It plots as a clean flat region, which is
     why the 2024 study that produced this golden did not catch it.
@@ -159,7 +165,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
     64-bit agreement here is exact to ~1e-15. At complex64 the same three come back at 3.94,
     2.96 and 3.82 — *each wrong differently*, which is the signature of a branch decided by
     round-off rather than of precision loss, and the reason this regime warns instead of being
-    repaired. See ``tests/test_fp_warnings.py`` for that tier and ``docs/branch-cuts.md`` for
+    repaired. See ``tests/rcwa/test_fp_warnings.py`` for that tier and ``docs/theory/rcwa/branch-cuts.md`` for
     why no threshold fixes it.
     """
     g = _golden()
@@ -168,7 +174,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
     phi = np.arctan(ky / (kx + 0.0001), dtype=np.complex128)
 
     def solve(bk):
-        res = wavebit.rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
+        res = _legacy_wavebit.rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
                              theta=theta, phi=phi, truncation_order=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              thickness=list(g['thickness'])[::-1],
@@ -200,8 +206,8 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     # arbitrary, but it has to be *a permittivity* or the slab is not the one described.
     scene['structure'] = np.full_like(np.asarray(scene['structure'], dtype=float), 6.25)
     # Re(theta) != pi/2 makes kx itself complex, which the solve now says out loud.
-    with pytest.warns(wavebit.ComplexIncidenceWarning):
-        res = wavebit.rcwa(backend='numpy', psi=np.pi / 2, **scene,
+    with pytest.warns(_legacy_wavebit.ComplexIncidenceWarning):
+        res = _legacy_wavebit.rcwa(backend='numpy', psi=np.pi / 2, **scene,
                              theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
                              truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                              period=list(g['period']),

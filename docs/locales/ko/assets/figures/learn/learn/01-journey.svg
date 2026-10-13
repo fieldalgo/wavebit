@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 395" role="img" aria-labelledby="01-journey-title 01-journey-desc">
+<title id="01-journey-title">한 번의 계산이 설계로 이어진다</title><desc id="01-journey-desc">장면, 행렬, 모드와 층, 응답과 미분의 연결</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="395" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">한 번의 계산이 설계로 이어진다</text>
+<rect x="35" y="100" width="270" height="165" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="53" y="134" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">01 장면</text>
+<text x="53" y="170" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">모양 · 재료 · 격자</text>
+<text x="53" y="197" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">파장 · 방향 · 편광</text>
+<line x1="312" y1="183" x2="355" y2="183" stroke="#546779" stroke-width="2"/>
+<polygon points="355,183 345.0,187.0 345.0,179.0" fill="#546779"/>
+<rect x="365" y="100" width="270" height="165" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="383" y="134" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">02 계산</text>
+<text x="383" y="170" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Fourier 구성 행렬</text>
+<text x="383" y="197" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">층 모드 + 층 연결</text>
+<line x1="642" y1="183" x2="685" y2="183" stroke="#546779" stroke-width="2"/>
+<polygon points="685,183 675.0,187.0 675.0,179.0" fill="#546779"/>
+<rect x="695" y="100" width="270" height="165" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="713" y="134" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">03 결과</text>
+<text x="713" y="170" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R/T · 진폭 · 장</text>
+<text x="713" y="197" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">목표량과 민감도</text>
+<line x1="830" y1="279" x2="830" y2="325" stroke="#117c77" stroke-width="2"/>
+<line x1="830" y1="325" x2="170" y2="325" stroke="#117c77" stroke-width="2"/>
+<polygon points="170,325 180.0,321.0 180.0,329.0" fill="#117c77"/>
+<text x="420" y="313" style="fill:#117c77;font-size:20px;font-weight:400" text-anchor="start">설계 변수 수정 → 다시 계산</text>
+<line x1="170" y1="325" x2="170" y2="278" stroke="#117c77" stroke-width="2"/>
+<polygon points="170,278 174.0,288.0 166.0,288.0" fill="#117c77"/>
+<text x="30" y="378" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">NVF는 02의 구성 행렬 단계 · 현재 기본 솔버는 RCWA</text>
+</svg>

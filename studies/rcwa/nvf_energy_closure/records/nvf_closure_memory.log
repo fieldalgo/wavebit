@@ -1,0 +1,6 @@
+{"kind": "mirror_closure_memory", "method": "explicit_inverse", "order": 32, "polarization": "p", "seconds": 8.729475250001997, "peak_rss_bytes": 2237071360}
+{"kind": "mirror_closure_memory", "method": "two_solves", "order": 32, "polarization": "p", "seconds": 8.063093042001128, "peak_rss_bytes": 1767243776, "action_max_difference": 2.380780297521185e-13}
+{"kind": "mirror_closure_memory", "method": "two_solves_tiled", "order": 32, "polarization": "p", "seconds": 11.445802207977977, "peak_rss_bytes": 1164328960, "action_max_difference": 2.380780297521185e-13}
+{"method": "right_triangular_solves_tiled_guard", "order": 32, "polarization": "p", "seconds": 7.114163082966115, "peak_rss_bytes": 988233728, "action_max_difference": 2.3625604048758637e-13, "blas": "Apple Accelerate", "concurrent_task_calculation": false}
+{"kind": "full_closure_cost", "implementation": "explicit_inverse", "order": [24, 24], "seconds": 9.451067249989137, "peak_rss_bytes": 3429974016}
+{"kind": "full_closure_cost", "implementation": "two_sided_solve", "order": [24, 24], "seconds": 7.575257749995217, "peak_rss_bytes": 962740224, "sampled_columns_max_difference": 7.18510956715889e-14}

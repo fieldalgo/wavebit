@@ -26,12 +26,18 @@ the waveform scalars and the waveform table. Those are the same on every backend
 construction, so freezing them once separates a moved lowering from a moved kernel in the
 failure message.
 
-What the archive cannot say is that any of it is *right*. ``tests/test_fd_waveform.py`` says the
+What the archive cannot say is that any of it is *right*. ``tests/fdtd/test_fd_waveform.py`` says the
 drive is the closed form, the PlaneWave and TFSF gates say the sheet and the box leak nothing,
-``tests/test_fd_sources_doors.py`` says the doors refuse what they claim to, and
-``tests/test_fd_stage2_grad.py`` says the derivatives are the derivatives. This file says the
+``tests/fdtd/test_fd_sources_doors.py`` says the doors refuse what they claim to, and
+``tests/fdtd/test_fd_stage2_grad.py`` says the derivatives are the derivatives. This file says the
 numbers have not moved.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
+from tools.repository_paths import repository_path
 import argparse
 import datetime
 import hashlib
@@ -43,15 +49,14 @@ import warnings
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references/interface')
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / 'src'))                      # this checkout's wavebit first
 sys.path.insert(0, str(HERE.parent))               # tests/references, for the case list
 
 import wavebit                                               # noqa: E402
-import wavebit.fd as fd                                      # noqa: E402
-from _fd_stage2_cases import (BACKENDS, GOLDEN, TOL, capture, content_digest,   # noqa: E402
-                              lowered, relative_gap, sample_indices, scenes)
+import wavebit.fdtd._legacy as fd                                      # noqa: E402
+from tests.references._fd_stage2_cases import BACKENDS, GOLDEN, TOL, capture, content_digest, lowered, relative_gap, sample_indices, scenes
 
 CASES = HERE.parent / '_fd_stage2_cases.py'
 SHARED_CASES = HERE.parent / '_fd_stage0_cases.py'
@@ -116,7 +121,7 @@ def freeze():
                     arrays[f'{name}__{backend}__{key}'] = value
     metadata = dict(
         archive=GOLDEN.name,
-        what='the stage-2 kernel (wavebit.fd: Dipole, PlaneWave, TFSF and their reference '
+        what='the stage-2 kernel (wavebit.fdtd._legacy: Dipole, PlaneWave, TFSF and their reference '
              'series) on the four scenes of _fd_stage2_cases.py, each backend pinned to its '
              'own answer and the lowered stamp, pattern and waveform pinned once; a drift '
              'detector, not an oracle',

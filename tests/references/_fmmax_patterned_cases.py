@@ -62,7 +62,7 @@ def tensor_rasters(n_in, g, grid=GRID):
     """``(eps, gyro)`` rasters: the scalar permittivity and the ``eps_xy`` field.
 
     The physical tensor is ``eps_xy = +gyro``, ``eps_yx = -gyro``. Slot negation happens at the
-    caller — see ``docs/off-diagonal-slot-convention.md``.
+    caller — see ``docs/theory/rcwa/off-diagonal-slot-convention.md``.
 
     **The ``n_in ** 2`` is not a leftover of the index convention.** This module has always
     produced permittivity — fmmax's tensor entry point takes nothing else — and ``CASES`` is

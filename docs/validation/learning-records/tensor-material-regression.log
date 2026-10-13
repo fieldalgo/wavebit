@@ -1,0 +1,27 @@
+........................................................................ [ 11%]
+........................................................................ [ 22%]
+........................................................................ [ 33%]
+........................................................................ [ 44%]
+........................................................................ [ 55%]
+........................................................................ [ 66%]
+........................................................................ [ 77%]
+........................................................................ [ 89%]
+.......................................................................  [100%]
+=============================== warnings summary ===============================
+tests/test_dispersive_material.py::test_torch_wavelength_derivative_keeps_graph
+  <checkout>/wavebit/_core/engine.py:2911: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+  Consider using tensor.detach() first. (Triggered internally at /Users/runner/work/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:823.)
+    complex(self.wavelength),
+
+tests/test_dispersive_material.py::test_precision_change_keeps_material_definitions[0]
+tests/test_dispersive_material.py::test_precision_change_keeps_material_definitions[1]
+tests/test_dispersive_material.py::test_precision_change_keeps_material_definitions[2]
+  <checkout>/wavebit/_core/engine.py:2507: PrecisionLossWarning: theta was given at 32-bit precision but this solve runs at 64-bit, and widening it cannot recover the digits already lost. If this is JAX, the usual cause is building the array before JAX's 32-bit cap was lifted: call `wavebit.enable_x64()` once, before building it. `import wavebit` lifts the cap only if JAX was already loaded, and the backend lifts it at the first solve, which is too late for an array made before that.
+    object.__setattr__(self, name, value)
+
+tests/test_vertical_coordinates.py::test_single_height_keeps_thickness_derivatives[uniform-torch]
+  <conda env>/lib/python3.12/site-packages/array_api_compat/torch/_aliases.py:205: UserWarning: torch.asarray: unspecified requires_grad now defaults to obj.requires_grad instead of False. Pass requires_grad=False explicitly to get the old behavior and silence this warning. (Triggered internally at /Users/runner/work/pytorch/pytorch/torch/csrc/utils/tensor_new.cpp:1740.)
+    return torch.asarray(obj, dtype=dtype, device=device, copy=copy, **kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+647 passed, 5 warnings in 131.65s (0:02:11)

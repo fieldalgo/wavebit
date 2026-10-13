@@ -1,7 +1,7 @@
 """The in-cell field of the **pure TE/TM 1D** path, against RETICOLO.
 
 ``test_s4_field_golden.py`` and ``test_fmmax_field_golden.py`` both reach field reconstruction
-through the coupled 6-component routes. Neither touches ``_core/fields.py::field_1d``
+through the coupled 6-component routes. Neither touches ``src/wavebit/rcwa/_engine/fields.py::field_1d``
 (``grating_type == 0``), which returns 3 components in its own layout -- TE ``(Ey, Hx, Hz)``,
 TM ``(Hy, Ex, Ez)`` -- and applies its own signs. That path had no outside opinion at all until
 this file. RETICOLO returns exactly those 3 components for a 1D grating, so nothing is padded
@@ -24,7 +24,7 @@ generator) when this library's ``+z`` still pointed down into the stack:
 * RETICOLO's ``+z`` points back out of the stack, so the cell reverses **as a whole**, layer
   order included -- not per layer. ``bilayer`` is what separates those two readings.
 * The reversal carries the component parity ``E_z, H_x, H_y`` flip, ``E_t, H_z`` do not, which
-  is the rule ``_core/fields.py`` already states for its own frame.
+  is the rule ``src/wavebit/rcwa/_engine/fields.py`` already states for its own frame.
 
 Since 2026-09-21 the public frame *is* RETICOLO's: ``+z`` up from ``z = 0`` at the bottom
 interface, bottom layer first. The comparison is still made in the downward depth frame
@@ -48,7 +48,14 @@ is not established, and cannot be from inside this directory.
 sides so it cannot silently grow, and cannot silently vanish without someone updating the
 story here.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
@@ -56,11 +63,9 @@ import pytest
 
 import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _reticolo_field_cases import (CASES, MAX_ORDER, NAMES, PERIOD, RES_X, RES_Z,  # noqa: E402
-                                   SLOW_SLOT, STACKS, WL, Z_PARITY, key, layer_rows,
-                                   n_layers, x_samples)
+from tests.references._reticolo_field_cases import CASES, MAX_ORDER, NAMES, PERIOD, RES_X, RES_Z, SLOW_SLOT, STACKS, WL, Z_PARITY, key, layer_rows, n_layers, x_samples
 
 GOLDEN_PATH = HERE / 'golden_reticolo_field.npz'
 
@@ -110,7 +115,7 @@ def _reconstruct(stack, theta, pol):
     # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
     # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
-    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
+    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],
                           theta=np.deg2rad(theta), phi=None, tetm=pol,
                           # RETICOLO's texture is analytic piecewise-constant, so the exact

@@ -1,0 +1,222 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- [host]/miniconda3\envs\wavebit\python.exe
+rootdir: [host]/<worktrees>\wavebit
+configfile: pyproject.toml
+plugins: anyio-4.12.1, timeout-2.4.0, xdist-3.8.0
+collecting ... collected 136 items
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[pair-x] PASSED [  0%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[pair-y] PASSED [  1%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[pair-z] PASSED [  2%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[triple-x] PASSED [  2%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[triple-y] PASSED [  3%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[triple-z] PASSED [  4%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[four-x] PASSED [  5%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[four-y] PASSED [  5%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[four-z] PASSED [  6%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[eight-x] PASSED [  7%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[eight-y] PASSED [  8%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[eight-z] PASSED [  8%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[equal-eps-x] PASSED [  9%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[equal-eps-y] PASSED [ 10%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[equal-eps-z] PASSED [ 11%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[one-inactive-x] PASSED [ 11%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[one-inactive-y] PASSED [ 12%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[one-inactive-z] PASSED [ 13%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[all-inactive-x] PASSED [ 13%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[all-inactive-y] PASSED [ 14%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[all-inactive-z] PASSED [ 15%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[thin-x] PASSED [ 16%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[thin-y] PASSED [ 16%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[thin-z] PASSED [ 17%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[tiny-fill-x] PASSED [ 18%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[tiny-fill-y] PASSED [ 19%]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[tiny-fill-z] PASSED [ 19%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[pair-numpy] PASSED [ 20%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[pair-jax] PASSED [ 21%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[pair-torch] PASSED [ 22%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[triple-numpy] PASSED [ 22%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[triple-jax] PASSED [ 23%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[triple-torch] PASSED [ 24%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[all-inactive-numpy] PASSED [ 25%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[all-inactive-jax] PASSED [ 25%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[all-inactive-torch] PASSED [ 26%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[complex-numpy] PASSED [ 27%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[complex-jax] PASSED [ 27%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[complex-torch] PASSED [ 28%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[reversed-numpy] PASSED [ 29%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[reversed-jax] PASSED [ 30%]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[reversed-torch] PASSED [ 30%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-x-numpy] PASSED [ 31%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-x-jax] PASSED [ 32%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-x-torch] PASSED [ 33%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-z-numpy] PASSED [ 33%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-z-jax] PASSED [ 34%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[pair-z-torch] PASSED [ 35%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-x-numpy] PASSED [ 36%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-x-jax] PASSED [ 36%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-x-torch] PASSED [ 37%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-z-numpy] PASSED [ 38%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-z-jax] PASSED [ 38%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-z-torch] PASSED [ 39%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[all-inactive-x-numpy] PASSED [ 40%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[all-inactive-x-jax] PASSED [ 41%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[all-inactive-x-torch] PASSED [ 41%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[all-inactive-z-numpy] PASSED [ 42%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[all-inactive-z-jax] PASSED [ 43%]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[all-inactive-z-torch] PASSED [ 44%]
+tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[lossy-pair-numpy] PASSED [ 44%]
+tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[lossy-pair-jax] PASSED [ 45%]
+tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[lossy-pair-torch] PASSED [ 46%]
+tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[mixed-triple-numpy] PASSED [ 47%]
+tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[mixed-triple-jax] PASSED [ 47%]
+tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[mixed-triple-torch] PASSED [ 48%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[physical-overlap] PASSED [ 49%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[padded-overlap] PASSED [ 50%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[padded-overlap-inactive] PASSED [ 50%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[off-grid-two-dx] PASSED [ 51%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[finite-box] PASSED [ 52%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[sphere] PASSED [ 52%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[turned] PASSED [ 53%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[ranged] PASSED [ 54%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[anisotropic-eps] PASSED [ 55%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[anisotropic-sigma] PASSED [ 55%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[magnetic] PASSED [ 56%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[lossy-host] PASSED [ 57%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[conductive-zero-host] PASSED [ 58%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[magnetic-host] PASSED [ 58%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[dispersive-member] PASSED [ 59%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[plain-material-member] PASSED [ 60%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[slab-member] PASSED [ 61%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[nonparallel] PASSED [ 61%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[initial] PASSED [ 62%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[stencil] PASSED [ 63%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[sub-dx] PASSED [ 63%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[transverse-halo] PASSED [ 64%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[normal-absorber] PASSED [ 65%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[transverse-absorber] PASSED [ 66%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[coefficient-range] PASSED [ 66%]
+tests/test_fd_conductive_stack.py::test_stack_admission_requires_every_member_and_disjoint_padded_support[exact-support-touch] PASSED [ 67%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[first-sigma] PASSED [ 68%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[second-sigma] PASSED [ 69%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[second-eps] PASSED [ 69%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[center] PASSED [ 70%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[thickness] PASSED [ 71%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[background] PASSED [ 72%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[order] PASSED [ 72%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[count] PASSED [ 73%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[missing-second] PASSED [ 74%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[duplicate-first] PASSED [ 75%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[wrong-name] PASSED [ 75%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[wrong-index] PASSED [ 76%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[wrong-region] PASSED [ 77%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[ordinary-memory] PASSED [ 77%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[singleton-plan] PASSED [ 78%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[nonfilm-plan] PASSED [ 79%]
+tests/test_fd_conductive_stack.py::test_prepared_stack_plan_binds_the_entire_ordered_scene_and_memory[unsupported-finite] PASSED [ 80%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[second-sigma-torch-reverse] PASSED [ 80%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[second-sigma-torch-forward] PASSED [ 81%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[second-sigma-jax-jit] PASSED [ 82%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[second-eps-torch-reverse] PASSED [ 83%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[second-eps-torch-forward] PASSED [ 83%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[second-eps-jax-jit] PASSED [ 84%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[center-torch-reverse] PASSED [ 85%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[center-torch-forward] PASSED [ 86%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[center-jax-jit] PASSED [ 86%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[thickness-torch-reverse] PASSED [ 87%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[thickness-torch-forward] PASSED [ 88%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[thickness-jax-jit] PASSED [ 88%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[host-torch-reverse] PASSED [ 89%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[host-torch-forward] PASSED [ 90%]
+tests/test_fd_conductive_stack.py::test_traced_later_members_and_host_cannot_bypass_the_stack_door[host-jax-jit] PASSED [ 91%]
+tests/test_fd_conductive_stack.py::test_stack_cfl_uses_the_maximum_local_member_rate_and_physical_curl_floor[later-fast] PASSED [ 91%]
+tests/test_fd_conductive_stack.py::test_stack_cfl_uses_the_maximum_local_member_rate_and_physical_curl_floor[earlier-fast] PASSED [ 92%]
+tests/test_fd_conductive_stack.py::test_stack_cfl_uses_the_maximum_local_member_rate_and_physical_curl_floor[four-members] PASSED [ 93%]
+tests/test_fd_conductive_stack.py::test_stack_cfl_uses_the_maximum_local_member_rate_and_physical_curl_floor[all-inactive] PASSED [ 94%]
+tests/test_fd_conductive_stack.py::test_stack_cfl_uses_the_maximum_local_member_rate_and_physical_curl_floor[subunit-eps] PASSED [ 94%]
+tests/test_fd_conductive_stack.py::test_stack_spectral_guards_check_every_member_and_the_full_source_band[band-second] PASSED [ 95%]
+tests/test_fd_conductive_stack.py::test_stack_spectral_guards_check_every_member_and_the_full_source_band[monitor-second] PASSED [ 96%]
+tests/test_fd_conductive_stack.py::test_stack_spectral_guards_check_every_member_and_the_full_source_band[resolution-second] PASSED [ 97%]
+tests/test_fd_conductive_stack.py::test_stack_spectral_guards_check_every_member_and_the_full_source_band[pml-second] PASSED [ 97%]
+tests/test_fd_conductive_stack.py::test_stack_spectral_guards_check_every_member_and_the_full_source_band[resolved] PASSED [ 98%]
+tests/test_fd_conductive_stack.py::test_stack_spectral_guards_check_every_member_and_the_full_source_band[traced-band-forward] PASSED [ 99%]
+tests/test_fd_conductive_stack.py::test_stack_spectral_guards_check_every_member_and_the_full_source_band[traced-band-jax] PASSED [100%]
+
+============================== warnings summary ===============================
+tests/test_fd_conductive_stack.py: 12 warnings
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 2 films normal to x, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[pair-y]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[equal-eps-y]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[one-inactive-y]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[all-inactive-y]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[thin-y]
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[tiny-fill-y]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 2 films normal to y, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py: 85 warnings
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 2 films normal to z, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[triple-x]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-x-numpy]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-x-jax]
+tests/test_fd_conductive_stack.py::test_stack_observer_sums_local_storage_and_closes_the_yee_loss_budget[triple-x-torch]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 3 films normal to x, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[triple-y]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 3 films normal to y, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py: 10 warnings
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 3 films normal to z, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[four-x]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 4 films normal to x, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[four-y]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 4 films normal to y, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[four-z]
+tests/test_fd_conductive_stack.py::test_stack_cfl_uses_the_maximum_local_member_rate_and_physical_curl_floor[four-members]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 4 films normal to z, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[eight-x]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 8 films normal to x, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[eight-y]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 8 films normal to y, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py::test_every_stack_member_matches_the_independent_discrete_series_parallel_law[eight-z]
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive stack has 8 films normal to z, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py: 34 warnings
+  [host]/<worktrees>\wavebit\tests\test_fd_conductive_stack.py:31: SubpixelAccuracyWarning: The conductive film uses an induced Debye memory at normal mixed cells and arithmetic conductivity along its faces. This C8 scope is one concrete axis-aligned film in a lossless dielectric; curved conductors, declared dispersive poles and junctions are not supported. An exact local material response alone does not establish spatial convergence. Validate the observables under refinement and check run duration separately. See docs/fd-conductive-film.md.
+    return function(*args, **kwargs)
+
+tests/test_fd_conductive_stack.py: 12 warnings
+  [host]/<worktrees>\wavebit\wavebit\fd\_check.py:210: SubpixelAccuracyWarning: The conductive stack has 2 films normal to z, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    p = _plan(scene) if p is None else p
+
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[triple-numpy]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[triple-jax]
+tests/test_fd_conductive_stack.py::test_stack_regions_preserve_singletons_order_and_actual_state_allocation[triple-torch]
+  [host]/<worktrees>\wavebit\wavebit\fd\_check.py:210: SubpixelAccuracyWarning: The conductive stack has 3 films normal to z, each with independent induced Debye memory on disjoint padded support. This bounded scope admits only concrete parallel Conductor films in a plain lossless dielectric; touching films, other pole families and junctions are outside it. Validate observables under refinement and check duration and absorbers separately. See docs/fd-conductive-stack.md.
+    p = _plan(scene) if p is None else p
+
+tests/test_fd_conductive_stack.py: 18 warnings
+  [host]/miniconda3\envs\wavebit\Lib\site-packages\torch\jit\_script.py:1488: DeprecationWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================ 136 passed, 192 warnings in 87.16s (0:01:27) =================

@@ -1,0 +1,22 @@
+{
+  "substrate": {
+    "E": {
+      "torch_relative": 9.504332710967683e-14,
+      "unranged_relative": 0.0
+    },
+    "H": {
+      "torch_relative": 7.393667872103546e-14,
+      "unranged_relative": 0.0
+    }
+  },
+  "mirror": {
+    "E": {
+      "torch_relative": 6.375893295967544e-14,
+      "unranged_relative": 0.0
+    },
+    "H": {
+      "torch_relative": 2.399842376887789e-14,
+      "unranged_relative": 0.0
+    }
+  }
+}

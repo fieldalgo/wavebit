@@ -1,0 +1,170 @@
+{
+  "reviewed_utc": "2026-10-07T03:41:22.331147+00:00",
+  "mutations_manifest": {
+    "path": "studies/results/fdtd_decay_stop_mutations.json",
+    "sha256": "075714771c24f2f603e4c179e98ca0b6859b7ae6a41d669788ef957dfddd82b8"
+  },
+  "interpretation": "Every first actual exception/assertion line matches the intended mechanism; not an import/runtime-only failure. All20 original source bytes restored and full guard verified. Combined restored185 baseline passed with actualparentexit0.",
+  "rows": [
+    {
+      "name": "closed-upper-threshold-admitted",
+      "test": "tests/test_fd_decay_stop.py::test_decay_requires_explicit_static_finite_amplitude_ratio_and_window[threshold-one]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/closed-upper-threshold-admitted.log",
+      "raw_log_sha256": "66cf23f3a1abf97ee5d45fa9bd64e3bec76b5d21b2deef47d13b81dc72fd4cb3",
+      "intended_failure_excerpt": "E   Failed: DID NOT RAISE ValueError",
+      "restored_sha256": "af68cf84c9c511049a013593ded3321b8f2d46d9023bc14cd0c2dc4e2c62de2a"
+    },
+    {
+      "name": "complex-modulus-overflow",
+      "test": "tests/test_fd_decay_stop.py::test_component_amplitude_keeps_subnormals_and_extreme_complex_values[large-complex-eager-numpy]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/complex-modulus-overflow.log",
+      "raw_log_sha256": "b2466f018375a6953cbb145484846b773c56ffc3ced707ccb0421148ad109898",
+      "intended_failure_excerpt": "E   assert inf == 1.7e+308",
+      "restored_sha256": "f813478428250b5d35e6403c5c865e81ec7168b3bfdf64eb8e0122a7bdd62484"
+    },
+    {
+      "name": "jax-window-subnormal-maximum-flushed",
+      "test": "tests/test_fd_decay_stop.py::test_component_amplitude_keeps_subnormals_and_extreme_complex_values[subnormal-actual-window-jax]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/jax-window-subnormal-maximum-flushed.log",
+      "raw_log_sha256": "bbf557fc330a7ad9fabc4975d6000286ad487df080016b382c4b49d02024ea9c",
+      "intended_failure_excerpt": "E   assert 0.0 == 1e-323",
+      "restored_sha256": "f813478428250b5d35e6403c5c865e81ec7168b3bfdf64eb8e0122a7bdd62484"
+    },
+    {
+      "name": "rounded-ratio-false-success",
+      "test": "tests/test_fd_decay_stop.py::test_complete_window_tracker_matches_independent_scalar_history[rounded-ratio-boundary]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/rounded-ratio-false-success.log",
+      "raw_log_sha256": "adeb184801c8e3155bfa0f8600cc790a5fef41b3483dd77436b3264f3af133de",
+      "intended_failure_excerpt": "E   assert 2 == 8",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "weak-group-global-normalization",
+      "test": "tests/test_fd_decay_stop.py::test_complete_window_tracker_matches_independent_scalar_history[weak-memory]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/weak-group-global-normalization.log",
+      "raw_log_sha256": "7eabb19b60a02b1e119ce795fc17ba69bf0d144ca6e2cabb1591f3c953370f0c",
+      "intended_failure_excerpt": "E   assert 2 == 6",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "hybrid-aux-group-omitted",
+      "test": "tests/test_fd_decay_stop.py::test_each_evolving_array_is_a_separate_group[hybrid-film]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/hybrid-aux-group-omitted.log",
+      "raw_log_sha256": "9d9a203ae43e1054f8431af1515404bebcf3c028ce43ce5fb54f4469065ef234",
+      "intended_failure_excerpt": "E   assert [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0]",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "cpml-group-omitted",
+      "test": "tests/test_fd_decay_stop.py::test_each_evolving_array_is_a_separate_group[cpml]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/cpml-group-omitted.log",
+      "raw_log_sha256": "2210601953263f9fb63dfd55a677dbffdc8e08e16aef3f827241a4ffc96165cc",
+      "intended_failure_excerpt": "E   assert [1.0, 2.0] == [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "only-last-step-of-window-read",
+      "test": "tests/test_fd_decay_stop.py::test_uniform_conductor_stops_at_first_independently_predicted_window[real-numpy]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/only-last-step-of-window-read.log",
+      "raw_log_sha256": "d974b172e5030b1af74faa1503f2c6b3b7ceec06b5e00bdab22e2fd865c8b80d",
+      "intended_failure_excerpt": "E   AssertionError: assert 70 == 77",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "record-cap-padding-retained",
+      "test": "tests/test_fd_decay_stop.py::test_prefix_outputs_use_actual_count_and_complete_energy_clock[3-numpy]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/record-cap-padding-retained.log",
+      "raw_log_sha256": "7eb971be5ed0c4030090fc08377551b024bf95630c2bd3e26414a7054bc70631",
+      "intended_failure_excerpt": "E   assert (53,) == (15,)",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "energy-prefix-one-clock-late",
+      "test": "tests/test_fd_decay_stop.py::test_prefix_outputs_use_actual_count_and_complete_energy_clock[3-numpy]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/energy-prefix-one-clock-late.log",
+      "raw_log_sha256": "5b1458030e5d3fe81bda5f85121cbd0132e7a326469e5d1989a1dac201e0a0f2",
+      "intended_failure_excerpt": "E   AssertionError: assert np.float64(442.1949179135942) <= (np.float64(2.842170943040401e-14) * 497.7798879721451)",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "decay-dft-endpoint-one-step-late",
+      "test": "tests/test_fd_decay_stop.py::test_prefix_outputs_use_actual_count_and_complete_energy_clock[3-numpy]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/decay-dft-endpoint-one-step-late.log",
+      "raw_log_sha256": "e954c6d140611e8c4aeb53e197c349f98fb6b23ae5e76395d03d53f9bfec6ebc",
+      "intended_failure_excerpt": "E   AssertionError: assert np.float64(1.8596485466399813e-05) <= (np.float64(2.842170943040401e-14) * 1.0)",
+      "restored_sha256": "d3d55a525e71470cb178e08965c27f5b43ffee5e3e2cb8bf416bd1e22d2361f0"
+    },
+    {
+      "name": "last-gaussian-source-ignored",
+      "test": "tests/test_fd_decay_stop.py::test_source_eligibility_uses_every_gaussian_tail_and_conservative_clock[Ex-0.1]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/last-gaussian-source-ignored.log",
+      "raw_log_sha256": "3820a4159a5b324127f1c33e3bf29cb89f9cf86a0af77cbe534f3e27722ea8ca",
+      "intended_failure_excerpt": "E   assert 47.325323155471935 >= (63.15060284233911 - (4 * 7.105427357601002e-15))",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "uncovered-runtime-admitted",
+      "test": "tests/test_fd_decay_stop.py::test_decay_refuses_uncovered_sources_memory_backends_and_transforms[unknown-runtime]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/uncovered-runtime-admitted.log",
+      "raw_log_sha256": "f7bdf9e66fd540b5083c48e79c5c1420aa6b39b422d9712ba3659b3d8a2afa4f",
+      "intended_failure_excerpt": "E   Failed: DID NOT RAISE ValueError",
+      "restored_sha256": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f"
+    },
+    {
+      "name": "callable-dual-primal-conversion-admitted",
+      "test": "tests/test_fd_decay_stop.py::test_decay_refuses_uncovered_sources_memory_backends_and_transforms[torch-callable-dual]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/callable-dual-primal-conversion-admitted.log",
+      "raw_log_sha256": "b41ccc7134f427cf1bfafc3f7dbebffad4ad0fc9e3a9557e6c6502d379b8d309",
+      "intended_failure_excerpt": "E   Failed: DID NOT RAISE ValueError",
+      "restored_sha256": "f41d6a8b1c103c63f1e224fc6fd0786bac56ec24b4ab3b93bd62164996f6c1f6"
+    },
+    {
+      "name": "actual-prefix-mislabeled-as-cap",
+      "test": "tests/test_fd_decay_stop.py::test_prepared_plan_and_report_bind_cap_criterion_and_effective_prefix[steps]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/actual-prefix-mislabeled-as-cap.log",
+      "raw_log_sha256": "6dbdddbd74d0715d9079e0e6ffa13c41072f199ac36be07d7f5f8621aee213e3",
+      "intended_failure_excerpt": "E   AssertionError: assert 77 == 173",
+      "restored_sha256": "493f61d83b94524df80b81fbbb5380b4e1364a1d5a9d901c9ce5763bd1ef4226"
+    },
+    {
+      "name": "fixed-energy-schedule-changed",
+      "test": "tests/test_fd_decay_stop.py::test_fixed_runs_keep_their_energy_cadence_and_amplitude_derivative[numpy]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/fixed-energy-schedule-changed.log",
+      "raw_log_sha256": "5bbe6fdbd9a60e8e4b8fc3b42a719278b997a69c5da9fdd6d34d5a2300ad7a79",
+      "intended_failure_excerpt": "E   AssertionError: assert (None is None and 1 == 16)",
+      "restored_sha256": "4624d82caa0124290feee64e835056e4656cd1066018d2294d01d52dcee602fe"
+    },
+    {
+      "name": "implicit-window-default",
+      "test": "tests/test_fd_monitors_doors.py::test_mode_monitors_and_decay_stopping_are_stage_7",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/implicit-window-default.log",
+      "raw_log_sha256": "4af53a4540597049ce5cdb23740d036c5a0ea230f5ecb16c8ef3ea44d7051a5a",
+      "intended_failure_excerpt": "E   Failed: DID NOT RAISE TypeError",
+      "restored_sha256": "af68cf84c9c511049a013593ded3321b8f2d46d9023bc14cd0c2dc4e2c62de2a"
+    },
+    {
+      "name": "bare-run-ratio-admitted",
+      "test": "tests/test_fd_monitors_doors.py::test_stopping_on_decay_is_refused_naming_stage_7[decay]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/bare-run-ratio-admitted.log",
+      "raw_log_sha256": "774cad6d9c57d143588968a198245a76421060304cfd7ac08a111b7db11e2f1b",
+      "intended_failure_excerpt": "E   Failed: DID NOT RAISE TypeError",
+      "restored_sha256": "34afa26d938d794b329ce0794908aea60e51cb28b8702893e6211e0fe1f030c9"
+    },
+    {
+      "name": "scene-contract-keeps-stale-stage-door",
+      "test": "tests/test_fd_contract.py::test_later_stages_are_refused_by_name",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/scene-contract-keeps-stale-stage-door.log",
+      "raw_log_sha256": "ab33d487ac94df3401b73f3edbbf57424e41d0ac21e25c4a12fd31019da9536a",
+      "intended_failure_excerpt": "E   AssertionError: Regex pattern did not match.",
+      "restored_sha256": "34afa26d938d794b329ce0794908aea60e51cb28b8702893e6211e0fe1f030c9"
+    },
+    {
+      "name": "scene-replace-keeps-stale-stage-door",
+      "test": "tests/test_fd_scene.py::test_a_later_stage_keyword_on_scene_is_refused_naming_the_stage[decay]",
+      "raw_log": "studies/results/fdtd_decay_stop_controls/mutations_attempt1/scene-replace-keeps-stale-stage-door.log",
+      "raw_log_sha256": "8d158df7d23489157ee9fb8ba3a0cec86001211ddc412c147f4cf56760f34c91",
+      "intended_failure_excerpt": "E   AssertionError: Regex pattern did not match.",
+      "restored_sha256": "34afa26d938d794b329ce0794908aea60e51cb28b8702893e6211e0fe1f030c9"
+    }
+  ]
+}

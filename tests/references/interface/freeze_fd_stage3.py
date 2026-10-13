@@ -31,9 +31,15 @@ the Axis1D ``i k dx``.
 
 What the archive cannot say is that any of it is *right*: gates 1 to 7 (flux closure, the far
 field, Diffraction against ``wavebit.rcwa``, the normalisations, the decay diagnostic, Axis1D,
-the grazing rule) do that, and ``tests/test_fd_stage3_grad.py`` says the derivatives are the
+the grazing rule) do that, and ``tests/fdtd/test_fd_stage3_grad.py`` says the derivatives are the
 derivatives. This file says the numbers have not moved.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
+from tools.repository_paths import repository_path
 import argparse
 import datetime
 import hashlib
@@ -45,16 +51,14 @@ import warnings
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references/interface')
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / 'src'))                      # this checkout's wavebit first
 sys.path.insert(0, str(HERE.parent))               # tests/references, for the case list
 
 import wavebit                                               # noqa: E402
-import wavebit.fd as fd                                      # noqa: E402
-from _fd_stage3_cases import (BACKENDS, EXPECTED, GOLDEN, TOL, capture,          # noqa: E402
-                              content_digest, describe, lowered, relative_gap,
-                              sample_indices, scenes, solve)
+import wavebit.fdtd._legacy as fd                                      # noqa: E402
+from tests.references._fd_stage3_cases import BACKENDS, EXPECTED, GOLDEN, TOL, capture, content_digest, describe, lowered, relative_gap, sample_indices, scenes, solve
 
 CASES = HERE.parent / '_fd_stage3_cases.py'
 SHARED_CASES = HERE.parent / '_fd_stage0_cases.py'
@@ -110,7 +114,7 @@ def freeze():
                     arrays[f'{name}__{backend}__{key}'] = value
     metadata = dict(
         archive=GOLDEN.name,
-        what='the stage-3 pipeline (wavebit.fd: DFTRegion accumulators, Flux, Field, '
+        what='the stage-3 pipeline (wavebit.fdtd._legacy: DFTRegion accumulators, Flux, Field, '
              'Diffraction, FarField, Axis1D and the source spectra) on the five scenes of '
              '_fd_stage3_cases.py, each backend pinned to its own answer and the lowered DFT '
              'frequencies and Axis1D factor pinned once; a drift detector, not an oracle',

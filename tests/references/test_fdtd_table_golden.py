@@ -1,6 +1,6 @@
-"""``docs/fdtd.md`` §2's tables, read out of the markdown and held against a golden.
+"""``docs/guide/fdtd/fdtd.md`` §2's tables, read out of the markdown and held against a golden.
 
-**The gate this repository did not have.** ``tests/test_docs_contract.py`` checks that the
+**The gate this repository did not have.** ``tests/api/test_docs_contract.py`` checks that the
 documents' paths, symbols, URLs and toctree entries are real. Nothing anywhere read a
 *number* out of a document -- so §2's three-way table drifted for as long as it took
 somebody to notice, which was three weeks. What drifted was one word's worth of
@@ -42,24 +42,27 @@ recomputed -- meep is GPL and lives in another environment, and that file is its
 oracle with its own closed-form calibration gate. ``test_the_meep_column_is_the_committed
 _meep_golden`` holds the copy against the original, digest included.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import re
 import sys
 
 import numpy as np
 import pytest
 
-from wavebit._core import fdtd as fdtd_module
+from wavebit.fdtd._periodic import legacy as fdtd_module
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _meep_1d_cases import (CASES, FDTD_CONVERGENCE, FDTD_PUBLISHED, LEGS,  # noqa: E402
-                            RCWA_ORDERS, WAVEBIT_CALL, WAVEBIT_DERIVED, WAVEBIT_SHIPPED)
-from gen_goldens_fdtd_table import (_fdtd, _grid, _rcwa, _shipped,          # noqa: E402
-                                    CASE_NAME)
+from tests.references._meep_1d_cases import CASES, FDTD_CONVERGENCE, FDTD_PUBLISHED, LEGS, RCWA_ORDERS, WAVEBIT_CALL, WAVEBIT_DERIVED, WAVEBIT_SHIPPED
+from tests.references.gen_goldens_fdtd_table import _fdtd, _grid, _rcwa, _shipped, CASE_NAME
 
 ROOT = HERE.parent.parent
-DOC = ROOT / 'docs' / 'fdtd.md'
+DOC = ROOT / 'docs' / 'guide' / 'fdtd' / 'fdtd.md'
 README = ROOT / 'README.md'
 TABLE_PATH = HERE / 'golden_fdtd_table.npz'
 MEEP_PATH = HERE / 'golden_meep_1d.npz'
@@ -111,7 +114,7 @@ def _table_with(text, *needles):
     found = [t for t in _tables(text) if all(any(n in c for c in t[0]) for n in needles)]
     assert len(found) == 1, (
         f'expected exactly one table whose header mentions {needles}, found {len(found)}; '
-        f'docs/fdtd.md has been restructured and this gate cannot find the table it holds')
+        f'docs/guide/fdtd/fdtd.md has been restructured and this gate cannot find the table it holds')
     return found[0]
 
 
@@ -254,7 +257,7 @@ def test_the_document_prints_the_frozen_three_way_table(table, doc):
                     f'golden holds {a:.3e}')
                 seen += 1
     assert seen_rows == want_rows, (
-        'docs/fdtd.md §2\'s three-way table no longer has the rows this gate holds.\n'
+        'docs/guide/fdtd/fdtd.md §2\'s three-way table no longer has the rows this gate holds.\n'
         f'  missing: {sorted(want_rows - seen_rows)}\n'
         f'  unexpected: {sorted(seen_rows - want_rows)}\n'
         'A row deleted from the table is a claim deleted from the record. Restore it, or '
@@ -317,7 +320,7 @@ def test_the_headline_gaps_quoted_in_prose_are_the_frozen_ones(table, doc):
     """
     want = [float(table[f'fdtd__{leg}__{FDTD_PUBLISHED}__worst']) for leg in ('te', 'tm')]
     want += [float(table[f'meep__{leg}__worst']) for leg in ('te', 'tm')]
-    for name, text in (('docs/fdtd.md', doc), ('README.md', README.read_text())):
+    for name, text in (('docs/guide/fdtd/fdtd.md', doc), ('README.md', README.read_text())):
         printed = _numbers_after(text, 'worst per-order gap', 4)
         for a, b in zip(want, printed):
             assert abs(a - float(b)) <= _half_ulp(b) * SLACK, (
@@ -353,7 +356,7 @@ def test_the_recorded_conditions_are_the_ones_the_module_ships():
              for name, recorded in WAVEBIT_SHIPPED.items()
              if _shipped(name) != recorded]
     assert not wrong, (
-        'the conditions docs/fdtd.md §2 is quoted at are no longer the shipped ones:\n  '
+        'the conditions docs/guide/fdtd/fdtd.md §2 is quoted at are no longer the shipped ones:\n  '
         + '\n  '.join(wrong)
         + '\nRe-run tests/references/gen_goldens_fdtd_table.py and re-type §2, or put '
           'the default back. Do not edit the record to match -- the record is what the '

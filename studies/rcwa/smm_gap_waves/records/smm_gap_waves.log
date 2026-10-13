@@ -1,0 +1,73 @@
+SMM's gap waves -- studies/smm_gap_waves.py
+numpy 2.5.1; every solve NumPy complex128
+
+1. mechanism -- four patterned double-negative TM gratings, floors
+  A: 1089 nm, period 432, layers [299.0] of 5/20 of (-1.68, -0.54+0.05j) beside 1.69, truncation 22, theta 0.0963
+  B: 1000 nm, period 432, layers [100.0] of 5/20 of (-1.68, -0.54+0.05j) beside 1.69, truncation 20, theta 0.0963
+  C: 787 nm, period 432, layers [188.0] of 14/20 of (-1.68, -0.54+0.05j) beside 1.69, truncation 19, theta 0.0963
+  D: 1171 nm, period 938, layers [281.0] of 12/16 of (-3.55, -1.41+0j) beside 3.64, truncation 6, theta 0.184
+  ETM | SMM develop | develop, _FLUX_FLAT 1e-6/1e-9/1e-15 | develop's z_p x10 | x0.1 | Laurent ETM / SMM develop | SMM shipped
+  A: 1.3e-13 | 4.5e-10 | 4.5e-10/4.5e-10/4.5e-10 | 1.8e-11 | 1.3e-09 | 1.2e-13/5.4e-11 | 1.1e-13
+  B: 6.6e-15 | 1.1e-10 | 1.1e-10/1.1e-10/1.1e-10 | 7.7e-12 | 1.5e-09 | 1.0e-14/1.3e-11 | 8.6e-15
+  C: 1.5e-14 | 6.8e-11 | 6.8e-11/6.8e-11/6.8e-11 | 2.2e-12 | 6.0e-10 | 1.9e-14/2.6e-12 | 2.9e-14
+  D: 6.2e-13 | 9.0e-12 | 9.0e-12/9.0e-12/9.0e-12 | 1.5e-12 | 4.5e-11 | 1.6e-15/1.2e-14 | 4.9e-13
+  every _FLUX_FLAT floor equal to develop's to the bit: True
+  A: largest propagating q 0.1235-16.56j; |kx| <= 55.6, where develop's z_p was 1/3087 and the shipped is 55.6
+  B: largest propagating q 0.1513-13.71j; |kx| <= 46.4, where develop's z_p was 1/2153 and the shipped is 46.4
+  C: largest propagating q 0.1372-12.57j; |kx| <= 34.7, where develop's z_p was 1/1206 and the shipped is 34.7
+  D: largest propagating q -1.281e-15+4.122j; |kx| <= 7.7, where develop's z_p was 1/60 and the shipped is 7.7
+
+2. sweep -- 40 TM gratings of the sweep's double negative, median / worst
+  eps -1.68, mu -0.54+0.05i ETM floor 3.6e-14 / 8.7e-13 | develop: floor 7.6e-13 / 5.5e-09, |SMM-ETM| 4.8e-13 / 3.4e-09 | shipped: floor 3.8e-14 / 8.7e-13, |SMM-ETM| 1.7e-15 / 6.4e-14
+  scenes with an SMM floor above 1e-11: develop 10, shipped 0; above 10x ETM's: develop 24, shipped 0
+
+3. families -- 12 random scenes each, median / worst
+  double negative, 1D      ETM floor 2.0e-14 / 2.3e-13 | develop: floor 5.2e-14 / 1.1e-12, |SMM-ETM| 4.8e-14 / 8.1e-13 | shipped: floor 1.7e-14 / 2.4e-13, |SMM-ETM| 4.3e-15 / 2.0e-14
+  double negative, 2D      ETM floor 1.4e-13 / 2.5e-10 | develop: floor 3.2e-13 / 2.5e-10, |SMM-ETM| 2.7e-13 / 1.3e-11 | shipped: floor 1.5e-13 / 2.5e-10, |SMM-ETM| 2.1e-14 / 3.8e-13
+  lossless metal, TM       ETM floor 2.8e-14 / 9.3e-14 | develop: floor 7.5e-14 / 1.1e-09, |SMM-ETM| 3.8e-14 / 8.6e-10 | shipped: floor 2.7e-14 / 2.2e-13, |SMM-ETM| 2.1e-15 / 7.4e-14
+  lossy metal, TM          ETM floor 2.0e-14 / 7.0e-14 | develop: floor 2.5e-14 / 1.1e-13, |SMM-ETM| 3.5e-15 / 9.1e-14 | shipped: floor 2.0e-14 / 6.9e-14, |SMM-ETM| 6.9e-16 / 3.3e-15
+  eps 9..16, TM            ETM floor 9.2e-15 / 1.4e-13 | develop: floor 8.9e-15 / 1.4e-13, |SMM-ETM| 1.1e-15 / 1.0e-14 | shipped: floor 8.8e-15 / 1.4e-13, |SMM-ETM| 1.3e-15 / 4.4e-15
+  lossy dielectric, TM     ETM floor 4.9e-15 / 6.9e-14 | develop: floor 4.7e-15 / 6.6e-14, |SMM-ETM| 4.9e-16 / 2.4e-15 | shipped: floor 5.0e-15 / 6.9e-14, |SMM-ETM| 4.3e-16 / 1.3e-15
+  2..20 um layers, TM      ETM floor 3.1e-13 / 5.5e-12 | develop: floor 3.2e-13 / 5.5e-12, |SMM-ETM| 8.6e-16 / 1.1e-14 | shipped: floor 3.1e-13 / 5.5e-12, |SMM-ETM| 4.6e-16 / 1.8e-15
+  truncation 25..40, TM    ETM floor 9.7e-14 / 3.9e-13 | develop: floor 9.7e-14 / 4.0e-13, |SMM-ETM| 3.6e-15 / 2.5e-14 | shipped: floor 9.7e-14 / 3.9e-13, |SMM-ETM| 1.2e-15 / 2.9e-15
+
+4. cutoff -- the shipped gap's cost near a layer mode's cutoff
+  TM, eps 12 beside air: a mode crosses q = 0 at 1167.787016 nm
+    offset 1e-02: q**2 +7.9e-02; floor ETM 1.8e-15, SMM develop 1.8e-15, shipped 1.7e-15; |SMM-ETM| develop 1.2e-15, shipped 6.6e-16
+    offset 1e-04: q**2 +7.9e-04; floor ETM 2.5e-15, SMM develop 2.1e-15, shipped 1.8e-15; |SMM-ETM| develop 1.8e-15, shipped 8.3e-16
+    offset 1e-06: q**2 +7.9e-06; floor ETM 1.0e-14, SMM develop 1.1e-14, shipped 8.4e-15; |SMM-ETM| develop 2.7e-15, shipped 3.3e-15
+    offset 1e-08: q**2 +7.9e-08; floor ETM 5.2e-14, SMM develop 1.5e-13, shipped 5.6e-14; |SMM-ETM| develop 9.9e-14, shipped 5.9e-14
+  TM, eps 4 beside air: a mode crosses q = 0 at 1214.309613 nm
+    offset 1e-02: q**2 +4.7e-02; floor ETM 2.0e-15, SMM develop 1.8e-15, shipped 1.9e-15; |SMM-ETM| develop 1.0e-15, shipped 2.5e-16
+    offset 1e-04: q**2 +4.6e-04; floor ETM 2.1e-15, SMM develop 1.5e-15, shipped 2.0e-15; |SMM-ETM| develop 3.2e-16, shipped 1.1e-15
+    offset 1e-06: q**2 +4.6e-06; floor ETM 2.5e-15, SMM develop 4.0e-15, shipped 9.0e-15; |SMM-ETM| develop 2.7e-15, shipped 8.1e-15
+    offset 1e-08: q**2 +4.6e-08; floor ETM 1.8e-14, SMM develop 1.4e-14, shipped 1.2e-13; |SMM-ETM| develop 5.0e-14, shipped 7.8e-14
+  TE, eps 12 beside air: a mode crosses q = 0 at 1167.787016 nm
+    offset 1e-02: q**2 +5.3e-02; floor ETM 5.7e-15, SMM develop 4.7e-15, shipped 4.8e-15; |SMM-ETM| develop 1.5e-15, shipped 1.4e-15
+    offset 1e-04: q**2 +5.3e-04; floor ETM 5.7e-15, SMM develop 6.4e-15, shipped 6.1e-15; |SMM-ETM| develop 1.3e-15, shipped 1.7e-15
+    offset 1e-06: q**2 +5.3e-06; floor ETM 2.1e-14, SMM develop 2.3e-14, shipped 2.4e-14; |SMM-ETM| develop 1.4e-14, shipped 2.1e-14
+    offset 1e-08: q**2 +5.3e-08; floor ETM 1.3e-14, SMM develop 1.4e-13, shipped 2.1e-13; |SMM-ETM| develop 1.1e-13, shipped 2.2e-13
+
+5. imaginary -- theta = i*asinh(1), the specular order at k_par = i
+  te: |SMM - ETM| develop 6.1e-16, shipped 7.9e-16
+  tm: |SMM - ETM| develop FloatingPointError (non-finite efficiencies), shipped 5.1e-16
+  conical: |SMM - ETM| develop FloatingPointError (non-finite efficiencies), shipped 2.7e-15
+
+6. mixture -- lossless (-2, -1) beside (2, 1.5) at exactly half fill, conical
+  truncation  5, half fill  : worst |SMM - ETM| over 32 scenes develop 2.0e-04, shipped 1.8e-05
+  truncation  5, fill 8/20  : worst |SMM - ETM| over 32 scenes develop 1.9e-13, shipped 3.0e-14
+  truncation  5, beside 2.2 : worst |SMM - ETM| over 32 scenes develop 6.0e-14, shipped 3.5e-14
+  truncation  5, 1e-6 loss  : worst |SMM - ETM| over 32 scenes develop 3.4e-13, shipped 5.1e-13
+  truncation 10, half fill  : worst |SMM - ETM| over 32 scenes develop 9.0e-02, shipped 1.9e-03
+  truncation 10, fill 8/20  : worst |SMM - ETM| over 32 scenes develop 1.2e-12, shipped 7.8e-13
+  truncation 10, beside 2.2 : worst |SMM - ETM| over 32 scenes develop 3.6e-12, shipped 9.6e-13
+  truncation 10, 1e-6 loss  : worst |SMM - ETM| over 32 scenes develop 4.3e-12, shipped 4.2e-12
+
+7. gauge -- both gap waves scaled by 2.7, each against its own magnitude
+  TM: T 4.1e-15, r_s 0.0e+00; whole-stack blocks 5.8e-15 4.2e-15 4.0e-15 3.6e-15; S_layers[0].S11 0.44, gamma[0] 0.44, S_ref.S11 0.34, S_trn.S11 0.48
+  conical: T 1.5e-15, r_s 2.0e-15; whole-stack blocks 6.5e-15 6.6e-15 7.0e-15 5.3e-15; S_layers[0].S11 0.80, gamma[0] 0.80, S_ref.S11 0.81, S_trn.S11 0.82
+  2D: T 8.9e-16, r_s 1.1e-15; whole-stack blocks 6.5e-15 3.6e-15 5.6e-15 3.9e-15; S_layers[0].S11 0.67, gamma[0] 0.68, S_ref.S11 0.78, S_trn.S11 0.73
+
+8. develop -- this study's develop gap against b9957c8
+  24 of 24 arrays byte-identical (SMM amplitudes of 12 scenes on the TE, TM, conical and 2D paths, each lit from either side)
+  the shipped gap against b9957c8: worst amplitude difference 1.7e-10

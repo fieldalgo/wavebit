@@ -8,7 +8,7 @@ https://meep.readthedocs.io/en/latest/Python_Tutorials/Basics/
 Geometry fixtures match the wavebit sphere and cylinder studies. Source pulse
 definitions and flux interpolation differ between solvers; compare each to Mie,
 retain placement spread, and measure time/PML/monitor controls before claiming
-an accuracy advantage. See docs/fd-mie-validation.md for the measured limits.
+an accuracy advantage. See docs/validation/fdtd/fd-mie-validation.md for the measured limits.
 """
 import argparse
 import json

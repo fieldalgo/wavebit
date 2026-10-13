@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" role="img" aria-labelledby="18-jobspec-title 18-jobspec-desc">
+<title id="18-jobspec-title">Save simulation conditions as data</title><desc id="18-jobspec-desc">Four JobSpec sections and wavelength-angle combinations</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="470" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Save simulation conditions as data</text>
+<rect x="35" y="76" width="345" height="72" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="53" y="110" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Stack</text>
+<text x="53" y="146" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Layers · materials · lattice</text>
+<rect x="35" y="159" width="345" height="72" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="53" y="193" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Incidence</text>
+<text x="53" y="229" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Wavelength · direction · polarization</text>
+<rect x="35" y="242" width="345" height="72" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="53" y="276" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Numerics</text>
+<text x="53" y="312" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Orders · backend · method</text>
+<rect x="35" y="325" width="345" height="72" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="53" y="359" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Sweep</text>
+<text x="53" y="395" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Sweep axes and values</text>
+<line x1="399" y1="243" x2="480" y2="243" stroke="#546779" stroke-width="2" />
+<polygon points="480,243 470.0,247.0 470.0,239.0" fill="#546779" />
+<rect x="570" y="100" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="617" y="135" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">1</text>
+<rect x="675" y="100" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="722" y="135" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">2</text>
+<rect x="780" y="100" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="827" y="135" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">3</text>
+<rect x="570" y="166" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="617" y="201" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">4</text>
+<rect x="675" y="166" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="722" y="201" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">5</text>
+<rect x="780" y="166" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="827" y="201" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">6</text>
+<rect x="570" y="232" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="617" y="267" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">7</text>
+<rect x="675" y="232" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="722" y="267" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">8</text>
+<rect x="780" y="232" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="827" y="267" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">9</text>
+<rect x="570" y="298" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="617" y="333" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">10</text>
+<rect x="675" y="298" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="722" y="333" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">11</text>
+<rect x="780" y="298" width="95" height="55" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="827" y="333" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">12</text>
+<text x="570" y="83" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">3 wavelengths →</text>
+<text x="493" y="162" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">Angles</text>
+<text x="493" y="191" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">4 values</text>
+<text x="570" y="414" style="fill:#182b3e;font-size:24px;font-weight:600" text-anchor="start">12 total · Cartesian product of all values</text>
+<text x="30" y="453" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Schematic · expand unfolds specifications; parallel execution and dispersion updates are separate</text>
+</svg>

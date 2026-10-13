@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 525" role="img" aria-labelledby="title desc">
+<title id="title">Wavebit's NVF matrix assembly</title><desc id="desc">Combine material and directional Fourier coefficients to build the material matrices used by RCWA.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="525" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Wavebit's NVF matrix assembly</text>
+<rect x="30" y="85" width="420" height="123" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Material Fourier coefficients</text>
+<text x="48" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">A = C(ε),  B = C(1/ε)</text>
+<text x="48" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Δ = A − B⁻¹</text>
+<rect x="550" y="85" width="420" height="123" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="568" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Direction Fourier coefficients</text>
+<text x="568" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Pxx, Pxy, Pyx, Pyy</text>
+<text x="568" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Cij = C(Pij)</text>
+<line x1="240" y1="210" x2="380" y2="262" stroke="#546779" stroke-width="2" />
+<polygon points="380,262 369.23300116148783,262.26783579200276 372.0184933983168,254.76843361592464" fill="#546779" />
+<line x1="760" y1="210" x2="620" y2="262" stroke="#546779" stroke-width="2" />
+<polygon points="620,262 627.9815066016831,254.76843361592464 630.7669988385121,262.26783579200276" fill="#546779" />
+<rect x="85" y="277" width="830" height="113" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2" />
+<text x="103" y="311" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Symmetrized product in finite matrices</text>
+<text x="103" y="347" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Kij = δij A − ½(Δ Cij + Cij Δ)</text>
+<line x1="500" y1="391" x2="500" y2="425" stroke="#546779" stroke-width="2" />
+<polygon points="500,425 496.0,415.0 504.0,415.0" fill="#546779" />
+<text x="500" y="462" style="fill:#285ab0;font-size:25px;font-weight:400" text-anchor="middle">ConvMatrices = (Kxx, Kyy, A⁻¹, −Kxy, −Kyx)</text>
+<text x="30" y="508" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Nonmagnetic · scalar ε · z-invariant layer · internal slot signs shown</text>
+</svg>

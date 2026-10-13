@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 710" role="img" aria-labelledby="06c-phase-lines-title 06c-phase-lines-desc">
+<title id="06c-phase-lines-title">b₁은 왜 a₂와 수직일까?</title><desc id="06c-phase-lines-desc">(1,0) 푸리에 성분의 같은 위상 선은 a2와 나란하다. 직교 셀에서는 세로선이어서 b1이 오른쪽을 향하고, 60도 셀에서는 선이 기울어 b1이 오른쪽 아래를 향한다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="710" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">b₁은 왜 a₂와 수직일까?</text>
+<text x="30" y="82" style="fill:#182b3e;font-size:22px;font-weight:400" text-anchor="start">각 선 위에서는 위상이 같음 · 두 그림 모두 실제 xy 평면</text>
+<rect x="25" y="112" width="460" height="522" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<text x="49" y="151" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">① 직교 셀 · 90°</text>
+<text x="49" y="185" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">위상: 한 번의 진동에서 지금 어느 단계인가</text>
+<polygon points="100.0000,419.0000 300.0000,419.0000 300.0000,219.0000 100.0000,219.0000" fill="#e8f1ff" stroke="#cad7df" stroke-width="1.5"/>
+<line x1="100.0" y1="431.0" x2="100.00000000000001" y2="207.0" stroke="#546779" stroke-width="1.6"/>
+<line x1="150.0" y1="431.0" x2="150.0" y2="207.0" stroke="#546779" stroke-width="1.6"/>
+<line x1="200.0" y1="431.0" x2="200.00000000000003" y2="207.0" stroke="#546779" stroke-width="1.6"/>
+<line x1="250.0" y1="431.0" x2="250.00000000000003" y2="207.0" stroke="#546779" stroke-width="1.6"/>
+<line x1="300.0" y1="431.0" x2="300.0" y2="207.0" stroke="#546779" stroke-width="1.6"/>
+<line x1="100.0" y1="419.0" x2="300.0" y2="419.0" stroke="#285ab0" stroke-width="3"/>
+<polygon points="300.0,419.0 290.0,423.0 290.0,415.0" fill="#285ab0"/>
+<line x1="100.0" y1="419.0" x2="100.00000000000001" y2="219.0" stroke="#117c77" stroke-width="3"/>
+<polygon points="100.00000000000001,219.0 104.00000000000001,229.0 96.00000000000001,229.0" fill="#117c77"/>
+<text x="200.0" y="450.0" style="fill:#285ab0;font-size:24px;font-weight:650" text-anchor="middle">a₁</text>
+<text x="71.0" y="316.0" style="fill:#117c77;font-size:24px;font-weight:650" text-anchor="middle">a₂</text>
+<line x1="200.0" y1="319.0" x2="332.0" y2="319.0" stroke="#a85116" stroke-width="4"/>
+<polygon points="332.0,319.0 322.0,323.0 322.0,315.0" fill="#a85116"/>
+<circle cx="200.0" cy="319.0" r="3" fill="#a85116"/>
+<text x="343.0" y="312.0" style="fill:#a85116;font-size:25px;font-weight:700" text-anchor="start">b₁</text>
+<line x1="200.0" y1="307.0" x2="212.0" y2="307.0" stroke="#a85116" stroke-width="1.5"/>
+<line x1="212.0" y1="307.0" x2="212.0" y2="319.0" stroke="#a85116" stroke-width="1.5"/>
+<text x="49" y="491" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">a₂를 따라가는 동안 → 위상 그대로</text>
+<text x="49" y="526" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">a₁ 한 칸을 따라가면 → 한 주기(2π)</text>
+<rect x="45" y="551" width="420" height="60" rx="8" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="65" y="589" style="fill:#a85116;font-size:23px;font-weight:650" text-anchor="start">b₁은 오른쪽(+x)</text>
+<rect x="515" y="112" width="460" height="522" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<text x="539" y="151" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">② 사선 셀 · 60°</text>
+<text x="539" y="185" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">위상: 한 번의 진동에서 지금 어느 단계인가</text>
+<polygon points="590.0000,419.0000 790.0000,419.0000 890.0000,245.7949 690.0000,245.7949" fill="#e8f1ff" stroke="#cad7df" stroke-width="1.5"/>
+<line x1="584.0" y1="429.39230484541326" x2="696.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6"/>
+<line x1="634.0" y1="429.39230484541326" x2="746.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6"/>
+<line x1="684.0" y1="429.39230484541326" x2="796.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6"/>
+<line x1="734.0" y1="429.39230484541326" x2="846.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6"/>
+<line x1="784.0" y1="429.39230484541326" x2="896.0" y2="235.402614397699" stroke="#546779" stroke-width="1.6"/>
+<line x1="590.0" y1="419.0" x2="790.0" y2="419.0" stroke="#285ab0" stroke-width="3"/>
+<polygon points="790.0,419.0 780.0,423.0 780.0,415.0" fill="#285ab0"/>
+<line x1="590.0" y1="419.0" x2="690.0" y2="245.79491924311228" stroke="#117c77" stroke-width="3"/>
+<polygon points="690.0,245.79491924311228 688.4641016151378,256.45517328095667 681.5358983848622,252.45517328095667" fill="#117c77"/>
+<text x="690.0" y="450.0" style="fill:#285ab0;font-size:24px;font-weight:650" text-anchor="middle">a₁</text>
+<text x="616.0" y="330.7372055837117" style="fill:#117c77;font-size:24px;font-weight:650" text-anchor="middle">a₂</text>
+<line x1="740.0" y1="332.39745962155615" x2="854.3153532995459" y2="398.39745962155615" stroke="#a85116" stroke-width="4"/>
+<polygon points="854.3153532995459,398.39745962155615 843.6550992617015,396.8615612366939 847.6550992617015,389.9333580064184" fill="#a85116"/>
+<circle cx="740.0" cy="332.39745962155615" r="3" fill="#a85116"/>
+<text x="863.8416327411747" y="391.39745962155615" style="fill:#a85116;font-size:25px;font-weight:700" text-anchor="start">b₁</text>
+<line x1="746.0" y1="322.0051547761429" x2="756.3923048454133" y2="328.0051547761429" stroke="#a85116" stroke-width="1.5"/>
+<line x1="756.3923048454133" y1="328.0051547761429" x2="750.3923048454133" y2="338.39745962155615" stroke="#a85116" stroke-width="1.5"/>
+<text x="539" y="491" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">a₂를 따라가는 동안 → 위상 그대로</text>
+<text x="539" y="526" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">a₁ 한 칸을 따라가면 → 한 주기(2π)</text>
+<rect x="535" y="551" width="420" height="60" rx="8" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="555" y="589" style="fill:#a85116;font-size:23px;font-weight:650" text-anchor="start">b₁은 오른쪽 아래(−30°)</text>
+<text x="30" y="674" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">셀을 따라 움직이는 방향(a₁)과, 위상 선에 수직인 방향(b₁)을 구분합니다.</text>
+<text x="30" y="693" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">선은 재료 경계가 아니라 (1,0) 푸리에 성분의 같은 위상 선 · +x는 오른쪽, +y는 위쪽</text>
+</svg>

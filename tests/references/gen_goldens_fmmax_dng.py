@@ -34,12 +34,17 @@ Every medium is passive; lit from glass that bounds ``R + T`` by one exactly, an
 absorbing double negative it is a sanity check (incident and reflected waves interfere in the
 flux there), which the frozen row passes with 1.2e-3 to spare.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_fmmax_dng.npz'
@@ -53,7 +58,7 @@ def main():
     import fmmax
     from fmmax import fft as fmmax_fft
     from importlib.metadata import version
-    from gen_goldens_fmmax_laurent import _float64_frequencies
+    from tests.references.gen_goldens_fmmax_laurent import _float64_frequencies
 
     if version('fmmax') != FMMAX_VERSION:
         raise SystemExit(f'fmmax {version("fmmax")} is not {FMMAX_VERSION}; the phase64 flavour '
@@ -65,15 +70,15 @@ def main():
         freeze(jnp, fmmax, out, flavour='phase64')
     finally:
         undo()
-    from _fmmax_dng_cases import CASES, LEVELS
+    from tests.references._fmmax_dng_cases import CASES, LEVELS
     out['__levels'] = np.asarray(LEVELS, dtype=np.int64)
     np.savez(OUT, **out)
     print(f'\nwrote {OUT} ({len(CASES)} cases, {len(LEVELS)} sampling levels, two flavours)')
 
 
 def freeze(jnp, fmmax, out, flavour):
-    from _fmmax_dng_cases import CASES, LEVELS, THICK, WL, incident_kxy, orders
-    from _fmmax_laurent_cases import upsampled
+    from tests.references._fmmax_dng_cases import CASES, LEVELS, THICK, WL, incident_kxy, orders
+    from tests.references._fmmax_laurent_cases import upsampled
 
     k0 = 2 * np.pi / WL
     wl = jnp.asarray(WL)

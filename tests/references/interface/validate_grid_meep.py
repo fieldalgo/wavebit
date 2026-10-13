@@ -3,6 +3,8 @@
 Run each worker in its own environment; no Meep implementation is read/imported
 into Wavebit. Geometry is periodic with a time window preceding wraparound.
 """
+
+from wavebit.compat import legacy as _legacy_wavebit
 import argparse
 import json
 import sys
@@ -54,7 +56,7 @@ def worker(backend, resolution, duration=18.):
             permittivity[[start, stop]] = (1+eps)/2
             source = np.zeros((3,)+shape)
             source[0, 3*resolution] = 1
-            out = wavebit.fdtd_grid(permittivity, spacing=(1/resolution,)*3,
+            out = _legacy_wavebit.fdtd_grid(permittivity, spacing=(1/resolution,)*3,
                                    dt=dt, steps=steps, source=source,
                                    pulse=pulse((np.arange(steps)+.5)*dt),
                                    wavelengths=WAVELENGTHS, monitor_z=[9*resolution],

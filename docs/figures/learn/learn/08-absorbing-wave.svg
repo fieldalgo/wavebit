@@ -1,0 +1,85 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1150 718" role="img" aria-labelledby="title desc">
+  <title id="title">Intensity and phase of one wave in an absorbing incident medium</title>
+  <desc id="desc">Two panels describe the same wave entering from above. Left: colour density shows intensity. A and B at the same height have equal intensity; lower points C and D also match each other but are weaker. Right: thin tilted lines join points of equal phase. The thick arrow Re(k), normal to the wavefronts, shows phase propagation and makes angle theta with the downward normal. Grey below both panels is the first layer encountered by the incident wave. x points right and z up.</desc>
+  <defs>
+    <linearGradient id="intensity" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#96bce8" />
+      <stop offset="0.45" stop-color="#c5daf1" />
+      <stop offset="1" stop-color="#f2f7fc" />
+    </linearGradient>
+    <marker id="phase" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#087b75" /></marker>
+    <marker id="decay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#a85c18" /></marker>
+    <clipPath id="phase-area"><rect x="620" y="238" width="476" height="237" /></clipPath>
+  </defs>
+  <style>
+    text {font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:22px}
+    .heading {font-size:29px;font-weight:700}
+    .panel-title {font-size:25px;font-weight:700}
+    .label {font-weight:650}
+    .note {font-size:20px;fill:#4d6276}
+    .blue {fill:#245a99}
+    .teal {fill:#087b75}
+    .amber {fill:#9d5316}
+    .sub {font-size:15px;baseline-shift:sub}
+  </style>
+  <rect width="1150" height="718" fill="#fff" />
+  <text x="28" y="43" class="heading">One incident wave in an absorbing medium</text>
+  <text x="28" y="78" class="note">Top incidence · φ = 0 · xz section (+x right, +z up)</text>
+
+  <rect x="26" y="111" width="532" height="559" rx="15" fill="#fff" stroke="#cbd7e1" stroke-width="1.5" />
+  <rect x="592" y="111" width="532" height="559" rx="15" fill="#fff" stroke="#cbd7e1" stroke-width="1.5" />
+  <text x="54" y="152" class="panel-title blue">① Intensity: decreases downward</text>
+  <text x="54" y="185" class="note">Darker colour means greater incident intensity.</text>
+  <text x="620" y="152" class="panel-title teal">② Phase: propagates obliquely</text>
+  <text x="620" y="185" class="note">Phase of the same wave, shown separately.</text>
+
+  <text x="54" y="222" class="note">top · absorbing incident medium</text>
+  <rect x="54" y="238" width="382" height="237" fill="url(#intensity)" />
+  <line x1="122" y1="292" x2="367" y2="292" stroke="#245a99" stroke-width="2" stroke-dasharray="4 5" />
+  <circle cx="122" cy="292" r="9" fill="#245a99" />
+  <circle cx="367" cy="292" r="9" fill="#245a99" />
+  <text x="113" y="277" class="label blue">A</text>
+  <text x="359" y="277" class="label blue">B</text>
+  <text x="245" y="278" text-anchor="middle" class="label blue">Equal intensity</text>
+
+  <line x1="122" y1="418" x2="367" y2="418" stroke="#245a99" stroke-opacity="0.4" stroke-width="2" stroke-dasharray="4 5" />
+  <circle cx="122" cy="418" r="9" fill="#245a99" fill-opacity="0.4" />
+  <circle cx="367" cy="418" r="9" fill="#245a99" fill-opacity="0.4" />
+  <text x="113" y="403" class="label blue">C</text>
+  <text x="359" y="403" class="label blue">D</text>
+  <text x="245" y="404" text-anchor="middle" class="label blue">Equal intensity</text>
+  <text x="245" y="453" text-anchor="middle" class="note">Weaker at this height.</text>
+  <text x="484" y="262" text-anchor="middle" class="label amber">Attenuation</text>
+  <line x1="484" y1="284" x2="484" y2="434" stroke="#a85c18" stroke-width="4" marker-end="url(#decay)" />
+  <text x="484" y="465" text-anchor="middle" class="note amber">Im(k)</text>
+
+  <text x="620" y="222" class="note">top · the same absorbing medium</text>
+  <rect x="620" y="238" width="476" height="237" fill="#f2f9f8" />
+  <g clip-path="url(#phase-area)" stroke="#82b7b1" stroke-width="2.5">
+    <path d="M620 360L1096 85.18 M620 435L1096 160.18 M620 510L1096 235.18 M620 585L1096 310.18 M620 660L1096 385.18" />
+  </g>
+  <line x1="807" y1="280" x2="807" y2="458" stroke="#5e7284" stroke-width="2" stroke-dasharray="6 6" />
+  <circle cx="807" cy="280" r="5" fill="#087b75" />
+  <line x1="807" y1="280" x2="900" y2="441.08" stroke="#087b75" stroke-width="5" marker-end="url(#phase)" />
+  <path d="M807 347 A67 67 0 0 0 840.5 338.02" fill="none" stroke="#087b75" stroke-width="2.5" />
+  <text x="819" y="372" class="teal" font-size="27">θ</text>
+  <rect x="910" y="344" width="89" height="35" rx="6" fill="#f2f9f8" />
+  <text x="920" y="369" class="label teal">Re(k)</text>
+  <text x="717" y="461" class="note">Normal −z</text>
+
+  <rect x="54" y="475" width="476" height="50" fill="#e7ecf0" />
+  <line x1="54" y1="475" x2="530" y2="475" stroke="#526a7b" stroke-width="2" />
+  <text x="292" y="507" text-anchor="middle" class="label">First layer encountered by the light</text>
+  <rect x="620" y="475" width="476" height="50" fill="#e7ecf0" />
+  <line x1="620" y1="475" x2="1096" y2="475" stroke="#526a7b" stroke-width="2" />
+  <text x="858" y="507" text-anchor="middle" class="label">First layer encountered by the light</text>
+
+  <text x="54" y="566"><tspan class="label blue">Laterally:</tspan> Constant intensity at the same height</text>
+  <text x="54" y="602"><tspan class="label amber">Downward:</tspan> Intensity decreases through absorption</text>
+  <text x="54" y="640" class="note">k<tspan class="sub">x</tspan>, k<tspan class="sub">y</tspan> is real · k<tspan class="sub">z</tspan> is complex</text>
+  <text x="620" y="566"><tspan class="label teal">Thin lines:</tspan> Wavefront joining points of equal phase</text>
+  <text x="620" y="602"><tspan class="label teal">Thick arrow:</tspan> Phase propagation direction Re(k)</text>
+  <text x="620" y="640" class="note">θ: angle between phase direction and downward normal</text>
+  <text x="28" y="706" class="note">Both panels show the same incident wave. Reflected and internal fields are omitted.</text>
+</svg>

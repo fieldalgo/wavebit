@@ -1,0 +1,198 @@
+[
+  {
+    "step": 1e-06,
+    "errors": {
+      "raw_be": {
+        "max_derivative_difference": 0.0,
+        "index": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "derivative": 0.0,
+        "reference": 0.0
+      },
+      "raw_bh": {
+        "max_derivative_difference": 0.0,
+        "index": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "derivative": 0.0,
+        "reference": 0.0
+      },
+      "lifted_be": {
+        "max_derivative_difference": 0.0,
+        "index": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "derivative": 0.0,
+        "reference": 0.0
+      },
+      "lifted_bh": {
+        "max_derivative_difference": 0.0,
+        "index": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "derivative": 0.0,
+        "reference": 0.0
+      }
+    }
+  },
+  {
+    "step": 3e-06,
+    "errors": {
+      "raw_be": {
+        "max_derivative_difference": 1.372050606462949e-08,
+        "index": [
+          1,
+          8,
+          6,
+          20
+        ],
+        "derivative": -2.3187400811549206,
+        "reference": -2.3187400948754266
+      },
+      "raw_bh": {
+        "max_derivative_difference": 103.42583864540269,
+        "index": [
+          1,
+          6,
+          10,
+          21
+        ],
+        "derivative": 103.20582044699248,
+        "reference": -0.2200181984102212
+      },
+      "lifted_be": {
+        "max_derivative_difference": 1.372050606462949e-08,
+        "index": [
+          1,
+          8,
+          6,
+          20
+        ],
+        "derivative": -2.3187400811549206,
+        "reference": -2.3187400948754266
+      },
+      "lifted_bh": {
+        "max_derivative_difference": 103.42583864540269,
+        "index": [
+          1,
+          6,
+          10,
+          21
+        ],
+        "derivative": 103.20582044699248,
+        "reference": -0.2200181984102212
+      }
+    }
+  },
+  {
+    "step": 1e-05,
+    "errors": {
+      "raw_be": {
+        "max_derivative_difference": 1.6762147225790613e-07,
+        "index": [
+          1,
+          8,
+          6,
+          20
+        ],
+        "derivative": -2.3187399272539544,
+        "reference": -2.3187400948754266
+      },
+      "raw_bh": {
+        "max_derivative_difference": 31.027116489593105,
+        "index": [
+          1,
+          6,
+          10,
+          21
+        ],
+        "derivative": 30.807098291182886,
+        "reference": -0.2200181984102212
+      },
+      "lifted_be": {
+        "max_derivative_difference": 1.6762147225790613e-07,
+        "index": [
+          1,
+          8,
+          6,
+          20
+        ],
+        "derivative": -2.3187399272539544,
+        "reference": -2.3187400948754266
+      },
+      "lifted_bh": {
+        "max_derivative_difference": 31.027116489593105,
+        "index": [
+          1,
+          6,
+          10,
+          21
+        ],
+        "derivative": 30.807098291182886,
+        "reference": -0.2200181984102212
+      }
+    }
+  },
+  {
+    "step": 0.0001,
+    "errors": {
+      "raw_be": {
+        "max_derivative_difference": 18.873513113161625,
+        "index": [
+          2,
+          6,
+          6,
+          22
+        ],
+        "derivative": -19.530687459491794,
+        "reference": -0.6571743463301694
+      },
+      "raw_bh": {
+        "max_derivative_difference": 3.1018882063629793,
+        "index": [
+          1,
+          6,
+          10,
+          21
+        ],
+        "derivative": 2.881870007952758,
+        "reference": -0.2200181984102212
+      },
+      "lifted_be": {
+        "max_derivative_difference": 18.873513113161625,
+        "index": [
+          2,
+          6,
+          6,
+          22
+        ],
+        "derivative": -19.530687459491794,
+        "reference": -0.6571743463301694
+      },
+      "lifted_bh": {
+        "max_derivative_difference": 3.1018882063629793,
+        "index": [
+          1,
+          6,
+          10,
+          21
+        ],
+        "derivative": 2.881870007952758,
+        "reference": -0.2200181984102212
+      }
+    }
+  }
+]

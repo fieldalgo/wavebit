@@ -1,0 +1,38 @@
+{
+  "cylinder_wall_cap": [
+    {
+      "field": "E",
+      "minimum_wall_cap_gap": 0.0018378395067911169,
+      "switching_counts": {
+        "0.0001": 0,
+        "1e-05": 0,
+        "3e-06": 0,
+        "1e-06": 0
+      }
+    },
+    {
+      "field": "H",
+      "minimum_wall_cap_gap": 0.0037448630693108498,
+      "switching_counts": {
+        "0.0001": 0,
+        "1e-05": 0,
+        "3e-06": 0,
+        "1e-06": 0
+      }
+    }
+  ],
+  "fields_relative": {
+    "unranged": {
+      "E": 0.0,
+      "H": 0.0
+    },
+    "reversed": {
+      "E": 0.0,
+      "H": 0.0
+    }
+  },
+  "coefficients_relative": {
+    "be": 0.0,
+    "bh": 0.0
+  }
+}

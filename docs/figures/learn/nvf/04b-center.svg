@@ -1,0 +1,43 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" role="img" aria-labelledby="title desc">
+<title id="title">At a circle's centre: match P, not identical arrows</title><desc id="desc">A real radial extension has direction-dependent centre limits; a complex projector can join to one value.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="600" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">At a circle's centre: match P, not identical arrows</text>
+<text x="250" y="87" style="fill:#182b3e;font-size:23px;font-weight:650" text-anchor="middle">Example: radial linear extension</text>
+<text x="750" y="87" style="fill:#182b3e;font-size:23px;font-weight:650" text-anchor="middle">Conceptual circular extension</text>
+<circle cx="250" cy="237" r="92" fill="#e5f4ef" stroke="#117c77" stroke-width="3" />
+<line x1="342" y1="237" x2="378" y2="237" stroke="#117c77" stroke-width="3" />
+<polygon points="378,237 368.0,241.0 368.0,233.0" fill="#117c77" />
+<line x1="250" y1="145" x2="250" y2="112" stroke="#117c77" stroke-width="3" />
+<polygon points="250,112 254.0,122.0 246.0,122.0" fill="#117c77" />
+<line x1="250" y1="237" x2="330" y2="237" stroke="#cad7df" stroke-width="2" stroke-dasharray="7 5" />
+<line x1="250" y1="237" x2="250" y2="158" stroke="#cad7df" stroke-width="2" stroke-dasharray="7 5" />
+<circle cx="750" cy="237" r="92" fill="#e5f4ef" stroke="#117c77" stroke-width="3" />
+<line x1="842" y1="237" x2="878" y2="237" stroke="#117c77" stroke-width="3" />
+<polygon points="878,237 868.0,241.0 868.0,233.0" fill="#117c77" />
+<line x1="750" y1="145" x2="750" y2="112" stroke="#117c77" stroke-width="3" />
+<polygon points="750,112 754.0,122.0 746.0,122.0" fill="#117c77" />
+<line x1="750" y1="237" x2="830" y2="237" stroke="#cad7df" stroke-width="2" stroke-dasharray="7 5" />
+<line x1="750" y1="237" x2="750" y2="158" stroke="#cad7df" stroke-width="2" stroke-dasharray="7 5" />
+<line x1="283" y1="237" x2="317" y2="237" stroke="#285ab0" stroke-width="4" />
+<polygon points="317,237 307.0,241.0 307.0,233.0" fill="#285ab0" />
+<line x1="250" y1="198" x2="250" y2="166" stroke="#285ab0" stroke-width="4" />
+<polygon points="250,166 254.0,176.0 246.0,176.0" fill="#285ab0" />
+<text x="231" y="252" style="fill:#a85116;font-size:30px;font-weight:400" text-anchor="start">?</text>
+<text x="250" y="360" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="middle">Projection depends on approach direction</text>
+<circle cx="750" cy="237" r="5" fill="#285ab0" />
+<text x="750" y="289" style="fill:#285ab0;font-size:22px;font-weight:400" text-anchor="middle">J = (1, i) / √2</text>
+<text x="750" y="360" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="middle">One well-defined projection at the centre</text>
+<rect x="30" y="392" width="440" height="134" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="426" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Limit approaching the centre</text>
+<text x="48" y="462" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">From right: P = diag(1,0)</text>
+<text x="48" y="489" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">From above: P = diag(0,1)</text>
+<rect x="530" y="392" width="440" height="134" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="548" y="426" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Along any approach path</text>
+<text x="548" y="462" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">P = ½ [ 1  −i ]</text>
+<text x="548" y="489" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">        [ i   1 ]</text>
+<text x="500" y="562" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="middle">Neither example creates an actual boundary normal at the centre.</text>
+<text x="30" y="583" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Teaching model of possible disk extensions · not a Wavebit field or RCWA result</text>
+</svg>

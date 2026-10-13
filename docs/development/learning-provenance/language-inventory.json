@@ -1,0 +1,2374 @@
+{
+  "schema_version": 1,
+  "scope": "All maintained canonical Markdown outside locales, generated builds and immutable evidence; includes every advanced guide, theory, validation, design and migration page. Every public documentation image also inventoried. This is a language/asset audit, not a new physical-validation claim.",
+  "markdown_counts": {
+    "_ext": 1,
+    "_static": 2,
+    "_templates": 1,
+    "design": 3,
+    "development": 8,
+    "getting-started": 5,
+    "guide": 37,
+    "learn": 43,
+    "migration": 7,
+    "reference": 10,
+    "root": 2,
+    "theory": 19,
+    "validation": 117
+  },
+  "canonical_markdown": [
+    {
+      "path": "docs/README.md",
+      "sha256": "fed2ad5a9f1fd2f795f38230f1562baa10624a82bbb75db016805f7475d8f7ef",
+      "language": "en",
+      "section": "root"
+    },
+    {
+      "path": "docs/_ext/README.md",
+      "sha256": "1d67c4aad0b41e0960c79a42b4c7d61b75c46eee83c9cdf532a5070675ac5abd",
+      "language": "en",
+      "section": "_ext"
+    },
+    {
+      "path": "docs/_static/learning/notices/idna-LICENSE.md",
+      "sha256": "a59f0b0ef3635874109a4461ca44ff7a70d50696e814767bfaf721d4c9b0db0f",
+      "language": "en",
+      "section": "_static"
+    },
+    {
+      "path": "docs/_static/learning/notices/soupsieve-LICENSE.md",
+      "sha256": "ceb7b9053b88addffa3102a457302bd840d123925ee9ed9c2ac90cf6548b33bf",
+      "language": "en",
+      "section": "_static"
+    },
+    {
+      "path": "docs/_templates/README.md",
+      "sha256": "b1a491ef8dde225ee674bdf347ec6df5c0ff20303e9879247bdbd5ecd2bcc0b5",
+      "language": "en",
+      "section": "_templates"
+    },
+    {
+      "path": "docs/design/fd-symmetric-stencil.md",
+      "sha256": "d5202f1a93f8e231780ee61ca1c3335ef424f50f5c94cee98df0abd65ed639f4",
+      "language": "en",
+      "section": "design"
+    },
+    {
+      "path": "docs/design/index.md",
+      "sha256": "011765f52a8d23702a680ae9901ccc8365c827b0a78d5d9c44cb6cc53e5c77b8",
+      "language": "en",
+      "section": "design"
+    },
+    {
+      "path": "docs/design/unified-api.md",
+      "sha256": "1aaa0ae88672e46f7f1ae199bb1c4a9a722573a648c6a170a9acf09dee61ab62",
+      "language": "en",
+      "section": "design"
+    },
+    {
+      "path": "docs/development/documentation.md",
+      "sha256": "a1d4c549b673a9dfcdb33d43f189e1ef1d4a9484a749009daca8d13168e2af9d",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/index.md",
+      "sha256": "0ebd41a0e786c80179e530fbd066c730a973712838a295517c0a45ceccc393be",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/learning-licenses.md",
+      "sha256": "37ff2e0c6dfd822fc763c046983d3950cace4a9b5f492958f45f369547112fbc",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/learning-provenance.md",
+      "sha256": "0c51c5fd61cf82293de37232a72479f63d375bf445f78a670c44f4ee1fdc233f",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/solver-integration.md",
+      "sha256": "6fef46036de4483b1a0091ba29ca524aab7e3cdf351e794de92dbc063f3eb846",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/source-checkout.md",
+      "sha256": "e3fc8f1fd39ab97fad05e34136c4925663f334bbb03dfa411e2efcdb43cb317e",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/torch-compile.md",
+      "sha256": "ad790d9d981e7fd339cd238be8030f082bc1d2c46b7e158d37ced19ed7f6f8be",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/torch-upstream-defects.md",
+      "sha256": "8594340b0b63c68de161c5a92410dfd20c0d9ef66a6066399178b217f0901103",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/getting-started/fdtd.md",
+      "sha256": "4808ca4ca43ca6605ffba86b7ac0f6cce5eb0f3be4cd398cd1bfd799bfe4ece5",
+      "language": "en",
+      "section": "getting-started"
+    },
+    {
+      "path": "docs/getting-started/index.md",
+      "sha256": "4f4cc2b5bc8211f3fa8f1a0f58fdc1b4e290fe2574d0f5710cdab4140f0ce94f",
+      "language": "en",
+      "section": "getting-started"
+    },
+    {
+      "path": "docs/getting-started/installation.md",
+      "sha256": "cd0069ec2cea8125b61186ca6c4781c8a0054db44a689af511b3e27e62a2aec9",
+      "language": "en",
+      "section": "getting-started"
+    },
+    {
+      "path": "docs/getting-started/overview.md",
+      "sha256": "09d3b232d238b44830d1dd450135fce0669f3d16ce5b33f32d7c400b8b2b1a42",
+      "language": "en",
+      "section": "getting-started"
+    },
+    {
+      "path": "docs/getting-started/rcwa.md",
+      "sha256": "933f9635882c0a5d71841cc5d94be02f578935536793c6ad5049bcd5155d5ad1",
+      "language": "en",
+      "section": "getting-started"
+    },
+    {
+      "path": "docs/guide/common/autodiff.md",
+      "sha256": "4da3faaecda85b3eea8a0b9bab449e3fb89d56eb3f5e5232c59a6bd3802a7ed2",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/common/backends.md",
+      "sha256": "64f30e40cccd523afb8d1e2145e441f5c64559f8fd3b03d66c48ec8888280145",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/common/index.md",
+      "sha256": "6a2f70f2f0451ac95111ef27916c244f35630496ccb957133b5ff7442f65ae43",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/common/lifecycle.md",
+      "sha256": "9a96160ed2332f087733891d8c131facacaf1f53b45d5a90e500ac28354f36e9",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/common/materials.md",
+      "sha256": "9dc737ac9933d401b917a58eabd0f044b59ee1772ff939fd6ad55df9affd735d",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/common/specs.md",
+      "sha256": "6d1cbda22e1c58d6790e052a6fb5e3fd61e8b607c554d4627fb285e54d450fb0",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/fd-constitutive-absorber.md",
+      "sha256": "bc7277e2dd84db595ab27ea648fefdf0b410e9ecd37da7420417cb0f314dd485",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/fd-differentiation.md",
+      "sha256": "38f905f3cc7827ff0d68de508f76bac5ac4efb9079f2950fee769f035daa742c",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/fd-metasurface.md",
+      "sha256": "941dcdb73268ad4a35c62bc17b731018fc020a19b42ceee3212719ff19505820",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/fd-radiation.md",
+      "sha256": "ef3f656ed2a7059d303b8c7cd165260f7be4069bc659636420b67968eca65357",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/fdtd-alpha.md",
+      "sha256": "67c742a482571bed29f204ecbaa6ef748cae7337b8831f93edbb8624856782e8",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/fdtd.md",
+      "sha256": "92b33cb24e20f89bccb017f6800930159488ffb279fea75b86c8397052cd42b4",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/general-fdtd.md",
+      "sha256": "3e4ec56983fc124249b224e0426f497322325bd82643f779b999228b942fe019",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/index.md",
+      "sha256": "3e9b33d1b2f9c914aea33bb9a88f4786e5fc199b61b17a768a1de7e66a01711e",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/fdtd/time-domain.md",
+      "sha256": "9e9625236962f8ef7f5906ae3eca1adc2ccb9823c682e9795213e71fc13c4fcf",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/index.md",
+      "sha256": "e81e46d1fe1b469f72c4494baf96fe5a97aea036e16ce093a601a2536dc7108c",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/affine-profile-nvf.md",
+      "sha256": "484b8087173f73ff7c2b85cb2bc6081d0092f3a9dcfe6770f7335959f8e3865e",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/anisotropic-materials.md",
+      "sha256": "44bbd4cfe1e368cb4819524ab4c7b6cdd31ce9f948dfaca6bfd7043b69c57793",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/boundary-modeling.md",
+      "sha256": "1e88d26d5e71be1ccf1f350e71eed3e98216249dacf928ea4698956f7d116df6",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/cartesian-pair-gap-autodiff.md",
+      "sha256": "f47dcff057963c551ea5932d0943dd8b4e779e4ea3408369f285bf65faed46e4",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/cartesian-pair-gap.md",
+      "sha256": "3664f75ded1883e93abe66760e28c2aa1005b94c84da849cfccf46205faa87ba",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/cartesian-pair-opening.md",
+      "sha256": "fd11b52d3b6578a33b91ce29a1738b1da47888a24705e5c9af48d53a96fe3a27",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/cartesian-rectangle-nvf.md",
+      "sha256": "5a4dd57d9946830448a7e4b7ef8926d1e516680b6f4776d1f7b8beae152c620c",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/cartesian-rectangle-pair-nvf.md",
+      "sha256": "231afc370c67fe943bf88534a17df9217652f8dbc2dd55dcc97a323d86211f9a",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/coherent-illumination.md",
+      "sha256": "ea9fff12d9f2bdbb2350b928079f2a7cd5e2a78885bf6c215bb2580a1754f5f8",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/conforming-nvf.md",
+      "sha256": "c54482178f919a926595465da4e67edc136c6ea506321bb3e78bf7c2c58b5c83",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/fields.md",
+      "sha256": "b4667dafa12c3be697dd2915d5164c8af966efef599899d5112dc6143ca62ce6",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/full-tensor-patterns.md",
+      "sha256": "7a1ae835eb8dad63fc23778c6bb602dff8701920d3bc5d9f32f6df29e804149f",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/index.md",
+      "sha256": "55ea22a4cc7ad132c5f470ef8b83aae8a56c35fb819b65f3c98728e160489bc0",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/light.md",
+      "sha256": "c92a45b797e7e42a7f02a89a1bec0505d0cc02c8fa16f2e384bd4c9eb995f911",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/multimode-incidence.md",
+      "sha256": "4285476b643be0994135eae41cdf180366818e2e15783ffdfe9248fdb90322c6",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/numerics.md",
+      "sha256": "a33d65bb49d7c2196f0b1a511f85d845b9ea795ca3a6fb5069adac31b08a861e",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/nvf-method-selection.md",
+      "sha256": "9b29b05597a49ccd64189e6ad657a07a1bd8832d1a3579a6cf1025cd317919ed",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/parametric-modeling.md",
+      "sha256": "65c41a0a5b229243384d6a539afc13a3e9673eabef52eb52554541aafa5df647",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/rayleigh-handling-walkthrough.md",
+      "sha256": "ed86aa0b959260b9c62a3d67dc8ddd14535643474bf591310b0ddce0699ef9be",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/scene.md",
+      "sha256": "8b2ac4ed2e6a8c5d0a842df721fd00761bdd8e13a8dc36823e3012ec3237b9e6",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/rcwa/tensor-shape-integration.md",
+      "sha256": "23239c500f332a126546e07ec1e9094671072560ab4005be1d8f12555df7817b",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/index.md",
+      "sha256": "0508210fcd41db687d063a9d91b448b8690839ae04eb628d539674ccee4a3390",
+      "language": "en",
+      "section": "root"
+    },
+    {
+      "path": "docs/learn/examples.md",
+      "sha256": "c2a76f758a661ab6b9cd2798d697ea1f4e0d27692019712a8e84a0ca8d1b2a0e",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fdtd/index.md",
+      "sha256": "575507e31d19ba70b36e0510e9193b666e0a45507b567b8f7a1afc6e21ec2a2f",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/autodiff.md",
+      "sha256": "53f4b56425ecee957eb948152a0b190a0d2e9651c9accfcf8c2baa0f651c79da",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/backends.md",
+      "sha256": "eaa17cd95c25b849d727adf1c00ef9a68c2bbcbb0cedf18203ba6e2a3aecbd82",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/code-map.md",
+      "sha256": "3eb96cc8a48aef2877c70282e5bdb17401f87c07258bc8fd195539ef8d269fe5",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/complex-kx-lossy-gain.md",
+      "sha256": "9547db4948deefff59e3bd0c005ca08b3fc1a34ce0da409a2a6a1adb142990db",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/complex-kx-roots.md",
+      "sha256": "673b5541bfac7eb762e1b4b8029b4c7b6ef05337bc37eaff107b242f4a79ce22",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/conventions.md",
+      "sha256": "061a3cd48c1d0881b78b002bdba0c31a4dd2aa057e9ba94737415c85bf7f3e70",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/convergence.md",
+      "sha256": "77a8b85903d2e97ccf22e4c1f9822507f0167b6e9f687a08d0006373a5432805",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/fields.md",
+      "sha256": "3cbf2ce15532a300cf48c410e1e0e24cef28aa9c1d6e19b84beb497b323cb963",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/fourier-orders.md",
+      "sha256": "066a7f272563577a026b9eabea8a60583ed793107049b5fcf237c8f487a4fbda",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/geometry.md",
+      "sha256": "1c74ff1d7acd5038ba0e6f3d1d74501615172029e618b7fc1dcfe3b37c85592a",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/incoherent-substrate.md",
+      "sha256": "e78b268c6f5866dec334bafc8b14e9709c1cfa1f0efa91c4eb1d6667c2de6510",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/index.md",
+      "sha256": "fa9b1db41cd7f994c4d72524ebd830428236ce5cdd1d0c6db4fc710400ba32ff",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/jobs-and-sweeps.md",
+      "sha256": "2e68955539a2c3e3b24abf5dc27b295f2b363c0135614e68ee50e580211e4b90",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/lattice.md",
+      "sha256": "466b44eb0e07c2624f7a360a2b6463aaa10f4f4727d13922ec9e52d4ee792945",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/layer-algorithms.md",
+      "sha256": "82608ebea4b460dc87ea6c82b9e7af4746eecabb87d20d683c7b6e71fbb3c141",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/light.md",
+      "sha256": "52ce06142a0562e7b56022c232b677aec50c0491fe41d8ba799371cae4a6e3c9",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/materials.md",
+      "sha256": "c09d1f8fd440f6dee64ef8c0acff37412e29f72fae4c36823e60142d25dafbf1",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/multiple-beams.md",
+      "sha256": "b179b6ea5d22d5de01379e602398f42c003b240638b5de53fe334878cecda597",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/nvf.md",
+      "sha256": "7c3df7eeae8f17c2ac557101b16b91a438ac5dd7c2156cebf1d9507a96edf294",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/overview.md",
+      "sha256": "dce9623f8e72566e05e92e0b477031dced24497d4794960b867f4c859975d760",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/power-and-efficiency.md",
+      "sha256": "b70ccf7f3a45f85484d4536a75c195f679e7fb06fe4453e75ee3f5dac219e852",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/quickstart.md",
+      "sha256": "b0c51aa81827960321fefab399d9d1a2570cc8c1bc9d10955b94c7dcda0c12fa",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/rcwa.md",
+      "sha256": "dfd1cf3d9bb0525de0cd215af3a5a2ef895ea71c1596b7725a7a7cd933168df5",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/fundamentals/results.md",
+      "sha256": "4099bf1ea4c748c2ff68136565ba9c02e74a022ef6b9ca3e04a7df2e70c1c9ed",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/index.md",
+      "sha256": "ca4b04c367a244fcc312ac042a3fb273fb23114fe6877ba3e1de260682a1bb48",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/autodiff.md",
+      "sha256": "850748cf9f5fb37f47aacde921261d0dc6068ef97bf0182edce13e5e93cbe036",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/boundary-conditions.md",
+      "sha256": "fbd6a6b7288bfeb0f1499d1f9d45e1e18e8c69cf55687fe5d4a852aca5dc6dcb",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/code-map.md",
+      "sha256": "99d1b840002dfee90f9b84b714d3061f1e9af780924e9491a25bba6f73b03b40",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/convergence.md",
+      "sha256": "b63d124b5c5bdb9b5285fb2e0e4b0486399bd1276a4346f0ca8ec454d7bade01",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/fourier-rules.md",
+      "sha256": "1cc8bd7e42d3a0958afc91189b89a0bf72bf3314c7b1188d00b6bbc7e6e5c08b",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/implementation.md",
+      "sha256": "54ade75e1a02c09e83ba64047847bf3b6a4f3121e47148dbbda0e3f04dccee44",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/index.md",
+      "sha256": "b43ee1dc02cc669ff552dc62f2837a0a0b4f1211c214d0e9c00799a490dca209",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/metal-inverse-rule.md",
+      "sha256": "1b351cf5463178f61f7e0cd656fcb6eed91f33d30f570ec12ca9c275beaf0f67",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/metal-original-plots.md",
+      "sha256": "256f34797d2e86ce6b32dc021af6975e3c5e3059e0338abbbcf96ef2de6234f5",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/metal-regularization.md",
+      "sha256": "126d819727c814aad491598f2fdcceae5bfb8979d808df97cca0871564f8feda",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/multiple-shapes.md",
+      "sha256": "6301c1484421b4b361f17f5f3b2c7c79f1f8bcfc902fb57f1f107dd92717e21e",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/overview.md",
+      "sha256": "8ac5e835d9a904b123a7dd442d0c7f484be47f631aba43a2b1551025b3423baa",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/projectors.md",
+      "sha256": "bc44e84b86f35d3dcaef03d917d600beaf406f7639b314d7fb86617cb86080ae",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/raster-example.md",
+      "sha256": "0958a77e3d2c7104db192de75dc57e5add761c7927d2b039db491bb0e8e3d636",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/settings.md",
+      "sha256": "a7a579563e5ebf90b95c90650dbf14226223739b8ac65fec2a64f51c209c7412",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/learn/nvf/shape-example.md",
+      "sha256": "182592d267676e005df0fb243f466f3c213a63f7373b2d74dfa7b30c1905488c",
+      "language": "en",
+      "section": "learn"
+    },
+    {
+      "path": "docs/migration/autodiff-v1.md",
+      "sha256": "97f920f5a789e34a3433e0e9a23dbd69978ec8e193ad290be951c3139c7b9ae8",
+      "language": "en",
+      "section": "migration"
+    },
+    {
+      "path": "docs/migration/backends-v1.md",
+      "sha256": "a2710a7c15625461fb4f4e67fd5694b70fe5e683f27040c6ee461612adf60913",
+      "language": "en",
+      "section": "migration"
+    },
+    {
+      "path": "docs/migration/general-fdtd-v1.md",
+      "sha256": "41576079322668e80396fadafe00cb573059438a31d5a85d362b6cacc840567b",
+      "language": "en",
+      "section": "migration"
+    },
+    {
+      "path": "docs/migration/index.md",
+      "sha256": "406610d565de7927ea85c1577c2be79e26abd0e915e4679e6e649006e04e81e3",
+      "language": "en",
+      "section": "migration"
+    },
+    {
+      "path": "docs/migration/jobs-v1.md",
+      "sha256": "ef025ca5ad674555044e1ac2a9c9c7f71b2f16da3464280b10867d7b5c2ec29d",
+      "language": "en",
+      "section": "migration"
+    },
+    {
+      "path": "docs/migration/legacy-api.md",
+      "sha256": "1ce82ccc3a5f38e9ac24a6912a4f36bd0575d6f6075e5d92db1f825d8f0f2b50",
+      "language": "en",
+      "section": "migration"
+    },
+    {
+      "path": "docs/migration/materials-v1.md",
+      "sha256": "c8d3764a9691206e0be673828a548212744c5d0616aba45c6637de9d7a859848",
+      "language": "en",
+      "section": "migration"
+    },
+    {
+      "path": "docs/reference/api.md",
+      "sha256": "302b00f20a9562048136b3a66f315323be4b2185818080d4e69d87d65af33900",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/common/capability-manifest.md",
+      "sha256": "af188f6c3202522d5460e2d71a534b9db312c40ebfe8d7b74dd66fb7ffc64741",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/common/conventions.md",
+      "sha256": "410692c14648b185b3f7a952e626fda6726db2878260023e6aeca39a17d4a16c",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/common/index.md",
+      "sha256": "828f21c49ec67ed10fc0f3be1f8d6bb2eef1dd2dfcbd6d80e32ad593578b326e",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/common/result-guards.md",
+      "sha256": "80b9dac52c3c4ec58f1daf98fa1d1bafa1bdaa8d75a532db56518227c7d73204",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/common/what-a-solve-answers.md",
+      "sha256": "7a0478622d92d4e70aa884a250ddb661ef2dfbb8ebf71ccbe276372d8bbcd363",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/fdtd/index.md",
+      "sha256": "198e2ad76c52c1842c2aaf7b5d9b18ed9e0ab810e429cf604ba4e2e75a18bf79",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/index.md",
+      "sha256": "cde359505c80154472ed8b6f995c8a95219b455dac27ff0dbe8a5b98753f2fcd",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/keywords.md",
+      "sha256": "fca3b6d065cc2e94922fdd9a8557a0ff16c2aff625eeef5120d7ba12e3a9d381",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/reference/rcwa/index.md",
+      "sha256": "1a7e5d126a8df4c598203e1a3dd88c856591c00070ff02b47c2386b5f9a675e3",
+      "language": "en",
+      "section": "reference"
+    },
+    {
+      "path": "docs/theory/index.md",
+      "sha256": "6ae6de6cd826bff61ead8103e23b85ec24c21b0975eba1e391e0cd9c3707dcbe",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/amplitude-sp-frame.md",
+      "sha256": "bb660bd6ce7faddae751bd00f15f9f13f959594a9b45bb162ffba7a0c3e6c830",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/branch-cuts.md",
+      "sha256": "a5148f0f24f8d4b4d42f5d922749b293f8de97d4c4808f8f3914cfa3078b552e",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/connecting-algorithms.md",
+      "sha256": "efb3f3eec6453285a234f4680159c14c8043e967be927fb98dfcd30bb5063bfd",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/factorization-terms.md",
+      "sha256": "b73c4b7feea6046563c90c663d402489b8e8e7c4e90e1857c363a3bc30034ea3",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/first-order-formulation.md",
+      "sha256": "9a77f81970f433a193cd1ef2ff82bbded9f62f9a4df9a739a5e7bd864587e340",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/five-slot-limit.md",
+      "sha256": "e7d99ffef121c30c6f92428784f5e131800f14b7680662d40e140945e3e5dda0",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/formulation.md",
+      "sha256": "12d2dfe9ebbd972cfd497e4d667182c428d3b3f175ae20a5c230c18d299b58a6",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/fourier-truncation-shape.md",
+      "sha256": "4392396f26dee7c888f27fb55017731cf779815420a14b2ba2911a61eb61c6fe",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/index.md",
+      "sha256": "8e46869d870743f7b4fa5b1acd23a77a37e1399ee546b5a75b7703376c439b7d",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/magnetic-materials.md",
+      "sha256": "73e0516e8be6c0ffa9366c0139cdb3edc6c9c6b2276553dcfc2128cd3d113cfd",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/negative-index-media.md",
+      "sha256": "495312b78fa1ec2105f5d8685786a3da68a455255271a418a6b62ac99d031552",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/nvf-metal-inverse-rule.md",
+      "sha256": "d2dc078e3a0d1eba7fa0fc11c1275258c4108feb3588b172a1b73cf344b49aae",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/nvf-normal-methods.md",
+      "sha256": "d6abdcf18d2ca479342100be10e034016c52a7047815bb9d07e67a23c6043d62",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/oblique-lattice.md",
+      "sha256": "43ff6caa6cf4bfb86ed175927786bcae68ea4ef6f1dfea0a84e83be18fac2e8c",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/off-diagonal-slot-convention.md",
+      "sha256": "2405b5c8a40bc0b89f6cf531bb0233b461c133b363ced5e62faeb6ca03ee654f",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/patterned-anisotropic-factorization.md",
+      "sha256": "f92fbd93919e729b1487509d72a62826d51d2b841f637bd44a24d4c253d95cb0",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/rayleigh-points.md",
+      "sha256": "172841845ea7c9cf4d53da483b40a582e622b0a1d2d137ed68f967df520bc931",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/theory/rcwa/tensor-li-factorization.md",
+      "sha256": "dbca903a8f30f49ad26c39f15ef7547411a8de44515130f473998b9839a56850",
+      "language": "en",
+      "section": "theory"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-conductive-film.md",
+      "sha256": "8edce6ce84a91bb8d87901711e1bbe14b54c933084dd48cd8cba3e27130f0d04",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-conductive-stack.md",
+      "sha256": "88060d4338a931084f896497f251e77d0e363aead196d01612de16f6a0dcf928",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-constitutive-absorber.md",
+      "sha256": "b4f05575a811e6f5cd64ddf95d150b7c5a65c2ba43c0f119b8af32a9603d9e64",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-debye-film.md",
+      "sha256": "6a415bfee5a8cd91c6975ea7ca063f43265d796288c2ff78b121075fa83fcf47",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-debye-stack.md",
+      "sha256": "2faae0878ccf0d1c92b8dc3aeea5437b08a7281104ee90d3b6f17c3120263f1f",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-debye-sum-film.md",
+      "sha256": "8151eb893d0ce9bd7a05c5d7f258373711b9fa717747fe89ab09888ea1775646",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-decay-stopping.md",
+      "sha256": "3b2dfef3318fa16719ca573d154917ba5b9b76a7ab08c6c6e981cc87dd98957a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-hybrid-film.md",
+      "sha256": "1583a798d13780670fb29bc025d148b10ed1a4051f9321ad74798cc30aa9eb5f",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-lattice-radiation.md",
+      "sha256": "b451008e122b992d98cc13563a85f9cf5d34fcdb172006c97d362058fda358f6",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-metasurface-validation.md",
+      "sha256": "ed96684da39ea00ed26aa149b51b005136bdc38c5ff23f305a6690022e43b28b",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-mie-validation.md",
+      "sha256": "9e54bbabc5844aeb9329f3b8b920cd93aeb8695bc1a43289d235b5ec947a97df",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-oscillator-stack.md",
+      "sha256": "a49f714ffc483db2a950348de8afcf65c3b1fd1227501e25ea6460125cde50d8",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-oscillator-sum-film.md",
+      "sha256": "247dacb46d4a580d626dd7b7d57678604957f420f6aa34a8b9e6cc1f9ca734e3",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-single-pole-film.md",
+      "sha256": "16e0198c713cba6339698cec0c43e1bab1bc57434ae9428794a15ec6507871d7",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-sphere-clip-jit.md",
+      "sha256": "ca4f9c02279276bd00ddec60fb9c86a46b20cc973c3c84f4401efa3172baa91a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-subpixel-occupancy.md",
+      "sha256": "d0bd97dfc9b4cb95161e83631718eb789f3a10cb37327e4fb610c4ccf4145a44",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fd-two-debye-film.md",
+      "sha256": "3ed0f923e5e8cd0d5bc9ca7513add6be398953d8003f1584853d03982ef616a3",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-adjoint-validation.md",
+      "sha256": "a71273e975f61fb86aa37013702282782213b0265f81d9d9467c39b576b8cee5",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-bragg-cavity.md",
+      "sha256": "a6ee8e9e72947904e6bb64204c5d4798f028d9286e2c9643ddd78c7cfcd7d9a8",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-circle-gradients.md",
+      "sha256": "2dcfa2efd8a5529d9e5c53dce4649d891a31c1c0d6b8061f155cafb23c804fb9",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-dft-sampling.md",
+      "sha256": "542090c90ecd30a58dcf094ad3c57a861e225a54bb315eacc258dca82bc31126",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-directional.md",
+      "sha256": "d192e0705d22f6666933525484c109fab24a36b83d923bbff24418e302323d46",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-ellipse-gradients.md",
+      "sha256": "43dece9ca344d826c0e893fe0fc5e319b28d00c187dae648a21717c18fafb4c3",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-enz.md",
+      "sha256": "d9484b49e2c5c0545e89f825d62fc6ae285de46242801baf4261bfd2fc72c95a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-halfspace-gradients.md",
+      "sha256": "d4a36c3fbf2786af391fa41c0eb648ad8405d2143982ac098aaa968b14f107b9",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-lattice-reference.md",
+      "sha256": "17fbcb35f28631fd00238418364812c9fe9af680b05621183febf0f2592938a5",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-layer-alignment.md",
+      "sha256": "f6cd3eaf6631e873ef842fbf37fd5fea23ba08d2c01fd1e4c948abb1b39b0eaa",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-layer-gradients.md",
+      "sha256": "918187564b1b176b3d2ccb82083cee03d82faebb629f220218a0fc21c921fe0f",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-layer-smoothing.md",
+      "sha256": "5ef9d050e4566d65e60e70725c64bd32d65a852ac165ad92d2a22f4ec5084c80",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-lorentz-decay.md",
+      "sha256": "e13183506e709ac0e5f93893b5b4466e5a42fe08f6d1cc9dcf6c3b870c9bb04e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-mixed-metal.md",
+      "sha256": "27873cc6f2ef7a10873276ef186c060c28686676ba8a19e9d9c72a6f4778775a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-multilayer-optimization.md",
+      "sha256": "8a41fac04416ebd2b195c8f19d0079fad00a1095a6ba8c3d0b7c9f262de0617e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-oblique-pulse.md",
+      "sha256": "8d7a774f6ad7d4bd921aece6998b9e505b5e468a501f98d820ac2d12438c7664",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-painted-shapes.md",
+      "sha256": "6c45107846367e1c8457975f5cd9cedb7ae461d8071db64c2fc11f1ab83cf910",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-pml-strength.md",
+      "sha256": "fa93383bdf3372a7d529977bf3c2b0dbf3891ecd37bbbb6635bc59472aeb02d2",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-pulse-convergence.md",
+      "sha256": "5218b14968eabbaf8d3f0bcc3677cd67d0f8348dc5575177e649f8237906c83e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-pulse-notches.md",
+      "sha256": "7326b557932f6ee222bd36bc1e6121e2c1b14008fea632e17ee2786891d51541",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-rayleigh.md",
+      "sha256": "6c8566c9f69ed66f3d22e597521b95c39a8522792a2dbeba7db82bcf2adf7077",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-rectangle-gradients.md",
+      "sha256": "8547e04cfdef8c93581c246dfe04961dda8cd7ed302b45fbf043521489aad183",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-ringdown.md",
+      "sha256": "a3c577d7eaac096464ea501616bf6237d8f4f6bd0275f24b9f31628639db7783",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-rotation-gradients.md",
+      "sha256": "b863d639f6b4b72d84be88d4aa73bea14ce3574e9c07e8b4ab7efbae6213a665",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-rotation-smoothing.md",
+      "sha256": "c2dbdd7e5ee610213756d01850c44498d5b66cb0a76da55a86735b6a38652ffc",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-route-parity.md",
+      "sha256": "031868e3a71f775532cb99f1e39eba9b8eeff5a6c0560b9e512e8616a2d420e0",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-scene-angles.md",
+      "sha256": "f875bc2b8c21f292d60de9b82eaeab017c7dcf2b8e4293091e5bef3f22b46f38",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-scene-azimuth.md",
+      "sha256": "4a900e6a1a55bcb2df2ff2c237b518dc3fc2773c96b7de6e15a6a65852e744ec",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-source-clearance.md",
+      "sha256": "5a5f63dfb841292941d9f3d770a48046c4ef6d7f68074a987fbaa3da6a206c8f",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-transverse-resolution.md",
+      "sha256": "c751853e73b1572a84c94f15c8254182e39e95b0c15460190282f4169f9c6d80",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/fdtd-variable-depth.md",
+      "sha256": "b780f7d92a1cd2a1a194ad8b9a32be1727b74bc9b07276f7c689051a35102a68",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/fdtd/index.md",
+      "sha256": "f32e707a7f21816ead0c29d29e6f88f47f7a1a875ef8b6fb69419a26c8f4e3a3",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/index.md",
+      "sha256": "c003712b0e3837d092a34ecd5ea1e5fbb82b69dc4febf1bc4ada4e8a014b4962",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/backend-choice.md",
+      "sha256": "504419d8b0bde855f318904c41bb6b2e09b4a08eecca5c428b5c856971b0ac5e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/bessel-j1.md",
+      "sha256": "caec8eb4383e134b55828612544af94c5ddd91bda24c5ccccdddfdd17938853a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/half-space-power-audit.md",
+      "sha256": "bf1479b26d6d92ed9d09e3163723365accfff37bdb9b2a6e366eafca12fad1ed",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/index.md",
+      "sha256": "d496dde2a39265c0893c32d7f475459e686aaa8a8d9735aa7a49ac4f5a7cd04e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/normal-field-known-limits.md",
+      "sha256": "b4921b99eee83f3e3d30215e54ebb411c8769d8f34dfbca59eabde8651680f10",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-affine-cells.md",
+      "sha256": "be81fb0f592f40d69da6383d18d458f44bff9682826f707872229b43ec7f4fb8",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-affine-convergence.md",
+      "sha256": "2a184b1fc9e4f8bc726cc36dd2a8049dfc6ff1d223ddbbd8818f9e3792d6b2bc",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-analytic-polynomial-traces.md",
+      "sha256": "d4a91898330a81f4386d15e0fc98978e683964e96899f42a27282db1882ed141",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-cartesian-cell.md",
+      "sha256": "35f31fecac6e41e229e515f1cf264ab873d3c645442a22dc241978e4429e3398",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-cartesian-pair-gap-autodiff.md",
+      "sha256": "ea3fc235f29bce150ebae1ed49e5228d3dbdc1052298753ab8c9ba2b9580fc1d",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-cartesian-pair-gap.md",
+      "sha256": "094a666ed39047d3afe10ffa9fdf30db2e114e4ce2fafc4c296e7142c15f08e5",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-cartesian-pair-opening.md",
+      "sha256": "e0c0cffb71b810c0c2ab92e4a79ca297b22294bbac845fa5972c78d5edb98678",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-cartesian-pair.md",
+      "sha256": "edf6ce2f9e554fcc51da4bebc46ff81cf7f1854dd64d9932a759b50259dde377",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-cell-corrector.md",
+      "sha256": "f6515ed9c0eb897d3030b17b06384144c263e07c23ae7103237ba22d8b3ddf12",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-common-loss.md",
+      "sha256": "573e4f95a4a975f48478e45358ace4d5099eaea2c5860610b8ec6da75172f4d9",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-complex-material.md",
+      "sha256": "d35c481fd7cbb32c2dc85c1c8d190d96f5643e6e88064c88a1a993ac55ce41b0",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-contact-energy-coordinates.md",
+      "sha256": "1c1881b82fc0476506adc521de60ee6d5aa9165f8137e5f984d1f6e6841bd207",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-contact-followup.md",
+      "sha256": "3906eb0e53044dfa9bdd17f477f819ff82dc0c187217c630c2bf4d7adc3fed68",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-contact-fourier-precision.md",
+      "sha256": "1aec9b49d7238b32ff34f4af4d67466fad6c136c5e9ffddd10e37c83ecfb559e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-contact-solver.md",
+      "sha256": "9a590d0e9507ebb244201d664ce19f5d786f81887c688b8ab76fc6a254a325e6",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-continuous-flux.md",
+      "sha256": "45daa2752cc19de727721ed4efef12961fba011121018fc9ebfc3599544acdfb",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-coupled-pair-seam-galerkin.md",
+      "sha256": "686708846477d8f2807dcd9212dc276212ab35ed0b1c47226e83365a89d817cf",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-coupled-seam-galerkin.md",
+      "sha256": "6a4201189603427c1c9cee1f5e4a1957051ad1a83209d4389c5fe0ad4fc67886",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-directional-convergence.md",
+      "sha256": "bd541cba38f22243958d3b63e7b6f817a07dae1240e80bd9a19f37237f797d49",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-energy-closure.md",
+      "sha256": "314bd178b315c0b9149735396a12491aae15b931015724087e01ed9ece161d59",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-energy-engine.md",
+      "sha256": "d6efef3f6974f8e6610c6a91f8d6c123598ffab77d7595a53f74d45994d6a839",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-galerkin-error.md",
+      "sha256": "83acf0b1ea5c2b40e02bd4d5e42698e867627bd5a98457c9348e10211d9e580f",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-gap-convergence.md",
+      "sha256": "21e0d29a09fd076bf99f109852b7e8942b7dea6079d139af6347f56af11db917",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-harmonic-coordinates.md",
+      "sha256": "44ecef56c8bad40fa09550bbc49f768a101974a317029f4a8045ac68e96cf9de",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-harmonic-energy.md",
+      "sha256": "60731e67a4e6200b0ec64e9ed04675fbac38cdac38ce4f6fb2c4457067ae961a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-independent-fem.md",
+      "sha256": "d8b5b5d5b0f98967c68e44cad786047b4e081af534d162df44d64173e808bbbb",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-interface-resolution.md",
+      "sha256": "b3112cb3f08a75ac28b79a41a5b0d28be16223e330a115a5f0a811c322079c55",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-lattice-rebasing.md",
+      "sha256": "bb0c4bd89466bed545313f69fe7534a1d58f93461ae25a5a6f51fc37e041575a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-layer-axes.md",
+      "sha256": "324cd8426aaea11eeadd8e1262a49f9fa49cd718364e9cbd357d9dcec9e2f0d3",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-local-flux.md",
+      "sha256": "fbcce7b6a5be1b05a691301c60da6e83094979e56808a03e4f38e0ffa8836e5c",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-mirror-convergence.md",
+      "sha256": "20ad3d05d5a3f4772d7136d9d153d9f9d9ababbcdb07beeec3a819c5db3346cd",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-mirror-doubling.md",
+      "sha256": "d4062859d62734bc527e1bef5bb03a08d944b1b55e81c304c68c0e3bf46aaffb",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-mirror-modal-memory.md",
+      "sha256": "bfd47404756f503fb57b18fd6fa4c1dce2447bd4af0da5ce56b23b0a2ccfbf1a",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-mirror-reference.md",
+      "sha256": "053a25ee545252a17ba3cdaf631575cb610a60a07a212ca4d2f84fa5a44b7dca",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-corner-potentials.md",
+      "sha256": "9ddea4fb6e534e868fb82ef6285e09e58626bad4966106c5189e48d3b117d707",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-galerkin.md",
+      "sha256": "4a119c0267d690866cda177394a1fad2a222ee3cdbe9b43e2751b8d7d94530f4",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-junction-potentials.md",
+      "sha256": "b2fd18dc8fe123a5766387d68a18c53bc4608136d88cc75a4669be8b1918d0ec",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-material-sector.md",
+      "sha256": "07b5283320439a5ea9f303eb03df30fea979eff41ff5981e03d445faf316ac23",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-normal-frame.md",
+      "sha256": "89196cfbbd1161359ba1528fca2856ae60ca96ed73217867ae85d430626314f7",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-quadratic.md",
+      "sha256": "4c91ce25220037c8b5a01d9a24e5e8dd59f898f36a6f7900c7a6ec8f62d5d4d3",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-radial-potentials.md",
+      "sha256": "8e992805ce3aedcd318c9c5d977f80081cd7f230fe87cd443049258575f943c1",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-refinement.md",
+      "sha256": "12f18e80ae65f56799db90a54daeead1cc2044f89a50732ddec07aa5c7f9c7ae",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-symmetric-potentials.md",
+      "sha256": "8978461ac93d5463fcbb8194f73f900d240cc4467aebf5e3d9d840ee1566a86f",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-pair-transmission-potentials.md",
+      "sha256": "8d204d915532e9dbf5c5e6200e5f929d8563b74cc5dee807560c49f2ee457ce8",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-paired-frame.md",
+      "sha256": "7795656d9bb7ae47005f6b542cd631fb422ce84338fad50d152a1d58fee4ca41",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-partitioned-gap-energy.md",
+      "sha256": "f14caca5a60cfea247d101068cb982b705ec75c7943fe1769828fdebed139c3e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-passive-closure.md",
+      "sha256": "8e032df303a6e8dbe4f71d29c73b233e89973730190ba09d9e9df6d8a94f1356",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-periodic-galerkin.md",
+      "sha256": "6484657c6cf05106f0738f90dbf83355a369c9e9eea78b7e8b8520bba2c9a0be",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-polynomial-body.md",
+      "sha256": "7af30e3b4e88ed4b88bc79c4898621d7307a94bea4939865566ff24a29eb28f3",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-polynomial-flux.md",
+      "sha256": "6c02b953f7bc61d5f583c42f2ba4770422fc1ca6f9661cc681ce43fd7f5ba1ba",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-polynomial-galerkin.md",
+      "sha256": "a33ad5a7e1189388230f4b51ada1506a808d9a6b0f0a66bf61880149a72e26cd",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-polynomial-pair-coupling.md",
+      "sha256": "7d1a330a80fe65f3374a0ba91e92e09a4463eac5b33fcb598bded736f7976552",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-posed-gap.md",
+      "sha256": "3b450b5a3db577cec384e7d2b34fe951ad379b3f70eb9f5dfa1b7716628a6ae6",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-positive-coordinate-precision.md",
+      "sha256": "af31c61069c49963cc93107adc75ba6b1586ad6631f37f5d32e06cae051be94f",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-rectangular-cells.md",
+      "sha256": "a6edc9d934622fc4a5869e2a45ecfa324aa83f858fc5dab7c5ecfbb9b22607de",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-retained-contact-solve.md",
+      "sha256": "4698d41b84f2888d27de3c40e8d32bedb33ac2fe8bf7fb4663eb663d2c6db90b",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-scattering-doubling.md",
+      "sha256": "7b4f01d5b1ebb1957d3305d9f2a40527620c06a7e1a38f738e2f85be11bc5178",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-seam-trace.md",
+      "sha256": "f2a779a9cd8a3021c7cdd2d0401fd2a851d3af9ed7917b00ca8941583200ef5c",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-separated-rectangles.md",
+      "sha256": "0fc4b37b054a04f3b63838a4d9080d8f6d0765c82ec95d17a24b4abb22bfc6d8",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-thin-gap-energy.md",
+      "sha256": "475f1b3e13910dac46aa5f3c88e21e1c03396a473ebcb969e0f3865c5a66328e",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/nvf-upsampling.md",
+      "sha256": "94bc3c039be08a6531dedac5f4706ecaaf94d6f10db678d627a9284a65452187",
+      "language": "en",
+      "section": "validation"
+    },
+    {
+      "path": "docs/validation/rcwa/time-convention-audit.md",
+      "sha256": "1794050a33ff901ea3fe7b88f606aaf902bbc68af4dcd8bb658b798c43d79805",
+      "language": "en",
+      "section": "validation"
+    }
+  ],
+  "images": [
+    {
+      "path": "docs/_static/coherent-illumination.svg",
+      "sha256": "cecdcf7c649bae05edaa45922dc4d5a433184d4de13216b099137138de35eeb2",
+      "language": "en",
+      "korean_original": null,
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/_static/learning/08-coherent-illumination.svg",
+      "sha256": "3df0a9570a1a43a344e83bbdb45c614e8055c74eb324b0ce5fcfa640799d42dc",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/_static/learning/08-coherent-illumination.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/_static/learning/09-source-calculation.svg",
+      "sha256": "bda7353cc555d4caf888ad3d96c4106951225ade32580e5322d3bdccd7f59fce",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/_static/learning/09-source-calculation.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/_static/learning/source-types.svg",
+      "sha256": "f7c22422541ad14386e6cf7853ad0f5ca25b4d0fe823fb62109de7384b01d261",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/_static/learning/source-types.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/_static/learning/structure-routing.svg",
+      "sha256": "c6f3c3c4222cb0160c5bf69d70c365bdf9d5a33c6f63ebd1d4a5277db17b0fb6",
+      "language": "en",
+      "korean_original": null,
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/backends.png",
+      "sha256": "9b079581fbc790f43cb66aed29c074a91a76ec41cff6acd734af8cfe0470dce3",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/fdtd_metasurface_fine_prescan.png",
+      "sha256": "5e2d8d48e91250b9b4c19b9bac6f8e4e63504cbde8f7fa53b36f276cd507f56d",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/fdtd_metasurface_fine_reference_orders.png",
+      "sha256": "9ed2824a78f2871b5934dbfb8a3568d0ee0e4afa2e51f9e19027f760db341435",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/fdtd_metasurface_fine_self_orders.png",
+      "sha256": "7bb1e3e507145384f40dfce37da600cfb30ce02ae53424c7f482076fe5867ef8",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/fdtd_metasurface_tall_settled_orders.png",
+      "sha256": "0412d697bace317a18aa27fd3453e41f43215a25d2da8fefb98d1ce3bde3a783",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/fdtd_metasurface_tall_time_calibration.png",
+      "sha256": "5d37113dbf350b8294916d94d51ad5fb61d4f198cc61cde067d12582ac6f0f44",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/learn/learn/01-journey.svg",
+      "sha256": "167db3f2d0b5a69c59a4a33bf1472c4e75967628f93ab0ae666e57842c8cc69b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/01-journey.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/02-factorization-flow.svg",
+      "sha256": "62d5bb17e56db8a5b31d3576c9028c325650deb6ef9eafb54932c102594674e7",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/02-factorization-flow.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/02-rcwa.svg",
+      "sha256": "bc1b1a890f16233dddd27eb850d5a3198f039770f0803797693805ee03b8e5ba",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/02-rcwa.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/03-coordinates.svg",
+      "sha256": "63bf66139ffcd65b5884ec913df98c0df9cd77a5ddec5b31df13c1ae880b26ef",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/03-coordinates.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/03-cylinder-materials.svg",
+      "sha256": "71223e3008d871fbe5dd1ea6e060262571d98d9d4dbbf23df0239090147b64ff",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/03-cylinder-materials.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/03-stack-overview.svg",
+      "sha256": "0d30a61b44a2c1caab20ffdacbb061c9d0639f55d9099e0646f01013bb5e7952",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/03-stack-overview.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/04-first-grating.svg",
+      "sha256": "013f82d36b18c4c714c2024e118c19781b13902ca846fb9ed35fcf142e15bee3",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/04-first-grating.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/05-geometry.svg",
+      "sha256": "aa7ccbe8e8f7a50aecbd378f36a6fc9da932175d4bdd8a445661c848e50e234a",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/05-geometry.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/05b-painting.svg",
+      "sha256": "46ae4a25008daa1b5fc1d533f0c81e94daeaf499ebd306a8921b36c2d186701a",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/05b-painting.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/06-lattice.svg",
+      "sha256": "9f93fe0b7e5312d9896ef48a768a248d751e1934bbf2ea69d59bff850d8c1dc4",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/06-lattice.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/06b-lattice-shapes.svg",
+      "sha256": "cd52c59745d595510ce9409c968434e10cca05951a426bc0edfeb0093a7413ab",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/06b-lattice-shapes.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/06c-phase-lines.svg",
+      "sha256": "d7c0044a1b98451a24b9bf28bbe0c2563de7a3cd2a2589b974f837e39174c6db",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/06c-phase-lines.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/06c-reciprocal.svg",
+      "sha256": "a41b319c1d9df24a9461fea1771971476ee379b309a68dee661678e8a33ab3b7",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/06c-reciprocal.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/06c2-order-wavevectors.svg",
+      "sha256": "a41b319c1d9df24a9461fea1771971476ee379b309a68dee661678e8a33ab3b7",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/06c2-order-wavevectors.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/06d-triangular-cell.svg",
+      "sha256": "4550d72af78f1dd8844d5e9672d6a14ad16173116b10495784a6ced2a8cb2657",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/06d-triangular-cell.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/07-material-axes.svg",
+      "sha256": "3c3fa12fcd63d2911b06b2ff808cfe5c15b5fc9375fda05ec7f166f533e572d4",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/07-material-axes.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/07-material.svg",
+      "sha256": "b8fdabb43fcda81d0b6aadf991700b6a1cf92b503a2af2ed31fdf038617697f0",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/07-material.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/08-absorbing-incidence.svg",
+      "sha256": "167eac7e973d985db9e11bbddeba7258e266369ca42a9423cd841ddb90ca9122",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/08-absorbing-incidence.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/08-absorbing-wave.svg",
+      "sha256": "d9b675942a92d5260cbe4cc99a91932b98d09b748322083b15c971e04a9fd3a5",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/08-absorbing-wave.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/08-light-azimuth.svg",
+      "sha256": "afe0694d00a884e6c860545ba25dd325549c6c436f1bf22bfc5db7e9f834cb1d",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/08-light-azimuth.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/08-light.svg",
+      "sha256": "12b0537b329295d412ee17c662dd04db31eed7962e5f70fde23c749c85dbb134",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/08-light.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/08-polarization-angles.svg",
+      "sha256": "98ea31d1eca058301dbe61d445ee0a77627faaed62555cbd0c501829538a6295",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/08-polarization-angles.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/08-polarization-states.svg",
+      "sha256": "aad978dfe36eae6d3f4360ae935037cab2dcd75df11824812d5008bf99f5aa7b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/08-polarization-states.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/10-nvf.svg",
+      "sha256": "96a93d67a1801f56ec47036c50b300c91eab306ff42455a484f4bc7c2e688ca3",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/10-nvf.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/10-orders.svg",
+      "sha256": "c1e1340d6a9e7a3033c5338f284a54a9789ea4ecdbecee324f4f5cc06fcb806d",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/10-orders.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/11-result.svg",
+      "sha256": "8162551c3410ea2462136e87afb3748979263ecca6833b6276aa0af7db3a2bb9",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/11-result.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/12-field-data.svg",
+      "sha256": "4c620dfd8fe7c146530c981dd90ccab81a828c7c99336dccba643d4fcabef6a2",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/12-field-data.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/12-power-balance.svg",
+      "sha256": "74fc3e0a7eb8b86c302f866d04ed8464e0faf6eea96509ba50073242118dada3",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/12-power-balance.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/12-reference-planes.svg",
+      "sha256": "c7c1eaa8c3a88b7c8117016f8a56a06c394e349c1ac7e9073892459997e99e9c",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/12-reference-planes.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/12-time-average.svg",
+      "sha256": "3bd137dd829fe5212213d74e004e068f44f47d50b63336c11b9d180ec181eabd",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/12-time-average.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/13-field-layout.svg",
+      "sha256": "f93be1c0ceb38a42c0aec163c302bd3035096fcbbd734423513131748c5145fe",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/13-field-layout.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/13-fresnel-interface.svg",
+      "sha256": "08a999eb253575865767ab1faef756778989841e2426e259af6907fe9ee2c555",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/13-fresnel-interface.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/13-interference-absorption.svg",
+      "sha256": "a42c417e13910533db5b4abaf458b0fd67d7ca614221ae80be446fec061d864b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/13-interference-absorption.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/13-wave-directions.svg",
+      "sha256": "161d6e8bdc59658b7cb8b7b76f5f3ada981f3554a2e4671abf08e2d97a3b3c6c",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/13-wave-directions.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/14-layers.svg",
+      "sha256": "9637b231e7cc966ae80820042e0e02cd5cd0f69fd072f72b36e184fafbca3916",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/14-layers.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/15-backends.svg",
+      "sha256": "753d0265989089b1d28b4d1cf1052d0f9d55e340ca15f7163897c9d4cadf3511",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/15-backends.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/16-autodiff.svg",
+      "sha256": "3c66dd8e8e7bc9e1c300871d912e0bae987b8cd44c5d1753d5298bca729e3019",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/16-autodiff.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/17-optimization.svg",
+      "sha256": "ad238413f633bcc329110a1fca78717be6d60f43a4e5b58b333255e0300b7c9b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/17-optimization.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/18-jobspec.svg",
+      "sha256": "197115d9bb3bd4762a5d755cbfe824cf0967d941ec2b62155133f7589899d7ad",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/18-jobspec.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/19-convergence.svg",
+      "sha256": "48d7b1821a1f8c12caf5aaeea4846af88e9c7500cbde0777bff455317a4e4332",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/19-convergence.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/20-code-map.svg",
+      "sha256": "6783368241835643adf9593d6cb0b892cb8f46ea675752090387dfada160c906",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/20-code-map.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a01-two-roots.svg",
+      "sha256": "ea2d2c1794cbfdd4b6333aaa1771034fda453cf968203986f2e90aeccdafc16d",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a01-two-roots.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a02-half-angle.svg",
+      "sha256": "9ef0e4c3cc0d0da67a8ce8e47b0d3f15dbd1d0c0d413c17a1e9a9171ab95ff7a",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a02-half-angle.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a03-real-kx.svg",
+      "sha256": "24d8a29f1a4a86d9b08fca42ab00bf624cb2dd393f4bf3b18e04cb254e5689c5",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a03-real-kx.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a04-complex-pairs.svg",
+      "sha256": "01d3f4a5fdbe94705ddd98c5a5594d559e24f84a9bf6443ffd07e834b4157d72",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a04-complex-pairs.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a05-loop.svg",
+      "sha256": "ba57bcd6dde6af8cf7a7139ed32b4aa90043c2a39fa0967a59a05b8eed3780c8",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a05-loop.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a06-paths-d-e.svg",
+      "sha256": "25490ac25cbd42236ca88b4f85bc296643f1848569a76eb2631e0f55ba384086",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a06-paths-d-e.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a07-through-branch-point.svg",
+      "sha256": "20ee7dd79489ce9b75b8c9f4c2a628e2e61119a985369879f041d18ec0e2a61e",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a07-through-branch-point.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a08-half-planes.svg",
+      "sha256": "7297266ce5aec0e866f31d3f705d516971947765b2a4b6d00ee596ae52a8d493",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a08-half-planes.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a09-cut-maps.svg",
+      "sha256": "e746b0d7ef4e65c2b5b7c35bc329d84402214407202f4d08285659aac7d80137",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a09-cut-maps.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/a10-sweeps.svg",
+      "sha256": "ce3b500896248d6102ebb322d2029ace07e39308d2e7af119265556a5363c847",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/a10-sweeps.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/b01-theta-to-kx.svg",
+      "sha256": "55381231385fbf4463a135aed92bb9afe90722ca14c7b67f54affdf30151ad62",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/b01-theta-to-kx.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/b02-real-kx-absorbing.svg",
+      "sha256": "f59cc2b2f8e1d51dbc965ae4a995a8d49a9a85e1eb7b00427c922bc3cd73babe",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/b02-real-kx-absorbing.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/b03-air-vs-lossy.svg",
+      "sha256": "b64477296a30d47c5c4ccfe79d6ac0c1e634f2e7a19a0a8f888513d83fce64f1",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/b03-air-vs-lossy.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/b04-gain.svg",
+      "sha256": "5376424331394097c5536314feb6eacb9f04580ba0410ad78d66edde467c9c8b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/b04-gain.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/incoh01.svg",
+      "sha256": "f8f76f5250591c1c6865da540e76096856ce8674722d9e1896bf4ea4580e82c5",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/incoh01.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/incoh02.svg",
+      "sha256": "e3d7ce3242d52d898b4fd8e41f2c5879da7d353d80c1df580ff2b97c33332e9b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/incoh02.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/incoh03.svg",
+      "sha256": "2621bf4c7b183b1418e1b8ea4a33951e9591a249e5b4ca98fef3a361bd316100",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/incoh03.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/incoh04.svg",
+      "sha256": "da9c1bcba5f9c5fdad00021ec4db780cda0fb873b28c6d545cf97923c102bc4d",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/incoh04.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/learn/incoh05.svg",
+      "sha256": "938851f4f90d37a716daf848ebf42e040767162993baf2e825987283f7464e96",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/learn/incoh05.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/01-rcwa.svg",
+      "sha256": "5646ed7fb744b8b7ad77e6814f71aafee88f4fbfaef887969d65a947cab332ad",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/01-rcwa.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/02-boundary.svg",
+      "sha256": "549875e8a3513cfcad7b7ed72ff05431430275001de1f8cdd192be20630bcc36",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/02-boundary.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/03-rules.svg",
+      "sha256": "4115ec05a39c382d382fabe640f847c8753969812e4d274a4b1fd42dcf26689d",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/03-rules.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/04-field.svg",
+      "sha256": "ffcd1ea4ac02b8031b2496efb584db70df81433a74c0a07dfca2aece670862d8",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/04-field.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/04b-center.svg",
+      "sha256": "eff13eff7cdf3bc47c3dfaf3d9e10a57fb4d872fb3bccfe4730ca4df4ae42ff0",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/04b-center.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/05-projector.svg",
+      "sha256": "39f756772f6f9d21059c6d8d623d63f1fc10c8e887a12eb7f37d4481f6a477a5",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/05-projector.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/06-assembly.svg",
+      "sha256": "78d48f77dd867c89d694a8b9a848d66ccd419ff452b6a6a7833ab7fb3c4a322f",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/06-assembly.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/07-inputs.svg",
+      "sha256": "623332a96d3b9493fbe66040fb4471a7ddfe05c1d9cece9e53abcf0298d0bbdd",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/07-inputs.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/08-settings.svg",
+      "sha256": "96db30f651c7a2156d7e16283c8aff3c89607a05273837bef8ec5f732694eb24",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/08-settings.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/09-orders.svg",
+      "sha256": "ded3cb30026cb05e696f0fbfe094841e87ba80c6713deb9968d4078beaa8ae73",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/09-orders.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/10-convergence.svg",
+      "sha256": "548c228e3836219aba4555963a9a8cdb4c95087ad7c6afff366d4e1926d4986a",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/10-convergence.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/11-gradient.svg",
+      "sha256": "5f848dde53a3b7b1dc7bfcba995f6bcc3a0ad95bed60cce6d00df8468ab3200d",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/11-gradient.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/12-map.svg",
+      "sha256": "8f456723031dbf12167892ffe6b950dc376bcfdc863b517fef0d3b599ca6f972",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/12-map.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-441-laurent.png",
+      "sha256": "730732b8b2240875da443fe3680b2acf44226f94a346e238bff793bbbdb1a32d",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-441-laurent.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-hole-1369-spectrum.png",
+      "sha256": "681cc727a84759c24df787bdf144146cf014fbbad091cbdca0d316e42fea8ee9",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-hole-1369-spectrum.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-hole-1681-spectrum.png",
+      "sha256": "8bc10008178526d7d6b4c83021d514fd8eab3a01c4549ec040106314748e8883",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-hole-1681-spectrum.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-hole-441-spectrum.png",
+      "sha256": "34ceb0dfe837fbea3e8f7888b83e0023bef78871696735e99397e27281922f37",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-hole-441-spectrum.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-peak-vs-harmonics.png",
+      "sha256": "5a2f4ccfe6e97f212867ae4da94ab81d52a320cae766f4b9c2103cc12c6cb596",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-peak-vs-harmonics.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-441-laurent.png",
+      "sha256": "1c49ba991f6467d9257c85a6e7d219f2ef419f8dce4a46c63f35734fcd387da8",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-441-laurent.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-dip-vs-harmonics.png",
+      "sha256": "3c0cc455fdb667e9ee4661338d1e9ee01806b271acbc23db6e5440ca7186f0bc",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-dip-vs-harmonics.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-121-rt.png",
+      "sha256": "4aea2db12f8715940b2977dfd81caac850d23227e8a3e0114843719316e153db",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-121-rt.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-1225-reflection.png",
+      "sha256": "a30338b85c9a5305769a4a79ac6d949fd82282f98665484eaee851e8cc7aada8",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-1225-reflection.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-441-rt-fmmax.png",
+      "sha256": "b287540cd5f0b304f26c3862b22061335a529734e9cea1e9517970370cfe21f6",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-441-rt-fmmax.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-625-rt.png",
+      "sha256": "40139e0148828ae1120742f978f3e83c722971aa98349a6971d4e57fdf9ae5c9",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-625-rt.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-e-ellipse-pyx-ladder.png",
+      "sha256": "0f4be6974d744f5056c1b62f5aeba6a0a832c608812212eecff8609dbe815bf8",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-e-ellipse-pyx-ladder.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-e-energy-deviation.png",
+      "sha256": "029da81d5bdcb0bd48984c836267c274e9bb5d80a813a44ed09a2ac0db3dfd5f",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-e-energy-deviation.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-inverse-rule-pole.png",
+      "sha256": "859fb8a4b24408a6e4aee9b154c091fd1722bd644067cb21ead3247268947e30",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-inverse-rule-pole.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-j-dip-vs-harmonics.png",
+      "sha256": "316eb057d140cbc9fe9d8c58bafd119ba60659d038d7f62fa2bd8a87dbe6113f",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-j-dip-vs-harmonics.png",
+      "review": "English labels rendered from preserved literal numerical arrays; metal-figures.json records exact provenance"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-reading-detail.svg",
+      "sha256": "6aef5ed28112d86e791e96e95fd7bbe1eb929ac2a9b5e090cd100ae8f3552f28",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-reading-detail.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-reading-height.svg",
+      "sha256": "2b18e7744a8c8d91db8d193031b98759ae63b64a9443c3b2c3023900972cb386",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-reading-height.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-reading-position.svg",
+      "sha256": "ff0b3b472dc2397b50484133d9376a59811083af783bbe44a4cd811bfa7e9851",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-reading-position.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-reading-spectrum.svg",
+      "sha256": "12d7213b5384c2f6de87a2f456959d4e4facd14d3aa3d338ce4ffaa6feb403a0",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-reading-spectrum.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-A820_peak.png",
+      "sha256": "34b6e520bcc30086d3adced262e15f610722e86d52c0a9fc0470dff9f8d9035b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-A820_peak.png",
+      "review": "Original English scientific plot bytes; Korean overlay callouts transcribed into English chapter captions; metal-original-plots.json"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-A_nvf_closing.png",
+      "sha256": "d4e0ac0d4faa85c6529a1b0b1907ae24728e2187dc9a612544663546b2f39800",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-A_nvf_closing.png",
+      "review": "Original English scientific plot bytes; Korean overlay callouts transcribed into English chapter captions; metal-original-plots.json"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-B780_dip.png",
+      "sha256": "27c8c609f0046554f068790185c1bf2af9625a998373a1cbb28426c7b0414d6b",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-B780_dip.png",
+      "review": "Original English scientific plot bytes; Korean overlay callouts transcribed into English chapter captions; metal-original-plots.json"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-B_passivity.png",
+      "sha256": "91a4eca6e60b21f790bbc805987c2b14c9f327a274aadc82613506b5f032d9c2",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-B_passivity.png",
+      "review": "Original English scientific plot bytes; Korean overlay callouts transcribed into English chapter captions; metal-original-plots.json"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-DE_P_yx.png",
+      "sha256": "6cf3e7a3b44c4e4fe76ec0ed67373149c971a7fde51dd8931f2c70f2ce9d2aa1",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-DE_P_yx.png",
+      "review": "Original English scientific plot bytes; Korean overlay callouts transcribed into English chapter captions; metal-original-plots.json"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-J_res_4codes.png",
+      "sha256": "7406d1e27efa6742b3aa3b3af3936e9e37d581e393ba624a859b0730ec1c9824",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-J_res_4codes.png",
+      "review": "Original English scientific plot bytes; Korean overlay callouts transcribed into English chapter captions; metal-original-plots.json"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-geometry-eigenmodes.svg",
+      "sha256": "5b089e5f2fb35a9a71ee3a9b1e58632acb4d59264dff7e1d1dd6d6e3c7764109",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-geometry-eigenmodes.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-geometry-material.svg",
+      "sha256": "69b25d32f7a4b0589eff12363fa51369d3de51a4d3a7a9ba7042007ea91882ad",
+      "language": "en",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-geometry-material.svg",
+      "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
+    },
+    {
+      "path": "docs/figures/oblique-lattice/cell-angle-sweep.png",
+      "sha256": "bece132eeec1dc0d84a448139fcf6f4270d520b5f794fa374f9060acb35593bf",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/oblique-lattice/one-mesh-two-arrays.png",
+      "sha256": "b726f48344526f85c5496b1e8bdc05d9a46ade99f81cf7ee640261dbe4310a6f",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    },
+    {
+      "path": "docs/figures/oblique-lattice/two-frames.png",
+      "sha256": "40f12e89f66b1bbd3901cabc6c8088665437a5c440ee1028ed337cec25ce4814",
+      "language": "en",
+      "korean_original": null,
+      "review": "Existing English scientific figure retained unchanged"
+    }
+  ],
+  "course_pages": 40,
+  "course_figures": 100,
+  "translated_body_overlays": 41,
+  "additional_korean_pages": "gettext where available; explicit English fallback otherwise",
+  "scientific_records": "Preserved with original hashes; no solver rerun for translation.",
+  "browser_review": [
+    "English and Korean homepages",
+    "same-route English/Korean chapter switch",
+    "all five translated incoherent-substrate SVGs load and first figure labels render legibly",
+    "untranslated FDTD getting-started page displays explicit English fallback",
+    "English projector slider changed 30 to 31 degrees and recomputed Pxx/Pxy/Pyy in English; no solver execution",
+    "Final deployment layout: English homepage at root and Korean homepage under ko/",
+    "68-note source archive, original-source downloads and current reading links render in the English guide",
+    "Same-route archive language switch enters ko/ and displays explicit English fallback",
+    "Additional 19-original archive download table and per-item decisions render; Korean route states English fallback, and the Korean course introduction distinguishes its historical snapshot from the current FDTD module"
+  ],
+  "build_checks": {
+    "english": "Sphinx 9.1.0 -E -a -W --keep-going -D wavebit_bilingual=1: passed; 251 source pages, English at deployment root",
+    "korean": "Sphinx 9.1.0 -E -a -W --keep-going -D wavebit_bilingual=1 -D language=ko: passed; 251 source pages under ko/",
+    "local_links": "506 published HTML pages, 82998 local references; zero missing targets, fragments or same-route language-switch errors; internal theme templates and viewcode source pages excluded"
+  },
+  "build_checks_scope": "Historical translation checkpoint before private-source publication filtering; its page counts are not the current published inventory.",
+  "publication_boundary": "Only maintained teaching material and selected numerical records are published. Raw author notes, draft designs, session links, source illustrations, exploratory notebooks and prototype bundles stay in the private lab."
+}

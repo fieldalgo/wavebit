@@ -1,0 +1,386 @@
+{
+  "schema_version": 1,
+  "editorial_corrections": [
+    {
+      "target": "docs/learn/fundamentals/light.md",
+      "change": "The evanescent-incidence identity is kx/k0 = n cosh(alpha), not kx = n cosh(alpha); the missing normalization is corrected in both English and Korean prose. Equations, solver input, and recorded numerical data are otherwise preserved."
+    },
+    {
+      "target": "docs/learn/fundamentals/backends.md",
+      "change": "Both English and Korean explicitly identify wavebit.enable_x64() as the wavebit.compat.legacy alias; importing the new wavebit root does not change JAX x64. Original author source and initial translation hashes remain unchanged; published and Korean-overlay hashes record this clarification."
+    },
+    {
+      "target": "docs/learn/fundamentals/index.md",
+      "change": "Clarify in English and Korean that the historical RCWA course predates FDTD integration; the current module uses Problem/prepare/run and earlier factories live under wavebit.compat.legacy. Original source and initial translation hashes remain preserved."
+    },
+    {
+      "target": "docs/learn/fundamentals/overview.md",
+      "change": "Clarify in English and Korean that the historical RCWA course predates FDTD integration; the current module uses Problem/prepare/run and earlier factories live under wavebit.compat.legacy. Original source and initial translation hashes remain preserved."
+    }
+  ],
+  "files": [
+    {
+      "source": "wavebit-sphinx-guide/source/learn/autodiff.md",
+      "source_sha256": "db805433bb401e9708dd5de41e59d112744c43cd4fee9b135f31630361977d03",
+      "target": "docs/learn/fundamentals/autodiff.md",
+      "translation_sha256": "fe140620ab4b22f12eafcc6369d58fcfdd2f93a7953e94497fe50fd98d03a737",
+      "published_sha256": "53f4b56425ecee957eb948152a0b190a0d2e9651c9accfcf8c2baa0f651c79da",
+      "korean_overlay_sha256": "d7bf479dd4f7edfdf4e9f663e20317c38a265c71d5c6ae9d2c8d4115eac7fc76",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/backends.md",
+      "source_sha256": "c51824884bade3038c0fc6013b7920c63da15a19837daa4f31b9c445f2fe04d6",
+      "target": "docs/learn/fundamentals/backends.md",
+      "translation_sha256": "3553cd39a64da955d660b42b32efa7df5d131481eae945d765623078ef4c97cb",
+      "published_sha256": "eaa17cd95c25b849d727adf1c00ef9a68c2bbcbb0cedf18203ba6e2a3aecbd82",
+      "korean_overlay_sha256": "5090b35737cbf2bc4824172ab62a02cac9561ee9a9448c3df09436af164d8beb",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD; explicit legacy x64 namespace clarified in both languages"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/code-map.md",
+      "source_sha256": "daa03a4120d2ca620ae3799ca796fb0cb450c354676ffb9af4e3e7142afb0a1c",
+      "target": "docs/learn/fundamentals/code-map.md",
+      "translation_sha256": "a503dd3fe0d463041c651e3675391f26a8d96717c97ed213f4392c78e8b02b10",
+      "published_sha256": "3eb96cc8a48aef2877c70282e5bdb17401f87c07258bc8fd195539ef8d269fe5",
+      "korean_overlay_sha256": "81ac3ffb1e80284806a0d7629ab39c62c88d6d1a7506829dc61de417e9a413fb",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/complex-kx-lossy-gain.md",
+      "source_sha256": "08658df1876fa6d9f2a246f255912d7c7a52771c844efaa1348e7f4dab0cd176",
+      "target": "docs/learn/fundamentals/complex-kx-lossy-gain.md",
+      "translation_sha256": "fd93ac189a16bc9fba628df842658ca93cae896fd7980af442a5f40844cc9518",
+      "published_sha256": "9547db4948deefff59e3bd0c005ca08b3fc1a34ce0da409a2a6a1adb142990db",
+      "korean_overlay_sha256": "4fd57121a30b29ba9bcaa0024bcec52e6be876bfe542dea3e0a1bd7a3976b638",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/complex-kx-roots.md",
+      "source_sha256": "4684c33c1bb10f3705289f3018144ad56916763150aec246363caa70e0798b0c",
+      "target": "docs/learn/fundamentals/complex-kx-roots.md",
+      "translation_sha256": "ace883fe24b1d0a8d0219c274f10c5822b6f82f1c945ab0bb005d55648b8528d",
+      "published_sha256": "673b5541bfac7eb762e1b4b8029b4c7b6ef05337bc37eaff107b242f4a79ce22",
+      "korean_overlay_sha256": "bd178805ff6b963303a37e17d026d5cbfe1a00461b65fe1c419953e2596f2274",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/conventions.md",
+      "source_sha256": "dfd88b66c68e13d3bf69fb2018e70a5feb571966e1f7d2d371c460994222999d",
+      "target": "docs/learn/fundamentals/conventions.md",
+      "translation_sha256": "3028564f65eaf63367e1b6fed08a7b2ab4cc1597228a382a2a1f775d5d227416",
+      "published_sha256": "061a3cd48c1d0881b78b002bdba0c31a4dd2aa057e9ba94737415c85bf7f3e70",
+      "korean_overlay_sha256": "c49f955e46f1e7e16f7c674f94f7574e39b6e4157ed96d0f7f91b4e5c1bdc2de",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/convergence.md",
+      "source_sha256": "58114b2c382576295b313c0f9b34db32225e2f84c78d1e455ba1191473b39a8e",
+      "target": "docs/learn/fundamentals/convergence.md",
+      "translation_sha256": "906ec9218a96247cc83eac90275f3c2b1b0eb959fb4edada5c11bd35b98bf599",
+      "published_sha256": "77a8b85903d2e97ccf22e4c1f9822507f0167b6e9f687a08d0006373a5432805",
+      "korean_overlay_sha256": "835d60030a0330cacf8326461be416b0c30d570b173aaa64bba53957c0bcb736",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/fields.md",
+      "source_sha256": "fe05bd53573b1da46d95f3f34db34e62b3947aad8d67cd07a3528fac0b4690a3",
+      "target": "docs/learn/fundamentals/fields.md",
+      "translation_sha256": "daf13df5973804862a098df4d21d42cc9bcf5757417284a0bd9d2c726c557eb5",
+      "published_sha256": "3cbf2ce15532a300cf48c410e1e0e24cef28aa9c1d6e19b84beb497b323cb963",
+      "korean_overlay_sha256": "45459a2501f1c4a1877fe2afff5e84024c1d201cd12ae5ce43253ef7090dfb8a",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/fourier-orders.md",
+      "source_sha256": "63c851f40fdf2b4c714a4c51997007d7ef495b9c217205ff75265570a255003c",
+      "target": "docs/learn/fundamentals/fourier-orders.md",
+      "translation_sha256": "c5d812968694d6e1d14fa98c788af75724342e8897fec008de2f2837015b0409",
+      "published_sha256": "066a7f272563577a026b9eabea8a60583ed793107049b5fcf237c8f487a4fbda",
+      "korean_overlay_sha256": "e5e1d2121ea823908dbbe8bfc2f8202dcfb3615c122165e0b76f9b3f2fb8d039",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/geometry.md",
+      "source_sha256": "84f8403da356f4a480465c972e969cb33606bfffa0c03922e9df4e600400ac0e",
+      "target": "docs/learn/fundamentals/geometry.md",
+      "translation_sha256": "d27c6b33981f92169687b82d31a1fa6266d98973015a4b1681e3937069cffb60",
+      "published_sha256": "1c74ff1d7acd5038ba0e6f3d1d74501615172029e618b7fc1dcfe3b37c85592a",
+      "korean_overlay_sha256": "4dd052b4710e6e00eb19275aa3a0b9e607bfca6bedf95f1f1bb42287cf863b37",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/incoherent-substrate.md",
+      "source_sha256": "d0905bcc8ea8d1fdc86bb21e4cc3d803ec4df299216082eeae9e7a8c1c2c38e1",
+      "target": "docs/learn/fundamentals/incoherent-substrate.md",
+      "translation_sha256": "358e1de2d707658b408a40ef7c567c6ade75d28246d6f53cf07f668b9dea1803",
+      "published_sha256": "e78b268c6f5866dec334bafc8b14e9709c1cfa1f0efa91c4eb1d6667c2de6510",
+      "korean_overlay_sha256": "2b408a5995b540dae86962c7a184b18ff3763b9f8ec48ff418fe7688ff424b88",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/index.md",
+      "source_sha256": "24de8ccf7ad0d6d27d2164b8d887676ce4d4820deb7ffa5dda359af123ade681",
+      "target": "docs/learn/fundamentals/index.md",
+      "translation_sha256": "d0c2dd2f9da3e392c519ba4d4293e5f9d203b7756b4290964e1b04ddb4258a56",
+      "published_sha256": "fa9b1db41cd7f994c4d72524ebd830428236ce5cdd1d0c6db4fc710400ba32ff",
+      "korean_overlay_sha256": "af389c47d75eb8c72d93efb2129b4cb6ec4762a7ae533cab2dc408b3ac96c986",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD; historical course snapshot distinguished from current FDTD module and compatibility factories in both languages"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/jobs-and-sweeps.md",
+      "source_sha256": "598efc626b40c334debb8bd1a4013f8f6ae03db65bcc1673bfa9a796f0d769c5",
+      "target": "docs/learn/fundamentals/jobs-and-sweeps.md",
+      "translation_sha256": "e06b594d27828135495c4c872ded7b6e86ed4cd2b9f3e0d5ec0ab009b6cc2129",
+      "published_sha256": "2e68955539a2c3e3b24abf5dc27b295f2b363c0135614e68ee50e580211e4b90",
+      "korean_overlay_sha256": "ef1a309d1bedcde08cfaa8b2b5a4c58da192b2ce9b3f42485215ae6ab630c573",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/lattice.md",
+      "source_sha256": "853542f8c19fc68c761e5cd407a66ca664d6e002319735410c3b8ef37004ca10",
+      "target": "docs/learn/fundamentals/lattice.md",
+      "translation_sha256": "818fea935a06ff7a784a462ca5d8a7ca2aacae369a470d01010eb84041d7c5db",
+      "published_sha256": "466b44eb0e07c2624f7a360a2b6463aaa10f4f4727d13922ec9e52d4ee792945",
+      "korean_overlay_sha256": "24536ae942b536be9cb3f235f40b5965685660dab1f544707030555651b1589e",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/layer-algorithms.md",
+      "source_sha256": "359e1c61b53fc9340e5ecf1df596c82aa09380d267fed0a2e5bc726e19543b19",
+      "target": "docs/learn/fundamentals/layer-algorithms.md",
+      "translation_sha256": "b086bbaa3f09f5453542f2399a7528686555e799d4fd211775bc32d295fb63f7",
+      "published_sha256": "82608ebea4b460dc87ea6c82b9e7af4746eecabb87d20d683c7b6e71fbb3c141",
+      "korean_overlay_sha256": "40c49b360c0880782db9bc0893c7cecb97e97d6f8f20b0fc75828f6c15507368",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/light.md",
+      "source_sha256": "20f262e2b671ec5a4b73d6c4b7ef33a41de4c9f417473d5590768ee50da7fdec",
+      "target": "docs/learn/fundamentals/light.md",
+      "translation_sha256": "42eae794e541fae370a550b53c7821a925536e1ea582d8e55ccb84925bcac8cf",
+      "published_sha256": "52ce06142a0562e7b56022c232b677aec50c0491fe41d8ba799371cae4a6e3c9",
+      "korean_overlay_sha256": "2a06ec97de6e3b969375fced95a0f8f4ecc662b1899c2666af4d2972e5f10628",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/materials.md",
+      "source_sha256": "4f2fd6571ccdc49ea9a40fbdb7300b7159ec78d58f91b5502a8299db9fda7df8",
+      "target": "docs/learn/fundamentals/materials.md",
+      "translation_sha256": "2071146c8cfbf35dada8eee5753f1daf2b3b9e54c498d1da566c568daa5e9b89",
+      "published_sha256": "c09d1f8fd440f6dee64ef8c0acff37412e29f72fae4c36823e60142d25dafbf1",
+      "korean_overlay_sha256": "21f12abce0aa7de7ee1c3f7c447e93cfa727107f3ce7cb6aa1a5123e7c8b1cf9",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/multiple-beams.md",
+      "source_sha256": "59b8bbc28e0df6b721e15aaf015cabaa533244832313672199279de9a88583bc",
+      "target": "docs/learn/fundamentals/multiple-beams.md",
+      "translation_sha256": "d81bdd80f1ebf8ff9c5f300dfb9f4f5b3035c3922b340ba6a4801af48f36d865",
+      "published_sha256": "b179b6ea5d22d5de01379e602398f42c003b240638b5de53fe334878cecda597",
+      "korean_overlay_sha256": "3a4bbcc00527253b199c75696836cba8c18244a2a970fd45fa345868e343b96a",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/nvf.md",
+      "source_sha256": "7dd365ccd5f27c16c50293fda8b4ababf633c2f45275ad270b21ef6430016090",
+      "target": "docs/learn/fundamentals/nvf.md",
+      "translation_sha256": "bced3b9c5d04eb55a9ecc5dbef8238e242f3837c3ed922126e8c67b62e43a474",
+      "published_sha256": "7c3df7eeae8f17c2ac557101b16b91a438ac5dd7c2156cebf1d9507a96edf294",
+      "korean_overlay_sha256": "6c9df7b21926f727053a412eb6a6917dd954f12b596a54a060c889cff0c7a539",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/overview.md",
+      "source_sha256": "16da793eb8b31fbb0af44b7ab6d3258e57a645e30aa8f7e07194b9d613ef0e4a",
+      "target": "docs/learn/fundamentals/overview.md",
+      "translation_sha256": "a4a7ffdb7465321bac76e100d702f4a9c01fb0bce3e054626e417622a53359b3",
+      "published_sha256": "dce9623f8e72566e05e92e0b477031dced24497d4794960b867f4c859975d760",
+      "korean_overlay_sha256": "e5fdfe7dc4dc258db39c2ff7e50b06c744ac1a2d9bc392dc2d3577b9a08ce2ac",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD; historical course snapshot distinguished from current FDTD module and compatibility factories in both languages"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/power-and-efficiency.md",
+      "source_sha256": "b03dc7ec29e7fc42dae86e082bf8e08d9607a3cf1b075a35e27a5d7629674772",
+      "target": "docs/learn/fundamentals/power-and-efficiency.md",
+      "translation_sha256": "d309d83c42284dbb3806207d93be033d0c1ede5276d42a8b4881f26280ea90bc",
+      "published_sha256": "b70ccf7f3a45f85484d4536a75c195f679e7fb06fe4453e75ee3f5dac219e852",
+      "korean_overlay_sha256": "8c70995d9044c28b1105a1850743c63a8434237827de8fd645a5e9d910919413",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/quickstart.md",
+      "source_sha256": "a1973d66d8d3ca9f9fc4811f287ca0f416a8adea4cac2583d1f93ece00cd4df9",
+      "target": "docs/learn/fundamentals/quickstart.md",
+      "translation_sha256": "fddc30f5acef32d17f2259c75dc10fcb30879ad641f19c60523740df4883af9a",
+      "published_sha256": "b0c51aa81827960321fefab399d9d1a2570cc8c1bc9d10955b94c7dcda0c12fa",
+      "korean_overlay_sha256": "cad5e2bcd9be33e4e2bff6fbb53a04fa32d7ec00c7e552fe4deb80761d8ab505",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/rcwa.md",
+      "source_sha256": "443797ac81b7612a4540f95aeb90acd69c63a3313a9a109a22c377b90e97b217",
+      "target": "docs/learn/fundamentals/rcwa.md",
+      "translation_sha256": "4d49f6a6d59bf67e7763fc6f2aaf314acdc57863ea81aeea3d7e3640b1e9b1d2",
+      "published_sha256": "dfd1cf3d9bb0525de0cd215af3a5a2ef895ea71c1596b7725a7a7cd933168df5",
+      "korean_overlay_sha256": "81992b1161da49800636a7b13028217a9488d3cb63b3067e4d5fbecc32ce2358",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/learn/results.md",
+      "source_sha256": "109825f1ff3dea5ad675a8927fc33b4f990543404f899c695f0eb57940894de1",
+      "target": "docs/learn/fundamentals/results.md",
+      "translation_sha256": "662fd757ee6f298f5a156f931d7ae94575d63531351fb99a23218d55d37e4092",
+      "published_sha256": "4099bf1ea4c748c2ff68136565ba9c02e74a022ef6b9ca3e04a7df2e70c1c9ed",
+      "korean_overlay_sha256": "1fc1385617e05e52057d106b593f2552c967ac8dbe7a13b3d2f73abb186acce8",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/autodiff.md",
+      "source_sha256": "b2439a75c26e6c6109afc7703d0ed984acdf854357e7603d077db137314f4346",
+      "target": "docs/learn/nvf/autodiff.md",
+      "translation_sha256": "866f78547ee8fa5a1faed968a7b7fe85899fb06952b4e75e20ffa16a9b2d915c",
+      "published_sha256": "850748cf9f5fb37f47aacde921261d0dc6068ef97bf0182edce13e5e93cbe036",
+      "korean_overlay_sha256": "9944afb8128ddd38872fa89697fbac0e5e54709e2637bda138d5dead81c4651a",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/boundary-conditions.md",
+      "source_sha256": "d526678930c9b2629e09922b657aae4313d248676f5328865cb5b2f930d42288",
+      "target": "docs/learn/nvf/boundary-conditions.md",
+      "translation_sha256": "6d92e4e110fc2e1b92fe64f668337472f731e670967805c325fac924a9ae1b2c",
+      "published_sha256": "fbd6a6b7288bfeb0f1499d1f9d45e1e18e8c69cf55687fe5d4a852aca5dc6dcb",
+      "korean_overlay_sha256": "95237bda2903e6eec56f98eda53ee8eb65da4f2597796254ddb24cbb823b3466",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/code-map.md",
+      "source_sha256": "a043aa1dca915ac84ff9092b1bf3dbacbc0034d584c2a4261a931530d8367da0",
+      "target": "docs/learn/nvf/code-map.md",
+      "translation_sha256": "1ec415b8ae0c5a18824ef40b4406eb2cb36bd612ff93b3b24fcbfdeeb3962e5e",
+      "published_sha256": "99d1b840002dfee90f9b84b714d3061f1e9af780924e9491a25bba6f73b03b40",
+      "korean_overlay_sha256": "02c9238bdb130b2df68829a961846283849e4e57220c30e397cd0021462e7e94",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/convergence.md",
+      "source_sha256": "0d5ee27b3d1e0e245835c5d5595407a563d4c60c253362727bb34d4fdfbb19d3",
+      "target": "docs/learn/nvf/convergence.md",
+      "translation_sha256": "e33918583b162fdb332af1db01a93afbc54f60aefeedc6073e49c2094a0de9dd",
+      "published_sha256": "b63d124b5c5bdb9b5285fb2e0e4b0486399bd1276a4346f0ca8ec454d7bade01",
+      "korean_overlay_sha256": "926cea3cd90676b1d3f099170f7f2bf54f7c44923379f61f02af718165d51b85",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/fourier-rules.md",
+      "source_sha256": "2bf2cdc958538c688985b2b4341e46f7bfeb06729a23595253055a0c1872c7f3",
+      "target": "docs/learn/nvf/fourier-rules.md",
+      "translation_sha256": "2ed83efce5fde6127c17cb8c00ec85f6b12b11f87c34e20a9cf753c19929ad5b",
+      "published_sha256": "1cc8bd7e42d3a0958afc91189b89a0bf72bf3314c7b1188d00b6bbc7e6e5c08b",
+      "korean_overlay_sha256": "8d4bd411bfab6871a909188bdf1c9b4ed45189e3ffd2e858e88881ac71e4fb94",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/implementation.md",
+      "source_sha256": "b119778c6fdeb52a8ee84af430bd6979926c3ca8792261cb7f87877ee8fbd3a0",
+      "target": "docs/learn/nvf/implementation.md",
+      "translation_sha256": "2828b4a4b6946175033a0ea2d74d10d9fdf4560ea4ae8f86fe0410d55e7bb5f8",
+      "published_sha256": "54ade75e1a02c09e83ba64047847bf3b6a4f3121e47148dbbda0e3f04dccee44",
+      "korean_overlay_sha256": "507d8b33efa59b189c01407c7befface3d020dabd958e99f7497de88e786faa5",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/index.md",
+      "source_sha256": "fcd3793b642b67d4a8230548519cda5305e94f13661e968e7884a10a9cc56ed8",
+      "target": "docs/learn/nvf/index.md",
+      "translation_sha256": "846b35c02f2e3e9827f6d82d54d0fa1edc3bf6c403c7f6c5b9fa42e9d8b84ada",
+      "published_sha256": "b43ee1dc02cc669ff552dc62f2837a0a0b4f1211c214d0e9c00799a490dca209",
+      "korean_overlay_sha256": "bed46a8a578fc2547ec98cebea0276d7bb280350f54325ac8a03ebd8d1d22c4a",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/metal-inverse-rule.md",
+      "source_sha256": "fc7f4d347489414e44a1b5c0282f9c687fc0c9aebb627c134b00ce49dd656c92",
+      "target": "docs/learn/nvf/metal-inverse-rule.md",
+      "translation_sha256": "344112f890de70c944b11142ba7124babce769aa5823056b5e5bda49496972af",
+      "published_sha256": "1b351cf5463178f61f7e0cd656fcb6eed91f33d30f570ec12ca9c275beaf0f67",
+      "korean_overlay_sha256": "9b0706b1d5636c94a9bf2d3e3b90615686a16fcd3c7afcd1506d3f1239c3618c",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/metal-original-plots.md",
+      "source_sha256": "1224c8252bef35222418e1cd20948c0a3eab88bb21539db34096986ba53e1b2d",
+      "target": "docs/learn/nvf/metal-original-plots.md",
+      "translation_sha256": "1f93f7f8918ae6c3c54706e42ef21cc4e652499b49da898eb1febb0db72bca73",
+      "published_sha256": "256f34797d2e86ce6b32dc021af6975e3c5e3059e0338abbbcf96ef2de6234f5",
+      "korean_overlay_sha256": "0747bd7917662a7b2893f23299337f97fdfe1686b54c49138927d7c6b81635c9",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/metal-regularization.md",
+      "source_sha256": "1763babbb180d9bb14ad7320bc3b06dfb1d60dbe0a2edafaf8f6c0773496adcc",
+      "target": "docs/learn/nvf/metal-regularization.md",
+      "translation_sha256": "8e9928e7c22a81f6e635082a910edca6c43bab2eaad7945ad9831155ed4ec7f2",
+      "published_sha256": "126d819727c814aad491598f2fdcceae5bfb8979d808df97cca0871564f8feda",
+      "korean_overlay_sha256": "b72d0d23a1affdf4dbdd82a587776f0edd7c3cda01c1d57a931f023df833e7d7",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/multiple-shapes.md",
+      "source_sha256": "8725d1359d5d2fd96892ed751f3af94ac738eab3435063ee268ef797c5be5d17",
+      "target": "docs/learn/nvf/multiple-shapes.md",
+      "translation_sha256": "c263f1b1fdfa5f3b52c338a3893261c9cba0f838e02e9d24a206589149c1e795",
+      "published_sha256": "6301c1484421b4b361f17f5f3b2c7c79f1f8bcfc902fb57f1f107dd92717e21e",
+      "korean_overlay_sha256": "a2f27527a5b36e091b650c9672f844d75645e8113630093aeb0de0ca42e65519",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/overview.md",
+      "source_sha256": "ed7d0c995b30ed5919e1db64ff40c00fea66c1a99a1282ee1414f214818d83a6",
+      "target": "docs/learn/nvf/overview.md",
+      "translation_sha256": "e90a30f8d571843d20715d758cd220115770296ccc66bde6133163438630873a",
+      "published_sha256": "8ac5e835d9a904b123a7dd442d0c7f484be47f631aba43a2b1551025b3423baa",
+      "korean_overlay_sha256": "ca37a86c02924ee243ff0381430ea9004cd1aad9987ce696fc5c8fbd884cdda0",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/projectors.md",
+      "source_sha256": "6f0112ef22c8ee3f81b30e28d98aecf5784cfad4122f6409ab25357c3b838004",
+      "target": "docs/learn/nvf/projectors.md",
+      "translation_sha256": "e5a09f2e8bc95aa64434c28def121289a057775694114c8e8ecf76b15cca0896",
+      "published_sha256": "bc44e84b86f35d3dcaef03d917d600beaf406f7639b314d7fb86617cb86080ae",
+      "korean_overlay_sha256": "9a95f6fb80341c09db1c0933a08c2dff4e2f4e491ba44a0f7abc24e09b348903",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/raster-example.md",
+      "source_sha256": "512889ad16fb80902791228eb414ea1a2c2e62bb4ae48e4d894d1725032f5ab2",
+      "target": "docs/learn/nvf/raster-example.md",
+      "translation_sha256": "0c1760c555b83e3ad3dd986524776024967c1a8234b1a0479da841e4227d2ea1",
+      "published_sha256": "0958a77e3d2c7104db192de75dc57e5add761c7927d2b039db491bb0e8e3d636",
+      "korean_overlay_sha256": "9095fb501e62388062ef1f840efba7bf74001fa052aba6d4ed0abeb0cfa087a9",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/settings.md",
+      "source_sha256": "06b86a9e9f6f4eaac97e3296c62629e90ce2b82a35d82de4c2663bc88a82ca7e",
+      "target": "docs/learn/nvf/settings.md",
+      "translation_sha256": "38e5f368acffdf32c41e8c1b0681a3a885dc9beecf8145b1ebc5c6d3db454376",
+      "published_sha256": "a7a579563e5ebf90b95c90650dbf14226223739b8ac65fec2a64f51c209c7412",
+      "korean_overlay_sha256": "4e678ba0138a22f85e5095eb02f51e6c5ab5de26bf1fbb3f3c81604559d47b6c",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    },
+    {
+      "source": "wavebit-sphinx-guide/source/nvf/shape-example.md",
+      "source_sha256": "15ecc275ed2d938e7026ab663bd7dc3e3f99b8531c9855645956d8d1442a6b0b",
+      "target": "docs/learn/nvf/shape-example.md",
+      "translation_sha256": "9a12f970758d71bc3f518f2c8b380d063092bbad21c963059b2e0f31c4f2eb3c",
+      "published_sha256": "182592d267676e005df0fb243f466f3c213a63f7373b2d74dfa7b30c1905488c",
+      "korean_overlay_sha256": "2ddd6c52b6e330b58241a743c8a2568fa7a8dd995bb7f564330f705771dc8760",
+      "translation": "complete-English-body; local-links/source-citations relocated; explicit legacy import/notice; source scope corrected for integrated FDTD"
+    }
+  ],
+  "required_pages": 40,
+  "completed_pages": 40,
+  "remaining": []
+}

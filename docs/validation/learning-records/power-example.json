@@ -1,0 +1,41 @@
+{
+  "lossless_incidence": {
+    "R": 0.04641356971002655,
+    "T": 0.9535864302899737,
+    "power_entering": 0.9535864302899735,
+    "absorption": -2.220446049250313e-16,
+    "interference": 5.336310501295016e-18,
+    "one_minus_R_minus_T": -2.220446049250313e-16,
+    "r_electric_tangential": [
+      0.21543808788147603,
+      0.0
+    ],
+    "admittance_times_Z0": [
+      1.7320508075688772,
+      0.0
+    ]
+  },
+  "absorbing_incidence": {
+    "R": 0.1452272767102451,
+    "T": 1.0131886090510112,
+    "power_entering": 1.0131886090510107,
+    "absorption": -4.440892098500626e-16,
+    "interference": 0.15841588576125581,
+    "one_minus_R_minus_T": -0.15841588576125631,
+    "r_electric_tangential": [
+      0.3337287554124131,
+      0.18399020224220322
+    ],
+    "admittance_times_Z0": [
+      1.8666315874586616,
+      0.8035865299173391
+    ]
+  },
+  "absorbing_finite_layer": {
+    "R": 2.0461413394754102e-32,
+    "T": 0.5680836058777344,
+    "power_entering": 1.0,
+    "absorption": 0.43191639412226557,
+    "exponential_T": 0.5680836058777343
+  }
+}

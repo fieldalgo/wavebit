@@ -1,0 +1,1832 @@
+{
+  "schema_version": 1,
+  "moves": [
+    {
+      "source": "docs/README.md",
+      "target": "docs/README.md",
+      "category": "site",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "e1a3440aec6a6b221b850066416851d685fb5d1d77c7aa524bf13651417ce900",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/_static/coherent-illumination.svg",
+      "target": "docs/_static/coherent-illumination.svg",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "cecdcf7c649bae05edaa45922dc4d5a433184d4de13216b099137138de35eeb2",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/_templates/README.md",
+      "target": "docs/_templates/README.md",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b1a491ef8dde225ee674bdf347ec6df5c0ff20303e9879247bdbd5ecd2bcc0b5",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/_templates/language-switcher.html",
+      "target": "docs/_templates/language-switcher.html",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "1fd07c91d0cecf08a8d580ad23bfcc3ae3eea066c486d024479f4a1d656f7176",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/_toc.yml",
+      "target": "docs/_toc.yml",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2fe298f6ecbd62dc82164a84c69de81d80e6174ae125c91a218efba762939d43",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/amplitude-sp-frame.md",
+      "target": "docs/theory/rcwa/amplitude-sp-frame.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "90bd471de2dfe74b19df6ccdf2441724a5c18cb0f6fe6adbba9320ec7493b26d",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/anisotropic-materials.md",
+      "target": "docs/guide/rcwa/anisotropic-materials.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "659f060a168a5aad1ee4fef31685361a349016698b6a565c9bdb0ae840ebf9c7",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/backend-choice.md",
+      "target": "docs/validation/rcwa/backend-choice.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "cc50d39e04e240fbadb45379099da423fa7b540d74d6303bb2baab4dfab204c7",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/bessel-j1.md",
+      "target": "docs/validation/rcwa/bessel-j1.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c4c64436eeb0aff53ed640c77d91401b32993b84601b1456dbcdf4389cc02fff",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/boundary-modeling.md",
+      "target": "docs/guide/rcwa/boundary-modeling.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f46b506f32de0122f985df36e54fd9e7d9133154500ebd92b0a20a80e88d60bd",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/branch-cuts.md",
+      "target": "docs/theory/rcwa/branch-cuts.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "fcfa432425095268b85f312dc771b59aaf1574f7d997339fdbb348d97bedf879",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/capability-manifest.md",
+      "target": "docs/reference/common/capability-manifest.md",
+      "category": "reference/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6ed30b3fdd53d00ce4b8ca0978964ef3386b2569f2a27ce723222364cc99a286",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/coherent-illumination.md",
+      "target": "docs/guide/rcwa/coherent-illumination.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f6f56c3b93d4c2b75f08ba09f5a58b6c756e89173afcb7162da15918af71cecd",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/conf.py",
+      "target": "docs/conf.py",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c4e289d6bd04799eecfd310c408b084e9b57432380f2ff1fc107de439759bc3f",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/connecting-algorithms.md",
+      "target": "docs/theory/rcwa/connecting-algorithms.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "316f3d7e6e4b8b602b1beb172fe101f646f8d6f513e778fb3e667e8522a09a75",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/conventions.md",
+      "target": "docs/reference/common/conventions.md",
+      "category": "reference/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "92d4e2471e0b4fa60c14e4fe94f392ab03fda74a11e7a54c58d8303da8c0d307",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/decisions/index.md",
+      "target": "docs/design/index.md",
+      "category": "design",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "3d0ccf14a3d920e676b611d07222dc80d1ee49ece4396412bd26f6bab0447d5b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/design/unified-api.md",
+      "target": "docs/design/unified-api.md",
+      "category": "design",
+      "immutable": false,
+      "tracked": false,
+      "sha256": "2211e9b665bd216adbc81e4f215e4d902d706b8a2da28171bb8eac22f5adacf1",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/developer/documentation.md",
+      "target": "docs/development/documentation.md",
+      "category": "development",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "904be0641f435f9ffe0fa8087efa39ce9e3c86ae1396bf7aa0c28d25c3526ab1",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/developer/index.md",
+      "target": "docs/development/index.md",
+      "category": "development",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0ebd41a0e786c80179e530fbd066c730a973712838a295517c0a45ceccc393be",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/developer/solver-integration.md",
+      "target": "docs/development/solver-integration.md",
+      "category": "development",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "78564cbdb31747c0865ad124748970ff6fe454131d2c597b2a7f30bcfa5eb58c",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/developer/source-checkout.md",
+      "target": "docs/development/source-checkout.md",
+      "category": "development",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d9e19ba13ad6af2e3f562a28d8a4df370e86cad7049bad6a54310bcf3e51f967",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/factorization-terms.md",
+      "target": "docs/theory/rcwa/factorization-terms.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9524ce8c4c0b07f879be9e1ec3b22f3b44e1bd56da199f5d1c741c08e43b1ff3",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-conductive-film.md",
+      "target": "docs/validation/fdtd/fd-conductive-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "36d78216b6cf660895521623d41e6f3f40f3422562f2b932b61c36bc5ee2edc4",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-conductive-stack.md",
+      "target": "docs/validation/fdtd/fd-conductive-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bbfc797f06aada01d7ca781adf645b4ab0d2bfc276f29addd918066692332401",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-constitutive-absorber.md",
+      "target": "docs/validation/fdtd/fd-constitutive-absorber.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d8de102793fec1b7bc8228aabcc18b2247a861b79f434a86665983f679f63ecc",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-debye-film.md",
+      "target": "docs/validation/fdtd/fd-debye-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "47e850d105d867c355190eeae108a941e2a1c6957f4e7cfcaec46175e059d59c",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-debye-stack.md",
+      "target": "docs/validation/fdtd/fd-debye-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c7ec9b15527fe15c17896e6c5c78fe910d2c32c6444389988615cb26b48bff0c",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-debye-sum-film.md",
+      "target": "docs/validation/fdtd/fd-debye-sum-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "73051e02c937994519cdf004b8a66a1b2a280148023535bc1dc7e16d8dbf8b01",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-decay-stopping.md",
+      "target": "docs/validation/fdtd/fd-decay-stopping.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "edb2277eada83c3b86dbd6e7943d40ea3b3a5f96414bcfd4b6330f2d723873f5",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-hybrid-film.md",
+      "target": "docs/validation/fdtd/fd-hybrid-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c37689bfe5d868c55612bfe66d3c2aa7480052470ef7a42aa20189e0c97e0e75",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-lattice-radiation.md",
+      "target": "docs/validation/fdtd/fd-lattice-radiation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8636706936ae8c3a788428872853e515d583d12fd944cf31db60f96f529d5423",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-metasurface-validation.md",
+      "target": "docs/validation/fdtd/fd-metasurface-validation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a4efab14d0050514bfe09032e2301a96f3a93854637b051630f0a6a21c4413de",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-mie-validation.md",
+      "target": "docs/validation/fdtd/fd-mie-validation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "38fc86310fe68e0587dbf6a65adb23b1fb1c0786fcb0a9212b87b10c2bdd809e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-oscillator-stack.md",
+      "target": "docs/validation/fdtd/fd-oscillator-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "80dac926926469e7c57dbbf646bda9d63b2b73669ec3fbab79d1e8945de94005",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-oscillator-sum-film.md",
+      "target": "docs/validation/fdtd/fd-oscillator-sum-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "fe8421ac1ce2d3fb97dae7aa7dd5a7f944327a06453dfc6364c4d3ac0b27c4a9",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-single-pole-film.md",
+      "target": "docs/validation/fdtd/fd-single-pole-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0833f91a6edc17d1af1b1f201545a74b7faab0cb95a884dc0bcc3d8b4d22f0d9",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-sphere-clip-jit.md",
+      "target": "docs/validation/fdtd/fd-sphere-clip-jit.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "4be49692d63c512857d7cdc592cff542af5b0cf41ec51cf6cdda429f46d9e311",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-subpixel-occupancy.md",
+      "target": "docs/validation/fdtd/fd-subpixel-occupancy.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9798baedbbea3600e7bc9292b4183228eafe53d2dc984aa66589fbbd95555941",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fd-symmetric-stencil.md",
+      "target": "docs/design/fd-symmetric-stencil.md",
+      "category": "design",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "cecd8b27c690b5911b1e9c459ac8b315fc5603687f4bb56f8206b286a14934c7",
+      "reason": "Explicit research proposal; retain status and unsupported scope."
+    },
+    {
+      "source": "docs/fd-two-debye-film.md",
+      "target": "docs/validation/fdtd/fd-two-debye-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6d487c556c655cb674307d03658ea50a1d84ee446f95783fae4d8181f43c012f",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-adjoint-validation.md",
+      "target": "docs/validation/fdtd/fdtd-adjoint-validation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9ac915664e0ccfa2f1ac5014bfcacf2feb13a64b6f379e9bc175d267f249c6ca",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-alpha.md",
+      "target": "docs/guide/fdtd/fdtd-alpha.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "346f4c32756a2c2be20b8a272119eaf4365feea99e2149b367908adcccf92d7e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-bragg-cavity.md",
+      "target": "docs/validation/fdtd/fdtd-bragg-cavity.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "cd21cba615f0fefa3aaf480657092f9f92f0fb921c72e6cca53633ee0018deaf",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-circle-gradients.md",
+      "target": "docs/validation/fdtd/fdtd-circle-gradients.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "ac26b1279c7ae98d65e202b98dadc560c76ef4655007de63b2f3010e576861eb",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-dft-sampling.md",
+      "target": "docs/validation/fdtd/fdtd-dft-sampling.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "addbba2197986e857235e7c3c5b98adb43c4aaefe0a4b5247d8f9ac2b63f3ecb",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-directional.md",
+      "target": "docs/validation/fdtd/fdtd-directional.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "ed92a6373b85040d796cc32d4eefc574f3d7cf269936a0b7a577a17b5d855518",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-ellipse-gradients.md",
+      "target": "docs/validation/fdtd/fdtd-ellipse-gradients.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "fec10bc3b713a735f37706e6c00294e1e00891813d8f4715677002b592ecdf09",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-enz.md",
+      "target": "docs/validation/fdtd/fdtd-enz.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "04548533de85ab0a1a23355d393335164cabb875b277862f16beafbed04453f7",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-halfspace-gradients.md",
+      "target": "docs/validation/fdtd/fdtd-halfspace-gradients.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9dd79be7e6f4fd6a2d3c390d78396ab3b1fa29518efaaf4aa4bbf0e372a6323c",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-lattice-reference.md",
+      "target": "docs/validation/fdtd/fdtd-lattice-reference.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "191a69f3fd965f2b51bef1c2d9b121ddbe91a0a5121edc06fce86ca9308cdaa6",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-layer-alignment.md",
+      "target": "docs/validation/fdtd/fdtd-layer-alignment.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "23dc8057e6a11272a299bc39240a953393592a525f265fb00ab68f1f7b7f50e0",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-layer-gradients.md",
+      "target": "docs/validation/fdtd/fdtd-layer-gradients.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d89fcb88cc8a85a8d2ce371330918afc602bbca5e6e9fc2a732411f9b65587b3",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-layer-smoothing.md",
+      "target": "docs/validation/fdtd/fdtd-layer-smoothing.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "87aeaa490567e7da687692dead23b51fc5c3cd28a089c7902ee08f4a0871f7e2",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-lorentz-decay.md",
+      "target": "docs/validation/fdtd/fdtd-lorentz-decay.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "688afc829e199f9b3ffef2d1d098b1d044cb4e9cf8b6c277e0e7bdcaab0dfa0b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-mixed-metal.md",
+      "target": "docs/validation/fdtd/fdtd-mixed-metal.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "3963aec622649657911bf82519d25a29679066d9be98b353d324f9e187a42648",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-multilayer-optimization.md",
+      "target": "docs/validation/fdtd/fdtd-multilayer-optimization.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "189aacbf83498f561509bcd04a349310d45f1ddb6c5c4eb1a04af4033b95de19",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-oblique-pulse.md",
+      "target": "docs/validation/fdtd/fdtd-oblique-pulse.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "26a75c6b9aa14f446c29147ebe4acca1cb40776f0cd95cb5a70fedf022f48fa0",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-painted-shapes.md",
+      "target": "docs/validation/fdtd/fdtd-painted-shapes.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "dc5867bb79567a345aebc3238ab5fe5ff1ac9f45e92b3d48a52a77d0106d8a21",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-pml-strength.md",
+      "target": "docs/validation/fdtd/fdtd-pml-strength.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "4cadf4fbe7f66854a3c8274eb029f35eac6d4d3067a6bb7bc9eb0c6c207a573e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-pulse-convergence.md",
+      "target": "docs/validation/fdtd/fdtd-pulse-convergence.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "23b4cd256513ca859cdca3a2b14e30751dd0ddb68ce2dc72a02312d9c0101001",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-pulse-notches.md",
+      "target": "docs/validation/fdtd/fdtd-pulse-notches.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2159388d7e71bb88534ab8554aa06e4241e1dcfd9d26211393789ca46ce59a52",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-rayleigh.md",
+      "target": "docs/validation/fdtd/fdtd-rayleigh.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "791193f790fcfee63449573115813c48b90c055de7dec41dd9925de37d643325",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-rectangle-gradients.md",
+      "target": "docs/validation/fdtd/fdtd-rectangle-gradients.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2beef4fd3dca5243ebc7b330a4d6a7f59a583f62b58c63d476df76300b647e12",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-ringdown.md",
+      "target": "docs/validation/fdtd/fdtd-ringdown.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c33464278ec6d250b0a22905868b307b5456b215f49be0010f92b3368457977c",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-rotation-gradients.md",
+      "target": "docs/validation/fdtd/fdtd-rotation-gradients.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a625947879813d8cc969ea337a71df60daa21f0974f879c62a46e281f1ebdab5",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-rotation-smoothing.md",
+      "target": "docs/validation/fdtd/fdtd-rotation-smoothing.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0e692e25531347b92009819ab2e8a5ffd0d44d23a8b2f21ef0131ad55ed12fc0",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-route-parity.md",
+      "target": "docs/validation/fdtd/fdtd-route-parity.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "098e19e362ac45df9f8a1dc083a2e81edfa40223be880aaeb00becd0ea5f7a4e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-scene-angles.md",
+      "target": "docs/validation/fdtd/fdtd-scene-angles.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5529adc9f84b1f14b436febc2ca33445e8bcf89c54c29f85f5f15f9b4535be4e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-scene-azimuth.md",
+      "target": "docs/validation/fdtd/fdtd-scene-azimuth.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6dba965024390a38e7d1f519937c228d0fca07ec1bc5c12551c9dafde8ca3e14",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-source-clearance.md",
+      "target": "docs/validation/fdtd/fdtd-source-clearance.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6b71e966deac7f976dad5dd3d20ffb7f8dad3b426f26fd01e058d7d99624b049",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-transverse-resolution.md",
+      "target": "docs/validation/fdtd/fdtd-transverse-resolution.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a63cbd3057ebe4a90f8b6d26964140af2905ff0591f27033d13822856617cce3",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd-variable-depth.md",
+      "target": "docs/validation/fdtd/fdtd-variable-depth.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c9cc61efd9a8bd3c0338d959c81c4cd5e7c63df6dd43ff7dffe84587545bb334",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fdtd.md",
+      "target": "docs/guide/fdtd/fdtd.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b0462e91047dda26664325bcf929880f3134357003ab62b7963569f63f61db62",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/figures/backends.png",
+      "target": "docs/figures/backends.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9b079581fbc790f43cb66aed29c074a91a76ec41cff6acd734af8cfe0470dce3",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/fdtd_metasurface_fine_prescan.png",
+      "target": "docs/figures/fdtd_metasurface_fine_prescan.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5e2d8d48e91250b9b4c19b9bac6f8e4e63504cbde8f7fa53b36f276cd507f56d",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/fdtd_metasurface_fine_reference_orders.png",
+      "target": "docs/figures/fdtd_metasurface_fine_reference_orders.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9ed2824a78f2871b5934dbfb8a3568d0ee0e4afa2e51f9e19027f760db341435",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/fdtd_metasurface_fine_self_orders.png",
+      "target": "docs/figures/fdtd_metasurface_fine_self_orders.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7bb1e3e507145384f40dfce37da600cfb30ce02ae53424c7f482076fe5867ef8",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/fdtd_metasurface_tall_settled_orders.png",
+      "target": "docs/figures/fdtd_metasurface_tall_settled_orders.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0412d697bace317a18aa27fd3453e41f43215a25d2da8fefb98d1ce3bde3a783",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/fdtd_metasurface_tall_time_calibration.png",
+      "target": "docs/figures/fdtd_metasurface_tall_time_calibration.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5d37113dbf350b8294916d94d51ad5fb61d4f198cc61cde067d12582ac6f0f44",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/oblique-lattice/cell-angle-sweep.png",
+      "target": "docs/figures/oblique-lattice/cell-angle-sweep.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bece132eeec1dc0d84a448139fcf6f4270d520b5f794fa374f9060acb35593bf",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/oblique-lattice/one-mesh-two-arrays.png",
+      "target": "docs/figures/oblique-lattice/one-mesh-two-arrays.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b726f48344526f85c5496b1e8bdc05d9a46ade99f81cf7ee640261dbe4310a6f",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/figures/oblique-lattice/two-frames.png",
+      "target": "docs/figures/oblique-lattice/two-frames.png",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "40f12e89f66b1bbd3901cabc6c8088665437a5c440ee1028ed337cec25ce4814",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/first-order-formulation.md",
+      "target": "docs/theory/rcwa/first-order-formulation.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "63394c1b89c6a7b487fae033b973d9544acfc56a479630e08b9d811519e0808b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/five-slot-limit.md",
+      "target": "docs/theory/rcwa/five-slot-limit.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7804c45e0d637fd72442f0e15d67f4d36975b6536d5ce0c9bc57127ba09f222e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/formulation.md",
+      "target": "docs/theory/rcwa/formulation.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "00e3bdc8919a07e4890947d2b0762da78caed168c0ffe418a3c3b89d86201cf7",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/fourier-truncation-shape.md",
+      "target": "docs/theory/rcwa/fourier-truncation-shape.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2943231cf0253662b70a84b685078f4752c3a57ebd9e1815236073d04ec078cb",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/full-tensor-patterns.md",
+      "target": "docs/guide/rcwa/full-tensor-patterns.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6c2f1261c0553d895f615214e28862461ed9e72713957a6c849b48dc9f2e52bd",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/getting-started/index.md",
+      "target": "docs/getting-started/index.md",
+      "category": "getting-started",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7e25779a2e91204ae5cf3d3a9baa9de48160104377336d715ab4276e9970ca14",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/README.md",
+      "target": "docs/guide/index.md",
+      "category": "guide",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "655dafa9a9711fb5fa07cbd97f8f5916cd7dc10444366dbd00edab250ddb5b09",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/affine-profile-nvf.md",
+      "target": "docs/guide/rcwa/affine-profile-nvf.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "4bdf9e19f34179798cc58da23dd5e95646677bc3923d6e9a3bffd060c3a50e82",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/autodiff.md",
+      "target": "docs/guide/common/autodiff.md",
+      "category": "guide/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "1e69a754e69398feee617ab5beffa09780407bad900aeb64533bd6f1791effe6",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/backends.md",
+      "target": "docs/guide/common/backends.md",
+      "category": "guide/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "4a61ec1973d75542e93e2d3784ce6753ff54dd7965ac73091c2869332ba2672b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/cartesian-pair-gap-autodiff.md",
+      "target": "docs/guide/rcwa/cartesian-pair-gap-autodiff.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f0290146cb5455d01a5c2cf59cb148532846a560724d6a72a5f9ff02c363f071",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/cartesian-pair-gap.md",
+      "target": "docs/guide/rcwa/cartesian-pair-gap.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "714a6be2fbfeadcdc3dfa42f8156da499f3155264e9023c6901656ad4a8f4fde",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/cartesian-pair-opening.md",
+      "target": "docs/guide/rcwa/cartesian-pair-opening.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2f1e99e17d583d8fe2e46e4e87200d882f388cc271f8c4fda5b295a544f562cf",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/cartesian-rectangle-nvf.md",
+      "target": "docs/guide/rcwa/cartesian-rectangle-nvf.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f192029aaff06bd3c97c5b2c8fe8921e130bb5db2f9b88bf924602162f4ed200",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/cartesian-rectangle-pair-nvf.md",
+      "target": "docs/guide/rcwa/cartesian-rectangle-pair-nvf.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "64c6fbfb41ecf80e34825061c2a477cebc51feea48e43f49053c62689a0bc423",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/conforming-nvf.md",
+      "target": "docs/guide/rcwa/conforming-nvf.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d4ce1c8b52ee724b077c4f9b2e277c66ae7d0f4005038add482535f89c07ebaa",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/fd-constitutive-absorber.md",
+      "target": "docs/guide/fdtd/fd-constitutive-absorber.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "52c8d848d6609850709ae85401a9461f4ff7fe681fae02ff442cfe9f1f3186fa",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/fd-differentiation.md",
+      "target": "docs/guide/fdtd/fd-differentiation.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d289c0e57c780c708e896b53585813d58f28cbe289ff6ecb60bd4559ddbdc2f1",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/fd-metasurface.md",
+      "target": "docs/guide/fdtd/fd-metasurface.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c721c54627526bdf990234975535fe9807e0ba047d7254b9a1260735fc80b6bc",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/fd-radiation.md",
+      "target": "docs/guide/fdtd/fd-radiation.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bfd639a38739c7bf8099797c762929f2a7549e3e7c52fbe683e8e6ba3198e51e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/fields.md",
+      "target": "docs/guide/rcwa/fields.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7b29ab534130df2ce71df928ba48123b7f68edd0685d3891c636e7d1e591c2e8",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/general-fdtd.md",
+      "target": "docs/guide/fdtd/general-fdtd.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "357e99a1f208f1b16f839f361d500edffa0e91f5c0293a109886f90d76a37716",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/installation.md",
+      "target": "docs/getting-started/installation.md",
+      "category": "getting-started",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "3e92882d6b8dd86ae3f052fc65f8358cbfe52d37cc8c78f4ef86e7f03c641c6a",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/light.md",
+      "target": "docs/guide/rcwa/light.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2b34fc35b15a97b8e3051ca9668e759494b6f9a1a5639d7f94f06f7ded171b91",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/materials.md",
+      "target": "docs/guide/common/materials.md",
+      "category": "guide/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "88d13b00ca1b22483c64962a02fc25dc42d61fde6bb4aec10452262ad2ba22db",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/numerics.md",
+      "target": "docs/guide/rcwa/numerics.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d0b967a333b6bc9db40885ab126552b7e3ba30b678ddfefe8766268f43d32703",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/nvf-method-selection.md",
+      "target": "docs/guide/rcwa/nvf-method-selection.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7a80da2cfda19a7910d2082deb4e9743c7bdd49e9b56f443801a2b69eb9a4be3",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/quickstart.md",
+      "target": "docs/getting-started/rcwa.md",
+      "category": "getting-started",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "092c4c16dd76940a590527d11cfd8722692d960c337a9f64bb2e8954b73d88a5",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/scene.md",
+      "target": "docs/guide/rcwa/scene.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "148835e15bb7e99ed3e3907a5c66d079294fa00b33f79b9128b6fcecc88b776b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/specs.md",
+      "target": "docs/guide/common/specs.md",
+      "category": "guide/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bd917126a2ec2efa87024db123282665d3a8d42dd365bf031d65905f90ae309d",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/time-domain.md",
+      "target": "docs/guide/fdtd/time-domain.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "28df7d80569ef06f0c2759aede63d09ab386b5213b50fa0e872ae57897c09dd5",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/guide/what-is-wavebit.md",
+      "target": "docs/getting-started/overview.md",
+      "category": "getting-started",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7351fc159b3fcd76d25fed90bb811901cadb9ad23582e1801456298a469206b5",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/half-space-power-audit.md",
+      "target": "docs/validation/rcwa/half-space-power-audit.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6353ff9dcf24bfeffceaaa1afcc0ddbd7352e8b1e9e7f43c5fc676e2b043e9a5",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/index.md",
+      "target": "docs/index.md",
+      "category": "site",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "28c961299d53799156917cfe93ea65a5b0ee7cbbf62ef9db8dc51322b6756df7",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/learn/index.md",
+      "target": "docs/learn/index.md",
+      "category": "learn",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "05f74bec9dfd0ebdf22b305b4a7d7ce9ab40514475f8ac3e185692bdb948edbb",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/locales/ko/LC_MESSAGES/index.po",
+      "target": "docs/locales/ko/LC_MESSAGES/index.po",
+      "category": "infrastructure",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "aa98b9956f173041afb73dde8a1c40439519fda425b0c53f1f61bbef499f6488",
+      "reason": "Retain documentation configuration, translation resources, theme assets and structural metadata."
+    },
+    {
+      "source": "docs/magnetic-materials.md",
+      "target": "docs/theory/rcwa/magnetic-materials.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "33b08164cf8a1bef90a373dbc51e9be50687ced4f1b879aac75106851cf68bf4",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/multimode-incidence.md",
+      "target": "docs/guide/rcwa/multimode-incidence.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "42aebf9b9c93c3279cb2b47173ccf4e70afe651272b24559a87c07c190bb3838",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/negative-index-media.md",
+      "target": "docs/theory/rcwa/negative-index-media.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c715a1066bf7700f895154658939b96668c1f1103c4c79c1b30ec0373eaac2af",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/normal-field-known-limits.md",
+      "target": "docs/validation/rcwa/normal-field-known-limits.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c563cf26c30ec4a5b0366ef24366a9cbebd6d46a4c741fcac2619c3ed691b34f",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-affine-cells.md",
+      "target": "docs/validation/rcwa/nvf-affine-cells.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9e7fef404a91ddf25263cc5417ca36128b4b6724e9b9c6a3a61b2ddfc02decc1",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-affine-convergence.md",
+      "target": "docs/validation/rcwa/nvf-affine-convergence.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b0b9dbe11c01c32511d79070d7051014155c62c5bd249192c7f68f15ec640da7",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-analytic-polynomial-traces.md",
+      "target": "docs/validation/rcwa/nvf-analytic-polynomial-traces.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c6f9c68f0e23601e2e27737932d07374225b8374d4722e707e9a15722dabcd4d",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-cartesian-cell.md",
+      "target": "docs/validation/rcwa/nvf-cartesian-cell.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "39b908d00042e43421dc8914995fccb1f802938ac1c4aa7bd9a9318493450598",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-cartesian-pair-gap-autodiff.md",
+      "target": "docs/validation/rcwa/nvf-cartesian-pair-gap-autodiff.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "721a4fe11468e9d16daf58e776bc1b0585c247bfcc2afd2d3987022f09200020",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-cartesian-pair-gap.md",
+      "target": "docs/validation/rcwa/nvf-cartesian-pair-gap.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5471e773b369f95de2d75ab76430088089965707063bebc26a22895178677426",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-cartesian-pair-opening.md",
+      "target": "docs/validation/rcwa/nvf-cartesian-pair-opening.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "eebbb6347bde6d4f7c303d607cf2df3a93902b2bcf63f00b31c470feed9d2715",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-cartesian-pair.md",
+      "target": "docs/validation/rcwa/nvf-cartesian-pair.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "ab320f9e6564dbc28ef8e1a3d352299833d59ca9480cea2723e2e941d40d11be",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-cell-corrector.md",
+      "target": "docs/validation/rcwa/nvf-cell-corrector.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "21334fd4c0676bf1134f221e9363fff5bfdf7067e5d0730c2ca533abe50d829b",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-common-loss.md",
+      "target": "docs/validation/rcwa/nvf-common-loss.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a7713065f5218adaded6a9f0201dc63c2f4e6ec03c42cb41287d239da7e3f994",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-complex-material.md",
+      "target": "docs/validation/rcwa/nvf-complex-material.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b279dd449f55b37ba6780f7a0a45cc67b81795e8ecf8acbf70ee92d1bfdddd22",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-contact-energy-coordinates.md",
+      "target": "docs/validation/rcwa/nvf-contact-energy-coordinates.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6cb70cfa2c6ee72cd08a31573bfaebefd0105f6ff73259309cca5528308e8a50",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-contact-followup.md",
+      "target": "docs/validation/rcwa/nvf-contact-followup.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f660073a0ef9a4f8c0034918825e11fddea067ee5f05c6c46719d8c9b69d64f2",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-contact-fourier-precision.md",
+      "target": "docs/validation/rcwa/nvf-contact-fourier-precision.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a29f2892cd45af50e3ef3c0c167e8c178f0ac2ac5fbf2576dae436df324f99aa",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-contact-solver.md",
+      "target": "docs/validation/rcwa/nvf-contact-solver.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6576640c89c99e2d672b0689e974f865c88f1c82fe27cbdcfdfb793573632fa2",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-continuous-flux.md",
+      "target": "docs/validation/rcwa/nvf-continuous-flux.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "caab38b1920a932caf9c24ba3f18ee3fc119714f220f7df27656f648ba29a902",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-coupled-pair-seam-galerkin.md",
+      "target": "docs/validation/rcwa/nvf-coupled-pair-seam-galerkin.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "fcb79972a8f75d51586175c9fdf48a25ae836b6bd923549b8432fa67e2d6d356",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-coupled-seam-galerkin.md",
+      "target": "docs/validation/rcwa/nvf-coupled-seam-galerkin.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0d8cd2658ed519378ff8ebbb461a842ca25f1a3194d41b6dcaba6a7c3cb45f64",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-directional-convergence.md",
+      "target": "docs/validation/rcwa/nvf-directional-convergence.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d6f1e0332952c745379b10455ab2e755c066d6807d8037c412c3f0171292efc1",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-energy-closure.md",
+      "target": "docs/validation/rcwa/nvf-energy-closure.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d7eb8ec19bd53e60532b40ead91a9b333687a5d44f33e2b4b91fca51e5be6c4e",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-energy-engine.md",
+      "target": "docs/validation/rcwa/nvf-energy-engine.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d465992148ff61df126c3fa48f873df349c75f49b44c985b9ed0afd076af3a79",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-galerkin-error.md",
+      "target": "docs/validation/rcwa/nvf-galerkin-error.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b949798e218318677ad082499d7c50e230be7158ecb3d22f7a4e36e99591ce85",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-gap-convergence.md",
+      "target": "docs/validation/rcwa/nvf-gap-convergence.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "3d0d769aca551123473461e1406c5c86ed8da358163fe8438932ab520aff382a",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-harmonic-coordinates.md",
+      "target": "docs/validation/rcwa/nvf-harmonic-coordinates.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "783af431c962ce784a9bd025d9c9746b174e5c79e08baa7a17c05b0dd56f8e45",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-harmonic-energy.md",
+      "target": "docs/validation/rcwa/nvf-harmonic-energy.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6facffba1f4621a4437297f27dd71d0d41ec6f9fbbae9fae6489cb1e22768826",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-independent-fem.md",
+      "target": "docs/validation/rcwa/nvf-independent-fem.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8fd1265a80dd0625c6def49c42491e0f612ebb5b152a59c0298120d1a9539caf",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-interface-resolution.md",
+      "target": "docs/validation/rcwa/nvf-interface-resolution.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8a713dc8d500b6789905c0f6d211418ad67738977bb0a35dda7e5c232abb2a6e",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-lattice-rebasing.md",
+      "target": "docs/validation/rcwa/nvf-lattice-rebasing.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "59594cd0f8a74ca0e8f6a2823f575f0486beb0242bf151857dbc07c2a79ec0b4",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-layer-axes.md",
+      "target": "docs/validation/rcwa/nvf-layer-axes.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "4a9cc9a0f6e841afb07dd839777a417713c65b097bb2f6e7c0745d265cd3078d",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-local-flux.md",
+      "target": "docs/validation/rcwa/nvf-local-flux.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2b6b9526bc56cae6b4587c1ada44cca4d20f48e395177bedd34bec245ef24ff9",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-metal-inverse-rule.md",
+      "target": "docs/theory/rcwa/nvf-metal-inverse-rule.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6f27348b5bc7d3de30be309300897df7139d6c99a45305babec8ce474ab4bbb6",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/nvf-mirror-convergence.md",
+      "target": "docs/validation/rcwa/nvf-mirror-convergence.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "af1827e3dc61d21fe1b340b0517ede6094c6202b6e6c71888a4c96cd79877d78",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-mirror-doubling.md",
+      "target": "docs/validation/rcwa/nvf-mirror-doubling.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f13a915493384d07320c35a1350622b3fbe201db34202e95a2826a6fa0209445",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-mirror-modal-memory.md",
+      "target": "docs/validation/rcwa/nvf-mirror-modal-memory.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "da488d2d15a7221a162dd33412e204ac1bfe452bfef8a87b0db7f61b3788c9a6",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-mirror-reference.md",
+      "target": "docs/validation/rcwa/nvf-mirror-reference.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8188ce14c3abcf03224800c95c044095aeda525f60062d20948fccee95fd2c80",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-normal-methods.md",
+      "target": "docs/theory/rcwa/nvf-normal-methods.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "112d6af75a728868ba31b252fcc91d85834032d67ec00d38f8291ee58892331b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/nvf-pair-corner-potentials.md",
+      "target": "docs/validation/rcwa/nvf-pair-corner-potentials.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a289b1d27a3459882e73ca369c25795e583a4bac59710dd4eac595980f3880da",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-galerkin.md",
+      "target": "docs/validation/rcwa/nvf-pair-galerkin.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "1e572aa91f9b453b1c65eddd92f0b4f99551a8afacf9ebbe237e9318006c1382",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-junction-potentials.md",
+      "target": "docs/validation/rcwa/nvf-pair-junction-potentials.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7fab9d39c6dd7095454a82758aec71137567ee7cbbb3f681f315f3e5113348dc",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-material-sector.md",
+      "target": "docs/validation/rcwa/nvf-pair-material-sector.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "70f811289c9a0a2f7ffbe4fbeb461182fa7fe62c1e49de0e1e73038ff7512a3e",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-normal-frame.md",
+      "target": "docs/validation/rcwa/nvf-pair-normal-frame.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "70bef1d6e22a9828201f3e92915ad1d3a394d914eee615bdae6e4c051ecd2f03",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-quadratic.md",
+      "target": "docs/validation/rcwa/nvf-pair-quadratic.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7e0a66aabeacfbc0e34877b3a7c4ed5ca08f6dc81c155a46f0c3da506725f2a5",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-radial-potentials.md",
+      "target": "docs/validation/rcwa/nvf-pair-radial-potentials.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8e992805ce3aedcd318c9c5d977f80081cd7f230fe87cd443049258575f943c1",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-refinement.md",
+      "target": "docs/validation/rcwa/nvf-pair-refinement.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0b24c921c991f7c2afbc1deb7682b541606c1323f02d7aac0d24560b965cb4b6",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-symmetric-potentials.md",
+      "target": "docs/validation/rcwa/nvf-pair-symmetric-potentials.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c15f4e4a267cf0725b396a4f4d92cfcd59c12b8580f2b02186e0bf48d574306b",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-pair-transmission-potentials.md",
+      "target": "docs/validation/rcwa/nvf-pair-transmission-potentials.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f1e9db182c4575a718152c10336a251641734e75d716bb807a38d06bc42883a7",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-paired-frame.md",
+      "target": "docs/validation/rcwa/nvf-paired-frame.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8ba5d9fbbd025b9038d54c66eed891518910452967273b454c24c30296274ebf",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-partitioned-gap-energy.md",
+      "target": "docs/validation/rcwa/nvf-partitioned-gap-energy.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "715c2dce661cbf03aa1fe002b41edb4763b44514f8e46bccc7e0fc47a877f57c",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-passive-closure.md",
+      "target": "docs/validation/rcwa/nvf-passive-closure.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9ec9c985dc9f3229527530b4b5c48d56239ba8f4b1165154ba8d7bc25d866538",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-periodic-galerkin.md",
+      "target": "docs/validation/rcwa/nvf-periodic-galerkin.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "28c0061638d1623e5a46e34f46822bb6194b85926bb43ce727d32e8428524a21",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-polynomial-body.md",
+      "target": "docs/validation/rcwa/nvf-polynomial-body.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "fff0997d3bfe9561f1c697ce9ca39f50f2bc52fef4e78548bbc19d8391679e5f",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-polynomial-flux.md",
+      "target": "docs/validation/rcwa/nvf-polynomial-flux.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "4b74c04b86c451bcc28dd008ccee1c5b09b7bca08a206120f0ba20d50363198c",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-polynomial-galerkin.md",
+      "target": "docs/validation/rcwa/nvf-polynomial-galerkin.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "fde47c1af705b0542e31ae819465d64ed87a86ec06093209eee361ee0957526c",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-polynomial-pair-coupling.md",
+      "target": "docs/validation/rcwa/nvf-polynomial-pair-coupling.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6032a96fc8982143425049dbef9cae6180b34e6222c7985ea8e640fd268834ae",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-posed-gap.md",
+      "target": "docs/validation/rcwa/nvf-posed-gap.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "93ab115c29c303839d0696a2c75b7171e288a728a299cadc5cad3ab61e3db2e0",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-positive-coordinate-precision.md",
+      "target": "docs/validation/rcwa/nvf-positive-coordinate-precision.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "095d6f1c15a67f5d75bc28f5dbc9c2220cf457478512efc99011c63ac0c90a75",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-rectangular-cells.md",
+      "target": "docs/validation/rcwa/nvf-rectangular-cells.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "985fecc2787ea2808ebd8300f12ac68b6311c8efae27cdde5a96207410b22c27",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-retained-contact-solve.md",
+      "target": "docs/validation/rcwa/nvf-retained-contact-solve.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "638145265a83929d4cb9920fec9f7d2f326af78320aa94a4d3c3d59a2b5daf55",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-scattering-doubling.md",
+      "target": "docs/validation/rcwa/nvf-scattering-doubling.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a7bf0278da20bdbfc6fe6bce2a87282f4d357aefb18801692b0ae037c28dd726",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-seam-trace.md",
+      "target": "docs/validation/rcwa/nvf-seam-trace.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8d5756542b27b98ffff2796517fd143e46bd594e29cd68c9719dfc7061487a86",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-separated-rectangles.md",
+      "target": "docs/validation/rcwa/nvf-separated-rectangles.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bb734fd66a8df1330e6f89cd0f8d7e60b09976143edb98b86d9ba860de9e18c7",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-thin-gap-energy.md",
+      "target": "docs/validation/rcwa/nvf-thin-gap-energy.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "cead399c402e9c11c26b1ea45a7198568ceabf0e016940f574869c856f6df288",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/nvf-upsampling.md",
+      "target": "docs/validation/rcwa/nvf-upsampling.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "529a1210687301a7c49e2b073e84d911b5fa3bffb0fc3a9d33e1cf7aa5ee426d",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/oblique-lattice.md",
+      "target": "docs/theory/rcwa/oblique-lattice.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6727be8655baf7a0009618001f235fe390eb96e48fddc311f94fb7f236388b4b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/off-diagonal-slot-convention.md",
+      "target": "docs/theory/rcwa/off-diagonal-slot-convention.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "ae166e498ca2554601d17e53f185410197d88a7da968ce3cdaa6236d27dfd10e",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/parametric-modeling.md",
+      "target": "docs/guide/rcwa/parametric-modeling.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c226eafea93a645296d86b7f7281510dd03527f0ea9ce3a8d4e61ea5cca1c9cf",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/patterned-anisotropic-factorization.md",
+      "target": "docs/theory/rcwa/patterned-anisotropic-factorization.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "404b3c100098a9773fee1ac36c5388acf0a8a8938e14a1a7b1d3c12755fec47b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/rayleigh-handling-walkthrough.md",
+      "target": "docs/guide/rcwa/rayleigh-handling-walkthrough.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "64c6acccef94b7f2bc0a7571cb1b571afacb1bd48e19157498d4e7ffa4ed764f",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/rayleigh-points.md",
+      "target": "docs/theory/rcwa/rayleigh-points.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6315dc73714fb374de24cfe0a23a6636f530ceb6ed2e27f34cb3305bfa77d8ba",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/reference/api.md",
+      "target": "docs/reference/api.md",
+      "category": "reference",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f3ad0102791f634bc3ffe246443272a0487428c2dbb3635b64c6f63d5a4a8a9a",
+      "reason": "Keep one generated public-symbol reference; split sections/navigation without duplicating declarations."
+    },
+    {
+      "source": "docs/reference/index.md",
+      "target": "docs/reference/index.md",
+      "category": "reference",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "873532b42f7476817d869a50744a7334e4c5b77d5920ffda708733ab30e5de1b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/reference/keywords.md",
+      "target": "docs/reference/keywords.md",
+      "category": "reference",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "debf4edf7c3037e5c055ccf377c6f8c59d6ed0206569849224bc18198b95f4c9",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/result-guards.md",
+      "target": "docs/reference/common/result-guards.md",
+      "category": "reference/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "66dcd1abd22f05b35d097f9ee1a6eaf8873b6e6406ba9580095f75e761cc76f7",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/tensor-li-factorization.md",
+      "target": "docs/theory/rcwa/tensor-li-factorization.md",
+      "category": "theory/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bd15eee4481ad8caa8901ed5c8dc864445358db72ae7036436754c0613991246",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/tensor-shape-integration.md",
+      "target": "docs/guide/rcwa/tensor-shape-integration.md",
+      "category": "guide/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "ebefea66d39553b3218a5d079d2382cb2e49da6153b4e1bb34f9f3f87bbc2003",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/theory/index.md",
+      "target": "docs/theory/index.md",
+      "category": "theory",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5f40d9bf1c0a46f7683ce698356ededc84a0a9b04a3b2c970f803499b5f3adad",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/time-convention-audit.md",
+      "target": "docs/validation/rcwa/time-convention-audit.md",
+      "category": "validation/rcwa",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "db2badb1857c49d3122103da25029ac9e401aca3f68e167c9dcf6894d7153a41",
+      "reason": "Derivation and measured research evidence retained together; preserve scope/limits and study citations."
+    },
+    {
+      "source": "docs/torch-compile.md",
+      "target": "docs/development/torch-compile.md",
+      "category": "development",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b97fb2854278e71231ee7cf41c01fed490642a0e1c615fb33f598529f04b3f8b",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/torch-upstream-defects.md",
+      "target": "docs/development/torch-upstream-defects.md",
+      "category": "development",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "9408a0c1ca05388649027b15cc434121cfa8bec0ae24648c73ce8541acadd2ce",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/what-a-solve-answers.md",
+      "target": "docs/reference/common/what-a-solve-answers.md",
+      "category": "reference/common",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a8eb4b1656832a7ef1c1202cafa7de5cbefe0ab5ae9487f6db22e71aec1419cc",
+      "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    }
+  ]
+}

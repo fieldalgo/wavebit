@@ -1,0 +1,19 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.14, pytest-9.1.1, pluggy-1.6.0 -- [host]/miniconda3\envs\wavebit\python.exe
+rootdir: [host]/<worktrees>\wavebit
+configfile: pyproject.toml
+plugins: anyio-4.12.1, timeout-2.4.0, xdist-3.8.0
+collecting ... collected 1 item
+
+tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[lossy-pair-numpy] FAILED [100%]
+
+================================== FAILURES ===================================
+_ test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[lossy-pair-numpy] _
+tests\test_fd_conductive_stack.py:339: in test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend
+    assert max(row['error_r']) < r_limit and max(row['error_t']) < t_limit
+E   assert (0.06623720336036866 < 0.007)
+E    +  where 0.06623720336036866 = max([0.04492374516845791, 0.05761697004957361, 0.06623720336036866])
+=========================== short test summary info ===========================
+FAILED tests/test_fd_conductive_stack.py::test_oblique_conductive_stack_matches_independent_multilayer_on_each_backend[lossy-pair-numpy] - assert (0.06623720336036866 < 0.007)
+ +  where 0.06623720336036866 = max([0.04492374516845791, 0.05761697004957361, 0.06623720336036866])
+============================= 1 failed in 14.16s ==============================

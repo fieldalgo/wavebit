@@ -18,7 +18,7 @@ A 1e-4 oracle is worth having precisely because of what this repository has actu
 wrong. The sign-convention defect fixed in ``9824f0d`` moved fields by 2e0; a transposed raster
 reverses the s/p split outright; a swapped component is order-1. Every one of those is four
 orders above this floor. What 1e-4 cannot see is slow numerical drift — that is
-``tests/data/golden_field.npz``'s job, and it is a different claim.
+``tests/fixtures/legacy_rcwa/golden_field.npz``'s job, and it is a different claim.
 
 **The amplitude convention is fitted, and then checked against a closed form.** fmmax's "unit
 mode amplitude" is not this project's "unit incident flux". Each case fits one complex scale by
@@ -29,18 +29,23 @@ incidence points (fmmax's corner, this library's centre; :func:`expected_scale`)
 three constants is deliberate: a table is satisfied by anything that reproduces the numbers,
 whereas a case added at a new angle is genuinely checked by the formula.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _fmmax_field_cases import (CASES, MAX_ORDER, PERIOD, RES_Z,  # noqa: E402
-                                THICK, WL, fine_res_x, raster, x_samples)
+from tests.references._fmmax_field_cases import CASES, MAX_ORDER, PERIOD, RES_Z, THICK, WL, fine_res_x, raster, x_samples
 
 GOLDEN = np.load(HERE / 'golden_fmmax_field.npz')
 
@@ -82,7 +87,7 @@ def _reconstruct(name, theta, pol):
     the flip is invisible; the layer is where it is not.
     """
     structure = raster(name)[None, :, :]
-    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=(PERIOD, PERIOD),
+    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=(PERIOD, PERIOD),
                           truncation_order=(MAX_ORDER, MAX_ORDER), wavelength=WL, thickness=[THICK],
                           structure=structure, theta=np.deg2rad(theta), phi=0.0,
                           psi=np.pi / 2 if pol == 's' else 0.0, answers='field')

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 626" role="img" aria-labelledby="title desc">
+<title id="title">방법·투영·샘플 수·모드 수는 별개의 선택</title><desc id="desc">raster_normal_method는 raster 방향장 생성법, shape_nvf_grid_size는 shape 투영장 샘플 수이며 nvf_projector는 양쪽 NVF에 쓰인다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="626" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">방법·투영·샘플 수·모드 수는 별개의 선택</text>
+<rect x="30" y="85" width="450" height="140" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">fourier_coefficients</text>
+<text x="48" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">재료 ε의 계수를 얻는 방법</text>
+<text x="48" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">sampled / integrated</text>
+<rect x="520" y="85" width="450" height="140" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="538" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">factorization</text>
+<text x="538" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">불연속 곱을 처리하는 규칙</text>
+<text x="538" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">li / nvf</text>
+<rect x="30" y="255" width="450" height="140" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="289" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">raster_normal_method</text>
+<text x="48" y="325" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">래스터 방향장 생성법 · raster NVF</text>
+<text x="48" y="352" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">distance / contour / spectral / smooth</text>
+<rect x="520" y="255" width="450" height="140" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="538" y="289" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">nvf_projector</text>
+<text x="538" y="325" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">투영 P의 구성 방식 · 양쪽 NVF</text>
+<text x="538" y="352" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">linear / circular · 입사 편광과 별개</text>
+<rect x="30" y="425" width="450" height="140" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="459" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">shape_nvf_grid_size</text>
+<text x="48" y="495" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">쉐입 투영장 샘플 수 · shape NVF</text>
+<text x="48" y="522" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">128 → 한 주기에서 128×128개 점</text>
+<rect x="520" y="425" width="450" height="140" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="538" y="459" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">truncation_order</text>
+<text x="538" y="495" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">광학 계산에 남기는 Fourier 차수</text>
+<text x="538" y="522" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">(2, 1) → (2×2+1)(2×1+1) = 15개</text>
+<text x="30" y="609" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">래스터 방향장 생성법과 쉐입 투영장 샘플 수는 적용 대상이 서로 다름</text>
+</svg>

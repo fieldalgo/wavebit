@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 610" role="img" aria-labelledby="title desc">
+  <title id="title">손실 입사 매질의 위상 방향과 감쇠 방향</title>
+  <desc id="desc">위쪽 흡수성 반무한 매질에서 위상 벡터의 실수부는 아래쪽 법선과 theta 각을 이루며, 감쇠 벡터인 파수의 허수부는 아래쪽을 향한다. 같은 높이의 두 점에서 단일 입사파의 세기는 같다. 구조와의 경계면에서 입사 전력을 정규화한다.</desc>
+  <defs>
+    <marker id="phase" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#117c77"/></marker>
+    <marker id="decay" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#b56626"/></marker>
+    <marker id="axis" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker>
+  </defs>
+  <style>
+    text {font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px}
+    .small {font-size:17px;fill:#546779}
+    .heading {font-size:24px;font-weight:650}
+    .label {font-size:21px;font-weight:600}
+  </style>
+  <rect width="1000" height="610" fill="white"/>
+  <text x="30" y="39" class="heading">손실 입사 매질에서도 표면을 따라 세기가 균일한 파를 지정합니다</text>
+  <rect x="30" y="67" width="596" height="462" rx="12" fill="#f6fafc" stroke="#cad7df" stroke-width="1.5"/>
+  <text x="53" y="103" class="label">top · 흡수성 반무한 매질</text>
+  <text x="53" y="130" class="small">xz 단면 · 위쪽 입사 · φ = 0</text>
+
+  <line x1="345" y1="154" x2="345" y2="367" stroke="#879ba9" stroke-width="2" stroke-dasharray="6 6"/>
+  <text x="356" y="174" class="small">표면 법선</text>
+  <line x1="237" y1="181" x2="339" y2="358" stroke="#117c77" stroke-width="5" marker-end="url(#phase)"/>
+  <text x="97" y="193" class="label" style="fill:#117c77">위상 방향</text>
+  <text x="126" y="221" style="fill:#117c77">Re(k)</text>
+  <path d="M345 291 A76 76 0 0 0 307 301" fill="none" stroke="#117c77" stroke-width="2.5"/>
+  <text x="312" y="278" class="heading" style="fill:#117c77">θ</text>
+
+  <line x1="524" y1="205" x2="524" y2="350" stroke="#b56626" stroke-width="4" marker-end="url(#decay)"/>
+  <text x="476" y="166" class="label" style="fill:#9a531c">감쇠 방향</text>
+  <text x="496" y="193" style="fill:#9a531c">Im(k)</text>
+
+  <line x1="95" y1="240" x2="575" y2="240" stroke="#8297b8" stroke-width="1.5" stroke-dasharray="4 5"/>
+  <circle cx="95" cy="240" r="6" fill="#3d6192"/>
+  <circle cx="575" cy="240" r="6" fill="#3d6192"/>
+  <text x="83" y="268" class="small">A</text>
+  <text x="568" y="268" class="small">B</text>
+
+  <line x1="54" y1="367" x2="602" y2="367" stroke="#546779" stroke-width="2"/>
+  <rect x="54" y="368" width="548" height="78" fill="#e7ecf0"/>
+  <text x="79" y="411" class="label">유한한 층들</text>
+  <text x="598" y="391" class="small" text-anchor="end">입사 쪽 경계면</text>
+  <line x1="54" y1="447" x2="602" y2="447" stroke="#879ba9" stroke-width="1.5"/>
+  <text x="79" y="487" class="label">bot · 아래쪽 반무한 매질</text>
+
+  <rect x="651" y="67" width="319" height="462" rx="12" fill="#fff" stroke="#cad7df" stroke-width="1.5"/>
+  <text x="675" y="109" class="label">같은 높이의 A와 B</text>
+  <text x="675" y="145">입사파의 세기는 같습니다.</text>
+  <text x="675" y="174">위상은 다를 수 있습니다.</text>
+  <text x="675" y="213" class="label" style="fill:#3d6192">kx · ky는 실수</text>
+  <line x1="675" y1="239" x2="946" y2="239" stroke="#dbe3e8"/>
+  <text x="675" y="280" class="label" style="fill:#9a531c">흡수는 수직 방향 감쇠로</text>
+  <text x="675" y="316">아래로 갈수록 입사파가</text>
+  <text x="675" y="345">약해집니다. kz는 복소수입니다.</text>
+  <line x1="675" y1="376" x2="946" y2="376" stroke="#dbe3e8"/>
+  <text x="675" y="417" class="label">전력의 기준면</text>
+  <text x="675" y="453">경계면에서 입사파만의</text>
+  <text x="675" y="482">전력을 1로 놓습니다.</text>
+
+  <line x1="76" y1="577" x2="138" y2="577" stroke="#546779" stroke-width="2" marker-end="url(#axis)"/>
+  <line x1="76" y1="577" x2="76" y2="543" stroke="#546779" stroke-width="2" marker-end="url(#axis)"/>
+  <text x="143" y="584" class="small">+x</text>
+  <text x="38" y="553" class="small">+z</text>
+  <text x="202" y="559" class="small">θ는 Re(k)와 구조 안쪽 법선(−z)이 이루는 각도입니다.</text>
+  <text x="202" y="588" class="small">단일 입사파만 그렸습니다. 반사파와 구조 안의 장 분포는 생략했습니다.</text>
+</svg>

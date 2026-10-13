@@ -6,6 +6,8 @@ Wavebit point sampling matches Meep's documented unsmoothed dispersive term;
 average sampling checks the tangential half-cell alternative against Airy.
 The pulse has zero DC by symmetry to avoid long CPML low-frequency tails.
 """
+
+from wavebit.compat import legacy as _legacy_wavebit
 import argparse
 import json
 import sys
@@ -69,7 +71,7 @@ def worker(backend,resolution,model,pml_width=1.,duration=24.,pole_sampling="ave
                 fill[start:stop+1]=1
                 fill[[start,stop]]=.5
             source=np.zeros((3,)+shape);source[0,3*resolution]=1
-            out=wavebit.fdtd_grid(1+(eps_inf-1)*fill,spacing=(1/resolution,)*3,dt=dt,steps=steps,
+            out=_legacy_wavebit.fdtd_grid(1+(eps_inf-1)*fill,spacing=(1/resolution,)*3,dt=dt,steps=steps,
                                  source=source,pulse=pulse((np.arange(steps)+.5)*dt,centre),backend='jax',
                                  poles=tuple((w,g,s*(fill if pole_sampling=="average" else (fill>0))) for w,g,s in poles),
                                  pml_cells=round(pml_width*resolution),pml_wavelength=centre,

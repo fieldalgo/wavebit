@@ -1,0 +1,25 @@
+{
+  "decision": "accepted",
+  "accepted_utc": "2026-10-07T03:25:12.565337+00:00",
+  "calibration_manifest": {
+    "path": "studies/results/fdtd_decay_stop_calibration_attempt1.json",
+    "sha256": "7a325fcaf9a4e18e0e02db193d23926aeeced7ca5a6165c65512b2d73715084a"
+  },
+  "disclosure": {
+    "path": "studies/results/fdtd_decay_stop_calibration_disclosure.json",
+    "sha256": "f4647f5bb5fe2bf157a0f5b9137fbd7d50bfcc781bb46faf2c744320b8a3b7bd"
+  },
+  "threshold": 1e-05,
+  "window": 1.0,
+  "prefix_scaled_ceiling": 2.842170943040401e-14,
+  "analytic_scaled_ceiling": 2.842170943040401e-14,
+  "spectral_relative_ceiling": 1e-06,
+  "budget_justification": "All six disclosed rows have exact actual-prefix arrays (relative maximum0). The three uniform-conductor closed-form responses have worst relative error6.580664815877184e-15; the inherited128eps float64 budget2.842170943040401e-14 provides a4.32fold rounding allowance without changing any detector criterion. Its test use is scaled absolute by max(1, reference peak), not a weak-signal relative certificate. The largest claimed-decay temporal spectral comparison is7.457789111015084e-7; round up to1e-6 (1.34fold), an empirical gate for these registered scenes, not a user-facing accuracy guarantee. All open-Dipole rows reachcap; their approximately1.006e-10 temporal differences remain disclosed but do not turn cap into successful convergence. No response-led fixture/source/helper change follows calibration.",
+  "test_budget_changes": {
+    "tests/test_fd_decay_stop.py": {
+      "before_sha256": "711c42769aa0ca5971fe461f30009c725b33e45c17087b0b1b8d317fe486c757",
+      "after_sha256": "3c8212559c91fae4ff5dd64e350286cf78be733d0a1959018d85266986330b49",
+      "reason": "Select previously declared128eps candidate only after six-row disclosure; only allowance binding/comment changed, tests/fixtures/criteria unchanged."
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "source_sha256": "ab1c812fb1b30e667e37fc9c2002fed9c5355e7672a56fddd76a9a9935c6dc54",
+  "measurement_and_calculation_ast_unchanged": true,
+  "translated_labels": 72,
+  "solver_executed": false,
+  "renderer": "tools/docs/learning/draw_metal_records.py",
+  "reason": "English labels for the default documentation language. The original recorded numbers and plotting calculations are preserved.",
+  "figures": [
+    {
+      "path": "docs/figures/learn/nvf/13-a-441-laurent.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-441-laurent.png",
+      "original_sha256": "8e838b969311a4f0224c448a63f3de1f735bb385fe01cc4e490df5b265fceb48",
+      "english_sha256": "730732b8b2240875da443fe3680b2acf44226f94a346e238bff793bbbdb1a32d"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-hole-1369-spectrum.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-hole-1369-spectrum.png",
+      "original_sha256": "ee9ea3f7e7b1d01f22a3dceae4bb06b7379443c6849dbb7372f324c57cc5269a",
+      "english_sha256": "681cc727a84759c24df787bdf144146cf014fbbad091cbdca0d316e42fea8ee9"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-hole-1681-spectrum.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-hole-1681-spectrum.png",
+      "original_sha256": "27f07a1907edb88ed7035c83f46aa3745beb08f1e50d27503ebf940752ccca93",
+      "english_sha256": "8bc10008178526d7d6b4c83021d514fd8eab3a01c4549ec040106314748e8883"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-hole-441-spectrum.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-hole-441-spectrum.png",
+      "original_sha256": "059d9641c677fd60b4221076d7c6ad5a49db6f89ea3dbdc6b2cd9bed249f7348",
+      "english_sha256": "34ceb0dfe837fbea3e8f7888b83e0023bef78871696735e99397e27281922f37"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-a-peak-vs-harmonics.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-a-peak-vs-harmonics.png",
+      "original_sha256": "2a1c8031058c8d4b3b5c802cb875716938787e02ad3896f745098fad8f68ba66",
+      "english_sha256": "5a2f4ccfe6e97f212867ae4da94ab81d52a320cae766f4b9c2103cc12c6cb596"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-441-laurent.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-441-laurent.png",
+      "original_sha256": "7f3b1097d4e61a8b60c8262d4a979a55563ea68f05f49c3112c7424297e8c513",
+      "english_sha256": "1c49ba991f6467d9257c85a6e7d219f2ef419f8dce4a46c63f35734fcd387da8"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-dip-vs-harmonics.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-dip-vs-harmonics.png",
+      "original_sha256": "15047b2a0b4703aaa025addb269e1042797781ea653735d7dec9a899b496aaed",
+      "english_sha256": "3c0cc455fdb667e9ee4661338d1e9ee01806b271acbc23db6e5440ca7186f0bc"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-121-rt.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-121-rt.png",
+      "original_sha256": "06bea824b1734582cd416de173bf13b335113ef5fe3a2512a1e3b63d22922dd8",
+      "english_sha256": "4aea2db12f8715940b2977dfd81caac850d23227e8a3e0114843719316e153db"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-1225-reflection.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-1225-reflection.png",
+      "original_sha256": "5164ab2361fb778dc9a2dc79f48c97679ae2f3d4b6be60fb39f10ebb66712b9b",
+      "english_sha256": "a30338b85c9a5305769a4a79ac6d949fd82282f98665484eaee851e8cc7aada8"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-441-rt-fmmax.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-441-rt-fmmax.png",
+      "original_sha256": "217285de4b8e4921ce43db3586c317514513ee5205601914be30f2891e5c96ea",
+      "english_sha256": "b287540cd5f0b304f26c3862b22061335a529734e9cea1e9517970370cfe21f6"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-b-disk-625-rt.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-b-disk-625-rt.png",
+      "original_sha256": "cff87b3a0be28e26ed30e1ae8d7303cdcd3525d6dbb3450ee43ea0bc4710210a",
+      "english_sha256": "40139e0148828ae1120742f978f3e83c722971aa98349a6971d4e57fdf9ae5c9"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-e-ellipse-pyx-ladder.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-e-ellipse-pyx-ladder.png",
+      "original_sha256": "a4d47e4caf746467fb0f26394f1f382207e4151fd70d4d1d15da5e88dd58407b",
+      "english_sha256": "0f4be6974d744f5056c1b62f5aeba6a0a832c608812212eecff8609dbe815bf8"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-e-energy-deviation.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-e-energy-deviation.png",
+      "original_sha256": "864e100ccbdfef44739bddf18eb20b2c825be99a71b9b212f208dfcd38e0e86f",
+      "english_sha256": "029da81d5bdcb0bd48984c836267c274e9bb5d80a813a44ed09a2ac0db3dfd5f"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-inverse-rule-pole.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-inverse-rule-pole.png",
+      "original_sha256": "d8ed50db56ecd87fa3d9e7d45d15f9f5addb02d47ac72ef57c5b4827b90c6f4f",
+      "english_sha256": "859fb8a4b24408a6e4aee9b154c091fd1722bd644067cb21ead3247268947e30"
+    },
+    {
+      "path": "docs/figures/learn/nvf/13-j-dip-vs-harmonics.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/13-j-dip-vs-harmonics.png",
+      "original_sha256": "6fb685963e8798b7abb1ec45d8c934e15fa14fa2b253bbaf9733e4a97f154916",
+      "english_sha256": "316eb057d140cbc9fe9d8c58bafd119ba60659d038d7f62fa2bd8a87dbe6113f"
+    }
+  ]
+}

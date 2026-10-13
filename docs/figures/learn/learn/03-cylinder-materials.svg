@@ -1,0 +1,83 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 880" role="img" aria-labelledby="cylinder-title cylinder-desc">
+<title id="cylinder-title">A cylinder in air on a substrate</title>
+<desc id="cylinder-desc">Perspective and plan views of a 600×600 nm cell. The central cylinder has diameter 240 nm, height 180 nm and relative permittivity 12.25. Below z=0 is the semi-infinite substrate bot, with permittivity 2.25. Above z=180 is top air; outside the cylinder within the patterned layer is background air. Both have permittivity 1. All media have relative permeability 1. Light at wavelength 900 nm enters normally from above.</desc>
+<defs>
+<marker id="dim-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#52677c" /></marker>
+<marker id="ray-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#c44738" /></marker>
+</defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;} .halo{paint-order:stroke;stroke:white;stroke-width:6;stroke-linejoin:round;}</style>
+<rect width="1200" height="880" fill="white" />
+
+<text x="30.00" y="43.00" font-size="30" fill="#182b3e" font-weight="750">Reading geometry from code: a cylinder on a substrate</text>
+<text x="30.00" y="78.00" font-size="20" fill="#52677c" font-weight="400">Lengths in nm · one cylinder and its surrounding air form one patterned layer.</text>
+<text x="30.00" y="119.00" font-size="20" fill="#182b3e" font-weight="650">Perspective of one cell</text>
+<polygon points="453.00,563.00 597.00,395.00 597.00,441.80 453.00,609.80" fill="#b6c6d9" stroke="#b1bdc9" stroke-width="1.5" />
+<polygon points="153.00,455.00 453.00,563.00 453.00,609.80 153.00,501.80" fill="#cad7e6" stroke="#b1bdc9" stroke-width="1.5" />
+<polygon points="153.00,455.00 453.00,563.00 597.00,395.00 297.00,287.00" fill="#edf2f8" stroke="#b1bdc9" stroke-width="1.5" />
+<line x1="153.00" y1="455.00" x2="153.00" y2="325.40" stroke="#a7b7c6" stroke-width="1.4" stroke-dasharray="5 6" />
+<line x1="453.00" y1="563.00" x2="453.00" y2="433.40" stroke="#a7b7c6" stroke-width="1.4" stroke-dasharray="5 6" />
+<line x1="597.00" y1="395.00" x2="597.00" y2="265.40" stroke="#a7b7c6" stroke-width="1.4" stroke-dasharray="5 6" />
+<line x1="297.00" y1="287.00" x2="297.00" y2="157.40" stroke="#a7b7c6" stroke-width="1.4" stroke-dasharray="5 6" />
+<polygon points="153.00,325.40 453.00,433.40 597.00,265.40 297.00,157.40" fill="none" stroke="#a7b7c6" stroke-width="1.4" stroke-dasharray="5 6" />
+<polygon points="308.45,290.47 308.54,292.55 308.81,294.64 309.27,296.73 309.90,298.82 310.71,300.89 311.70,302.96 312.87,305.00 314.20,307.02 315.70,309.00 317.36,310.95 319.18,312.85 321.16,314.71 323.28,316.51 325.54,318.26 327.94,319.94 330.47,321.56 333.12,323.10 335.88,324.57 338.75,325.96 341.72,327.26 344.79,328.48 347.93,329.60 351.15,330.64 354.43,331.57 357.77,332.41 361.16,333.15 364.59,333.78 368.04,334.31 371.52,334.73 375.00,335.04 378.48,335.24 381.96,335.34 385.41,335.32 388.84,335.20 392.23,334.96 395.57,334.62 398.85,334.17 402.07,333.62 405.21,332.96 408.28,332.19 411.25,331.33 414.12,330.37 416.88,329.31 419.53,328.16 422.06,326.92 424.46,325.59 426.72,324.18 428.84,322.69 430.82,321.13 432.64,319.49 434.30,317.79 435.80,316.03 437.13,314.21 438.30,312.34 439.29,310.42 440.10,308.47 440.73,306.47 441.19,304.45 441.46,302.40 441.55,300.33 441.55,429.93 441.46,432.00 441.19,434.05 440.73,436.07 440.10,438.07 439.29,440.02 438.30,441.94 437.13,443.81 435.80,445.63 434.30,447.39 432.64,449.09 430.82,450.73 428.84,452.29 426.72,453.78 424.46,455.19 422.06,456.52 419.53,457.76 416.88,458.91 414.12,459.97 411.25,460.93 408.28,461.79 405.21,462.56 402.07,463.22 398.85,463.77 395.57,464.22 392.23,464.56 388.84,464.80 385.41,464.92 381.96,464.94 378.48,464.84 375.00,464.64 371.52,464.33 368.04,463.91 364.59,463.38 361.16,462.75 357.77,462.01 354.43,461.17 351.15,460.24 347.93,459.20 344.79,458.08 341.72,456.86 338.75,455.56 335.88,454.17 333.12,452.70 330.47,451.16 327.94,449.54 325.54,447.86 323.28,446.11 321.16,444.31 319.18,442.45 317.36,440.55 315.70,438.60 314.20,436.62 312.87,434.60 311.70,432.56 310.71,430.49 309.90,428.42 309.27,426.33 308.81,424.24 308.54,422.15 308.45,420.07" fill="#117c77" stroke="#0f6965" stroke-width="1.5" />
+<polygon points="435.00,317.00 436.69,314.85 438.14,312.62 439.33,310.32 440.28,307.97 440.96,305.56 441.39,303.11 441.55,300.64 441.45,298.14 441.09,295.63 440.47,293.13 439.59,290.63 438.45,288.14 437.07,285.69 435.44,283.28 433.57,280.91 431.47,278.60 429.14,276.36 426.61,274.19 423.87,272.11 420.93,270.12 417.82,268.23 414.53,266.44 411.09,264.77 407.51,263.22 403.80,261.80 399.98,260.51 396.05,259.36 392.05,258.35 387.97,257.48 383.85,256.77 379.69,256.21 375.51,255.80 371.33,255.55 367.17,255.46 363.03,255.52 358.95,255.74 354.92,256.12 350.98,256.65 347.13,257.34 343.39,258.18 339.77,259.16 336.30,260.28 332.97,261.55 329.82,262.95 326.84,264.47 324.05,266.12 321.46,267.89 319.08,269.76 316.93,271.73 315.00,273.80 313.31,275.95 311.86,278.18 310.67,280.48 309.72,282.83 309.04,285.24 308.61,287.69 308.45,290.16 308.55,292.66 308.91,295.17 309.53,297.67 310.41,300.17 311.55,302.66 312.93,305.11 314.56,307.52 316.43,309.89 318.53,312.20 320.86,314.44 323.39,316.61 326.13,318.69 329.07,320.68 332.18,322.57 335.47,324.36 338.91,326.03 342.49,327.58 346.20,329.00 350.02,330.29 353.95,331.44 357.95,332.45 362.03,333.32 366.15,334.03 370.31,334.59 374.49,335.00 378.67,335.25 382.83,335.34 386.97,335.28 391.05,335.06 395.08,334.68 399.02,334.15 402.87,333.46 406.61,332.62 410.23,331.64 413.70,330.52 417.03,329.25 420.18,327.85 423.16,326.33 425.95,324.68 428.54,322.91 430.92,321.04 433.07,319.07 435.00,317.00" fill="#47a59b" stroke="#0f6965" stroke-width="1.5" />
+<line x1="441.55" y1="300.64" x2="684.00" y2="300.64" stroke="#a7b7c6" stroke-width="1" stroke-dasharray="3 4" />
+<line x1="441.55" y1="430.24" x2="684.00" y2="430.24" stroke="#a7b7c6" stroke-width="1" stroke-dasharray="3 4" />
+<line x1="668.00" y1="302.64" x2="668.00" y2="428.24" stroke="#52677c" stroke-width="1.5" marker-start="url(#dim-arrow)" marker-end="url(#dim-arrow)" />
+<text x="692.00" y="352.00" font-size="21" fill="#182b3e" font-weight="650">180 nm</text>
+<text x="692.00" y="380.00" font-size="17" fill="#52677c" font-weight="400">Height</text>
+<text x="692.00" y="406.00" font-size="14" fill="#52677c" font-weight="400">thickness[0]</text>
+<line x1="375.00" y1="143.00" x2="375.00" y2="240.00" stroke="#c44738" stroke-width="3.5" marker-end="url(#ray-arrow)" />
+<text x="401.00" y="158.00" font-size="20" fill="#af372c" font-weight="650">Incident light · λ = 900 nm</text>
+<text x="401.00" y="184.00" font-size="17" fill="#af372c" font-weight="400">Normal incidence from above</text>
+<text x="73.00" y="195.00" font-size="20" fill="#3c658c" font-weight="650">top · air</text>
+<text x="65.00" y="350.00" font-size="20" fill="#3c658c" font-weight="650">background</text>
+<text x="65.00" y="376.00" font-size="17" fill="#52677c" font-weight="400">Surrounding air in the layer</text>
+<line x1="217.00" y1="368.00" x2="257.80" y2="347.00" stroke="#6b869c" stroke-width="1.5" />
+<circle cx="257.80" cy="347.00" r="3.5" fill="#6b869c" />
+<text x="373.00" y="379.00" font-size="18" fill="white" font-weight="650" text-anchor="middle">material</text>
+<text x="0.00" y="0.00" font-size="21" fill="#3c526d" font-weight="650" text-anchor="middle" dominant-baseline="central" transform="matrix(1 .36 0 1 303 532)">bot · substrate</text>
+<circle cx="153.00" cy="455.00" r="3.5" fill="#52677c" />
+<line x1="153.00" y1="455.00" x2="88.00" y2="455.00" stroke="#52677c" stroke-width="1.5" />
+<text x="33.00" y="461.00" font-size="19" fill="#182b3e" font-weight="650">z=0</text>
+<circle cx="153.00" cy="325.40" r="3.5" fill="#52677c" />
+<line x1="153.00" y1="325.40" x2="96.00" y2="325.40" stroke="#52677c" stroke-width="1.5" />
+<text x="33.00" y="331.40" font-size="17" fill="#182b3e" font-weight="650">z=180</text>
+<text x="121.00" y="643.00" font-size="18" fill="#52677c" font-weight="400">The substrate extends downward indefinitely.</text>
+<rect x="815" y="109" width="360" height="458" rx="12" fill="#f8fafc" stroke="#dce4ea" stroke-width="1.5" />
+<text x="837.00" y="143.00" font-size="21" fill="#182b3e" font-weight="650">Plan view of one cell</text>
+<rect x="854" y="202" width="260" height="260" rx="0" fill="white" stroke="#a7b7c6" stroke-width="1.5" />
+<circle cx="984.0" cy="332.0" r="52" fill="#47a59b" stroke="#0f6965" stroke-width="1.5" />
+<line x1="854.00" y1="183.00" x2="1114.00" y2="183.00" stroke="#52677c" stroke-width="1.5" marker-start="url(#dim-arrow)" marker-end="url(#dim-arrow)" />
+<text x="984.00" y="174.00" font-size="18" fill="#182b3e" font-weight="600" text-anchor="middle">Px = 600</text>
+<line x1="1134.00" y1="202.00" x2="1134.00" y2="462.00" stroke="#52677c" stroke-width="1.5" marker-start="url(#dim-arrow)" marker-end="url(#dim-arrow)" />
+<text x="0.00" y="0.00" font-size="18" fill="#182b3e" font-weight="600" text-anchor="middle" transform="matrix(0 -1 1 0 1157 332.0)">Py = 600</text>
+<line x1="933.00" y1="332.00" x2="1035.00" y2="332.00" stroke="#ffffff" stroke-width="2" marker-start="url(#dim-arrow)" marker-end="url(#dim-arrow)" />
+<text x="984.00" y="321.00" font-size="19" fill="white" font-weight="700" text-anchor="middle">240</text>
+<text x="984.00" y="493.00" font-size="18" fill="#182b3e" font-weight="400" text-anchor="middle">Cell centre · cx = cy = 0</text>
+<text x="984.00" y="527.00" font-size="19" fill="#182b3e" font-weight="650" text-anchor="middle">lx = 240 is the diameter.</text>
+<text x="837.00" y="601.00" font-size="19" fill="#182b3e" font-weight="600">One cell repeats along x and y.</text>
+<text x="837.00" y="630.00" font-size="19" fill="#52677c" font-weight="400">period = (600, 600)</text>
+<rect x="30" y="676" width="272" height="148" rx="12" fill="#f2f7fc" stroke="#dce4ea" stroke-width="1.5" />
+<text x="48.00" y="706.00" font-size="22" fill="#3c658c" font-weight="700">top</text>
+<text x="48.00" y="737.00" font-size="17" fill="#182b3e" font-weight="400">Upper air</text>
+<text x="48.00" y="765.00" font-size="17" fill="#52677c" font-weight="400">z &gt; 180</text>
+<text x="48.00" y="802.00" font-size="24" fill="#3c658c" font-weight="700">εr = 1</text>
+<rect x="320" y="676" width="272" height="148" rx="12" fill="#f2f7fc" stroke="#dce4ea" stroke-width="1.5" />
+<text x="338.00" y="706.00" font-size="22" fill="#3c658c" font-weight="700">background</text>
+<text x="338.00" y="737.00" font-size="17" fill="#182b3e" font-weight="400">In layer · air outside cylinder</text>
+<text x="338.00" y="765.00" font-size="17" fill="#52677c" font-weight="400">0 &lt; z &lt; 180</text>
+<text x="338.00" y="802.00" font-size="24" fill="#3c658c" font-weight="700">εr = 1</text>
+<rect x="610" y="676" width="272" height="148" rx="12" fill="#eaf5f2" stroke="#dce4ea" stroke-width="1.5" />
+<text x="628.00" y="706.00" font-size="22" fill="#0f6965" font-weight="700">material</text>
+<text x="628.00" y="737.00" font-size="17" fill="#182b3e" font-weight="400">In layer · inside cylinder</text>
+<text x="628.00" y="765.00" font-size="17" fill="#52677c" font-weight="400">0 &lt; z &lt; 180</text>
+<text x="628.00" y="802.00" font-size="24" fill="#0f6965" font-weight="700">εr = 12.25</text>
+<rect x="900" y="676" width="272" height="148" rx="12" fill="#edf2f8" stroke="#dce4ea" stroke-width="1.5" />
+<text x="918.00" y="706.00" font-size="22" fill="#3c526d" font-weight="700">bot</text>
+<text x="918.00" y="737.00" font-size="17" fill="#182b3e" font-weight="400">Lower substrate</text>
+<text x="918.00" y="765.00" font-size="17" fill="#52677c" font-weight="400">z &lt; 0</text>
+<text x="918.00" y="802.00" font-size="24" fill="#3c526d" font-weight="700">εr = 2.25</text>
+<text x="30.00" y="858.00" font-size="17" fill="#52677c" font-weight="400">All media: μr = 1 · dashed lines bound the layer, not physical walls · drawn substrate thickness is not its actual thickness.</text>
+</svg>

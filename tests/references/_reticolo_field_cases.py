@@ -4,7 +4,7 @@ Imports numpy and nothing else: the generator needs Octave and a RETICOLO tree, 
 neither, and a case list that lives in only one of them is a case list that drifts.
 
 This is the oracle for the *pure* TE/TM reconstruction (``grating_type == 0``,
-``_core/fields.py::field_1d``), which the S4 and fmmax field goldens never reach — they both
+``src/wavebit/rcwa/_engine/fields.py::field_1d``), which the S4 and fmmax field goldens never reach — they both
 route through the coupled 6-component paths. It has its own component layout (TE returns
 ``(Ey, Hx, Hz)``, TM returns ``(Hy, Ex, Ez)``) and its own sign handling, and RETICOLO returns
 exactly those 3 components for a 1D grating, so the two line up without padding.
@@ -52,7 +52,7 @@ _CELL = PERIOD / NX
 
 # TE is (Ey, Hx, Hz) and TM is (Hy, Ex, Ez), so the same three slots hold different components
 # and the parity is not the same list twice. Under z -> -z, `E_z`, `H_x` and `H_y` change sign
-# while `E_t` and `H_z` do not -- the rule `_core/fields.py` states for its own frame.
+# while `E_t` and `H_z` do not -- the rule `src/wavebit/rcwa/_engine/fields.py` states for its own frame.
 Z_PARITY = {'te': np.array([1.0, -1.0, 1.0]),
             'tm': np.array([-1.0, 1.0, -1.0])}
 NAMES = {'te': ('Ey', 'Hx', 'Hz'), 'tm': ('Hy', 'Ex', 'Ez')}

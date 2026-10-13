@@ -1,0 +1,370 @@
+{
+  "schema": 1,
+  "source_sha256": "e0ed4ef60d81d3c575db42988253b212eed52c9090b49ae44a4da20f39fcb3dd",
+  "git_head": "b80baf1a229e70a19d35e6aec51cb41ccff46869",
+  "python": "3.12.9",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "versions": {
+    "numpy": "2.5.1",
+    "scipy": "1.18.0",
+    "array-api-compat": "1.15.0"
+  },
+  "scope": "Two crossed lossless dielectric scenes; propagating channels only; no extrapolation to other geometries or materials.",
+  "cases": {
+    "square_18deg": {
+      "runs": {
+        "time120": {
+          "settings": {
+            "resolution": 25.0,
+            "n_periods": 120,
+            "n_pml": 12,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 14.250564083980862,
+          "nx": 21,
+          "ny": 21,
+          "nz": 54,
+          "dx": 0.04,
+          "dy": 0.04,
+          "dz_min": 0.039999999999999813,
+          "dz_max": 0.040000000000000036,
+          "dt": 0.022863070659909182,
+          "n_steps": 4199,
+          "pml_thickness": [
+            0.48,
+            0.4800000000000002
+          ],
+          "residual": 0.0005994899275452246,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.02538169784686225,
+            "power": 0.013476575471429109
+          }
+        },
+        "time180": {
+          "settings": {
+            "resolution": 25.0,
+            "n_periods": 180,
+            "n_pml": 12,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 22.988534250005614,
+          "nx": 21,
+          "ny": 21,
+          "nz": 54,
+          "dx": 0.04,
+          "dy": 0.04,
+          "dz_min": 0.039999999999999813,
+          "dz_max": 0.040000000000000036,
+          "dt": 0.022863070659909182,
+          "n_steps": 6299,
+          "pml_thickness": [
+            0.48,
+            0.4800000000000002
+          ],
+          "residual": 0.00020893999910547945,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.025378814319373628,
+            "power": 0.013473566396762893
+          }
+        },
+        "time240": {
+          "settings": {
+            "resolution": 25.0,
+            "n_periods": 240,
+            "n_pml": 12,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 29.376800333004212,
+          "nx": 21,
+          "ny": 21,
+          "nz": 54,
+          "dx": 0.04,
+          "dy": 0.04,
+          "dz_min": 0.039999999999999813,
+          "dz_max": 0.040000000000000036,
+          "dt": 0.022863070659909182,
+          "n_steps": 8398,
+          "pml_thickness": [
+            0.48,
+            0.4800000000000002
+          ],
+          "residual": 5.2780603759436766e-05,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.025377229975951314,
+            "power": 0.013474987154159845
+          }
+        },
+        "pml20": {
+          "settings": {
+            "resolution": 25.0,
+            "n_periods": 240,
+            "n_pml": 20,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 36.73581154100248,
+          "nx": 21,
+          "ny": 21,
+          "nz": 70,
+          "dx": 0.04,
+          "dy": 0.04,
+          "dz_min": 0.039999999999999813,
+          "dz_max": 0.040000000000000036,
+          "dt": 0.022863070659909182,
+          "n_steps": 8398,
+          "pml_thickness": [
+            0.8000000000000002,
+            0.8000000000000005
+          ],
+          "residual": 0.00013478083061142172,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.025184234992599586,
+            "power": 0.01379543491474422
+          }
+        },
+        "pad1.5": {
+          "settings": {
+            "resolution": 25.0,
+            "n_periods": 240,
+            "n_pml": 12,
+            "pad_scale": 1.5,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 36.55067691599834,
+          "nx": 21,
+          "ny": 21,
+          "nz": 65,
+          "dx": 0.04,
+          "dy": 0.04,
+          "dz_min": 0.039999999999999813,
+          "dz_max": 0.040000000000000036,
+          "dt": 0.022863070659909182,
+          "n_steps": 8398,
+          "pml_thickness": [
+            0.48,
+            0.4800000000000004
+          ],
+          "residual": 0.00010570902595361591,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.030799417190887333,
+            "power": 0.01360761404086086
+          }
+        }
+      },
+      "comparisons": {
+        "time120_to_time180": {
+          "amplitude": 0.00014503790653825068,
+          "power": 2.0230005591141687e-05
+        },
+        "time180_to_time240": {
+          "amplitude": 3.953218033911287e-05,
+          "power": 8.252031859279363e-06
+        },
+        "time240_to_pml20": {
+          "amplitude": 0.0005505298621161252,
+          "power": 0.00032044776058437474
+        },
+        "time240_to_pad1.5": {
+          "amplitude": 0.005509491446672856,
+          "power": 0.00014048441300772152
+        }
+      }
+    },
+    "rect_28deg": {
+      "runs": {
+        "time120": {
+          "settings": {
+            "resolution": 30.0,
+            "n_periods": 120,
+            "n_pml": 12,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 43.85416729201097,
+          "nx": 24,
+          "ny": 36,
+          "nz": 63,
+          "dx": 0.03333333333333333,
+          "dy": 0.03333333333333333,
+          "dz_min": 0.033333333333333215,
+          "dz_max": 0.03333333333333344,
+          "dt": 0.019052558883257648,
+          "n_steps": 5354,
+          "pml_thickness": [
+            0.3999999999999999,
+            0.4000000000000006
+          ],
+          "residual": 0.004559393822028535,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.024894538062394576,
+            "power": 0.016974504504584265
+          }
+        },
+        "time180": {
+          "settings": {
+            "resolution": 30.0,
+            "n_periods": 180,
+            "n_pml": 12,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 65.15765491701313,
+          "nx": 24,
+          "ny": 36,
+          "nz": 63,
+          "dx": 0.03333333333333333,
+          "dy": 0.03333333333333333,
+          "dz_min": 0.033333333333333215,
+          "dz_max": 0.03333333333333344,
+          "dt": 0.019052558883257648,
+          "n_steps": 8031,
+          "pml_thickness": [
+            0.3999999999999999,
+            0.4000000000000006
+          ],
+          "residual": 0.0009652334639716627,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.025484730845013615,
+            "power": 0.01728380256897666
+          }
+        },
+        "time240": {
+          "settings": {
+            "resolution": 30.0,
+            "n_periods": 240,
+            "n_pml": 12,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 87.56938308299868,
+          "nx": 24,
+          "ny": 36,
+          "nz": 63,
+          "dx": 0.03333333333333333,
+          "dy": 0.03333333333333333,
+          "dz_min": 0.033333333333333215,
+          "dz_max": 0.03333333333333344,
+          "dt": 0.019052558883257648,
+          "n_steps": 10708,
+          "pml_thickness": [
+            0.3999999999999999,
+            0.4000000000000006
+          ],
+          "residual": 0.00025032477632289763,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.025627499992136153,
+            "power": 0.01727765694561645
+          }
+        },
+        "pml20": {
+          "settings": {
+            "resolution": 30.0,
+            "n_periods": 240,
+            "n_pml": 20,
+            "pad_scale": 1.0,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 120.84306904199184,
+          "nx": 24,
+          "ny": 36,
+          "nz": 79,
+          "dx": 0.03333333333333333,
+          "dy": 0.03333333333333333,
+          "dz_min": 0.033333333333333215,
+          "dz_max": 0.03333333333333344,
+          "dt": 0.019052558883257648,
+          "n_steps": 10708,
+          "pml_thickness": [
+            0.6666666666666666,
+            0.6666666666666645
+          ],
+          "residual": 0.0007485199771867834,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.02544773904796024,
+            "power": 0.01614022429050166
+          }
+        },
+        "pad1.5": {
+          "settings": {
+            "resolution": 30.0,
+            "n_periods": 240,
+            "n_pml": 12,
+            "pad_scale": 1.5,
+            "courant": 0.99,
+            "subpixel": true,
+            "grading": null
+          },
+          "seconds": 116.51279716700083,
+          "nx": 24,
+          "ny": 36,
+          "nz": 79,
+          "dx": 0.03333333333333333,
+          "dy": 0.03333333333333333,
+          "dz_min": 0.033333333333333215,
+          "dz_max": 0.03333333333333344,
+          "dt": 0.019052558883257648,
+          "n_steps": 10708,
+          "pml_thickness": [
+            0.3999999999999999,
+            0.3999999999999986
+          ],
+          "residual": 0.0007168106063662571,
+          "warnings": [],
+          "error_vs_rcwa13": {
+            "amplitude": 0.026131652949703682,
+            "power": 0.01603695727972243
+          }
+        }
+      },
+      "comparisons": {
+        "time120_to_time180": {
+          "amplitude": 0.0017781452625140013,
+          "power": 0.0009882115031674132
+        },
+        "time180_to_time240": {
+          "amplitude": 0.0004028327825807562,
+          "power": 0.00017669130193520566
+        },
+        "time240_to_pml20": {
+          "amplitude": 0.0018036041658610886,
+          "power": 0.0011374326551147895
+        },
+        "time240_to_pad1.5": {
+          "amplitude": 0.0024149406296852974,
+          "power": 0.0012406996658940184
+        }
+      }
+    }
+  },
+  "complete": true
+}

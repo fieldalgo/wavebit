@@ -1,0 +1,200 @@
+{
+  "use": "Internal generation of original static diagrams and plots. No runtime integration, package redistribution, copied implementation, font outlines or font binaries in SVG outputs. Matplotlib SVG output keeps text as text.",
+  "packages": [
+    {
+      "package": "matplotlib",
+      "version": "3.10.1",
+      "license_summary": "License agreement for matplotlib versions 1.3.0 and later",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/matplotlib-3.10.1.dist-info/LICENSE",
+          "sha256": "5a1a81ea301728c8bba2933da832c0cd62229daf20893a024ab3d53244468dbc"
+        }
+      ]
+    },
+    {
+      "package": "numpy",
+      "version": "2.5.1",
+      "license_summary": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/LICENSE.txt",
+          "sha256": "649a589ab31076e79e9ce62ba24eae9959598124176640dbc95f87bd10f34fcf"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt",
+          "sha256": "fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING",
+          "sha256": "3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/_core/src/highway/LICENSE",
+          "sha256": "e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt",
+          "sha256": "f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md",
+          "sha256": "211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE",
+          "sha256": "c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md",
+          "sha256": "a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt",
+          "sha256": "a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/ma/LICENSE",
+          "sha256": "05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/random/LICENSE.md",
+          "sha256": "103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/random/src/distributions/LICENSE.md",
+          "sha256": "469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md",
+          "sha256": "0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md",
+          "sha256": "e7d4f4fb20358f314210a892ae17351e04993813646f697ec387385ca2a36918"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/random/src/philox/LICENSE.md",
+          "sha256": "6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md",
+          "sha256": "9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/numpy-2.5.1.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md",
+          "sha256": "268b0ca06759d31ea3ca68dd35f20e877916e927b1c2a835e4592a3c4354b1f9"
+        }
+      ]
+    },
+    {
+      "package": "pillow",
+      "version": "11.2.1",
+      "license_summary": "MIT-CMU",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/pillow-11.2.1.dist-info/licenses/LICENSE",
+          "sha256": "f36612f01986767553bf053454df48e99c423ac73dcf9798c8a8336df0767b48"
+        }
+      ]
+    },
+    {
+      "package": "contourpy",
+      "version": "1.3.2",
+      "license_summary": "BSD 3-Clause License",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/contourpy-1.3.2.dist-info/LICENSE",
+          "sha256": "34170979fc64f4f5e6dfa66ef27dec314ffffc5852000c60f4836ec1dfbf156e"
+        }
+      ]
+    },
+    {
+      "package": "cycler",
+      "version": "0.12.1",
+      "license_summary": "Copyright (c) 2015, matplotlib project",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/cycler-0.12.1.dist-info/LICENSE",
+          "sha256": "f1218143d766da3fea66f13396b7f15df46a83303f29bf96ba6e98eb4d42f408"
+        }
+      ]
+    },
+    {
+      "package": "fonttools",
+      "version": "4.57.0",
+      "license_summary": "MIT",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/fonttools-4.57.0.dist-info/licenses/LICENSE",
+          "sha256": "6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383"
+        }
+      ]
+    },
+    {
+      "package": "kiwisolver",
+      "version": "1.4.8",
+      "license_summary": "=========================",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/kiwisolver-1.4.8.dist-info/LICENSE",
+          "sha256": "238e69906d7e507a94832b9831131862c4176d58c002b388e2e99db5d83677d2"
+        }
+      ]
+    },
+    {
+      "package": "packaging",
+      "version": "24.2",
+      "license_summary": "",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/packaging-24.2.dist-info/LICENSE",
+          "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/packaging-24.2.dist-info/LICENSE.APACHE",
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/packaging-24.2.dist-info/LICENSE.BSD",
+          "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+        }
+      ]
+    },
+    {
+      "package": "pyparsing",
+      "version": "3.2.3",
+      "license_summary": "",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/pyparsing-3.2.3.dist-info/LICENSE",
+          "sha256": "10d5120a16805804ffda8b688c220bfb4e8f39741b57320604d455a309e01972"
+        }
+      ]
+    },
+    {
+      "package": "python-dateutil",
+      "version": "2.9.0.post0",
+      "license_summary": "Dual License",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/python_dateutil-2.9.0.post0.dist-info/LICENSE",
+          "sha256": "ba00f51a0d92823b5a1cde27d8b5b9d2321e67ed8da9bc163eff96d5e17e577e"
+        }
+      ]
+    },
+    {
+      "package": "six",
+      "version": "1.17.0",
+      "license_summary": "MIT",
+      "official_packaged_notices": [
+        {
+          "path": "<conda env>/lib/python3.12/site-packages/six-1.17.0.dist-info/LICENSE",
+          "sha256": "4375ba20e2b9c6c4e7cad2940a628fd90e95cc3d50ee92aae755715d8ba1fbd0"
+        }
+      ]
+    }
+  ],
+  "official_matplotlib_license": "https://matplotlib.org/3.10.1/project/license.html",
+  "assessment": "Installed Matplotlib 3.10.1 has the PSF-based permissive Matplotlib license; its official license page covers bundled software. The used dependencies have BSD, MIT, Apache-2.0, or equivalent permissive notices, retained in the installed distributions and identified by hashes above. Internal figure generation and unmodified tool use do not impose relicensing on Wavebit. No Python packages, compiled libraries, font files, or font outlines are redistributed in these figures."
+}

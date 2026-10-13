@@ -1,0 +1,81 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 720" role="img" aria-labelledby="coordinates-title coordinates-desc">
+<title id="coordinates-title">Reading coordinates and layer order</title>
+<desc id="coordinates-desc">Axes, the cell-centred origin and layer order are shared by raster and shape inputs. The left xy diagram overlays a 4-by-4 raster example; its monochrome grid indicates row and column locations, not material values. Row 0 lies toward negative y, and the origin is at the cell centre. This right-handed frame has x rightward, y upward and z out of the page. The right diagram shows two layers without their material patterns. Grey does not denote material; their thicknesses are d0 and d1. Height increases from the bottom at z=0.</desc>
+<defs><marker id="coord-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#435466" /></marker></defs>
+<style>
+text { font-family: -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; fill:#182b3e; }
+.axis { stroke:#435466; stroke-width:2; marker-end:url(#coord-arrow); }
+.dimension { stroke:#657584; stroke-width:1.6; marker-start:url(#coord-arrow); marker-end:url(#coord-arrow); }
+</style>
+<rect width="1000" height="720" fill="white" />
+
+<text x="28" y="41" font-size="28" font-weight="750" text-anchor="start" fill="#182b3e">Reading coordinates and layer order</text>
+<text x="28" y="76" font-size="18" font-weight="400" text-anchor="start" fill="#536678">Axes, origin and layer order are shared by raster and shape inputs.</text>
+<rect x="24" y="101" width="464" height="566" rx="14" fill="#ffffff" stroke="#d6e0e5" stroke-width="1.6" />
+<rect x="512" y="101" width="464" height="566" rx="14" fill="#ffffff" stroke="#d6e0e5" stroke-width="1.6" />
+<text x="48" y="136" font-size="23" font-weight="700" text-anchor="start" fill="#182b3e">A · One layer in xy</text>
+<text x="48" y="166" font-size="18" font-weight="400" text-anchor="start" fill="#536678">The grid below illustrates a raster array.</text>
+<text x="536" y="136" font-size="23" font-weight="700" text-anchor="start" fill="#182b3e">B · Layer order in side view (z)</text>
+<text x="536" y="166" font-size="18" font-weight="400" text-anchor="start" fill="#536678">Material patterns are omitted.</text>
+<rect x="135" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="0" />
+<rect x="195" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="1" />
+<rect x="255" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="2" />
+<rect x="315" y="408" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="0" data-column="3" />
+<text x="115" y="445" font-size="20" font-weight="700" text-anchor="middle" fill="#182b3e">0</text>
+<rect x="135" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="0" />
+<rect x="195" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="1" />
+<rect x="255" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="2" />
+<rect x="315" y="348" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="1" data-column="3" />
+<text x="115" y="385" font-size="20" font-weight="400" text-anchor="middle" fill="#182b3e">1</text>
+<rect x="135" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="0" />
+<rect x="195" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="1" />
+<rect x="255" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="2" />
+<rect x="315" y="288" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="2" data-column="3" />
+<text x="115" y="325" font-size="20" font-weight="400" text-anchor="middle" fill="#182b3e">2</text>
+<rect x="135" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="0" />
+<rect x="195" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="1" />
+<rect x="255" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="2" />
+<rect x="315" y="228" width="60" height="60" rx="0" fill="#f4f6f8" stroke="#a6bbc7" stroke-width="1.6" data-row="3" data-column="3" />
+<text x="115" y="265" font-size="20" font-weight="400" text-anchor="middle" fill="#182b3e">3</text>
+<text x="165.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">0</text>
+<text x="225.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">1</text>
+<text x="285.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">2</text>
+<text x="345.0" y="492" font-size="18" font-weight="400" text-anchor="middle" fill="#182b3e">3</text>
+<text x="97" y="215" font-size="17" font-weight="400" text-anchor="middle" fill="#536678">Rows y</text>
+<text x="391" y="492" font-size="17" font-weight="400" text-anchor="start" fill="#536678">Columns x</text>
+<line x1="255" y1="480" x2="255" y2="187" class="axis" />
+<line x1="101" y1="348" x2="423" y2="348" class="axis" />
+<text x="269" y="197" font-size="20" font-weight="650" text-anchor="start" fill="#182b3e">+y</text>
+<text x="432" y="355" font-size="20" font-weight="650" text-anchor="start" fill="#182b3e">+x</text>
+<circle cx="255" cy="348" r="5" fill="#182b3e" />
+<rect x="266" y="358" width="98" height="27" rx="4" fill="white" stroke="none" stroke-width="1.6" />
+<text x="315" y="378" font-size="18" font-weight="600" text-anchor="middle" fill="#182b3e">(0, 0)</text>
+<text x="48" y="533" font-size="18" font-weight="400" text-anchor="start" fill="#536678">Raster example · 4 × 4 array (materials omitted)</text>
+<text x="48" y="576" font-size="19" font-weight="400" text-anchor="start" fill="#182b3e">Row 0 is at the bottom (−y).</text>
+<text x="48" y="615" font-size="21" font-weight="650" text-anchor="start" fill="#182b3e">Raster array: [layer, row y, column x]</text>
+<circle cx="58" cy="638" r="8" fill="none" stroke="#435466" stroke-width="1.8" /><circle cx="58" cy="638" r="2.5" fill="#435466" />
+<text x="77" y="644" font-size="17" font-weight="400" text-anchor="start" fill="#536678">+z: out of page · origin (0, 0) at cell centre</text>
+<rect x="545" y="208" width="285" height="72" rx="0" fill="#fafbfc" stroke="#c1cdd5" stroke-width="1.6" />
+<rect x="545" y="280" width="285" height="105" rx="0" fill="#edf0f3" stroke="#a9b7c2" stroke-width="1.6" data-layer="1" />
+<rect x="545" y="385" width="285" height="105" rx="0" fill="#edf0f3" stroke="#a9b7c2" stroke-width="1.6" data-layer="0" />
+<rect x="545" y="490" width="285" height="72" rx="0" fill="#fafbfc" stroke="#c1cdd5" stroke-width="1.6" />
+<text x="565" y="239" font-size="20" font-weight="600" text-anchor="start" fill="#182b3e">top · upper medium</text>
+<text x="565" y="265" font-size="16" font-weight="400" text-anchor="start" fill="#536678">Semi-infinite space</text>
+<text x="565" y="322" font-size="23" font-weight="650" text-anchor="start" fill="#182b3e">structure[1]</text>
+<text x="565" y="354" font-size="18" font-weight="400" text-anchor="start" fill="#182b3e">Second layer added</text>
+<text x="565" y="427" font-size="23" font-weight="650" text-anchor="start" fill="#182b3e">structure[0]</text>
+<text x="565" y="459" font-size="18" font-weight="400" text-anchor="start" fill="#182b3e">First layer added</text>
+<text x="565" y="520" font-size="20" font-weight="600" text-anchor="start" fill="#182b3e">bot · lower medium</text>
+<text x="565" y="547" font-size="16" font-weight="400" text-anchor="start" fill="#536678">Semi-infinite space</text>
+<line x1="852" y1="284" x2="852" y2="381" class="dimension" />
+<line x1="852" y1="389" x2="852" y2="486" class="dimension" />
+<text x="868" y="340" font-size="19" font-weight="650" text-anchor="start" fill="#182b3e">d1</text>
+<text x="868" y="445" font-size="19" font-weight="650" text-anchor="start" fill="#182b3e">d0</text>
+<line x1="934" y1="551" x2="934" y2="220" class="axis" />
+<text x="838" y="505" font-size="17" font-weight="650" text-anchor="start" fill="#182b3e">z=0</text>
+<text x="944" y="397" font-size="19" font-weight="650" text-anchor="start" fill="#182b3e">+z</text>
+<text x="536" y="615" font-size="22" font-weight="650" text-anchor="start" fill="#182b3e">thickness = [d0, d1]</text>
+<text x="536" y="644" font-size="16" font-weight="400" text-anchor="start" fill="#536678">Grey marks layer divisions, not material values.</text>
+<text x="28" y="700" font-size="17" font-weight="400" text-anchor="start" fill="#536678">Orthogonal cell schematic · for an oblique cell, raster axes are [layer, v, u].</text>
+</svg>

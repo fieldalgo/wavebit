@@ -71,7 +71,7 @@ msgid "Edit the source, debug a worktree and build the documentation."
 msgstr "소스를 수정하고 worktree에서 디버깅하며 문서를 빌드합니다."
 
 #: docs/index.md:67
-msgid "The seven conventions"
+msgid "The seven reference/common/conventions"
 msgstr "일곱 가지 규약"
 
 #: docs/index.md:84
@@ -107,24 +107,24 @@ msgstr ""
 
 #: docs/index.md:15
 msgid ""
-"Time-domain work has two entry points: the [periodic-stack solver](guide/time-domain.md) shares "
-"RCWA's scene interface; the [general FDTD engine](guide/general-fdtd.md) uses an explicit spatial"
+"Time-domain work has two entry points: the [periodic-stack solver](guide/fdtd/time-domain.md) shares "
+"RCWA's scene interface; the [general FDTD engine](guide/fdtd/general-fdtd.md) uses an explicit spatial"
 " domain with sources, boundaries and named monitors. The latter has its own units, array layout "
 "and bounded support contract."
 msgstr ""
-"시간 영역 계산에는 두 가지 진입점이 있습니다. [주기 적층구조 솔버](guide/time-domain.md)는 RCWA와 동일한 문제 설정 인터페이스를 사용합니다. [일반 "
-"FDTD 엔진](guide/general-fdtd.md)은 공간 영역과 소스, 경계조건, 이름을 붙인 모니터를 명시적으로 지정합니다. 이 엔진에는 별도의 단위·배열 배치 "
+"시간 영역 계산에는 두 가지 진입점이 있습니다. [주기 적층구조 솔버](guide/fdtd/time-domain.md)는 RCWA와 동일한 문제 설정 인터페이스를 사용합니다. [일반 "
+"FDTD 엔진](guide/fdtd/general-fdtd.md)은 공간 영역과 소스, 경계조건, 이름을 붙인 모니터를 명시적으로 지정합니다. 이 엔진에는 별도의 단위·배열 배치 "
 "규칙과 제한된 지원 범위가 적용됩니다."
 
 #: docs/index.md:69
 msgid ""
 "Each is legal, energy-conserving and *wrong* when read backwards — no error, no warning. "
-"[`conventions.md`](conventions.md) is the normative contract for the interfaces summarized here. "
-"The [general FDTD guide](guide/general-fdtd.md#units-coordinates-and-backends) states that "
+"[`reference/common/conventions.md`](reference/common/conventions.md) is the normative contract for the interfaces summarized here. "
+"The [general FDTD guide](guide/fdtd/general-fdtd.md#units-coordinates-and-backends) states that "
 "engine's separate coordinate, angle and time conventions."
 msgstr ""
 "각 규약을 반대로 읽어도 오류나 경고 없이 에너지가 보존되는 계산이 가능하지만, 결과의 해석은 *틀립니다*. 여기에 요약한 인터페이스의 공식 규약은 "
-"[`conventions.md`](conventions.md)에 있습니다. [일반 FDTD 안내](guide/general-fdtd.md#units-coordinates-"
+"[`reference/common/conventions.md`](reference/common/conventions.md)에 있습니다. [일반 FDTD 안내](guide/fdtd/general-fdtd.md#units-coordinates-"
 "and-backends)는 해당 엔진의 별도 좌표·각도·시간 규칙을 설명합니다."
 
 #: docs/index.md:59

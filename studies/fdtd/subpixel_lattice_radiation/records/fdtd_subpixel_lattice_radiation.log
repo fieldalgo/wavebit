@@ -1,0 +1,2427 @@
+{
+  "status": "radiation_validation_complete_C3_incomplete",
+  "environment": {
+    "platform": "Windows AMD64",
+    "python": "3.12.14",
+    "versions": {
+      "numpy": "2.5.1",
+      "jax": "0.11.0",
+      "torch": "2.13.0",
+      "scipy": "1.18.0"
+    },
+    "numerical_threads": 2
+  },
+  "source_and_replay": {
+    "status": "completed_lattice_radiation_controls_not_C3_pass",
+    "source_sha256": {
+      "wavebit/fd/__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+      "wavebit/fd/_assemble.py": "822b8508d5a8aab5b67f331d55ade92e48fb020471727c90068f1438b0036414",
+      "wavebit/fd/_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+      "wavebit/fd/_kernel/__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+      "wavebit/fd/_kernel/constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+      "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+      "wavebit/fd/_kernel/curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+      "wavebit/fd/_kernel/faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+      "wavebit/fd/_kernel/grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+      "wavebit/fd/_kernel/masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+      "wavebit/fd/_kernel/observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+      "wavebit/fd/_kernel/poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+      "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+      "wavebit/fd/_kernel/step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+      "wavebit/fd/_lower/__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+      "wavebit/fd/_lower/checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+      "wavebit/fd/_lower/coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+      "wavebit/fd/_lower/constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+      "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+      "wavebit/fd/_lower/fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+      "wavebit/fd/_lower/grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+      "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+      "wavebit/fd/_lower/monitors.py": "fedc8f502038907ea34b7ec5bc30d60e63addb6fcbbbaf51c35c8cb22db218ba",
+      "wavebit/fd/_lower/occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+      "wavebit/fd/_lower/params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+      "wavebit/fd/_lower/plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+      "wavebit/fd/_lower/sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+      "wavebit/fd/_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+      "wavebit/fd/_radiation.py": "50995f04920dfc24c623fea1f9c499aaad3df5b5902b186c650f51c1fa8980f4",
+      "wavebit/fd/_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+      "wavebit/fd/_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+      "wavebit/fd/_shapes/__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+      "wavebit/fd/_shapes/_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+      "wavebit/fd/_shapes/_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+      "wavebit/fd/_shapes/_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+      "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+      "wavebit/fd/_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+      "wavebit/fd/_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+      "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+      "wavebit/fd/diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+      "wavebit/fd/geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+      "wavebit/fd/materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+      "wavebit/fd/monitors.py": "3f1bfdcd151b60129e6396e6f3eb3938024cc30f2864cd0d1e66b1443375ccfc",
+      "wavebit/fd/results.py": "76da4f4c5db132d9f35e7373f1e68c2a83a6aa6f68e201e2082ae43af74148b0",
+      "wavebit/fd/scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+      "wavebit/fd/sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328",
+      "studies/fdtd_subpixel_lattice_radiation.py": "34dc445d8451a692226e7a1f2749feceb91364d84eaa99f1eaec8531b5279e91"
+    },
+    "source_unchanged": true,
+    "cases": [
+      {
+        "cpw": 20,
+        "eps": 1.1,
+        "periods": 24.0,
+        "reflection": 1e-08,
+        "input_json_sha256": "b11089cae93d4da0d7c345a3257d49f8ce42ad0453e8d6857b5ab44123a0b585",
+        "input_array_sha256": "b8be50cb2c902446bed1d9970ec89044d0ac36b8b140710ecfa71f5cdfbae79e",
+        "historical_continuum_optical_closure": 0.5204750340278024,
+        "backward_ratio": [
+          9.602091186543374e-05,
+          2.403745509777239e-05
+        ],
+        "rows": [
+          {
+            "surface": "near",
+            "forward": [
+              0.0203765702870215,
+              0.0007292482790940136
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014771425076736332,
+            "sigma_absorption": -2.4113995059860864e-07,
+            "optical": 0.0014773234334322372,
+            "optical_closure": 0.00028577785790351307,
+            "integral_closure": -6.834386123699687e-06,
+            "quadrature_change": 2.886579864025407e-15,
+            "historical_continuum_forward": [
+              0.02056136492292933,
+              0.0010052904690295876
+            ],
+            "historical_two_wave_closure": 0.00016643796487203488,
+            "angular_peak_errors": {
+              "0.0": 0.016100513902770036,
+              "90.0": 0.020088450896941223
+            }
+          },
+          {
+            "surface": "ff",
+            "forward": [
+              0.02037658983300689,
+              0.0007292326118089076
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014771428905063883,
+            "sigma_absorption": -2.4113995059860864e-07,
+            "optical": 0.0014772916943824664,
+            "optical_closure": 0.0002640282784756032,
+            "integral_closure": -6.506925795513041e-06,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.020610445806470094,
+              0.0011227923103676817
+            ],
+            "historical_two_wave_closure": 0.0001446929614807857,
+            "angular_peak_errors": {
+              "0.0": 0.016101622910250867,
+              "90.0": 0.020089196149878193
+            }
+          },
+          {
+            "surface": "far",
+            "forward": [
+              0.020376482835884894,
+              0.000729198477064147
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014771404907778789,
+            "sigma_absorption": -2.4113995059860864e-07,
+            "optical": 0.0014772225436422116,
+            "optical_closure": 0.00021883198387917524,
+            "integral_closure": -7.613690830687858e-06,
+            "quadrature_change": 2.886579864025407e-15,
+            "historical_continuum_forward": [
+              0.020552948132946808,
+              0.0012631537739909151
+            ],
+            "historical_two_wave_closure": 9.949944212306328e-05,
+            "angular_peak_errors": {
+              "0.0": 0.016098472563133383,
+              "90.0": 0.02008723069177737
+            }
+          }
+        ]
+      },
+      {
+        "cpw": 28,
+        "eps": 1.1,
+        "periods": 24.0,
+        "reflection": 1e-08,
+        "input_json_sha256": "9e42b450436cf4579349394f76b7b258910b72d36998987db45f126e2c2bded7",
+        "input_array_sha256": "18c15282cda4110b763d2b553df51485b9917c72709acb4cde48d043ab8a8e15",
+        "historical_continuum_optical_closure": 0.26379831766222805,
+        "backward_ratio": [
+          3.269468129024443e-06,
+          -4.8899269451496435e-05
+        ],
+        "rows": [
+          {
+            "surface": "near",
+            "forward": [
+              0.020381879269532322,
+              0.0007297649683527056
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014696626275427667,
+            "sigma_absorption": 3.7886724153343534e-08,
+            "optical": 0.0014690580157683947,
+            "optical_closure": -0.00043716287249573327,
+            "integral_closure": 8.253991609752376e-06,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.02047321709201712,
+              0.0008669796170825963
+            ],
+            "historical_two_wave_closure": -3.964090256458608e-05,
+            "angular_peak_errors": {
+              "0.0": 0.008079179888920084,
+              "90.0": 0.010082514313751189
+            }
+          },
+          {
+            "surface": "ff",
+            "forward": [
+              0.02038182367488142,
+              0.0007297673922194098
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014696622329565953,
+            "sigma_absorption": 3.7886724153343534e-08,
+            "optical": 0.0014690628951486958,
+            "optical_closure": -0.0004335745255238388,
+            "integral_closure": 7.25635702214511e-06,
+            "quadrature_change": 2.886579864025407e-15,
+            "historical_continuum_forward": [
+              0.02050124851946895,
+              0.0009287023303545133
+            ],
+            "historical_two_wave_closure": -3.605641750670241e-05,
+            "angular_peak_errors": {
+              "0.0": 0.008077842725767495,
+              "90.0": 0.010081897842547276
+            }
+          },
+          {
+            "surface": "far",
+            "forward": [
+              0.02038189828788682,
+              0.0007297509489619239
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014696638582292274,
+            "sigma_absorption": 3.7886724153343534e-08,
+            "optical": 0.0014690297939445238,
+            "optical_closure": -0.00045720229370638243,
+            "integral_closure": 8.39468454549852e-06,
+            "quadrature_change": 2.886579864025407e-15,
+            "historical_continuum_forward": [
+              0.02046862724391886,
+              0.001003738634297399
+            ],
+            "historical_two_wave_closure": -5.967990605870721e-05,
+            "angular_peak_errors": {
+              "0.0": 0.008081330523411432,
+              "90.0": 0.01008442372047386
+            }
+          }
+        ]
+      },
+      {
+        "cpw": 40,
+        "eps": 1.1,
+        "periods": 24.0,
+        "reflection": 1e-08,
+        "input_json_sha256": "5e204f791ba9b0b64359c90da8f5b287bc5adb626e7885866928effcaf836005",
+        "input_array_sha256": "624e6b9cd240c2541072e1966efcace511ed990f68a99304290f38b81f7e78b9",
+        "historical_continuum_optical_closure": 0.12913839710138375,
+        "backward_ratio": [
+          -2.8485139043209725e-05,
+          -4.2276770007122434e-07
+        ],
+        "rows": [
+          {
+            "surface": "near",
+            "forward": [
+              0.020384999194689307,
+              0.0007306543832712263
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014658511780824483,
+            "sigma_absorption": 6.135135964377675e-08,
+            "optical": 0.0014659615807981181,
+            "optical_closure": 3.346131166814814e-05,
+            "integral_closure": 1.0324675712158893e-06,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.020430904337045988,
+              0.000798651651859288
+            ],
+            "historical_two_wave_closure": 1.5252458046122186e-05,
+            "angular_peak_errors": {
+              "0.0": 0.003913985127605133,
+              "90.0": 0.004888217589753801
+            }
+          },
+          {
+            "surface": "ff",
+            "forward": [
+              0.020384926546956034,
+              0.0007306027471397319
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014658489842293238,
+            "sigma_absorption": 6.135135964377675e-08,
+            "optical": 0.0014658579797157392,
+            "optical_closure": -3.571560412485297e-05,
+            "integral_closure": 2.4162090328516683e-08,
+            "quadrature_change": 3.3306690738754696e-15,
+            "historical_continuum_forward": [
+              0.020443471788373538,
+              0.0008276087381646827
+            ],
+            "historical_two_wave_closure": -5.392579135177211e-05,
+            "angular_peak_errors": {
+              "0.0": 0.003910926552711574,
+              "90.0": 0.004886215911816308
+            }
+          },
+          {
+            "surface": "far",
+            "forward": [
+              0.020384948356427846,
+              0.0007306653758628574
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014658480734158956,
+            "sigma_absorption": 6.135135964377675e-08,
+            "optical": 0.0014659836359823112,
+            "optical_closure": 5.062468766325878e-05,
+            "integral_closure": 1.0325800965382825e-06,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.02042955640379753,
+              0.0008627442208272267
+            ],
+            "historical_two_wave_closure": 3.241602293990731e-05,
+            "angular_peak_errors": {
+              "0.0": 0.003912178616500688,
+              "90.0": 0.004887083204071226
+            }
+          }
+        ]
+      },
+      {
+        "cpw": 20,
+        "eps": 1.1,
+        "periods": 48.0,
+        "reflection": 1e-08,
+        "input_json_sha256": "e3a18e20cc976e19fabc4de42b0225486390bf8230647187d701af56ee7aa77c",
+        "input_array_sha256": "6550eb8e0609ba23bda756c045f2dfa31836cc0e2f3ad4688c2a84c16fddaac9",
+        "historical_continuum_optical_closure": 0.5201519415243046,
+        "backward_ratio": [
+          9.590159658629031e-05,
+          2.4099669626306235e-05
+        ],
+        "rows": [
+          {
+            "surface": "near",
+            "forward": [
+              0.020376442343194634,
+              0.0007292314387472021
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014771395562462033,
+            "sigma_absorption": 9.019062179453397e-08,
+            "optical": 0.0014772893179743267,
+            "optical_closure": 4.032622986049894e-05,
+            "integral_closure": -7.323686573634802e-06,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.02056123690954132,
+              0.001005272362680644
+            ],
+            "historical_two_wave_closure": -7.956267027775521e-05,
+            "angular_peak_errors": {
+              "0.0": 0.0160974697640179,
+              "90.0": 0.020086984511239105
+            }
+          },
+          {
+            "surface": "ff",
+            "forward": [
+              0.020376422452523833,
+              0.0007292500999257022
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.001477138703894295,
+            "sigma_absorption": 9.019062179453397e-08,
+            "optical": 0.0014773271221037076,
+            "optical_closure": 6.649449383422379e-05,
+            "integral_closure": -7.940226289360197e-06,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.020610276151078664,
+              0.0011228088157741465
+            ],
+            "historical_two_wave_closure": -5.339564658235485e-05,
+            "angular_peak_errors": {
+              "0.0": 0.016096459312531012,
+              "90.0": 0.020086294794786783
+            }
+          },
+          {
+            "surface": "far",
+            "forward": [
+              0.02037643742985407,
+              0.0007292323972138259
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014771396526694937,
+            "sigma_absorption": 9.019062179453397e-08,
+            "optical": 0.0014772912596521396,
+            "optical_closure": 4.157535885851438e-05,
+            "integral_closure": -8.146628193372862e-06,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.020552900648709974,
+              0.0012631875082460388
+            ],
+            "historical_two_wave_closure": -7.831059688434561e-05,
+            "angular_peak_errors": {
+              "0.0": 0.01609773228738158,
+              "90.0": 0.020087767716202774
+            }
+          }
+        ]
+      },
+      {
+        "cpw": 20,
+        "eps": 1.1,
+        "periods": 24.0,
+        "reflection": 1e-12,
+        "input_json_sha256": "3a73b85c48a6c2b42c1b0fac62cea7f82ff0f4a6e857e7def74f2989eb2e832f",
+        "input_array_sha256": "96a8b4ec39c25c61d470580876f45db2dd77dd8a32dcd66cdcf86d07d453d5d2",
+        "historical_continuum_optical_closure": 0.5196114957625402,
+        "backward_ratio": [
+          -0.00028256008447077055,
+          -0.00014648058667219367
+        ],
+        "rows": [
+          {
+            "surface": "near",
+            "forward": [
+              0.020374443939809143,
+              0.0007280161875726748
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014762309785634911,
+            "sigma_absorption": -2.3244934397848446e-07,
+            "optical": 0.0014748274416982994,
+            "optical_closure": -0.0007934205204340739,
+            "integral_closure": 3.3340139556026216e-05,
+            "quadrature_change": 2.886579864025407e-15,
+            "historical_continuum_forward": [
+              0.020559224778515586,
+              0.0010040842012107153
+            ],
+            "historical_two_wave_closure": 0.00016265731381315263,
+            "angular_peak_errors": {
+              "0.0": 0.015930021936604064,
+              "90.0": 0.019856563018014143
+            }
+          },
+          {
+            "surface": "ff",
+            "forward": [
+              0.020374388177054,
+              0.0007280072108790452
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014762309141065648,
+            "sigma_absorption": -2.3244934397848446e-07,
+            "optical": 0.0014748092565613111,
+            "optical_closure": -0.0008056974513631632,
+            "integral_closure": 3.307955520015504e-05,
+            "quadrature_change": 3.1086244689504383e-15,
+            "historical_continuum_forward": [
+              0.020608163138543453,
+              0.001121468811771368
+            ],
+            "historical_two_wave_closure": 0.00015035565274179596,
+            "angular_peak_errors": {
+              "0.0": 0.015929172800158962,
+              "90.0": 0.019856394737311833
+            }
+          },
+          {
+            "surface": "far",
+            "forward": [
+              0.020374302610605584,
+              0.0007279552452377681
+            ],
+            "forward_reference": [
+              0.02038855501798758,
+              0.0007311864845251784
+            ],
+            "sigma_scatter": 0.0014762281494556404,
+            "sigma_absorption": -2.3244934397848446e-07,
+            "optical": 0.0014747039836908874,
+            "optical_closure": -0.0008751491760286001,
+            "integral_closure": 3.170582136191591e-05,
+            "quadrature_change": 2.886579864025407e-15,
+            "historical_continuum_forward": [
+              0.020550721235330704,
+              0.001261671603209967
+            ],
+            "historical_two_wave_closure": 8.088545313555962e-05,
+            "angular_peak_errors": {
+              "0.0": 0.015924439173439053,
+              "90.0": 0.019852848332733913
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "independent_fourier_green": [
+    {
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "order": 128,
+      "amplitude": 1.0,
+      "measured_sine_limit": 0.9999999999673989,
+      "measured_cosine_limit": 4.68291098352649e-13,
+      "sine_gap": -3.260114400660541e-11,
+      "residual": 2.3214763444912023e-13,
+      "seconds": 0.010945199988782406
+    },
+    {
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "order": 256,
+      "amplitude": 1.0,
+      "measured_sine_limit": 0.9999999999663336,
+      "measured_cosine_limit": -5.722220608841211e-12,
+      "sine_gap": -3.366640299873325e-11,
+      "residual": 1.4377388168895777e-13,
+      "seconds": 0.04630950000137091
+    },
+    {
+      "direction": [
+        0,
+        0,
+        1
+      ],
+      "order": 512,
+      "amplitude": 1.0,
+      "measured_sine_limit": 0.9999999999736252,
+      "measured_cosine_limit": 4.474778428790026e-12,
+      "sine_gap": -2.6374791239902606e-11,
+      "residual": 1.3666845433135677e-13,
+      "seconds": 0.17987380002159625
+    },
+    {
+      "direction": [
+        1,
+        1,
+        1
+      ],
+      "order": 128,
+      "amplitude": 1.0167127956560758,
+      "measured_sine_limit": 1.0167127956580735,
+      "measured_cosine_limit": -2.231326138336032e-12,
+      "sine_gap": 1.964872708981602e-12,
+      "residual": 3.979039320256561e-13,
+      "seconds": 0.010942099965177476
+    },
+    {
+      "direction": [
+        1,
+        1,
+        1
+      ],
+      "order": 256,
+      "amplitude": 1.0167127956560758,
+      "measured_sine_limit": 1.0167127956632795,
+      "measured_cosine_limit": 2.5182639598215237e-13,
+      "sine_gap": 7.085443343157749e-12,
+      "residual": 1.3655743202889425e-13,
+      "seconds": 0.054947399999946356
+    },
+    {
+      "direction": [
+        1,
+        1,
+        1
+      ],
+      "order": 512,
+      "amplitude": 1.0167127956560758,
+      "measured_sine_limit": 1.016712795664388,
+      "measured_cosine_limit": 8.675048167427981e-13,
+      "sine_gap": 8.175682353339653e-12,
+      "residual": 2.2459811788166917e-13,
+      "seconds": 0.19515449996106327
+    },
+    {
+      "direction": [
+        0.2,
+        0.7,
+        0.3
+      ],
+      "order": 128,
+      "amplitude": 1.0086728175111028,
+      "measured_sine_limit": 1.008672817531575,
+      "measured_cosine_limit": 1.6148846817572658e-12,
+      "sine_gap": 2.0295987113172487e-11,
+      "residual": 3.5560443478743764e-13,
+      "seconds": 0.011514100013300776
+    },
+    {
+      "direction": [
+        0.2,
+        0.7,
+        0.3
+      ],
+      "order": 256,
+      "amplitude": 1.0086728175111028,
+      "measured_sine_limit": 1.0086728175284312,
+      "measured_cosine_limit": 5.47330673158185e-13,
+      "sine_gap": 1.7179369038444747e-11,
+      "residual": 2.435274204515281e-13,
+      "seconds": 0.05030050000641495
+    },
+    {
+      "direction": [
+        0.2,
+        0.7,
+        0.3
+      ],
+      "order": 512,
+      "amplitude": 1.0086728175111028,
+      "measured_sine_limit": 1.0086728175266073,
+      "measured_cosine_limit": 2.974608829098498e-14,
+      "sine_gap": 1.5371259820540217e-11,
+      "residual": 2.4741320103771614e-13,
+      "seconds": 0.19734720000997186
+    }
+  ],
+  "independent_reciprocity_backends": [
+    {
+      "backend": "numpy",
+      "field": 2.2591401799415137e-16,
+      "transverse": 5.605073573759033e-17
+    },
+    {
+      "backend": "jax",
+      "field": 2.336924281732948e-16,
+      "transverse": 4.069731613151662e-17
+    },
+    {
+      "backend": "jax.jit",
+      "field": 2.3097242142629586e-16,
+      "transverse": 5.295880929093773e-17
+    },
+    {
+      "backend": "torch",
+      "field": 2.7755575615628914e-16,
+      "transverse": 5.950123274503098e-17
+    }
+  ],
+  "dipoles_pml12": [
+    {
+      "component": "Ez",
+      "surface": "ff",
+      "complex_peak_error": 1.199242985151964e-08,
+      "power_closure": 1.1259658127205086e-05,
+      "decay": 5.4419872796512014e-11,
+      "seconds": 6.701757500006352
+    },
+    {
+      "component": "Ez",
+      "surface": "ff2",
+      "complex_peak_error": 5.719282637478535e-08,
+      "power_closure": 1.1243973407237817e-05,
+      "decay": 5.2160199044188404e-11,
+      "seconds": 6.794189799984451
+    },
+    {
+      "component": "Hx",
+      "surface": "ff",
+      "complex_peak_error": 3.597851448130521e-08,
+      "power_closure": -1.1302784919231534e-05,
+      "decay": 7.456446521519149e-12,
+      "seconds": 1.466073099989444
+    },
+    {
+      "component": "Hx",
+      "surface": "ff2",
+      "complex_peak_error": 7.052743909202884e-08,
+      "power_closure": -1.1309398445735752e-05,
+      "decay": 7.868615026292334e-12,
+      "seconds": 1.5634311999892816
+    }
+  ],
+  "dipoles_pml24": [
+    {
+      "component": "Ez",
+      "surface": "ff",
+      "complex_peak_error": 6.106228743503908e-09,
+      "power_closure": 1.2289844697477292e-09,
+      "decay": 4.166437944852514e-11,
+      "seconds": 12.780503000016324
+    },
+    {
+      "component": "Ez",
+      "surface": "ff2",
+      "complex_peak_error": 3.263228106921233e-08,
+      "power_closure": 1.3570901957749015e-08,
+      "decay": 5.092821136710336e-11,
+      "seconds": 12.873488900018856
+    },
+    {
+      "component": "Hx",
+      "surface": "ff",
+      "complex_peak_error": 4.350471952422369e-08,
+      "power_closure": 1.1620594930761285e-08,
+      "decay": 1.1865386900590085e-11,
+      "seconds": 7.187149800010957
+    },
+    {
+      "component": "Hx",
+      "surface": "ff2",
+      "complex_peak_error": 1.1011139892774187e-07,
+      "power_closure": 4.582924928442367e-09,
+      "decay": 1.0130231308029416e-11,
+      "seconds": 7.283348300028592
+    }
+  ],
+  "fresh_public_weak_sphere": {
+    "qsca": 0.007523001446207407,
+    "qabs": -1.2281156836705282e-06,
+    "qmie": [
+      0.007447804373386739,
+      0.007447804373386739,
+      0.0
+    ],
+    "error": 0.01009654242388125,
+    "ffq": 0.007523026965668559,
+    "farfield_integral": 0.007522978013890336,
+    "optical": 0.007523784817585764,
+    "optical_closure": 0.00026742191949136185,
+    "forward": {
+      "value": [
+        0.020376589833006956,
+        0.000729232611808858
+      ],
+      "reference": [
+        0.02038855501798758,
+        0.0007311864845251784
+      ],
+      "relative_error": 0.0005942489269606913
+    },
+    "incident_flux_ratio": 0.9875944996111287,
+    "decay": {
+      "abs": 1.7467690198189195e-11,
+      "sca": 3.0560895931425782e-09,
+      "ff": 5.201761330438248e-09
+    },
+    "shape": [
+      62,
+      62,
+      62
+    ],
+    "propagation": "yee",
+    "cpw": 20,
+    "eps": 1.1,
+    "periods": 24.0,
+    "backend": "jax",
+    "gap": 0.2,
+    "pml": 12,
+    "offset": "0,0,0",
+    "energy": false,
+    "phase_control": false,
+    "seconds": 21.313847303390503
+  },
+  "rejected_energy_reconstruction": [
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 2.25,
+      "cells": 16,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 4.440892098500626e-16,
+        "mean_error": 6.7286243916676156e-18,
+        "circulation": 4.440892098500626e-16,
+        "min_eigenvalue": 0.4444444444444444
+      },
+      "symmetrized": {
+        "max_error": 4.440892098500626e-16,
+        "mean_error": 6.7286243916676156e-18,
+        "circulation": 4.440892098500626e-16,
+        "min_eigenvalue": 0.4444444444444444
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 2.25,
+      "cells": 16,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.07500000000000018,
+        "mean_error": 0.002272727272727313,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.4444444444444444
+      },
+      "symmetrized": {
+        "max_error": 1.6653345369377348e-16,
+        "mean_error": 4.0371746350005693e-17,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.4444444444444444
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 2.25,
+      "cells": 32,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 4.440892098500626e-16,
+        "mean_error": 3.416070845000482e-18,
+        "circulation": 4.440892098500626e-16,
+        "min_eigenvalue": 0.4444444444444444
+      },
+      "symmetrized": {
+        "max_error": 4.440892098500626e-16,
+        "mean_error": 3.416070845000482e-18,
+        "circulation": 4.440892098500626e-16,
+        "min_eigenvalue": 0.4444444444444444
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 2.25,
+      "cells": 32,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.07500000000000018,
+        "mean_error": 0.0011538461538461947,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.4444444444444444
+      },
+      "symmetrized": {
+        "max_error": 1.6653345369377348e-16,
+        "mean_error": 4.099285014000578e-17,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.4444444444444444
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 2.25,
+      "cells": 64,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 4.440892098500626e-16,
+        "mean_error": 1.7212760071707853e-18,
+        "circulation": 4.440892098500626e-16,
+        "min_eigenvalue": 0.4444444444444444
+      },
+      "symmetrized": {
+        "max_error": 4.440892098500626e-16,
+        "mean_error": 1.7212760071707853e-18,
+        "circulation": 4.440892098500626e-16,
+        "min_eigenvalue": 0.4444444444444444
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 2.25,
+      "cells": 64,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.07500000000000018,
+        "mean_error": 0.0005813953488372505,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.4444444444444444
+      },
+      "symmetrized": {
+        "max_error": 1.6653345369377348e-16,
+        "mean_error": 4.131062417209885e-17,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.4444444444444444
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 12.0,
+      "cells": 16,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 8.881784197001252e-16,
+        "mean_error": 1.3457248783335231e-17,
+        "circulation": 8.881784197001252e-16,
+        "min_eigenvalue": 0.08333333333333333
+      },
+      "symmetrized": {
+        "max_error": 8.881784197001252e-16,
+        "mean_error": 1.3457248783335231e-17,
+        "circulation": 8.881784197001252e-16,
+        "min_eigenvalue": 0.08333333333333333
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 12.0,
+      "cells": 16,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.12375000000000022,
+        "mean_error": 0.003750000000000044,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.08333333333333333
+      },
+      "symmetrized": {
+        "max_error": 1.942890293094024e-16,
+        "mean_error": 4.710037074167331e-17,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.08333333333333333
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 12.0,
+      "cells": 32,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 8.881784197001252e-16,
+        "mean_error": 6.832141690000964e-18,
+        "circulation": 8.881784197001252e-16,
+        "min_eigenvalue": 0.08333333333333333
+      },
+      "symmetrized": {
+        "max_error": 8.881784197001252e-16,
+        "mean_error": 6.832141690000964e-18,
+        "circulation": 8.881784197001252e-16,
+        "min_eigenvalue": 0.08333333333333333
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 12.0,
+      "cells": 32,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.12375000000000022,
+        "mean_error": 0.0019038461538462004,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.08333333333333333
+      },
+      "symmetrized": {
+        "max_error": 1.942890293094024e-16,
+        "mean_error": 4.7824991830006746e-17,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.08333333333333333
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 12.0,
+      "cells": 64,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 8.881784197001252e-16,
+        "mean_error": 3.4425520143415706e-18,
+        "circulation": 8.881784197001252e-16,
+        "min_eigenvalue": 0.08333333333333333
+      },
+      "symmetrized": {
+        "max_error": 8.881784197001252e-16,
+        "mean_error": 3.4425520143415706e-18,
+        "circulation": 8.881784197001252e-16,
+        "min_eigenvalue": 0.08333333333333333
+      }
+    },
+    {
+      "normal": [
+        1.0,
+        0.0
+      ],
+      "eps": 12.0,
+      "cells": 64,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.12375000000000022,
+        "mean_error": 0.0009593023255814428,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.08333333333333333
+      },
+      "symmetrized": {
+        "max_error": 1.942890293094024e-16,
+        "mean_error": 4.819572820078199e-17,
+        "circulation": 0.0,
+        "min_eigenvalue": 0.08333333333333333
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 2.25,
+      "cells": 16,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 0.0686079587805607,
+        "mean_error": 0.0017578209791778861,
+        "circulation": 0.20787008919584216,
+        "min_eigenvalue": 0.35138753900672004
+      },
+      "symmetrized": {
+        "max_error": 0.030337309610439678,
+        "mean_error": 0.000752592402177319,
+        "circulation": 0.052123130979964793,
+        "min_eigenvalue": 0.44009009745819666
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 2.25,
+      "cells": 16,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.06678384559800798,
+        "mean_error": 0.0019033353000577637,
+        "circulation": 0.04713993544862549,
+        "min_eigenvalue": 0.35138753900672004
+      },
+      "symmetrized": {
+        "max_error": 0.02444075213811514,
+        "mean_error": 0.0005023188049681123,
+        "circulation": 0.025719684407176535,
+        "min_eigenvalue": 0.44009009745819666
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 2.25,
+      "cells": 32,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 0.06860795878056114,
+        "mean_error": 0.0008985809444876961,
+        "circulation": 0.20787008919584293,
+        "min_eigenvalue": 0.35138753900671976
+      },
+      "symmetrized": {
+        "max_error": 0.030337309610439678,
+        "mean_error": 0.0003823396916721336,
+        "circulation": 0.052123130979964793,
+        "min_eigenvalue": 0.44009009745819666
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 2.25,
+      "cells": 32,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.06678384559800815,
+        "mean_error": 0.0009651474227948988,
+        "circulation": 0.0471399354486256,
+        "min_eigenvalue": 0.35138753900671976
+      },
+      "symmetrized": {
+        "max_error": 0.02444075213811525,
+        "mean_error": 0.0002547041648470528,
+        "circulation": 0.025719684407176868,
+        "min_eigenvalue": 0.44009009745819666
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 2.25,
+      "cells": 64,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 0.0686079587805638,
+        "mean_error": 0.0004543584747750907,
+        "circulation": 0.2078700891958457,
+        "min_eigenvalue": 0.3513875390067188
+      },
+      "symmetrized": {
+        "max_error": 0.030337309610440122,
+        "mean_error": 0.00019271734511160755,
+        "circulation": 0.052123130979964793,
+        "min_eigenvalue": 0.44009009745819666
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 2.25,
+      "cells": 64,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.06678384559800848,
+        "mean_error": 0.00048601522146503296,
+        "circulation": 0.04713993544862616,
+        "min_eigenvalue": 0.3513875390067188
+      },
+      "symmetrized": {
+        "max_error": 0.024440752138115585,
+        "mean_error": 0.00012825701173102167,
+        "circulation": 0.0257196844071792,
+        "min_eigenvalue": 0.44009009745819666
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 12.0,
+      "cells": 16,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 0.631307905365349,
+        "mean_error": 0.00896429013779925,
+        "circulation": 1.089318045845539,
+        "min_eigenvalue": 0.04939853577906253
+      },
+      "symmetrized": {
+        "max_error": 0.22594325013166372,
+        "mean_error": 0.008994393418998041,
+        "circulation": 0.6208031536775007,
+        "min_eigenvalue": 0.0664802512428684
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 12.0,
+      "cells": 16,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.15274230268669098,
+        "mean_error": 0.005408830036867668,
+        "circulation": 0.11078887884976207,
+        "min_eigenvalue": 0.04939853577906253
+      },
+      "symmetrized": {
+        "max_error": 0.09082507222208147,
+        "mean_error": 0.0020065937327023516,
+        "circulation": 0.09200501223108926,
+        "min_eigenvalue": 0.0664802512428684
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 12.0,
+      "cells": 32,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 0.6313079053653514,
+        "mean_error": 0.004607233300077487,
+        "circulation": 1.0893180458455434,
+        "min_eigenvalue": 0.04939853577906231
+      },
+      "symmetrized": {
+        "max_error": 0.22594325013166483,
+        "mean_error": 0.004563948865116605,
+        "circulation": 0.6208031536775007,
+        "min_eigenvalue": 0.06648025124286834
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 12.0,
+      "cells": 32,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.15274230268669148,
+        "mean_error": 0.0027287857522551484,
+        "circulation": 0.11078887884976218,
+        "min_eigenvalue": 0.04939853577906231
+      },
+      "symmetrized": {
+        "max_error": 0.09082507222208208,
+        "mean_error": 0.0010138285378624757,
+        "circulation": 0.09200501223109009,
+        "min_eigenvalue": 0.06648025124286834
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 12.0,
+      "cells": 64,
+      "et": 1.0,
+      "dn": 0.0,
+      "energy": {
+        "max_error": 0.631307905365371,
+        "mean_error": 0.002335944844562122,
+        "circulation": 1.089318045845564,
+        "min_eigenvalue": 0.04939853577906231
+      },
+      "symmetrized": {
+        "max_error": 0.2259432501316715,
+        "mean_error": 0.0022990362958222135,
+        "circulation": 0.6208031536775074,
+        "min_eigenvalue": 0.06648025124286815
+      }
+    },
+    {
+      "normal": [
+        0.6,
+        0.8
+      ],
+      "eps": 12.0,
+      "cells": 64,
+      "et": 0.0,
+      "dn": 1.0,
+      "energy": {
+        "max_error": 0.15274230268669348,
+        "mean_error": 0.0013705262658215566,
+        "circulation": 0.11078887884976252,
+        "min_eigenvalue": 0.04939853577906231
+      },
+      "symmetrized": {
+        "max_error": 0.09082507222208303,
+        "mean_error": 0.0005095796867725164,
+        "circulation": 0.09200501223109714,
+        "min_eigenvalue": 0.06648025124286815
+      }
+    }
+  ],
+  "measured_exits": {
+    "lattice-dipole-probe": 0,
+    "lattice-dipole-pml24": 0,
+    "lattice-replay": 0,
+    "lattice-fresh-weak20": 0
+  },
+  "full_verification": [
+    {
+      "stage": "fast",
+      "exit": 1,
+      "seconds": 911.7041912000277,
+      "source_unchanged": true,
+      "internal_error": false,
+      "collected": 1958,
+      "reported": 1958,
+      "failed": 3,
+      "errors": 0,
+      "skipped": 6
+    },
+    {
+      "stage": "fast-v2",
+      "exit": 0,
+      "seconds": 786.3232283000252,
+      "source_unchanged": true,
+      "internal_error": false,
+      "collected": 1958,
+      "reported": 1958,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 6
+    },
+    {
+      "stage": "slow",
+      "exit": 0,
+      "seconds": 947.393808999972,
+      "source_unchanged": true,
+      "internal_error": false,
+      "collected": 78,
+      "reported": 78,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "stage": "freeze0",
+      "exit": 0,
+      "seconds": 7.095828299992718,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "froze 143 arrays from 8 scenes on 3 backends, twice, byte-identical; content 11547313656e\nagainst the committed fd_golden_stage0.npz:\n  143 of 143 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written"
+    },
+    {
+      "stage": "freeze1",
+      "exit": 0,
+      "seconds": 7.735770600032993,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "froze 288 arrays from 6 scenes on 3 backends, twice, byte-identical; content 73d979466bf1\nagainst the committed fd_golden_stage1.npz:\n  288 of 288 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written"
+    },
+    {
+      "stage": "freeze2",
+      "exit": 0,
+      "seconds": 12.43018480000319,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "froze 140 arrays from 4 scenes on 3 backends, twice, byte-identical; content 6f5118aab6a1\nagainst the committed fd_golden_stage2.npz:\n  140 of 140 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written"
+    },
+    {
+      "stage": "freeze3",
+      "exit": 0,
+      "seconds": 27.53338919999078,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "against the committed fd_golden_stage3.npz:\n  570 of 570 arrays reproduce bit for bit\n  the case list has changed since the freeze (provenance only; the arrays above say whether the numbers moved)\nthe committed golden is reproduced; nothing written"
+    }
+  ],
+  "full_verification_source_sha256": {
+    "wavebit/fd/__init__.py": "44990ca995cf525b3155c99619678323fe93c2c950858f300d2ca029e57feca9",
+    "wavebit/fd/_assemble.py": "822b8508d5a8aab5b67f331d55ade92e48fb020471727c90068f1438b0036414",
+    "wavebit/fd/_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+    "wavebit/fd/_kernel/__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+    "wavebit/fd/_kernel/constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+    "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+    "wavebit/fd/_kernel/curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+    "wavebit/fd/_kernel/faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+    "wavebit/fd/_kernel/grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+    "wavebit/fd/_kernel/masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+    "wavebit/fd/_kernel/observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+    "wavebit/fd/_kernel/poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+    "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+    "wavebit/fd/_kernel/step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+    "wavebit/fd/_lower/__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+    "wavebit/fd/_lower/checks.py": "4f37432acd12d82fa8271351119277a66bd43eca9818bd6554db2f104858534b",
+    "wavebit/fd/_lower/coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+    "wavebit/fd/_lower/constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+    "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+    "wavebit/fd/_lower/fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+    "wavebit/fd/_lower/grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+    "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+    "wavebit/fd/_lower/monitors.py": "fedc8f502038907ea34b7ec5bc30d60e63addb6fcbbbaf51c35c8cb22db218ba",
+    "wavebit/fd/_lower/occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+    "wavebit/fd/_lower/params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+    "wavebit/fd/_lower/plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+    "wavebit/fd/_lower/sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+    "wavebit/fd/_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+    "wavebit/fd/_radiation.py": "50995f04920dfc24c623fea1f9c499aaad3df5b5902b186c650f51c1fa8980f4",
+    "wavebit/fd/_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+    "wavebit/fd/_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+    "wavebit/fd/_shapes/__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+    "wavebit/fd/_shapes/_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+    "wavebit/fd/_shapes/_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+    "wavebit/fd/_shapes/_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+    "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+    "wavebit/fd/_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+    "wavebit/fd/_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+    "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+    "wavebit/fd/diagnostics.py": "89fc89c7d5bfcbe94f1340288c00b1268f6175eb61902aa8562a2422cc3f0f76",
+    "wavebit/fd/geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+    "wavebit/fd/materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+    "wavebit/fd/monitors.py": "741792014847a5985949eaa5600ffb17b59c543259636c5df1b3e525a9522c41",
+    "wavebit/fd/results.py": "c1de3a60fef93c23ffd0021b210ebf8d6c5f9bd2d07e219c59dc46da99e78995",
+    "wavebit/fd/scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+    "wavebit/fd/sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328",
+    "tests/check_installed_package.py": "10ed4e458949c5fd1fd31863b6e43d44c1c26e73df30054ec5fd29c732d42741",
+    "tests/conftest.py": "016e358ab716b0fffaf0b754174277c88aabec3d279ddf027db3cd2f7b42d2c6",
+    "tests/data/gen_goldens.py": "a7b3c3ad99f15f8ba0bd72b8651a3a828db1611fb776132ca3a156e631001919",
+    "tests/data/gen_goldens_field.py": "28eb3ec4ff9d173cd64861465d92356fba34d071362134b0fd84133b0577f6af",
+    "tests/data/gen_goldens_nvf.py": "5a51be9f26f2a3ca2076e33e03e44921057bc05bc990a916b4de7f00a29a8326",
+    "tests/fd_helpers.py": "527216c8cd4e6da9608104e9f81097b167a862be2c55f64bbbce0e71e61be5c0",
+    "tests/gamma_instruments.py": "1df51f5acf361423e6d902ff374e3a73a52fbd11e020b94c2cb68f08bd42f762",
+    "tests/references/_fd_stage0_cases.py": "850db75093adef640b1a3977724443cf448e707789d1092592a7525e2d021e43",
+    "tests/references/_fd_stage1_cases.py": "c2862c3de2cd6f7e37829fcfb5b25bd7286de02daa1dff6399a2e337e4201d6d",
+    "tests/references/_fd_stage2_cases.py": "b9d2013ce97caa36b7f79a5119f991f0a0420f49afe011cfa6f806d6a9f63a37",
+    "tests/references/_fd_stage3_cases.py": "514a16b4afa104600d749341ba4be48715d6ab17568f52954d46a7d99f0aa162",
+    "tests/references/_fmmax_cases.py": "c2761d3881c6b873f55ae6652645c811793532768ee11a0d942a11379d98c735",
+    "tests/references/_fmmax_field_cases.py": "46fcf4af23b4144994944998506512fa78ae992e10f60b05dd2a01f58b6f8c8e",
+    "tests/references/_fmmax_mu_ambient_cases.py": "178a09da99bf4d7b73813b2db433c93473add084393c369170b6d443daf87df1",
+    "tests/references/_fmmax_patterned_cases.py": "4666456ac21ff10bee5fcb7ab3ad8bff0c708677f3fd64d604855e7f0a513e86",
+    "tests/references/_fmmax_patterned_mu_cases.py": "d875931dbcadbcef8f6560c3b4decb91f4d0ef85a563542111086e08ac68bc7d",
+    "tests/references/_meep_1d_cases.py": "9632ce71a262417e88f35eb49639e378c04b0e1f09f1cd03b0ac2c86ea69a3c6",
+    "tests/references/_meep_crossed_cases.py": "8fadfc3b1309f0a7aeec22f206786f2dd595f615b8bb4f687d9c940754825a72",
+    "tests/references/_meep_crossed_material_cases.py": "753cbdbfa604a122dc8e52fe8cf87553beb191e8acfb2d5c2eba16ac14fe7082",
+    "tests/references/_meep_crossed_metal_case.py": "3a1ae2ee78eb2b8a51bab06bf5b2cc988973aaef479964be6e2b78afff843718",
+    "tests/references/_reticolo_conical_field_cases.py": "20e6b9cf1c0908a8bf718cb41d807f1fd55df0f532b393709a142a66384f3ed6",
+    "tests/references/_reticolo_field_cases.py": "8fff0d7e39c063366b1796670940155f61bc33987f68cda2f2b66e8e165434fb",
+    "tests/references/check_meep_crossed_material_runtime.py": "545506df99e34cda0eb28ed7ec9c24591c53848aa911b155d5623ff6d444de47",
+    "tests/references/gen_goldens_fdtd_table.py": "444159f4ce8e9c107e2bba32e364de6ab1343e31387e83cae821dfa4b87fc814",
+    "tests/references/gen_goldens_fmmax.py": "ae2405016fcc74ca308fc3548f3174205bbd1dea5bb8f939fb94a7a0d15ce347",
+    "tests/references/gen_goldens_fmmax_field.py": "b77e5d93304654a331447d65f63eed7e068228d3a3d18db95dc72dd999a910b0",
+    "tests/references/gen_goldens_fmmax_magnetic.py": "be7c1acdafd1d551952c5d97540b351254da1fba5cb25c3232a01850a2a320c9",
+    "tests/references/gen_goldens_fmmax_mu_ambient.py": "1d178de20fd17a65e2964c2fdcf1f3b40298577f1ad0b5ffe6c2fba0f551ef48",
+    "tests/references/gen_goldens_fmmax_patterned.py": "ebc23af9f43d08f8da914088785c22b10e26ac077635caaea070384a6acd7daa",
+    "tests/references/gen_goldens_fmmax_patterned_mu.py": "fb44fe01132d16d4b10adeff82fe2e05321bd6bbe71b1ebba9384ddad6c0d3a8",
+    "tests/references/gen_goldens_meep_1d.py": "70df7ff1f18243ba1d4ab217c3e816967397ae5858eeaefd64a8785fad62e3da",
+    "tests/references/gen_goldens_meep_crossed.py": "011e24fed2aff87efa39cef54369873631d8bee6ced15b1551807ae48f3c3f0f",
+    "tests/references/gen_goldens_meep_crossed_materials.py": "4c05e22bc3830e461483ca394258f111086f7533c033308e56f6f69380f616b2",
+    "tests/references/gen_goldens_meep_crossed_metal.py": "6c3bf8d5ab226145c37db937771fd25f055a8c12eec15fc4a6e92e416f675a24",
+    "tests/references/gen_goldens_reticolo.py": "a979af9d01a92e4efcfe7b89416280424ed886cb216d4900b5d72cfff88e7b25",
+    "tests/references/gen_goldens_reticolo_anisotropic.py": "ae9c8498dca4a101a9dcdccb85ffd8bfc571a051f5d9dcd1de78d589a9cf11fd",
+    "tests/references/gen_goldens_reticolo_conical_field.py": "6c6575f93efcee1dfba1673d8537d58580a7987e0a3631d2893b351843e9e522",
+    "tests/references/gen_goldens_reticolo_conical_sweep.py": "add23159cb10e6257fc08e993f2aeb7f30e5eafc0d9a278056f02a93fa59598a",
+    "tests/references/gen_goldens_reticolo_field.py": "ea0200ae3b00002b7dab067fca58657d03ec53d0381e8b0683f0c959f0c0ce80",
+    "tests/references/gen_goldens_s4.py": "ead197ee4782d6fb0f985e34af8de4d42109bb0c32e79a3ef4578f4707e99c66",
+    "tests/references/gen_goldens_s4_field.py": "2b543addc717155cff4a93b8690f843088374c8281eb1ee0dd7dcda4856a13c5",
+    "tests/references/interface/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/references/interface/freeze_fd_stage0.py": "902f22168f18e7636d4ce3e3a52be4fad0a103b9ae6074b364b1543829100c1d",
+    "tests/references/interface/freeze_fd_stage1.py": "f54318053df7c910bb890a102fcd9178632343acb6974cd565748b2a52dbc38d",
+    "tests/references/interface/freeze_fd_stage2.py": "b94ee8bfda379b3f1ea3e461415c2344a20ae636388da0727c4b10909064c5ea",
+    "tests/references/interface/freeze_fd_stage3.py": "1df438ba65b3f02acb88fe6608d81886968b137fcffb29e214eba7b7a1c077ce",
+    "tests/references/interface/freeze_grid_material_references.py": "e6605b78515283504ff536d99f2442eaf5e0f451a8b9d1c4d12cb470ec6bff52",
+    "tests/references/interface/freeze_grid_references.py": "2c6e6337353d760e6293f7033d9da523237940256a7750227e241b3f89dc7a42",
+    "tests/references/interface/measure_fd_stage4_fdtdx.py": "692f032e4c5709117ab6ddd09d5a49f3be8e991a0ae28ac4e531a2ba2029be02",
+    "tests/references/interface/measure_fd_stage4_meep.py": "9cc7ace06f56a13111ba22fd25df7c0fdfe55702c5086b29f3a120e7a3472dd7",
+    "tests/references/interface/meep_adjoint_rotation.py": "f02539f5afbaf6a1e05d65c8edb2b55f855c3a0c082667b4fa74377a453565db",
+    "tests/references/interface/meep_halfspace.py": "6997ec19d2dec60f41d5a6c26bf4a093e4733fd26e39d45c1ce205216159d4e3",
+    "tests/references/interface/meep_multilayer.py": "466e37e6882c3389c667a7ee21bfeebfe952844969bc3470dc032f47ce2377f4",
+    "tests/references/interface/meep_rectangle.py": "9b73d48ad7fdc2ae2b803968c15ad22dc61314c76ade3e0bf3d4987960801409",
+    "tests/references/interface/meep_ringdown.py": "5d83312b8fe2bf5beb2c167543d79c9dafa1c502e21fd135f2e660b62c3330e3",
+    "tests/references/interface/meep_rotation.py": "aef41e0952a402acd4549ebafcf21a2327bec15d41f82a56590fd6350a713d00",
+    "tests/references/interface/meep_source_notch.py": "7b5a2545c1ed2f2cd1bcf30bb60e7e252e3c67e4f9cb7d8ece3692ea200394bf",
+    "tests/references/interface/Reticolo.py": "245e3482ee0b769704ddefcab0ab1df6fae8bba0a2086ac8a35f866b8b3f5e0a",
+    "tests/references/interface/validate_grid_dispersive.py": "954f034bef55cab5686c66d69e3d26feb7802334084556d57e76a7404d7d1bac",
+    "tests/references/interface/validate_grid_fdtdx.py": "4d76990d90138a0f9d3d14ec537a0035000ba2fcd4dbe00c1bcdfde33b435f9d",
+    "tests/references/interface/validate_grid_fdtdx_ade.py": "0fd771cbedf011a3acb2b175b1bfcdac375c27c483c6b1fcb0bd7036cccd3016",
+    "tests/references/interface/validate_grid_fdtdx_bloch.py": "ba552015bb4d014e01c8878232900be0dfa3aec1148c754753155ee255f5707d",
+    "tests/references/interface/validate_grid_meep.py": "6cf96c1b119bc55607b804dd542caabd0cb7eea59bda71d40b954386a156e961",
+    "tests/references/interface/validate_scene_bottom_meep.py": "3bb24ac5d74cf09f803a2012f593143ee553e921ac9f124a09a95f533eb82446",
+    "tests/references/lattice.py": "a08a4d421b83428de5cb36beee2089e53994c56f52b5ceaab9fd97a9a2682b79",
+    "tests/references/mie.py": "04afcc9d9496793b49622ac25283d5e772ed0bcc47624b35b02f4ddf50633518",
+    "tests/references/mie_fields.py": "804d78df204ba70d791f554ec37dc9d6a5ec24b11cb4bcde2480489b9a327c55",
+    "tests/references/refine_meep_crossed_metal.py": "cc0438a622db0d06219995565ae8ecd35ee49eafec7cd74b5668368599713ab8",
+    "tests/references/test_4ff_external_goldens.py": "e1411cc785d76b2965858e0417d888452550cd6baa6894773386fd5e52e00bbe",
+    "tests/references/test_fdtd_table_golden.py": "ae6d78304e4f5d0b3ea56f03e5d1997670596500e196cb48dc569597829fe10f",
+    "tests/references/test_fmmax_field_golden.py": "d8357a73031206a0f91b279cbfbb65a6ca720790f17800eb6d0f36ece97e0500",
+    "tests/references/test_fmmax_golden.py": "eb16ee1c2091088b66b560341dc66fb98db816f6f8ce399e031af3b19dff3b08",
+    "tests/references/test_fmmax_magnetic_golden.py": "b69f030bbd8c232208cc690316a67a9160488898d78c0df72b5d01388839d334",
+    "tests/references/test_fmmax_mu_ambient_golden.py": "40b2456d42b980aa168de35db56595196a613cf62f5c32430a2ed1afccf9f8a0",
+    "tests/references/test_fmmax_patterned_golden.py": "455dc7aa4a24ca3611cb9b0f940342f4c171e742fcee5f08712d4a9978e22461",
+    "tests/references/test_fmmax_patterned_mu_golden.py": "08c1a2e883e63df13d9aba699fa1234c13a8949213851d00d4db1290fed73d0f",
+    "tests/references/test_meep_1d_golden.py": "f3f72b7888a8291d9ebdd2485cf55f71bb2684188b56dc1150b68a1929892ead",
+    "tests/references/test_meep_adjoint_rotation.py": "007614ffc56871847e6c630c229b5ad19dd40af19559887c63af0c90dd47dda1",
+    "tests/references/test_meep_circles.py": "14e88cfa9121f79d08a3de4217b45f1357111bb7aff3ad52f1ec71b24f503d45",
+    "tests/references/test_meep_crossed_golden.py": "1b9a5ab6cd19427c0977cfdb9d241e7336bb5aa13357661514881aaabf3c7a39",
+    "tests/references/test_meep_crossed_materials_golden.py": "dfc5c95278b5bf5c8d32e1d6872ec93d4b0080ad2695ee453e046f0c7c1bd8ce",
+    "tests/references/test_meep_crossed_metal_golden.py": "9c8f47c2c94b9d461ea33d4deffdd249c6fe9fe511740b34674a63da962d250e",
+    "tests/references/test_meep_ellipses.py": "08d84eddebffd15a1038dc641d7170e6e2cca7fce7c34a65fbd34a0c1da87d5e",
+    "tests/references/test_meep_halfspace.py": "7ec8dfe6287b9d09de0a38c32e5f7abc3e1852fc85860112ab1a9bb2ef6caf34",
+    "tests/references/test_meep_layer_smoothing.py": "7ceb6ea4034920d466ec7e37c1eb04bbc65909dcc7efe23f3b1e9ee400b55500",
+    "tests/references/test_meep_layer_thickness.py": "51b6ade27cc6cd4012eb9794c5f00f9757720e7b8c7923d293bdeb7912f71c65",
+    "tests/references/test_meep_multilayer.py": "864c151b1f79fa4695f1defb8f9ee5266d08ab59405a8540fac9c65605f80a94",
+    "tests/references/test_meep_painted_shapes.py": "127006a47e321f40352bf8777378901e828db8a7e537db85c81b0ef482c0b7ab",
+    "tests/references/test_meep_rectangle.py": "0906616c52ad3e0829cd3ca2064fe3b7cea080f85d2d4d6e4a83343c8bfb82ea",
+    "tests/references/test_meep_ringdown.py": "ec8f574798ead268002230081a379ca6ff740de585c225d7ee8c1baf7727ff87",
+    "tests/references/test_meep_rotation.py": "c7983986b80710a839c237a783a5cc56dbdbf4c73458d478fa80b77c71569e20",
+    "tests/references/test_meep_rotation_smoothing.py": "67706c7389d030cd26f9acf666fe8df286dbb899fba649267e10e07b90cf9e7f",
+    "tests/references/test_meep_source_notch.py": "176b61bd648cb8ae7b4fc75e47acd1edd01fe1330015a77022ee3d74b18871f0",
+    "tests/references/test_meep_variable_depth.py": "d608300b8fe3252b8ac1bacbeadc80507aa0158832ffe2c79cbf105f2221580c",
+    "tests/references/test_native_bloch_external.py": "1d6e775ff3f215d44eacc2871db3749e5acde7bc145146e596a97b96dc78da5b",
+    "tests/references/test_native_grid_external.py": "5062e6438205836bc294292d5bc600a1b8a2eeadd5fbb0c7952acd71d0db4a43",
+    "tests/references/test_native_material_external.py": "63ee67aef72d9fe79f7fc2718059af9012b03229b0a2d46fb1a61b234484d212",
+    "tests/references/test_native_torch_external.py": "06dc97215cf06b6167c5709f0b2005137f1529346bbfc7bac5430fcfeb605f35",
+    "tests/references/test_reticolo_anisotropic_golden.py": "b773f6f8ed9f28cf7307f5e7e9f0e54e8ace5f09428f9e67a46fd6d524df5071",
+    "tests/references/test_reticolo_conical_field_golden.py": "5c2bdd814d41bf55293898c4839b7340a818413cac7ae840354080243a3df2d5",
+    "tests/references/test_reticolo_conical_sweep.py": "8a1c2d1412c689581eca0b87538ae8618a34ada26f90c551b8e98564b30e0210",
+    "tests/references/test_reticolo_field_golden.py": "dae0b66da87ce6ed8f06512c434e0df33aff01cb2be6bd4673dbb31fabe6f320",
+    "tests/references/test_reticolo_golden.py": "1e24101301a0f552f03580abaf47cda9d19c12b3b5ec0234ab3839a0e433a63b",
+    "tests/references/test_s4_field_golden.py": "84cff9d88d3c1fd8caace08fd1969fb9a143f16dd2858009076c9d5099cea823",
+    "tests/references/test_s4_golden.py": "54cee5b58370d34f82eab4af90b0066579940ddac6fb874e32bea146adead435",
+    "tests/references/test_scene_bottom_meep.py": "41bdeae1224fab410dc67e55fb830c21a103a9bb86acef6ae0aa83b4725b7ce8",
+    "tests/run_distribution_smoke.py": "89b7472e60aaf2b29578fd932e40808a2be2bc906396eed9c4a02297c3df0935",
+    "tests/run_examples_smoke.py": "f7bb0bbfc5932f1ee63b16a41c8bf0fe3f57c2a4ca9c659c689a94c83a3fc948",
+    "tests/test_amplitude_sp_frame.py": "92db512eed981002c8dd0704eb137ab25206a58bea8bf6800fa34b4b3f1f349a",
+    "tests/test_anisotropic_berreman.py": "6146edf64c0664a0cc8d22a0062131971ef6b5628af599f0aeda97aa39d9022c",
+    "tests/test_answers_declaration.py": "c9807d768eb0cc754dd5badb62cb91eb6db50961127559e75b0a915c8306fd19",
+    "tests/test_backend_adapter.py": "bbdddd6c0f0590991d4643e1724ea613acdeb2a7b21330a029b741f9191303a2",
+    "tests/test_backside_incidence.py": "7ab364aeb29d9fcde4d77453e94c5d647145b41a5069485a00bd37dfe0c3338c",
+    "tests/test_boundary.py": "96fb523dcd8cf2a6931432cbff9d07e595a6339c4ea34873f850d8f888dbf7dd",
+    "tests/test_branch_selection.py": "9421df4c846b4a1eb2fce50d38973cc033c4260106206eb033e587824a5a622e",
+    "tests/test_cell_shape_gate.py": "1ebe6a9eb47423c16f2f370bb766b5751a18cb2eef29868e53b00f67ecd64c0b",
+    "tests/test_condition_gate.py": "a17a92770e09dbaad22e622c36c63c2c8f6f4bef342657cbae0f6e53ab37a626",
+    "tests/test_condition_sweep.py": "48b1be7222cc4e482f6f785798e9692ce38bb7578a4dde64f586e4ee0ebb7def",
+    "tests/test_conv_matrices_accessor.py": "555915d0fcca38d5135a817cacdbc2948614aecd9c984629af3fe321dda42794",
+    "tests/test_core_full_results.py": "505a659c38327047b4f8a98b5785d72065b6c714758228cdd50dff45c821a8c2",
+    "tests/test_docs_contract.py": "ca7c19b65f8e13280683732e0b0f6a454013c07480b6283c02d8286d872b5fa1",
+    "tests/test_domain.py": "9f154c6f59cc569250057d264856ae457e3eb603ae81feb0f479246b429be740",
+    "tests/test_eig_grad.py": "6b8363732edfd447f01ba46c389b381e062cf12a51d72790224d536a29c146d9",
+    "tests/test_enums.py": "15ddf70bdd6a09a29a94f1df8ae0c41553409100c8e99597cce6d4d0e872b977",
+    "tests/test_equivalence.py": "e4b25bf46c7dab60895d45a5ab28067412c0449bf4b1bb6a9dc33c334c075483",
+    "tests/test_excitation.py": "4d4ca403e40767a9f98e60af2d2f74764c0a0eadc5db98a4767fe7ca5a01fe8f",
+    "tests/test_factorization_by_modeling_path.py": "49da89f6f834754060e6d616850697b94a2672f64aac8df7f2784a31860d037a",
+    "tests/test_factorization_core.py": "efdcea50e4638365209e0c4d3ed91dcfa22318e2013d3e8ffea4c286a62cfc7a",
+    "tests/test_fd_absorber.py": "7f87b93d3946e60f4f14233cb40a9b77d740ceec6aec8998e1bcfef62b715b15",
+    "tests/test_fd_airy.py": "95fa4f71a5f7da8b73f92fb882e2755bb19a71b946181b7f4c3a25c06f95b530",
+    "tests/test_fd_axis1d.py": "6bce56d131488544cab33b1d44c7557f7190d64971a9b2df3702e6970f923256",
+    "tests/test_fd_backends.py": "82018c012243ac74d9fed2879f834a73dffa6427864522e28c5c351576dfb896",
+    "tests/test_fd_bloch.py": "d1f8e280f518d7bf1bfb974420bb4f14049cdf3cab9b4d05f60a6744b338a396",
+    "tests/test_fd_constitutive.py": "6400ac55365ee37a0470dcb692b2592d9468073a957eaf94679a3c78e68d0035",
+    "tests/test_fd_constitutive_study.py": "c2b763675cf3dd3844bd7f6133691cac88570fe75ff2ce9dee26e1618d0e3e63",
+    "tests/test_fd_contract.py": "5910e678797e613e16cb4fac7b54321e5047e90ecb9931a999a39cd7555e6cbf",
+    "tests/test_fd_decay.py": "152c1ce41e6702a0ce0a69410d08bea44f64badddc8ff340067dba4cb8a5dd00",
+    "tests/test_fd_diffraction.py": "26b0e136ff7d1919228cb6e9b13b82eb312b2125b5d4da47e7cc693ecad2cf17",
+    "tests/test_fd_dipole.py": "4c17613a449ce81d56b4bc4efb0b94b460d52f65a43909da67320b9f7db70ad6",
+    "tests/test_fd_dispersive.py": "0a29ef94e11242d15b53b5251ee57b1a71c482ea0c3b6a37bd09d1ee61d78826",
+    "tests/test_fd_farfield.py": "1073b5e854b93364ca7bf4647a3d370803fd705fa02585da58137413551dfbed",
+    "tests/test_fd_flux.py": "32a3372ded8426d0e44c33fe602634e3d29154d43bf9cf181639088b9ab16d35",
+    "tests/test_fd_grad.py": "328988c79a77f03353b4be850dc1ff0df45b593a71e84072f73eb2cfd6b6da27",
+    "tests/test_fd_grazing.py": "cf240bf09589d26222f971124d04f37bf4a8aa6307458e48e9f91430df837209",
+    "tests/test_fd_layer_return.py": "b5ad912cf842cab87449bc278b5b9cd941ebc48a0976da264647735734604544",
+    "tests/test_fd_materials_doors.py": "0c66d80fdfa836cef8daadb007e5693b2a852d02fea3815d08668b2edabc14b9",
+    "tests/test_fd_mie_external.py": "3822ffe95295c817d97be3118dec5794c79b6ac7194ec177ba63270189e2d471",
+    "tests/test_fd_mie_physics.py": "6148566c68c89dd7e1c04d9b48c1c57cb1491655385cc305000a218b33778c1b",
+    "tests/test_fd_mie_reference.py": "e3da050d6ff5d7c465c5a7010d4f8c1744dc23c8d6838c919ad9ac84f6e904e3",
+    "tests/test_fd_mie_study.py": "7267844a80778c7f47228d1cab3c8727b0c9bbd855655d4af677f8b5195b6e8a",
+    "tests/test_fd_mie_transform.py": "5126312368fdb384839b1a503b6de8f4243b3cb1da445965476e6ea5b8ece694",
+    "tests/test_fd_monitor_structure.py": "de46a67fc61793a11a80c6632780498418ae2de854be8ab417327c01d567e06e",
+    "tests/test_fd_monitors_doors.py": "e332d38c06fe89d85172fb72d20fcd2e1cd3278353a1957540ee0d0a4fd11b1c",
+    "tests/test_fd_occupancy.py": "d3c5ab3bb4c33b0014e080eb4ff580b01e008accb4e8c033136d27199d77984b",
+    "tests/test_fd_occupancy_integration.py": "89ef5cd87551fe8d852b30b7ebbb3d3978e3563612c4de13bc445d44407fb7e6",
+    "tests/test_fd_pec.py": "bdefdcfd3781177ac23e30a794f585643fa82e8e541e6e7748d3fe237f1eb01b",
+    "tests/test_fd_phase_control.py": "3a2830023b26c3182e8e9303388043d2dcc7be536e155dd6ad540629cab117d8",
+    "tests/test_fd_planewave.py": "93274e02841a054dcabce83b0078a62f061b4603df154f188d24f92310abd3a1",
+    "tests/test_fd_pmc.py": "19dc7a882536e02db6f66c23ed5d595cf76087b5a705bea8f4004f8d297ecc96",
+    "tests/test_fd_pml.py": "202dfd1b285853b6ce0ad6553d7520386ba8348cd78cefa2b91f9146a6641a13",
+    "tests/test_fd_pml_stability.py": "c7dd4e630b343af538e54c165df9b06b5f3ebc70d1982cf6d6eb163995148b05",
+    "tests/test_fd_radiation.py": "b284402f80610af84ae2c77eca926a4c73fa76a454c52ce54248ac110f0d7b57",
+    "tests/test_fd_scene.py": "89a8a3dc6aeee8e6d6da0791d340108e935b8193a7c6212780b5dc1f87fd6365",
+    "tests/test_fd_shape_protocol.py": "df351ad4af0b48c4af9c408ba6f5581d9f028c9e1fd08f3e4a4b77893bed358d",
+    "tests/test_fd_shapes.py": "7e28cc9605a6074231c2e480b1718a32c002929985d7ac1cd8d648fe50e2ea77",
+    "tests/test_fd_sources_doors.py": "82efe3c58e0997ce3e887a73e916019b596f2de618e8b0f230d3b2cca1ec62f7",
+    "tests/test_fd_sphere_clip_jit.py": "6943404bd9d954ceaea0439de00c58cd6c97734f45d4cd83a1e0c4ae37cdcf9d",
+    "tests/test_fd_stage1_backends.py": "da78cb5f9d3fc0839a3e3b61073e93ca0c089a021836e539333359be85a40a54",
+    "tests/test_fd_stage1_grad.py": "e6c48328dd344b5d98c1ea6502dc3442dcb16d89295eea0f6a3516cc5562aea8",
+    "tests/test_fd_stage2_backends.py": "90a4e11723c0ca98f298c61d3866fcd492e9db3e3fa925905da078b9d163597a",
+    "tests/test_fd_stage2_grad.py": "0b0229660e68fc47bc08cb09b42ed181036e61dcbded17f2a37a7eb591aeedf9",
+    "tests/test_fd_stage3_backends.py": "9684d6c1195b362e8aba1f68f82b2d04b869eed0a4c6b7f2af80c30386b682a5",
+    "tests/test_fd_stage3_grad.py": "80d8fcbd7be3b6543e82001ebf55979f5c06fe5f5fb68988021f5b319beaf281",
+    "tests/test_fd_subpixel_study.py": "a33ae92cbcd0a6d8c47182193f125b7d2f474ec87f811c09e593c41b87095526",
+    "tests/test_fd_symmetry.py": "0b727239a8541956eeee78bb66852137f25b2543d16aad9ff9505759a9f3071d",
+    "tests/test_fd_terms.py": "aa0b9c36392e9fb5254dc888fbb6115fcdef27884cfd5e46ff86614813e73b93",
+    "tests/test_fd_tfsf.py": "d64197c6cd53d8fce68a832f9187a2203027698e165560cb3698679ad41df04f",
+    "tests/test_fd_triplet_research.py": "2bd976f3f55df56ab7c3d7afaa9934cd46e3243333e368b9343985d079509536",
+    "tests/test_fd_triplet_sphere.py": "21e03ff8f2e0f83c9ee1aade436a59bfab9468735666ad67137f8b39002c3c18",
+    "tests/test_fd_waveform.py": "d04c50d0d24a862052fb4b246c81082ae91821f413f9a8cbe4885aefdce6f295",
+    "tests/test_fdtd.py": "144e961560da85b8e8635ac788ee16efdd20313ce2953e904601f29c1b68b0b8",
+    "tests/test_fdtd_boundary_controls.py": "d5f4796e7585b04703f4bc36806688b3e3faced2099fcdaf784478bc6516928a",
+    "tests/test_fdtd_cavity_convergence.py": "5ed95ddb73b19fd0dbc35393af81c800b177219fab0d0e0befb68f131cceba56",
+    "tests/test_fdtd_cell_basis.py": "1c58ae8cb54aaac8b6aa247a960981d3b2dabb048a5df9e23c841ab1c4de340d",
+    "tests/test_fdtd_circle_optics.py": "f1e4ee7af36d01274b1d0cabb11519e097f1bcb08fd8f4e0dd53e002a599cd89",
+    "tests/test_fdtd_circles.py": "18f4a80eef1845f6a6b43a6fb44c83d27af7e1c14e0c1e1a9b0a3985bf34b5f7",
+    "tests/test_fdtd_components.py": "5ffbbd28682812b446961c1ef233411393e5aec316dbde0e23905c005083ea97",
+    "tests/test_fdtd_convergence.py": "926135dd13091556a94be5c2020d6fed50bad764964253217567f74298df2371",
+    "tests/test_fdtd_dft_sampling.py": "c760aefd4be731a5b4c1e4cae6558ce9d9f3b5897e0a7b1861d557cc1c96df58",
+    "tests/test_fdtd_diffraction_planes.py": "4320031fb0849b97eb9069a6758a50d8aeacd1b00412123cff7b7eaf56b6a56c",
+    "tests/test_fdtd_directional.py": "aad514175f0a3d225eef2a07f1aaadf8d6df6f7d0648935a42f8271366b9064a",
+    "tests/test_fdtd_ellipse_optics.py": "b1cc2fd8fd8fbabeed27cd9cc8362f4bab7b86a8547f75105c82f96766c863b6",
+    "tests/test_fdtd_ellipses.py": "edf9a2618983c5178f9b361e23f1d3c415ae05cbd09db0f5f1780edff298ee2d",
+    "tests/test_fdtd_enz.py": "9ae401e994f1b29afa2d5474372e6f3b525bedcd2f6e7334229d4c6559930229",
+    "tests/test_fdtd_frequency_monitor.py": "d0d65b8ba8eb91eb24234f539583ace2fa3c68a77d9f09e9e74b87c99528714b",
+    "tests/test_fdtd_grid.py": "b1b4fd3d0ed237281c76cdfccae703c3bc8d2e328213e159cb8204c80df5f0df",
+    "tests/test_fdtd_grid_backends.py": "09f5c8ed83309816e349847cbfc7a2e437b5a949a48ceb69d0b719f49be4702e",
+    "tests/test_fdtd_grid_bloch.py": "11c27ddf57bad7d0f762f487f217ff855959b1e7000f034829bc995d9c2cc0c6",
+    "tests/test_fdtd_grid_materials.py": "c69266159eb2740355e056d302e1ab266a3931bfc7bc19fcb757ee76d061b331",
+    "tests/test_fdtd_grid_records.py": "ad0d67a0f1a2ddfad694238f14cd9117022dd3dba4966eda2245f403caf2eb70",
+    "tests/test_fdtd_halfspace_gradients.py": "e374058e646b2c82c4503aa6c96f9a4ae1eeb9e8d26c2882c0ef77205ce608dd",
+    "tests/test_fdtd_incidence.py": "5c0a4b69f0fd552859363b3931b64a11ef273cb29b8316a57a2d8bcd817e43e9",
+    "tests/test_fdtd_interface_moments.py": "0a29e97cb9032596782014862a2aa90375d02e3428291a5bcf2430624f84fee4",
+    "tests/test_fdtd_lattice_reference.py": "76ba40e99effbdee5ff3653029a72a04fecd2fe0205c36255a416df1cea60d3e",
+    "tests/test_fdtd_layer_alignment.py": "82fff7c1f6c05ee927771afe4dba107790eb396c53caa37b9ab9a9f7c71a5644",
+    "tests/test_fdtd_layer_gradients.py": "dcc31ad684064cdd49e09354d7d4d7a5676a2fb1dc8a46325826edded61e8ad4",
+    "tests/test_fdtd_layer_smoothing.py": "525af3b29de35c6d908f6a7b54d5c190a365ac450dac3e7482075a33ef86f48c",
+    "tests/test_fdtd_material_decay.py": "b676738f7e3eba57d0213e7c49f5b57abcbf714849a19331523b849b3d74b702",
+    "tests/test_fdtd_mixed_metal.py": "a6746dc16efe179cd78a8aad4121af7ac0c225b778a61a023b9744cba1f6ccd7",
+    "tests/test_fdtd_modes.py": "3ca9efa02f6ec732f1c5777d015a2979c79c7f8546dd292659cb9e1e8272a622",
+    "tests/test_fdtd_multilayer_optimization.py": "928584c4cbc6ea0deeae544cf509dc34c56b550e5648f97fd3092fa494b98d6a",
+    "tests/test_fdtd_nonuniform.py": "81a85c9d5bfb99d078cdefafebc85e67131f78e2b2482e7df6eada994ba9970b",
+    "tests/test_fdtd_painted_optics.py": "569a2e8fbb1d448e439059d36248268e51a8ad5c421762af071459cecf642249",
+    "tests/test_fdtd_painted_shapes.py": "343595316f178bfe83fea99578f7b6b9fef9d2eea297cf2548b4f6b2663e3a02",
+    "tests/test_fdtd_pml_strength.py": "122a1d56a19fa53d82581a48d94e6dcce4aab43126a057f6a50f82f9a9e62a3d",
+    "tests/test_fdtd_polarization.py": "358301c36df7a08ede1f553d751d7f921c793ce0106c8db718e844f101bbdb58",
+    "tests/test_fdtd_pole_colocation.py": "ca6f2c371d490e336fd6fc531a74bb34d9fea5616c11b09da6b78c0c1a08119a",
+    "tests/test_fdtd_probe.py": "2d5561b5ddbdf83b10e14e3e263a6cf88a9a3b1f856eadd1ab143d6d87c1b0d0",
+    "tests/test_fdtd_pulse_notches.py": "2eb963a2d8eb18de9c98f28e763dba848e28748ae115e49fc728b01692d21270",
+    "tests/test_fdtd_pulse_width.py": "f2c47dd18038a460fa7c7edc5ab8be9215045ea059e7208a4906c35756fa2a93",
+    "tests/test_fdtd_quadrature.py": "920d7d403ffa32a8b9eea9c2ec002b4d85883a6204324897f46d2197af0912c8",
+    "tests/test_fdtd_record.py": "edf9fa16c20046fcb1b68b1ce68869cb5559e6762e9ae963218a52c672aeffe7",
+    "tests/test_fdtd_record_region.py": "11b274c448e77558be1c9040963a0dd828de0a3cca6e0a49aa3fb9f13f7bc5d2",
+    "tests/test_fdtd_rectangles.py": "3d86de623a17e9462b8ee5363a8d97c61868a1fd1fe00f50a2f2e0e46d403c47",
+    "tests/test_fdtd_rotated_rectangles.py": "81b28e6a27b2c251c884372aec2e276430ee766d67ab66991c0af8029b976589",
+    "tests/test_fdtd_rotation_smoothing.py": "ba93bd98c596da869b238eaf06ce713b3a050513ff231cf7fda6e602f8a6ae6b",
+    "tests/test_fdtd_route_parity_capture.py": "76011a14331a05e66e8002eeb2a8389ca9d29d7e605e0b593ea8b993bfdfda7a",
+    "tests/test_fdtd_scan_programs.py": "daa8ac810901a7a4b289cea69ef17e4e929f067c29c42c44ab0f3dc44315e473",
+    "tests/test_fdtd_scattering_convergence.py": "663f62fc99c29f08579b9ccf17cfa49c2dfd9633c62c6a2cbfe0da86bc815ec7",
+    "tests/test_fdtd_scene_angles.py": "aaf965701f14ec8b07076382b210182f66994f8faac269c891a129485231358f",
+    "tests/test_fdtd_scene_azimuth.py": "9e50e7d6d24dfa074b79acb9cf27bce68320f3fa59da6320acd24907d2c30e87",
+    "tests/test_fdtd_scene_backends.py": "ec32e328cacef1b848f6042c91ac5b1c4deae3385c5ff7dedb30e831186ec74f",
+    "tests/test_fdtd_scene_bottom.py": "af9434c22f6b1cd0dc6305fabdff80b030996e2bd400b878ee4eb1e2a4ff5196",
+    "tests/test_fdtd_scene_graded.py": "0ad5761ca4be74ce9931939e4ea84984be3f41f49b1c36b563240287a709d7a1",
+    "tests/test_fdtd_scene_record_bounds.py": "ea3686b9f85031b11fc5de6a99ead14e2b9c00d7b1db5cabcfb9f36cad816f3d",
+    "tests/test_fdtd_scene_records.py": "2d07c8f2213dee22b663869c0be92e2ca5fa65a2a0a1fc7047a781c8c58421b9",
+    "tests/test_fdtd_source_distance.py": "9cc0b800c9450a519d30075d242e0eb49a70c605a4e0476773c6318620fab6ec",
+    "tests/test_fdtd_transverse_resolution.py": "d4d799cd6dfa4eed1cc75ac2c7cb5cf4d135e9967d937fe5ccf2985b3b5618cf",
+    "tests/test_fdtd_uniform_reference.py": "26fb8fe0089a68c1b99946f4727ed41307be662226899945789cdedccb8df553",
+    "tests/test_fdtd_variable_depth.py": "a0aa4cc164356c1f494959b748444009bec04bc5178512efcba31a5bb054ea3d",
+    "tests/test_fdtd_variable_depth_optics.py": "7de9b732bbac8fdcd904f7748228b903c5bcbbb00ce12e614588f3c538de7a62",
+    "tests/test_field_4ff.py": "2b08ba4645f67288dad6e5e626ce654e76d6a7820621977db1c2aed088280343",
+    "tests/test_field_core.py": "264c65c9ad332172bd80ed869ac95a0773b36e17a35454f952bbda90b5b3e560",
+    "tests/test_field_sample_points.py": "fdf8a85b218f3df479817ab70bcf2e841019d84322fa40594587f95a63c3ad00",
+    "tests/test_field_stale_scene.py": "bba78f074b2d6cb3ffded305a032cb76a749aeafa7cb3b5ff76dfe73fcc72f00",
+    "tests/test_fixes.py": "f48fa57ec556ff99de25f95df5a63e0311b6a5c271f4ea7fc3f5edb6d49ab786",
+    "tests/test_formulation_dispatch.py": "6cf70de357923f2b03023a14196778c67cb364b48d11f1361e8eb7434c3ff98a",
+    "tests/test_fourier_coefficients_by_modeling_path.py": "54a86655f82322929a89501489a0d5c10cdcd3a3a55ee1c53cae8667ebdb700c",
+    "tests/test_fourier_options.py": "ce37471daacdfa6aecbf7e756b1e768e4c3c475b630595fda7aca611a6b8e29e",
+    "tests/test_fp_warnings.py": "d184d8b41aee114770df26d3411b58876b8aa376dfd5640ea2b3727a610ae510",
+    "tests/test_frozen_geometry.py": "5f820fd893ec20f28074956ae8299873b8ec81a8b9525011335c8037da8042f7",
+    "tests/test_gamma_field.py": "ca1aecaee1a3e2f9a1b5f667523eb895cad8a0e148214fa9f914cb74c94455a5",
+    "tests/test_gamma_frozen.py": "c56897e4488256827921d35c915930184afb330a6c87d632299746388a227fe4",
+    "tests/test_gamma_layers.py": "464f2b2a3e3d52af21a9a243c5aa9f887ecb3b779c42bc4d9dda705da84e5524",
+    "tests/test_gamma_plan.py": "7601a9d9b0a2bf97f42bf630bc24ddee0c2f7ea8ea63f0349c73c8b8ee73a37f",
+    "tests/test_golden_legacy_parity.py": "ed51963e02736770294ae78835e3ac1df70bdff0f3cbf26588fa624300b718e7",
+    "tests/test_gradients.py": "336e1d39f847cacf5ebf28fd684a07e04a4730d73b874b610a99bf089b140dc1",
+    "tests/test_jax_device_placement.py": "5cb6a6333f64633e13ed109dc6e9d9fdfca2b6d9c8b2ef70817b89379c6d0207",
+    "tests/test_lattice_pytree.py": "249cd9380e756fee9b3839e6f46669bfd66858f6fd2ec82deef643569f628697",
+    "tests/test_layer_stack.py": "577033b57b5fbe5f69fe97f6e56457904355add87131c72dc4632af9f2c1baec",
+    "tests/test_layer_thicknesses.py": "f01911ff5a7bfc51d1c2f684e4a53446be10af2dd383e59c9edaa88862cb2830",
+    "tests/test_lossy_media.py": "3507f66acb689c56cc496ad9d938b7b7fd10e73f6a7a9b2825d2534848f32f90",
+    "tests/test_magnetic_1d.py": "8a064c6c8e4cc4e35990861d0e3269f62848d978abe6b60ad6579e7fc222feec",
+    "tests/test_magnetic_layer.py": "6043b61c8d81e04100bcd6a72b58c441ea8f376c69ca82a4a01e9b47a6f500c7",
+    "tests/test_manifest.py": "ca04b0884b573b66a9478cbc3005636217a7f2daa28cc4fcca8a108961a9291f",
+    "tests/test_material.py": "5e69ce5aa83ec00947d8a73674b76e8c347c1ab64c36f0d0a6db6a0f169954b1",
+    "tests/test_material_convention_anchor.py": "adcfffe423a17796236f7dcc91e2512d003cab335a3a411acbe7b828dca0383e",
+    "tests/test_nk_table.py": "be9ec2f6397d4d227c31c9adf41fa299b70be5a7f5bf41ddd3a5bea1f64ead84",
+    "tests/test_nvf.py": "ee3facec092d1f331756217de13ea826729ae6357072354312d7b24bc1fdc3d5",
+    "tests/test_nvf_lattice_translation.py": "33f4952470fd49d3f0c49e80184687910788c86f2f1da4137bc1de36912a195b",
+    "tests/test_nvf_non_square_grid.py": "3f4c93f999fd4d13a52c556f8477c8053fc126b8ffd53d76f15e877e19aa45a2",
+    "tests/test_nvf_normal_field.py": "a4a3bd3c5835ac766cd3443796872047408c0723039b84446b28adea19a12572",
+    "tests/test_nvf_normal_methods.py": "b969845c581beac7e14a608ea6f0a479cd12eaa5a3fce0c1e50a5aa04789c09d",
+    "tests/test_nvf_period_spanning_shape.py": "7eab986f293f2354a43259917c75027dfb120478ea47aa1ae40f45f16dafc71a",
+    "tests/test_nvf_projector.py": "73cab3198b71a783bf1d8fea0c6050c364358f2aad64c5c5fabf05eb058e51d6",
+    "tests/test_nvf_self_coincident_faces.py": "6138a413666790f83f2cb38964404222943b1fed353f3140da4bfb4a89bdb381",
+    "tests/test_nvf_vector.py": "d4a28245d0941410590aebd19d80752545838a18cdf13301b719d35779265b6f",
+    "tests/test_nvf_zero_norm_gradients.py": "4554c194c87d1d3e3c7d6c4fe4e96cddc4e4713367f37b01206eb778f2d93516",
+    "tests/test_oblique_lattice.py": "2f508d81190a12421adc498cce2ce921399bd7e298f7e2a1d084512bbfb92e72",
+    "tests/test_optimization_smoke.py": "165ed228f39c3a7f2638f3a0d8621c2fead44fb9e7bb3dfb786596dc4b2883c4",
+    "tests/test_optimizer.py": "989b8afe53bf16648aacfb12a78d0aa2962e58fc20b7c536c9188e2c3dbcf115",
+    "tests/test_order_azimuth.py": "0370f2fd0e0bb206baa5dda6a4c0d366443f2e742f5646c9d4610ca38874fe5e",
+    "tests/test_order_naming.py": "7a2181e72dbb6fed4b234ef0c3522d52c4e9461983a7c9a154ef76dbd9089409",
+    "tests/test_parametric.py": "82518ff854186ef57bbda4aeab945e06117a8b0ffb6c68016df5a22b3a5bde3b",
+    "tests/test_plot_fdtd.py": "9ab5221d488815a20cf838911100df015629a117f0253be3c35a114194be82aa",
+    "tests/test_plot_structure.py": "9212e5aeec854849c4e866cd62e930ee8e89f95643582652822183f62d21cea5",
+    "tests/test_pn_factorization.py": "f37e3c31ca5f8b0c400833a898a35ea4ba38bec991647f9958066d0b1ead71f8",
+    "tests/test_polarization.py": "73e52d76837ffe9a704b5c1ed747eec11e22b2e6a30d45b52261ceba98610912",
+    "tests/test_pytree_round_trip.py": "30ac202ed8f009faf7e9f91e173e1818df2a1f60429ddefacd8f7817920c789a",
+    "tests/test_rayleigh_guard.py": "6170370a05de22e23672fff4e3386554e2729a0ffd94aeb5558906122366cfa3",
+    "tests/test_result_api.py": "2d113a6e5ed1bec0b44b8a37eceb0098db721aa5d2b22dd70ffb2ac1368e3196",
+    "tests/test_same_material.py": "eabae15fa699fcde4f10de79e7edf14c0632ceb8fa49ee0eb8eaf8b441f0e831",
+    "tests/test_scattering_core.py": "237165053c73d16854dd239ce46706d6bec24bf76a14c2fd13a974f1e40ef70e",
+    "tests/test_shape_position_gradients.py": "61819d505f61a73eda62032ba7015e678fdb12076dd95f90f39d3c8a902f6d3b",
+    "tests/test_slot_order.py": "b4516aa7347c09aef8bd2a36f1b2610f61af7c3a33b2b36d0bf369bd3b75a030",
+    "tests/test_solve_1d_core.py": "a19602c2cb32419eb712583fcb1dd58d78b34c2de7a25555e3ea78d634494c41",
+    "tests/test_solve_2d_4ff.py": "4ac6dfee70cdf0f5537c4031a3cec4f2454c4ddad3f98fcad5228d439df51245",
+    "tests/test_solve_2d_core.py": "e4db2b7e2893e9d4680b65ed9ef5b654ad8ebb788756981e998dbbf8aa2ae7e8",
+    "tests/test_solve_field_jax.py": "252f7089730cb4849e89eed01c08570de8ab1ff96b6b5ee18ddbe12d26b6c202",
+    "tests/test_solve_keywords.py": "4f3faf19fb35ee2b929257786af38dc42dcc4af93ccc4499d47e45da21f5a3b1",
+    "tests/test_spec.py": "61876ac5472de84293c930dbf219bb3c6247882d61d06ef2b4592f06f88f2a10",
+    "tests/test_stability.py": "375bbf38acf136222ae6755f1239e89119df683a2d5eedee92effb856d7ca6ff",
+    "tests/test_uniform_anisotropic.py": "a6ddee4d75c0eaea3b009d2b5a194c1e00b1e0827956f71782e4a6ff04f9964c",
+    "studies/fdtd_subpixel_circle_moments.py": "a73d2f54e2bc0e66e2dc75e9cd56fb616f2eb9b9052d46f43560b29b739d183e",
+    "studies/fdtd_subpixel_constitutive.py": "d4b79542e3be63d2419680e417ca88ccffb55b08f44b5cf3424d2d256ad2913d",
+    "studies/fdtd_subpixel_coupled_cylinder.py": "48fe0b066fb1bd99bc14ce3545992c5971212525ba406a87bdc2e58c2367d88b",
+    "studies/fdtd_subpixel_interface_consistency.py": "b74b9f3b52718eebb1832904d05a3d05af31907aa729fc16c2392ff0b719c564",
+    "studies/fdtd_subpixel_lattice_radiation.py": "34dc445d8451a692226e7a1f2749feceb91364d84eaa99f1eaec8531b5279e91",
+    "studies/fdtd_subpixel_mie_cylinder.py": "f4c57629798c94474f72b0191ac73619879b7e40a2c651e1a3ec15cd4f9a1217",
+    "studies/fdtd_subpixel_mie_sphere.py": "6d1af0ef3cb06aebfa136021bdc3a1e90154aaf39d47699e9f1f508ffdb82a6f",
+    "studies/fdtd_subpixel_mie_transform.py": "3f9f229b52945b17acf91947f6fd5ffab28c6465ffec814acfdc4138ff134044",
+    "studies/fdtd_subpixel_phase_control.py": "dac216355f8511292187deb08deee91288e9092065f69f8ea17026ee4a7dd003",
+    "studies/fdtd_subpixel_tilted_tensor.py": "ab7cdae103eee093cfdfba9fe5ae748494a7691b8cd3b60075ac68826e90622b",
+    "studies/fdtd_subpixel_triplet_cylinder.py": "f19f4cf5de722fd8e103bcc9fc6772ef15cb257ccdcad8ce3279c280499ea6dc",
+    "studies/fdtd_subpixel_triplet_sphere.py": "cae774796182713418666953d6c0ea74f9fb0a27c92f561783df6264bd02270d"
+  },
+  "followup_verification": [
+    {
+      "stage": "targeted",
+      "exit": 0,
+      "seconds": 57.92697380000027,
+      "source_unchanged": true,
+      "internal_error": false,
+      "collected": 90,
+      "reported": 90,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "stage": "freeze0",
+      "exit": 0,
+      "seconds": 7.01436550001381,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "froze 143 arrays from 8 scenes on 3 backends, twice, byte-identical; content 11547313656e\nagainst the committed fd_golden_stage0.npz:\n  143 of 143 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written"
+    },
+    {
+      "stage": "freeze1",
+      "exit": 0,
+      "seconds": 7.6397682999959216,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "froze 288 arrays from 6 scenes on 3 backends, twice, byte-identical; content 73d979466bf1\nagainst the committed fd_golden_stage1.npz:\n  288 of 288 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written"
+    },
+    {
+      "stage": "freeze2",
+      "exit": 0,
+      "seconds": 12.360576300008688,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "froze 140 arrays from 4 scenes on 3 backends, twice, byte-identical; content 6f5118aab6a1\nagainst the committed fd_golden_stage2.npz:\n  140 of 140 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written"
+    },
+    {
+      "stage": "freeze3",
+      "exit": 0,
+      "seconds": 27.518841600045562,
+      "source_unchanged": true,
+      "internal_error": false,
+      "bit_identical": true,
+      "tail": "against the committed fd_golden_stage3.npz:\n  570 of 570 arrays reproduce bit for bit\n  the case list has changed since the freeze (provenance only; the arrays above say whether the numbers moved)\nthe committed golden is reproduced; nothing written"
+    }
+  ],
+  "source_mutation_audits": [
+    {
+      "name": "radiation-mutants",
+      "driver_exit": 0,
+      "rows": [
+        {
+          "name": "dispersion_phase_scale",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "band_k.append(kh/dx)",
+          "after": "band_k.append(1.01*kh/dx)",
+          "test": "test_modes_satisfy",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert np.float64(0.020100000000000895) < 2e-13\n +  where np.float64(0.020100000000000895) = <function max at 0x0000024DF32D61F0>(array([0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201,\\n       0.0201, 0.0201, 0.0201, 0.0201, 0.0201, ...0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201,\\n       0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201]))\n +    where <function max at 0x0000024DF32D61F0> = np.max\n +    and   array([0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201,\\n       0.0201, 0.0201, 0.0201, 0.0201, 0.0201, ...0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201,\\n       0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201, 0.0201]) = abs((array([1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201,\\n       1.0201, 1.0201, 1.0201, 1.0201, 1.0201, ...1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201,\\n       1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201]) - 1))\n +      where array([1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201,\\n       1.0201, 1.0201, 1.0201, 1.0201, 1.0201, ...1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201,\\n       1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201, 1.0201]) = <function sum at 0x0000024DF32D5230>((((array([[ 2.02000000e-08,  0.00000000e+00,  1.23689327e-24],\\n       [ 1.23689327e-24,  2.02000000e-08,  1.23689327e-24]...      [ 2.42316334e-09, -1.97870964e-08,  3.26176273e-09],\\n       [-1.37558112e-08,  9.55479222e-09,  1.12926349e-08]]) * 0.05) / 1e-09) ** 2), axis=-1)\n +        where <function sum at 0x0000024DF32D5230> = np.sum"
+          ]
+        },
+        {
+          "name": "green_curvature_omitted",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "band_a.append(1/np.sqrt(curvature))",
+          "after": "band_a.append(1.)",
+          "test": "test_green_gain",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert np.float64(0.0167127956634332) < 2e-10\n +  where np.float64(0.0167127956634332) = abs(((np.float64(1.0167127956634332) / np.float64(1.0)) - 1))"
+          ]
+        },
+        {
+          "name": "reference_H_plane_average_missing",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "cosine = xp.cos(k[:, :, P]*dx/2)",
+          "after": "cosine = xp.ones_like(k[:, :, P])",
+          "test": "test_complex_reciprocity or test_reciprocity_annihilates",
+          "collected": 5,
+          "reported": 5,
+          "assertion_failures": 5,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04906749467405453-0.08787930735467561j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.0035651369681741576+0.0055499783782656615j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.04906749467405453-0.08787930735467561j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.0035651369681741576+0.0055499783782656615j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.04906749467405453-0.08787930735467561j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.01421292\nMax relative difference among violations: 0.21919479\n ACTUAL: array([[[[ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.049067494674054565-0.08787930735467563j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.003565136968174132+0.005549978378265691j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.049067494674054565-0.08787930735467563j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.003565136968174132+0.005549978378265691j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.049067494674054565-0.08787930735467563j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.01421292\nMax relative difference among violations: 0.21919479\n ACTUAL: array([[[[ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04906749467405459-0.08787930735467563j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.003565136968174126+0.005549978378265691j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.04906749467405459-0.08787930735467563j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.003565136968174126+0.005549978378265691j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.04906749467405459-0.08787930735467563j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.01421292\nMax relative difference among violations: 0.21919479\n ACTUAL: array([[[[ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04906749467405453-0.08787930735467564j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.003565136968174145+0.005549978378265652j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.04906749467405453-0.08787930735467564j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.003565136968174145+0.005549978378265652j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.04906749467405453-0.08787930735467564j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.01421292\nMax relative difference among violations: 0.21919479\n ACTUAL: array([[[[ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.906749e-02-8.787931e-02j, -3.565137e-03+5.549978e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "assert np.float64(0.0010371193073032108) < 5e-15\n +  where np.float64(0.0010371193073032108) = <function max at 0x000001E0BAD12130>(array([[[0.00000000e+00, 1.48794816e-15, 0.00000000e+00],\\n        [3.05739130e-05, 1.03711931e-03, 8.11661919e-04]]]))\n +    where <function max at 0x000001E0BAD12130> = np.max\n +    and   array([[[0.00000000e+00, 1.48794816e-15, 0.00000000e+00],\\n        [3.05739130e-05, 1.03711931e-03, 8.11661919e-04]]]) = abs(array([[[ 0.00000000e+00+0.00000000e+00j,\\n         -1.47129864e-15+2.21968519e-16j,\\n          0.00000000e+00+0.0000000... 3.05739130e-05+1.96355393e-17j,\\n          1.03711931e-03-1.10729288e-17j,\\n         -8.11661919e-04+4.24192712e-18j]]]))"
+          ]
+        },
+        {
+          "name": "magnetic_current_sign",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "-cross/prepared.impedance",
+          "after": "+cross/prepared.impedance",
+          "test": "test_public_radiation_matches",
+          "collected": 2,
+          "reported": 2,
+          "assertion_failures": 2,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert (np.float64(0.9831690038202032) / np.float64(0.65704078279791)) < 5e-07\n +  where np.float64(0.9831690038202032) = <function max at 0x0000024930EB1C30>(array([[[[4.15408509e-01, 4.42964743e-02, 2.38329972e-01],\\n         [1.61647233e-01, 3.26535431e-01, 2.07475137e-01],\\n...        [1.58417555e-01, 3.16672759e-01, 2.01575115e-01],\\n         [3.31600698e-01, 1.73381523e-01, 2.12529343e-01]]]]))\n +    where <function max at 0x0000024930EB1C30> = np.max\n +    and   array([[[[4.15408509e-01, 4.42964743e-02, 2.38329972e-01],\\n         [1.61647233e-01, 3.26535431e-01, 2.07475137e-01],\\n...        [1.58417555e-01, 3.16672759e-01, 2.01575115e-01],\\n         [3.31600698e-01, 1.73381523e-01, 2.12529343e-01]]]]) = abs((array([[[[ 5.41686265e-02+2.42309060e-01j,\\n           3.28604042e-02-2.97047381e-02j,\\n          -3.10778595e-02-1.3901...61107420e-02+2.06201984e-01j,\\n          -8.55363661e-03+1.12031596e-01j,\\n          -4.47336525e-02-1.33052104e-01j]]]]) - array([[[[ 2.58623379e-01-1.19301896e-01j,\\n           0.00000000e+00+0.00000000e+00j,\\n          -1.48378527e-01+6.8446...55896116e-01-7.86347230e-02j,\\n           9.29202587e-02-2.85536135e-02j,\\n          -1.56093719e-01+4.79662862e-02j]]]])))\n +  and   np.float64(0.65704078279791) = <function max at 0x0000024930EB1C30>(array([[[[2.84813965e-01, 0.00000000e+00, 1.63404704e-01],\\n         [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n...        [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n         [2.67705513e-01, 9.72084529e-02, 1.63297317e-01]]]]))\n +    where <function max at 0x0000024930EB1C30> = np.max\n +    and   array([[[[2.84813965e-01, 0.00000000e+00, 1.63404704e-01],\\n         [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n...        [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n         [2.67705513e-01, 9.72084529e-02, 1.63297317e-01]]]]) = abs(array([[[[ 2.58623379e-01-1.19301896e-01j,\\n           0.00000000e+00+0.00000000e+00j,\\n          -1.48378527e-01+6.8446...55896116e-01-7.86347230e-02j,\\n           9.29202587e-02-2.85536135e-02j,\\n          -1.56093719e-01+4.79662862e-02j]]]]))",
+            "assert (np.float64(0.7207143333718992) / np.float64(0.6181113811364531)) < 5e-07\n +  where np.float64(0.7207143333718992) = <function max at 0x0000024930EB1C30>(array([[[[2.35651245e-02, 5.81792330e-01, 1.35198855e-02],\\n         [1.08839278e-02, 6.03609043e-01, 3.26868321e-01],\\n...        [8.07740476e-03, 6.55664578e-01, 3.54558445e-01],\\n         [2.18236841e-02, 6.41044751e-01, 1.24027379e-01]]]]))\n +    where <function max at 0x0000024930EB1C30> = np.max\n +    and   array([[[[2.35651245e-02, 5.81792330e-01, 1.35198855e-02],\\n         [1.08839278e-02, 6.03609043e-01, 3.26868321e-01],\\n...        [8.07740476e-03, 6.55664578e-01, 3.54558445e-01],\\n         [2.18236841e-02, 6.41044751e-01, 1.24027379e-01]]]]) = abs((array([[[[-1.78313782e-02+1.54063962e-02j,\\n          -2.40842408e-02-4.46571508e-01j,\\n           1.02302957e-02-8.8390...30583768e-02+1.74857651e-02j,\\n           2.31465512e-02+4.60579269e-01j,\\n           2.50788744e-03-9.95562868e-02j]]]]) - array([[[[ 0.00000000e+00+0.00000000e+00j,\\n           5.19700328e-01-2.39736650e-01j,\\n           0.00000000e+00+0.0000...00000000e+00+0.00000000e+00j,\\n          -5.47334070e-01+1.68192140e-01j,\\n           1.07110120e-01-3.29142315e-02j]]]])))\n +  and   np.float64(0.6181113811364531) = <function max at 0x0000024930EB1C30>(array([[[[0.00000000e+00, 5.72330405e-01, 0.00000000e+00],\\n         [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n...        [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n         [0.00000000e+00, 5.72593381e-01, 1.12053222e-01]]]]))\n +    where <function max at 0x0000024930EB1C30> = np.max\n +    and   array([[[[0.00000000e+00, 5.72330405e-01, 0.00000000e+00],\\n         [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n...        [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n         [0.00000000e+00, 5.72593381e-01, 1.12053222e-01]]]]) = abs(array([[[[ 0.00000000e+00+0.00000000e+00j,\\n           5.19700328e-01-2.39736650e-01j,\\n           0.00000000e+00+0.0000...00000000e+00+0.00000000e+00j,\\n          -5.47334070e-01+1.68192140e-01j,\\n           1.07110120e-01-3.29142315e-02j]]]]))"
+          ]
+        },
+        {
+          "name": "normal_face_phase_sign",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "xp.exp(-1j*k[:, :, P]*position)",
+          "after": "xp.exp(1j*k[:, :, P]*position)",
+          "test": "test_complex_reciprocity",
+          "collected": 4,
+          "reported": 4,
+          "assertion_failures": 4,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.043858877452331496-0.022672052332689985j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (0.11033188055223273-0.015419225534433418j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.043858877452331496-0.022672052332689985j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (0.11033188055223273-0.015419225534433418j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.043858877452331496-0.022672052332689985j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.58745606\nMax relative difference among violations: 33.8147501\n ACTUAL: array([[[[ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04385887745233149-0.022672052332689974j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (0.1103318805522327-0.015419225534433392j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.04385887745233149-0.022672052332689974j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (0.1103318805522327-0.015419225534433392j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.04385887745233149-0.022672052332689974j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.58745606\nMax relative difference among violations: 33.8147501\n ACTUAL: array([[[[ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04385887745233151-0.022672052332689974j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (0.1103318805522327-0.015419225534433392j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.04385887745233151-0.022672052332689974j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (0.1103318805522327-0.015419225534433392j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.04385887745233151-0.022672052332689974j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.58745606\nMax relative difference among violations: 33.8147501\n ACTUAL: array([[[[ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04385887745233149-0.022672052332689995j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (0.11033188055223273-0.015419225534433404j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.04385887745233149-0.022672052332689995j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (0.11033188055223273-0.015419225534433404j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.04385887745233149-0.022672052332689995j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.58745606\nMax relative difference among violations: 33.8147501\n ACTUAL: array([[[[ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.385888e-02-2.267205e-02j,  1.103319e-01-1.541923e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,..."
+          ]
+        },
+        {
+          "name": "face_endpoint_weights_missing",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "else layout.weights[v]",
+          "after": "else np.ones(len(vn))",
+          "test": "test_complex_reciprocity",
+          "collected": 4,
+          "reported": 4,
+          "assertion_failures": 4,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.039775731680140626-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.01617228047550966+0.004577467985364435j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.039775731680140626-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.01617228047550966+0.004577467985364435j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.039775731680140626-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.04049456\nMax relative difference among violations: 2.48693981\n ACTUAL: array([[[[ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.03977573168014066-0.08692268069582407j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.016172280475509625+0.00457746798536443j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.03977573168014066-0.08692268069582407j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.016172280475509625+0.00457746798536443j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.03977573168014066-0.08692268069582407j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.04049456\nMax relative difference among violations: 2.48693981\n ACTUAL: array([[[[ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.03977573168014069-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.01617228047550961+0.004577467985364429j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.03977573168014069-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.01617228047550961+0.004577467985364429j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.03977573168014069-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.04049456\nMax relative difference among violations: 2.48693981\n ACTUAL: array([[[[ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.03977573168014064-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.016172280475509664+0.004577467985364396j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.03977573168014064-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.016172280475509664+0.004577467985364396j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.03977573168014064-0.08692268069582408j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.04049456\nMax relative difference among violations: 2.48693981\n ACTUAL: array([[[[ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 3.977573e-02-8.692268e-02j, -1.617228e-02+4.577468e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,..."
+          ]
+        },
+        {
+          "name": "normal_current_sign",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "integrate(-sign*Hv, uh, vn",
+          "after": "integrate(sign*Hv, uh, vn",
+          "test": "test_complex_reciprocity",
+          "collected": 4,
+          "reported": 4,
+          "assertion_failures": 4,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.15666555668830756-0.09519828753253977j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.0032218475204071214-0.013015280129434493j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.15666555668830756-0.09519828753253977j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.0032218475204071214-0.013015280129434493j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.15666555668830756-0.09519828753253977j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.29029096\nMax relative difference among violations: 19.32647597\n ACTUAL: array([[[[ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.15666555668830756-0.09519828753253971j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.003221847520407058-0.01301528012943446j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.15666555668830756-0.09519828753253971j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.003221847520407058-0.01301528012943446j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.15666555668830756-0.09519828753253971j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.29029096\nMax relative difference among violations: 19.32647597\n ACTUAL: array([[[[ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.15666555668830756-0.09519828753253973j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.0032218475204070646-0.01301528012943446j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.15666555668830756-0.09519828753253973j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.0032218475204070646-0.01301528012943446j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.15666555668830756-0.09519828753253973j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.29029096\nMax relative difference among violations: 19.32647597\n ACTUAL: array([[[[ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.15666555668830756-0.09519828753253975j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 0, 1]: (-0.003221847520407077-0.013015280129434504j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 1, 0]: (0.15666555668830756-0.09519828753253975j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\n [0, 0, 1, 1]: (-0.003221847520407077-0.013015280129434504j) (ACTUAL), (-0.0032045173261808016+0.005522617353491645j) (DESIRED)\n [0, 0, 2, 0]: (0.15666555668830756-0.09519828753253975j) (ACTUAL), (0.048170476249544576-0.08713778769908775j) (DESIRED)\nMax absolute difference among violations: 0.29029096\nMax relative difference among violations: 19.32647597\n ACTUAL: array([[[[ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,\n           0.000000e+00+0.000000e+00j],\n         [ 1.566656e-01-9.519829e-02j, -3.221848e-03-1.301528e-02j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,..."
+          ]
+        },
+        {
+          "name": "transverse_projection_missing",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "N-n*xp.sum(N*n",
+          "after": "N-0*n*xp.sum(N*n",
+          "test": "test_complex_reciprocity",
+          "collected": 4,
+          "reported": 4,
+          "assertion_failures": 4,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 132 / 216 (61.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 2]: (-0.005863744810741612+0.0035615932893792728j) (ACTUAL), 0j (DESIRED)\n [0, 0, 1, 2]: (-0.005863744810741612+0.0035615932893792728j) (ACTUAL), 0j (DESIRED)\n [0, 0, 2, 2]: (-0.005863744810741612+0.0035615932893792728j) (ACTUAL), 0j (DESIRED)\n [0, 0, 3, 2]: (-0.005863744810741612+0.0035615932893792728j) (ACTUAL), 0j (DESIRED)\n [0, 1, 0, 0]: (0.012198999714102259-0.15148608102194552j) (ACTUAL), (-0.019935067220869088-0.12268793871608771j) (DESIRED)\nMax absolute difference among violations: 0.18882734\nMax relative difference among violations: 3.63373667e+16\n ACTUAL: array([[[[ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,\n          -0.005864+3.561593e-03j],\n         [ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 132 / 216 (61.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 2]: (-0.005863744810741621+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 1, 2]: (-0.005863744810741621+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 2, 2]: (-0.005863744810741621+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 3, 2]: (-0.005863744810741621+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 1, 0, 0]: (0.012198999714102224-0.1514860810219455j) (ACTUAL), (-0.019935067220869088-0.12268793871608771j) (DESIRED)\nMax absolute difference among violations: 0.18882734\nMax relative difference among violations: 3.63373667e+16\n ACTUAL: array([[[[ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,\n          -0.005864+3.561593e-03j],\n         [ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 132 / 216 (61.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 2]: (-0.005863744810741614+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 1, 2]: (-0.005863744810741614+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 2, 2]: (-0.005863744810741614+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 3, 2]: (-0.005863744810741614+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 1, 0, 0]: (0.012198999714102236-0.1514860810219455j) (ACTUAL), (-0.019935067220869088-0.12268793871608771j) (DESIRED)\nMax absolute difference among violations: 0.18882734\nMax relative difference among violations: 3.63373667e+16\n ACTUAL: array([[[[ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,\n          -0.005864+3.561593e-03j],\n         [ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 132 / 216 (61.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 2]: (-0.005863744810741616+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 1, 2]: (-0.005863744810741616+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 2, 2]: (-0.005863744810741616+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 0, 3, 2]: (-0.005863744810741616+0.0035615932893792697j) (ACTUAL), 0j (DESIRED)\n [0, 1, 0, 0]: (0.01219899971410225-0.15148608102194555j) (ACTUAL), (-0.019935067220869088-0.12268793871608771j) (DESIRED)\nMax absolute difference among violations: 0.18882734\nMax relative difference among violations: 3.63373667e+16\n ACTUAL: array([[[[ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,\n          -0.005864+3.561593e-03j],\n         [ 0.04817 -8.713779e-02j, -0.003205+5.522617e-03j,...\n DESIRED: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,..."
+          ]
+        },
+        {
+          "name": "radial_power_omitted",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "xp.sum(xp.abs(field)**2, axis=-1)",
+          "after": "(xp.abs(theta)**2+xp.abs(phi)**2)",
+          "test": "test_complex_reciprocity",
+          "collected": 4,
+          "reported": 4,
+          "assertion_failures": 4,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 42 / 72 (58.3%)\nFirst 5 mismatches are at indices:\n [0, 1, 0]: 0.025064632702414495 (ACTUAL), 0.025064826761718825 (DESIRED)\n [0, 1, 1]: 0.018226336704613176 (ACTUAL), 0.018226632616996048 (DESIRED)\n [0, 1, 2]: 0.022473375498873495 (ACTUAL), 0.02247362055787989 (DESIRED)\n [0, 1, 3]: 0.014617098221506803 (ACTUAL), 0.014617371493038165 (DESIRED)\n [0, 2, 0]: 0.008816132166377267 (ACTUAL), 0.008816258015381544 (DESIRED)\nMax absolute difference among violations: 1.88022491e-05\nMax relative difference among violations: 0.00028062\n ACTUAL: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018226, 0.022473, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],...\n DESIRED: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018227, 0.022474, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 42 / 72 (58.3%)\nFirst 5 mismatches are at indices:\n [0, 1, 0]: 0.025064632702414505 (ACTUAL), 0.025064826761718825 (DESIRED)\n [0, 1, 1]: 0.018226336704613186 (ACTUAL), 0.018226632616996048 (DESIRED)\n [0, 1, 2]: 0.022473375498873495 (ACTUAL), 0.02247362055787989 (DESIRED)\n [0, 1, 3]: 0.014617098221506804 (ACTUAL), 0.014617371493038165 (DESIRED)\n [0, 2, 0]: 0.008816132166377267 (ACTUAL), 0.008816258015381544 (DESIRED)\nMax absolute difference among violations: 1.88022491e-05\nMax relative difference among violations: 0.00028062\n ACTUAL: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018226, 0.022473, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],...\n DESIRED: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018227, 0.022474, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 42 / 72 (58.3%)\nFirst 5 mismatches are at indices:\n [0, 1, 0]: 0.0250646327024145 (ACTUAL), 0.025064826761718825 (DESIRED)\n [0, 1, 1]: 0.01822633670461319 (ACTUAL), 0.018226632616996048 (DESIRED)\n [0, 1, 2]: 0.022473375498873505 (ACTUAL), 0.02247362055787989 (DESIRED)\n [0, 1, 3]: 0.014617098221506792 (ACTUAL), 0.014617371493038165 (DESIRED)\n [0, 2, 0]: 0.00881613216637727 (ACTUAL), 0.008816258015381544 (DESIRED)\nMax absolute difference among violations: 1.88022491e-05\nMax relative difference among violations: 0.00028062\n ACTUAL: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018226, 0.022473, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],...\n DESIRED: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018227, 0.022474, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 42 / 72 (58.3%)\nFirst 5 mismatches are at indices:\n [0, 1, 0]: 0.025064632702414505 (ACTUAL), 0.025064826761718825 (DESIRED)\n [0, 1, 1]: 0.01822633670461319 (ACTUAL), 0.018226632616996048 (DESIRED)\n [0, 1, 2]: 0.022473375498873488 (ACTUAL), 0.02247362055787989 (DESIRED)\n [0, 1, 3]: 0.014617098221506796 (ACTUAL), 0.014617371493038165 (DESIRED)\n [0, 2, 0]: 0.008816132166377267 (ACTUAL), 0.008816258015381544 (DESIRED)\nMax absolute difference among violations: 1.88022491e-05\nMax relative difference among violations: 0.00028062\n ACTUAL: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018226, 0.022473, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],...\n DESIRED: array([[[0.006431, 0.006431, 0.006431, 0.006431],\n        [0.025065, 0.018227, 0.022474, 0.014617],\n        [0.008816, 0.029803, 0.013717, 0.030428],..."
+          ]
+        },
+        {
+          "name": "background_flux_admittance",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "u*np.linalg.norm(direction)/np.sqrt(mu/eps)",
+          "after": "u*np.linalg.norm(direction)*np.sqrt(mu/eps)",
+          "test": "test_modes_satisfy",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=2e-13\n\nMismatched elements: 3 / 3 (100%)\nMismatch at indices:\n [0]: 0.760116950066092 (ACTUAL), 1.3155870289605438 (DESIRED)\n [1]: 0.760116950066092 (ACTUAL), 1.3155870289605438 (DESIRED)\n [2]: 0.760116950066092 (ACTUAL), 1.3155870289605438 (DESIRED)\nMax absolute difference among violations: 0.55547008\nMax relative difference among violations: 0.42222222\n ACTUAL: array([0.760117, 0.760117, 0.760117])\n DESIRED: array(1.315587)"
+          ]
+        },
+        {
+          "name": "negative_medium_accepted",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "(inputs > 0)",
+          "after": "(inputs != 0)",
+          "test": "test_preparation_refuses",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: Regex pattern did not match.\n  Expected regex: 'RadiationInputRefused'\n  Actual message: 'RadiationNonconvexBandRefused: require 0 < Omega*n*dx < sqrt(2) at every frequency'"
+          ]
+        },
+        {
+          "name": "scene_spectral_check_missing",
+          "file": "wavebit/fd/_lower/monitors.py",
+          "before": "if m.propagation == 'yee':",
+          "after": "if False and m.propagation == 'yee':",
+          "test": "test_scene_refuses",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "Failed: DID NOT RAISE ValueError"
+          ]
+        },
+        {
+          "name": "detached_field_derivative",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "    theta = xp.sum(field*",
+          "after": "    field = field + ((field.detach() if hasattr(field, 'detach') else __import__('jax').lax.stop_gradient(field))-field)\n    theta = xp.sum(field*",
+          "test": "test_field_derivatives",
+          "collected": 2,
+          "reported": 2,
+          "assertion_failures": 2,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert 1.0 < 1e-14\n +  where 1.0 = abs(-1.0)\n +    where -1.0 = float(((Array(0., dtype=float64, weak_type=True) / ((2 * Array(1.61072281, dtype=float64)) / 0.72)) - 1))",
+            "assert 1.0 < 1e-14\n +  where 1.0 = abs(-1.0)\n +    where -1.0 = float(((tensor(0., dtype=torch.float64) / ((2 * tensor(1.6107, dtype=torch.float64)) / 0.72)) - 1))"
+          ]
+        },
+        {
+          "name": "wrong_run_dt",
+          "file": "wavebit/fd/_assemble.py",
+          "before": "dt=plan.dt, propagation=m.propagation",
+          "after": "dt=.9*plan.dt, propagation=m.propagation",
+          "test": "test_public_radiation_matches",
+          "collected": 2,
+          "reported": 2,
+          "assertion_failures": 2,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert (np.float64(5.051699992513536e-05) / np.float64(0.65704078279791)) < 5e-07\n +  where np.float64(5.051699992513536e-05) = <function max at 0x00000194CB85A0B0>(array([[[[2.09472551e-05, 3.34588438e-06, 1.20037039e-05],\\n         [5.23172298e-06, 2.23876776e-05, 1.30302317e-05],\\n...        [4.55598062e-06, 2.04618308e-05, 1.18560931e-05],\\n         [2.00064884e-05, 3.97362621e-06, 1.14576392e-05]]]]))\n +    where <function max at 0x00000194CB85A0B0> = np.max\n +    and   array([[[[2.09472551e-05, 3.34588438e-06, 1.20037039e-05],\\n         [5.23172298e-06, 2.23876776e-05, 1.30302317e-05],\\n...        [4.55598062e-06, 2.04618308e-05, 1.18560931e-05],\\n         [2.00064884e-05, 3.97362621e-06, 1.14576392e-05]]]]) = abs((array([[[[ 2.58616741e-01-1.19321763e-01j,\\n           7.96436141e-07-3.24971257e-06j,\\n          -1.48374594e-01+6.8457...55892952e-01-7.86544777e-02j,\\n           9.29178461e-02-2.85567710e-02j,\\n          -1.56091397e-01+4.79775062e-02j]]]]) - array([[[[ 2.58623379e-01-1.19301896e-01j,\\n           0.00000000e+00+0.00000000e+00j,\\n          -1.48378527e-01+6.8446...55896116e-01-7.86347230e-02j,\\n           9.29202587e-02-2.85536135e-02j,\\n          -1.56093719e-01+4.79662862e-02j]]]])))\n +  and   np.float64(0.65704078279791) = <function max at 0x00000194CB85A0B0>(array([[[[2.84813965e-01, 0.00000000e+00, 1.63404704e-01],\\n         [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n...        [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n         [2.67705513e-01, 9.72084529e-02, 1.63297317e-01]]]]))\n +    where <function max at 0x00000194CB85A0B0> = np.max\n +    and   array([[[[2.84813965e-01, 0.00000000e+00, 1.63404704e-01],\\n         [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n...        [9.72084145e-02, 2.67705407e-01, 1.63297252e-01],\\n         [2.67705513e-01, 9.72084529e-02, 1.63297317e-01]]]]) = abs(array([[[[ 2.58623379e-01-1.19301896e-01j,\\n           0.00000000e+00+0.00000000e+00j,\\n          -1.48378527e-01+6.8446...55896116e-01-7.86347230e-02j,\\n           9.29202587e-02-2.85536135e-02j,\\n          -1.56093719e-01+4.79662862e-02j]]]]))",
+            "assert (np.float64(4.5623477695405164e-05) / np.float64(0.6181113811364531)) < 5e-07\n +  where np.float64(4.5623477695405164e-05) = <function max at 0x00000194CB85A0B0>(array([[[[1.62884084e-06, 4.56234777e-05, 9.34504850e-07],\\n         [6.25773340e-07, 4.29719949e-05, 2.32038889e-05],\\n...        [4.75798247e-07, 4.12636410e-05, 2.22631475e-05],\\n         [1.69301513e-06, 4.04203281e-05, 7.05576452e-06]]]]))\n +    where <function max at 0x00000194CB85A0B0> = np.max\n +    and   array([[[[1.62884084e-06, 4.56234777e-05, 9.34504850e-07],\\n         [6.25773340e-07, 4.29719949e-05, 2.32038889e-05],\\n...        [4.75798247e-07, 4.12636410e-05, 2.22631475e-05],\\n         [1.69301513e-06, 4.04203281e-05, 7.05576452e-06]]]]) = abs((array([[[[ 3.32101536e-07-1.59462568e-06j,\\n           5.19689505e-01-2.39780971e-01j,\\n          -1.90534574e-07+9.1487...73233186e-07-1.65136223e-06j,\\n          -5.47328023e-01+1.68232105e-01j,\\n           1.07108608e-01-3.29211234e-02j]]]]) - array([[[[ 0.00000000e+00+0.00000000e+00j,\\n           5.19700328e-01-2.39736650e-01j,\\n           0.00000000e+00+0.0000...00000000e+00+0.00000000e+00j,\\n          -5.47334070e-01+1.68192140e-01j,\\n           1.07110120e-01-3.29142315e-02j]]]])))\n +  and   np.float64(0.6181113811364531) = <function max at 0x00000194CB85A0B0>(array([[[[0.00000000e+00, 5.72330405e-01, 0.00000000e+00],\\n         [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n...        [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n         [0.00000000e+00, 5.72593381e-01, 1.12053222e-01]]]]))\n +    where <function max at 0x00000194CB85A0B0> = np.max\n +    and   array([[[[0.00000000e+00, 5.72330405e-01, 0.00000000e+00],\\n         [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n...        [0.00000000e+00, 5.72593699e-01, 3.08587175e-01],\\n         [0.00000000e+00, 5.72593381e-01, 1.12053222e-01]]]]) = abs(array([[[[ 0.00000000e+00+0.00000000e+00j,\\n           5.19700328e-01-2.39736650e-01j,\\n           0.00000000e+00+0.0000...00000000e+00+0.00000000e+00j,\\n          -5.47334070e-01+1.68192140e-01j,\\n           1.07110120e-01-3.29142315e-02j]]]]))"
+          ]
+        },
+        {
+          "name": "continuum_optical_denominator",
+          "file": "studies/fdtd_subpixel_mie_sphere.py",
+          "before": "optical_denominator = Omega*math.sqrt(1-(Omega*res.plan.dx/2)**2)",
+          "after": "optical_denominator = 2*math.pi",
+          "test": "test_public_weak_sphere",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: {'qsca': 0.007523001446207407, 'qabs': -1.2281156836705282e-06, 'qmie': [0.007447804373386739, 0.007447804373386739, 0.0], 'error': np.float64(0.01009654242388125), ...}\nassert 0.012479894976155426 < 0.0005\n +  where 0.012479894976155426 = abs(-0.012479894976155426)"
+          ]
+        },
+        {
+          "name": "wrong_public_propagation",
+          "file": "wavebit/fd/results.py",
+          "before": "if self.propagation == 'yee':",
+          "after": "if False and self.propagation == 'yee':",
+          "test": "test_public_weak_sphere",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: {'qsca': 0.007523001446207407, 'qabs': -1.2281156836705282e-06, 'qmie': [0.007447804373386739, 0.007447804373386739, 0.0], 'error': np.float64(0.01009654242388125), ...}\nassert 0.5401019530060283 < 0.016\n +  where 0.5401019530060283 = abs(0.5401019530060283)"
+          ]
+        },
+        {
+          "name": "oracle_green_jacobian_missing",
+          "file": "tests/references/lattice.py",
+          "before": "w[:, None]/jac",
+          "after": "w[:, None]",
+          "test": "test_green_gain",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert np.float64(0.012405500390938906) < 2e-10\n +  where np.float64(0.012405500390938906) = abs(((np.float64(0.9875944996090611) / np.float64(1.0)) - 1))"
+          ]
+        },
+        {
+          "name": "oracle_reciprocal_H_sign",
+          "file": "tests/references/lattice.py",
+          "before": "magnetic = np.cross(",
+          "after": "magnetic = -np.cross(",
+          "test": "test_reciprocity_annihilates or test_complex_reciprocity",
+          "collected": 5,
+          "reported": 5,
+          "assertion_failures": 5,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04817047624954457-0.08713778769908773j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 0, 1]: (-0.0032045173261807973+0.005522617353491594j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 1, 0]: (0.04817047624954457-0.08713778769908773j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 1, 1]: (-0.0032045173261807973+0.005522617353491594j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 2, 0]: (0.04817047624954457-0.08713778769908773j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\nMax absolute difference among violations: 0.63484833\nMax relative difference among violations: 12.74063016\n ACTUAL: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...\n DESIRED: array([[[[-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,\n           0.000000e+00+0.000000e+00j],\n         [-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.0481704762495446-0.08713778769908771j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 0, 1]: (-0.0032045173261807717+0.0055226173534916245j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 1, 0]: (0.0481704762495446-0.08713778769908771j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 1, 1]: (-0.0032045173261807717+0.0055226173534916245j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 2, 0]: (0.0481704762495446-0.08713778769908771j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\nMax absolute difference among violations: 0.63484833\nMax relative difference among violations: 12.74063016\n ACTUAL: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...\n DESIRED: array([[[[-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,\n           0.000000e+00+0.000000e+00j],\n         [-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.04817047624954461-0.08713778769908773j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 0, 1]: (-0.0032045173261807656+0.0055226173534916245j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 1, 0]: (0.04817047624954461-0.08713778769908773j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 1, 1]: (-0.0032045173261807656+0.0055226173534916245j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 2, 0]: (0.04817047624954461-0.08713778769908773j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\nMax absolute difference among violations: 0.63484833\nMax relative difference among violations: 12.74063016\n ACTUAL: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...\n DESIRED: array([[[[-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,\n           0.000000e+00+0.000000e+00j],\n         [-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,...",
+            "AssertionError: \nNot equal to tolerance rtol=0, atol=5e-15\n\nMismatched elements: 186 / 216 (86.1%)\nFirst 5 mismatches are at indices:\n [0, 0, 0, 0]: (0.048170476249544555-0.08713778769908774j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 0, 1]: (-0.0032045173261807842+0.005522617353491585j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 1, 0]: (0.048170476249544555-0.08713778769908774j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\n [0, 0, 1, 1]: (-0.0032045173261807842+0.005522617353491585j) (ACTUAL), (-0.027678700692907864+0.030093613631729205j) (DESIRED)\n [0, 0, 2, 0]: (0.048170476249544555-0.08713778769908774j) (ACTUAL), (-0.15614336208831833+0.08083378462983018j) (DESIRED)\nMax absolute difference among violations: 0.63484833\nMax relative difference among violations: 12.74063016\n ACTUAL: array([[[[ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,\n           0.000000e+00+0.000000e+00j],\n         [ 4.817048e-02-8.713779e-02j, -3.204517e-03+5.522617e-03j,...\n DESIRED: array([[[[-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,\n           0.000000e+00+0.000000e+00j],\n         [-1.561434e-01+8.083378e-02j, -2.767870e-02+3.009361e-02j,...",
+            "assert np.float64(0.22944505809196994) < 5e-15\n +  where np.float64(0.22944505809196994) = <function max at 0x000001BAD12963B0>(array([[[0.00000000e+00, 1.48952795e-15, 0.00000000e+00],\\n        [1.66680773e-01, 2.29445058e-01, 2.15006462e-01]]]))\n +    where <function max at 0x000001BAD12963B0> = np.max\n +    and   array([[[0.00000000e+00, 1.48952795e-15, 0.00000000e+00],\\n        [1.66680773e-01, 2.29445058e-01, 2.15006462e-01]]]) = abs(array([[[ 0.00000000e+00+0.00000000e+00j,\\n          1.47289629e-15-2.21968519e-16j,\\n          0.00000000e+00+0.0000000... 1.66680773e-01-8.75010628e-17j,\\n          2.29445058e-01+6.32449735e-17j,\\n         -2.15006462e-01-2.96914984e-17j]]]))"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "studies/fdtd_subpixel_mie_sphere.py": "6d1af0ef3cb06aebfa136021bdc3a1e90154aaf39d47699e9f1f508ffdb82a6f",
+        "tests/references/lattice.py": "a08a4d421b83428de5cb36beee2089e53994c56f52b5ceaab9fd97a9a2682b79",
+        "wavebit/fd/_assemble.py": "822b8508d5a8aab5b67f331d55ade92e48fb020471727c90068f1438b0036414",
+        "wavebit/fd/_lower/monitors.py": "fedc8f502038907ea34b7ec5bc30d60e63addb6fcbbbaf51c35c8cb22db218ba",
+        "wavebit/fd/_radiation.py": "50995f04920dfc24c623fea1f9c499aaad3df5b5902b186c650f51c1fa8980f4",
+        "wavebit/fd/results.py": "c1de3a60fef93c23ffd0021b210ebf8d6c5f9bd2d07e219c59dc46da99e78995"
+      },
+      "restored_byte_for_byte": true
+    },
+    {
+      "name": "radiation-warning-mutants",
+      "driver_exit": 0,
+      "rows": [
+        {
+          "name": "missing_approximation_note",
+          "file": "wavebit/fd/_lower/checks.py",
+          "before": "out += _radiation_notes(scene)",
+          "after": "out += []",
+          "test": "test_continuum_approximation",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert (0 == 1)\n +  where 0 = len([])"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "wavebit/fd/_lower/checks.py": "4f37432acd12d82fa8271351119277a66bd43eca9818bd6554db2f104858534b"
+      },
+      "restored_byte_for_byte": true
+    },
+    {
+      "name": "radiation-compat-mutants",
+      "driver_exit": 0,
+      "rows": [
+        {
+          "name": "old_continuum_forward_sign",
+          "file": "studies/fdtd_subpixel_mie_sphere.py",
+          "before": "forward = to_numpy(res['ff'].fields(0.,0.)[0])[0]/amplitude",
+          "after": "forward = -to_numpy(res['ff'].fields(0.,0.)[0])[0]/amplitude",
+          "test": "test_sphere_instrument_closes",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert 2.0 < 2e-14\n +  where 2.0 = abs(((-2.3068050749711666e-13 / 2.3068050749711666e-13) - 1))"
+          ]
+        },
+        {
+          "name": "old_absorption_sign",
+          "file": "studies/fdtd_subpixel_mie_sphere.py",
+          "before": "qabs = float(-to_numpy(res['abs'].flux)",
+          "after": "qabs = float(to_numpy(res['abs'].flux)",
+          "test": "test_sphere_instrument_counts",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert -0.125 == 0.125"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "studies/fdtd_subpixel_mie_sphere.py": "6d1af0ef3cb06aebfa136021bdc3a1e90154aaf39d47699e9f1f508ffdb82a6f"
+      },
+      "restored_byte_for_byte": true
+    },
+    {
+      "name": "radiation-stage3-warning-mutants",
+      "driver_exit": 0,
+      "rows": [
+        {
+          "name": "missing_approximation_note",
+          "file": "wavebit/fd/_lower/checks.py",
+          "before": "out += _radiation_notes(scene)",
+          "after": "out += []",
+          "test": "test_the_scene_warns and farfield",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: []\nassert [] == ['RadiationAp...ationWarning']\n  \n  Right contains one more item: 'RadiationApproximationWarning'\n  Use -v to get more diff"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "wavebit/fd/_lower/checks.py": "4f37432acd12d82fa8271351119277a66bd43eca9818bd6554db2f104858534b"
+      },
+      "restored_byte_for_byte": true
+    },
+    {
+      "name": "radiation-followup-v2-mutants",
+      "driver_exit": 0,
+      "rows": [
+        {
+          "name": "scalar_promotion_missing",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "    dx, dt, eps, mu = map(float, inputs)\n",
+          "after": "",
+          "test": "test_preparation_preserves_scalar_values",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: \nArrays are not equal\n\nMismatched elements: 3 / 3 (100%)\nMismatch at indices:\n [0, 0, 0]: 4.8416663078300495 (ACTUAL), 4.841666233363984 (DESIRED)\n [0, 0, 1]: 4.198578434219886 (ACTUAL), 4.198578369964395 (DESIRED)\n [0, 0, 2]: 8.702463412141586 (ACTUAL), 8.702463271959699 (DESIRED)\nMax absolute difference among violations: 1.40181887e-07\nMax relative difference among violations: 1.61082998e-08\n ACTUAL: array([[[4.841666, 4.198578, 8.702463]]])\n DESIRED: array([[[4.841666, 4.198578, 8.702463]]])"
+          ]
+        },
+        {
+          "name": "traced_angle_refusal_missing",
+          "file": "wavebit/fd/_radiation.py",
+          "before": "except (ValueError, TypeError, RuntimeError) as error:",
+          "after": "except (ValueError, TypeError) as error:",
+          "test": "test_preparation_preserves_scalar_values",
+          "collected": 1,
+          "reported": 1,
+          "assertion_failures": 1,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "AssertionError: ('RuntimeError', \"Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead.\")\nassert False\n +  where False = isinstance(RuntimeError(\"Can't call numpy() on Tensor that requires grad. Use tensor.detach().numpy() instead.\"), ValueError)"
+          ]
+        },
+        {
+          "name": "auxiliary_propagation_inverted",
+          "file": "studies/fdtd_subpixel_mie_sphere.py",
+          "before": "propagation=args.propagation)\n                      for name, half",
+          "after": "propagation='continuum' if args.propagation == 'yee' else 'yee')\n                      for name, half",
+          "test": "test_phase_control_cli_keeps_one_propagation",
+          "collected": 2,
+          "reported": 2,
+          "assertion_failures": 2,
+          "errors": 0,
+          "exit": 1,
+          "caught": true,
+          "assertion_messages": [
+            "assert False\n +  where False = all(<generator object test_phase_control_cli_keeps_one_propagation.<locals>.<genexpr> at 0x0000024B232C8040>)",
+            "assert False\n +  where False = all(<generator object test_phase_control_cli_keeps_one_propagation.<locals>.<genexpr> at 0x0000024B232C8BA0>)"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "studies/fdtd_subpixel_mie_sphere.py": "61bc39fb7a8b4d6247e1915305993670e7a6f468095fa9920c83dd0e59ab6c02",
+        "wavebit/fd/_radiation.py": "febe3e1ccb962bf95e8d6179d5e7342b69c27cbc5846612d05ceb4507ff7944f"
+      },
+      "restored_byte_for_byte": true
+    }
+  ],
+  "source_mutation_summary": {
+    "distinct_defects": 24,
+    "mutated_invocations": 25,
+    "assertion_failures": 52,
+    "all_restored_byte_for_byte": true
+  },
+  "followup_review": {
+    "status": "fixed_and_tested",
+    "scalar_input_probe": {
+      "inputs": [
+        "np.float32(.05)",
+        "np.float32(.01)",
+        "(1.,)",
+        "np.float32(2.25)",
+        "np.float32(1.3)",
+        "37.",
+        "41."
+      ],
+      "comparison": "same representable values explicitly promoted to Python float",
+      "absolute_gaps": {
+        "k": 1.4018188743136761e-07,
+        "unit_K": 1.6306467287563464e-10,
+        "omega": 0.0,
+        "impedance": 1.3493238748552017e-09,
+        "green_gain": 1.27186927656453e-09,
+        "flux_weight": 1.5554046939314503e-09
+      }
+    },
+    "review_findings": [
+      "Validated inputs were converted to float64 but arithmetic still used the original scalar objects. Promote validated dx/dt/eps/mu before arithmetic.",
+      "Torch requires-grad angles fail conversion with RuntimeError; convert this unsupported preparation request to RadiationInputRefused without detaching.",
+      "Sphere CLI phase-control auxiliary monitors must inherit requested propagation, and report it."
+    ],
+    "constraint": "No numerical source edited during active final verification.",
+    "result": "Same representable Python, NumPy float32 and Torch float32 input values now produce exactly equal mode arrays. Traced Torch angles have a named host refusal. All diagnostic CLI surfaces inherit the requested propagation."
+  },
+  "compatibility_fixes": [
+    "Initial full fast run: two analytic fake-result fixtures lacked propagation metadata; one stage-3 warning expectation predated the new scene-level warning. Fixture metadata was updated without changing numerical thresholds or reference arrays.",
+    "Stage-3 freezer reports a case-file provenance digest change because its expected warning tuple changed; all 570 arrays remain bit-identical."
+  ],
+  "excluded_attempts": [
+    {
+      "name": "radiation-compat",
+      "reason": "A baseline overlapped a deliberate warning-source mutation; excluded. The later clean radiation-compat-restored run passed all seven cases after verified byte restoration."
+    },
+    {
+      "name": "radiation-followup-mutants",
+      "driver_exit": 1,
+      "reason": "The two CLI cases could not access the default pytest temporary directory; setup errors are not counted as detected defects. The v2 audit uses its own permitted basetemp and passes all assertion-detection checks."
+    }
+  ],
+  "final_source_sha256": {
+    "wavebit/fd/__init__.py": "44990ca995cf525b3155c99619678323fe93c2c950858f300d2ca029e57feca9",
+    "wavebit/fd/_assemble.py": "822b8508d5a8aab5b67f331d55ade92e48fb020471727c90068f1438b0036414",
+    "wavebit/fd/_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+    "wavebit/fd/_kernel/__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+    "wavebit/fd/_kernel/constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+    "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+    "wavebit/fd/_kernel/curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+    "wavebit/fd/_kernel/faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+    "wavebit/fd/_kernel/grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+    "wavebit/fd/_kernel/masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+    "wavebit/fd/_kernel/observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+    "wavebit/fd/_kernel/poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+    "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+    "wavebit/fd/_kernel/step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+    "wavebit/fd/_lower/__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+    "wavebit/fd/_lower/checks.py": "4f37432acd12d82fa8271351119277a66bd43eca9818bd6554db2f104858534b",
+    "wavebit/fd/_lower/coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+    "wavebit/fd/_lower/constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+    "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+    "wavebit/fd/_lower/fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+    "wavebit/fd/_lower/grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+    "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+    "wavebit/fd/_lower/monitors.py": "fedc8f502038907ea34b7ec5bc30d60e63addb6fcbbbaf51c35c8cb22db218ba",
+    "wavebit/fd/_lower/occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+    "wavebit/fd/_lower/params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+    "wavebit/fd/_lower/plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+    "wavebit/fd/_lower/sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+    "wavebit/fd/_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+    "wavebit/fd/_radiation.py": "febe3e1ccb962bf95e8d6179d5e7342b69c27cbc5846612d05ceb4507ff7944f",
+    "wavebit/fd/_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+    "wavebit/fd/_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+    "wavebit/fd/_shapes/__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+    "wavebit/fd/_shapes/_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+    "wavebit/fd/_shapes/_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+    "wavebit/fd/_shapes/_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+    "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+    "wavebit/fd/_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+    "wavebit/fd/_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+    "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+    "wavebit/fd/diagnostics.py": "89fc89c7d5bfcbe94f1340288c00b1268f6175eb61902aa8562a2422cc3f0f76",
+    "wavebit/fd/geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+    "wavebit/fd/materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+    "wavebit/fd/monitors.py": "741792014847a5985949eaa5600ffb17b59c543259636c5df1b3e525a9522c41",
+    "wavebit/fd/results.py": "c1de3a60fef93c23ffd0021b210ebf8d6c5f9bd2d07e219c59dc46da99e78995",
+    "wavebit/fd/scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+    "wavebit/fd/sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328",
+    "tests/test_fd_radiation.py": "63e4c04bdad73517c78780476aa5a4b561cedeb50ed0542193064522710547d6",
+    "tests/references/lattice.py": "a08a4d421b83428de5cb36beee2089e53994c56f52b5ceaab9fd97a9a2682b79",
+    "tests/test_fd_mie_external.py": "3822ffe95295c817d97be3118dec5794c79b6ac7194ec177ba63270189e2d471",
+    "tests/references/_fd_stage3_cases.py": "514a16b4afa104600d749341ba4be48715d6ab17568f52954d46a7d99f0aa162",
+    "studies/fdtd_subpixel_mie_sphere.py": "61bc39fb7a8b4d6247e1915305993670e7a6f468095fa9920c83dd0e59ab6c02",
+    "studies/fdtd_subpixel_lattice_radiation.py": "34dc445d8451a692226e7a1f2749feceb91364d84eaa99f1eaec8531b5279e91"
+  },
+  "restored_final_fast_verification": [
+    {
+      "stage": "targeted",
+      "exit": 0,
+      "seconds": 13.447090999979991,
+      "source_unchanged": true,
+      "internal_error": false,
+      "collected": 87,
+      "reported": 87,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "restored_final_fast_selection": "not slow; full radiation module, independent instrument, stage-3 farfield warning and document contracts"
+}

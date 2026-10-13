@@ -1,0 +1,46 @@
+{
+  "accepted_utc": "2026-10-07T00:35:23.351294+00:00",
+  "calibration": "studies/results/fdtd_conductive_stack_calibration_attempt1.json",
+  "calibration_sha256": "3d8e49163ac9b555e864413c5e1e19681fbc7a24b4f69abf17cce0fee6a84645",
+  "source_identity": {
+    "helper_sha256": "8baebd8ce66b890cffe85f9f4e23be916255b4e98f2e2a127dad79f26e1d621b",
+    "fd_source_sha256": "2f6343bb16379005a543426575be9dcfb50fa8c17713a8459bd2d5baedbf9b69",
+    "wavebit_source_sha256": "c6d176178fd90aedd73e041e706fb712354130a2b680c85a719d37ff99112e91",
+    "reference_dependencies": {
+      "studies/fdtd_layer_alignment.py": "91433f49dffb84ceb1441fd1455a7e49ea104a276875402d127b20192cf2c008",
+      "studies/fdtd_oblique_pulse.py": "ac840bd60b50a0e6c5b8864e0883f79f6bf5bd8edb2113629ed151f6ffaef1b2",
+      "studies/fdtd_conductive_film_probe.py": "0c9a8d36de9db69d1c13484b9dfbe0b6a134cc9da4baa48763203df7da37b4f7"
+    },
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "measured_max_absolute_complex_errors": {
+    "r": 0.005551693331482326,
+    "t": 0.010841844816499236
+  },
+  "measured_max_errors_by_family": {
+    "lossy-pair": {
+      "r": 0.0015464762804496444,
+      "t": 0.004865877549259704
+    },
+    "mixed-triple": {
+      "r": 0.005551693331482326,
+      "t": 0.010841844816499236
+    }
+  },
+  "accepted_ceilings": {
+    "r": 0.007,
+    "t": 0.014
+  },
+  "decision": "Post-disclosure shared coarse-grid regression ceilings: 1.2 times the measured maxima rounded upward to the next .001. Approximate margins are26.1% and29.1%. These six known configurations alone define these limits; the registered campaign order/noise/decay criteria are unchanged.",
+  "scope": "Absolute complex amplitude errors on two declared n40 p-polarized f.3 T120PML24 configurations, three backends. Neither percentage errors nor a universal physical accuracy bound.",
+  "outer_exit_record": "studies/results/fdtd_conductive_stack_controls/calibration_launch_attempt1/exit.json",
+  "outer_exit_sha256": "4b4410055161a46022eeb71aee6d13d79e9beb060dac8ce21c8c08c4a0d9533a",
+  "test_before_sha256": "7ba75592886b1057521f1f22978b74f127c8dc3ac221b6e362d6510176da4c46",
+  "test_after_sha256": "4878f96f834c0889e017be1675ea8296479f56b22bd2d0a4055face807344c9f",
+  "test_before_snapshot": "studies/results/fdtd_conductive_stack_calibration_acceptance_sources/test_before_ceilings.raw.gz",
+  "test_before_archive_sha256": "169131f52b3b533f35c2a3281072ef5f71a84a3d36843e746643acc62c189592",
+  "independent_review": "Final saved-data recursive Fresnel replay passed with maximum reference difference3.61e-16, correcting the preliminary2.80e-16 report. All1959input hashes and actual parent/child exits were verified; the first read-only audit roundoff comparison failure is preserved and explicitly labeled transcript-derived.",
+  "independent_review_result": "studies/results/fdtd_conductive_stack_calibration_independent_audit/attempt2.json",
+  "independent_review_sha256": "b23ce5b8631604ceff57d07f3b8ec300caeaa643c8c6fee1ef1b8d9d0b08450b",
+  "final_review_recorded_utc": "2026-10-07T00:40:31.853706+00:00"
+}

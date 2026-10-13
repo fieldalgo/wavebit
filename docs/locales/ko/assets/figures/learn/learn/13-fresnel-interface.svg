@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 58 1000 596" role="img" aria-labelledby="title desc">
+<title id="title">수직 입사의 프레넬 경계조건</title><desc id="desc">수직 입사하는 두 무손실 등방성 비자성 매질의 경계. 입사파와 반사파의 전체 접선 전기장과 자기장을 각각 투과파와 연결한다. 반사파의 진행 방향이 반대이므로 자기장의 변환식에 마이너스가 붙는다.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px}</style>
+<rect width="1000" height="654" fill="white"/>
+<rect x="24" y="78" width="458" height="524" rx="12" fill="#f6fafc" stroke="#cad7df" stroke-width="1.5"/>
+<rect x="500" y="78" width="476" height="524" rx="12" fill="#f6fafc" stroke="#cad7df" stroke-width="1.5"/>
+<text x="48" y="114" text-anchor="start" style="font-size:23px;fill:#182b3e;font-weight:650">① 입사·반사·투과파</text>
+<text x="48" y="146" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">수직 입사 · 두 매질 사이의 한 경계면</text>
+<rect x="48" y="166" width="410" height="190" rx="0" fill="#f3f7fa" stroke="none" stroke-width="1.5"/>
+<rect x="48" y="356" width="410" height="192" rx="0" fill="#e2edf6" stroke="none" stroke-width="1.5"/>
+<text x="70" y="197" text-anchor="start" style="font-size:20px;fill:#182b3e"><tspan baseline-shift="baseline">입사 매질  </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="70" y="525" text-anchor="start" style="font-size:20px;fill:#182b3e"><tspan baseline-shift="baseline">출사 매질  </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">out</tspan></text>
+<line x1="48" y1="356" x2="458" y2="356" stroke="#879ba9" stroke-width="2"/>
+<text x="440" y="345" text-anchor="end" style="font-size:17px;fill:#546779;font-weight:400">경계면</text>
+<text x="160" y="234" text-anchor="middle" style="font-size:20px;fill:#2d60a1;font-weight:400">입사파</text>
+<text x="350" y="234" text-anchor="middle" style="font-size:20px;fill:#b56626;font-weight:400">반사파</text>
+<line x1="160" y1="248" x2="160" y2="344" stroke="#2d60a1" stroke-width="5"/>
+<polygon points="160,344 152,329 168,329" fill="#2d60a1"/>
+<line x1="350" y1="344" x2="350" y2="248" stroke="#b56626" stroke-width="5"/>
+<polygon points="350,248 342,263 358,263" fill="#b56626"/>
+<text x="130" y="280" text-anchor="end" style="font-size:26px;fill:#2d60a1"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="130" y="317" text-anchor="end" style="font-size:26px;fill:#2d60a1"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="379" y="280" text-anchor="start" style="font-size:26px;fill:#b56626"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<text x="379" y="317" text-anchor="start" style="font-size:26px;fill:#b56626"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<line x1="160" y1="370" x2="160" y2="476" stroke="#117c77" stroke-width="5"/>
+<polygon points="160,476 152,461 168,461" fill="#117c77"/>
+<text x="198" y="397" text-anchor="start" style="font-size:20px;fill:#117c77;font-weight:400">투과파</text>
+<text x="198" y="434" text-anchor="start" style="font-size:26px;fill:#117c77"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="198" y="471" text-anchor="start" style="font-size:26px;fill:#117c77"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="253" y="580" text-anchor="middle" style="font-size:18px;fill:#546779;font-weight:400">화살표는 파의 진행 방향입니다.</text>
+<text x="524" y="114" text-anchor="start" style="font-size:23px;fill:#182b3e;font-weight:650">② 경계면에서 연결하는 두 조건</text>
+<text x="524" y="146" text-anchor="start" style="font-size:17px;fill:#546779;font-weight:400">각 파의 E와 H를 같은 방향 성분으로 읽습니다.</text>
+<rect x="524" y="172" width="428" height="100" rx="10" fill="#e8f1f9" stroke="none" stroke-width="1.5"/>
+<text x="546" y="205" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">전기장 연속</text>
+<text x="738" y="247" text-anchor="middle" style="font-size:29px;fill:#2d60a1"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline"> = </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<rect x="524" y="287" width="428" height="137" rx="10" fill="#e5f4ef" stroke="none" stroke-width="1.5"/>
+<text x="546" y="320" text-anchor="start" style="font-size:20px;fill:#182b3e;font-weight:600">자기장 연속</text>
+<text x="738" y="358" text-anchor="middle" style="font-size:26px;fill:#117c77"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline"> = </tspan><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="738" y="402" text-anchor="middle" style="font-size:25px;fill:#117c77"><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline">(</tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> − </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline">) = </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">out</tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="738" y="453" text-anchor="middle" style="font-size:18px;fill:#182b3e;font-weight:400">반사파는 진행 방향이 반대이므로</text>
+<text x="738" y="485" text-anchor="middle" style="font-size:24px;fill:#b56626"><tspan baseline-shift="baseline">H</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan><tspan baseline-shift="baseline"> = −(</tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> / </tspan><tspan baseline-shift="baseline">Z</tspan><tspan baseline-shift="sub" style="font-size:70%">0</tspan><tspan baseline-shift="baseline">) </tspan><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">r</tspan></text>
+<text x="738" y="523" text-anchor="middle" style="font-size:18px;fill:#546779;font-weight:400">두 조건을 함께 풀면</text>
+<text x="567" y="574" text-anchor="start" style="font-size:26px;fill:#182b3e;font-weight:400">t =</text>
+<text x="646" y="552" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">t</tspan></text>
+<text x="646" y="586" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">E</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<line x1="618" y1="561" x2="674" y2="561" stroke="#182b3e" stroke-width="1.6"/>
+<text x="689" y="574" text-anchor="start" style="font-size:26px;fill:#182b3e;font-weight:400">=</text>
+<text x="820" y="552" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">2</tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan></text>
+<text x="820" y="586" text-anchor="middle" style="font-size:23px;fill:#182b3e"><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">in</tspan><tspan baseline-shift="baseline"> + </tspan><tspan baseline-shift="baseline">n</tspan><tspan baseline-shift="sub" style="font-size:70%">out</tspan></text>
+<line x1="739" y1="561" x2="901" y2="561" stroke="#182b3e" stroke-width="1.6"/>
+<text x="500" y="636" text-anchor="middle" style="font-size:17px;fill:#546779;font-weight:400">무손실·등방성·비자성 매질 · E와 H는 경계면에서 읽은 복소 진폭</text>
+</svg>

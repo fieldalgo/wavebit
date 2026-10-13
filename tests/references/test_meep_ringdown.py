@@ -1,14 +1,20 @@
 """Fit frozen public-API Meep records against independently derived time poles."""
-from pathlib import Path
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
-import wavebit
 
 
 @pytest.mark.parametrize('name', ['lorentz', 'cavity'])
 def test_meep_ringdown_recovers_discrete_material_and_maxwell_modes(name):
-    with np.load(Path(__file__).with_name('golden_meep_ringdown.npz'), allow_pickle=False) as data:
+    with np.load(repository_path('tests/references/golden_meep_ringdown.npz'), allow_pickle=False) as data:
         dt, eps, gamma = (float(data[k]) for k in (name+'_dt', 'epsilon', 'gamma'))
         hold = (1-gamma*dt/2)/(1+gamma*dt/2)
         if name == 'lorentz':
@@ -25,7 +31,7 @@ def test_meep_ringdown_recovers_discrete_material_and_maxwell_modes(name):
             roots = np.r_[roots, 1.+0j]
         frequency = -np.angle(roots)/(2*np.pi*dt)
         order = np.argsort(frequency)
-        fitted = wavebit.fit_fdtd_modes(data[name+'_t'], data[name+'_signal'], modes=modes)
+        fitted = _legacy_wavebit.fit_fdtd_modes(data[name+'_t'], data[name+'_signal'], modes=modes)
         np.testing.assert_allclose(fitted['frequency'], frequency[order], atol=1e-9)
         np.testing.assert_allclose(fitted['decay_rate'], -np.log(abs(roots[order]))/dt, atol=1e-9)
         assert fitted['relative_residual'] < 1e-9

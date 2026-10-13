@@ -25,6 +25,9 @@ numpy, jax and torch.
 """
 import pathlib
 import posixpath
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent / "_ext"))
 import wavebit
 
 # An editable environment must point at the same checkout as these documents.
@@ -43,6 +46,7 @@ locale_dirs = ['locales/']
 gettext_compact = False
 
 extensions = [
+    'wavebit_i18n',           # full Korean chapters and explicit fallback
     'myst_parser',              # the docs are markdown, and stay markdown
     'sphinx.ext.autodoc',       # the API page, read off the live objects
     'sphinx.ext.napoleon',      # Google-style Args:/Returns: in those docstrings
@@ -93,11 +97,16 @@ intersphinx_timeout = 15
 autodoc_member_order = 'bysource'
 autodoc_typehints = 'description'
 
-exclude_patterns = ['_build', '_templates', 'README.md', 'figures', 'locales']
+exclude_patterns = ['_build', '_templates', 'README.md', 'figures', 'locales', '_ext', '**/learning-provenance', '**/learning-records']
 templates_path = ['_templates']
 
 html_theme = 'pydata_sphinx_theme'
 html_title = 'Wavebit'
+html_static_path = ['_static']
+html_css_files = ['learning/learning.css']
+html_js_files = [(f'learning/{name}', {'defer': 'defer'}) for name in (
+    'learn-interactions.js', 'nvf-interactions.js', 'reader.js', 'light-section-links.js')]
+
 html_theme_options = {
     'github_url': 'https://github.com/fieldalgo/wavebit',
     'show_prev_next': True,

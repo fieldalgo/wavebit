@@ -1,0 +1,77 @@
+Conforming NVF common passive loss ratio validation
+Date: 2026-09-09
+Platform: Darwin arm64
+NumPy 2.5.1; SciPy 1.18.0; JAX 0.11.0; Torch 2.13.0
+Environment: PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+These settings do not establish Apple Accelerate's actual thread count.
+
+Common-loss adapter and shared profile controls:
+python -m pytest tests/test_conforming_common_loss.py tests/test_nvf_partitioned_gap_energy.py -q --tb=short
+118 passed, 1 xfailed in 529.55s.
+The strict expected failure remains the historical fixed-P1 moving-interface
+control. The new file contributes 30 passing cases: exact common-factor
+scaling, positive-semidefinite dissipation, independent material integrals,
+mixed-axis absorbing contact stacks, independent Airy slab transmission on
+three backends, thirteen live JAX parameters, lossless-boundary and contact
+derivatives, material wrappers, and eager/traced invalid-input controls.
+Direct real-corrector calls explicitly refuse unfactored complex loss.
+
+Final adapter rerun after parenthesizing the real loss-ratio division:
+python -m pytest tests/test_conforming_common_loss.py -q --tb=short
+30 passed in 100.20s. These duplicate the cases counted above.
+
+Public geometry and background regression:
+python -m pytest tests/test_conforming_nvf.py tests/test_conforming_rectangular_lattice.py tests/test_conforming_layer_axes.py tests/test_conforming_separated_rectangles.py -q --tb=short
+133 passed in 302.45s.
+The invalid uniform-material replay control now uses gain (3-.1j), because
+the former passive value (3+.1j) is supported by this extension.
+
+Engine closure, slot order and pose regression:
+python -m pytest tests/test_nvf_energy_builder.py tests/test_slot_order.py tests/test_nvf_posed_gap.py -q --tb=short
+62 passed in 80.39s.
+
+Documentation contract:
+python -m pytest tests/test_docs_contract.py -q
+33 passed in 1.02s.
+
+Combined: 346 distinct passing cases and one historical expected failure.
+No production cell residual (1e-8), storage Hermitian (1e-9), mesh CDF
+(2e-12), optical or derivative threshold was relaxed for this extension.
+
+Manual examples: both Python blocks in docs/guide/conforming-nvf.md executed.
+Existing real 700-by-430 mixed-axis stack with internal background gaps:
+p T=0.6472679896766905, s T=0.8377685774616475.
+JAX example: gap and common-loss derivative shapes (1, 9, 9), (1, 9, 9).
+
+Absorbing mixed-axis contact stack, NumPy engine:
+Fixture: test_different_loss_ratios_across_layers_match_independent_contact_controls
+in tests/test_conforming_common_loss.py.
+Lattice R(.31) diag(700,430); horizontal and vertical rectangle layers
+with zero perpendicular gap, internal gap 23, storage materials 4 and 9,
+background 1.7, and respective common loss ratios .13 and .41.
+Middle uniform layer epsilon=2.3+.7j; retained orders (2,1);
+wavelength=585, each layer thickness=112.45; theta=.23, phi=.78;
+top epsilon=1, bottom epsilon=2.25. A=1-T-R.
+p: T=0.11160544705854093, R=0.06821310590552108, A=0.820181447035938
+s: T=0.11943038196755103, R=0.054303611546172734, A=0.8262660064862762
+All three backends agree with independent contact matrices within the
+test's 2e-10 power tolerance. These are finite-model outputs, not an optical
+convergence certificate.
+
+Strict documentation build:
+python -m sphinx -b html -W --keep-going docs <temporary-output-directory>
+Build succeeded with the existing official intersphinx inventory cache.
+
+Lint:
+python -m ruff check wavebit/_core/conforming/__init__.py wavebit/_core/conforming/partitioned_gap.py tests/test_conforming_common_loss.py tests/test_conforming_nvf.py
+All checks passed. git diff --check: passed.
+
+Scope: patterned-layer shapes AND background must share a finite common
+Im(epsilon)/Re(epsilon), with positive real parts and nonnegative imaginary
+parts. Different layers may have different ratios. Uniform layers accept
+independent passive positive-real-part permittivities. Geometry and common
+loss remain live under a frozen plan; derivatives must stay within that
+material family. A lossy inclusion in a lossless background, or differing
+loss ratios within one patterned layer, still requires a general complex
+corrector and is not implemented here. These controls do not cover the
+entire repository suite or certify optical convergence.

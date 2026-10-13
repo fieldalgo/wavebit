@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 465" role="img" aria-labelledby="title desc">
+<title id="title">경계에서 연속인 성분이 다르다</title><desc id="desc">자유 표면 전하가 없을 때 접선 전기장과 법선 전속밀도는 연속이다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="465" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">경계에서 연속인 성분이 다르다</text>
+<rect x="40" y="91" width="430" height="270" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<rect x="470" y="91" width="430" height="270" rx="0" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<line x1="470" y1="91" x2="470" y2="361" stroke="#a85116" stroke-width="4"/>
+<text x="70" y="131" style="fill:#182b3e;font-size:26px;font-weight:400" text-anchor="start">ε₁ = 1</text>
+<text x="720" y="131" style="fill:#182b3e;font-size:26px;font-weight:400" text-anchor="start">ε₂ = 4</text>
+<line x1="300" y1="278" x2="300" y2="166" stroke="#117c77" stroke-width="5"/>
+<polygon points="300,166 304.0,176.0 296.0,176.0" fill="#117c77"/>
+<text x="320" y="215" style="fill:#117c77;font-size:22px;font-weight:400" text-anchor="start">Eₜ = 1</text>
+<line x1="620" y1="278" x2="620" y2="166" stroke="#117c77" stroke-width="5"/>
+<polygon points="620,166 624.0,176.0 616.0,176.0" fill="#117c77"/>
+<text x="640" y="215" style="fill:#117c77;font-size:22px;font-weight:400" text-anchor="start">Eₜ = 1</text>
+<line x1="95" y1="322" x2="255" y2="322" stroke="#285ab0" stroke-width="5"/>
+<polygon points="255,322 245.0,326.0 245.0,318.0" fill="#285ab0"/>
+<line x1="680" y1="322" x2="720" y2="322" stroke="#285ab0" stroke-width="5"/>
+<polygon points="720,322 710.0,326.0 710.0,318.0" fill="#285ab0"/>
+<text x="95" y="290" style="fill:#285ab0;font-size:22px;font-weight:400" text-anchor="start">Eₙ = 1</text>
+<text x="680" y="290" style="fill:#285ab0;font-size:22px;font-weight:400" text-anchor="start">Eₙ = 0.25</text>
+<line x1="455" y1="395" x2="535" y2="395" stroke="#a85116" stroke-width="3"/>
+<polygon points="535,395 525.0,399.0 525.0,391.0" fill="#a85116"/>
+<text x="554" y="402" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">n: 경계에 수직인 방향</text>
+<text x="42" y="402" style="fill:#182b3e;font-size:22px;font-weight:400" text-anchor="start">ε₁Eₙ₁ = ε₂Eₙ₂ = 1</text>
+<text x="30" y="448" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">D/ε₀ = εE로 정규화한 국소 경계조건 예 · 실제 장 해는 아님</text>
+</svg>

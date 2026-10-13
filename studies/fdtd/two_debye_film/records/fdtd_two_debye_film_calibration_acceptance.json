@@ -1,0 +1,26 @@
+{
+  "accepted_utc": "2026-10-06T13:34:03.387453+00:00",
+  "calibration": "studies/results/fdtd_two_debye_film_calibration_attempt1.json",
+  "calibration_sha256": "a3745a5f30541e15719447fb51734dfbb978ab6ff8d41fb90d0998a8d1c5ed22",
+  "source_identity": {
+    "helper_sha256": "ef622521bfcd2b28383b1e47c8ad82fc1964370b0d576a16d6585c2a9641006e",
+    "fd_source_sha256": "d61cafe1d30073c857fcd70611d69ad979174c9a288f0121be2019e07c65b6ae",
+    "wavebit_source_sha256": "7648ac6bda54909bc85a89112bbbf3988d87cce32a089966d10ec0fe09b83a68",
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "accepted_ceilings": {
+    "r": 0.005,
+    "t": 0.01
+  },
+  "inherited_candidates_unchanged": true,
+  "measured_max_absolute_complex_errors": {
+    "r": 0.004119745237675937,
+    "t": 0.009808685984934997
+  },
+  "margin": {
+    "r": 0.0008802547623240628,
+    "t": 0.00019131401506500278
+  },
+  "backend_scaled_max": 1.1826807284728509e-15,
+  "scope": "Disclosed fixed n40 p-polarized film configuration only; not unseen corroboration, not a convergence or arbitrary-material claim. These same observations must be accounted for before any later registered study."
+}

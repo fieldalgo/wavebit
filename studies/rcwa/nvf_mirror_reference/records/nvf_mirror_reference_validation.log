@@ -1,0 +1,9 @@
+test_closed_laminate_matches_analytic_fourier_fields_and_energy (test_nvf_mirror_reference.MirrorReferenceTests.test_closed_laminate_matches_analytic_fourier_fields_and_energy) ... ok
+test_half_and_full_cell_energy_enclosures_are_consistent (test_nvf_mirror_reference.MirrorReferenceTests.test_half_and_full_cell_energy_enclosures_are_consistent) ... ok
+test_invalid_geometry_and_material_mapping_are_rejected (test_nvf_mirror_reference.MirrorReferenceTests.test_invalid_geometry_and_material_mapping_are_rejected) ... ok
+test_positive_gap_obeys_parity_and_converged_fourier_quadrature (test_nvf_mirror_reference.MirrorReferenceTests.test_positive_gap_obeys_parity_and_converged_fourier_quadrature) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 1.311s
+
+OK

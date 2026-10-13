@@ -55,7 +55,7 @@ O(1) residual when guessed wrong:
   frame points the way RETICOLO's does, and the test reverses *both* cells into the
   top-to-bottom depth frame of ``STACKS``; the golden itself stays raw.
 * The reversal carries the **component parity** ``E_z, H_x, H_y`` flip / ``E_t, H_z`` do not,
-  which is the rule ``_core/fields.py`` already states for its own frame. With the parity and
+  which is the rule ``src/wavebit/rcwa/_engine/fields.py`` already states for its own frame. With the parity and
   the reversal applied there is **no free amplitude at all** -- not a fitted scale, as the
   fmmax golden needs, but exactly 1. (Since 2026-09-27 that is after one stated lateral phase,
   which the test applies: RETICOLO's incident wave is unit at the cell corner, this library's
@@ -65,13 +65,18 @@ O(1) residual when guessed wrong:
 and M.P. Jurek, J. Mod. Opt. **45**, 1357-1374 (1998) whenever near-field distributions are
 shown -- which a field golden is. See ``README.md``.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import os
-import pathlib
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE.parents[1]))   # repo root, for `import wavebit`
 sys.path.insert(0, str(HERE))              # the bridge and the cases module beside it
 
@@ -90,8 +95,7 @@ def main():
     octave.addpath(octave.genpath(RETICOLO_PATH))
 
     from interface.Reticolo import Reticolo
-    from _reticolo_field_cases import (CASES, MAX_ORDER, PERIOD, RES_X, RES_Z, STACKS, WL,
-                                       key, layer_rows, n_layers, x_samples)
+    from tests.references._reticolo_field_cases import CASES, MAX_ORDER, PERIOD, RES_X, RES_Z, STACKS, WL, key, layer_rows, n_layers, x_samples
 
     reti = Reticolo()
     out = {}

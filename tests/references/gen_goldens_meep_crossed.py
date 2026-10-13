@@ -25,7 +25,7 @@ copy of ``_extract_conical`` whose per-order signs, s/p frame and ``n / kz_m`` s
 all invisible to ``R``, ``T`` and ``R + T``.
 
 **Every convention below is derived, none is fitted.** The chain, in the order it was
-measured (the working is in ``docs/fdtd.md`` §2 and ``docs/amplitude-sp-frame.md``):
+measured (the working is in ``docs/guide/fdtd/fdtd.md`` §2 and ``docs/theory/rcwa/amplitude-sp-frame.md``):
 
 * the **axis map is the identity** — a 3D meep cell has three real axes, so unlike the
   2D bridge nothing is permuted; wavebit's ``+z`` (down, into the stack) is meep's
@@ -70,14 +70,19 @@ first. They are recorded because each one is still live for anyone extending thi
 incident-only field into orders and demand that every order a plane wave does not have
 comes back at round-off. It is the cheapest check here and it is asserted, not printed.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 import time
 
 sys.tracebacklimit = 0                     # never print frames from another package
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_meep_crossed.npz'
@@ -88,7 +93,7 @@ OUT = HERE / 'golden_meep_crossed.npz'
 #: liked, and 1x at first. **Measured on these scenes q is 0.69 to 1.63**, not 2, so the
 #: estimate below is printed both ways and the test reads the honest end. A crossed
 #: raster is all corners, and neither this solver nor wavebit's own reaches second order
-#: on one (``docs/fdtd.md`` sec.8g measures 1.83 and 1.50 for wavebit, with a control
+#: on one (``docs/guide/fdtd/fdtd.md`` sec.8g measures 1.83 and 1.50 for wavebit, with a control
 #: that stalled at 0.67).
 COARSE_RATIO = 2
 
@@ -103,7 +108,7 @@ def _z_layout(d, resolution, dpml, pad, gap):
     The monitors sit ``gap`` from the structure and no further. Below a periodic
     structure the field is exactly a sum of Rayleigh orders at any depth and the spatial
     transform separates them exactly, so an evanescent order on the monitor plane cannot
-    contaminate a propagating one — the same finding ``docs/fdtd.md`` §2 records for
+    contaminate a propagating one — the same finding ``docs/guide/fdtd/fdtd.md`` §2 records for
     wavebit's own ``pad_scale``. What the distance *does* buy is de-referencing error:
     the phase is undone with the analytic ``kz`` while meep propagates on the numerical
     one. Measured on a uniform slab at resolution 60, moving the transmission monitor
@@ -321,7 +326,7 @@ def solve(case, leg, resolution):
 
 
 def main():
-    from _meep_crossed_cases import CASES
+    from tests.references._meep_crossed_cases import CASES
 
     out, t_start = {}, time.time()
     for name, case in CASES.items():

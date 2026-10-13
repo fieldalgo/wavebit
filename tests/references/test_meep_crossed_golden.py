@@ -2,19 +2,19 @@
 
 The fourth oracle in this directory and the first that is not RCWA. RETICOLO, S4 and
 fmmax all truncate a Fourier series and inherit whatever factorization that forces, which
-is the same formulation ``src/wavebit/_core/engine.py`` uses; none of them can arbitrate the
+is the same formulation ``src/wavebit/rcwa/_engine/engine.py`` uses; none of them can arbitrate the
 **time-domain** path, whose errors are numerical dispersion, a staircased boundary and an
 imperfect absorber instead. Meep is an FDTD. Nothing is shared but Maxwell's equations.
 
 What it reaches that nothing here did:
 
 * a **crossed grating** — periodic on both axes — solved in the time domain. Until this
-  file, ``_core/fdtd.py::_extract_crossed`` had no external reference of any kind: it is
+  file, ``src/wavebit/fdtd/_periodic/legacy.py::_extract_crossed`` had no external reference of any kind: it is
   a line-for-line copy of ``_extract_conical`` and every per-order sign in it, the three
   ``sigma`` legs, the ``s_hat``/``p_hat`` frame and the ``n / kz_m`` secant, is invisible
   to ``R``, ``T`` and ``R + T``;
 * per-order **complex amplitudes on a two-dimensional order grid**, for either path.
-  ``docs/amplitude-sp-frame.md`` §2 lists what the other goldens compare — efficiencies,
+  ``docs/theory/rcwa/amplitude-sp-frame.md`` §2 lists what the other goldens compare — efficiencies,
   or fields, or 1D amplitudes — and concludes that the per-order s/p half-turn "could not
   have been reached" by any of them. This is the case that reaches it: the sign flips on
   every order whose ``Re(kx) < 0``, and both cells here have such orders.
@@ -29,7 +29,7 @@ footing this directory's README puts inkstone on. This module needs only numpy.
 **What the tolerances are, and why they are not tighter.** Both sides discretise space,
 so this comparison is bounded by two grids rather than one, and on a corner-rich crossed
 raster **neither code converges at second order** — measured 0.69 to 1.63 here, against
-the 1.83 / 1.50 ``docs/fdtd.md`` §8g records for wavebit's own crossed path. That was
+the 1.83 / 1.50 ``docs/guide/fdtd/fdtd.md`` §8g records for wavebit's own crossed path. That was
 measured before it was read, and Meep's *published documentation* — not its source — states
 the same thing as a property of the method rather than of this harness: subpixel smoothing
 gives "roughly second-order convergence", but "objects with sharp corners or edges are
@@ -50,27 +50,33 @@ Against that, a defect of the kind this file exists to catch moves an amplitude 
 so the resolving power is 13x to 28x rather than the ~1e13 an RCWA-against-RCWA golden
 gets, and ``test_a_leg_sign_would_still_be_visible`` asserts that rather than assuming it.
 It is an oracle for *structure*, exactly as the fmmax field row is; slow drift is a job for
-the in-process comparisons in ``tests/test_fdtd.py``.
+the in-process comparisons in ``tests/fdtd/test_fdtd.py``.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
-from wavebit._core.fdtd import solve_fdtd
+from wavebit.fdtd._periodic.legacy import solve_fdtd
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _meep_crossed_cases import CASES, SIGMA, eps_of, in_plane_k, margin   # noqa: E402
+from tests.references._meep_crossed_cases import CASES, SIGMA, eps_of, in_plane_k, margin   # noqa: E402
 
 GOLDEN_PATH = HERE / 'golden_meep_crossed.npz'
 
 #: An order this close to a Rayleigh point is excluded from the amplitude comparison.
 #: ``kz = sqrt(n**2 - k_par**2)`` has sensitivity ``1/kz`` and the p channel multiplies
 #: by ``n / kz`` again, so both codes are slowest exactly there — see
-#: ``tests/test_fdtd.py::test_the_crossed_amplitudes_carry_the_per_leg_signs``. The scenes
+#: ``tests/fdtd/test_fdtd.py::test_the_crossed_amplitudes_carry_the_per_leg_signs``. The scenes
 #: were chosen so that nothing is anywhere near it: the smallest margin over both cells
 #: and both half-spaces is 0.33.
 MARGIN = 0.05
@@ -102,7 +108,7 @@ FDTD_RESOLUTION = {'square_18deg': 25, 'rect_28deg': 30}
 FDTD_BOUND = {'square_18deg': 4.5e-2, 'rect_28deg': 9.0e-2}
 
 
-from _legacy_conventions import AMPLITUDES, centre_phase, centred_meep
+from tests.references._legacy_conventions import AMPLITUDES, centre_phase, centred_meep
 
 
 def _leg_grid(sub, case, result, *, legacy=False):
@@ -131,7 +137,7 @@ def _propagating(case, name):
 
 
 def _rcwa(case):
-    return wavebit.rcwa(
+    return _legacy_wavebit.rcwa(
         backend='numpy', wavelength=case['wavelength'], period=list(case['period']),
         truncation_order=RCWA_ORDERS, top=eps_of(case['n_top']), bot=eps_of(case['n_bot']),
         theta=np.deg2rad(case['theta_deg']), phi=np.deg2rad(case['phi_deg']),
@@ -193,7 +199,7 @@ def test_the_crossed_efficiencies_match_meep(golden, rcwa_solutions, name):
 
     An efficiency cannot see any of the signs the test above exists for — that is the
     whole reason the amplitude comparison is the primary one here. It is kept because it
-    is the one quantity a reader of ``docs/fdtd.md`` §2 can put beside the published
+    is the one quantity a reader of ``docs/guide/fdtd/fdtd.md`` §2 can put beside the published
     Meep column, and because a *shape* error shows up here first.
     """
     case = CASES[name]
@@ -218,7 +224,7 @@ def test_the_crossed_fdtd_matches_meep(golden, name):
     """``_extract_crossed`` against a solver that is not ours.
 
     This is the row the file exists for. The crossed extraction had no external oracle at
-    all: ``tests/test_fdtd.py`` compares it against **wavebit's own** RCWA path, which
+    all: ``tests/fdtd/test_fdtd.py`` compares it against **wavebit's own** RCWA path, which
     shares every convention with it by construction, so a convention wrong in both moves
     nothing. Here the frame, the order index, the y ladder's period and the three leg
     signs are all read off an FDTD that was written by somebody else.
@@ -269,7 +275,7 @@ def test_the_golden_states_its_own_error_bar(golden, rcwa_solutions):
     here: 1.26 and 1.63 on the square cell, 0.83 and 0.69 on the rectangular one — so the
     honest bar is the first-order reading ``|fine - coarse|`` (2.7e-2 to 3.3e-2) rather
     than the second-order ``|fine - coarse| / 3``, and the measured gaps against RCWA
-    (1.2e-2 to 3.7e-2) sit between the two. ``docs/fdtd.md`` §9 lists as unmeasured
+    (1.2e-2 to 3.7e-2) sit between the two. ``docs/guide/fdtd/fdtd.md`` §9 lists as unmeasured
     whether the corner cells where a vertical and a horizontal interface meet cost first
     or second order; Meep's subpixel scheme is a different implementation of the same
     idea and degrades the same way on the same geometry, which is as close to an
@@ -428,7 +434,7 @@ def test_the_rectangular_cell_radiates_a_y_order():
 def test_the_half_turn_half_plane_is_covered():
     """The per-order s/p frame reverses on ``Re(kx) < 0``, so the set must reach there.
 
-    ``docs/amplitude-sp-frame.md`` records a year of that reversal being wrong while every
+    ``docs/theory/rcwa/amplitude-sp-frame.md`` records a year of that reversal being wrong while every
     external golden agreed, because none of them compared amplitudes across orders on a 2D
     grid. This one does — but only if orders on both sides of ``kx = 0`` propagate.
     """
@@ -442,7 +448,7 @@ def test_the_half_turn_half_plane_is_covered():
 
 
 def test_the_leg_signs_are_the_ones_the_generator_derived():
-    """The generator and ``_core/fdtd.py`` reach ``(-1, +1, -1)`` independently.
+    """The generator and ``src/wavebit/fdtd/_periodic/legacy.py`` reach ``(-1, +1, -1)`` independently.
 
     Not a convention either of them chose: ``p_hat = k_hat x s_hat`` plus ``E . k_hat = 0``
     gives ``E . p_hat = -+ (n / kz)(c Ex + s Ey)`` with the upper sign downgoing, which is
@@ -451,7 +457,7 @@ def test_the_leg_signs_are_the_ones_the_generator_derived():
     disagreement absorbed by the tolerance.
     """
     import inspect
-    from wavebit._core import fdtd
+    from wavebit.fdtd._periodic import legacy as fdtd
     sig = inspect.signature(fdtd._extract_crossed).parameters['sigma'].default
     assert tuple(float(s) for s in sig) == SIGMA
 
@@ -463,7 +469,7 @@ def test_the_meep_set_is_not_another_oracle_s_configurations():
     nanometres, crossed rather than 1D, and a conical mount both of the others' 2D cases
     lack.
     """
-    from _fmmax_cases import WL as FMMAX_WL, PERIOD as FMMAX_PERIOD
+    from tests.references._fmmax_cases import WL as FMMAX_WL, PERIOD as FMMAX_PERIOD
 
     for case in CASES.values():
         assert case['wavelength'] != FMMAX_WL

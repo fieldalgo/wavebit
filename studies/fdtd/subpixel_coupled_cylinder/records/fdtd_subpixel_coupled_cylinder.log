@@ -1,0 +1,2413 @@
+{
+  "date": "2026-09-23",
+  "status": "Coupled cylinder convergence gate failed: mean order 1.60337, RMS order 1.58655, both below 1.8.",
+  "public_scene_preparation": false,
+  "numerical_threads": 2,
+  "preflight": {
+    "status": "Preflight only; no FDTD time stepping or physics pass.",
+    "cpw": 40,
+    "eps": 12.0,
+    "grid": [
+      1,
+      2000,
+      136
+    ],
+    "steps": 6236,
+    "historical_constitutive_terms": 0,
+    "coupled_constitutive_terms": 1,
+    "diagonal_max_absolute_difference": 1.1102230246251565e-15,
+    "stable": 1.0,
+    "terms": [
+      {
+        "name": "constitutive[E0]",
+        "region": [
+          [
+            60,
+            76
+          ],
+          [
+            992,
+            1008
+          ],
+          [
+            0,
+            1
+          ]
+        ],
+        "cross_max_by_pair": [
+          0.0,
+          0.0,
+          0.20286890945840094
+        ],
+        "nonzero_cross_coefficients": 117,
+        "inverse_material_enclosure": [
+          0.03471343709876381,
+          1.1014344547292285
+        ]
+      }
+    ],
+    "warnings": []
+  },
+  "origin_comparisons": [
+    {
+      "status": "completed_measurement_not_C3_pass",
+      "source_sha256": {
+        "wavebit\\fd\\__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+        "wavebit\\fd\\_assemble.py": "4b1d3486f5971b0035c66266c7ac55216cc41eb409092d460eb788b82fc12ca1",
+        "wavebit\\fd\\_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+        "wavebit\\fd\\_kernel\\__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+        "wavebit\\fd\\_kernel\\constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+        "wavebit\\fd\\_kernel\\cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+        "wavebit\\fd\\_kernel\\curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+        "wavebit\\fd\\_kernel\\faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+        "wavebit\\fd\\_kernel\\grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+        "wavebit\\fd\\_kernel\\masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+        "wavebit\\fd\\_kernel\\observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+        "wavebit\\fd\\_kernel\\poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+        "wavebit\\fd\\_kernel\\sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+        "wavebit\\fd\\_kernel\\step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+        "wavebit\\fd\\_lower\\__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+        "wavebit\\fd\\_lower\\checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+        "wavebit\\fd\\_lower\\coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+        "wavebit\\fd\\_lower\\constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+        "wavebit\\fd\\_lower\\cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+        "wavebit\\fd\\_lower\\fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+        "wavebit\\fd\\_lower\\grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+        "wavebit\\fd\\_lower\\layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+        "wavebit\\fd\\_lower\\monitors.py": "c634eaf9d7416b54777b7827b9a7352fad43ac6fcf9852307b5f0172adce6c36",
+        "wavebit\\fd\\_lower\\occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+        "wavebit\\fd\\_lower\\params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+        "wavebit\\fd\\_lower\\plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+        "wavebit\\fd\\_lower\\sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+        "wavebit\\fd\\_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+        "wavebit\\fd\\_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+        "wavebit\\fd\\_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+        "wavebit\\fd\\_shapes\\__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+        "wavebit\\fd\\_shapes\\_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+        "wavebit\\fd\\_shapes\\_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+        "wavebit\\fd\\_shapes\\_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+        "wavebit\\fd\\_shapes\\_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+        "wavebit\\fd\\_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+        "wavebit\\fd\\_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+        "wavebit\\fd\\boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+        "wavebit\\fd\\diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+        "wavebit\\fd\\geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+        "wavebit\\fd\\materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+        "wavebit\\fd\\monitors.py": "d0bf7ea6dffc4d857b9f8d1e61cfb989644df21d6682b2142358798761e13275",
+        "wavebit\\fd\\results.py": "24f334921a17087a849f28c7ccf89c1347cdd57369b1464538cde31bcdd09f95",
+        "wavebit\\fd\\scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+        "wavebit\\fd\\sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328"
+      },
+      "cpw": 40,
+      "eps": 12.0,
+      "pol": "TE",
+      "offset": "0,0",
+      "backend": "jax",
+      "rows": [
+        {
+          "name": "empty",
+          "constitutive_terms": 0,
+          "decay": 2.517519729679213e-12,
+          "incident_intensity": 0.3172863536653508,
+          "seconds": 6.627089900022838
+        },
+        {
+          "name": "diagonal",
+          "constitutive_terms": 0,
+          "decay": 7.630819245826158e-10,
+          "sigma": 0.8830476795866435,
+          "exact": 0.909413120174101,
+          "error": -0.02899170905122861,
+          "contour_parts": {
+            "z-": 0.11013580232498404,
+            "y-": 0.0388039288333879,
+            "z+": 0.09244044897171545,
+            "y+": 0.03879879823860777
+          },
+          "other_contours": [
+            0.8830466809400241,
+            0.8830471870629565
+          ],
+          "seconds": 10.78903469996294
+        },
+        {
+          "name": "coupled",
+          "constitutive_terms": 1,
+          "decay": 9.446872921524425e-09,
+          "sigma": 0.9716276729593055,
+          "exact": 0.909413120174101,
+          "error": 0.06841176073344313,
+          "contour_parts": {
+            "z-": 0.12620613310775156,
+            "y-": 0.040672847274935434,
+            "z+": 0.10073753119885845,
+            "y+": 0.0406676898920626
+          },
+          "other_contours": [
+            0.9716265677134155,
+            0.9716271742649001
+          ],
+          "seconds": 9.866339900007006
+        }
+      ],
+      "grid": [
+        1,
+        2000,
+        136
+      ],
+      "steps": 6236,
+      "seconds": 27.877284299989697,
+      "warnings": [],
+      "exit": 0
+    },
+    {
+      "status": "completed_measurement_not_C3_pass",
+      "source_sha256": {
+        "wavebit\\fd\\__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+        "wavebit\\fd\\_assemble.py": "4b1d3486f5971b0035c66266c7ac55216cc41eb409092d460eb788b82fc12ca1",
+        "wavebit\\fd\\_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+        "wavebit\\fd\\_kernel\\__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+        "wavebit\\fd\\_kernel\\constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+        "wavebit\\fd\\_kernel\\cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+        "wavebit\\fd\\_kernel\\curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+        "wavebit\\fd\\_kernel\\faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+        "wavebit\\fd\\_kernel\\grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+        "wavebit\\fd\\_kernel\\masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+        "wavebit\\fd\\_kernel\\observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+        "wavebit\\fd\\_kernel\\poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+        "wavebit\\fd\\_kernel\\sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+        "wavebit\\fd\\_kernel\\step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+        "wavebit\\fd\\_lower\\__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+        "wavebit\\fd\\_lower\\checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+        "wavebit\\fd\\_lower\\coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+        "wavebit\\fd\\_lower\\constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+        "wavebit\\fd\\_lower\\cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+        "wavebit\\fd\\_lower\\fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+        "wavebit\\fd\\_lower\\grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+        "wavebit\\fd\\_lower\\layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+        "wavebit\\fd\\_lower\\monitors.py": "c634eaf9d7416b54777b7827b9a7352fad43ac6fcf9852307b5f0172adce6c36",
+        "wavebit\\fd\\_lower\\occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+        "wavebit\\fd\\_lower\\params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+        "wavebit\\fd\\_lower\\plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+        "wavebit\\fd\\_lower\\sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+        "wavebit\\fd\\_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+        "wavebit\\fd\\_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+        "wavebit\\fd\\_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+        "wavebit\\fd\\_shapes\\__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+        "wavebit\\fd\\_shapes\\_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+        "wavebit\\fd\\_shapes\\_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+        "wavebit\\fd\\_shapes\\_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+        "wavebit\\fd\\_shapes\\_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+        "wavebit\\fd\\_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+        "wavebit\\fd\\_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+        "wavebit\\fd\\boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+        "wavebit\\fd\\diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+        "wavebit\\fd\\geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+        "wavebit\\fd\\materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+        "wavebit\\fd\\monitors.py": "d0bf7ea6dffc4d857b9f8d1e61cfb989644df21d6682b2142358798761e13275",
+        "wavebit\\fd\\results.py": "24f334921a17087a849f28c7ccf89c1347cdd57369b1464538cde31bcdd09f95",
+        "wavebit\\fd\\scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+        "wavebit\\fd\\sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328"
+      },
+      "cpw": 56,
+      "eps": 12.0,
+      "pol": "TE",
+      "offset": "0,0",
+      "backend": "jax",
+      "rows": [
+        {
+          "name": "empty",
+          "constitutive_terms": 0,
+          "decay": 2.317041303403743e-12,
+          "incident_intensity": 0.31775755815616424,
+          "seconds": 33.186925099988
+        },
+        {
+          "name": "diagonal",
+          "constitutive_terms": 0,
+          "decay": 4.3055665705128317e-10,
+          "sigma": 0.8813135884490088,
+          "exact": 0.909413120174101,
+          "error": -0.030898533462671796,
+          "contour_parts": {
+            "z-": 0.11038435095114366,
+            "y-": 0.03809383061525169,
+            "z+": 0.09347204165375636,
+            "y+": 0.03809383061525201
+          },
+          "other_contours": [
+            0.8813139244541845,
+            0.8813135585165163
+          ],
+          "seconds": 44.0176101999823
+        },
+        {
+          "name": "coupled",
+          "constitutive_terms": 1,
+          "decay": 3.5499113201698238e-09,
+          "sigma": 0.9432954102032414,
+          "exact": 0.909413120174101,
+          "error": 0.03725731384066,
+          "contour_parts": {
+            "z-": 0.1217149758604062,
+            "y-": 0.03938347125587143,
+            "z+": 0.09925732779395,
+            "y+": 0.039383471255871653
+          },
+          "other_contours": [
+            0.9432952883137343,
+            0.9432963180799708
+          ],
+          "seconds": 40.202541700040456
+        }
+      ],
+      "grid": [
+        1,
+        2800,
+        181
+      ],
+      "steps": 8730,
+      "seconds": 118.00780790002318,
+      "warnings": [],
+      "exit": 0
+    },
+    {
+      "status": "completed_measurement_not_C3_pass",
+      "source_sha256": {
+        "wavebit\\fd\\__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+        "wavebit\\fd\\_assemble.py": "4b1d3486f5971b0035c66266c7ac55216cc41eb409092d460eb788b82fc12ca1",
+        "wavebit\\fd\\_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+        "wavebit\\fd\\_kernel\\__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+        "wavebit\\fd\\_kernel\\constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+        "wavebit\\fd\\_kernel\\cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+        "wavebit\\fd\\_kernel\\curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+        "wavebit\\fd\\_kernel\\faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+        "wavebit\\fd\\_kernel\\grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+        "wavebit\\fd\\_kernel\\masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+        "wavebit\\fd\\_kernel\\observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+        "wavebit\\fd\\_kernel\\poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+        "wavebit\\fd\\_kernel\\sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+        "wavebit\\fd\\_kernel\\step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+        "wavebit\\fd\\_lower\\__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+        "wavebit\\fd\\_lower\\checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+        "wavebit\\fd\\_lower\\coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+        "wavebit\\fd\\_lower\\constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+        "wavebit\\fd\\_lower\\cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+        "wavebit\\fd\\_lower\\fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+        "wavebit\\fd\\_lower\\grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+        "wavebit\\fd\\_lower\\layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+        "wavebit\\fd\\_lower\\monitors.py": "c634eaf9d7416b54777b7827b9a7352fad43ac6fcf9852307b5f0172adce6c36",
+        "wavebit\\fd\\_lower\\occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+        "wavebit\\fd\\_lower\\params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+        "wavebit\\fd\\_lower\\plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+        "wavebit\\fd\\_lower\\sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+        "wavebit\\fd\\_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+        "wavebit\\fd\\_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+        "wavebit\\fd\\_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+        "wavebit\\fd\\_shapes\\__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+        "wavebit\\fd\\_shapes\\_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+        "wavebit\\fd\\_shapes\\_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+        "wavebit\\fd\\_shapes\\_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+        "wavebit\\fd\\_shapes\\_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+        "wavebit\\fd\\_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+        "wavebit\\fd\\_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+        "wavebit\\fd\\boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+        "wavebit\\fd\\diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+        "wavebit\\fd\\geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+        "wavebit\\fd\\materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+        "wavebit\\fd\\monitors.py": "d0bf7ea6dffc4d857b9f8d1e61cfb989644df21d6682b2142358798761e13275",
+        "wavebit\\fd\\results.py": "24f334921a17087a849f28c7ccf89c1347cdd57369b1464538cde31bcdd09f95",
+        "wavebit\\fd\\scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+        "wavebit\\fd\\sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328"
+      },
+      "cpw": 80,
+      "eps": 12.0,
+      "pol": "TE",
+      "offset": "0,0",
+      "backend": "jax",
+      "rows": [
+        {
+          "name": "empty",
+          "constitutive_terms": 0,
+          "decay": 4.092289207613771e-12,
+          "incident_intensity": 0.3180147470190096,
+          "seconds": 115.94126489997143
+        },
+        {
+          "name": "diagonal",
+          "constitutive_terms": 0,
+          "decay": 3.237685781118712e-10,
+          "sigma": 0.8834870660401041,
+          "exact": 0.909413120174101,
+          "error": -0.028508555197701124,
+          "contour_parts": {
+            "z-": 0.10999889030239696,
+            "y-": 0.03885180066813343,
+            "z+": 0.09325987481085998,
+            "y+": 0.03885135001992038
+          },
+          "other_contours": [
+            0.8834872634973305,
+            0.8834867476284992
+          ],
+          "seconds": 129.34717880003154
+        },
+        {
+          "name": "coupled",
+          "constitutive_terms": 1,
+          "decay": 1.3096780191215057e-09,
+          "sigma": 0.9212912406085516,
+          "exact": 0.909413120174101,
+          "error": 0.013061303131602697,
+          "contour_parts": {
+            "z-": 0.1168208673420766,
+            "y-": 0.039686595005213925,
+            "z+": 0.09679055705540406,
+            "y+": 0.03968618141026349
+          },
+          "other_contours": [
+            0.9212908879737388,
+            0.9212909721273405
+          ],
+          "seconds": 132.40699990000576
+        }
+      ],
+      "grid": [
+        1,
+        4000,
+        248
+      ],
+      "steps": 12471,
+      "seconds": 378.3484948000405,
+      "warnings": [],
+      "exit": 0
+    },
+    {
+      "status": "completed_measurement_not_C3_pass",
+      "source_sha256": {
+        "wavebit\\fd\\__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+        "wavebit\\fd\\_assemble.py": "4b1d3486f5971b0035c66266c7ac55216cc41eb409092d460eb788b82fc12ca1",
+        "wavebit\\fd\\_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+        "wavebit\\fd\\_kernel\\__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+        "wavebit\\fd\\_kernel\\constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+        "wavebit\\fd\\_kernel\\cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+        "wavebit\\fd\\_kernel\\curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+        "wavebit\\fd\\_kernel\\faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+        "wavebit\\fd\\_kernel\\grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+        "wavebit\\fd\\_kernel\\masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+        "wavebit\\fd\\_kernel\\observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+        "wavebit\\fd\\_kernel\\poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+        "wavebit\\fd\\_kernel\\sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+        "wavebit\\fd\\_kernel\\step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+        "wavebit\\fd\\_lower\\__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+        "wavebit\\fd\\_lower\\checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+        "wavebit\\fd\\_lower\\coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+        "wavebit\\fd\\_lower\\constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+        "wavebit\\fd\\_lower\\cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+        "wavebit\\fd\\_lower\\fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+        "wavebit\\fd\\_lower\\grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+        "wavebit\\fd\\_lower\\layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+        "wavebit\\fd\\_lower\\monitors.py": "c634eaf9d7416b54777b7827b9a7352fad43ac6fcf9852307b5f0172adce6c36",
+        "wavebit\\fd\\_lower\\occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+        "wavebit\\fd\\_lower\\params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+        "wavebit\\fd\\_lower\\plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+        "wavebit\\fd\\_lower\\sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+        "wavebit\\fd\\_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+        "wavebit\\fd\\_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+        "wavebit\\fd\\_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+        "wavebit\\fd\\_shapes\\__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+        "wavebit\\fd\\_shapes\\_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+        "wavebit\\fd\\_shapes\\_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+        "wavebit\\fd\\_shapes\\_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+        "wavebit\\fd\\_shapes\\_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+        "wavebit\\fd\\_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+        "wavebit\\fd\\_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+        "wavebit\\fd\\boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+        "wavebit\\fd\\diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+        "wavebit\\fd\\geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+        "wavebit\\fd\\materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+        "wavebit\\fd\\monitors.py": "d0bf7ea6dffc4d857b9f8d1e61cfb989644df21d6682b2142358798761e13275",
+        "wavebit\\fd\\results.py": "24f334921a17087a849f28c7ccf89c1347cdd57369b1464538cde31bcdd09f95",
+        "wavebit\\fd\\scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+        "wavebit\\fd\\sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328"
+      },
+      "cpw": 112,
+      "eps": 12.0,
+      "pol": "TE",
+      "offset": "0,0",
+      "backend": "jax",
+      "rows": [
+        {
+          "name": "empty",
+          "constitutive_terms": 0,
+          "decay": 5.3118519799190025e-12,
+          "incident_intensity": 0.3181385911298084,
+          "seconds": 332.13429720001295
+        },
+        {
+          "name": "diagonal",
+          "constitutive_terms": 0,
+          "decay": 3.6047190252028406e-10,
+          "sigma": 0.8892460091047534,
+          "exact": 0.909413120174101,
+          "error": -0.022175962301365093,
+          "contour_parts": {
+            "z-": 0.11090343478775967,
+            "y-": 0.03898241824091538,
+            "z+": 0.09403520123479985,
+            "y+": 0.03898241824091613
+          },
+          "other_contours": [
+            0.8892460988324208,
+            0.8892458620194673
+          ],
+          "seconds": 362.4139835999813
+        },
+        {
+          "name": "coupled",
+          "constitutive_terms": 1,
+          "decay": 1.0391418400547392e-09,
+          "sigma": 0.9175998012117431,
+          "exact": 0.909413120174101,
+          "error": 0.00900215848664554,
+          "contour_parts": {
+            "z-": 0.11602395065924535,
+            "y-": 0.03961335829758187,
+            "z+": 0.09667324072408665,
+            "y+": 0.03961335829758235
+          },
+          "other_contours": [
+            0.9175993174359293,
+            0.9176001504180179
+          ],
+          "seconds": 363.78436980000697
+        }
+      ],
+      "grid": [
+        1,
+        5600,
+        338
+      ],
+      "steps": 17460,
+      "seconds": 1058.980490499991,
+      "warnings": [],
+      "exit": 0
+    }
+  ],
+  "initial_probe_failure": "Exit 1 at final public result report: the shortest pulse wavelength gives 5.99 material cells at cpw=40, below the existing threshold 8. The research comparator uses the historical empty-scene report context; no production refusal is changed.",
+  "shortened_origins": {
+    "status": "completed_measurements_not_C3_pass",
+    "public_scene_preparation": false,
+    "cases": {
+      "40": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9715486647305046,
+            "exact": 0.909413120174101,
+            "error": 0.06832488247421376,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -5.537123295047526e-06,
+            "decay": 1.6318487561030113e-06,
+            "final_energy_over_peak": 0.0006197299163138468,
+            "contours": [
+              0.971535809581769,
+              0.9715611355772941
+            ],
+            "seconds": 6.382602399971802
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          1100,
+          136
+        ],
+        "steps": 3430,
+        "period": 27.500000000000004,
+        "gate": 24.750000000000004
+      },
+      "56": {
+        "rows": [
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9431802268741065,
+            "exact": 0.909413120174101,
+            "error": 0.037130657069848416,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -0.000170826117061326,
+            "decay": 7.564828297558935e-07,
+            "final_energy_over_peak": 0.0006418990973772043,
+            "contours": [
+              0.943195073456381,
+              0.9431778271573268
+            ],
+            "seconds": 11.00589700002456
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          1540,
+          181
+        ],
+        "steps": 4802,
+        "period": 27.500000000000004,
+        "gate": 24.750000000000004
+      },
+      "80": {
+        "rows": [
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9212665022886938,
+            "exact": 0.909413120174101,
+            "error": 0.01303410062120447,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -5.1627120655404605e-05,
+            "decay": 3.4296510735972266e-07,
+            "final_energy_over_peak": 0.0006561791778251032,
+            "contours": [
+              0.921272219435056,
+              0.9212566846167621
+            ],
+            "seconds": 37.10868450003909
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2200,
+          248
+        ],
+        "steps": 6859,
+        "period": 27.500000000000004,
+        "gate": 24.750000000000004
+      },
+      "112": {
+        "rows": [
+          {
+            "cpw": 112,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9175887425271305,
+            "exact": 0.909413120174101,
+            "error": 0.008989998243553288,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 6.4297562842351855e-06,
+            "decay": 3.0326903274068264e-07,
+            "final_energy_over_peak": 0.0006630294309932695,
+            "contours": [
+              0.9175914929054372,
+              0.917583501772889
+            ],
+            "seconds": 108.32866930001182
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          3080,
+          338
+        ],
+        "steps": 9603,
+        "period": 27.500000000000004,
+        "gate": 24.750000000000004
+      }
+    },
+    "fits": {
+      "coupled": {
+        "mean_errors": [
+          0.06832488247421376,
+          0.037130657069848416,
+          0.01303410062120447,
+          0.008989998243553288
+        ],
+        "rms_errors": [
+          0.06832488247421376,
+          0.037130657069848416,
+          0.01303410062120447,
+          0.008989998243553288
+        ],
+        "spread": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": {
+          "order": 2.0732411885340793,
+          "scatter": 0.23774853189021455,
+          "monotone": true
+        },
+        "rms": {
+          "order": 2.0732411885340793,
+          "scatter": 0.23774853189021455,
+          "monotone": true
+        }
+      }
+    },
+    "seconds": 292.54157870000927,
+    "exit": 0
+  },
+  "controls40": {
+    "status": "completed_controls_not_C3_pass",
+    "public_scene_preparation": false,
+    "cases": {
+      "base": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9716276729593055,
+            "exact": 0.909413120174101,
+            "error": 0.06841176073344313,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -8.05389365210269e-06,
+            "decay": 9.446872921524425e-09,
+            "final_energy_over_peak": 0.00023615239429593143,
+            "contours": [
+              0.9716265677134155,
+              0.9716271742649001
+            ],
+            "seconds": 12.633544599986635
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2000,
+          136
+        ],
+        "steps": 6236,
+        "period": 50.0,
+        "gate": 45.0
+      },
+      "longer": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9716273441341488,
+            "exact": 0.909413120174101,
+            "error": 0.06841139915392613,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -4.3292954571544126e-06,
+            "decay": 2.0683430787921463e-09,
+            "final_energy_over_peak": 0.00016265382307523377,
+            "contours": [
+              0.9716267768491877,
+              0.9716260191197827
+            ],
+            "seconds": 22.698041999945417
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2800,
+          136
+        ],
+        "steps": 8730,
+        "period": 70.0,
+        "gate": 62.99999999999999
+      },
+      "wider": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9716276729593187,
+            "exact": 0.909413120174101,
+            "error": 0.06841176073345756,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -8.053893651905889e-06,
+            "decay": 9.446872921525737e-09,
+            "final_energy_over_peak": 0.0001686774524820327,
+            "contours": [
+              0.9716265677134285,
+              0.9716271742649136
+            ],
+            "seconds": 16.346213400014676
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2800,
+          136
+        ],
+        "steps": 6236,
+        "period": 70.0,
+        "gate": 45.0
+      },
+      "short": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9715486647305046,
+            "exact": 0.909413120174101,
+            "error": 0.06832488247421376,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -5.537123295047526e-06,
+            "decay": 1.6318487561030113e-06,
+            "final_energy_over_peak": 0.0006197299163138468,
+            "contours": [
+              0.971535809581769,
+              0.9715611355772941
+            ],
+            "seconds": 2.222539099981077
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          1100,
+          136
+        ],
+        "steps": 3430,
+        "period": 27.500000000000004,
+        "gate": 24.750000000000004
+      },
+      "short_time_only": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9715486647304924,
+            "exact": 0.909413120174101,
+            "error": 0.06832488247420043,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -5.537123296031644e-06,
+            "decay": 1.631848756102906e-06,
+            "final_energy_over_peak": 0.00034084190641064184,
+            "contours": [
+              0.9715358095817566,
+              0.9715611355772817
+            ],
+            "seconds": 4.6865221000043675
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2000,
+          136
+        ],
+        "steps": 3430,
+        "period": 50.0,
+        "gate": 24.750000000000004
+      },
+      "source": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9716240714542441,
+            "exact": 0.909413120174101,
+            "error": 0.06840780048151629,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -1.4174606982071112e-05,
+            "decay": 9.247998756514267e-09,
+            "final_energy_over_peak": 0.0002351794168562219,
+            "contours": [
+              0.9716288005579299,
+              0.9716236003808771
+            ],
+            "seconds": 8.154883500013966
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2000,
+          136
+        ],
+        "steps": 6236,
+        "period": 50.0,
+        "gate": 45.0
+      },
+      "layer": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.971629356523143,
+            "exact": 0.909413120174101,
+            "error": 0.06841361199751672,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -8.05826492224776e-06,
+            "decay": 9.412523748607131e-09,
+            "final_energy_over_peak": 0.0002942398898980652,
+            "contours": [
+              0.9716286042825406,
+              0.9716289625405076
+            ],
+            "seconds": 19.640732200001366
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2000,
+          216
+        ],
+        "steps": 6236,
+        "period": 50.0,
+        "gate": 45.0
+      }
+    },
+    "fits": {},
+    "seconds": 153.26721059996635,
+    "exit": 0
+  },
+  "document_validation": {
+    "collected": 64,
+    "reported": 64,
+    "passed": 64,
+    "exit": 0,
+    "internal_errors": false
+  },
+  "duration_decision": "Retain period=50 and gate=45 for the placement sweep. The .55-scaled schedule changes the 56-cell cross-section by 1.22107e-4 relative, above the 9.7e-5 open-scene floor. At 40 cells, increasing period and gate by 1.4 changes the coupled cross-section by -3.38427e-7.",
+  "eight_placement_sweep": {
+    "status": "completed_measurements_not_C3_pass",
+    "public_scene_preparation": false,
+    "cases": {
+      "40": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9716276729593055,
+            "exact": 0.909413120174101,
+            "error": 0.06841176073344313,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -8.05389365210269e-06,
+            "decay": 9.446872921524425e-09,
+            "final_energy_over_peak": 0.00023615239429593143,
+            "contours": [
+              0.9716265677134155,
+              0.9716271742649001
+            ],
+            "seconds": 12.57059079996543
+          },
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.5,
+              0.3333333333333333
+            ],
+            "sigma": 0.9714048997815732,
+            "exact": 0.909413120174101,
+            "error": 0.06816679706094875,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 3.141389749454096e-06,
+            "decay": 5.492389173466255e-09,
+            "final_energy_over_peak": 0.0002368958748835428,
+            "contours": [
+              0.9714054371092207,
+              0.9714027359165677
+            ],
+            "seconds": 11.391924700001255
+          },
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.25,
+              0.6666666666666666
+            ],
+            "sigma": 0.9667304757130974,
+            "exact": 0.909413120174101,
+            "error": 0.0630267523829251,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -6.015085213800424e-07,
+            "decay": 6.915208487088628e-09,
+            "final_energy_over_peak": 0.00023990694793572307,
+            "contours": [
+              0.9667304895188026,
+              0.9667283259851905
+            ],
+            "seconds": 7.4470074999844655
+          },
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.75,
+              0.1111111111111111
+            ],
+            "sigma": 0.9526518835660912,
+            "exact": 0.909413120174101,
+            "error": 0.04754578797336073,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -3.4878411392314137e-07,
+            "decay": 5.577589720883706e-09,
+            "final_energy_over_peak": 0.00023845094665150813,
+            "contours": [
+              0.9526520076838927,
+              0.952653758110148
+            ],
+            "seconds": 7.8268904000287876
+          },
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.125,
+              0.4444444444444444
+            ],
+            "sigma": 0.9675602350760503,
+            "exact": 0.909413120174101,
+            "error": 0.06393916429402013,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -6.515041861995763e-06,
+            "decay": 8.033845432137225e-09,
+            "final_energy_over_peak": 0.00023909093668837605,
+            "contours": [
+              0.967559563554947,
+              0.9675574497217986
+            ],
+            "seconds": 7.612273300008383
+          },
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.625,
+              0.7777777777777778
+            ],
+            "sigma": 0.958162236386827,
+            "exact": 0.909413120174101,
+            "error": 0.05360502848627613,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 1.2624328097789617e-05,
+            "decay": 6.792849274051154e-09,
+            "final_energy_over_peak": 0.00024001398838892186,
+            "contours": [
+              0.9581632541230765,
+              0.958163422190662
+            ],
+            "seconds": 7.449352000025101
+          },
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.375,
+              0.2222222222222222
+            ],
+            "sigma": 0.9581646166438121,
+            "exact": 0.909413120174101,
+            "error": 0.05360764584128486,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 1.0812875596952986e-05,
+            "decay": 5.1906062058358065e-09,
+            "final_energy_over_peak": 0.00023795947653734698,
+            "contours": [
+              0.9581654062994963,
+              0.9581651044719485
+            ],
+            "seconds": 7.335604900028557
+          },
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.875,
+              0.5555555555555556
+            ],
+            "sigma": 0.9675594309518659,
+            "exact": 0.909413120174101,
+            "error": 0.06393828007081437,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -5.849438949580984e-06,
+            "decay": 7.460658958157936e-09,
+            "final_energy_over_peak": 0.0002401706234306892,
+            "contours": [
+              0.9675593114147417,
+              0.9675570225604969
+            ],
+            "seconds": 7.574219300004188
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2000,
+          136
+        ],
+        "steps": 6236,
+        "period": 50.0,
+        "gate": 45.0
+      },
+      "56": {
+        "rows": [
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9432954102032414,
+            "exact": 0.909413120174101,
+            "error": 0.03725731384066,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 6.2392120102903236e-06,
+            "decay": 3.5499113201698238e-09,
+            "final_energy_over_peak": 0.0002552889082144785,
+            "contours": [
+              0.9432952883137343,
+              0.9432963180799708
+            ],
+            "seconds": 42.56087819999084
+          },
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.5,
+              0.3333333333333333
+            ],
+            "sigma": 0.9478753695023522,
+            "exact": 0.909413120174101,
+            "error": 0.04229348408882405,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -1.6829275771800311e-06,
+            "decay": 3.1425550110236855e-09,
+            "final_energy_over_peak": 0.0002541018582397933,
+            "contours": [
+              0.9478747922347545,
+              0.947875388423349
+            ],
+            "seconds": 40.52286940003978
+          },
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.25,
+              0.6666666666666666
+            ],
+            "sigma": 0.9424794172855706,
+            "exact": 0.909413120174101,
+            "error": 0.03636003965407841,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -3.3342250337496386e-07,
+            "decay": 2.2708658404598964e-09,
+            "final_energy_over_peak": 0.0002565087800770714,
+            "contours": [
+              0.9424786940556237,
+              0.9424799004121648
+            ],
+            "seconds": 40.303414099966176
+          },
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.75,
+              0.1111111111111111
+            ],
+            "sigma": 0.9365295557800208,
+            "exact": 0.909413120174101,
+            "error": 0.029817510880784992,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 7.647400789142205e-06,
+            "decay": 1.4043333231549532e-09,
+            "final_energy_over_peak": 0.0002556158976348104,
+            "contours": [
+              0.9365303839309704,
+              0.9365302187773057
+            ],
+            "seconds": 36.6386666999897
+          },
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.125,
+              0.4444444444444444
+            ],
+            "sigma": 0.935361371060933,
+            "exact": 0.909413120174101,
+            "error": 0.028532962974917586,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 2.0661818840028733e-06,
+            "decay": 2.262624137206713e-09,
+            "final_energy_over_peak": 0.00025650425415464233,
+            "contours": [
+              0.9353611624247393,
+              0.9353621289948295
+            ],
+            "seconds": 36.95015029999195
+          },
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.625,
+              0.7777777777777778
+            ],
+            "sigma": 0.9375666871574431,
+            "exact": 0.909413120174101,
+            "error": 0.030957951187192245,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 4.482358522093727e-06,
+            "decay": 2.0583090212910034e-09,
+            "final_energy_over_peak": 0.00025703557762646236,
+            "contours": [
+              0.9375666410308566,
+              0.93756713333656
+            ],
+            "seconds": 37.110366700042505
+          },
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.375,
+              0.2222222222222222
+            ],
+            "sigma": 0.9375691947952064,
+            "exact": 0.909413120174101,
+            "error": 0.03096070861141209,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 3.912768660235666e-06,
+            "decay": 1.8223807597336505e-09,
+            "final_energy_over_peak": 0.0002547440338146901,
+            "contours": [
+              0.9375691865143865,
+              0.9375696002986587
+            ],
+            "seconds": 36.0455748999957
+          },
+          {
+            "cpw": 56,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.875,
+              0.5555555555555556
+            ],
+            "sigma": 0.9353609038479823,
+            "exact": 0.909413120174101,
+            "error": 0.028532449222762102,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 2.0818462182154427e-06,
+            "decay": 2.322629307283607e-09,
+            "final_energy_over_peak": 0.0002560876957517718,
+            "contours": [
+              0.9353606889856186,
+              0.9353616321248712
+            ],
+            "seconds": 36.240002700011246
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2800,
+          181
+        ],
+        "steps": 8730,
+        "period": 50.0,
+        "gate": 45.0
+      },
+      "80": {
+        "rows": [
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9212912406085516,
+            "exact": 0.909413120174101,
+            "error": 0.013061303131602697,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -6.075538123884299e-06,
+            "decay": 1.3096780191215057e-09,
+            "final_energy_over_peak": 0.00026945279339696883,
+            "contours": [
+              0.9212908879737388,
+              0.9212909721273405
+            ],
+            "seconds": 129.6433511999785
+          },
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.5,
+              0.3333333333333333
+            ],
+            "sigma": 0.9247818763971876,
+            "exact": 0.909413120174101,
+            "error": 0.016899642068221254,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -3.6839698286956847e-06,
+            "decay": 1.4574039120091925e-09,
+            "final_energy_over_peak": 0.0002693356060239612,
+            "contours": [
+              0.9247817376129752,
+              0.9247812526599323
+            ],
+            "seconds": 129.92909479996888
+          },
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.25,
+              0.6666666666666666
+            ],
+            "sigma": 0.928930042872613,
+            "exact": 0.909413120174101,
+            "error": 0.021461008496090006,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -2.594375275310899e-06,
+            "decay": 1.0190097356709023e-09,
+            "final_energy_over_peak": 0.0002692911782605391,
+            "contours": [
+              0.9289300282156272,
+              0.9289295891519486
+            ],
+            "seconds": 124.92603649996454
+          },
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.75,
+              0.1111111111111111
+            ],
+            "sigma": 0.9258581192184742,
+            "exact": 0.909413120174101,
+            "error": 0.018083089719691747,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -4.471881459780643e-06,
+            "decay": 1.3326892289542544e-09,
+            "final_energy_over_peak": 0.0002688782422580123,
+            "contours": [
+              0.9258580686541709,
+              0.9258576374590795
+            ],
+            "seconds": 124.54503839998506
+          },
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.125,
+              0.4444444444444444
+            ],
+            "sigma": 0.9323746359144994,
+            "exact": 0.909413120174101,
+            "error": 0.025248718355858513,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 3.836838373543932e-07,
+            "decay": 1.7471489692804706e-09,
+            "final_energy_over_peak": 0.0002684962413239189,
+            "contours": [
+              0.9323753129261271,
+              0.9323741549357302
+            ],
+            "seconds": 124.65783280000323
+          },
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.625,
+              0.7777777777777778
+            ],
+            "sigma": 0.9269293198105871,
+            "exact": 0.909413120174101,
+            "error": 0.01926099288421601,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -3.6517852555743297e-06,
+            "decay": 1.105550622730776e-09,
+            "final_energy_over_peak": 0.00026897695715577395,
+            "contours": [
+              0.9269291847930204,
+              0.926928988640374
+            ],
+            "seconds": 124.969066700025
+          },
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.375,
+              0.2222222222222222
+            ],
+            "sigma": 0.9269304266566247,
+            "exact": 0.909413120174101,
+            "error": 0.019262209983478273,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -3.572325701660398e-06,
+            "decay": 1.1770691500929582e-09,
+            "final_energy_over_peak": 0.0002689938231609528,
+            "contours": [
+              0.9269305337225919,
+              0.9269299059982473
+            ],
+            "seconds": 125.01355630002217
+          },
+          {
+            "cpw": 80,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "jax",
+            "variant": "coupled",
+            "placement": [
+              0.875,
+              0.5555555555555556
+            ],
+            "sigma": 0.9323745107478111,
+            "exact": 0.909413120174101,
+            "error": 0.025248580721283442,
+            "constitutive_terms": 1,
+            "absorption_cross_section": 2.5897898450328154e-07,
+            "decay": 1.7727358249139864e-09,
+            "final_energy_over_peak": 0.00026869458928463713,
+            "contours": [
+              0.9323751025459204,
+              0.9323740444266996
+            ],
+            "seconds": 126.23200640000869
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          4000,
+          248
+        ],
+        "steps": 12471,
+        "period": 50.0,
+        "gate": 45.0
+      }
+    },
+    "fits": {
+      "coupled": {
+        "mean_errors": [
+          0.06028015210538415,
+          0.033089052557578935,
+          0.019815693170055243
+        ],
+        "rms_errors": [
+          0.06070775677254459,
+          0.033416263862024946,
+          0.0201890308967374
+        ],
+        "spread": [
+          0.020865972760082396,
+          0.01376103486606195,
+          0.012187415224255815
+        ],
+        "mean": {
+          "order": 1.603365157450582,
+          "scatter": 0.04062498652581784,
+          "monotone": true
+        },
+        "rms": {
+          "order": 1.586554653058028,
+          "scatter": 0.042608821454189615,
+          "monotone": true
+        },
+        "subset_orders": {
+          "count": 70,
+          "minimum": 1.3769638637590098,
+          "maximum": 1.842996569672121,
+          "sd": 0.1280236872524804
+        }
+      }
+    },
+    "source_sha256": {
+      "wavebit/fd/__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+      "wavebit/fd/_assemble.py": "4b1d3486f5971b0035c66266c7ac55216cc41eb409092d460eb788b82fc12ca1",
+      "wavebit/fd/_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+      "wavebit/fd/_kernel/__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+      "wavebit/fd/_kernel/constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+      "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+      "wavebit/fd/_kernel/curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+      "wavebit/fd/_kernel/faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+      "wavebit/fd/_kernel/grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+      "wavebit/fd/_kernel/masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+      "wavebit/fd/_kernel/observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+      "wavebit/fd/_kernel/poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+      "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+      "wavebit/fd/_kernel/step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+      "wavebit/fd/_lower/__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+      "wavebit/fd/_lower/checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+      "wavebit/fd/_lower/coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+      "wavebit/fd/_lower/constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+      "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+      "wavebit/fd/_lower/fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+      "wavebit/fd/_lower/grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+      "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+      "wavebit/fd/_lower/monitors.py": "c634eaf9d7416b54777b7827b9a7352fad43ac6fcf9852307b5f0172adce6c36",
+      "wavebit/fd/_lower/occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+      "wavebit/fd/_lower/params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+      "wavebit/fd/_lower/plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+      "wavebit/fd/_lower/sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+      "wavebit/fd/_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+      "wavebit/fd/_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+      "wavebit/fd/_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+      "wavebit/fd/_shapes/__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+      "wavebit/fd/_shapes/_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+      "wavebit/fd/_shapes/_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+      "wavebit/fd/_shapes/_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+      "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+      "wavebit/fd/_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+      "wavebit/fd/_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+      "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+      "wavebit/fd/diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+      "wavebit/fd/geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+      "wavebit/fd/materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+      "wavebit/fd/monitors.py": "d0bf7ea6dffc4d857b9f8d1e61cfb989644df21d6682b2142358798761e13275",
+      "wavebit/fd/results.py": "24f334921a17087a849f28c7ccf89c1347cdd57369b1464538cde31bcdd09f95",
+      "wavebit/fd/scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+      "wavebit/fd/sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328",
+      "studies/fdtd_subpixel_coupled_cylinder.py": "48fe0b066fb1bd99bc14ce3545992c5971212525ba406a87bdc2e58c2367d88b",
+      "studies/fdtd_subpixel_mie_cylinder.py": "f4c57629798c94474f72b0191ac73619879b7e40a2c651e1a3ec15cd4f9a1217",
+      "studies/fdtd_subpixel_tilted_tensor.py": "ab7cdae103eee093cfdfba9fe5ae748494a7691b8cd3b60075ac68826e90622b",
+      "tests/fd_helpers.py": "527216c8cd4e6da9608104e9f81097b167a862be2c55f64bbbce0e71e61be5c0",
+      "tests/references/mie.py": "04afcc9d9496793b49622ac25283d5e772ed0bcc47624b35b02f4ddf50633518"
+    },
+    "seconds": 1538.188582999981,
+    "exit": 0
+  },
+  "convergence_gate_pass": false,
+  "static_interface_consistency": {
+    "status": "completed_static_consistency_diagnostic_not_scattering_proof",
+    "source_sha256": {
+      "studies\\fdtd_subpixel_interface_consistency.py": "b74b9f3b52718eebb1832904d05a3d05af31907aa729fc16c2392ff0b719c564",
+      "wavebit\\fd\\_kernel\\constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+      "wavebit\\fd\\_lower\\coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341"
+    },
+    "rows": [
+      {
+        "cells": 16,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 1.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 33
+      },
+      {
+        "cells": 32,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 1.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 65
+      },
+      {
+        "cells": 64,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 1.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 129
+      },
+      {
+        "cells": 16,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 1.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 33
+      },
+      {
+        "cells": 32,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 1.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 65
+      },
+      {
+        "cells": 64,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 1.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 129
+      },
+      {
+        "cells": 16,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 2.25,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 33
+      },
+      {
+        "cells": 32,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 2.25,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 65
+      },
+      {
+        "cells": 64,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 2.25,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 129
+      },
+      {
+        "cells": 16,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 2.25,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 33
+      },
+      {
+        "cells": 32,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 2.25,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 65
+      },
+      {
+        "cells": 64,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 2.25,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 129
+      },
+      {
+        "cells": 16,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 12.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 33
+      },
+      {
+        "cells": 32,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 12.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 65
+      },
+      {
+        "cells": 64,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 12.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "rms_error": 0.0,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 129
+      },
+      {
+        "cells": 16,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 12.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 1.850371707708594e-17,
+        "rms_error": 3.6796563866992976e-17,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 33
+      },
+      {
+        "cells": 32,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 12.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 1.793437193625253e-17,
+        "rms_error": 3.5777124964580496e-17,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 65
+      },
+      {
+        "cells": 64,
+        "normal": [
+          1.0,
+          0.0
+        ],
+        "eps": 12.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 1.764307907350055e-17,
+        "rms_error": 3.524415080098129e-17,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 129
+      },
+      {
+        "cells": 16,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 1.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 3.058465632576189e-19,
+        "rms_error": 5.82715965570777e-18,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 1.7763568394002505e-15,
+        "predicted_E_circulation": 1.1102230246251565e-16,
+        "intersected_nodes": 58
+      },
+      {
+        "cells": 32,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 1.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 7.883240411539573e-20,
+        "rms_error": 2.9584041328977904e-18,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 3.552713678800501e-15,
+        "predicted_E_circulation": 1.1102230246251565e-16,
+        "intersected_nodes": 114
+      },
+      {
+        "cells": 64,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 1.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 2.001483729268355e-20,
+        "rms_error": 1.4906687491345458e-18,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 7.105427357601002e-15,
+        "predicted_E_circulation": 1.1102230246251565e-16,
+        "intersected_nodes": 226
+      },
+      {
+        "cells": 16,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 1.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 5.0974427209603145e-19,
+        "rms_error": 7.52283076741598e-18,
+        "exact_E_circulation_over_dx": 1.7763568394002505e-15,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 58
+      },
+      {
+        "cells": 32,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 1.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 1.5766480823079145e-19,
+        "rms_error": 4.1838152477246716e-18,
+        "exact_E_circulation_over_dx": 3.552713678800501e-15,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 114
+      },
+      {
+        "cells": 64,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 1.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 1.1102230246251565e-16,
+        "mean_abs_error": 6.338031809349791e-20,
+        "rms_error": 2.6526644803945294e-18,
+        "exact_E_circulation_over_dx": 7.105427357601002e-15,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.0,
+        "intersected_nodes": 226
+      },
+      {
+        "cells": 16,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 2.25,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.0841703287147908,
+        "mean_abs_error": 0.0018062471131499408,
+        "rms_error": 0.009104677764196899,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 4.618527782440651e-14,
+        "predicted_E_circulation": 0.241486209881967,
+        "intersected_nodes": 58
+      },
+      {
+        "cells": 32,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 2.25,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.08417032871479135,
+        "mean_abs_error": 0.0009232386528482482,
+        "rms_error": 0.006527013861944755,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 2.0605739337042905e-13,
+        "predicted_E_circulation": 0.24148620988196856,
+        "intersected_nodes": 114
+      },
+      {
+        "cells": 64,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 2.25,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.08417032871479235,
+        "mean_abs_error": 0.00046680149705013627,
+        "rms_error": 0.0046475021531901155,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 6.963318810448982e-13,
+        "predicted_E_circulation": 0.24148620988197078,
+        "intersected_nodes": 226
+      },
+      {
+        "cells": 16,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 2.25,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.05887510759310777,
+        "mean_abs_error": 0.0013155502875280153,
+        "rms_error": 0.006646671971031958,
+        "exact_E_circulation_over_dx": 1.9539925233402755e-14,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.021427467219438334,
+        "intersected_nodes": 58
+      },
+      {
+        "cells": 32,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 2.25,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0588751075931081,
+        "mean_abs_error": 0.0006699365086652388,
+        "rms_error": 0.00475433623983234,
+        "exact_E_circulation_over_dx": 8.526512829121202e-14,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.021427467219438445,
+        "intersected_nodes": 114
+      },
+      {
+        "cells": 64,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 2.25,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.0588751075931091,
+        "mean_abs_error": 0.0003380912638120237,
+        "rms_error": 0.0033814966319332053,
+        "exact_E_circulation_over_dx": 3.090860900556436e-13,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.021427467219439056,
+        "intersected_nodes": 226
+      },
+      {
+        "cells": 16,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 12.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.6411140758376208,
+        "mean_abs_error": 0.01814666834907453,
+        "rms_error": 0.08511107971374095,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 3.979039320256561e-13,
+        "predicted_E_circulation": 1.7468251398664991,
+        "intersected_nodes": 58
+      },
+      {
+        "cells": 32,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 12.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.641114075837621,
+        "mean_abs_error": 0.009251968952687444,
+        "rms_error": 0.06093641635454093,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 1.7621459846850485e-12,
+        "predicted_E_circulation": 1.7468251398664991,
+        "intersected_nodes": 114
+      },
+      {
+        "cells": 64,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 12.0,
+        "et": 1.0,
+        "dn": 0.0,
+        "max_abs_error": 0.641114075837623,
+        "mean_abs_error": 0.004671910510848467,
+        "rms_error": 0.04336112768456897,
+        "exact_E_circulation_over_dx": 0.0,
+        "exact_D_divergence_over_dx": 6.0254023992456496e-12,
+        "predicted_E_circulation": 1.7468251398665022,
+        "intersected_nodes": 226
+      },
+      {
+        "cells": 16,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 12.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.17383109405579222,
+        "mean_abs_error": 0.004243084891438978,
+        "rms_error": 0.01958069844126221,
+        "exact_E_circulation_over_dx": 3.2862601528904634e-14,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.07709699071623843,
+        "intersected_nodes": 58
+      },
+      {
+        "cells": 32,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 12.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.17383109405579322,
+        "mean_abs_error": 0.002157546510017787,
+        "rms_error": 0.013992027601118203,
+        "exact_E_circulation_over_dx": 1.4566126083082054e-13,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.07709699071623943,
+        "intersected_nodes": 114
+      },
+      {
+        "cells": 64,
+        "normal": [
+          0.6,
+          0.8
+        ],
+        "eps": 12.0,
+        "et": 0.0,
+        "dn": 1.0,
+        "max_abs_error": 0.1738310940557955,
+        "mean_abs_error": 0.0010880033123563193,
+        "rms_error": 0.009946730392537744,
+        "exact_E_circulation_over_dx": 5.044853423896711e-13,
+        "exact_D_divergence_over_dx": 0.0,
+        "predicted_E_circulation": 0.07709699071624232,
+        "intersected_nodes": 226
+      }
+    ],
+    "exit": 0
+  },
+  "backend_comparison40": {
+    "status": "completed_backend_measurements_not_C3_pass",
+    "source_sha256": {
+      "wavebit/fd/__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+      "wavebit/fd/_assemble.py": "4b1d3486f5971b0035c66266c7ac55216cc41eb409092d460eb788b82fc12ca1",
+      "wavebit/fd/_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+      "wavebit/fd/_kernel/__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+      "wavebit/fd/_kernel/constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+      "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+      "wavebit/fd/_kernel/curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+      "wavebit/fd/_kernel/faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+      "wavebit/fd/_kernel/grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+      "wavebit/fd/_kernel/masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+      "wavebit/fd/_kernel/observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+      "wavebit/fd/_kernel/poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+      "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+      "wavebit/fd/_kernel/step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+      "wavebit/fd/_lower/__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+      "wavebit/fd/_lower/checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+      "wavebit/fd/_lower/coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+      "wavebit/fd/_lower/constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+      "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+      "wavebit/fd/_lower/fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+      "wavebit/fd/_lower/grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+      "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+      "wavebit/fd/_lower/monitors.py": "c634eaf9d7416b54777b7827b9a7352fad43ac6fcf9852307b5f0172adce6c36",
+      "wavebit/fd/_lower/occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+      "wavebit/fd/_lower/params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+      "wavebit/fd/_lower/plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+      "wavebit/fd/_lower/sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+      "wavebit/fd/_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+      "wavebit/fd/_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+      "wavebit/fd/_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+      "wavebit/fd/_shapes/__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+      "wavebit/fd/_shapes/_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+      "wavebit/fd/_shapes/_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+      "wavebit/fd/_shapes/_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+      "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+      "wavebit/fd/_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+      "wavebit/fd/_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+      "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+      "wavebit/fd/diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+      "wavebit/fd/geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+      "wavebit/fd/materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+      "wavebit/fd/monitors.py": "d0bf7ea6dffc4d857b9f8d1e61cfb989644df21d6682b2142358798761e13275",
+      "wavebit/fd/results.py": "24f334921a17087a849f28c7ccf89c1347cdd57369b1464538cde31bcdd09f95",
+      "wavebit/fd/scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+      "wavebit/fd/sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328"
+    },
+    "reference_jax": {
+      "cpw": 40,
+      "eps": 12.0,
+      "pol": "TE",
+      "backend": "jax",
+      "variant": "coupled",
+      "placement": [
+        0.0,
+        0.0
+      ],
+      "sigma": 0.9716276729593055,
+      "exact": 0.909413120174101,
+      "error": 0.06841176073344313,
+      "constitutive_terms": 1,
+      "absorption_cross_section": -8.05389365210269e-06,
+      "decay": 9.446872921524425e-09,
+      "final_energy_over_peak": 0.00023615239429593143,
+      "contours": [
+        0.9716265677134155,
+        0.9716271742649001
+      ],
+      "seconds": 12.57059079996543
+    },
+    "backends": {
+      "numpy": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "numpy",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9716276729593055,
+            "exact": 0.909413120174101,
+            "error": 0.06841176073344313,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -8.05389365214643e-06,
+            "decay": 9.446872921525007e-09,
+            "final_energy_over_peak": 0.00023615239429590276,
+            "contours": [
+              0.9716265677134168,
+              0.9716271742648989
+            ],
+            "seconds": 24.903263200016227
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2000,
+          136
+        ],
+        "steps": 6236,
+        "period": 50.0,
+        "gate": 45.0,
+        "sigma_relative_gap_from_jax": 0.0,
+        "absorption_absolute_gap_from_jax": -4.373908733031756e-17
+      },
+      "torch": {
+        "rows": [
+          {
+            "cpw": 40,
+            "eps": 12.0,
+            "pol": "TE",
+            "backend": "torch",
+            "variant": "coupled",
+            "placement": [
+              0.0,
+              0.0
+            ],
+            "sigma": 0.9716276729593067,
+            "exact": 0.909413120174101,
+            "error": 0.06841176073344446,
+            "constitutive_terms": 1,
+            "absorption_cross_section": -8.053893652386997e-06,
+            "decay": 9.446872921524377e-09,
+            "final_energy_over_peak": 0.00023615239429593173,
+            "contours": [
+              0.9716265677134168,
+              0.9716271742649002
+            ],
+            "seconds": 43.577682699949946
+          }
+        ],
+        "warnings": [],
+        "grid": [
+          1,
+          2000,
+          136
+        ],
+        "steps": 6236,
+        "period": 50.0,
+        "gate": 45.0,
+        "sigma_relative_gap_from_jax": 1.3322676295501878e-15,
+        "absorption_absolute_gap_from_jax": -2.843066087459059e-16
+      }
+    },
+    "exit": 0
+  }
+}

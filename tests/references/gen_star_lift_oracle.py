@@ -2,7 +2,7 @@
 change and its first and second directional derivatives on four small regions.
 
 Run once, by hand, where mpmath is installed (wavebit does not depend on it);
-``tests/test_fd_star_lift.py`` then compares the lift's nested forward derivatives with the
+``tests/fdtd/test_fd_star_lift.py`` then compares the lift's nested forward derivatives with the
 committed numbers on every backend.
 
     python tests/references/gen_star_lift_oracle.py
@@ -10,7 +10,7 @@ committed numbers on every backend.
 Rerun it only to add a fixture, never to make a failing test pass.
 
 **What it computes, and from what.** It is written from the definitions in
-``src/wavebit/fd/_lower/stars.py``'s docstring and imports nothing from wavebit; ``THETA`` is restated.
+``src/wavebit/fdtd/_prepare/stars.py``'s docstring and imports nothing from wavebit; ``THETA`` is restated.
 It shares none of the module's arithmetic: the module tests a 3x3 matrix of harmonic means in
 float64, finds ``t*`` by 52 halvings and differentiates by Newton steps on one ``L D L^T``
 pivot; this builds each star's explicit matrix (up to 6x6), finds ``t*`` by 150 halvings at 50

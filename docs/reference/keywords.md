@@ -7,12 +7,12 @@ question it answers rather than by the constructor's order, which is chronologic
 same `Stack` and `Incidence` reach both. What it adds are keywords about a time-domain run
 rather than about the scene (`resolution`, `n_periods`, `courant`, `n_pml`, `pml_reflection`,
 `grading`, `subpixel`, `record_field`, `dispersion`), and what it refuses it refuses by name. Both lists
-are in [`fdtd.md`](../fdtd.md) beside the measurement that decided each default.
+are in [`fdtd.md`](../guide/fdtd/fdtd.md) beside the measurement that decided each default.
 
 This page is the lookup. For what the choices *mean* and how to pick between them, the user
-guide takes them one subject at a time: [the light](../guide/light.md),
-[the scene](../guide/scene.md), [the numerics](../guide/numerics.md),
-[near fields](../guide/fields.md) and [backends](../guide/backends.md).
+guide takes them one subject at a time: [the light](../guide/rcwa/light.md),
+[the scene](../guide/rcwa/scene.md), [the numerics](../guide/rcwa/numerics.md),
+[near fields](../guide/rcwa/fields.md) and [backends](../guide/common/backends.md).
 
 Two rules cover the whole surface and are worth stating once:
 
@@ -26,36 +26,36 @@ Two rules cover the whole surface and are worth stating once:
 
 ## The light
 
-Explained in [Saying what the light is](../guide/light.md).
+Explained in [Saying what the light is](../guide/rcwa/light.md).
 
 | Keyword | Default | What it takes |
 | --- | --- | --- |
 | `wavelength` | `1.` | free-space wavelength, in whatever unit `period` and `thickness` share |
-| `theta` | `0.` in angle mode; `None` with direct k | polar angle of the incident light's direction from the inward normal, radians: the direction its power travels in a lossless medium of either sign of index (in a negative-index medium the in-plane wavevector then points the other way). Real angles give uniform surface illumination, including in absorbing incident media. A nonzero imaginary part selects the formal complex-angle parameterization; see [real-angle incidence](../conventions.md#real-angle-incidence) and [negative-index media](../negative-index-media.md) |
+| `theta` | `0.` in angle mode; `None` with direct k | polar angle of the incident light's direction from the inward normal, radians: the direction its power travels in a lossless medium of either sign of index (in a negative-index medium the in-plane wavevector then points the other way). Real angles give uniform surface illumination, including in absorbing incident media. A nonzero imaginary part selects the formal complex-angle parameterization; see [real-angle incidence](common/conventions.md#real-angle-incidence) and [negative-index media](../theory/rcwa/negative-index-media.md) |
 | `phi` | `None` | azimuth of the incident light's direction, radians. `None` is "not named", which the pure 1D path requires |
-| `kx`, `ky` | `None` | direct real Cartesian transverse angular wavenumbers, in inverse length units; an omitted component is zero. Alternative to `theta`/`phi`; these are physical values, not divided by k0. See [direction inputs](../guide/light.md#two-ways-to-specify-direction) |
+| `kx`, `ky` | `None` | direct real Cartesian transverse angular wavenumbers, in inverse length units; an omitted component is zero. Alternative to `theta`/`phi`; these are physical values, not divided by k0. See [direction inputs](../guide/rcwa/light.md#two-ways-to-specify-direction) |
 | `tetm` | `None` | `'te'` / `'tm'`. A **declaration** that polarization and azimuth are not degrees of freedom here; one-row raster structures only, and it is what buys the pure TE/TM formulation (a shape structure, a tensor, a z row, `formulation='first_order'`, or no structure after anything but a pure solve, is refused by name, with the pair below as the fix). The same light and the same per-order amplitudes as `polarization=(1, 0)` / `(0, 1)` at `phi = 0`; its scattering matrix is that solve's s-s / p-p block, and `s_inc` / `p_inc` stay `None` |
 | `psi` | `pi/2` (s/TE) | polarization angle, radians. `pi/2` is s/TE, `0` is p/TM |
 | `chi` | `None` | ellipticity angle. With `psi` it is the canonical chart of any state: `0` linear, `±pi/4` circular |
 | `polarization` | `None` | the Jones pair `(a_s, a_p)` itself, complex. The only spelling that carries an overall phase; magnitude is normalized away |
-| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order. A weight multiplies its order's own s/p vector, so on the `ky == 0` row an order with `kx < 0` is lit along `-y` for s, and is unit at `x = y = 0` on the lit face -- the weights `OrderExcitation(orders=...)` takes. A side-keyed map, `{"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`, selects [coherent illumination](../coherent-illumination.md) |
+| `excitation` | `None` | which diffraction *orders* the light arrives on: `{0: 1.0, 1: 0.6-0.8j}` on 1D, `{(m, n): amp}` on 2D. `None` is one plane wave on the specular order. A weight multiplies its order's own s/p vector, so on the `ky == 0` row an order with `kx < 0` is lit along `-y` for s, and is unit at `x = y = 0` on the lit face -- the weights `OrderExcitation(orders=...)` takes. A side-keyed map, `{"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`, selects [coherent illumination](../guide/rcwa/coherent-illumination.md) |
 | `incidence_side` | `'top'` | `'top'` / `'bottom'` — which half-space the light arrives from. Scene labels never move; results are incidence-relative, and `theta` / `phi` are measured in the incidence medium |
 
 ## The stack
 
-Explained in [Describing a scene](../guide/scene.md).
+Explained in [Describing a scene](../guide/rcwa/scene.md).
 
 | Keyword | Default | What it takes |
 | --- | --- | --- |
 | `structure` | `None` | the layers. An `ndarray` of shape `(n_layers, Ny, Nx)` is a **raster** of relative permittivity; a `list` of `dict(background=..., shapes=[...])` is the **parametric** path |
 | `thickness` | `(0.,)` | one length per layer, same unit as `period` |
-| `top` | `1.` | superstrate material — a `Material`, or a bare relative permittivity. A passive double negative (`Re(eps) < 0`, `Re(mu) < 0`) is solved on either side, lit or not; an active one that propagates (`Re(eps*mu) > 0`, and `Im(eps) < 0` or `Im(mu) < 0`) is refused. See [negative-index media](../negative-index-media.md) |
+| `top` | `1.` | superstrate material — a `Material`, or a bare relative permittivity. A passive double negative (`Re(eps) < 0`, `Re(mu) < 0`) is solved on either side, lit or not; an active one that propagates (`Re(eps*mu) > 0`, and `Im(eps) < 0` or `Im(mu) < 0`) is refused. See [negative-index media](../theory/rcwa/negative-index-media.md) |
 | `bot` | `1.` | substrate, read the same way |
 | `mu` | `None` | **raster path only**: the permeability field, `(n_layers, Ny, Nx)`, beside `structure`. On the shape paths a permeability belongs to each `Material`, so naming it here is refused |
 
 ## The cell
 
-Explained in [Describing a scene](../guide/scene.md), "The cell".
+Explained in [Describing a scene](../guide/rcwa/scene.md), "The cell".
 `period` and `lattice` are two spellings of one cell: naming **both** raises, and naming
 **neither** while giving a structure raises too.
 
@@ -66,25 +66,25 @@ Explained in [Describing a scene](../guide/scene.md), "The cell".
 
 ## The numerics
 
-Explained in [Choosing the numerics](../guide/numerics.md), except
+Explained in [Choosing the numerics](../guide/rcwa/numerics.md), except
 `backend`, `device` and `complex_dtype`, which are
-[Backends, devices and precision](../guide/backends.md), and `answers`, which is
-[Near fields](../guide/fields.md).
+[Backends, devices and precision](../guide/common/backends.md), and `answers`, which is
+[Near fields](../guide/rcwa/fields.md).
 
 | Keyword | Default | What it takes |
 | --- | --- | --- |
 | `truncation_order` | `(0, 0)` | retained Fourier orders per axis. A pair, `dict(x=..., y=...)` or `dict(u=..., v=...)` |
-| `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly so — see [Backends and precision](../guide/backends.md) |
+| `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly so — see [Backends and precision](../guide/common/backends.md) |
 | `device` | `0` | `0`/`'cpu'`, `1`/`'gpu'`/`'cuda'`, or the backend's own device object |
 | `complex_dtype` | `0` (double) | `0` double, `1` single, or any of the three namespaces' complex spellings |
 | `layer_algorithm` | `'ETM'` | `'ETM'` (enhanced transmittance matrix) or `'SMM'` (scattering matrix) |
 | `fourier_coefficients` | resolves | `'sampled'` (series off the pixel grid) or `'integrated'` (closed-form transform of the raster's rectangles) |
-| `factorization` | resolves | `'li'` (successive rules along v then u, with axes aligned to y and x, in the default `li_nesting`), `'nvf'` (normal vector field, factorizing along material interfaces) or `'laurent'` (the direct rule for every product -- opt-in, for comparing with solvers that use it; refused on tensor materials); tensor support is described in [the material guide](../guide/materials.md#anisotropic-materials) |
+| `factorization` | resolves | `'li'` (successive rules along v then u, with axes aligned to y and x, in the default `li_nesting`), `'nvf'` (normal vector field, factorizing along material interfaces) or `'laurent'` (the direct rule for every product -- opt-in, for comparing with solvers that use it; refused on tensor materials); tensor support is described in [the material guide](../migration/materials-v1.md#anisotropic-materials) |
 | `raster_normal_method` | `'distance'` | raster NVF only: `'distance'`, `'contour'`, `'spectral'`, `'smooth'` |
 | `nvf_projector` | `'linear'` | raster and shape NVF projection: `'linear'` or `'circular'`; independent of incident polarization |
 | `li_nesting` | `'fixed'` | Li only: the order Li's rules are nested in. `'fixed'` (`v` inside `u` for every slot) or `'symmetric'` (each slot's inverse-rule axis inside -- covariant under swapping x and y). Read on rasters and on axis-aligned rectangles; refused under `'nvf'` and `'laurent'`; tensor Li builds `'fixed'` only |
 | `shape_nvf_grid_size` | `max(1024, 4*Nx+1, 4*Ny+1)` | shape NVF only: projector sampling points per cell axis; `128` means a 128×128 grid |
-| `answers` | `'amplitude'` | what the solve keeps the state to answer — see [Near fields](../guide/fields.md) |
+| `answers` | `'amplitude'` | what the solve keeps the state to answer — see [Near fields](../guide/rcwa/fields.md) |
 
 ### NVF names changed on 2026-09-21
 
@@ -102,7 +102,7 @@ the linear shape construction can also carry complex material-dependent componen
 
 JobSpec now writes schema version **10**. For a version-7 document, rename these keys in
 `numerics` when present and keep their option values. Also reverse `stack.layers` and
-review the coordinate migration in [Conventions](../conventions.md) before setting version 10. The capability
+review the coordinate migration in [Conventions](common/conventions.md) before setting version 10. The capability
 manifest has used the new option keys since version **10**. Earlier JobSpec versions also
 require their own material and coordinate migrations.
 
@@ -146,9 +146,9 @@ problem while conserving energy to machine precision.
 For side-keyed excitation, `power_region` chooses `"cell"`, `"infinite"`, or
 `((xmin, xmax), (ymin, ymax))`. It is required when the beams occupy different
 Bloch sectors. PlaneWave direction and polarization arguments are documented in
-[coherent illumination](../coherent-illumination.md).
+[coherent illumination](../guide/rcwa/coherent-illumination.md).
 
 Typed source lists use `excitation=[PlaneWave(...), GaussianBeam(...), ElectricDipole(...)]`.
 An internal dipole requires `length_unit`, the metres per scene length.
 Gaussian and isolated-dipole sources require a finite rectangular `power_region`.
-See [source objects and examples](../coherent-illumination.md#source-objects).
+See [source objects and examples](../guide/rcwa/coherent-illumination.md#source-objects).

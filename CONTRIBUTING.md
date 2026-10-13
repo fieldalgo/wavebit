@@ -23,7 +23,7 @@ If none of them is a yes, **the file has no home yet.** Say so in the PR rather 
 
 **Questions 6 and 7 are the other pair worth restating.** `docs/` is published: anyone who clones this repository reads it, so it holds what a user or contributor needs — measurements, and the reasoning behind a default. A record of *how the project is run* is finished work rather than scratch, but it is not part of the library, and putting it here means publishing it. Keep those alongside the checkout instead of inside it.
 
-Because it is published, **nothing committed here may name a path outside the checkout** — not a document, not a script's default argument, not a notebook's stored output. State what a private record measured; never where it sits. [`docs/README.md`](docs/README.md) states the contract, and `tests/test_docs_contract.py` fails the build on a violation. A draft that keeps wanting to point outward is usually a question-6 file that landed in the wrong place.
+Because it is published, **nothing committed here may name a path outside the checkout** — not a document, not a script's default argument, not a notebook's stored output. State what a private record measured; never where it sits. [`docs/README.md`](docs/README.md) states the contract, and `tests/api/test_docs_contract.py` fails the build on a violation. A draft that keeps wanting to point outward is usually a question-6 file that landed in the wrong place.
 
 **Questions 5 and 6 split what used to be one row.** `docs/guide/` is the manual: it answers *how do I use this*, for a reader who already knows the API exists and needs the contract for one keyword. `docs/` answers *why is it built this way*, for a reader who is questioning a default. The test is whether the sentence would change if a measurement came out differently — if it would, it is a `docs/` sentence. Question 5 also sits above question 8 on purpose: a manual page is looked up, a tutorial is read once and outgrown, and when a draft is both it is a tutorial.
 
@@ -45,7 +45,7 @@ Three of them are worth a sentence, because the obvious guess is wrong:
 
 The package uses a `src/` layout so installed-package checks and source-tree tests
 have explicit import paths. Use one editable environment per worktree; see the
-[source checkout guide](docs/developer/source-checkout.md) for setup and line debugging.
+[source checkout guide](docs/development/source-checkout.md) for setup and line debugging.
 `studies/` keeps executable investigations; their explanations live in `docs/`.
 
 **This file is the operative one.** If a directory name anywhere else disagrees with the table above, the table wins.
@@ -68,8 +68,8 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 
 - **Keep PRs small and focused.** One fix or one feature per PR reviews much faster than a grab-bag.
 - **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests/` for the pattern.
-- **Mind the conventions.** All sign and branch-cut choices live in `src/wavebit/_core/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. Wavebit uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
-- **Backend neutrality.** New solver code should be written against the Array API (`src/wavebit/_core/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
+- **Mind the conventions.** All sign and branch-cut choices live in `src/wavebit/_common/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. Wavebit uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
+- **Backend neutrality.** New solver code should be written against the Array API (`src/wavebit/_common/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
 
 ### Branches: rebase, then fast-forward
@@ -124,11 +124,11 @@ solver and they are where the suite's time goes:
 ```shell
 pytest -m research tests/ -q                     # the research tier alone
 pytest -m "research or not research" tests/ -q   # everything
-pytest tests/test_nvf_pair_galerkin.py -q        # a file you name runs whole
+pytest tests/rcwa/test_nvf_pair_galerkin.py -q        # a file you name runs whole
 ```
 
-Run the tier when you work on the research code itself -- `src/wavebit/_core/conforming/`,
-`src/wavebit/_core/passive_nvf.py`, a `studies/nvf_*` model or a research test. A change to the rest
+Run the tier when you work on the research code itself -- `src/wavebit/rcwa/_engine/conforming/`,
+`src/wavebit/rcwa/_engine/passive_nvf.py`, an NVF model under `studies/rcwa/` or a research test. A change to the rest
 of the package lands on the default set alone. Many research tests drive the ordinary engine, so
 such a change can break one; that does not hold the change back, and the test is repaired when
 research work next runs the tier.
@@ -154,7 +154,7 @@ The `docs` CI job runs that with `-W`, so **any warning fails the build**. That 
 not a tidiness rule: `docs/reference/api.md` names objects by hand, and autodoc reports one it
 cannot import as a warning -- so a renamed public symbol fails CI instead of leaving a quietly
 shorter page. A `github.com` URL into this repository is checked against the tree separately, by
-`tests/test_docs_contract.py`.
+`tests/api/test_docs_contract.py`.
 
 Nothing is deployed. `.github/workflows/docs-deploy.yml` is written and dormant; its header
 says what has to be true before it runs.

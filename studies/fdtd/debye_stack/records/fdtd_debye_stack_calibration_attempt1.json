@@ -1,0 +1,1177 @@
+{
+  "kind": "disclosed calibration, not a registered convergence verdict",
+  "base_commit": "f2b6b14856aab000e4b4fbf155b71202171dd24e",
+  "support_sha256": "d5609dfa1693b40c0b4e5dd353a871a6c08a131a505a7037509826f0dcf773f0",
+  "attempt": 1,
+  "started_utc": "2026-10-09T02:36:05.879475+00:00",
+  "source_identity": {
+    "helper_sha256": "f72422830afef906237f629835c6cbf1dd0057834f61863c6f78f4fcc2f70f98",
+    "fd_source_sha256": "90c4c12587fb8d736daf5fa0456fd689ad4fef6691b27347e01817b8f52ef1eb",
+    "wavebit_source_sha256": "bcd4a8bf057dc9f7f08bc341d31c4ebc30042586ad676b090c87bc56938587c4",
+    "reference_dependencies": {
+      "studies/fdtd_layer_alignment.py": "91433f49dffb84ceb1441fd1455a7e49ea104a276875402d127b20192cf2c008",
+      "studies/fdtd_oblique_pulse.py": "ac840bd60b50a0e6c5b8864e0883f79f6bf5bd8edb2113629ed151f6ffaef1b2"
+    },
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "analytic_preflight": {
+    "analytic_controls": "passed",
+    "residuals": {
+      "fixed-kx-transverse": 1.1102230246251565e-16,
+      "debye-pair-n40-f0.3-phases": 4.274358644806853e-15,
+      "debye-pair-n40-f0.1-phases": 1.2795320358804929e-14,
+      "debye-pair-n80-f0.3-phases": 2.831068712794149e-15,
+      "debye-pair-n80-f0.1-phases": 1.990074771640593e-14,
+      "debye-pair-n160-f0.3-phases": 3.980149543281186e-14,
+      "debye-pair-n160-f0.1-phases": 5.689893001203927e-15,
+      "debye-pair-s-matched-r": 1.3970443064985195e-16,
+      "debye-pair-s-matched-t": 8.005932084973443e-16,
+      "debye-pair-s-lossless-power": 3.3306690738754696e-16,
+      "debye-pair-s-recursive": 3.608224830031759e-16,
+      "debye-pair-s-reciprocal-t": 2.7755575615628914e-17,
+      "debye-pair-s-reflection-asymmetry": 0.2656123496741657,
+      "debye-pair-s-reverse-recursive": 1.716587549445839e-16,
+      "debye-pair-s-single-0": 2.220446049250313e-16,
+      "debye-pair-s-zero-depth-0": 2.482534153247273e-16,
+      "debye-pair-s-single-1": 3.376611507232129e-16,
+      "debye-pair-s-zero-depth-1": 2.482534153247273e-16,
+      "debye-pair-p-matched-r": 1.076689353332586e-16,
+      "debye-pair-p-matched-t": 8.005932084973443e-16,
+      "debye-pair-p-lossless-power": 4.440892098500626e-16,
+      "debye-pair-p-recursive": 2.2887833992611187e-16,
+      "debye-pair-p-reciprocal-t": 1.2412670766236366e-16,
+      "debye-pair-p-reflection-asymmetry": 0.2462629929785415,
+      "debye-pair-p-reverse-recursive": 1.6653345369377348e-16,
+      "debye-pair-p-single-0": 2.0014830212433607e-16,
+      "debye-pair-p-zero-depth-0": 3.510833468576701e-16,
+      "debye-pair-p-single-1": 2.2887833992611187e-16,
+      "debye-pair-p-zero-depth-1": 3.510833468576701e-16,
+      "debye-pair-normal-r-sign": 1.3877787807814457e-16,
+      "debye-pair-normal-t": 1.7554167342883506e-16,
+      "debye-triple-n40-f0.3-phases": 4.274358644806853e-15,
+      "debye-triple-n40-f0.1-phases": 8.520961713998076e-15,
+      "debye-triple-n80-f0.3-phases": 2.5590640717609858e-14,
+      "debye-triple-n80-f0.1-phases": 3.4111602431607935e-14,
+      "debye-triple-n160-f0.3-phases": 3.980149543281186e-14,
+      "debye-triple-n160-f0.1-phases": 2.273181642920008e-14,
+      "debye-triple-s-matched-r": 9.16620988578365e-17,
+      "debye-triple-s-matched-t": 8.082545620880531e-16,
+      "debye-triple-s-lossless-power": 3.3306690738754696e-16,
+      "debye-triple-s-recursive": 3.3306690738754696e-16,
+      "debye-triple-s-reciprocal-t": 2.7755575615628914e-17,
+      "debye-triple-s-reflection-asymmetry": 0.3926285437713755,
+      "debye-triple-s-reverse-recursive": 2.996606141238032e-16,
+      "debye-triple-s-single-0": 2.482534153247273e-16,
+      "debye-triple-s-zero-depth-0": 2.482534153247273e-16,
+      "debye-triple-s-single-1": 2.2591401799415137e-16,
+      "debye-triple-s-zero-depth-1": 2.482534153247273e-16,
+      "debye-triple-s-single-2": 2.237726045655905e-16,
+      "debye-triple-s-zero-depth-2": 2.482534153247273e-16,
+      "debye-triple-p-matched-r": 8.878607859536453e-17,
+      "debye-triple-p-matched-t": 8.95090418262362e-16,
+      "debye-triple-p-lossless-power": 4.440892098500626e-16,
+      "debye-triple-p-recursive": 5.79553433516819e-16,
+      "debye-triple-p-reciprocal-t": 2.482534153247273e-16,
+      "debye-triple-p-reflection-asymmetry": 0.30326477707359284,
+      "debye-triple-p-reverse-recursive": 4.710277376051326e-16,
+      "debye-triple-p-single-0": 1.716587549445839e-16,
+      "debye-triple-p-zero-depth-0": 3.510833468576701e-16,
+      "debye-triple-p-single-1": 3.342213888644167e-16,
+      "debye-triple-p-zero-depth-1": 3.510833468576701e-16,
+      "debye-triple-p-single-2": 2.0014830212433607e-16,
+      "debye-triple-p-zero-depth-2": 3.510833468576701e-16,
+      "debye-triple-normal-r-sign": 3.925231146709438e-16,
+      "debye-triple-normal-t": 2.5476231888929306e-16
+    },
+    "bulk_bounds": {
+      "debye-pair": {
+        "angular_band": [
+          2.980415272118947,
+          9.585955342240226
+        ],
+        "member_modulus_bounds": [
+          20.0739278589276,
+          19.090001390787076
+        ],
+        "host_modulus_bound": 9.585955342240226,
+        "qualification": "ordinary floating endpoint evaluation"
+      },
+      "debye-triple": {
+        "angular_band": [
+          2.980415272118947,
+          9.585955342240226
+        ],
+        "member_modulus_bounds": [
+          17.84423178593963,
+          18.224889149829938,
+          16.603361691846377
+        ],
+        "host_modulus_bound": 9.585955342240226,
+        "qualification": "ordinary floating endpoint evaluation"
+      }
+    },
+    "support_controls": {
+      "debye-pair": [
+        {
+          "n": 40,
+          "fraction": 0.3,
+          "spans": [
+            [
+              68,
+              75
+            ],
+            [
+              56,
+              65
+            ]
+          ],
+          "face_fractions": [
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.30000000000000426
+          ]
+        },
+        {
+          "n": 40,
+          "fraction": 0.1,
+          "spans": [
+            [
+              68,
+              75
+            ],
+            [
+              56,
+              65
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999998721
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.3,
+          "spans": [
+            [
+              112,
+              123
+            ],
+            [
+              88,
+              103
+            ]
+          ],
+          "face_fractions": [
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.1,
+          "spans": [
+            [
+              112,
+              123
+            ],
+            [
+              88,
+              103
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.0999999999999801,
+            0.09999999999999432,
+            0.09999999999999432
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.3,
+          "spans": [
+            [
+              200,
+              219
+            ],
+            [
+              152,
+              179
+            ]
+          ],
+          "face_fractions": [
+            0.3000000000000398,
+            0.30000000000001137,
+            0.3000000000000398,
+            0.3000000000000398
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.1,
+          "spans": [
+            [
+              200,
+              219
+            ],
+            [
+              152,
+              179
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432
+          ]
+        }
+      ],
+      "debye-triple": [
+        {
+          "n": 40,
+          "fraction": 0.3,
+          "spans": [
+            [
+              78,
+              85
+            ],
+            [
+              67,
+              76
+            ],
+            [
+              56,
+              63
+            ]
+          ],
+          "face_fractions": [
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.29999999999999716,
+            0.30000000000000426
+          ]
+        },
+        {
+          "n": 40,
+          "fraction": 0.1,
+          "spans": [
+            [
+              78,
+              85
+            ],
+            [
+              67,
+              76
+            ],
+            [
+              56,
+              63
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.09999999999999432,
+            0.10000000000000142,
+            0.10000000000000853
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.3,
+          "spans": [
+            [
+              132,
+              143
+            ],
+            [
+              110,
+              125
+            ],
+            [
+              88,
+              99
+            ]
+          ],
+          "face_fractions": [
+            0.30000000000001137,
+            0.30000000000001137,
+            0.30000000000001137,
+            0.3000000000000256,
+            0.30000000000001137,
+            0.3000000000000256
+          ]
+        },
+        {
+          "n": 80,
+          "fraction": 0.1,
+          "spans": [
+            [
+              132,
+              143
+            ],
+            [
+              110,
+              125
+            ],
+            [
+              88,
+              99
+            ]
+          ],
+          "face_fractions": [
+            0.09999999999999432,
+            0.0999999999999659,
+            0.0999999999999801,
+            0.09999999999999432,
+            0.0999999999999801,
+            0.09999999999999432
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.3,
+          "spans": [
+            [
+              240,
+              259
+            ],
+            [
+              196,
+              223
+            ],
+            [
+              152,
+              171
+            ]
+          ],
+          "face_fractions": [
+            0.30000000000001137,
+            0.30000000000001137,
+            0.30000000000001137,
+            0.3000000000000398,
+            0.30000000000001137,
+            0.3000000000000398
+          ]
+        },
+        {
+          "n": 160,
+          "fraction": 0.1,
+          "spans": [
+            [
+              240,
+              259
+            ],
+            [
+              196,
+              223
+            ],
+            [
+              152,
+              171
+            ]
+          ],
+          "face_fractions": [
+            0.10000000000002274,
+            0.10000000000002274,
+            0.10000000000002274,
+            0.10000000000002274,
+            0.10000000000002274,
+            0.10000000000002274
+          ]
+        }
+      ]
+    },
+    "sampled_cells": {
+      "debye-pair": [
+        {
+          "phase_cells": [
+            16.73987789813776,
+            18.40831484817169,
+            20.08571571238682
+          ],
+          "skin_cells": [
+            19.29586811901503,
+            22.982582361858352,
+            27.053802440543762
+          ]
+        },
+        {
+          "phase_cells": [
+            17.57629219844988,
+            19.26292311843414,
+            20.942212469295157
+          ],
+          "skin_cells": [
+            16.977245286084027,
+            19.518370667344673,
+            22.264204731357356
+          ]
+        }
+      ],
+      "debye-triple": [
+        {
+          "phase_cells": [
+            18.85930223880494,
+            20.726021720410653,
+            22.58435627863382
+          ],
+          "skin_cells": [
+            22.13952332141533,
+            25.27781494034843,
+            28.601071555390728
+          ]
+        },
+        {
+          "phase_cells": [
+            18.56974837656035,
+            20.478194777490966,
+            22.380076746574456
+          ],
+          "skin_cells": [
+            31.269909726350697,
+            35.794253728769746,
+            40.581615102354874
+          ]
+        },
+        {
+          "phase_cells": [
+            20.784609690826528,
+            23.094010767585033,
+            25.403411844343537
+          ],
+          "skin_cells": [
+            null,
+            null,
+            null
+          ]
+        }
+      ]
+    },
+    "reference_theta_at": [
+      31.0789556338119,
+      35.0,
+      39.11907093337352
+    ],
+    "field_solves": 0
+  },
+  "production_sources": {
+    "wavebit/__init__.py": "00c717c323380e25cb571144d3495fa9f898e406b8b4d068ad954d0fdb09eb17",
+    "wavebit/_core/__init__.py": "dac2c8c684c1dfd3b8175be1ec8a2f66a3eecf4f5c06013afe2fe9631d2801fc",
+    "wavebit/_core/backend.py": "b7a44dc46eeda58b39e1c76b4b7709fd904ba94962c218dea2a89d8631e89cb7",
+    "wavebit/_core/boundary.py": "d4b92cdd4036b3ff60a3723d9ac5ebda417ea5ca0af344791865eb53f54c589c",
+    "wavebit/_core/clipper.py": "8673c4327d1929614b008f4a776a76dd2e934d49e5150b87eb38569183e9a719",
+    "wavebit/_core/conventions.py": "907271cae8917aea37c488a70f53d4303d9803f64b049e41e1264e14993156be",
+    "wavebit/_core/domain.py": "9a4bc699078daa2b6e4c372f303f0cce9a8234967b2c85c4e48ea14545763f9b",
+    "wavebit/_core/draw.py": "583273001a339211084d7794c084850e36e7be660bfbdafb51d1aeafb46cdb1f",
+    "wavebit/_core/engine.py": "eed9891d86088d9a38956c36d4396b43d8cd694ecfcbc76b7b8710a5d6b1383d",
+    "wavebit/_core/enums.py": "f0956ac431b6735c863e3c9534c28aef8f50d46a6c6213ce79129a1059980a48",
+    "wavebit/_core/factorization.py": "71f5234e07831197777c567ea5ba1357e147b84f9b804129fe02df53c469cd72",
+    "wavebit/_core/fdtd.py": "e840b5e72caadf09707304cd11441c98ad46ca98a231d3ad00034b7ee841cf7b",
+    "wavebit/_core/fields.py": "f80f36e4360cd39620f07fce1d12023c6748e37a48e2f7262c3274ea004625ca",
+    "wavebit/_core/frequency_monitor.py": "97dc5a54b82fa825b2c8778bb42d5a6e89c69b1b84b4a8fa422406047658729f",
+    "wavebit/_core/geometry.py": "ab18542cc727a22c93dfd9ae99b2d1c2941779cad2d30329fb99ac5bf5e63ecf",
+    "wavebit/_core/grid_fdtd.py": "252fc90c5b4521d6e03959865fc59cc5761d24e9ce535413d66ad15638b6ca2b",
+    "wavebit/_core/lattice.py": "511308915f15c29fe620be1085a7de8ab888d7b2e297e4be4b0758bb3e3ae301",
+    "wavebit/_core/modeler.py": "e2cc9548c3a3e50df705df1abb3f911bbcabec1030bbc76073ff95613aacc06b",
+    "wavebit/_core/normal_methods.py": "8bd5ecfefca48d842746bb695350211ecb299405e44f1d4b95ef9356c14d92ed",
+    "wavebit/_core/overlap.py": "e72676814773b8b1da6622316d76bd4e12422998022e4696e688baf15bd94a2c",
+    "wavebit/_core/parametric.py": "8dc7e42cc80dae260e2cc39ef568b89cd27ae1ac4a1aa85964849b324d76dd55",
+    "wavebit/_core/polygon.py": "13f93526dea9e3430be0bc4390b0cd8c630a5a083f3df8699bb3d8e781d5acd7",
+    "wavebit/_core/result.py": "5ee93546768aae655dfeba87f7db8bda359d48b4c70ec083c86354a5103e7949",
+    "wavebit/_core/scattering.py": "9504c8ce43a0c3a82f3745ee585dcb1cf77f2aaea6cbb5554696f228b3e97ed6",
+    "wavebit/_core/scene_fdtd.py": "b97e935c2514b6c0cc0f34100d6e7418a5abc0a064ad190beb1a303103afdec4",
+    "wavebit/_core/solve_1d.py": "37981c1b39b56343d2975eb8a47d0ca98b3741219c3b74464c08add927deaab4",
+    "wavebit/_core/solve_2d.py": "2afaa48b9ac7d9e33d1daf2d4b2804ea36e6c334b9e4b21a367b56e9dbb4c405",
+    "wavebit/_core/solve_2d_4ff.py": "1f31b99c5b620239f49ef8a86331ae8f8f4df4532fe0d971e9f209fad462600a",
+    "wavebit/_core/spec.py": "963bbefb0c8950a59cdf9dd9f4b50b998fb66d59b4ff332825fc81a0269da8b3",
+    "wavebit/_core/time_plot.py": "a562f0f7b34d0e5753bf3b166a83cae70d154e045e5a029337ea87a96cd24d5c",
+    "wavebit/_core/time_probe.py": "584d9238c5d4d881fd19c7c720d1bf152924fee03ae1a2f2379374fa75d23a51",
+    "wavebit/backends/__init__.py": "f38fd1a2281dfe8fac56f10a6fe74960b0aa550a7d94d3006531622d31d243d1",
+    "wavebit/backends/jax_backend.py": "8d4804396246466d46f271e442b21568107ffbbbbacf76a5540ffedd64ac98bf",
+    "wavebit/backends/numpy_backend.py": "d0a8d000ce65911bbffe8bf4dfff5f731762e7634884fdd07650af5d60c7586c",
+    "wavebit/backends/time_domain.py": "f5b28c0160d1fc238fce1bf0c560e60e2d3a7715396299473bf7a6f0fd96bdd6",
+    "wavebit/backends/torch_backend.py": "c5407f7fac2fb80357295331f3660486c0d0c311aac4820de2df14b1d5eee795",
+    "wavebit/fd/__init__.py": "245753ccc5c87e33db296dfb0671e0cbc171abfd37bce3b155ebe8449d46fc62",
+    "wavebit/fd/_assemble.py": "d3d55a525e71470cb178e08965c27f5b43ffee5e3e2cb8bf416bd1e22d2361f0",
+    "wavebit/fd/_check.py": "493f61d83b94524df80b81fbbb5380b4e1364a1d5a9d901c9ce5763bd1ef4226",
+    "wavebit/fd/_decay.py": "8531ab292f2c81e56543980813107b30dabc06a8309f73324d2399efaef3900f",
+    "wavebit/fd/_kernel/__init__.py": "a1809e1a1a6432f5a83c75c7f18491d50665ac1ec96db41ada8c5c5454455129",
+    "wavebit/fd/_kernel/constitutive.py": "3d395084b7087ab0d7dbd4bef1ac7651cbc41345dfa522bdf1009bee1f8ba64e",
+    "wavebit/fd/_kernel/constitutive_absorber.py": "ee0ba7f96b20fd7ef5be234b90367a059b17cf23ee8d5d7292d7c98c80104b70",
+    "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+    "wavebit/fd/_kernel/curl.py": "29b0a61d7a2ca51667dc84e0fadf38eb0c889d991ff12fcd5884a2e7cdb3b4d0",
+    "wavebit/fd/_kernel/faces.py": "ed0f80e453b07a0803c36b4d733f0008ee5fcce580786d5dffb82d26f9cef06f",
+    "wavebit/fd/_kernel/grid.py": "3b1874dc3cf1dbac36cd74cc016c285cc0b40b092481b167fb2ff7c2c6c12ae2",
+    "wavebit/fd/_kernel/masks.py": "dc97a811286ea8b0cda2e13179879181a83b99f9c78329c2810e4c796c978c89",
+    "wavebit/fd/_kernel/observe.py": "c247f6e981b87c6d94b5e0b3d2e7b05b004d879dc817fc5a75d8cdbabcea0acc",
+    "wavebit/fd/_kernel/poles.py": "3657cb4d8549e278e5f28a2b6135933e87d3b5ea2eb94a613ded653c2a1be1ab",
+    "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+    "wavebit/fd/_kernel/stencil.py": "d3fdab3f5b0a96068752bb11e1d5967e77539166b33e9da9ccf47dfc679fa84b",
+    "wavebit/fd/_kernel/step.py": "ea03ef133830060988764567b29d19b2eca8eb221882dfb4c9e0bdb808ac10cd",
+    "wavebit/fd/_lower/__init__.py": "ee125aae60bfb926b09f8fa1bd0ae9f7714bf6d18f3145a4a5c67926e377c5fc",
+    "wavebit/fd/_lower/checks.py": "025ee61e30b60e864450c7dc184436ed056d1cd5c0b184749278b0359d78ea59",
+    "wavebit/fd/_lower/coefficients.py": "6011da01f281dac0c6c7254e8f1697d69f8da1d8360b9b4a883192d87a3522ab",
+    "wavebit/fd/_lower/conductive_film.py": "5918685b34b56eb801743a1cbc08b57b499647eedadb672178b71b204c4b90f4",
+    "wavebit/fd/_lower/conductive_stack.py": "52c975a8450965adff436177a951d861ce4dcdf58bf154d1177510a36251b54e",
+    "wavebit/fd/_lower/constitutive.py": "47a531bb323fc956a8dccf041d872dbdac957fc55ea433fa72ebdec6e0d204a1",
+    "wavebit/fd/_lower/constitutive_absorber.py": "48ce46cd238cdac16accc1457babb6e23ad713efe5da780c24964d1d04945d1b",
+    "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+    "wavebit/fd/_lower/debye_film.py": "b9ca1b691ad1b97daba8d6fe8fdef540eb39546ab58097102908b3aaa5b6086b",
+    "wavebit/fd/_lower/debye_resolution.py": "d08cf07a121c9136c11fcbf663bc11b2f9c9a8cf3929387762cd1726eed9ad3b",
+    "wavebit/fd/_lower/debye_stack.py": "fd681c58c235c5217119e2d292a0be17e497b28325fa59ab137a2f3ba1b9d27a",
+    "wavebit/fd/_lower/debye_sum_film.py": "114cfc5b5627701172193a73e98cfd9d3dec13a66187f844fcac3e78f5d806f6",
+    "wavebit/fd/_lower/debye_sum_resolution.py": "f29f6b39b6aaeead7948b5db6dd2407b273e31db202da290314367fb1c8880d4",
+    "wavebit/fd/_lower/fields.py": "f41d6a8b1c103c63f1e224fc6fd0786bac56ec24b4ab3b93bd62164996f6c1f6",
+    "wavebit/fd/_lower/grazing.py": "9981adf16ceba0b22adfb170735d7dda8a24afe592612d5018abbfe89d93a608",
+    "wavebit/fd/_lower/hybrid_film.py": "052c72703ac4031ad567c3e96b035c6eb48d705db768a6f1615920753fafa4f4",
+    "wavebit/fd/_lower/hybrid_resolution.py": "4f1abcf3b8db26dd4a80e17569eaa42ad05483d7c60329dc951cad2baf192ba7",
+    "wavebit/fd/_lower/junction.py": "d2a7ccd4db43e5704df5e812c64f20dcfff928b3a20441fe93555b7912e48c45",
+    "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+    "wavebit/fd/_lower/monitors.py": "32194b67e1d74d9eed5ab67fb8b3dabffbbf51299c2a7e8c05b150e36103bf92",
+    "wavebit/fd/_lower/occupancy.py": "8c7954181527b08ae6297d07491c0684469986dd936a9c5c1e7edfa1878eb0b0",
+    "wavebit/fd/_lower/oscillator_sum_film.py": "0b72ad5081aaaf07a17be7deba5344b7d79ba60544fc2c1f2773e5d288132cf7",
+    "wavebit/fd/_lower/oscillator_sum_resolution.py": "69c72f34b0eaac044c97dbdd365bf23cca53670b6ae72cf7d7319f831f991c79",
+    "wavebit/fd/_lower/params.py": "bf39468f024234b6e0986b22f480e1df64a42d24932877dc9a13a4535b602522",
+    "wavebit/fd/_lower/plan.py": "02d6ac362b218df97b32ef10e72508b57265214e5f46500b6096451a29cac8ea",
+    "wavebit/fd/_lower/shape_ranges.py": "81e6c6f3e355098fa2c5935b5a5b8f0a2c6710db12c766f1a7ae16a059d8bdd3",
+    "wavebit/fd/_lower/single_pole_film.py": "6665e3c2fecbea0c956a591275eec3c0da0c52cef30bac3121332bddaf7087ee",
+    "wavebit/fd/_lower/single_pole_resolution.py": "afab7900c5aab9983e5fbd20d1fda65b9ece5d33e9f9e8dccd33cd6c8624a48d",
+    "wavebit/fd/_lower/sources.py": "e4fa10963601949f64751cb615c8793cc9ad42874afd80997df7f4d166b04d64",
+    "wavebit/fd/_lower/stars.py": "0a0b49e5a1a3761613484e179231e577874431d8b873088812f6488718a55de4",
+    "wavebit/fd/_lower/stencil.py": "8dfb69895f1cea5ebf8fa8a4367e7de799ef7e15ec27b21c777f962475a35fce",
+    "wavebit/fd/_lower/triplet.py": "c42295e47715763ce759b25cfd0bda2997951b60601d3c7a36c68655b6077b3c",
+    "wavebit/fd/_lower/two_debye_film.py": "d06b121494a9df485cb8eea87056663781a902f28f2415cdf954d07d6ab5f6e4",
+    "wavebit/fd/_lower/two_debye_resolution.py": "439a065280d9571251bb7e83081d7e37827f5eb9e3e484670bebe5f48447fbc0",
+    "wavebit/fd/_post.py": "e47607f1b93e51882d245b95d76c87af25ea018233903c18f7379de05f4d4a61",
+    "wavebit/fd/_radiation.py": "3eb42e4276e58288ea72cab1e895021d93985a52e37a24f4bfe16a45282bd0b5",
+    "wavebit/fd/_run.py": "6b1d9d85fa61b8f1e109e07941c7976277ec56f0cb54a3ed1795d55a47702c66",
+    "wavebit/fd/_runtime.py": "f813478428250b5d35e6403c5c865e81ec7168b3bfdf64eb8e0122a7bdd62484",
+    "wavebit/fd/_shapes/__init__.py": "afbeaa1bd157f993f7615476c7f70f43c96ebc10eab4826720933c8469e1399d",
+    "wavebit/fd/_shapes/_bodies.py": "09b94a186fb55438a8e65df3760ff4f49dfac842c39a5c0adcb958ce00926d1b",
+    "wavebit/fd/_shapes/_cut.py": "e0a75e30874507d795ef42c5dfb474d19cebcdded53195a3893c172a4c85e4ad",
+    "wavebit/fd/_shapes/_exact.py": "2a9e39fac0e6f5abb01f87d4025a27c97896a94865d0db5a8354cc881d01e937",
+    "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+    "wavebit/fd/_spec.py": "a4914554f8f9c3282e325b4eb274370b5d3019f283b0e54d9b8314948f29c313",
+    "wavebit/fd/_testing.py": "e56b769e9e5c1521bebfded05f297fb39922f65343c7df0217e912463bebf5b8",
+    "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+    "wavebit/fd/diagnostics.py": "ef76eedf65ea0a336923bfdf411f753fa95548d255be6f4a66170393e0010ac0",
+    "wavebit/fd/geometry.py": "9bbefa43435eaac15b7b581edc39a8f3ca659cb3228e85ea5ad0d7fa0a805b8a",
+    "wavebit/fd/materials.py": "44780da74b37a7a6b826af575cde6089ca21941303285526d8a8f1f708bf73bd",
+    "wavebit/fd/monitors.py": "af68cf84c9c511049a013593ded3321b8f2d46d9023bc14cd0c2dc4e2c62de2a",
+    "wavebit/fd/results.py": "28161da77011a1aca5b29099677f97d7ba56ae9d79724d11abe9a16987fe564f",
+    "wavebit/fd/scene.py": "34afa26d938d794b329ce0794908aea60e51cb28b8702893e6211e0fe1f030c9",
+    "wavebit/fd/sources.py": "a7973917e3080cc0fd2191c300bc5f29eb3e6d7c04a85adb3d5dc668b5878688",
+    "wavebit/main.py": "7dd39a5376898eecce12d88f47758ed93843551dfbd73fa6e2a3f61c306ba030",
+    "wavebit/manifest.py": "586747ea09cc7c55b3f9e581dbaf16d58587bd585a3df8126239d6fd1d78bbe4"
+  },
+  "production_archive": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\production_sources.zip",
+  "production_archive_sha256": "e01cbcba628944f06ca29db6e03ca1b92539c67325f4ff5622deab946802ae9a",
+  "python": "3.12.14 | packaged by Anaconda, Inc. | (main, Aug 27 2026, 14:37:13) [MSC v.1942 64 bit (AMD64)]",
+  "executable": "C:\\<conda env>\\python.exe",
+  "backend_versions": {
+    "numpy": "2.5.1",
+    "jax": "0.11.0",
+    "jaxlib": "0.11.0",
+    "torch": "2.13.0"
+  },
+  "environment": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "PYTHONUTF8": "1"
+  },
+  "frozen_sources": [
+    {
+      "file": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\probe.py.raw",
+      "sha256": "f72422830afef906237f629835c6cbf1dd0057834f61863c6f78f4fcc2f70f98"
+    },
+    {
+      "file": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\controller.py.raw",
+      "sha256": "ff85dcfb417f3886ef156171d4fccd0bbe6d3af729bac27db1608f65df9a3dd0"
+    },
+    {
+      "file": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\support.py.raw",
+      "sha256": "d5609dfa1693b40c0b4e5dd353a871a6c08a131a505a7037509826f0dcf773f0"
+    },
+    {
+      "file": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\studies__fdtd_layer_alignment.py.py.raw",
+      "sha256": "91433f49dffb84ceb1441fd1455a7e49ea104a276875402d127b20192cf2c008"
+    },
+    {
+      "file": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\studies__fdtd_oblique_pulse.py.py.raw",
+      "sha256": "ac840bd60b50a0e6c5b8864e0883f79f6bf5bd8edb2113629ed151f6ffaef1b2"
+    }
+  ],
+  "planned_rows": [
+    {
+      "family": "debye-pair",
+      "backend": "numpy",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          2.25,
+          [
+            3.0
+          ],
+          [
+            0.08
+          ],
+          0.1
+        ],
+        [
+          1.8,
+          [
+            1.5,
+            2.0
+          ],
+          [
+            0.04,
+            0.16
+          ],
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.15
+      ]
+    },
+    {
+      "family": "debye-pair",
+      "backend": "jax",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          2.25,
+          [
+            3.0
+          ],
+          [
+            0.08
+          ],
+          0.1
+        ],
+        [
+          1.8,
+          [
+            1.5,
+            2.0
+          ],
+          [
+            0.04,
+            0.16
+          ],
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.15
+      ]
+    },
+    {
+      "family": "debye-pair",
+      "backend": "torch",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          2.25,
+          [
+            3.0
+          ],
+          [
+            0.08
+          ],
+          0.1
+        ],
+        [
+          1.8,
+          [
+            1.5,
+            2.0
+          ],
+          [
+            0.04,
+            0.16
+          ],
+          0.15
+        ]
+      ],
+      "gaps": [
+        0.15
+      ]
+    },
+    {
+      "family": "debye-triple",
+      "backend": "numpy",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          2.0,
+          [
+            0.8,
+            1.1,
+            0.7
+          ],
+          [
+            0.035,
+            0.11,
+            0.3
+          ],
+          0.1
+        ],
+        [
+          2.4,
+          [
+            0.5,
+            0.0,
+            0.9,
+            0.6
+          ],
+          [
+            0.02,
+            0.04,
+            0.08,
+            0.25
+          ],
+          0.15
+        ],
+        [
+          3.0,
+          [
+            0.0
+          ],
+          [
+            0.1
+          ],
+          0.1
+        ]
+      ],
+      "gaps": [
+        0.125,
+        0.175
+      ]
+    },
+    {
+      "family": "debye-triple",
+      "backend": "jax",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          2.0,
+          [
+            0.8,
+            1.1,
+            0.7
+          ],
+          [
+            0.035,
+            0.11,
+            0.3
+          ],
+          0.1
+        ],
+        [
+          2.4,
+          [
+            0.5,
+            0.0,
+            0.9,
+            0.6
+          ],
+          [
+            0.02,
+            0.04,
+            0.08,
+            0.25
+          ],
+          0.15
+        ],
+        [
+          3.0,
+          [
+            0.0
+          ],
+          [
+            0.1
+          ],
+          0.1
+        ]
+      ],
+      "gaps": [
+        0.125,
+        0.175
+      ]
+    },
+    {
+      "family": "debye-triple",
+      "backend": "torch",
+      "n": 40,
+      "pol": "p",
+      "fraction": 0.3,
+      "periods": 120,
+      "pml": 24,
+      "films": [
+        [
+          2.0,
+          [
+            0.8,
+            1.1,
+            0.7
+          ],
+          [
+            0.035,
+            0.11,
+            0.3
+          ],
+          0.1
+        ],
+        [
+          2.4,
+          [
+            0.5,
+            0.0,
+            0.9,
+            0.6
+          ],
+          [
+            0.02,
+            0.04,
+            0.08,
+            0.25
+          ],
+          0.15
+        ],
+        [
+          3.0,
+          [
+            0.0
+          ],
+          [
+            0.1
+          ],
+          0.1
+        ]
+      ],
+      "gaps": [
+        0.125,
+        0.175
+      ]
+    }
+  ],
+  "optical_ceilings": null,
+  "ceiling_qualification": "No optical ceiling selected before disclosure. A separate acceptance record must follow all six measured rows.",
+  "backend_pair_budget": 2.842170943040401e-14,
+  "adaptation": "None within this attempt. Preserve any failure and review before new work.",
+  "workers": [
+    {
+      "backend": "numpy",
+      "family": "debye-pair",
+      "started_utc": "2026-10-09T02:36:05.941253+00:00",
+      "ended_utc": "2026-10-09T02:36:15.174708+00:00",
+      "wall_s": 9.233336100005545,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_debye_stack_probe",
+        "--family",
+        "debye-pair",
+        "--backend",
+        "numpy",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_numpy.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_numpy.log",
+      "raw_log_sha256": "454e95f78ce0dfa1e7873e644e588f7025cc44da55db682c1f090466be62d67a",
+      "result": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_numpy.json",
+      "result_sha256": "dfd92cbe89dfd1a22503f8b3f6570003008320b5db6c5ba7030bcc5e4076b3c5"
+    },
+    {
+      "backend": "jax",
+      "family": "debye-pair",
+      "started_utc": "2026-10-09T02:36:15.257706+00:00",
+      "ended_utc": "2026-10-09T02:36:23.249559+00:00",
+      "wall_s": 7.9923282999079674,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_debye_stack_probe",
+        "--family",
+        "debye-pair",
+        "--backend",
+        "jax",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_jax.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_jax.log",
+      "raw_log_sha256": "1b82994e6245baa087d340790b1f5d8ed6242459f35d86fe27adb36a0a86715c",
+      "result": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_jax.json",
+      "result_sha256": "a59206054bc729c50f3439c7ed0e5d310cb7787d4a8b603ff45f3ec058c3abae"
+    },
+    {
+      "backend": "torch",
+      "family": "debye-pair",
+      "started_utc": "2026-10-09T02:36:23.331559+00:00",
+      "ended_utc": "2026-10-09T02:36:54.241762+00:00",
+      "wall_s": 30.910892899963073,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_debye_stack_probe",
+        "--family",
+        "debye-pair",
+        "--backend",
+        "torch",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_torch.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_torch.log",
+      "raw_log_sha256": "ffa27afb3b59ceeeca71e53face5d32c21f03639f56c84ec5172bf4cdf6bf8c6",
+      "result": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-pair_torch.json",
+      "result_sha256": "eac4e7a01ff6982a4e45e21db346dfee4eaee099f391820fecfd023f7357a076"
+    },
+    {
+      "backend": "numpy",
+      "family": "debye-triple",
+      "started_utc": "2026-10-09T02:36:54.338799+00:00",
+      "ended_utc": "2026-10-09T02:37:04.473023+00:00",
+      "wall_s": 10.134853799943812,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_debye_stack_probe",
+        "--family",
+        "debye-triple",
+        "--backend",
+        "numpy",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_numpy.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_numpy.log",
+      "raw_log_sha256": "844ae63537797293ecfabd5dba8072a40ccbe3b020570cd7687f9422d0ac5845",
+      "result": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_numpy.json",
+      "result_sha256": "4b95cfac76a782e5b789dac0af03b8e036c329f7baa25359d28a946c13901e6f"
+    },
+    {
+      "backend": "jax",
+      "family": "debye-triple",
+      "started_utc": "2026-10-09T02:37:04.556542+00:00",
+      "ended_utc": "2026-10-09T02:37:12.655797+00:00",
+      "wall_s": 8.099165700026788,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_debye_stack_probe",
+        "--family",
+        "debye-triple",
+        "--backend",
+        "jax",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_jax.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_jax.log",
+      "raw_log_sha256": "a3c07c63131379b17d37c028483ddb76cca3fcab64736b566f20eddde2afac5c",
+      "result": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_jax.json",
+      "result_sha256": "cdf80d15a439c63b0a074326dd4bad1b47b4c5fe9493aead807ede342bff2192"
+    },
+    {
+      "backend": "torch",
+      "family": "debye-triple",
+      "started_utc": "2026-10-09T02:37:12.740795+00:00",
+      "ended_utc": "2026-10-09T02:37:46.594348+00:00",
+      "wall_s": 33.85459030000493,
+      "command": [
+        "C:\\<conda env>\\python.exe",
+        "-B",
+        "-m",
+        "studies.fdtd_debye_stack_probe",
+        "--family",
+        "debye-triple",
+        "--backend",
+        "torch",
+        "--n",
+        "40",
+        "--pol",
+        "p",
+        "--fraction",
+        "0.3",
+        "--periods",
+        "120",
+        "--pml",
+        "24",
+        "--output",
+        "C:\\<worktrees>\\wavebit\\studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_torch.json"
+      ],
+      "exit_code": 0,
+      "raw_log": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_torch.log",
+      "raw_log_sha256": "0ebff780abcf683531a3a88ae11ed47bc20998c16d6649fb107f9c3de395f1d0",
+      "result": "studies\\results\\fdtd_debye_stack_calibration_attempt1\\debye-triple_torch.json",
+      "result_sha256": "d264e8ed5b802a3f7e42a7ab6c8dbde51984bbce5cdfed544da245969b2e8794"
+    }
+  ],
+  "complete": true,
+  "source_unchanged": true,
+  "backend_pair_scaled_differences": {
+    "debye-pair": {
+      "jax": {
+        "r": [
+          7.438546047598635e-16,
+          2.9504581591051765e-16,
+          1.5463617361248926e-15
+        ],
+        "t": [
+          2.2591401799415137e-16,
+          1.1102230246251565e-16,
+          7.947987303456223e-16
+        ]
+      },
+      "torch": {
+        "r": [
+          8.206690572649954e-16,
+          8.95090418262362e-16,
+          2.1210781103223385e-15
+        ],
+        "t": [
+          3.2487068343022356e-16,
+          8.252325904466731e-16,
+          1.9436831477661174e-15
+        ]
+      }
+    },
+    "debye-triple": {
+      "jax": {
+        "r": [
+          4.965068306494546e-16,
+          2.387624894196368e-16,
+          5.97591465750644e-16
+        ],
+        "t": [
+          3.908020529499657e-16,
+          3.1401849173675503e-16,
+          8.252325904466732e-16
+        ]
+      },
+      "torch": {
+        "r": [
+          7.216449660063518e-16,
+          1.0007415106216803e-15,
+          7.796612332912426e-16
+        ],
+        "t": [
+          9.710485573708405e-16,
+          3.0226828573591784e-15,
+          2.2509412470550935e-15
+        ]
+      }
+    }
+  },
+  "backend_pairs_within_budget": true,
+  "measured_max_absolute_complex_errors": {
+    "r": 0.004138978324113231,
+    "t": 0.007928025017279098
+  },
+  "measured_max_errors_by_family": {
+    "debye-pair": {
+      "r": 0.003686044286528058,
+      "t": 0.005979806428181119
+    },
+    "debye-triple": {
+      "r": 0.004138978324113231,
+      "t": 0.007928025017279098
+    }
+  },
+  "finite_stable_all_rows": true,
+  "max_decay": 1.1999228519264299e-08,
+  "all_decay_records_present": true,
+  "production_unchanged": true,
+  "ended_utc": "2026-10-09T02:37:46.664347+00:00"
+}

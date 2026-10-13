@@ -1,0 +1,100 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1220" role="img" aria-labelledby="08-light-title 08-light-desc">
+<title id="08-light-title">Raise the incidence plane to see s and p</title><desc id="08-light-desc">An xz incidence plane stands above the horizontal sample. k points downward, s points along y out of the plane, and p is in the plane perpendicular to k. An xy plan view shows azimuth φ from +x to the xy projection of k, comparing φ=0° in the perspective with a separate φ=45° example. NVF concerns separate material boundaries in xy.</desc>
+<defs><marker id="phi-blue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#285ab0" /></marker><marker id="phi-angle-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#a85116" /></marker><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="1220" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Raise the incidence plane to see s and p</text>
+<text x="30" y="78" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">Example: top incidence (φ = 0°, θ = 40°)</text>
+<polygon points="162.20,325.60 571.80,450.40 571.80,480.64 162.20,355.84" fill="#cad7df" fill-opacity="1" stroke="#cad7df" stroke-width="2" />
+<polygon points="529.80,564.40 571.80,450.40 571.80,480.64 529.80,594.64" fill="#dbe3eb" fill-opacity="1" stroke="#cad7df" stroke-width="2" />
+<polygon points="120.20,439.60 529.80,564.40 571.80,450.40 162.20,325.60" fill="#f1f5f7" fill-opacity="1" stroke="#cad7df" stroke-width="2" />
+<polygon points="134.80,97.15 493.20,206.35 493.20,489.85 134.80,380.65" fill="#cfe2ff" fill-opacity="0.63" stroke="#cad7df" stroke-width="2" />
+<text x="149" y="126" style="fill:#285ab0;font-size:21px;font-weight:650" text-anchor="start">Plane of incidence (xz)</text>
+<line x1="346" y1="130.0" x2="346" y2="445.0" stroke="#546779" stroke-width="2" stroke-dasharray="7 5" />
+<text x="359" y="115" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">Line normal to the surface</text>
+<line x1="346" y1="445.0" x2="346" y2="337.90000000000003" stroke="#546779" stroke-width="2" />
+<polygon points="346,337.90000000000003 350.0,347.90000000000003 342.0,347.90000000000003" fill="#546779" />
+<text x="358" y="340" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">+z</text>
+<line x1="346" y1="445.0" x2="557.2" y2="509.35" stroke="#546779" stroke-width="2" />
+<polygon points="557.2,509.35 546.4683307999101,510.2617434835731 548.8000026595396,502.6090768673529" fill="#546779" />
+<text x="558" y="516" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">+x</text>
+<line x1="346" y1="445.0" x2="382.75" y2="345.25" stroke="#546779" stroke-width="2" />
+<polygon points="382.75,345.25 383.0463188789949,356.01625260348055 375.539573944458,353.2506097328617" fill="#546779" />
+<text x="388" y="353" style="fill:#546779;font-size:19px;font-weight:400" text-anchor="start">+y</text>
+<text x="34" y="574" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Sample surface (xy)</text>
+<line x1="152.64948700628898" y1="159.2627559646993" x2="346" y2="445.0" stroke="#285ab0" stroke-width="5" />
+<polygon points="346,445.0 337.08293626173236,438.9596379009473 343.7085828785322,434.4762455570532" fill="#285ab0" />
+<text x="51" y="169" style="fill:#285ab0;font-size:21px;font-weight:650" text-anchor="start">k: light propagation direction</text>
+<line x1="143" y1="178" x2="169.1048498142644" y2="183.58081928685255" stroke="#285ab0" stroke-width="2" />
+<line x1="237.10709753619676" y1="188.70549342277397" x2="191.60709753619676" y2="312.205493422774" stroke="#a85116" stroke-width="5" />
+<polygon points="191.60709753619676,312.205493422774 191.3107786572019,301.43924081929345 198.81752359173876,304.2048836899123" fill="#a85116" />
+<line x1="214.35709753619676" y1="250.45549342277397" x2="237.10709753619676" y2="188.70549342277397" stroke="#a85116" stroke-width="5" />
+<polygon points="237.10709753619676,188.70549342277397 237.40341641519163,199.47174602625452 229.89667148065476,196.70610315563565" fill="#a85116" />
+<line x1="150.6221998686978" y1="283.68057202303544" x2="278.0919952036957" y2="217.23041482251247" stroke="#117c77" stroke-width="5" />
+<polygon points="278.0919952036957,217.23041482251247 271.0735976478218,225.39999839499052 267.3755117511815,218.30604599163524" fill="#117c77" />
+<line x1="214.35709753619676" y1="250.45549342277397" x2="150.6221998686978" y2="283.68057202303544" stroke="#117c77" stroke-width="5" />
+<polygon points="150.6221998686978,283.68057202303544 157.6405974245717,275.51098845055736 161.33868332121205,282.60494085391264" fill="#117c77" />
+<circle cx="214.35709753619676" cy="250.45549342277397" r="5" fill="#285ab0" />
+<text x="65" y="337" style="fill:#a85116;font-size:21px;font-weight:650" text-anchor="start">s: out of the plane</text>
+<text x="295" y="244" style="fill:#117c77;font-size:21px;font-weight:650" text-anchor="start">p: in the plane</text>
+<polyline points="346.00,365.62 344.12,365.07 342.25,364.56 340.37,364.10 338.50,363.68 336.64,363.30 334.78,362.97 332.92,362.69 331.07,362.44 329.23,362.25 327.40,362.09 325.58,361.99 323.77,361.92 321.97,361.90 320.19,361.93 318.42,362.00 316.66,362.12 314.92,362.28 313.20,362.49 311.50,362.74 309.81,363.04 308.14,363.38 306.50,363.76 304.87,364.19 303.27,364.66 301.69,365.18 300.13,365.74 298.60,366.34 297.10,366.98 295.62,367.67 294.17,368.40" fill="none" stroke="#285ab0" stroke-width="2" />
+<text x="304" y="349" style="fill:#285ab0;font-size:26px;font-weight:400" text-anchor="start">θ</text>
+<circle cx="346" cy="445.0" r="5" fill="#285ab0" />
+<rect x="627" y="113" width="343" height="129" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="645" y="147" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">① Incidence plane = upright plane</text>
+<text x="645" y="183" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">An imaginary plane containing k</text>
+<text x="645" y="210" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">and the surface normal.</text>
+<rect x="627" y="260" width="343" height="135" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="645" y="294" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">② s and p = two electric-field directions</text>
+<text x="645" y="330" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">s: normal to the incidence plane</text>
+<text x="645" y="357" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">p: in that plane, normal to k</text>
+<rect x="627" y="415" width="343" height="160" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="645" y="449" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">③ Polarization = amplitudes and phases</text>
+<text x="645" y="485" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">(1,0) → oscillation along s</text>
+<text x="645" y="512" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">(0,1) → oscillation along p</text>
+<text x="645" y="539" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Mix components for linear or elliptical polarization</text>
+<text x="32" y="615" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">s and p describe electric-field oscillation, not light propagation.</text>
+<text x="32" y="650" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">In physical space: s ⟂ k, p ⟂ k, s ⟂ p · perspective may hide these right angles.</text>
+<g id="azimuth-top-view">
+<rect x="30" y="683" width="940" height="300" rx="10" fill="#f7faff" stroke="#cad7df" stroke-width="2" />
+<text x="50" y="719" style="font-size:23px;font-weight:650">④ φ: azimuth in the xy plan view</text>
+<text x="50" y="752" style="font-size:18px;fill:#546779">Look down from +z. Measure from +x toward the xy projection of k.</text>
+<line x1="449" y1="776" x2="449" y2="960" stroke="#dbe3eb" stroke-width="1.5" />
+<!-- The upper 3D example has phi=0: its in-plane wavevector coincides with +x. -->
+<line x1="150" y1="880" x2="365" y2="880" stroke="#546779" stroke-width="2" marker-end="url(#arrow)" />
+<line x1="150" y1="908" x2="150" y2="797" stroke="#546779" stroke-width="2" marker-end="url(#arrow)" />
+<text x="375" y="887">+x</text><text x="137" y="785">+y</text>
+<line x1="150" y1="880" x2="334" y2="880" stroke="#285ab0" stroke-width="4" marker-end="url(#phi-blue-arrow)" />
+<circle cx="150" cy="880" r="4" fill="#285ab0" />
+<text x="201" y="854" style="fill:#285ab0;font-size:20px">xy component of k</text>
+<text x="73" y="950" style="font-size:20px;font-weight:650">Perspective above: φ = 0°</text>
+<!-- Independent nonzero-azimuth example; +x to +y is positive in this view. -->
+<line x1="575" y1="880" x2="850" y2="880" stroke="#546779" stroke-width="2" marker-end="url(#arrow)" />
+<line x1="575" y1="908" x2="575" y2="797" stroke="#546779" stroke-width="2" marker-end="url(#arrow)" />
+<text x="860" y="887">+x</text><text x="562" y="785">+y</text>
+<line x1="575" y1="880" x2="670" y2="785" stroke="#285ab0" stroke-width="4" marker-end="url(#phi-blue-arrow)" />
+<circle cx="575" cy="880" r="4" fill="#285ab0" />
+<text x="692" y="796" style="fill:#285ab0;font-size:20px">xy component of k</text>
+<path d="M635 880 A60 60 0 0 0 617.426 837.574" fill="none" stroke="#a85116" stroke-width="2.5" marker-end="url(#phi-angle-arrow)" />
+<text x="648" y="854" style="fill:#a85116;font-size:29px;font-weight:650">φ</text>
+<text x="504" y="950" style="font-size:20px;font-weight:650">Changed azimuth: φ = 45°</text>
+</g>
+<g transform="translate(0 320)">
+<rect x="30" y="683" width="940" height="172" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2" />
+<circle cx="116" cy="767" r="46" fill="#117c77" />
+<line x1="162.0" y1="767.0" x2="184.0" y2="767.0" stroke="#117c77" stroke-width="3" />
+<polygon points="184.0,767.0 174.0,771.0 174.0,763.0" fill="#117c77" />
+<line x1="116.0" y1="813.0" x2="116.0" y2="835.0" stroke="#117c77" stroke-width="3" />
+<polygon points="116.0,835.0 112.0,825.0 120.0,825.0" fill="#117c77" />
+<line x1="70.0" y1="767.0" x2="48.0" y2="767.0" stroke="#117c77" stroke-width="3" />
+<polygon points="48.0,767.0 58.0,763.0 58.0,771.0" fill="#117c77" />
+<line x1="115.99999999999999" y1="721.0" x2="115.99999999999999" y2="699.0" stroke="#117c77" stroke-width="3" />
+<polygon points="115.99999999999999,699.0 119.99999999999999,709.0 111.99999999999999,709.0" fill="#117c77" />
+<text x="221" y="719" style="fill:#182b3e;font-size:23px;font-weight:650" text-anchor="start">NVF normals: material boundaries in xy</text>
+<text x="221" y="758" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">Plan view of the green circle. Arrows are normal to its boundary.</text>
+<text x="221" y="793" style="fill:#182b3e;font-size:19px;font-weight:400" text-anchor="start">nvf_projector selects how these boundary directions enter the calculation.</text>
+<text x="221" y="828" style="fill:#117c77;font-size:20px;font-weight:650" text-anchor="start">This setting is separate from incident s/p polarization.</text>
+<text x="30" y="883" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Plane wave in an isotropic medium · φ rotates the incidence plane about z · not a computed field</text>
+</g>
+</svg>

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="images/wavebit_logo_dark.svg">
-    <img src="images/wavebit_logo.svg" width="45%" alt="Wavebit">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/branding/wavebit_logo_dark.svg">
+    <img src="assets/branding/wavebit_logo.svg" width="45%" alt="Wavebit">
   </picture>
 </p>
 
@@ -20,7 +20,7 @@ through the calculation, so the same model can predict and optimize a device res
 experimental contact auxiliary solver have different validation scopes. The auxiliary solver
 is opt-in, NumPy-only, and limited to one supported rectangle pair; its optical convergence,
 contact derivatives and practical runtime remain under investigation. Ordinary NVF does not
-call it automatically. See [method selection](docs/guide/nvf-method-selection.md) before using
+call it automatically. See [method selection](docs/guide/rcwa/nvf-method-selection.md) before using
 that experimental path.
 
 * **Modeling** — describe a structure parametrically or as a raster
@@ -31,20 +31,18 @@ The ordinary solver uses one implementation of the physics on NumPy, JAX and PyT
 cross-backend agreement is checked in the test suite. Experimental auxiliary families have
 the narrower backend and derivative support stated in their guides.
 
-**The periodic-stack FDTD entry point, `wavebit.fdtd(...)`, is an experimental
-research-alpha path.** It supports periodic raster scenes and shares the RCWA
-scene and result interfaces. An explicit `backend`
-selects the common NumPy/JAX/PyTorch engine; JAX and PyTorch support angle,
-material and constant-total layer-thickness derivatives on a fixed mesh. Omitting `backend` selects the legacy
-NumPy path. CPU execution is tested; GPU validation remains outstanding.
-See the [FDTD scope and validation report](docs/fdtd-alpha.md) before relying on a new
-geometry, angle or material combination.
+The public `wavebit.rcwa` and `wavebit.fdtd` modules share an immutable lifecycle:
+`check(problem, numerics=...)`, `prepare(problem, numerics=...)`, and
+`run(problem, numerics=...)`. A prepared calculation always receives the complete
+live problem as `prepared.run(problem)`. Both use shared materials, explicit
+length units, radian angles, electric fields in V/m, and magnetic fields in A/m.
+FDTD times and material rates use SI seconds and inverse seconds.
 
-The separate general engine, `import wavebit.fd as fd`, uses explicit `fd.Scene`
-domains, boundaries, sources and monitors for finite or periodic problems, on
-NumPy, JAX and PyTorch CPU backends. Its own material, coordinate and angle
-contracts are in the [general FDTD guide](docs/guide/general-fdtd.md), including
-its current geometry and validation limits.
+FDTD currently supports CPU execution in double precision on NumPy, JAX, and
+PyTorch. Geometry, material and derivative support depend on the admitted
+problem; preparation reports its limits. Older periodic factories and the
+normalized general FDTD dialect remain explicit compatibility interfaces under
+`wavebit.compat.legacy`. Historical tutorials and measurements label that import.
 
 ## Install
 
@@ -58,7 +56,7 @@ pip install .
 Use the source checkout or distribution attached to the version you want to evaluate;
 a Git installation from the repository's default branch can contain a different version.
 
-NumPy alone runs the solver. JAX and PyTorch are optional and bring autodiff and GPU support:
+NumPy runs both solvers. JAX and PyTorch are optional differentiation backends:
 
 ```shell
 pip install '.[jax]'
@@ -78,81 +76,83 @@ sits where it does.
 
 ## Quickstart
 
-A binary grating, solved on the NumPy backend:
+A binary grating on glass, using the NumPy backend:
 
 ```python
 import numpy as np
-import wavebit
+from wavebit import Material, Units, rcwa
 
-# One 300 nm layer, half air and half n = 3.5, on a glass substrate. Materials are relative
-# permittivity, so an index off a datasheet goes through `eps_from_index` first.
-eps_hi = wavebit.eps_from_index(3.5)                     # 12.25
-structure = np.array([[[1.0, 1.0, eps_hi, eps_hi]]])     # (layer, y, x)
-
-solver = wavebit.rcwa(
-    backend='numpy',                          # or 'jax' / 'torch'
-    wavelength=900., period=[700.],           # one shared length unit; nm here
-    truncation_order=dict(x=10, y=0),         # named, so there is no order to recall
-    top=1., bot=wavebit.eps_from_index(1.5),  # the two half-spaces, as materials
-    theta=0., phi=0., tetm='te',
-    structure=structure, thickness=[300.],
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(700., 700.),
+        bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=300., epsilon=np.array([[1., 1., 12.25, 12.25]])),),
+    ),
+    excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(polarization="s"),)),
 )
-
-result = solver.solve()
-print(result.R.sum(), result.T.sum())    # 0.20533162825847726 0.7946683717415197
-print(result.order(0, 0).T)              # 0.3531011230787259 — the zeroth transmitted order
+numerics = rcwa.Numerics(orders=(10, 0))
+result = rcwa.run(problem, numerics=numerics)
+print(float(result.R.sum()), float(result.T.sum()))
+print(result.transmission.order(0, 0).efficiency)
 ```
 
-`R` and `T` are the reflected and transmitted diffraction efficiencies, one entry per order.
-Here they sum to 1 to within a few times 1e-15, as a lossless structure must.
+The diffraction arrays retain `(wavelength, order_v, order_u)` axes, including
+single-wavelength solves. Reflection and transmission here are efficiencies;
+absolute port power and its integration measure are recorded separately.
 
-[`tutorials/01-modeling-and-emsolver.ipynb`](tutorials/01-modeling-and-emsolver.ipynb) walks the
-same scene in full, and the tutorials after it take one topic each.
+The corresponding FDTD entry point is demonstrated in
+[`examples/fdtd/pulse_slab.py`](examples/fdtd/pulse_slab.py). Its physical domain is
+kept separate from the PML cells added outside open faces. Time records use
+seconds; raw Fourier fields retain their pulse-transform units rather than
+claiming monochromatic power.
 
 ## Conventions
 
-Seven rows decide whether your input means what you think it means. Every one of them is legal,
-energy-conserving and *wrong* when read backwards — no error, no warning — which is why they are
-worth the two minutes. [`docs/conventions.md`](docs/conventions.md) is the normative contract.
-This table describes the RCWA and periodic-stack interfaces; the separate
-[general FDTD conventions](docs/guide/general-fdtd.md#units-coordinates-and-backends)
-include degrees for incidence angles and normalized time units.
+* `Material(epsilon=...)` declares relative permittivity, with shared permeability
+  and supported conductive/dispersive models. Tabulated optical data are not
+  automatically converted into a causal FDTD material.
+* The phasor convention is `exp(-i omega t)`. Positive imaginary permittivity is
+  loss. The common Cartesian frame has `+z` upward; RCWA finite layers are
+  declared from bottom to top, with the bottom interface at `z=0`.
+* All geometry lengths and wavelengths follow `Problem.units`. Angles are
+  radians, FDTD time is seconds, and field units are E in V/m and H in A/m.
+* RCWA cells are centered laterally. Diffraction observations identify their
+  reference plane, medium, lateral origin, propagation and polarization frame.
+  FDTD Yee samples additionally retain component-specific positions and times.
+* Raw pulse spectra, normalized scattering efficiency and calibrated power are
+  separate quantities. A missing or unusable incident reference cannot define
+  a normalized efficiency.
 
-| | |
-| --- | --- |
-| **Materials are relative permittivity** | not refractive index. `eps_from_index` / `index_from_eps` convert, and the retired index-shaped keywords (`ucell`, `n_top`, `n_bot`) are refused by name because the quantity moved with them |
-| **Time convention is `e^{-iωt}`** | `Im(eps) > 0` is loss — equivalently `Im(n) > 0`, how nk databases tabulate it — and a wave travelling in `+z` carries `exp(+i*k0*kz*z)` |
-| **Layers run bottom to top; `+z` points upward** | `structure[0]` touches `bot`; the bottom interface is `z=0`. Raster row `0` is at the negative-y edge. Select the light with `incidence_side` |
-| **Uppercase is power, lowercase is amplitude** | `R` / `T` are per-order efficiencies; `r_s` / `r_p` / `t_s` / `t_p` are the complex Fresnel amplitudes, each order in its own s/p frame; `r_xyz` / `t_xyz` are the same waves as Cartesian E vectors, with no frame to turn over |
-| **Arrays run `v` first, written pairs run `x` first** | `truncation_order=[4, 1]` gives `R.shape == (3, 9)`. `result.order(m, n)` indexes by order and sidesteps the layout entirely |
-| **The cell is centred at the origin** | a centred feature is `0` in a shape's `cx` / `cy`, in `reconstruct_field`'s `sample_x` / `sample_y` and in `wavebit.meshgrid_xy` alike. Shape lengths are absolute, not fractions of the period |
-| **Units are yours** | `wavelength`, `period` and `thickness` only have to share one. Angles are radians |
+The current contract is described in [`docs/design/unified-api.md`](docs/design/unified-api.md).
+Compatibility examples preserve their historical conventions explicitly.
 
 ## Differentiating a solve
 
-`jax.grad` and PyTorch autograd work straight off the public API — a grad tracer carries a
-concrete value, so the pipeline's geometric decisions read it one at a time:
+A prepared calculation fixes structural decisions while eligible numerical
+leaves remain live. Its `contract` and validation report identify reuse limits.
+Enable JAX double precision explicitly before preparing; importing Wavebit does
+not change the process-wide JAX configuration.
 
 ```python
-import jax, jax.numpy as jnp
+import jax
+import jax.numpy as jnp
+jax.config.update("jax_enable_x64", True)
 
-solver = wavebit.rcwa(backend='jax', structure=structure, ...)
-grad = jax.grad(lambda u: jnp.sum(solver.solve(structure=u).T))(structure)
+prepared = rcwa.prepare(problem, numerics=numerics, backend="jax")
+
+def transmitted(thickness):
+    layer = problem.stack.layers[0].replace(thickness=thickness)
+    live = problem.replace(stack=problem.stack.replace(layers=(layer,)))
+    return jnp.sum(prepared.run(live).T)
+
+gradient = jax.grad(transmitted)(jnp.asarray(300.))
 ```
 
-`jax.jit` and `vmap` are the harder bar, because those same decisions branch on values that a
-jit tracer does not have. `freeze_geometry()` takes them once, against the concrete structure,
-and hands them back as data:
-
-```python
-geometry = solver.freeze_geometry()
-step = jax.jit(lambda u: jnp.sum(solver.solve(structure=u, geometry=geometry).T))
-```
-
-Re-take the freeze every step rather than holding one. It costs 0–1 ms, compares by content so
-an unchanged record is free, and it is the only form that cannot carry a stale one forward.
-Which backend to use, and whether to jit at all, differs by modeling path and is measured in
-[`docs/backend-choice.md`](docs/backend-choice.md).
+FDTD also validates fixed grid, duration, source and observation dependencies.
+Geometry derivatives require explicitly reserved support where the engine
+supports them. Runtime guards remain active under transformations; preparation
+alone is not a convergence certificate.
 
 ## Validation
 
@@ -164,7 +164,7 @@ optical convergence or opening derivative:
   numbers are committed as goldens and checked in CI, so the half that needs software this
   project does not ship runs once, by hand. RETICOLO agrees to ~1e-13 and is the only reference
   here that validates individual diffraction *orders* rather than totals.
-* **A different method entirely** — Wavebit's own FDTD ([`docs/fdtd.md`](docs/fdtd.md)) solves
+* **A different method entirely** — Wavebit's own FDTD ([`docs/guide/fdtd/fdtd.md`](docs/guide/fdtd/fdtd.md)) solves
   the same scene in the time domain, and Meep is the outside reference for it. RCWA truncates a
   Fourier series and FDTD discretises space and time, so a defect surviving both belongs to
   neither. Meep's answers are committed as
@@ -202,7 +202,7 @@ There is deliberately no generic "R+T above 1" warning. It cannot tell a broken 
 structure that legitimately amplifies: gain is `Im(eps) < 0` here, and `R + T > 1`, or a
 negative order under total internal reflection, is then the right answer. Energy is asserted
 per scene in the suite, where the expected number is known; see
-[`docs/result-guards.md`](docs/result-guards.md).
+[`docs/reference/common/result-guards.md`](docs/reference/common/result-guards.md).
 
 ## Documentation
 
@@ -212,9 +212,9 @@ manual uses, with the decision records outside the manual the way NEPs are.
 | | For a reader who | |
 | --- | --- | --- |
 | [`docs/guide/`](docs/guide) | needs the contract for one keyword | **The manual.** What Wavebit solves and what it is bad at, installation, a quickstart; then describing a scene, saying what the light is, choosing the numerics, near fields, autodiff, backends, and a run described as data |
-| [`docs/reference/`](docs/reference) | needs a signature or a guarantee | [`conventions.md`](docs/conventions.md) is the **normative** contract; `keywords.md` is all 27 `rcwa()` keywords with their defaults and refusals; `api.md` is generated from the docstrings |
+| [`docs/reference/`](docs/reference) | needs a signature or a guarantee | [`conventions.md`](docs/reference/common/conventions.md) is the **normative** contract; the current solver modules expose typed physical declarations and execution contracts; compatibility references retain older keyword details |
 | [`docs/`](docs) | is questioning a default | **Why it is what it is**, and what was measured to decide it — the write-ups, cited from the code they explain. [`docs/decisions/`](docs/decisions) groups them |
-| [`tutorials/`](tutorials) | has not used the API yet | Lessons in order, as runnable notebooks: a first solve, autograd and optimization, device and precision, NVF factorization, oblique cells, polarization, multimode incidence |
+| [`tutorials/`](tutorials) | has not used the API yet | Start with the current [RCWA](tutorials/rcwa/00-unified-lifecycle.ipynb) or [FDTD](tutorials/fdtd/00-unified-lifecycle.ipynb) notebook. Historical lessons use explicit compatibility imports |
 | [`examples/`](examples) | wants it applied | Wavebit against outside problems |
 | [`studies/`](studies) | wants the raw measurement | The scripts behind the numbers in `docs/` |
 
@@ -227,13 +227,13 @@ sphinx-build -b html docs docs/_build/html      # then open docs/_build/html/ind
 
 Every page reads the same in both places, which is a constraint rather than a coincidence: a
 link in `docs/` is a relative link to a real file, the navigation lives in `docs/_toc.yml`
-rather than in directives inside the pages, and `tests/test_docs_contract.py` checks that every
+rather than in directives inside the pages, and `tests/api/test_docs_contract.py` checks that every
 path a document cites exists. The one thing the site has that the repository cannot show is the
 API reference, which is read off the live objects at build time.
 
 Nothing is deployed yet. `python -m wavebit.manifest` is the other machine-readable surface —
 every option, refusal and constraint as one generated JSON document, for a program that needs to
-know without reading the source ([`docs/capability-manifest.md`](docs/capability-manifest.md)).
+know without reading the source ([`docs/reference/common/capability-manifest.md`](docs/reference/common/capability-manifest.md)).
 
 ## Contributing
 

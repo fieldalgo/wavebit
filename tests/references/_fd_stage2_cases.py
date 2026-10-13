@@ -1,13 +1,13 @@
 """The stage-2 scenes, samples and lowered arrays that ``fd_golden_stage2.npz`` and its test share.
 
 One module, imported by both ``interface/freeze_fd_stage2.py`` (which writes the golden) and
-``tests/test_fd_stage2_backends.py`` (which reads it), so the two cannot disagree about which
+``tests/fdtd/test_fd_stage2_backends.py`` (which reads it), so the two cannot disagree about which
 scene a key names. Nothing here solves anything. The stage-0 and stage-1 case lists are
 imported rather than copied: the capture, the content digest and the relative gap are the same
 definitions, and a second copy of them would be a second thing to keep in step. The sampling
 rule is the one thing that is *not* shared, and :func:`sample_indices` says why.
 
-**The scenes are built here and not by the ``tests/fd_helpers.py`` builders** (``dipole_box``,
+**The scenes are built here and not by the ``tests/fixtures/fdtd/fd_helpers.py`` builders** (``dipole_box``,
 ``bloch_plane_wave``, ``tfsf_box``). Those helpers are shared with the physics gates and are
 edited as those gates grow; a golden whose scenes moved every time a helper gained a default
 would read as kernel drift. Every number below is spelled out once, here.
@@ -32,7 +32,7 @@ enough that the source has actually driven the grid (the band centre's pulse pea
     the half-cell stagger phase each carries along its own axis, and not transverse to the
     grid's discrete ``K``, so this conical (``phi = 30``) p wave was launched with an s part
     first order in ``dx``. The drive now writes the grid's own p wave
-    (``src/wavebit/fd/_lower/sources.py::plane_wave_drive``). Only this scene moved: its fields,
+    (``src/wavebit/fdtd/_prepare/sources.py::plane_wave_drive``). Only this scene moved: its fields,
     ``Record`` series and reference series by 2.7e-2 to 4.7e-2 of their peaks (the stagger
     phase ``k_x dx/2`` is 0.048 rad here, and the s part is gone), its energy by 7.9e-6; the
     lowered rows (pattern, waveform) and the other three scenes reproduced bit for bit, and
@@ -62,21 +62,27 @@ and the waveform table the kernel reads its drive from. They are backend-indepen
 construction, so a failure that touches only them says the lowering moved, and one that touches
 only the per-backend rows says the step moved under an unchanged lowering.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))                          # tests/references, for the earlier cases
 sys.path.insert(0, str(HERE.parent))                   # tests/, for fd_helpers
 
-import wavebit.fd as fd                                                       # noqa: E402
-from _fd_stage0_cases import (BACKENDS, capture as _capture_fields,          # noqa: E402,F401
-                              content_digest, relative_gap)
-from fd_helpers import to_numpy                                              # noqa: E402
-from wavebit.fd._kernel.sources import waveform_table                        # noqa: E402
-from wavebit.fd._runtime import runtime                                      # noqa: E402
+import wavebit.fdtd._legacy as fd                                                       # noqa: E402
+from tests.references._fd_stage0_cases import (BACKENDS as BACKENDS, capture as _capture_fields,
+                                              content_digest as content_digest,
+                                              relative_gap as relative_gap)
+from tests.fixtures.fdtd.fd_helpers import to_numpy                                              # noqa: E402
+from wavebit.fdtd._kernel.sources import waveform_table                        # noqa: E402
+from wavebit.fdtd._runtime import runtime                                      # noqa: E402
 
 #: The committed golden.
 GOLDEN = HERE / 'fd_golden_stage2.npz'

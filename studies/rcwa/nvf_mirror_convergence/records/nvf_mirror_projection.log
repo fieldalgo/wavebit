@@ -1,0 +1,2 @@
+# Local paths are recorded relative to the repository or by artifact basename; numerical values are unchanged.
+{"kind": "mirror_projection", "path": "wavebit-mirror-x3-body4-cap64.npz", "projection": {"fixture": "partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "rows": 8, "body_degree": 4, "gap_degree": 6, "x_subdivisions": 3, "edge_fraction": 1e-05}, "cap": 64, "mirror_error": 1.9047048445498253e-11, "retained_cap48_difference": 0.0, "cell_residual": 1.3850395288393074e-11, "degrees_of_freedom": 7559, "seconds": 26.947879249986727}

@@ -1,0 +1,59 @@
+{
+  "date": "2026-09-21",
+  "api": [
+    "Material scalar/diagonal/full tensor",
+    "Material.rotated",
+    "tensor TabulatedMaterial",
+    "tensor shapes and rasters",
+    "JobSpec tensor serialization",
+    "component-specific structure pictures"
+  ],
+  "regression": {
+    "passed": 647,
+    "failed": 0,
+    "warnings": 5,
+    "seconds": 131.65,
+    "full_release_suite": false
+  },
+  "final_tensor_checks": {
+    "passed": 49,
+    "failed": 0,
+    "seconds": 12.85,
+    "scope": "34 tensor API tests plus 15 structure plotting regressions",
+    "overlaps_regression": true
+  },
+  "reference_checks": [
+    "independent Airy slab for both polarizations",
+    "rotated waveplate complex amplitudes",
+    "independent Berreman full-tensor stack from both sides",
+    "matching tensor shape/raster matrices",
+    "periodic painting and translation on an unreduced oblique cell",
+    "JAX and Torch gradients against finite differences"
+  ],
+  "limitations": [
+    "sampled tensor shapes: circles, ellipses, rectangles; refine grid and Fourier orders",
+    "patterned z coupling unsupported",
+    "anisotropic half-spaces unsupported",
+    "z-coupled tensors with explicit mu unsupported",
+    "sampled tensor geometry/lattice derivatives unsupported; fixed geometry material gradients supported",
+    "finite-order tensor patterns need energy and convergence checks"
+  ],
+  "example": {
+    "source_sha256": "bd1940463cc2e700781cef2e1f3e7d1fc817480afc16a13f069ee5858481db45",
+    "R_s": 0.35747266249464993,
+    "R_p": 0.01630802517033101,
+    "python_blocks_parsed": 19
+  },
+  "new_dependencies": [],
+  "goldens_modified": false,
+  "source_hashes": {
+    "wavebit/_core/anisotropy.py": "debd46dd5eee3abcf48bd736f4c0c61688f0dca4b13c84bb0879978769ea5fa3",
+    "wavebit/_core/domain.py": "20cdba83f21a4f06fe5a5b4934af4449ef8e0f5726d54858ddbb4779e057c59b",
+    "wavebit/_core/materials.py": "d02230964c985d38d240b58ccbb1fd8099a8e69be5dfb2e01ed1d9f4db3e3c66",
+    "wavebit/_core/engine.py": "f122ac32911e98806af8242f219651e9eb603b6fcac9067d5df83624ec97ca69",
+    "wavebit/_core/spec.py": "d190d0539f8e730f171ddd3cf8517a7b2af718d844fce09546c10eb5fb814afb",
+    "wavebit/_core/draw.py": "000563a1335a2fa836cbe08df04254e7b1d2be33a73c9dd90c9e2f203e1109f5",
+    "wavebit/_core/geometry.py": "bfe5a86a736e41a94fcc334c1d39fe81d9f8f9e73e2bcf26723ed0f2fcc900e1",
+    "tests/test_tensor_material_api.py": "bc84134559f47b8df2183ba4c8e071d2126ec70eaa6b700bb7ebe75e67cf0ee1"
+  }
+}

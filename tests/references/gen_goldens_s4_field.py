@@ -13,7 +13,7 @@ right". It duly froze a wrong sign convention (``E_z``, ``H_x``, ``H_y`` in the 
 ``+z`` points *out* of the stack, on samples that ran *into* it -- the declared frame was then
 ``+z`` into the stack; since 2026-09-21 it is ``+z`` out of it with samples running bottom to
 top) and kept the suite green for as long as it existed. That
-golden is gone; this one replaces it, and ``tests/data/golden_field.npz`` covers the breadth
+golden is gone; this one replaces it, and ``tests/fixtures/legacy_rcwa/golden_field.npz`` covers the breadth
 S4 cannot reach.
 
 **Where S4 reaches, measured 2026-08-14.** On a *uniform* stack the two solvers agree entry
@@ -42,8 +42,8 @@ convergence study, not a frozen tolerance, and it is deliberately not attempted 
   so the interior is indices ``1 .. sample_z-2``.
 
 **Real permittivity only** — this S4 build rejects a complex ``Epsilon``, so the cases below
-are lossless. Absorption is covered against the Airy closed form in ``tests/test_lossy_media.py``
-and by the ``|E|``-decay check in ``docs/time-convention-audit.md`` section 8.
+are lossless. Absorption is covered against the Airy closed form in ``tests/rcwa/test_lossy_media.py``
+and by the ``|E|``-decay check in ``docs/validation/rcwa/time-convention-audit.md`` section 8.
 
 **The stacks are stated in permittivity, and the ``** 2`` that used to sit at ``SetMaterial`` is
 gone rather than moved.** S4's ``Epsilon`` always wanted a permittivity; what changed on
@@ -56,12 +56,17 @@ conversion has to come out. Nothing else in the file moves — the physics is id
 field arrays are bit-for-bit the same, which is the only reason this is a safe thing to leave
 half-migrated.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 OUT = HERE / 'golden_s4_field.npz'
 
 WL = 620.0

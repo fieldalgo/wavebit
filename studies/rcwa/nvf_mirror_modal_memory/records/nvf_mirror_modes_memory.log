@@ -1,0 +1,2 @@
+{"kind": "mirror_modes_memory", "method": "original_dense_blocks", "order": 32, "polarization": "p", "seconds": 51.68579650000902, "peak_rss_bytes": 1846837248}
+{"kind":"rejected_comparison","quantity":"V W^-1 action","max_absolute_difference":10.21806227,"reason":"Not invariant to propagating modal-root sign labels; use finite-layer T/R and direct Maxwell controls. Root selection unchanged. No memory improvement inferred from this rejected comparison."}

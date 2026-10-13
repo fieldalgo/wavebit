@@ -1,0 +1,150 @@
+{
+  "scope": "Descriptive summaries of every frozen height-study cell; no new pass rule.",
+  "controls_valid": true,
+  "scenes": {
+    "base": {
+      "self_counts": {
+        "low": 22,
+        "mixed": 9,
+        "second": 23
+      },
+      "direct_final_counts": {
+        "unresolved": 51,
+        "low": 1,
+        "mixed": 2
+      },
+      "max_noise_share": 0.0012498990767349965,
+      "noise_gate_failures": 0,
+      "self_order_range": [
+        -2.3314075799011995,
+        4.2766206106730875
+      ],
+      "reference_ladder": [
+        20,
+        26,
+        28,
+        30,
+        32
+      ],
+      "per_wavelength": [
+        {
+          "wavelength": 0.95,
+          "self_counts": {
+            "low": 6,
+            "mixed": 5,
+            "second": 7
+          },
+          "direct_final_counts": {
+            "unresolved": 18
+          }
+        },
+        {
+          "wavelength": 1.0,
+          "self_counts": {
+            "low": 5,
+            "second": 10,
+            "mixed": 3
+          },
+          "direct_final_counts": {
+            "unresolved": 17,
+            "mixed": 1
+          }
+        },
+        {
+          "wavelength": 1.05,
+          "self_counts": {
+            "low": 11,
+            "mixed": 1,
+            "second": 6
+          },
+          "direct_final_counts": {
+            "unresolved": 16,
+            "low": 1,
+            "mixed": 1
+          }
+        }
+      ]
+    },
+    "tall": {
+      "self_counts": {
+        "mixed": 23,
+        "second": 20,
+        "low": 11
+      },
+      "direct_final_counts": {
+        "unresolved": 54
+      },
+      "max_noise_share": 0.02996247417597657,
+      "noise_gate_failures": 0,
+      "self_order_range": [
+        -0.21512941683786335,
+        6.629149180175293
+      ],
+      "reference_ladder": [
+        12,
+        16,
+        20,
+        24
+      ],
+      "per_wavelength": [
+        {
+          "wavelength": 0.95,
+          "self_counts": {
+            "mixed": 17,
+            "second": 1
+          },
+          "direct_final_counts": {
+            "unresolved": 18
+          }
+        },
+        {
+          "wavelength": 1.0,
+          "self_counts": {
+            "second": 8,
+            "low": 7,
+            "mixed": 3
+          },
+          "direct_final_counts": {
+            "unresolved": 18
+          }
+        },
+        {
+          "wavelength": 1.05,
+          "self_counts": {
+            "second": 11,
+            "mixed": 3,
+            "low": 4
+          },
+          "direct_final_counts": {
+            "unresolved": 18
+          }
+        }
+      ]
+    }
+  },
+  "class_transitions": {
+    "low -> mixed": 8,
+    "low -> second": 11,
+    "mixed -> mixed": 5,
+    "low -> low": 3,
+    "second -> second": 8,
+    "mixed -> low": 3,
+    "second -> mixed": 10,
+    "second -> low": 5,
+    "mixed -> second": 1
+  },
+  "delta_intervals": {
+    "resolved": 54,
+    "strictly_positive": 38,
+    "strictly_negative": 16,
+    "include_zero": 0
+  },
+  "work": {
+    "new_workers": 7,
+    "worker_seconds": 8843.306977299857,
+    "new_fd_seconds": 8843.306977299857,
+    "new_rcwa_seconds": 0,
+    "raw_max_abs_energy_residual": 7.259643254298176e-05,
+    "selected_max_abs_energy_residual": 7.259643254298176e-05
+  }
+}

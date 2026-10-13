@@ -1,0 +1,164 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" width="691.2pt" height="525.6pt" viewBox="0 0 691.2 525.6" version="1.1">
+ <metadata>
+  <rdf:RDF>
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+    <dc:description>Complementary masks transformed separately and weighted by reciprocal permittivity; conceptual, not simulation data.</dc:description>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 525.6 L 691.2 525.6 L 691.2 0 L 0 0 z " style="fill: #ffffff" />
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 46.8 329.76 L 262.8 329.76 L 262.8 113.76 L 46.8 113.76 z " clip-path="url(#pa300f5e39e)" style="fill: #ffffff; stroke: #7b8898; stroke-width: 1.3; stroke-linejoin: miter" />
+   </g>
+   <g id="patch_3">
+    <path d="M 154.8 277.92 C 171.794215 277.92 188.094678 271.168127 200.111403 259.151403 C 212.128127 247.134678 218.88 230.834215 218.88 213.84 C 218.88 196.845785 212.128127 180.545322 200.111403 168.528597 C 188.094678 156.511873 171.794215 149.76 154.8 149.76 C 137.805785 149.76 121.505322 156.511873 109.488597 168.528597 C 97.471873 180.545322 90.72 196.845785 90.72 213.84 C 90.72 230.834215 97.471873 247.134678 109.488597 259.151403 C 121.505322 271.168127 137.805785 277.92 154.8 277.92 z " clip-path="url(#pa300f5e39e)" style="fill: #dbeafe; stroke: #245ba4; stroke-width: 2; stroke-linejoin: miter" />
+   </g>
+   <g id="patch_4">
+    <path d="M 154.8 340.40061 Q 154.8 365.398974 154.8 388.16127 " clip-path="url(#pa300f5e39e)" style="fill: none; stroke: #245ba4; stroke-width: 2; stroke-linecap: round" />
+    <path d="M 158.4 380.96127 L 154.8 388.16127 L 151.2 380.96127 z " clip-path="url(#pa300f5e39e)" style="fill: #245ba4; stroke: #245ba4; stroke-width: 2; stroke-linecap: round" />
+   </g>
+   <g id="patch_5">
+    <path d="M 428.4 329.76 L 644.4 329.76 L 644.4 113.76 L 428.4 113.76 z " clip-path="url(#pa300f5e39e)" style="fill: #e3e7ed; stroke: #7b8898; stroke-width: 1.3; stroke-linejoin: miter" />
+   </g>
+   <g id="patch_6">
+    <path d="M 536.4 277.92 C 553.394215 277.92 569.694678 271.168127 581.711403 259.151403 C 593.728127 247.134678 600.48 230.834215 600.48 213.84 C 600.48 196.845785 593.728127 180.545322 581.711403 168.528597 C 569.694678 156.511873 553.394215 149.76 536.4 149.76 C 519.405785 149.76 503.105322 156.511873 491.088597 168.528597 C 479.071873 180.545322 472.32 196.845785 472.32 213.84 C 472.32 230.834215 479.071873 247.134678 491.088597 259.151403 C 503.105322 271.168127 519.405785 277.92 536.4 277.92 z " clip-path="url(#pa300f5e39e)" style="fill: #ffffff; stroke: #245ba4; stroke-width: 2; stroke-linejoin: miter" />
+   </g>
+   <g id="patch_7">
+    <path d="M 536.4 340.40061 Q 536.4 365.398974 536.4 388.16127 " clip-path="url(#pa300f5e39e)" style="fill: none; stroke: #245ba4; stroke-width: 2; stroke-linecap: round" />
+    <path d="M 540 380.96127 L 536.4 388.16127 L 532.8 380.96127 z " clip-path="url(#pa300f5e39e)" style="fill: #245ba4; stroke: #245ba4; stroke-width: 2; stroke-linecap: round" />
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 19px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="345.6" y="32.285" transform="rotate(-0 345.6 32.285)">Fourier-transform each material's shape separately</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 12px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="345.6" y="60.960938" transform="rotate(-0 345.6 60.960938)">Same unit cell · selected material is 1, all other regions 0</text>
+   </g>
+   <g id="text_3">
+    <!-- Dielectric map  $\chi_d$ -->
+    <g style="fill: #182b42" transform="translate(105.36 100.56)">
+     <text>
+      <tspan x="0" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" textLength="73" lengthAdjust="spacingAndGlyphs">Dielectric map</tspan>
+      <tspan x="13.839996" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" />
+      <tspan x="27.679993" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" />
+      <tspan x="41.519989" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42"> </tspan>
+      <tspan x="45.727982" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" />
+      <tspan x="59.567978" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" />
+      <tspan x="73.407974" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42"> </tspan>
+      <tspan x="77.615967" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42"> </tspan>
+      <tspan x="81.823959" y="-0.90625" style="font-style: oblique; font-size: 16px; font-family: 'DejaVu Sans'; fill: #182b42">χ</tspan>
+      <tspan x="91.292709" y="1.71875" style="font-style: oblique; font-size: 11.2px; font-family: 'DejaVu Sans'; fill: #182b42">d</tspan>
+     </text>
+    </g>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 12px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="154.8" y="199.813125" transform="rotate(-0 154.8 199.813125)">Dielectric locations</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 24px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="154.8" y="237.504375" transform="rotate(-0 154.8 237.504375)">1</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 12px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="154.8" y="297.76875" transform="rotate(-0 154.8 297.76875)">Metal locations</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 18px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="154.8" y="321.948281" transform="rotate(-0 154.8 321.948281)">0</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 10px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; fill: #182b42" transform="translate(194.620313 361.780937)">After Fourier transform</text>
+    <text style="font-size: 10px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; fill: #182b42" transform="translate(191.610156 372.069062)">Multiply by reciprocal permittivity</text>
+   </g>
+   <g id="text_9">
+    <!-- $\dfrac{1}{\varepsilon_d}\,\widehat{\chi_d}$ -->
+    <g style="fill: #182b42" transform="translate(126.36 431.52)">
+     <text>
+      <tspan x="5" y="-11.5" style="font-size: 24px; font-family: 'DejaVu Sans'; fill: #182b42">1</tspan>
+      <tspan x="0" y="9.453125" style="font-style: oblique; font-size: 24px; font-family: 'DejaVu Sans'; fill: #182b42">ε</tspan>
+      <tspan x="31.189531" y="-0.984375" style="font-style: oblique; font-size: 24px; font-family: 'DejaVu Sans'; fill: #182b42">χ</tspan>
+      <tspan x="12.972656" y="13.390625" style="font-style: oblique; font-size: 16.8px; font-family: 'DejaVu Sans'; fill: #182b42">d</tspan>
+      <tspan x="45.392656" y="2.953125" style="font-style: oblique; font-size: 16.8px; font-family: 'DejaVu Sans'; fill: #182b42">d</tspan>
+      <tspan x="62.742265" y="-7.53125" style="font-size: 17.478377px; font-family: 'STIXSizeThreeSym'; fill: #182b42">̂</tspan>
+     </text>
+     <rect x="0" y="-6.5" width="24.292969" height="1.5" />
+    </g>
+   </g>
+   <g id="text_10">
+    <!-- Metal map  $\chi_m$ -->
+    <g style="fill: #182b42" transform="translate(491.92 100.56)">
+     <text>
+      <tspan x="0" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" textLength="59" lengthAdjust="spacingAndGlyphs">Metal map</tspan>
+      <tspan x="13.839996" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" />
+      <tspan x="27.679993" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42"> </tspan>
+      <tspan x="31.887985" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" />
+      <tspan x="45.727982" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42" />
+      <tspan x="59.567978" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42"> </tspan>
+      <tspan x="63.77597" y="-0.90625" style="font-size: 16px; font-family: 'Apple SD Gothic Neo'; fill: #182b42"> </tspan>
+      <tspan x="67.983963" y="-0.90625" style="font-style: oblique; font-size: 16px; font-family: 'DejaVu Sans'; fill: #182b42">χ</tspan>
+      <tspan x="77.452713" y="1.71875" style="font-style: oblique; font-size: 11.2px; font-family: 'DejaVu Sans'; fill: #182b42">m</tspan>
+     </text>
+    </g>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 12px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="536.4" y="199.813125" transform="rotate(-0 536.4 199.813125)">Dielectric locations</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 24px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="536.4" y="237.504375" transform="rotate(-0 536.4 237.504375)">0</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 12px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="536.4" y="297.76875" transform="rotate(-0 536.4 297.76875)">Metal locations</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 18px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="536.4" y="321.948281" transform="rotate(-0 536.4 321.948281)">1</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; fill: #182b42" transform="translate(576.220313 361.780937)">After Fourier transform</text>
+    <text style="font-size: 10px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; fill: #182b42" transform="translate(573.210156 372.069062)">Multiply by reciprocal permittivity</text>
+   </g>
+   <g id="text_16">
+    <!-- $\dfrac{1}{\varepsilon_m}\,\widehat{\chi_m}$ -->
+    <g style="fill: #182b42" transform="translate(502.32 431.64)">
+     <text>
+      <tspan x="7" y="-11.5" style="font-size: 24px; font-family: 'DejaVu Sans'; fill: #182b42">1</tspan>
+      <tspan x="0" y="9.453125" style="font-style: oblique; font-size: 24px; font-family: 'DejaVu Sans'; fill: #182b42">ε</tspan>
+      <tspan x="36.890703" y="-0.984375" style="font-style: oblique; font-size: 24px; font-family: 'DejaVu Sans'; fill: #182b42">χ</tspan>
+      <tspan x="12.972656" y="13.390625" style="font-style: oblique; font-size: 16.8px; font-family: 'DejaVu Sans'; fill: #182b42">m</tspan>
+      <tspan x="51.093828" y="2.953125" style="font-style: oblique; font-size: 16.8px; font-family: 'DejaVu Sans'; fill: #182b42">m</tspan>
+      <tspan x="75.11873" y="-5.28125" style="font-size: 21.382523px; font-family: 'STIXSizeThreeSym'; fill: #182b42">̂</tspan>
+     </text>
+     <rect x="0" y="-6.5" width="29.994141" height="1.5" />
+    </g>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 12px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; fill: #182b42" transform="translate(311.304375 221.007)">The two maps sum to</text>
+    <text style="font-size: 12px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; fill: #182b42" transform="translate(309.162187 233.33925)">1 at every position</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 30px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="345.6" y="434.580469" transform="rotate(-0 345.6 434.580469)">+</text>
+   </g>
+   <g id="text_19">
+    <text style="font-weight: 700; font-size: 13px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="345.6" y="484.550313" transform="rotate(-0 345.6 484.550313)">Adding material value × shape Fourier coefficients</text>
+   </g>
+   <g id="text_20">
+    <text style="font-weight: 700; font-size: 13px; font-family: 'Apple SD Gothic Neo', 'DejaVu Sans'; text-anchor: middle; fill: #182b42" x="345.6" y="510.470312" transform="rotate(-0 345.6 510.470312)">gives the Fourier coefficients of total reciprocal permittivity</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pa300f5e39e">
+   <rect x="0" y="0" width="691.2" height="525.6" />
+  </clipPath>
+ </defs>
+</svg>

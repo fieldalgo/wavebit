@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="1210" viewBox="0 0 1040 1210" role="img" aria-labelledby="title desc">
+<title id="title">여러 평면파의 입사와 전력 계산</title>
+<desc id="desc">한쪽 입사와 양면 입사에 공통인 계산 흐름입니다. 횡파수에 따라 계산 묶음을 정합니다. 서로 다른 묶음도 복소 필드를 합쳐 간섭을 계산합니다. 회색: 입력 설정·RCWA 계산·필드 재구성. 초록: 필드 합산·전력 계산·정규화.</desc>
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#546878"/></marker></defs>
+<rect width="1040" height="1210" rx="18" fill="#f4f7fa"/>
+<g font-family="Arial, Noto Sans KR, sans-serif" fill="#142c40">
+<text x="520" y="47" font-size="28" font-weight="bold" text-anchor="middle">여러 평면파의 입사와 전력 계산</text>
+<text x="520" y="78" font-size="19" font-weight="normal" text-anchor="middle">한쪽 입사·양면 입사 공통 · 같은 파장·선형 재료</text>
+<g id="legend" aria-label="범례">
+<text x="65" y="123" font-size="20" font-weight="bold">범례</text>
+<rect x="165" y="103" width="26" height="26" rx="5" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="207" y="123" font-size="20">회색: 입력 설정·RCWA 계산·필드 재구성</text>
+<rect x="165" y="145" width="26" height="26" rx="5" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="207" y="165" font-size="20">초록: 필드 합산·전력 계산·정규화</text>
+</g>
+<g id="flow" transform="translate(0 100)">
+<rect x="140" y="110" width="760" height="84" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520.0" y="144.5" font-size="22" font-weight="bold" text-anchor="middle">층·재료·격자</text>
+<text x="520.0" y="173.5" font-size="22" font-weight="normal" text-anchor="middle">입사파마다 입사 쪽 · 방향 · 편광 · 복소 진폭</text>
+<path d="M520 194 V225" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="140" y="225" width="760" height="84" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520.0" y="259.5" font-size="22" font-weight="bold" text-anchor="middle">각 입사파의 실제 kx, ky를 계산</text>
+<text x="520.0" y="288.5" font-size="22" font-weight="normal" text-anchor="middle">횡파수 차이가 역격자 벡터의 정수 조합이면 같은 묶음</text>
+<path d="M520 309 V340" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<text x="520" y="366" font-size="20" font-weight="bold" text-anchor="middle">계산 묶음 수</text>
+<path d="M450 361 H285 V405" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<path d="M590 361 H755 V405" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="405" width="440" height="82" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="285.0" y="438.5" font-size="22" font-weight="bold" text-anchor="middle">한 묶음</text>
+<text x="285.0" y="467.5" font-size="22" font-weight="normal" text-anchor="middle">산란행렬을 한 번 계산</text>
+<rect x="535" y="405" width="440" height="82" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="755.0" y="438.5" font-size="22" font-weight="bold" text-anchor="middle">여러 묶음</text>
+<text x="755.0" y="467.5" font-size="22" font-weight="normal" text-anchor="middle">묶음마다 산란행렬 계산</text>
+<path d="M285 487 V514 H520 V544" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<path d="M755 487 V514 H520" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="140" y="545" width="760" height="84" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520.0" y="579.5" font-size="22" font-weight="bold" text-anchor="middle">위·아래 경계의 복소 진폭 보관</text>
+<text x="520.0" y="608.5" font-size="22" font-weight="normal" text-anchor="middle">각 경계에서 들어오는 파와 나가는 파를 구분</text>
+<path d="M520 629 V650 H417 V669" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="669" width="705" height="90" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="417.5" y="706.5" font-size="22" font-weight="bold" text-anchor="middle">공통 좌표와 위상 기준으로 E, H를 합산</text>
+<text x="417.5" y="735.5" font-size="22" font-weight="normal" text-anchor="middle">E = Σ Eⱼ    ·    H = Σ Hⱼ</text>
+<path d="M900 587 H990 V684 H902 V714" fill="none" stroke="#546878" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<rect x="794" y="714" width="215" height="76" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="901.5" y="744.5" font-size="22" font-weight="bold" text-anchor="middle">필요할 때</text>
+<text x="901.5" y="773.5" font-size="22" font-weight="normal" text-anchor="middle">층 내부 E, H 재구성</text>
+<path d="M416 759 V804" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="804" width="705" height="84" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="417.5" y="838.5" font-size="22" font-weight="bold" text-anchor="middle">전력 흐름 계산</text>
+<text x="417.5" y="867.5" font-size="22" font-weight="normal" text-anchor="middle">⟨S⟩ = ½ Re(E × H*)</text>
+<path d="M416 888 V926" fill="none" stroke="#546878" stroke-width="2.5"  marker-end="url(#arrow)"/>
+<rect x="65" y="926" width="910" height="84" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="520.0" y="960.5" font-size="22" font-weight="bold" text-anchor="middle">관측 영역에서 평균 · 총 입사 전력으로 정규화</text>
+<text x="520.0" y="989.5" font-size="22" font-weight="normal" text-anchor="middle">output_top · output_bottom</text>
+<text x="520" y="1046" font-size="19" font-weight="normal" text-anchor="middle">서로 다른 묶음도 복소 필드를 합쳐 간섭을 계산합니다.</text>
+<text x="520" y="1076" font-size="19" font-weight="normal" text-anchor="middle">계산된 R, T를 더하는 흐름이 아닙니다.</text>
+</g></g></svg>

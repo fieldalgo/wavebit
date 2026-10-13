@@ -1,0 +1,72 @@
+Affine auxiliary Fourier projection memory and timing, 2026-09-09
+
+Baseline: wavebit/_core/conforming/affine_cell.py at 67cff19.
+Candidate: zero-mode weak assembly, then x Fourier projection batches of 16.
+The unchanged dependencies and all other production code are shared.
+Host: macOS arm64, Apple M4, 16 GiB physical RAM, Apple Accelerate.
+OPENBLAS_NUM_THREADS=1 and OMP_NUM_THREADS=1 were set; these do not establish
+Accelerate's actual thread count. No other numerical task from this session
+overlapped this paired comparison.
+Installed versions: numpy=2.5.1, scipy=1.18.0, jax=0.11.0
+
+Reproduction: load the baseline affine module under a distinct module name
+within wavebit._core.conforming, and instantiate one old and one new model.
+Use AffineCellGapModel(12, x_subdivisions=2, rows=4, body_degree=4,
+gap_degree=6, flux_basis='local', edge_fraction=1e-5). This is coefficient
+cap 24, with 3887 auxiliary unknowns. Call coefficients(17.,
+{'seams': [31.], 'values': [4., 9.]}, 350.,
+basis=700*np.array([[1., .45], [0., .7]])).
+
+Warm each implementation once. Four alternating pairs run before/after,
+after/before, before/after, after/before. Collect garbage before each call,
+then time only coefficients() with time.monotonic. Compare all nine arrays
+against the first baseline warmup; every recorded difference is zero.
+After timing, collect garbage and measure one call per implementation with
+tracemalloc, keeping only its returned arrays alive. Model construction,
+imports and native linear-algebra workspaces are excluded. Traced allocation
+is not process RSS, and this does not time matrix closure or Maxwell solving.
+The benchmark retains a small reference coefficient array, constructed before
+tracing. No JAX memory or performance conclusion follows from this NumPy run.
+
+{"kind": "affine_projection_warmup", "implementation": "before", "seconds": 6.190628625045065, "maximum_coefficient_difference": 0.0, "cell_residual": 1.531281622179278e-10}
+{"kind": "affine_projection_warmup", "implementation": "after", "seconds": 6.200738708022982, "maximum_coefficient_difference": 0.0, "cell_residual": 1.531281622179278e-10}
+{"kind": "affine_projection_pair", "repetition": 0, "implementation": "before", "seconds": 6.109969083976466, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 0, "implementation": "after", "seconds": 6.204532999952789, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 1, "implementation": "after", "seconds": 6.279810375010129, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 1, "implementation": "before", "seconds": 6.252450084022712, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 2, "implementation": "before", "seconds": 6.123120500007644, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 2, "implementation": "after", "seconds": 6.142563833971508, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 3, "implementation": "after", "seconds": 6.374274708039593, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 3, "implementation": "before", "seconds": 6.135669625014998, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_allocation", "implementation": "before", "peak_traced_bytes": 759359530, "live_traced_bytes": 352706, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_allocation", "implementation": "after", "peak_traced_bytes": 726618154, "live_traced_bytes": 357766, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_summary", "order": 12, "cap": 24, "settings": {"x_subdivisions": 2, "rows": 4, "body_degree": 4, "gap_degree": 6, "flux_basis": "local", "edge_fraction": 1e-05}, "median_seconds": {"before": 6.129395062511321, "after": 6.242171687481459}}
+
+Larger Fourier envelope, fresh process, identical finite auxiliary space:
+Repeat the same protocol with AffineCellGapModel(32, **settings), coefficient
+cap 64. Keep all physical and finite-cell inputs unchanged. This measures
+coefficients only, without a 32nd-order Maxwell solve. The baseline and
+candidate arrays are again compared over all nine components.
+{"kind": "affine_projection_warmup", "implementation": "before", "seconds": 16.77222270797938, "maximum_coefficient_difference": 0.0, "cell_residual": 1.531281622179278e-10}
+{"kind": "affine_projection_warmup", "implementation": "after", "seconds": 16.619161707989406, "maximum_coefficient_difference": 0.0, "cell_residual": 1.531281622179278e-10}
+{"kind": "affine_projection_pair", "repetition": 0, "implementation": "before", "seconds": 16.672721457958687, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 0, "implementation": "after", "seconds": 16.626310249965172, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 1, "implementation": "after", "seconds": 16.738645749981515, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 1, "implementation": "before", "seconds": 16.775702791986987, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 2, "implementation": "before", "seconds": 17.111430459015537, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 2, "implementation": "after", "seconds": 16.705077291990165, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 3, "implementation": "after", "seconds": 16.631354375043884, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_pair", "repetition": 3, "implementation": "before", "seconds": 17.04895700002089, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_allocation", "implementation": "before", "peak_traced_bytes": 813928490, "live_traced_bytes": 2403266, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_allocation", "implementation": "after", "peak_traced_bytes": 726618154, "live_traced_bytes": 2412325, "maximum_coefficient_difference": 0.0}
+{"kind": "affine_projection_summary", "order": 32, "cap": 64, "settings": {"x_subdivisions": 2, "rows": 4, "body_degree": 4, "gap_degree": 6, "flux_basis": "local", "edge_fraction": 1e-05}, "median_seconds": {"before": 16.91232989600394, "after": 16.668215833517024}}
+
+Validation, completed after the implementation change:
+python -m pytest tests/test_nvf_affine_cell.py tests/test_nvf_affine_contact.py tests/test_nvf_affine_orders.py tests/test_nvf_affine_convergence.py -q --tb=short
+114 passed in 86.57s. Ten new parameter cases cover default batch boundaries,
+positive-gap diagonal-metric comparisons and JAX derivatives across chunks.
+python -m pytest tests/test_nvf_complex_variational.py tests/test_docs_contract.py -q --tb=short
+54 passed in 1.36s. Total: 168 distinct passing cases; no skips or warnings.
+Ruff on the changed Python files, git diff --check and strict Sphinx HTML
+(-W --keep-going) also passed. This is targeted validation, not the full
+repository suite. All benchmark, candidate and test processes completed.

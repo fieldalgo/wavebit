@@ -1,0 +1,250 @@
+{
+  "test": "tests/cross_solver/test_public_lifecycle_diffraction.py",
+  "test_sha256": "ed3842c8eeafabefcd78c1a79863052a158190776e36d4235f2f7674fc8d72e7",
+  "validation": "Four cross-solver cases passed within the 38-case focused public FDTD, cross-solver and repository contract run.",
+  "frame": "cell centred x/y, +z up, incident plane z=0.2 um, reflected plane z=0.2 um, transmitted plane z=0 um",
+  "power_comparison": "Per-order efficiencies normalized to the declared/measured incident source; FDTD raw pulse energy is not relabelled as monochromatic watts.",
+  "observed_cases": [
+    {
+      "profile": "film",
+      "polarization": "s",
+      "rcwa_orders": [
+        [
+          7,
+          0
+        ],
+        [
+          11,
+          0
+        ]
+      ],
+      "rcwa_refinement_max_abs": {
+        "complex_amplitude": 0.0,
+        "order_efficiency": 0.0
+      },
+      "fdtd": [
+        {
+          "spacing_um": 0.05,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.038182600476680074,
+          "order_efficiency_max_abs_error": 0.014113463204375967
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.009233633531317476,
+          "order_efficiency_max_abs_error": 0.0035089366413358913,
+          "difference_from_previous": {
+            "complex_amplitude": 0.02895193984993719,
+            "order_efficiency": 0.010617879649736012
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1e-13,
+          "complex_amplitude_max_abs_error": 0.009233625001553688,
+          "order_efficiency_max_abs_error": 0.0035089232826760464,
+          "difference_from_previous": {
+            "complex_amplitude": 1.0059758811715158e-08,
+            "order_efficiency": 1.3358659844975307e-08
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1.4e-13,
+          "complex_amplitude_max_abs_error": 0.009233637987236408,
+          "order_efficiency_max_abs_error": 0.0035089470405076373,
+          "difference_from_previous": {
+            "complex_amplitude": 3.886363865046607e-08,
+            "order_efficiency": 2.3757831590920375e-08
+          }
+        }
+      ],
+      "spatial_refinement_error_ratio": {
+        "complex_amplitude_max_abs_error": 0.24182830441202907,
+        "order_efficiency_max_abs_error": 0.24862335987441578
+      }
+    },
+    {
+      "profile": "film",
+      "polarization": "p",
+      "rcwa_orders": [
+        [
+          7,
+          0
+        ],
+        [
+          11,
+          0
+        ]
+      ],
+      "rcwa_refinement_max_abs": {
+        "complex_amplitude": 0.0,
+        "order_efficiency": 0.0
+      },
+      "fdtd": [
+        {
+          "spacing_um": 0.05,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.038182600476679866,
+          "order_efficiency_max_abs_error": 0.014113463204375953
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.009233633531317266,
+          "order_efficiency_max_abs_error": 0.0035089366413355583,
+          "difference_from_previous": {
+            "complex_amplitude": 0.02895193984993719,
+            "order_efficiency": 0.010617879649736081
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1e-13,
+          "complex_amplitude_max_abs_error": 0.00923362500155329,
+          "order_efficiency_max_abs_error": 0.0035089232826760464,
+          "difference_from_previous": {
+            "complex_amplitude": 1.0059759033752937e-08,
+            "order_efficiency": 1.33586595119084e-08
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1.4e-13,
+          "complex_amplitude_max_abs_error": 0.009233637987236408,
+          "order_efficiency_max_abs_error": 0.0035089470405075263,
+          "difference_from_previous": {
+            "complex_amplitude": 3.886363865967413e-08,
+            "order_efficiency": 2.3757831479898073e-08
+          }
+        }
+      ],
+      "spatial_refinement_error_ratio": {
+        "complex_amplitude_max_abs_error": 0.2418283044120249,
+        "order_efficiency_max_abs_error": 0.2486233598743924
+      }
+    },
+    {
+      "profile": "grating",
+      "polarization": "s",
+      "rcwa_orders": [
+        [
+          7,
+          0
+        ],
+        [
+          11,
+          0
+        ]
+      ],
+      "rcwa_refinement_max_abs": {
+        "complex_amplitude": 0.00010130283684256744,
+        "order_efficiency": 2.6502375037762427e-05
+      },
+      "fdtd": [
+        {
+          "spacing_um": 0.05,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.02429899872878892,
+          "order_efficiency_max_abs_error": 0.0034481964441795063
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.006113842088037876,
+          "order_efficiency_max_abs_error": 0.0008065838275366881,
+          "difference_from_previous": {
+            "complex_amplitude": 0.01818863563619653,
+            "order_efficiency": 0.002641612616642818
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1e-13,
+          "complex_amplitude_max_abs_error": 0.005934401759409985,
+          "order_efficiency_max_abs_error": 0.000865602709516633,
+          "difference_from_previous": {
+            "complex_amplitude": 0.00035590211358579405,
+            "order_efficiency": 0.00010074884722099942
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1.4e-13,
+          "complex_amplitude_max_abs_error": 0.00593385806693754,
+          "order_efficiency_max_abs_error": 0.0008554716512921001,
+          "difference_from_previous": {
+            "complex_amplitude": 0.00014169905195162715,
+            "order_efficiency": 0.00014072421268873647
+          }
+        }
+      ],
+      "spatial_refinement_error_ratio": {
+        "complex_amplitude_max_abs_error": 0.25160880727131896,
+        "order_efficiency_max_abs_error": 0.23391469731899617
+      }
+    },
+    {
+      "profile": "grating",
+      "polarization": "p",
+      "rcwa_orders": [
+        [
+          7,
+          0
+        ],
+        [
+          11,
+          0
+        ]
+      ],
+      "rcwa_refinement_max_abs": {
+        "complex_amplitude": 0.00029496960598888224,
+        "order_efficiency": 5.0092111579802534e-05
+      },
+      "fdtd": [
+        {
+          "spacing_um": 0.05,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.02316051414744055,
+          "order_efficiency_max_abs_error": 0.003622255955866075
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 7e-14,
+          "complex_amplitude_max_abs_error": 0.0059758668637187595,
+          "order_efficiency_max_abs_error": 0.0009219563631788878,
+          "difference_from_previous": {
+            "complex_amplitude": 0.017185956636078623,
+            "order_efficiency": 0.0027002995926871873
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1e-13,
+          "complex_amplitude_max_abs_error": 0.005976138767241728,
+          "order_efficiency_max_abs_error": 0.0009217821923939995,
+          "difference_from_previous": {
+            "complex_amplitude": 4.440530515057327e-06,
+            "order_efficiency": 1.5741929911272656e-06
+          }
+        },
+        {
+          "spacing_um": 0.025,
+          "duration_seconds": 1.4e-13,
+          "complex_amplitude_max_abs_error": 0.005975826062947827,
+          "order_efficiency_max_abs_error": 0.0009216316702167007,
+          "difference_from_previous": {
+            "complex_amplitude": 2.494532419701957e-06,
+            "order_efficiency": 1.1488581104224238e-06
+          }
+        }
+      ],
+      "spatial_refinement_error_ratio": {
+        "complex_amplitude_max_abs_error": 0.2580196115542257,
+        "order_efficiency_max_abs_error": 0.25452545993770054
+      }
+    }
+  ],
+  "scope": "NumPy, a homogeneous film and an off-centre one-dimensional grating, each with s and p illumination at wavelength 0.8 um; only the recorded refinements and source normalization are claimed."
+}

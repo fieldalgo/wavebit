@@ -1,0 +1,235 @@
+# The first-order path — what it is judged against, when no oracle will do it
+
+Written: 2026-08-11. Measured on an Apple M4, NumPy 2.5.1 against Accelerate, float64.
+
+Targets:
+- `src/wavebit/rcwa/_engine/solve_2d_first_order.py` — the whole path, `::solve_2d_first_order` its
+  public entry
+- `tests/rcwa/test_solve_2d_first_order.py` and
+  `tests/references/test_first_order_external_goldens.py` — every number here
+- `src/wavebit/rcwa/_engine/fields.py::field_2d_first_order` and `tests/rcwa/test_field_first_order.py` — the
+  in-cell field (§4b)
+- `tests/rcwa/test_anisotropic_berreman.py` — the Berreman oracle it is judged against
+- `tests/rcwa/test_formulation_dispatch.py` — which of the two formulations a call takes, and why
+- `tests/rcwa/test_first_order_exceptional_point.py`, `tests/rcwa/test_exceptional_point_clusters.py`
+  — regular pairs and unresolved-cluster warnings (§6)
+
+Companions. [`anisotropic-materials.md`](../../guide/rcwa/anisotropic-materials.md) scopes the whole anisotropy
+question and says what each gap costs; [`five-slot-limit.md`](five-slot-limit.md) explains why the
+second-order path has five permittivity slots and what other solvers do at that edge;
+[`connecting-algorithms.md`](connecting-algorithms.md) covers `layer_algorithm`, a general
+question this path happens to be the best test bed for.
+
+**This one answers a narrower question: how do you validate a solver when no other solver can
+check it?** Three of the four decisions below exist only because the usual answer — compare
+against someone else's code — was unavailable. Where the path currently stands, and what it
+cannot yet do, lives beside the code in `solve_2d_first_order.py`; that goes stale and this
+should not.
+
+---
+
+## TL;DR — four decisions, and what forced each
+
+| decision | forced by |
+|---|---|
+| Judge the tilted-magnetisation geometry by a **theorem** (rotation covariance about `z`), not by an oracle | all four surveyed solvers are out, each for a measured reason (§2) |
+| Decide mode direction **per mode against its own norm**, not against the set | the set-relative rule reads 1e-17 of dust as energy flow once every mode is evanescent — which is every order above the light line |
+| Accept `exx = epx`, `eyy = epy`, `ezz_i = epz_i` as the isotropic-grating mapping | it is the same continuity argument that puts the inverse rule in `epx`, not a fit (§3) |
+| Treat a patterned *anisotropic* layer as a **factorization** problem, not a solver problem | this module takes convolution matrices as input; fed real ones it already works (§3) |
+
+## 1. Why it exists
+
+The second-order path reduces a layer to `d²E_t/dz² = Omega2 E_t`. That reduction exists only when
+the permittivity has an empty z row and column: eliminating `E_z` otherwise leaves a
+first-derivative term and there is no second-order operator to write. Physically that case is the
+**Voigt geometry** — a magnetisation lying *in* the plane, which is what an ordinary magnetised film
+has unless perpendicular anisotropy or an applied field holds it out.
+
+The first-order form keeps the whole transverse state instead:
+
+```
+    d/dz (Ex, Ey, Hx, Hy) = i k0 M (Ex, Ey, Hx, Hy)          M is 4N x 4N for N orders
+```
+
+## 2. What it is checked against
+
+Four oracles, in decreasing order of independence:
+
+| oracle | reaches | agreement |
+|---|---|---|
+| RETICOLO (external) | uniform tensors, **one** off-diagonal pair at `delta0 = 0` | 1e-15, 12 cases |
+| fmmax (external) | uniform tensors, no z row | 1e-15, 12 cases |
+| the second-order path (ours) | z-decoupled tensors; isotropic gratings | `lam = i q` to 1e-15; gratings to 3e-14 |
+| Berreman 4×4 (ours) | uniform tensors including z-coupling | entry-for-entry to 1e-16 |
+
+Since the public route landed (2026-08-13) each of these judges *it* as well as this module's own
+entry, which matters because the route adds code none of them used to cross: the substrate seed,
+the s/p rotation, and the shared final matching. Two of the rows also reach further than they did.
+The second-order row is now run on a **patterned** grating through `formulation='first_order'` — the
+same scene both ways, agreeing to 4e-14 — and the Berreman row is run on **stacks**, on a **tilted**
+magnetisation (`xy` and `yz` at once, which RETICOLO cannot arbitrate), and from the **back side**,
+where the mirror has to flip the z row's sign and nothing else.
+
+**No outside solver reaches a tilted magnetisation.** All four surveyed are out, each for a
+measured reason — the table is in [`tests/references/README.md`](https://github.com/fieldalgo/wavebit/blob/develop/tests/references/README.md).
+So that geometry is judged by a *theorem* instead: turning the tensor and the incidence azimuth
+together about the stack normal must leave the efficiencies unchanged, which holds to 3e-15 over
+eight tensors, three angles and four rotations. That test is also the only thing in the repo
+exercising `ky != 0`; five mutations that are the identity at `ky = 0` die there and nowhere else.
+
+## 3. What it solves, measured
+
+| | evidence |
+|---|---|
+| uniform z-coupled tensors | Berreman, entry-for-entry, plus end-to-end R/T |
+| any thickness | closed-form Airy slab to ~1e-13 at modal exponent 113; single-interface Fresnel to 4e-16 at 2500 |
+| any order count | a uniform layer cannot diffract, so 9 and 25 orders must reproduce 1 order — they do, to 1e-14 |
+| **isotropic gratings** | fed the second-order path's own convolution matrices, reproduces it to **3e-14** at up to 49 orders, normal and conical |
+| lossless ⇒ `R + T = 1` | every Hermitian case, to 1e-10 |
+| **a patterned exceptional point** | the 1D rebuild to 1.1e-13 (SMM was up to 2.45 off); historical 2026-10-12 measurements, [regular-pair split](rayleigh-points.md#9-the-first-order-path-at-a-patterned-exceptional-point) |
+| **the in-cell field** | the second-order twin to 1e-11 per component; Maxwell + continuity + flux where there is no twin (below) |
+
+The grating row is the one that exercises **order coupling**: those convolution matrices are full,
+not scaled identities, so orders genuinely mix. It works because an isotropic grating needs no new
+factorization — `exx = epx`, `eyy = epy`, `ezz_i = epz_i`, everything else zero — and that mapping
+is principled rather than fitted: `epx` carries the inverse rule along `x` because `D_x = eps E_x`
+is a continuous quantity written as a product of discontinuous ones, and `exx` sits in exactly
+that product in the first-order form too.
+
+## 4. Full tensor patterns and permeability
+
+The first-order layer operator consumes full epsilon and mu convolution tensors from
+Li or linear NVF. Patterned xz/yz/zx/zy coupling, scalar magnetic half-spaces,
+both incidence sides and all six reconstructed fields are supported. The public
+layer algorithms are ETM (default) and SMM; anisotropic half-spaces remain unsupported.
+
+SMM cascades the distinct forward and backward eigenspaces and reconstructs
+internal fields using decaying propagation factors referenced to opposite layer
+faces. It exposes `solver.scattering` with `answers='amplitude'` or `'field'`,
+using the same scalar half-space port convention as the second-order solver. Compatible
+second-order and first-order stacks can therefore be joined with `.cascade()`.
+
+`tests/rcwa/test_smm_first_order.py` checks public amplitudes and six-component fields on
+NumPy, JAX and PyTorch, illumination from either side, coherent diffraction
+orders, mixed second- and first-order stack composition, and a thick absorbing slab. Independent
+laminate transfer solutions, Maxwell curl residuals and material derivatives
+in `tests/rcwa/test_full_tensor_patterns.py` cover both ETM and SMM.
+
+Longitudinal fields retain the complete constitutive relations:
+
+```text
+Ez = inverse(ezz) (Ky Hx - Kx Hy - ezx Ex - ezy Ey)
+Hz = inverse(mzz) (Kx Ey - Ky Ex - mzx Hx - mzy Hy)
+```
+
+See [full tensor patterns](../../guide/rcwa/full-tensor-patterns.md) for the factorization,
+mode-direction criterion, independent references and convergence examples.
+
+## 4b. Field reconstruction, and the three checks that replace the twin (2026-08-14)
+
+The in-cell field landed on this path on 2026-08-14
+(`src/wavebit/rcwa/_engine/fields.py::field_2d_first_order`, `tests/rcwa/test_field_first_order.py`). It is the
+same validation question this document is about, one level down, so it belongs here rather than
+in a changelog.
+
+**Where a twin exists it is the whole answer.** Forcing `formulation='first_order'` on an
+empty-z-row problem makes the two paths solve the same problem by different algebra, so the
+reconstructed cells must agree entry for entry — measured to 1e-11 *per component*, over four
+geometries, three angles, both incidence sides and all three incidence variants. Per component
+matters: `E_z` runs two orders below `H_y` at these incidences, so a wholly wrong `E_z` scored
+against the cell's largest entry comes back at 1e-2 and reads like a tolerance question.
+
+**Where none exists — the z-coupled geometry the path is for — three checks divide the work,
+and the division is the point.** Any two of them accept something wrong:
+
+| check | catches | blind to |
+|---|---|---|
+| Maxwell, by central differences through a layer's height | a wrong term anywhere, `E_z`'s two extra ones included | any constant factor (it is homogeneous) |
+| transverse continuity at an interface, exact | a mis-referenced propagator face | the same constant factor |
+| `z` flux between lossless spacers vs `T / (1 - R)` | exactly that constant — i.e. a mis-normalised `T1` | shape |
+
+The Maxwell check asserts its **rate**, not just its size. The field is analytic inside a
+layer, so halving the step must quarter the residual; measured 4.03–4.13 per doubling. A
+residual that is merely small without converging is a different object from one that is
+discretisation error, and only the rate tells them apart. The continuity check is exact rather
+than asymptotic because the sampling lands on the interface: `linspace(0, sample_z, sample_z)` is
+inclusive, so a layer's last slice *is* its top face and the next layer's first slice is the
+same plane. (Its bottom face until 2026-09-21, while count samples ran downward; they run bottom
+to top now.)
+
+**The sign convention, which the vacuum slab settled — and which turned out to be a defect in
+the other three paths.** A layer of vacuum in vacuum returns the incident plane wave exactly,
+so every entry is known in closed form, and two of the facts it gave did not sit together: the
+phase advanced *with* the cell's `z` index, so the wave travelled that way, while the returned
+Poynting vector pointed *against* it.
+
+The first reading was that this is the library's convention and the new path should match it,
+which is what shipped for a day. It is not. `docs/reference/common/conventions.md` then declared `+z` **down,
+into the stack** — the direction the cell's `z` index ran — and measured against that
+declaration the second-order cell is not a Maxwell field
+at all: the curl residual on a three-layer slab at 33° was 2.8 as shipped and 8.0e-4
+(converging like the step) once `E_z`, `H_x`, `H_y` were flipped — on all four paths, the two
+1D layouts included. The first-order state vector was already in the declared frame, because
+`Im(lam_f) >= 0` means "does not grow" only with `+z` along propagation.
+
+That paragraph is dated 2026-08-14 and told in that day's frame. Since 2026-09-21
+[`conventions.md`](../../reference/common/conventions.md#geometry-and-propagation) declares `+z` **up**, with `z = 0`
+at the bottom interface and the cell's `z` index running bottom to top. Restating a cell in that
+frame reverses the index and flips `E_z`, `H_x`, `H_y` together, so the fix stands unchanged:
+what it removed was a cell whose signs disagreed with the direction its own `z` index ran,
+which is a defect in either frame.
+
+The sharper way to say it: [`formulation.md`](formulation.md) §1 had already written the
+answer down as the sanity anchor for `(M1)/(M2)` — a `+z` vacuum wave has `(Ey, H̃x) =
+(1, -kz)` — and `test_anisotropic_berreman.py::_vacuum_modes` writes that pair verbatim. The
+formulation, the Berreman oracle and this module all agreed with each other; the
+reconstruction was the one file that did not. Matching it would have propagated the one wrong
+opinion in the repo, which is what makes "match the shipped behaviour" a rule with an
+exception rather than a rule.
+
+So the parity moved to where it belongs, onto the three second-order paths, and
+`field_2d_first_order` applies none. The legacy field golden was **not** regenerated for it at first
+— a helper transformed it at the comparison — and later the same day it was retired outright,
+because a golden captured from this project's own earlier implementation is a change detector, not
+an oracle. S4 now answers whether the field is right (`tests/references/test_s4_field_golden.py`),
+and `tests/fixtures/legacy_rcwa/golden_field.npz`, re-frozen once after the fix, answers whether it has moved.
+That archive still holds the 2026-08-14 downward frame: since 2026-09-21
+`test_field_core.upward_reference` restates it in the public frame at the comparison — a
+reversal along `z` plus the same parity — rather than re-freezing it. What let
+this stand for so long is in [`time-convention-audit.md`](../../validation/rcwa/time-convention-audit.md) §8: the
+audit that checked fields probed `|E|` and `E_t`, the two things the parity leaves alone.
+
+## 5. Two things that were not obvious
+
+**The `±` mode pairing becomes false, not merely unnecessary.** In the second-order form,
+`exp(+q z)` and `exp(-q z)` solve the same second-order equation with the *same* eigenvector, so
+the pair is free and only a root has to be chosen. A first-order system has 4N eigenvalues for N
+orders, and they are not `±` pairs. Measured: at normal incidence the backward set still matches the
+negated forward set to 1e-16, and for a tilted magnetisation at 35° they part by 9e-2. z-coupling
+and oblique incidence have to combine before the assumption breaks, which is why nothing noticed.
+
+**Direction has to be decided per mode, against its own norm.** Scaling the "carries no flux"
+threshold by the largest flux in the set — the obvious thing — works on every propagating case and
+then, once every mode is evanescent, promotes 1e-17 of numerical dust to real energy flow. Every
+diffraction order above the light line is that case, so the set-relative version would have broken
+on the first grating.
+
+
+## 6. A regular pair at a patterned exceptional point
+
+At a patterned x-cutoff, two same-direction eigenvectors can nearly coincide even though each
+satisfies Maxwell's equations accurately. Using them as a basis made ETM lose up to 2.5e-4 in
+amplitudes and SMM up to 2.45 in the 2026-10-12 baseline measurements. The latter repeatedly
+inverted a round trip in that poorly conditioned basis. `_pair_gate` now finds eligible pairs,
+`_regular_pair` refines an orthonormal basis of their invariant subspace with one Newton step,
+and `_layer_split` carries the resulting triangular 2x2 generator into propagation, fields
+and differentiation. Both algorithms then matched the independent 1D rebuild to 1.1e-13 in
+those measurements.
+
+A pair too close to a third mode is skipped; the final basis is screened for a defective
+cluster within each direction. `ExceptionalPointWarning` identifies unresolved eager cases,
+including coincident EPs, while ordinary degenerate eigenspaces remain quiet. This warning
+does not trigger `auto_detune`. Under an abstract trace the screen is silent; static slots
+hold eligible pairs and overflow produces NaN, but unresolved coincident clusters can still
+be inaccurate. The construction, derivative rule, historical measurements and remaining
+limits are in [`rayleigh-points.md` §9](rayleigh-points.md#9-the-first-order-path-at-a-patterned-exceptional-point).

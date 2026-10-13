@@ -12,7 +12,14 @@ paths are run against the same S4 numbers — pure TE, pure TM, conical, 2D, and
 route — because they are five different assemblies of the same physics and the oracle
 costs nothing extra per path.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
@@ -20,9 +27,9 @@ import pytest
 
 import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from gen_goldens_s4_field import STACKS                                   # noqa: E402
+from tests.references.gen_goldens_s4_field import STACKS                                   # noqa: E402
 
 GOLDEN = np.load(HERE / 'golden_s4_field.npz')
 
@@ -90,7 +97,7 @@ def _reconstruct(path, stack_name, theta, phi, pol):
         kw.update(psi=np.pi / 2 if pol == 's' else 0.0, phi=np.deg2rad(phi),
                   truncation_order=(0, 0), period=PERIOD,
                   structure=np.repeat(np.repeat(eps, 2, axis=1), 2, axis=2))
-    solver = wavebit.rcwa(**kw)
+    solver = _legacy_wavebit.rcwa(**kw)
     if path == 'first_order':
         solver.formulation = 'first_order'
     solver.solve()

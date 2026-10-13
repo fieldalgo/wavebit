@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 430" role="img" aria-labelledby="title desc">
+<title id="title">The same ε, but a different matrix-building order</title><desc id="desc">Tangential: direct multiplication. Normal: form the reciprocal-permittivity matrix, then invert it.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="430" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">The same ε, but a different matrix-building order</text>
+<rect x="30" y="90" width="450" height="175" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="124" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Tangential component</text>
+<text x="48" y="160" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Eₜ continuous → Dₜ/ε₀ = εEₜ</text>
+<text x="48" y="187" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Spatial product → convolution matrix A = C(ε)</text>
+<text x="48" y="214" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Direct rule: [Dₜ/ε₀] ≈ A [Eₜ]</text>
+<rect x="520" y="90" width="450" height="175" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="538" y="124" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Normal component</text>
+<text x="538" y="160" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Dₙ continuous → Eₙ = (1/ε)Dₙ/ε₀</text>
+<text x="538" y="187" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">First B = C(1/ε), then B⁻¹</text>
+<text x="538" y="214" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Inverse rule: [Dₙ/ε₀] ≈ B⁻¹ [Eₙ]</text>
+<text x="45" y="314" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Zeroth-order 50:50 example: ε = 1 or 4</text>
+<text x="45" y="355" style="fill:#285ab0;font-size:24px;font-weight:400" text-anchor="start">A = (1 + 4)/2 = 2.5</text>
+<text x="520" y="355" style="fill:#117c77;font-size:23px;font-weight:400" text-anchor="start">B⁻¹ = 1/[(1 + 1/4)/2] = 1.6</text>
+<text x="30" y="413" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Hand calculation showing C(ε) ≠ C(1/ε)⁻¹ in a truncated Fourier space</text>
+</svg>

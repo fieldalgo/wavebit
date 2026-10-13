@@ -1,19 +1,25 @@
 """A lossy negative-epsilon 3D Drude pattern against an independent Meep reference."""
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import hashlib
-from pathlib import Path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
 
-HERE = Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _meep_crossed_metal_case import CASE  # noqa: E402
-from _meep_crossed_material_cases import epsilon  # noqa: E402
-from _meep_crossed_cases import margin  # noqa: E402
-from test_meep_crossed_materials_golden import scene, extract, frozen, gap  # noqa: E402
+from tests.references._meep_crossed_metal_case import CASE  # noqa: E402
+from tests.references._meep_crossed_material_cases import epsilon  # noqa: E402
+from tests.references._meep_crossed_cases import margin  # noqa: E402
+from tests.references.test_meep_crossed_materials_golden import scene, extract, frozen, gap  # noqa: E402
 
 
 @pytest.fixture(scope='module')
@@ -28,7 +34,7 @@ def golden():
 
 @pytest.fixture(scope='module')
 def computed():
-    result, diagnostics = wavebit.fdtd(
+    result, diagnostics = _legacy_wavebit.fdtd(
         **scene(CASE), dispersion=CASE['dispersion'], poles=CASE['poles'],
         resolution=60., n_periods=240, n_pml=12, pad_scale=1., courant=.99,
         subpixel=True, grading=None, return_diagnostics=True)
@@ -86,7 +92,7 @@ def test_finer_external_grid_reduces_reference_error(golden):
     kw = scene(CASE)
     kw['structure'] = epsilon(CASE, CASE['wavelength'])
     kw['truncation_order'] = dict(x=11, y=11)
-    ref = extract(wavebit.rcwa(backend='numpy', **kw).solve(), CASE)
+    ref = extract(_legacy_wavebit.rcwa(backend='numpy', **kw).solve(), CASE)
     errors = [gap(frozen(golden, 'metal', resolution), ref, CASE) for resolution in (30, 60, 120)]
     print('METAL_MEEP_REFINEMENT', errors, flush=True)
     assert errors[2] < errors[1] < errors[0]

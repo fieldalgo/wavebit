@@ -1,0 +1,48 @@
+{
+  "reason": "Original English plot bytes preserved exactly. Korean overlay annotations moved into English captions and panel/wavelength locators; numerical plot unchanged.",
+  "solver_executed": false,
+  "figures": [
+    {
+      "path": "docs/figures/learn/nvf/14-A_nvf_closing.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-A_nvf_closing.png",
+      "source": "wavebit-lab/optical-comparison-records/a_eot_820nm/fig_A_nvf_closing.png",
+      "original_sha256": "2062d3e1484dbaf3e1c2dc06fc270e186e8122b4ed839a335f089b68fd6ba8e1",
+      "english_sha256": "d4e0ac0d4faa85c6529a1b0b1907ae24728e2187dc9a612544663546b2f39800"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-A820_peak.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-A820_peak.png",
+      "source": "wavebit-lab/optical-comparison-records/a_eot_820nm/fig_A820_peak.png",
+      "original_sha256": "1e4e938fd56a97bc35c42698e401e593ff183aa879d8fe63dcd43e9a7e15ba3c",
+      "english_sha256": "34b6e520bcc30086d3adced262e15f610722e86d52c0a9fc0470dff9f8d9035b"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-B780_dip.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-B780_dip.png",
+      "source": "wavebit-lab/optical-comparison-records/b_disk_785nm/fig_B780_dip.png",
+      "original_sha256": "23d579d25253e4873a8fa81c27744e43af50a3aae4e2e71698ae6ee2984322e0",
+      "english_sha256": "27c8c609f0046554f068790185c1bf2af9625a998373a1cbb28426c7b0414d6b"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-B_passivity.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-B_passivity.png",
+      "source": "wavebit-lab/optical-comparison-records/b_disk_785nm/fig_B_passivity.png",
+      "original_sha256": "a7403bfb2289a82e6bb8430fbf3be828872431eb4c6a8b39d056adbdedc70e3d",
+      "english_sha256": "91a4eca6e60b21f790bbc805987c2b14c9f327a274aadc82613506b5f032d9c2"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-DE_P_yx.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-DE_P_yx.png",
+      "source": "wavebit-lab/optical-comparison-records/de_rotated_pyx/fig_DE_P_yx.png",
+      "original_sha256": "6948aeb55c6d93782c4a6668fd2f4c8570566026983e6da04c346a04ce1b4ecd",
+      "english_sha256": "6cf3e7a3b44c4e4fe76ec0ed67373149c971a7fde51dd8931f2c70f2ce9d2aa1"
+    },
+    {
+      "path": "docs/figures/learn/nvf/14-J_res_4codes.png",
+      "korean_original": "docs/locales/ko/assets/figures/learn/nvf/14-J_res_4codes.png",
+      "source": "wavebit-lab/optical-comparison-records/j_resonance_890nm/fig_J_res_4codes.png",
+      "original_sha256": "b7702b8c907434b1a72f041b4277a37200a8b946e4c1d60fa8057229ce7fd10b",
+      "english_sha256": "7406d1e27efa6742b3aa3b3af3936e9e37d581e393ba624a859b0730ec1c9824"
+    }
+  ]
+}

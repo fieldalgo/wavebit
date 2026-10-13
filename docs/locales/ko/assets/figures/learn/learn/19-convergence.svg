@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" role="img" aria-labelledby="19-convergence-title 19-convergence-desc">
+<title id="19-convergence-title">서로 다른 해상도를 하나로 생각하지 않기</title><desc id="19-convergence-desc">형상, Fourier, NVF, z 분할, 출력 표본의 차이</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="560" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">서로 다른 해상도를 하나로 생각하지 않기</text>
+<rect x="30" y="77" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="49" y="106" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">01 형상</text>
+<text x="230" y="106" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">래스터 칸 / 곡선 경계 근사</text>
+<text x="230" y="134" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">입력 장면이 얼마나 잘 표현되는가</text>
+<rect x="30" y="163" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="49" y="192" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">02 Fourier</text>
+<text x="230" y="192" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">truncation_order</text>
+<text x="230" y="220" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">그 장면의 해를 얼마나 많은 파동으로 푸는가</text>
+<rect x="30" y="249" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="49" y="278" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">03 도형 NVF</text>
+<text x="230" y="278" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">shape_nvf_grid_size</text>
+<text x="230" y="306" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">투영 구성의 표본화가 충분한가</text>
+<rect x="30" y="335" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="49" y="364" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">04 z 분할</text>
+<text x="230" y="364" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">층 개수와 각 층 단면</text>
+<text x="230" y="392" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">높이에 따라 변하는 형상을 잘 근사했는가</text>
+<rect x="30" y="421" width="940" height="74" rx="8" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="49" y="450" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">05 출력 위치</text>
+<text x="230" y="450" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">sample_x / y / z</text>
+<text x="230" y="478" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">이미 얻은 해를 어디에서 보여주는가</text>
+<text x="30" y="543" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">마지막 출력 표본을 늘리는 것만으로 앞 단계의 계산 오차가 줄어들지 않는다</text>
+</svg>

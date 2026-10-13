@@ -1,0 +1,47 @@
+{
+  "date": "2026-09-22T00:30:59.015016+09:00",
+  "scope": "Integrated in-plane anisotropic shapes; material geometry preserved, normal extension sampled.",
+  "validation": {
+    "regression": {
+      "passed": 173,
+      "seconds": 84.62
+    },
+    "expanded": {
+      "passed": 32,
+      "seconds": 53.51
+    },
+    "note": "Suites overlap; these counts must not be added as unique tests."
+  },
+  "external_reference": {
+    "goldens_modified": false,
+    "solver": "existing fmmax FFT and JONES_DIRECT goldens",
+    "cases": 3,
+    "max_gaps": [
+      1.2723874075470931e-06,
+      2.918979780441866e-06,
+      1.4477069550471872e-05
+    ],
+    "reference_spreads": [
+      4.83918453331178e-06,
+      2.9738367896547935e-05,
+      0.00016684011018727827
+    ]
+  },
+  "new_dependencies": [],
+  "limits": [
+    "patterned z coupling unsupported",
+    "only linear tensor projector",
+    "normal extension remains sampled",
+    "curved painting and multiple-shape normals retain 256-vertex approximation",
+    "integrated periodic painting overlaps unsupported; explicit sampled route available",
+    "JIT requires frozen topology and cannot validate changes during trace"
+  ],
+  "source_hashes": {
+    "wavebit/_core/tensor_shapes.py": "103e281f03d89c75437c4b1458609b0e95180d06716dc2dcf94cc1a5cfbaabb3",
+    "wavebit/_core/anisotropy.py": "96d05b861250c9b5366d1e9033a3d236cefac751c9c1342cdbb82b6203c1c5f1",
+    "wavebit/_core/interfaces.py": "8580f8e8cb0a6de5108a55144566c128651c3b40cb80eeb37319fbcb970b3aca",
+    "wavebit/_core/engine.py": "d715fe4b273ea6921c30edfa80d500d0513731d9d853abffd229729b33004675",
+    "tests/test_tensor_shape_integrated.py": "57708489c50db5eff7b8b23be6db37600845d0c75e9afe825819f45443f76746",
+    "tests/references/test_tensor_shape_golden.py": "c18f79875579b099e012820757eb24bb1485658e9077ee483fed75f9de4fcec2"
+  }
+}

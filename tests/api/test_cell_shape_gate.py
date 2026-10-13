@@ -1,0 +1,430 @@
+"""
+A gate, not a measurement: no oblique-capable path may do geometry with ``(Px, Py)``.
+
+``period`` reaches an internal function as ``periods_of(A) = (|a1|, |a2|)`` -- edge lengths,
+with the angle already discarded. A 60-degree hex and a 400x400 square both arrive as
+``(400, 400)``, so a function handed only that cannot tell them apart and anything it folds,
+tiles, wraps or centres is a rectangle's.
+
+Two live wrong answers came through exactly this hole in one day (2026-08-23):
+
+* ``_shape_surface_normal`` folded to the nearest periodic image with ``d % Px``, reducing
+  towards a point where no image is. 1.146e-03 from the raster path on a hex pillar array,
+  5.271e-06 after (``b480650``).
+* ``shape_geometry`` defaulted an omitted centre to ``(Px/2, Py/2)`` -- the centre of
+  ``diag(|a1|, |a2|)``, which on a shear is not inside the cell at all. It drew an empty cell
+  where the solve built a rod (``2d7ca08``).
+
+Both were silent: a rectangular cell makes the two spellings *the same arithmetic*, energy
+conserved to 1e-12 throughout, and 3316 tests passed over them. Nothing a numerical test can
+reach will catch the third one either, so this reads the code instead.
+
+The rule is not "never touch ``period``". A scalar length is fine -- a 1-D series has no cell
+shape to get wrong. What this refuses is a *pair* used as though it described a rectangle,
+anywhere the cell might not be one.
+"""
+
+from wavebit.compat import legacy as _legacy_wavebit
+import ast
+import pathlib
+
+import numpy as np
+import pytest
+
+_PERIOD_NAMES = {'Px', 'Py'}
+
+#: ``(module, function) -> (expected number of flagged lines, why it is allowed)``. Each entry
+#: is a promise that the function cannot see a skewed cell. Adding one means arguing that case,
+#: which is the point: the list is the argument, not the exemption.
+#: The wavevector build named for the case it serves: `_separable_kxy` is the *rectangular*
+#: one, and the two routes that reach it both prove the cell is a rectangle in the caller,
+#: which is why an in-function read cannot see the guard.
+_SEPARABLE_KXY = (
+    "the separable wavevector build, rectangular by name and by design. `engine.order_kxy` "
+    "returns it only inside `if A is None or is_axis_aligned(A)` and takes the lattice branch "
+    "without calling it at all -- counted rather than assumed, by `test_oblique_lattice.py::"
+    "test_the_skewed_branch_never_calls_the_separable_build`. `_solve_1d` and "
+    "`_solve_1d_conical` call it directly, and `_assign_grating_type` routes to either only "
+    "under `one_dimensional = one_row and self.lattice_is_axis_aligned`, the shape path "
+    "setting grating_type 2 unconditionally.")
+
+_ALLOWED = {
+    ('src/wavebit/rcwa/_engine/conforming/cartesian_pair_seam_galerkin.py', '_geometry'): (
+        2,
+        "the explicit Cartesian pair chart checks the complete basis against diag(period) "
+        "and requires positive diagonal entries before using either period; "
+        "test_cartesian_auxiliary_families_reject_non_diagonal_bases exercises contact and "
+        "positive gaps for both seam degrees and both corner meshes."),
+    ('src/wavebit/rcwa/_engine/conforming/cartesian_pair_seam_galerkin.py', '_free_fourier_energy'): (
+        2,
+        "this exact rectangle Fourier integral refuses any off-diagonal basis entry before "
+        "computing an indicator; test_pair_fourier_energy_rejects_non_diagonal_bases "
+        "checks the helper directly, independently of the cell's earlier validation."),
+    ('src/wavebit/rcwa/_engine/conforming/pair_symmetric_mesh.py', '_normalization_length'): (
+        1,
+        "the symmetric pair explicitly checks basis == diag(diag(basis)) and positive "
+        "periods before multiplying them. Its public closure is covered by "
+        "test_cartesian_auxiliary_families_reject_non_diagonal_bases; unit-chart controls "
+        "also exercise the direct guard in test_nvf_pair_symmetric_mesh.py."),
+    ('src/wavebit/rcwa/_engine/conforming/periodic_seam_galerkin.py', '_quadrature'): (
+        1,
+        "the periodic seam API accepts exactly two axis lengths, never a general lattice. "
+        "This function constructs basis=np.diag(period) and calls _chart_geometry, which "
+        "requires a positive diagonal basis, before period arithmetic. "
+        "test_periodic_seam_accepts_axis_lengths_not_a_lattice checks the public boundary."),
+    # One entry, and three until the body was folded into `_core`. The argument below is
+    # entirely about the *callers*, so it did not weaken by moving -- but the gate is keyed by
+    # (module, function) and could not know that, which is what makes it a gate. It failed on
+    # the move in both directions at once: the new location was unlisted, and the three old
+    # keys had stopped existing, which `test_the_allow_list_has_not_quietly_grown` caught.
+    ('src/wavebit/rcwa/_engine/engine.py', '_separable_kxy'): (2, _SEPARABLE_KXY),
+    ('src/wavebit/fdtd/_periodic/adapter.py', '_public_result'): (
+        3,
+        "the periodic FDTD adapter converts results only after a private engine returns. "
+        "Legacy `_refuse_out_of_scope` and explicit `solve_scene_fdtd` both reject every "
+        "non-None lattice before `_public_result`; only rectangular periods reach its "
+        "order-frame and cell-centre phase arithmetic. "
+        "test_periodic_fdtd_rejects_a_skewed_lattice_before_result_conversion checks "
+        "both incidence sides with backend omitted and NumPy/JAX/Torch selected."),
+    ('src/wavebit/rcwa/plotting.py', 'slice_structure'): (
+        2,
+        "one sample grid, behind a raise rather than behind a declaration: the `mt == 2` pair "
+        "sits after an explicit `if not solver.lattice_is_axis_aligned: raise "
+        "NotImplementedError`. The add-path branch beside it already goes through "
+        "`sample_grid` with the lattice. It was four until the block path was removed -- its "
+        "own pair was guarded by `draw._refuse_layer`, and both went with it."),
+    ('src/wavebit/rcwa/_engine/conforming/__init__.py', '_layers'): (
+        5,
+        "the research conforming cell is a rectangle by construction: `periods` are the reduced "
+        "basis's axis lengths behind `_require(valid, 'conforming NVF requires a right-handed "
+        "lattice with an orthogonal reduced basis')`, and every rectangle is further held to a "
+        "reduced axis by `_require(aligned, ...)`. A skewed cell never reaches the arithmetic; "
+        "it is invalidated at the door, the way `slice_structure` raises."),
+}
+
+
+def _is_period_pair(node, alias=frozenset({'period', 'periods'})):
+    """``Px`` / ``Py`` by name, or a ``period``-derived subscript however the name was reached.
+
+    The subscript half deliberately does not care what the sequence hangs off. ``period[0]``,
+    ``self.period[0]`` and ``solver.period[0]`` are the same read, and the attribute spelling is
+    the one the three backends actually use -- an earlier version of this matched only
+    ``ast.Name``, so ``wavelength / self.period[0]`` in every ``_separable_kxy`` was invisible to
+    a gate whose whole claim is that it looks everywhere.
+
+    ``alias`` is the set of local names the enclosing function bound to a period sequence, which
+    ``_Scan.visit_Assign`` grows: ``p = self.period`` then ``p[0] * x`` is the same read as
+    ``self.period[0] * x``. No such spelling exists in the package today, so that half is
+    prevention and costs nothing -- it flags nothing new.
+
+    Descending into **call arguments** was measured and rejected. It flags 30-odd lines and
+    nearly all of them are this package's correct idiom: ``shape_geometry(shape, Px, Py,
+    lattice)`` hands the pair *and* the basis to a callee that takes both. Narrowing it to calls
+    carrying no basis still leaves the ``float(period[0])`` conversions and the rectangular
+    branch of ``fields._inv_fourier``, which the skewed branch returns before reaching. The
+    audit's motivating example, ``tol_rel * max(Px, Py)`` in ``modeler.py``, is a tolerance
+    scale and not geometry at all. An allow-list long enough to hold that is a gate that no
+    longer means anything -- and the omission it was meant to catch is caught directly by
+    ``test_a_function_holding_a_lattice_forwards_it_to_every_sibling_that_takes_one`` below.
+    """
+    if isinstance(node, ast.Name) and node.id in _PERIOD_NAMES:
+        return True
+    if not isinstance(node, ast.Subscript):
+        return False
+    base = node.value
+    if isinstance(base, ast.Attribute):
+        return base.attr in ('period', 'periods')
+    return isinstance(base, ast.Name) and base.id in alias
+
+
+def _guards_the_rectangle(test):
+    """Whether this ``if`` test establishes that the cell *is* axis-aligned.
+
+    ``lattice is None`` counts because the only way a geometry path gets ``None`` is a caller
+    that had no basis to give -- which today means an axis-aligned cell whose period is the
+    variable under differentiation (``engine._geometry_lattice_for``).
+    """
+    if isinstance(test, ast.BoolOp):
+        return any(_guards_the_rectangle(v) for v in test.values)
+    if isinstance(test, ast.UnaryOp) and isinstance(test.op, ast.Not):
+        return _guards_the_rectangle(test.operand)
+    if (isinstance(test, ast.Compare) and isinstance(test.left, ast.Name)
+            and test.left.id in ('lattice', 'basis', 'A')):
+        return any(isinstance(o, (ast.Is, ast.IsNot)) for o in test.ops)
+    if isinstance(test, ast.Call):
+        f = test.func
+        name = f.attr if isinstance(f, ast.Attribute) else getattr(f, 'id', '')
+        return name in ('is_axis_aligned', 'lattice_is_axis_aligned')
+    return False
+
+
+class _Scan(ast.NodeVisitor):
+    """Arithmetic on a period pair, outside any branch that pinned the cell to a rectangle."""
+
+    def __init__(self):
+        self.guarded = 0
+        self.lines = []
+        self._top = True
+        self.alias = {'period', 'periods'}
+
+    def visit_FunctionDef(self, node):
+        if self._top:                      # scan one function at a time; ast.walk finds the rest
+            self._top = False
+            for n in node.body:
+                self.visit(n)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_If(self, node):
+        if _guards_the_rectangle(node.test):
+            self.guarded += 1
+            for n in node.body:
+                self.visit(n)
+            self.guarded -= 1
+            for n in node.orelse:          # the else is the lattice branch -- still watched
+                self.visit(n)
+        else:
+            self.generic_visit(node)
+
+    def visit_Assign(self, node):
+        v = node.value
+        if ((isinstance(v, ast.Name) and v.id in self.alias)
+                or (isinstance(v, ast.Attribute) and v.attr in ('period', 'periods'))):
+            for t in node.targets:
+                if isinstance(t, ast.Name):
+                    self.alias.add(t.id)
+        self.generic_visit(node)
+
+    def visit_BinOp(self, node):
+        if self.guarded == 0 and (_is_period_pair(node.left, self.alias)
+                                  or _is_period_pair(node.right, self.alias)):
+            self.lines.append(node.lineno)
+        self.generic_visit(node)
+
+
+def _source_files():
+    # Read the working package, including new files before they are staged in Git.
+    # An index-only inventory misses precisely the new paths this gate should guard.
+    package = pathlib.Path(__file__).resolve().parents[2] / 'src/wavebit'
+    repo = package.parents[1]
+    files = sorted(path.relative_to(repo).as_posix() for path in package.rglob('*.py'))
+    required = {
+        'src/wavebit/_common/geometry/recipes.py',
+        'src/wavebit/rcwa/_engine/engine.py',
+        'src/wavebit/fdtd/_periodic/adapter.py',
+        'src/wavebit/lattice.py',
+    }
+    assert required <= set(files), files
+    return files
+
+
+def _offenders():
+    files = _source_files()
+    found = {}
+    for f in files:
+        source = pathlib.Path(f).read_text(encoding='utf-8')
+        lines = source.splitlines()
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            scan = _Scan()
+            scan.visit(node)
+            hit = sorted(set(scan.lines))
+            if hit:
+                found[(f, node.name)] = [(n, lines[n - 1].strip()) for n in hit]
+    return found
+
+
+def test_no_oblique_capable_path_does_rectangle_geometry():
+    """Every ``(Px, Py)`` arithmetic must sit behind a proof that the cell is a rectangle."""
+    found = _offenders()
+    unlisted = {k: v for k, v in found.items() if k not in _ALLOWED}
+    assert not unlisted, (
+        'these do arithmetic on a period pair with nothing establishing the cell is '
+        'axis-aligned:\n' + '\n'.join(
+            f'  {f}:{n} in {fn}()\n      {src}' for (f, fn), v in unlisted.items()
+            for n, src in v)
+        + '\n\n`period` is (|a1|, |a2|) on a skewed cell -- the angle is already gone, so this '
+          'computes a rectangle\'s answer. Take the 2x2 basis instead and branch on '
+          '`lattice.is_axis_aligned(A)` if a cheap rectangular path is wanted, as '
+          '`parametric._round_field` and `shape_geometry` do. If the path genuinely '
+          'cannot meet a skewed cell, add it to `_ALLOWED` with the guard that says so.')
+
+
+def test_the_allow_list_has_not_quietly_grown():
+    """An exempt function may not accumulate new period arithmetic under its exemption.
+
+    The entries promise a *specific* pair of sample grids, not a licence. Without the count a
+    third one could be added inside `slice_structure` and inherit an argument made about two
+    others.
+    """
+    found = _offenders()
+    for key, (expected, why) in _ALLOWED.items():
+        assert key in found, f'{key} no longer does period arithmetic -- drop it from _ALLOWED'
+        got = len(found[key])
+        assert got == expected, (
+            f'{key[0]} in {key[1]}(): expected {expected} flagged line(s), found {got}.\n'
+            f'  the exemption reads: {why}\n'
+            '  if the new one is covered by that same guard, raise the count; if it is not, '
+            'it needs the basis.')
+
+
+# ------------------------------------------- the omission no arithmetic predicate can see
+
+#: ``(module, function, callee)`` that may hold a ``lattice`` and call a lattice-taking sibling
+#: without it. Empty, and an entry here would need the same kind of argument as ``_ALLOWED``.
+_MAY_DROP_THE_LATTICE = set()
+
+
+def _lattice_takers(trees):
+    """``name -> smallest positional index of ``lattice``, or ``None`` if keyword-only.
+
+    Keyed by name because a call site is resolved by name here, and two modules may define the
+    same one with the parameter in different places -- ``normal_projector_coeffs`` did
+    (``boundary.py`` at 6, ``analytic.py`` at 7; both take it at 3 now, ``analytic.py`` having
+    become ``parametric.py``). The *smallest* index is the conservative
+    reading: a call passing enough positional arguments for any of them is forwarding.
+    """
+    takers = {}
+    for tree in trees.values():
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            names = [a.arg for a in node.args.args]
+            if 'lattice' in names:
+                i = names.index('lattice')
+                prev = takers.get(node.name)
+                takers[node.name] = i if prev is None else min(prev, i)
+            elif any(a.arg == 'lattice' for a in node.args.kwonlyargs):
+                takers.setdefault(node.name, None)
+    return takers
+
+
+def _binds_lattice(fn):
+    if any(a.arg == 'lattice' for a in list(fn.args.args) + list(fn.args.kwonlyargs)):
+        return True
+    return any(isinstance(t, ast.Name) and t.id == 'lattice'
+               for n in ast.walk(fn) if isinstance(n, ast.Assign) for t in n.targets)
+
+
+def test_a_function_holding_a_lattice_forwards_it_to_every_sibling_that_takes_one():
+    """The other half of the hole, and the half no arithmetic predicate reaches.
+
+    ``_ALLOWED`` above is about a period *pair* being used as a rectangle. This is about a
+    ``lattice`` that was never passed at all -- there is no arithmetic to flag, only a call with
+    one argument missing, and the callee then defaults it to ``None`` and computes the rectangle.
+
+    That is exactly ``boundary.py:471`` (fixed 2026-08-24): ``to_conv_mat_boundary_layer``
+    forwarded ``lattice`` to ``shape_vertices``, ``plan_layer`` and ``conv_mats``, and not to
+    ``check_plan_still_fits`` -- whose signature had the parameter all along. A frozen painted
+    layer on a hex cell whose shape omitted its centre then raised ``StaleGeometryError`` where
+    the eager pass answered. Worse, ``_guards_the_rectangle`` credits ``lattice is None`` as
+    *proof* the cell is a rectangle, so a manufactured ``None`` launders itself downstream into
+    a guard this file already trusts.
+
+    The rule is narrow on purpose: only a function that *has* a lattice in scope, only a callee
+    whose own signature takes one. Neither half is a judgement call, so a hit is a fact.
+    """
+    files = _source_files()
+    trees = {f: ast.parse(pathlib.Path(f).read_text(encoding='utf-8')) for f in files}
+    takers = _lattice_takers(trees)
+    assert len(takers) > 20, takers            # a predicate matching nothing would pass silently
+
+    dropped = []
+    for f, tree in trees.items():
+        for fn in ast.walk(tree):
+            if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not _binds_lattice(fn):
+                continue
+            for call in ast.walk(fn):
+                if not isinstance(call, ast.Call):
+                    continue
+                name = (call.func.attr if isinstance(call.func, ast.Attribute)
+                        else getattr(call.func, 'id', None))
+                if name not in takers or name == fn.name:
+                    continue
+                if any(k.arg in ('lattice', None) for k in call.keywords):
+                    continue                   # named, or forwarded inside a **kwargs
+                idx = takers[name]
+                if idx is not None and len(call.args) > idx:
+                    continue                   # passed positionally
+                if (f, fn.name, name) in _MAY_DROP_THE_LATTICE:
+                    continue
+                dropped.append(f'  {f}:{call.lineno} in {fn.name}() -> {name}()')
+
+    assert not dropped, (
+        'these hold a `lattice` and call a sibling that takes one without passing it, so the '
+        'callee defaults to `None` and answers for a rectangle:\n' + '\n'.join(dropped)
+        + '\n\nForward it. If the callee genuinely must see the rectangle, pass `lattice=None` '
+          'explicitly -- a stated `None` is a decision and an omitted one is a silence.')
+
+
+_NON_DIAGONAL_BASES = (
+    ((1., .1), (0., 1.)),
+    ((1., 0.), (.1, 1.)),
+    ((0., -1.), (1., 0.)),
+)
+
+
+@pytest.mark.parametrize('backend', (None, 'numpy', 'jax', 'torch'),
+                         ids=('legacy', 'numpy', 'jax', 'torch'))
+@pytest.mark.parametrize('side', ('top', 'bottom'))
+def test_periodic_fdtd_rejects_a_skewed_lattice_before_result_conversion(monkeypatch, backend, side):
+    """Both rectangular engines reject skewed cells before the adapter's period arithmetic."""
+    from wavebit.fdtd._periodic import adapter as periodic_fdtd
+
+    if backend in ('jax', 'torch'):
+        pytest.importorskip(backend)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('a skewed lattice reached periodic FDTD result conversion')
+
+    monkeypatch.setattr(periodic_fdtd, '_public_result', forbidden)
+    settings = dict(structure=np.ones((1, 1, 1)), thickness=[.2], top=1., bot=1.,
+                    period=[1., 1.], lattice=np.asarray(_NON_DIAGONAL_BASES[0]),
+                    wavelength=1., tetm='te', incidence_side=side, resolution=10)
+    if backend is not None:
+        settings['backend'] = backend
+    with pytest.raises(ValueError, match='lattice|rectangular period'):
+        _legacy_wavebit.fdtd(**settings)
+
+
+@pytest.mark.parametrize('basis', _NON_DIAGONAL_BASES)
+@pytest.mark.parametrize('gap', (0., .02))
+@pytest.mark.parametrize('family', ('seam2', 'seam3', 'corner_original', 'corner_symmetric'))
+def test_cartesian_auxiliary_families_reject_non_diagonal_bases(basis, gap, family):
+    """The declared rectangular scope must be enforced for every chart family."""
+    from wavebit.rcwa._engine.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+    from wavebit.rcwa._engine.conforming.cartesian_pair_seam_galerkin import CartesianPairSeamGalerkinGapCell
+    from wavebit.rcwa._engine.conforming.cartesian_pair_corner_galerkin import CartesianPairCornerGalerkinGapCell
+
+    plan = CartesianPairOpeningPlan(0)
+    if family.startswith('seam'):
+        cell = CartesianPairSeamGalerkinGapCell(plan, order=0, degree=int(family[-1]), quadrature=16)
+    else:
+        cell = CartesianPairCornerGalerkinGapCell(
+            plan, order=0, degree=3, exponents=(), mesh=family.split('_')[1])
+    # A quarter-turn can fail the original positive-triangle chart guard first.
+    with pytest.raises(ValueError, match='positive diagonal|regular triangles must remain positive'):
+        cell.closure(basis=np.asarray(basis), widths=(.3, .3), height=.3,
+                     gap=gap, epsilon=(2., 3.), background=1.)
+
+
+@pytest.mark.parametrize('basis', _NON_DIAGONAL_BASES)
+def test_pair_fourier_energy_rejects_non_diagonal_bases(basis):
+    from wavebit.rcwa._engine.conforming.cartesian_pair_seam_galerkin import _free_fourier_energy
+
+    settings = dict(basis=np.asarray(basis), widths=(.3, .3), height=.3, gap=0.,
+                    offset=(0., 0.), epsilon=(2., 3.), background=1., gap_tangent=1.,
+                    epsilon_tangent=(0., 0.), background_tangent=0.)
+    with pytest.raises(ValueError, match='positive diagonal'):
+        _free_fourier_energy((0, 0), settings)
+
+
+def test_periodic_seam_accepts_axis_lengths_not_a_lattice():
+    from wavebit.rcwa._engine.conforming.periodic_seam_galerkin import PeriodicSeamGalerkinGapCell
+
+    cell = PeriodicSeamGalerkinGapCell(order=0, quadrature=16)
+    with pytest.raises(ValueError, match='period'):
+        cell.closure(gap=.02, period=np.array(_NON_DIAGONAL_BASES[0]), width=.3)

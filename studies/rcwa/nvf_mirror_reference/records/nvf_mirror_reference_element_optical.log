@@ -1,0 +1,3 @@
+{"kind": "mirror_reference_optical", "source": "global_q32_cap96", "order": 16, "mirror_error": 0.0, "p_T": 0.9071659049211087, "p_R": 0.09283409507888508, "s_T": 0.9414806209407586, "s_R": 0.05851937906277444, "energy_error": 3.532951708962173e-12}
+{"kind": "mirror_reference_optical", "source": "element_q36_cap112", "order": 16, "mirror_error": 0.0, "p_T": 0.9071659049212132, "p_R": 0.09283409507874105, "s_T": 0.9414806209358932, "s_R": 0.05851937906222083, "energy_error": 1.8859358519307534e-12}
+{"kind": "reference_integration_comparison", "p_T": 1.0447198661722723e-13, "s_T": -4.8653303608148235e-12, "p_R": -1.4403755965730625e-13, "s_R": -5.536127112293343e-13}

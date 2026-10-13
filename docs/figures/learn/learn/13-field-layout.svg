@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 320" role="img" aria-labelledby="layout-title layout-desc">
+<title id="layout-title">Field-array axes and six components</title>
+<desc id="layout-desc">The internal-layer array has shape nz,ny,nx,6, indexed by z,y,x position. Components are Ex,Ey,Ez,Z0Hx,Z0Hy,Z0Hz. Boundary arrays have no z axis.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:23px}.small{font-size:19px;fill:#546779}.mono{font-family:ui-monospace,SFMono-Regular,monospace;font-size:26px}</style>
+<rect width="1000" height="320" fill="white" />
+<rect x="30" y="24" width="940" height="99" rx="10" fill="#e8f1ff" stroke="#cad7df" />
+<text x="55" y="66">Inside layers</text><text x="230" y="66" class="mono">(nz, ny, nx, 6)</text>
+<text x="55" y="101" class="small">First three axes: z · y · x position</text>
+<text x="575" y="66">Boundary</text><text x="720" y="66" class="mono">(ny, nx, 6)</text>
+<text x="575" y="101" class="small">The selected boundary fixes z</text>
+<text x="40" y="163">Last axis: choose component</text>
+<rect x="30" y="183" width="465" height="72" rx="8" fill="#e8f1ff" stroke="#cad7df" />
+<rect x="505" y="183" width="465" height="72" rx="8" fill="#e5f4ef" stroke="#cad7df" />
+<g text-anchor="middle"><text x="108" y="212" class="small">0</text><text x="263" y="212" class="small">1</text><text x="418" y="212" class="small">2</text><text x="583" y="212" class="small">3</text><text x="738" y="212" class="small">4</text><text x="893" y="212" class="small">5</text>
+<text x="108" y="242">Eₓ</text><text x="263" y="242">Eᵧ</text><text x="418" y="242">E_z</text><text x="583" y="242">Z₀Hₓ</text><text x="738" y="242">Z₀Hᵧ</text><text x="893" y="242">Z₀H_z</text>
+<text x="263" y="293" class="small">Electric field</text><text x="738" y="293" class="small">Normalized magnetic field</text></g>
+</svg>

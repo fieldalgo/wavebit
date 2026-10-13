@@ -1,0 +1,191 @@
+{
+  "commit": null,
+  "date": "2026-09-21",
+  "python": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 12:55:12) [Clang 14.0.6 ]",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "wavebit_file": "wavebit/__init__.py",
+  "numpy": "2.5.1",
+  "scipy": "1.18.0",
+  "examples": {
+    "01_shape_nvf.py": {
+      "exit_code": 0,
+      "elapsed_seconds": 0.22051879088394344,
+      "stderr": "",
+      "result": {
+        "p": {
+          "R": 0.0028695030836278644,
+          "T": 0.9971304969163707,
+          "energy_balance_residual": 1.4432899320127035e-15
+        },
+        "s": {
+          "R": 0.00539741004256977,
+          "T": 0.9946025899574311,
+          "energy_balance_residual": 8.881784197001252e-16
+        },
+        "array_shape": [
+          5,
+          5
+        ],
+        "orders_u": [
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ],
+        "orders_v": [
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ]
+      },
+      "source_sha256": "2fb1963061ba359c59f85d2dafb50753077e05e7b28f1ce4cbb4e1bcf2fd3b10"
+    },
+    "02_raster_nvf.py": {
+      "exit_code": 0,
+      "elapsed_seconds": 0.24027566704899073,
+      "stderr": "",
+      "result": {
+        "pixels": 64,
+        "R_p": 0.0028272937186218164,
+        "T_p": 0.997172706281378,
+        "energy_balance_residual": 2.220446049250313e-16
+      },
+      "source_sha256": "136f4bfc92c9ee4b5e97d625568cc2ce44841a8bdf7926483831a61080fe7023"
+    },
+    "03_convergence.py": {
+      "exit_code": 0,
+      "elapsed_seconds": 0.2566697499714792,
+      "stderr": "",
+      "result": [
+        {
+          "sweep": "Fourier",
+          "orders": [
+            1,
+            1
+          ],
+          "shape_nvf_grid_size": 128,
+          "R_p": 0.002919375466714662,
+          "T_p": 0.9970806245332849,
+          "energy_balance_residual": 4.440892098500626e-16
+        },
+        {
+          "sweep": "Fourier",
+          "orders": [
+            2,
+            2
+          ],
+          "shape_nvf_grid_size": 128,
+          "R_p": 0.0028695030836278644,
+          "T_p": 0.9971304969163707,
+          "energy_balance_residual": 1.4432899320127035e-15
+        },
+        {
+          "sweep": "Fourier",
+          "orders": [
+            3,
+            3
+          ],
+          "shape_nvf_grid_size": 128,
+          "R_p": 0.0029342170016094073,
+          "T_p": 0.9970657829983908,
+          "energy_balance_residual": 2.220446049250313e-16
+        },
+        {
+          "sweep": "shape_nvf_grid_size",
+          "orders": [
+            3,
+            3
+          ],
+          "shape_nvf_grid_size": 64,
+          "R_p": 0.0029342075257540175,
+          "T_p": 0.997065792474248,
+          "energy_balance_residual": 1.9984014443252818e-15
+        },
+        {
+          "sweep": "shape_nvf_grid_size",
+          "orders": [
+            3,
+            3
+          ],
+          "shape_nvf_grid_size": 128,
+          "R_p": 0.0029342170016094073,
+          "T_p": 0.9970657829983908,
+          "energy_balance_residual": 2.220446049250313e-16
+        },
+        {
+          "sweep": "shape_nvf_grid_size",
+          "orders": [
+            3,
+            3
+          ],
+          "shape_nvf_grid_size": 256,
+          "R_p": 0.0029342198452020937,
+          "T_p": 0.9970657801547983,
+          "energy_balance_residual": 4.440892098500626e-16
+        }
+      ],
+      "source_sha256": "83ebd8dc752de414e57ddc98920021303009a34bb2222f71248d9931f1685a88"
+    },
+    "04_jax_gradient.py": {
+      "exit_code": 0,
+      "elapsed_seconds": 7.199709000065923,
+      "stderr": "",
+      "result": {
+        "T_p": 0.9961799957099021,
+        "dT_d_epsilon": 0.002181443388963952,
+        "eager_T_p": 0.9961799957099049,
+        "finite_differences": [
+          {
+            "h": 0.001,
+            "derivative": 0.002181443461701793,
+            "absolute_difference": 7.273784092404201e-11
+          },
+          {
+            "h": 0.0005,
+            "derivative": 0.0021814434086886436,
+            "absolute_difference": 1.9724691498190783e-11
+          }
+        ]
+      },
+      "source_sha256": "59256cc05dbae7f22abc1f897b5b682d1de2010afd2bb784c7ae75242afe89bc"
+    },
+    "05_select_li_or_nvf.py": {
+      "exit_code": 0,
+      "elapsed_seconds": 0.1895100420806557,
+      "stderr": "",
+      "result": [
+        {
+          "method": "li",
+          "R_p": 0.004000379906299121,
+          "T_p": 0.9959996200936998,
+          "energy_balance_residual": 1.1102230246251565e-15
+        },
+        {
+          "method": "nvf",
+          "R_p": 0.004197170601717535,
+          "T_p": 0.9958028293982838,
+          "energy_balance_residual": 1.3322676295501878e-15
+        }
+      ],
+      "source_sha256": "338fa716ca0b0a140d98107f5ef1ce16ef9951ba25c3789367388b9800156edc"
+    }
+  },
+  "wavebit_version": "0.1.0",
+  "import_mode": "Source checkout via PYTHONPATH; package installation was not tested in this document task.",
+  "jax": "0.11.0",
+  "jaxlib": "0.11.0",
+  "thread_settings": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false"
+  },
+  "scope": "Executed learning examples; not an optical convergence certificate or a performance benchmark.",
+  "base_commit": "a1d23fcbe2f24d1f3483c00bfbb9891f6787f7e3",
+  "code_state": "Working tree with canonical NVF API names; see sources.json for file hashes"
+}

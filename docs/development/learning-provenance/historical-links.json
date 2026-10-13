@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "links": [
+    {
+      "url": "https://github.com/fieldalgo/wavebit/blob/f90cf1d/wavebit/_core/factorization.py",
+      "commit": "f90cf1dacfb93331aa6710032f573461112148cf",
+      "path": "wavebit/_core/factorization.py",
+      "git_blob": "797c40b7ea2e95b2728b4bd9691a831bce39670f",
+      "sha256": "b838d8f89e8d3e491537753adeeb4a17c75bbd42f7f15fb688252a40156ee172",
+      "source": "wavebit-sphinx-guide/source/nvf/metal-regularization.md",
+      "verified": "git object exists at the exact historical commit and path; the URL must not be rewritten to a current path"
+    },
+    {
+      "url": "https://github.com/fieldalgo/wavebit/blob/c5267d8/docs/nvf-metal-inverse-rule.md",
+      "commit": "c5267d89fa8c38bbbba0758bee42cabb26181962",
+      "path": "docs/nvf-metal-inverse-rule.md",
+      "git_blob": "8ba3ea19fdb4fad2333fb64eb89dc9edf9836a4a",
+      "sha256": "83c0d6c629195f67d7762a537f6739fcedbec5835f0884d494853fdcf83480a2",
+      "source": "wavebit-sphinx-guide/source/nvf/metal-regularization.md",
+      "verified": "git object exists at the exact historical commit and path; the URL must not be rewritten to a current path"
+    },
+    {
+      "url": "https://github.com/fieldalgo/wavebit/blob/56f1cd5/tests/test_nvf_metal_inverse_rule.py",
+      "commit": "56f1cd5272f82e0a3401be7dc5b3014b177179b9",
+      "path": "tests/test_nvf_metal_inverse_rule.py",
+      "git_blob": "2b88c9494e6da10264b574c8a6d31022ec1544cd",
+      "sha256": "a5d0cf6f351078fcc69ef9069c3bf0213da5b007d9dcfb51d87c276fe08b6812",
+      "source": "wavebit-sphinx-guide/source/nvf/metal-regularization.md",
+      "verified": "git object exists at the exact historical commit and path; the URL must not be rewritten to a current path"
+    }
+  ]
+}

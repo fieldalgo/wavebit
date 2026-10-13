@@ -28,15 +28,20 @@ it cannot arbitrate the Voigt geometry any better than we can. RETICOLO remains 
 
 Sign convention: ``_fmmax_cases`` states the *physical* tensor. fmmax takes it as-is; the
 solver's slots take the negation. Note that power efficiencies cannot see that sign either way
-(``docs/off-diagonal-slot-convention.md`` §3), so this golden does not pin it — the amplitude
-test in ``tests/test_uniform_anisotropic.py`` does.
+(``docs/theory/rcwa/off-diagonal-slot-convention.md`` §3), so this golden does not pin it — the amplitude
+test in ``tests/rcwa/test_uniform_anisotropic.py`` does.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_fmmax.npz'
@@ -48,7 +53,7 @@ def main():
     import jax.numpy as jnp
     import fmmax
 
-    from _fmmax_cases import CASES, WL, PERIOD, THICK
+    from tests.references._fmmax_cases import CASES, WL, PERIOD, THICK
 
     lat = fmmax.LatticeVectors(u=jnp.array([PERIOD, 0.0]), v=jnp.array([0.0, PERIOD]))
     expansion = fmmax.generate_expansion(lat, approximate_num_terms=1,

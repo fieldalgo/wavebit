@@ -1,0 +1,47 @@
+Conforming NVF per-layer tiling-axis validation
+Date: 2026-09-09
+Platform: Darwin arm64
+NumPy 2.5.1; SciPy 1.18.0; JAX 0.11.0; Torch 2.13.0
+Environment: PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+These settings do not establish Apple Accelerate's actual thread count.
+
+Public construction regression and layer-axis controls, after the
+original-length roundoff fix:
+python -m pytest tests/test_conforming_nvf.py tests/test_conforming_rectangular_lattice.py tests/test_conforming_layer_axes.py -q --tb=short
+107 passed in 105.55s: 78 existing and 29 new checks.
+Includes analytic material integrals, equivalent quarter-turn spellings,
+mixed-axis contact stacks, NumPy/JAX/Torch engine readouts, equivalent
+lattice bases with unequal retained orders, eleven live JAX parameters,
+one-sided contact derivatives, frozen-axis replay and invalid traced input.
+The new original-length guards refuse zero and tiny negative dimensions
+that rotation roundoff previously mapped to positive extents.
+
+Engine closure, order layout and pose regression:
+python -m pytest tests/test_nvf_energy_builder.py tests/test_slot_order.py tests/test_nvf_posed_gap.py -q --tb=short
+62 passed in 64.05s.
+
+Documentation contract:
+python -m pytest tests/test_docs_contract.py -q
+31 passed in 0.51s.
+
+Combined: 200 passing checks, no skipped or expected-failure cases in these
+selected suites. No numerical tolerance or expected-failure mark changed.
+The shared cell kernels are unchanged in this extension.
+
+Manual examples: both Python blocks in docs/guide/conforming-nvf.md executed.
+700-by-430 horizontal/uniform/vertical stack:
+p T=0.5781958643164116, s T=0.7859073182269463.
+JAX example: gap derivative shape (1, 9, 9).
+
+Strict documentation build:
+python -m sphinx -b html -W --keep-going docs <temporary-output-directory>
+Build succeeded with the existing official intersphinx inventory cache.
+
+Lint:
+python -m ruff check wavebit/_core/conforming/__init__.py tests/test_conforming_layer_axes.py
+All checks passed. git diff --check: passed.
+
+Scope: finite-model construction, derivative and integration controls;
+not the entire repository suite or certification of optical convergence.
+Plans retain a chosen layer axis, even if a second axis becomes valid.
+General curved, disconnected, oblique or lossy corrector cells remain open.

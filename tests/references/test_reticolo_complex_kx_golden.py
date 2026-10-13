@@ -9,7 +9,7 @@ With a complex ``kx`` no root of ``kz`` both carries power away and decays away,
 picks one by its own rule:
 
 * this solver and RETICOLO: Maystre's cut, the root with ``Re(kz) + Im(kz) > 0`` (RETICOLO's
-  ``retsqrt(x, -1)``; this solver's :func:`~wavebit._core.conventions.boundary_kz` since
+  ``retsqrt(x, -1)``; this solver's :func:`~wavebit._common.conventions.boundary_kz` since
   2026-10-02);
 * fmmax: ``Im(kz) > 0``, always.
 
@@ -34,15 +34,21 @@ The regenerated golden kept the first five cases bit for bit. The new cases agre
 1.2e-15 .. 1.9e-15 in efficiency and 1.4e-15 .. 1.7e-15 in the zeroth-order amplitude. Under
 the old rule they missed by 0.003 .. 0.06 in efficiency.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
-import wavebit
-from wavebit._core.conventions import boundary_kz
+from wavebit._common.conventions import boundary_kz
 
-GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo_complex_kx.npz'
+GOLDEN_PATH = repository_path('tests/references/golden_reticolo_complex_kx.npz')
 
 _UNIFORM = np.full((1, 1, 2), 2.25)          # the layer is bot's material: one interface
 _HALF = np.array([[[9.0] * 5 + [1.0] * 5]])  # test_reticolo_golden's binary grating
@@ -93,7 +99,7 @@ _LOSSLESS_TOP = ('te_grating_lossless_top', 'tm_grating_lossless_top',
 
 
 def _solver(name):
-    return wavebit.rcwa(backend='numpy', fourier_coefficients='integrated', **CASES[name])
+    return _legacy_wavebit.rcwa(backend='numpy', fourier_coefficients='integrated', **CASES[name])
 
 
 def _golden():
@@ -156,7 +162,7 @@ def test_orders_match_reticolo(name):
     g = _golden()
     kw = CASES[name]
     n = kw['truncation_order']
-    with pytest.warns(wavebit.ComplexIncidenceWarning):
+    with pytest.warns(_legacy_wavebit.ComplexIncidenceWarning):
         result = _solver(name).solve()
     kx = np.asarray(_solver(name).order_kxy()[0]).ravel()
     for kind, values, side in (('r', result.R, 'top'), ('t', result.T, 'bot')):

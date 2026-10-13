@@ -22,7 +22,7 @@ Setup notes:
   superstrate cannot be anisotropic at all** (page 1). Every case below is a uniform layer
   between vacuum, which is the intersection of those. A magneto-optic substrate, or an
   off-diagonal tensor inside a grating, has to go to a different oracle — see
-  ``docs/off-diagonal-slot-convention.md`` §8.
+  ``docs/theory/rcwa/off-diagonal-slot-convention.md`` §8.
 * **"Accepts an arbitrary 3x3" is narrower in practice than the manual reads**, and the
   boundary was measured here on 2026-08-11 rather than assumed. Feeding a *real symmetric*
   tensor — Hermitian, hence provably lossless, hence ``R + T = 1`` by theorem — through this
@@ -56,13 +56,19 @@ Setup notes:
   above one is the correct answer for it rather than a symptom. This guard caught that
   distinction being got wrong the first time round, which is the argument for having it.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import os
 import pathlib
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE.parents[1]))    # tests/, for the case list
 sys.path.insert(0, str(HERE))
 
@@ -80,7 +86,7 @@ OUT = HERE / 'golden_reticolo_anisotropic.npz'
 def main():
     from oct2py import octave
 
-    from test_reticolo_anisotropic_golden import ALL_CASES, WL, PERIOD, THICK, is_hermitian
+    from tests.references.test_reticolo_anisotropic_golden import ALL_CASES, WL, PERIOD, THICK, is_hermitian
 
     if not pathlib.Path(RETICOLO_PATH).is_dir():
         raise SystemExit(f'RETICOLO not found at {RETICOLO_PATH}; set RETICOLO_PATH')

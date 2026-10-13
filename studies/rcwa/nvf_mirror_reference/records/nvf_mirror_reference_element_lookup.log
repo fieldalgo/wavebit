@@ -1,0 +1,1 @@
+{"kind": "element_location_diagnostic", "quadrature": 36, "points": 1708128, "mismatched_material_points": 4, "full_cell_absolute_weighted_material_error": 2.8559405774007163e-11, "example": {"xy_micrometers": [0.03099999107330665, 0.32578336526552126], "element_material": 4.0, "located_material": 9.0}}

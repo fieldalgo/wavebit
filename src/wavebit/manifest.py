@@ -1,8 +1,14 @@
-"""What this solver supports, in a form another program can read.
+"""Compatibility-engine capability manifest, with a separate current lifecycle index.
 
-Wavebit already knows this about itself, in pieces: ``_core/enums.py`` holds the legal
+The detailed paths, result shapes, refusal tables, and ``solvers`` entries describe
+``wavebit.compat.legacy``. They must not be read as the current physical Problem
+API. ``current_lifecycle`` names the current solver modules, declarations, validation
+reports, and portable Job schema; those modules' check/prepare/run methods own the
+current admission contract.
+
+Wavebit already knows this about itself, in pieces: ``src/wavebit/rcwa/_engine/enums.py`` holds the legal
 values, the ``structure`` setter decides which modeling path a structure takes, and
-``_core/engine.py`` carries the tables that refuse an option a path cannot express. This
+``src/wavebit/rcwa/_engine/engine.py`` carries the tables that refuse an option a path cannot express. This
 module collects those into one JSON-round-trippable document, so a caller outside the
 process — documentation, a configuration UI, an assistant that recommends conditions — can
 read the same facts the solver enforces instead of restating them.
@@ -17,7 +23,7 @@ and which spelling of ``structure`` selects which path. Deliberately not here:
   a user's problem, not this library.
 
 The line matters because of what it buys: everything here is checked against the code it
-describes by ``tests/test_manifest.py``, so a path that grows or loses an option fails the
+describes by ``tests/api/test_manifest.py``, so a path that grows or loses an option fails the
 suite rather than going stale in a consumer. A fact that cannot be checked that way does
 not belong in this module.
 
@@ -27,18 +33,27 @@ Regenerate the JSON with::
 """
 import json
 
-from ._core.enums import (Answers, Backend, DEFAULT_ANSWERS, DIFFERENTIABLE_BACKENDS,
-                          Factorization,
-                          FourierCoefficients, ModelingPath, Nesting, NormalMethod, Projector,
-                          Tetm)
-from ._core.engine import (_COEFFICIENTS_IMPLEMENTED_BY, _COEFFICIENTS_REASON,
-                           _FACTORIZATION_IMPLEMENTED_BY, _FACTORIZATION_REASON)
-from ._core.spec import SPEC_VERSION
+from wavebit.rcwa._engine.enums import Answers
+from wavebit._common.enums import Backend
+from wavebit.rcwa._engine.enums import DEFAULT_ANSWERS
+from wavebit._common.enums import DIFFERENTIABLE_BACKENDS
+from wavebit.rcwa._engine.enums import Factorization
+from wavebit.rcwa._engine.enums import FourierCoefficients
+from wavebit.rcwa._engine.enums import ModelingPath
+from wavebit.rcwa._engine.enums import Nesting
+from wavebit.rcwa._engine.enums import NormalMethod
+from wavebit.rcwa._engine.enums import Projector
+from wavebit._common.enums import Tetm
+from wavebit.rcwa._engine.engine import _COEFFICIENTS_IMPLEMENTED_BY
+from wavebit.rcwa._engine.engine import _COEFFICIENTS_REASON
+from wavebit.rcwa._engine.engine import _FACTORIZATION_IMPLEMENTED_BY
+from wavebit.rcwa._engine.engine import _FACTORIZATION_REASON
+from wavebit.compat._jobs_v1 import SPEC_VERSION
 
 #: Bumped when the document's *shape* changes, so a consumer can refuse one it cannot read.
 #: An **added** key is not that: a consumer reading unknown keys degrades gracefully, and
 #: nothing it already reads changes meaning. ``backends`` (2026-08-26) went in without a
-#: bump for exactly the reason ``docs/capability-manifest.md`` gives for why a rename alone
+#: bump for exactly the reason ``docs/reference/common/capability-manifest.md`` gives for why a rename alone
 #: would not earn one.
 #: Independent of the Wavebit version, which moves whenever the content does.
 #: '2': the ``results`` section — the solve's output contract joined the document when the
@@ -57,7 +72,7 @@ from ._core.spec import SPEC_VERSION
 #: ``results.incidences.fields`` goes ``('res', 'res_te_inc', 'res_tm_inc')`` ->
 #: ``('given', 's_inc', 'p_inc')``, and the constructor keywords named in ``why`` and
 #: ``meaning`` prose move with them (``fto`` -> ``max_order`` -> ``truncation_order``, ``type_complex`` ->
-#: ``complex_dtype``, ``connecting_algo`` -> ``layer_algorithm``). ``docs/capability-manifest.md``
+#: ``complex_dtype``, ``connecting_algo`` -> ``layer_algorithm``). ``docs/reference/common/capability-manifest.md``
 #: says a rename alone does not earn a bump, because a consumer reading unknown keys degrades
 #: gracefully -- but ``fields`` is a *recognisable* key whose contents are attribute names a
 #: consumer indexes a result object with, so the old contents keep their shape while ceasing
@@ -207,7 +222,7 @@ SPELLINGS = (
                               'materials, which is not a material',
             'observed_at': 'geometry.boundary_plans -- a layer\'s slot holds a plan if it '
                            'resolved, None if it stayed on the closed form',
-            'source': 'docs/boundary-modeling.md',
+            'source': 'docs/guide/rcwa/boundary-modeling.md',
         },
         'summary': 'Shape edges enter the Fourier transform in closed form, so a tilted or '
                    'curved boundary carries no staircase error at any truncation order. '
@@ -245,7 +260,7 @@ MATERIAL_QUANTITY = {
     #: addressed does not exist yet; the renames belong in the first release's notes.
     #: Removed without a MANIFEST_VERSION bump, following `c08e682`, which took
     #: `outputs_default` out of `results.jobspec` and left the version at '6'.
-    'source': 'docs/conventions.md',
+    'source': 'docs/reference/common/conventions.md',
 }
 
 #: How a shape dict's numbers are read, on the parametric path. It says two things, and each
@@ -272,7 +287,7 @@ SHAPE_COORDINATES = {
 def _options_for(path):
     """The two Fourier axes for one modeling path, as implemented rather than as documented.
 
-    Read from :mod:`wavebit._core.engine`'s own tables. A path absent from a table
+    Read from :mod:`wavebit.rcwa._engine.engine`'s own tables. A path absent from a table
     implements every value of that axis and takes the option as given; a path present in one
     implements exactly the values it names -- the rules as a tuple, its default first, the
     series as one value -- and the reason says whether the others are unbuilt or unbuildable.
@@ -345,7 +360,7 @@ def _raster_normal_methods():
 # ------------------------------------------------------------------ lattice
 
 #: What a non-orthogonal (skewed) cell refuses, mirrored from
-#: :meth:`wavebit._core.engine.CoreSolveMixin._reject_unsupported_lattice`. Both of these
+#: :meth:`wavebit.rcwa._engine.engine.CoreSolveMixin._reject_unsupported_lattice`. Both of these
 #: *run* on a skewed cell and return a plausible, wrong number — the raster is still a
 #: raster, the transforms are still transforms, and NVF's assembly stays Hermitian so energy
 #: conserves to 1e-15 either way. Nothing downstream can notice, which is why the refusal is
@@ -370,7 +385,7 @@ LATTICE = {
     #: ``normal_methods_refused_on_oblique`` is empty as of 2026-08-21 and kept rather than
     #: dropped: the key is the membership test a consumer already asks, and an empty answer
     #: is the answer. All four constructions carry the cell metric now — see
-    #: ``docs/nvf-normal-methods.md``; ``'contour'`` is the one to recommend on a skewed cell
+    #: ``docs/theory/rcwa/nvf-normal-methods.md``; ``'contour'`` is the one to recommend on a skewed cell
     #: as on any other.
     #: Empty since the block path was removed: it was the only one refused here, because its
     #: modeller rasterised shapes onto a rectangular grid of its own. Both surviving paths
@@ -401,7 +416,7 @@ MATERIALS = (
         'supported': True,
         'why': 'a scalar relative permittivity per material, complex for a lossy one '
                '(Im(eps) > 0); see material_quantity for what a material number means',
-        'source': 'src/wavebit/_core/solve_2d.py',
+        'source': 'src/wavebit/rcwa/_engine/solve_2d.py',
     },
     {
         'case': 'uniform_anisotropic',
@@ -410,7 +425,7 @@ MATERIALS = (
                'solve_conv also reads nine permittivity slots, so a tensor filling a whole '
                'layer works, z row included. Note that every off-diagonal slot holds the '
                'negative of its component: -eps_xy, and equally -eps_xz.',
-        'source': 'docs/off-diagonal-slot-convention.md',
+        'source': 'docs/theory/rcwa/off-diagonal-slot-convention.md',
     },
     {
         'case': 'patterned_anisotropic',
@@ -423,9 +438,9 @@ MATERIALS = (
                'in-plane tensor also supports explicit Li on an axis-aligned rectangular cell: '
                'rasters use sampled or integrated coefficients and axis-aligned rectangle '
                "paintings use exact intervals, both in the fixed nesting only (li_nesting='symmetric' "
-               'is refused). See docs/tensor-li-factorization.md. A patterned '
+               'is refused). See docs/theory/rcwa/tensor-li-factorization.md. A patterned '
                'layer that also fills the z row is patterned_z_coupled below, not this.',
-        'source': 'docs/patterned-anisotropic-factorization.md',
+        'source': 'docs/theory/rcwa/patterned-anisotropic-factorization.md',
     },
     {
         'case': 'magnetic',
@@ -434,7 +449,7 @@ MATERIALS = (
                'in-plane tensors and nine for full tensors. Full tensors use the first-order '
                'solve, including magnetic field reconstruction. Scalar magnetic half-spaces '
                'enter through their admittances. The separate 1D operators retain diagonal mu.',
-        'source': 'docs/full-tensor-patterns.md',
+        'source': 'docs/guide/rcwa/full-tensor-patterns.md',
     },
     {
         'case': 'z_coupled',
@@ -443,7 +458,7 @@ MATERIALS = (
                'coupling in either quantity automatically selects the first-order '
                'formulation. Public layer_algorithm choices are ETM and SMM; fields and both incidence '
                'sides are supported. Tensor half-spaces are not implemented.',
-        'source': 'src/wavebit/_core/solve_2d_first_order.py',
+        'source': 'src/wavebit/rcwa/_engine/solve_2d_first_order.py',
     },
     {
         'case': 'patterned_z_coupled',
@@ -456,7 +471,7 @@ MATERIALS = (
                'Fourier-order and normal-field convergence; finite-order PN need not conserve '
                'lossless power exactly. See independent laminate, Maxwell-transfer and '
                'convergence tests.',
-        'source': 'docs/full-tensor-patterns.md',
+        'source': 'docs/guide/rcwa/full-tensor-patterns.md',
     },
 )
 
@@ -464,7 +479,7 @@ MATERIALS = (
 #: What a tensor material refuses that a scalar one takes, by name, so a consumer can test
 #: membership rather than read prose. The paths' ``factorization`` lists are per modeling
 #: path and cannot say it: a raster lists ``'laurent'``, and a raster of tensors refuses it.
-#: ``tests/test_manifest.py`` builds a tensor raster and a tensor shape under each value, so
+#: ``tests/api/test_manifest.py`` builds a tensor raster and a tensor shape under each value, so
 #: the list is held against the refusal the solver actually raises.
 TENSOR_MATERIALS = {
     'factorizations_refused': ('laurent',),
@@ -479,13 +494,13 @@ TENSOR_MATERIALS = {
 # ------------------------------------------------------------------ what a solve returns
 
 #: The result contract, restated as data for consumers that build UIs over the output.
-#: This is the half of ``docs/conventions.md`` a program can hold: field names, their kind,
+#: This is the half of ``docs/reference/common/conventions.md`` a program can hold: field names, their kind,
 #: and the layout rule. It passes the same admission test as everything else here — every
-#: claim is checked against a *real* result object by ``tests/test_manifest.py``, so a
+#: claim is checked against a *real* result object by ``tests/api/test_manifest.py``, so a
 #: rename that misses this table fails the suite instead of going stale in a consumer.
 RESULTS = {
     'convention': 'uppercase is power, lowercase is amplitude; the normative statement '
-                  'is docs/conventions.md',
+                  'is docs/reference/common/conventions.md',
     'efficiencies': {
         'total': ('R', 'T'),
         'by_outgoing_polarization': ('R_s', 'R_p', 'T_s', 'T_p'),
@@ -583,7 +598,7 @@ RESULTS = {
         #: `key()` hashed it, so two specs with identical results got different cache keys.
         'spec_version': SPEC_VERSION,
     },
-    'source': 'docs/conventions.md',
+    'source': 'docs/reference/common/conventions.md',
 }
 
 # ------------------------------------------------------------------ the two doors
@@ -598,11 +613,11 @@ RESULTS = {
 #: every solve here.
 #:
 #: Same admission test as everything else: each claim is held against runtime by
-#: ``tests/test_manifest.py``. Both entry points are called, every name in ``refused`` is asked
+#: ``tests/api/test_manifest.py``. Both entry points are called, every name in ``refused`` is asked
 #: for and raises, and ``sections`` names keys of this very document.
 SOLVERS = {
     'rcwa': {
-        'entry_point': 'wavebit.rcwa',
+        'entry_point': 'wavebit.compat.legacy.rcwa',
         'domain': 'frequency',
         'returns': 'a solver object; call .solve()',
         #: Derived from the same enum ``enums.backend`` is, so the two spellings cannot drift.
@@ -612,7 +627,7 @@ SOLVERS = {
                      'backends', 'material_quantity', 'results'),
     },
     'fdtd': {
-        'entry_point': 'wavebit.fdtd',
+        'entry_point': 'wavebit.compat.legacy.fdtd',
         'domain': 'time',
         'returns': 'a Result directly, or a list for a wavelength vector; optional diagnostics '
                    'return a (result, diagnostics) pair',
@@ -627,7 +642,7 @@ SOLVERS = {
                 'backends': ('numpy',),
                 'differentiable': False,
                 'incidence_sides': ('top', 'bottom'),
-                'source': 'docs/fdtd.md',
+                'source': 'docs/guide/fdtd/fdtd.md',
             },
             'common': {
                 'selector': 'explicit backend=numpy/jax/torch',
@@ -671,7 +686,7 @@ SOLVERS = {
                                               'nonuniform reference-phase slopes remain piecewise',
                 'results_incidences': ('incident', 's_inc', 'p_inc'),
                 'verified_devices': ('cpu',),
-                'source': 'docs/guide/time-domain.md',
+                'source': 'docs/guide/fdtd/time-domain.md',
             },
         },
         'sections': ('material_quantity', 'results'),
@@ -694,7 +709,7 @@ SOLVERS = {
         #: ``incident`` is guaranteed on both routes. The common route additionally
         #: guarantees both pure-incidence columns for every solve.
         'results_incidences': ('incident',),
-        'source': 'docs/fdtd-alpha.md',
+        'source': 'docs/guide/fdtd/fdtd-alpha.md',
     },
 }
 
@@ -725,12 +740,49 @@ def _backend_capabilities() -> dict:
     return out
 
 
+
+# These are public paths, deliberately separate from the compatibility tables.
+CURRENT_LIFECYCLE = {
+    'solvers': {
+        name: {
+            'module': f'wavebit.{name}',
+            'problem': f'wavebit.{name}.Problem',
+            'numerics': f'wavebit.{name}.Numerics',
+            'check': f'wavebit.{name}.check',
+            'prepare': f'wavebit.{name}.prepare',
+            'run': f'wavebit.{name}.run',
+            'prepared': f'wavebit.{name}.Prepared',
+        } for name in ('rcwa', 'fdtd')
+    },
+    'execution_keywords': ['backend', 'device', 'precision'],
+    'prepared_run_requires': 'the complete live Problem',
+    'check_report': {
+        'type': 'wavebit.CheckReport',
+        'fields': ['issues', 'estimates', 'capabilities', 'resolved'],
+        'admission': 'ok',
+        'raise_method': 'raise_if_invalid',
+    },
+    'validation_error': {
+        'type': 'wavebit.errors.ValidationError',
+        'fields': ['code', 'path', 'message', 'expected', 'actual', 'issue'],
+    },
+    'job': {
+        'type': 'wavebit.Job',
+        'schema': 'wavebit.job/v1',
+        'run': 'wavebit.run',
+        'serialization': ['to_json', 'from_json'],
+        'legacy_policy': 'Legacy JobSpec requires explicit migration.',
+    },
+}
+
+
 def manifest() -> dict:
     """Everything above, as one JSON-round-trippable document."""
-    from . import __version__
+    from wavebit import __version__
 
     return {
         'manifest_version': MANIFEST_VERSION,
+        'current_lifecycle': CURRENT_LIFECYCLE,
         'wavebit_version': __version__,
         'enums': {
             'backend': [m.value for m in Backend],
@@ -747,7 +799,7 @@ def manifest() -> dict:
         'material_quantity': _jsonable_material_quantity(),
         'material_dispersion': {
             'type': 'TabulatedMaterial',
-            'catalog': 'wavebit.materials.load',
+            'catalog': 'wavebit.materials.catalog.load',
             'catalog_units': ['nm', 'um', 'mm', 'm'],
             'evaluation': 'material.at(wavelength): scalar or array',
             'index_import': 'from_index(wavelengths, index, mu=None): isotropic index**2/mu',
@@ -756,7 +808,7 @@ def manifest() -> dict:
             'backends': ['numpy', 'jax', 'torch'],
             'raster_arrays': 'evaluated numerical fields; rebuild explicitly per wavelength',
             'out_of_range': 'error eagerly; NaN for traced material evaluation',
-            'source': 'docs/guide/materials.md',
+            'source': 'docs/guide/common/materials.md',
         },
         'paths': [
             dict(spelling, **_options_for(ModelingPath(spelling['path'])))

@@ -1,7 +1,7 @@
 """The stage-1 scenes, samples and lowered arrays that ``fd_golden_stage1.npz`` and its test share.
 
 One module, imported by both ``interface/freeze_fd_stage1.py`` (which writes the golden) and
-``tests/test_fd_stage1_backends.py`` (which reads it), so the two cannot disagree about which
+``tests/fdtd/test_fd_stage1_backends.py`` (which reads it), so the two cannot disagree about which
 scene a key names. Nothing here solves anything. The stage-0 counterpart
 (``_fd_stage0_cases.py``) is imported rather than copied: the sampling rule, the capture, the
 content digest and the relative gap are the same definitions, and a second copy of them would
@@ -47,20 +47,26 @@ recurrence coefficients. Those are what a stage-1 defect moves first, they are t
 every backend by construction, and freezing them separates "the profile changed" from "the
 kernel drifted" in the failure message.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import math
-import pathlib
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))                          # tests/references, for the stage-0 cases
 sys.path.insert(0, str(HERE.parent))                   # tests/, for fd_helpers
 
-import wavebit.fd as fd                                                       # noqa: E402
-from _fd_stage0_cases import (BACKENDS, capture, content_digest,              # noqa: E402,F401
-                              relative_gap)
-from fd_helpers import Packet                                                 # noqa: E402
+import wavebit.fdtd._legacy as fd                                                       # noqa: E402
+from tests.references._fd_stage0_cases import (BACKENDS as BACKENDS, capture as capture,
+                                              content_digest as content_digest,
+                                              relative_gap as relative_gap)
+from tests.fixtures.fdtd.fd_helpers import Packet                                                 # noqa: E402
 
 #: The committed golden.
 GOLDEN = HERE / 'fd_golden_stage1.npz'

@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="550" viewBox="0 0 960 550" role="img" aria-labelledby="title desc">
+<title id="title">Source types and electromagnetic calculation</title><desc id="desc">Plane waves and Gaussian beams enter at outer boundaries; dipoles enter within layers. Solve complex fields, then calculate power.</desc>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#496176" /></marker></defs>
+<rect width="960" height="550" rx="16" fill="#f5f8fa" />
+<g font-family="-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif" text-anchor="middle" fill="#142b40">
+<text x="480" y="38" font-size="23" font-weight="700">Specify each source appropriately and solve the combined complex fields</text>
+<rect x="30" y="65" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5" />
+<text x="165.0" y="93" font-size="19" font-weight="650">PlaneWave</text>
+<text x="165.0" y="119" font-size="16">Direction · polarization · complex amplitude</text>
+<rect x="345" y="65" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5" />
+<text x="480.0" y="93" font-size="19" font-weight="650">GaussianBeam</text>
+<text x="480.0" y="119" font-size="16">Beam width · focus · direction · polarization</text>
+<rect x="660" y="65" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5" />
+<text x="795.0" y="93" font-size="19" font-weight="650">ElectricDipole</text>
+<text x="795.0" y="119" font-size="16">Position · complex electric dipole moment</text>
+<path d="M165 141 V193" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M480 141 V159 H165 V193" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)" />
+<text x="465" y="186" font-size="15">Decompose into plane-wave components</text>
+<rect x="30" y="200" width="585" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5" />
+<text x="322.5" y="228" font-size="19" font-weight="650">Incident amplitudes at top/bottom outer boundaries</text>
+<text x="322.5" y="254" font-size="16">Include each component's phase reference and polarization</text>
+<rect x="660" y="200" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5" />
+<text x="795.0" y="228" font-size="19" font-weight="650">Current term inside the layer</text>
+<text x="795.0" y="254" font-size="16">Specify field jumps at the source height</text>
+<path d="M795 141 V193" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M322 276 V307 H480 V331" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)" />
+<path d="M795 276 V307 H480 V331" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)" />
+<rect x="145" y="338" width="670" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5" />
+<text x="480.0" y="366" font-size="19" font-weight="650">Solve total complex E and H using layer modes and scattering matrices</text>
+<text x="480.0" y="392" font-size="16">Include external incidence, internal emission and multiple reflections between layers</text>
+<path d="M480 414 V445" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)" />
+<rect x="145" y="452" width="670" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5" />
+<text x="480.0" y="480" font-size="19" font-weight="650">Compute power flow over the observation region</text>
+<text x="480.0" y="506" font-size="16">Reflection/transmission ratios use incident-power normalization only for external-only illumination</text>
+</g></svg>

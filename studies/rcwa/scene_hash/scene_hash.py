@@ -1,0 +1,227 @@
+"""
+scene_hash.py — a byte fingerprint of the solver, wide enough to arbitrate a refactor.
+
+A refactor that must not move a number needs an instrument that would notice if it did, and
+the instrument has to be wider than the change. This one sweeps
+
+    4 cell shapes    square, rectangle, hexagon, shear
+  x 3 modeling paths raster, shapes (summed), shapes (painted)
+  x 2 incidence      top, bottom
+  x 3 backends       numpy, jax, torch
+  = 72 scenes
+
+and hashes, per scene, the per-order efficiencies **and** the reconstructed field. Both,
+because `R` and `T` are sums over orders: a per-order wavevector wrong by a whole reciprocal
+step passes them while conserving energy to 1e-15, which is the shape of `b7c4645`. The field
+is where such a thing is a different *shape* rather than a different total.
+
+**The backend axis is the point.** A sweep on numpy alone cannot arbitrate a change to the
+per-backend layer, which is two thirds of what such a change touches. It is also the axis that
+costs the most to add later: the jax and torch arms need their optional dependencies present,
+so a run that silently skipped them would report a smaller sweep as a clean one. It says so
+instead -- an absent backend is recorded by name in the digest rather than omitted from it.
+
+**Refusals are hashed too, by exception name**, and there are none left. Twelve of the old 96
+were refused on purpose -- the block modeller on the two skewed cells, both incidence sides,
+all three backends -- and they went with that path: both surviving ones take a skewed cell. The
+mechanism stays because a refactor that *starts* refusing has to move the digest exactly as a
+changed number would; hashing only the successes would make "it began refusing" a silent pass,
+which is the failure mode `c5b061f` was.
+
+A refusal that is *not* on purpose is the trap on the other side, and this sweep walked into it
+before it was fixed: forcing `factorization='nvf'` onto the block path and handing the summed
+rule two overlapping discs refused 48 of the 96 for reasons that were the scene's fault, not
+the solver's. Half the instrument was measuring its own configuration. Any scene added here has
+to be checked for that -- a high refusal count is a symptom, not a feature.
+
+Usage::
+
+    python studies/rcwa/scene_hash/scene_hash.py             # one digest, plus a per-scene table
+    python studies/rcwa/scene_hash/scene_hash.py --quiet     # the digest alone, for a diff
+
+To check that a change moved nothing, run it against an extraction of the commit before the
+change rather than against a stash or a checkout::
+
+    before=$(mktemp -d)
+    git archive <rev> | tar -x -C "$before"
+    (cd "$before" && python studies/rcwa/scene_hash/scene_hash.py --quiet)
+
+`git archive` touches no shared git state, which matters: several sessions share this repo's
+worktrees and refs (see `.claude/`), and a `git stash` or a `git checkout` in one of them is
+visible to the others.
+
+This is a *study*, not a test: it pins nothing and asserts nothing, because a digest committed
+as a golden would have to be regenerated on every legitimate change and would then arbitrate
+nothing. It is an instrument to be run twice -- before and after -- by whoever is making the
+change.
+"""
+
+import argparse
+from pathlib import Path
+import hashlib
+import importlib.util
+import sys
+import warnings
+
+import numpy as np
+
+# Select the checkout before importing any wavebit module. Archived comparisons may
+# use the historical flat package; the maintained tree uses src/.
+ROOT = str(Path(__file__).resolve().parents[3])
+_root_parser = argparse.ArgumentParser(add_help=False)
+_root_parser.add_argument('--root', default=ROOT)
+_SELECTED_ROOT = Path(_root_parser.parse_known_args()[0].root).expanduser().resolve()
+_PACKAGE_PARENT = next((path for path in (_SELECTED_ROOT / 'src', _SELECTED_ROOT)
+                        if (path / 'wavebit' / '__init__.py').is_file()), None)
+if _PACKAGE_PARENT is None:
+    raise RuntimeError(f'No wavebit source package in selected root: {_SELECTED_ROOT}')
+sys.path.insert(0, str(_PACKAGE_PARENT))
+_selected_wavebit = importlib.import_module('wavebit')
+_expected_origin = (_PACKAGE_PARENT / 'wavebit' / '__init__.py').resolve()
+if Path(_selected_wavebit.__file__).resolve() != _expected_origin:
+    raise RuntimeError(
+        f'Selected root {_SELECTED_ROOT} requires {_expected_origin}; '
+        f'wavebit was already imported from {_selected_wavebit.__file__}. '
+        'Run this study in a fresh Python process.')
+try:
+    _legacy_wavebit = importlib.import_module('wavebit.compat.legacy')
+except ModuleNotFoundError as error:
+    if error.name not in ('wavebit.compat', 'wavebit.compat.legacy'):
+        raise
+    _legacy_wavebit = _selected_wavebit
+# These maintained experiments retain the historical factory/type contract.
+wavebit = _legacy_wavebit
+
+
+def _study_module(current, historical):
+    """Load the matching private implementation in the selected checkout."""
+    return importlib.import_module(
+        historical if _legacy_wavebit is _selected_wavebit else current)
+
+
+def _backend_arg(name):
+    Backend = _study_module('wavebit._common.enums', 'wavebit._core.enums').Backend
+    return {'numpy': 0, 'jax': 1, 'torch': 2}[name] if issubclass(Backend, int) else name
+
+
+P, WL, H, ROD = 400.0, 900.0, 150.0, 110.0
+
+CELLS = {
+    'square': np.diag([P, P]),
+    'rect': np.diag([P, 1.6 * P]),
+    'hex': np.column_stack(([P, 0.0], [P / 2, P * np.sqrt(3) / 2])),
+    'shear': np.column_stack(([P, 0.0], [0.35 * P, 1.2 * P])),
+}
+BACKENDS = ('numpy', 'jax', 'torch')
+SIDES = ('top', 'bottom')
+
+
+def _rod(basis, n=40, radius=ROD):
+    """A disc on the cell's own lattice grid, so every cell carries the same object.
+
+    Through ``wavebit.meshgrid_xy``, which puts the samples on the parallelogram *and* centres the
+    cell on the origin -- so the disc is stated by writing nothing, exactly as the shape arms
+    below state theirs with ``cx = cy = 0``.
+    """
+    a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
+    X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=basis))
+    inside = np.zeros(X.shape, dtype=bool)
+    for i in (-1, 0, 1):                               # minimum image over the lattice
+        for j in (-1, 0, 1):
+            s = i * a1 + j * a2
+            inside |= ((X - s[0]) ** 2 + (Y - s[1]) ** 2) <= radius ** 2
+    return np.where(inside, 5.76, 1.0)[None]
+
+
+def _shapes(basis, painted=False):
+    """Two discs on the shape path -- disjoint on one arm, overlapping on the other.
+
+    The arms take different scenes on purpose, because the geometry is what routes them: discs
+    that do not touch stay on the closed-form builder, and discs that do go to the boundary
+    resolver. Handing both arms the same discs would exercise one builder twice.
+    """
+    if painted:
+        offsets, radii = ((0.0, 0.0), (40.0, 0.0)), (ROD, ROD)
+    else:
+        offsets, radii = ((-0.22 * P, 0.0), (0.22 * P, 0.0)), (0.16 * P, 0.16 * P)
+    # The offsets *are* the centres: `cx` / `cy` are measured from `0.5*(a1 + a2)`, so every
+    # cell here carries the same pair of discs the same way, as `_rod` does above.
+    layer = {'background': 1.0, 'shapes': [
+        {'type': 'circle', 'cx': dx, 'cy': dy, 'lx': 2 * r, 'material': eps}
+        for (dx, dy), r, eps in zip(offsets, radii, (5.76, 9.0))]}
+    return [layer]
+
+
+def _structure(kind, basis):
+    return {'raster': _rod(basis), 'disjoint': _shapes(basis),
+            'overlap': _shapes(basis, True)}[kind]
+
+
+def _available(name):
+    return name == 'numpy' or importlib.util.find_spec(name) is not None
+
+
+def scenes():
+    """Every (cell, path, side, backend) combination, in a fixed order."""
+    for cell in CELLS:
+        for kind in ('raster', 'disjoint', 'overlap'):
+            for side in SIDES:
+                for backend in BACKENDS:
+                    yield cell, kind, side, backend
+
+
+def digest_one(cell, kind, side, backend):
+    """``(sha256 hex, note)`` for one scene. A refusal hashes its exception's name."""
+    if not _available(backend):
+        return hashlib.sha256(f'absent:{backend}'.encode()).hexdigest(), f'{backend} absent'
+    basis = CELLS[cell]
+    h = hashlib.sha256()
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            solver = _legacy_wavebit.rcwa(
+                backend=_backend_arg(backend), structure=_structure(kind, basis),
+                lattice=np.asarray(basis).tolist(), truncation_order=[4, 4], thickness=[H],
+                wavelength=WL, top=1.0, bot=2.25, theta=0.3, phi=0.4, psi=0.2,
+                incidence_side=side, answers='field',
+                # NVF on every path here, which all three implement. It used to be conditional:
+                # the block path built its coefficients its own way and refused the name, so
+                # forcing one factorization across all four refused a quarter of the sweep and
+                # called the refusal a result.
+                factorization='nvf')
+            result = solver.solve()
+            field = solver.reconstruct_field(sample_x=7, sample_y=5, sample_z=3)
+        for value in (result.R, result.T, field):
+            h.update(np.ascontiguousarray(np.asarray(value, dtype=np.complex128)).tobytes())
+        return h.hexdigest(), 'ok'
+    except Exception as exc:                           # noqa: BLE001 - the name is the datum
+        h.update(type(exc).__name__.encode())
+        return h.hexdigest(), type(exc).__name__
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[1])
+    ap.add_argument('--quiet', action='store_true', help='print the digest and nothing else')
+    ap.add_argument('--root', help='import wavebit from this checkout (src or flat layout)')
+    args = ap.parse_args()
+
+    overall = hashlib.sha256()
+    rows, counts = [], {}
+    for cell, kind, side, backend in scenes():
+        one, note = digest_one(cell, kind, side, backend)
+        overall.update(one.encode())
+        rows.append((f'{cell}/{kind}/{side}/{backend}', one[:12], note))
+        counts[note] = counts.get(note, 0) + 1
+
+    if not args.quiet:
+        for name, short, note in rows:
+            print(f'  {name:34s} {short}  {note}')
+        print()
+        for note, n in sorted(counts.items(), key=lambda kv: -kv[1]):
+            print(f'  {note:36s} {n}')
+        print()
+    print(f'{len(rows)} scenes  {overall.hexdigest()}')
+
+
+if __name__ == '__main__':
+    main()

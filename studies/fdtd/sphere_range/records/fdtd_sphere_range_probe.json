@@ -1,0 +1,118 @@
+[
+  {
+    "backend": "numpy",
+    "radius": 0.22,
+    "center": [
+      -0.073,
+      0.017,
+      -0.009
+    ],
+    "skeleton": "9157b06f9b058383bb44aff577fff91f49af35fb47ad92b175ba9ba7ef13cb0f",
+    "seconds": 0.6759739000117406,
+    "ranged_run_seconds": 0.4236679000314325,
+    "volume": 0.04460223810056549,
+    "E_absolute": 0.0,
+    "E_relative": 0.0,
+    "E_backend_relative": 0.0,
+    "H_absolute": 0.0,
+    "H_relative": 0.0,
+    "H_backend_relative": 0.0
+  },
+  {
+    "backend": "numpy",
+    "radius": 0.27,
+    "center": [
+      0.071,
+      -0.037,
+      0.023
+    ],
+    "skeleton": "9157b06f9b058383bb44aff577fff91f49af35fb47ad92b175ba9ba7ef13cb0f",
+    "seconds": 0.7076163000310771,
+    "ranged_run_seconds": 0.42441059998236597,
+    "volume": 0.08244795760081054,
+    "E_absolute": 0.0,
+    "E_relative": 0.0,
+    "E_backend_relative": 0.0,
+    "H_absolute": 0.0,
+    "H_relative": 0.0,
+    "H_backend_relative": 0.0
+  },
+  {
+    "backend": "jax",
+    "radius": 0.22,
+    "center": [
+      -0.073,
+      0.017,
+      -0.009
+    ],
+    "skeleton": "9157b06f9b058383bb44aff577fff91f49af35fb47ad92b175ba9ba7ef13cb0f",
+    "seconds": 10.941784200025722,
+    "ranged_run_seconds": 6.060446500021499,
+    "volume": 0.04460223810056549,
+    "E_absolute": 1.3877787807814457e-17,
+    "E_relative": 1.1252969877506093e-18,
+    "E_backend_relative": 2.88076028864156e-16,
+    "H_absolute": 1.3877787807814457e-17,
+    "H_relative": 2.86321745052407e-18,
+    "H_backend_relative": 3.664918336670808e-16,
+    "compiled_variants": 1
+  },
+  {
+    "backend": "jax",
+    "radius": 0.27,
+    "center": [
+      0.071,
+      -0.037,
+      0.023
+    ],
+    "skeleton": "9157b06f9b058383bb44aff577fff91f49af35fb47ad92b175ba9ba7ef13cb0f",
+    "seconds": 6.506237099994905,
+    "ranged_run_seconds": 1.644886799971573,
+    "volume": 0.08244795760081054,
+    "E_absolute": 0.0,
+    "E_relative": 0.0,
+    "E_backend_relative": 2.887048877829934e-16,
+    "H_absolute": 0.0,
+    "H_relative": 0.0,
+    "H_backend_relative": 3.0221286766885914e-16,
+    "compiled_variants": 1
+  },
+  {
+    "backend": "torch",
+    "radius": 0.22,
+    "center": [
+      -0.073,
+      0.017,
+      -0.009
+    ],
+    "skeleton": "9157b06f9b058383bb44aff577fff91f49af35fb47ad92b175ba9ba7ef13cb0f",
+    "seconds": 0.8599372000317089,
+    "ranged_run_seconds": 0.5161419000360183,
+    "volume": 0.04460223810056549,
+    "E_absolute": 0.0,
+    "E_relative": 0.0,
+    "E_backend_relative": 7.2019007216039e-17,
+    "H_absolute": 0.0,
+    "H_relative": 0.0,
+    "H_backend_relative": 1.832459168335404e-16
+  },
+  {
+    "backend": "torch",
+    "radius": 0.27,
+    "center": [
+      0.071,
+      -0.037,
+      0.023
+    ],
+    "skeleton": "9157b06f9b058383bb44aff577fff91f49af35fb47ad92b175ba9ba7ef13cb0f",
+    "seconds": 0.8903845999739133,
+    "ranged_run_seconds": 0.5202061000163667,
+    "volume": 0.08244795760081054,
+    "E_absolute": 0.0,
+    "E_relative": 0.0,
+    "E_backend_relative": 7.217622194574835e-17,
+    "H_absolute": 0.0,
+    "H_relative": 0.0,
+    "H_backend_relative": 1.371746349702623e-16
+  }
+]

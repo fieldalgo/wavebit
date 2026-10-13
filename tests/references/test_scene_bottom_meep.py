@@ -1,14 +1,20 @@
 """Public-API Meep source physically below an asymmetric stack; no Meep import."""
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import json
-from pathlib import Path
 
 import numpy as np
-import wavebit
 
 
 def test_bottom_scene_complex_amplitudes_against_meep_in_original_coordinates():
-    ref=json.loads((Path(__file__).parent/'golden_scene_bottom_meep.json').read_text())
-    results=wavebit.fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),
+    ref=json.loads((repository_path('tests/references/golden_scene_bottom_meep.json')).read_text())
+    results=_legacy_wavebit.fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),
                          thickness=ref['thickness'][::-1],top=1.,bot=1.,period=.1,
                          wavelength=ref['wavelengths'],backend='numpy',incidence_side='bottom',
                          resolution=ref['resolution'],n_periods=35,truncation_order=0,tetm='te')

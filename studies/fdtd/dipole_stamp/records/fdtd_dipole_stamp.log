@@ -1,0 +1,9 @@
+16 cells per wavelength; R at f/f0 = (0.8, 1.0, 1.2); continuum k^2/(6 pi) = 1.3404, 2.0944, 3.0159
+tent     offset 0.00: 1.28130, 1.95449, 2.72905
+tent     offset 0.25: 1.26402, 1.91313, 2.64592
+tent     offset 0.50: 1.26214, 1.90918, 2.63789
+tent     spread over positions: 1.52e-02, 2.37e-02, 3.46e-02
+bspline  offset 0.00: 1.30644, 2.02101, 2.86480
+bspline  offset 0.25: 1.30625, 2.02089, 2.86450
+bspline  offset 0.50: 1.30603, 2.02077, 2.86423
+bspline  spread over positions: 3.15e-04, 1.15e-04, 1.98e-04

@@ -1,0 +1,36 @@
+{
+  "accepted_utc": "2026-10-06T20:17:36.686120+00:00",
+  "calibration": "studies/results/fdtd_hybrid_film_calibration_attempt1.json",
+  "calibration_sha256": "a8f1ad0250ac0053514eeee79d5f5c5addf4681f94990753b412262903446250",
+  "source_identity": {
+    "helper_sha256": "b225c606683fe8a6682f775e978357541f9198edf8bc6793dfff7334e12525c9",
+    "fd_source_sha256": "5aa63f0f692d85cf83b988d6f97cfa0b5835ec876e890fca976628df3fc08838",
+    "wavebit_source_sha256": "d0d1be0ce8e1e7220a07d842abfd2bf438ac9525d1cb7005c7c84cc964910f94",
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "accepted_ceilings": {
+    "r": 0.005,
+    "t": 0.01
+  },
+  "inherited_candidates_unchanged": true,
+  "measured_max_absolute_complex_errors": {
+    "r": 0.002903755513044464,
+    "t": 0.005908102517955595
+  },
+  "measured_max_errors_by_family": {
+    "mixed-metal": {
+      "r": 0.002103337007512033,
+      "t": 0.000910626458041374
+    },
+    "mixed-dielectric": {
+      "r": 0.002903755513044464,
+      "t": 0.005908102517955595
+    }
+  },
+  "margin": {
+    "r": 0.002096244486955536,
+    "t": 0.004091897482044405
+  },
+  "backend_scaled_max": 2.336254579962001e-15,
+  "scope": "Two disclosed fixed n40 p-polarized film configurations only (mixed-metal and mixed-dielectric), each measured on three backends; not unseen corroboration, a convergence result or arbitrary-material guarantee. Preserve all known responses in registration. Metal AbsorberProximityWarning (0.775 clearance vs0.840433 half local wavelength) and scope warnings remain; later duration/PML controls assess empirical contamination."
+}

@@ -5,7 +5,7 @@ test in the project env (the reverse), so what they share imports numpy and noth
 
 **What this oracle is for.** Gratings resting on, containing, or lit from a **lossy
 double-negative** medium (``Re(eps) < 0`` and ``Re(mu) < 0``): the half-space root, the signed
-index and the layer labels this solver chose for such media (``docs/branch-cuts.md`` §9),
+index and the layer labels this solver chose for such media (``docs/theory/rcwa/branch-cuts.md`` §9),
 held to a solver that made none of those choices. fmmax keeps each layer's modes with
 ``Im(kz) > 0`` (decaying along its forward direction), which is the physical choice for **every
 lossy medium, of either sign of index** -- the limiting-absorption argument that picks the root
@@ -85,7 +85,7 @@ CASES = {
 
 def phase_index(eps_mu, theta):
     """``N = |Re(k)|/k0`` of a plane wave of real angle ``theta`` with real ``k_par``:
-    ``N**2 = (a + hypot(a, b/cos(theta)))/2`` for ``eps*mu = a + ib`` (``docs/conventions.md``)."""
+    ``N**2 = (a + hypot(a, b/cos(theta)))/2`` for ``eps*mu = a + ib`` (``docs/reference/common/conventions.md``)."""
     a, b = eps_mu.real, eps_mu.imag
     return np.sqrt((a + np.hypot(a, b / np.cos(theta))) / 2)
 

@@ -4,6 +4,12 @@ Input directory must contain meep-grid-{20,40,80}.json, meep-grid-runtime.json
 and fdtdx-grid.json. Deliberately never reads Wavebit-generated outputs. Refuses
 an existing destination: changing an oracle needs explicit review.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
+from tools.repository_paths import repository_path
 import argparse
 import hashlib
 from pathlib import Path
@@ -27,7 +33,7 @@ def main():
             raise ValueError('Expected external FDTDX data.')
         values={key:np.array(data[key]) for key in
                 ('E','H','E_imag','H_imag','value','gradient','finite_difference')}
-        generator=Path(__file__).with_name('validate_grid_fdtdx_bloch.py')
+        generator=repository_path('tests/references/interface/validate_grid_fdtdx_bloch.py')
         metadata=dict(version=data['version'],update_sha256=data['update_sha256'],
                       input_sha256=hashlib.sha256(raw).hexdigest(),
                       generator_sha256=hashlib.sha256(generator.read_bytes()).hexdigest())

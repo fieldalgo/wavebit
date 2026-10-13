@@ -10,12 +10,12 @@ Run it from the repository root with the project interpreter; it puts this check
 another checkout is the usual way a golden gets taken from code it does not describe).
 
 **What this file can and cannot say.** Every number in the archive comes from
-``wavebit.fd`` itself, so the archive cannot say the kernel is right -- gates 1 to 4 do
-that, against closed forms (``tests/test_fd_pec.py``, ``test_fd_pmc.py``,
+``wavebit.fdtd._legacy`` itself, so the archive cannot say the kernel is right -- gates 1 to 4 do
+that, against closed forms (``tests/fdtd/test_fd_pec.py``, ``test_fd_pmc.py``,
 ``test_fd_symmetry.py``, ``test_fd_bloch.py``). What it says is that the kernel has not
 *moved*, on each backend separately, and that is a claim cross-backend agreement cannot
 make: a defect that moves NumPy, JAX and Torch together -- a pad sign, a dropped mask, a
-wall one cell off -- leaves all three agreeing to 1e-15. ``tests/test_fd_backends.py`` holds
+wall one cell off -- leaves all three agreeing to 1e-15. ``tests/fdtd/test_fd_backends.py`` holds
 both halves, agreement and the pin, and its mutant is a plan with its masks dropped, which
 passes the first half and fails the second on every backend.
 
@@ -36,6 +36,12 @@ never writes over the committed file: it reproduces the archive and prints, arra
 what moved and by how much against the test's budget. A change that moves these numbers on
 purpose is re-frozen with ``--rebaseline`` and the reason goes in the commit message.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
+from tools.repository_paths import repository_path
 import argparse
 import datetime
 import hashlib
@@ -46,15 +52,14 @@ import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references/interface')
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT / 'src'))                      # this checkout's wavebit first
 sys.path.insert(0, str(HERE.parent))               # tests/references, for the case list
 
 import wavebit                                               # noqa: E402
-import wavebit.fd as fd                                      # noqa: E402
-from _fd_stage0_cases import (BACKENDS, GOLDEN, TOL, capture, content_digest,   # noqa: E402
-                              relative_gap, sample_indices, scenes)
+import wavebit.fdtd._legacy as fd                                      # noqa: E402
+from tests.references._fd_stage0_cases import BACKENDS, GOLDEN, TOL, capture, content_digest, relative_gap, sample_indices, scenes
 
 CASES = HERE.parent / '_fd_stage0_cases.py'
 
@@ -115,7 +120,7 @@ def freeze():
                 arrays[f'{name}__{backend}__{key}'] = value
     metadata = dict(
         archive=GOLDEN.name,
-        what='the stage-0 kernel (wavebit.fd) on the gate 1-4 scenes, each backend pinned to '
+        what='the stage-0 kernel (wavebit.fdtd._legacy) on the gate 1-4 scenes, each backend pinned to '
              'its own answer; a drift detector, not an oracle',
         frozen=datetime.date.today().isoformat(),
         versions=_versions(), platform=_platform(),

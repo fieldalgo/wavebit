@@ -3,7 +3,7 @@
 The fifth oracle in this directory and the second that is not RCWA. It shares a bridge
 with ``test_meep_crossed_golden.py`` and answers a different question.
 
-**What it is for: the published table.** ``docs/fdtd.md`` §2 prints a three-way agreement
+**What it is for: the published table.** ``docs/guide/fdtd/fdtd.md`` §2 prints a three-way agreement
 -- the RCWA path, this project's FDTD, and Meep -- on one grating, and ``README.md``
 quotes its worst per-order gaps as the FDTD path's headline validation. Those Meep
 numbers were computed in a *sibling lab repository* on 2026-08-25 and **quoted, not
@@ -26,7 +26,7 @@ run and the shipped clearance had since been halved, with the paragraph beneath 
 re-derived and the table itself not. That is what a column no test re-solves does, and it is
 why all three are re-solved here rather than only the outside one.
 
-**The scene is not a new one, deliberately.** It is ``tests/test_fdtd.py::_grating()`` at
+**The scene is not a new one, deliberately.** It is ``tests/fdtd/test_fdtd.py::_grating()`` at
 that module's own constants, and ``test_the_scene_is_the_one_tests_test_fdtd_uses``
 asserts that rather than trusting the comment in ``_meep_1d_cases.py`` that says so. An
 oracle stated on a scene *near* the one under test is a different oracle.
@@ -61,21 +61,26 @@ this comparison is bounded by two grids rather than one. Unlike the crossed cell
 grating has one vertical interface per period and no corners, and **both codes keep second
 order on it** -- so the golden is frozen at two resolutions and
 ``test_the_golden_states_its_own_error_bar`` asserts that claim rather than an estimate.
-Slow drift is still the job of the in-process comparisons in ``tests/test_fdtd.py``.
+Slow drift is still the job of the in-process comparisons in ``tests/fdtd/test_fdtd.py``.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
-from wavebit._core.fdtd import solve_fdtd
+from wavebit.fdtd._periodic.legacy import solve_fdtd
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _meep_1d_cases import (CASES, LEGS, SIGMA, airy_rt, eps_of,          # noqa: E402
-                            in_plane_k, margin)
+from tests.references._meep_1d_cases import CASES, LEGS, SIGMA, airy_rt, eps_of, in_plane_k, margin
 
 GOLDEN_PATH = HERE / 'golden_meep_1d.npz'
 
@@ -85,13 +90,13 @@ GOLDEN_PATH = HERE / 'golden_meep_1d.npz'
 #: one: the smallest margin over both half-spaces is 0.60.
 MARGIN = 0.05
 
-#: Truncation order for the RCWA reference, and ``docs/fdtd.md`` §2's own choice, read
+#: Truncation order for the RCWA reference, and ``docs/guide/fdtd/fdtd.md`` §2's own choice, read
 #: from the record so that one place names it. Measured against ``truncation_order = 400``
 #: on this scene: TE has converged (worst per-order move 1.2e-6), TM has not quite (1.3e-5),
 #: so the reference itself carries ~1e-5 and every bound below is 50x clear of it.
 #:
 #: ``FDTD_PUBLISHED`` is the 5 nm cell §2's "this module" column is taken on, likewise.
-from _meep_1d_cases import FDTD_PUBLISHED, RCWA_ORDERS                    # noqa: E402
+from tests.references._meep_1d_cases import FDTD_PUBLISHED, RCWA_ORDERS                    # noqa: E402
 
 #: The column that table printed **before** 2026-09-06, computed in a sibling lab repository
 #: on 2026-08-25 and quoted here with nothing in this repository able to reproduce it. It is
@@ -180,7 +185,7 @@ AMPLITUDE_BOUND = 8.0e-3
 FDTD_RESOLUTION = FDTD_PUBLISHED
 
 
-from _legacy_conventions import centred_meep
+from tests.references._legacy_conventions import centred_meep
 
 
 def _order_grid(result, case):
@@ -209,7 +214,7 @@ def _propagating(case, name):
 
 
 def _solve_rcwa(case, tetm, orders=RCWA_ORDERS):
-    return wavebit.rcwa(
+    return _legacy_wavebit.rcwa(
         backend='numpy', wavelength=case['wavelength'], period=[case['period'][0]],
         truncation_order=dict(x=orders, y=0), top=eps_of(case['n_top']),
         bot=eps_of(case['n_bot']), theta=0.0, phi=0.0, tetm=tetm,
@@ -233,7 +238,7 @@ def rcwa_solutions():
 
 @pytest.fixture(scope='module')
 def fdtd_solutions():
-    """wavebit's own time-domain run on the grating, at ``docs/fdtd.md`` §2's settings.
+    """wavebit's own time-domain run on the grating, at ``docs/guide/fdtd/fdtd.md`` §2's settings.
 
     Module-scoped because two tests read it and it is the expensive half of this file
     (~7 s a leg): one asks whether the printed column is still what the solver returns, the
@@ -406,7 +411,7 @@ def test_the_time_domain_path_matches_meep(golden, fdtd_solutions, leg):
     """``solve_fdtd`` against a time-domain solver that is not ours.
 
     This is the row the oracle was built for, and it is §2's other two columns read against
-    each other on the *same* 5 nm cell. ``tests/test_fdtd.py`` compares this path against
+    each other on the *same* 5 nm cell. ``tests/fdtd/test_fdtd.py`` compares this path against
     **wavebit's own** RCWA path, which shares every convention with it by construction, so
     a convention wrong in both moves nothing; here the frame, the order index, the ladder's
     period and the reference planes are all read off an FDTD written by somebody else.
@@ -446,7 +451,7 @@ def test_pure_and_conical_amplitudes_share_the_meep_frame(golden):
         pure = _order_grid(_solve_rcwa(case, leg), case)
         # The conical route at the same scene. `theta` cannot be exactly zero on that path,
         # and 1e-9 rad is nine orders below every tolerance in this file.
-        conical = wavebit.rcwa(
+        conical = _legacy_wavebit.rcwa(
             backend='numpy', wavelength=case['wavelength'], period=[case['period'][0]],
             truncation_order=dict(x=RCWA_ORDERS, y=0), top=eps_of(case['n_top']),
             bot=eps_of(case['n_bot']), theta=1e-9, phi=0.0,
@@ -497,7 +502,7 @@ def test_the_golden_states_its_own_error_bar(golden, rcwa_solutions):
     fine tier 4.7e-4 to 7.4e-4 from the reference. That is
     the difference between a raster whose interfaces are all corners and one whose single
     interface per period is a plane the grid can hold exactly -- which is the same reading
-    ``docs/fdtd.md`` §8g gives of wavebit's own crossed convergence, from the other side.
+    ``docs/guide/fdtd/fdtd.md`` §8g gives of wavebit's own crossed convergence, from the other side.
 
     An earlier version of the crossed test asserted only ``|fine - coarse| / 3 < 3e-2`` and
     passed while the frozen numbers were 4.6e-2 wrong, because both tiers rounded a layer
@@ -576,7 +581,7 @@ def test_the_incident_only_run_was_a_single_plane_wave(golden):
 def test_the_two_first_orders_are_equal(golden):
     """A 50 % duty profile is mirror-symmetric, so ``T(+1) == T(-1)`` exactly.
 
-    RCWA returns them equal to round-off and ``tests/test_fdtd.py`` asserts it of wavebit's
+    RCWA returns them equal to round-off and ``tests/fdtd/test_fdtd.py`` asserts it of wavebit's
     own run. It is asserted of the *frozen Meep numbers* here because it is a symmetry the
     answer must have and the harness cannot arrange -- and it is what found the sixth
     harness fault, which ``gen_goldens_meep_1d.py::_layer_blocks`` records: an explicit
@@ -629,14 +634,14 @@ def test_the_scene_is_the_one_tests_test_fdtd_uses():
     """``_meep_1d_cases.py`` says where its numbers came from; this is what checks it.
 
     An oracle stated on a scene *near* the one under test is a different oracle, and the
-    two files cannot share a constant -- ``tests/test_fdtd.py`` imports wavebit and the
+    two files cannot share a constant -- ``tests/fdtd/test_fdtd.py`` imports wavebit and the
     case file has to be readable in an environment that has only numpy and meep. So the
     provenance is a comment there and an assertion here, in the one environment that can
     import both. The unit differs by 1000 on purpose (§2's table is in nanometres, this
     oracle is stated in micrometres), which is why these compare *ratios* rather than values.
     """
     sys.path.insert(0, str(HERE.parent))
-    import test_fdtd as bench
+    import tests.fdtd.test_fdtd as bench
 
     case = CASES['binary_grating']
     scale = bench.WL / case['wavelength']
@@ -649,7 +654,7 @@ def test_the_scene_is_the_one_tests_test_fdtd_uses():
     # docstring: two columns, the tooth's index first.
     want = np.asarray(bench._grating()).ravel()
     got = eps_of(np.asarray(case['index'])).ravel()
-    assert np.allclose(got, want), f'{got} against tests/test_fdtd.py::_grating() {want}'
+    assert np.allclose(got, want), f'{got} against tests/fdtd/test_fdtd.py::_grating() {want}'
     assert float(np.asarray(case['index']).ravel()[0]) == bench.N_TOOTH
 
     # And the planar scene is that grating with exactly one thing removed.
@@ -664,14 +669,14 @@ def test_the_closed_form_agrees_with_the_one_the_benchmark_carries():
     """Two independently written planar solvers, pinned to each other.
 
     ``_meep_1d_cases.py::airy_rt`` is a transfer-matrix chain and
-    ``tests/test_fdtd.py::_stack_rt`` is the benchmark's own; the calibration above is only
+    ``tests/fdtd/test_fdtd.py::_stack_rt`` is the benchmark's own; the calibration above is only
     as good as the first, and this is the one place in the repository that can compare them
     because it is the one environment that imports both. They agree to round-off, which
     also settles the ``t_p`` convention -- the published p transmission is the **E** ratio
     rather than the magnetic one, and the two differ by ``n_top / n_bot``.
     """
     sys.path.insert(0, str(HERE.parent))
-    import test_fdtd as bench
+    import tests.fdtd.test_fdtd as bench
 
     case = CASES['slab_uniform']
     n_tooth = float(np.asarray(case['index']).ravel()[0])
@@ -701,7 +706,7 @@ def test_the_golden_holds_the_orders_the_case_file_declares(golden):
 
 
 def test_the_leg_signs_are_the_ones_the_generator_derived():
-    """The generator and ``_core/fdtd.py`` reach ``(-1, +1, -1)`` independently.
+    """The generator and ``src/wavebit/fdtd/_periodic/legacy.py`` reach ``(-1, +1, -1)`` independently.
 
     Not a convention either of them chose: ``p_hat = k_hat x s_hat`` plus ``E . k_hat = 0``
     gives ``E . p_hat = -+ (n / kz)(c Ex + s Ey)`` with the upper sign downgoing, which is
@@ -710,7 +715,7 @@ def test_the_leg_signs_are_the_ones_the_generator_derived():
     absorbed by a tolerance.
     """
     import inspect
-    from wavebit._core import fdtd
+    from wavebit.fdtd._periodic import legacy as fdtd
     for name in ('_extract_crossed', '_extract_conical'):
         sig = inspect.signature(getattr(fdtd, name)).parameters['sigma'].default
         assert tuple(float(s) for s in sig) == SIGMA, name

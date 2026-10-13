@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 365" role="img" aria-labelledby="07-material-title 07-material-desc">
+<title id="07-material-title">Assign once; evaluate permittivity at each wavelength</title><desc id="07-material-desc">From material definition through wavelength-dependent permittivity to RCWA results</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="365" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Assign once; evaluate permittivity at each wavelength</text>
+<rect x="30" y="93" width="280" height="151" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="127" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">① Assign materials</text>
+<text x="48" y="163" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Shapes · backgrounds · half-spaces</text>
+<text x="48" y="190" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Constants or dispersion tables</text>
+<text x="48" y="217" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Assign the silicon object once</text>
+<line x1="318" y1="167" x2="356" y2="167" stroke="#546779" stroke-width="2" />
+<polygon points="356,167 346.0,171.0 346.0,163.0" fill="#546779" />
+<rect x="365" y="93" width="290" height="151" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="383" y="127" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">② Evaluate at current wavelength</text>
+<text x="383" y="163" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">solve(wavelength=λ)</text>
+<text x="383" y="190" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Interpolate εᵣ(λ), μᵣ(λ) from the table</text>
+<text x="383" y="217" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Reevaluate when wavelength changes</text>
+<line x1="664" y1="167" x2="697" y2="167" stroke="#546779" stroke-width="2" />
+<polygon points="697,167 687.0,171.0 687.0,163.0" fill="#546779" />
+<rect x="705" y="93" width="265" height="151" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="723" y="127" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">③ RCWA calculation</text>
+<text x="723" y="163" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Build matrices from evaluated permittivity</text>
+<text x="723" y="190" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Modes · layer coupling</text>
+<text x="723" y="217" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R / T · fields</text>
+<text x="37" y="302" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">For external n,k tables, step ② converts to permittivity · users assign the material</text>
+<text x="30" y="348" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Current implementation · numerical rasters and solve_conv matrices must be updated at each wavelength by the caller</text>
+</svg>

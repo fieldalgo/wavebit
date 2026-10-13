@@ -1,15 +1,20 @@
 """Independent adjoint provenance and controls without assuming continuum equivalence."""
-from pathlib import Path
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
-from studies.fdtd_adjoint_comparison import reference_controls, measure
+from studies.fdtd.adjoint_comparison.fdtd_adjoint_comparison import reference_controls, measure
 
 
 @pytest.mark.parametrize('resolution,suffix', [(20, '_coarse'), (40, '')])
 def test_meep_adjoint_and_finite_difference_reference_controls(resolution, suffix, record_property):
-    base = Path(__file__).parent
+    base = repository_path('tests/references')
     data = dict(np.load(base/f'golden_meep_adjoint_rotation{suffix}.npz'))
     previous = dict(np.load(base/f'golden_meep_rotation_smoothing{suffix}.npz'))
     assert data['amplitudes'].shape == (2, 2)

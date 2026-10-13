@@ -32,12 +32,17 @@ The order set is handed to fmmax as ``|m|, |n| <= ORDER`` rather than generated 
 formulation's matrices are exactly Hermitian on a Hermitian permittivity, so a miss there is
 the bridge, not the oracle.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_fmmax_laurent.npz'
@@ -76,15 +81,14 @@ def main():
         freeze(jnp, fmmax, out, flavour='phase64')
     finally:
         undo()
-    from _fmmax_laurent_cases import CASES, LEVELS
+    from tests.references._fmmax_laurent_cases import CASES, LEVELS
     out['__levels'] = np.asarray(LEVELS, dtype=np.int64)
     np.savez(OUT, **out)
     print(f'\nwrote {OUT} ({len(CASES)} cases, {len(LEVELS)} sampling levels, two flavours)')
 
 
 def freeze(jnp, fmmax, out, flavour):
-    from _fmmax_laurent_cases import (CASES, LEVELS, ORDER, THETA, THICK, WL, lossless,
-                                      upsampled)
+    from tests.references._fmmax_laurent_cases import CASES, LEVELS, ORDER, THETA, THICK, WL, lossless, upsampled
 
     k0 = 2 * np.pi / WL
     wl = jnp.asarray(WL)

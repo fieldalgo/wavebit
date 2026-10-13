@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="1350" viewBox="0 0 1040 1350" role="img" aria-labelledby="title desc">
+<title id="title">여러 소스의 계산 흐름</title>
+<desc id="desc">외부 평면파와 가우시안 빔은 위·아래 경계의 입사 진폭으로, 내부 전기 다이폴은 전류 항으로 입력합니다. 같은 푸리에 배열을 공유하는 성분끼리 계산한 뒤 복소 전기장과 자기장을 합산합니다. 외부 입사만 있으면 입사 전력으로 정규화하고, 다이폴이 포함되면 방향별 출력 전력을 읽습니다.</desc>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#546878"/></marker></defs>
+<rect width="1040" height="1350" rx="18" fill="#f4f7fa"/>
+<g font-family="Arial, Noto Sans KR, sans-serif" fill="#142c40" text-anchor="middle">
+<text x="520" y="43" font-size="28" font-weight="700" text-anchor="middle">여러 소스의 계산 흐름</text>
+<text x="520" y="75" font-size="19" font-weight="400" text-anchor="middle">같은 파장 · 선형 재료 · 각 소스의 크기와 위상을 지정</text>
+<text x="65" y="115" font-size="19" font-weight="700" text-anchor="start">범례</text>
+<rect x="135" y="96" width="24" height="24" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="174" y="115" font-size="18" font-weight="400" text-anchor="start">회색: 입력·RCWA 계산·필드 재구성</text>
+<rect x="577" y="96" width="24" height="24" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="616" y="115" font-size="18" font-weight="400" text-anchor="start">초록: 장 합산·전력 계산·결과</text>
+<rect x="140" y="145" width="760" height="60" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520" y="182" font-size="23" font-weight="700" text-anchor="middle">공통 설정: 층·재료·격자·파장</text>
+<path d="M520 205 V222 H280 V240" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M520 222 H760 V240" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="50" y="240" width="460" height="145" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="280" y="269" font-size="23" font-weight="700" text-anchor="middle">외부 입사파</text>
+<text x="280" y="298" font-size="20" font-weight="400" text-anchor="middle">평면파 · 차수별 입력 · 가우시안 빔</text>
+<text x="280" y="326" font-size="19" font-weight="400" text-anchor="middle">가우시안 빔은 여러 평면파로 구성</text>
+<text x="280" y="359" font-size="21" font-weight="700" text-anchor="middle">→ 위·아래 경계의 입사 진폭</text>
+<rect x="530" y="240" width="460" height="145" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="760" y="269" font-size="23" font-weight="700" text-anchor="middle">층 내부의 전기 다이폴</text>
+<text x="760" y="298" font-size="20" font-weight="400" text-anchor="middle">위치 · 복소 모멘트 · 반복 조건</text>
+<text x="760" y="326" font-size="19" font-weight="400" text-anchor="middle">주기 배열 또는 고립 소스 근사</text>
+<text x="760" y="359" font-size="21" font-weight="700" text-anchor="middle">→ 소스 위치의 전류 항</text>
+<path d="M280 385 V405 H520 V425" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M760 385 V405 H520" fill="none" stroke="#546878" stroke-width="2.5"/>
+<rect x="140" y="425" width="760" height="86" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520" y="460" font-size="23" font-weight="700" text-anchor="middle">같은 푸리에 배열을 공유하는 성분끼리 묶음</text>
+<text x="520" y="491" font-size="21" font-weight="400" text-anchor="middle">횡파수 차이 = 역격자 벡터의 정수 조합</text>
+<path d="M520 511 V543" fill="none" stroke="#546878" stroke-width="2.5"/>
+<path d="M520 543 H280 V570" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M520 543 H760 V570" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="50" y="570" width="460" height="77" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="280" y="600" font-size="23" font-weight="700" text-anchor="middle">한 묶음</text>
+<text x="280" y="629" font-size="21" font-weight="400" text-anchor="middle">공통 RCWA 계산</text>
+<rect x="530" y="570" width="460" height="77" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="760" y="600" font-size="23" font-weight="700" text-anchor="middle">여러 묶음</text>
+<text x="760" y="629" font-size="21" font-weight="400" text-anchor="middle">묶음별 RCWA 계산</text>
+<path d="M280 647 V675 H520 V699" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M760 647 V675 H520" fill="none" stroke="#546878" stroke-width="2.5"/>
+<rect x="140" y="700" width="760" height="82" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="520" y="733" font-size="23" font-weight="700" text-anchor="middle">위·아래 경계의 복소 장 계산</text>
+<text x="520" y="764" font-size="21" font-weight="400" text-anchor="middle">외부 입사와 내부 소스의 기여를 함께 반영</text>
+<path d="M520 782 V798 H417 V817" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="65" y="818" width="705" height="85" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="417" y="853" font-size="22" font-weight="700" text-anchor="middle">공통 좌표와 위상 기준으로 E, H를 합산</text>
+<text x="417" y="884" font-size="22" font-weight="400" text-anchor="middle">E = Σ Eⱼ    ·    H = Σ Hⱼ</text>
+<path d="M900 741 H990 V802 H901 V838" fill="none" stroke="#546878" stroke-width="2.5" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+<rect x="794" y="839" width="215" height="76" rx="12" fill="#ffffff" stroke="#a4b5c4" stroke-width="2"/>
+<text x="901" y="869" font-size="21" font-weight="700" text-anchor="middle">필요할 때</text>
+<text x="901" y="897" font-size="20" font-weight="400" text-anchor="middle">층 내부 E, H 재구성</text>
+<path d="M417 903 V922 H520 V943" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="140" y="944" width="760" height="87" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="520" y="978" font-size="23" font-weight="700" text-anchor="middle">관측 영역의 전력 흐름 계산</text>
+<text x="520" y="1010" font-size="22" font-weight="400" text-anchor="middle">⟨S⟩ = ½ Re(E × H*)</text>
+<text x="520" y="1080" font-size="20" font-weight="700" text-anchor="middle">포함된 소스에 따라 결과 읽기</text>
+<path d="M520 1031 V1048 H280 V1100" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<path d="M520 1048 H760 V1100" fill="none" stroke="#546878" stroke-width="2.5" marker-end="url(#arrow)"/>
+<rect x="50" y="1100" width="460" height="160" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="280" y="1132" font-size="22" font-weight="700" text-anchor="middle">외부 입사만 있는 경우</text>
+<text x="280" y="1163" font-size="20" font-weight="400" text-anchor="middle">관측 영역의 입사 전력으로 나눔</text>
+<text x="280" y="1194" font-size="20" font-weight="400" text-anchor="middle">output_top · output_bottom</text>
+<text x="280" y="1230" font-size="18" font-weight="400" text-anchor="middle">해당 관측 영역의 출력 전력 비율</text>
+<rect x="530" y="1100" width="460" height="160" rx="12" fill="#deefed" stroke="#267d78" stroke-width="2"/>
+<text x="760" y="1132" font-size="22" font-weight="700" text-anchor="middle">내부 다이폴이 포함된 경우</text>
+<text x="760" y="1163" font-size="20" font-weight="400" text-anchor="middle">입사 전력으로 정규화하지 않음</text>
+<text x="760" y="1194" font-size="18" font-weight="400" text-anchor="middle">power.outgoing_top · outgoing_bottom</text>
+<text x="760" y="1230" font-size="18" font-weight="400" text-anchor="middle">Z₀로 나누면 평균 전력 밀도 (W/m²)</text>
+<text x="520" y="1300" font-size="19" font-weight="400" text-anchor="middle">여러 소스의 복소 장을 합한 뒤 전력을 구하므로 간섭이 포함됩니다.</text>
+<text x="520" y="1330" font-size="17" font-weight="400" text-anchor="middle">식의 H는 실제 자기장입니다. 반환 필드 Z₀H를 사용하면 전력식에 1/Z₀를 반영합니다.</text>
+</g></svg>

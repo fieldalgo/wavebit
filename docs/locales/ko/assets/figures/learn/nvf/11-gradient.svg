@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 429" role="img" aria-labelledby="title desc">
+<title id="title">미분하는 계산과 검증하는 계산</title><desc id="desc">같은 유한 설정에서 자동미분과 독립적인 중심차분을 비교한다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="429" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">미분하는 계산과 검증하는 계산</text>
+<rect x="30" y="85" width="260" height="140" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">구체적인 도형으로 준비</text>
+<text x="48" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">freeze_geometry()</text>
+<text x="48" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">이산적인 기하 선택을 기록</text>
+<rect x="365" y="85" width="255" height="140" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="383" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">재료값 ε를 변수로</text>
+<text x="383" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">JAX solve(geometry=...)</text>
+<text x="383" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">T(ε) → 자동미분</text>
+<rect x="705" y="85" width="265" height="140" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="723" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">기울기</text>
+<text x="723" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">dT / dε</text>
+<text x="723" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">현재 차수와 격자의 미분</text>
+<line x1="292" y1="155" x2="352" y2="155" stroke="#546779" stroke-width="2"/>
+<polygon points="352,155 342.0,159.0 342.0,151.0" fill="#546779"/>
+<line x1="622" y1="155" x2="692" y2="155" stroke="#546779" stroke-width="2"/>
+<polygon points="692,155 682.0,159.0 682.0,151.0" fill="#546779"/>
+<rect x="105" y="267" width="790" height="108" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="123" y="301" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">별도 확인: 기하를 다시 구성하는 중심차분</text>
+<text x="123" y="337" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">[T(ε+h) − T(ε−h)] / (2h),  h와 h/2 모두 비교</text>
+<text x="30" y="412" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">차분과의 일치는 미분 구현의 확인 · 광학 차수와 공간 적분의 수렴은 별도</text>
+</svg>

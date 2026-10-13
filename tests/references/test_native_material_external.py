@@ -1,12 +1,17 @@
 """External CPML and electric dispersive material references; no Meep import."""
-from pathlib import Path
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import json
 import runpy
 
 import numpy as np
 import pytest
 
-HERE=Path(__file__).resolve().parent
+HERE=repository_path('tests/references')
 
 
 @pytest.mark.parametrize('resolution', [40, 80])

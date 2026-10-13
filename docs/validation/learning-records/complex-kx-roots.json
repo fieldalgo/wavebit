@@ -1,0 +1,575 @@
+{
+  "date": "2026-10-03",
+  "script": "tools/measure_complex_kx_roots.py",
+  "provenance": "Wavebit numbers come from the checkout named in wavebit_source; rerun this script to refresh them. The RETICOLO numbers in grating.reticolo need Octave, oct2py and RETICOLO V10; they are recorded here, not recomputed at build time. path_d holds the Wavebit numbers under the half-space rule before 2026-10-02, measured at its own commit and carried forward.",
+  "python": "3.12.9",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "versions": {
+    "numpy": "2.5.1",
+    "wavebit": "0.1.0"
+  },
+  "wavebit_source": {
+    "commit": "6bb364b436e8cdad1967d5430d1bc7835233b7c8",
+    "describe": "6bb364b",
+    "dirty": false
+  },
+  "boundary_kz_air": {
+    "eps": 1.0,
+    "function": "wavebit._core.conventions.boundary_kz",
+    "rows": [
+      {
+        "kx": [
+          1.5,
+          -1e-09
+        ],
+        "kz": [
+          1.3416407864998739e-09,
+          1.118033988749895
+        ]
+      },
+      {
+        "kx": [
+          1.5,
+          0.0
+        ],
+        "kz": [
+          0.0,
+          1.118033988749895
+        ]
+      },
+      {
+        "kx": [
+          1.5,
+          1e-09
+        ],
+        "kz": [
+          -1.3416407864998739e-09,
+          1.118033988749895
+        ]
+      }
+    ]
+  },
+  "rule_match": {
+    "samples": 600,
+    "sampling": "numpy default_rng(7): 3000 media drawn as sample_media (half lossless; Re(eps) 1..6, Im(eps) 0.01..3 on the lossy half; real kx 0..3), then Im(kx) uniform in -0.5..0.5 for the first 600",
+    "tolerance": 1e-12,
+    "rules": {
+      "D": "path D: continued along the straight kx path from normal incidence (Wavebit before 2026-10-02: principal root plus continuity fix)",
+      "E": "path E: continued from the real kx with the same real part, raising only Im(kx)",
+      "M": "Maystre's cut, Re(kz) + Im(kz) > 0 (Wavebit since 2026-10-02; RETICOLO retsqrt(x, -1); S4 answers the same)",
+      "F": "Im(kz) > 0 (fmmax 1.7.1)"
+    },
+    "same_as": {
+      "D": 544,
+      "E": 598,
+      "M": 600,
+      "F": 475
+    },
+    "lossless": {
+      "samples": 288,
+      "same_as": {
+        "D": 240,
+        "E": 286,
+        "M": 288,
+        "F": 178,
+        "principal": 240
+      }
+    },
+    "absorbing": {
+      "samples": 312,
+      "same_as": {
+        "D": 304,
+        "E": 312,
+        "M": 312,
+        "F": 297,
+        "principal": 301
+      }
+    }
+  },
+  "grating": {
+    "setup": {
+      "top": 1.0,
+      "bot": 2.25,
+      "structure": "one layer of 10 pixels: 5 of eps 9, then 5 of eps 1",
+      "thickness": 0.15,
+      "period": 0.7,
+      "wavelength": 0.9,
+      "polarization": "TE",
+      "truncation_order": 5,
+      "theta_real": 0.2,
+      "fourier_coefficients": "integrated",
+      "backend": "numpy"
+    },
+    "order_kx": [
+      {
+        "order": -1,
+        "kx": -1.0870449549192247
+      },
+      {
+        "order": 0,
+        "kx": 0.19866933079506122
+      },
+      {
+        "order": 1,
+        "kx": 1.484383616509347
+      }
+    ],
+    "theta_imag": [
+      -0.001,
+      -1e-09,
+      0.0,
+      1e-09,
+      1e-06,
+      0.001
+    ],
+    "wavebit": {
+      "rows": [
+        {
+          "theta_imag": -0.001,
+          "r0": [
+            0.1510698799058776,
+            0.09257100948177753
+          ],
+          "R0": 0.03139150041125163,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": -1e-09,
+          "r0": [
+            0.14950818247851716,
+            0.09458647787942784
+          ],
+          "R0": 0.031299298425665076,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": 0.0,
+          "r0": [
+            0.14950818087894557,
+            0.09458647985732628
+          ],
+          "R0": 0.031299298321531895,
+          "warnings": []
+        },
+        {
+          "theta_imag": 1e-09,
+          "r0": [
+            0.14950817927937332,
+            0.09458648183522489
+          ],
+          "R0": 0.03129929821739856,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": 1e-06,
+          "r0": [
+            0.14950658127005823,
+            0.09458845771806723
+          ],
+          "R0": 0.031299194176543116,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": 0.001,
+          "r0": [
+            0.1478732147925459,
+            0.0965246741367301
+          ],
+          "R0": 0.031183500370284348,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        }
+      ]
+    },
+    "reticolo": {
+      "date": "2026-09-26",
+      "provenance": "Needs Octave, oct2py and RETICOLO V10; recorded, not recomputed at build time.",
+      "reticolo": "V10_2025/reticolo_allege_v10",
+      "octave": "9.4.0",
+      "oct2py": "6.0.3",
+      "bridge": "tests/references/interface/Reticolo.py::run_res2_all_modes",
+      "bridge_commit": "c6aa0ab0623d53b14a190abb64679d1365484850",
+      "pol_argument": 0,
+      "rows": [
+        {
+          "theta_imag": -0.001,
+          "r0": [
+            0.1510698799058794,
+            0.09257100948177988
+          ],
+          "R0": 0.0313915004112526,
+          "sum_R": 0.03160111648588101
+        },
+        {
+          "theta_imag": -1e-09,
+          "r0": [
+            0.14950818247851827,
+            0.09458647787942716
+          ],
+          "R0": 0.031299298425665284,
+          "sum_R": 0.031299298634551304
+        },
+        {
+          "theta_imag": 0.0,
+          "r0": [
+            0.14950818087894757,
+            0.09458647985732305
+          ],
+          "R0": 0.03129929832153188,
+          "sum_R": 0.18179625635208768
+        },
+        {
+          "theta_imag": 1e-09,
+          "r0": [
+            0.14950817927937354,
+            0.09458648183522336
+          ],
+          "R0": 0.03129929821739833,
+          "sum_R": 0.03129929842628436
+        },
+        {
+          "theta_imag": 1e-06,
+          "r0": [
+            0.149506581270062,
+            0.09458845771806776
+          ],
+          "R0": 0.031299194176544344,
+          "sum_R": 0.031299403061799784
+        },
+        {
+          "theta_imag": 0.001,
+          "r0": [
+            0.1478732147925468,
+            0.09652467413673013
+          ],
+          "R0": 0.031183500370284625,
+          "sum_R": 0.0313915614309941
+        }
+      ]
+    }
+  },
+  "gain": {
+    "setup": {
+      "top": 2.25,
+      "gain_eps": [
+        1.0,
+        -0.05
+      ],
+      "polarization": "TE",
+      "wavelength_nm": 1000.0,
+      "period_nm": 2000.0,
+      "truncation_order": 0,
+      "backend": "numpy",
+      "half_space": "a 100 nm glass layer, then the gain medium as bot",
+      "lossy_mirror": "the same with bot = conj(gain_eps) = 1 + 0.05i",
+      "layer": "a 2000 nm gain layer between glass (top) and air (bot)"
+    },
+    "half_space": [
+      {
+        "theta_deg": 30.0,
+        "R": 0.10563166810710448,
+        "warnings": [],
+        "R_lossy_mirror": 0.10563166810710452,
+        "warnings_lossy_mirror": [],
+        "R_principal_root": 0.10563166810710459,
+        "R_gain_continued_root": 0.10563166810710459
+      },
+      {
+        "theta_deg": 45.0,
+        "R": 1.2646300343998609,
+        "warnings": [
+          "UnphysicalResultWarning"
+        ],
+        "R_lossy_mirror": 0.7907450976162815,
+        "warnings_lossy_mirror": [],
+        "R_principal_root": 0.7907450976162819,
+        "R_gain_continued_root": 1.2646300343998613
+      }
+    ],
+    "layer": {
+      "thickness_um": 2.0,
+      "rows": [
+        {
+          "theta_deg": 30.0,
+          "R": 0.0761188555461973,
+          "T": 2.414842943858594,
+          "warnings": [
+            "UnphysicalResultWarning"
+          ],
+          "R_airy": 0.07611885554619718,
+          "abs_difference": 1.1102230246251565e-16
+        },
+        {
+          "theta_deg": 45.0,
+          "R": 1.2646377119300711,
+          "T": 0.0,
+          "warnings": [
+            "UnphysicalResultWarning"
+          ],
+          "R_airy": 1.2646377119300718,
+          "abs_difference": 6.661338147750939e-16
+        }
+      ]
+    }
+  },
+  "theta_to_kx": {
+    "function": "wavebit rcwa(...)._incident_kxy(wavelength)[0], normalized by k0",
+    "rows": [
+      {
+        "top_eps": [
+          4.0,
+          3.0
+        ],
+        "theta": [
+          0.4,
+          0.0
+        ],
+        "kx": [
+          0.8333175186611247,
+          0.0
+        ]
+      },
+      {
+        "top_eps": [
+          4.0,
+          3.0
+        ],
+        "theta": [
+          0.4,
+          1e-12
+        ],
+        "kx": [
+          0.8260810516939616,
+          0.2753603505668249
+        ]
+      },
+      {
+        "top_eps": [
+          4.0,
+          3.0
+        ],
+        "theta": [
+          0.4,
+          -1e-12
+        ],
+        "kx": [
+          0.8260810516952642,
+          0.27536035056291713
+        ]
+      },
+      {
+        "top_eps": [
+          4.0,
+          0.0
+        ],
+        "theta": [
+          0.4,
+          0.0
+        ],
+        "kx": [
+          0.778836684617301,
+          0.0
+        ]
+      },
+      {
+        "top_eps": [
+          4.0,
+          0.0
+        ],
+        "theta": [
+          0.4,
+          1e-12
+        ],
+        "kx": [
+          0.778836684617301,
+          1.8421219880057702e-12
+        ]
+      },
+      {
+        "top_eps": [
+          4.0,
+          0.0
+        ],
+        "theta": [
+          0.4,
+          -1e-12
+        ],
+        "kx": [
+          0.778836684617301,
+          -1.8421219880057702e-12
+        ]
+      }
+    ]
+  },
+  "path_d": {
+    "note": "Wavebit numbers under path D, the half-space rule before 2026-10-02 (principal root plus continuity fix), measured at the commit named here. Later runs carry this block unchanged.",
+    "date": "2026-09-26",
+    "wavebit_source": {
+      "commit": "2f7f8a68ff6c56ac29047901e220e06e7ba8097e",
+      "describe": "2f7f8a6",
+      "dirty": false
+    },
+    "boundary_kz_air": {
+      "eps": 1.0,
+      "function": "wavebit._core.conventions.boundary_kz",
+      "rows": [
+        {
+          "kx": [
+            1.5,
+            -1e-09
+          ],
+          "kz": [
+            1.3416407864998739e-09,
+            1.118033988749895
+          ]
+        },
+        {
+          "kx": [
+            1.5,
+            0.0
+          ],
+          "kz": [
+            0.0,
+            1.118033988749895
+          ]
+        },
+        {
+          "kx": [
+            1.5,
+            1e-09
+          ],
+          "kz": [
+            1.3416407864998739e-09,
+            -1.118033988749895
+          ]
+        }
+      ]
+    },
+    "rule_match": {
+      "samples": 600,
+      "same_as": {
+        "D": 600,
+        "E": 542,
+        "M": 544,
+        "F": 419
+      },
+      "lossless": {
+        "samples": 288,
+        "same_as": {
+          "D": 288,
+          "E": 238,
+          "M": 240,
+          "F": 130,
+          "principal": 288
+        }
+      },
+      "absorbing": {
+        "samples": 312,
+        "same_as": {
+          "D": 312,
+          "E": 304,
+          "M": 304,
+          "F": 289,
+          "principal": 309
+        }
+      }
+    },
+    "grating_wavebit": {
+      "rows": [
+        {
+          "theta_imag": -0.001,
+          "r0": [
+            0.09149946808723275,
+            -0.25705084182298776
+          ],
+          "R0": 0.07444728794215319,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": -1e-09,
+          "r0": [
+            0.09203664270900913,
+            -0.2560935324554857
+          ],
+          "R0": 0.07405464096667472,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": 0.0,
+          "r0": [
+            0.14950818087894602,
+            0.09458647985732571
+          ],
+          "R0": 0.03129929832153192,
+          "warnings": []
+        },
+        {
+          "theta_imag": 1e-09,
+          "r0": [
+            -0.0061614460335652765,
+            -0.06257370835244899
+          ],
+          "R0": 0.003953432394201882,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": 1e-06,
+          "r0": [
+            -0.006162582880271383,
+            -0.06257426065336164
+          ],
+          "R0": 0.003953515524071056,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        },
+        {
+          "theta_imag": 0.001,
+          "r0": [
+            -0.007287745821382807,
+            -0.06314539219931914
+          ],
+          "R0": 0.004040451795162917,
+          "warnings": [
+            "ComplexIncidenceWarning"
+          ]
+        }
+      ]
+    },
+    "gain_half_space": [
+      {
+        "theta_deg": 30.0,
+        "R": 0.10563166810710448,
+        "warnings": [],
+        "R_lossy_mirror": 0.10563166810710452,
+        "warnings_lossy_mirror": [],
+        "R_principal_root": 0.10563166810710459,
+        "R_gain_continued_root": 0.10563166810710459
+      },
+      {
+        "theta_deg": 45.0,
+        "R": 0.7907450976162821,
+        "warnings": [],
+        "R_lossy_mirror": 0.790745097616282,
+        "warnings_lossy_mirror": [],
+        "R_principal_root": 0.7907450976162819,
+        "R_gain_continued_root": 1.2646300343998613
+      }
+    ]
+  }
+}

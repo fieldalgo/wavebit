@@ -1,0 +1,50 @@
+"""Discretization and algorithm declarations; physical inputs belong to Problem."""
+from .._common.declarations import spec
+from ..errors import ValidationError
+
+
+@spec
+class Numerics:
+    orders: tuple = (0, 0)
+    algorithm: str = 'smm'
+    fourier_coefficients: str | None = None
+    factorization: str | None = None
+    formulation: str = 'auto'
+    raster_normal_method: str | None = None
+    nvf_projector: str | None = None
+    shape_nvf_grid_size: int | None = None
+    li_nesting: str | None = None
+    detuning: object = None
+
+    def __post_init__(self):
+        object.__setattr__(self, 'orders', tuple(self.orders))
+        if len(self.orders) != 2 or any(type(v) is not int or v < 0 for v in self.orders):
+            raise ValidationError('orders needs two nonnegative integers.',
+                                  code='numerics.orders', path='numerics.orders')
+        choices = {'algorithm': ('smm', 'etm'),
+                   'fourier_coefficients': (None, 'sampled', 'integrated'),
+                   'factorization': (None, 'li', 'nvf', 'laurent'),
+                   'formulation': ('auto', 'first_order', 'second_order'),
+                   'raster_normal_method': (None, 'distance', 'contour', 'spectral', 'smooth'),
+                   'nvf_projector': (None, 'linear', 'circular'),
+                   'li_nesting': (None, 'fixed', 'symmetric')}
+        for name, allowed in choices.items():
+            if getattr(self, name) not in allowed:
+                raise ValidationError(f'{name} must be one of {allowed}.',
+                                      code='numerics.choice', path=f'numerics.{name}')
+        if self.shape_nvf_grid_size is not None and (type(self.shape_nvf_grid_size) is not int or self.shape_nvf_grid_size < 1):
+            raise ValidationError('shape_nvf_grid_size must be a positive integer.',
+                                  code='numerics.grid', path='numerics.shape_nvf_grid_size')
+        if self.detuning is not None:
+            import math
+            if type(self.detuning) not in (float, int) or not math.isfinite(self.detuning) or self.detuning <= 0:
+                raise ValidationError('detuning is None (exact requested problem) or a positive relative step.',
+                                      code='numerics.detuning', path='numerics.detuning')
+
+    def _engine_kwargs(self):
+        out = dict(truncation_order=self.orders, layer_algorithm=self.algorithm.upper())
+        for name in ('fourier_coefficients', 'factorization', 'formulation', 'raster_normal_method',
+                     'nvf_projector', 'shape_nvf_grid_size', 'li_nesting'):
+            if getattr(self, name) is not None:
+                out[name] = getattr(self, name)
+        return out

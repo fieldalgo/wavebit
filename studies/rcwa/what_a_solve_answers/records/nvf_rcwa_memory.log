@@ -1,0 +1,278 @@
+Runtime 2D matrix lifetimes, 2026-09-09
+---------------------------------------
+Baseline: commit 023b03e. The affine physical fixture is unchanged.
+The comparison uses its degree-8, h=.04, refine40, cap64, quadrature40
+FEM export. No FEM implementation is imported by the runtime.
+
+Direct core allocation comparison at order (8,8):
+Input convolution matrices and imports precede each fresh tracemalloc
+trace. Baseline and current solve_2d are loaded under different module
+names in the same process. Garbage collection precedes each call.
+Both calls receive identical arrays and preserve their answers declaration.
+{"kind": "core_etm_traced_allocation", "implementation": "before", "order": [8, 8], "answers": "amplitude", "peak_traced_bytes": 176472073, "live_traced_bytes": 195747, "maximum_order_power_difference": 0.0}
+{"kind": "core_etm_traced_allocation", "implementation": "after", "order": [8, 8], "answers": "amplitude", "peak_traced_bytes": 110986835, "live_traced_bytes": 192314, "maximum_order_power_difference": 7.216449660063518e-16}
+{"kind": "core_etm_traced_allocation", "implementation": "before", "order": [8, 8], "answers": "field", "peak_traced_bytes": 176468953, "live_traced_bytes": 21611719, "maximum_order_power_difference": 0.0}
+{"kind": "core_etm_traced_allocation", "implementation": "after", "order": [8, 8], "answers": "field", "peak_traced_bytes": 132368921, "live_traced_bytes": 21611919, "maximum_order_power_difference": 1.0547118733938987e-15}
+
+Validation scope
+----------------
+Initial selection:
+python -m pytest tests/test_solve_2d_core.py tests/test_scattering_core.py tests/test_answers_declaration.py tests/test_field_core.py tests/test_rayleigh_guard.py tests/test_magnetic_layer.py tests/test_anisotropic_berreman.py tests/test_oblique_lattice.py tests/test_stability.py tests/test_gradients.py tests/references/test_reticolo_anisotropic_golden.py -q --tb=short
+395 passed, 4 warnings in 697.80s before intentional interruption.
+The run was interrupted in test_a_painted_overlap_survives_a_unimodular_shear,
+inside boundary._sum while processing overlapping circles. That geometry
+preprocessing was unchanged. The full initial selection was not completed.
+The four warnings came from the 1D exact-grazing detune case.
+
+Focused continuation (no overlap with the 395 completed cases):
+python -m pytest tests/test_stability.py tests/test_gradients.py tests/references/test_reticolo_anisotropic_golden.py tests/test_nvf_affine_orders.py tests/test_nvf_affine_convergence.py tests/test_docs_contract.py tests/test_oblique_lattice.py::test_field_reconstruction_runs_on_a_skewed_cell -q --tb=short
+144 passed, 6 warnings in 93.95s.
+These warnings were the single-precision branch diagnostics, a Torch scalar
+conversion warning, and power diagnostics on real antisymmetric reference
+tensors. No assertion failed. Total: 539 distinct passing cases, including
+the two new independent Fresnel controls for a stack containing no layers.
+This is a targeted validation, not a claim that the entire repository suite ran.
+Ruff on the changed Python files and git diff --check passed.
+
+Whole-process observations at order (20,20)
+-------------------------------------------
+Each row is a fresh process. Timing starts before projected_matrices and
+ends after the public solve_conv call, with answers=amplitude and ETM.
+Peak RSS includes imports, the unchanged projection closure and runtime.
+No other numerical test or study from this task ran during either solve.
+The machine is shared; unrelated load and memory compression are uncontrolled.
+{"kind": "full_rcwa_memory", "implementation": "before_lifetime_change", "order": [20, 20], "seconds": 178.0290407499997, "peak_rss_bytes": 3701080064, "p_T": 0.852401539892462, "p_R": 0.14759846010716418, "s_T": 0.7310368555544822, "s_R": 0.2689631444452565}
+{"kind": "full_rcwa_memory", "implementation": "after_lifetime_change", "order": [20, 20], "seconds": 193.40341108298162, "peak_rss_bytes": 3444555776, "maximum_order_power_difference": 6.671663221879953e-12, "order_power_differences": {"p_T": 6.671663221879953e-12, "p_R": 7.167877402736167e-13, "s_T": 4.163169808890643e-12, "s_R": 1.0524359161934171e-12}, "energy_error": 5.391020962974835e-12, "p_T": 0.85240153989751, "p_R": 0.14759846010788097, "s_T": 0.7310368555553874, "s_R": 0.26896314444420405}
+No speedup is established by these single observations. The measured
+resident peak decreases by about 7%, whereas the separately traced
+order-8 core allocation peak decreases by 37% for amplitude and 25% for
+field. These instruments and scopes measure different quantities.
+
+Reproduction
+------------
+Use the fixed affine FEM export described in nvf-affine-convergence.md.
+For the core trace, first call projected_matrices(coefficients[:8],8),
+then use solve_2d with the same public solver order_kxy arrays, exterior
+indices 1 and 1.5, theta=.2, phi=0, incidence=(0,1), wavelength=900,
+and thickness=[300]. Start tracemalloc after preparing those inputs,
+record get_traced_memory immediately after the call, then stop tracing.
+Run both amplitude and field declarations against the parent and current
+core functions, with garbage collection before each measured call.
+
+For the process measurement, load the same coefficients and start timing
+before projected_matrices(coefficients[:8],20). Construct wavebit.rcwa
+with backend=0, lattice=700*[[1,.45],[0,.7]], wavelength=900, thickness=[300],
+theta=.2, phi=0, truncation_order=(20,20), top=1 and bot=2.25. Call
+solve_conv with the five returned matrices each expanded to one layer.
+Stop timing after the solve, save each p_inc/s_inc R/T array and record
+resource.getrusage(resource.RUSAGE_SELF).ru_maxrss. On this macOS host
+that value is bytes. The record compares all orders, not only totals.
+Both NumPy and SciPy use Apple Accelerate; OPENBLAS_NUM_THREADS=1 and
+OMP_NUM_THREADS=1 were set, which does not establish its actual thread count.
+No package was installed, upgraded or copied for this change.
+All numerical study and test processes ended.
+
+Final documentation validation
+------------------------------
+After the measurement records and documentation were complete:
+python -m pytest tests/test_docs_contract.py -q --tb=short
+36 passed in 0.53s (already included in the 539 distinct cases above).
+The strict Sphinx HTML build with -W --keep-going succeeded.
+Ruff on the changed Python files and git diff --check passed again.
+
+Diagonal-action follow-up (2026-09-09)
+------------------------------------
+Baseline: 9acae35, including the lifetime changes measured above.
+Current: row/column scaling in layer_modes_2d and sp_modes_2d, with
+cosine/sine vectors reused by the 2D ETM and SMM paths. These replace
+eight dense N-square products in the left blocks and sixteen in rotation.
+The grazing guard's eight repeated left-block products also become scaling.
+The ETM block identity still has quadratic per-layer allocation cost.
+No eigensolve, inverse, Fourier order, cutoff threshold or declaration changed.
+No dependency was installed, updated or copied.
+
+Paired timing and allocation reproduction:
+Load the fixed degree-8 affine FEM projection at cap=64, quadrature_refine=40,
+as described above, checking its profile with load_projection. For each
+retained order (8,8) and (12,12), call projected_matrices once. Build the
+public solver's order_kxy arrays for lattice=700*[[1,.45],[0,.7]], wavelength=900,
+theta=.2, phi=0, top=1, bot=2.25. Give those same arrays and convolution
+matrices to the parent and current solve_2d functions, loaded under separate
+module names in the same process. Pass n_top=1, n_bot=1.5, incidence=(0,1).
+Use either one 300 nm layer or three identical 100 nm layers, repeating
+each convolution slot along its layer axis. This splits the same physical
+stack while exercising multiple layer solves.
+
+Warm each function once per configuration with answers=amplitude. Run
+six pairs at order 8 and four at order 12, alternating which function
+runs first. Collect garbage before each call. Time only solve_2d, with
+perf_counter, without tracemalloc. Summaries compare every p/s R/T order
+from all calls with the saved baseline warm-up arrays, and check R+T=1.
+After the timing pairs, trace separate amplitude and field calls with fresh
+tracemalloc traces following garbage collection; capture live/peak bytes
+before accessing the output, then stop the trace and discard the result.
+Inputs and imports precede each trace; native LAPACK workspace is excluded.
+No other numerical work from this task overlaps the measurements. Unrelated
+host load is uncontrolled; NumPy/SciPy use Apple Accelerate, with the same
+OPENBLAS_NUM_THREADS=1 and OMP_NUM_THREADS=1 settings and their limitations.
+
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 0, "implementation": "before", "seconds": 0.5842384170391597}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 0, "implementation": "after", "seconds": 0.5893547920277342}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 1, "implementation": "after", "seconds": 0.5790735419723205}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 1, "implementation": "before", "seconds": 0.5808585829799995}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 2, "implementation": "before", "seconds": 0.632917582988739}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 2, "implementation": "after", "seconds": 0.5812992909923196}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 3, "implementation": "after", "seconds": 0.5766634999890812}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 3, "implementation": "before", "seconds": 0.5808933340013027}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 4, "implementation": "before", "seconds": 0.5831392080290243}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 4, "implementation": "after", "seconds": 0.582479249977041}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 5, "implementation": "after", "seconds": 0.5879268749849871}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 1, "pair": 5, "implementation": "before", "seconds": 0.5808143750182353}
+{"kind": "core_diagonal_summary", "order": [8, 8], "layers": 1, "median_before_seconds": 0.5820162710151635, "median_after_seconds": 0.5818892704846803, "maximum_order_power_difference": 1.1102230246251565e-16, "maximum_energy_error": 9.636735853746359e-14}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 1, "answers": "amplitude", "implementation": "before", "peak_traced_bytes": 110986835, "live_traced_bytes": 192315, "maximum_order_power_difference": 1.1102230246251565e-16}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 1, "answers": "amplitude", "implementation": "after", "peak_traced_bytes": 110996231, "live_traced_bytes": 192133, "maximum_order_power_difference": 1.1102230246251565e-16}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 1, "answers": "field", "implementation": "before", "peak_traced_bytes": 132368875, "live_traced_bytes": 21611781, "maximum_order_power_difference": 1.3877787807814457e-16}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 1, "answers": "field", "implementation": "after", "peak_traced_bytes": 132378317, "live_traced_bytes": 21611829, "maximum_order_power_difference": 1.1102230246251565e-16}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 0, "implementation": "before", "seconds": 1.6014386670431122}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 0, "implementation": "after", "seconds": 1.4836864999961108}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 1, "implementation": "after", "seconds": 1.4811348750372417}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 1, "implementation": "before", "seconds": 1.5011348340194672}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 2, "implementation": "before", "seconds": 1.5016017080051824}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 2, "implementation": "after", "seconds": 1.478983959008474}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 3, "implementation": "after", "seconds": 1.5141677079955116}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 3, "implementation": "before", "seconds": 1.5040440000011586}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 4, "implementation": "before", "seconds": 1.5237425419618376}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 4, "implementation": "after", "seconds": 1.483662666985765}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 5, "implementation": "after", "seconds": 1.4675394580117427}
+{"kind": "core_diagonal_timing", "order": [8, 8], "layers": 3, "pair": 5, "implementation": "before", "seconds": 1.5048147910274565}
+{"kind": "core_diagonal_summary", "order": [8, 8], "layers": 3, "median_before_seconds": 1.5044293955143075, "median_after_seconds": 1.4823987710115034, "maximum_order_power_difference": 9.43689570931383e-16, "maximum_energy_error": 9.747758156208874e-14}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 3, "answers": "amplitude", "implementation": "before", "peak_traced_bytes": 110986789, "live_traced_bytes": 192177, "maximum_order_power_difference": 3.885780586188048e-16}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 3, "answers": "amplitude", "implementation": "after", "peak_traced_bytes": 110996369, "live_traced_bytes": 195719, "maximum_order_power_difference": 0.0}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 3, "answers": "field", "implementation": "before", "peak_traced_bytes": 175151867, "live_traced_bytes": 64394865, "maximum_order_power_difference": 0.0}
+{"kind": "core_diagonal_allocation", "order": [8, 8], "layers": 3, "answers": "field", "implementation": "after", "peak_traced_bytes": 175161355, "live_traced_bytes": 64394775, "maximum_order_power_difference": 0.0}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 0, "implementation": "before", "seconds": 4.207869583973661}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 0, "implementation": "after", "seconds": 4.06724383297842}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 1, "implementation": "after", "seconds": 4.105503124999814}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 1, "implementation": "before", "seconds": 4.227571916999295}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 2, "implementation": "before", "seconds": 4.388516332954168}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 2, "implementation": "after", "seconds": 4.107473791984376}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 3, "implementation": "after", "seconds": 4.097968958027195}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 1, "pair": 3, "implementation": "before", "seconds": 4.290249082958326}
+{"kind": "core_diagonal_summary", "order": [12, 12], "layers": 1, "median_before_seconds": 4.2589104999788105, "median_after_seconds": 4.1017360415135045, "maximum_order_power_difference": 4.556910404573955e-13, "maximum_energy_error": 7.807088309164101e-13}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 1, "answers": "amplitude", "implementation": "before", "peak_traced_bytes": 518890881, "live_traced_bytes": 402025, "maximum_order_power_difference": 4.556910404573955e-13}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 1, "answers": "amplitude", "implementation": "after", "peak_traced_bytes": 518911121, "live_traced_bytes": 402119, "maximum_order_power_difference": 1.726951914804431e-13}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 1, "answers": "field", "implementation": "before", "peak_traced_bytes": 618891545, "live_traced_bytes": 100483215, "maximum_order_power_difference": 4.556910404573955e-13}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 1, "answers": "field", "implementation": "after", "peak_traced_bytes": 618911785, "live_traced_bytes": 100483263, "maximum_order_power_difference": 4.556910404573955e-13}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 0, "implementation": "before", "seconds": 10.939486125018448}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 0, "implementation": "after", "seconds": 10.57147799996892}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 1, "implementation": "after", "seconds": 10.539930499973707}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 1, "implementation": "before", "seconds": 11.106271041964646}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 2, "implementation": "before", "seconds": 10.92755570897134}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 2, "implementation": "after", "seconds": 10.600866374967154}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 3, "implementation": "after", "seconds": 10.573493875039276}
+{"kind": "core_diagonal_timing", "order": [12, 12], "layers": 3, "pair": 3, "implementation": "before", "seconds": 10.96639558300376}
+{"kind": "core_diagonal_summary", "order": [12, 12], "layers": 3, "median_before_seconds": 10.952940854011104, "median_after_seconds": 10.572485937504098, "maximum_order_power_difference": 5.501710198529963e-13, "maximum_energy_error": 7.789324740770098e-13}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 3, "answers": "amplitude", "implementation": "before", "peak_traced_bytes": 518890651, "live_traced_bytes": 401749, "maximum_order_power_difference": 3.8402614421784165e-13}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 3, "answers": "amplitude", "implementation": "after", "peak_traced_bytes": 518911029, "live_traced_bytes": 402027, "maximum_order_power_difference": 0.0}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 3, "answers": "field", "implementation": "before", "peak_traced_bytes": 818933335, "live_traced_bytes": 300524821, "maximum_order_power_difference": 2.83550960489265e-13}
+{"kind": "core_diagonal_allocation", "order": [12, 12], "layers": 3, "answers": "field", "implementation": "after", "peak_traced_bytes": 818953529, "live_traced_bytes": 300524915, "maximum_order_power_difference": 0.0}
+
+Diagonal-action validation scope
+-------------------------------
+python -m pytest tests/test_solve_2d_core.py tests/test_rayleigh_guard.py -q --tb=short
+58 passed, 4 warnings in 43.88s. This preceded adding the six new residual
+cases; those six cases ran in the next selection.
+
+python -m pytest tests/test_solve_2d_core.py::test_2d_modes_satisfy_both_dense_maxwell_factors tests/test_scattering_core.py tests/test_answers_declaration.py tests/test_field_core.py tests/test_magnetic_layer.py tests/test_anisotropic_berreman.py tests/test_solve_2d_4ff.py tests/test_gradients.py tests/references/test_reticolo_anisotropic_golden.py tests/references/test_4ff_external_goldens.py tests/references/test_s4_field_golden.py -q --tb=short
+879 passed, 38 skipped, 5 warnings in 162.30s.
+The skips are the existing non-Hermitian lossless checks and unsupported
+TE/TM azimuth/polarization cases. Warnings are a Torch scalar conversion
+and the expected diagnostics on real antisymmetric reference tensors.
+
+python -m pytest tests/test_oblique_lattice.py::test_the_public_wavevectors_are_the_ones_the_skewed_solve_uses tests/test_oblique_lattice.py::test_oblique_runs_on_every_backend tests/test_oblique_lattice.py::test_field_reconstruction_runs_on_a_skewed_cell tests/test_oblique_lattice.py::test_the_answer_rotates_with_the_cell tests/test_stability.py tests/test_docs_contract.py -q --tb=short
+75 passed, 3 warnings in 9.77s. These warnings are the existing
+single-precision branch diagnostics in the 1D stability controls.
+
+Total: 1012 distinct passing cases, 38 conditional skips. All selections
+completed; this does not claim a full repository-suite run.
+All numerical test and measurement processes ended.
+After the final documentation edits, the 36 documentation-contract cases
+passed again in 0.38s (already included in the distinct total). The strict
+Sphinx HTML build with -W --keep-going succeeded. Ruff on the changed
+Python files and git diff --check passed.
+
+Direct boundary solve follow-up (2026-09-09)
+-------------------------------------------
+Isolated baseline: 5312319. Both implementations use that same 2D mode
+and diagonal-rotation code; only final_matching differs. The parent
+constructs the full inverse. The new version directly solves for the
+one requested efficiency column or the three amplitude/field columns.
+No new dependency, numerical threshold or retained mode was introduced.
+
+Reproduction: follow the diagonal timing procedure above at order 8,
+with four alternating pairs per one-layer/three-layer configuration.
+Load the parent's final_matching into a separate copy of the current
+2D module, leaving the main runtime untouched. Warm both functions,
+then time their complete core solves, including boundary matching.
+Use separate amplitude/field tracemalloc calls, with prebuilt inputs
+excluded. All calls use the fixed cap64, degree8, quadrature40 projection.
+No numerical work from this task overlapped the timing or allocation runs.
+
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 0, "implementation": "before", "seconds": 0.5617164159775712}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 0, "implementation": "after", "seconds": 0.4714235839783214}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 1, "implementation": "after", "seconds": 0.4590294170193374}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 1, "implementation": "before", "seconds": 0.6144233749946579}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 2, "implementation": "before", "seconds": 0.575465333997272}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 2, "implementation": "after", "seconds": 0.4882557499804534}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 3, "implementation": "after", "seconds": 0.5061459160060622}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 1, "pair": 3, "implementation": "before", "seconds": 0.5324560839799233}
+{"kind": "core_boundary_summary", "order": [8, 8], "layers": 1, "median_before_seconds": 0.5685908749874216, "median_after_seconds": 0.4798396669793874, "maximum_order_power_difference": 1.609823385706477e-15, "maximum_energy_error": 9.903189379656396e-14}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 1, "answers": "amplitude", "implementation": "before", "peak_traced_bytes": 110996323, "live_traced_bytes": 192409, "maximum_order_power_difference": 1.1102230246251565e-16}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 1, "answers": "amplitude", "implementation": "after", "peak_traced_bytes": 81570041, "live_traced_bytes": 192327, "maximum_order_power_difference": 1.2490009027033011e-15}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 1, "answers": "field", "implementation": "before", "peak_traced_bytes": 132378363, "live_traced_bytes": 21611783, "maximum_order_power_difference": 0.0}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 1, "answers": "field", "implementation": "after", "peak_traced_bytes": 102952081, "live_traced_bytes": 21611793, "maximum_order_power_difference": 1.2490009027033011e-15}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 0, "implementation": "before", "seconds": 1.4157088340143673}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 0, "implementation": "after", "seconds": 1.3185495840152726}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 1, "implementation": "after", "seconds": 1.3481556249898858}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 1, "implementation": "before", "seconds": 1.364205582998693}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 2, "implementation": "before", "seconds": 2.028862166975159}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 2, "implementation": "after", "seconds": 1.5411896249861456}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 3, "implementation": "after", "seconds": 1.6980486669926904}
+{"kind": "core_boundary_timing", "order": [8, 8], "layers": 3, "pair": 3, "implementation": "before", "seconds": 2.0044375410070643}
+{"kind": "core_boundary_summary", "order": [8, 8], "layers": 3, "median_before_seconds": 1.7100731875107158, "median_after_seconds": 1.4446726249880157, "maximum_order_power_difference": 8.049116928532385e-16, "maximum_energy_error": 9.903189379656396e-14}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 3, "answers": "amplitude", "implementation": "before", "peak_traced_bytes": 110996461, "live_traced_bytes": 192409, "maximum_order_power_difference": 2.220446049250313e-16}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 3, "answers": "amplitude", "implementation": "after", "peak_traced_bytes": 81570087, "live_traced_bytes": 192189, "maximum_order_power_difference": 8.326672684688674e-16}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 3, "answers": "field", "implementation": "before", "peak_traced_bytes": 175161401, "live_traced_bytes": 64394913, "maximum_order_power_difference": 0.0}
+{"kind": "core_boundary_allocation", "order": [8, 8], "layers": 3, "answers": "field", "implementation": "after", "peak_traced_bytes": 145735119, "live_traced_bytes": 64394739, "maximum_order_power_difference": 7.216449660063518e-16}
+
+Whole-process order-20 continuity observation:
+A fresh public solve_conv run with the same fixed projection, wavelength,
+incidence, thickness and media as the earlier order-20 record. Timing
+includes projected_matrices and the optical solve. RSS is macOS bytes,
+including imports and native workspaces. The saved comparison arrays are
+from the lifetime-only implementation, before both diagonal scaling and
+the direct boundary solve. This is a continuity observation, not an
+isolated paired performance comparison with 5312319.
+{"kind": "affine_fitted_cell", "order": [20, 20], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8524015398932834, "p_R": 0.14759846010726857, "s_T": 0.731036855556002, "s_R": 0.26896314444372044, "energy_error": 5.520028878436278e-13, "projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "seconds": 55.62032095901668}
+{"kind": "runtime_observation", "order": [20, 20], "peak_rss_bytes": 2547548160, "seconds": 55.62032095901668, "boundary_algorithm": "direct_solve", "maximum_order_power_difference": 5.5319082647997675e-12, "order_power_differences": {"p_T": 5.5319082647997675e-12, "p_R": 6.123990203832363e-13, "s_T": 9.731104810839497e-13, "s_R": 4.836131495267182e-13}}
+
+Validation scope (disjoint selections):
+python -m pytest tests/test_answers_declaration.py tests/test_fp_warnings.py tests/test_solve_1d_core.py tests/test_solve_2d_core.py tests/test_rayleigh_guard.py -q --tb=short
+196 passed, 4 warnings in 83.01s; before adding the four Fresnel column cases.
+
+python -m pytest tests/test_solve_2d_core.py::test_empty_stack_incidence_columns_match_complex_fresnel_amplitudes tests/test_scattering_core.py tests/test_field_core.py tests/test_magnetic_layer.py tests/test_anisotropic_berreman.py tests/test_solve_2d_4ff.py tests/test_gradients.py tests/test_polarization.py tests/test_backside_incidence.py tests/test_lossy_media.py tests/test_stability.py tests/references/test_reticolo_anisotropic_golden.py tests/references/test_4ff_external_goldens.py tests/references/test_s4_field_golden.py tests/references/test_reticolo_conical_field_golden.py -q --tb=short
+1472 passed, 38 skipped, 8 warnings in 224.41s.
+
+python -m pytest tests/test_excitation.py tests/test_oblique_lattice.py::test_a_shifted_order_window_does_not_count_its_centre_twice tests/test_oblique_lattice.py::test_the_public_wavevectors_are_the_ones_the_skewed_solve_uses tests/test_oblique_lattice.py::test_oblique_runs_on_every_backend tests/test_oblique_lattice.py::test_field_reconstruction_runs_on_a_skewed_cell tests/test_oblique_lattice.py::test_the_answer_rotates_with_the_cell tests/test_nvf_affine_orders.py tests/test_nvf_affine_convergence.py tests/test_docs_contract.py -q --tb=short
+128 passed in 22.96s.
+
+Total: 1796 distinct passing cases and 38 existing conditional skips.
+Warnings came from the existing 1D exact-grazing/single-precision controls,
+Torch scalar conversion, and real antisymmetric reference tensors. The
+skips are non-Hermitian lossless checks and unsupported TE/TM azimuth or
+polarization cases. All three selections completed. This is targeted
+validation, not a full repository test run. All numerical processes ended.
+
+Final documentation validation: 36 cases passed again in 0.57s, already
+included in the 1796 distinct cases. Strict Sphinx HTML (-W --keep-going),
+Ruff on changed Python files, and git diff --check passed.

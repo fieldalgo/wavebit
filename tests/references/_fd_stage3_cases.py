@@ -1,13 +1,13 @@
 """The stage-3 scenes, captures and lowered arrays that ``fd_golden_stage3.npz`` and its test share.
 
 One module, imported by both ``interface/freeze_fd_stage3.py`` (which writes the golden) and
-``tests/test_fd_stage3_backends.py`` (which reads it), so the two cannot disagree about which
+``tests/fdtd/test_fd_stage3_backends.py`` (which reads it), so the two cannot disagree about which
 scene a key names. The content digest and the relative gap are the stage-0 definitions,
 imported rather than copied; the stage-2 sampling rule (cells clustered on the domain centre)
 is imported too, because the reason it exists -- a TFSF or sheet scene's far cells are
 round-off -- holds for every scene here.
 
-**The scenes are built here and not by the ``tests/fd_helpers.py`` builders**
+**The scenes are built here and not by the ``tests/fixtures/fdtd/fd_helpers.py`` builders**
 (``flux_box_dipole``, ``bloch_stack``, ``box_grating``, ``farfield_dipole``,
 ``conical_grating``). Those are shared with the physics gates, tuned for accuracy (14 to 160
 periods, 20 to 80 cells per wavelength) and edited as those gates grow; a golden whose scenes
@@ -55,7 +55,7 @@ reason: the first freeze pinned a launch defect of the PlaneWave column. Its har
 the continuum polarisation into the stored ``E_x`` and ``E_y`` without the half-cell stagger
 phase each carries along its own axis (and not transverse to the grid's discrete ``K``), so both
 scenes' conical p waves were launched with an s part first order in ``dx``; the drive now writes
-the grid's own p wave (``src/wavebit/fd/_lower/sources.py::plane_wave_drive``). What moved, as a
+the grid's own p wave (``src/wavebit/fdtd/_prepare/sources.py::plane_wave_drive``). What moved, as a
 fraction of each array's peak (the same on every backend): ``bloch_stack`` -- the accumulators
 2.8e-2 to 5.9e-2, the sampled fields 5.1e-2 / 5.7e-2, ``incident_amplitude`` 5.1e-2 (the
 stagger phases, ``k_x dx/2 = 0.058`` and ``k_y dx/2 = 0.033`` rad here), the energies, fluxes,
@@ -101,22 +101,27 @@ to 1e-12 and a pin on it would be a pin on cancellation. The energy series it is
 added: each DFT region's angular frequencies (``params['dft']``) and, for the Axis1D scene,
 the exact ``i k dx`` the curl multiplies by (``params['axis1d']``).
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))                          # tests/references, for the earlier cases
 sys.path.insert(0, str(HERE.parent))                   # tests/, for fd_helpers
 
-import wavebit.fd as fd                                                       # noqa: E402
-from _fd_stage0_cases import BACKENDS, content_digest, relative_gap          # noqa: E402,F401
-from _fd_stage2_cases import sample_indices                                   # noqa: E402,F401
-from fd_helpers import to_numpy                                              # noqa: E402
-from wavebit.fd._lower import lower                                          # noqa: E402
-from wavebit.fd._run import _results, execute                                # noqa: E402
-from wavebit.fd._runtime import runtime                                      # noqa: E402
+import wavebit.fdtd._legacy as fd                                                       # noqa: E402
+from tests.references._fd_stage0_cases import BACKENDS, content_digest, relative_gap          # noqa: E402,F401
+from tests.references._fd_stage2_cases import sample_indices                                   # noqa: E402,F401
+from tests.fixtures.fdtd.fd_helpers import to_numpy                                              # noqa: E402
+from wavebit.fdtd._prepare import lower                                          # noqa: E402
+from wavebit.fdtd._execution import _results, execute                                # noqa: E402
+from wavebit.fdtd._runtime import runtime                                      # noqa: E402
 
 #: The committed golden.
 GOLDEN = HERE / 'fd_golden_stage3.npz'
@@ -162,7 +167,7 @@ EXPECTED = (fd.CoarseMeshWarning, fd.UnsettledFieldWarning, fd.RadiationApproxim
 #: Which source series a kind of source fills (the stage-2 set).
 SERIES_FIELDS = ('incident', 'incident_H', 'drive', 'work', 'field')
 
-#: The ten arrays of a ``wavebit._core.result.ResultSub``.
+#: The ten arrays of a ``wavebit.observations.diffraction.ResultSub``.
 RESULT_FIELDS = ('r_s', 'r_p', 't_s', 't_p', 'R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
@@ -364,7 +369,7 @@ def cross_polarised(result):
     """The ``Result`` fields of the polarisation a ``Diffraction`` monitor's source did not
     launch. In a :func:`polarisation_preserving` cell they are round-off (1e-16, measured) since
     the PlaneWave launches the grid's own s or p wave, so they are **not frozen** -- a pin on
-    round-off is O(1) of its own peak -- and ``tests/test_fd_stage3_backends.py`` holds them
+    round-off is O(1) of its own peak -- and ``tests/fdtd/test_fd_stage3_backends.py`` holds them
     under a line live instead."""
     other = 'p' if result.polarization == 's' else 's'
     return {f'r_{other}', f't_{other}', f'R_{other}', f'T_{other}'}

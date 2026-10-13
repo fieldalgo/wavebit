@@ -1,0 +1,77 @@
+Conforming NVF equivalent lattice basis validation
+Date: 2026-09-09
+Platform: Darwin arm64
+NumPy 2.5.1; SciPy 1.18.0; JAX 0.11.0; Torch 2.13.0
+Environment: PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+These settings do not establish Apple Accelerate's actual thread count.
+
+Initial rebasing controls:
+python -m pytest tests/test_conforming_lattice_rebasing.py -q --tb=short
+46 passed in 64.46s before the additional contact-derivative cases and
+additional Fourier-subset transformations below were added.
+The four integer basis changes, applied to R(.31) diag(700,430), are:
+[[1,3],[0,1]], [[1,0],[-2,1]], [[2,1],[1,1]], [[-1,2],[0,-1]].
+All have determinant one. Both physical rectangle tiling directions are
+covered. The controls include analytic material integrals in the original
+cell origin, independent inverse-rule contact tensors, positive-gap energy
+closures on exactly matched physical Fourier sets, mixed-axis contact
+stacks through three engines, fifteen live JAX parameters checked against
+two secant steps, and invalid eager/traced reduction or lattice inputs.
+
+Contact-opening derivatives on equivalent physical Fourier sets:
+python -m pytest tests/test_conforming_lattice_rebasing.py -q -k contact_opening_derivatives --tb=short
+2 passed, 46 deselected in 187.70s.
+Zero perpendicular and internal gap; independent inclusion loss with a
+lossless background. Contact values match between lattice spellings within
+3e-10 and the two opening derivatives within 3e-9 absolute. The original
+contact continuation and residual guards are unchanged.
+
+All four positive-gap Fourier-subset transformations:
+python -m pytest tests/test_conforming_lattice_rebasing.py -q -k nonrectangular --tb=short
+8 passed, 44 deselected in 2.47s.
+Four of these cases overlap the initial run; four are additional. The
+reference matches orders by their physical reciprocal vectors, captures
+Q/G/Z from a larger orthogonal order envelope, and selects the exact subset
+before closure. All five slots match within 5e-12 absolute.
+The completed rebasing test file therefore contains 52 distinct cases.
+
+Public construction and material regression:
+python -m pytest tests/test_conforming_nvf.py tests/test_conforming_rectangular_lattice.py tests/test_conforming_layer_axes.py tests/test_conforming_separated_rectangles.py tests/test_conforming_common_loss.py tests/test_conforming_complex_material.py -q --tb=short
+203 passed in 531.91s.
+This retains the existing real, common-loss and independently lossy
+construction, analytic contact, all-backend engine and derivative controls.
+
+Documentation contract:
+python -m pytest tests/test_docs_contract.py -q
+35 passed in 0.62s.
+
+Combined: 290 distinct passing cases = 52 rebasing + 203 regression + 35 docs.
+
+Manual examples: all three Python blocks in docs/guide/conforming-nvf.md executed.
+Existing real 700-by-430 mixed-axis stack:
+p T=0.6472679896766852, s T=0.8377685774616426.
+Integer shear example, A=[[700,2100],[0,430]], original order=(2,1):
+plan.reduction=((1,-3),(0,1)); epx shape=(1,15,15).
+JAX independent inclusion-loss example:
+gap and loss derivative shapes (1,9,9), (1,9,9).
+
+The corrector equations, polynomial energy integrals, material model and
+physical acceptance tolerances are unchanged. Additional Fourier coefficients are computed when the
+original mode set has a larger envelope in reduced coordinates. Only the
+original retained modes enter Q/G/Z and their inverses; no modes are added
+to the consuming engine. The rectangle geometry and original cell-center
+convention are preserved.
+
+Strict documentation build:
+python -m sphinx -b html -W --keep-going docs <temporary-output-directory>
+Build succeeded with the existing official intersphinx inventory cache.
+
+Lint and whitespace:
+python -m ruff check wavebit/_core/conforming/__init__.py tests/test_conforming_lattice_rebasing.py
+All checks passed. git diff --check: passed.
+
+Scope: right-handed bases whose integer reduction is orthogonal. This
+includes integer shears and mixed integer basis changes of rectangular
+point lattices. It does not implement genuinely nonorthogonal correctors,
+sheared physical rectangles, curved shapes, nonpositive real materials or
+automatic projector selection, and does not certify optical convergence.

@@ -1,0 +1,86 @@
+{
+  "accepted_utc": "2026-10-09T04:55:19.097605+00:00",
+  "calibration": "studies/results/fdtd_oscillator_stack_calibration_attempt1.json",
+  "calibration_sha256": "c497ea9211ca98a3b9f9a9b08bf93fb135169570a9f8324e74288ddeaef81741",
+  "source_identity": {
+    "helper_sha256": "438a2bba35332256f209591b6cd0d826030715a7739286c58a40898ec46f6e79",
+    "fd_source_sha256": "6992b12036cc0b771de35c6f064c8c34bff7791b87340d6d58b70aaaf939a69e",
+    "wavebit_source_sha256": "e044937653e54906ddf231477c4594738cdb106d08f1cdbeb71a24581548ba64",
+    "reference_dependencies": {
+      "studies/fdtd_layer_alignment.py": "91433f49dffb84ceb1441fd1455a7e49ea104a276875402d127b20192cf2c008",
+      "studies/fdtd_oblique_pulse.py": "ac840bd60b50a0e6c5b8864e0883f79f6bf5bd8edb2113629ed151f6ffaef1b2"
+    },
+    "fd_digest_rule": "sorted relative POSIX path + NUL + LF-normalized bytes + NUL"
+  },
+  "parent": {
+    "path": "studies/results/fdtd_oscillator_stack_controls/calibration_parent_attempt1/exit.json",
+    "sha256": "a6f1df5ad3fdd07882fad07a7577a140a423ce96b00dc12009517340ffb4ef4d"
+  },
+  "accepted_ceilings": {
+    "r": 0.005,
+    "t": 0.01
+  },
+  "measured_max_absolute_complex_errors": {
+    "r": 0.0028746030096987282,
+    "t": 0.004656987658630519
+  },
+  "qualification": "Post-disclosure regression ceilings for these six known coarse p-polarized rows only. Absolute complex-amplitude errors, not relative power percentages. Not a preregistered unseen optical gate or a convergence claim.",
+  "rationale": "Explicitly reviewed round decimal ceilings after disclosure; no pre-existing threshold was changed. The registered spatial study retains every cell regardless of its convergence classification.",
+  "absolute_headroom": {
+    "r": 0.002125396990301272,
+    "t": 0.005343012341369482
+  },
+  "accept_controller": {
+    "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/accept_controller.py.raw",
+    "sha256": "262b47c545d48ae80c6482f593d061b4363c3e5196447ccf279e8ff87cea365d"
+  },
+  "test_before": {
+    "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/test_before.py.raw",
+    "sha256": "419600d5f39e90ffd260e316da1160dbae84db4d4e569a7b3a29a6069a22b5e6"
+  },
+  "test_after": {
+    "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/test_after.py.raw",
+    "sha256": "bc5da0ad8851487417bcc3ddd0137c0947d33519533014f88e3b1e77cadd906b"
+  },
+  "allowed_ast_changes": [
+    "module docstring",
+    "CALIBRATED_CEILINGS"
+  ],
+  "remaining_ast_exact": true,
+  "test_sha256_before": "419600d5f39e90ffd260e316da1160dbae84db4d4e569a7b3a29a6069a22b5e6",
+  "test_sha256_after": "bc5da0ad8851487417bcc3ddd0137c0947d33519533014f88e3b1e77cadd906b",
+  "independent_review": {
+    "review.py": {
+      "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/review.py.raw",
+      "sha256": "4d8ba0895f6f80380dd8afacc146048417021726f73fce3e8f9f3999db704d88"
+    },
+    "runner.py": {
+      "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/runner.py.raw",
+      "sha256": "75aaac97710d4538f72c50560ef53344e16e60be01eab22f8e4ecc62067c95a2"
+    },
+    "review.log": {
+      "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/review.log.raw",
+      "sha256": "ad6ece5eb1192e639a2d9a1273d006e3d947fcc8a9ee6a1fd16e61d360445dca"
+    },
+    "review.json": {
+      "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/review.json.raw",
+      "sha256": "1bd77c249933bc505743bc19199306a5d0aa96cbe6814f68fd5e3a0249a718e0"
+    },
+    "execution.json": {
+      "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/execution.json.raw",
+      "sha256": "d39dd076dfb2356dc062e75bce2fbb16414a97c70a1aadcced28c46b73dc4529"
+    },
+    "executed_review.py.raw": {
+      "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/executed_review.py.raw.raw",
+      "sha256": "4d8ba0895f6f80380dd8afacc146048417021726f73fce3e8f9f3999db704d88"
+    },
+    "executed_runner.py.raw": {
+      "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/executed_runner.py.raw.raw",
+      "sha256": "75aaac97710d4538f72c50560ef53344e16e60be01eab22f8e4ecc62067c95a2"
+    }
+  },
+  "test_transition": {
+    "path": "studies/results/fdtd_oscillator_stack_calibration_acceptance_sources/test_transition.json",
+    "sha256": "5dabdcc9ce62820d702ce00483a013f6b396441745b982c5e124487c2320e20c"
+  }
+}

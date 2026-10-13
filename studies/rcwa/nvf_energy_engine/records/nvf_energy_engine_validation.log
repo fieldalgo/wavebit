@@ -1,0 +1,27 @@
+NVF energy builder and Wavebit engine integration validation
+
+Environment: fieldwave Python environment; PYTHONPATH points to this checkout.
+OPENBLAS_NUM_THREADS=1 and OMP_NUM_THREADS=1 were set. No BLAS thread-count claim is made.
+
+python -m pytest tests/test_nvf_energy_builder.py -q
+29 passed in 4.68s
+
+python -m pytest tests/test_nvf_thin_gap_energy.py tests/test_nvf_polynomial_body.py tests/test_nvf_local_flux.py tests/test_nvf_posed_gap.py tests/test_slot_order.py -q
+62 passed in 154.04s
+
+python -m pytest tests/test_docs_contract.py -q
+28 passed in 0.39s
+
+python -m ruff check wavebit/_core/factorization.py studies/nvf_thin_gap_energy.py tests/test_nvf_energy_builder.py
+All checks passed!
+
+Reproduction: order 1; rows 2; body degree 2; gap degree 2; gap 17; width 350;
+seam 31; materials 4/9; period 700/700; wavelength 900; thickness 300;
+theta 0.2; phi 0.37; top epsilon 1; bottom epsilon 2.25.
+Actual Wavebit solve_conv result:
+p T = 0.9565787464278929; R = 0.04342125357210356
+s T = 0.8619876223224576; R = 0.13801237767754032
+This coarse example checks integration, not optical convergence.
+
+Strict Sphinx HTML build (-W --keep-going): passed after including the NVF
+research documents in the navigation and fetching the official external inventories.

@@ -1,4 +1,6 @@
 """Six coating variables checked against Meep and independent continuum optics."""
+
+from wavebit.compat import legacy as _legacy_wavebit
 from pathlib import Path
 
 import numpy as np
@@ -8,9 +10,8 @@ import pytest
 def test_constrained_coating_gradients_against_meep_and_continuum(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
-    import wavebit
-    from examples.fdtd_multilayer_optimization import design
-    from studies.fdtd_multilayer_optimization import decode_numpy, graded_stack
+    from examples.fdtd.fdtd_multilayer_optimization import design
+    from studies.fdtd.multilayer_optimization.fdtd_multilayer_optimization import decode_numpy, graded_stack
     def load(name):
         with np.load(Path(__file__).with_name(name)) as data:
             return {key: data[key] for key in data.files}
@@ -33,7 +34,7 @@ def test_constrained_coating_gradients_against_meep_and_continuum(record_propert
     np.testing.assert_allclose(lengths, ref['thickness'], atol=1e-15)
 
     def response(p, resolution):
-        results = wavebit.fdtd(design(p), wavebit.Incidence(wavelength=band, polarization=(1., 0.)),
+        results = _legacy_wavebit.fdtd(design(p), _legacy_wavebit.Incidence(wavelength=band, polarization=(1., 0.)),
                                backend='jax', resolution=resolution, n_pml=resolution,
                                mesh_thickness=[.2]*4, layer_smoothing=1/resolution, align_layers=True,
                                n_periods=65, pulse_width=3., truncation_order=0,

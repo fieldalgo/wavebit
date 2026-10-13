@@ -4,7 +4,7 @@ This is the case that had no oracle. ``test_fmmax_golden.py`` covers uniform ten
 Berreman and RETICOLO also reach; here the tensor varies across the cell, and of the four
 reference solvers surveyed for this project only fmmax both accepts a patterned complex
 off-diagonal and demonstrably uses it. So this file is what stands behind
-``wavebit._core.factorization.pn_eps_conv_matrices``.
+``wavebit.rcwa._engine.factorization.pn_eps_conv_matrices``.
 
 **It asserts convergence, not identity, and the tolerance is measured rather than chosen.**
 Three formulations are in play — the Popov-Neviere rearrangement under test, fmmax's ``FFT``
@@ -24,19 +24,24 @@ Values are frozen by ``gen_goldens_fmmax_patterned.py``, which needs the ``fwref
 regenerate to make this pass — the whole worth of the file is that the numbers did not come
 from this codebase.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-import wavebit
-from wavebit._core.factorization import normal_vector_field, pn_eps_conv_matrices
+from wavebit.rcwa._engine.factorization import normal_vector_field, pn_eps_conv_matrices
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _fmmax_patterned_cases import (                                           # noqa: E402
-    CASES, MAX_ORDER, GRID, PERIOD, THETA, THICK, WL, tensor_rasters)
+from tests.references._fmmax_patterned_cases import CASES, MAX_ORDER, GRID, PERIOD, THETA, THICK, WL, tensor_rasters
 
 GOLDEN_PATH = HERE / 'golden_fmmax_patterned.npz'
 
@@ -56,7 +61,7 @@ def solve(n_in, g, truncation_order=MAX_ORDER):
     # that used to sit here existed only because the constructor took an index and squared it
     # back. It selects the modeling path and the grating type; the convolution matrices the
     # solve actually uses are the ones passed to `solve_conv` below.
-    mee = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
+    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(THETA), phi=0.0,
                        psi=0.0, truncation_order=(truncation_order, truncation_order), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK], structure=np.expand_dims(eps, axis=0))
     res = mee._solve_conv(np.stack([epx]), np.stack([epy]), np.stack([epz_i]),

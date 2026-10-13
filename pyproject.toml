@@ -49,7 +49,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # The jax floor is a hard requirement on top of the verification rule, not just a record:
-# _core/backend.py calls jax.lax.linalg.eig(enable_eigvec_derivs=True), which does not
+# src/wavebit/_common/backend.py calls jax.lax.linalg.eig(enable_eigvec_derivs=True), which does not
 # exist before 0.11 -- an older jax installs fine and then fails at the first
 # eigendecomposition.
 jax = [
@@ -66,7 +66,7 @@ jax = [
 # failure on cell variables, and a complex-view stride error in the backward pass. All
 # four are gone by 2.13, where the suite is green. Eager and autograd work on 2.7, so this
 # floor is about matching the version the suite is verified against, not about enabling
-# `torch.compile` -- which is not worth using either way; see docs/torch-compile.md.
+# `torch.compile` -- which is not worth using either way; see docs/development/torch-compile.md.
 # Versions between 2.8 and 2.12 were not tested.
 pytorch = [
     "torch>=2.13",
@@ -117,7 +117,7 @@ include = ["wavebit*"]
 # material -- which is why the CI `minimal` job installs the built package and runs outside
 # the checkout rather than importing the source tree.
 [tool.setuptools.package-data]
-wavebit = ["nk_data/filmetrics/*.txt", "nk_data/matlab/*.mat"]
+wavebit = ["data/filmetrics/*.txt", "data/matlab/*.mat"]
 
 # The rule set is narrow on purpose: every entry below names a defect, none names a
 # preference. That distinction is the whole policy. Ruff's own default set reports 651
@@ -128,7 +128,7 @@ wavebit = ["nk_data/filmetrics/*.txt", "nk_data/matlab/*.mat"]
 #
 # F401 is the one that earns its place by history rather than by principle. It is the failure
 # this repo accumulates: a refactor moves a function, the import that fed it stays, and the
-# module goes on advertising a dependency it no longer has. `_core/parametric.py` carried
+# module goes on advertising a dependency it no longer has. `src/wavebit/rcwa/_engine/parametric.py` carried
 # `from .factorization import dfs2d` unused across every commit since 672993c, which reads as
 # if the module obtains its coefficients off a raster -- the one thing it exists not to do.
 #

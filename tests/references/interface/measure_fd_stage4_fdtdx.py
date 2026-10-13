@@ -5,7 +5,7 @@ It is a staircase control, not a smoothed-shape reference. No Meep-derived
 projection is invoked or inspected. Latest web documentation describes
 APIs absent from this release, so the interface uses the installed public API.
 Period 50 and gate 45 match the wavebit high-contrast cylinder fixture; controls
-and residual contour dependence are recorded in docs/fd-mie-validation.md.
+and residual contour dependence are recorded in docs/validation/fdtd/fd-mie-validation.md.
 """
 import argparse
 import json

@@ -1,0 +1,63 @@
+columns: this tree | b9957c8 | 07ae0f6
+
+1 closed form: worst residual against the plane wave
+  vacuum, 100 nm, 0.5+0.3j: SMM second-order                                    1.6e-15 |      3.5e+00 |      1.6e-15
+  vacuum, 100 nm, 0.5+0.3j: every other path                                    2.2e-15 |      2.2e-15 |      2.2e-15
+  eps 4 on itself, 100 nm, real 0.5: SMM second-order                           1.1e-15 |      1.1e-15 |      1.1e-15
+  eps 4 on itself, 100 nm, real 0.5: every other path                           1.8e-15 |      1.8e-15 |      1.8e-15
+  eps 25 on itself, 100 nm, 0.5+0.3j: SMM second-order                          9.0e-15 |      2.3e+02 |      3.0e-15
+  eps 25 on itself, 100 nm, 0.5+0.3j: every other path                          5.6e-15 |      5.6e-15 |      5.6e-15
+  gain 25-0.5i on itself, 100 nm, real 0.5: SMM second-order                    1.2e-14 |      1.5e+06 |      3.0e-15
+  gain 25-0.5i on itself, 100 nm, real 0.5: every other path                    4.7e-15 |      4.7e-15 |      4.7e-15
+  vacuum lit from below, 100 nm, 0.5+0.3j: SMM second-order                     1.6e-15 |      3.5e+00 |      1.6e-15
+  vacuum lit from below, 100 nm, 0.5+0.3j: every other path                     1.7e-15 |      1.7e-15 |      1.7e-15
+  eps 4 mu 2.25 on itself, 100 nm, 0.5+0.3j: SMM second-order                   2.2e-15 |      4.8e+00 |      1.2e-15
+  eps 4 mu 2.25 on itself, 100 nm, 0.5+0.3j: every other path                   1.8e-15 |      1.8e-15 |      1.8e-15
+  vacuum, 10 um, 0.5+0.3j (G 2.7e4): SMM second-order                           7.1e-08 |      7.6e-01 |  LinAlgError
+  vacuum, 10 um, 0.5+0.3j (G 2.7e4): every other path                           1.3e-07 |      2.5e-07 |      1.3e-07
+  eps 2.13 on itself, 20 um, 0.5+0.3j (G 6.3e5): SMM second-order               4.6e-05 |      1.0e+00 |      2.1e+00
+  eps 2.13 on itself, 20 um, 0.5+0.3j (G 6.3e5): every other path               5.3e-05 |      1.3e-04 |      5.3e-05
+  eps 2.25 in itself, 4869 nm, from below (G 2.8e4): SMM second-order           1.9e-07 |      1.3e+01 |      2.4e+00
+  eps 2.25 in itself, 4869 nm, from below (G 2.8e4): every other path           2.5e-07 |      2.3e-07 |      2.5e-07
+
+2 gratings
+  160 nm, SMM vs ETM, worst of conical/te/tm/2d                                 1.1e-13 |      1.5e+05 |      1.3e-13
+  4800 nm, SMM vs ETM, worst of conical/te/tm/2d                                4.2e-11 |      1.8e+01 |      4.1e-08
+
+3 a root growing below another layer
+  ETM TE vs 60-digit closed form                                                3.8e-15 |      3.8e-15 |      3.8e-15
+  SMM TE vs 60-digit closed form                                                5.7e-16 |      7.1e-16 |      7.3e-11
+
+4 a capped layer on its own medium
+  SMM vs ETM                                                                    1.2e-12 |      3.9e-01 |      7.5e-01
+  SMM, 1e-14 nudge of theta                                                     1.3e-12 |      1.8e+00 |      9.2e-01
+  ETM vs first-order (its own floor)                                            3.0e-06 |      3.0e-06 |      3.0e-06
+
+5 real angle
+  metal raster, oblique 0.35: SMM vs ETM                                        1.8e-12 |      1.7e-12 |      3.2e-08
+  metal raster, normal: SMM vs ETM                                              4.9e-14 |      1.4e-12 |      1.2e-08
+  active patterned double negative, 0.5: SMM vs first-order ETM                 5.4e-13 |      4.0e-12 |      5.9e-11
+  complex64, SMM vs complex128 ETM, worst of tm/conical at 0 and 0.5            3.8e-06 |      1.4e+00 |      3.3e-06
+  complex64, ETM vs complex128 ETM, worst of tm/conical at 0 and 0.5            3.3e-06 |      3.3e-06 |      3.3e-06
+
+6 uniform double negative at 0.5-0.3j
+  SMM vs ETM                                                                    4.7e-16 |      2.1e+00 |      2.7e-16
+  ETM vs first-order                                                            1.1e-15 |      1.1e-15 |      1.1e-15
+
+7 rungs
+  gratings at 0.5+0.3j: largest amplitude change, field vs amplitude rung       0.0e+00 |      0.0e+00 |      0.0e+00
+  10 um vacuum on vacuum, TE, field rung                                         solves |       solves |  LinAlgError
+
+8 an order on a layer light line
+  SMM vs ETM, auto_detune, worst of te/tm/conical/2d                            6.0e-11 |      1.6e-10 |      1.6e-10
+
+9 the field meets itself and its ports, label-free
+  three layers, 0.5+0.3j: SMM                                                   5.2e-15 |      1.3e-13 |      1.9e-14
+  two eps 25 gratings on eps 25, 0.5+0.3j: SMM                                  1.8e-14 |      6.7e-12 |      4.4e-14
+  10 um of vacuum between gratings, 0.5+0.3j: SMM                               6.9e-15 |      2.1e-14 |      7.7e-15
+  10 um of vacuum on vacuum, 0.5+0.3j: SMM                                      1.1e-12 |      1.9e-01 |      4.6e-01
+  metal grating -20+1j, real 0.3: SMM                                           2.4e-15 |      1.5e-15 |      2.3e-15
+
+10 cost (this tree only)
+  2D raster (6, 6), 2 layers, real 0.5: SMM field solve                    2 builds for 2 layers, 2.28 blocks retained per layer
+  2D raster (6, 6), 2 layers, 0.5+0.3j: SMM field solve                    2 builds for 2 layers, 2.28 blocks retained per layer

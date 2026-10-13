@@ -1,0 +1,50 @@
+Conforming NVF rectangular-lattice validation
+Date: 2026-09-09
+Platform: Darwin arm64
+NumPy 2.5.1; SciPy 1.18.0; JAX 0.11.0; Torch 2.13.0
+Environment: PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+These settings do not establish Apple Accelerate's actual thread count.
+
+Construction and independent metric controls:
+python -m pytest tests/test_conforming_rectangular_lattice.py tests/test_conforming_nvf.py tests/test_nvf_polynomial_body.py tests/test_nvf_gap_convergence.py -q --tb=short
+117 passed in 113.68s.
+
+Shared-kernel and engine regression:
+python -m pytest tests/test_nvf_thin_gap_energy.py tests/test_nvf_partitioned_gap_energy.py tests/test_nvf_continuous_flux.py tests/test_nvf_interface_resolution.py tests/test_nvf_polynomial_flux.py tests/test_nvf_local_flux.py tests/test_nvf_posed_gap.py tests/test_nvf_energy_builder.py tests/test_slot_order.py -q --tb=short
+205 passed, 1 xfailed in 530.13s.
+The strict expected failure remains the historical fixed-P1 moving-interface
+control. No expected-failure marks or numerical accuracy tolerances changed.
+
+Manual examples: both Python blocks in docs/guide/conforming-nvf.md executed.
+700-by-430 example: p T=0.9341608505656191, s T=0.8284073171921982.
+JAX example: gap derivative shape (1, 9, 9).
+
+Prior square-cell comparison against 7b52efd:
+36 cases: body/gap degrees (1,1), (2,4), (4,6), periods 2.1/430/700,
+angles 0/.31, heights .7/1 times the period, rows=2, grade_y=False,
+retained orders (2,1), width=.5 period, background=1.7, inclusion=4.
+The original 700-period results are bitwise identical.
+Maximum absolute slot difference: 2.832858292855221e-10, at period=2.1,
+body=4, gap=6, angle=0, height=.7 period. This is a measured comparison,
+not a claim of bitwise invariance under arbitrary unit changes.
+In the most sensitive case, the reordered physical-gap calculation changes
+the normalized gap by -2.842170943040401e-14. Feeding identical normalized
+gap inputs to old and new cells gives bitwise identical coefficient arrays.
+
+Documentation contract:
+python -m pytest tests/test_docs_contract.py -q
+30 passed in 0.42s.
+
+Strict documentation build:
+python -m sphinx -b html -W --keep-going docs <temporary-output-directory>
+Build succeeded with the existing official intersphinx inventory cache.
+
+Lint:
+python -m ruff check wavebit/_core/conforming tests/test_conforming_nvf.py tests/test_conforming_rectangular_lattice.py tests/test_nvf_polynomial_body.py tests/test_nvf_gap_convergence.py
+All checks passed. git diff --check: passed.
+
+Combined: 352 passing checks and one historical expected failure.
+
+Scope: finite-model metric, derivative and integration controls; not the
+entire repository suite or certification of optical convergence. Existing
+residual, Hermitian, and derivative tolerances remain unchanged.

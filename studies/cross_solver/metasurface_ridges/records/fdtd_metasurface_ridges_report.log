@@ -1,0 +1,14 @@
+ridges report 2026-10-04T23:28:14+0900: file 24dbd29f4a885e78, registered 24dbd29f4a885e78 at 2026-10-04T22:41:09+0900; digests fd 511cad5b5f5014d6 rcwa 710256bc8e6fa5cb ctrl ec3e0285050aa986; changed since registration: nothing
+reference Y against its turn X at N 800: 3.2e-09
+Y12: A 6.922e-02, 1.850e-02, 4.890e-03, 1.301e-03; F 7.082e-02, 1.915e-02, 4.958e-03, 1.296e-03; local orders 40->80 1.904/1.887; 80->160 1.919/1.949; 160->320 1.910/1.936 (judged [(80, 160), (160, 320)]); self-convergence 40-160 1.909/1.865, 80-320 1.923/1.954; u 3.8e-06/6.8e-07 against 2.6e-05/2.6e-05; run length 3.5e-07/4.7e-07 against 3.6e-04/3.7e-04
+X12: A 6.922e-02, 1.850e-02, 4.890e-03, 1.301e-03; F 7.082e-02, 1.915e-02, 4.958e-03, 1.296e-03; local orders 40->80 1.904/1.887; 80->160 1.919/1.949; 160->320 1.910/1.936 (judged [(80, 160), (160, 320)]); self-convergence 40-160 1.909/1.865, 80-320 1.923/1.954; u 3.8e-06/6.8e-07 against 2.6e-05/2.6e-05; run length 3.5e-07/4.7e-07 against 3.6e-04/3.7e-04
+F12: A 8.747e-02, 2.201e-02, 5.509e-03, 1.378e-03; F 4.892e-02, 1.266e-02, 3.193e-03, 8.005e-04; local orders 40->80 1.990/1.951; 80->160 1.998/1.987; 160->320 2.000/1.996 (judged [(80, 160), (160, 320)]); self-convergence 40-160 1.995/1.938, 80-320 1.998/1.984; u 0.0e+00/0.0e+00 against 2.8e-05/1.6e-05; run length 8.8e-08/1.3e-07 against 4.1e-04/2.4e-04
+control F12: local orders all at least 1.8: True
+control F12 against the corner study's rows: 0.0e+00 (line 1e-10)
+xz premise (corner study R12 under this rule): A 2.309e-02, 5.813e-03, 1.457e-03, 3.651e-04; F 2.696e-02, 6.518e-03, 1.616e-03, 4.019e-04; judged orders 1.996, 2.012, 1.997, 2.008; u 6.7e-06/6.6e-06 against 7.3e-06/8.0e-06; class second
+first-order control (ridge narrower by 0.0312 cells): A 1.143e-01, 4.179e-02, 1.641e-02, 7.027e-03; F 1.214e-01, 4.396e-02, 1.722e-02, 7.392e-03; judged orders 1.349, 1.352, 1.223, 1.220; class low (must not be second)
+first-order control (ridge wider by 0.0312 cells): A 3.412e-02, 7.333e-03, 6.503e-03, 4.401e-03; F 2.509e-02, 5.391e-03, 7.001e-03, 4.725e-03; judged orders 0.173, -0.377, 0.563, 0.567; class low (must not be second)
+X12 against Y12: 4.8e-14 (line 1e-10): symmetric
+Y12 class: second (judged orders 1.919, 1.949, 1.910, 1.936)
+verdict: second: M3's yz cross-section converges at second order as a 2D ridge, as its xz cross-section does; what holds M3 down is three-dimensional (its vertical edges, its vertices, or how the field varies along finite edges)
+

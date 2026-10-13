@@ -5,6 +5,12 @@
 Only the public Meep API is called. No Wavebit solver is imported; traceback source
 frames are suppressed by the shared generator. The original reference remains immutable.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import argparse
 import hashlib
 import json
@@ -13,10 +19,10 @@ import time
 
 import numpy as np
 
-from _meep_crossed_material_cases import CASES
-from _meep_crossed_cases import margin
-from gen_goldens_meep_crossed_materials import material_factory
-from gen_goldens_meep_crossed import _run, _amplitudes
+from tests.references._meep_crossed_material_cases import CASES
+from tests.references._meep_crossed_cases import margin
+from tests.references.gen_goldens_meep_crossed_materials import material_factory
+from tests.references.gen_goldens_meep_crossed import _run, _amplitudes
 
 
 def main():
@@ -26,7 +32,7 @@ def main():
     args = parser.parse_args()
     if args.output.exists():
         raise SystemExit('Choose a new output path; do not overwrite reference evidence.')
-    here = Path(__file__).resolve().parent
+    here = repository_path('tests/references')
     reference = here / 'golden_meep_crossed_materials.npz'
     files = [Path(__file__), here / '_meep_crossed_material_cases.py',
              here / 'gen_goldens_meep_crossed.py', here / 'gen_goldens_meep_crossed_materials.py',

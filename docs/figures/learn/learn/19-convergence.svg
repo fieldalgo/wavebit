@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" role="img" aria-labelledby="19-convergence-title 19-convergence-desc">
+<title id="19-convergence-title">Do not conflate different resolutions</title><desc id="19-convergence-desc">Geometry, Fourier, NVF, z slicing and output sampling</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="560" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Do not conflate different resolutions</text>
+<rect x="30" y="77" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="49" y="106" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">01 Geometry</text>
+<text x="230" y="106" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">Raster pixels / curved-boundary approximation</text>
+<text x="230" y="134" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">How faithfully is the input scene represented?</text>
+<rect x="30" y="163" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="49" y="192" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">02 Fourier</text>
+<text x="230" y="192" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">truncation_order</text>
+<text x="230" y="220" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">How many waves resolve that scene's solution?</text>
+<rect x="30" y="249" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="49" y="278" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">03 Shape NVF</text>
+<text x="230" y="278" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">shape_nvf_grid_size</text>
+<text x="230" y="306" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">Is projector sampling sufficient?</text>
+<rect x="30" y="335" width="940" height="74" rx="8" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="49" y="364" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">04 z slicing</text>
+<text x="230" y="364" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">Layer count and each cross-section</text>
+<text x="230" y="392" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">Is the height-dependent shape adequately approximated?</text>
+<rect x="30" y="421" width="940" height="74" rx="8" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="49" y="450" style="fill:#182b3e;font-size:21px;font-weight:600" text-anchor="start">05 Output positions</text>
+<text x="230" y="450" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">sample_x / y / z</text>
+<text x="230" y="478" style="fill:#546779;font-size:18px;font-weight:400" text-anchor="start">Where is the already-computed solution displayed?</text>
+<text x="30" y="543" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Increasing output samples alone does not reduce errors from earlier calculation stages</text>
+</svg>

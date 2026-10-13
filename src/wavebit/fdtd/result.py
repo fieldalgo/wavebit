@@ -1,0 +1,195 @@
+"""Owned observations with SI field/time units and explicit Fourier normalization."""
+from wavebit._common.backend import eager_under_torch_compile
+from dataclasses import dataclass, field
+import math
+import numpy as np
+from wavebit._common.declarations import Declaration
+from wavebit._common.execution import frozen_mapping
+from wavebit._common.pytrees import register_dataclass
+from wavebit.observations import (TimeSeries, FieldSamples, SpectralFieldSamples,
+                                 DiffractionOrders, RawDiffractionSpectrum, Validity)
+from wavebit.units import C0, Z0
+from . import monitors, boundaries
+
+
+@eager_under_torch_compile
+@dataclass(frozen=True, kw_only=True)
+class SpectralFlux(Declaration):
+    wavelengths: object
+    frequencies: object
+    energy_density: object
+    units: str
+    faces: object = None
+    metadata: object = field(default_factory=dict)
+
+    def __post_init__(self):
+        register_dataclass(type(self))
+        object.__setattr__(self,'metadata',frozen_mapping(self.metadata))
+
+
+@eager_under_torch_compile
+@dataclass(frozen=True, kw_only=True)
+class Result(Declaration):
+    outputs: object
+    validity: Validity
+    diagnostics: object
+    provenance: object
+    sources: object = field(default_factory=dict)
+    final_fields: object = None
+
+    def __post_init__(self):
+        register_dataclass(type(self))
+        for name in ('outputs','diagnostics','provenance','sources'):
+            object.__setattr__(self,name,frozen_mapping(getattr(self,name)))
+
+    def __getitem__(self,name):
+        return self.outputs[name]
+
+
+def _measure(problem, raw):
+    invariant=sum(isinstance(problem.scene.boundaries.face(a+'-'),boundaries.Axis1D) for a in 'xyz')
+    exponent=2-invariant
+    return (problem.units.length_metres**exponent / (Z0*raw.plan.dx**invariant),
+            'J/Hz' if invariant==0 else ('J/(Hz*m)' if invariant==1 else 'J/(Hz*m^2)'), invariant)
+
+
+def _coords(raw,component):
+    return raw.plan.grid.yee_points(component[0], 'xyz'.index(component[1]))
+
+
+@eager_under_torch_compile
+@dataclass(frozen=True, kw_only=True)
+class FarFieldSpectrum(Declaration):
+    """Two-sided pulse spectral energy per solid angle; angles are radians."""
+    _raw: object = field(repr=False,compare=False)
+    _factor: float
+    wavelengths: tuple
+    units: str
+
+    def intensity(self,theta,phi=0.):
+        return self._raw.intensity(theta*180/math.pi,phi*180/math.pi)*self._factor
+
+    def fields(self,theta,phi=0.):
+        # This is the radiation coefficient r E_tilde, with geometric r in metres.
+        e,p=self._raw.fields(theta*180/math.pi,phi*180/math.pi)
+        scale=math.sqrt(self._factor*Z0/2)
+        return e*scale,p*scale
+
+
+def adapt_result(problem,numerics,execution,raw,metadata):
+    units=problem.units;ts=units.time_seconds
+    measure,flux_units,invariant=_measure(problem,raw)
+    spectral_factor=2*ts**2*measure
+    outputs={}
+    source_usable={}
+    transform=dict(transform='integral exp(+i 2 pi f t) dt',window='rectangular finite run',
+                   spectrum='two-sided',sampling='raw staggered Yee samples',
+                   duration_seconds=raw.plan.steps*raw.plan.dt*ts)
+    requests={m.name:m for m in problem.outputs.monitors}
+    for name,m in requests.items():
+        value=raw[name]
+        if isinstance(m,monitors.Record):
+            scale=1/Z0 if m.component.startswith('H') else 1.
+            observer=next(o for o in raw.plan.observers if o.name==name)
+            axes=raw.plan.grid.yee_points(m.component[0], 'xyz'.index(m.component[1]))
+            coordinates={'requested':m.at,'sample':tuple(axes[a][index] for a,index in enumerate((observer.i,observer.j,observer.k)))}
+            for key in ('index','indices','at'):
+                if hasattr(observer,key):coordinates['sample_'+key]=getattr(observer,key)
+            outputs[name]=TimeSeries(times=value.t*ts,coordinates=coordinates,values=value.values*scale,
+                components=(m.component,),units='A/m' if scale!=1 else 'V/m',sampling='raw Yee component',
+                metadata={'time_unit':'s','length_unit':units.length,'component_time_level':m.component[0]})
+        elif isinstance(m,monitors.Field):
+            values={c:v*(ts/Z0 if c.startswith('H') else ts) for c,v in value.fields.items()}
+            outputs[name]=SpectralFieldSamples(coordinates=value.coords,values=values,
+                components=tuple(value.fields),units={c:'A*s/m' if c.startswith('H') else 'V*s/m' for c in value.fields},
+                sampling='raw Yee components',wavelengths=value.wavelengths,
+                frequencies=np.asarray([C0/(w*units.length_metres) for w in value.wavelengths]),
+                window=transform['window'],metadata={'length_unit':units.length,'duration_seconds':transform['duration_seconds']})
+        elif isinstance(m,monitors.Flux):
+            outputs[name]=SpectralFlux(wavelengths=value.wavelengths,
+                frequencies=np.asarray([C0/(w*units.length_metres) for w in value.wavelengths]),
+                energy_density=value.flux*spectral_factor,units=flux_units,
+                faces=None if value.faces is None else {f:v*spectral_factor for f,v in value.faces.items()},
+                metadata=dict(transform,orientation='positive plane normal or outward closed surface',invariant_axes=invariant))
+        elif isinstance(m,monitors.FarField):
+            outputs[name]=FarFieldSpectrum(_raw=value,_factor=spectral_factor,wavelengths=value.wavelengths,
+                                           units=flux_units+'/sr')
+        elif isinstance(m,monitors.Diffraction):
+            reflected=m.side=='reflect';side='r' if reflected else 't';order=value.orders.incident
+            a=getattr(order,side+'_s');b=getattr(order,side+'_p')
+            efficiency=getattr(order,'R' if reflected else 'T')
+            source=raw.sources[m.source]
+            rt=source.context.rt;xp=rt.xp
+            incident=source.incident_amplitude(value.wavelengths,plane=value.incident_plane)*ts
+            declaration=next(s for s in problem.sources if s.name==m.source)
+            frequency=rt.array([C0/(w*units.length_metres) for w in value.wavelengths],'float64')
+            nominal=xp.exp(-.5*((frequency-C0/(declaration.pulse.wavelength*units.length_metres))/
+                                declaration.pulse.frequency_sigma_hz)**2)
+            # Both a nominal source-band condition and a measured signal floor are
+            # required. A zero-amplitude pulse cannot define scattering ratios.
+            floor=100*np.finfo(float).eps*xp.max(xp.abs(source.incident))*transform['duration_seconds']
+            usable=(nominal>=declaration.pulse.cutoff)&xp.isfinite(incident)&(xp.abs(incident)>floor)
+            source_usable[name]=usable
+            reference=dict(plane=value.reference_plane,incident_plane=value.incident_plane,
+                lateral_origin=value.lateral_origin,propagation='yee',polarization_frame='per-order s/p',
+                source=m.source,normalization='measured incident reference',length_unit=units.length,
+                amplitude_units='dimensionless',port=m.side,invariant_axes=invariant,
+                epsilon=value.raw['epsilon'],mu=value.raw['mu'],
+                outward_normal=value.raw['outward_normal'],tangent_axes=value.raw['tangent_axes'],
+                incident_amplitude=incident,incident_amplitude_units='V*s/m')
+            if invariant==0:
+                reference['cell_area_m2']=value.raw['cell_area']*units.length_metres**2
+            else:
+                reference['integration_measure']=value.raw['cell_area']*units.length_metres**(2-invariant)/raw.plan.dx**invariant
+                reference['integration_measure_units']='m' if invariant==1 else '1'
+            common=dict(wavelengths=value.wavelengths,orders_u=tuple(value.orders.orders_u),
+                        orders_v=tuple(value.orders.orders_v),kz=value.kz*next(v for v in value.raw['outward_normal'] if v),k_parallel=value.raw['k_parallel'],
+                        reference_wavelength_fields=('epsilon','mu','incident_amplitude'),
+                        metadata={'theta_radians':value.theta_at*math.pi/180,'spectral_axis_retained':True,
+                            'source_usable':usable,'source_band_cutoff':declaration.pulse.cutoff,
+                            'measured_reference_floor':floor,'wavevector_units':'rad/'+units.length})
+            if m.raw:
+                reference.update(normalization='none (raw pulse transform)',amplitude_units='V*s/m',
+                                 spectral_energy_units=flux_units)
+                outputs[name]=RawDiffractionSpectrum(**common,amplitude_s=value.raw['raw_s']*ts,
+                    amplitude_p=value.raw['raw_p']*ts,
+                    spectral_energy=value.raw['raw_flux']*value.raw['cell_area']*spectral_factor,
+                    reference=reference,window=transform['window'],amplitude_units='V*s/m')
+            else:
+                valid=usable[:,None,None]
+                outputs[name]=DiffractionOrders(**common,amplitude_s=xp.where(valid,a,complex('nan')),
+                    amplitude_p=xp.where(valid,b,complex('nan')),efficiency=xp.where(valid,efficiency,float('nan')),
+                    cartesian=xp.where(valid[...,None],getattr(order,side+'_xyz'),complex('nan')),
+                    reference=reference)
+    source_references={}
+    for name,s in raw.sources.items():
+        if s.kind.startswith('Dipole'):
+            magnetic=s.kind=='Dipole(H)'
+            drive_scale=units.length_metres**2/(1. if magnetic else Z0)
+            source_references[name]=dict(time=s.t*ts,drive=s.drive*drive_scale,
+                drive_units='V*m' if magnetic else 'A*m',field=s.field/(Z0 if magnetic else 1.),
+                field_units='A/m' if magnetic else 'V/m',field_time=s.t_field*ts,
+                delivered_power=s.work*units.length_metres**2/Z0,power_units='W',time_unit='s')
+        else:
+            source_references[name]=dict(time=s.t*ts,incident=s.incident,
+                magnetic_time=None if s.t_H is None else s.t_H*ts,
+                incident_H=None if s.incident_H is None else s.incident_H/Z0,
+                plane=s.plane,plane_H=s.plane_H,field_units={'E':'V/m','H':'A/m'},time_unit='s',
+                normalization='measured Yee incident reference',length_unit=units.length)
+    final=None
+    if problem.outputs.final_fields:
+        # Coordinates are reported per component because Yee offsets differ.
+        coordinates={c:_coords(raw,c) for c in ('Ex','Ey','Ez','Hx','Hy','Hz')}
+        final=FieldSamples(coordinates=coordinates,values={'E':raw.final.E,'H':raw.final.H/Z0},
+            components=('Ex','Ey','Ez','Hx','Hy','Hz'),units={'E':'V/m','H':'A/m'},sampling='raw Yee components',
+            metadata={'length_unit':units.length,'E_time':raw.plan.steps*raw.plan.dt*ts,
+                      'H_time':(raw.plan.steps-.5)*raw.plan.dt*ts,'allocated_domain':metadata['allocated_domain']})
+    diagnostics=dict(raw.diagnostics)
+    validity=Validity(checks={'admitted':True,'runtime_stability':diagnostics.get('stable'),'source_reference':source_usable},
+                      convergence={'continuum_convergence':'not assessed','decay':diagnostics.get('decay')})
+    provenance=dict(solver='fdtd',backend=execution.backend,device=execution.device,precision=execution.precision,
+        units={'length':units.length,'time':'s','E':'V/m','H':'A/m'},numerics=numerics,
+        actual_steps=raw.plan.steps,dt_seconds=raw.plan.dt*ts,source_normalization={s.name:('current moment in A*m' if s.kind=='electric' else 'equivalent magnetic current moment in V*m')
+            if hasattr(s,'current_moment') else 'electric field amplitude in V/m' for s in problem.sources},**metadata)
+    return Result(outputs=outputs,validity=validity,diagnostics=diagnostics,provenance=provenance,
+                  sources=source_references,final_fields=final)

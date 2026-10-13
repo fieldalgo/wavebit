@@ -1,4 +1,10 @@
 """Compare public Meep adjoint and central differences for two complex transmissions."""
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
+from tools.repository_paths import repository_root
 import argparse
 import sys
 import warnings
@@ -15,8 +21,8 @@ def generate(output, resolution=40, duration=120., profile_grid=256):
     import autograd.numpy as npa
     import meep as mp
     import meep.adjoint as mpa
-    sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-    from studies.fdtd_rotation_smoothing import density
+    sys.path.insert(0, str(repository_root()))
+    from studies.fdtd.rotation_smoothing.fdtd_rotation_smoothing import density
     mp.verbosity(0)
     p = np.array([.37, .3])
     period, depth, smoothing = .6, .2, .05

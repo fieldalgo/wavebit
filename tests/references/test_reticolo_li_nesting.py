@@ -1,7 +1,7 @@
 """A crossed grating against RETICOLO, in both of Li's nestings.
 
 ``golden_reticolo.npz`` is all 1D: its gratings have one axis, so they cannot tell the two
-nestings of :class:`~wavebit._core.enums.Nesting` apart -- on a y-invariant layer both reduce to
+nestings of :class:`~wavebit.rcwa._engine.enums.Nesting` apart -- on a y-invariant layer both reduce to
 Li's 1D inverse rule. This is the 2D case that can: an axis-aligned rectangle, where Li's rules
 are exact for the staircase they are given, so the two codes build the same convolution matrices
 and should agree to round-off in *each* nesting while the nestings disagree with each other.
@@ -24,10 +24,11 @@ also why the sampled path lands on the same numbers.
 The nestings differ here by 1.7e-5 to 1.7e-3 in total transmission, so a build that reverted
 from one to the other fails by at least 1e4 times the tolerance.
 """
+
+from wavebit.compat import legacy as _legacy_wavebit
 import numpy as np
 import pytest
 
-import wavebit
 
 #: (nesting, truncation_order) -> (total T for TE, total T for TM), RETICOLO V10.
 GOLDEN = {
@@ -53,7 +54,7 @@ def _rectangle(along_x=200.0, along_y=150.0):
 
 
 def _total_T(structure, nesting, truncation_order, psi, coefficients='integrated'):
-    res = wavebit.rcwa(backend='numpy', structure=structure, period=[_PERIOD, _PERIOD],
+    res = _legacy_wavebit.rcwa(backend='numpy', structure=structure, period=[_PERIOD, _PERIOD],
                        thickness=[600.0], wavelength=532.0, top=1.0, bot=1.46 ** 2,
                        theta=0.0, phi=0.0, psi=psi, truncation_order=[truncation_order] * 2,
                        fourier_coefficients=coefficients, li_nesting=nesting).solve()
@@ -90,7 +91,7 @@ def test_turning_the_rectangle_exchanges_te_and_tm_only_in_the_symmetric_nesting
     TM problem, relabelled -- so its total has to be the golden TM number, and it is, to
     round-off, in the symmetric nesting. The fixed nesting answers the turned problem 1.4e-3
     away from its own golden at ``truncation_order=3``: that gap is the whole of the asymmetry
-    ``docs/factorization-terms.md`` §6 is about.
+    ``docs/theory/rcwa/factorization-terms.md`` §6 is about.
     """
     turned = _rectangle(along_x=150.0, along_y=200.0)
     for M in (3, 5):

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 400" role="img" aria-labelledby="title desc">
+<title id="title">x/y 차수와 결과 배열의 축</title><desc id="desc">truncation_order는 x가 먼저지만 결과 배열은 y 행, x 열이다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="400" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">x/y 차수와 결과 배열의 축</text>
+<rect x="65" y="105" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="106" y="140" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(-2,-1)</text>
+<rect x="150" y="105" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="191" y="140" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(-1,-1)</text>
+<rect x="235" y="105" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="276" y="140" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(0,-1)</text>
+<rect x="320" y="105" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="361" y="140" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(1,-1)</text>
+<rect x="405" y="105" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="446" y="140" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(2,-1)</text>
+<rect x="65" y="165" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="106" y="200" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(-2,0)</text>
+<rect x="150" y="165" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="191" y="200" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(-1,0)</text>
+<rect x="235" y="165" width="82" height="57" rx="0" fill="#e5f4ef" stroke="#ffffff" stroke-width="2"/>
+<text x="276" y="200" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(0,0)</text>
+<rect x="320" y="165" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="361" y="200" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(1,0)</text>
+<rect x="405" y="165" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="446" y="200" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(2,0)</text>
+<rect x="65" y="225" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="106" y="260" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(-2,1)</text>
+<rect x="150" y="225" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="191" y="260" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(-1,1)</text>
+<rect x="235" y="225" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="276" y="260" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(0,1)</text>
+<rect x="320" y="225" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="361" y="260" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(1,1)</text>
+<rect x="405" y="225" width="82" height="57" rx="0" fill="#f1f5f7" stroke="#ffffff" stroke-width="2"/>
+<text x="446" y="260" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">(2,1)</text>
+<text x="65" y="89" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">열: m = −2, −1, 0, 1, 2</text>
+<text x="65" y="328" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">행: n = −1, 0, 1</text>
+<rect x="550" y="105" width="415" height="180" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="568" y="139" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">truncation_order = (2, 1)</text>
+<text x="568" y="175" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">M = (2×2+1)(2×1+1) = 15</text>
+<text x="568" y="202" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">result.T.shape = (3, 5)</text>
+<text x="568" y="229" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">result.order(m, n)으로 직접 접근</text>
+<text x="30" y="383" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">각 칸은 회절차수 (m,n) · 전파하는 차수와 감쇠하는 차수를 함께 유지</text>
+</svg>

@@ -1,6 +1,6 @@
 """Anisotropic uniform stacks against RETICOLO, from a checked-in golden.
 
-``tests/test_anisotropic_berreman.py`` judges the same cases with a Berreman 4x4 written in
+``tests/rcwa/test_anisotropic_berreman.py`` judges the same cases with a Berreman 4x4 written in
 this repo. That is an independent *formulation*, but not an independent *implementation* — a
 misconception shared by both would survive it. This file is the outside check: a different
 group's solver, in a different language, validated over two decades of published work, and
@@ -14,7 +14,7 @@ with it and is what ``interface/reti_aniso.m`` follows.
 **No convention fitting was needed.** The isotropic and symmetric cases below agree with both
 Berreman and this solver to ~1e-15 as they stand, which is what licenses reading the
 asymmetric ones as physics rather than as a bookkeeping difference. S4 was tried for this role
-first and failed exactly that gate — see ``docs/off-diagonal-slot-convention.md`` §8.
+first and failed exactly that gate — see ``docs/theory/rcwa/off-diagonal-slot-convention.md`` §8.
 
 The asymmetric cases are ``xfail(strict)``: ``layer_modes_2d`` carries the off-diagonal pair in
 one order inside ``Omega2_LR`` and the other inside ``Omega_R``, so a tensor with
@@ -33,16 +33,21 @@ Values are frozen in ``golden_reticolo_anisotropic.npz`` by
 ``gen_goldens_reticolo_anisotropic.py``, which needs Octave and RETICOLO V10. This file needs
 neither.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-from test_anisotropic_berreman import solve_tensor_stack          # noqa: E402
+sys.path.insert(0, str(repository_path('tests')))
+from tests.rcwa.test_anisotropic_berreman import solve_tensor_stack          # noqa: E402
 
-GOLDEN_PATH = pathlib.Path(__file__).parent / 'golden_reticolo_anisotropic.npz'
+GOLDEN_PATH = repository_path('tests/references/golden_reticolo_anisotropic.npz')
 
 WL = 600.0
 PERIOD = 300.0

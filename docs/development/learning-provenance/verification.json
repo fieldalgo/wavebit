@@ -1,0 +1,453 @@
+{
+  "date": "2026-09-21",
+  "sphinx_build": {
+    "warnings_as_errors": true,
+    "passed": true,
+    "warnings": 0
+  },
+  "site_audit": {
+    "html_pages": 172,
+    "missing_local_links": [],
+    "remote_scripts_or_images": [],
+    "lesson_pages": 32,
+    "lesson_images_without_alt": []
+  },
+  "examples": {
+    "count": 14,
+    "passed": 14,
+    "compared_to_prior_records": true,
+    "relative_tolerance": 1e-07,
+    "absolute_tolerance": 1e-09,
+    "details": "example-verification.json"
+  },
+  "browser": {
+    "korean_search": "투영 returns projector chapter first",
+    "zoom_dialog": "image opens at original size and closes",
+    "code_copy": "first-grating executable copied without line numbers; temporary clipboard reset to original empty state",
+    "interactions": {
+      "boundary_epsilon12": "normal field 0.0833, tangential field 1",
+      "projection_angle180": "Pxx=1, Pxy=Pyx=Pyy=0",
+      "nvf_orders_Nx4_Ny1": "27 modes",
+      "orders_Nx0_Ny1": "3 modes, shape (3,1)",
+      "polarization_alpha45_delta_minus180": "linear",
+      "phasor_time360": "real part 0.5, squared magnitude 1"
+    },
+    "console_errors": [],
+    "desktop_horizontal_overflow": false,
+    "mobile_viewport_tested": false
+  },
+  "scope": {
+    "full_solver_regression_run": false,
+    "fdtd_included": false,
+    "published": false,
+    "new_packages_installed": false,
+    "solver_source_changed": true,
+    "original_html_books_preserved": true
+  },
+  "documentation_followup": {
+    "constant_material_example": "Direct epsilon scalar; Material and index conversion explained separately",
+    "notice_links": "Only actual license text retained; no Python implementation or bytecode downloads",
+    "sphinx_build_warnings": 0
+  },
+  "chapter03_assignment_snippet": {
+    "executed": true,
+    "R": 0.044163751670280124,
+    "T": 0.9558362483297205,
+    "scope": "Short inline constant-permittivity assignment example; not a convergence study",
+    "R_plus_T": 1.0000000000000007,
+    "stdout": "전체 반사율: 0.044164\n전체 투과율: 0.955836\n",
+    "source_sha256": "781e9a5a4c6065e6f12296824ef5a2867c6878686c959b9fbbe93bbb12b29ffc",
+    "wavebit_version": "0.1.0",
+    "truncation_order": [
+      1,
+      1
+    ],
+    "convergence_checked": false
+  },
+  "coordinates_figure": {
+    "raster_cells": 16,
+    "material_legend": {
+      "blue": 1,
+      "green": 4
+    },
+    "row_zero_at_negative_y": true,
+    "layer_fills_equal_and_distinct_from_material_fills": true,
+    "code_example_distinction_in_caption": true,
+    "source_generator": "tools/draw_coordinates.py",
+    "handedness": "Right-handed xyz: +x right, +y up in plan view; +z out of screen. Bottom-origin height."
+  },
+  "stack_overview_figure": {
+    "source_generator": "tools/draw_stack_overview.py",
+    "repeated_cells_shown": 9,
+    "finite_layers": 2,
+    "angle_convention_checked_against": "wavebit/_core/engine.py:_incident_kxy",
+    "new_external_art_or_dependencies": false,
+    "caption_distinguishes_concept_from_single_layer_example": true,
+    "layer_labels": "Centered on each front x-z face and transformed with the projected x basis; no white halo",
+    "handedness": "Right-handed: +x right/down, +y right/up, +z vertical up; bottom layer 0, upper layer 1"
+  },
+  "coordinate_frame_audit_before_migration": {
+    "date": "2026-09-21",
+    "frame": "right-handed xyz, with +z into the stack",
+    "implementation_evidence": [
+      "wavebit/_core/solve_2d_4ff.py:380-385",
+      "wavebit/_core/fields.py:787-788"
+    ],
+    "targeted_existing_tests": [
+      "tests/test_field_4ff.py::test_a_vacuum_slab_comes_back_as_the_incident_plane_wave",
+      "tests/test_field_core.py::test_every_path_returns_a_maxwell_field_in_the_declared_frame"
+    ],
+    "passed": 9,
+    "full_solver_regression_run": false
+  },
+  "coordinate_frame_migration": {
+    "date": "2026-09-21",
+    "frame": "Right-handed xyz, +z upward, finite stack bottom at z=0",
+    "layer_order": "Bottom to top; structure[0] adjacent to bot",
+    "incidence": "Physical top illuminates along -z; bottom along +z",
+    "interfaces": "Explicit heights select upper layer; count=1 selects each lower face",
+    "typed_stack_snippet_executed": true,
+    "learning_examples_rerun": 9,
+    "nvf_examples_rerun_this_migration": false,
+    "frozen_reference_files_modified": false,
+    "full_solver_regression_run": false,
+    "new_packages_installed": false,
+    "tests": "tests/test_vertical_coordinates.py plus targeted analytic, field, reference, backend, autodiff and spec suites",
+    "vertical_coordinate_tests": 173,
+    "small_raster_jax_fft_layout_regression_fixed": true,
+    "browser_figures_checked": [
+      "03-stack-overview.svg",
+      "03-coordinates.svg",
+      "08-light.svg"
+    ]
+  },
+  "remaining_input_migration": {
+    "date": "2026-09-21",
+    "frame": {
+      "handedness": "right",
+      "positive_z": "up",
+      "z_origin": "finite-stack bottom",
+      "layer_order": "bottom-to-top",
+      "incidence_side": "physical top or bottom; never changes geometry order",
+      "JobSpec_version": "10"
+    },
+    "current_inputs_migrated": [
+      "repository multilayer examples and analytic benchmark",
+      "all nine repository tutorial notebooks",
+      "remaining physical test fixtures and matching epsilon/mu stacks",
+      "Pattern Studio multilayer preset and stack display",
+      "standalone Wavebit and NVF learning books",
+      "Sphinx Korean lessons and inherited English guide"
+    ],
+    "repository_targeted_tests": {
+      "passed": 805,
+      "skipped": 3,
+      "full_release_regression": false
+    },
+    "preview_tests_passed": 5,
+    "notebooks": {
+      "code_cells_compiled": 96,
+      "input_pairings_compared_to_before": true,
+      "executed": [
+        "06-polarization-pair.ipynb",
+        "07-multimode-incidence.ipynb"
+      ],
+      "all_saved_outputs_cleared": true,
+      "long_optimization_loops_rerun": false
+    },
+    "learning_examples_rerun": 9,
+    "site": {
+      "html_pages": 172,
+      "missing_local_links": 0,
+      "remote_scripts_or_images": 0
+    },
+    "browser_checked": "Pattern Studio: topmost card layer 2 z=300..420, middle layer 1 z=220..300, bottom layer 0 z=0..220",
+    "reference_data": "Frozen numerical goldens and historical experiment records preserved; comparison inputs/fields explicitly converted where required.",
+    "dependencies_added": false
+  },
+  "stack_overview_layout": {
+    "date": "2026-09-21",
+    "height": 900,
+    "changes": [
+      "bottom-origin callout anchored to the actual bottom face",
+      "orientation/height/color legend aligned in three columns",
+      "separate footer with clear spacing",
+      "upper-face z=H callout and top medium explanation aligned away from incidence annotations",
+      "Use h_total for total height, distinct from magnetic field H",
+      "Omit top-surface height annotation; preserve top medium and bottom origin",
+      "Remove half-space annotations from overview; explain them below the coordinate diagram; identify oblique top incidence explicitly"
+    ],
+    "source_sha256": "d68dc1963c93c27f17fbadd8a919bba18c84e6194103ca85f8fcaf846dca5c25",
+    "svg_sha256": "9924dded379582feef986d5aa1649a64c1ec957519e7f2438fbcca6cde46f4cf",
+    "checked": "XML parse, local image layout preview, Sphinx warning-as-error build and site link audit",
+    "runtime_solver_changes": false,
+    "preview_renderer": {
+      "tool": "ImageMagick",
+      "version": "7.1.1-47",
+      "license": "ImageMagick License",
+      "evidence": "/opt/homebrew/Cellar/imagemagick/7.1.1-47/LICENSE",
+      "use": "Existing executable used only for private local layout inspection; no executable, library, font, or third-party source distributed in the site."
+    }
+  },
+  "coordinate_figure_layout": {
+    "date": "2026-09-21",
+    "changes": [
+      "remove two-material colors and permittivity legend",
+      "neutral 4 by 4 grid with row and column labels",
+      "state coordinate and layer conventions apply to both shape and raster; label only the grid and indices as raster examples",
+      "synchronize original single-page book figure",
+      "Use h_total for total height, distinct from magnetic field H",
+      "Omit top-surface height annotation; preserve top medium and bottom origin"
+    ],
+    "source_sha256": "fb1baf14f6068adc68a52872f3ccb5220916311308584f8464c723cb30913292",
+    "svg_sha256": "f80e9e763275b37ec2f47f2d23d475ba7ff9bb04595f5eafef1b5415e841dcb5",
+    "checked": "XML parse, local layout preview, Sphinx warning-as-error build, site link audit and built asset byte equality",
+    "runtime_solver_changes": false
+  },
+  "chapter03_material_lesson": {
+    "date": "2026-09-21",
+    "examples_executed": 2,
+    "record": "source/records/chapter03-material-examples.json",
+    "figure_generator": "tools/draw_cylinder_materials.py",
+    "figure_sha256": "ec39874384964a1d22e3bbd23746866023e8214cf21ada3234a6df264be1ad97",
+    "source_sha256": "62a035fbecca5a2f7bf75a3386e307c7983767ca3fc906e910060ecf34aae962",
+    "geometry": {
+      "period_nm": [
+        600,
+        600
+      ],
+      "diameter_nm": 240,
+      "height_nm": 180,
+      "center_xy_nm": [
+        0,
+        0
+      ],
+      "bottom_z_nm": 0
+    },
+    "checks": [
+      "both exact inline examples executed with current checkout",
+      "lossless R+T consistency",
+      "source hashes match executed examples",
+      "local figure layout preview",
+      "SVG XML parse",
+      "Sphinx warning-as-error build",
+      "site link audit",
+      "built SVG byte equality"
+    ],
+    "convergence_study": false,
+    "solver_source_modified": false,
+    "third_party_art_or_dependencies_added": false
+  },
+  "height_notation": {
+    "total_height": "h_total = sum(thickness)",
+    "top_surface": "z=h_total",
+    "magnetic_field_H_preserved": true,
+    "solver_source_modified": false,
+    "checked": "local layout preview, warning-as-error Sphinx build, site link audit and built SVG equality",
+    "top_surface_label_in_overview_figures": false
+  },
+  "final_layer_order": {
+    "date": "2026-09-21",
+    "layer_order": "bottom-to-top",
+    "layer_zero": "adjacent to bot, lower face z=0",
+    "positive_z": "up",
+    "handedness": "right",
+    "bounds": "sum(thickness[:i]) <= z <= sum(thickness[:i+1])",
+    "incidence_side": "independent physical top/bottom; geometry order unchanged",
+    "JobSpec_version": "10",
+    "reversed_top_down_experiment": true,
+    "preserved_preexisting_edits": true,
+    "tests": {
+      "passed": 1161,
+      "failed": 0,
+      "warnings": 1,
+      "seconds": 123.8,
+      "warning": "Existing torch.asarray requires_grad default warning",
+      "log": "<scratch>/bottom-up-final-tests.log",
+      "scope": "Vertical coordinates, analytic material oracle, JobSpec, field sampling, both illumination sides, scattering, anisotropic Berreman, magnetic stacks, lossy media, uniform interfaces and frozen legacy optical goldens"
+    },
+    "full_release_regression": false,
+    "golden_values_changed": false,
+    "preview_tests_passed": 5,
+    "learning_examples_passed": 9,
+    "notebook_code_cells_compiled": 96,
+    "notebooks_executed": [
+      "06-polarization-pair.ipynb",
+      "07-multimode-incidence.ipynb"
+    ],
+    "long_optimizer_notebooks_rerun": false,
+    "chapter03_typed_stack_executed": true,
+    "chapter03_heights": [
+      [
+        0,
+        100
+      ],
+      [
+        100,
+        300
+      ],
+      [
+        300,
+        350
+      ]
+    ],
+    "sphinx_build_warnings": 0,
+    "site_audit": {
+      "html_pages": 172,
+      "missing_local_links": 0,
+      "remote_scripts_or_images": 0,
+      "lesson_images_without_alt": 0
+    },
+    "diagram_check": "XML parsed; local label placement inspected; served SVGs equal authored figures",
+    "source_and_figure_hashes": {
+      "tools/draw_stack_overview.py": "d68dc1963c93c27f17fbadd8a919bba18c84e6194103ca85f8fcaf846dca5c25",
+      "tools/draw_coordinates.py": "fb1baf14f6068adc68a52872f3ccb5220916311308584f8464c723cb30913292",
+      "source/figures/learn/03-stack-overview.svg": "9924dded379582feef986d5aa1649a64c1ec957519e7f2438fbcca6cde46f4cf",
+      "source/figures/learn/03-coordinates.svg": "f80e9e763275b37ec2f47f2d23d475ba7ff9bb04595f5eafef1b5415e841dcb5"
+    },
+    "new_dependencies": false,
+    "published": false
+  },
+  "materials_lesson_followup": {
+    "date": "2026-09-21",
+    "chapter03": "Added material assignment navigation and explicit tensor-route distinction",
+    "chapter07": "Added input comparison, scalar/tensor explanation, uniform anisotropic example and current support limits",
+    "english_guide_updated": true,
+    "standalone_book_updated": true,
+    "example": {
+      "source_sha256": "32ef8e0d1a57b499aa061e976a57d683f5213b06710df5b2627c3ae4800aa46d",
+      "stdout": "y 편광 반사율: 0.35747266249464993\nx 편광 반사율: 0.01630802517033101\n",
+      "results": {
+        "y": {
+          "R": 0.35747266249464993,
+          "T": 0.6425273375053501,
+          "Airy_R": 0.35747266249465
+        },
+        "x": {
+          "R": 0.01630802517033101,
+          "T": 0.9836919748296693,
+          "Airy_R": 0.016308025170331
+        }
+      },
+      "analytic_reference": "Airy reflectance of a lossless uniform film between identical vacuum half-spaces, independently evaluated per eigen-polarization",
+      "tolerance": 1e-12,
+      "passed": true
+    },
+    "sphinx_warnings": 0,
+    "site_audit_passed": true,
+    "existing_test_run": {
+      "passed": 78,
+      "failed": 1,
+      "failure": "Existing docs-contract path scan includes stale docs/_build/html/_sources/*.txt that refer to removed analytic.py / analytic-modeling.md. The new source changes did not introduce those references.",
+      "log": "<scratch>/material-lesson-tests.log"
+    },
+    "solver_code_changed": false,
+    "new_dependencies": false
+  },
+  "tensor_material_api": {
+    "date": "2026-09-21",
+    "api": [
+      "Material scalar/diagonal/full tensor",
+      "Material.rotated",
+      "tensor TabulatedMaterial",
+      "tensor shapes and rasters",
+      "JobSpec tensor serialization",
+      "component-specific structure pictures"
+    ],
+    "regression": {
+      "passed": 647,
+      "failed": 0,
+      "warnings": 5,
+      "seconds": 131.65,
+      "full_release_suite": false
+    },
+    "final_tensor_checks": {
+      "passed": 49,
+      "failed": 0,
+      "seconds": 12.85,
+      "scope": "34 tensor API tests plus 15 structure plotting regressions",
+      "overlaps_regression": true
+    },
+    "reference_checks": [
+      "independent Airy slab for both polarizations",
+      "rotated waveplate complex amplitudes",
+      "independent Berreman full-tensor stack from both sides",
+      "matching tensor shape/raster matrices",
+      "periodic painting and translation on an unreduced oblique cell",
+      "JAX and Torch gradients against finite differences"
+    ],
+    "limitations": [
+      "sampled tensor shapes: circles, ellipses, rectangles; refine grid and Fourier orders",
+      "patterned z coupling unsupported",
+      "anisotropic half-spaces unsupported",
+      "z-coupled tensors with explicit mu unsupported",
+      "sampled tensor geometry/lattice derivatives unsupported; fixed geometry material gradients supported",
+      "finite-order tensor patterns need energy and convergence checks"
+    ],
+    "example": {
+      "source_sha256": "bd1940463cc2e700781cef2e1f3e7d1fc817480afc16a13f069ee5858481db45",
+      "R_s": 0.35747266249464993,
+      "R_p": 0.01630802517033101,
+      "python_blocks_parsed": 19
+    },
+    "new_dependencies": [],
+    "goldens_modified": false,
+    "source_hashes": {
+      "wavebit/_core/anisotropy.py": "debd46dd5eee3abcf48bd736f4c0c61688f0dca4b13c84bb0879978769ea5fa3",
+      "wavebit/_core/domain.py": "20cdba83f21a4f06fe5a5b4934af4449ef8e0f5726d54858ddbb4779e057c59b",
+      "wavebit/_core/materials.py": "d02230964c985d38d240b58ccbb1fd8099a8e69be5dfb2e01ed1d9f4db3e3c66",
+      "wavebit/_core/engine.py": "f122ac32911e98806af8242f219651e9eb603b6fcac9067d5df83624ec97ca69",
+      "wavebit/_core/spec.py": "d190d0539f8e730f171ddd3cf8517a7b2af718d844fce09546c10eb5fb814afb",
+      "wavebit/_core/draw.py": "000563a1335a2fa836cbe08df04254e7b1d2be33a73c9dd90c9e2f203e1109f5",
+      "wavebit/_core/geometry.py": "bfe5a86a736e41a94fcc334c1d39fe81d9f8f9e73e2bcf26723ed0f2fcc900e1",
+      "tests/test_tensor_material_api.py": "bc84134559f47b8df2183ba4c8e071d2126ec70eaa6b700bb7ebe75e67cf0ee1"
+    }
+  },
+  "tensor_shape_integration_update": {
+    "date": "2026-09-22T00:30:59.015016+09:00",
+    "scope": "Integrated in-plane anisotropic shapes; material geometry preserved, normal extension sampled.",
+    "validation": {
+      "regression": {
+        "passed": 173,
+        "seconds": 84.62
+      },
+      "expanded": {
+        "passed": 32,
+        "seconds": 53.51
+      },
+      "note": "Suites overlap; these counts must not be added as unique tests."
+    },
+    "external_reference": {
+      "goldens_modified": false,
+      "solver": "existing fmmax FFT and JONES_DIRECT goldens",
+      "cases": 3,
+      "max_gaps": [
+        1.2723874075470931e-06,
+        2.918979780441866e-06,
+        1.4477069550471872e-05
+      ],
+      "reference_spreads": [
+        4.83918453331178e-06,
+        2.9738367896547935e-05,
+        0.00016684011018727827
+      ]
+    },
+    "new_dependencies": [],
+    "limits": [
+      "patterned z coupling unsupported",
+      "only linear tensor projector",
+      "normal extension remains sampled",
+      "curved painting and multiple-shape normals retain 256-vertex approximation",
+      "integrated periodic painting overlaps unsupported; explicit sampled route available",
+      "JIT requires frozen topology and cannot validate changes during trace"
+    ],
+    "source_hashes": {
+      "wavebit/_core/tensor_shapes.py": "103e281f03d89c75437c4b1458609b0e95180d06716dc2dcf94cc1a5cfbaabb3",
+      "wavebit/_core/anisotropy.py": "96d05b861250c9b5366d1e9033a3d236cefac751c9c1342cdbb82b6203c1c5f1",
+      "wavebit/_core/interfaces.py": "8580f8e8cb0a6de5108a55144566c128651c3b40cb80eeb37319fbcb970b3aca",
+      "wavebit/_core/engine.py": "d715fe4b273ea6921c30edfa80d500d0513731d9d853abffd229729b33004675",
+      "tests/test_tensor_shape_integrated.py": "57708489c50db5eff7b8b23be6db37600845d0c75e9afe825819f45443f76746",
+      "tests/references/test_tensor_shape_golden.py": "c18f79875579b099e012820757eb24bb1485658e9077ee483fed75f9de4fcec2"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 365" role="img" aria-labelledby="07-material-title 07-material-desc">
+<title id="07-material-title">한 번 지정하고, 파장마다 유전율을 평가한다</title><desc id="07-material-desc">재료 정의에서 파장별 유전율 평가를 거쳐 RCWA 결과를 구하는 순서</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="365" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">한 번 지정하고, 파장마다 유전율을 평가한다</text>
+<rect x="30" y="93" width="280" height="151" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="127" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">① 재료 지정</text>
+<text x="48" y="163" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">도형 · 배경 · 위아래 매질</text>
+<text x="48" y="190" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">상수 또는 분산 표</text>
+<text x="48" y="217" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">silicon 객체를 한 번 할당</text>
+<line x1="318" y1="167" x2="356" y2="167" stroke="#546779" stroke-width="2"/>
+<polygon points="356,167 346.0,171.0 346.0,163.0" fill="#546779"/>
+<rect x="365" y="93" width="290" height="151" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="383" y="127" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">② 현재 파장에서 평가</text>
+<text x="383" y="163" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">solve(wavelength=λ)</text>
+<text x="383" y="190" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">표에서 εᵣ(λ), μᵣ(λ) 계산</text>
+<text x="383" y="217" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">파장이 바뀌면 다시 평가</text>
+<line x1="664" y1="167" x2="697" y2="167" stroke="#546779" stroke-width="2"/>
+<polygon points="697,167 687.0,171.0 687.0,163.0" fill="#546779"/>
+<rect x="705" y="93" width="265" height="151" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="723" y="127" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">③ RCWA 계산</text>
+<text x="723" y="163" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">평가된 유전율로 행렬 구성</text>
+<text x="723" y="190" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">모드 · 층 연결</text>
+<text x="723" y="217" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R / T · 장</text>
+<text x="37" y="302" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">외부 자료가 n, k 표이면 ②에서 유전율로 변환 · 사용자는 재료를 지정</text>
+<text x="30" y="348" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">현재 로컬 구현 · 숫자 래스터와 solve_conv 행렬은 사용자가 파장마다 갱신</text>
+</svg>

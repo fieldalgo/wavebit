@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 1290" role="img" aria-labelledby="flow-title flow-desc">
+<title id="flow-title">구조와 재료에서 RCWA 계산까지</title>
+<desc id="flow-desc">구조 형상은 Li 또는 NVF 경로로 들어갑니다. 재료값은 점선으로 두 경로 모두에 전달됩니다. NVF는 경계의 법선장, 법선 투영행렬, 컨볼루션 행렬 구성 순서로 진행합니다. 두 경로는 재료 컨볼루션 행렬 묶음을 만든 뒤 공통 RCWA 솔버의 고유모드 계산, 층 경계조건 연결, 반사·투과·전기장 계산으로 합류합니다.</desc>
+<defs>
+<marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker>
+<marker id="data-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#a85116"/></marker>
+</defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e} .flow{fill:none;stroke:#546779;stroke-width:2.4;stroke-linejoin:round} .data{fill:none;stroke:#a85116;stroke-width:2.4;stroke-dasharray:8 6;stroke-linejoin:round}</style>
+<rect width="840" height="1290" fill="white"/>
+
+<text x="420" y="36" font-size="26" font-weight="650" text-anchor="middle" style="fill:#182b3e">구조와 재료에서 RCWA 계산까지</text>
+<rect x="82" y="62" width="676" height="198" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.6"/>
+<text x="106" y="90" font-size="19" font-weight="600" text-anchor="start" style="fill:#182b3e">공통 입력 · 래스터 또는 도형</text>
+<rect x="260" y="106" width="320" height="56" rx="12" fill="#fff1df" stroke="#dfb58d" stroke-width="1.6"/>
+<text x="420" y="142" font-size="23" font-weight="600" text-anchor="middle" style="fill:#182b3e">재료값 ε, μ</text>
+<rect x="260" y="190" width="320" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6"/>
+<text x="420" y="224" font-size="22" font-weight="600" text-anchor="middle" style="fill:#182b3e">구조 형상 · 재료 경계</text>
+<rect x="82" y="328" width="676" height="428" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.6"/>
+<text x="420" y="356" font-size="20" font-weight="600" text-anchor="middle" style="fill:#182b3e">컨볼루션 행렬 구성</text>
+<path d="M420 242 V282 H228 V620" class="flow" marker-end="url(#flow-arrow)"/>
+<path d="M420 282 H580 V382" class="flow" marker-end="url(#flow-arrow)"/>
+<rect x="180" y="291" width="96" height="30" rx="5" fill="#ffffff" stroke="#ffffff" stroke-width="1.6"/>
+<text x="228" y="313" font-size="20" font-weight="600" text-anchor="middle" style="fill:#182b3e">li 선택</text>
+<rect x="519" y="291" width="122" height="30" rx="5" fill="#ffffff" stroke="#ffffff" stroke-width="1.6"/>
+<text x="580" y="313" font-size="20" font-weight="600" text-anchor="middle" style="fill:#182b3e">nvf 선택</text>
+<rect x="424" y="382" width="312" height="72" rx="12" fill="#e5f4ef" stroke="#94bfb7" stroke-width="1.6"/>
+<text x="580" y="412" font-size="22" font-weight="600" text-anchor="middle" style="fill:#182b3e">경계의 법선장 계산</text>
+<text x="580" y="440" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">셀 전체에 방향장 연장</text>
+<path d="M580 454 V492" class="flow" marker-end="url(#flow-arrow)"/>
+<rect x="424" y="492" width="312" height="72" rx="12" fill="#e5f4ef" stroke="#94bfb7" stroke-width="1.6"/>
+<text x="580" y="535" font-size="22" font-weight="600" text-anchor="middle" style="fill:#182b3e">법선 투영행렬 구성</text>
+<path d="M580 564 V620" class="flow" marker-end="url(#flow-arrow)"/>
+<rect x="104" y="620" width="248" height="112" rx="12" fill="#e8f1ff" stroke="#9bb5d8" stroke-width="1.6"/>
+<text x="228" y="651" font-size="23" font-weight="650" text-anchor="middle" style="fill:#182b3e">Li 방식</text>
+<text x="228" y="682" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">격자 u·v축을 기준으로</text>
+<text x="228" y="710" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">직접 규칙·역규칙 적용</text>
+<rect x="424" y="620" width="312" height="112" rx="12" fill="#e5f4ef" stroke="#94bfb7" stroke-width="1.6"/>
+<text x="580" y="651" font-size="23" font-weight="650" text-anchor="middle" style="fill:#182b3e">NVF 방식</text>
+<text x="580" y="682" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">재료값과 법선 투영을 반영해</text>
+<text x="580" y="710" font-size="19" font-weight="400" text-anchor="middle" style="fill:#182b3e">컨볼루션 행렬 구성</text>
+<path d="M260 134 H54 V674 H104" class="data" marker-end="url(#data-arrow)"/>
+<path d="M580 134 H786 V674 H736" class="data" marker-end="url(#data-arrow)"/>
+<g transform="translate(36 473) rotate(-90)">
+<text x="0" y="0" font-size="18" font-weight="400" text-anchor="middle" style="fill:#a85116">재료값 전달</text>
+</g><g transform="translate(812 473) rotate(90)">
+<text x="0" y="0" font-size="18" font-weight="400" text-anchor="middle" style="fill:#a85116">재료값 전달</text>
+</g>
+<path d="M228 732 V772 H420 V804" class="flow" marker-end="url(#flow-arrow)"/>
+<path d="M580 732 V772 H420" class="flow"/>
+<circle cx="420" cy="772" r="4" fill="#546779"/>
+<rect x="230" y="804" width="380" height="106" rx="12" fill="#e8f1ff" stroke="#9bb5d8" stroke-width="1.6"/>
+<text x="420" y="837" font-size="23" font-weight="650" text-anchor="middle" style="fill:#182b3e">재료 컨볼루션 행렬</text>
+<text x="420" y="868" font-size="21" font-weight="400" text-anchor="middle" style="fill:#182b3e">conv_mat 묶음</text>
+<text x="420" y="895" font-size="18" font-weight="400" text-anchor="middle" style="fill:#546779">5개 또는 9개 연산자 블록</text>
+<rect x="180" y="952" width="480" height="278" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.6"/>
+<text x="200" y="979" font-size="20" font-weight="600" text-anchor="start" style="fill:#182b3e">공통 RCWA 솔버</text>
+<path d="M420 910 V1000" class="flow" marker-end="url(#flow-arrow)"/>
+<rect x="214" y="1000" width="412" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6"/>
+<text x="420" y="1034" font-size="22" font-weight="400" text-anchor="middle" style="fill:#182b3e">각 층의 고유모드 계산</text>
+<path d="M420 1052 V1080" class="flow" marker-end="url(#flow-arrow)"/>
+<rect x="214" y="1080" width="412" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6"/>
+<text x="420" y="1114" font-size="22" font-weight="400" text-anchor="middle" style="fill:#182b3e">층 사이의 경계조건 연결</text>
+<path d="M420 1132 V1160" class="flow" marker-end="url(#flow-arrow)"/>
+<rect x="214" y="1160" width="412" height="52" rx="12" fill="#ffffff" stroke="#cad7df" stroke-width="1.6"/>
+<text x="420" y="1194" font-size="22" font-weight="400" text-anchor="middle" style="fill:#182b3e">반사·투과·전기장 계산</text>
+<path d="M156 1260 H204" class="flow" marker-end="url(#flow-arrow)"/>
+<text x="220" y="1267" font-size="17" font-weight="400" text-anchor="start" style="fill:#182b3e">계산 흐름</text>
+<path d="M434 1260 H482" class="data" marker-end="url(#data-arrow)"/>
+<text x="498" y="1267" font-size="17" font-weight="400" text-anchor="start" style="fill:#182b3e">재료값 전달</text>
+</svg>

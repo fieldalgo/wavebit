@@ -26,6 +26,12 @@ instead, in ``test_reticolo_conical_sweep._scene``, which says the same thing fr
 end. If the study directory ever comes back and this is rerun, move the squaring here and
 delete it there; do not have both.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import pathlib
 import sys
 
@@ -37,7 +43,7 @@ if len(sys.argv) < 2:
                      '  the directory holding reti_res_80.mat and reti_res_200.mat; see the '
                      'module docstring')
 SOURCE = pathlib.Path(sys.argv[1]).expanduser()
-OUT = pathlib.Path(__file__).parent / 'golden_reticolo_conical_sweep.npz'
+OUT = repository_path('tests/references/golden_reticolo_conical_sweep.npz')
 
 # The grid and structure `run_reti.m` swept. Lengths are metres here; the .m file works in nm.
 KX = np.linspace(-2, 2, 21)

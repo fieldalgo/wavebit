@@ -1,0 +1,163 @@
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 1, "errors": {"node": 0.30084989827653175, "cell": -0.286733417436529, "mieA": -0.06355573862005237, "mieB": -0.05491794522888116, "c": 0.054451805084864136}, "lo": -0.286733417436529, "hi": 0.30084989827653175, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 2, "errors": {"node": 0.08904269110543184, "cell": -0.008914676838086, "mieA": 0.011300895568179037, "mieB": 0.008641148242077179, "c": 0.01852096950860882}, "lo": -0.008914676838086, "hi": 0.08904269110543184, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 3, "errors": {"node": -0.004961712909217764, "cell": 0.020862601346786747, "mieA": 0.01476652456455474, "mieB": 0.017274284657323058, "c": 0.013620704656067684}, "lo": -0.004961712909217764, "hi": 0.020862601346786747, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 4, "errors": {"node": 0.013511897076632806, "cell": -0.003331814657293375, "mieA": 0.003916660404097438, "mieB": 0.001834061264849085, "c": 0.004115577518100322}, "lo": -0.003331814657293375, "hi": 0.013511897076632806, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 6, "errors": {"node": 0.004354727935352187, "cell": -0.00010596019623332342, "mieA": 0.0015430313553363995, "mieB": 0.0009672568135850046, "c": 0.0016563781497647145}, "lo": -0.00010596019623332342, "hi": 0.004354727935352187, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 8, "errors": {"node": 0.002477473733374813, "cell": 0.000707567204459858, "mieA": 0.0007241359640375311, "mieB": 0.0007610212902404712, "c": 0.0008682380155886626}, "lo": 0.000707567204459858, "hi": 0.002477473733374813, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 12, "errors": {"node": 0.0012186440325201442, "cell": 0.0004396451034469617, "mieA": 0.00033691080043363186, "mieB": 0.0004191705191518569, "c": 0.0003811514563225593}, "lo": 0.00033691080043363186, "hi": 0.0012186440325201442, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 2.25, "arm": "production", "across": 24, "errors": {"node": 5.7344960221250574e-05, "cell": 1.8775679890836727e-06, "mieA": 0.00013891228816054202, "mieB": 9.208989139364299e-05, "c": 0.00013636413410056392}, "lo": 1.8775679890836727e-06, "hi": 0.00013891228816054202, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 1, "errors": {"node": 0.6342842347816877, "cell": -0.4027576108266667, "mieA": -0.04320889570659414, "mieB": 0.017261585464681817, "c": 0.22376530099062286}, "lo": -0.4027576108266667, "hi": 0.6342842347816877, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 2, "errors": {"node": 0.1938017945123125, "cell": 0.010850349845114016, "mieA": 0.03622276414856418, "mieB": 0.04505990012976868, "c": 0.06358514590567599}, "lo": 0.010850349845114016, "hi": 0.1938017945123125, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 3, "errors": {"node": -0.0009281425998897141, "cell": 0.04902910737857247, "mieA": 0.03955849265896538, "mieB": 0.04188500886158253, "c": 0.034868685529815924}, "lo": -0.0009281425998897141, "hi": 0.04902910737857247, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 4, "errors": {"node": 0.029010364614017403, "cell": -0.0030701148259878464, "mieA": 0.013152762693174003, "mieB": 0.008625852670075096, "c": 0.014196863589702291}, "lo": -0.0030701148259878464, "hi": 0.029010364614017403, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 6, "errors": {"node": 0.01171334812529401, "cell": 0.002747964369440359, "mieA": 0.004905525527260979, "mieB": 0.0044515139756413635, "c": 0.005461351199648856}, "lo": 0.002747964369440359, "hi": 0.01171334812529401, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 8, "errors": {"node": 0.005862435799657284, "cell": 0.002608615744186915, "mieA": 0.0026510308825800077, "mieB": 0.0027655065423306535, "c": 0.0030269783045631105}, "lo": 0.002608615744186915, "hi": 0.005862435799657284, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 12, "errors": {"node": 0.0032723082461176833, "cell": 0.0018038967339044643, "mieA": 0.0011307587122701968, "mieB": 0.0014631250270060736, "c": 0.001271589224626668}, "lo": 0.0011307587122701968, "hi": 0.0032723082461176833, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 4.0, "arm": "production", "across": 24, "errors": {"node": 0.00017741448663821657, "cell": 0.00012431835852022566, "mieA": 0.0005035103257335916, "mieB": 0.00038013216549726003, "c": 0.0004939142795046259}, "lo": 0.00012431835852022566, "hi": 0.0005035103257335916, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 1, "errors": {"node": 1.49349959863925, "cell": -0.5089651210672556, "mieA": 0.10689392236024808, "mieB": 0.39419533405746976, "c": 0.8490479982709482}, "lo": -0.5089651210672556, "hi": 1.49349959863925, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 2, "errors": {"node": 0.4308042946226285, "cell": 0.09589137803534209, "mieA": 0.10790417796978846, "mieB": 0.19100370740800465, "c": 0.23339806819839004}, "lo": 0.09589137803534209, "hi": 0.4308042946226285, "certified": 1, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 3, "errors": {"node": 0.03953769393773632, "cell": 0.1570093389176328, "mieA": 0.11489590703493158, "mieB": 0.11659498405717983, "c": 0.09575650745956232}, "lo": 0.03953769393773632, "hi": 0.1570093389176328, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 4, "errors": {"node": 0.06300614447356345, "cell": 0.012306612268844885, "mieA": 0.045021622963805186, "mieB": 0.03759361964175767, "c": 0.0530918153777864}, "lo": 0.012306612268844885, "hi": 0.06300614447356345, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 6, "errors": {"node": 0.039660083358725284, "cell": 0.01861228149071059, "mieA": 0.01651717579750911, "mieB": 0.020162283008243964, "c": 0.01988745421007998}, "lo": 0.01651717579750911, "hi": 0.039660083358725284, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 8, "errors": {"node": 0.014672220865622032, "cell": 0.005984119968699186, "mieA": 0.010730969619756836, "mieB": 0.010171156811992654, "c": 0.012087700440684968}, "lo": 0.005984119968699186, "hi": 0.014672220865622032, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 12, "errors": {"node": 0.007795875348286296, "cell": 0.00676145102680259, "mieA": 0.004201855765102236, "mieB": 0.00516875435113473, "c": 0.00488276282002964}, "lo": 0.004201855765102236, "hi": 0.007795875348286296, "certified": 3, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "production", "across": 24, "errors": {"node": 0.0012123426265138182, "cell": 0.001036746373880515, "mieA": 0.0018672910674497611, "mieB": 0.001676267520377861, "c": 0.0018631124880195138}, "lo": 0.001036746373880515, "hi": 0.0018672910674497611, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 1, "errors": {"node": 1.7594708523116918, "cell": -0.5200848259256055, "mieA": 0.09709094811150698, "mieB": 0.39534995171813114, "c": 0.8660151002656458}, "lo": -0.5200848259256055, "hi": 1.7594708523116918, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 2, "errors": {"node": 0.5597701406944597, "cell": 0.2139205713953689, "mieA": 0.23334559936664867, "mieB": 0.2925826455439198, "c": 0.3342763071184909}, "lo": 0.2139205713953689, "hi": 0.5597701406944597, "certified": 1, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 3, "errors": {"node": 0.15998079580099578, "cell": 0.24522860087490983, "mieA": 0.22476368150506443, "mieB": 0.21963048135655172, "c": 0.2046402642778693}, "lo": 0.15998079580099578, "hi": 0.24522860087490983, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 4, "errors": {"node": 0.17344157710887864, "cell": 0.12328003128132892, "mieA": 0.14742078970461026, "mieB": 0.14305106982070281, "c": 0.15349615733320543}, "lo": 0.12328003128132892, "hi": 0.17344157710887864, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 6, "errors": {"node": 0.11659375976813191, "cell": 0.10036897342675433, "mieA": 0.10085915954668945, "mieB": 0.10283277343268349, "c": 0.10328548820102212}, "lo": 0.10036897342675433, "hi": 0.11659375976813191, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 8, "errors": {"node": 0.08219920646591539, "cell": 0.07669789136550764, "mieA": 0.07884175976660668, "mieB": 0.07916533944905702, "c": 0.080263707394723}, "lo": 0.07669789136550764, "hi": 0.08219920646591539, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 12, "errors": {"node": 0.0569600228240259, "cell": 0.05551352331842452, "mieA": 0.05464988651986746, "mieB": 0.05507963265192495, "c": 0.054999415126379736}, "lo": 0.05464988651986746, "hi": 0.0569600228240259, "certified": 3, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "no cross terms", "across": 24, "errors": {"node": 0.028500408264169552, "cell": 0.02850485917008072, "mieA": 0.02874148043475122, "mieB": 0.02873038984580667, "c": 0.02881882707514971}, "lo": 0.028500408264169552, "hi": 0.02881882707514971, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 1, "errors": {"node": 1.7594708523116904, "cell": 1.9098760215054718, "mieA": 1.5724714906876014, "mieB": 2.2326690501246134, "c": 2.3713104273150134}, "lo": 1.5724714906876014, "hi": 2.3713104273150134, "certified": 5, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 2, "errors": {"node": 0.8993115975943438, "cell": 1.1527481692773276, "mieA": 0.9033900556107484, "mieB": 1.1162845959293288, "c": 1.0973372909871744}, "lo": 0.8993115975943438, "hi": 1.1527481692773276, "certified": 1, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 3, "errors": {"node": 0.714913442188166, "cell": 0.5870482485562036, "mieA": 0.694264857927362, "mieB": 0.5951403273497571, "c": 0.6025112886686186}, "lo": 0.5870482485562036, "hi": 0.714913442188166, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 4, "errors": {"node": 0.42155114667905447, "cell": 0.5079225019051248, "mieA": 0.4854956887383999, "mieB": 0.5226988894286488, "c": 0.5285059513360659}, "lo": 0.42155114667905447, "hi": 0.5285059513360659, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 6, "errors": {"node": 0.31098753387908484, "cell": 0.3518790547647528, "mieA": 0.31925000351674737, "mieB": 0.3456034347193395, "c": 0.34103725070639257}, "lo": 0.31098753387908484, "hi": 0.3518790547647528, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 8, "errors": {"node": 0.22464832211809105, "cell": 0.25360238085180775, "mieA": 0.24111826125560287, "mieB": 0.2538084245442578, "c": 0.25385475746488995}, "lo": 0.22464832211809105, "hi": 0.25385475746488995, "certified": 2, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 12, "errors": {"node": 0.156892710700137, "cell": 0.1690011753287577, "mieA": 0.1604394028332099, "mieB": 0.16716768556124273, "c": 0.16612200335464822}, "lo": 0.156892710700137, "hi": 0.1690011753287577, "certified": 3, "of": 5}
+{"study": "static", "body": "sphere", "eps": 12.0, "arm": "arithmetic", "across": 24, "errors": {"node": 0.07804050020233877, "cell": 0.08179710014426589, "mieA": 0.08040968976104268, "mieB": 0.0818482655047974, "c": 0.08187752582953456}, "lo": 0.07804050020233877, "hi": 0.08187752582953456, "certified": 5, "of": 5}
+{"study": "bodies", "body": "box30", "eps": 12.0, "axis": "x", "placement": "node", "reference": 2.978882490536542, "reference_spread": 0.0022421351373713705, "errors": {"2": 0.11447544852634817, "3": 0.07410024047985941, "4": 0.036241164479852594, "6": 0.025396782074034174, "8": 0.013048577012604756, "12": 0.009684721511340255, "16": 0.0022421351373713705, "24": 0.0024211803778351193}}
+{"study": "bodies", "body": "box30", "eps": 12.0, "axis": "x", "placement": "mieA", "reference": 2.984186899911409, "reference_spread": 0.003549048141639144, "errors": {"2": 0.1045071755206588, "3": 0.04548568443757128, "4": 0.031896228869521925, "6": 0.014429842916334978, "8": 0.006651961668830753, "12": 0.006111822455910021, "16": 0.003549048141639144, "24": 0.0015279556139775607}}
+{"study": "bodies", "body": "box30", "eps": 12.0, "axis": "x", "placement": "c", "reference": 2.981750860123579, "reference_spread": 0.005287711320449917, "errors": {"2": 0.10285909762523815, "3": 0.04876050926696851, "4": 0.031863129016400205, "6": 0.011309160958043796, "8": 0.010856427753945352, "12": 0.00841693539022259, "16": 0.005287711320449917, "24": 0.0021042338475554256}}
+{"study": "bodies", "body": "box30", "eps": 12.0, "axis": "z", "placement": "node", "reference": 2.727364519745164, "reference_spread": 0.0038371315309770893, "errors": {"2": 0.13097611937702158, "3": 0.03484468572739119, "4": 0.028367803420613402, "6": 0.008642574077991627, "8": 0.016086900679524563, "12": 0.0032064135202760635, "16": 0.0038371315309770893, "24": 0.0008016033800690714}}
+{"study": "bodies", "body": "box30", "eps": 12.0, "axis": "z", "placement": "mieA", "reference": 2.725216044831455, "reference_spread": 0.0044822198379663725, "errors": {"2": 0.14879971427529526, "3": 0.05788688853674828, "4": 0.030359263992270735, "6": 0.021317722676686746, "8": 0.01966063778016558, "12": 0.00919725028197993, "16": 0.0044822198379663725, "24": 0.0022993125704948714}}
+{"study": "bodies", "body": "box30", "eps": 12.0, "axis": "z", "placement": "c", "reference": 2.7276742618679872, "reference_spread": 0.004700136371505348, "errors": {"2": 0.054988914847226456, "3": 0.06220999938146066, "4": 0.034146193582001105, "6": 0.019342228493166136, "8": 0.006611292315641171, "12": 0.008163279488464736, "16": 0.004700136371505348, "24": 0.0020408198721162396}}
+{"study": "bodies", "body": "cylinder", "eps": 12.0, "axis": "x", "placement": "node", "reference": 2.2076321396655283, "reference_spread": 0.009489309558875947, "errors": {"2": 0.2186061508052195, "3": -0.005190628946636799, "4": 0.09102373390005902, "6": 0.02931785763514938, "8": 0.01621787990528678, "12": 0.011357521458280617, "16": 0.009489309558875947, "24": 0.002839380364570099}}
+{"study": "bodies", "body": "cylinder", "eps": 12.0, "axis": "x", "placement": "mieA", "reference": 2.2060037204056684, "reference_spread": 0.005330862875012166, "errors": {"2": 0.1390763977748395, "3": 0.09473032048623353, "4": 0.035822212840759704, "6": 0.022222929298450156, "8": 0.008298537815554674, "12": 0.005782499391460583, "16": 0.005330862875012166, "24": 0.0014456248478651457}}
+{"study": "bodies", "body": "cylinder", "eps": 12.0, "axis": "x", "placement": "c", "reference": 2.2043962520526983, "reference_spread": 0.0017627725405826578, "errors": {"2": 0.23374918865475602, "3": 0.11304216343225137, "4": 0.03396549529362769, "6": 0.029333831108744546, "8": 0.009299655188585554, "12": 0.0032998104421368968, "16": 0.0017627725405826578, "24": 0.0008249526105341687}}
+{"study": "bodies", "body": "cylinder", "eps": 12.0, "axis": "z", "placement": "node", "reference": 3.54969708246555, "reference_spread": 0.008426163673050713, "errors": {"2": 0.34892975561454587, "3": -0.04492914151060634, "4": 0.09193833820019215, "6": 0.027308206379850875, "8": 0.026275862438353892, "12": 0.014636898367777151, "16": 0.008426163673050713, "24": 0.0036592245919442323}}
+{"study": "bodies", "body": "cylinder", "eps": 12.0, "axis": "z", "placement": "mieA", "reference": 3.546558678722219, "reference_spread": 0.002517047135156325, "errors": {"2": 0.03354650868753417, "3": 0.09307005153281311, "4": 0.015379683813079081, "6": 0.00149984507410994, "8": 0.00662979092232896, "12": 0.003496102459872308, "16": 0.002517047135156325, "24": 0.000874025614968188}}
+{"study": "bodies", "body": "cylinder", "eps": 12.0, "axis": "z", "placement": "c", "reference": 3.5440400164519312, "reference_spread": 0.0017708896683548137, "errors": {"2": 0.17762146512219612, "3": 0.06282071761802999, "4": 0.03800946975876052, "6": 0.026929128798625745, "8": 0.010550428744961371, "12": 0.0026001322955180317, "16": 0.0017708896683548137, "24": 0.0006500330738794524}}
+{"study": "bodies", "body": "hexprism", "eps": 12.0, "axis": "x", "placement": "node", "reference": 3.4658622107023027, "reference_spread": 0.004749055270960145, "errors": {"2": 0.15586103668554374, "3": 0.04990399247304511, "4": 0.0705486553622614, "6": 0.01810151306662111, "8": 0.016595662303660275, "12": 0.008807424262756491, "16": 0.004749055270960145, "24": 0.002201856065689123}}
+{"study": "bodies", "body": "hexprism", "eps": 12.0, "axis": "x", "placement": "mieA", "reference": 3.4612680505322437, "reference_spread": 0.0008099602350211121, "errors": {"2": 0.1892542295705404, "3": 0.02276052220595881, "4": 0.030422616820960036, "6": 0.027779796329471695, "8": 0.01020128734520287, "12": 0.003574816560508731, "16": 0.0008099602350211121, "24": 0.0008937041401273493}}
+{"study": "bodies", "body": "hexprism", "eps": 12.0, "axis": "x", "placement": "c", "reference": 3.4609033006507417, "reference_spread": 0.0031514204556766234, "errors": {"2": 0.0945245404939341, "3": 0.08662426798612488, "4": 0.02740602271419501, "6": 0.01483733188758496, "8": 0.009640540833257383, "12": 0.005560144808184564, "16": 0.0031514204556766234, "24": 0.00139003620204603}}
+{"study": "bodies", "body": "hexprism", "eps": 12.0, "axis": "z", "placement": "node", "reference": 2.262348445946907, "reference_spread": 0.007145068616250194, "errors": {"2": 0.08327124196614455, "3": 0.0792964340681317, "4": 0.0493406220727346, "6": 0.02722135741547027, "8": 0.014252931220610332, "12": 0.009756543768962622, "16": 0.007145068616250194, "24": 0.0024391359422406556}}
+{"study": "bodies", "body": "hexprism", "eps": 12.0, "axis": "z", "placement": "mieA", "reference": 2.2692378262719353, "reference_spread": 0.0009515733345036859, "errors": {"2": 0.18077996327036572, "3": 0.08482905900105431, "4": 0.008617248596727967, "6": 0.012999724434505255, "8": 0.012846740555775282, "12": 0.0009123441142449007, "16": -0.0009515733345036859, "24": 0.00022808602856128068}}
+{"study": "bodies", "body": "hexprism", "eps": 12.0, "axis": "z", "placement": "c", "reference": 2.2670523843165062, "reference_spread": 0.0023223058889454418, "errors": {"2": 0.14000801293997034, "3": 0.06616303214545027, "4": 0.056473897864975475, "6": 0.02356829669638838, "8": 0.008959065097816632, "12": 0.005297021083533027, "16": 0.0023223058889454418, "24": 0.0013242552708832012}}
+{"study": "dynamic", "body": "sphere", "eps": 12.0, "cpw": 40, "radius": 0.025, "across": 2.0, "placement": [0, 0, 0], "tag": "2 across, node", "qsca": 0.0022851644869012395, "mie": 0.0010238319523332446, "error": 1.2319722310809915, "decay": {"abs": 1.9911577862633e-11, "sca": 1.121437954598505e-09}, "seconds": 28.993110500014154}
+{"study": "dynamic", "body": "sphere", "eps": 12.0, "cpw": 40, "radius": 0.05, "across": 4.0, "placement": [0, 0, 0], "tag": "4 across, node", "qsca": 0.01981179603224265, "mie": 0.017495451047406588, "error": 0.13239698585418425, "decay": {"abs": 1.945185099144474e-11, "sca": 1.8266221050237007e-10}, "seconds": 28.28684990000329}
+{"study": "dynamic", "body": "sphere", "eps": 12.0, "cpw": 40, "radius": 0.05, "across": 4.0, "placement": [0.5, 0.5, 0.5], "tag": "4 across, cell", "qsca": 0.01771965287429398, "mie": 0.017495451047406588, "error": 0.012814864062657305, "decay": {"abs": 1.9259459328756512e-11, "sca": 3.0061805488332004e-10}, "seconds": 28.68130930000916}
+{"study": "dynamic", "body": "sphere", "eps": 12.0, "cpw": 40, "radius": 0.1, "across": 8.0, "placement": [0, 0, 0], "tag": "8 across, node", "qsca": 0.39233888439520603, "mie": 0.38486228974206016, "error": 0.01942667507943363, "decay": {"abs": 1.8437379387015633e-10, "sca": 1.8486245946765702e-09}, "seconds": 28.40948520001257}
+{"study": "dynamic", "body": "sphere", "eps": 12.0, "cpw": 40, "radius": 0.1, "across": 8.0, "placement": [0.5, 0.5, 0.5], "tag": "8 across, cell", "qsca": 0.38867868964128727, "mie": 0.38486228974206016, "error": 0.009916273952911503, "decay": {"abs": 2.4943090346144787e-10, "sca": 3.139098770013326e-09}, "seconds": 28.490826499997638}
+{"study": "certificate", "body": "sphere", "eps": 6.0, "across": 4, "certified": 5, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 6.0, "across": 8, "certified": 5, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 6.0, "across": 16, "certified": 5, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 6.0, "across": 24, "certified": 5, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 6.0, "across": 32, "certified": 5, "of": 5}
+{"study": "certificate", "body": "box30", "eps": 6.0, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 6.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 6.0, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 6.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 6.0, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 6.0, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 6.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 6.0, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 6.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 6.0, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 6.0, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 6.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 6.0, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 6.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 6.0, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "sphere", "eps": 12.0, "across": 4, "certified": 2, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.0, "across": 8, "certified": 2, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.0, "across": 16, "certified": 5, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.0, "across": 24, "certified": 5, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.0, "across": 32, "certified": 5, "of": 5}
+{"study": "certificate", "body": "box30", "eps": 12.0, "across": 4, "certified": 2, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.0, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.0, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.0, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.0, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.0, "across": 32, "certified": 2, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.0, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.0, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.0, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "sphere", "eps": 12.5, "across": 4, "certified": 2, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.5, "across": 8, "certified": 1, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.5, "across": 16, "certified": 1, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.5, "across": 24, "certified": 0, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 12.5, "across": 32, "certified": 0, "of": 5}
+{"study": "certificate", "body": "box30", "eps": 12.5, "across": 4, "certified": 2, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.5, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.5, "across": 16, "certified": 2, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.5, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 12.5, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.5, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.5, "across": 8, "certified": 2, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.5, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.5, "across": 24, "certified": 2, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 12.5, "across": 32, "certified": 2, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.5, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.5, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.5, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.5, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 12.5, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "sphere", "eps": 13.0, "across": 4, "certified": 2, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 13.0, "across": 8, "certified": 1, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 13.0, "across": 16, "certified": 0, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 13.0, "across": 24, "certified": 0, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 13.0, "across": 32, "certified": 0, "of": 5}
+{"study": "certificate", "body": "box30", "eps": 13.0, "across": 4, "certified": 2, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 13.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 13.0, "across": 16, "certified": 2, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 13.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 13.0, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 13.0, "across": 4, "certified": 2, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 13.0, "across": 8, "certified": 2, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 13.0, "across": 16, "certified": 2, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 13.0, "across": 24, "certified": 1, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 13.0, "across": 32, "certified": 2, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 13.0, "across": 4, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 13.0, "across": 8, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 13.0, "across": 16, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 13.0, "across": 24, "certified": 3, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 13.0, "across": 32, "certified": 3, "of": 3}
+{"study": "certificate", "body": "sphere", "eps": 20.0, "across": 4, "certified": 0, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 20.0, "across": 8, "certified": 0, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 20.0, "across": 16, "certified": 0, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 20.0, "across": 24, "certified": 0, "of": 5}
+{"study": "certificate", "body": "sphere", "eps": 20.0, "across": 32, "certified": 0, "of": 5}
+{"study": "certificate", "body": "box30", "eps": 20.0, "across": 4, "certified": 0, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 20.0, "across": 8, "certified": 0, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 20.0, "across": 16, "certified": 0, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 20.0, "across": 24, "certified": 0, "of": 3}
+{"study": "certificate", "body": "box30", "eps": 20.0, "across": 32, "certified": 0, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 20.0, "across": 4, "certified": 1, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 20.0, "across": 8, "certified": 1, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 20.0, "across": 16, "certified": 0, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 20.0, "across": 24, "certified": 0, "of": 3}
+{"study": "certificate", "body": "cylinder", "eps": 20.0, "across": 32, "certified": 0, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 20.0, "across": 4, "certified": 0, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 20.0, "across": 8, "certified": 0, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 20.0, "across": 16, "certified": 0, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 20.0, "across": 24, "certified": 0, "of": 3}
+{"study": "certificate", "body": "hexprism", "eps": 20.0, "across": 32, "certified": 0, "of": 3}

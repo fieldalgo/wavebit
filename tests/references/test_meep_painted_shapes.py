@@ -1,16 +1,21 @@
 """Independent graded painted-rectangle controls and three Meep shape sensitivities."""
-from pathlib import Path
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
-from studies.fdtd_painted_shapes import reference
-from studies.fdtd_rotation_gradients import finite_difference
+from studies.cross_solver.painted_shapes.fdtd_painted_shapes import reference
+from studies.cross_solver.rotation_gradients.fdtd_rotation_gradients import finite_difference
 
 
 @pytest.fixture(scope='module')
 def references():
-    base = Path(__file__).parent
+    base = repository_path('tests/references')
     data = {key: dict(np.load(base/name)) for key, name in (
         (20, 'golden_meep_painted_shapes_coarse.npz'), (40, 'golden_meep_painted_shapes.npz'),
         ('profile', 'golden_meep_painted_shapes_profile.npz'))}

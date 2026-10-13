@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 468" role="img" aria-labelledby="title desc">
+<title id="title">일반 NVF와 고급 보조 셀의 위치</title><desc id="desc">보통의 NVF 사용에는 삼각형 보조 셀을 만들지 않는다.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="468" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">일반 NVF와 고급 보조 셀의 위치</text>
+<rect x="30" y="165" width="180" height="116" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2"/>
+<text x="48" y="199" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">구조 입력</text>
+<text x="48" y="235" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">재료 · 도형</text>
+<rect x="295" y="85" width="300" height="136" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2"/>
+<text x="313" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">일반 NVF</text>
+<text x="313" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">경계 법선 → 투영 계수</text>
+<text x="313" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">유전율 행렬과 결합</text>
+<text x="313" y="209" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">이 교재의 실행 예제</text>
+<rect x="295" y="266" width="300" height="136" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2"/>
+<text x="313" y="300" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">명시적 보조 셀</text>
+<text x="313" y="336" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">추가 문제로 장 기저 구성</text>
+<text x="313" y="363" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">지원 구조와 가정이 따로 있음</text>
+<text x="313" y="390" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">사용자가 해당 API를 호출</text>
+<rect x="700" y="165" width="265" height="116" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2"/>
+<text x="718" y="199" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">RCWA 광학 계산</text>
+<text x="718" y="235" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">모드 · 층 연결 → R, T</text>
+<line x1="210" y1="199" x2="280" y2="154" stroke="#546779" stroke-width="2"/>
+<polygon points="280,154 273.75124561148846,162.7722898146412 269.4251848809805,156.04286201162878" fill="#546779"/>
+<line x1="210" y1="249" x2="280" y2="334" stroke="#546779" stroke-width="2"/>
+<polygon points="280,334 270.5552065289208,328.8235266552739 276.7306484138572,323.73786863238513" fill="#546779"/>
+<line x1="595" y1="154" x2="685" y2="199" stroke="#546779" stroke-width="2"/>
+<polygon points="685,199 674.266873708001,198.10557280900008 677.8445824720006,190.95015528100078" fill="#546779"/>
+<line x1="595" y1="334" x2="685" y2="249" stroke="#546779" stroke-width="2"/>
+<polygon points="685,249 680.4763626063567,258.7742879398364 674.9833743426469,252.9581827194379" fill="#546779"/>
+<text x="30" y="451" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">factorization=&quot;nvf&quot;만으로 FEM 보조 솔버가 자동 실행되지 않음</text>
+</svg>

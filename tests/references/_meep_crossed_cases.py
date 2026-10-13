@@ -8,9 +8,9 @@ test runs in the project env that has no ``meep``. Neither can import the other'
 module. This one imports numpy and nothing else, so both can read it.
 
 **Lengths are micrometres**, which is a deliberate departure from the nanometres
-``tests/test_fdtd.py`` uses. Both solvers are scale-free and the FDTD module has had
+``tests/fdtd/test_fdtd.py`` uses. Both solvers are scale-free and the FDTD module has had
 exactly one defect that was not — a bare ``0.05`` in the CPML that was a reciprocal
-*length* (``docs/fdtd.md`` §3) — so stating this oracle in the other unit costs nothing
+*length* (``docs/guide/fdtd/fdtd.md`` §3) — so stating this oracle in the other unit costs nothing
 and is the one thing that would notice such a constant coming back.
 
 **Materials are stated as a refractive index**, not as a permittivity. Meep's
@@ -43,7 +43,7 @@ def eps_of(index):
 def _raster(n_y, n_x, blocks, background=1.0):
     """``(1, n_y, n_x)`` refractive index. ``blocks`` are ``(j0, j1, i0, i1, index)``
     half-open in the array's own ``[y, x]`` order — v-first, the rule
-    ``docs/conventions.md`` states for arrays."""
+    ``docs/reference/common/conventions.md`` states for arrays."""
     a = np.full((n_y, n_x), float(background))
     for j0, j1, i0, i1, n in blocks:
         a[j0:j1, i0:i1] = float(n)
@@ -85,7 +85,7 @@ CASES = {
 #: The three leg signs are the canonical frame rather than a convention, and both sides
 #: derive them from the same two definitions -- ``s_hat = z_hat x k_hat_par`` and
 #: ``p_hat = k_hat x s_hat`` -- so nothing here is fitted. Written down because the
-#: generator and ``src/wavebit/_core/fdtd.py`` reach them independently:
+#: generator and ``src/wavebit/fdtd/_periodic/legacy.py`` reach them independently:
 #:
 #:     E . p_hat = -+ (n / kz) (cos(varphi) Ex + sin(varphi) Ey)
 #:

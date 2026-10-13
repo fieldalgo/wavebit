@@ -9,7 +9,7 @@ meep generator runs in a separate ``meep`` env that has no ``wavebit`` in it, an
 tests run in the project env that has no ``meep``. Neither can import the other's module.
 This one imports numpy and nothing else, so all four can read it.
 
-**What this file is for, in one sentence: a reader regenerating ``docs/fdtd.md`` §2's
+**What this file is for, in one sentence: a reader regenerating ``docs/guide/fdtd/fdtd.md`` §2's
 three-way table in five years reads THIS, not the document.** The document prints six
 decimals; six decimals are a claim about a configuration, and the configuration is here.
 
@@ -33,10 +33,10 @@ either spelling alone leaves the record ambiguous, which is why
 **in steps** -- quantities that are unambiguous whichever spelling produced them, and that
 survive a future default change.
 
-The scene is **not a new one**. It is the benchmark ``tests/test_fdtd.py::_grating()``
+The scene is **not a new one**. It is the benchmark ``tests/fdtd/test_fdtd.py::_grating()``
 runs everywhere, read off that module's own constants:
 
-    tests/test_fdtd.py          here
+    tests/fdtd/test_fdtd.py          here
     WL       = 900.0 nm         wavelength = 0.90
     PERIOD   = 700.0 nm         period     = 0.70
     THICK    = 300.0 nm         thickness  = (0.30,)
@@ -47,10 +47,10 @@ runs everywhere, read off that module's own constants:
                                 theta = 0, phi = 0 -- normal incidence
 
 **Lengths are micrometres** (:data:`UNITS`), which is a deliberate departure from the
-nanometres ``tests/test_fdtd.py`` uses -- the same departure ``_meep_crossed_cases.py``
+nanometres ``tests/fdtd/test_fdtd.py`` uses -- the same departure ``_meep_crossed_cases.py``
 makes and for the same reason. Both solvers are scale-free and the FDTD module has had
 exactly one defect that was not (a bare ``0.05`` in the CPML that was a reciprocal
-*length*, ``docs/fdtd.md`` §3), so stating this oracle in the other unit costs nothing and
+*length*, ``docs/guide/fdtd/fdtd.md`` §3), so stating this oracle in the other unit costs nothing and
 is the one thing that would notice such a constant coming back. The unit is also
 load-bearing for the record itself: ``resolution=200`` means a 5 nm cell in micrometres
 and a 5 µm cell in millimetres, so the keyword cannot be reconstructed from §2's printed
@@ -90,7 +90,7 @@ def _raster(n_x, indices):
     """``(1, 1, n_x)`` refractive index: one layer, invariant along y, ``n_x`` columns.
 
     The array is **v-first** -- ``(layer, y, x)`` -- which is the rule
-    ``docs/conventions.md`` states for arrays, and ``Ny == 1`` is what both solvers read
+    ``docs/reference/common/conventions.md`` states for arrays, and ``Ny == 1`` is what both solvers read
     as "a grating invariant along y" rather than as a crossed one.
 
     **The column count is part of the record, and so is the ORDER.** The count is free
@@ -134,7 +134,7 @@ CASES = {
     'binary_grating': dict(
         wavelength=0.90, period=(0.70,), thickness=(0.30,),
         n_top=1.0, n_bot=1.5, theta_deg=0.0, phi_deg=0.0,
-        # `tests/test_fdtd.py::_grating(duty=0.5)`, spelled as an index rather than as a
+        # `tests/fdtd/test_fdtd.py::_grating(duty=0.5)`, spelled as an index rather than as a
         # permittivity: a 50 % tooth of n = 3.5, then air. Two raster columns rather than
         # two thousand, which describes the same geometry exactly -- that module's own
         # docstring records it agreeing with a 2000-column reference to 6e-7.
@@ -287,7 +287,7 @@ WAVEBIT_CALL = dict(resolution=200)
 #: ``test_fdtd_table_golden.py`` asserts each of these against the live module, so halving
 #: a clearance again is a failing test that names this table instead of a silent 8e-5.
 #:
-#: Read as ``name -> value``; the sources are ``wavebit._core.fdtd`` module attributes
+#: Read as ``name -> value``; the sources are ``wavebit.fdtd._periodic.legacy`` module attributes
 #: except the four marked, which are ``solve_fdtd`` signature defaults. **The distinction
 #: matters and is not cosmetic**: ``PML_CELLS`` and ``COURANT`` are bound into the
 #: signature at import, so patching the module attribute is inert, while
@@ -601,7 +601,7 @@ MEEP_UNEXPLAINED = (
 #: The three leg signs are the canonical frame rather than a convention, and both sides
 #: derive them from the same two definitions -- ``s_hat = z_hat x k_hat_par`` and
 #: ``p_hat = k_hat x s_hat`` -- so nothing here is fitted. Written down because the
-#: generator and ``src/wavebit/_core/fdtd.py`` reach them independently:
+#: generator and ``src/wavebit/fdtd/_periodic/legacy.py`` reach them independently:
 #:
 #:     E . p_hat = -+ (n / kz) (cos(varphi) Ex + sin(varphi) Ey)
 #:
@@ -612,7 +612,7 @@ SIGMA = (-1.0, 1.0, -1.0)
 #: this file that a swapped label would hide from every energy check.
 #:
 #: * **wavebit** takes ``tetm='te'`` / ``'tm'``. TE is the grating community's TE: the
-#:   electric field lies **along the grooves**, which here is ``y``. ``tests/test_fdtd.py``
+#:   electric field lies **along the grooves**, which here is ``y``. ``tests/fdtd/test_fdtd.py``
 #:   pins it -- ``_stack_rt`` propagates ``Ey`` for TE and ``Hy`` for TM -- and the
 #:   conical machinery calls the same two legs ``s`` and ``p``, which is why the crossed
 #:   golden's arrays are keyed ``s``/``p`` and these are keyed ``te``/``tm``.
@@ -652,7 +652,7 @@ def airy_rt(wavelength, n_top, n_list, d_list, n_bot):
 
     Written here, from the boundary conditions, so that the calibration this file's
     docstring describes involves no solver at all -- not wavebit's, not Meep's. It is the
-    same closed form ``tests/test_fdtd.py::_stack_rt`` carries, deliberately re-derived
+    same closed form ``tests/fdtd/test_fdtd.py::_stack_rt`` carries, deliberately re-derived
     rather than imported: that module lives in the other environment, and a calibration
     that shares an implementation with the thing it calibrates is not one.
 

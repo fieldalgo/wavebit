@@ -1,0 +1,324 @@
+Negative-index media -- studies/negative_index_media.py
+numpy 2.5.1; every solve NumPy complex128 except sections 9 and 11
+
+1. roots -- glass (n 1.5) onto eps = -2+0.1i, mu = -1+0.1i at normal incidence
+  eps*mu = 1.99-0.30i: below the real axis, as a gain medium (Im(eps*mu) = Re(eps) Im(mu) + Im(eps) Re(mu) < 0)
+  maystre root kz = +1.4147-0.1060i: Im(kz) -0.1060 (grows away from the interface), Re(kz) +1.4147 (phase away from it), Re(kz/mu) -1.4111, Re(kz/eps) -0.7082 (power toward it)
+  mirror  root kz = -1.4147+0.1060i: Im(kz) +0.1060 (decays away from the interface), Re(kz) -1.4147 (phase toward it), Re(kz/mu) +1.4111, Re(kz/eps) +0.7082 (power away from it)
+  physical root (decay; no cut): equals the mirror root to 0.0e+00
+  physical root  : r = +0.030373-0.012417i, R = 0.001076681582, T = 0.9989233184, R + T - 1 = -1.1e-16
+  Maystre's root : r = +28.209627+11.532417i, R = 928.7797034, T = -927.7797034, R + T - 1 = -1.1e-13
+  r(Maystre) * r(physical) - 1 = 2.0e-18: the wrong root negates the admittance, so r -> 1/r
+  the solver now, ETM: R = 0.0010766816, T = 0.9989233184
+  the solver now, SMM: R = 0.0010766816, T = 0.9989233184
+
+  the same eps*mu, three media (glass onto each, normal incidence):
+    the passive double negative, its decaying root: R = 0.001076681582
+    eps = 1.99-0.3i, mu = 1 (gain), Maystre's root (gain switched on from zero): R = 0.002178010778
+    eps = 1.99-0.3i, mu = 1, the decaying root (Skaar 2006's construction):      R = 459.1345507
+
+  the standard table, glass onto the double negative, R_s / R_p:
+                      0 deg                      30 deg                     60 deg
+    lossy (-2+0.1i, -1+0.1i), physical: 0.001076681582 / 0.001076681582;  0.001516744535 / 0.001195717263;  0.02662274906 / 0.0297091977
+    lossy (-2+0.1i, -1+0.1i), maystre : 928.7797034 / 928.7797034;  659.3068093 / 836.3181086;  37.56186102 / 33.65960973
+    lossless (-2, -1), physical: 0.0008665517772 / 0.0008665517772;  0.001605140572 / 0.0003535768269;  0.02128623625 / 0.007713804549
+    lossless (-2, -1), maystre : 1153.999133 / 1153.999133;  622.9983949 / 2828.239646;  46.97871376 / 129.6377156
+
+  0 deg, R_s: a lossless double negative reflects exactly as its double-positive twin, so lossless |mu| = 1 rows cannot tell them apart; an impedance-blind solver is caught only where |mu| != 1:
+    (-2, -1), physical                   R = 0.0008665517772
+    (2, 1), its double-positive twin     R = 0.0008665517772
+    (-3, -0.5), physical                 R = 0.0577961054
+    (3, 0.5), its twin                   R = 0.0577961054
+    (-3, -0.5), Maystre's root           R = 17.30220389
+    eps = 1.5, mu = 1 (eps*mu as eps)    R = 0.01020514434
+  the mirror medium (-conj eps, -conj mu) of the lossy pair, its own (Maystre) root:
+       0 deg: R_s - R_s(mirror) = 0.0e+00, |r_s - conj(r_s(mirror))| = 0.0e+00, |r_s - r_s(mirror)| = 0.025
+      30 deg: R_s - R_s(mirror) = 0.0e+00, |r_s - conj(r_s(mirror))| = 0.0e+00, |r_s - r_s(mirror)| = 0.004
+      60 deg: R_s - R_s(mirror) = 0.0e+00, |r_s - conj(r_s(mirror))| = 0.0e+00, |r_s - r_s(mirror)| = 0.291
+  the gain twin with the p admittance conj(kz)/eps (kz conjugated, eps not), R_p at 0 / 30 / 60 deg: 0.01348 / 0.01657 / 0.07686
+  a passive magnetic metal (-10+0.1i, 1+0.5i), glass onto it, 0 deg, R_s: the decaying root 0.6834 (Maystre's cut takes it: 0.6834); the principal root of eps*mu, +0.7520-3.2581i, which grows: 1.463
+
+2. mirror -- the double negative's root, Im(kz) - Re(kz) > 0
+  boundary_kz for a double negative against -conj(maystre(conj z)), bit for bit: 26005 of 26005 equal (random z, both axes, the diagonals, signed zeros)
+  this script's mirror() against boundary_kz: 26005 of 26005 equal
+  on each cut the tie: Maystre's, kz**2 = -2i -> +1-1i (Re(kz) > 0 kept); the mirror's, kz**2 = +2i -> -1-1i (Re(kz) < 0 kept)
+  where Re(kz**2) < 0 the two cuts take the same root: 10960 of 10960; where Re(kz**2) > 0, never: 0 of 13040
+  2e5 random passive double negatives at real k_par in [0, 4): the decision |Im v - Re v| is at least 1.000043 |v|; the mirror root is the physical one (decaying; power outgoing if lossless) on 200000; min Im(kz) 8.5e-05
+  24834 passive negative-phase-velocity media with one real part negative (magnetic metals), k_par 0 .. 6 in 61 steps: Maystre's root decays (Im(kz) > 0) on 1514874 of 1514874
+
+  limiting absorption on the lossless double negative (-2, -1): the decaying root of the lossy medium, distance to each cut's lossless root
+    k_par  loss on          delta 1e-2   1e-4     1e-6     -> mirror root   Maystre root  (distance at 1e-6)
+     0.0   eps and mu    1.1e-02  1.1e-04  1.1e-06   -1.4142+0.0000i  +1.4142+0.0000i  (1.1e-06 / 2.8e+00)
+     0.0   eps only      3.5e-03  3.5e-05  3.5e-07   -1.4142+0.0000i  +1.4142+0.0000i  (3.5e-07 / 2.8e+00)
+     0.0   mu only       7.1e-03  7.1e-05  7.1e-07   -1.4142+0.0000i  +1.4142+0.0000i  (7.1e-07 / 2.8e+00)
+     0.0   the product   3.5e-03  3.5e-05  3.5e-07   -1.4142+0.0000i  +1.4142+0.0000i  (2.8e+00 / 3.5e-07)
+     0.8   eps and mu    1.3e-02  1.3e-04  1.3e-06   -1.1662+0.0000i  +1.1662+0.0000i  (1.3e-06 / 2.3e+00)
+     0.8   eps only      4.3e-03  4.3e-05  4.3e-07   -1.1662+0.0000i  +1.1662+0.0000i  (4.3e-07 / 2.3e+00)
+     0.8   mu only       8.6e-03  8.6e-05  8.6e-07   -1.1662+0.0000i  +1.1662+0.0000i  (8.6e-07 / 2.3e+00)
+     0.8   the product   4.3e-03  4.3e-05  4.3e-07   -1.1662+0.0000i  +1.1662+0.0000i  (2.3e+00 / 4.3e-07)
+     1.3   eps and mu    2.7e-02  2.7e-04  2.7e-06   -0.5568+0.0000i  +0.5568+0.0000i  (2.7e-06 / 1.1e+00)
+     1.3   eps only      9.0e-03  9.0e-05  9.0e-07   -0.5568+0.0000i  +0.5568+0.0000i  (9.0e-07 / 1.1e+00)
+     1.3   mu only       1.8e-02  1.8e-04  1.8e-06   -0.5568+0.0000i  +0.5568+0.0000i  (1.8e-06 / 1.1e+00)
+     1.3   the product   9.0e-03  9.0e-05  9.0e-07   -0.5568+0.0000i  +0.5568+0.0000i  (1.1e+00 / 9.0e-07)
+     1.7   eps and mu    1.6e-02  1.6e-04  1.6e-06   +0.0000+0.9434i  +0.0000+0.9434i  (1.6e-06 / 1.6e-06)
+     1.7   eps only      5.3e-03  5.3e-05  5.3e-07   +0.0000+0.9434i  +0.0000+0.9434i  (5.3e-07 / 5.3e-07)
+     1.7   mu only       1.1e-02  1.1e-04  1.1e-06   +0.0000+0.9434i  +0.0000+0.9434i  (1.1e-06 / 1.1e-06)
+     1.7   the product   5.3e-03  5.3e-05  5.3e-07   +0.0000+0.9434i  +0.0000+0.9434i  (5.3e-07 / 5.3e-07)
+    (loss on the product, eps*mu + i*delta, is measured against Maystre's root, which it reaches)
+
+  k_par swept 1.30 .. 1.52 in steps of 1e-4 through grazing (1.4107): max |step in kz| mirror 2.6e-04, Maystre 1.10
+
+  the tie: eps = mu = -1+1i, normal incidence, kz**2 = -2i (on Maystre's cut)
+    maystre: kz = +1-1i, glass onto it R = 25
+    mirror : kz = -1+1i, glass onto it R = 0.04
+    the solver, ETM: R = 0.040000000000
+    the solver, SMM: R = 0.040000000000
+
+  8 media with one real part or none negative (gain, metals, a magnetic metal, mu-negative), real and complex k_par: 6416 of 6416 roots bit-identical with and without the material
+
+3. index -- n = sqrt(eps)*sqrt(mu), each root on Maystre's cut
+    medium (eps, mu)            principal sqrt(eps*mu)   signed n              s
+    2.25, no mu                     +1.5000+0.0000i       the same bits         +1
+    2.25, 1.3                       +1.7103+0.0000i       the same bits         +1
+    -2+0.1i, 1 (a metal)            +0.0353+1.4147i       the same bits         +1
+    -2+0.1i, -1+0.1i                +1.4147-0.1060i       -1.4147+0.1060i       -1
+    -2, -1                          +1.4142+0.0000i       -1.4142+0.0000i       -1
+    -3+0.1i, -0.5+0.05i             +1.2254-0.0816i       -1.2254+0.0816i       -1
+    -2+0.01i, 0.1+0.5i              +0.6383-0.7826i       -0.6383+0.7826i       -1
+    -1+1.2i, -1+1.2i                +1.0000-1.2000i       -1.0000+1.2000i       -1
+    2+0.1i, -1+0.1i (mu-negative)   +0.0353+1.4182i       the same bits         +1
+
+  1000000 random passive pairs (a quarter with lossless mu, a quarter lossless eps):
+    s = +1: 500095, the principal root to the bit on 500095; s = -1: 499905, its exact negation on 499905
+    Im(n) >= 0 on 1000000; |n - sqrt(eps)*sqrt(mu)| max 1.8e-15
+    against s = -1, on the 1000000 pairs off the axis Im(eps*mu) = 0 (0 on it):
+      Im(eps*mu) < 0                                                 agrees on 1000000
+      Depine-Lakhtakia: eps'|mu| + mu'|eps| < 0                      agrees on 1000000
+      McCall-Lakhtakia-Weiglhofer: (|eps|-eps')(|mu|-mu') > eps''mu'' agrees on 1000000
+    on the axis, the lossless double negatives (-2, -1: s = -1, Im(eps*mu) < 0 False, Depine-Lakhtakia True, McCall-Lakhtakia-Weiglhofer True; -3, -0.5: s = -1, Im(eps*mu) < 0 False, Depine-Lakhtakia True, McCall-Lakhtakia-Weiglhofer True)
+    s = -1 and double negative: 249498; s = -1 with one real part non-negative (magnetic metals): 250407; double negatives with s = +1: 0
+    among media that propagate (Re(eps*mu) > 0): s = -1 exactly for the double negatives on 462415 of 462415
+
+  199930 passive pairs with eps*mu within 3 ulp of the negative real axis:
+    Im(n) < 0 (a passive medium read as gain): sign of Re(q) alone 35855, the projection Re(conj(r) q) 0
+    signed zeros: (-2-0i, -1+0i) -> -1.4142+0.0000i, lossless; on the axis, (-(4+0i), 1) -> +0.0000-2.0000i, the bits of sqrt(-(4+0i)) = +0.0000-2.0000i: True
+
+  a passive far side crossing Re(eps) = 0 (eps = +-1e-9+0.3i, mu = -1+0.1i) or Re(mu) = 0 (eps = -2+0.1i, mu = +-1e-9+0.4i), conical grating, SMM:
+    Re(eps) -1e-9 -> +1e-9: n_bot -0.3684+0.4071i, step 1.8e-09; every R, T, r, t: step 1.4e-09; a sign keyed on both real parts negative would step by 1.0982
+    Re(mu) -1e-9 -> +1e-9: n_bot -0.6168+0.6485i, step 2.2e-09; every R, T, r, t: step 1.3e-09; a sign keyed on both real parts negative would step by 1.7900
+
+  glass onto the magnetic metal (-2+0.01i, 0.1+0.5i), normal incidence, closed form: t_s = +0.8319-0.4608i, t_p = t_H (n1/mu1)/(n2/mu2) = +0.8319-0.4608i with the signed n2; and the solver, through 37 nm of glass:
+    t_s = 0.9336+0.1811i, t_p = 0.9336+0.1811i (|t_p - t_s| 3.3e-16); with the principal index t_p would be -0.9336-0.1811i = -t_s
+
+  400000 random media, Re in (-3, 3) and Im in (-1, 1) for eps and mu: does n point along the normal-incidence kz the half-space takes (Re(conj(n) kz) > 0)?
+    class                                                   count   principal factors   Maystre factors (now)
+    passive                                                   99848     99848 (100.0%)     99848 (100.0%)
+    active, no gain-metal factor                             124941    122000 ( 97.6%)    122000 ( 97.6%)
+    active, a gain-metal factor, not DNG, evanescent          93797         0 (  0.0%)     93797 (100.0%)
+    active, a gain-metal factor, not DNG, propagating          5839      5839 (100.0%)         0 (  0.0%)
+    active DNG, evanescent (accepted)                          2903         0 (  0.0%)         0 (  0.0%)
+    active DNG, propagating (refused)                         72672     22117 ( 30.4%)     72672 (100.0%)
+    the two rules agree to the bit on 249809 of 400000; they differ on 150191, by an exact negation on 150191, and those are the media with exactly one gain-metal factor (Re < 0, Im < 0): True
+  a factor on Maystre's cut itself, eps = -0.01i .. -3.00i (300) with mu = -3 (kz**2 = 3bi, no tie in kz): n against kz for 0 on arrays and 0 on Python numbers; with each factor's sign read off the computed Re + Im of its root, 67 and 67
+
+4. theta -- a real angle names the direction the light travels
+  lit from (-2, -1), n = -1.414214, at 20 deg onto glass: kx = -0.483690 = -sqrt(2) sin(20 deg); transmitted angle arcsin(kx/1.5) = -18.8117 deg; R = 0.0010947, T = 0.9989053
+  the transmitted field's Poynting vector, 2D path at phi = 0.6, lit from either side: -18.8117 deg to 7.1e-15 deg
+
+  lossless lit media: the incident Poynting vector against (theta, phi = 0.6), theta 0.1 .. 1.3 rad, psi 0 / pi/2 / 0.7, both sides, 2D / conical / first-order:
+    (-3, -0.5), n = -sqrt(1.5)  : polar angle to 3.8e-14 deg, azimuth to 5.6e-16 rad; (kx, ky) = n sin(theta) (cos phi, sin phi), signed n, to 1.1e-16
+    (-2, -1), n = -sqrt(2)      : polar angle to 3.8e-14 deg, azimuth to 5.6e-16 rad; (kx, ky) = n sin(theta) (cos phi, sin phi), signed n, to 0.0e+00
+    (2.25, 1.3), n = +1.71      : polar angle to 3.3e-14 deg, azimuth to 1.1e-16 rad; (kx, ky) = n sin(theta) (cos phi, sin phi), signed n, to 0.0e+00
+
+  absorbing lit media at theta = 45.8 deg, phi = 0.6: the incident Poynting vector's polar angle, signed in the plane of incidence (negative: across the normal)
+    2+0.5i (lossy dielectric)            s = +1: p   44.07, s   45.80
+    -10+1i (metal)                       s = +1: p  -45.51, s   45.80
+    (-3+0.1i, -0.5+0.05i) (lossy DNG)    s = -1: p   45.67, s   45.41
+    (-1+1i, -1+0.5i) (absorbing DNG)     s = -1: p   25.67, s   33.23
+    (-1+0.2i, 0.5+2i) (magnetic metal)   s = -1: p   36.36, s   -8.43
+
+  lit from the lossy (-2+0.1i, -1+0.1i) at 20 deg, phi = 0, onto glass (one interface): N = 1.415176 (|n| = 1.418621), kx = -N sin(20 deg) = -0.484019, the incident wave's public k_z = +1.329830-0.112796i (phase up, away from the structure; decaying toward it); transmitted angle arcsin(kx/1.5) = -18.825 deg
+    s: R = 0.0011723371, T = 0.9990539670, R + T = 1.0002263042, power_entering = 0.9990539670; the incident power travels at 19.845 deg
+    p: R = 0.0010474959, T = 1.0001534647, R + T = 1.0012009606, power_entering = 1.0001534647; the incident power travels at 19.922 deg
+
+  the s/p basis from a negative-index side: lit at 20 deg, phi = 0, the same polarization from (-2, -1) and from its double-positive twin (2, 1):
+    polarization (1, 0): E_inc = (+0.0000, -1.0000, +0.0000) from (-2, -1), (+0.0000, +1.0000, +0.0000) from (2, 1); their Poynting vectors agree to 3.0e-17
+    polarization (0, 1): E_inc = (+0.9397, +0.0000, +0.3420) from (-2, -1), (-0.9397, +0.0000, -0.3420) from (2, 1); their Poynting vectors agree to 0.0e+00
+
+  normal incidence, a grating lit from (-3+0.1i, -0.5+0.05i) at phi = 0.6: theta = 0 against 1e-9, every amplitude, r_xyz / t_xyz, the field and the incident field, 5 paths x 2 sides x ETM / SMM:
+    max change 8.7e-09; with the frame left at phi (solved as theta = 0 at phi + pi, whose frame is then phi), conical / 2D / first-order: at least 4.670
+
+  a complex angle, theta = 0.35 + 1e-9i against 0.35, lit from the double negative (te, tm, conical; grating; SMM):
+    lossless: kx and every amplitude move by 1.9e-09; lossy: kx moves by 0.028 (N against the complex n), zeroth-order kx -0.4203 real angle, -0.4202 complex: the same side of the normal
+
+  the s = +-1 seam: lit from eps = -2+0.1i, mu = 1 + (0.05 +- 1e-9)i (Im(eps*mu) changes sign), theta = 0.3, phi = 0.6, psi = 0.3, conical grating:
+    Im(mu) = 0.05 - 1e-9: n_top = +7.06e-10+1.4160i, s = +1, kx = +1.80e-10, E_inc = (-0.955+0.000i, -0.296+0.000i, +0.000+0.000i)
+    Im(mu) = 0.05 + 1e-9: n_top = -7.06e-10+1.4160i, s = -1, kx = -1.80e-10, E_inc = (+0.955+0.000i, +0.296+0.000i, +0.000+0.000i)
+    every R: step 2.1e-09; every T: step 3.7e-07, relative 2.1e-08 (T is a ratio to an incident power that vanishes on the seam: here up to 17.2)
+    glass at theta = -1e-9 and +1e-9 (phi = 0.6): E_inc = (+0.955, +0.296, +0.000) and (-0.955, -0.296, +0.000); every R and T: step 5.5e-10
+
+  direct kx, ky set to the theta door's (kx, ky) = (-0.346903, -0.237329): every amplitude to 3.1e-15
+  normal incidence from (-2, -1), polarization (1, 0): the theta door (theta = 0, phi = 0) against the direct-k door (kx = 0):
+    theta door: E_inc = (+0.0000, -1.0000, +0.0000), r_s = -0.029437+0.000000i
+    kx door   : E_inc = (+0.0000, +1.0000, +0.0000), r_s = -0.029437+0.000000i
+
+5. amplitudes -- polarization, the incident wave, the scattering matrix
+  normal incidence, one interface, lit and far double negatives and the magnetic metal (far), conical / 2D / first-order, ETM / SMM: |r_p + r_s| 4.7e-16, |t_p - t_s| 7.8e-16
+  lit from (-3, -0.5) at theta 0.4, phi 0.6, psi 0.7: the incident wave has Re(k_z) = +1.1281 (phase up, away from the structure), Im(k_z) = +0.0000, S_z = -1.1281 (power down); |H - k x E / mu| = 1.7e-16, |k . E| = 4.5e-18
+  lit from (-3+0.1i, -0.5+0.05i) at theta 0.4, phi 0.6, psi 0.7: the incident wave has Re(k_z) = +1.1291 (phase up, away from the structure), Im(k_z) = -0.0886, S_z = -1.1262 (power down); |H - k x E / mu| = 4.2e-17, |k . E| = 8.5e-17
+  the beam of each order in the lossless (-2, -1), n = -sqrt(2): a TE grating (700 nm, glass on the other side, theta = 10 deg), the outgoing field sampled over one period, each order's Poynting vector, its angle from the outward normal (positive toward +x) against arcsin(kx_m / n) with the signed n:
+    far side, transmitted: m = -2: kx -1.1681, beam +55.69 deg; m = -1: kx -0.4538, beam +18.72 deg; m = +0: kx +0.2605, beam -10.61 deg; m = +1: kx +0.9748, beam -43.57 deg (each to 3.6e-14 deg of arcsin(kx_m / n); 4 of 4 carry their power away from the interface)
+    lit side, reflected: m = -1: kx -0.9599, beam +42.74 deg; m = +0: kx -0.2456, beam +10.00 deg; m = +1: kx +0.4687, beam -19.36 deg; m = +2: kx +1.1830, beam -56.77 deg (each to 1.4e-14 deg of arcsin(kx_m / n); 4 of 4 carry their power away from the interface)
+  unitarity, glass grating lit from the lossless (-3, -0.5) onto glass, SMM, the public scattering matrix in flux units on the propagating orders:
+    conical: 8 + 8 open channels, |U^H U - I| = 1.6e-15
+    2d: 16 + 18 open channels, |U^H U - I| = 7.5e-15
+
+6. layers -- which of a mode's +-q is "down"
+  56 scenes: a uniform double-negative layer, 150 nm, on a half-space of its own medium -- no interface at all (4 media: (-2, -1), (-2+0.1i, -1+0.1i), (-6, -1.5), (-3+0.1i, -0.5+0.05i); 7 path/angle pairs; vacuum or glass above):
+    label rules on : LinAlgError ETM 0, SMM 0; |ETM - SMM| where both solved 5.6e-16
+    label rules off: LinAlgError ETM 20, SMM 4; |ETM - SMM| where both solved 3.6e-15
+  connecting-algorithms.md section 10's grating with its block made (-25, -1): [1, X, 1, X, X, X] over 2000 nm, 100 nm, on a half-space of X, truncation 30, 900 nm:
+    te      theta 0.5        |ETM - SMM|: rules on 1.2e-14, off 6.6e-07
+    te      theta (0.5+0.3j) |ETM - SMM|: rules on 4.0e-14, off 7.5e-07
+    tm      theta 0.5        |ETM - SMM|: rules on 5.5e-15, off 1.0e-05
+    tm      theta (0.5+0.3j) |ETM - SMM|: rules on 1.2e-14, off 2.7e-04
+    conical theta 0.5        |ETM - SMM|: rules on 6.4e-14, off 1.4e-05
+    conical theta (0.5+0.3j) |ETM - SMM|: rules on 1.5e-13, off 1.2e-04
+  96 random patterned layers, 200 nm (double-negative regions in glass or a metal, and the reverse; on the double negative or glass; theta 0.3, 0.5+0.2i, 0.7):
+    label rules on : LinAlgError ETM 0, SMM 0; |ETM - SMM| where both solved 9.7e-13
+    label rules off: LinAlgError ETM 0, SMM 0; |ETM - SMM| where both solved 2.0e-10
+  a lossless (-2, -1) layer patterned with glass, 2D, a column of mu half +1 and half -1: li LinAlgError, laurent solves it, nvf solves it (Li inverts the Toeplitz matrix of 1/mu, here exactly singular)
+
+7. refusals -- what is refused, what is only flagged
+  an active propagating double negative (-2-0.1i, -1-0.1i) as bot:
+    ValueError: `bot` is an active negative-index half-space: Re(eps) < 0 and Re(mu) < 0, Re(eps*mu) > 0 so waves propagate in it, and Im(eps) < 0 or Im(mu) < 0. A...
+  gain in mu alone, (-2+0.1i, -1-0.01i), as top:
+    ValueError: `top` is an active negative-index half-space: Re(eps) < 0 and Re(mu) < 0, Re(eps*mu) > 0 so waves propagate in it, and Im(eps) < 0 or Im(mu) < 0. A...
+  an active double negative that does not propagate, (-1-1.2i, -1-1.2i), Re(eps*mu) = -0.44: accepted, R = 25.000000 (Maystre's root, which the mirror cut shares there)
+  active media that are not refused, and the sign of their index, lit at theta = 0.3, phi = 0:
+    (-2-0.01i, 0.1-0.5i), a magnetic metal with gain   n_top = +0.6383+0.7826i, s = +1, kx = +0.1939: accepted
+    (-1-1.2i, -1-1.2i), the double negative above      n_top = -1.0000-1.2000i, s = -1, kx = -0.3036: accepted
+  a GaussianBeam launched from (-3, -0.5):
+    ValueError: GaussianBeam requires a lossless positive-index isotropic incident medium; the top half-space is a negative-index one (Re(eps) < 0 and Re(mu) < 0)....
+  a real angle from a lossless medium that carries no wave, (-4, 1):
+    ValueError: real-angle incidence requires a propagating incident wave: a lossless lit half-space must carry one (Re(eps*mu) > 0), and in an absorbing one abs(t...
+
+  gain band near grazing, k_par**2 0 .. 9 in 901 steps: 300 random double negatives (either sign of loss in either factor) against their double-positive mirrors: 300 of 300 identical
+    passive (-2+0.1i, -1+0.1i), (-2, -1), (-3+0.1i, -0.5+0.05i): flagged 0 orders; active (-2-0.1i, -1-0.1i): 121 of 901, all with Im(kz**2) > 0; testing Im(kz**2) < 0 as for an ordinary medium flags 0
+
+8. oracles
+  closed-form Fresnel r, t, R, T (s and p), glass through a 37 nm glass spacer; 5 paths x 2 sides x ETM / SMM:
+    far side (-2+0.1i, -1+0.1i), 0 .. 80 deg     2.0e-15
+    far side (-3+0.1i, -0.5+0.05i)               1.6e-15
+    far side lossless (-2, -1)                   3.2e-15
+    far side (-6+0.3i, -1.5+0.05i)               2.3e-15
+    far side magnetic metal, 0/30/60 deg         1.0e-15
+    far side eps = mu = -1+1i, 0 deg             6.7e-16
+    lit (-3+0.1i, -0.5+0.05i), 0/20/35/60 deg    1.3e-15
+    lit lossless (-3, -0.5)                      1.0e-15
+    lit (-2+0.1i, -1+0.1i)                       8.9e-16
+  a grating on the half-space against the same grating on a 16 um slab of the medium (a layer keeps both roots), every order:
+    R per order 4.0e-16; half-space T against the power the slab takes in 1.7e-15 (5 paths x ETM / SMM)
+  the lossless half-space as the limit of lossy slabs (-2+i delta, -1+i delta), conical: delta = 1e-5 (128 mm) is 1.9e-05 away, Richardson on 1e-4 and 1e-5 2.3e-08
+  reciprocity: a grating lit from the lossless (-3, -0.5) at 0.35 rad, order m into glass, against glass lit along that order's reverse, read on the incident order:
+    orders +-1, TE / TM, ETM / SMM: 1.7e-15 (incident kx -0.4200 < 0)
+  the coherent door (PlaneWave) against the ordinary SMM solve, lit from the double negative, (theta, phi) = (0.35, 0.6), (0, 0.6), (0, 2.5), both sides:
+    power 3.7e-15, field 1.5e-14
+  fmmax 1.7.1 FFT formulation, frozen (tests/references/golden_fmmax_dng.npz): unpolarized R and T of every order, Richardson over 16/32/64/128 samples per pixel;
+    worst order over ETM / SMM and the theta / direct-k doors, against the bound of the extrapolation:
+    grating1d_on_dng     5.9e-14 (bound 4.7e-12; fmmax as shipped, float32 centring phase, 2.3e-09 from the corrected run)
+    grating2d_on_dng     7.5e-14 (bound 5.6e-12; fmmax as shipped, float32 centring phase, 2.5e-09 from the corrected run)
+    dng_pattern_on_dng   6.1e-12 (bound 3.9e-10; fmmax as shipped, float32 centring phase, 3.9e-09 from the corrected run)
+    lit_from_dng_1d      2.7e-14 (bound 2.7e-12; fmmax as shipped, float32 centring phase, 2.4e-09 from the corrected run)
+  the mirror medium (Lakhtakia 2004; Grunhut and Depine 2011): glass lit at 0, 0.3 rad and 60 deg onto (eps, mu) and onto (-conj(eps), -conj(mu)) -- lossy, lossless, and evanescent at 60 deg; 5 paths x ETM / SMM x either side lit:
+    no layer between (solve_conv): 2376 of 2376 arrays are exactly the conjugate (R and T: equal), bit for bit
+    every layer mirrored too (two lossy uniform layers, a positive one and a double negative; a grating symmetric about the cell centre), every order propagating in glass, theta 0 and 0.2: 7.8e-15 relative
+  PyMoosh 4.0.1, frozen (tests/references/golden_pymoosh_dng.npz): flat stacks with a lossless double negative as substrate, lit superstrate, inner layer and all three; (r, t, R, T), TE and TM, at PyMoosh's kx:
+    32 rows x TE/TM, 2D and first-order paths x ETM / SMM: 8.8e-15 at worst
+    every double negative replaced by its double-positive twin (-eps, -mu), where one lies beyond the lit side: misses by dng_substrate 1.8, dng_inner_layer 2.9, dng_everywhere 2.3
+
+9. backends -- JAX, PyTorch, jit, gradients
+  JAX eager against NumPy, conical grating, far / lit / lit at theta = 0: 2.0e-15, 2.5e-15, 1.9e-15
+  PyTorch   against NumPy, conical grating, far / lit / lit at theta = 0: 7.5e-15, 2.7e-15, 2.6e-15
+  jax.jit over the lit medium's Re(eps), conical grating at 0.35 rad: Re(eps) = -3 (a double negative) 1.9e-15, Re(eps) = +3 (eps = 3+0.1i, mu = -0.5+0.05i: not a double negative) 3.8e-15; compiles: 1
+  jax.grad against a central difference (h = 1e-6):
+    far side, d R / d Re(eps): +0.050237 against +0.050237 (6.6e-12)
+    lit side, d R / d theta: +0.111502 against +0.111502 (1.8e-10)
+  PyTorch backward, far side, d R / d Re(eps): +0.050237 against +0.050237 (6.6e-12)
+  an active double negative (-2-0.1i, -1-0.1i) under jax.jit, glass at 60 deg: gain_cutoff_band flags 1 of 7 orders; eagerly it is refused
+
+10. develop -- this tree against 0dfc4ce
+  12 media with s = +1: glass 2.25, lossy 2+0.5i, metal -10+1i, lossless_metal -4, gain 1-0.05i, magnetic 2.25 / 1.3, magnetic_lossy 2.25+0.1i / 1.2+0.05i, magnetic_metal_s+ -2+0.1i / 1.3, mu_negative 2+0.1i / -1+0.1i, mu_negative_lossless 2 / -1, magnetic_gain 2.25-0.05i / 1.2, mu_one -4 / 1
+  NumPy: 5 paths x ETM / SMM x lit / far x theta 0, 0.3, 0.3+0.05i, 1.4:
+    20796 arrays (90 refusal records), 20796 byte-identical to 0dfc4ce, 0 not
+  JAX eager: conical and 2D x ETM / SMM x lit / far, theta 0.3:
+    2616 arrays (12 refusal records), 2616 byte-identical to 0dfc4ce, 0 not
+  PyTorch eager: the same:
+    2616 arrays (12 refusal records), 2616 byte-identical to 0dfc4ce, 0 not
+  the coherent door, PlaneWave from the medium, theta 0.3 and 0:
+    60 arrays (6 refusal records), 34 byte-identical to 0dfc4ce, 26 not
+    largest relative difference 2.8e-15, in gain/0.0, glass/0.0, lossy/0.0, magnetic/0.0, magnetic_gain/0.0, magnetic_lossy/0.0, magnetic_metal_s+/0.0, metal/0.0, mu_negative/0.0
+  jax.jit, Re(eps) of a magnetic half-space traced, lit and far:
+    36 arrays (0 refusal records), 28 byte-identical to 0dfc4ce, 8 not
+    largest relative difference 7.6e-16, in magnetic/lit, magnetic_lossy/far, magnetic_lossy/lit
+  in all: 26124 arrays, 26090 byte-identical to 0dfc4ce, 34 not
+  double negatives, glass onto each at normal incidence (lit: theta 0.35, phi 0.6), R_s or what was raised:
+    far (-2+0.1i, -1+0.1i), ETM            0dfc4ce:     ValueError   now: 0.001076681582
+    far (-2+0.1i, -1+0.1i), SMM            0dfc4ce:     ValueError   now: 0.001076681582
+    far (-2, -1), ETM                      0dfc4ce:     ValueError   now: 0.0008665517772
+    far (-2, -1), SMM                      0dfc4ce:     ValueError   now: 0.0008665517772
+    far eps = mu = -1+1i, ETM              0dfc4ce:             25   now:           0.04
+    far eps = mu = -1+1i, SMM              0dfc4ce:    LinAlgError   now:           0.04
+    lit (-3+0.1i, -0.5+0.05i), ETM         0dfc4ce:     ValueError   now:  0.05284956599
+    lit (-3+0.1i, -0.5+0.05i), SMM         0dfc4ce:     ValueError   now:  0.05284956599
+
+11. usage -- the examples of the document's section 16, as written there
+  substrate: n_bot, R, T: -1.4147+0.1060i, 0.0010766816, 0.9989233184
+  lit: kx, transmitted angle, R, T: -0.483690, -18.8117, 0.0010947, 0.9989053
+  absorbing lit: R + T, R, T, power_entering: 1.0002263, 0.0011723, 0.9990540, 0.9990540
+  direct kx: kx / k0, R: -0.48369, 0.0010947
+  raster layer: R, T: 0.21002, 0.60802
+  shape layer: R, T: 0.11623, 0.74861
+  coherent door: output_top, output_bottom, their sum, absorption: 0.06712053, 0.93318075, 1.00030128, 4.4e-16
+  the same light through theta: R, T: 0.06712053, 0.93318075
+  solve_conv pair: t_p equal to the magnetic scene's bit for bit, scene.n_bot after: True, +1.2254-0.0816i
+  jax.grad of R in Re(eps), a central difference (h = 1e-6); jax.jit of R: 0.0074111, 0.0074111, 0.0010766816
+  jit gain band; eager: [0, 0, 0, 1, 0, 0, 0], ValueError: `bot` is an active negative-index half-space: Re(eps) < 0 and ...
+
+12. the negation pair -- two lossless half-spaces that are each other's negation
+  glass (2.25, 1) over (-2.25, -1), 500 nm, period 300 nm, theta = 0.2: of the retained orders 5 of 7 (te, tm, conical) and 7 of 9 (2d, first_order) are evanescent in both media, and one first order propagates in both (-1 lit from glass, +1 lit from the double negative); between them nothing, a glass layer, a (-2.25, -1) layer, both; 5 paths x ETM / SMM x either side lit: 80 scenes
+    NumPy   refused: 80 of 80
+    JAX     refused: 80 of 80
+    PyTorch refused: 80 of 80
+  the same scenes with no evanescent order retained -- the specular order alone, or a period of 3000 nm at the same truncation: solved, not refused
+    NumPy   finite 160 of 160; R <= 5e-30, |T - 1| <= 1e-15; every amplitude within 1.4e-12 of the same scene with a loss of 1e-12
+    JAX     finite 160 of 160; R <= 6e-30, |T - 1| <= 2e-15
+    PyTorch finite 160 of 160; R <= 3e-30, |T - 1| <= 1e-15
+  the same scenes with the refusal switched off -- what a solve does without it:
+    NumPy   nothing between ETM LinAlgError 10; SMM LinAlgError 10
+    NumPy   layers          ETM finite 16 (conical, 2d, first_order); ETM the lens message 14 (te, tm, 2d); SMM finite 30; every finite answer R <= 9e-20, |T - 1| <= 1e-06; of SMM's 6 finite answers on the first-order path, 5 carry 0.0089 .. 2.7 in orders a uniform stack does not excite
+    JAX     nothing between ETM FloatingPointError 10; SMM FloatingPointError 10
+    JAX     layers          ETM finite 16 (conical, 2d, first_order); ETM the lens message 14 (te, tm, 2d); SMM finite 30; every finite answer R <= 3e-20, |T - 1| <= 3e-07; of SMM's 6 finite answers on the first-order path, 5 carry 0.0065 .. 2.7 in orders a uniform stack does not excite
+    PyTorch nothing between ETM LinAlgError 10; SMM LinAlgError 6 (te, tm, conical); SMM finite 4 (2d, first_order); every finite answer R <= 5e-32, |T - 1| <= 7e-16
+    PyTorch layers          ETM finite 14 (conical, 2d, first_order); ETM the lens message 16 (te, tm, 2d); SMM finite 30; every finite answer R <= 7e-26, |T - 1| <= 2e-12; of SMM's 6 finite answers on the first-order path, 4 carry 1.1 .. 21 in orders a uniform stack does not excite
+  a loss delta in the double negative and its layer, (-2.25+i delta, -1+i delta), NumPy, every scene above:
+    delta = 1e-12: solved 80 of 80; the bare interface R 1.5e-26 .. 2.4e-26, T = 1 to 6.7e-16; with layers R up to 7.9e-19; ETM against SMM 4.6e-10 (first_order, both), elsewhere 1.1e-15
+    delta = 1e-09: solved 80 of 80; the bare interface R 1.5e-20 .. 2.4e-20, T = 1 to 6.7e-16; with layers R up to 1.4e-19; ETM against SMM 3.1e-08 (first_order, both), elsewhere 1.1e-15
+    delta = 1e-06: solved 80 of 80; the bare interface R 1.5e-14 .. 2.4e-14, T = 1 to 7.1e-14; with layers R up to 1.4e-13; ETM against SMM 1.6e-15 (te, both), elsewhere 1.3e-15
+    delta = 1e-03: solved 80 of 80; the bare interface R 1.5e-08 .. 2.4e-08, T = 1 to 7.1e-08; with layers R up to 1.4e-07; ETM against SMM 1.3e-15 (2d, a glass layer), elsewhere 1.3e-15
+  lit by an evanescent wave from glass (theta = pi/2 - 0.5i), a glass layer between, SMM: delta * max|r_s|, the incident order on the pole
+    te   delta = 1e-3 / 1e-6 / 1e-9 / 1e-12: 0.0766 / 0.0766 / 0.0766 / 0.0766; delta = 0 with the refusal off: max|r_s| = 2e+15
+    2d   delta = 1e-3 / 1e-6 / 1e-9 / 1e-12: 0.0226 / 0.0226 / 0.0226 / 0.0226; delta = 0 with the refusal off: max|r_s| = 4e+14
+    first_order delta = 1e-3 / 1e-6 / 1e-9 / 1e-12: 0.0226 / 0.0226 / 0.0226 / 0.0226; delta = 0 with the refusal off: max|r_s| = 4e+14
+
+13. literature -- what the document's section 18 quotes, computed
+  lossless Drude-Drude double negative (Omega_e = Omega_m = 1) at omega = +0.50+0.01i: eps = mu = -2.9952+0.1599i, kz**2 = +2.245-0.150i
+    Re + Im > 0 (Maystre's cut on kz**2): +1.499-0.050i; the mirror (boundary_kz): -1.499+0.050i; the decaying root (Im omega > 0): -1.499+0.050i
+  Im(eps) and Im(mu) of opposite signs, eps = -2.0+0.1i, mu = -1.0-0.5i: kz**2 = +2.05+0.90i at normal incidence
+    the mirror root     -1.4644-0.3073i (grows away from the interface; Re(kz/mu) +1.2944: power away from it)
+    Maystre's root      +1.4644+0.3073i (decays away from the interface; Re(kz/mu) -1.2944: power toward it)
+    as bot: ValueError: `bot` is an active negative-index half-space: Re(eps) < 0 and ...
+  eps = diag(1, 1, -1), mu = diag(-1, -1, 1), kx = 1.5: kz**2 = 1.25 (s) and 1.25 (p); the root carrying power away is -1.1180 (s) and +1.1180 (p) -- one kz**2, two roots
+  the principal sqrt of complex(-1, -0.0): cmath +0-1i, NumPy +0-1i, JAX 0.11.0 +0+1i, PyTorch 2.13.0 +0-1i
+  index_from_eps of complex(-1, -0.0): Python number +0-1i, NumPy +0-1i, JAX +0-1i, PyTorch +0-1i
+  cmath.sqrt against np.sqrt on 2000 random products eps*mu: 45 differ; the larger gap of the two components is 1 ulp on 38 and 2 ulp on 7

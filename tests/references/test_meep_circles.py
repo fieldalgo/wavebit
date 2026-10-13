@@ -1,16 +1,21 @@
 """Public-API Meep disk references with independent profile and runtime controls."""
-from pathlib import Path
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 
 import numpy as np
 import pytest
 
-from studies.fdtd_circle_gradients import reference
-from studies.fdtd_rotation_gradients import finite_difference
+from studies.cross_solver.circle_gradients.fdtd_circle_gradients import reference
+from studies.cross_solver.rotation_gradients.fdtd_rotation_gradients import finite_difference
 
 
 @pytest.fixture(scope='module')
 def references():
-    base = Path(__file__).parent
+    base = repository_path('tests/references')
     data = {key: dict(np.load(base/name)) for key, name in (
         (20, 'golden_meep_circle_coarse.npz'), (40, 'golden_meep_circle.npz'),
         ('profile', 'golden_meep_circle_profile.npz'))}

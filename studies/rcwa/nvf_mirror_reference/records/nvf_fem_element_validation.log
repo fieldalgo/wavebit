@@ -1,0 +1,18 @@
+test_closed_laminate_matches_analytic_fourier_fields_and_energy (test_nvf_mirror_reference.MirrorReferenceTests.test_closed_laminate_matches_analytic_fourier_fields_and_energy) ... ok
+test_half_and_full_cell_energy_enclosures_are_consistent (test_nvf_mirror_reference.MirrorReferenceTests.test_half_and_full_cell_energy_enclosures_are_consistent) ... ok
+test_interface_quadrature_uses_its_own_element_and_matches_exact_material_fourier (test_nvf_mirror_reference.MirrorReferenceTests.test_interface_quadrature_uses_its_own_element_and_matches_exact_material_fourier) ... ok
+test_invalid_geometry_and_material_mapping_are_rejected (test_nvf_mirror_reference.MirrorReferenceTests.test_invalid_geometry_and_material_mapping_are_rejected) ... ok
+test_positive_gap_obeys_parity_and_converged_fourier_quadrature (test_nvf_mirror_reference.MirrorReferenceTests.test_positive_gap_obeys_parity_and_converged_fourier_quadrature) ... ok
+test_closed_fitted_laminate_recovers_exact_tensor_and_mean_field (test_nvf_gap_reference.GapReferenceTests.test_closed_fitted_laminate_recovers_exact_tensor_and_mean_field) ... ok
+test_invalid_geometry_and_incomplete_material_mapping_are_rejected (test_nvf_gap_reference.GapReferenceTests.test_invalid_geometry_and_incomplete_material_mapping_are_rejected) ... ok
+test_positive_gap_has_consistent_finite_energy_enclosure (test_nvf_gap_reference.GapReferenceTests.test_positive_gap_has_consistent_finite_energy_enclosure) ... ok
+test_bar_projection_matches_exact_piecewise_field_and_inverse_rule (test_nvf_cell_corrector.CellCorrectorTests.test_bar_projection_matches_exact_piecewise_field_and_inverse_rule) ... ok
+test_geometry_has_both_periodic_axes_and_correct_material (test_nvf_cell_corrector.CellCorrectorTests.test_geometry_has_both_periodic_axes_and_correct_material) ... ok
+test_invalid_discretizations_are_rejected (test_nvf_cell_corrector.CellCorrectorTests.test_invalid_discretizations_are_rejected) ... ok
+test_tilted_projection_quadrature_is_refined_independently (test_nvf_cell_corrector.CellCorrectorTests.test_tilted_projection_quadrature_is_refined_independently) ... ok
+test_uniform_and_bar_energy_are_analytic (test_nvf_cell_corrector.CellCorrectorTests.test_uniform_and_bar_energy_are_analytic) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 3.604s
+
+OK

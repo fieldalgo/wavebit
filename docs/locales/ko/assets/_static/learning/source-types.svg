@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="550" viewBox="0 0 960 550" role="img" aria-labelledby="title desc">
+<title id="title">소스 종류와 전자기장 계산</title><desc id="desc">평면파와 가우시안 빔은 바깥 경계에, 다이폴은 층 내부에 입력합니다. 복소 장을 구한 뒤 전력을 계산합니다.</desc>
+<defs><marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#496176"/></marker></defs>
+<rect width="960" height="550" rx="16" fill="#f5f8fa"/>
+<g font-family="-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif" text-anchor="middle" fill="#142b40">
+<text x="480" y="38" font-size="23" font-weight="700">소스 종류에 맞게 입력하고, 복소 장을 함께 계산합니다</text>
+<rect x="30" y="65" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5"/>
+<text x="165.0" y="93" font-size="19" font-weight="650">PlaneWave</text>
+<text x="165.0" y="119" font-size="16">방향·편광·복소 진폭</text>
+<rect x="345" y="65" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5"/>
+<text x="480.0" y="93" font-size="19" font-weight="650">GaussianBeam</text>
+<text x="480.0" y="119" font-size="16">빔 폭·초점·방향·편광</text>
+<rect x="660" y="65" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5"/>
+<text x="795.0" y="93" font-size="19" font-weight="650">ElectricDipole</text>
+<text x="795.0" y="119" font-size="16">위치·복소 쌍극자 모멘트</text>
+<path d="M165 141 V193" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M480 141 V159 H165 V193" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="465" y="186" font-size="15">평면파 성분으로 분해</text>
+<rect x="30" y="200" width="585" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5"/>
+<text x="322.5" y="228" font-size="19" font-weight="650">위·아래 바깥 경계의 입사 진폭</text>
+<text x="322.5" y="254" font-size="16">각 성분의 위상 기준과 편광을 반영</text>
+<rect x="660" y="200" width="270" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5"/>
+<text x="795.0" y="228" font-size="19" font-weight="650">층 내부의 전류 항</text>
+<text x="795.0" y="254" font-size="16">소스 높이에서 장의 변화 지정</text>
+<path d="M795 141 V193" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M322 276 V307 H480 V331" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)"/>
+<path d="M795 276 V307 H480 V331" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="145" y="338" width="670" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5"/>
+<text x="480.0" y="366" font-size="19" font-weight="650">층별 모드와 산란행렬로 전체 복소 E·H 계산</text>
+<text x="480.0" y="392" font-size="16">외부 입사와 내부 방출, 층 사이의 반복 반사를 함께 계산</text>
+<path d="M480 414 V445" fill="none" stroke="#496176" stroke-width="2" marker-end="url(#arrow)"/>
+<rect x="145" y="452" width="670" height="76" rx="10" fill="white" stroke="#8299ac" stroke-width="1.5"/>
+<text x="480.0" y="480" font-size="19" font-weight="650">관측 영역의 전력 흐름 계산</text>
+<text x="480.0" y="506" font-size="16">반사·투과 비율은 외부 입사만 있을 때 입사 전력으로 정규화</text>
+</g></svg>

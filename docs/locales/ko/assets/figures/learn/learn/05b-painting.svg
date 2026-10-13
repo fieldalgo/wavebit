@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 435" role="img" aria-labelledby="05b-painting-title 05b-painting-desc">
+<title id="05b-painting-title">도형 방식의 규칙: 나중 도형이 덮는다</title><desc id="05b-painting-desc">shapes 목록에 원 다음 사각형을 놓으면 겹친 곳에는 사각형의 재료만 남는다</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779"/></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="435" fill="white"/>
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">도형 방식의 규칙: 나중 도형이 덮는다</text>
+<rect x="48" y="89" width="300" height="267" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2"/>
+<circle cx="175" cy="220" r="96" fill="#117c77"/>
+<rect x="185" y="172" width="131" height="158" rx="0" fill="#e8f1ff" stroke="#285ab0" stroke-width="2"/>
+<text x="123" y="228" style="fill:#ffffff;font-size:30px;font-weight:650" text-anchor="start">1</text>
+<text x="250" y="256" style="fill:#285ab0;font-size:30px;font-weight:650" text-anchor="middle">2</text>
+<text x="393" y="122" style="fill:#182b3e;font-size:25px;font-weight:650" text-anchor="start">shapes = [원, 사각형]</text>
+<text x="393" y="177" style="fill:#117c77;font-size:22px;font-weight:400" text-anchor="start">① 먼저 원의 재료를 채움</text>
+<text x="393" y="225" style="fill:#285ab0;font-size:22px;font-weight:400" text-anchor="start">② 그 위에 사각형의 재료를 채움</text>
+<line x1="220" y1="270" x2="375" y2="300" stroke="#285ab0" stroke-width="2"/>
+<polygon points="375,300 364.42211386783373,302.0269003367025 365.9422891203606,294.1726615319802" fill="#285ab0"/>
+<text x="393" y="300" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">겹친 곳 → 사각형의 유전율</text>
+<text x="393" y="337" style="fill:#546779;font-size:21px;font-weight:400" text-anchor="start">두 재료의 유전율을 더하지 않음</text>
+<text x="30" y="418" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">도형 입력 안에서의 겹침 처리 규칙 · 세 번째 입력 방식이 아니다</text>
+</svg>

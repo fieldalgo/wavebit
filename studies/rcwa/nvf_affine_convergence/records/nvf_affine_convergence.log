@@ -1,0 +1,504 @@
+Affine NVF independent reference and directional convergence, 2026-09-09
+
+Physical lattice in nm: [[700,315],[0,490]]. Reference envelope width 350,
+gap 17, seam 31, permittivities 4/9 in unit background. Wavelength 900 nm,
+thickness 300 nm, theta=.2, phi=0, exterior permittivities 1/2.25.
+
+Environments: Python 3.12; Wavebit environment NumPy 2.5.1 / SciPy 1.18.0;
+optional independent FEM environment NGSolve 6.2.2606.
+Invocations set OPENBLAS_NUM_THREADS=1 and OMP_NUM_THREADS=1. These settings
+do not establish the actual thread count of Apple Accelerate. Timings include
+concurrent study processes and are not a controlled speed comparison.
+
+Independent FEM reference exports
+---------------------------------
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.1, "refine": 20.0, "degree": 4, "quadrature": 20, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 24, "elements": 728, "ndof": 5825, "bounds": {"upper": [[2.15875320735212, 0.7353445876927434], [0.7353445876927434, 2.7593542508971205]], "lower": [[2.1587276882228656, 0.735314911268936], [0.7353149112689359, 2.759310935451465]], "gap_eigenvalues": [3.435561399607956e-06, 6.539901351019608e-05], "relative_gap": 2.0149444289330755e-05}, "residuals": [1.5510495212200755e-15, 1.1638655633508448e-15], "reciprocal_residuals": [5.5140976920003515e-16, 3.101531123547478e-16], "mean_energy_quadrature_error": 2.353672812205332e-14, "quadrature_points": 291200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 2.0626560829696245, "analytic_material_error": 9.973345939219285e-09}
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.06, "refine": 20.0, "degree": 6, "quadrature": 24, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 32, "elements": 860, "ndof": 15481, "bounds": {"upper": [[2.15874245307621, 0.7353321224272832], [0.7353321224272832, 2.7593360602816586]], "lower": [[2.1587390208143176, 0.7353280884454997], [0.7353280884454997, 2.759329651821008]], "gap_eigenvalues": [6.206579339086219e-07, 9.220064609155496e-06], "relative_gap": 2.8349051453955814e-06}, "residuals": [1.7572960021919207e-15, 1.3436744717532424e-15], "reciprocal_residuals": [4.986043201959084e-16, 3.7472419050623944e-16], "mean_energy_quadrature_error": 9.725553695716371e-14, "quadrature_points": 495360, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 5.7947212920407765, "analytic_material_error": 1.7145794053428063e-15}
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 28, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 32, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.3500311979441904e-13, "quadrature_points": 1271648, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 13.557762457989156, "analytic_material_error": 1.3322676295501878e-15}
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 32, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 32, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.3633538742396922e-13, "quadrature_points": 1660928, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 18.17962945799809, "analytic_material_error": 3.927115112201731e-15}
+
+Finest-mesh quadrature 28 -> 32 max coefficient change: 2.732189474663471e-15
+
+Candidate static enclosures
+---------------------------
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 1, "rows": 4, "body_degree": 2, "gap_degree": 4, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.1589866107825717, 0.7356675554781293], [0.7356675554781293, 2.759890224736373]], "lower": [[2.15828868271405, 0.7347073053009926], [0.7347073053009926, 2.7583659473692057]], "gap_eigenvalues": [6.573498659674632e-05, 0.0021564704490923264], "relative_gap": 0.000663190447257592, "cell_residual": 2.0676904565305775e-12, "reciprocal_residual": 8.093803887573776e-13, "degrees_of_freedom": 1007, "seconds": 0.8614597090054303}
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 1, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.1589441245887295, 0.7355987526751331], [0.7355987526751331, 2.7597653270972518]], "lower": [[2.1583320068447995, 0.7347675821829459], [0.7347675821829459, 2.7584704321505735]], "gap_eigenvalues": [5.4957201277564415e-05, 0.0018520554893306585], "relative_gap": 0.0005694994310997184, "cell_residual": 3.0224363994356683e-12, "reciprocal_residual": 6.322279135565071e-13, "degrees_of_freedom": 1943, "seconds": 2.6798451659851708}
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 2, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.1587934988871607, 0.7353974588612459], [0.7353974588612459, 2.7594369314681946]], "lower": [[2.158635449452556, 0.7351865956356287], [0.7351865956356287, 2.7591167607362244]], "gap_eigenvalues": [1.320273793869643e-05, 0.00046501742863625325], "relative_gap": 0.0001429650683620126, "cell_residual": 1.0699829176431367e-11, "reciprocal_residual": 5.186318960073159e-12, "degrees_of_freedom": 3887, "seconds": 10.814609958964866}
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 1, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 2, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.1589431898699685, 0.735597410521213], [0.735597410521213, 2.7597630325285003]], "lower": [[2.1583331438387376, 0.734769267581569], [0.734769267581569, 2.7584731586158386]], "gap_eigenvalues": [5.4771603179756327e-05, 0.0018451483407127354], "relative_gap": 0.0005673747239093903, "cell_residual": 3.512941892277266e-12, "reciprocal_residual": 2.3012463669336065e-12, "degrees_of_freedom": 3671, "seconds": 3.0124545419821516}
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 2, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.1587934988871607, 0.7353974588612459], [0.7353974588612459, 2.7594369314681946]], "lower": [[2.158635449452556, 0.7351865956356287], [0.7351865956356287, 2.7591167607362244]], "gap_eigenvalues": [1.320273793869643e-05, 0.00046501742863625325], "relative_gap": 0.0001429650683620126, "cell_residual": 1.0699829176431367e-11, "reciprocal_residual": 5.186318960073159e-12, "degrees_of_freedom": 3887, "seconds": 3.5050423750071786}
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 4, "rows": 4, "body_degree": 2, "gap_degree": 4, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.158804743310622, 0.7354231244200036], [0.7354231244200036, 2.759493571164267]], "lower": [[2.1586686549948344, 0.7352266390001096], [0.7352266390001096, 2.759158694254285]], "gap_eigenvalues": [1.528782065216944e-05, 0.0004556774051173346], "relative_gap": 0.0001403000195715227, "cell_residual": 3.2196542904676925e-11, "reciprocal_residual": 2.1461034854351572e-11, "degrees_of_freedom": 4031, "seconds": 4.121886083041318}
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 6, "rows": 4, "body_degree": 1, "gap_degree": 4, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.159153616654632, 0.7359854391521152], [0.7359854391521152, 2.7605123701324805]], "lower": [[2.158321864980303, 0.7346618049850498], [0.7346618049850497, 2.7581140719952573]], "gap_eigenvalues": [7.699878007988334e-05, 0.003153051031472621], "relative_gap": 0.000974742413396904, "cell_residual": 9.128962528155359e-11, "reciprocal_residual": 4.6932694619116284e-11, "degrees_of_freedom": 3455, "seconds": 3.6563237500377}
+
+Optical comparisons at fixed physical parameters
+-----------------------------------------------
+FEM columns identify h / degree / quadrature; candidate columns identify
+x subdivisions / body degree / gap degree. All candidate rows have y
+subdivisions 1, body rows 4, local flux basis and edge fraction 1e-5.
+Each tuple is (x order,y order). Values are p_T, s_T, max lossless energy
+error, elapsed seconds. All values are finite; reference and candidate
+optics share the Maxwell engine and therefore are not independent 3D solves.
+FEM 0.1/4/20           (4, 4)     0.853482920830409 0.735075800898511 1.132427e-14 0.033
+FEM 0.1/4/20           (8, 8)     0.852725317619705 0.732705583747276 3.574918e-14 0.622
+FEM 0.1/4/20           (12, 8)    0.852595480656370 0.732744469581178 6.372680e-14 1.713
+FEM 0.1/4/20           (8, 12)    0.852654771886526 0.731646765510283 9.592327e-14 1.694
+FEM 0.1/4/20           (12, 12)   0.852525528033885 0.731684153513927 1.993961e-13 4.567
+candidate 1/2/4        (4, 4)     0.853453378665897 0.734978251406554 7.993606e-15 0.030
+candidate 1/2/4        (8, 8)     0.852704391370952 0.732643954732844 1.316725e-13 0.608
+candidate 1/2/4        (12, 8)    0.852576151868374 0.732682163075378 1.076916e-13 1.732
+candidate 1/2/4        (8, 12)    0.852634724044831 0.731594013569275 8.004708e-14 1.792
+candidate 1/2/4        (12, 12)   0.852506675485857 0.731631268483893 1.944001e-13 5.407
+candidate 1/4/6        (4, 4)     0.853458154008524 0.735004393440387 3.219647e-15 0.034
+candidate 1/4/6        (8, 8)     0.852709162375277 0.732667912968471 8.926193e-14 0.683
+candidate 1/4/6        (12, 8)    0.852580928313686 0.732706940351243 2.886580e-14 1.889
+candidate 1/4/6        (8, 12)    0.852639332376296 0.731615617674360 8.948398e-14 1.860
+candidate 1/4/6        (12, 12)   0.852511035065285 0.731652308240056 4.141132e-13 5.285
+FEM 0.06/6/24          (8, 8)     0.852727253707793 0.732709231991352 5.773160e-14 0.569
+FEM 0.06/6/24          (12, 8)    0.852597390123893 0.732748147441887 9.092727e-14 1.517
+FEM 0.06/6/24          (8, 12)    0.852656660159013 0.731650400507524 1.789680e-13 1.530
+FEM 0.06/6/24          (12, 12)   0.852527387222420 0.731687812540909 1.040279e-13 4.301
+FEM 0.06/6/24          (16, 12)   0.852475206413989 0.731689709339129 1.352252e-13 9.175
+FEM 0.06/6/24          (12, 16)   0.852495483240783 0.731227255173347 5.304646e-13 8.392
+FEM 0.06/6/24          (16, 16)   0.852442893204034 0.731229171928239 3.961276e-13 17.617
+FEM 0.04/8/28          (8, 8)     0.852727535317464 0.732709929588298 5.240253e-14 0.551
+FEM 0.04/8/28          (12, 8)    0.852597669147702 0.732748852613034 1.099121e-13 1.412
+FEM 0.04/8/28          (8, 12)    0.852656933772863 0.731651099273673 3.841372e-13 1.384
+FEM 0.04/8/28          (12, 12)   0.852527657038924 0.731688518711822 5.669909e-13 3.732
+FEM 0.04/8/28          (16, 12)   0.852475474946246 0.731690420549690 7.128742e-13 8.502
+FEM 0.04/8/28          (12, 16)   0.852495746055332 0.731227967383108 2.782219e-13 8.586
+FEM 0.04/8/28          (16, 16)   0.852443153987468 0.731229889741983 1.727729e-12 17.771
+candidate 2/4/6        (8, 8)     0.852720309428964 0.732695204285475 4.130030e-14 0.640
+candidate 2/4/6        (12, 8)    0.852592046855029 0.732736568998555 5.817569e-14 1.658
+candidate 2/4/6        (8, 12)    0.852650863759664 0.731636769148632 2.045031e-13 1.420
+candidate 2/4/6        (12, 12)   0.852522051244977 0.731678833970516 1.423306e-13 3.742
+candidate 2/4/6        (16, 12)   0.852470261928007 0.731679628346202 9.392487e-14 8.246
+candidate 2/4/6        (12, 16)   0.852489954956492 0.731219384620144 3.186340e-13 8.419
+candidate 2/4/6        (16, 16)   0.852437653873731 0.731219224724320 1.110445e-12 18.436
+
+Reproduction
+------------
+With the optional FEM Python, run studies/nvf_gap_reference.py with
+--cap 24 --h .1 --degree 4 --quadrature 20; or cap 32 with h .06, degree 6,
+quadrature 24; or cap 32 with h .04, degree 8, quadrature 28/32, refine 40.
+All runs use --transform 1 .45 0 .7 and an external --output NPZ path.
+Run studies/nvf_affine_convergence.py with those projections and
+--orders 4 8 12:8 8:12 12 --cells 1:4:2:4 1:4:4:6 for the first comparison;
+--orders 8 12:8 8:12 12 16:12 12:16 16 --cells 2:4:4:6 for the refinement.
+The allocation controls use --orders 0 and cells 1:4:4:6:2, 2:4:4:6,
+4:4:2:4 and 6:4:1:4.
+
+Validation
+----------
+python -m pytest tests/test_nvf_affine_orders.py tests/test_nvf_affine_convergence.py tests/test_nvf_affine_cell.py -q --tb=short
+92 passed in 23.99s.
+Optional FEM Python: python -m unittest tests.test_nvf_affine_reference tests.test_nvf_cell_corrector tests.test_nvf_gap_reference
+13 tests passed in 1.486s.
+python -m pytest tests/test_nvf_cell_bounds.py tests/test_nvf_directional_convergence.py -q --tb=short
+22 passed in 73.21s.
+python -m pytest tests/test_docs_contract.py -q
+36 passed in 0.38s.
+python -m sphinx -b html -W --keep-going docs <output>
+Build succeeded with warnings treated as errors.
+Ruff on all modified Python files and git diff --check passed.
+Combined: 163 distinct passing cases (92 + 13 + 22 + 36).
+
+Limits
+------
+Static enclosures are floating-point variational estimates for positive real
+permittivity, not optical error bounds. Directional optical changes remain
+consequential. No optical stopping threshold or default mesh setting changed.
+Public general physical-rectangle geometry and independent 3D optical
+qualification remain open. Every study process completed; none remains running.
+
+Higher optical orders and directional diagnostics, 2026-09-09
+-------------------------------------------------------------
+Run after the affine contact factorization (357d001). The physical
+profile, wavelength, incidence and exterior media above are unchanged.
+Only the study reporting changes here; no runtime solver default or
+optical stopping threshold changed. Timings include concurrent study
+processes and are not a controlled performance comparison.
+
+Fitted reference exports:
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 32, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.3633538742396922e-13, "quadrature_points": 1660928, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 47.78549512499012}
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 76.75460587500129}
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 48, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.7319479184152442e-14, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 59.433261000027414}
+
+Independent coefficient checks:
+{"quadrature_32_to_40_max": 4.884981308350689e-15, "shared_cap32_max": 0.0, "material_error": 1.903013791694777e-15}
+{"p10_ndof": 81101, "p10_elements": 1622, "p10_relative_gap": 1.4277128655834951e-07, "p8_to_p10_coefficient_change": 1.298168925113375e-07, "p10_mean_energy_quadrature_error": 1.7319479184152442e-14}
+
+Candidate static enclosure:
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 2, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.158793498886977, 0.7353974588615364], [0.7353974588615364, 2.7594369314688607]], "lower": [[2.158635449452533, 0.7351865956357642], [0.7351865956357642, 2.759116760736379]], "gap_eigenvalues": [1.3202737848714797e-05, 0.00046501742907706535], "relative_gap": 0.00014296506849586295, "cell_residual": 1.531281622179278e-10, "reciprocal_residual": 2.7828640117807162e-11, "degrees_of_freedom": 3887, "seconds": 19.786046375054866}
+
+Optical rows: source, (x,y) half widths, p_T, s_T, energy error, seconds.
+FEM degree 8             (16, 16)     0.852443153985551 0.731229889742403 5.913048e-13 15.929
+FEM degree 8             (20, 16)     0.852417073420952 0.731227345523672 1.024070e-12 28.664
+FEM degree 8             (16, 20)     0.852428151482954 0.731039456470689 2.871481e-12 27.915
+FEM degree 8             (20, 20)     0.852401539891326 0.731036855555305 1.820211e-12 54.774
+FEM degree 8             (24, 20)     0.852388526661451 0.731034096403172 2.472800e-12 91.669
+FEM degree 8             (20, 24)     0.852395205346480 0.730980282618755 7.706280e-12 100.542
+FEM degree 8             (24, 24)     0.852381909684557 0.730977440340130 3.329337e-12 275.651
+FEM degree 10            (24, 24)     0.852381921846079 0.730977466811620 2.799760e-12 408.591
+candidate x2 body4 gap6  (24, 24)     0.852377641159012 0.730966937869719 1.878053e-12 325.411
+
+Complete adjacent order rectangles for the fixed degree-8 reference:
+{"x_orders": [16, 20], "y_orders": [16, 20], "p": {"x_at_lower_y": -2.6080564599517686e-05, "x_at_upper_y": -2.661159162808957e-05, "y_at_lower_x": -1.5002502597560863e-05, "y_at_upper_x": -1.5533529626132747e-05, "mixed": -5.310270285718843e-07, "diagonal": -4.161409422565043e-05}, "s": {"x_at_lower_y": -2.5442187312485487e-06, "x_at_upper_y": -2.6009153839545718e-06, "y_at_lower_x": -0.00019043327171452962, "y_at_upper_x": -0.00019048996836723564, "mixed": -5.669665270602309e-08, "diagonal": -0.0001930341870984842}}
+{"x_orders": [20, 24], "y_orders": [20, 24], "p": {"x_at_lower_y": -1.3013229874458965e-05, "x_at_upper_y": -1.3295661922874125e-05, "y_at_lower_x": -6.334544846109402e-06, "y_at_upper_x": -6.616976894524562e-06, "mixed": -2.824320484151599e-07, "diagonal": -1.9630206768983527e-05}, "s": {"x_at_lower_y": -2.7591521326586488e-06, "x_at_upper_y": -2.842278625792005e-06, "y_at_lower_x": -5.657293654959261e-05, "y_at_upper_x": -5.665606304272597e-05, "mixed": -8.31264931333564e-08, "diagonal": -5.941521517538462e-05}}
+
+Same-order transmission differences at (24,24):
+{"comparison": "FEM degree10 minus degree8", "p": 1.2161522677800463e-08, "s": 2.6471490222057525e-08}
+{"comparison": "candidate minus FEM degree8", "p": -4.268525544137702e-06, "s": -1.0502470410789222e-05}
+{"comparison": "candidate minus FEM degree10", "p": -4.280687066815503e-06, "s": -1.052894190101128e-05}
+
+Reproduction:
+Export the optional fitted reference at cap64, h=.04, degree8,
+quadrature32 (or40), refine40, transform 1 .45 0 .7. Use an external
+NPZ output. Run studies/nvf_affine_convergence.py with that projection,
+--orders 16 20:16 16:20 20 24:20 20:24 24 --cells --directional-changes.
+For the separate reference refinement, export cap48 with degree10
+and quadrature40 on the same mesh. Compare at --orders 24 with the
+candidate --cells 2:4:4:6. All retained sets get their own closure.
+
+Validation:
+python -m pytest tests/test_nvf_affine_convergence.py tests/test_docs_contract.py -q --tb=short
+58 passed in 1.49s. Eight new cases cover directional cancellation,
+mixed changes, distinct source series, missing corners, duplicate
+orders and invalid optical records. The CLI smoke check emits four
+optical records and one complete directional rectangle.
+Ruff and git diff --check passed.
+The final documentation contract rerun passed all 36 cases in 0.38s;
+these are already included in the 58 distinct cases above.
+python -m sphinx -b html -W --keep-going -q docs <output>
+Build succeeded with warnings treated as errors.
+
+Limits:
+The FEM environment remains a separate internal validation tool.
+No third-party implementation was incorporated into the runtime and
+no new dependency was added. Finite optical increments and observed
+reference changes are not continuum optical error bounds. Further
+directional optical refinement and general physical-rectangle
+geometry on oblique lattices remain open. All study processes ended.
+
+Directional affine continuation through y=32, 2026-09-09
+--------------------------------------------------------
+The degree-8 fitted auxiliary field and physical fixture above remain fixed.
+All new optical rows use cap64, quadrature40, h=.04, refine40 and the same
+1622-element mesh. No cell refinement or optical stopping criterion is
+introduced. The preceding degree-10/candidate comparison remains at (24,24).
+Fitted export metadata:
+{"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}
+
+Optical records (shared projection metadata omitted from each row):
+{"kind": "affine_fitted_cell", "order": 24, "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523819096857066, "p_R": 0.1476180903129526, "s_T": 0.730977440341986, "s_R": 0.2690225596580918, "energy_error": 1.3408163468398016e-12, "seconds": 190.11372654198203}
+{"kind": "affine_fitted_cell", "order": [20, 28], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.852393633568315, "p_R": 0.14760636643636244, "s_T": 0.7309867330726199, "s_R": 0.269013266927261, "energy_error": 4.6773696027457845e-12, "seconds": 150.5628729169839}
+{"kind": "affine_fitted_cell", "order": [24, 28], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523801932123279, "p_R": 0.14761980678907655, "s_T": 0.7309839353728274, "s_R": 0.2690160646226025, "energy_error": 4.570122058566994e-12, "seconds": 240.82122704200447}
+{"kind": "affine_fitted_cell", "order": [20, 32], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523941796802704, "p_R": 0.14760582031894703, "s_T": 0.7310159292913057, "s_R": 0.26898407071119984, "energy_error": 2.5055513219740533e-12, "seconds": 250.48313154198695}
+{"kind": "affine_fitted_cell", "order": [24, 32], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523806989593461, "p_R": 0.14761930105450538, "s_T": 0.7310131920912105, "s_R": 0.26898680790528773, "energy_error": 1.3851586544433303e-11, "seconds": 720.8593768750434}
+{"kind": "affine_fitted_cell", "order": [28, 24], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523763522973429, "p_R": 0.1476236477058886, "s_T": 0.7309754069385856, "s_R": 0.2690245930625951, "energy_error": 3.2314151354739806e-12, "seconds": 998.8145329580293}
+
+Complete adjacent rectangle; reported CLI record matches direct analysis:
+{"kind": "affine_directional_change", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "source_kind": "affine_fitted_cell", "x_orders": [20, 24], "y_orders": [28, 32], "p": {"x_at_lower_y": -1.3440355987048846e-05, "x_at_upper_y": -1.3480720924330392e-05, "y_at_lower_x": 5.461119554350802e-07, "y_at_upper_x": 5.057470181535351e-07, "mixed": -4.036493728154511e-08, "diagonal": -1.2934608968895311e-05}, "s": {"x_at_lower_y": -2.797699792500552e-06, "x_at_upper_y": -2.7372000951375597e-06, "y_at_lower_x": 2.91962186858008e-05, "y_at_upper_x": 2.9256718383163793e-05, "mixed": 6.049969736299232e-08, "diagonal": 2.645901859066324e-05}}
+
+Additional signed edge comparisons:
+{"lower": [24, 24], "upper": [24, 28], "p": -1.7164733786545483e-06, "s": 6.495030841380256e-06}
+{"lower": [20, 28], "upper": [20, 32], "p": 5.461119554350802e-07, "s": 2.91962186858008e-05}
+{"lower": [24, 28], "upper": [24, 32], "p": 5.057470181535351e-07, "s": 2.9256718383163793e-05}
+{"lower": [24, 24], "upper": [28, 24], "p": -5.55738836371944e-06, "s": -2.0334034003255397e-06}
+
+Reproduction:
+Export cap64, degree8, quadrature40, h=.04, refine40 and transform 1 .45 0 .7.
+Use studies/nvf_affine_convergence.py with --orders 24 20:28 24:28 20:32
+24:32 28:24 --cells --directional-changes and that external projection NPZ.
+Every retained Fourier set receives its own full-space energy closure.
+
+Interpretation and limits:
+The s change reverses between y=24 and 28, then grows again through y=32
+at both tested x orders. The small y=24-to-28 increment is not a bound on
+remaining optical error. The new degree-8 rows do not supply a degree-10
+or candidate comparison at y=32, or independent 3D Maxwell validation.
+An x=24-to-28 edge at y=24 is not a complete rectangle reaching x=28.
+Timings are uncontrolled observations on a shared machine; earlier rows
+overlapped the regression runs. They are not a scaling benchmark.
+Full-space closure memory and continuity controls are recorded separately
+in nvf_closure_memory.log and nvf_energy_closure_validation.log.
+The changed closure passed 214 distinct checks, including documentation.
+No third-party dependency was added. All optical study processes ended.
+
+Final documentation validation:
+python -m pytest tests/test_docs_contract.py -q --tb=short
+36 passed in 1.23s; these cases are already included in the 214 above.
+python -m sphinx -b html -W --keep-going -q docs <output>
+Build succeeded with warnings treated as errors. git diff --check passed.
+
+Completing the x=28 rectangles
+-----------------------------
+Runtime: ea4c85e, including diagonal scaling and the direct boundary solve.
+The fixed physical profile, degree-8 FEM field, mesh, coefficient cap64
+and quadrature40 export are unchanged. Each retained Fourier space gets
+its own projected_matrices closure; no closed matrix is cropped.
+All projection metadata was checked against the earlier four corners
+before calling directional_changes on the combined six-point set.
+The new runtime agrees with saved order-20 per-order p/s powers within
+5.54e-12; the isolated boundary comparison and 1796 passing targeted
+checks are recorded in nvf_rcwa_memory.log. Earlier corners predate the
+runtime arithmetic changes. No numerical threshold was changed.
+
+Shared projection metadata:
+{"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}
+
+New optical rows:
+{"kind": "affine_fitted_cell", "order": [28, 28], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523745587313766, "p_R": 0.14762544126143248, "s_T": 0.7309818578096936, "s_R": 0.26901814218601766, "energy_error": 7.190914530497139e-12, "seconds": 390.1613516670186}
+{"kind": "affine_fitted_cell", "order": [28, 32], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523750414940143, "p_R": 0.14762495850779822, "s_T": 0.731011083754093, "s_R": 0.26898891624298354, "energy_error": 2.9234392684429622e-12, "seconds": 453.8225747079705}
+
+Complete adjacent rectangles:
+{"kind": "affine_directional_change", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "source_kind": "affine_fitted_cell", "x_orders": [24, 28], "y_orders": [24, 28], "p": {"x_at_lower_y": -5.55738836371944e-06, "x_at_upper_y": -5.634480951366427e-06, "y_at_lower_x": -1.7164733786545483e-06, "y_at_upper_x": -1.7935659663015358e-06, "mixed": -7.709258764698745e-08, "diagonal": -7.350954330020976e-06}, "s": {"x_at_lower_y": -2.0334034003255397e-06, "x_at_upper_y": -2.0775631337510703e-06, "y_at_lower_x": 6.495030841380256e-06, "y_at_upper_x": 6.450871107954725e-06, "mixed": -4.415973342553059e-08, "diagonal": 4.417467707629186e-06}}
+{"kind": "affine_directional_change", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "source_kind": "affine_fitted_cell", "x_orders": [24, 28], "y_orders": [28, 32], "p": {"x_at_lower_y": -5.634480951366427e-06, "x_at_upper_y": -5.657465331765366e-06, "y_at_lower_x": 5.057470181535351e-07, "y_at_upper_x": 4.827626377545968e-07, "mixed": -2.2984380398938242e-08, "diagonal": -5.1517183136118305e-06}, "s": {"x_at_lower_y": -2.0775631337510703e-06, "x_at_upper_y": -2.108337117556758e-06, "y_at_lower_x": 2.9256718383163793e-05, "y_at_upper_x": 2.9225944399358106e-05, "mixed": -3.077398380568752e-08, "diagonal": 2.7148381265607036e-05}}
+
+Fresh-process runtime observations:
+{"kind": "runtime_observation", "order": [28, 28], "peak_rss_bytes": 6394691584, "seconds": 390.1613516670186, "boundary_algorithm": "direct_solve"}
+{"kind": "runtime_observation", "order": [28, 32], "peak_rss_bytes": 6476906496, "seconds": 453.8225747079705, "boundary_algorithm": "direct_solve"}
+
+RSS is macOS bytes and includes imports, projection closure and native
+workspaces. The two solves ran sequentially in separate processes on a
+shared host. These timings are observations, not isolated speed comparisons.
+NumPy/SciPy use Apple Accelerate; OPENBLAS_NUM_THREADS=1 and
+OMP_NUM_THREADS=1 do not establish Accelerate's actual thread count.
+The runtime's layer eigensolve and final matching were wrapped only to
+print phase start/end times, without altering their inputs or outputs.
+
+Reproduction: with the same cap64/degree8/quadrature40 export, run
+studies/nvf_affine_convergence.py --orders 28:28 28:32 --cells and its
+--projections argument. Combine with the four existing corners at
+(24,24), (24,28), (24,32), (28,24) only after verifying the complete
+projection metadata. The documentation also gives the all-six-corner
+command for reproducing both directional rectangles in one run.
+
+At x=28 the y=24-to-28 s change is +6.450871107954725e-6, followed by
++2.9225944399358106e-5 from y=28 to 32, about 4.53 times larger.
+That latter increment agrees in scale and sign at x=20,24,28. The smaller
+x increments and mixed terms do not bound or remove the remaining y tail.
+The degree-10/candidate comparison remains at (24,24), and independent
+three-dimensional optical qualification remains open. Static enclosures
+are not optical error bounds. No convergence criterion was selected.
+No external code or dependency was added. All numerical processes ended.
+
+Final documentation validation: 36 cases passed in 0.37s; these are
+already included in the 1796 distinct runtime-validation cases. Strict
+Sphinx HTML (-W --keep-going) and git diff --check passed.
+
+Further candidate x refinement at fixed optical orders, 2026-09-09
+
+The production runtime is based on 67cff19 with the bounded affine Fourier
+projection described in nvf-affine-cells.md. x subdivisions increase from
+2 to 4 with all other candidate settings and physical inputs unchanged.
+The cap-48 primal projection is reused at optical orders 12 and 24; the
+reciprocal field supplies only its mean energy. Each retained optical space
+receives its own full-space closure. The lossless optical guard remains 1e-9.
+No other numerical task from this session overlaps this candidate run.
+Projection RSS is a whole-process high-water observation, not a controlled
+before/after benchmark. It includes models, imports and native workspaces.
+
+Reproduce with studies/nvf_affine_convergence.py --orders 12 24 --cells 4:4:4:6
+and the default affine profile. The saved export is checked against the
+exact material coefficients, real-field conjugacy and identity mean field.
+The separate degree-10 FEM export and prior x=2 candidate are the same
+cap-48 numerical outputs used earlier; no new FEM computation is performed.
+
+{"kind": "progress", "phase": "candidate_projection", "settings": {"x_subdivisions": 4, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05}}
+{"kind": "progress", "phase": "candidate_projection_complete", "seconds": 45.28810112498468, "analytic_material_error": 3.9968028886505635e-15}
+{"kind": "affine_cell_bounds", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 4, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "upper": [[2.158753263213092, 0.7353456371578475], [0.7353456371578475, 2.7593569423660718]], "lower": [[2.1587157310432814, 0.7352962028568041], [0.735296202856804, 2.759281870387943]], "gap_eigenvalues": [3.424295822333627e-06, 0.00010917985211700998], "relative_gap": 3.35653640806102e-05, "cell_residual": 5.94598779774493e-10, "reciprocal_residual": 1.360960232500595e-10, "degrees_of_freedom": 7775, "seconds": 53.79852083302103}
+{"kind": "candidate_projection_runtime", "peak_rss_bytes": 4231184384}
+{"kind": "progress", "phase": "candidate_optics", "order": 12}
+{"kind": "affine_candidate", "order": 12, "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 4, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "p_T": 0.8525258243221119, "p_R": 0.1474741756784716, "s_T": 0.731684219310978, "s_R": 0.2683157806891235, "energy_error": 5.835332217429823e-13, "seconds": 2.9168527079746127}
+{"kind": "progress", "phase": "candidate_optics", "order": 24}
+{"kind": "affine_candidate", "order": 24, "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "x_subdivisions": 4, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "p_T": 0.852380240145187, "p_R": 0.14761975985849665, "s_T": 0.7309738279403573, "s_R": 0.2690261720554512, "energy_error": 4.191536007169816e-12, "seconds": 120.41234112501843}
+
+Signed differences below retain the earlier fitted and x=2 optical rows.
+At order 12 the fitted reference is degree 8, quadrature 28; at order 24 it
+is degree 10, quadrature 40. Each comparison holds the optical order fixed.
+The coefficients are compared to the verified degree-10 cap-48 export.
+Static enclosures and finite-order differences are not optical tail bounds.
+{"kind": "affine_candidate_refinement", "order": 12, "reference_degree": 8, "x_subdivisions": [2, 4], "p": {"previous_difference": -5.6057939469278395e-06, "refined_difference": -1.8327168120890747e-06, "absolute_difference_reduction_percent": 67.30673960833926}, "s": {"previous_difference": -9.684741305915345e-06, "refined_difference": -4.299400843899015e-06, "absolute_difference_reduction_percent": 55.60644618072572}}
+{"kind": "affine_candidate_refinement", "order": 24, "reference_degree": 10, "x_subdivisions": [2, 4], "p": {"previous_difference": -4.280687066926525e-06, "refined_difference": -1.681700891986715e-06, "absolute_difference_reduction_percent": 60.714229615617455}, "s": {"previous_difference": -1.052894190101128e-05, "refined_difference": -3.6388712627566377e-06, "absolute_difference_reduction_percent": 65.43934521656793}}
+{"kind": "affine_static_refinement", "x_subdivisions": [2, 4], "relative_enclosures": [0.00014296506849586295, 3.35653640806102e-05], "reduction_percent": 76.52198230396294, "maximum_cap48_coefficient_differences_against_degree10": [0.0019365706401845333, 0.0006313509573257309]}
+
+Next y interval with a fixed degree-8 auxiliary field, 2026-09-09
+
+Runtime: dafc8eb. Physical inputs remain unchanged. The cap-72 export
+extends the same 1622-element, 51905-unknown fitted field. Its shared cap-64
+coefficients are checked exactly against the earlier quadrature-40 export.
+The cap-72 quadrature-40/48 comparison is separate from cell refinement.
+No new dependency, external source copy or FEM runtime integration is used.
+The already-installed optional reference tools remain ngsolve/Netgen 6.2.2606.
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 72, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 90.98789637500886}
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 48, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 72, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.3589129821411916e-13, "quadrature_points": 3737088, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 127.99939633300528}
+{"kind": "affine_projection_extension_control", "caps": [64, 72], "quadratures": [40, 48], "degree": 8, "ndof": 51905, "shared_cap64_coefficients_identical": true, "shared_coefficient_difference": 0.0, "maximum_quadrature_difference": 5.260918396854247e-15, "analytic_material_error": 1.903013791694777e-15}
+
+The optical row uses cap 72 and quadrature 40. Each retained space gets
+its own closure. Phase times and RSS are whole-process observations on a
+shared host; small algebraic validation and code review ran alongside it,
+without another large numerical solve. RSS is macOS bytes and includes
+imports, projection closure and native workspaces. No convergence threshold
+was selected or adjusted.
+{"kind": "progress", "order": [24, 36], "phase": "projection_closure"}
+{"kind": "progress", "order": [24, 36], "phase": "optical_solve", "seconds": 24.787907000049017}
+{"kind": "progress", "order": [24, 36], "phase": "layer_eigensolve", "event": "start"}
+{"kind": "progress", "order": [24, 36], "phase": "layer_eigensolve", "event": "end", "seconds": 185.9005659999675}
+{"kind": "progress", "order": [24, 36], "phase": "boundary_matching", "event": "start"}
+{"kind": "progress", "order": [24, 36], "phase": "boundary_matching", "event": "end", "seconds": 44.34265399997821}
+{"kind": "affine_fitted_cell", "order": [24, 36], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.852381870037685, "p_R": 0.14761812995412338, "s_T": 0.7310426373671545, "s_R": 0.2689573626333057, "energy_error": 8.191669564894255e-12, "projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 72, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "seconds": 412.28418000001693}
+{"kind": "runtime_observation", "order": [24, 36], "peak_rss_bytes": 6681214976, "seconds": 412.28418000001693, "boundary_algorithm": "direct_solve"}
+
+The old (24,32) optical row retains its original cap-64 metadata. That full
+metadata was checked against the saved cap-64 export; the new row's full
+metadata was checked against cap 72. They differ in cap only, and their
+shared coefficients are exactly equal. The explicit edge comparison below
+keeps both caps; it does not coerce directional_changes metadata grouping.
+The source-field and candidate errors at y=36 are not independently bounded.
+{"kind": "affine_y_extension", "x_order": 24, "y_orders": [32, 36], "projection_caps": [64, 72], "shared_cap64_coefficients_identical": true, "degree": 8, "quadrature": 40, "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p": {"before": 0.8523806989593461, "after": 0.852381870037685, "difference": 1.1710783388574342e-06}, "s": {"before": 0.7310131920912105, "after": 0.7310426373671545, "difference": 2.9445275943951188e-05}}
+
+Final documentation checks for this continuation:
+python -m pytest tests/test_docs_contract.py -q --tb=short
+36 passed in 0.36s. Strict Sphinx HTML (-W --keep-going) and
+git diff --check passed. All numerical, algebraic-test and review tasks
+completed; no large FEM solve ran alongside the optical calculation.
+
+Degree-10 reference refinement at optical (24,32), 2026-09-09
+
+The fitted field uses the same h=.04 mesh and vertex refinement 40.
+Its Fourier export is extended from cap48 to cap64 at quadrature40,
+then independently exported with quadrature48. Shared cap48 coefficients
+are exactly equal; the complete metadata differ only in cap. Finite
+field degrees, bounds and residuals are retained explicitly below.
+
+FEM export settings and results:
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.7319479184152442e-14, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 74.04516529198736}
+{"kind": "gap_fem_cell", "fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 48, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.8207657603852567e-14, "quadrature_points": 3737088, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]], "seconds": 105.5305077500525}
+
+Projection controls and full provenance:
+{"kind": "affine_reference_refinement_controls", "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "caps": [48, 64], "shared_cap48_coefficients_identical": true, "degrees": [8, 10], "quadratures": [40, 48], "quadrature_max_coefficient_difference": 5.260918396854247e-15, "degree_max_coefficient_difference": 1.2981689248611108e-07, "material_max_error": 1.903013791694777e-15, "old_projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 48, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.7319479184152442e-14, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.7319479184152442e-14, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "quadrature_projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 48, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.8207657603852567e-14, "quadrature_points": 3737088, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "lower_degree_projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}}
+
+Independent direct-NPZ review, without the loader or material helper,
+confirmed shared-cap exact equality and both maximum coefficient changes.
+Explicit interval exponential integration gives material-coefficient
+errors below 1.78e-15 (q40) and 6.97e-15 (q48), conjugacy error 0,
+and identity-mean error below 8.89e-16. Metadata differences are confined
+to cap for extension; quadrature/point count/mean-energy integration error
+for the quadrature control; and degree/DOF/energy/residual measures for
+the degree comparison. No projection provenance error was found.
+
+New degree-10 optical record and phase observations:
+{"kind": "progress", "order": [24, 32], "phase": "projection_closure"}
+{"kind": "progress", "order": [24, 32], "phase": "optical_solve", "seconds": 17.071747207955923}
+{"kind": "progress", "order": [24, 32], "phase": "layer_eigensolve", "event": "start"}
+{"kind": "progress", "order": [24, 32], "phase": "layer_eigensolve", "event": "end", "seconds": 139.1213534999988}
+{"kind": "progress", "order": [24, 32], "phase": "boundary_matching", "event": "start"}
+{"kind": "progress", "order": [24, 32], "phase": "boundary_matching", "event": "end", "seconds": 30.103948540985584}
+{"kind": "affine_fitted_cell", "order": [24, 32], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523807109766661, "p_R": 0.14761928901643245, "s_T": 0.731013218636261, "s_R": 0.2689867813668527, "energy_error": 6.901368365674898e-12, "projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.7319479184152442e-14, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "seconds": 292.3971276249504}
+{"kind": "runtime_observation", "order": [24, 32], "peak_rss_bytes": 5367054336, "seconds": 292.3971276249504, "boundary_algorithm": "direct_solve"}
+
+Degree-8 control rerun with the same current runtime as degree 10:
+The earlier (24,32) row predates production arithmetic optimizations.
+A fresh solve retains its exact cap64/q40 coefficients and allows a
+same-runtime field-degree comparison without assuming continuity at
+this optical order from controls at other orders. The degree-10 process started at d78de22 and the degree-8 process at
+379aeb9, sequentially. The intervening geometry-study commit changes no
+Wavebit runtime, affine convergence loader or projection-closure source;
+the diff of those paths is empty between the two revisions.
+The runtime_observation below compares its p8 arrays against p10;
+maximum absolute per-order differences are independent of that sign.
+{"kind": "progress", "order": [24, 32], "phase": "projection_closure"}
+{"kind": "progress", "order": [24, 32], "phase": "optical_solve", "seconds": 17.211796207993757}
+{"kind": "progress", "order": [24, 32], "phase": "layer_eigensolve", "event": "start"}
+{"kind": "progress", "order": [24, 32], "phase": "layer_eigensolve", "event": "end", "seconds": 134.03733454097528}
+{"kind": "progress", "order": [24, 32], "phase": "boundary_matching", "event": "start"}
+{"kind": "progress", "order": [24, 32], "phase": "boundary_matching", "event": "end", "seconds": 30.193660958029795}
+{"kind": "affine_fitted_cell", "order": [24, 32], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "p_T": 0.8523806989593526, "p_R": 0.14761930105450666, "s_T": 0.7310131920912111, "s_R": 0.26898680790528573, "energy_error": 1.3859358105605679e-11, "projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "seconds": 283.71713758300757}
+{"kind": "runtime_observation", "order": [24, 32], "peak_rss_bytes": 6290391040, "seconds": 283.71713758300757, "boundary_algorithm": "direct_solve", "maximum_order_power_difference": 5.3616683648449737e-08, "order_power_differences": {"p_T": 8.255178596261459e-09, "p_R": 1.203807420413483e-08, "s_T": 5.3616683648449737e-08, "s_R": 2.653843300670644e-08}}
+
+Fixed-order degree comparison and separate old/current arithmetic check:
+{"kind": "affine_reference_degree_change", "order": [24, 32], "transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "degrees": [8, 10], "cap": 64, "quadrature": 40, "degree8_start_revision": "379aeb9", "degree10_start_revision": "d78de22", "runtime_source_diff_empty": true, "same_runtime": true, "before_projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 8, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 51905, "bounds": {"upper": [[2.1587407901279465, 0.7353301633239856], [0.7353301633239856, 2.7593327611999996]], "lower": [[2.15874045526891, 0.7353297693914308], [0.7353297693914308, 2.7593322117556567]], "gap_eigenvalues": [3.3869224784442456e-08, 8.504341546270349e-07], "relative_gap": 2.623667181965866e-07}, "residuals": [2.6267684741727213e-15, 1.8610278503201763e-15], "reciprocal_residuals": [7.721517225318011e-16, 5.237339450345286e-16], "mean_energy_quadrature_error": 1.354472090042691e-13, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "after_projection": {"fixture": "affine_partitioned_gap", "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0], "h": 0.04, "refine": 40.0, "degree": 10, "quadrature": 40, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "cap": 64, "elements": 1622, "ndof": 81101, "bounds": {"upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "relative_gap": 1.4277128655834951e-07}, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "mean_energy_quadrature_error": 1.7319479184152442e-14, "quadrature_points": 2595200, "quadrature_mapping": "element_local", "transform": [[1.0, 0.45], [0.0, 0.7]]}, "before": {"p_T": 0.8523806989593526, "p_R": 0.14761930105450666, "s_T": 0.7310131920912111, "s_R": 0.26898680790528573, "energy_error": 1.3859358105605679e-11}, "after": {"p_T": 0.8523807109766661, "p_R": 0.14761928901643245, "s_T": 0.731013218636261, "s_R": 0.2689867813668527, "energy_error": 6.901368365674898e-12}, "max_order_power_difference": {"p_T": 8.255178596261459e-09, "p_R": 1.203807420413483e-08, "s_T": 5.3616683648449737e-08, "s_R": 2.653843300670644e-08}, "p": {"degree_transmission_change": 1.201731347766355e-08, "historical_degree8_y28_to32_change": 5.057470181535351e-07, "absolute_change_ratio_to_y_increment": 0.023761511281941605}, "s": {"degree_transmission_change": 2.6545049935933207e-08, "historical_degree8_y28_to32_change": 2.9256718383163793e-05, "absolute_change_ratio_to_y_increment": 0.0009073146751553976}}
+{"kind": "affine_runtime_continuity", "order": [24, 32], "degree": 8, "cap": 64, "quadrature": 40, "same_projection_metadata": true, "historical": {"p_T": 0.8523806989593461, "p_R": 0.14761930105450538, "s_T": 0.7310131920912105, "s_R": 0.26898680790528773, "energy_error": 1.3851586544433303e-11}, "current": {"p_T": 0.8523806989593526, "p_R": 0.14761930105450666, "s_T": 0.7310131920912111, "s_R": 0.26898680790528573, "energy_error": 1.3859358105605679e-11}, "differences": {"p_T": 6.5503158452884236e-15, "p_R": 1.27675647831893e-15, "s_T": 5.551115123125783e-16, "s_R": -1.9984014443252818e-15}}
+
+The degree comparison uses both fresh current-runtime optical rows.
+Each source projection metadata was matched to its original numerical
+export. The historical degree8 y28/y32 edge remains identified separately
+when comparing the size of its increment to this endpoint refinement.
+Current degree8 p/s R/T totals reproduce the historical row within
+6.56e-15. No old/new timing ratio is used as a performance claim.
+
+The p/s total transmission degree changes are +1.20173e-8/+2.65450e-8.
+The largest single diffraction-order R/T change is 5.37e-8, so outgoing
+redistribution is checked as well as total transmission. The s total
+change is 0.0907% of the older degree8 y28-to32 increment, and p is 2.38%.
+This is a y32 endpoint reference-degree check, not a degree10 reproduction
+of the entire y interval. Degree10 y28/y36, candidate comparison beyond
+(24,24), and an independent 3D affine optical bound remain unmeasured.
+All balances satisfy the unchanged 1e-9 algebraic guard, which does not
+bound the optical continuum error. No convergence threshold is selected.
+
+The existing internal FEM reference environment is unchanged. The large
+numerical processes ran one at a time; parallel geometry work constructed
+small meshes and spaces without a Maxwell system. All numerical runs
+completed and no numerical process remains running for this continuation.
+
+Independent final array/log review confirms the fresh same-runtime degree
+comparison, per-order power differences and old/current total continuity.
+No numerical or provenance discrepancy was found. The review retains the
+y32 endpoint scope and does not assign an optical error bound.
+
+Final checks: all 36 documentation-contract tests passed in 0.38s;
+strict Sphinx HTML (-W --keep-going) and git diff --check passed.
+The parallel geometry addition separately passed 17 algebraic/affine
+geometry checks and five existing square-mesh controls, plus independent
+volume/moment/pair-coverage review. These are 58 distinct test cases,
+not a full-suite run. Every numerical and review task completed.
+
+
+Candidate cap64 export and fixed-order(24,32) comparison,2026-09-10
+The candidate auxiliary space remains x4,rows4,bodydegree4,gapdegree6,
+y_subdivisions1,local flux,edge_fraction1e-5,grading_strength8,
+grading_radius.01,quadrature12,grade_y=True and7775unknowns.
+It is reprojected through cap64; the shared cap48 coefficients are exact.
+The9 raw components retain the independently calculated yx Gram term.
+Primal data are atomically saved before a separate reciprocal mean solve.
+The fitted degree10/cap64/quadrature40 field and(24,32) optical arrays
+are reused with checked input hashes and complete profile metadata.
+Source starts:export5d0f115,optics8a2f159,fitted opticsd78de22.
+Relevant Wavebit/closure/convergence source diff is empty; current hashes
+agree between export and optics. All p/s orders share one layer mode solve.
+Selected validated records follow; duplicate projection metadata and
+private file locations are omitted. Full metadata are in the export row.
+
+{"artifacts": {"baseline_candidate": {"sha256": "7744b203ad1370612c7dc7fc35e6682c5b056b5e2e9c9523277ca65ae4146b90"}, "fitted_log": {"sha256": "136d90c7f36a071d6444ea1b60ab497658e1113ca685550cca113fe66249810e"}, "fitted_powers": {"sha256": "762b2b89a2babe2866340730c52070d159d2cdb41fe769afbab6b7857f1ac046"}, "fitted_projection": {"sha256": "73e0a998decac00634f437ef9fd1d2b2a3e45048895bc6290be25df72f980cf7"}}, "bounds": {"gap_eigenvalues": [3.424295822333627e-06, 0.00010917985211700998], "lower": [[2.1587157310432814, 0.7352962028568041], [0.735296202856804, 2.759281870387943]], "relative_gap": 3.35653640806102e-05, "upper": [[2.158753263213092, 0.7353456371578475], [0.7353456371578475, 2.7593569423660718]]}, "cap": 64, "cell_residual": 5.94598779774493e-10, "checks": {"analytic_material": 3.9968028886505635e-15, "gram_symmetry": 4.809127078224516e-12, "identity_mean": 8.881784197001252e-16, "real_field": 0.0, "shared_cap48_exact": true, "shared_cap48_max_abs": 0.0}, "coefficient_layout": ["Bxx", "Bxy", "Byx", "Byy", "Gxx", "Gxy", "Gyy", "epsilon", "Gyx"], "context": {"gap": 17.0, "seams": [31.0], "transform": [[1.0, 0.45], [0.0, 0.7]], "values": [4.0, 9.0], "width": 350.0}, "degrees_of_freedom": 7775, "kind": "candidate_export_complete", "maximum_process_rss_bytes": 4425449472, "optics": {"answers": "amplitude", "backend": 0, "bottom_permittivity": 2.25, "lattice_nm": [[700.0, 315.0], [0.0, 490.0]], "layer_algorithm": "ETM", "order": [24, 32], "phi": 0.0, "theta": 0.2, "thickness_nm": 300.0, "top_permittivity": 1.0, "wavelength_nm": 900.0}, "primal_seconds": 59.822479041002225, "provenance": {"driver_sha256": "edef3ae2d5522ee3f1df3a1bf947f02210ffa7829db91422bd1fa1a9244789f1", "fitted_start_revision": "d78de224acd2890bbaad474a9bf4bec03dae7cca", "numpy": "2.5.1", "platform": "macOS-26.5.2-arm64-arm-64bit", "python": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 12:55:12) [Clang 14.0.6 ]", "runtime_source_diff_empty": true, "runtime_source_sha256": "1350783bb538856c3b617309e19f1bf0f5b8111d1bf9b27f00c990cdbabdadb5", "scipy": "1.18.0", "source_hashes": {"studies/nvf_affine_convergence.py": "f0ffc40fbf0d13e8336281e0234df1b1fd7cb5ddfee88efca349f2e1c6575ece", "studies/nvf_cell_bounds.py": "9b8e667491eded698f939a9f7a4f3f693cc7a487e672b69bdfaf8e5d8f8c13cf", "studies/nvf_energy_closure.py": "f6686b175e51a42f4c2cce3c644f01ee93d43440ea7276b587962641443c1b6e", "studies/nvf_fourier_orders.py": "38300d208d8253b1bd1810b23ea6bd51c056e35a4603f6ecc68544c67472618d", "wavebit/__init__.py": "fe97a054580029c1b24e1f96f8cc34895b308dcb5c9e42b0062d6019f7c9cc6a", "wavebit/_core/__init__.py": "04e310c4bf7169c31ae4e3e895da6e0f5268996f1d4ef6a871607c0ed0ea67df", "wavebit/_core/backend.py": "37278a27b362850e514f245797c262e6bdc41ccca33f590039d332d06c44cf26", "wavebit/_core/boundary.py": "9e5777d34a22c5cbf7a6d2574e3daff60f355528e4a45ad97a9232255aa83a5d", "wavebit/_core/clipper.py": "e30ea9ec05b238d258b4c05ee7b47c510607b5eaec1a5e4aea2c78eb14fa42e6", "wavebit/_core/conforming/__init__.py": "2656defae4bdd4fbdac6db24e7f9b9aa1d5c7bed7cafb150a5694ec1b0eb20f3", "wavebit/_core/conforming/affine_cell.py": "42b796f3b0f5ddd0f6f233052c42a8c40f9b78cc166cba3ac2acf0bc86b4663d", "wavebit/_core/conforming/continuous_flux.py": "14bb5aa58bc73e89ef90bbe14c0250f72119a6e6b3b0d7aa87f4aef676a4392c", "wavebit/_core/conforming/material_grading.py": "0a3fca4fcbc2e451e0faedbe5653e0d80277cb2e617aa3f5170de2d033139fba", "wavebit/_core/conforming/partitioned_gap.py": "596f5c6b44f31a68351118408581e95fed902d5c7202dd19b32dbdc7e0837743", "wavebit/_core/conforming/polynomial_body.py": "c1720b944cf87bf87425c5245c91d87bf1fa63e3f7aa1cdd34d2b5b13572efd4", "wavebit/_core/conforming/thin_gap.py": "9584b4eeb063c3b63cf3a305555333bb4b427f14bae8014a9479200847424818", "wavebit/_core/conventions.py": "b81dd85519263f72544e1a1c45727b05f1fb4919edb9354a1671c0e05e62dcca", "wavebit/_core/domain.py": "f2a439ca194a5a29cb5c6023b03306f550705f9f493c0e543c76416dd6751829", "wavebit/_core/draw.py": "c7fbb08ddb5ec8a811f71a673dea60e2d06fc9d89872ec97d5de9cc846da0f5c", "wavebit/_core/engine.py": "9c06f137f8014c01f9a5b5d47779ef49690f3e72e1b079853abe2c5c07165ac7", "wavebit/_core/enums.py": "fe5ee5c1557c0f2316b89b99dfac451b0c9c6f12278ca29f7010beeafb166d2c", "wavebit/_core/factorization.py": "11f2d7e99e07c74d167b3222f12769c5de94c961c371b6cc40524dfdc1fdd468", "wavebit/_core/fields.py": "821c9017a79121fe1b740494a21797c41675bb4dae09f3c77aa185e8c5bddad8", "wavebit/_core/geometry.py": "fb405aa744a57bdcec0123e15ce91792445776c5a42e43367edc80e9b5531534", "wavebit/_core/interfaces.py": "34d5258283de1d52c70d785512eb38242077f461e4429fbabbede7bc88f5b1e8", "wavebit/_core/lattice.py": "70fcc438bc0de6791110b405cdcdb270a975381f10b9784767ecb0a479183086", "wavebit/_core/modeler.py": "261c7e487665eab2a4416583ef6def67f42b270242a0e09980bb82497cc04d9d", "wavebit/_core/normal_methods.py": "4c001800b43b0d68f9a0d2bc4890eb9f3f487de42b5de39210a12587b872e346", "wavebit/_core/overlap.py": "9f53903cbb35840b0599b2ed9d96941596a49fd05ce05bf344dfa7935cf7430e", "wavebit/_core/parametric.py": "c24e9761c0012704054af2c7ab21f2e3b2955fc863935d8adff6cf5ca3060fa3", "wavebit/_core/polygon.py": "44bad48068555d29e98971bc2bb85491818fffdc2af56a2665bd3cd158f16e89", "wavebit/_core/rectilinear.py": "31acb0eef3155492b51ecb9844e2a22504dbb0cbc154d2bbe49446d4d0c38bd1", "wavebit/_core/result.py": "36b8892e51f9c85b1ecba3f5771b7a906cf555f0255fe24c6cd1890712812e83", "wavebit/_core/scattering.py": "d5ea9dce413ba056778a0ca31753509d3a2fb71d91296ef1fea7c445e8664fca", "wavebit/_core/solve_1d.py": "bc066078d3f0494bdfd96cff17e1eda2e7047d76482e1456c6fd6eef3adce253", "wavebit/_core/solve_2d.py": "f698a3fca32f1339ee74c7384ad05d1b3efcaab8a3f338b62d9c88660575d660", "wavebit/_core/solve_2d_4ff.py": "ed5e450c4a00be5ba17fb3648e24aec7df0f9c1174321d2725af87debe212577", "wavebit/_core/spec.py": "98b9137eb907b2642f792296db4a743a1218ea6cc24543e1b02e4e8c849170e3", "wavebit/backends/__init__.py": "b6cfe89edf53104397ffb1f2e26260845d28b15b144703e81985c93dca667459", "wavebit/backends/jax_backend.py": "258319a1430178bf44ae2a8cbf2887fddd6e0bab54a1c4b1a1fe92165a44e52f", "wavebit/backends/numpy_backend.py": "9053e004351fbabeb0a514606e7b4e82865f454babcd4fea1b015c50dec8f364", "wavebit/backends/torch_backend.py": "36bfb88e032b08448dfeb1c401c3907131895f6bd08e3b3bbf4e3864ab9c2086", "wavebit/main.py": "e0a660d2cd67e8ba2f7125b82954e0112f3852d1f09b2eadfac65180e84c9072", "wavebit/manifest.py": "e3e00307efc582bef3fa07ab2e70f5f7d4eecbb3afe45eb054ce462371ed242a"}, "start_revision": "5d0f115ce81e1d412d326133b06bd1c488ea80dc", "threads": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1"}}, "reciprocal_residual": 1.360960232500595e-10, "reciprocal_seconds": 8.6825357080088, "schema_version": 1, "scope": "Static enclosure only; no optical error bound", "settings": {"body_degree": 4, "edge_fraction": 1e-05, "flux_basis": "local", "gap_degree": 6, "grade_y": true, "grading_radius": 0.01, "grading_strength": 8.0, "quadrature": 12, "rows": 4, "x_subdivisions": 4, "y_subdivisions": 1}, "sha256": "13f5f6354bf00f584f6598ba50475ecd29edb4ec55adfef297156905c592bb79", "state": "static_complete", "tolerances": {"analytic_material": 1e-09, "cell_residual": 1e-08, "gram_symmetry": 1e-10, "identity_mean": 1e-09, "lossless_power": 1e-09, "real_field": 1e-09, "shared_cap48": 2e-10}, "utc": "2026-09-10T00:50:03.204076+00:00"}
+{"artifacts": {"baseline_candidate": {"sha256": "7744b203ad1370612c7dc7fc35e6682c5b056b5e2e9c9523277ca65ae4146b90"}, "fitted_log": {"sha256": "136d90c7f36a071d6444ea1b60ab497658e1113ca685550cca113fe66249810e"}, "fitted_powers": {"sha256": "762b2b89a2babe2866340730c52070d159d2cdb41fe769afbab6b7857f1ac046"}, "fitted_projection": {"sha256": "73e0a998decac00634f437ef9fd1d2b2a3e45048895bc6290be25df72f980cf7"}}, "candidate_artifact": {"sha256": "13f5f6354bf00f584f6598ba50475ecd29edb4ec55adfef297156905c592bb79"}, "context": {"gap": 17.0, "seams": [31.0], "transform": [[1.0, 0.45], [0.0, 0.7]], "values": [4.0, 9.0], "width": 350.0}, "kind": "candidate_optical_saved", "maximum_process_rss_bytes": 6227984384, "optics": {"answers": "amplitude", "backend": 0, "bottom_permittivity": 2.25, "lattice_nm": [[700.0, 315.0], [0.0, 490.0]], "layer_algorithm": "ETM", "order": [24, 32], "phi": 0.0, "theta": 0.2, "thickness_nm": 300.0, "top_permittivity": 1.0, "wavelength_nm": 900.0}, "order_mapping": "array[n+32,m+24], k_parallel/k0 = incident + G/k0", "provenance": {"driver_sha256": "edef3ae2d5522ee3f1df3a1bf947f02210ffa7829db91422bd1fa1a9244789f1", "fitted_start_revision": "d78de224acd2890bbaad474a9bf4bec03dae7cca", "numpy": "2.5.1", "platform": "macOS-26.5.2-arm64-arm-64bit", "python": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 12:55:12) [Clang 14.0.6 ]", "runtime_source_diff_empty": true, "runtime_source_sha256": "1350783bb538856c3b617309e19f1bf0f5b8111d1bf9b27f00c990cdbabdadb5", "scipy": "1.18.0", "source_hashes": {"studies/nvf_affine_convergence.py": "f0ffc40fbf0d13e8336281e0234df1b1fd7cb5ddfee88efca349f2e1c6575ece", "studies/nvf_cell_bounds.py": "9b8e667491eded698f939a9f7a4f3f693cc7a487e672b69bdfaf8e5d8f8c13cf", "studies/nvf_energy_closure.py": "f6686b175e51a42f4c2cce3c644f01ee93d43440ea7276b587962641443c1b6e", "studies/nvf_fourier_orders.py": "38300d208d8253b1bd1810b23ea6bd51c056e35a4603f6ecc68544c67472618d", "wavebit/__init__.py": "fe97a054580029c1b24e1f96f8cc34895b308dcb5c9e42b0062d6019f7c9cc6a", "wavebit/_core/__init__.py": "04e310c4bf7169c31ae4e3e895da6e0f5268996f1d4ef6a871607c0ed0ea67df", "wavebit/_core/backend.py": "37278a27b362850e514f245797c262e6bdc41ccca33f590039d332d06c44cf26", "wavebit/_core/boundary.py": "9e5777d34a22c5cbf7a6d2574e3daff60f355528e4a45ad97a9232255aa83a5d", "wavebit/_core/clipper.py": "e30ea9ec05b238d258b4c05ee7b47c510607b5eaec1a5e4aea2c78eb14fa42e6", "wavebit/_core/conforming/__init__.py": "2656defae4bdd4fbdac6db24e7f9b9aa1d5c7bed7cafb150a5694ec1b0eb20f3", "wavebit/_core/conforming/affine_cell.py": "42b796f3b0f5ddd0f6f233052c42a8c40f9b78cc166cba3ac2acf0bc86b4663d", "wavebit/_core/conforming/continuous_flux.py": "14bb5aa58bc73e89ef90bbe14c0250f72119a6e6b3b0d7aa87f4aef676a4392c", "wavebit/_core/conforming/material_grading.py": "0a3fca4fcbc2e451e0faedbe5653e0d80277cb2e617aa3f5170de2d033139fba", "wavebit/_core/conforming/partitioned_gap.py": "596f5c6b44f31a68351118408581e95fed902d5c7202dd19b32dbdc7e0837743", "wavebit/_core/conforming/polynomial_body.py": "c1720b944cf87bf87425c5245c91d87bf1fa63e3f7aa1cdd34d2b5b13572efd4", "wavebit/_core/conforming/thin_gap.py": "9584b4eeb063c3b63cf3a305555333bb4b427f14bae8014a9479200847424818", "wavebit/_core/conventions.py": "b81dd85519263f72544e1a1c45727b05f1fb4919edb9354a1671c0e05e62dcca", "wavebit/_core/domain.py": "f2a439ca194a5a29cb5c6023b03306f550705f9f493c0e543c76416dd6751829", "wavebit/_core/draw.py": "c7fbb08ddb5ec8a811f71a673dea60e2d06fc9d89872ec97d5de9cc846da0f5c", "wavebit/_core/engine.py": "9c06f137f8014c01f9a5b5d47779ef49690f3e72e1b079853abe2c5c07165ac7", "wavebit/_core/enums.py": "fe5ee5c1557c0f2316b89b99dfac451b0c9c6f12278ca29f7010beeafb166d2c", "wavebit/_core/factorization.py": "11f2d7e99e07c74d167b3222f12769c5de94c961c371b6cc40524dfdc1fdd468", "wavebit/_core/fields.py": "821c9017a79121fe1b740494a21797c41675bb4dae09f3c77aa185e8c5bddad8", "wavebit/_core/geometry.py": "fb405aa744a57bdcec0123e15ce91792445776c5a42e43367edc80e9b5531534", "wavebit/_core/interfaces.py": "34d5258283de1d52c70d785512eb38242077f461e4429fbabbede7bc88f5b1e8", "wavebit/_core/lattice.py": "70fcc438bc0de6791110b405cdcdb270a975381f10b9784767ecb0a479183086", "wavebit/_core/modeler.py": "261c7e487665eab2a4416583ef6def67f42b270242a0e09980bb82497cc04d9d", "wavebit/_core/normal_methods.py": "4c001800b43b0d68f9a0d2bc4890eb9f3f487de42b5de39210a12587b872e346", "wavebit/_core/overlap.py": "9f53903cbb35840b0599b2ed9d96941596a49fd05ce05bf344dfa7935cf7430e", "wavebit/_core/parametric.py": "c24e9761c0012704054af2c7ab21f2e3b2955fc863935d8adff6cf5ca3060fa3", "wavebit/_core/polygon.py": "44bad48068555d29e98971bc2bb85491818fffdc2af56a2665bd3cd158f16e89", "wavebit/_core/rectilinear.py": "31acb0eef3155492b51ecb9844e2a22504dbb0cbc154d2bbe49446d4d0c38bd1", "wavebit/_core/result.py": "36b8892e51f9c85b1ecba3f5771b7a906cf555f0255fe24c6cd1890712812e83", "wavebit/_core/scattering.py": "d5ea9dce413ba056778a0ca31753509d3a2fb71d91296ef1fea7c445e8664fca", "wavebit/_core/solve_1d.py": "bc066078d3f0494bdfd96cff17e1eda2e7047d76482e1456c6fd6eef3adce253", "wavebit/_core/solve_2d.py": "f698a3fca32f1339ee74c7384ad05d1b3efcaab8a3f338b62d9c88660575d660", "wavebit/_core/solve_2d_4ff.py": "ed5e450c4a00be5ba17fb3648e24aec7df0f9c1174321d2725af87debe212577", "wavebit/_core/spec.py": "98b9137eb907b2642f792296db4a743a1218ea6cc24543e1b02e4e8c849170e3", "wavebit/backends/__init__.py": "b6cfe89edf53104397ffb1f2e26260845d28b15b144703e81985c93dca667459", "wavebit/backends/jax_backend.py": "258319a1430178bf44ae2a8cbf2887fddd6e0bab54a1c4b1a1fe92165a44e52f", "wavebit/backends/numpy_backend.py": "9053e004351fbabeb0a514606e7b4e82865f454babcd4fea1b015c50dec8f364", "wavebit/backends/torch_backend.py": "36bfb88e032b08448dfeb1c401c3907131895f6bd08e3b3bbf4e3864ab9c2086", "wavebit/main.py": "e0a660d2cd67e8ba2f7125b82954e0112f3852d1f09b2eadfac65180e84c9072", "wavebit/manifest.py": "e3e00307efc582bef3fa07ab2e70f5f7d4eecbb3afe45eb054ce462371ed242a"}, "start_revision": "8a2f15991f17092df6b9bd3a3e5df17c6072a4d8", "threads": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1"}}, "schema_version": 1, "scope": "One fixed-order candidate comparison; no optical tail bound", "seconds": 279.65117670898326, "settings": {"body_degree": 4, "edge_fraction": 1e-05, "flux_basis": "local", "gap_degree": 6, "grade_y": true, "grading_radius": 0.01, "grading_strength": 8.0, "quadrature": 12, "rows": 4, "x_subdivisions": 4, "y_subdivisions": 1}, "sha256": "ca82b067d78ee79939bbbb10542db14cc170a6dc4cd654225059283ecf334c7c", "totals": {"energy_error": 7.923439682144817e-12, "p_R": 0.1476208165118652, "p_T": 0.8523791834960582, "s_R": 0.26899021028880243, "s_T": 0.7310097897060149}, "utc": "2026-09-10T00:54:51.900199+00:00"}
+{"artifacts": {"baseline_candidate": {"sha256": "7744b203ad1370612c7dc7fc35e6682c5b056b5e2e9c9523277ca65ae4146b90"}, "fitted_log": {"sha256": "136d90c7f36a071d6444ea1b60ab497658e1113ca685550cca113fe66249810e"}, "fitted_powers": {"sha256": "762b2b89a2babe2866340730c52070d159d2cdb41fe769afbab6b7857f1ac046"}, "fitted_projection": {"sha256": "73e0a998decac00634f437ef9fd1d2b2a3e45048895bc6290be25df72f980cf7"}}, "candidate_minus_fitted": {"p_R": {"maximum_order_abs": 1.5274954327515466e-06, "maximum_order_label": [0, 0], "signed_at_maximum": 1.5274954327515466e-06, "total": 1.5274954327515466e-06}, "p_T": {"maximum_order_abs": 1.1275921610875983e-06, "maximum_order_label": [0, 0], "signed_at_maximum": -1.1275921610875983e-06, "total": -1.5274806078879877e-06}, "s_R": {"maximum_order_abs": 3.4289219497107837e-06, "maximum_order_label": [0, 0], "signed_at_maximum": 3.4289219497107837e-06, "total": 3.4289219497107837e-06}, "s_T": {"maximum_order_abs": 4.9122831031755965e-06, "maximum_order_label": [0, 0], "signed_at_maximum": -4.9122831031755965e-06, "total": -3.42893024607438e-06}}, "candidate_power_sha256": "ca82b067d78ee79939bbbb10542db14cc170a6dc4cd654225059283ecf334c7c", "candidate_projection_sha256": "13f5f6354bf00f584f6598ba50475ecd29edb4ec55adfef297156905c592bb79", "candidate_totals": {"energy_error": 7.923439682144817e-12, "p_R": 0.1476208165118652, "p_T": 0.8523791834960582, "s_R": 0.26899021028880243, "s_T": 0.7310097897060149}, "context": {"gap": 17.0, "seams": [31.0], "transform": [[1.0, 0.45], [0.0, 0.7]], "values": [4.0, 9.0], "width": 350.0}, "fitted_projection": {"bounds": {"gap_eigenvalues": [1.6959401728291146e-08, 4.625769626667257e-07], "lower": [[2.158740536360666, 0.7353298647479607], [0.7353298647479607, 2.7593323438103363]], "relative_gap": 1.4277128655834951e-07, "upper": [[2.158740719137464, 0.7353300801446524], [0.7353300801446524, 2.7593326405699026]]}, "cap": 64, "degree": 10, "elements": 1622, "epsilon": {"piece_0": 4.0, "piece_1": 9.0}, "fixture": "affine_partitioned_gap", "gap": 17.0, "h": 0.04, "mean_energy_quadrature_error": 1.7319479184152442e-14, "ndof": 81101, "quadrature": 40, "quadrature_mapping": "element_local", "quadrature_points": 2595200, "reciprocal_residuals": [6.979818786250287e-16, 5.068350498001552e-16], "refine": 40.0, "residuals": [2.9560905344197153e-15, 2.222489311142008e-15], "seams": [31.0], "transform": [[1.0, 0.45], [0.0, 0.7]], "values": [4.0, 9.0], "width": 350.0}, "fitted_totals": {"energy_error": 6.901368365674898e-12, "p_R": 0.14761928901643245, "p_T": 0.8523807109766661, "s_R": 0.2689867813668527, "s_T": 0.731013218636261}, "kind": "affine_candidate_fitted_comparison", "maximum_coefficient_difference_cap64": 0.0006313509573257309, "optics": {"answers": "amplitude", "backend": 0, "bottom_permittivity": 2.25, "lattice_nm": [[700.0, 315.0], [0.0, 490.0]], "layer_algorithm": "ETM", "order": [24, 32], "phi": 0.0, "theta": 0.2, "thickness_nm": 300.0, "top_permittivity": 1.0, "wavelength_nm": 900.0}, "provenance": {"driver_sha256": "edef3ae2d5522ee3f1df3a1bf947f02210ffa7829db91422bd1fa1a9244789f1", "fitted_start_revision": "d78de224acd2890bbaad474a9bf4bec03dae7cca", "numpy": "2.5.1", "platform": "macOS-26.5.2-arm64-arm-64bit", "python": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 12:55:12) [Clang 14.0.6 ]", "runtime_source_diff_empty": true, "runtime_source_sha256": "1350783bb538856c3b617309e19f1bf0f5b8111d1bf9b27f00c990cdbabdadb5", "scipy": "1.18.0", "source_hashes": {"studies/nvf_affine_convergence.py": "f0ffc40fbf0d13e8336281e0234df1b1fd7cb5ddfee88efca349f2e1c6575ece", "studies/nvf_cell_bounds.py": "9b8e667491eded698f939a9f7a4f3f693cc7a487e672b69bdfaf8e5d8f8c13cf", "studies/nvf_energy_closure.py": "f6686b175e51a42f4c2cce3c644f01ee93d43440ea7276b587962641443c1b6e", "studies/nvf_fourier_orders.py": "38300d208d8253b1bd1810b23ea6bd51c056e35a4603f6ecc68544c67472618d", "wavebit/__init__.py": "fe97a054580029c1b24e1f96f8cc34895b308dcb5c9e42b0062d6019f7c9cc6a", "wavebit/_core/__init__.py": "04e310c4bf7169c31ae4e3e895da6e0f5268996f1d4ef6a871607c0ed0ea67df", "wavebit/_core/backend.py": "37278a27b362850e514f245797c262e6bdc41ccca33f590039d332d06c44cf26", "wavebit/_core/boundary.py": "9e5777d34a22c5cbf7a6d2574e3daff60f355528e4a45ad97a9232255aa83a5d", "wavebit/_core/clipper.py": "e30ea9ec05b238d258b4c05ee7b47c510607b5eaec1a5e4aea2c78eb14fa42e6", "wavebit/_core/conforming/__init__.py": "2656defae4bdd4fbdac6db24e7f9b9aa1d5c7bed7cafb150a5694ec1b0eb20f3", "wavebit/_core/conforming/affine_cell.py": "42b796f3b0f5ddd0f6f233052c42a8c40f9b78cc166cba3ac2acf0bc86b4663d", "wavebit/_core/conforming/continuous_flux.py": "14bb5aa58bc73e89ef90bbe14c0250f72119a6e6b3b0d7aa87f4aef676a4392c", "wavebit/_core/conforming/material_grading.py": "0a3fca4fcbc2e451e0faedbe5653e0d80277cb2e617aa3f5170de2d033139fba", "wavebit/_core/conforming/partitioned_gap.py": "596f5c6b44f31a68351118408581e95fed902d5c7202dd19b32dbdc7e0837743", "wavebit/_core/conforming/polynomial_body.py": "c1720b944cf87bf87425c5245c91d87bf1fa63e3f7aa1cdd34d2b5b13572efd4", "wavebit/_core/conforming/thin_gap.py": "9584b4eeb063c3b63cf3a305555333bb4b427f14bae8014a9479200847424818", "wavebit/_core/conventions.py": "b81dd85519263f72544e1a1c45727b05f1fb4919edb9354a1671c0e05e62dcca", "wavebit/_core/domain.py": "f2a439ca194a5a29cb5c6023b03306f550705f9f493c0e543c76416dd6751829", "wavebit/_core/draw.py": "c7fbb08ddb5ec8a811f71a673dea60e2d06fc9d89872ec97d5de9cc846da0f5c", "wavebit/_core/engine.py": "9c06f137f8014c01f9a5b5d47779ef49690f3e72e1b079853abe2c5c07165ac7", "wavebit/_core/enums.py": "fe5ee5c1557c0f2316b89b99dfac451b0c9c6f12278ca29f7010beeafb166d2c", "wavebit/_core/factorization.py": "11f2d7e99e07c74d167b3222f12769c5de94c961c371b6cc40524dfdc1fdd468", "wavebit/_core/fields.py": "821c9017a79121fe1b740494a21797c41675bb4dae09f3c77aa185e8c5bddad8", "wavebit/_core/geometry.py": "fb405aa744a57bdcec0123e15ce91792445776c5a42e43367edc80e9b5531534", "wavebit/_core/interfaces.py": "34d5258283de1d52c70d785512eb38242077f461e4429fbabbede7bc88f5b1e8", "wavebit/_core/lattice.py": "70fcc438bc0de6791110b405cdcdb270a975381f10b9784767ecb0a479183086", "wavebit/_core/modeler.py": "261c7e487665eab2a4416583ef6def67f42b270242a0e09980bb82497cc04d9d", "wavebit/_core/normal_methods.py": "4c001800b43b0d68f9a0d2bc4890eb9f3f487de42b5de39210a12587b872e346", "wavebit/_core/overlap.py": "9f53903cbb35840b0599b2ed9d96941596a49fd05ce05bf344dfa7935cf7430e", "wavebit/_core/parametric.py": "c24e9761c0012704054af2c7ab21f2e3b2955fc863935d8adff6cf5ca3060fa3", "wavebit/_core/polygon.py": "44bad48068555d29e98971bc2bb85491818fffdc2af56a2665bd3cd158f16e89", "wavebit/_core/rectilinear.py": "31acb0eef3155492b51ecb9844e2a22504dbb0cbc154d2bbe49446d4d0c38bd1", "wavebit/_core/result.py": "36b8892e51f9c85b1ecba3f5771b7a906cf555f0255fe24c6cd1890712812e83", "wavebit/_core/scattering.py": "d5ea9dce413ba056778a0ca31753509d3a2fb71d91296ef1fea7c445e8664fca", "wavebit/_core/solve_1d.py": "bc066078d3f0494bdfd96cff17e1eda2e7047d76482e1456c6fd6eef3adce253", "wavebit/_core/solve_2d.py": "f698a3fca32f1339ee74c7384ad05d1b3efcaab8a3f338b62d9c88660575d660", "wavebit/_core/solve_2d_4ff.py": "ed5e450c4a00be5ba17fb3648e24aec7df0f9c1174321d2725af87debe212577", "wavebit/_core/spec.py": "98b9137eb907b2642f792296db4a743a1218ea6cc24543e1b02e4e8c849170e3", "wavebit/backends/__init__.py": "b6cfe89edf53104397ffb1f2e26260845d28b15b144703e81985c93dca667459", "wavebit/backends/jax_backend.py": "258319a1430178bf44ae2a8cbf2887fddd6e0bab54a1c4b1a1fe92165a44e52f", "wavebit/backends/numpy_backend.py": "9053e004351fbabeb0a514606e7b4e82865f454babcd4fea1b015c50dec8f364", "wavebit/backends/torch_backend.py": "36bfb88e032b08448dfeb1c401c3907131895f6bd08e3b3bbf4e3864ab9c2086", "wavebit/main.py": "e0a660d2cd67e8ba2f7125b82954e0112f3852d1f09b2eadfac65180e84c9072", "wavebit/manifest.py": "e3e00307efc582bef3fa07ab2e70f5f7d4eecbb3afe45eb054ce462371ed242a"}, "start_revision": "8a2f15991f17092df6b9bd3a3e5df17c6072a4d8", "threads": {"OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1"}}, "scope": "Auxiliary field comparison at (24,32); scalar fitted degree10 is not 3D Maxwell degree; no convergence verdict or optical bound", "settings": {"body_degree": 4, "edge_fraction": 1e-05, "flux_basis": "local", "gap_degree": 6, "grade_y": true, "grading_radius": 0.01, "grading_strength": 8.0, "quadrature": 12, "rows": 4, "x_subdivisions": 4, "y_subdivisions": 1}, "static_bounds": {"gap_eigenvalues": [3.424295822333627e-06, 0.00010917985211700998], "lower": [[2.1587157310432814, 0.7352962028568041], [0.735296202856804, 2.759281870387943]], "relative_gap": 3.35653640806102e-05, "upper": [[2.158753263213092, 0.7353456371578475], [0.7353456371578475, 2.7593569423660718]]}, "utc": "2026-09-10T00:54:51.958718+00:00"}
+{"kind": "independent_affine_candidate_order_audit", "mapping": "physical k_parallel = k_incident + 2*pi*inverse(lattice).T @ [m,n]; array[n+32,m+24]", "context": {"transform": [[1.0, 0.45], [0.0, 0.7]], "gap": 17.0, "width": 350.0, "seams": [31.0], "values": [4.0, 9.0]}, "candidate_settings": {"x_subdivisions": 4, "rows": 4, "body_degree": 4, "gap_degree": 6, "y_subdivisions": 1, "flux_basis": "local", "edge_fraction": 1e-05, "grading_strength": 8.0, "grading_radius": 0.01, "quadrature": 12, "grade_y": true}, "optics": {"order": [24, 32], "lattice_nm": [[700.0, 315.0], [0.0, 490.0]], "wavelength_nm": 900.0, "thickness_nm": 300.0, "theta": 0.2, "phi": 0.0, "top_permittivity": 1.0, "bottom_permittivity": 2.25, "backend": 0, "layer_algorithm": "ETM", "answers": "amplitude"}, "source_sha256": "af1726b9dd53bd59389c73335d84b6bdb9f1b4675a6ddf006f66ba58c88a3b93", "pinned_inputs": {"nvf-affine-x4-candidate-cap48.npz": "7744b203ad1370612c7dc7fc35e6682c5b056b5e2e9c9523277ca65ae4146b90", "nvf-affine-x4-refinement.log": "8a9e826af1a4205f7ec9bfde2c4345172cc6d5db2fffcff6822c4db21822551a", "nvf-affine-x4-refinement.py": "c6b5e02fb6e412d6c1df55d7c5ce823f6fbb5d40901f6cf88dc59476f894d361", "nvf-affine-fem-h04-p10-cap64-q40.npz": "73e0a998decac00634f437ef9fd1d2b2a3e45048895bc6290be25df72f980cf7", "nvf-affine-p10-x24-y32.npz": "762b2b89a2babe2866340730c52070d159d2cdb41fe769afbab6b7857f1ac046", "nvf-affine-p10-x24-y32.log": "136d90c7f36a071d6444ea1b60ab497658e1113ca685550cca113fe66249810e"}, "fitted_totals": {"p_T": 0.8523807109766661, "p_R": 0.14761928901643245, "s_T": 0.731013218636261, "s_R": 0.2689867813668527, "energy_error": 6.901368365674898e-12}, "fitted_ports": {"p_T": {"total": 0.8523807109766661, "propagating_sum": 0.8523807109766661, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [-1, -1], "array_index": [31, 23], "k_parallel_per_um": [-7.5890054322135185, -7.052554936630147], "power": 0.002546061499007463}, {"label": [-1, 0], "array_index": [32, 23], "k_parallel_per_um": [-7.5890054322135185, 5.770272220879213], "power": 0.40725548301130393}, {"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.44257916646635465}]}, "p_R": {"total": 0.14761928901643245, "propagating_sum": 0.14761928901643245, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.14761928901643245}]}, "s_T": {"total": 0.731013218636261, "propagating_sum": 0.731013218636261, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [-1, -1], "array_index": [31, 23], "k_parallel_per_um": [-7.5890054322135185, -7.052554936630147], "power": 0.0063498209241558854}, {"label": [-1, 0], "array_index": [32, 23], "k_parallel_per_um": [-7.5890054322135185, 5.770272220879213], "power": 0.26998977913760125}, {"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.45467361857450395}]}, "s_R": {"total": 0.2689867813668527, "propagating_sum": 0.2689867813668527, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.2689867813668527}]}}, "historical_order24_totals": {"p_T": 0.852380240145187, "p_R": 0.14761975985849665, "s_T": 0.7309738279403573, "s_R": 0.2690261720554512, "energy_error": 4.191536007169816e-12}, "historical_optical_runtime_revision_recorded": false, "historical_scope": "Recorded totals only; original optical runtime hash and per-order arrays were not saved", "candidate_projection_sha256": "13f5f6354bf00f584f6598ba50475ecd29edb4ec55adfef297156905c592bb79", "candidate_power_sha256": "ca82b067d78ee79939bbbb10542db14cc170a6dc4cd654225059283ecf334c7c", "candidate_totals": {"p_T": 0.8523791834960582, "p_R": 0.1476208165118652, "s_T": 0.7310097897060149, "s_R": 0.26899021028880243, "energy_error": 7.923439682144817e-12}, "candidate_ports": {"p_T": {"total": 0.8523791834960582, "propagating_sum": 0.8523791834960582, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [-1, -1], "array_index": [31, 23], "k_parallel_per_um": [-7.5890054322135185, -7.052554936630147], "power": 0.002545600663142421}, {"label": [-1, 0], "array_index": [32, 23], "k_parallel_per_um": [-7.5890054322135185, 5.770272220879213], "power": 0.40725554395872227}, {"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.44257803887419356}]}, "p_R": {"total": 0.1476208165118652, "propagating_sum": 0.1476208165118652, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.1476208165118652}]}, "s_T": {"total": 0.7310097897060149, "propagating_sum": 0.7310097897060149, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [-1, -1], "array_index": [31, 23], "k_parallel_per_um": [-7.5890054322135185, -7.052554936630147], "power": 0.006348883209349264}, {"label": [-1, 0], "array_index": [32, 23], "k_parallel_per_um": [-7.5890054322135185, 5.770272220879213], "power": 0.2699922002052649}, {"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.45466870629140077}]}, "s_R": {"total": 0.26899021028880243, "propagating_sum": 0.26899021028880243, "unselected_sum": 0.0, "maximum_unselected_abs": 0.0, "orders": [{"label": [0, 0], "array_index": [32, 24], "k_parallel_per_um": [1.3869735780430328, 0.0], "power": 0.26899021028880243}]}}, "candidate_minus_fitted": {"p_T": {"total": -1.5274806078879877e-06, "maximum_order_abs": 1.1275921610875983e-06, "maximum_order_label": [0, 0], "propagating": [{"label": [-1, -1], "candidate": 0.002545600663142421, "fitted": 0.002546061499007463, "candidate_minus_fitted": -4.608358650419822e-07}, {"label": [-1, 0], "candidate": 0.40725554395872227, "fitted": 0.40725548301130393, "candidate_minus_fitted": 6.094741833440054e-08}, {"label": [0, 0], "candidate": 0.44257803887419356, "fitted": 0.44257916646635465, "candidate_minus_fitted": -1.1275921610875983e-06}]}, "p_R": {"total": 1.5274954327515466e-06, "maximum_order_abs": 1.5274954327515466e-06, "maximum_order_label": [0, 0], "propagating": [{"label": [0, 0], "candidate": 0.1476208165118652, "fitted": 0.14761928901643245, "candidate_minus_fitted": 1.5274954327515466e-06}]}, "s_T": {"total": -3.42893024607438e-06, "maximum_order_abs": 4.9122831031755965e-06, "maximum_order_label": [0, 0], "propagating": [{"label": [-1, -1], "candidate": 0.006348883209349264, "fitted": 0.0063498209241558854, "candidate_minus_fitted": -9.377148066213453e-07}, {"label": [-1, 0], "candidate": 0.2699922002052649, "fitted": 0.26998977913760125, "candidate_minus_fitted": 2.421067663627152e-06}, {"label": [0, 0], "candidate": 0.45466870629140077, "fitted": 0.45467361857450395, "candidate_minus_fitted": -4.9122831031755965e-06}]}, "s_R": {"total": 3.4289219497107837e-06, "maximum_order_abs": 3.4289219497107837e-06, "maximum_order_label": [0, 0], "propagating": [{"label": [0, 0], "candidate": 0.26899021028880243, "fitted": 0.2689867813668527, "candidate_minus_fitted": 3.4289219497107837e-06}]}}, "shared_cap48_max_abs": 0.0, "shared_cap48_exact": true, "historical_profile_and_settings_match": true, "candidate_order24_to24_32_recorded_total_change": {"p_T": -1.0566491287500313e-06, "p_R": 1.0566533685529844e-06, "s_T": 3.596176565767717e-05, "s_R": -3.5961766648773263e-05}, "maximum_candidate_fitted_coefficient_difference_cap64": 0.0006313509573257309, "optical_runtime_source_sha256": "1350783bb538856c3b617309e19f1bf0f5b8111d1bf9b27f00c990cdbabdadb5", "scope": "Small-array arithmetic/provenance audit; no new solve, convergence verdict, optical tail bound, or 3D FEM claim"}
+
+Candidate-minus-fitted p/s total T:-1.5274806078879877e-6/-3.42893024607438e-6.
+Largest individual R/T differences:1.5274954327515466e-6/4.9122831031755965e-6.
+The p transmitting-order maximum alone is1.1275921610875983e-6;
+its larger R/T maximum is the reflected(0,0) order.
+All propagating orders and total/unselected power sums were independently
+recomputed from the saved arrays, not from the production power helper.
+No numerical/provenance discrepancy was found. The s transmitting
+orders partly cancel, so the total does not bound an individual difference.
+Candidate signed balance:p+7.9234396821448172e-12,s-5.1826321012526932e-12.
+This algebraic diagnostic does not bound optical discretization error.
+
+Relative to historical candidate order24, p/s T changes are
+-1.0566491287500313e-6/+3.596176565767717e-5. The old profile/settings
+and cap48 archive/log match, but its optical runtime hash and per-order
+arrays were not saved. These recorded total differences are not asserted
+to be a newly controlled same-runtime directional interval.
+Independent3D FEM refinement and optical-tail qualification remain open.
+
+Primal export59.822479041002225s,reciprocal8.6825357080088s,
+export peakRSS4425449472bytes. Optical279.65117670898326s including
+closure16.600228083960246s; optical peakRSS6227984384bytes.
+These are shared-host observations, not evidence of equal-accuracy speed.
+One large job ran at a time. Both stages completed, and no numerical
+process remains running for this candidate comparison. No dependency,
+production runtime, or acceptance threshold was changed.
+Final independent documentation/log review found no numerical or scope
+discrepancy. Documentation contract:37 tests passed; strict Sphinx HTML
+(-W --keep-going) and git diff --check passed.

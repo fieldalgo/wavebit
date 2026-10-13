@@ -5,7 +5,7 @@ the production separable surface transform. The Green oracle integrates the
 Fourier delta pole of 1/(sum K_j^2-Omega^2), without using surface fields.
 """
 import numpy as np
-from wavebit.fd._kernel.grid import OFFSETS
+from wavebit.fdtd._kernel.grid import OFFSETS
 
 
 def plane(grid, faces, k, electric, Omega, mu=1.):

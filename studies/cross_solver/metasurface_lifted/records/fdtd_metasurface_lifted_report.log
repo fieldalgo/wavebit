@@ -1,0 +1,17 @@
+lifted report 2026-10-04T15:13:12+0900: file 5af4a441ad3dffc7, registered 5af4a441ad3dffc7 at 2026-10-04T12:07:57+0900; digests fd 16dd4c1c63f329ff rcwa 6ec723858b3efc7e c7 5f5f1d33b0239d7b c7_rcwa 7c90b21fb8e0deca
+lifted run length: 80 at 120 vs 180 periods moves amplitudes 2.4e-07 (line 4.3e-04), efficiencies 1.0e-07 (line 3.1e-04)
+lifted rows ea451de17d3e82ee; repeats []; walls [119, 813, 5321] s
+flush run length: amplitudes 7.3e-08 (line 3.5e-04), efficiencies 4.2e-08 (line 1.9e-04)
+flush rows e798156179bfafce
+control M1 s: p_A 2.043 p_F 2.026 (both at least 1.8): holds
+control M1 p: p_A 2.143 p_F 1.969 (both at least 1.8): holds
+control M1 s one cell off its axis: p_A 0.920 (at most 1.5): holds
+lifted against its top (28, 28): A 2.847e-02, 9.227e-03, 4.942e-03; F 1.963e-02, 6.905e-03, 3.806e-03; local orders A 1.540 F 1.469; u 1.7e-03/1.2e-03; judgeable (C7) False; project (C7) u against 1.3e-03/9.1e-04; toward True
+  top (20, 20): lifted A 3.009e-02, 1.091e-02, 6.644e-03 F 2.081e-02, 8.088e-03, 4.988e-03 local 1.222/1.192; flush A 2.293e-02, 7.915e-03, 4.456e-03 F 1.229e-02, 4.824e-03, 2.932e-03 local 1.417/1.228; lifted - flush -0.194/-0.036
+  top (26, 26): lifted A 2.875e-02, 9.517e-03, 5.233e-03 F 1.981e-02, 7.087e-03, 3.987e-03 local 1.475/1.419; flush A 2.242e-02, 7.406e-03, 3.947e-03 F 1.178e-02, 4.313e-03, 2.421e-03 local 1.552/1.425; lifted - flush -0.077/-0.006
+  top (28, 28): lifted A 2.847e-02, 9.227e-03, 4.942e-03 F 1.963e-02, 6.905e-03, 3.806e-03 local 1.540/1.469; flush A 2.226e-02, 7.243e-03, 3.784e-03 F 1.171e-02, 4.240e-03, 2.348e-03 local 1.601/1.458; lifted - flush -0.062/+0.011
+lifted self-convergence: D1/D2 amp 1.929e-02/4.296e-03 eff 1.272e-02/3.100e-03; p_A 1.690 p_F 1.538; median cell 1.831
+flush self-convergence: D1/D2 amp 1.502e-02/3.459e-03 eff 7.467e-03/1.892e-03; p_A 1.633 p_F 1.471; median cell 1.809
+lifted - flush: dA +0.057 dF +0.067
+verdict: the rim is not necessary
+

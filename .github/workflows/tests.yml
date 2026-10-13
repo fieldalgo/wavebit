@@ -329,9 +329,12 @@ jobs:
       # This says the examples still RUN, and nothing about whether their numbers are
       # right -- there is no per-scene expected value here to compare against. It used
       # to also fail on an `UnphysicalResultWarning`; that check was removed from the
-      # solver (docs/result-guards.md). The physics is checked in tests/.
+      # solver (docs/reference/common/result-guards.md). The physics is checked in tests/.
       - name: Run every example
-        run: python tests/run_examples_smoke.py
+        run: python tools/run_examples_smoke.py
+
+      - name: Run current API tutorial notebooks in fresh interpreters
+        run: python tools/run_tutorials_smoke.py
 
   minimal:
     name: distribution (${{ matrix.os }}, Python ${{ matrix.python-version }})
@@ -351,7 +354,7 @@ jobs:
       - name: Install distribution tooling
         run: python -m pip install build twine
       - name: Build and exercise an isolated installed distribution
-        run: python tests/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
+        run: python tools/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
 
   docs:
     name: docs

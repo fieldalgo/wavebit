@@ -27,12 +27,17 @@ not the superstrate's. With asymmetric ambients those differ, and using the inci
 both would silently rescale ``T`` — which the energy guard would then catch, which is why the
 guard is worth having even though the line above it looks obvious.
 """
-import pathlib
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 
 OUT = HERE / 'golden_fmmax_mu_ambient.npz'
@@ -44,8 +49,7 @@ def main():
     import jax.numpy as jnp
     import fmmax
 
-    from _fmmax_mu_ambient_cases import (CASES, PERIOD, THICK, WL, ZERO_THICKNESS_CASES,
-                                         fresnel)
+    from tests.references._fmmax_mu_ambient_cases import CASES, PERIOD, THICK, WL, ZERO_THICKNESS_CASES, fresnel
 
     lat = fmmax.LatticeVectors(u=jnp.array([PERIOD, 0.0]), v=jnp.array([0.0, PERIOD]))
     expansion = fmmax.generate_expansion(lat, approximate_num_terms=1,

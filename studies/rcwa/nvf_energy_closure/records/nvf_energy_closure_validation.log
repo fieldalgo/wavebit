@@ -1,0 +1,36 @@
+...........................................................              [100%]
+59 passed in 91.44s (0:01:31)
+
+Full-space projected closure, 2026-09-09
+--------------------------------------
+The two-sided solve and tiled storage now also apply to projected real fields
+without mirror symmetry. Eight new cases check the defining energy identity,
+the material inverse, rectangular ordering across the tile boundary, input
+preservation and singular matrices. No dependency or runtime default changed.
+
+python -m pytest tests/test_nvf_cell_bounds.py tests/test_nvf_energy_closure.py tests/test_nvf_affine_orders.py tests/test_nvf_affine_convergence.py -q --tb=short
+68 passed in 1.06s.
+python -m pytest tests/test_nvf_directional_convergence.py tests/test_nvf_mirror_convergence.py -q --tb=short
+44 passed in 124.67s.
+python -m pytest tests/test_nvf_polynomial_flux.py tests/test_nvf_posed_gap.py tests/test_nvf_gap_convergence.py tests/test_nvf_mirror_doubling.py -q --tb=short
+61 passed in 204.58s.
+Optional existing FEM environment:
+python -m unittest tests.test_nvf_cell_corrector
+5 passed in 0.718s.
+python -m pytest tests/test_docs_contract.py -q --tb=short
+36 passed in 0.57s.
+Combined: 214 distinct passing checks. Longer test groups overlapped the
+affine optical study; these are validation durations, not timing benchmarks.
+Ruff and git diff --check passed.
+python -m sphinx -b html -W --keep-going -q docs <output>
+Build succeeded with warnings treated as errors.
+
+At optical order (24,24), the fixed degree-8 affine reference after this
+closure change gives p_T=.8523819096857066 and s_T=.7309774403419860,
+with lossless energy error 1.3408163468398016e-12. Compared with the prior
+explicit-inverse run, the transmission changes are about +1.15e-12 and
++1.86e-12. This is continuity at one retained order, not optical convergence.
+The preceding optical record used projection quadrature 32 and the rerun
+uses 40, whose coefficient difference is below 4.89e-15. The optical
+continuity observation includes that quadrature change; the separate
+matrix-column memory comparison holds the quadrature-40 export fixed.

@@ -1,0 +1,72 @@
+/* First-party reading styles; keep PyData's navigation and accessibility behavior. */
+:root { --pst-color-primary: #137c76; --pst-font-family-base: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+.bd-article-container { max-width: 58rem; }
+.bd-article { line-height: 1.85; word-break: keep-all; overflow-wrap: anywhere; }
+.bd-article h1 { letter-spacing: -.045em; line-height: 1.35; font-weight: 750; margin-bottom: 1.4rem; }
+.bd-article h2 { letter-spacing: -.025em; margin-top: 2.8rem; line-height: 1.5; }
+.bd-article pre { line-height: 1.6; word-break: normal; }
+.bd-article .sd-card { border-radius: 12px; box-shadow: none!important; }
+.bd-article .sd-card:hover { border-color: #137c76; }
+.bd-article .sd-card-title { font-size: 1.12rem; }
+.learning-figure { margin: 2rem 0; padding: 1rem; border: 1px solid var(--pst-color-border); border-radius: 12px; background: white; color: #354e60; }
+.learning-figure img { width: 100%; height: auto; cursor: zoom-in; }
+.learning-figure figcaption { font-size: .85rem; line-height: 1.7; margin-top: .8rem; color: #536678; word-break: keep-all; overflow-wrap: anywhere; }
+.exercise { margin: 2rem 0; padding: 1.4rem; border: 1px solid var(--pst-color-border); border-radius: 12px; background: var(--pst-color-surface); }
+.exercise h3 { margin-top: 0; font-size: 1.15rem; line-height: 1.6; }
+.exercise .concept, .exercise .explain { font-size: .85rem; }
+.controls { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 1.2rem 0; }
+.controls label { flex: 1; min-width: 9rem; font-size: .9rem; font-weight: 600; }
+.controls output { float: right; font-variant-numeric: tabular-nums; }
+.controls input[type=range] { display: block; width: 100%; margin-top: .8rem; accent-color: #137c76; }
+.exercise svg { display: block; background: #fff; border-radius: 10px; width: 100%; max-width: 430px; height: auto; margin: auto; }
+.exercise svg text { font-family: var(--pst-font-family-base); font-size: 15px; fill: #354b60; }
+.readout { margin-top: 1rem; padding: 1rem; border: 1px solid var(--pst-color-border); border-radius: 8px; font-size: .9rem; line-height: 1.8; font-variant-numeric: tabular-nums; }
+.bar-shell { height: 20px; border-radius: 6px; background: #dce8e2; overflow: hidden; }
+.bar { height: 100%; background: #137c76; }
+.code-copy { display: block; margin: 0 0 .35rem auto; padding: .25rem .65rem; font: inherit; font-size: .75rem; color: var(--pst-color-text-base); background: var(--pst-color-surface); border: 1px solid var(--pst-color-border); border-radius: 5px; }
+.image-viewer { max-width: 96vw; max-height: 94vh; padding: 1rem; border: 0; border-radius: 12px; background: white; color: #172b3d; }
+.image-viewer::backdrop { background: #102537b8; }
+.image-viewer .image-scroll { overflow: auto; max-height: 76vh; }
+.image-viewer img { display: block; max-width: none; min-width: min(850px, 80vw); height: auto; }
+/* Let the image set the dialog width and wrap Korean captions between words. */
+.image-viewer .image-caption { contain: inline-size; word-break: keep-all; overflow-wrap: anywhere; }
+.image-viewer .image-caption p { margin: .7rem 0 0; font-size: .85rem; }
+.image-viewer button { display: block; margin: 0 0 .75rem auto; padding: .3rem 1rem; border: 1px solid #c1d0d8; border-radius: 6px; background: #f0f6f4; color: #172b3d; }
+@media (max-width: 576px) { .bd-article h1 { font-size: 1.8rem; } .exercise { padding: 1rem; } .learning-figure { padding: .4rem; } }
+@media print { .code-copy { display: none; } .exercise .controls { display: none; } .learning-figure, .exercise { break-inside: avoid; } }
+
+/* Equations in the power chapter: native text, no external math runtime. */
+.power-equations { margin: 1.4rem 0; padding: 1rem 1.25rem; border-left: 3px solid #137c76; background: var(--pst-color-surface); overflow-x: auto; }
+.power-equations p { margin: .25rem 0; font-family: Georgia, "Times New Roman", var(--pst-font-family-base); font-size: 1.18rem; line-height: 1.85; white-space: nowrap; }
+.power-equations .continuation { padding-left: 2.2rem; }
+@media (max-width: 576px) { .power-equations { padding: .75rem; } .power-equations p { font-size: 1rem; } }
+
+/* Separate the two native MathML rotation equations from each other and the prose. */
+.rotation-matrices { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 1.5rem 3rem; margin: 1.5rem 0; padding: .25rem 0; }
+.rotation-matrices math { flex: 0 0 auto; margin: 0; }
+
+/* Polarization controls use the same psi/chi inputs as the lesson. */
+.polarization-exercise .control-hint { display: block; margin-top: .45rem; font-size: .8rem; font-weight: 400; line-height: 1.5; }
+.polarization-exercise .readout p { margin: .45rem 0; }
+.polarization-exercise .readout code { display: block; margin-top: .25rem; white-space: normal; overflow-wrap: anywhere; }
+
+/* Chapter 13 interference exercise: three panels share one height axis, so keep them wide. */
+.power-flux-exercise .svg-scroll { overflow-x: auto; }
+.power-flux-exercise svg { max-width: 100%; min-width: 560px; }
+.power-flux-exercise .pf-play { align-self: flex-end; padding: .3rem 1rem; font: inherit; font-size: .85rem; color: var(--pst-color-text-base); background: var(--pst-color-surface); border: 1px solid var(--pst-color-border); border-radius: 6px; }
+.power-flux-exercise .pf-legend { margin: .6rem 0 0; font-size: .8rem; }
+.power-flux-exercise .pf-swatch { display: inline-block; width: .8rem; height: .8rem; margin: 0 .3rem 0 .8rem; border-radius: 2px; vertical-align: -.1rem; }
+.power-flux-exercise .pf-more { background: #b5662666; }
+.power-flux-exercise .pf-less { background: #117c7766; }
+.power-flux-exercise .readout p { margin: .2rem 0; }
+
+/* Appendix A: follow kz around the branch point. Two planes side by side, so keep them wide. */
+.ckr-exercise .svg-scroll { overflow-x: auto; }
+.ckr-exercise svg { max-width: 100%; min-width: 560px; }
+.ckr-exercise .ckr-loop { flex: 1; min-width: 14rem; margin: 0; padding: 0; border: 0; font-size: .9rem; }
+.ckr-exercise .ckr-loop legend { float: none; width: auto; margin: 0 0 .3rem; padding: 0; font-size: .9rem; font-weight: 600; line-height: 1.6; }
+.ckr-exercise .ckr-loop label { display: block; min-width: 0; font-weight: 400; line-height: 1.7; }
+.ckr-exercise .ckr-loop input { margin-right: .4rem; accent-color: #137c76; }
+.ckr-exercise .ckr-play { align-self: flex-end; padding: .3rem 1rem; font: inherit; font-size: .85rem; color: var(--pst-color-text-base); background: var(--pst-color-surface); border: 1px solid var(--pst-color-border); border-radius: 6px; }
+.ckr-exercise .readout p { margin: .2rem 0; }
+.ckr-exercise .ckr-status { font-weight: 600; }

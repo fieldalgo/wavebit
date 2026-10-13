@@ -1,0 +1,266 @@
+[
+  {
+    "kind": "cylinder",
+    "ranged": true,
+    "point": [
+      0.12,
+      0.3,
+      0.011,
+      2.25
+    ],
+    "written": 118,
+    "requires_grad": true,
+    "be": 9.61481343191782e-16,
+    "cross_constitutive[E0]": 2.450494653751095e-15,
+    "E": 1.7858285060180854e-16,
+    "H": 2.2829958979598253e-16,
+    "stable": true
+  },
+  {
+    "kind": "cylinder",
+    "ranged": true,
+    "point": [
+      0.1,
+      0.25,
+      -0.013,
+      1.7
+    ],
+    "written": 87,
+    "requires_grad": true,
+    "be": 3.845925372767128e-16,
+    "cross_constitutive[E0]": 2.1310296904647108e-15,
+    "E": 9.663820574716456e-17,
+    "H": 1.3297435762830551e-16,
+    "stable": true
+  },
+  {
+    "kind": "cylinder",
+    "ranged": true,
+    "point": [
+      0.135,
+      0.37,
+      0.003,
+      2.5
+    ],
+    "written": 146,
+    "requires_grad": true,
+    "be": 1.922962686383564e-15,
+    "cross_constitutive[E0]": 2.9458339406639358e-15,
+    "E": 5.350745144487217e-16,
+    "H": 3.1074946786894686e-16,
+    "stable": true
+  },
+  {
+    "kind": "cylinder",
+    "ranged": true,
+    "point": [
+      0.127,
+      0.21,
+      0.0,
+      1.3
+    ],
+    "written": 126,
+    "requires_grad": true,
+    "be": 2.884444029575346e-16,
+    "cross_constitutive[E0]": 9.172228726327661e-15,
+    "E": 8.929169821283516e-17,
+    "H": 5.75155955060547e-17,
+    "stable": true
+  },
+  {
+    "kind": "cylinder",
+    "ranged": false,
+    "point": [
+      0.12,
+      0.3,
+      0.011,
+      2.25
+    ],
+    "written": 118,
+    "requires_grad": true,
+    "be": 9.61481343191782e-16,
+    "cross_constitutive[E0]": 2.450494653751095e-15,
+    "E": 1.7858285060180854e-16,
+    "H": 2.2829958979598253e-16,
+    "stable": true
+  },
+  {
+    "kind": "cylinder",
+    "ranged": false,
+    "point": [
+      0.12,
+      0.3,
+      0.011,
+      1.7
+    ],
+    "written": 118,
+    "requires_grad": true,
+    "be": 4.80740671595891e-16,
+    "cross_constitutive[E0]": 2.279245729833493e-15,
+    "E": 1.7858302194249238e-16,
+    "H": 2.2888633632862057e-16,
+    "stable": true
+  },
+  {
+    "kind": "cylinder",
+    "ranged": false,
+    "point": [
+      0.12,
+      0.3,
+      0.011,
+      2.5
+    ],
+    "written": 118,
+    "requires_grad": true,
+    "be": 7.691850745534256e-16,
+    "cross_constitutive[E0]": 2.5452922254832384e-15,
+    "E": 2.6787418766141715e-16,
+    "H": 2.2809025957266436e-16,
+    "stable": true
+  },
+  {
+    "kind": "cylinder",
+    "ranged": false,
+    "point": [
+      0.12,
+      0.3,
+      0.011,
+      1.3
+    ],
+    "written": 118,
+    "requires_grad": true,
+    "be": 3.845925372767128e-16,
+    "cross_constitutive[E0]": 6.930474804394982e-15,
+    "E": 1.785832042754606e-16,
+    "H": 2.2947594791731e-16,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": true,
+    "point": [
+      0.23,
+      0.21,
+      0.3,
+      2.25
+    ],
+    "written": 120,
+    "requires_grad": true,
+    "be": 2.884444029575346e-16,
+    "E": 1.7858284486209697e-16,
+    "H": 2.2828213434514743e-16,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": true,
+    "point": [
+      0.2,
+      0.22,
+      0.25,
+      1.7
+    ],
+    "written": 105,
+    "requires_grad": true,
+    "be": 2.884444029575346e-16,
+    "E": 1.7858339266086308e-16,
+    "H": 2.300026761421475e-16,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": true,
+    "point": [
+      0.25,
+      0.205,
+      0.37,
+      2.5
+    ],
+    "written": 120,
+    "requires_grad": true,
+    "be": 3.845925372767128e-16,
+    "E": 2.675645464046964e-16,
+    "H": 3.1371040564624683e-16,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": true,
+    "point": [
+      0.214,
+      0.233,
+      0.21,
+      1.3
+    ],
+    "written": 105,
+    "requires_grad": true,
+    "be": 3.845925372767128e-16,
+    "E": 8.929169821301763e-17,
+    "H": 5.751560116140816e-17,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": false,
+    "point": [
+      0.23,
+      0.21,
+      0.3,
+      2.25
+    ],
+    "written": 120,
+    "requires_grad": true,
+    "be": 2.884444029575346e-16,
+    "E": 1.7858284486209697e-16,
+    "H": 2.2828213434514743e-16,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": false,
+    "point": [
+      0.23,
+      0.21,
+      0.3,
+      1.7
+    ],
+    "written": 120,
+    "requires_grad": true,
+    "be": 2.884444029575346e-16,
+    "E": 2.577594723938622e-16,
+    "H": 2.288731284898402e-16,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": false,
+    "point": [
+      0.23,
+      0.21,
+      0.3,
+      2.5
+    ],
+    "written": 120,
+    "requires_grad": true,
+    "be": 2.884444029575346e-16,
+    "E": 1.7858278569802495e-16,
+    "H": 2.280712808219852e-16,
+    "stable": true
+  },
+  {
+    "kind": "box",
+    "ranged": false,
+    "point": [
+      0.23,
+      0.21,
+      0.3,
+      1.3
+    ],
+    "written": 120,
+    "requires_grad": true,
+    "be": 3.845925372767128e-16,
+    "E": 1.8067597344679993e-16,
+    "H": 2.2946811809576635e-16,
+    "stable": true
+  }
+]

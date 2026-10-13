@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 410" role="img" aria-labelledby="title desc">
+<title id="title">The structure computed by RCWA</title><desc id="desc">The xy pattern repeats periodically; layers stack along z.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="410" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">The structure computed by RCWA</text>
+<rect x="40" y="85" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="90" cy="127" r="25" fill="#117c77" />
+<rect x="140" y="85" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="190" cy="127" r="25" fill="#117c77" />
+<rect x="240" y="85" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="290" cy="127" r="25" fill="#117c77" />
+<rect x="40" y="170" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="90" cy="212" r="25" fill="#117c77" />
+<rect x="140" y="170" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="190" cy="212" r="25" fill="#117c77" />
+<rect x="240" y="170" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="290" cy="212" r="25" fill="#117c77" />
+<rect x="40" y="255" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="90" cy="297" r="25" fill="#117c77" />
+<rect x="140" y="255" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="190" cy="297" r="25" fill="#117c77" />
+<rect x="240" y="255" width="100" height="85" rx="0" fill="#ffffff" stroke="#cad7df" stroke-width="2" />
+<circle cx="290" cy="297" r="25" fill="#117c77" />
+<rect x="140" y="170" width="100" height="85" rx="0" fill="none" stroke="#a85116" stroke-width="2" />
+<text x="40" y="373" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="start">xy plane · the outlined cell repeats</text>
+<line x1="390" y1="207" x2="470" y2="207" stroke="#546779" stroke-width="2" />
+<polygon points="470,207 460.0,211.0 460.0,203.0" fill="#546779" />
+<rect x="530" y="115" width="410" height="65" rx="0" fill="#f1f5f7" stroke="#cad7df" stroke-width="2" />
+<rect x="530" y="180" width="410" height="105" rx="0" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<rect x="530" y="285" width="410" height="55" rx="0" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="550" y="157" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">Upper medium: top</text>
+<text x="550" y="218" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">Patterned layer: xy pattern × thickness</text>
+<text x="550" y="254" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Cross-section is constant along z within a layer</text>
+<text x="550" y="321" style="fill:#182b3e;font-size:21px;font-weight:400" text-anchor="start">Lower medium: bot</text>
+<line x1="849" y1="65" x2="849" y2="110" stroke="#285ab0" stroke-width="4" />
+<polygon points="849,110 845.0,100.0 853.0,100.0" fill="#285ab0" />
+<text x="745" y="84" style="fill:#285ab0;font-size:20px;font-weight:400" text-anchor="start">Incident light</text>
+<line x1="965" y1="327" x2="965" y2="133" stroke="#546779" stroke-width="2" />
+<polygon points="965,133 969.0,143.0 961.0,143.0" fill="#546779" />
+<text x="963" y="368" style="fill:#182b3e;font-size:20px;font-weight:400" text-anchor="middle">+z</text>
+<text x="30" y="393" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Schematic of a nonmagnetic periodic structure with scalar permittivity</text>
+</svg>

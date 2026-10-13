@@ -1,4 +1,4 @@
-"""Freeze ``docs/fdtd.md`` §2's two tables -- **all three columns** -- into
+"""Freeze ``docs/guide/fdtd/fdtd.md`` §2's two tables -- **all three columns** -- into
 ``golden_fdtd_table.npz``.
 
     conda run -n fieldwave python tests/references/gen_goldens_fdtd_table.py
@@ -33,23 +33,26 @@ the RCWA path are what do that, and both comparisons live in ``test_meep_1d_gold
 What *this* file arbitrates is whether the published table is still the table the code
 produces, which is a different question and the one that was going unasked.
 """
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import hashlib
-import pathlib
 import sys
 import time
 
 import numpy as np
 
-import wavebit
-from wavebit._core import fdtd as fdtd_module
-from wavebit._core.fdtd import solve_fdtd
+from wavebit.fdtd._periodic import legacy as fdtd_module
+from wavebit.fdtd._periodic.legacy import solve_fdtd
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _meep_1d_cases import (CASES, FDTD_CONVERGENCE, FDTD_PUBLISHED,   # noqa: E402
-                            LEGS, RCWA_ORDERS, RCWA_ORDERS_CONVERGED, UNITS,
-                            WAVEBIT_BUILD, WAVEBIT_CALL, WAVEBIT_DERIVED,
-                            WAVEBIT_SHIPPED, eps_of)
+from tests.references._meep_1d_cases import CASES, FDTD_CONVERGENCE, FDTD_PUBLISHED, LEGS, RCWA_ORDERS, RCWA_ORDERS_CONVERGED, UNITS, WAVEBIT_BUILD, WAVEBIT_CALL, WAVEBIT_DERIVED, WAVEBIT_SHIPPED, eps_of
 
 OUT = HERE / 'golden_fdtd_table.npz'
 MEEP_GOLDEN = HERE / 'golden_meep_1d.npz'
@@ -96,7 +99,7 @@ def check_the_record_is_still_the_shipped_configuration():
         raise SystemExit(
             'the recorded conditions are not the shipped ones any more:\n'
             + '\n'.join(wrong)
-            + '\n\ndocs/fdtd.md section 2 is quoted at these values. Decide which is '
+            + '\n\ndocs/guide/fdtd/fdtd.md section 2 is quoted at these values. Decide which is '
               'right, update _meep_1d_cases.py::WAVEBIT_SHIPPED, re-run this generator '
               'and re-type the table -- all four, or the document goes stale the way it '
               'did before 2026-09-07.')
@@ -116,7 +119,7 @@ def _grid(result, case):
 
 
 def _rcwa(case, leg, orders):
-    return wavebit.rcwa(
+    return _legacy_wavebit.rcwa(
         backend='numpy', wavelength=case['wavelength'], period=[case['period'][0]],
         truncation_order=dict(x=orders, y=0), top=eps_of(case['n_top']),
         bot=eps_of(case['n_bot']), theta=0.0, phi=0.0, tetm=leg,
@@ -253,7 +256,7 @@ def main():
 
     np.savez(OUT, **out)
     print(f'\nwrote {OUT} ({len(out)} arrays) in {time.time() - t_start:.0f} s')
-    print('now re-type docs/fdtd.md section 2 from it; '
+    print('now re-type docs/guide/fdtd/fdtd.md section 2 from it; '
           'test_fdtd_table_golden.py reads the markdown back and compares.')
 
 

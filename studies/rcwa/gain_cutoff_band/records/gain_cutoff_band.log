@@ -1,0 +1,236 @@
+1. flips -- where the fixed-kx causal root flips, for single Lorentz gain lines pinned to eps(1) = 1 - i g.
+   A record, not the reason for c: a finite beam does not see these flips (section 4), and how many
+   a band holds depends on the grid (the finer grid below).
+  documented flips, n_inc 1.5, g 0.05, gam 0.1:
+    wc 0.9: 41.2462 deg (documented 41.246), |Re kz^2|/|Im kz^2| there 0.440
+    wc 1.0: 41.8212 deg (documented 41.821), |Re kz^2|/|Im kz^2| there 0.008
+    wc 1.1: 42.4828 deg (documented 42.483), |Re kz^2|/|Im kz^2| there 0.526
+  check: closed-form continuation vs small-step tracking at 282 points (n_inc 1.5;
+    30 and 60 deg, and 0.02 deg either side of each flip): the sign of Re agrees at 282/282,
+    max |difference|/|kz| 9.1e-12
+  check: bisection vs the angles where kx_b(1 + i s) crosses the real kx axis: 141/141 matched one for one,
+    max difference 2.7e-13 deg; crossings per line with eps_inf > 0: 1: 72
+  the flip is a convention: at the flip's kx the straight path w = 1 + i s runs into a branch point of kz(w),
+    at s 0.0021 .. 0.823 (every crossing above), in the upper half w plane. The root below it depends on
+    which side the path passes, and the straight path is one choice of side.
+  3 lines have eps_inf <= 0, so no decaying root at large s (unstable, skipped):
+    (g 0.1, wc 0.8, gam 0.02), (g 0.2, wc 0.8, gam 0.02), (g 0.2, wc 0.9, gam 0.02)
+
+  |Re kz^2| / |Im kz^2| at each flip. It does not depend on n_inc, which only maps kx to an angle. Listed
+  for n_inc 3.5, which reaches every flip with kx < 3.5. "u" unstable, "p" peak |Im eps| > 1, ">" a flip
+  beyond n_inc 1.5 (kx > 1.5 sin 89.9 deg), "-" no flip in 0 .. 89.9 deg.
+       g    gam     wc 0.8     wc 0.9     wc 1.0     wc 1.1     wc 1.2
+    0.005   0.02      0.03p       0.07       0.00       0.08      0.05p
+    0.005   0.10       0.02       0.04       0.00       0.05       0.03
+    0.005   0.30       0.01       0.01       0.00       0.02       0.02
+    0.020   0.02      2.42p      1.91p       0.00      2.01p      2.66p
+    0.020   0.10       0.10       0.16       0.00       0.20       0.15
+    0.020   0.30       0.05       0.05       0.00       0.07       0.08
+    0.050   0.02     12.96u      6.50p       0.00      6.09p     11.32p
+    0.050   0.10       0.38       0.44       0.01       0.53       0.54
+    0.050   0.30       0.12       0.10       0.01       0.15       0.20
+    0.100   0.02          -      8.28u       0.01      7.77p    14.69>p
+    0.100   0.10      1.19p       0.84       0.01       0.94      1.39p
+    0.100   0.30       0.23       0.17       0.02       0.25       0.37
+    0.200   0.02          -          -       0.01     8.65>p    16.42>p
+    0.200   0.10      2.36u      1.27p       0.02       1.34      2.36p
+    0.200   0.30       0.42       0.26       0.03       0.37       0.62
+
+  per (n_inc, g): plausible lines, their flips, the largest ratio, and how many flips c = 0.5 / 1 / 2 hold
+    n 1.5  g 0.005: 13/15 plausible, 13 flips, max ratio 0.082, held 13 / 13 / 13
+    n 1.5  g 0.02 : 11/15 plausible, 11 flips, max ratio 0.199, held 11 / 11 / 11
+    n 1.5  g 0.05 : 11/15 plausible, 11 flips, max ratio 0.538, held  9 / 11 / 11
+    n 1.5  g 0.1  :  9/15 plausible,  9 flips, max ratio 0.940, held  7 /  9 /  9
+    n 1.5  g 0.2  :  8/15 plausible,  8 flips, max ratio 1.339, held  6 /  7 /  8
+    n 3.5  g 0.005: 13/15 plausible, 13 flips, max ratio 0.082, held 13 / 13 / 13
+    n 3.5  g 0.02 : 11/15 plausible, 11 flips, max ratio 0.199, held 11 / 11 / 11
+    n 3.5  g 0.05 : 11/15 plausible, 11 flips, max ratio 0.538, held  9 / 11 / 11
+    n 3.5  g 0.1  :  9/15 plausible,  9 flips, max ratio 0.940, held  7 /  9 /  9
+    n 3.5  g 0.2  :  8/15 plausible,  8 flips, max ratio 1.339, held  6 /  7 /  8
+  all plausible flips, both n_inc: c 0.5 holds 92/104, c 1.0 holds 102/104, c 2.0 holds 104/104 (this grid only)
+  implausible lines flip up to ratio 16.42: no c bounds them
+
+  finer grid: wc 0.50 .. 1.60 step 0.01, 70 log-spaced gam 0.005 .. 2, the same five g (38850 lines)
+    35099 lines have eps_inf > 0; crossings per line: 1: 35099
+    20005 plausible lines, 20005 flips; c 0.5 / 1 / 2 hold 18427 / 19429 / 19876 (of 20005)
+    129 plausible flips lie at ratio 2 or more: 2.000 .. 4.933, at kx 0.857 .. 1.124 (all reachable from glass)
+    the largest: ratio 4.933 on (g 0.02, wc 0.98, gam 0.00595), peak |Im eps| 0.925, kx 0.9494;
+      bisection on that line finds 4.933
+    the weakest plausible line with a flip at or past each c, by peak |Im eps|:
+      c 0.5: peak 0.029 (g 0.005, wc 1.01, gam 0.00918), ratio 0.541
+      c 1.0: peak 0.072 (g 0.005, wc 1.01, gam 0.00545), ratio 1.138
+      c 2.0: peak 0.180 (g 0.02, wc 1.01, gam 0.00708), ratio 2.030
+    So narrow detuned lines with peak |Im eps| <= 1 flip at ratios above 2, and the coarse grid's
+    "c 2 holds 104/104" is a property of that grid.
+
+2. beam -- glass (n 1.5) onto the centred line (wc 1, gam 0.1, g 0.05), s polarization, field at the beam centre
+  kx_b(1 + i s) crosses the real axis once: s = 0.01830, kx_c = 1.000212 = 1.5 sin 41.8212 deg (section 1: 41.8212 deg)
+  it ends at kx_b(1) = 1.000312 -0.024992i, below the axis, so the contour dips under it
+  check: the trajectory is continuous from s_c to 0 (largest step 1.4e-06 for ds 9.2e-07)
+    and below the axis there (max Im -1.2e-06)
+  check: on the real axis the fixed-kx causal root of section 1 is the axis root stepped at kx_c: max |difference|
+    1.1e-13 over kx 0.5 .. 1.45
+  check: wavebit R vs NumPy Fresnel with Maystre's root, max |difference| 8.9e-16
+    GainCutoffWarning at 42.0 deg yes, 43.3 deg yes, 43.8 deg yes, 44.2 deg yes, 44.5 deg no, 45.0 deg no
+  the window: the finger's Gaussian weight at the tip, exp((W/2)^2 (Im^2 - (kx0 - Re)^2)), grows with W for
+    |kx0 - Re kx_b(1)| < |Im kx_b(1)|: kx0 0.975320 .. 1.025304, theta 40.56 .. 43.12 deg,
+    where the ratio is below 0.975 and 1.025 on the two sides
+  the gain length L_g = 2 sqrt(Re eps) / (k0 |Im eps|) = 40, so W 100 .. 800 is W/L_g 2.5 .. 20.0
+  Columns. E_r(0) and E_inc(0) are the reflected and incident fields at x = 0, the beam centre.
+  |E_r/E_inc|^2 is the squared field ratio there, not a reflectance: inside the window the reflected field is a
+  lateral wave that grows downstream (below). E_r takes the Briggs-Bers contour; E_M is the same beam
+  under Maystre's kernel. |dev| = |E_r - E_M| / |E_inc|, the distance to that beam. |to r| = |E_r/E_inc - r|,
+  the distance to the plane wave's r at the beam's centre angle. |finger| is finger B's part of dev.
+  Cauchy = |dev_A - dev_B| / |dev| for the two fingers. refine = the larger relative change of dev and of
+  E_M when the nodes double. A row past 1e-8 in either prints as unreliable.
+   theta  ratio  |r|^2 plane     W   |E_M/E_inc|^2   |E_r/E_inc|^2      |dev|     |to r|  |finger|  Cauchy  refine
+    42.0   0.15      1.67811   100        0.995136          2.1328   5.61e-01   5.31e-01   5.6e-01   6e-16   2e-16
+    42.0   0.15      1.67811   200        1.170933         181.143   1.25e+01   1.22e+01   1.2e+01   6e-16   5e-16
+    42.0   0.15      1.67811   300        1.308603      1.0901e+08   1.04e+04   1.04e+04   1.0e+04   4e-15   3e-15
+    43.3   1.17      1.39687   100        1.370710         1.45449   4.35e-02   2.81e-02   4.4e-02   6e-16   3e-16
+    43.3   1.17      1.39687   200        1.399773         1.40258   1.93e-03   4.12e-03   1.9e-03   7e-15   1e-15
+    43.3   1.17      1.39687   300        1.398143         1.39806   8.79e-05   1.03e-03   8.8e-05   1e-14   8e-15
+    43.3   1.17      1.39687   400        1.397577         1.39757   2.02e-06   5.51e-04   2.0e-06   1e-14   1e-14
+    43.3   1.17      1.39687   800        1.397042         1.39704   1.50e-16   1.38e-04   1.5e-16   2e-13   1e-13
+    43.8   1.56      1.34363   100        1.343233         1.34674   5.11e-03   2.52e-03   5.2e-03   2e-15   3e-16
+    43.8   1.56      1.34363   200        1.344839         1.34483   2.67e-06   1.72e-03   2.7e-06   1e-14   2e-15
+    43.8   1.56      1.34363   300        1.344142         1.34414   4.74e-11   7.63e-04   4.7e-11   7e-15   1e-14
+    43.8   1.56      1.34363   400        1.343912         1.34391   1.80e-17   4.28e-04   1.8e-17   2e-14   2e-14
+    43.8   1.56      1.34363   800        1.343697          1.3437   2.18e-60   1.07e-04   2.2e-60   5e-13   1e-13
+    44.2   1.87      1.31155   100        1.312792         1.31234   4.85e-04   5.40e-03   4.8e-04   6e-15   8e-16
+    44.2   1.87      1.31155   200        1.311952         1.31195   4.18e-09   1.44e-03   4.2e-09   1e-14   3e-15
+    44.2   1.87      1.31155   300        1.311713         1.31171   2.85e-17   6.37e-04   2.8e-17   6e-15   1e-14
+    44.2   1.87      1.31155   400        1.311637         1.31164   1.84e-28   3.58e-04   1.8e-28   5e-14   2e-14
+    44.2   1.87      1.31155   800        1.311568         1.31157  4.26e-104   8.94e-05  4.3e-104   8e-13   2e-13
+    44.5   2.11      1.29175   100        1.292069         1.29193   6.03e-05   5.20e-03   5.0e-05   2e-14   1e-15
+    44.5   2.11      1.29175   200        1.291767         1.29177   1.59e-11   1.27e-03   1.6e-11   2e-14   4e-15
+    44.5   2.11      1.29175   300        1.291748         1.29175   1.26e-22   5.64e-04   1.3e-22   5e-15   2e-14
+    44.5   2.11      1.29175   400        1.291747         1.29175   6.17e-38   3.17e-04   6.2e-38   8e-14   2e-14
+    44.5   2.11      1.29175   800        1.291748         1.29175  8.22e-142   7.91e-05  8.2e-142   1e-12   2e-13
+    45.0   2.50      1.26463   100        1.263343         1.26335   9.56e-06   4.34e-03   9.7e-06   9e-15   1e-15
+    45.0   2.50      1.26463   200        1.264248         1.26425   4.15e-16   1.06e-03   4.2e-16   2e-14   5e-15
+    45.0   2.50      1.26463   300        1.264456         1.26446   7.77e-33   4.71e-04   7.8e-33   2e-14   2e-14
+    45.0   2.50      1.26463   400        1.264531         1.26453   5.13e-56   2.65e-04   5.1e-56   2e-13   2e-14
+    45.0   2.50      1.26463   800        1.264605         1.26461  7.31e-214   6.61e-05  7.3e-214   1e-12   3e-13
+  the lateral wave, 42 deg, W 200: |E_r - E_M| / |E_inc(0)| at x = -50 / 0 / 50 is 4.45 / 12.5 / 36.2,
+    a growth of 0.0210 per unit x downstream
+  the lateral wave, 42 deg, W 300: |E_r - E_M| / |E_inc(0)| at x = -50 / 0 / 50 is 3.22e+03 / 1.04e+04 / 3.4e+04,
+    a growth of 0.0236 per unit x downstream
+  The growth approaches |Im kx_b(1)| = 0.0250 as W grows. The field at x = 0 is fed from upstream,
+    so a wider beam feeds it from further away. Inside the window |E_r/E_inc|^2 is not a reflectance.
+  the deformation's direction, 42 deg, W 100. Fingers A and B and a lowered contour at w = 1 share one
+    topology, so their agreement tests the integration, not the direction. Only a continuation in w tests
+    the direction. A contour lowered to Im kx = -0.035 over kx 0.810 .. 1.198, the root carried along it,
+    must match the undeformed real-axis integral at w = 1 + i eta while kx_b(w) is above the axis (eta > s_c
+    = 0.0183). At eta 0.02 / 0.025 / 0.03 the relative gap is 4e-14 / 3e-14 / 3e-14. Control: the same contour
+    raised to Im kx = +0.035 passes above kx_b(w) and misses by 0.35 / 0.41 / 0.52.
+    Carried from eta 0.03 to 0 in 31 steps, kx_b(1 + i eta) stays above the lowered contour (least clearance
+    0.0100; Re inside the detour: yes), so the integral is analytic in eta all the way (largest root
+    turn per node 0.5 deg). At eta = 0 it gives E_r: |E_low - E_r| / |E_r - E_M| = 5e-15.
+
+3. margin -- past the c = 2 edge, at ratio 2.107 (44.5 deg at g 0.05), high side: |E_r - E_M| / |E_inc| at x = 0
+  The tip term goes as exp((W/2)^2 (Im^2 - (kx0 - Re)^2)), kx_b(1) = Re + i Im ("tip"). For weak gain that is
+  exp(-(rho^2 - 1) (W/L_g)^2 / 4) ("formula"), with the gain length L_g = 2 sqrt(Re eps) / (k0 |Im eps|).
+  Lines: wc 1, gam 0.1, pinned to eps(1) = 1 - i g. A row whose tip weight is below exp(-690) is skipped:
+  the deviation is below the double range. Cauchy and refine as in section 2; past 1e-8 prints as unreliable.
+       g    L_g   theta       W   W/L_g      |dev|    formula        tip  Cauchy  refine
+   0.005    400  42.080      30    0.07   3.55e-03   9.95e-01   9.95e-01   2e-14   1e-16
+   0.005    400  42.080     100    0.25   1.11e-02   9.48e-01   9.48e-01   2e-14   2e-16
+   0.005    400  42.080     300    0.75   1.96e-02   6.16e-01   6.19e-01   2e-14   1e-16
+   0.005    400  42.080    1000    2.50   1.16e-05   4.63e-03   4.84e-03   1e-13   2e-14
+   0.005    400  42.080    3000    7.50   1.29e-24   9.69e-22   1.45e-21   6e-13   1e-13
+   0.050     40  44.500      30    0.75   6.38e-02   6.16e-01   6.40e-01   8e-16   3e-16
+   0.050     40  44.500     100    2.50   6.03e-05   4.63e-03   7.05e-03   2e-14   1e-15
+   0.050     40  44.500     300    7.50   1.26e-22   9.69e-22   4.32e-20   5e-15   2e-14
+   0.050     40  44.500    1000   25.00  1.84e-219  3.25e-234  6.98e-216   2e-12   4e-13
+   0.050     40  44.500    3000   75.00  skipped: tip weight e^-4459, formula e^-4839
+   0.200     10  52.640      30    3.00   1.53e-04   4.34e-04   3.46e-03   2e-15   9e-17
+   0.200     10  52.640     100   10.00   1.65e-30   4.39e-38   4.54e-28   3e-14   6e-15
+   0.200     10  52.640     300   30.00  3.30e-250     e^-774  8.12e-247   3e-13   2e-13
+   0.200     10  52.640    1000  100.00  skipped: tip weight e^-6296, formula e^-8602
+   0.200     10  52.640    3000  300.00  skipped: tip weight e^-56664, formula e^-77418
+  check: the g 0.05 row at W 100 is section 2's 44.5 deg row (6.03e-05)
+  how wide a beam must be at the edge itself (ratio 2, high side): the W/L_g past which |dev| stays below
+  1e-3 and 1e-6. Scanned on 121 log-spaced widths from W 10 to 20 L_g, then bisected; the formula alone
+  would ask for sqrt(4 ln(1/tol) / 3). The mirror point's Gaussian weight is at most 2.26e-44 (W 10),
+  so it stays out.
+    1e-03: g 0.005: 2.03, g 0.05: 2.27, g 0.2: 2.56; formula 3.03
+    1e-06: g 0.005: 3.36, g 0.05: 3.67, g 0.2: 4.27; formula 4.29
+
+4. far flip -- beams between Maystre's step and a far fixed-kx flip: the beam goes to Maystre's value
+  B uses eps(1) alone. A runs along the line's own trajectory kx_b(1 + i s). A's real-axis part carries the
+  fixed-kx causal kernel over the beam centre ("step"), and its finger cancels that. So |A - B| is read
+  against "A size", the sum of the sizes of A's terms, which sets A's round-off. "overflow": the Gaussian
+  on the trajectory leaves the double range; "A unresolved": past 1e-10 of A size. refine as in section 2.
+  the coarse grid's largest flip: (g 0.2, wc 1.1, gam 0.1), ratio 1.339,
+    kx_c 1.1259, kx_b(1) = 1.00494 -0.09951i
+    48.03 deg, ratio 1.219, |kx0 - Re| / |Im| 1.108. Plane wave |r|^2: Maystre 1.8056, fixed-kx causal 0.5538
+          W   |E_r/E_inc|^2      |dev|     |to r|   A size  |A-B|/size     step  refine
+        100        1.804567   2.16e-05   1.33e-03  8.8e+03     2.7e-15  1.4e+00   3e-15
+        200        1.805303   2.27e-13   3.38e-04  3.7e+15     2.7e-14  1.7e+00   4e-14
+        400        1.805490   1.75e-43   8.45e-05  1.2e+62     8.4e-14  1.8e+00   1e-13
+        800        1.805537  4.00e-162   2.11e-05  1.5e+248     4.7e-02  1.8e+00   5e-13  A unresolved
+       1600        1.805549   < 1e-299   5.28e-06   overflow             1.8e+00   1e-16
+  the finer grid's largest flip: (g 0.02, wc 0.98, gam 0.00595), ratio 4.933,
+    kx_c 0.9494, kx_b(1) = 1.00005 -0.01000i
+    40.27 deg, ratio 3.000, |kx0 - Re| / |Im| 3.052. Plane wave |r|^2: Maystre 0.4146, fixed-kx causal 2.4118
+          W   |E_r/E_inc|^2      |dev|     |to r|   A size  |A-B|/size     step  refine
+        100        0.434842   9.09e-03   1.73e-02  3.0e+00     2.4e-16  8.0e-01   7e-16
+        200        0.417747   1.87e-06   2.68e-03  5.5e+01     2.4e-15  9.1e-01   1e-14
+        400        0.415393   1.31e-17   6.49e-04  2.7e+07     5.4e-15  9.2e-01   2e-14
+        800        0.414819   1.71e-61   1.61e-04  1.7e+30     1.0e-13  9.2e-01   9e-14
+    39.75 deg, ratio 4.000, |kx0 - Re| / |Im| 4.089. Plane wave |r|^2: Maystre 0.3648, fixed-kx causal 2.7412
+          W   |E_r/E_inc|^2      |dev|     |to r|   A size  |A-B|/size     step  refine
+        100        0.373802   1.33e-03   8.11e-03  2.5e+00     7.2e-16  7.4e-01   7e-16
+        200        0.366773   2.38e-09   1.72e-03  1.7e+01     1.5e-15  9.6e-01   5e-15
+        400        0.365286   1.17e-30   4.21e-04  8.8e+04     1.9e-14  1.1e+00   3e-14
+        800        0.364922  4.09e-113   1.05e-04  1.0e+20     2.5e-14  1.1e+00   1e-13
+
+5. top hat -- a field e^{i k0 x} on |x| < L/2 onto the centred line (g 0.05): |E_r - E_M| / |E_inc| at x = 0
+  Its spectrum is entire and of exponential type, so on the finger it weighs up to exp(|Im kx_b(1)| L/2),
+  at any angle. Its upstream edge seeds a lateral wave that grows over L/2 before it reaches x = 0.
+  Unlike a Gaussian's, its spectrum is not small at the mirror point -kx_b(1), which the contour passes
+  above. By symmetry that finger is finger B with a(k) replaced by a(-k); "mirror" is its share. The
+  Gaussian column is section 2's deviation at W = L. Cauchy and refine as in section 2, on the sum.
+   theta  ratio      L    top hat  mirror  exp(|Im| L/2)   Gaussian  Cauchy  refine
+    44.5   2.11    100   6.26e-02   0.036           3.49   6.03e-05   4e-16   3e-16
+    44.5   2.11    200   1.48e-01   0.025           12.2   1.59e-11   5e-16   2e-16
+    44.5   2.11    400   6.58e-01   0.028            148   6.17e-38   2e-16   3e-16
+    44.5   2.11    800   3.45e+01   0.028        2.2e+04  8.22e-142   7e-16   7e-16
+    50.0   6.41    100   3.30e-02   0.050           3.49   1.94e-26   1e-15   1e-16
+    50.0   6.41    200   5.18e-02   0.072           12.2   6.23e-97   4e-16   2e-16
+    50.0   6.41    400   2.41e-01   0.070            148   < 1e-299   3e-15   4e-16
+    50.0   6.41    800   1.35e+01   0.068        2.2e+04   < 1e-299   4e-15   5e-16
+
+6. firing -- glass (n 1.5) onto eps = 1 - i g, the 900 angles 0.0 .. 89.9 deg, c = 2
+  g 0.005:   5/900 angles in the band, 41.6 .. 42.0 deg; the solver warned on   5, the same angles
+  g 0.05 :  51/900 angles in the band, 39.3 .. 44.3 deg; the solver warned on  51, the same angles
+  g 0.2  : 210/900 angles in the band, 31.1 .. 52.0 deg; the solver warned on 210, the same angles
+
+conclusions
+  1. For a Gaussian beam the field at the beam centre grows with W where |kx0 - Re sqrt(eps)| < |Im
+     sqrt(eps)|, a ratio below about 1 (0.975 and 1.025 on the two sides at g 0.05; 40.56 .. 43.12 deg from
+     glass): |E_r/E_inc|^2 = 2.13 / 181 / 1.09e+08 at 42 deg for W 100 / 200 / 300. That field is a lateral
+     wave growing downstream at about |Im kx_b(1)| = 0.025 per unit x (0.0210 and 0.0236 measured), not a
+     reflectance.
+  2. c = 2 adds the zone 1 < ratio < 2. There a beam does converge to Maystre's value, but beams a few gain
+     lengths wide have not yet: at ratio 1.17 (43.3 deg) |dev| is 4.35e-02 / 1.93e-03 / 2.02e-06 / 1.50e-16
+     for W/L_g 2.5 / 5 / 10 / 20.
+  3. At the c = 2 edge, on its high side (the slower one), a beam must be W/L_g = 2.0 .. 2.6 wide for its
+     field to stay within 1e-3 of Maystre's beam, and 3.4 .. 4.3 for 1e-6 (g 0.005 .. 0.2), with L_g = 2
+     sqrt(Re eps) / (k0 |Im eps|). The tip weight alone, exp(-(rho^2 - 1) (W/L_g)^2 / 4), asks for 3.03 and
+     4.29.
+  4. The fixed-kx causal flips of section 1 are not what a finite beam sees. Between Maystre's step and a flip
+     at ratio 4.93, beams at ratio 3.00 and 4.00 go to Maystre's |r|^2 (0.4146, 0.3648), not to the fixed-kx
+     causal one (2.4118, 2.7412). So does a beam at ratio 1.22 on the coarse grid's furthest flip (1.8056, not
+     0.5538). How many flips a band holds depends on the grid: c = 2 holds 104/104 on the coarse one, and 129
+     of 20005 flips lie past 2 on the finer one.
+  5. No single-frequency check can see the contour's topology. The beam's answer depends on eps(1) and on
+     kx_b(w) crossing the real axis once as Im(w) falls to 0 (checked in section 2 by continuing in w, which
+     tests the direction; section 4's A against B is an integration check). Every line here with eps_inf > 0
+     crosses once (72 of 72 on the coarse grid, 35099 of 35099 on the finer one). A medium whose branch point
+     does not cross the real axis once needs another contour, and nothing at one frequency, the warning
+     included, can tell.
+  6. The window of ratio ~1 is a property of the Gaussian. A top hat deviates by 6.3e-02 .. 3.4e+01 at ratio
+     2.11 for L 100 .. 800, and by 3.3e-02 .. 1.3e+01 at ratio 6.41: an edge seeds a growing lateral wave at
+     any angle.

@@ -6,6 +6,12 @@ Never read Meep source. This harness only calls its public API and reuses the ex
 crossed monitor/frame bridge. No Wavebit solver is imported. Output must not exist;
 existing goldens are never overwritten to make tests pass.
 """
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import argparse
 import hashlib
 from pathlib import Path
@@ -15,8 +21,8 @@ import time
 sys.tracebacklimit = 0
 import numpy as np
 
-from _meep_crossed_material_cases import CASES, epsilon
-from gen_goldens_meep_crossed import _run, _amplitudes
+from tests.references._meep_crossed_material_cases import CASES, epsilon
+from tests.references.gen_goldens_meep_crossed import _run, _amplitudes
 
 
 def material_factory(case):
@@ -59,8 +65,8 @@ def main():
     args = parser.parse_args()
     if args.output.exists():
         raise SystemExit('Output already exists; choose a new path. Frozen references are immutable.')
-    files = [Path(__file__), Path(__file__).with_name('_meep_crossed_material_cases.py'),
-             Path(__file__).with_name('gen_goldens_meep_crossed.py')]
+    files = [Path(__file__), repository_path('tests/references/_meep_crossed_material_cases.py'),
+             repository_path('tests/references/gen_goldens_meep_crossed.py')]
     digest = hashlib.sha256(b''.join(p.read_bytes() for p in files)).hexdigest()
     out = dict(meep_version=np.array(mp.__version__), generator_sha256=np.array(digest),
                complete=np.array(False), resolutions=np.array([20, 40]),

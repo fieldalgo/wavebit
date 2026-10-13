@@ -32,7 +32,14 @@ returns ``(z, x, y, 6)`` — **x before y**, the transpose of this project's ``(
 * At ``phi = 0`` it must also agree with the pure TE/TM golden beside it, which ties the two
   RETICOLO goldens together and checks both harnesses at once.
 """
-import pathlib
+
+from wavebit.compat import legacy as _legacy_wavebit
+
+import sys as _repository_sys
+from pathlib import Path as _RepositoryPath
+if __package__ in (None, ""):
+    _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
+from tools.repository_paths import repository_path
 import sys
 
 import numpy as np
@@ -40,11 +47,9 @@ import pytest
 
 import wavebit
 
-HERE = pathlib.Path(__file__).resolve().parent
+HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
-from _reticolo_conical_field_cases import (CASES, MAX_ORDER, NAMES, PERIOD, RES_X,  # noqa: E402
-                                           RES_Z, SLOW_SLOT, STACKS, WL, Z_PARITY,
-                                           key, layer_rows, n_layers, x_samples)
+from tests.references._reticolo_conical_field_cases import CASES, MAX_ORDER, NAMES, PERIOD, RES_X, RES_Z, SLOW_SLOT, STACKS, WL, Z_PARITY, key, layer_rows, n_layers, x_samples
 
 GOLDEN_PATH = HERE / 'golden_reticolo_conical_field.npz'
 
@@ -104,7 +109,7 @@ def _reconstruct(stack, theta, phi, pol):
     # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
     # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
-    solver = wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
+    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],
                           theta=np.deg2rad(theta), phi=np.deg2rad(phi),
                           psi=np.pi / 2 if pol == 's' else 0.0,
@@ -240,7 +245,7 @@ def test_at_zero_azimuth_the_two_reticolo_goldens_agree(stack, pol):
     the orders and does not see that). And the stacks are lit from air, where RETICOLO's 1D TM
     input -- the incident ``H_y`` -- is also a unit incident E.
     """
-    import _reticolo_field_cases as flat
+    import tests.references._reticolo_field_cases as flat
 
     conical = _golden()
     flat_path = HERE / 'golden_reticolo_field.npz'

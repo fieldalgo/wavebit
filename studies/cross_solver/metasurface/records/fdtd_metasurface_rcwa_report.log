@@ -1,0 +1,59 @@
+C7 report 2026-10-03T10:52:18+0900 -- provenance 5f5f1d33b0239d7b (rcwa {'M1': '813427469a4340bf', 'M2': 'f14ff6b46e70ac44', 'M3': '7c90b21fb8e0deca'}), commit 273514f44352; protocol f34cb37f2f16c405, registered f34cb37f2f16c405 at 2026-10-03T02:19:40+0900: same rule
+M1 ladder: top (22, 26), below it [(12, 14), (15, 18), (19, 22)]; 0 appended since registration
+M2 ladder: top (24, 24), below it [(15, 15), (18, 18), (21, 21)]; 0 appended since registration
+M3 ladder: top (32, 32), below it [(26, 26), (28, 28), (30, 30)]; 0 appended since registration
+layout: {'M1': True, 'M2': True, 'M3': True}
+M1 instruments pass: shift|20 1.1e-12, shift|40 7.3e-13, shift|80 4.4e-13
+M1 s: A 2.925e-02, 7.403e-03, 2.095e-03 (slope -1.902); F 1.739e-02, 4.581e-03, 1.363e-03 (slope -1.837); u amp 1.91e-04 eff 1.94e-04; 72 cells; pair (40, 80); repeats []
+   1 valid True []; 2 judgeable True; 3 second order True; 4 consistent True (0 outside)
+   cells zero by symmetry in RCWA: 12, largest |fd| at 80 2.86e-05
+   energy balance per rung (sum R + sum T - 1): [[0.0, -0.0, -0.0], [-0.0, -0.0, 0.0], [-0.0, 0.0, -0.0]]
+   control misplaced: A 1.66e-01, 8.64e-02, 4.37e-02 slope -0.96, F slope -1.84; 3 False, 4 False (30 of 72 outside)
+   control displaced: A 3.06e-02, 8.71e-03, 3.62e-03 slope -1.54, F slope -1.39; 3 False, 4 False (70 of 72 outside)
+M1 p: A 2.775e-02, 6.603e-03, 1.811e-03 (slope -1.969); F 1.363e-02, 3.495e-03, 9.060e-04 (slope -1.956); u amp 2.32e-04 eff 1.66e-04; 72 cells; pair (40, 80); repeats []
+   1 valid True []; 2 judgeable True; 3 second order True; 4 consistent True (0 outside)
+   cells zero by symmetry in RCWA: 12, largest |fd| at 80 1.95e-05
+   energy balance per rung (sum R + sum T - 1): [[-1e-06, 0.0, 1e-06], [-1e-06, 0.0, 1e-06], [-1e-06, 1e-06, 1e-06]]
+   control misplaced: A 1.61e-01, 8.76e-02, 4.52e-02 slope -0.92, F slope -1.96; 3 False, 4 False (29 of 72 outside)
+   control displaced: A 2.79e-02, 6.88e-03, 2.71e-03 slope -1.68, F slope -1.50; 3 False, 4 False (69 of 72 outside)
+M1 s run length at 40: 120 vs 180 periods amp 1.35e-07 eff 1.69e-07 (lines 2.09e-04, 1.36e-04): True
+M1 p run length at 40: 120 vs 180 periods amp 7.93e-07 eff 5.85e-07 (lines 1.81e-04, 9.06e-05): True
+M1 backends at 20 (s): jax amp 9.10e-16 eff 8.04e-16, torch amp 2.98e-15 eff 1.49e-15: True
+M1 s: pass
+M1 p: pass
+M2 instruments pass: shift|25 3.1e-12, shift|50 3.1e-12, shift|100 2.2e-12
+M2 s: A 7.408e-02, 2.018e-02, 6.082e-03 (slope -1.803); F 1.207e-02, 2.048e-03, 3.870e-04 (slope -2.482); u amp 2.04e-04 eff 1.88e-04; 27 cells; pair (50, 100); repeats []
+   1 valid True []; 2 judgeable False; 3 second order True; 4 consistent True (0 outside)
+   cells zero by symmetry in RCWA: 9, largest |fd| at 100 2.24e-04
+   energy balance per rung (sum R + sum T - 1): [[-0.0, 0.0, 0.0], [0.0, -0.0, -0.0], [-0.0, 0.0, 0.0]]
+   control misplaced: A 2.63e-01, 1.49e-01, 7.84e-02 slope -0.87, F slope -2.48; 3 False, 4 False (3 of 27 outside)
+   control displaced: A 7.42e-02, 2.08e-02, 8.50e-03 slope -1.56, F slope -2.03; 3 False, 4 False (19 of 27 outside)
+M2 p: A 3.478e-02, 8.577e-03, 2.274e-03 (slope -1.967); F 1.802e-02, 4.484e-03, 1.107e-03 (slope -2.012); u amp 1.45e-04 eff 8.47e-05; 27 cells; pair (50, 100); repeats []
+   1 valid True []; 2 judgeable True; 3 second order True; 4 consistent False (1 outside: [(('p', 1.05, 't', 0, 0, 't_s'), 0.0005531884784051471, 0.0005201823547807861)])
+   cells zero by symmetry in RCWA: 9, largest |fd| at 100 2.65e-04
+   energy balance per rung (sum R + sum T - 1): [[-1e-06, 0.0, 1e-06], [-1e-06, 0.0, 1e-06], [-1e-06, 0.0, 0.0]]
+   control misplaced: A 2.64e-01, 1.40e-01, 7.19e-02 slope -0.94, F slope -2.01; 3 False, 4 False (4 of 27 outside)
+   control displaced: A 3.43e-02, 8.27e-03, 2.80e-03 slope -1.81, F slope -1.56; 3 False, 4 False (26 of 27 outside)
+M2 s run length at 50: 120 vs 180 periods amp 7.37e-08 eff 1.23e-07 (lines 6.08e-04, 3.87e-05): True
+M2 p run length at 50: 120 vs 180 periods amp 3.16e-07 eff 2.32e-07 (lines 2.27e-04, 1.11e-04): True
+M2 backends at 25 (s): jax amp 1.86e-15 eff 6.87e-16, torch amp 2.20e-15 eff 2.20e-15: True
+M2 s: not judgeable
+M2 p: FAIL
+M3 instruments pass: shift|40 2.0e-11, shift|80 1.4e-11, shift|120 1.6e-11, frame|x 3.1e-12, frame|y 3.8e-12
+M3 s: A 2.212e-02, 7.103e-03, 3.644e-03 (slope -1.641); F 1.155e-02, 4.085e-03, 2.192e-03 (slope -1.511); u amp 3.43e-04 eff 2.28e-04; 54 cells; pair (80, 120); repeats []
+   1 valid True []; 2 judgeable True; 3 second order False; 4 consistent True (0 outside)
+   energy balance per rung (sum R + sum T - 1): [[-0.0, -0.0, -0.0], [-0.0, 0.0, 0.0], [-0.0, -0.0, -0.0]]
+   control misplaced: A 6.96e-02, 3.17e-02, 2.03e-02 slope -1.12, F slope -1.51; 3 False, 4 False (24 of 54 outside)
+   control displaced: A 2.31e-02, 8.60e-03, 5.73e-03 slope -1.28, F slope -1.05; 3 False, 4 False (54 of 54 outside)
+M3 p: A 1.292e-02, 3.719e-03, 1.912e-03 (slope -1.745); F 6.024e-03, 1.950e-03, 1.016e-03 (slope -1.621); u amp 3.04e-04 eff 1.94e-04; 54 cells; pair (80, 120); repeats []
+   1 valid True []; 2 judgeable True; 3 second order False; 4 consistent True (0 outside)
+   energy balance per rung (sum R + sum T - 1): [[-0.0, 0.0, 0.0], [-0.0, 0.0, 0.0], [-0.0, 0.0, 0.0]]
+   control misplaced: A 8.91e-02, 4.69e-02, 3.18e-02 slope -0.94, F slope -1.62; 3 False, 4 False (22 of 54 outside)
+   control displaced: A 1.48e-02, 5.63e-03, 3.82e-03 slope -1.25, F slope -1.14; 3 False, 4 False (53 of 54 outside)
+M3 s run length at 80: 120 vs 180 periods amp 7.28e-08 eff 4.24e-08 (lines 3.64e-04, 2.19e-04): True
+M3 p run length at 80: 120 vs 180 periods amp 1.38e-07 eff 6.34e-08 (lines 1.91e-04, 1.02e-04): True
+M3 backends at 40 (s): jax amp 3.44e-15 eff 7.67e-16, torch amp 7.03e-15 eff 9.20e-15: True
+M3 s: FAIL
+M3 p: FAIL
+C7: NOT PASSED -- M1 p pass, M1 s pass, M2 p FAIL, M2 s not judgeable, M3 p FAIL, M3 s FAIL
+

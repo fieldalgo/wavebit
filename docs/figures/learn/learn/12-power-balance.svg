@@ -1,0 +1,37 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 58 1000 502" role="img" aria-labelledby="title desc">
+<title id="title">Distinguish 1 − R from actual net entering power</title><desc id="desc">Power balance for lossless and lossy incidence. Including interference makes net entering power equal transmission, so absorption in the finite stack is zero.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px}</style>
+<rect width="1000" height="560" fill="white" />
+<rect x="30" y="76" width="455" height="414" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.5" />
+<text x="54" y="114" text-anchor="start" style="font-size:23px;fill:#182b3e;font-weight:650">Lossless incident medium</text>
+<text x="54" y="145" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">top relative permittivity: 4</text>
+<text x="54" y="195" text-anchor="start" style="font-size:19px;fill:#182b3e;font-weight:400">Incident − reflected: 1 − R</text>
+<text x="457" y="195" text-anchor="end" style="font-size:23px;fill:#182b3e;font-weight:400">0.953586</text>
+<text x="54" y="238" text-anchor="start" style="font-size:19px;fill:#a45b24;font-weight:400">+ interference contribution</text>
+<text x="457" y="238" text-anchor="end" style="font-size:23px;fill:#a45b24;font-weight:400">0.000000</text>
+<line x1="54" y1="261" x2="457" y2="261" stroke="#879ba9" stroke-width="2" />
+<text x="54" y="303" text-anchor="start" style="font-size:21px;fill:#117c77;font-weight:600">= net entering power</text>
+<text x="457" y="303" text-anchor="end" style="font-size:24px;fill:#117c77;font-weight:600">0.953586</text>
+<text x="54" y="350" text-anchor="start" style="font-size:21px;fill:#2d60a1;font-weight:400">− transmitted power T</text>
+<text x="457" y="350" text-anchor="end" style="font-size:24px;fill:#2d60a1;font-weight:400">0.953586</text>
+<rect x="52" y="379" width="411" height="82" rx="9" fill="#e5f4ef" stroke="none" stroke-width="1.5" />
+<text x="72" y="427" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">= total stack absorption A</text>
+<text x="436" y="430" text-anchor="end" style="font-size:29px;fill:#117c77;font-weight:650">0</text>
+<rect x="515" y="76" width="455" height="414" rx="12" fill="#f8fafb" stroke="#cad7df" stroke-width="1.5" />
+<text x="539" y="114" text-anchor="start" style="font-size:23px;fill:#182b3e;font-weight:650">Lossy incident medium</text>
+<text x="539" y="145" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">top relative permittivity: 4 + 3i</text>
+<text x="539" y="195" text-anchor="start" style="font-size:19px;fill:#182b3e;font-weight:400">Incident − reflected: 1 − R</text>
+<text x="942" y="195" text-anchor="end" style="font-size:23px;fill:#182b3e;font-weight:400">0.854773</text>
+<text x="539" y="238" text-anchor="start" style="font-size:19px;fill:#a45b24;font-weight:400">+ interference contribution</text>
+<text x="942" y="238" text-anchor="end" style="font-size:23px;fill:#a45b24;font-weight:400">0.158416</text>
+<line x1="539" y1="261" x2="942" y2="261" stroke="#879ba9" stroke-width="2" />
+<text x="539" y="303" text-anchor="start" style="font-size:21px;fill:#117c77;font-weight:600">= net entering power</text>
+<text x="942" y="303" text-anchor="end" style="font-size:24px;fill:#117c77;font-weight:600">1.013189</text>
+<text x="539" y="350" text-anchor="start" style="font-size:21px;fill:#2d60a1;font-weight:400">− transmitted power T</text>
+<text x="942" y="350" text-anchor="end" style="font-size:24px;fill:#2d60a1;font-weight:400">1.013189</text>
+<rect x="537" y="379" width="411" height="82" rx="9" fill="#e5f4ef" stroke="none" stroke-width="1.5" />
+<text x="557" y="427" text-anchor="start" style="font-size:21px;fill:#182b3e;font-weight:600">= total stack absorption A</text>
+<text x="921" y="430" text-anchor="end" style="font-size:29px;fill:#117c77;font-weight:650">0</text>
+<text x="30" y="526" text-anchor="start" style="font-size:18px;fill:#546779;font-weight:400">Layer and bot: same lossless material · λ = 1,000 nm · θ = 30° · s incidence</text>
+</svg>

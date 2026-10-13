@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 626" role="img" aria-labelledby="title desc">
+<title id="title">Method, projector, samples and modes are separate choices</title><desc id="desc">raster_normal_method generates raster directions; shape_nvf_grid_size sets shape-projector sampling; nvf_projector applies to both NVF paths.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="626" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Method, projector, samples and modes are separate choices</text>
+<rect x="30" y="85" width="450" height="140" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">fourier_coefficients</text>
+<text x="48" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">How material ε coefficients are obtained</text>
+<text x="48" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">sampled / integrated</text>
+<rect x="520" y="85" width="450" height="140" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="538" y="119" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">factorization</text>
+<text x="538" y="155" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Rule for discontinuous products</text>
+<text x="538" y="182" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">li / nvf</text>
+<rect x="30" y="255" width="450" height="140" rx="10" fill="#f1f5f7" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="289" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">raster_normal_method</text>
+<text x="48" y="325" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Raster direction-field method · raster NVF</text>
+<text x="48" y="352" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">distance / contour / spectral / smooth</text>
+<rect x="520" y="255" width="450" height="140" rx="10" fill="#fff1df" stroke="#cad7df" stroke-width="2" />
+<text x="538" y="289" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">nvf_projector</text>
+<text x="538" y="325" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Construction of P · both NVF paths</text>
+<text x="538" y="352" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">linear / circular · separate from incident polarization</text>
+<rect x="30" y="425" width="450" height="140" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="459" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">shape_nvf_grid_size</text>
+<text x="48" y="495" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Shape-projector samples · shape NVF</text>
+<text x="48" y="522" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">128 → 128×128 points per period</text>
+<rect x="520" y="425" width="450" height="140" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="538" y="459" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">truncation_order</text>
+<text x="538" y="495" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Fourier orders retained in the optical solve</text>
+<text x="538" y="522" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">(2,1) → (2×2+1)(2×1+1) = 15</text>
+<text x="30" y="609" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Raster direction methods and shape-projector sample counts apply to different inputs</text>
+</svg>

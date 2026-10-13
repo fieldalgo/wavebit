@@ -1,0 +1,569 @@
+{
+  "date": "2026-09-22",
+  "engine_parent": "9615759ad743b115d66819c2190b732ace9e38b0",
+  "status": "C11 kernel verification complete. Full production C3 convergence and its physics mutants remain incomplete.",
+  "numerical_threads": {
+    "OMP_NUM_THREADS": 2,
+    "OPENBLAS_NUM_THREADS": 2,
+    "MKL_NUM_THREADS": 2
+  },
+  "fixture": {
+    "cells": [
+      16,
+      16,
+      16
+    ],
+    "dx": 0.05,
+    "radius": 0.15,
+    "center": [
+      0.012,
+      0.007,
+      -0.009
+    ],
+    "epsilon": 2.25,
+    "mu": 1.5,
+    "courant": 0.5,
+    "steps": 80,
+    "seed": 224
+  },
+  "cavity": {
+    "numpy": {
+      "energy_spread": 2.8582210206137215e-15,
+      "field_gap": 0.0,
+      "energy": [
+        21637.8087189631,
+        21637.808718963082,
+        21637.80871896309,
+        21637.808718963075,
+        21637.80871896304,
+        21637.808718963068
+      ],
+      "seconds": 0.10861500003375113
+    },
+    "jax": {
+      "energy_spread": 5.043919448141861e-16,
+      "field_gap": 3.3084646133829665e-14,
+      "energy": [
+        21637.80871896308,
+        21637.808718963075,
+        21637.80871896307,
+        21637.808718963075,
+        21637.808718963075,
+        21637.808718963068
+      ],
+      "seconds": 15.305793999985326
+    },
+    "jit": {
+      "energy_spread": 5.043919448141861e-16,
+      "field_gap": 3.236300116782331e-14,
+      "energy": [
+        21637.80871896308,
+        21637.808718963075,
+        21637.80871896307,
+        21637.808718963075,
+        21637.808718963075,
+        21637.808718963068
+      ],
+      "seconds": 1.610818899993319
+    },
+    "torch": {
+      "energy_spread": 1.6813064827139537e-16,
+      "field_gap": 2.324182513113726e-14,
+      "energy": [
+        21637.808718963075,
+        21637.808718963075,
+        21637.808718963075,
+        21637.808718963075,
+        21637.80871896307,
+        21637.808718963075
+      ],
+      "seconds": 1.6569975999882445
+    }
+  },
+  "wall_and_derivative": {
+    "(-0.25, 0.0, 0.0)": {
+      "span": 2.8571479031732118e-15
+    },
+    "(0.2, 0.0, 0.0)": {
+      "span": 3.690577867924438e-15
+    },
+    "jax": {
+      "grad": -103.80604302068576,
+      "differences": [
+        {
+          "h": 0.01,
+          "finite": -103.80924360051722,
+          "relative": 3.0832307429617956e-05
+        },
+        {
+          "h": 0.001,
+          "finite": -103.80607502702333,
+          "relative": 3.0832826913851363e-07
+        },
+        {
+          "h": 0.0001,
+          "finite": -103.80604333477095,
+          "relative": 3.0256925853677785e-09
+        },
+        {
+          "h": 1e-05,
+          "finite": -103.80604298916295,
+          "relative": -3.036703111192196e-10
+        }
+      ]
+    },
+    "torch": {
+      "grad": -103.80604302068565,
+      "differences": [
+        {
+          "h": 0.01,
+          "finite": -103.80924360060817,
+          "relative": 3.0832308306694145e-05
+        },
+        {
+          "h": 0.001,
+          "finite": -103.80607502611383,
+          "relative": 3.083195085906709e-07
+        },
+        {
+          "h": 0.0001,
+          "finite": -103.80604333477095,
+          "relative": 3.025693695590803e-09
+        },
+        {
+          "h": 1e-05,
+          "finite": -103.80604289821348,
+          "relative": -1.1798173549237845e-09
+        }
+      ]
+    }
+  },
+  "high_contrast_plans": {
+    "epsilon": 12,
+    "rows": [
+      {
+        "cpw": 40,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "status": "accepted",
+        "seconds": 0.5448870999971405
+      },
+      {
+        "cpw": 40,
+        "offset": [
+          0.5,
+          0.3333333333333333,
+          0.2
+        ],
+        "status": "accepted",
+        "seconds": 0.5996495999861509
+      },
+      {
+        "cpw": 40,
+        "offset": [
+          0.25,
+          0.6666666666666666,
+          0.4
+        ],
+        "status": "accepted",
+        "seconds": 0.6103519999887794
+      },
+      {
+        "cpw": 56,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "status": "accepted",
+        "seconds": 1.7463304999982938
+      },
+      {
+        "cpw": 56,
+        "offset": [
+          0.5,
+          0.3333333333333333,
+          0.2
+        ],
+        "status": "accepted",
+        "seconds": 1.729849600000307
+      },
+      {
+        "cpw": 56,
+        "offset": [
+          0.25,
+          0.6666666666666666,
+          0.4
+        ],
+        "status": "accepted",
+        "seconds": 1.762117300007958
+      },
+      {
+        "cpw": 80,
+        "offset": [
+          0,
+          0,
+          0
+        ],
+        "status": "accepted",
+        "seconds": 6.135038699954748
+      },
+      {
+        "cpw": 80,
+        "offset": [
+          0.5,
+          0.3333333333333333,
+          0.2
+        ],
+        "status": "accepted",
+        "seconds": 5.413042699976359
+      },
+      {
+        "cpw": 80,
+        "offset": [
+          0.25,
+          0.6666666666666666,
+          0.4
+        ],
+        "status": "accepted",
+        "seconds": 4.967809599998873
+      }
+    ]
+  },
+  "source_mutants": [
+    {
+      "mutant": "wrong_adjoint",
+      "exit": 1,
+      "cases": 10,
+      "failed": 10,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "periodic_finite_end",
+      "exit": 1,
+      "cases": 2,
+      "failed": 2,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_field_increment",
+      "exit": 1,
+      "cases": 8,
+      "failed": 8,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_flux_current",
+      "exit": 1,
+      "cases": 8,
+      "failed": 8,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "magnetic_sign",
+      "exit": 1,
+      "cases": 8,
+      "failed": 4,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_wall_projection",
+      "exit": 1,
+      "cases": 2,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "detach_cross_gradient",
+      "exit": 1,
+      "cases": 2,
+      "failed": 2,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "diagonal_electric_energy",
+      "exit": 1,
+      "cases": 4,
+      "failed": 4,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "diagonal_magnetic_energy",
+      "exit": 1,
+      "cases": 4,
+      "failed": 4,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "wrong_h_sampling",
+      "exit": 1,
+      "cases": 4,
+      "failed": 4,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_initial_door",
+      "exit": 1,
+      "cases": 2,
+      "failed": 2,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_positive_door",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_cfl_door",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_traced_certificate",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_merge",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_pml_halo_door",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_loss_halo_door",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_mirror_door",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_common_nodes",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "wrong_background",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "wrong_box_moment",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_lower_radius",
+      "exit": 1,
+      "cases": 2,
+      "failed": 2,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_memory_bytes",
+      "exit": 1,
+      "cases": 1,
+      "failed": 1,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_common_report",
+      "exit": 1,
+      "cases": 12,
+      "failed": 12,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_accuracy_warning",
+      "exit": 1,
+      "cases": 4,
+      "failed": 4,
+      "errors": 0,
+      "detected": true
+    },
+    {
+      "mutant": "omit_proxy_measurement",
+      "exit": 1,
+      "cases": 12,
+      "failed": 12,
+      "errors": 0,
+      "detected": true
+    }
+  ],
+  "initial_fast": [
+    {
+      "stage": "fast",
+      "collected": 1907,
+      "reported": 1907,
+      "exit": 1,
+      "failed": 3,
+      "errors": 0,
+      "skipped": 6,
+      "seconds": 732.6747064000228,
+      "internal_error": false
+    }
+  ],
+  "initial_failure_resolution": [
+    "Two historical energy mutants lacked the new optional flux-memory argument.",
+    "The bare-curl mutant cached its reference after mutation when run alone; the reference now precedes mutation.",
+    "One docstring cited an unresolved relative path; it now uses the full repository path."
+  ],
+  "custom_body_normal_proxy": {
+    "Union": 0.628253,
+    "Intersection": 0.821168,
+    "Difference": 0.821168
+  },
+  "note": "Probe timings are not an isolated performance benchmark. Public E/H initialization is refused where the inverse constitutive solve is required.",
+  "validation": [
+    {
+      "stage": "fast",
+      "collected": 1907,
+      "reported": 1907,
+      "exit": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 6,
+      "seconds": 720.1758497999981,
+      "internal_error": false
+    },
+    {
+      "stage": "slow",
+      "collected": 65,
+      "reported": 65,
+      "exit": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 316.4029962000204,
+      "internal_error": false
+    },
+    {
+      "stage": "freeze_fd_stage0.py",
+      "exit": 0,
+      "seconds": 7.602284899970982,
+      "bit_identical": true,
+      "tail": "froze 143 arrays from 8 scenes on 3 backends, twice, byte-identical; content 11547313656e\nagainst the committed fd_golden_stage0.npz:\n  143 of 143 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written\n"
+    },
+    {
+      "stage": "freeze_fd_stage1.py",
+      "exit": 0,
+      "seconds": 8.10118749999674,
+      "bit_identical": true,
+      "tail": "froze 288 arrays from 6 scenes on 3 backends, twice, byte-identical; content 73d979466bf1\nagainst the committed fd_golden_stage1.npz:\n  288 of 288 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written\n"
+    },
+    {
+      "stage": "freeze_fd_stage2.py",
+      "exit": 0,
+      "seconds": 12.965317299996968,
+      "bit_identical": true,
+      "tail": "froze 140 arrays from 4 scenes on 3 backends, twice, byte-identical; content 6f5118aab6a1\nagainst the committed fd_golden_stage2.npz:\n  140 of 140 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written\n"
+    },
+    {
+      "stage": "freeze_fd_stage3.py",
+      "exit": 0,
+      "seconds": 29.34334319998743,
+      "bit_identical": true,
+      "tail": "froze 570 arrays from 5 scenes on 3 backends, twice, byte-identical; content 0843f3122f3e\nagainst the committed fd_golden_stage3.npz:\n  570 of 570 arrays reproduce bit for bit\nthe committed golden is reproduced; nothing written\n"
+    }
+  ],
+  "raw_source_sha256": {
+    "wavebit/fd/__init__.py": "c75dd074a42ec97c03fc6c6272ec57b2e8c99eeb8ca31df9b66d6605a6326eaf",
+    "wavebit/fd/_assemble.py": "4b1d3486f5971b0035c66266c7ac55216cc41eb409092d460eb788b82fc12ca1",
+    "wavebit/fd/_check.py": "58f4511a812b0100faafa5ca0fa2f226c9d5a45a2a05e35339f00a22e9e61310",
+    "wavebit/fd/_kernel/__init__.py": "66712bdc330125353ef0e6eedeeadcd1e5afdf842392bb89b03e8ca5f1cff8e6",
+    "wavebit/fd/_kernel/constitutive.py": "5ecc1a369ec9a74e003ce694e3989a2b7887229eab1ddd882c3c431ea4d98061",
+    "wavebit/fd/_kernel/cpml.py": "42d632f090feebb9d207eb833ceddf23e3ae6bd3ecef1ba4f42ce55140800b15",
+    "wavebit/fd/_kernel/curl.py": "ada5992de65b568cdd907db3b747c069f04a6ce20b8bc9833813f8ac30b541aa",
+    "wavebit/fd/_kernel/faces.py": "bacc526ef5f6b16c2ecc30ce08ff46f8246ba21fdebd03acfd6112ae2ee7de7b",
+    "wavebit/fd/_kernel/grid.py": "8031c2384826a7d428871e841fa8b65ea37381a7375476f99c303a7ba7b0ff41",
+    "wavebit/fd/_kernel/masks.py": "03d047068e6a2d54265d6e3fba9d7f14530da13f5b17f73af1571ee84cfcd545",
+    "wavebit/fd/_kernel/observe.py": "7b8ba292e3d82d41630327fde854e847bd2d45ef35b15bffd1e1933a60964aad",
+    "wavebit/fd/_kernel/poles.py": "fc0689e2605b95a3981aa287031faf2d3f6f499b38f5774c11aed28daa934fd6",
+    "wavebit/fd/_kernel/sources.py": "6de4fdb156bd20ebefa4abce0c55f5e93b9279b972ef2078c5aa28ff5aad0752",
+    "wavebit/fd/_kernel/step.py": "8492adfdf9be1c501775b4e724357f09c201ef8a6eb84f2112f4f90d5b2377a5",
+    "wavebit/fd/_lower/__init__.py": "7d9ba5405096bb2e173ef89cd66294f46978135c5efb36eefeeda0325cdd7e7f",
+    "wavebit/fd/_lower/checks.py": "4618e3568bab1b4d35aeb79125391d73313bd7e79933064f35eb04c1c79901ff",
+    "wavebit/fd/_lower/coefficients.py": "ba90e0b92001bc094766cb3dc61dfa9c30badf4805d9f0aab7bb5b2361fb9341",
+    "wavebit/fd/_lower/constitutive.py": "afa52072e9bbdf5905dfe8170d65a1f09f22bf0c9bf8234a7477cc9d7c2106f7",
+    "wavebit/fd/_lower/cpml.py": "e5bec61ceea6d961ac8922b82af721edfd89c2438275f0ba38e2f58f4263f172",
+    "wavebit/fd/_lower/fields.py": "56c858213b9180d5ffb67c424ada2fa0632d40c2700b67f1a43c21646dc299c4",
+    "wavebit/fd/_lower/grazing.py": "fd13591aae6f3b61913193847365ae6288abafc1ccf368192178ff847a34e5d8",
+    "wavebit/fd/_lower/layer_return.py": "bdae693eefa93b6a4ab6b2266fb1092f93fe97e4230693610fe708041b3c2485",
+    "wavebit/fd/_lower/monitors.py": "c634eaf9d7416b54777b7827b9a7352fad43ac6fcf9852307b5f0172adce6c36",
+    "wavebit/fd/_lower/occupancy.py": "75c85b0a275c7b2cb1aff66d86e8b6a7f4be8e7963591208b31cae8d828c5f88",
+    "wavebit/fd/_lower/params.py": "aea601981a817c93771daa295c6eb300b36bcbe7d587989d751772795f161040",
+    "wavebit/fd/_lower/plan.py": "8e02d3096058c82d652ef3c423b6eb4fa07bf36a3c0d3b39903dba359d7d0efa",
+    "wavebit/fd/_lower/sources.py": "e57b429e43401f7a44dee90ada7c31d46d08a68addf6f1dea1b649b544692b60",
+    "wavebit/fd/_post.py": "636d3ac3e6716f27f48239ed28f0319dc9ccdd791470d323c0daaba4cdd203c6",
+    "wavebit/fd/_run.py": "794b94d322afb7681aede57d29ea585f3fae62904c40a36640d4f5efaac45983",
+    "wavebit/fd/_runtime.py": "4ee5db12ad262adc7341f8aa00fc04360a235dfd2b15fed178a34c69a851f3c6",
+    "wavebit/fd/_shapes/__init__.py": "c10f9b4d80ac18e7006d45aec0849279f2f16ee4043d6f7c81726f461ad9dd4a",
+    "wavebit/fd/_shapes/_bodies.py": "dfdea32659d1f2010aa168638838c42161feca13feaed56d3759c3aa5d288eb6",
+    "wavebit/fd/_shapes/_cut.py": "e370af1779ea02b6b3c49ab81e6984e0625271f4de88dcc9afc720d20566b829",
+    "wavebit/fd/_shapes/_exact.py": "ab9da3102b576430a00ee579e581cebf2730bc687900c0bbe9e95d7b9d7d27b5",
+    "wavebit/fd/_shapes/_occupancy.py": "6827ec0440f2f7900ab46d8e2b0a376e77968368763f49937c41ed669494a082",
+    "wavebit/fd/_spec.py": "b5ac9b5ed9162680bdb7faf0b362287670fa877528a04bc2ccf89b4c0fb7590c",
+    "wavebit/fd/_testing.py": "e0d9e56745b820f5e6d8e685eb8e19b441e289f4cb10697c2c4c5c88a9778bb8",
+    "wavebit/fd/boundaries.py": "94b60188deec3b8bf38ad54468ae8dec904d6f752f1ad96388d6cd5afd4cb17d",
+    "wavebit/fd/diagnostics.py": "1f07d42c95ddf93f38c6c1369bc9a9f17b648c97b12708593d301f90d0da42eb",
+    "wavebit/fd/geometry.py": "08174b731e9be49c83cefed7881267fa4567bc9c4965bfefff7b6f315cf8ee30",
+    "wavebit/fd/materials.py": "f5ac0d80fc9f01db96e53a275d030b5b9b249efcb09721e4fa48b5f8f38621ad",
+    "wavebit/fd/monitors.py": "d0bf7ea6dffc4d857b9f8d1e61cfb989644df21d6682b2142358798761e13275",
+    "wavebit/fd/results.py": "24f334921a17087a849f28c7ccf89c1347cdd57369b1464538cde31bcdd09f95",
+    "wavebit/fd/scene.py": "b6be915108cb9394e1fb1be4dbb9071e57ccc18a1c68497a852bc6a36db7e639",
+    "wavebit/fd/sources.py": "e74fcd0d972afdf2ee8d29e40fe9a120b435d3d165de212e27e9d1dcfdac2328"
+  }
+}

@@ -1,0 +1,26 @@
+scene                          cells     cut  creased  % cut >=3 media  % cut  joint
+sphere r.25                       20    1420        0   0.00         0   0.00      0
+sphere r.25                       40    5640        0   0.00         0   0.00      0
+sphere r.25                       80   22620        0   0.00         0   0.00      0
+cylinder r.25 h.5                 20    1680      240  14.29         0   0.00      0
+cylinder r.25 h.5                 40    6682      480   7.18         0   0.00      0
+cylinder r.25 h.5                 80   26754      960   3.59         0   0.00      0
+box .4x.3x.5                      20    1134      276  24.34         0   0.00      0
+box .4x.3x.5                      40    4518      564  12.48         0   0.00      0
+box .4x.3x.5                      80   18054     1140   6.31         0   0.00      0
+box .4x.3x.5 turned 30 deg        20    1414      357  25.25         0   0.00      0
+box .4x.3x.5 turned 30 deg        40    5638      678  12.03         0   0.00      0
+box .4x.3x.5 turned 30 deg        80   22934     1382   6.03         0   0.00      0
+hexagonal prism R.25 h.5          20    1486      386  25.98         0   0.00      0
+hexagonal prism R.25 h.5          40    5946      821  13.81         0   0.00      0
+hexagonal prism R.25 h.5          80   24160     1597   6.61         0   0.00      0
+pillar flush on a substrate       20    1831      160   8.74        80   4.37    119
+pillar flush on a substrate       40    6917      320   4.63       160   2.31    549
+pillar flush on a substrate       80   26970      640   2.37       320   1.19   2362
+sphere dimer, gap .5 D            20    2772        0   0.00         0   0.00      0
+sphere dimer, gap .5 D            40   11292        0   0.00         0   0.00      0
+sphere dimer, gap .5 D            80   45220        0   0.00         0   0.00      0
+dimer, gap .05 D, two metals      20    2794        0   0.00        32   1.15      0
+dimer, gap .05 D, two metals      40   11244        0   0.00         0   0.00      0
+dimer, gap .05 D, two metals      80   45220        0   0.00         0   0.00      0
+(5.1 s; E-component voxels near a surface; "cells" per unit length, the bodies are about 0.5 across)

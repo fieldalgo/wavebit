@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 370" role="img" aria-labelledby="16-autodiff-title 16-autodiff-desc">
+<title id="16-autodiff-title">Trace changes in the objective back to inputs</title><desc id="16-autodiff-desc">Forward and derivative paths from thickness to reflectance</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#546779" /></marker></defs>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;fill:#182b3e;font-size:20px} .small{font-size:17px;fill:#546779}.formula{font-family:ui-monospace,SFMono-Regular,monospace;font-size:23px}</style>
+<rect width="1000" height="370" fill="white" />
+<text x="30" y="37" style="fill:#182b3e;font-size:24px;font-weight:650" text-anchor="start">Trace changes in the objective back to inputs</text>
+<rect x="30" y="110" width="210" height="105" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="48" y="144" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Design q</text>
+<text x="48" y="180" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">d = 900q</text>
+<line x1="244" y1="162" x2="273" y2="162" stroke="#546779" stroke-width="2" />
+<polygon points="273,162 263.0,166.0 263.0,158.0" fill="#546779" />
+<rect x="278" y="110" width="210" height="105" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="296" y="144" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Constitutive and propagation operators</text>
+<text x="296" y="180" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">Modes and phases</text>
+<line x1="492" y1="162" x2="521" y2="162" stroke="#546779" stroke-width="2" />
+<polygon points="521,162 511.0,166.0 511.0,158.0" fill="#546779" />
+<rect x="526" y="110" width="210" height="105" rx="10" fill="#e8f1ff" stroke="#cad7df" stroke-width="2" />
+<text x="544" y="144" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Optical response</text>
+<text x="544" y="180" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">R(q), T(q)</text>
+<line x1="740" y1="162" x2="769" y2="162" stroke="#546779" stroke-width="2" />
+<polygon points="769,162 759.0,166.0 759.0,158.0" fill="#546779" />
+<rect x="774" y="110" width="210" height="105" rx="10" fill="#e5f4ef" stroke="#cad7df" stroke-width="2" />
+<text x="792" y="144" style="fill:#182b3e;font-size:22px;font-weight:650" text-anchor="start">Objective</text>
+<text x="792" y="180" style="fill:#182b3e;font-size:18px;font-weight:400" text-anchor="start">L = ΣR</text>
+<line x1="878" y1="250" x2="132" y2="250" stroke="#a85116" stroke-width="3" />
+<polygon points="132,250 142.0,246.0 142.0,254.0" fill="#a85116" />
+<text x="266" y="291" style="fill:#a85116;font-size:23px;font-weight:400" text-anchor="start">Autodiff: dL/dq · derivative of the numerical operations executed</text>
+<text x="30" y="353" style="fill:#546779;font-size:16px;font-weight:400" text-anchor="start">Schematic · derivative correctness and Fourier-solution convergence are separate questions</text>
+</svg>

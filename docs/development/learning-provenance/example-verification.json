@@ -1,0 +1,100 @@
+[
+  {
+    "book": "learn",
+    "file": "01_first_grating.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.261,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "02_shape.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.263,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "03_fields.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.177,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "04_jobspec.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.169,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "05_jax_gradient.py",
+    "returncode": 0,
+    "elapsed_seconds": 3.769,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "06_torch_gradient.py",
+    "returncode": 0,
+    "elapsed_seconds": 1.022,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "07_convergence.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.164,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "08_material_and_layers.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.165,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "learn",
+    "file": "09_material_sweep.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.187,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "nvf",
+    "file": "01_shape_nvf.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.183,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "nvf",
+    "file": "02_raster_nvf.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.216,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "nvf",
+    "file": "03_convergence.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.245,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "nvf",
+    "file": "04_jax_gradient.py",
+    "returncode": 0,
+    "elapsed_seconds": 6.246,
+    "matches_recorded_values": true
+  },
+  {
+    "book": "nvf",
+    "file": "05_select_li_or_nvf.py",
+    "returncode": 0,
+    "elapsed_seconds": 0.17,
+    "matches_recorded_values": true
+  }
+]
