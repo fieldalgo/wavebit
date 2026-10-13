@@ -7,6 +7,15 @@ Start with the current public API:
 
 Both notebooks use the NumPy backend, shared physical materials and explicit units. Their code cells were executed sequentially in fresh processes; outputs remain empty so opening them does not present stale numerical output. They demonstrate execution and reuse, not a convergence claim.
 
+After those introductions, the current API has three executable worked examples:
+
+- [RCWA film optimization](../examples/rcwa/film_optimization.py): a prepared JAX objective, an independently checked derivative, and a quarter-wave antireflection design.
+- [Dispersive FDTD fields](../examples/fdtd/dispersive_fields.py): a Lorentz film, seconds and SI material rates, raw Fourier E/H units, and live source-amplitude reuse.
+- [RCWA–FDTD film and grating comparison](../examples/cross_solver/film_and_grating.py): common physical parameters, explicit amplitude reference planes, and separate spatial/time refinement.
+
+These scripts retain their checks and need no plotting library unless the optional
+FDTD `--plot` output is requested. Only the optimization example needs JAX.
+
 ## Advanced compatibility tutorials
 
 The ten numbered notebooks below explicitly import `wavebit.compat.legacy`. Their numerical teaching workflow and formulas are preserved; the public root `wavebit.rcwa` and `wavebit.fdtd` are modules, so they cannot be called as the historical factory functions. See the [migration guide](../docs/migration/index.md).

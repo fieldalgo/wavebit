@@ -6,6 +6,43 @@ Some examples use optional JAX/PyTorch backends.
 Install `wavebit[plot]` for the FDTD image example; the shape examples use the
 optional JAX/PyTorch backends.
 
+## Current physical API
+
+Start here for shared `Material` models, explicit `Units`, immutable problems and
+`check` / `prepare` / `run`. These scripts use only the current public interface.
+All checks live alongside the example so a copied script retains its verification.
+
+| Example | Workflow and check | Dependencies |
+| --- | --- | --- |
+| [`record_run.py`](common/record_run.py) | Save inputs, measured arrays, units and source; verify exact round trips without repeating the solver. Use `--output` to retain a record. | Base install |
+| [`basic_grating.py`](rcwa/basic_grating.py) | A binary grating and its lossless power balance. | Base install |
+| [`pulse_slab.py`](fdtd/pulse_slab.py) | A physical pulse, outside PML padding and a named time record. | Base install |
+| [`film_optimization.py`](rcwa/film_optimization.py) | Reuse a prepared RCWA calculation, differentiate film thickness with JAX and minimize reflectance; check the derivative against an independent Airy formula and the design against the quarter-wave thickness. | `wavebit[jax]` |
+| [`dispersive_fields.py`](fdtd/dispersive_fields.py) | A Lorentz film with SI rates, time-domain E and raw Fourier E/H; check passive power balance and linear field scaling under prepared reuse. | Base install; `wavebit[plot]` only for `--plot` |
+| [`film_and_grating.py`](cross_solver/film_and_grating.py) | Declare the same film or shifted grating for both solvers; compare powers and complex odd-order amplitudes at matched reference faces while refining RCWA order, FDTD spacing and duration separately. | Base install |
+
+For example, from the repository root:
+
+```bash
+python examples/rcwa/film_optimization.py
+python examples/fdtd/dispersive_fields.py
+python examples/cross_solver/film_and_grating.py
+python examples/cross_solver/film_and_grating.py --polarization p
+```
+
+The cross-solver example starts with a deliberately coarse grid, so its mesh
+warnings are expected and remain visible. Its printed errors belong to those two
+specific scenes; they do not establish an accuracy bound for other structures.
+The dispersive example labels Fourier fields in V·s/m and A·s/m, keeping them
+separate from monochromatic amplitudes. Add `--plot /path/pulse.png` to save the
+physical time trace; no script opens a plotting window during the default run.
+
+## Earlier solver workflows
+
+The advanced examples below explicitly use the compatibility API. Their original
+scientific workflows remain useful, but copy the current examples above when
+starting a new physical problem. See the [migration guide](../docs/migration/index.md).
+
 | Entry | Question it answers |
 | --- | --- |
 | [`nvf_method_selection.py`](rcwa/nvf_method_selection.py) | How do I choose ordinary NVF, explicit Cartesian Li, or the experimental auxiliary pair solver for the same structure? |
@@ -49,9 +86,12 @@ The `examples smoke` job in [`../.github/workflows/tests.yml`](../.github/workfl
 runs every script from its own directory with `MPLBACKEND=Agg` and fails on a non-zero exit or
 on `Traceback` in the output. This is a separate smoke job; runtime depends on the machine and installed backends.
 
-**It cannot tell you the numbers are right.** A green tick means the code ran; it says nothing
-about what was printed. It used to also fail on an `UnphysicalResultWarning`, but that check
-was removed from the solver — see [`../README.md`](../README.md) for why.
+The smoke job checks successful execution and the assertions each script contains.
+The current examples above include checks of power balance, an independent analytic
+answer, derivatives or explicit refinement. These are checks of the demonstrated
+scenes, not a substitute for the numerical validation in `tests/`. Printed values
+without assertions are not checked. The former `UnphysicalResultWarning` is no
+longer a smoke criterion; see [`../README.md`](../README.md).
 
 Nor does it check what a verification example is *for*. Until 2026-08-11 the 2D one compared a
 shape `structure` against a raster that was the vertical mirror of it — a defect that survived

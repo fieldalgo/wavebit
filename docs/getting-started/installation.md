@@ -13,23 +13,53 @@ version with `python -c "import wavebit; print(wavebit.__version__)"`.
 The alpha API may change; the experimental auxiliary solver has the narrower scope in
 [method selection](../guide/rcwa/nvf-method-selection.md).
 
-NumPy alone runs the solver. JAX and PyTorch are optional and bring automatic differentiation
-and GPU support:
+The base installation runs both public solvers on NumPy. JAX and PyTorch add supported
+automatic differentiation. RCWA also supports compatible accelerator execution; the current
+public FDTD lifecycle accepts **CPU and double precision only**, including with JAX or
+PyTorch. Backend availability does not widen a solver's physical or numerical scope; use
+`check` before preparing a problem and read the [execution guide](../guide/common/backends.md).
+
+Install an optional backend when you need it:
 
 ```shell
 pip install '.[jax]'
 ```
 
-The extras are `jax`, `pytorch`, `contour` and `docs`, and they combine —
-`[jax,pytorch]` installs both backends.
+The extras are `jax`, `pytorch`, `contour`, `plot` and `docs`, and they combine —
+`[jax,pytorch]` installs both backends. Use `[plot]` for the plotting helpers.
 
 ## For a checkout you intend to edit
 
 ```shell
-git clone https://github.com/fieldalgo/wavebit.git && cd wavebit
-pip install -e '.[jax]'                # or '.[pytorch]', or plain -e . for NumPy only
-pytest tests/ -q           # skips the tests marked slow; add --run-slow for all
+git clone https://github.com/fieldalgo/wavebit.git
+cd wavebit
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+python -c "import wavebit; print(wavebit.__file__)"
 ```
+
+On Windows, activate with `.venv\Scripts\Activate.ps1`. Confirm that the import path is
+this checkout's `src/wavebit/__init__.py`. Then run the NumPy [RCWA first
+calculation](rcwa.md) and [FDTD pulse calculation](fdtd.md). These small examples verify that
+you can execute the current API; their resolution is not a convergence recommendation.
+
+Install `pytest` separately when developing the library:
+
+```shell
+python -m pip install pytest
+python tools/run_verification.py --profile quick
+```
+
+The [verification runner](../development/verification.md) records this small smoke profile and
+provides explicit full/research profiles with safe resumption. For direct pytest commands,
+`python -m pytest tests/ -q` deselects research and skips slow cases.
+`--run-slow` enables slow cases within the selected set; it does **not** select research
+cases. `python -m pytest -m research tests/ -q` selects research alone, and
+`python -m pytest -m "research or not research" tests/ -q` selects both tiers, including
+slow cases. A named test file opts in to its research and slow cases. See the
+[test guide](https://github.com/fieldalgo/wavebit/blob/develop/tests/README.md) before starting
+a larger validation run and the [source guide](../development/source-checkout.md) for debugging.
 
 `environment.yml` builds the full development environment, including the tools the studies need:
 

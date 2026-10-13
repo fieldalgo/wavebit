@@ -6,9 +6,9 @@
     "_static": 2,
     "_templates": 1,
     "design": 3,
-    "development": 8,
+    "development": 10,
     "getting-started": 5,
-    "guide": 37,
+    "guide": 38,
     "learn": 43,
     "migration": 7,
     "reference": 10,
@@ -19,7 +19,7 @@
   "canonical_markdown": [
     {
       "path": "docs/README.md",
-      "sha256": "fed2ad5a9f1fd2f795f38230f1562baa10624a82bbb75db016805f7475d8f7ef",
+      "sha256": "45205d748b9c19b6b6e167973692290ab4167bad42745df267d17d0149e4e3d0",
       "language": "en",
       "section": "root"
     },
@@ -67,13 +67,13 @@
     },
     {
       "path": "docs/development/documentation.md",
-      "sha256": "a1d4c549b673a9dfcdb33d43f189e1ef1d4a9484a749009daca8d13168e2af9d",
+      "sha256": "3be62c2f2352e614df2d274b75fecd509e6937826c56c4b6224302880fc2527c",
       "language": "en",
       "section": "development"
     },
     {
       "path": "docs/development/index.md",
-      "sha256": "0ebd41a0e786c80179e530fbd066c730a973712838a295517c0a45ceccc393be",
+      "sha256": "475ad013eebd9f88e97197edef09fe753401b6d26cbf712f37620e1c214d4e7a",
       "language": "en",
       "section": "development"
     },
@@ -97,7 +97,13 @@
     },
     {
       "path": "docs/development/source-checkout.md",
-      "sha256": "e3fc8f1fd39ab97fad05e34136c4925663f334bbb03dfa411e2efcdb43cb317e",
+      "sha256": "7008a37bd48a5c6053e8123cd363a673a399457c25177291f51dcbd8b913b9e3",
+      "language": "en",
+      "section": "development"
+    },
+    {
+      "path": "docs/development/source-map.md",
+      "sha256": "3c3cfc7a78df083f3dbb9086f9fffae938deae060d3e324ee68246dc8a2b3f62",
       "language": "en",
       "section": "development"
     },
@@ -114,8 +120,14 @@
       "section": "development"
     },
     {
+      "path": "docs/development/verification.md",
+      "sha256": "5a9613c8456fa6a0ea84a034c099c593d53e3df27a77ede7401d31734e0a947d",
+      "language": "en",
+      "section": "development"
+    },
+    {
       "path": "docs/getting-started/fdtd.md",
-      "sha256": "4808ca4ca43ca6605ffba86b7ac0f6cce5eb0f3be4cd398cd1bfd799bfe4ece5",
+      "sha256": "7045d7abda0b4b136fe5fb2c66f53bcc4391c822d79158be3316cb434083ac0d",
       "language": "en",
       "section": "getting-started"
     },
@@ -127,7 +139,7 @@
     },
     {
       "path": "docs/getting-started/installation.md",
-      "sha256": "cd0069ec2cea8125b61186ca6c4781c8a0054db44a689af511b3e27e62a2aec9",
+      "sha256": "f76c84660c59325b7d3e34c513734d5dbe91bf6c897562f24b81e388b73ab570",
       "language": "en",
       "section": "getting-started"
     },
@@ -139,7 +151,7 @@
     },
     {
       "path": "docs/getting-started/rcwa.md",
-      "sha256": "933f9635882c0a5d71841cc5d94be02f578935536793c6ad5049bcd5155d5ad1",
+      "sha256": "d41763f2b2b8efaf208ce54ddc77f938e838a8ede1548040407404015ffc409b",
       "language": "en",
       "section": "getting-started"
     },
@@ -151,13 +163,13 @@
     },
     {
       "path": "docs/guide/common/backends.md",
-      "sha256": "64f30e40cccd523afb8d1e2145e441f5c64559f8fd3b03d66c48ec8888280145",
+      "sha256": "94cf243f6b4d2a2202b358617eda1841b0a81f791cc82195bcdd0db315b0af5e",
       "language": "en",
       "section": "guide"
     },
     {
       "path": "docs/guide/common/index.md",
-      "sha256": "6a2f70f2f0451ac95111ef27916c244f35630496ccb957133b5ff7442f65ae43",
+      "sha256": "a8238ad4817601a61a335525981ed7f7f15f0b0b395995a5f4409b222afba05c",
       "language": "en",
       "section": "guide"
     },
@@ -175,7 +187,7 @@
     },
     {
       "path": "docs/guide/common/specs.md",
-      "sha256": "6d1cbda22e1c58d6790e052a6fb5e3fd61e8b607c554d4627fb285e54d450fb0",
+      "sha256": "713eb01b1b1d735ceed4df9dae1d62b480e27519c240c8ff63911dde0835fa0c",
       "language": "en",
       "section": "guide"
     },
@@ -362,6 +374,12 @@
     {
       "path": "docs/guide/rcwa/tensor-shape-integration.md",
       "sha256": "23239c500f332a126546e07ec1e9094671072560ab4005be1d8f12555df7817b",
+      "language": "en",
+      "section": "guide"
+    },
+    {
+      "path": "docs/guide/run-records.md",
+      "sha256": "cf635e7a7319f002df27c07a2896c64cd0308996ee99da94970f75c442949ea8",
       "language": "en",
       "section": "guide"
     },
@@ -691,7 +709,7 @@
     },
     {
       "path": "docs/reference/common/index.md",
-      "sha256": "828f21c49ec67ed10fc0f3be1f8d6bb2eef1dd2dfcbd6d80e32ad593578b326e",
+      "sha256": "7f365910fe61706df75b6f1ccc5d92de8406c1982a11ddf24f4a82a625d93c7a",
       "language": "en",
       "section": "reference"
     },
@@ -2350,8 +2368,8 @@
   ],
   "course_pages": 40,
   "course_figures": 100,
-  "translated_body_overlays": 41,
-  "additional_korean_pages": "gettext where available; explicit English fallback otherwise",
+  "translated_body_overlays": 44,
+  "additional_korean_pages": "Authored current API and developer translations listed below; gettext where available; explicit English fallback otherwise.",
   "scientific_records": "Preserved with original hashes; no solver rerun for translation.",
   "browser_review": [
     "English and Korean homepages",
@@ -2365,10 +2383,42 @@
     "Additional 19-original archive download table and per-item decisions render; Korean route states English fallback, and the Korean course introduction distinguishes its historical snapshot from the current FDTD module"
   ],
   "build_checks": {
+    "english": "Sphinx 9.1.0 -E -a -W --keep-going -D wavebit_bilingual=1: passed without warnings; 254 source pages, English at deployment root",
+    "korean": "Sphinx 9.1.0 -E -a -W --keep-going -D wavebit_bilingual=1 -D language=ko: passed without warnings; 254 source pages under ko/",
+    "local_links": "512 published HTML pages, 83739 local references; zero missing targets, fragments or same-route language-switch errors; internal theme templates and viewcode source pages excluded"
+  },
+  "authored_page_translations": [
+    {
+      "canonical": "docs/development/source-map.md",
+      "canonical_sha256": "3c3cfc7a78df083f3dbb9086f9fffae938deae060d3e324ee68246dc8a2b3f62",
+      "korean_overlay": "docs/locales/ko/pages/development/source-map.md",
+      "korean_overlay_sha256": "1ae6dee4ea460fc1fc0158892d27b23e6d0c457ad7c0b7e898b0c6459c0be28c",
+      "scope": "Complete translation of maintained current guidance; distinct from the forty imported historical course chapters.",
+      "link_destinations": "Same canonical routes and source files; verified in both language builds."
+    },
+    {
+      "canonical": "docs/development/verification.md",
+      "canonical_sha256": "5a9613c8456fa6a0ea84a034c099c593d53e3df27a77ede7401d31734e0a947d",
+      "korean_overlay": "docs/locales/ko/pages/development/verification.md",
+      "korean_overlay_sha256": "44ff8a28f3ed6b591eff238d408a8ea547e0f13d2f9627bd365e6096e889b3c1",
+      "scope": "Complete translation of maintained current guidance; distinct from the forty imported historical course chapters.",
+      "link_destinations": "Same canonical routes and source files; verified in both language builds."
+    },
+    {
+      "canonical": "docs/guide/run-records.md",
+      "canonical_sha256": "cf635e7a7319f002df27c07a2896c64cd0308996ee99da94970f75c442949ea8",
+      "korean_overlay": "docs/locales/ko/pages/guide/run-records.md",
+      "korean_overlay_sha256": "32142308987d8ecb4c2715c12174dd9b929cc15b3ce468ee8d6294a2845a08d6",
+      "scope": "Complete translation of maintained current guidance; distinct from the forty imported historical course chapters.",
+      "link_destinations": "Same canonical routes and source files; verified in both language builds."
+    }
+  ],
+  "previous_build_checks": {
     "english": "Sphinx 9.1.0 -E -a -W --keep-going -D wavebit_bilingual=1: passed; 251 source pages, English at deployment root",
     "korean": "Sphinx 9.1.0 -E -a -W --keep-going -D wavebit_bilingual=1 -D language=ko: passed; 251 source pages under ko/",
     "local_links": "506 published HTML pages, 82998 local references; zero missing targets, fragments or same-route language-switch errors; internal theme templates and viewcode source pages excluded"
   },
+  "previous_build_checks_scope": "Integration checkpoint before the subsequent developer-workflow improvements.",
   "build_checks_scope": "Historical translation checkpoint before private-source publication filtering; its page counts are not the current published inventory.",
   "publication_boundary": "Only maintained teaching material and selected numerical records are published. Raw author notes, draft designs, session links, source illustrations, exploratory notebooks and prototype bundles stay in the private lab."
 }

@@ -71,6 +71,7 @@ subtrees:
           - file: guide/common/backends
           - file: guide/common/materials
           - file: guide/common/specs
+          - file: guide/run-records
       - file: guide/rcwa/index
         subtrees:
         - entries:
@@ -276,6 +277,8 @@ subtrees:
       - file: development/learning-provenance
       - file: development/solver-integration
       - file: development/source-checkout
+      - file: development/source-map
+      - file: development/verification
       - file: development/torch-compile
       - file: development/torch-upstream-defects
       - file: design/index

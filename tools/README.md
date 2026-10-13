@@ -2,6 +2,7 @@
 
 These tools maintain the checkout; they are not part of the installed package.
 
+- `run_verification.py` records quick/full/research pytest profiles and resumes only identical inputs; see [recorded verification](../docs/development/verification.md).
 - `run_examples_smoke.py` runs the executable examples from any working directory.
 - `run_tutorials_smoke.py` executes the current RCWA/FDTD notebook code cells in fresh interpreters.
 - `run_distribution_smoke.py` builds and validates an isolated installed distribution.

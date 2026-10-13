@@ -8,7 +8,7 @@ From the checkout you want to edit, with Python 3.12 or newer:
 ```sh
 python -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[jax,pytorch,contour,plot,docs]'
+python -m pip install -e .  # NumPy first; add only the extras you need
 python -m pip install pytest
 python -c "import wavebit; print(wavebit.__file__)"
 ```
@@ -17,6 +17,10 @@ On Windows, activate with `.venv\Scripts\Activate.ps1`. The module path must end
 in this checkout's `src/wavebit/__init__.py`. Install only the optional backends you
 need. Restart notebook kernels after structural changes.
 
+For material models, prepared reuse, fields or numerical changes, use the
+[current source map](source-map.md) to select an entry point and its first regression
+checks. The imported course's code map describes its compatibility workflow.
+
 ## Step through the source
 
 Select this checkout's `.venv` interpreter in your IDE. Set a breakpoint in
@@ -24,8 +28,8 @@ Select this checkout's `.venv` interpreter in your IDE. Set a breakpoint in
 The standard Python debugger also works:
 
 ```sh
-python -m pdb examples/rcwa/shapes_1d.py
-python -m pytest tests/api/test_manifest.py -q
+python -m pdb examples/fdtd/pulse_slab.py
+python -m pytest tests/api/test_unified_rcwa.py::test_check_does_not_run_scattering -q
 ```
 
 With `pdb`, `s` steps into a Python call and `n` advances to the next line. NumPy is
@@ -40,7 +44,7 @@ is inconvenient. Prepend this checkout's source directory for each command:
 
 ```sh
 PYTHONPATH="$PWD/src" python -c "import wavebit; print(wavebit.__file__)"
-PYTHONPATH="$PWD/src" python -m pytest tests/api/test_manifest.py -q
+PYTHONPATH="$PWD/src" python -m pytest tests/api/test_unified_rcwa.py::test_check_does_not_run_scattering -q
 ```
 
 The working directory alone does not select the package in a `src` layout.

@@ -76,3 +76,22 @@ Physical materials and units are shared by both solvers. A common declaration do
    :members:
 
 ```
+
+## Measured run records
+
+See [saving and inspecting research runs](../../guide/run-records.md) for the data-only
+load contract, explicit field sampling and source-provenance scope.
+
+```{eval-rst}
+.. autofunction:: wavebit.records.run_recorded
+
+.. autofunction:: wavebit.records.save_run
+
+.. autofunction:: wavebit.records.load_run
+
+.. autoclass:: wavebit.records.RunRecord
+   :members:
+
+.. autoclass:: wavebit.records.RecordedFields
+   :members:
+```

@@ -6,3 +6,5 @@ Materials, execution backends, derivatives and serializable jobs used across the
 - [Backends, devices and precision](backends.md)
 - [Materials and wavelength sweeps](materials.md)
 - [A run as data](specs.md)
+
+- [Save and inspect research runs](../run-records.md)

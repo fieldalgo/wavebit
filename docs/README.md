@@ -25,9 +25,13 @@ reference things that arrive with the clone**, plus the published literature:
 
 | May cite | Must not cite |
 | --- | --- |
-| code, tests, studies and other docs in this repository | a path on anyone's machine — `/Users/...`, `~/project/...`, `artifacts/...`, `/private/...`, `C:\...` |
+| code, tests, studies and other docs in this repository | a path on anyone's machine — `/Users/...`, `~/project/...`, `/private/...`, `C:\...` |
 | a DOI, an arXiv id, a public URL | a private study, an unpublished draft, an internal note |
 | a released version of another project | a sibling checkout or scratch directory, however stable it feels |
+
+Portable output destinations such as `artifacts/` are allowed when a command creates them.
+State that these are local generated outputs, not evidence included in a fresh clone. Link
+to committed measurements when making a published numerical claim.
 
 The rule is not decoration; it is what this repository already got wrong. Four documents
 pointed at directories that exist on one laptop, and the pointers named more than a location:
@@ -44,7 +48,7 @@ golden that ships, dates the run it was cut from, and stops there.
 One thing worth noticing about how the leaks were distributed: they were all in the documents
 whose subject lives outside the code. A document explaining a solver implementation has no occasion to name a
 directory. **If a draft here keeps wanting to point somewhere else, that is a signal it belongs
-somewhere else** — question 7 of the CONTRIBUTING table, not this folder.
+somewhere else** — private coordination rather than the maintained contributor guidance described in question 7 of the CONTRIBUTING table.
 
 ## Teaching pages and research records
 
@@ -72,10 +76,10 @@ translations are the public reading routes.
 ## What a document here is not
 
 - **Research records have a different role from the user manual.** The [guide](guide/index.md) teaches current usage; a validation record explains why a numerical decision was made and where its evidence stops.
-- **Not a changelog or a project record.** A document states what is true now and what the
-  measurement decided. Past defects appear only where the current behaviour is otherwise
-  inexplicable — a warning that exists because of one, a slot whose sign looks wrong until you
-  know why.
+- **A maintained explanation, not a running session log.** A document states current behavior,
+  a measured result, or an explicitly dated design decision. Developer workflows and accepted
+  implementation checkpoints belong here; private coordination and transient progress do not.
+  Explain past defects where they justify current behavior or the interpretation of evidence.
 - **Not a scratch pad.** An unfinished measurement lives in `studies/` until it decides
   something; scratch lives outside the checkout entirely.
 

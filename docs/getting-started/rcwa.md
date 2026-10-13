@@ -57,3 +57,13 @@ A prepared calculation accepts the complete live problem on every run. The secon
 The layers in `rcwa.Stack.layers` are ordered **bottom to top**. `top` and `bottom` mean physical half-spaces. Angles are in radians, x/y are centered in the cell, and z increases upward from the bottom of the finite stack.
 
 Continue with [materials](../guide/common/materials.md), [RCWA problem declarations](../guide/rcwa/index.md), and [the guided curriculum](../learn/fundamentals/index.md).
+
+## Continue with a complete experiment
+
+The [film optimization example](https://github.com/fieldalgo/wavebit/blob/develop/examples/rcwa/film_optimization.py)
+uses the current API for a thickness derivative and a bounded optimization. It checks the
+JAX derivative against an independent Airy calculation and the optimum against the
+quarter-wave thickness. The [shared film and grating comparison](https://github.com/fieldalgo/wavebit/blob/develop/examples/cross_solver/film_and_grating.py)
+builds both solver problems from the same physical materials and geometry, aligns amplitude
+reference planes, and compares complex diffraction orders under FDTD grid/time refinement.
+These are bounded examples with explicit checks, not convergence settings for every device.

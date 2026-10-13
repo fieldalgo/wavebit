@@ -9,21 +9,25 @@ Answer these in order and stop at the first **yes**. The point of the order is t
 | | Question | Where it goes |
 |---|---|---|
 | **0** | Is this going into git at all? A fragment, a probe, an idea being tried out. | **No → your scratch space, outside the repository.** Stop here. |
-| 1 | Is it the implementation? | `wavebit/` |
+| 1 | Is it the implementation? | `src/wavebit/` |
 | 2 | Can you write the `assert` line *before* you run it? | `tests/` |
 | 3 | …and does that criterion come from an **outside solver** (RETICOLO, GRCWA, TORCWA, Meep, FDTDX)? | the external-oracle machinery — `tests/references/interface/` plus the golden and its test |
 | 4 | Would writing that `assert` mean asserting the very thing you are trying to find out? | `studies/` — **and** a write-up in `docs/` |
 | 5 | Is it prose telling a user **how to use** something — what a keyword takes, what it defaults to, what it refuses? | `docs/guide/` |
-| 6 | Is it prose **about the code** — why a default is what it is, what was measured to decide it? | `docs/` |
-| 7 | Is it prose **about how the project is run** — a plan, a process, a decision about the repository rather than about the physics? | Not here. It is finished work, but it is not documentation of the library. |
-| 8 | Is it a lesson, read in order, for someone who has not used the API? | `tutorials/` |
+| 6 | Is it prose **about the code** — why a default is what it is, what was measured to decide it? | `docs/theory/`, `docs/validation/` or `docs/design/`, according to its role |
+| 7 | Is it maintained guidance for contributors or an accepted implementation decision? | `docs/development/` or `docs/design/`. Private coordination and unfinished plans stay outside the repository. |
+| 8 | Is it a lesson, read in order, for someone who has not used the API? | `docs/learn/` for the course; `tutorials/rcwa/` or `tutorials/fdtd/` for runnable notebooks |
 | 9 | Is it Wavebit applied to an outside problem? | `examples/` |
 
 If none of them is a yes, **the file has no home yet.** Say so in the PR rather than inventing a directory.
 
-**Questions 6 and 7 are the other pair worth restating.** `docs/` is published: anyone who clones this repository reads it, so it holds what a user or contributor needs — measurements, and the reasoning behind a default. A record of *how the project is run* is finished work rather than scratch, but it is not part of the library, and putting it here means publishing it. Keep those alongside the checkout instead of inside it.
+**Questions 6 and 7 separate scientific explanation from contributor guidance.**
+Published documentation includes measured evidence, architectural decisions, source maps and
+repeatable development workflows. Private coordination notes and unfinished plans remain
+outside the checkout. A design page distinguishes a proposal from implemented behavior and
+links the evidence supporting its implementation checkpoint.
 
-Because it is published, **nothing committed here may name a path outside the checkout** — not a document, not a script's default argument, not a notebook's stored output. State what a private record measured; never where it sits. [`docs/README.md`](docs/README.md) states the contract, and `tests/api/test_docs_contract.py` fails the build on a violation. A draft that keeps wanting to point outward is usually a question-6 file that landed in the wrong place.
+Because it is published, **nothing committed here may name a path outside the checkout** — not a maintained document, a script's default argument, or a new notebook's stored output. State what a private record measured; never where it sits. [`docs/README.md`](docs/README.md) states the contract, and `tests/api/test_docs_contract.py` fails the build on a violation. Exact, hash-verified historical source records have the narrow exceptions listed there; their paths are evidence, not current navigation.
 
 **Questions 5 and 6 split what used to be one row.** `docs/guide/` is the manual: it answers *how do I use this*, for a reader who already knows the API exists and needs the contract for one keyword. `docs/` answers *why is it built this way*, for a reader who is questioning a default. The test is whether the sentence would change if a measurement came out differently — if it would, it is a `docs/` sentence. Question 5 also sits above question 8 on purpose: a manual page is looked up, a tutorial is read once and outgrown, and when a draft is both it is a tutorial.
 
@@ -33,6 +37,7 @@ Two more rules that go with the table:
 
 - **Every directory carries a `README.md` whose first table maps each entry to the question it answers.** Not what the script does — what it exists to find out. `studies/README.md` is the model.
 - **English is canonical** for code, comments, documentation and commit messages. Optional Korean translations live in `docs/locales/ko/`; keep numerical examples in their canonical source files.
+- **Generated outputs are local.** Build, comparison and verification commands may write portable outputs under ignored `artifacts/`. These are not committed reference evidence; promote a reviewed measurement into an explicitly documented record when needed.
 - **Scratch lives outside the checkout.** An ignored directory inside the repository is not safe — it is what `git clean -xdf` exists to delete. Keep it as a sibling of the checkout and symlink it in as `lab` if you want it on hand (`ln -s ../<your-scratch-dir> lab`); the symlink is ignored, and losing it costs one `ln -s`.
 
 ### Why the directories are named this way
@@ -45,7 +50,8 @@ Three of them are worth a sentence, because the obvious guess is wrong:
 
 The package uses a `src/` layout so installed-package checks and source-tree tests
 have explicit import paths. Use one editable environment per worktree; see the
-[source checkout guide](docs/development/source-checkout.md) for setup and line debugging.
+[source checkout guide](docs/development/source-checkout.md) for setup and line debugging,
+and the [current source map](docs/development/source-map.md) for change locations and regression checks.
 `studies/` keeps executable investigations; their explanations live in `docs/`.
 
 **This file is the operative one.** If a directory name anywhere else disagrees with the table above, the table wins.
@@ -72,29 +78,25 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 - **Backend neutrality.** New solver code should be written against the Array API (`src/wavebit/_common/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
 
-### Branches: rebase, then fast-forward
+### Branches and preserved solver ancestry
 
-Work happens on several branches at once, often in parallel worktrees over the same clone. That
-is what these two rules are for; neither is about tidiness.
+Ordinary feature work is rebased onto `develop` and lands with `git merge --ff-only`.
+If another session lands first, rebase the ordinary feature branch again and retry.
+Keep its commits focused, with messages explaining what changed and why; squash WIP and
+fixup commits before landing.
 
-- **Rebase your branch onto `develop`. Never merge `develop` into your branch.** Merging the
-  other way puts a merge commit *inside* the branch, and with several branches doing it the
-  history criss-crosses until nobody can read it. Rebasing keeps each branch a straight line
-  sitting on `develop`'s tip.
-- **Land it with `git merge --ff-only`, whatever the size of the branch.** `develop` is linear:
-  no merge commits, no exceptions for large branches. `merge.ff=only` is set in the repo config
-  as a guard, so a plain `git merge` that would create one refuses; never pass `--no-ff` to
-  override it. If the fast-forward fails, another session landed first — rebase again and retry.
-  That retry loop is the concurrency control between sessions.
+The repository owner's RCWA/FDTD integration is an explicit exception. Preserve the
+independently developed `fdtd-general` ancestry with a true merge; do not squash or
+plain-rebase that integration. If `develop` advances before landing, merge it into the
+integration branch and resolve there. Intentional merge commits, including `--no-ff`, are
+allowed for that integration and later FDTD syncs. Land the resulting branch onto `develop`
+with `git merge --ff-only`, retaining both histories.
 
-**The commit, not the branch, is the unit of history here.** With no merge commit to carry a
-branch name, each commit has to stand on its own: squash WIP and fixup commits during the
-rebase, and write the message so it answers *what changed and why* without the branch for
-context. `git log --oneline develop` is the changelog this produces.
-
-This replaced a `--no-ff` rule on 2026-08-13 (`d1f5195`). If you find prose elsewhere that
-still describes merge commits as the landing step, it predates that and is wrong;
-[`CLAUDE.md`](CLAUDE.md) and this section are the current word.
+The initial solver merge is `04b449754e6b226bdcd4374b2897732054468ce7`, with develop parent
+`db37dbb8722b8993c2486c6af4f491e3b1b8bc13` and FDTD parent
+`d1119445bb2839dd03d2af0b769a2797d0be2d13`. The detailed policy is in
+[`CLAUDE.md`](CLAUDE.md). The `merge.ff=only` guard remains appropriate for ordinary feature
+work; it does not erase this documented exception.
 
 **One trap, because this repository turns it on.** `rebase.updateRefs` is set to `true` here, so
 every rebase moves *any other branch* pointing into the rebased range — no flag needed. That
@@ -113,10 +115,11 @@ source .venv/bin/activate
 python -m pip install -e '.[jax]'  # or .[pytorch], or plain -e . for NumPy only
 python -m pip install pytest
 python -c "import wavebit; print(wavebit.__file__)"
-pytest tests/ -q           # skips the tests marked slow; add --run-slow for all
+python -m pytest tests/ -q  # default: research deselected, slow skipped
 ```
 
-That runs the default set, which is also what CI runs. Tests of the NVF research code -- the
+That runs the default set, which is also what CI runs. `--run-slow` enables slow
+cases in that set; it does not select the research tier. Tests of the NVF research code -- the
 experimental conforming module and the study instruments built on it -- are marked `research`
 and run only when asked for, because they study that experimental code rather than the ordinary
 solver and they are where the suite's time goes:

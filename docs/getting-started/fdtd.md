@@ -31,3 +31,13 @@ The record's time axis is in seconds, and Ey is in V/m. Magnetic records use A/m
 For repeated compatible runs, use `prepared = fdtd.prepare(problem, numerics=numerics)` and `prepared.run(problem)`. Every run receives the complete current problem. Changing grid topology, duration structure, monitor layout or other prepared constraints requires a new preparation; rejected reuse raises a structured incompatibility error.
 
 See [the FDTD guide](../guide/fdtd/general-fdtd.md) for units, supported observations and validation limits, and [the FDTD curriculum](../learn/fdtd/index.md) for refinement and physical validation.
+
+## Continue with dispersion and calibrated observations
+
+The [dispersive field example](https://github.com/fieldalgo/wavebit/blob/develop/examples/fdtd/dispersive_fields.py)
+adds a physical Lorentz material, a time record, spectral E/H and a separate reference run.
+It keeps raw Fourier field units distinct from source-normalized fields and checks live
+source-amplitude reuse. Plotting is optional. The [film and grating comparison](https://github.com/fieldalgo/wavebit/blob/develop/examples/cross_solver/film_and_grating.py)
+then aligns RCWA and FDTD reference planes and compares complex nonzero diffraction orders
+under spatial and time-window refinement. Agreement in these declared cases does not
+establish convergence for a different material, geometry or pulse.
