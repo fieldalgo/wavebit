@@ -320,8 +320,9 @@ an abstract trace there is nothing to read, and the masks travel as data: below)
   `ky == 0` (where `g = 0` and the comparison is strict) never engage: the Rayleigh contract,
   the TE/TM path and every `ky == 0` solve are untouched. A gate without it engaged at a
   `ky == 0` retry and scattered forward- and reverse-mode tangents by 4e-8.
-- A cluster root under 1e-9, or a pair with opposite root labels, keeps the family
-  construction.
+- A cluster root under 1e-9 keeps the family construction. Members labelled up and down are
+  not refused: the rebuild first puts every member on the deepest member's side
+  (`solve_1d.py::_one_side`; *Patterned double negatives*, below).
 
 Engaging where it was not needed costs time, never accuracy; failing to engage leaves the 1e-14
 edge error. About 2% of random conical solves route; a solve with one rebuilt layer of two costs
@@ -447,7 +448,7 @@ eigensolves dominate, not the `4n`-sized solve of the modal variation.
 
 **What stays as it was.**
 - Nothing refuses under a trace: `check_finite` and `auto_detune` are skipped there, as before.
-- A refused cluster (a root under the 1e-9 floor, or opposite labels) gets empty masks: the
+- A refused cluster (a root under the 1e-9 floor) gets empty masks: the
   family construction's arithmetic in the general layout, NaN at an exact zero included, silent.
 - `ky == 0` at a Rayleigh point under a trace: NaN, unchanged (the `check_finite` gap).
 - More than 4 coupled rows or columns in one layer (`_COUPLED_CAP`), or a coupled row that is
@@ -457,7 +458,7 @@ eigensolves dominate, not the `4n`-sized solve of the modal variation.
 - Second derivatives through the modal operator still raise, as do `torch.func.grad` and `jvp`;
   `torch.compile(fullgraph=True)` raises `Unsupported`, now at wavebit's first door
   ([`torch-compile.md`](torch-compile.md) §6).
-- Not measured: GPU, `pmap` and `shard_map`, patterned double negatives under a trace.
+- Not measured: GPU, `pmap` and `shard_map`.
 
 **Why not a `lax.cond`.** A design that keeps the family construction off the band and the
 rebuild on it, chosen at run time, was built and measured beside this one. Under `vmap` the
@@ -478,6 +479,50 @@ exponential takes the closed-form tangent (9.9e-17 from eager on a field's `z` d
 PA616). Before, `_expm` formed jax's ceiling squaring count traced and ran a scan of conditional
 squarings (4e-16..8e-16); before that, falling back to jax's own floor count put 6.4e-11 there.
 
+**Patterned double negatives.** They have exceptional points of their own at a real angle.
+Root-found on the layer's own matrices: six in four lossless layers (double-negative pillars in
+silicon; glass pillars in a double-negative host; air beside `(-1, -3)`; glass beside `(-6, -2)`
+at `phi = 1`), the pair's slopes in the ratio 0.76..1.0; none in 350..1600 nm in three milder
+ones (glass or air beside `(-2, -1.5)` or `(-4, -1)`). Their flux labels
+(`conventions.py::power_down_labels`) read the `1/(w - ky**2)` quotient, but at a real `ky` no
+label rule can split a cluster. The gate holds `abs(w) <= ky**2/2`, so every root inside it lies
+within `pi/12` of `+-abs(ky)`: decay-dominated, with a real part of at least `0.68 abs(ky)` --
+with the 1e-9 root floor, far from the flux tie-break's 1e-12 -- and every rule (the decaying
+root, Maystre's, its mirror, the power-down rule, the cap) takes the decaying root. A census
+agrees: 380 random scenes with double-negative regions (lossless, lossy, beside a metal or a
+gain region), 210 gate calls with a nonempty band on ETM and SMM, no split label. The rebuild is
+exact at all six points: amplitudes 1.2e-13 .. 6.6e-12 from the fit at the four where the fit is
+good to 2e-11, and 7.6e-11 and 1.9e-9 at the two where the fit itself is only 4.9e-10 and
+1.4e-9; the family construction there was 0.18 .. 99 off in `R`.
+
+A complex `theta` does split them. With `phi = pi/2` the cutoff does not move with `ky`, so the
+pair sits at `q = +-ky`, and once `ky` is propagation-dominated the power-down rule labels each
+mode by its flux: on ETM a band member that the flux sends the other way (at `abs(ky) ~ 1.5` the
+band reaches the neighbouring crossing's mode); on both algorithms every root at a purely
+imaginary `theta` (the tie `Re(q) = 0`, broken by the flux); and the cutoff pair itself, a
+relative 1e-12 off the point. The gate refused each, and the family construction answered
+silently (beyond the `ComplexIncidenceWarning` every complex angle carries): `R` 1.1..24 off at and beside the point (ETM), 0.48..1.4 at an imaginary `theta` on
+SMM, 3.3e-5..7.4e-4 where only the pair split; under `jax.jit`, `jax.vmap` and
+`torch.func.vmap` 3e-5..12, wavelength derivatives 9e6..2e26 relative, and the SMM field
+4.7e-4..6.2e6 from the ETM field (relative to its largest entry). A split cluster is
+now put on one side before the rebuild (`solve_1d.py::_one_side`): every member takes the root
+on the side of the deepest member's own label. That is a change of basis, so it moves no exact
+answer, and where no member disagrees `where` hands back the same bits: a 348-line digest
+(eager NumPy, JAX and PyTorch, gradients, `jit`, `jit(grad)`, `jit(vmap)`, and this section's
+routed points), run twice per tree, is identical to the tree before. At 16 split cases the
+answer is within the fit's own residual (amplitudes at most 2.1e-8 where the fit is 1.5e-7,
+elsewhere at most 2.2e-9) and ETM = SMM to 2.2e-11; at five of them NumPy, `jit`, `jit(vmap)`,
+`torch.func.vmap`, `jax.grad`, `jit(grad)` and torch backward agree, the derivatives 3.6e-9 ..
+7.8e-7 relative from the fit's slope (the fit's accuracy); the SMM and ETM fields agree to
+2.1e-11; and at 3, 10 and 30 um of thickness (two scenes) the answer stays within the fit's
+residual and ETM = SMM to 2.3e-10: the flipped roots cost ETM nothing measurable.
+
+The 2D and first-order paths at these points show the two defects below and nothing new: at a
+real `theta` the 2D path is 2.0e-11..1.1e-5 off in `R` and up to 4.0e-2 in an amplitude of 2.75
+(SMM); first-order ETM up to 5.6e-6 in `R`, first-order SMM 1.6e-3..0.13 (`R + T - 1` up to
++0.34), exact at two of the six; at a complex `theta`, 2D up to 3.4e-3, first-order ETM up to
+1.5e-4 and first-order SMM up to 4.2 in `R`.
+
 **Still open, and separate.**
 
 - The 2D path at a *patterned* exceptional point is 1e-8..4e-5 off, silently: its grazing
@@ -486,6 +531,3 @@ squarings (4e-16..8e-16); before that, falling back to jax's own floor count put
   +0.36), silently, and stays near 0.2 for every relative offset under 1e-8. First-order ETM
   there sits at the 2D path's level (3.5e-7); neither first-order path fails at a uniform
   cutoff.
-- Patterned double negatives were not measured (no real crossing was found). Their flux labels
-  read the same `1/(w - ky**2)` quotient; if a pair's labels disagree the gate keeps the family
-  construction, silently.

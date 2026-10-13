@@ -241,9 +241,17 @@ def _cutoff_cluster(xp, wA, wB, q1, q2, ky):
     agreed to 2e-10.
 
     ``None`` also where the masks cannot be handed to the rebuild: a cluster root at or below
-    :data:`_CUTOFF_Q_FLOOR`, or a family-1 / family-2 pair with opposite root labels
-    (``|q1_j - q2_k| >= |q1_j + q2_k|``), which would put an up- and a down-going mode in one
-    cluster.
+    :data:`_CUTOFF_Q_FLOOR`. Members whose root *labels* disagree (``|q1_j - q2_k| >=
+    |q1_j + q2_k|``, an up- and a down-going mode in one cluster) are not refused: the rebuild
+    puts every member on one side first (:func:`_one_side`). Until 2026-10-12 they were refused,
+    and the family construction they fell back to is the lottery of section 7 of
+    ``docs/rayleigh-points.md``. It is reachable only at a complex ``ky``: at a real one every
+    root inside the gate is within ``pi/12`` of ``+-|ky|`` (the gate holds ``|w| <= ky**2/2``),
+    so not propagation-dominated, and every label rule picks its decaying root. At a complex
+    ``theta`` a patterned double negative splits a cluster through its flux labels
+    (:func:`~wavebit._core.conventions.power_down_labels`), on ETM through a band member the flux
+    labels the other way (``R`` measured 1.1 to 24 off), on both algorithms at a purely imaginary
+    ``theta``, where every root is a flux-broken tie (up to 1.4).
 
     **Never ``None`` under an abstract trace** -- ``jax.jit``, ``jax.vmap`` (the wavelength-sweep
     idiom), a ``jax.lax.map`` or ``scan`` body, ``jax.checkpoint``, ``torch.func.vmap``. There
@@ -269,12 +277,8 @@ def _cutoff_cluster(xp, wA, wB, q1, q2, ky):
     g = xp.minimum(_CUTOFF_REL * ky2 ** 0.75, 0.5 * ky2)
     mJ = xp.abs(_readable(wA, xp)) < g
     mK = xp.abs(_readable(wB, xp)) < g
-    pair = xp.logical_and(mJ[:, None], mK[None, :])
-    opposite = xp.abs(v1[:, None] - v2[None, :]) >= xp.abs(v1[:, None] + v2[None, :])
-    refused = xp.logical_or(
-        xp.any(xp.logical_and(pair, opposite)),
-        xp.logical_or(xp.any(xp.logical_and(mJ, xp.abs(v1) <= _CUTOFF_Q_FLOOR)),
-                      xp.any(xp.logical_and(mK, xp.abs(v2) <= _CUTOFF_Q_FLOOR))))
+    refused = xp.logical_or(xp.any(xp.logical_and(mJ, xp.abs(v1) <= _CUTOFF_Q_FLOOR)),
+                            xp.any(xp.logical_and(mK, xp.abs(v2) <= _CUTOFF_Q_FLOOR)))
     engaged = xp.logical_and(xp.logical_or(xp.any(mJ), xp.any(mK)), xp.logical_not(refused))
     decided = _concrete(engaged)
     if decided is None:
@@ -289,6 +293,34 @@ def _cutoff_cluster(xp, wA, wB, q1, q2, ky):
     if not decided:
         return None
     return mJ, mK
+
+
+def _one_side(xp, wA, wB, q1, q2, mJ, mK):
+    """``(q1, q2)`` with every cluster member's root on the side of the deepest member's.
+
+    The deepest member is the one with the smallest ``|wA|`` or ``|wB|``; its root is the one
+    the layer's own rule chose. A member whose root lies on the other side
+    (``|q - ref| > |q + ref|``) takes the opposite root, which is the same mode travelling the
+    other way: a label is a choice of basis, so this moves no exact answer, and the rebuild
+    needs it -- its coupling ``tau_jk`` divides by ``q1_j + q2_k``, which is ~0 for a pair
+    labelled up and down, and a pair split across the ``+`` and ``-`` sets cannot be coupled at
+    all. Every root inside the gate is within ``pi/12`` of ``+-ky`` (``|w| <= |ky|**2/2``), so the
+    side is never in doubt. Where no member disagrees -- every real ``ky``, and every cluster the
+    rebuild took before -- nothing is flipped, and ``where`` hands back the same bits.
+
+    Masks and values only, so it runs as data under an abstract trace: the deepest member is a
+    one-hot of an ``argmin``, never an index read.
+    """
+    n1 = q1.shape[0]
+    q = xp.concat([q1, q2])
+    m = xp.concat([mJ, mK])
+    depth = xp.abs(xp.concat([wA, wB]))
+    depth = xp.where(m, depth, xp.full_like(depth, float('inf')))
+    hot = xp.arange(q.shape[0], device=getattr(q, 'device', None)) == xp.argmin(depth)
+    ref = xp.sum(xp.where(hot, q, xp.zeros_like(q)))
+    flip = xp.logical_and(m, xp.abs(q - ref) > xp.abs(q + ref))
+    q = xp.where(flip, -q, q)
+    return q[:n1], q[n1:]
 
 
 def _regular_conical_modes(xp, Kx, ky, epx_conv, epz_conv_i, A, mux_conv, muz_conv_i, mu_given,
@@ -350,7 +382,11 @@ def _regular_conical_modes(xp, Kx, ky, epx_conv, epz_conv_i, A, mux_conv, muz_co
     Every divisor is guarded where its lane is discarded (``where(mask, d, 1)``), so no ``inf``
     or NaN is formed even in lanes the masks drop: NumPy stays quiet under a caller's
     ``'error'`` filter and a JAX ``where`` takes no NaN gradient.
+
+    The cluster's roots are first put on one side (:func:`_one_side`), so that ``q1_j + q2_k``
+    is never ~0 inside it; the returned ``q`` carries those labels.
     """
+    q1, q2 = _one_side(xp, wA, wB, q1, q2, mJ, mK)
     one = xp.ones_like(wA)
     # Outside the cluster |wA| >= the gate > 0; inside it the gate's floor keeps |q1|, |q2| > 0
     # and one label for the pair keeps q1 + q2 off zero.
@@ -652,7 +688,7 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
         # With `ky == 0` that is a Rayleigh point, the quotients are 0/0, and `check_finite`
         # refuses the result downstream. With `ky != 0` it is an x-cutoff, which the rebuild
         # above takes. It reaches this block only when the gate refused its cluster (a root
-        # under the floor, opposite labels), where an exact zero makes the quotients inf, the
+        # under the floor), where an exact zero makes the quotients inf, the
         # products below NaN, and `check_finite` refuses that too -- never under an abstract
         # trace, where every layer is rebuilt (a refused cluster with empty masks). So NumPy's
         # own warnings are silenced over the whole block (see `division_at_a_cutoff`).

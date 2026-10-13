@@ -287,14 +287,35 @@ def test_the_rayleigh_bound_takes_over_at_small_ky():
     assert _synthetic([1.1 * ky ** 2 / 2, 0.5], [1.1 * ky ** 2 / 2, 0.5], ky) is None
 
 
-def test_the_gate_refuses_a_root_under_the_floor_and_opposite_labels():
-    """A cluster root at the floor, or a pair labelled up and down, keeps the old construction."""
+def test_the_gate_refuses_a_root_under_the_floor_and_takes_opposite_labels():
+    """A cluster root at the floor keeps the old construction; a pair labelled up and down is
+    taken, and the rebuild puts both on the deepest member's side (:func:`_one_side`)."""
     ky, g = 0.3, _gate(0.3)
     wA, wB = [0.5 * g, 0.7], [0.5 * g, 0.5]
     q = np.sqrt(np.asarray(wA, dtype=complex) + ky ** 2)
     assert _synthetic(wA, wB, ky, q1=q, q2=q) is not None
     assert _synthetic(wA, wB, ky, q1=[1e-10, q[1]], q2=q) is None
-    assert _synthetic(wA, wB, ky, q1=q, q2=[-q[0], q[1]]) is None
+    masks = _synthetic(wA, wB, ky, q1=q, q2=[-q[0], q[1]])
+    assert masks is not None and masks[0].tolist() == [True, False]
+    q1, q2 = solve_1d._one_side(np, np.asarray(wA, dtype=complex), np.asarray(wB, dtype=complex),
+                                q, np.asarray([-q[0], q[1]]), *masks)
+    assert q1.tolist() == q.tolist() and q2.tolist() == [q[0], q[1]]
+
+
+def test_one_side_follows_the_deepest_member_and_flips_nothing_else():
+    """The reference is the member with the smallest ``|w|``, whichever family it is in; modes
+    outside the masks keep their labels whatever they are; with no disagreement the output is
+    the input, bit for bit."""
+    q = np.asarray([0.3 + 0.01j, 0.31 + 0.0j, -0.29 - 0.02j], dtype=complex)
+    wA = np.asarray([1e-3, 2e-3, 0.5], dtype=complex)
+    wB = np.asarray([1e-9, 3e-3, 0.4], dtype=complex)
+    mJ = np.asarray([True, True, False])
+    mK = np.asarray([True, True, False])
+    # family 2's first member is the deepest: its label (-) wins, and family 1 follows
+    q1, q2 = solve_1d._one_side(np, wA, wB, q, np.asarray([-q[0], -q[1], q[2]]), mJ, mK)
+    assert q1.tolist() == [-q[0], -q[1], q[2]] and q2.tolist() == [-q[0], -q[1], q[2]]
+    same = solve_1d._one_side(np, wA, wB, q, q, mJ, mK)
+    assert all(np.array_equal(a, q) for a in same)
 
 
 def _gate_cases():
@@ -315,7 +336,7 @@ def _gate_cases():
     q = list(np.sqrt(np.asarray(wA, dtype=complex) + ky ** 2))
     out.append(('a cluster', True, (wA, wB, ky, q, q)))
     out.append(('a root under the floor', False, (wA, wB, ky, [1e-10, q[1]], q)))
-    out.append(('opposite labels', False, (wA, wB, ky, q, [-q[0], q[1]])))
+    out.append(('opposite labels', True, (wA, wB, ky, q, [-q[0], q[1]])))
     out.append(('ky 0, exact zero', False, ([0.0, 0.3], [0.0, 0.5], 0.0, None, None)))
     out.append(('ky 0, +-1e-300', False, ([1e-300, 0.3], [-1e-300, 0.5], 0.0, None, None)))
     out.append(('ky 0, roots above the floor', False,
@@ -327,12 +348,13 @@ def _gate_cases():
                          ids=[name for name, _, _ in _gate_cases()])
 def test_the_gate_under_jit_matches_the_eager_gate(name, engages, case):
     """Under ``jax.jit`` the gate hands its masks on as data: the eager masks where the gate
-    engages, all-False wherever it must not -- outside the edge, a root under the floor,
-    opposite labels, ``ky == 0``.
+    engages (opposite labels included), all-False wherever it must not -- outside the edge, a
+    root under the floor, ``ky == 0``.
 
     The only check that sees the refusal fold (a refused cluster's masks dropped to empty): the
-    solver-level tests never build a refused cluster. Also pins the strict comparison at
-    ``ky == 0`` under a trace, where nothing refuses afterwards.
+    solver-level tests never build a refused cluster. Opposite labels are no longer a refusal
+    (the rebuild relabels them), so they keep their masks under a trace as eagerly. Also pins the
+    strict comparison at ``ky == 0`` under a trace, where nothing refuses afterwards.
     """
     jax = pytest.importorskip('jax')
     wavebit.enable_x64()
@@ -412,6 +434,123 @@ def test_a_patterned_exceptional_point_is_exact(name, monkeypatch):
             f'{name} rel {rel:g}: {np.max(np.abs(etm - truth)):.1e} from the fit')
         assert np.max(np.abs(smm - etm)) < 1e-13, (
             f'{name} rel {rel:g}: SMM {np.max(np.abs(smm - etm)):.1e} from ETM')
+
+
+# ------------------------------- 3b. a cluster whose labels split (complex theta, double negative)
+
+def _dng_grating(eps_bg, eps_fg, mu_bg, mu_fg):
+    eps, mu = np.full((1, 1, 20), eps_bg), np.full((1, 1, 20), mu_bg)
+    eps[0, 0, 6:14], mu[0, 0, 6:14] = eps_fg, mu_fg
+    return dict(structure=eps, mu=mu)
+
+
+_DNG_HOST = _dng_grating(-2.0, 2.25, -2.0, 1.0)     # glass pillars in a double-negative host
+_SI_HOST = _dng_grating(12.25, -2.0, 1.0, -1.5)     # double-negative pillars in silicon
+_SPLIT_BASE = dict(period=1000., thickness=[300.], top=1.0, bot=2.1025)
+
+#: Lossless patterned double negatives at their own x-cutoff (root-found on the layer's own
+#: matrices, ``min|wA|`` below 1e-14), lit at a complex ``theta``. With ``phi = pi/2`` the cutoff
+#: does not depend on ``ky``, so the pair sits at ``q = +-ky``. Before 2026-10-12 the gate refused
+#: each and kept the family construction, silently (largest error in ``(sum R, sum T, r, t)``
+#: against the fit): a band member the flux labels the other way (ETM; 2.3 and 8.1), every root
+#: a flux-broken tie at an imaginary ``theta`` (both algorithms; 9.3e-3), the cutoff pair itself
+#: split by its flux labels at a relative 1e-12 (ETM; 6.6e-4).
+SPLIT = {
+    'DNG host, theta 0.02+1.2j': dict(_DNG_HOST, **_SPLIT_BASE, wavelength=589.736193646378,
+                                      theta=0.02 + 1.2j, rel=0.0, algos=('ETM',)),
+    'Si host, theta 0.02+1.2j': dict(_SI_HOST, **_SPLIT_BASE, wavelength=1396.5775562391,
+                                     theta=0.02 + 1.2j, rel=0.0, algos=('ETM',)),
+    'Si host, theta 1.2j': dict(_SI_HOST, **_SPLIT_BASE, wavelength=1396.5775562391,
+                                theta=1.2j, rel=1e-12, algos=('ETM', 'SMM')),
+    'DNG host, theta 0.02+0.8j': dict(_DNG_HOST, **_SPLIT_BASE, wavelength=589.736193646378,
+                                      theta=0.02 + 0.8j, rel=1e-12, algos=('ETM',)),
+}
+
+
+def _quiet_complex(call):
+    """Run ``call`` with every warning an error but the complex-incidence notice."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        warnings.simplefilter('ignore', wavebit.ComplexIncidenceWarning)
+        return call()
+
+
+@functools.lru_cache(maxsize=None)
+def _split_fit(name):
+    """:func:`_fit` for a :data:`SPLIT` scene (ETM family construction, the same 16 offsets)."""
+    scene = SPLIT[name]
+    with _family_construction(), warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        Y = np.array([_vector(_solver(scene, wavelength=scene['wavelength'] * (1 + h))
+                              .solve(auto_detune=False)) for h in _FIT_OFFSETS])
+    return np.polyfit(1e3 * _FIT_OFFSETS, Y, 8)
+
+
+def _split_spy(monkeypatch):
+    """Spy on the gate: per call, whether two roots inside its band are labelled up and down."""
+    seen = []
+    gate = solve_1d._cutoff_cluster
+
+    def spy(xp, wA, wB, q1, q2, ky):
+        v1, v2 = (_np(q if q.ndim == 1 else np.diagonal(_np(q))) for q in (q1, q2))
+        g = _gate(complex(_np(ky)))
+        mJ, mK = np.abs(_np(wA)) < g, np.abs(_np(wB)) < g
+        opposite = np.abs(v1[:, None] - v2[None, :]) >= np.abs(v1[:, None] + v2[None, :])
+        seen.append(bool(np.any(opposite & mJ[:, None] & mK[None, :])))
+        return gate(xp, wA, wB, q1, q2, ky)
+    monkeypatch.setattr(solve_1d, '_cutoff_cluster', spy)
+    return seen
+
+
+@pytest.mark.parametrize('name', list(SPLIT))
+def test_a_split_cluster_is_rebuilt_on_one_side(name, monkeypatch, rebuilds):
+    """The rebuild takes a cluster whose labels disagree, puts it on one side, and is exact.
+
+    The premise -- that the gate's band holds a pair labelled up and down -- is read off the
+    gate's own input. Measured: 1.0e-10 .. 2.1e-9 from the fit (its own residual is 3.7e-10 ..
+    3.5e-9 at these angles), ETM = SMM to 4.6e-14 .. 1.2e-11. Catches the refusal kept (2.3 ..
+    8.1) and the rebuild without the relabelling (the pair-split scenes).
+    """
+    scene = SPLIT[name]
+    truth = np.polyval(_split_fit(name), 1e3 * scene['rel'])
+    split = _split_spy(monkeypatch)
+    wavelength = scene['wavelength'] * (1 + scene['rel'])
+    got = {}
+    for algo in scene['algos']:
+        del split[:], rebuilds[:]
+        got[algo] = _vector(_quiet_complex(lambda: _solver(scene, algo=algo, wavelength=wavelength)
+                                           .solve(auto_detune=False)))
+        assert any(split), f'{name} {algo}: no split cluster -- the premise is gone'
+        assert rebuilds, f'{name} {algo}: the rebuild did not engage'
+        err = np.max(np.abs(got[algo] - truth))
+        assert err < 1e-8, f'{name} {algo}: {err:.1e} from the fit'
+    if len(got) == 2:
+        assert np.max(np.abs(got['ETM'] - got['SMM'])) < 1e-11
+
+
+@pytest.mark.parametrize('name', ['DNG host, theta 0.02+1.2j', 'Si host, theta 1.2j'])
+def test_a_split_cluster_under_jit_and_vmap(name):
+    """Under ``jax.jit`` and ``jax.vmap`` the masks travel as data and the relabelling with them.
+
+    Before, a split cluster under a trace folded to empty masks: the family construction in the
+    general layout, as wrong as eagerly (6.7e-3 and 38 from the eager solve). Measured: jitted
+    values 3.9e-13 and 8.4e-13 from eager.
+    """
+    jax = pytest.importorskip('jax')
+    wavebit.enable_x64()
+    jnp = jax.numpy
+    scene = SPLIT[name]
+    wl = scene['wavelength'] * (1 + scene['rel'])
+    algo = scene['algos'][-1]
+    s = _solver(scene, algo=algo, backend='jax')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', wavebit.ComplexIncidenceWarning)
+        eager = _vector(s.solve(wavelength=wl, auto_detune=False))
+        jitted = _vector(jax.jit(lambda w: s.solve(wavelength=w, auto_detune=False))(jnp.asarray(wl)))
+        lanes = jax.vmap(lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R)))(
+            jnp.asarray([wl, wl * (1 + 1e-12)]))
+    assert np.max(np.abs(jitted - eager)) < 1e-10
+    assert abs(float(lanes[0]) - eager[0].real) < 1e-10
 
 
 # ------------------------------------------------------------------- 4. a wide cluster
