@@ -1,8 +1,9 @@
 # Verification suite
 
 Everything whose expected answer can be stated before the run. CI runs the default
-set in two jobs (`pytest tests -m "not slow and not research"` and
-`pytest tests -m "slow and not research"`). The
+set in two recorded jobs: `--profile full --slow exclude` and
+`--profile full --slow only` through `tools/run_verification.py`. These preserve
+the `not slow and not research` and `slow and not research` selections. The
 [research tier](#the-research-tier) is asserted separately during research development.
 
 The test for whether something belongs here: **can you write the `assert` line first?** If
@@ -18,7 +19,14 @@ Use `python tools/run_verification.py --profile quick` for the small smoke profi
 Each run writes an exact collection and result record to a new directory under
 `artifacts/verification/`; `--resume RUN_DIRECTORY` reuses completed nonfailed
 nodes only when inputs, environment, configuration and collection still match.
-Source mutation tests run in a separate serial snapshot.
+Source mutation tests run in a separate serial snapshot. CI uses two workers and
+retains the existing per-test timeouts: 1,200 seconds for the ordinary partition,
+2,400 seconds for slow tests, both with the thread timeout method. The job limits
+remain 180 and 240 minutes. Artifacts `verification-default` and
+`verification-slow` keep receipts, inventories, JSONL events, JUnit XML and logs;
+the writable source snapshot is excluded from upload. `XLA_FLAGS` is part of the
+recorded environment, so changing, setting or removing it refuses resume.
+These controls belong to the verification tool and add no solver runtime work.
 See [recorded verification](../docs/development/verification.md) for the record
 format and interruption rules. Installed wheel/sdist verification remains the
 separate `python tools/run_distribution_smoke.py` command.

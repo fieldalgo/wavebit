@@ -22,13 +22,30 @@ pytest-xdist가 필요합니다. 도구는 자체 기록기와 xdist를 명시�
 기존 conftest hook과 pytest 설정은 계속 적용됩니다. 지정하지 않은 BLAS 스레드
 수는 1로 설정합니다.
 
+선택 사항인 `--slow`는 research 선택 규칙을 유지하면서 profile의 범위를 좁힙니다.
+기본값 `include`는 profile의 기존 선택을 유지하고, `exclude`는 slow 사례를
+제외하며, `only`는 해당 범위의 slow 사례만 선택합니다. `quick --slow only`는
+거부합니다. 따라서 명시적으로 좁히지 않으면 `full`은 여전히 slow 사례를 포함합니다.
+
+`--timeout SECONDS`는 양수인 테스트별 시간 제한을 설정하며 pytest-timeout이
+필요합니다. 요청하면 도구가 플러그인을 명시적으로 불러오고, 설치되어 있지 않으면
+실행을 거부합니다. `--timeout-method`는 기본값 `thread` 또는 `signal`을 받습니다.
+별도의 순차 mutation 단계에도 같은 제한을 적용합니다. 옵션을 생략하면 새로운
+시간 제한을 추가하지 않습니다. `--verbose`는 자세한 테스트 진행을 출력하고,
+`--live-output`은 단계 로그에 저장하면서 출력을 실시간으로 보여줍니다.
+수집 단계는 조용히 파일로만 기록하며 실시간·상세 출력은 실제 테스트 실행 단계에
+적용합니다. thread timeout은 최종 JUnit XML이나 session summary가 완성되기 전에
+pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기며, 중단된 노드는
+미완료로 유지하고 0이 아닌 종료 상태를 반환합니다.
+이 옵션은 검증용 하위 프로세스에 적용되며 일반 솔버 실행은 바꾸지 않습니다.
+
 실행할 때마다 `artifacts/verification/` 아래 새 디렉터리가 생깁니다.
 `--output`으로 다른 새 디렉터리를 지정할 수 있지만 이미 존재하는 디렉터리는
 거부합니다. 테스트 시작 전에 저장 위치를 출력합니다. 다음 파일을 확인하세요.
 
 - `inputs.json`: 저장소 소스, 테스트, fixture와 그 밖의 기록 대상 입력의 해시,
-  Python과 설치 배포판 버전, 선택한 설정, 수치 실행에 관련된 제한된 환경 변수
-  목록입니다. 임의의 환경 변수, 자격 증명, 패키지 인덱스 URL은 기록하지 않습니다.
+  Python과 설치 배포판 버전, 선택한 설정, `XLA_FLAGS`를 포함해 수치 실행에
+  관련된 제한된 환경 변수 목록입니다. 임의의 환경 변수, 자격 증명, 패키지 인덱스 URL은 기록하지 않습니다.
 - `collected-nodeids.json`: 선택한 profile의 정확한 테스트 목록과 순서입니다.
 - `receipt.json`: 노드별 결과, 재사용한 노드, 무결성 검사, 단계별 종료 코드와
   경과 시간입니다. 통과, 실패, setup/teardown 오류, 건너뜀, 예상 실패,
@@ -41,18 +58,46 @@ pytest-xdist가 필요합니다. 도구는 자체 기록기와 xdist를 명시�
 끝나야 재사용할 수 있습니다. 중단된 실행은 완료된 이벤트를 남기고 0이 아닌
 종료 상태를 반환하며, 보고되지 않은 노드를 통과했다고 처리하지 않습니다.
 
+## CI의 기존 두 실행 범위 유지
+
+[테스트 workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)는
+research를 제외하는 기존 두 범위 모두에 검증 도구를 사용합니다.
+
+```shell
+python tools/run_verification.py --profile full --slow exclude --workers 2 \
+  --timeout 1200 --timeout-method thread --verbose --live-output \
+  --output artifacts/verification/default
+python tools/run_verification.py --profile full --slow only --workers 2 \
+  --timeout 2400 --timeout-method thread --verbose --live-output \
+  --output artifacts/verification/slow
+```
+
+일반 job과 slow job은 각각 기존의 테스트별 1,200초·2,400초 제한과
+job 전체의 180분·240분 제한을 유지합니다. 선택하는 테스트는 바뀌지 않으며,
+두 범위를 합치면 research를 제외한 전체 테스트가 됩니다. 각 범위 안에서
+소스를 수정하는 사례는 공유 체크아웃의 병렬 실행 대신 도구가 만든 별도
+스냅샷에서 순차 실행합니다.
+
+GitHub artifact `verification-default`와 `verification-slow`에는 JSON 결과 기록과
+입력 목록, JSONL 이벤트, JUnit XML, 로그를 보관합니다. artifact마다 저장소를
+복제해 올리지 않도록 쓰기 가능한 소스 스냅샷은 업로드에서 제외합니다.
+이 artifact는 검증 기록이며 전체 소스 스냅샷이 아닙니다.
+
 ## 동일한 실행 이어가기
 
 ```shell
 python tools/run_verification.py --profile full --workers 4 --resume RUN_DIRECTORY
 ```
 
-profile, 경로, worker 설정, 체크아웃 입력과 환경을 그대로 유지해야 합니다.
+profile, slow 필터, 경로, worker·timeout 설정, 출력 방식, 체크아웃 입력과 환경을
+그대로 유지해야 합니다.
 도구는 이를 다시 fingerprint로 계산하고 선택 범위 전체를 다시 수집합니다.
 새 테스트, 사라진 테스트, 순서가 바뀐 테스트를 포함해 fingerprint나 수집한
 node ID가 하나라도 바뀌면 재사용을 거부합니다. 기본적으로 실패와 미완료
 테스트는 다시 실행하고, 완료된 통과·건너뜀·예상 실패와 non-strict 예상 밖 통과는 원래 기록 위치와 함께
-재사용합니다. 예상 밖 통과는 계속 별도로 보고하며, strict XPASS는 실패이므로
+재사용합니다. `XLA_FLAGS`의 값 변경뿐 아니라 새 설정이나 제거도 환경
+fingerprint를 바꾸므로 재사용을 거부합니다. 이 경우 새 실행을 시작하세요.
+예상 밖 통과는 계속 별도로 보고하며, strict XPASS는 실패이므로
 다시 실행합니다. 이전 실행을 덮어쓰지 않고 새 기록에 합친 결과를 남깁니다.
 이것은 로컬 재현성의 근거이며 원격 서비스, 하드웨어나 기록하지 않은 외부 상태가
 변하지 않는다는 보장은 아닙니다.

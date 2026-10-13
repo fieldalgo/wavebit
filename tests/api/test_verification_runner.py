@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 
 import pytest
@@ -350,3 +351,142 @@ def test_inputs_changed_during_a_run_keep_a_nonresumable_receipt(checkout):
     assert receipt['counts'] == {'passed': 1}
     result, _ = run(checkout, checkout/'artifacts/second', '--resume', str(first))
     assert result.returncode == 2 and 'Resume refused' in result.stderr
+
+
+def test_full_slow_shards_partition_the_original_full_profile(checkout):
+    suite(checkout, """
+        import pytest
+        def test_fast(): pass
+        @pytest.mark.slow
+        def test_slow(): pass
+        @pytest.mark.research
+        def test_research(): pass
+        @pytest.mark.research
+        @pytest.mark.slow
+        def test_slow_research(): pass
+    """)
+    members = {}
+    for selection in ('include', 'exclude', 'only'):
+        result, receipt = run(checkout, checkout/'artifacts'/selection, '--slow', selection)
+        assert result.returncode == 0, result.stdout + result.stderr
+        members[selection] = set(receipt['collected_nodeids'])
+        assert receipt['counts'] == {'passed': len(members[selection])}
+    assert members['exclude'].isdisjoint(members['only'])
+    assert members['exclude'] | members['only'] == members['include']
+    assert len(members['include']) == 2
+    result, receipt = run(checkout, checkout/'artifacts/invalid', '--profile', 'quick', '--slow', 'only')
+    assert result.returncode == 2 and receipt is None
+    assert 'cannot select --slow only' in result.stderr
+
+
+@pytest.mark.parametrize('options', [
+    ['--slow', 'exclude'], ['--timeout', '2'], ['--timeout-method', 'signal'],
+    ['--verbose'], ['--live-output'],
+])
+def test_ci_configuration_changes_refuse_resume(checkout, options):
+    if '--timeout' in options:
+        pytest.importorskip('pytest_timeout')
+    suite(checkout, 'def test_pass(): pass\n')
+    first = checkout/'artifacts/first'
+    result, _ = run(checkout, first)
+    assert result.returncode == 0
+    result, receipt = run(checkout, checkout/'artifacts/second', '--resume', str(first), *options)
+    assert result.returncode == 2 and receipt is None
+    assert 'Resume refused' in result.stderr
+
+
+@pytest.mark.parametrize('seconds', ['0', '-1', 'nan', 'inf'])
+def test_timeout_requires_positive_finite_seconds(checkout, seconds):
+    suite(checkout, 'def test_pass(): pass\n')
+    result, receipt = run(checkout, checkout/'artifacts/invalid', '--timeout', seconds)
+    assert result.returncode == 2 and receipt is None
+    assert 'positive finite' in result.stderr
+
+
+def test_timeout_missing_dependency_is_an_explicit_preflight_error(checkout):
+    suite(checkout, 'def test_pass(): pass\n')
+    script = """
+import importlib.util
+import runpy
+import sys
+original = importlib.util.find_spec
+importlib.util.find_spec = lambda name, *args: None if name == 'pytest_timeout' else original(name, *args)
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name='__main__')
+"""
+    output = checkout/'artifacts/missing'
+    env = dict(os.environ, PYTHONPATH=str(checkout/'tools'))
+    result = subprocess.run([sys.executable, '-c', script, str(checkout/'tools/run_verification.py'),
+                             '--root', str(checkout), '--profile', 'full', '--timeout', '1',
+                             '--output', str(output)], env=env, text=True, capture_output=True, timeout=20)
+    assert result.returncode == 2
+    assert '--timeout requires pytest-timeout' in result.stderr
+    assert not output.exists()
+
+
+@pytest.mark.parametrize('mutation', [False, True], ids=['ordinary', 'snapshot'])
+def test_thread_timeout_preserves_completed_events_and_cannot_report_success(checkout, mutation):
+    pytest.importorskip('pytest_timeout')
+    suite(checkout, """
+        import pytest
+        import time
+        def test_first(): pass
+        MARKER
+        def test_timeout(): time.sleep(10)
+    """.replace('MARKER', '@pytest.mark.source_mutation' if mutation else ''))
+    result, receipt = run(checkout, checkout/'artifacts/timeout', '--timeout', '.5',
+                          '--timeout-method', 'thread', '--verbose', '--live-output')
+    assert result.returncode != 0
+    assert receipt['outcomes']['tests/test_tiny.py::test_first']['outcome'] == 'passed'
+    unfinished = receipt['outcomes']['tests/test_tiny.py::test_timeout']
+    assert not unfinished['complete'] and unfinished['outcome'] == 'interrupted'
+    phase = next(phase for phase in receipt['phases'] if phase['name'] == ('mutations' if mutation else 'tests'))
+    assert phase['exit_code'] != 0
+    assert '--timeout=0.5' in phase['command'] and '--timeout-method=thread' in phase['command']
+    assert 'pytest_timeout' in phase['command']
+    assert 'Timeout' in Path(phase['directory'], 'pytest.log').read_text()
+    assert receipt['inputs_unchanged']
+    if mutation:
+        assert receipt['snapshot']['restored'] and '-n' not in phase['command']
+
+
+def test_live_output_is_flushed_before_a_running_test_finishes(checkout):
+    suite(checkout, """
+        from pathlib import Path
+        import time
+        def test_wait_for_release():
+            deadline = time.monotonic() + 15
+            while not Path('artifacts/release').exists():
+                assert time.monotonic() < deadline
+                time.sleep(.02)
+    """)
+    output = checkout/'artifacts/live'
+    command = [sys.executable, str(checkout/'tools/run_verification.py'), '--root', str(checkout),
+               '--profile', 'full', '--output', str(output), '--verbose', '--live-output']
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    chunks, seen = [], threading.Event()
+    needle = b'tests/test_tiny.py::test_wait_for_release '
+    def capture():
+        while block := process.stdout.read1(65536):
+            chunks.append(block)
+            if needle in b''.join(chunks):
+                seen.set()
+    reader = threading.Thread(target=capture, daemon=True)
+    reader.start()
+    try:
+        assert seen.wait(timeout=10), b''.join(chunks).decode(errors='replace')
+        assert process.poll() is None
+        assert needle in (output/'tests/pytest.log').read_bytes()
+        (checkout/'artifacts/release').touch()
+        assert process.wait(timeout=15) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        reader.join(timeout=5)
+        process.stdout.close()
+    assert (output/'tests/pytest.log').read_bytes() in b''.join(chunks)
+    receipt = json.loads((output/'receipt.json').read_text())
+    assert receipt['counts'] == {'passed': 1}
+    assert '-v' in receipt['phases'][1]['command']
+    assert '-q' in receipt['phases'][0]['command']

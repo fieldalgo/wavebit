@@ -21,13 +21,30 @@ The runner loads its own recorder and xdist explicitly, without auto-loading
 unrelated installed pytest plugins. Existing repository conftest hooks and
 pytest configuration still apply. It sets unspecified BLAS thread counts to one.
 
+The optional `--slow` filter narrows a profile without changing its research policy:
+`include` (the default) keeps the profile's existing selection, `exclude` removes
+slow cases, and `only` selects its slow cases. `quick --slow only` is refused.
+Thus `full` still includes slow cases unless you explicitly narrow it.
+
+`--timeout SECONDS` sets a positive per-test limit and requires pytest-timeout.
+The runner loads that plugin explicitly when requested and refuses the run if it
+is unavailable. `--timeout-method` accepts `thread` (the default) or `signal`.
+The same limit applies to the separate serial mutation phase. No timeout is added
+when the option is omitted. `--verbose` requests verbose test progress, while
+`--live-output` streams the output as well as saving it to the phase log.
+Collection remains quiet and file-only; streaming and verbosity apply to the
+executing test phases. A thread timeout can terminate pytest before its final
+JUnit XML or session summary is complete. Flushed JSONL events remain available;
+the interrupted node stays unfinished and the run returns a nonzero status.
+These options affect verification subprocesses, not ordinary solver execution.
+
 Each invocation creates a new directory under `artifacts/verification/`.
 `--output` may choose a different new directory; an existing directory is refused.
 The tool prints the location before running tests. Inspect:
 
 - `inputs.json`: hashes of repository source, tests, fixtures and other recorded
   inputs, Python and installed distribution versions, selected configuration,
-  and a short allowlist of numerical environment controls. Arbitrary environment
+  and a short allowlist of numerical environment controls, including `XLA_FLAGS`. Arbitrary environment
   variables, credentials and package index URLs are not recorded.
 - `collected-nodeids.json`: the exact ordered profile membership.
 - `receipt.json`: per-node outcomes, reused nodes, integrity checks, phase exit
@@ -41,19 +58,46 @@ inputs are errors, not successful empty runs. A passed call is reusable only
 after its teardown completes. An interrupted run retains completed events and
 returns a nonzero exit status; it does not claim that unreported nodes passed.
 
+## CI keeps the existing two partitions
+
+The [test workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)
+uses the runner for both existing non-research partitions:
+
+```shell
+python tools/run_verification.py --profile full --slow exclude --workers 2 \
+  --timeout 1200 --timeout-method thread --verbose --live-output \
+  --output artifacts/verification/default
+python tools/run_verification.py --profile full --slow only --workers 2 \
+  --timeout 2400 --timeout-method thread --verbose --live-output \
+  --output artifacts/verification/slow
+```
+
+The ordinary and slow jobs retain their 1,200-second and 2,400-second per-test
+limits, respectively, and their existing 180-minute and 240-minute job limits.
+The selected tests do not change: the two partitions together cover the
+non-research suite. Source-mutating cases within either partition run in the
+runner's separate serial snapshot, not in the shared parallel checkout.
+
+GitHub artifacts `verification-default` and `verification-slow` retain the JSON
+receipts and inventories, JSONL events, JUnit XML and logs. The writable source
+snapshot is excluded from upload to avoid copying the repository into every
+artifact. These are verification records, not full source snapshots.
+
 ## Resume an identical run
 
 ```shell
 python tools/run_verification.py --profile full --workers 4 --resume RUN_DIRECTORY
 ```
 
-Keep the profile, paths, worker configuration, checkout inputs and environment
-unchanged. The runner fingerprints them again and recollects the whole selection.
+Keep the profile, slow filter, paths, worker and timeout settings, output mode,
+checkout inputs and environment unchanged. The runner fingerprints them again and recollects the whole selection.
 It refuses reuse if any fingerprint or collected node ID changed, including new,
 missing or reordered tests. Failures and unfinished tests run again by default;
 completed passes, skips, expected failures and non-strict unexpected passes are
 reused with their original
-receipt location. Unexpected passes remain separately reported; strict XPASS is
+receipt location. Changing `XLA_FLAGS`, including setting or removing it, changes
+the environment fingerprint and refuses reuse; start a new run instead.
+Unexpected passes remain separately reported; strict XPASS is
 a failure and is rerun. A new receipt records the combined result, without overwriting
 the previous run. This is local reproducibility evidence, not a claim that remote
 services, hardware or unrecorded external state cannot change.

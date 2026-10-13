@@ -6,7 +6,8 @@
 #              left out of a run over `tests` by `tests/conftest.py`, and no job
 #              here runs it: it is a development aid for that research code, run
 #              by hand while the code is worked on, not a gate on other changes.
-#              tests/README.md says how.
+#              tests/README.md says how. Both numerical jobs use the recorded runner;
+#              source-writing tests execute serially in a private source snapshot.
 #   slow     — runs the tests marked `slow` (tests/conftest.py): the FDTD line's
 #              resolution-refinement studies, finite-difference gradient checks
 #              and Meep comparisons, and develop's painted-overlap polygon tests.
@@ -167,6 +168,10 @@ jobs:
           # not less, which is the same direction the five above are set for.
           XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
         #
+        # The recorder retains the parallel ordinary phase, then runs the source-writing
+        # boundary/Gamma tests serially in a byte-checked copy. loadfile alone cannot
+        # isolate a temporary edit from a different worker reading the same checkout.
+        #
         # Two workers, because the runner has two cores and every thread count above pins
         # this process to one of them. The suite spent 77 minutes using half the machine.
         # `--dist loadfile` keeps a file's tests on one worker, which matters here: several
@@ -205,7 +210,8 @@ jobs:
         # a mean of 25 seconds a test -- and a bound that fires on a slow test rather
         # than a stuck one would be a false red mark on a healthy commit.
         #
-        # `-v`, not `-q`, and this is the part that actually diagnoses a hang. `-q`
+        # `--verbose --live-output` retains pytest -v in the log and CI console.
+        # This is the part that actually diagnoses a hang. `-q`
         # prints one character per test and flushes a line every 72 of them, so a
         # job killed mid-line names none of the 72 -- run 33656262958 and run
         # 33715389225 both died that way, and recovering even the *identity* of what
@@ -256,7 +262,26 @@ jobs:
         # against the 180 above. Split, this half took 42 minutes on the desktop, which is
         # roughly 100 to 120 here by the same ratio.
         run: >
-          pytest tests -v -m "not slow and not research" -n 2 --dist loadfile --timeout=1200 --timeout-method=thread
+          python -u tools/run_verification.py --profile full --slow exclude
+          --workers 2 --timeout 1200 --timeout-method thread --verbose --live-output
+          --output artifacts/verification/default
+
+      # Keep receipts and partial logs after failures without uploading source copies,
+      # pytest caches or temporary fixtures. Each phase writes its reports at one level.
+      - name: Upload verification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-default
+          path: |
+            artifacts/verification/default/*.json
+            artifacts/verification/default/*/*.json
+            artifacts/verification/default/*/*.jsonl
+            artifacts/verification/default/*/*.xml
+            artifacts/verification/default/*/*.log
+            !artifacts/verification/default/snapshot/**
+          if-no-files-found: warn
+          retention-days: 14
 
   slow:
     name: slow tests
@@ -299,7 +324,26 @@ jobs:
           VECLIB_MAXIMUM_THREADS: 1
           XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
         run: >
-          pytest tests -v -m "slow and not research" -n 2 --dist loadfile --timeout=2400 --timeout-method=thread
+          python -u tools/run_verification.py --profile full --slow only
+          --workers 2 --timeout 2400 --timeout-method thread --verbose --live-output
+          --output artifacts/verification/slow
+
+      # Keep receipts and partial logs after failures without uploading source copies,
+      # pytest caches or temporary fixtures. Each phase writes its reports at one level.
+      - name: Upload verification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-slow
+          path: |
+            artifacts/verification/slow/*.json
+            artifacts/verification/slow/*/*.json
+            artifacts/verification/slow/*/*.jsonl
+            artifacts/verification/slow/*/*.xml
+            artifacts/verification/slow/*/*.log
+            !artifacts/verification/slow/snapshot/**
+          if-no-files-found: warn
+          retention-days: 14
 
   examples:
     name: examples smoke

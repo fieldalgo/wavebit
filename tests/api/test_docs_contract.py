@@ -534,7 +534,7 @@ def _defines(src, symbol):
 # with no network involved.
 REPO_URL = re.compile(
     r'https://github\.com/fieldalgo/wavebit/(?:blob|tree)/[A-Za-z0-9._/-]+?/'
-    r'([A-Za-z0-9_][A-Za-z0-9._/-]*)')
+    r'((?:\.[A-Za-z0-9_]|[A-Za-z0-9_])[A-Za-z0-9._/-]*)')
 
 
 @functools.lru_cache(maxsize=None)
@@ -589,6 +589,25 @@ def test_only_exact_verified_historical_urls_survive_a_source_move(tmp_path):
     })
     assert dangling_repo_urls(tmp_path) == [
         'docs/page.md:2: old/other.py', 'docs/page.md:3: old/source.py']
+
+
+@needs_git
+def test_hidden_repository_links_keep_dotted_refs_and_missing_targets_distinct(tmp_path):
+    """A dot-prefixed repository path is not part of the preceding branch name."""
+    base = 'https://github.com/fieldalgo/wavebit/'
+    urls = [base + route + '/' + ref + '/' + target
+            for route in ('blob', 'tree') for ref in ('develop', 'release.v1')
+            for target in ('.github/workflows/tests.yml', '.gitignore', 'src/example.py')]
+    urls += [base + 'blob/develop/.github/workflows/missing.yml',
+             base + 'blob/release.v1/src/missing.py']
+    _write(tmp_path, {'docs/page.md': '\n'.join(urls),
+                      '.github/workflows/tests.yml': 'name: Tests',
+                      '.gitignore': 'build/', 'src/example.py': 'value = 1'})
+    _init(tmp_path)
+    _git(tmp_path, 'add', 'docs/page.md', '.github/workflows/tests.yml', '.gitignore', 'src/example.py')
+    assert dangling_repo_urls(tmp_path) == [
+        'docs/page.md:13: .github/workflows/missing.yml',
+        'docs/page.md:14: src/missing.py']
 
 
 def test_repository_urls_name_something_in_the_tree():

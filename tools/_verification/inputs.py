@@ -16,7 +16,7 @@ ROOT_FILES = ('pyproject.toml', 'pytest.ini', 'setup.cfg', 'setup.py', 'conftest
               '.gitignore', '.gitattributes', 'LICENSE', 'LICENSE.meent', 'LICENSE.fmmax')
 SAFE_ENV = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
             'VECLIB_MAXIMUM_THREADS', 'NUMEXPR_NUM_THREADS', 'JAX_ENABLE_X64',
-            'JAX_PLATFORMS', 'CUDA_VISIBLE_DEVICES', 'PYTHONHASHSEED')
+            'JAX_PLATFORMS', 'XLA_FLAGS', 'CUDA_VISIBLE_DEVICES', 'PYTHONHASHSEED')
 
 
 def digest(value):

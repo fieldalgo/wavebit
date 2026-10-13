@@ -121,7 +121,7 @@
     },
     {
       "path": "docs/development/verification.md",
-      "sha256": "5a9613c8456fa6a0ea84a034c099c593d53e3df27a77ede7401d31734e0a947d",
+      "sha256": "32cfe48471540e4089556086ea07e331520642220831fc8ebeab46190180f013",
       "language": "en",
       "section": "development"
     },
@@ -2398,9 +2398,9 @@
     },
     {
       "canonical": "docs/development/verification.md",
-      "canonical_sha256": "5a9613c8456fa6a0ea84a034c099c593d53e3df27a77ede7401d31734e0a947d",
+      "canonical_sha256": "32cfe48471540e4089556086ea07e331520642220831fc8ebeab46190180f013",
       "korean_overlay": "docs/locales/ko/pages/development/verification.md",
-      "korean_overlay_sha256": "44ff8a28f3ed6b591eff238d408a8ea547e0f13d2f9627bd365e6096e889b3c1",
+      "korean_overlay_sha256": "225caf61d778353b040ebab1f0774c9f592ce00435e5ccfe5e8a1791b2cf4ee6",
       "scope": "Complete translation of maintained current guidance; distinct from the forty imported historical course chapters.",
       "link_destinations": "Same canonical routes and source files; verified in both language builds."
     },
@@ -2419,6 +2419,16 @@
     "local_links": "506 published HTML pages, 82998 local references; zero missing targets, fragments or same-route language-switch errors; internal theme templates and viewcode source pages excluded"
   },
   "previous_build_checks_scope": "Integration checkpoint before the subsequent developer-workflow improvements.",
+  "verification_workflow_update": {
+    "scope": "CI runner isolation and XLA_FLAGS fingerprint documentation; no numerical runtime changes.",
+    "canonical": "docs/development/verification.md",
+    "korean_overlay": "docs/locales/ko/pages/development/verification.md",
+    "builds": "English and Korean incremental Sphinx -W --keep-going builds passed without warnings.",
+    "focused_contracts": "10 passed, 140 deselected: relevant published-path, symbol, URL and navigation gates plus hidden-path and historical/citation regressions. The full documentation suite was not repeated.",
+    "links": "Both verification pages checked: 151 local references; zero missing targets, fragments or same-route language-switch errors.",
+    "translation": "Code blocks and link destinations match between English and Korean.",
+    "static_checks": "Ruff and diff whitespace checks passed for the changed documentation guard."
+  },
   "build_checks_scope": "Historical translation checkpoint before private-source publication filtering; its page counts are not the current published inventory.",
   "publication_boundary": "Only maintained teaching material and selected numerical records are published. Raw author notes, draft designs, session links, source illustrations, exploratory notebooks and prototype bundles stay in the private lab."
 }

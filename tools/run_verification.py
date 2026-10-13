@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Record and safely resume explicit verification profiles. See --help."""
 import argparse
+import codecs
 from datetime import datetime, timezone
+import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -59,6 +63,29 @@ def collections(directory):
     return first['nodeids'], first['mutation_nodes'], errors
 
 
+def relay_output(stream, log, errors):
+    """Tee available bytes immediately; do not wait for a full line or pipe buffer."""
+    decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+    console = True
+    try:
+        while block := stream.read1(65536):
+            log.write(block)
+            log.flush()
+            if console:
+                try:
+                    sys.stdout.write(decoder.decode(block))
+                    sys.stdout.flush()
+                except BrokenPipeError:
+                    console = False
+        if console:
+            sys.stdout.write(decoder.decode(b'', final=True))
+            sys.stdout.flush()
+    except (OSError, ValueError) as exc:
+        errors.append(f'Live output recording failed: {exc}')
+    finally:
+        stream.close()
+
+
 def phase_run(output, name, root, config, *, expected=None, selected=None,
               collect=False, isolated=False, paths=None):
     directory = output / name
@@ -67,10 +94,14 @@ def phase_run(output, name, root, config, *, expected=None, selected=None,
                     selected=selected, snapshot=isolated)
     contract_path = directory / 'phase.json'
     save(contract_path, contract)
-    args = [sys.executable, '-m', 'pytest', *(paths or config['paths']), '-q',
+    args = [sys.executable, '-u', '-m', 'pytest', *(paths or config['paths']),
+            '-v' if config['verbose'] and not collect else '-q',
             '-m', config['expression'], '-p', '_verification.plugin',
             '--junitxml=' + str(directory / 'junit.xml'), '-o',
             'cache_dir=' + str(directory / 'cache'), '--basetemp=' + str(directory / 'temporary')]
+    if config['timeout'] is not None:
+        args += ['-p', 'pytest_timeout', '--timeout=' + str(config['timeout']),
+                 '--timeout-method=' + config['timeout_method']]
     if collect:
         args.append('--collect-only')
     elif config['workers'] and not isolated:
@@ -82,11 +113,18 @@ def phase_run(output, name, root, config, *, expected=None, selected=None,
                PYTEST_DISABLE_PLUGIN_AUTOLOAD='1', WAVEBIT_VERIFICATION_PHASE=str(contract_path))
     started = time.monotonic()
     interrupted = False
-    with (directory / 'pytest.log').open('w') as log:
+    live = config['live_output'] and not collect
+    stream_errors = []
+    with (directory / 'pytest.log').open('wb') as log:
         group = (dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
                  if os.name == 'nt' else dict(start_new_session=True))
-        process = subprocess.Popen(args, cwd=root, env=env, stdout=log,
+        process = subprocess.Popen(args, cwd=root, env=env,
+                                   stdout=subprocess.PIPE if live else log,
                                    stderr=subprocess.STDOUT, **group)
+        if live:
+            relay = threading.Thread(target=relay_output, args=(process.stdout, log, stream_errors),
+                                     daemon=True)
+            relay.start()
         try:
             exit_code = process.wait()
         except KeyboardInterrupt:
@@ -103,7 +141,13 @@ def phase_run(output, name, root, config, *, expected=None, selected=None,
                 else:
                     os.killpg(process.pid, signal.SIGTERM)
                 exit_code = process.wait()
+        finally:
+            if live:
+                relay.join(timeout=5)
+                if relay.is_alive():
+                    stream_errors.append('Pytest exited but a child kept its output pipe open.')
     nodes, mutations, errors = collections(directory)
+    errors.extend(stream_errors)
     result = dict(name=name, directory=str(directory), command=args, exit_code=exit_code,
                   seconds=round(time.monotonic()-started, 3), interrupted=interrupted,
                   collected=nodes, mutation_nodes=mutations, collection_errors=errors)
@@ -113,13 +157,20 @@ def phase_run(output, name, root, config, *, expected=None, selected=None,
 
 def run(args):
     root = args.root.resolve()
+    if args.timeout is not None and importlib.util.find_spec('pytest_timeout') is None:
+        raise ValueError('--timeout requires pytest-timeout; install it in this Python environment.')
     for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
                 'VECLIB_MAXIMUM_THREADS', 'NUMEXPR_NUM_THREADS'):
         os.environ.setdefault(key, '1')
     os.environ.setdefault('PYTHONHASHSEED', '0')
     paths = validate_paths(root, args.path or (QUICK if args.profile == 'quick' else ['tests']))
-    config = dict(profile=args.profile, expression=EXPRESSIONS[args.profile], paths=paths,
-                  workers=args.workers, plugin_autoload=False, distribution='loadfile')
+    expression = EXPRESSIONS[args.profile]
+    if args.profile != 'quick' and args.slow != 'include':
+        expression += ' and ' + ('slow' if args.slow == 'only' else 'not slow')
+    config = dict(profile=args.profile, expression=expression, paths=paths,
+                  workers=args.workers, plugin_autoload=False, distribution='loadfile',
+                  slow=args.slow, timeout=args.timeout, timeout_method=args.timeout_method,
+                  verbose=args.verbose, live_output=args.live_output)
     before = hashes(root)
     inputs = dict(root=str(root), files=before, environment=environment(), config=config)
     fingerprint = digest(inputs)
@@ -231,6 +282,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', choices=EXPRESSIONS, default='quick',
                         help='quick: selected smoke checks; full: all non-research including slow; research: research only')
+    parser.add_argument('--slow', choices=('include', 'exclude', 'only'), default='include',
+                        help='split full/research profiles by the slow marker; quick always excludes slow')
+    parser.add_argument('--timeout', type=float, help='positive per-test seconds; requires pytest-timeout')
+    parser.add_argument('--timeout-method', choices=('thread', 'signal'), default='thread')
+    parser.add_argument('--verbose', action='store_true', help='show test nodeids with pytest -v')
+    parser.add_argument('--live-output', action='store_true', help='flush test output to both console and phase log')
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--path', action='append', help='restrict the profile to a repository path or nodeid (repeatable)')
     parser.add_argument('--workers', type=int, default=0, help='xdist workers; 0 is serial (default)')
@@ -238,6 +295,10 @@ def main():
     parser.add_argument('--resume', type=Path, help='reuse completed successful/skip/xfail nodes from an identical run')
     parser.add_argument('--collect-only', action='store_true')
     args = parser.parse_args()
+    if args.profile == 'quick' and args.slow == 'only':
+        parser.error('--profile quick cannot select --slow only')
+    if args.timeout is not None and (not math.isfinite(args.timeout) or args.timeout <= 0):
+        parser.error('--timeout must be a positive finite number of seconds')
     if args.workers < 0:
         parser.error('--workers cannot be negative')
     try:
