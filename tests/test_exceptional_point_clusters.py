@@ -42,7 +42,7 @@ def _solve_2d(scene, algo, first_order):
     return out, [w.category for w in rec]
 
 
-@pytest.mark.parametrize('first_order', [False], ids=['2d'])
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name', list(SCENES))
 @pytest.mark.parametrize('dth', [0.0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 3e-4, 1e-3])
@@ -73,7 +73,7 @@ UNIFORM_NEAR_DEGENERATE = dict(
 
 
 @pytest.mark.parametrize('kind', ['near-degenerate', 'normal incidence'])
-@pytest.mark.parametrize('first_order', [False], ids=['2d'])
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_degenerate_clusters_stay_quiet(kind, first_order, algo):
     """A uniform layer's degenerate clusters, in whatever basis ``eig`` chose, raise nothing and
@@ -160,3 +160,22 @@ def test_a_pair_beside_an_unpaired_root(delta):
     Wr, _, Qm, a, b, _ = solve_2d._rebuild_defective_pairs(np, A, np.eye(12), W, W / np.sqrt(w),
                                                            np.sqrt(w), w, pairs)
     assert np.linalg.norm(A @ Wr - Wr @ (Qm @ Qm)) < 1e-13 * np.linalg.norm(A)
+
+
+@pytest.mark.parametrize('rel', [1e-12, 1e-9])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_a_graze_on_the_first_order_path_is_not_an_exceptional_point(algo, rel):
+    """Near a Rayleigh point an up- and a down-going mode of the first-order operator merge (the
+    ``{1, z}`` regime): a non-normal cluster, but across the two directions, which the screen
+    keeps apart. Uniform air spacer at ``wavelength = period``, normal incidence: quiet, and the
+    2D path's answer. Catches the screen run over both directions at once (it warned here)."""
+    kw = dict(backend='numpy', structure=np.full((2, 12, 12), 1.0), thickness=[300., 200.],
+              period=[800., 800.], wavelength=800. * (1 + rel), theta=0.0, phi=0.0, top=1.0,
+              bot=1.5, psi=0.3, truncation_order=[2, 2], layer_algorithm=algo)
+    s = wavebit.rcwa(**kw)
+    s.formulation = 'first_order'
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        got = s.solve(auto_detune=False)
+    ref = wavebit.rcwa(**kw).solve(auto_detune=False)
+    assert abs(float(np.sum(np.real(_np(got.R)))) - float(np.sum(np.real(_np(ref.R))))) < 1e-12

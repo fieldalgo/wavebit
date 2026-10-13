@@ -215,7 +215,9 @@ class FieldState:
                          atol=1e-12*max(1., float(np.asarray(_host_value(edges[-1])))))) for h in heights):
             raise ValueError('The point-source plane has a singular field; sample strictly above or below it.')
         coefficient = None
-        for j, (eps, d, lf, pf, lb, pb, af, ab) in enumerate(g['layers']):
+        for j, layer in enumerate(g['layers']):
+            eps, d, lf, pf, lb, pb, af, ab = layer[:8]
+            coupled = len(layer) > 8      # a regular-pair layer (illumination._cascade)
             # Dipole planes split a layer into concrete segment thicknesses.
             d = xp.real(_array(xp, d, self.data['thickness']))
             # The segment's host layer is static metadata, not a traced choice.
@@ -225,8 +227,9 @@ class FieldState:
             local = _local_height(xp, z, ge[j], d, mask)
             if lf.ndim == 2 or lb.ndim == 2:
                 from .modal_gradient import exponential
-                state = (pf @ (exponential(xp, lf, 1j*g['k0']*local) @ af[..., None])
-                         + pb @ (exponential(xp, lb, 1j*g['k0']*(local-d)) @ ab[..., None]))[..., 0]
+                state = (pf @ (exponential(xp, lf, 1j*g['k0']*local, coupled=coupled) @ af[..., None])
+                         + pb @ (exponential(xp, lb, 1j*g['k0']*(local-d), coupled=coupled)
+                                 @ ab[..., None]))[..., 0]
             else:
                 state = (pf @ (xp.exp(1j*g['k0']*local[:, None]*lf)*af)[..., None]
                          + pb @ (xp.exp(1j*g['k0']*(local-d)[:, None]*lb)*ab)[..., None])[..., 0]

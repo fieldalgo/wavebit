@@ -248,27 +248,66 @@ def generator(xp, operator, w, W, values, *, square_root):
 
 
 def split_generator(xp, operator, values, basis, forward):
-    """Differentiate separated directional subspaces, not individual degenerate modes."""
+    """Differentiate separated directional subspaces, not individual degenerate modes.
+
+    ``values`` is a vector of eigenvalues, or a matrix: a first-order layer whose defective pair
+    was rebuilt in a regular basis (:func:`~wavebit._core.solve_2d_first_order._regular_pair`),
+    diagonal plus a coupling on disjoint rows and columns, every coupling inside one direction.
+    The value comes from stopped data, so the coupling carries no tangent of its own. Then
+    ``basis^-1 dA basis = X values - values X + d(values)`` with ``X`` confined to the entries
+    across the two directions, ``d(values)`` to those within one, and the across part is a
+    Sylvester equation whose coupling is solved in four passes (:func:`_split_sylvester`).
+    """
     if not carries_autodiff(operator):
         return values, basis
     n = values.shape[0]
     eye = xp.eye(n, dtype=operator.dtype, device=getattr(operator, 'device', None))
     residual = _variation(operator, basis)
     separate = forward[:, None] != forward[None, :]
-    gap = values[None, :]-values[:, None]
+    coupled = values.ndim == 2
+    roots = xp.linalg.diagonal(values) if coupled else values
+    gap = roots[None, :]-roots[:, None]
     # A directional invariant subspace has a derivative only while separated
     # from the opposite one. Do not invent a finite derivative at a collision.
-    magnitude = xp.max(xp.abs(values))
+    magnitude = xp.max(xp.abs(roots))
     tolerance = 64*xp.finfo(magnitude.dtype).eps*xp.maximum(xp.ones_like(magnitude), magnitude)
     valid = xp.all(~separate | (xp.abs(gap) > tolerance))
     _require_separated(valid, 'coincident forward and backward modes')
     residual = residual*xp.where(valid, xp.ones_like(residual),
                                      xp.full_like(residual, complex('nan')))
     denominator = xp.where(separate & (gap != 0), gap, xp.ones_like(gap))
+    if coupled:
+        change = _split_sylvester(xp, values - eye*roots, denominator, residual, separate)
+        modal = values + xp.where(separate, xp.zeros_like(residual), residual)
+        return modal, basis @ (eye+change)
     change = xp.where(separate, residual/denominator, xp.zeros_like(residual))
     vectors = basis @ (eye+change)
     modal = eye*values + xp.where(separate, xp.zeros_like(residual), residual)
     return modal, vectors
+
+
+def _split_sylvester(xp, N, gap, R, separate):
+    """``X`` on the ``separate`` entries with ``X (D + N) - (D + N) X = R`` there, ``0`` elsewhere.
+
+    ``gap`` holds ``D_j - D_i`` (guarded to 1 off ``separate``), ``N`` the coupling, whose
+    nonzero rows ``J`` and columns ``K`` are disjoint and lie inside one direction, so that a
+    ``separate`` entry ``(i, j)`` reads ``(N X)_ij`` only through entries ``(k, j)`` with ``k`` in
+    ``K`` -- across too -- and ``(X N)_ij`` only through ``(i, k)``, ``k`` in ``J``. Entries off
+    ``J`` rows and ``K`` columns are a plain quotient; a ``J`` row reads the first pass, a ``K``
+    column too, and a ``J x K`` entry reads the two before it: the four passes of
+    :func:`~wavebit._core.solve_1d._coupled_sylvester`, for this equation. ``J`` and ``K`` are
+    read off the value (``N != 0``: exact, no threshold), so an all-zero ``N`` -- a layer under a
+    trace whose masks engaged nothing -- is the first pass alone. Linear in ``R``.
+    """
+    zero = xp.zeros_like(R)
+    rows = xp.any(N != 0, axis=1)[:, None]
+    cols = xp.any(N != 0, axis=0)[None, :]
+    X1 = xp.where(separate, R/gap, zero)
+    X2 = xp.where(separate, (R + N @ X1)/gap, zero)
+    X3 = xp.where(separate, (R - X1 @ N)/gap, zero)
+    Xa = xp.where(rows & ~cols, X2, xp.where(~rows & cols, X3, X1))
+    X4 = xp.where(separate, (R - Xa @ N + N @ Xa)/gap, zero)
+    return xp.where(rows & cols, X4, Xa)
 
 
 def _require_separated(valid, description, *, error=ValueError):

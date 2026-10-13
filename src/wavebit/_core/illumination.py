@@ -17,8 +17,7 @@ from .sources import (Source, PlaneWave, OrderExcitation, GaussianBeam, Electric
 from .source_expansion import resolve_wave, gaussian_waves, dipole_layers
 from .scattering import redheffer_star
 from .solve_2d_first_order import (
-    _conv_layers, _interface_s, _propagate_s, _run_k0_ds, layer_matrix_first_order,
-    split_forward_backward,
+    _conv_layers, _interface_s, _layer_split, _propagate_s, _run_k0_ds, layer_matrix_first_order,
 )
 from .backend import eager_under_torch_compile
 
@@ -111,8 +110,15 @@ def _affine_star(xp, I, a, b):
                                         g[1] + B[2] @ middle)
 
 
-def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None):
-    """Stable two-port cascade with optional prescribed tangential-field jumps."""
+def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None, *, slots=None):
+    """Stable two-port cascade with optional prescribed tangential-field jumps.
+
+    ``slots`` is the order grid's traced pair capacity. A direct caller without
+    grid metadata uses the coupled exponential's full capacity.
+    """
+    if slots is None:
+        from .modal_gradient import _COUPLED_CAP
+        slots = _COUPLED_CAP
     n = kx.shape[0]
     Kx, Ky = xp.diag(kx), xp.diag(ky)
     I = xp.eye(2*n, dtype=kx.dtype, device=getattr(kx, 'device', None))
@@ -130,16 +136,18 @@ def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None):
     cache = {}
     for j, (material, d) in enumerate(layers):
         if id(material) not in cache:
-            cache[id(material)] = split_forward_backward(
-                xp, layer_matrix_first_order(xp, Kx, Ky, **material), n, k0_ds[j])
-        lf, pf, lb, pb = cache[id(material)]
+            cache[id(material)] = _layer_split(
+                xp, layer_matrix_first_order(xp, Kx, Ky, **material), n, k0_ds[j], slots=slots)
+        lf, pf, lb, pb, coupled = cache[id(material)]
         emitted = (zero, zero)
         if j in jumps:
             v = linear_solve(xp, xp.concat([prev_b, -pf], axis=1), -jumps[j])
             emitted = (v[:2*n], v[2*n:])
         parts.extend([(_interface_s(xp, prev_f, prev_b, pf, pb), emitted),
-                      (_propagate_s(xp, lf, lb, k0, d, n), (zero, zero))])
-        modes.append((material, d, lf, pf, lb, pb))
+                      (_propagate_s(xp, lf, lb, k0, d, n, coupled), (zero, zero))])
+        # A trailing `None` when the split took the regular-pair layout: structural, so the
+        # field's exponential (field_result) reads it off the record's length under a trace too.
+        modes.append((material, d, lf, pf, lb, pb) + ((None,) if coupled else ()))
         prev_f, prev_b = pf, pb
     parts.append((_interface_s(xp, prev_f, prev_b, *top), (zero, zero)))
     suffix = [None] * len(parts)
@@ -162,7 +170,8 @@ def _inside_amplitudes(xp, state, incoming_bottom, incoming_top):
         if j % 2 == 0:
             entrance = forward
         else:
-            records.append((*modes[j//2], entrance, backward))
+            mode = modes[j//2]
+            records.append((*mode[:6], entrance, backward, *mode[6:]))
     return records
 
 
@@ -541,6 +550,8 @@ class CoherentSolver:
             gx, gy = basis.order_kxy()
             from .solve_2d import order_grid_kxy
             gx, gy = order_grid_kxy(xp, gx, gy)
+            from .modal_gradient import _COUPLED_CAP
+            slots = min(max(gx.shape), _COUPLED_CAP)
             kx, ky = xp.reshape(gx, (-1,)), xp.reshape(gy, (-1,))
             count = kx.shape[0]
             kxy = xp.stack([kx, ky], axis=-1)*k0
@@ -594,7 +605,8 @@ class CoherentSolver:
             layers, jumps, segment_edges, source_heights = self._dipole_layers(group, layers, k0, kxy)
             S, emission, state = _cascade(xp, k0, kx, ky, layers,
                                 tuple(_tangential(xp, ports['bottom', d]) for d in (1, -1)),
-                                tuple(_tangential(xp, ports['top', d]) for d in (1, -1)), keep, jumps)
+                                tuple(_tangential(xp, ports['top', d]) for d in (1, -1)), keep, jumps,
+                                slots=slots)
             out = dict(bottom=S[0]@a['bottom'] + S[1]@a['top'] + emission[0],
                        top=S[2]@a['bottom'] + S[3]@a['top'] + emission[1])
             check_finite(xp, outgoing_top=out['top'], outgoing_bottom=out['bottom'])

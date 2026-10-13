@@ -11,6 +11,8 @@ Targets:
   in-cell field (§4b)
 - `tests/test_anisotropic_berreman.py` — the Berreman oracle it is judged against
 - `tests/test_formulation_dispatch.py` — which of the two formulations a call takes, and why
+- `tests/test_first_order_exceptional_point.py`, `tests/test_exceptional_point_clusters.py`
+  — regular pairs and unresolved-cluster warnings (§6)
 
 Companions. [`anisotropic-materials.md`](anisotropic-materials.md) scopes the whole anisotropy
 question and says what each gap costs; [`five-slot-limit.md`](five-slot-limit.md) explains why the
@@ -84,6 +86,7 @@ exercising `ky != 0`; five mutations that are the identity at `ky = 0` die there
 | any order count | a uniform layer cannot diffract, so 9 and 25 orders must reproduce 1 order — they do, to 1e-14 |
 | **isotropic gratings** | fed the second-order path's own convolution matrices, reproduces it to **3e-14** at up to 49 orders, normal and conical |
 | lossless ⇒ `R + T = 1` | every Hermitian case, to 1e-10 |
+| **a patterned exceptional point** | the 1D rebuild to 1.1e-13 (SMM was up to 2.45 off); historical 2026-10-12 measurements, [regular-pair split](rayleigh-points.md#9-the-first-order-path-at-a-patterned-exceptional-point) |
 | **the in-cell field** | the second-order twin to 1e-11 per component; Maxwell + continuity + flux where there is no twin (below) |
 
 The grating row is the one that exercises **order coupling**: those convolution matrices are full,
@@ -210,3 +213,23 @@ threshold by the largest flux in the set — the obvious thing — works on ever
 then, once every mode is evanescent, promotes 1e-17 of numerical dust to real energy flow. Every
 diffraction order above the light line is that case, so the set-relative version would have broken
 on the first grating.
+
+
+## 6. A regular pair at a patterned exceptional point
+
+At a patterned x-cutoff, two same-direction eigenvectors can nearly coincide even though each
+satisfies Maxwell's equations accurately. Using them as a basis made ETM lose up to 2.5e-4 in
+amplitudes and SMM up to 2.45 in the 2026-10-12 baseline measurements. The latter repeatedly
+inverted a round trip in that poorly conditioned basis. `_pair_gate` now finds eligible pairs,
+`_regular_pair` refines an orthonormal basis of their invariant subspace with one Newton step,
+and `_layer_split` carries the resulting triangular 2x2 generator into propagation, fields
+and differentiation. Both algorithms then matched the independent 1D rebuild to 1.1e-13 in
+those measurements.
+
+A pair too close to a third mode is skipped; the final basis is screened for a defective
+cluster within each direction. `ExceptionalPointWarning` identifies unresolved eager cases,
+including coincident EPs, while ordinary degenerate eigenspaces remain quiet. This warning
+does not trigger `auto_detune`. Under an abstract trace the screen is silent; static slots
+hold eligible pairs and overflow produces NaN, but unresolved coincident clusters can still
+be inaccurate. The construction, derivative rule, historical measurements and remaining
+limits are in [`rayleigh-points.md` §9](rayleigh-points.md#9-the-first-order-path-at-a-patterned-exceptional-point).

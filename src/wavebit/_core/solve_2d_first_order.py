@@ -30,7 +30,8 @@ from cmath import sqrt as _csqrt
 
 import numpy as np
 
-from .backend import array_namespace, as_array, eig, in_namespace, linear_solve
+from .backend import (ExceptionalPointWarning, array_namespace, as_array, eig, in_namespace,
+                      linear_solve)
 from .modal_gradient import _stop, split_generator, exponential, combine
 from .conventions import boundary_kz, half_space_medium, layer_runs, order_azimuth, run_k0_d
 from .enums import Answers, answers_of
@@ -93,8 +94,222 @@ def mode_flux_z(xp, psi, n_orders):
     return 0.5 * xp.real(xp.sum(Ex * xp.conj(Hy) - Ey * xp.conj(Hx), axis=0))
 
 
-def split_forward_backward(xp, M, n_orders, k0_d=None):
-    """Split modes into propagation towards +z and -z.
+def split_forward_backward(xp, M, n_orders, k0_d=None, *, slots=1):
+    """``(lam_f, psi_f, lam_b, psi_b)``: :func:`_layer_split` without its structural word.
+
+    A rebuilt exceptional-point pair makes ``lam_f`` and ``lam_b`` matrix generators,
+    including under an abstract trace. Propagation consumers that need the coupling
+    flag should call :func:`_layer_split`. ``slots`` bounds traced pairs per direction;
+    eagerly every eligible pair is rebuilt.
+    """
+    return _layer_split(xp, M, n_orders, k0_d, slots=slots)[:4]
+
+
+#: A pair of same-direction modes counts as defective when the sine of the angle between their
+#: two eigenvectors is below this (:func:`_pair_gate`). Measured, not derived. Near a patterned
+#: conical x-cutoff (an exceptional point, ``docs/rayleigh-points.md`` section 7) the eigenvector
+#: basis rounds like ``C_E u / s**2`` through ETM and ``C_S u / s**3`` through SMM (``s`` this
+#: sine, ``u`` the unit round-off; fitted at relative 1e-4, largest at PL952: ``C_E = 0.087``,
+#: ``C_S = 5.6e-3``), so at the gate's edge both are below 5e-15. Over 240 random first-order
+#: scenes (conical, uniform, 2D rasters, tilted magnetic tensors) the smallest sine was 3.3e-2,
+#: and one scene in 240 fell under the gate. The rebuild is an exact change of basis for any pair whose subspace is
+#: separated from the rest, so a larger value costs time, never accuracy.
+_PARALLEL_SIN = 0.05
+
+#: A gated pair is skipped (kept in the eigenvector basis) when another root
+#: of the layer lies within this of the pair's mean root, relative to ``max(1, |root|)``: the pair
+#: then has no invariant subspace of its own to rebuild, and the bordered solve that refines one
+#: loses what the third root's distance costs it. Measured on a rotated Jordan block beside a
+#: third root at distance ``delta`` (refusal disabled): the rebuilt pair's residual
+#: ``|M B - B T| / |M|`` was 1.5e-7, 2.7e-9 and 6.0e-11 at ``delta`` = 1e-7, 1e-6, 1e-5, and at
+#: most 1.2e-12 from 1e-4 on. ``eig`` spreads a defective cluster's roots by about ``sqrt(u)``,
+#: so a second Jordan block at the same root sits about that far away, not at zero. The nearest
+#: other root at the five measured exceptional points is 2.6e-2 away.
+_PAIR_SEPARATION = 1e-4
+
+_REFUSED_PAIR = (
+    'a first-order layer holds three or more same-direction modes in a defective eigenvalue '
+    'cluster (including coincident exceptional points) that no regular pair rebuild spans: '
+    'the eigenvector basis was kept for them, and the answer can be inaccurate. Move the '
+    'wavelength or angle by more than a relative 1e-4 to check it.')
+
+def _pair_gate(xp, lam, psi, forward, *, slots=1):
+    """``(pairs, refused, overflow)``: defective same-direction pairs of one layer.
+
+    Within each direction the pairs are taken greedily, most parallel first, by ``argmax`` over
+    the normalised eigenvectors' Gram matrix with the modes already taken masked out -- static
+    shapes, so the same expression serves an abstract trace. A candidate is *engaged* when its
+    sine is below :data:`_PARALLEL_SIN`, and *refused* when a third mode of its direction is that
+    parallel to either member (a cluster of three, which no pair basis spans) or another root sits
+    within :data:`_PAIR_SEPARATION` of the pair's mean root. A layer can hold several: the x-cutoff
+    condition does not depend on ``ky``, so a y-invariant raster reaches it in every row of orders
+    at once, one pair per row and direction (three at ``truncation_order = (M, 1)``).
+
+    Read through :func:`~wavebit._core.backend._concrete`, once per candidate: eagerly ``pairs``
+    lists every engaged, unrefused pair as ``(a, b, True)``, ``a`` and ``b`` length-1 index arrays,
+    and is empty off the band (the caller then takes the eigenvector basis, to the bit). Under an
+    abstract trace -- ``jax.jit``, ``jax.vmap``, a ``lax.map`` or ``scan`` body,
+    ``jax.checkpoint``, ``torch.func.vmap`` -- it is ``slots`` candidates per
+    direction with their masks as data, ``engaged & ~refused``, and every traced layer takes the
+    regular-pair layout (the 1D conical rebuild's rule, ``solve_1d._cutoff_cluster``).
+    ``refused`` is eager-only (``None`` under a trace): ``True`` when a gated pair had to be kept.
+    ``overflow`` is trace-only (``None`` eagerly): after the last slot, one more greedy
+    candidate is checked, and an eligible remainder poisons the layer's generator.
+    """
+    from .backend import _concrete
+    n = psi.shape[1]
+    dev = getattr(psi, 'device', None)
+    v = psi / xp.linalg.vector_norm(psi, axis=0)[None, :]
+    C = xp.abs(xp.matrix_transpose(xp.conj(v)) @ v)
+    eye = xp.eye(n, dtype=xp.bool, device=dev)
+    cos = 1.0 - 0.5 * _PARALLEL_SIN ** 2      # sin < g  <=>  cos > sqrt(1 - g**2) ~ 1 - g**2/2
+    index = xp.arange(n, device=dev)
+    magnitude = xp.maximum(xp.ones_like(xp.abs(lam)), xp.abs(lam))
+    out = []
+    refused = xp.zeros((), dtype=xp.bool, device=dev)
+    overflow = xp.zeros((), dtype=xp.bool, device=dev)
+    traced = False
+    for side in (forward, ~forward):
+        Cs = xp.where(side[:, None] & side[None, :] & ~eye, C, xp.zeros_like(C))
+        taken = xp.zeros((n,), dtype=xp.bool, device=dev)
+        for k in range(n // 2 + 1):
+            free = xp.where(~taken[:, None] & ~taken[None, :], Cs, xp.zeros_like(Cs))
+            flat = xp.reshape(xp.argmax(xp.reshape(free, (-1,))), (1,))
+            i, j = flat // n, flat % n
+            a, b = xp.minimum(i, j), xp.maximum(i, j)  # 1-D, length 1: what every `take` reads
+            engaged = xp.max(free) > cos
+            # a third mode as parallel to either member
+            third = (xp.sum(xp.astype(xp.take(Cs, a, axis=0) > cos, xp.int32))
+                     + xp.sum(xp.astype(xp.take(Cs, b, axis=0) > cos, xp.int32))) > 2
+            mean = 0.5 * (xp.take(lam, a) + xp.take(lam, b))
+            others = (index != a) & (index != b)
+            near = xp.any(others & (xp.abs(lam - mean) <= _PAIR_SEPARATION * magnitude))
+            bad = third | near
+            more = _concrete(engaged)
+            if more is None:              # abstract: fixed slots, masks and overflow as data
+                traced = True
+                if k == slots:
+                    overflow = overflow | (engaged & ~bad)
+                    break
+            elif not more:                # eager: the first unengaged candidate ends the side
+                break
+            out.append((a, b, engaged & ~bad))
+            refused = refused | (engaged & bad)
+            taken = taken | (engaged & ((index == a) | (index == b)))
+    if traced:
+        return out, None, overflow
+    pairs = [(a, b, True) for a, b, ok in out if _concrete(ok)]
+    return pairs, _concrete(refused), None
+
+
+def _schur_2x2(xp, T):
+    """Unitary ``U`` with ``U^H T U`` upper triangular, for a ``2 x 2`` ``T``; closed form.
+
+    The first column is a unit eigenvector of ``T`` for ``mu = m + sqrt(((p - s)/2)**2 + q r)``,
+    ``m = (p + s)/2``, read off whichever row of ``T - mu I`` is larger; the second its unitary
+    complement (the complex Schur form, G. H. Golub and C. F. Van Loan, Matrix Computations, 4th
+    ed., section 7.1.3). A scalar ``T`` has no larger row and takes ``e_1``. At a 2x2 Jordan block
+    ``mu`` carries the ``sqrt(u)`` of any computed defective root, but ``U^H T U`` is still ``T``
+    to ``O(u)``: the dropped ``(2, 1)`` entry is ``u2^H (T u1 - mu u1)``.
+    """
+    p, q, r, s = T[0, 0], T[0, 1], T[1, 0], T[1, 1]
+    half = 0.5 * (p - s)
+    mu = 0.5 * (p + s) + xp.sqrt(half * half + q * r)
+    c1 = xp.stack([q, mu - p])
+    c2 = xp.stack([mu - s, r])
+    n1 = xp.sum(xp.abs(c1) ** 2)
+    n2 = xp.sum(xp.abs(c2) ** 2)
+    u = xp.where(n1 >= n2, c1, c2)
+    norm = xp.sqrt(xp.maximum(n1, n2))
+    e1 = xp.astype(xp.asarray([1.0, 0.0], device=getattr(T, 'device', None)), T.dtype)
+    u = xp.where(norm > 0, u / xp.where(norm > 0, norm, xp.ones_like(norm)), e1)
+    return xp.stack([xp.stack([u[0], -xp.conj(u[1])]), xp.stack([u[1], xp.conj(u[0])])])
+
+
+def _regular_pair(xp, M, values, psi, a, b, engaged):
+    """Rebuild modes ``a`` and ``b`` in a regular basis of their invariant subspace.
+
+    ``values`` is the layer's generator so far (``n x n``, diagonal plus earlier couplings),
+    ``psi`` its basis; both come back with columns ``a`` and ``b`` replaced where ``engaged``:
+    ``psi[:, (a, b)] = B``, orthonormal with ``M B = B T``, ``T`` upper triangular, its diagonal on
+    ``values``' and ``T[0, 1]`` coupling row ``a`` to column ``b`` -- disjoint rows and columns,
+    which :func:`~wavebit._core.modal_gradient.exponential` takes exactly.
+
+    **Why eig's pair cannot be kept.** At a 2x2 Jordan block ``eig`` returns two eigenvectors at
+    an angle ``~ sqrt(u)``, and ``Psi Lam Psi^-1`` reproduces the layer only to ``u/s`` (4e-10 at
+    the patterned conical x-cutoff). Orthonormalising the two loses the subspace the same way:
+    their difference is ``O(s)`` and carries ``O(u)`` of rounding out of it.
+
+    **The refinement.** One step of Newton's method for the invariant subspace through its
+    Sylvester equation (G. W. Stewart, SIAM Rev. 15, 727, 1973; J. W. Demmel, Computing 38, 43,
+    1987): with ``X`` orthonormal and ``S = X^H M X`` upper triangular (:func:`_schur_2x2`),
+    ``R = M X - X S``, the correction ``Z``, ``X^H Z = 0``, solves
+    ``(I - X X^H) M Z - Z S = -R`` through the bordered system ``[[M - sigma I, X], [X^H, 0]]``,
+    both columns in one solve with one shift ``sigma``, the mean of ``S``'s diagonal. Two terms
+    of the exact step are left out, both ``O(u)``: each column's own shift differs from
+    ``sigma`` by ``|S_00 - S_11|``, which multiplies ``Z``; and the second column's coupling term
+    ``S_01 z_1`` multiplies ``z_1``, the first column's correction -- and that column, after the
+    Schur rotation, is ``eig``'s own eigenvector, which already lies in the pair's subspace to
+    ``O(u / sep)`` (an eigenvector of a nearby operator); only the second direction carries the
+    ``u / s`` error. Measured: one step puts both subspaces of all five patterned exceptional
+    points within 1.7e-14 of a sorted complex Schur decomposition's (SciPy) -- that
+    decomposition's own accuracy -- from 1e-13 .. 1.8e-9 before it; with the coupling term, or a
+    second step, the same to the digit. ``|M B - B T| <= 4e-16 |M|`` after the step, against up
+    to 5e-10 for the orthonormalised pair. The bordered matrix is regular while the pair is
+    separated from the other roots (:data:`_PAIR_SEPARATION`), however defective the pair itself.
+
+    Everything is on stopped values (the derivative is the modal rule's, in this basis:
+    :func:`~wavebit._core.modal_gradient.split_generator`). A lane that is not ``engaged`` --
+    under a trace, a layer whose masks engaged nothing -- returns ``values`` and ``psi`` as they
+    were, and its bordered matrix is swapped for the identity so no lane forms an ``inf``.
+    """
+    n = psi.shape[0]
+    dev = getattr(psi, 'device', None)
+    if isinstance(engaged, bool):          # eager: a Python flag; PyTorch's `where` wants a tensor
+        engaged = xp.asarray(engaged, device=dev)
+    index = xp.arange(psi.shape[1], device=dev)
+    at_a, at_b = index == a, index == b    # `a`, `b`: 1-D index arrays of length 1
+    va = xp.take(psi, a, axis=1)[:, 0]
+    vb = xp.take(psi, b, axis=1)[:, 0]
+
+    def orthonormal(x1, x2):
+        x1 = x1 / xp.linalg.vector_norm(x1)
+        w = x2 - x1 * xp.sum(xp.conj(x1) * x2)
+        size = xp.linalg.vector_norm(w)
+        return xp.stack([x1, w / xp.where(size > 0, size, xp.ones_like(size))], axis=1)
+
+    def project(X):
+        return xp.matrix_transpose(xp.conj(X)) @ (M @ X)
+
+    X = orthonormal(va, vb)
+    U = _schur_2x2(xp, project(X))
+    X = X @ U
+    S = project(X)
+    residual = M @ X - X @ S
+    residual = residual - X @ (xp.matrix_transpose(xp.conj(X)) @ residual)
+    sigma = 0.5 * (S[0, 0] + S[1, 1])
+    eye = xp.eye(n, dtype=M.dtype, device=dev)
+    bordered = _block(xp, [[M - sigma * eye, X],
+                           [xp.matrix_transpose(xp.conj(X)), xp.zeros((2, 2), dtype=M.dtype, device=dev)]])
+    bordered = xp.where(engaged, bordered, xp.eye(n + 2, dtype=M.dtype, device=dev))
+    pad = xp.zeros((2, 2), dtype=M.dtype, device=dev)
+    Z = linear_solve(xp, bordered, xp.concat([-residual, pad], axis=0))[:n]
+    X = orthonormal(X[:, 0] + Z[:, 0], X[:, 1] + Z[:, 1])
+    U = _schur_2x2(xp, project(X))
+    B = X @ U
+    T = project(B)
+
+    psi = xp.where(engaged & at_a[None, :], B[:, 0:1],
+                   xp.where(engaged & at_b[None, :], B[:, 1:2], psi))
+    diagonal = xp.linalg.diagonal(values)
+    diagonal = xp.where(engaged & at_a, T[0, 0], xp.where(engaged & at_b, T[1, 1], diagonal))
+    unit = xp.eye(values.shape[0], dtype=values.dtype, device=dev)
+    coupling = xp.where(engaged & at_a[:, None] & at_b[None, :], T[0, 1], values - unit * xp.linalg.diagonal(values))
+    return unit * diagonal + coupling, psi
+
+
+def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
+    """``(lam_f, psi_f, lam_b, psi_b, coupled)``: split modes into propagation towards +z and -z.
 
     For decay-dominated eigenvalues (|Im(lambda)| > |Re(lambda)|), attenuation
     selects the direction. Otherwise normalized real Poynting flux selects it;
@@ -106,6 +321,12 @@ def split_forward_backward(xp, M, n_orders, k0_d=None):
 
     A stable sort keeps array sizes static under JAX tracing. Eager evaluation
     refuses a split with anything other than 2*n_orders modes in each direction.
+
+    Rebuilt pairs use matrix generators for ``lam_f`` and ``lam_b`` and return
+    ``coupled=True`` so propagation and fields retain their coupling. Under an
+    abstract trace this layout is structural even when no pair engages. ``slots``
+    bounds greedy candidates per direction; an eligible candidate beyond that
+    capacity poisons both generators with NaN. Eagerly all eligible pairs are rebuilt.
 
     ``k0_d`` is ``k0`` times the thickness of the layer's run of identical layers
     (:func:`_run_k0_ds`), given by the two stack algorithms (ETM and SMM) and by the coherent
@@ -146,6 +367,30 @@ def split_forward_backward(xp, M, n_orders, k0_d=None):
 
     order = xp.argsort(-key, stable=True)
     fwd, bwd = order[:2 * n_orders], order[2 * n_orders:]
+    # A defective pair -- a patterned conical x-cutoff is a 2x2 Jordan block -- is rebuilt in a
+    # regular basis (:func:`_regular_pair`); off the band nothing here runs and the split is the
+    # eigenvector one, to the bit. `coupled` is structural: True wherever the layout was taken.
+    pairs, refused, overflow = _pair_gate(xp, lam, psi, forward, slots=slots)
+    coupled = bool(pairs)
+    eig_lam = lam
+    if coupled:
+        frozen = _stop(M)
+        values = xp.eye(lam.shape[0], dtype=lam.dtype, device=getattr(lam, 'device', None)) * lam
+        for a, b, engaged in pairs:
+            values, psi = _regular_pair(xp, frozen, values, psi, a, b, engaged)
+        if overflow is not None:
+            # A trace must not leave an eligible pair in the ill-conditioned eigenvector basis.
+            values = values * xp.where(overflow, float('nan'), 1.0)
+        lam = values
+    # A skipped pair (a third root or a third parallel mode beside it) is loud
+    # only when the cluster it sits in is defective; a degenerate eigenspace in a nearly
+    # parallel basis (uniform layers, C4 rasters at normal incidence) is exact as eig left it.
+    # The same screen catches coincident exceptional points whose eig vectors no pair explains.
+    from .solve_2d import _unresolved_defective_cluster
+    if _unresolved_defective_cluster(xp, _stop(eig_lam), _stop(psi), lambda: _stop(M),
+                                     _PARALLEL_SIN, group=forward):
+        import warnings
+        warnings.warn(_REFUSED_PAIR, ExceptionalPointWarning, stacklevel=3)
     modal, psi = split_generator(xp, M, lam, psi, forward)
     def selected(indices):
         if modal.ndim == 1:
@@ -159,7 +404,7 @@ def split_forward_backward(xp, M, n_orders, k0_d=None):
         valid = xp.sum(key) == 2 * n_orders
         modes = tuple(xp.where(valid, a, as_array(xp, complex('nan'), dtype=a.dtype,
                                                  device=getattr(a, 'device', None))) for a in modes)
-    return modes
+    return (*modes, coupled)
 
 
 def _cap_round_trips(xp, M, lam, psi, forward, k0_d):
@@ -301,6 +546,12 @@ def _partner(xp, code, other):
 
 
 _SLOTS = ('exx', 'exy', 'exz', 'eyx', 'eyy', 'eyz', 'ezx', 'ezy', 'ezz_i')
+
+#: What a layer record gains when its split took the regular-pair layout (:func:`_layer_split`):
+#: a ninth slot, so the record's *length* tells :func:`~wavebit._core.fields.field_2d_first_order`
+#: to pass ``coupled=True`` -- a structural word a traced record keeps (a pytree child could not
+#: be branched on). Its content is unused; ``None`` adds no leaf.
+_COUPLED_RECORD = [None]
 
 
 def _run_k0_ds(xp, k0, layers):
@@ -476,8 +727,11 @@ def _interface_s(xp, psi1_f, psi1_b, psi2_f, psi2_b):
     return S[:n, :n], S[:n, n:], S[n:, :n], S[n:, n:]
 
 
-def _propagate_s(xp, lam_f, lam_b, k0, d, n_orders):
+def _propagate_s(xp, lam_f, lam_b, k0, d, n_orders, coupled=False):
     """Scattering matrix of a uniform layer, forward amplitudes referenced at its top.
+
+    ``coupled`` is :func:`_layer_split`'s structural word that the generators may carry a
+    regular pair's coupling, for :func:`~wavebit._core.modal_gradient.exponential`.
 
     **This is the whole reason for the direction split.** Forward modes decay towards ``+z``
     (``Im(lam_f) >= 0``) so ``|exp(i k0 lam_f d)| <= 1``, and backward modes decay towards ``-z``
@@ -486,20 +740,20 @@ def _propagate_s(xp, lam_f, lam_b, k0, d, n_orders):
     decaying halves in one matrix and inverts it, so the growing half sets the conditioning.
     """
     zero = xp.astype(xp.zeros((2 * n_orders, 2 * n_orders)), lam_f.dtype)
-    X_f = exponential(xp, lam_f, 1j*k0*d)
-    X_b = exponential(xp, lam_b, -1j*k0*d)
+    X_f = exponential(xp, lam_f, 1j*k0*d, coupled=coupled)
+    X_b = exponential(xp, lam_b, -1j*k0*d, coupled=coupled)
     return zero, X_b, X_f, zero
 
 
-def _solve_smm(xp, k0, Kx, Ky, layers, n_orders, psi_vf, psi_vb):
+def _solve_smm(xp, k0, Kx, Ky, layers, n_orders, psi_vf, psi_vb, *, slots=1):
     """Cascade interface and propagation scattering matrices with the Redheffer star."""
     S, _, _ = _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
-                           psi_vf, psi_vb, psi_vf, psi_vb)
+                           psi_vf, psi_vb, psi_vf, psi_vb, slots=slots)
     return S
 
 
 def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
-                 entry_f, entry_b, exit_f, exit_b, keep_field=False):
+                 entry_f, entry_b, exit_f, exit_b, keep_field=False, *, slots=1):
     """Cascade distinct forward/backward modes, optionally retaining field maps.
 
     Each backward amplitude is referenced at its layer's exit face. A suffix
@@ -515,14 +769,15 @@ def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
     modes, interfaces, propagators = [], [], []
     layers = list(layers)
     for (eps_blocks, d), k0_d in zip(layers, _run_k0_ds(xp, k0, layers)[0]):
-        lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, k0_d)
+        lam_f, psi_f, lam_b, psi_b, coupled = _layer_split(
+            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, k0_d,
+            slots=slots)
         interface = _interface_s(xp, prev_f, prev_b, psi_f, psi_b)
-        propagation = _propagate_s(xp, lam_f, lam_b, k0, d, n_orders)
+        propagation = _propagate_s(xp, lam_f, lam_b, k0, d, n_orders, coupled)
         for part in (interface, propagation):
             S = part if S is None else redheffer_star(xp, I, S, part)
         if keep_field:
-            modes.append([eps_blocks, psi_f, lam_f, psi_b, lam_b, d])
+            modes.append(([eps_blocks, psi_f, lam_f, psi_b, lam_b, d], _COUPLED_RECORD * coupled))
             interfaces.append(interface)
             propagators.append(propagation)
         prev_f, prev_b = psi_f, psi_b
@@ -533,8 +788,8 @@ def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
 
     reflection, advance = tail[0], tail[2]
     layer_info_list = []
-    for mode, interface, propagation in reversed(list(zip(modes, interfaces, propagators))):
-        layer_info_list.append(mode + [advance, reflection])
+    for (mode, marker), interface, propagation in reversed(list(zip(modes, interfaces, propagators))):
+        layer_info_list.append(mode + [advance, reflection] + marker)
         # Reflection at the entrance of this layer, including both bounded
         # propagation factors. Close the loop across its entrance interface.
         reflected_at_entry = propagation[1] @ reflection @ propagation[2]
@@ -559,7 +814,7 @@ def _forward_amplitudes(xp, incident, psi_vf, psi_vb, n_orders):
     return coef[:2 * n_orders]
 
 
-def _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
+def _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb, *, slots=1):
     """Enhanced transmittance matrix — the second-order path's stable transfer, carried over here.
 
     Same idea as :func:`wavebit._core.solve_2d.solve_2d`'s ``big_A_i`` / ``big_T`` recursion
@@ -577,7 +832,8 @@ def _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     redefinition is bookkept separately as ``P^-1 X_f`` per layer, so the transmitted amplitude
     can be recovered at the end.
     """
-    G, T_acc, _ = _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, psi_vf, keep_field=False)
+    G, T_acc, _ = _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, psi_vf,
+                                keep_field=False, slots=slots)
 
     # incident + reflected on the top side must be whatever the recursion says arrives there
     sol = linear_solve(xp, xp.concat([psi_vb, -G], axis=1),
@@ -585,7 +841,7 @@ def _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     return psi_vb @ sol[:2 * n_orders], psi_vf @ (T_acc @ sol[2 * n_orders:])
 
 
-def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
+def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True, *, slots=1):
     """Sweep the ETM recursion up the stack: ``(G_above, T_acc, layer_info_list)``.
 
     Split out of :func:`_solve_etm` because the recursion is the part
@@ -621,10 +877,11 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
     below = None
     for index in range(len(layers) - 1, -1, -1):
         eps_blocks, d = layers[index]
-        lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, run[index])
-        X_f = exponential(xp, lam_f, 1j*k0*d)
-        X_b = exponential(xp, lam_b, -1j*k0*d)
+        lam_f, psi_f, lam_b, psi_b, coupled = _layer_split(
+            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, run[index],
+            slots=slots)
+        X_f = exponential(xp, lam_f, 1j*k0*d, coupled=coupled)
+        X_b = exponential(xp, lam_b, -1j*k0*d, coupled=coupled)
 
         PQ = _run_pq(xp, psi_f, psi_b, G, below, False if below is None else links[index])
         P_i = xp.linalg.inv(PQ[:2 * n_orders])
@@ -640,11 +897,12 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True):
         # moves on; only `G` and `T_acc` have to survive an iteration. `_solve_etm` above
         # discards the list outright and so never builds it.
         if keep_field:
-            layer_info_list.append([eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i])
+            layer_info_list.append([eps_blocks, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i]
+                                   + _COUPLED_RECORD * coupled)
     return G, T_acc, layer_info_list
 
 
-def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
+def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb, *, slots=1):
     """Unstabilised eigen-decomposition transfer, kept only as a third opinion.
 
     Not ``layer_algorithm='ETM'``, which is the enhanced form in :func:`_solve_etm` and is what
@@ -653,8 +911,8 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
     """
     P = xp.astype(xp.eye(4 * n_orders), Kx.dtype)
     for eps_blocks, d in layers:
-        lam_f, psi_f, lam_b, psi_b = split_forward_backward(
-            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders)
+        lam_f, psi_f, lam_b, psi_b, coupled = _layer_split(
+            xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, slots=slots)
         lam = combine(xp, lam_f, lam_b)
         exponent = k0 * float(xp.max(xp.abs(xp.imag(lam)))) * float(d)
         if exponent > _MAX_EXPONENT:
@@ -663,7 +921,7 @@ def _solve_naive(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb):
                 "carry in float64. Use layer_algorithm='ETM' or 'SMM', either of "
                 'which is bounded for any thickness.')
         Psi = xp.concat([psi_f, psi_b], axis=1)
-        E = exponential(xp, lam, 1j*k0*d)
+        E = exponential(xp, lam, 1j*k0*d, coupled=coupled)
         P = (Psi @ E @ xp.linalg.inv(Psi)) @ P
 
     # Matching at both interfaces at once: incident + reflected on the input side must transfer
@@ -830,6 +1088,10 @@ def solve_2d_first_order(wavelength, kx, ky, n_top, n_bot, theta, incidence, thi
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
     n_orders_v, n_orders_u = kx_g.shape
     n_orders = n_orders_u * n_orders_v
+    from .modal_gradient import _COUPLED_CAP
+    # One exceptional-point pair may occur in every row of an invariant raster.
+    # The traced exponential's capacity bounds how many each direction can retain.
+    slots = min(max(n_orders_u, n_orders_v), _COUPLED_CAP)
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
@@ -861,7 +1123,7 @@ def solve_2d_first_order(wavelength, kx, ky, n_top, n_bot, theta, incidence, thi
 
         S, layer_info_list, entry_map = _smm_cascade(
             xp, k0, Kx, Ky, layers, n_orders,
-            entry_f, backward(entry_f), seed, backward(seed), keep_field)
+            entry_f, backward(entry_f), seed, backward(seed), keep_field, slots=slots)
         # The scene was already mirrored above when needed, including both
         # material tensors. Its ports are now incidence-relative.
         out, c_inc = _sp_scattering_result(
@@ -873,7 +1135,7 @@ def solve_2d_first_order(wavelength, kx, ky, n_top, n_bot, theta, incidence, thi
         return out
 
     G, big_T, layer_info_list = _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, seed,
-                                               keep_field=keep_field)
+                                               keep_field=keep_field, slots=slots)
     big_F, big_G = sp_modes_2d(xp, G[:2 * n_orders], 1j * G[2 * n_orders:], F_c, F_s, n_orders)
 
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,

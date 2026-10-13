@@ -132,12 +132,12 @@ body, `jax.checkpoint` and `torch.func.vmap` rebuild the layer too, the gate's m
 data. `rayleigh-points.md` §7 has the construction, the gate, how traces are handled and the
 measurements.
 
-On the 2D path the same patterned point produces nearly parallel eigenvectors at a nonzero
-root. Its builder now replaces each eligible pair with a regular basis and coupled generator
-(`rayleigh-points.md` §8). Coincident exceptional points can exceed that pair construction;
+On the 2D and first-order paths the same patterned point produces nearly parallel eigenvectors
+at a nonzero root. Their builders replace each eligible pair with a regular basis and coupled
+generator (`rayleigh-points.md` §§8–9). Coincident exceptional points can exceed that pair construction;
 the eager cluster screen emits `ExceptionalPointWarning`, which does not trigger detuning.
 The screen is silent under an abstract trace, so unresolved traced clusters can remain
-inaccurate. First-order handling is separate and remains open at this stage.
+inaccurate. A traced layer with more eligible pairs than its static slots returns NaN.
 
 ## Where the proofs live
 

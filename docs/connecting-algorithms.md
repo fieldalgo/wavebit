@@ -147,6 +147,11 @@ turns on the difference.
 On the first-order path, over five tensors × three incidences × both polarisations: **ETM vs SMM
 3.3e-15, ETM vs plain transfer 1.8e-15** wherever the plain transfer is willing to answer at all.
 
+At a patterned exceptional point, first-order ETM and SMM previously disagreed by up to 2.45;
+the regular-pair construction brings their agreement to about 1e-13 in the 2026-10-12 design
+measurements. See [`rayleigh-points.md` §9](rayleigh-points.md#9-the-first-order-path-at-a-patterned-exceptional-point)
+for the mechanism and the coincident-cluster and trace limits.
+
 ## 4. Thickness
 
 First-order, `n = 1.5 + 0.1j` at 35°, against the exact Airy slab. The third column is the

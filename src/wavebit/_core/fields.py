@@ -815,20 +815,23 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
     z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 5, interface_side)
 
     cells = []
-    for spec, (eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i) in zip(z_per_layer,
-                                                                     layer_info_list[::-1]):
+    for spec, record in zip(z_per_layer, layer_info_list[::-1]):
+        eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i = record[:8]
+        # A ninth slot says the layer's split took the regular-pair layout
+        # (`solve_2d_first_order._COUPLED_RECORD`): structural, so a traced record answers it.
+        coupled = len(record) > 8
         nz = _n_samples(spec)
         # The layer's unknown is its forward amplitude at its own top face -- that is what the
         # ETM redefinition `t' = X_f^-1 P t` bought. The backward half is referenced at the
         # bottom face, so `QP_i @ X_f` is the map to it.
         from .modal_gradient import exponential
-        X_f = exponential(xp, lam_f, 1j*k0*d)
+        X_f = exponential(xp, lam_f, 1j*k0*d, coupled=coupled)
         a_f = T_layer
         a_b = (QP_i @ X_f) @ T_layer
 
         z = _z_1d(xp, spec, d, C, dev)
-        fwd = exponential(xp, lam_f, 1j*k0*z)
-        bwd = exponential(xp, lam_b, 1j*k0*(z-d))
+        fwd = exponential(xp, lam_f, 1j*k0*z, coupled=coupled)
+        bwd = exponential(xp, lam_b, 1j*k0*(z-d), coupled=coupled)
         psi = psi_f @ (fwd[:, None] @ a_f) + psi_b @ (bwd[:, None] @ a_b)
 
         Ex, Ey = psi[:, :, :n_orders], psi[:, :, n_orders:2 * n_orders]
