@@ -658,15 +658,20 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4, interface_side)
 
     cells = []
-    for spec, (epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i, amplitudes) in zip(
-            z_per_layer, layer_info_list[::-1]):
+    for spec, entry in zip(z_per_layer, layer_info_list[::-1]):
+        epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i, amplitudes = entry[:9]
         nz = _n_samples(spec)
         q_1, q_2 = q[:n_orders], q[n_orders:]
         # A conical x-cutoff layer arrives in the general layout (`solve_1d.
         # _regular_conical_modes`): `W` is `2n x 2n` rather than the family layout's `n x 2n`, and
         # its `q` couples the cluster modes in value. The shape is static, so a traced record
-        # answers it; `exponential` takes it as its structural `coupled` word.
+        # answers it; `exponential` takes it as its structural `coupled` word. A 2D layer with
+        # rebuilt pairs (`solve_2d._rebuild_defective_pairs`) carries a tenth slot (`None`, so
+        # it survives any pytree round trip as structure): its presence is the word, and the
+        # pairs' cap, the closed form's size, is the solve's, read off the order grid.
         rebuilt = conical and W.shape[0] != n_orders
+        if len(entry) > 9:
+            rebuilt = max(n_orders_u, n_orders_v)
         from .modal_gradient import exponential
         if amplitudes is None:
             # The ETM's record: `T_layer` is this layer's `+` amplitude at its top.

@@ -50,6 +50,7 @@ from wavebit._core.factorization import (_nvf_assemble, fourier2d_piecewise_cons
                                            to_conv_mat_raster_nvf)
 from wavebit._core.solve_1d import _block, _diag, final_matching
 from wavebit._core.solve_2d import layer_modes_2d, sp_modes_2d
+from wavebit._core.modal_gradient import exponential
 
 C128 = np.complex128
 
@@ -218,11 +219,17 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
     F_c = _diag(xp, np.cos(varphi))
     F_s = _diag(xp, np.sin(varphi))
 
-    W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx, epy, epz_i, epxy, epyx, C128)
+    pair_cap = max(np.unique(mm).size, np.unique(nn).size)
+    W, V, q, coupled = layer_modes_2d(
+        xp, Kx, Ky, I, epx, epy, epz_i, epxy, epyx, C128,
+        pair_cap=pair_cap, with_coupling=True)
 
-    X_1 = _diag(xp, np.exp(-k0 * q[:n_orders] * thickness))
-    X_2 = _diag(xp, np.exp(-k0 * q[n_orders:] * thickness))
-    big_X = _block(xp, [[X_1, O], [O, X_2]])
+    if q.ndim == 1:
+        X_1 = _diag(xp, np.exp(-k0 * q[:n_orders] * thickness))
+        X_2 = _diag(xp, np.exp(-k0 * q[n_orders:] * thickness))
+        big_X = _block(xp, [[X_1, O], [O, X_2]])
+    else:
+        big_X = exponential(xp, q, -k0*thickness, coupled=pair_cap if coupled else False)
 
     big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
     big_W_i = np.linalg.inv(big_W)

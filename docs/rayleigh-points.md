@@ -1,7 +1,8 @@
 # Rayleigh points — the exact graze, which paths solve it, and what `auto_detune` does
 
 Written: 2026-08-16; §6 (the 2D coupled-cluster rebuild) added later the same day; §7 (the
-1D conical x-cutoff at `ky != 0`, which is not a Rayleigh point) added 2026-10-10.
+1D conical x-cutoff at `ky != 0`, which is not a Rayleigh point) added 2026-10-10; §8 records
+the 2D exceptional-point design and judge measurements from 2026-10-12.
 Measured on CPU (Apple Accelerate), NumPy / JAX / PyTorch, float64; the single-precision
 caveat is stated where it applies. This file is the measurement record; for the
 narrative walkthrough of how the pieces hand off to each other at solve time, read
@@ -9,13 +10,14 @@ narrative walkthrough of how the pieces hand off to each other at solve time, re
 
 Targets:
 - `src/wavebit/_core/solve_1d.py` — `layer_modes_1d_conical` (the reformulation), `layer_modes_1d`,
-  `_cutoff_cluster` and `_regular_conical_modes` (§7)
-- `src/wavebit/_core/solve_2d.py` — `layer_modes_2d`, `_rebuild_grazing_cluster` (§6)
+  `_cutoff_cluster`, `_one_side` and `_regular_conical_modes` (§7)
+- `src/wavebit/_core/solve_2d.py` — `layer_modes_2d`, `_rebuild_grazing_cluster` (§6),
+  `_defective_pairs`, `_rebuild_defective_pairs`, `_unresolved_defective_cluster` (§8)
 - `src/wavebit/_core/backend.py` — `check_mode_cutoff`, `check_finite`,
-  `RayleighPointWarning`, `AutoDetuneWarning`
+  `RayleighPointWarning`, `AutoDetuneWarning`, `ExceptionalPointWarning`
 - `src/wavebit/_core/engine.py` — `solve` (the `auto_detune` ladder)
 - `tests/test_rayleigh_guard.py` — every contract below, pinned; `tests/test_conical_cutoff.py`
-  — §7
+  — §7; `tests/test_2d_exceptional_point.py`, `tests/test_exceptional_point_clusters.py` — §8
 
 ---
 
@@ -37,8 +39,9 @@ hunt for a *configuration* that separates failing from working cases found none,
 | half-space graze (any path) | always fine | no mode matrix is built for a half-space |
 | 1D pure TE/TM (`tetm=`) | always fine | `V = W*q` — nothing singular is ever inverted |
 | 1D conical (`psi`/pair), `ky == 0` | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
-| 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, eagerly and, since 2026-10-11, under every abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint`, `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike |
-| 2D | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice; quiet-wrong is gone |
+| 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, eagerly and, since 2026-10-11, under every abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint`, `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike; patterned double negatives at a complex `theta` too |
+| 2D graze | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice |
+| 2D at a patterned EP (`q = abs(ky)`) | **rebuilt as a regular pair (§8)** | coincident EPs warn eagerly; under a trace the screen is silent, so this guarantee has limits |
 | any path, eigenvalue *exactly* `0.0` — and, on 2D, any cluster whose coupled rates split below ~1e-10 of the modal scale | refuses, unless the ladder clears it | the exponential mode basis is degenerate at the point itself (the limit basis is `{1, z}`) |
 
 `solve` handles the practical side by default: `auto_detune=True` retries a solve that
@@ -523,11 +526,198 @@ real `theta` the 2D path is 2.0e-11..1.1e-5 off in `R` and up to 4.0e-2 in an am
 +0.34), exact at two of the six; at a complex `theta`, 2D up to 3.4e-3, first-order ETM up to
 1.5e-4 and first-order SMM up to 4.2 in `R`.
 
-**Still open, and separate.**
+**Other paths at the same point.**
 
-- The 2D path at a *patterned* exceptional point is 1e-8..4e-5 off, silently: its grazing
-  rebuild is keyed to `q -> 0`, and this cluster sits at `q = abs(ky)`.
-- First-order SMM at a patterned exceptional point is 0.07..0.32 off (`R + T - 1` up to
-  +0.36), silently, and stays near 0.2 for every relative offset under 1e-8. First-order ETM
-  there sits at the 2D path's level (3.5e-7); neither first-order path fails at a uniform
-  cutoff.
+- The 2D path now rebuilds regular pairs (§8). Against baseline `db37dbb8`, the re-measured
+  amplitude errors before the fix were 4.2e-8..5.4e-3 on ETM and 8.2e-7..3.6e-2 on SMM.
+- First order is still open in this commit: baseline SMM errors were 3.0e-2..2.45,
+  ETM 2.1e-7..2.5e-4, with `R + T - 1` up to +5.4. Neither path fails at a uniform cutoff.
+- Patterned double negatives, with historical `R` errors up to 24, are covered by the
+  one-side relabeling above.
+
+## 8. The 2D path at an exceptional point — a near-defective pair, rebuilt
+
+`solve_2d.py::_defective_pairs` gates, `solve_2d.py::_rebuild_defective_pairs` rebuilds,
+`_pair_generator` / `_pair_inverse` / `_pair_sylvester` differentiate. Tests:
+`tests/test_2d_exceptional_point.py` and `tests/test_exceptional_point_clusters.py`.
+
+The measurements below are the 2026-10-12 prototype and judge record against baseline
+`db37dbb8`, before the source-layout and FDTD integration changes. They describe those measured
+trees, not a new run on the current checkout.
+
+**What it was.** The 2D path diagonalises each layer's product `Omega2 = Omega_L Omega_R`. Where
+two of its eigenvalues form a 2x2 Jordan block (an exceptional point, EP) `eig` returns two
+columns that are each accurate to the unit round-off `u` but meet at a sine `s` of
+1e-8..1e-6: `(Omega2 - w) ` has one singular value at 1e-16 and the next at 4e-3..7e-2, and the
+eigenvalues split by `sqrt(u)`-sized amounts (1e-9..5e-8). Each column still satisfies both
+first-order relations to 1e-15; what breaks is the basis: `cond(W)` 6e6..1.6e8, and the
+interface inverses amplify rounding by about `1/s**2` -- measured `K u / s**2` with `K <= 1e-2`
+(SMM; ETM 1e-5..1e-2) for `s` from 2e-5 to 1e-2. The grazing rebuild (§6) never engaged: it is
+keyed to `min|w| / max|w| < 1e-9`, and these pairs sit at `|w| ~ 1e-1..7`.
+
+Two kinds were measured, both silent before:
+
+- **§7's exceptional points on a y-invariant raster.** `wA` does not depend on `ky`, so a 2D raster
+  has one EP per order row at once, each at `q = abs(ky_v)` (three on truncation `(M, 1)`). Against
+  the landed 1D rebuild, v = 0 row: amplitudes 4.2e-8..5.4e-3 (ETM) and 8.2e-7..3.6e-2 (SMM),
+  `R + T - 1` to -2.1e-2 (MU614 at relative 1e-12); `|d sum R|` at the exact point, ETM, 1.2e-8..4.4e-8
+  on PA616 / PB687 / PD574 and 2.1e-6..2.2e-6 on MU614 / PL952 (the "1e-8..4e-5" recorded in §7
+  was `|d sum R|` at the point plus PL952's spread); gradients 2e-8..6e-2, fields 2.5e-7..5.1e-2;
+  under `jit`, `vmap` and `torch.func.vmap` the same. On the lossless double-negative EP
+  `Si 1558`, SMM amplitudes 5.2e-7 at relative 1e-5; at complex `theta` up to 9e-2 in `R`.
+- **Genuinely 2D exceptional points.** Cutting the PA616 pillar to a fraction `fy` of the y period
+  breaks the y-invariance and the families, and the layer's real `q**2` pairs turn complex at
+  EPs of their own -- codimension one in the wavelength for a lossless layer: 8, 5 and 6 of
+  them within +-3% of 616 nm at `fy` 0.95, 0.8 and 0.5, every one with `q**2 > 0`. Against an oracle
+  that never runs the rebuild (below), the product construction was 4e-11..1.7e-6 off (ETM) and
+  2.5e-9..6.4e-6 (SMM). Their error band is narrow -- `s ~ sqrt(|d wl|)`, so the error falls like
+  `1/|d wl|` (6.4e-6 at the point, 2.2e-9 at 1e-12, 2.6e-12 at 1e-9) -- where §7's falls like
+  `1/d**2`.
+
+**The gate.** Two modes are a pair when each is the other's nearest eigenvalue of `Omega2`, their
+eigenvector sine `s = |(I - v v^H) W_b|` is below `_EP_SINE = 1e-2`, and both roots are above
+`_EP_ROOT_FLOOR = 1e-9` (`q -> 0` is §6's). Measured just outside the edge (`s` 1e-2..2e-1), the
+product construction is at its floor, 4e-15..1.7e-13; inside, the rebuild is 2e-15..5e-14. Over
+400 random 2D layers the gate engaged on one (smallest sine 6.6e-3), over 100 C4-symmetric layers
+at normal incidence (exactly degenerate pairs) on none. Concrete decisions go through `_concrete`; under a trace the masks remain data.
+A pair is also skipped if an *unpaired* root is within `_EP_SEPARATION = 1e-7` times
+`max(1, |w|)` of either member. The Newton step divides a plain row by that separation:
+synthetic residuals were 2.0e-12 at 1e-8, 3.5e-13 at 2e-8, and at most 8.1e-14 from 5e-8 on.
+Members of another gated pair are exempt because their rows use the coupled Sylvester solve;
+that solve was accurate to 2.4e-14 down to a pair-to-pair spread of 1.5e-6. A 1e-4 guard on
+all third roots was rejected because it skipped pairs that could be rebuilt exactly.
+
+**The construction** (values only, inputs stopped):
+
+1. *Orthonormalise.* `v = W_a / |W_a|` -- an eigenvector to `u` -- and `x0 = (I - v v^H) W_b / s`,
+   a direction accurate only to `u / s` (the span `eig` hands back is not backward stable: its
+   invariant-subspace residual is `u / s`, about 1e-9 here; built on it the answer was 8e-10 off).
+2. *One Newton step for the invariant subspace, every pair at once* (G. W. Stewart, SIAM J.
+   Numer. Anal. 10, 752, 1973; J. W. Demmel, Linear Algebra Appl. 79, 163, 1986). In the basis
+   `W0` -- the modes with each pair orthonormalised, well conditioned -- the operator is already
+   (block) diagonal: `M = Q^H Omega2 Q` is upper triangular to `u` (`M_10 = x0^H Omega2 v`
+   is dropped), the residual `R = Omega2 Q - Q M` expands as `R = W0 C` by one solve for every
+   pair, and the correction `Q -> Q + W0 Y` solves `Lambda Y - Y M = -C` row by row: a plain row
+   `y (lambda_i - M) = -c_i`, another pair's two rows the 2x2 upper-triangular Sylvester equation
+   with that pair's `M`, its own rows zero. Measured: the eig span's 1e-9 lands at rounding
+   (invariant-subspace residual <= 6e-16). Shifted inverse iteration was measured first and
+   rejected: on a Jordan block it collapses the pair onto its eigenvector (1e-14 after two steps,
+   1e-2 after three).
+3. *The pair's modes.* Re-orthonormalised to `(v, x)`, `T = Q^H Omega2 Q` is upper triangular to
+   `u` (`T_10` dropped), and `q = [[alpha, t], [0, beta]]`, `alpha**2 = T_00`, `beta**2 = T_11`,
+   `t = T_01 / (alpha + beta)`, is its exact square root; `W = (v, x)` and `V = Omega_R W q^-1`
+   (`V_a = Omega_R v / alpha`, `V_b = (Omega_R x - V_a t) / beta`) satisfy `Omega_R W = V q` and
+   `Omega_L V = W q` to 6e-16, and `cond(W)` falls to 4..170. No division by a gap.
+4. *One side.* Both roots take the side of the more decaying member's label -- each member's own
+   wherever the layer's rule agrees with itself. Where it does not (a complex pair on Maystre's
+   cut, a tie the flux or `Im(q) <= 0` breaks: purely imaginary `theta`, the double negatives of the
+   patterned double negatives at complex `theta`), the other member turns, so the `+` set holds
+   the whole Jordan block and stays complementary to the `-` set.
+
+The layer comes out with `q = diag(q) + tau`, `tau[a, b] = t` per pair: coupled rows `{a}` and
+columns `{b}`, disjoint, so `modal_gradient.exponential`'s divided differences are its exact
+exponential (§7), and the ETM, SMM and field reconstruction consume it as they consume §7's
+general layout. The consumers are told structurally: `layer_modes_2d(..., with_coupling=True)`
+returns the word to the ETM and SMM loops; an ETM record gets a tenth slot (`None`, so a pytree
+round trip keeps it) and SMM's records likewise.
+
+**Derivatives.** In the fixed basis `W` the layer is the matrix `Q` with `Q**2 = W^-1 Omega2 W`,
+and its first variation solves `Q dQ + dQ Q = W^-1 dOmega2 W` -- `modal_gradient.generator`'s
+rule with a coupled `Q`: the four divided-difference passes of `_coupled_sylvester`, the
+coupling's products taken by gathers (`_pair_sylvester`). `V = Omega_R W Q^-1` takes the closed
+form's value and the exact tangent `-Q^-1 dQ Q^-1` (`_pair_inverse`: the formula's own tangent
+drops `M dQ_off D^-1 + D^-1 dQ_off M - M dQ M`, `M = D^-1 tau D^-1`). The exponential is the
+coupled one (`exponential(coupled=cap)`): eagerly `expm`'s Fréchet derivative, under a trace the
+closed form of §7 with the pairs' cap. SMM's field state reads both members of a pair off the
+bottom face (`two_face(coupled='pairs')`): a 2D pair's tangent `d_ba` is not tied to its gap
+the way a conical cutoff pair's is.
+
+**Under an abstract trace** every 2D layer takes the coupled layout with its pairs as data: the
+`cap = max(n_orders_u, n_orders_v)` smallest sines (an invariant raster's EPs come one per order
+row or column), masked; a lane whose pairs are masked keeps the product construction's columns
+and a zero coupling. More qualifying pairs than the cap multiply the layer's `q` by NaN -- loud.
+
+| measured (oracles: the 1D rebuild for §7's points; a Cauchy circle for the genuinely 2D ones) | before | now |
+| --- | --- | --- |
+| PA616 / PB687 / PD574 / MU614 / PL952 rasters, `rel` 0, +-1e-15, +-1e-12, +-1e-9 .. +-1e-3, amplitudes | 4.2e-8..5.4e-3 (ETM), 8.2e-7..3.6e-2 (SMM) | <= 4.5e-14 for `|rel|` <= 1e-9 and <= 1.0e-13 to 1e-3 (PB687 SMM at -1e-3, where develop gives the same 1.0e-13); `R + T - 1` <= 7.2e-15 and <= 4.1e-14 |
+| genuinely 2D EPs, `fy` 0.95 / 0.8 / 0.5 (six points), amplitudes | 4e-11..1.7e-6 (ETM), 2.5e-9..6.4e-6 (SMM) | 5.8e-15..1.6e-13 |
+| complex `theta`: patterned double negatives at 18 angles (fits of the 1D family construction) and PA616 at three | `R` up to 9e-2, amplitudes up to 3.4e-2 | within each fit's residual; PA616 <= 9.4e-13 |
+| `jax.grad`, `jvp`, torch reverse, `forward_ad` (raster, wavelength, thickness, `theta`) and `jit(grad)`, vs `jax.grad` of the 1D rebuild, `rel` 0 .. 1e-9 | 4.7e-8..6.2e-2 | <= 2.2e-13 (MU614 <= 6.0e-12, the 1D path's own consistency there) |
+| `jit`, `jit(vmap)`, `torch.func.vmap` values; `jit(grad(sum vmap))`, `jit(vmap(grad))`, torch `vmap` + backward and `forward_ad`, per lane | 2e-8..3e-4; 2e-6..4e-3 | <= 4e-14; <= 1.2e-12 |
+| fields (six components) / field gradients, eager | 2.5e-7..5.1e-2 / 2.3e-6..1.9e-2 | <= 1.2e-13 / <= 2.6e-13 (the double negative `Si 1558`: 9.1e-13 / 3.1e-12) |
+| fields / field gradients under `jit` | 8.1e-7..2.4e-4 / 3.1e-6..2.3e-3 | <= 5.8e-14 / <= 2.6e-13 |
+| complex64, against the 1D rebuild at complex128 | 4e-6..9e-4 | 5.4e-7..2.0e-6, the 2D path's float32 floor off the band (5.8e-7..1.6e-6) |
+| uniform cutoffs (`test_conical_cutoff.UNIFORM`, 13 scenes x exact, +1e-12, one ULP) | exact (2.3e-15..5.2e-14) | the same numbers: the gate never engaged, so the arithmetic is the product construction's |
+
+The Cauchy oracle: the Cartesian amplitudes are analytic in `theta`, so their value at `theta*` is
+their mean over `theta* + r exp(2 pi i k / K)`; on the circle the pair is off its EP and the product
+construction is accurate. It reproduced direct solves off the EP to 2e-14, and itself across
+`r` 1e-4 / 2e-4, `K` 16 / 24 and ETM / SMM to 7e-14. (It cannot judge §7's points: there `wA`
+does not depend on `theta`, so the whole circle sits on the EP.)
+
+**Historical byte identity.** A 404-line digest (`sha256` of `R`, `T`, `r_xyz`, `t_xyz` and fields) over 40 random
+scenes -- 2D Li rasters, with `mu`, backside, NVF, C4-symmetric at normal incidence, lossy and
+metallic, first-order on 2D, conical with `mu` -- on NumPy, JAX and PyTorch eagerly, with eager
+`jax.grad`, `jvp`, torch backward and `forward_ad`, eager field gradients, `jit`, `jit(grad)`,
+`jit(vmap)` and `torch.func.vmap`, run twice per tree: each tree repeats itself, and develop and
+the prototype differ in 22 lines -- the 12 routed EP lines and 10 `jit(grad)` lines. Every *off-band* eager line and
+every *off-band* traced value line (`jit`, `jit(vmap)`, `torch.func.vmap`) is identical. The moved
+`jit(grad)` lines are as accurate as before: against eager `jax.grad` on the same tree, 1.9e-16..
+1.2e-10 on both trees, line for line.
+
+**Historical prototype cost.** These timings precede the cluster screen below. Eagerly the gate is `O(n**2)` per layer: off the band 1.00..1.01x (NumPy, two
+layers at truncation (5, 5) and (8, 8)). A rebuilt layer adds one solve with `W0` and a few
+`2n x 2 * pairs` products: 1.06..1.15x on PA616's rasters. Under a trace every 2D layer pays the
+rebuild (truncation (8, 8), two layers, two runs per tree): `jit(solve)` 1.22x, `jit(grad)` 1.07..1.11x,
+an 8-wavelength `jit(vmap)` 0.93..1.17x and its gradient 0.97..1.08x, `torch.func.vmap` 0.95..1.14x;
+compile 1.3..1.5x.
+
+**The unresolved-cluster screen.** Nearly parallel *pairs* do not detect every defective
+cluster. At `ky0 = Gy/2` a y-invariant raster has two coincident Jordan blocks: `eig` mixes
+four vectors whose pairwise sines are 0.76..1.0, while the four-column smallest singular value
+is about 1e-7. The pair gate then sees nothing. Eagerly, `_unresolved_defective_cluster`
+checks the final basis after any rebuild, on stopped values:
+
+1. Group roots connected by a distance at most `_EP_CLUSTER = 1e-4` times the larger
+   `max(1, |w|)`. If `_concrete` cannot read the presence of a cluster of at least three modes,
+   the screen returns without warning; if none exists, one quadratic comparison is all it does.
+2. For each such cluster, normalise its columns and inspect their smallest singular value.
+   A value at least `_EP_SINE` needs no further check.
+3. Otherwise form an orthonormal basis `Q`, then `T = Q^H Omega2 Q`, and measure
+   `nu = ||T T^H - T^H T||_F / max(1, |mean(diag(T))|)**2`. Warn with
+   `ExceptionalPointWarning` when `nu > 1e-10 * (eps/eps64)**2`.
+
+This measures non-normality, so a diagonalizable degenerate eigenspace is not confused with a
+Jordan block just because `eig` returned a poor basis. Across the judge's 195 ordinary
+clusters, `nu <= 1.9e-19`; across 429 exceptional clusters, `nu >= 1.4e-7`. Measuring
+`||T - mean(T) I||` instead failed on two ordinary degenerate pairs whose roots were 4.5e-5
+apart. The precision scaling suppresses the screen below double precision: a fixed float64
+threshold gave four false warnings in 60 complex64 uniform first-order layers; the scaled
+threshold gave none. The screen changes no arithmetic, and `auto_detune` does not respond to
+`ExceptionalPointWarning`: its 1e-12 step cannot clear this wider band.
+
+At the measured coincidences the amended 2D path was exact (at most 6.0e-13) or warned:
+PA616 warned for `|dtheta| <= 1e-8`, PL952 for `|dtheta| <= 1e-7`, and points beyond were exact.
+There were no false warnings on 120 degenerate scenes or on the 200-scene census. Rebuilding
+can still select a diagonalizable pair with a poor eigenvector basis: across both paths,
+10 of 800 census solves moved by at most 1.2e-15 in `sum R` or `sum T`. This qualifies the
+digest claim: byte identity applies outside the gates, not to every non-exceptional layer.
+
+**Limits and unchanged behavior.**
+
+- Eagerly a layer with no gated pair keeps the product construction's arithmetic; the screen
+  can add a warning. At unresolved coincidences, the old arithmetic was 2.0e-6..5.8e-4 off.
+- Under `jit`, `vmap` or `torch.func.vmap`, the screen cannot read concrete values, so coincident
+  clusters can remain silently at the old error level. No correct-or-loud guarantee covers
+  those traced clusters. More qualifying *pairs* than the trace cap do produce NaN.
+- A root below `_EP_ROOT_FLOOR = 1e-9` stays with the grazing machinery or product construction.
+  A layer that both grazes and holds an EP takes the grazing path; its EP pair is not rebuilt
+  (not measured). The grazing refusal, `RayleighPointWarning` and `_require_separated` remain.
+- Every traced layer's `jit(grad)` uses the coupled exponential's closed-form tangent, even
+  off the band. Its bits can move; the historical digest's moved gradients remained as accurate.
+- In complex64 the rebuild reaches the float32 floor (5.4e-7..2.0e-6 in the measured cases),
+  and the cluster screen is effectively inactive.
+- Not measured: GPU, `pmap`, `shard_map`, `jax.lax.map` / `jax.checkpoint` bodies for this path,
+  second derivatives through a rebuilt layer, NVF or anisotropic layers at an EP, and large
+  clusters beyond the cases above. Historical prototype cost does not establish peak memory
+  at large truncation or the cost of the added screen.

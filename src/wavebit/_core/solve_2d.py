@@ -16,7 +16,7 @@ to the conical versions, so this module reuses ``solve_1d``'s boundary init and
 ``final_matching`` verbatim.
 """
 from .backend import (_concrete, _readable, array_namespace, as_array, carries_autodiff,
-                      check_mode_cutoff, checked_float, division_at_a_cutoff, eig)
+                      check_mode_cutoff, checked_float, division_at_a_cutoff, eig, linear_solve)
 from .conventions import (boundary_kz, half_space_medium, layer_label_rule, layer_root,
                           order_azimuth, power_down_labels)
 from .enums import Answers, answers_of
@@ -198,8 +198,380 @@ def _rebuild_grazing_cluster(xp, w, W, V, q, Omega_L, Omega_R, k0_d=None, mirror
     return W, V, q
 
 
+#: The defective-pair gate (:func:`_defective_pairs`): two modes of a 2D layer that are each
+#: other's nearest eigenvalue, and whose eigenvectors meet at a sine below this, are rebuilt as
+#: an orthonormal Schur pair with an upper-triangular ``q`` (:func:`_rebuild_defective_pairs`).
+#: Measured, not derived: the product construction's error follows ``K u / s**2`` (``u`` the
+#: unit round-off, ``s`` the pair's sine, ``K <= 1e-2`` on SMM over the patterned scenes), and just
+#: outside the edge (``s`` 1e-2 .. 1e-1) it was at its floor, 4e-15 .. 1.7e-13. The rebuild is an
+#: exact change of basis for any pair, so a larger value costs time, never accuracy.
+_EP_SINE = 1e-2
+
+#: A pair root at or below this modulus is left to the construction: ``q -> 0`` is the grazing
+#: cluster's (:func:`_rebuild_grazing_cluster`), where an up- and a down-going mode merge.
+_EP_ROOT_FLOOR = 1e-9
+
+#: A pair with an unpaired eigenvalue within this of either member (relative to
+#: max(1, |w|)) is not rebuilt: the Newton step divides that row by its distance to the pair.
+#: Measured on a Jordan pair beside a plain root at delta: the rebuilt pair's residual 2.0e-12
+#: at 1e-8, 3.5e-13 at 2e-8, <= 8.1e-14 from 5e-8 on (three random bases). Another gated pair
+#: is not counted: its rows take the 2x2 Sylvester closed form.
+_EP_SEPARATION = 1e-7
+
+#: The radius of the clusters _unresolved_defective_cluster reads.
+_EP_CLUSTER = 1e-4
+
+#: A cluster whose restriction T = Q^H A Q departs from normality by more than
+#: this, ||T T^H - T^H T||_F / max(1, |lambda|)**2, is defective. Measured: degenerate clusters in
+#: a nearly parallel eig basis (uniform layers, C4 rasters) <= 1.9e-19; exceptional points
+#: (patterned rasters at offsets 0..1e-3, y-Littrow coincidences, 2D and first order) >= 1.4e-7.
+_DEFECT_NU = 1e-10
+
+
+def _unresolved_defective_cluster(xp, w, W, operator, sine, group=None):
+    """Eagerly, whether ``eig`` left a defective cluster of three or more modes in a nearly
+    dependent basis; ``None`` under an abstract trace.
+
+    A cluster is a connected set of eigenvalues each within :data:`_EP_CLUSTER` of the next.
+    It is unresolved when its unit columns' smallest singular value is below ``sine`` and its
+    restriction ``T = Q^H A Q`` (``Q`` an orthonormal basis of the columns) is not normal:
+    :data:`_DEFECT_NU`. A degenerate (diagonalizable) cluster passes whatever basis
+    ``eig`` chose for it. ``operator()`` builds ``A`` only when needed. ``group`` (optional, one
+    label per mode) keeps modes of different groups out of one cluster.
+    """
+    scale = xp.maximum(xp.ones_like(xp.abs(w)), xp.abs(w))
+    near = xp.abs(w[:, None] - w[None, :]) <= _EP_CLUSTER * xp.maximum(scale[:, None],
+                                                                          scale[None, :])
+    if group is not None:
+        # Modes of different groups never share a cluster: the first-order split's two
+        # directions, so that an up- and a down-going mode merging at a graze (q -> 0, the
+        # {1, z} regime, which this screen is not about) is not read as an exceptional point.
+        near = near & (group[:, None] == group[None, :])
+    count = xp.sum(xp.astype(near, xp.int32), axis=1)
+    crowded = _concrete(xp.any(count >= 3))
+    if not crowded:
+        return None if crowded is None else False
+    dev = getattr(W, 'device', None)
+    Wn = W / xp.linalg.vector_norm(W, axis=0)[None, :]
+    pending, A = count >= 3, None
+    idx = xp.arange(w.shape[0], device=dev)
+    while _concrete(xp.any(pending)):
+        # Keep graph membership and indices as array data. Only Boolean reductions
+        # cross to Python, through _concrete, even in this eager-only screen.
+        comp = idx == xp.argmax(xp.astype(pending, xp.int32))
+        frontier = comp
+        while _concrete(xp.any(frontier)):
+            neighbors = xp.any(xp.take(near, xp.nonzero(frontier)[0], axis=0), axis=0)
+            frontier = neighbors & ~comp
+            comp = comp | frontier
+        pending = pending & ~comp
+        members = xp.nonzero(comp)[0]
+        cols = xp.take(Wn, members, axis=1)
+        if _concrete(xp.linalg.svdvals(cols)[-1] >= sine):
+            continue
+        if A is None:
+            A = operator()
+        Q, _ = xp.linalg.qr(cols)
+        T = xp.matrix_transpose(xp.conj(Q)) @ (A @ Q)
+        k = members.shape[0]
+        lam = xp.sum(xp.linalg.diagonal(T)) / k
+        TH = xp.matrix_transpose(xp.conj(T))
+        nu = (xp.linalg.matrix_norm(T @ TH - TH @ T)
+              / xp.maximum(xp.ones_like(xp.abs(lam)), xp.abs(lam)) ** 2)
+        # The floor is |E|**2 for a rounding E of T, so it scales with eps**2: in single
+        # precision a normal cluster's measure reached the float64 threshold (4 of 60 uniform
+        # first-order layers warned), so below double precision the screen stays silent.
+        eps = float(xp.finfo(xp.real(T).dtype).eps) / 2.220446049250313e-16
+        if _concrete(nu > _DEFECT_NU * eps * eps):
+            return True
+    return False
+
+
+_UNRESOLVED_2D = (
+    'a 2D layer holds three or more modes of one defective eigenvalue cluster (exceptional '
+    'points that coincide, such as two order rows of a y-invariant layer at the same x-cutoff), '
+    'which no pair rebuild spans: the eigenvector basis was kept, and the answer can be '
+    'inaccurate. Move the angle or wavelength by more than a relative 1e-4 to check it.')
+
+
+def _defective_pairs(xp, w, W, q, cap):
+    """The near-defective mode pairs of a 2D layer, or ``None`` when there is none.
+
+    A pair is two modes ``(a, b)``, ``a < b``, that are each other's nearest eigenvalue of the
+    product operator and whose eigenvectors meet at a sine ``s`` below :data:`_EP_SINE`, with
+    roots above :data:`_EP_ROOT_FLOOR` (their labels may disagree; the rebuild puts both on one
+    side). That is
+    what ``eig`` hands back at and near an exceptional point -- a 2x2 Jordan block of the layer
+    operator, which on a patterned layer is reached wherever an order meets the conical x-cutoff
+    (``docs/rayleigh-points.md`` section 7): the two computed eigenvectors are each accurate to
+    ``u`` but meet at ``s ~ 1e-8 .. 1e-6``, the mode matrix's condition number is ``~1/s``, and the
+    interface inverses amplify rounding by about ``1/s**2``. It is also what ``eig`` may hand
+    back for an exactly degenerate (diagonalizable) pair, whose basis it chooses freely.
+
+    Returns ``(a, b, mask, v, x0, overflow)``: index vectors of a static length, a mask of the
+    pairs that are real, the unit eigenvector ``v`` of each ``a`` and the unit direction ``x0`` of
+    its partner orthogonal to it -- ``(I - v v^H) W_b / s``, accurate to ``u / s`` -- and, under an
+    abstract trace, whether more pairs qualified than ``cap`` (``None`` eagerly).
+
+    Read once per layer through :func:`~wavebit._core.backend._concrete`. Eagerly the pairs are
+    exactly the qualifying ones; under an abstract trace (``jax.jit``, ``jax.vmap``,
+    ``torch.func.vmap``) there is nothing to read, so the ``cap`` smallest sines come back with
+    their mask as data -- the 1D cutoff gate's arrangement (:func:`~wavebit._core.solve_1d.
+    _cutoff_cluster`).
+    """
+    n2 = w.shape[0]
+    dev = getattr(W, 'device', None)
+    idx = xp.arange(n2, device=dev)
+    d = xp.abs(w[:, None] - w[None, :])
+    d = xp.where(idx[:, None] == idx[None, :], xp.full_like(d, float('inf')), d)
+    nb = xp.argmin(d, axis=1)
+    Wn = W / xp.linalg.vector_norm(W, axis=0)[None, :]
+    Wp = xp.take(Wn, nb, axis=1)
+    X = Wp - Wn * xp.sum(xp.conj(Wn) * Wp, axis=0)[None, :]
+    s = xp.linalg.vector_norm(X, axis=0)
+    qp = xp.take(q, nb)
+    # no unpaired eigenvalue within _EP_SEPARATION of either member.
+    member = ((xp.take(nb, nb) == idx) & (s < _EP_SINE)
+              & (xp.minimum(xp.abs(q), xp.abs(qp)) > _EP_ROOT_FLOOR))
+    scale = xp.maximum(xp.ones_like(xp.abs(w)), xp.abs(w))
+    partner = idx[None, :] == nb[:, None]
+    unpaired = (d <= _EP_SEPARATION * scale[:, None]) & ~partner & ~member[None, :]
+    alone = ~xp.any(unpaired, axis=1)
+    eligible = member & (idx < nb) & alone & xp.take(alone, nb)
+    decided = _concrete(xp.any(eligible))
+    if decided is False:
+        return None
+    overflow = None
+    if decided:
+        a = xp.nonzero(eligible)[0]
+        mask = xp.ones(a.shape, dtype=xp.bool, device=dev)
+    else:
+        cap = max(1, min(cap, n2 // 2))
+        order = xp.argsort(xp.where(eligible, s, xp.full_like(s, float('inf'))))
+        a = order[:cap]
+        mask = xp.take(eligible, a)
+        overflow = xp.sum(xp.astype(eligible, xp.int32)) > cap
+    b = xp.take(nb, a)
+    sa = xp.take(s, a)
+    x0 = xp.take(X, a, axis=1) / xp.where(sa > 0, sa, xp.ones_like(sa))[None, :]
+    v = xp.take(Wn, a, axis=1)
+    return a, b, mask, v, x0, overflow
+
+
+def _one_hot(xp, n2, index, mask, dtype, dev):
+    """``(n2, len(index))``: column ``p`` is the unit vector ``e_index[p]``, zero where unmasked."""
+    idx = xp.arange(n2, device=dev)
+    return xp.astype((idx[:, None] == index[None, :]) & mask[None, :], dtype)
+
+
+def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs):
+    """Each near-defective pair of a 2D layer as an orthonormal Schur pair; values only.
+
+    ``A`` is the layer's product operator ``Omega2 = Omega_L Omega_R``, ``(W, V, q)`` the modes
+    the product construction built, ``w`` their eigenvalues and ``pairs``
+    :func:`_defective_pairs`'s answer. Returns ``(W, V, q, a, b, mask)`` with every pair's two
+    columns replaced and ``q`` the ``2n x 2n`` matrix ``diag(q) + tau``: ``tau[a, b] = t`` on each
+    pair, zero elsewhere, so its coupled rows ``{a}`` and columns ``{b}`` are disjoint.
+
+    **The subspace.** A pair's invariant subspace is well conditioned (its gap to the rest of the
+    spectrum is O(1)) even where its eigenvectors are not, but the span ``eig`` hands back is not
+    backward stable: ``v`` is an eigenvector to ``u``, its partner's direction ``x0`` only to
+    ``u / s``. One Newton step for the invariant subspace (G. W. Stewart, SIAM J. Numer. Anal. 10,
+    752, 1973; J. W. Demmel, Linear Algebra Appl. 79, 163, 1986) squares that error. It is taken
+    in the basis ``W0`` -- the modes with every pair orthonormalised, well conditioned -- where
+    the rest of the operator is already (block) diagonal: with ``M = Q^H A Q`` upper triangular
+    (``M_10 = x0^H A v`` is ``O(u)``, ``v`` being an eigenvector, and is dropped), the residual
+    ``R = A Q - Q M`` expands as ``R = W0 C`` by one solve for every pair at once, and the
+    correction ``Q -> Q + W0 Y`` solves ``Lambda Y - Y M = -C`` row by row: a plain row
+    ``y (lambda_i - M) = -c_i``, and another pair's two rows the 2x2 upper-triangular Sylvester
+    equation with that pair's ``M``, in closed form. The pair's own rows are left at zero (a
+    change of basis inside the subspace). Measured, the starting error ``u / s`` (1e-9 at the
+    test points) lands at the solve's rounding: amplitudes within 5e-14 of the 1D conical rebuild,
+    where the product construction was 1e-8 .. 4e-2 off.
+
+    **The modes.** Re-orthonormalised to ``(v, x)``, the pair's restriction ``T = Q^H A Q`` is
+    upper triangular to ``u`` (``T_10`` dropped: a backward error of ``u``), and
+    ``q = [[alpha, t], [0, beta]]`` with ``alpha**2 = T_00``, ``beta**2 = T_11`` and
+    ``t = T_01 / (alpha + beta)`` is the exact square root of ``T`` on one side: both roots take
+    the side of the more decaying member's label, which is each member's own wherever the layer's
+    rule agrees with itself (``alpha + beta`` is then at least ``2 * _EP_ROOT_FLOOR`` from zero).
+    Then ``W = (v, x)`` and
+    ``V = Omega_R W q^-1`` -- column ``a`` ``Omega_R v / alpha``, column ``b``
+    ``(Omega_R x - V_a t) / beta`` -- satisfy both first-order relations ``Omega_R W = V q`` and
+    ``Omega_L V = W q`` to ``u``: the second because ``Omega_L Omega_R = A`` and ``q**2 = T``.
+    No division by a gap anywhere; ``alpha`` and ``beta`` may be equal.
+
+    Every divisor is guarded where its lane is discarded, so an unmasked lane under a trace forms
+    no ``inf``; such a lane keeps the construction's columns and a zero coupling.
+    """
+    a, b, mask, v, x0, overflow = pairs
+    n2 = W.shape[0]
+    C = W.dtype
+    dev = getattr(W, 'device', None)
+    idx = xp.arange(n2, device=dev)
+    Oa = _one_hot(xp, n2, a, mask, C, dev)
+    Ob = _one_hot(xp, n2, b, mask, C, dev)
+    is_a = xp.any(Oa != 0, axis=1)
+    is_b = xp.any(Ob != 0, axis=1)
+    pa = xp.argmax(xp.astype(Oa != 0, xp.int32), axis=1)
+    pb = xp.argmax(xp.astype(Ob != 0, xp.int32), axis=1)
+    one = xp.ones_like
+
+    def place(col_a, col_b, base):
+        return xp.where(is_a[None, :], xp.take(col_a, pa, axis=1),
+                        xp.where(is_b[None, :], xp.take(col_b, pb, axis=1), base))
+
+    W0 = place(v, x0, W)
+    Av, Ax = A @ v, A @ x0
+    m00 = xp.sum(xp.conj(v) * Av, axis=0)
+    m01 = xp.sum(xp.conj(v) * Ax, axis=0)
+    m11 = xp.sum(xp.conj(x0) * Ax, axis=0)
+    R = xp.concat([Av - v * m00[None, :], Ax - v * m01[None, :] - x0 * m11[None, :]], axis=1)
+    eye = xp.astype(xp.eye(n2, device=dev), C)
+    G = linear_solve(xp, xp.where(xp.any(mask), W0, eye), R)
+    npair = a.shape[0]
+    Ca, Cb = G[:, :npair], G[:, npair:]
+    # Each row's own diagonal in the W0 basis: a pair's M_00 / M_11, else the eigenvalue.
+    lam = xp.where(is_a, xp.take(m00, pa), xp.where(is_b, xp.take(m11, pb), w))
+    own = ((idx[:, None] == a[None, :]) | (idx[:, None] == b[None, :]))
+    den0 = xp.where(own, one(Ca), lam[:, None] - m00[None, :])
+    den1 = xp.where(own, one(Ca), lam[:, None] - m11[None, :])
+    Y0 = -Ca / den0
+    Y1 = (-Cb + Y0 * m01[None, :]) / den1
+    # Another pair's `a` row: its own M_01 couples it to its `b` row (upper-triangular Sylvester).
+    m01_row = xp.where(is_a, xp.take(m01, pa), xp.zeros_like(w))
+    partner = xp.where(is_a, xp.take(b, pa), idx)
+    Y0 = xp.where(is_a[:, None], (-Ca - m01_row[:, None] * xp.take(Y0, partner, axis=0)) / den0, Y0)
+    Y1 = xp.where(is_a[:, None], (-Cb - m01_row[:, None] * xp.take(Y1, partner, axis=0)
+                                  + Y0 * m01[None, :]) / den1, Y1)
+    zero = xp.zeros_like(Y0)
+    Y0, Y1 = xp.where(own, zero, Y0), xp.where(own, zero, Y1)
+    v1 = v + W0 @ Y0
+    x1 = x0 + W0 @ Y1
+    v1 = v1 / xp.linalg.vector_norm(v1, axis=0)[None, :]
+    x1 = x1 - v1 * xp.sum(xp.conj(v1) * x1, axis=0)[None, :]
+    x1 = x1 / xp.linalg.vector_norm(x1, axis=0)[None, :]
+    Av1, Ax1 = A @ v1, A @ x1
+    T00 = xp.sum(xp.conj(v1) * Av1, axis=0)
+    T01 = xp.sum(xp.conj(v1) * Ax1, axis=0)
+    T11 = xp.sum(xp.conj(x1) * Ax1, axis=0)
+    ra, rb = xp.sqrt(T00), xp.sqrt(T11)
+    qa, qb = xp.take(q, a), xp.take(q, b)
+    # One side for the pair: the root nearer the label of its more decaying member. Where the
+    # labels agree that is each member's own; where they disagree -- a complex pair on Maystre's
+    # cut, a tie broken by the flux or by `Im(q) <= 0` -- the other member turns, so the `+` set
+    # takes the whole Jordan block and stays complementary to the `-` set.
+    ref = xp.where(xp.real(qa) >= xp.real(qb), qa, qb)
+    alpha = xp.where(xp.real(xp.conj(ref) * ra) >= 0, ra, -ra)
+    beta = xp.where(xp.real(xp.conj(ref) * rb) >= 0, rb, -rb)
+    alpha = xp.where(mask, alpha, one(alpha))
+    beta = xp.where(mask, beta, one(beta))
+    t = xp.where(mask, T01 / (alpha + beta), xp.zeros_like(T01))
+    Va = (Omega_R @ v1) / alpha[None, :]
+    Vb = (Omega_R @ x1 - Va * t[None, :]) / beta[None, :]
+    W = place(v1, x1, W)
+    V = place(Va, Vb, V)
+    q = xp.where(is_a, xp.take(alpha, pa), xp.where(is_b, xp.take(beta, pb), q))
+    Q = _diag(xp, q) + Oa @ (t[:, None] * xp.matrix_transpose(Ob))
+    if overflow is not None:
+        # More qualifying pairs than the trace's static count: loud, never a silent remainder.
+        Q = Q * xp.where(overflow, float('nan'), 1.0)
+    return W, V, Q, a, b, mask
+
+
+def _pair_coupling(xp, Q, a, b, mask):
+    """``t_p = Q[a_p, b_p]`` (zero where unmasked) and the two one-hot maps, by gathers."""
+    n2 = Q.shape[0]
+    dev = getattr(Q, 'device', None)
+    Oa = _one_hot(xp, n2, a, mask, Q.dtype, dev)
+    Ob = _one_hot(xp, n2, b, mask, Q.dtype, dev)
+    t = xp.sum(xp.take(Q, a, axis=0) * xp.matrix_transpose(Ob), axis=1)
+    return t, Oa, Ob
+
+
+def _pair_sylvester(xp, T, S, a, b, mask):
+    """``X`` with ``T X + X T = S`` for ``T = diag(t) + coupling`` on the pairs ``(a_p, b_p)``.
+
+    :func:`~wavebit._core.solve_1d._coupled_sylvester`'s four divided-difference passes, with the
+    coupling's products taken by gathers (``O(n**2)`` per pair) rather than dense products: the
+    coupling has one entry per pair. With no coupling every pass is ``S / (t_i + t_j)``, the
+    arithmetic :func:`~wavebit._core.modal_gradient.generator` forms.
+    """
+    tv = xp.linalg.diagonal(T)
+    total = tv[:, None] + tv[None, :]
+    t, Oa, Ob = _pair_coupling(xp, T, a, b, mask)
+    rows = xp.any(Oa != 0, axis=1)[:, None]
+    cols = xp.any(Ob != 0, axis=1)[None, :]
+
+    def left(X):                                 # N @ X: row a_p is t_p X[b_p, :]
+        return Oa @ (t[:, None] * xp.take(X, b, axis=0))
+
+    def right(X):                                # X @ N: column b_p is t_p X[:, a_p]
+        return (xp.take(X, a, axis=1) * t[None, :]) @ xp.matrix_transpose(Ob)
+
+    X1 = S / total
+    X2 = (S - left(X1)) / total
+    X3 = (S - right(X1)) / total
+    Xa = xp.where(rows & ~cols, X2, xp.where(~rows & cols, X3, X1))
+    X4 = (S - left(Xa) - right(Xa)) / total
+    return xp.where(rows & cols, X4, Xa)
+
+
+def _pair_generator(xp, operator, W, Q, a, b, mask):
+    """:func:`~wavebit._core.modal_gradient.generator` for a layer with rebuilt pairs.
+
+    ``Q`` is the rebuilt ``q`` (diagonal plus the pairs' coupling), the square root of
+    ``W^-1 Omega2 W`` in the fixed basis ``W``; its first variation ``dQ`` solves
+    ``Q dQ + dQ Q = W^-1 dOmega2 W`` (:func:`_pair_sylvester`). The value is ``Q``.
+    """
+    from .modal_gradient import _require_separated, _stop, _variation
+    if not carries_autodiff(operator):
+        return Q
+    Q0 = _stop(Q)
+    residual = _variation(operator, _stop(W))
+    tv = xp.linalg.diagonal(Q0)
+    total = tv[:, None] + tv[None, :]
+    valid = xp.all(total != 0)
+    _require_separated(valid, 'zero or opposing square-root modes; use auto_detune',
+                       error=FloatingPointError)
+    residual = residual * xp.where(valid, xp.ones_like(residual),
+                                   xp.full_like(residual, complex('nan')))
+    return Q0 + _pair_sylvester(xp, Q0, residual, a, b, mask)
+
+
+def _pair_inverse(xp, Q, a, b, mask):
+    """``Q^-1`` for a rebuilt ``q``, with its exact first variation ``-Q^-1 dQ Q^-1``.
+
+    The value is :func:`~wavebit._core.modal_gradient.inverse`'s closed form, exact for a coupling
+    with disjoint rows and columns (``D^-1 - D^-1 N D^-1``). Its own tangent drops every term in
+    which the coupling ``N`` meets an off-diagonal ``dQ``; they are added here on a zero value,
+    ``M Eoff D^-1 + D^-1 Eoff M - M E M`` with ``M = D^-1 N D^-1``, ``E = Q - stop(Q)`` and
+    ``Eoff`` its off-diagonal part -- by gathers, ``M`` having one entry per pair. With no coupling
+    they are zero and the arithmetic is :func:`~wavebit._core.modal_gradient.inverse`'s.
+    """
+    from .modal_gradient import _stop, inverse
+    base = inverse(xp, Q)
+    if not carries_autodiff(Q):
+        return base
+    Q0 = _stop(Q)
+    tv = xp.linalg.diagonal(Q0)
+    t, Oa, Ob = _pair_coupling(xp, Q0, a, b, mask)
+    m = t / (xp.take(tv, a) * xp.take(tv, b))          # M[a_p, b_p]
+    E = Q - Q0
+    n2 = Q.shape[0]
+    eye = xp.astype(xp.eye(n2, device=getattr(Q, 'device', None)), Q.dtype)
+    Eoff = E - eye * E
+    dinv = 1 / tv
+    # M X: row a_p is m_p X[b_p, :];  X M: column b_p is m_p X[:, a_p].
+    MEoffD = Oa @ (m[:, None] * xp.take(Eoff, b, axis=0)) * dinv[None, :]
+    DEoffM = (dinv[:, None] * xp.take(Eoff, a, axis=1) * m[None, :]) @ xp.matrix_transpose(Ob)
+    EM = xp.take(E, a, axis=1) * m[None, :]             # columns b_p of E M
+    MEM = Oa @ (m[:, None] * xp.take(EM, b, axis=0)) @ xp.matrix_transpose(Ob)
+    return base + (MEoffD + DEoffM - MEM)
+
+
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
-                   mu=None, k0_d=None, dng=None):
+                   mu=None, k0_d=None, dng=None, pair_cap=None, with_coupling=False):
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
     ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; without ``k0_d``
@@ -228,6 +600,13 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     layer is non-magnetic and the same non-magnetic Maxwell equations apply. ``Kx`` and
     ``Ky`` are diagonal wavevector matrices; their action on the longitudinal inverse is
     evaluated by row and column scaling, including during a grazing-cluster rebuild.
+
+    ``pair_cap`` bounds the number of exceptional-point pairs held under an abstract
+    trace; callers with an order grid pass its larger axis count. An overflow poisons
+    the generator with NaN. Eagerly every eligible pair is rebuilt. ``with_coupling``
+    requests a fourth return value describing that layout for propagation and field
+    consumers. Without it the three-value interface is retained, but ``q`` at an
+    exceptional point is a matrix generator, not a vector of independent roots.
 
     Where it enters is a duality, not a patch. Under ``(E, H, eps, mu) -> (H, -E, mu, eps)``
     the two curl equations map onto each other, so ``Omega_L`` — which eliminates ``E_z``
@@ -354,13 +733,51 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             if patterned is not None:
                 # The rebuilt cluster took `layer_root`'s labels; the per-mode rule reads them.
                 V, q = _power_down_2d(xp, W, V, q, k0_d, patterned)
-            return W, V, q
+            return (W, V, q, False) if with_coupling else (W, V, q)
     check_mode_cutoff(xp, w)
+    # A near-defective pair (an exceptional point of the layer operator, or a degenerate pair
+    # whose basis `eig` chose nearly parallel): rebuilt as an orthonormal Schur pair with an
+    # upper-triangular `q` (`_rebuild_defective_pairs`). Gated once per layer; under an abstract
+    # trace every layer takes the coupled layout with its pairs' mask as data.
+    if pair_cap is None:
+        import math
+        pair_cap = math.isqrt(W.shape[0] // 2) + 1
+    pairs = _defective_pairs(xp, w, W, q, pair_cap)
+
+    def _operator():
+        if differentiated:
+            return _stop(Omega2_LR)
+        B_, D_, Cc_, E_ = left_blocks()
+        return _block(xp, [[-Cc_, B_], [-D_, E_]]) @ Omega_R
+
+    def _screen(W_final):
+        # coincident exceptional points the pair gate cannot see -- eagerly loud.
+        if _unresolved_defective_cluster(xp, _stop(w), _stop(W_final), _operator, _EP_SINE):
+            import warnings
+            from .backend import ExceptionalPointWarning
+            warnings.warn(_UNRESOLVED_2D, ExceptionalPointWarning, stacklevel=4)
+    if pairs is None:
+        _screen(W)
+    if pairs is not None:
+        if differentiated:
+            A = _stop(Omega2_LR)
+        else:
+            # Released above to keep the eager peak; formed again only for a gated layer.
+            B, D, Cc, E = left_blocks()
+            A = _block(xp, [[-Cc, B], [-D, E]]) @ Omega_R
+            del B, D, Cc, E
+        W, V, Q, a, b, mask = _rebuild_defective_pairs(xp, A, _stop(Omega_R), W, V, q, w, pairs)
+        del A
+        _screen(W)
+        if differentiated:
+            Q = _pair_generator(xp, Omega2_LR, W, Q, a, b, mask)
+            V = Omega_R @ W @ _pair_inverse(xp, Q, a, b, mask)
+        return (W, V, Q, True) if with_coupling else (W, V, Q)
     if differentiated:
         from .modal_gradient import generator, inverse
         q = generator(xp, Omega2_LR, w, W, q, square_root=True)
         V = Omega_R @ W @ inverse(xp, q)
-    return W, V, q
+    return (W, V, q, False) if with_coupling else (W, V, q)
 
 
 def sp_modes_2d(xp, W, V, F_c, F_s, n_orders):
@@ -469,6 +886,9 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
     n_orders_v, n_orders_u = kx_g.shape
     n_orders = n_orders_u * n_orders_v
+    # Under an abstract trace a layer's near-defective pairs are rebuilt up to this many at once:
+    # an invariant raster has one exceptional point per order row (or column) together.
+    pair_cap = max(n_orders_u, n_orders_v)
     k0 = 2 * 3.141592653589793 / wavelength
     theta = 0.0 if theta is None else theta
 
@@ -529,10 +949,11 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # inverts a transmission into the medium below, so a layer's `+` modes have to be
         # the waves that medium receives. Decided on the run's thickness
         # (:func:`~wavebit._core.solve_1d._run_k0_d`).
-        W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
-                                 epxy_conv, epyx_conv, C, mu=layer_mu,
-                                 k0_d=run_k0_ds[layer_index],
-                                 dng=None if dng is None else dng[layer_index])
+        W, V, q, coupled = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
+                                          epxy_conv, epyx_conv, C, mu=layer_mu,
+                                          k0_d=run_k0_ds[layer_index],
+                                          dng=None if dng is None else dng[layer_index],
+                                          pair_cap=pair_cap, with_coupling=True)
 
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         if not keep_field:
@@ -551,7 +972,9 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         del big_W_i, big_V_i, big_A
 
         from .modal_gradient import exponential
-        big_X = exponential(xp, q, -k0*d)
+        # A layer with rebuilt pairs (`_rebuild_defective_pairs`) couples them in `q`'s value;
+        # `coupled` is the builder's structural word, never read off the value.
+        big_X = exponential(xp, q, -k0*d, coupled=pair_cap if coupled else False)
 
         Y = big_X @ big_B @ big_A_i @ big_X
         big_F = big_W @ (big_I + Y)
@@ -575,8 +998,12 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # `layer_mu` and `Material.mu` already use. The ninth slot is `None`, as in
         # :func:`~wavebit._core.solve_1d.solve_1d`'s record: only the SMM's carries one there.
         if keep_field:
+            # A coupled layer's record carries a tenth slot (`None`): its presence is what tells
+            # field reconstruction the layer's `q` couples its pairs -- a structural test that a
+            # pytree round trip keeps.
             layer_info_list.append([epz_conv_i, W, V, q, d, big_A_i, big_B,
-                                    None if layer_mu is None else layer_mu[2], None])
+                                    None if layer_mu is None else layer_mu[2], None]
+                                   + ([None] if coupled else []))
         # Field declarations own the saved references above. Other solves
         # release them before the next layer or final boundary elimination.
         del big_X, big_A_i, big_B

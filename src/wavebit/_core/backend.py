@@ -1095,6 +1095,21 @@ class PrecisionLossWarning(UserWarning):
     """
 
 
+class ExceptionalPointWarning(UserWarning):
+    """A 2D or first-order layer retains an unresolved defective mode cluster.
+
+    Isolated exceptional-point pairs are rebuilt in a regular basis. The eager cluster
+    screen (:func:`wavebit._core.solve_2d._unresolved_defective_cluster`) warns when the
+    final basis still contains a nearly dependent cluster with a non-normal restriction
+    of the layer operator. Ordinary diagonalizable degeneracies do not trigger it.
+
+    The result may be inaccurate. ``auto_detune`` does not act on this warning: its
+    Rayleigh detuning ladder is too small to leave a coincident exceptional-point band.
+    The screen cannot run under an abstract trace, where the unresolved cluster remains
+    silent; see ``docs/rayleigh-points.md`` for the measured limits.
+    """
+
+
 class RayleighPointWarning(UserWarning):
     """A layer eigenmode sits numerically on its light line, on a path that loses it there.
 

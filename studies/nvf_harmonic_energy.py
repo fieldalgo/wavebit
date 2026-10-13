@@ -21,6 +21,7 @@ from scipy.linalg import solve
 from scipy.sparse.linalg import LinearOperator, cg
 
 from wavebit._core.solve_2d import layer_modes_2d
+from wavebit._core.modal_gradient import exponential
 
 from studies.nvf_fourier_orders import order_grid
 
@@ -168,8 +169,10 @@ def polarized_powers(order, slots, xp=np, *, polarizations=('p', 's'), theta=THE
     ky = np.sin(theta)*np.sin(azimuth)+WAVELENGTH/PERIOD*n.ravel()
     count = len(kx)
     identity = xp.eye(count, dtype=xp.complex128)
-    w, v, rates = layer_modes_2d(xp, xp.diag(xp.asarray(kx)), xp.diag(xp.asarray(ky)),
-                                identity, *slots, xp.complex128)
+    pair_cap = max(n.shape)
+    w, v, rates, coupled = layer_modes_2d(
+        xp, xp.diag(xp.asarray(kx)), xp.diag(xp.asarray(ky)), identity, *slots,
+        xp.complex128, pair_cap=pair_cap, with_coupling=True)
     def exterior(epsilon):
         phi = np.arctan2(ky, kx)
         phi = np.where((m.ravel() == 0) & (n.ravel() == 0), azimuth, phi)
@@ -183,7 +186,12 @@ def polarized_powers(order, slots, xp=np, *, polarizations=('p', 's'), theta=THE
         return e, h, kz
     wt, vt, kt = exterior(1.)
     wb, vb, kb = exterior(2.25)
-    decay = xp.diag(xp.exp(-2*np.pi/WAVELENGTH*THICKNESS*rates))
+    if rates.ndim == 1:
+        decay = xp.diag(xp.exp(-2*np.pi/WAVELENGTH*THICKNESS*rates))
+    else:
+        # Rebuilt pairs, and every abstract trace, carry a matrix generator.
+        decay = exponential(xp, rates, -2*np.pi/WAVELENGTH*THICKNESS,
+                            coupled=pair_cap if coupled else False)
     a, d = linear_solve(w, wb), linear_solve(v, vb)
     b, ai = (a-d)/2, xp.linalg.inv((a+d)/2)
     roundtrip = decay@b@ai@decay

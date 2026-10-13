@@ -312,8 +312,11 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc, coupled=None):
             # (measured 6.8e-3 on a field gradient with the cluster kept), so it reads the
             # coupled rows off the bottom face and adds the term it would miss
             # (`two_face(coupled=True)`). Decided by the caller's structural flag, never by
-            # the value: a pytree child cannot be branched on.
-            minus = two_face(xp, q, k0_d, minus_top, minus_bottom, keep, coupled=True)
+            # the value: a pytree child cannot be branched on. A 2D layer with rebuilt pairs
+            # (`solve_2d._rebuild_defective_pairs`) reads both members of a pair off the bottom
+            # face (`'pairs'`): its tangent's lower entry is not tied to the pair's gap.
+            minus = two_face(xp, q, k0_d, minus_top, minus_bottom, keep,
+                             coupled='pairs' if isinstance(coupled[p], tuple) else True)
         else:
             minus = two_face(xp, q, k0_d, minus_top, minus_bottom, keep)
         amplitudes.append((plus, minus))
@@ -321,7 +324,7 @@ def _field_state(xp, I, S_ref, S_trn, S_layers, AB, roots, c_inc, coupled=None):
     return amplitudes, g_top
 
 
-def _field_records(modes, amplitudes, muz, arrange):
+def _field_records(modes, amplitudes, muz, arrange, tails=None):
     """``layer_info_list`` from the per-layer pieces, bottom-to-top as the ETM appends it.
 
     Slots 0-4 and 7 are where the ETM puts them, ``(epz_conv_i, W, V, q, d, ., ., muz_conv_i)``,
@@ -330,9 +333,15 @@ def _field_records(modes, amplitudes, muz, arrange):
     ``arrange`` as ``T1`` is: what tells :mod:`~wavebit._core.fields` which record it walks, asked
     structurally (``is None``) so a traced record can answer it. Two vectors per incidence instead
     of the ETM's two full blocks, so this record keeps 2.25 blocks per layer to the ETM's 4.25.
+
+    ``tails`` holds a tenth slot per layer (``[]`` for none): a 2D layer with rebuilt pairs
+    carries ``[None]``, whose presence tells :mod:`~wavebit._core.fields` structurally that its
+    ``q`` couples them (:func:`~wavebit._core.solve_2d._rebuild_defective_pairs`).
     """
-    return [m + [None, None, z, (arrange(plus), arrange(minus))]
-            for m, (plus, minus), z in zip(modes, amplitudes, muz)][::-1]
+    if tails is None:
+        tails = [[] for _ in modes]
+    return [m + [None, None, z, (arrange(plus), arrange(minus))] + extra
+            for m, (plus, minus), z, extra in zip(modes, amplitudes, muz, tails)][::-1]
 
 
 #: What each :attr:`Port.channel` counts, in the words a refused join names it by.
@@ -1030,7 +1039,10 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         big_W, big_V, q, W, V, rebuilt = layer_modes(layer_index)
         d = thickness[layer_index]
         from .modal_gradient import exponential
-        big_X = exponential(xp, q, -k0*d, coupled=rebuilt)
+        # `rebuilt` is True (a conical x-cutoff layer), ('pairs', cap) (a 2D layer with rebuilt
+        # pairs, `solve_2d._rebuild_defective_pairs`) or False -- structural, never the value.
+        big_X = exponential(xp, q, -k0*d,
+                            coupled=rebuilt[1] if isinstance(rebuilt, tuple) else rebuilt)
         A, B = _ab_matrices(xp, big_W, big_V, W_gap, V_gap)
         S_layer = _s_layer(xp, A, B, big_X)
         S = redheffer_star(xp, big_I, S, S_layer)
@@ -1063,7 +1075,9 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     def by_incidence(v):
         # One column per incidence variant (psi, TE, TM), as the ETM stacks them.
         return xp.stack([v[:, i:i + 1] for i in range(n_inc)])
-    layer_info_list = _field_records(modes, amplitudes, muz_conv, by_incidence)
+    tails = [[None] if isinstance(c, tuple) else [] for c in coupled]
+    layer_info_list = _field_records(modes, amplitudes, muz_conv, by_incidence,
+                                     tails[::-1] if backside else tails)
     if T1 is not None:
         T1 = by_incidence(T1)
     out.update(layer_info_list=layer_info_list, T1=T1)
@@ -1153,6 +1167,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     kx_g, ky_g = order_grid_kxy(xp, kx, ky)
     n_orders_v, n_orders_u = kx_g.shape
     n_orders = n_orders_u * n_orders_v
+    pair_cap = max(n_orders_u, n_orders_v)          # as in `solve_2d.solve_2d`
     I = xp.astype(xp.eye(n_orders), C)
     O = xp.astype(xp.zeros((n_orders, n_orders)), C)
     varphi = order_azimuth(xp, ky_g, kx_g, phi)
@@ -1169,12 +1184,16 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             I if mu_all[0] is None else mu_all[0][layer_index],
             I if mu_all[1] is None else mu_all[1][layer_index],
             *(None if t is None else t[layer_index] for t in mu_all[2:]))
-        W, V, q = layer_modes_2d(xp, Kx, Ky, I, epx_conv_all[layer_index],
-                                 epy_conv_all[layer_index], epz_conv_i_all[layer_index],
-                                 epxy_conv, epyx_conv, C, mu=layer_mu,
-                                 dng=None if dng is None else dng[layer_index])
+        W, V, q, coupled = layer_modes_2d(xp, Kx, Ky, I, epx_conv_all[layer_index],
+                                          epy_conv_all[layer_index], epz_conv_i_all[layer_index],
+                                          epxy_conv, epyx_conv, C, mu=layer_mu,
+                                          dng=None if dng is None else dng[layer_index],
+                                          pair_cap=pair_cap, with_coupling=True)
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
-        return big_W, big_V, q, W, V, False
+        # A layer with rebuilt pairs (`solve_2d._rebuild_defective_pairs`): `'pairs'` asks the
+        # coupled exponential for the cap and the field state to read both members of a pair
+        # off the bottom face (`modal_gradient.two_face`).
+        return big_W, big_V, q, W, V, (('pairs', pair_cap) if coupled else False)
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,

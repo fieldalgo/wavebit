@@ -91,6 +91,7 @@ def enable_x64():
 from .main import fdtd, rcwa
 from ._core.fdtd import UnsettledFieldWarning, permittivity_at
 from ._core.backend import (AutoDetuneWarning, AxisNameWarning, ComplexIncidenceWarning,
+                            ExceptionalPointWarning,
                             GainCutoffWarning,
                             PrecisionLossWarning, RayleighPointWarning,
                             UnresolvedBranchWarning,
@@ -155,7 +156,8 @@ __all__ = [
     # Defined in this file rather than imported -- see `enable_x64` above.
     'enable_x64',
     'AutoDetuneWarning',
-    'AxisNameWarning', 'ComplexIncidenceWarning', 'GainCutoffWarning', 'PrecisionLossWarning',
+    'AxisNameWarning', 'ComplexIncidenceWarning', 'ExceptionalPointWarning', 'GainCutoffWarning',
+    'PrecisionLossWarning',
     'RayleighPointWarning',
     'UnresolvedBranchWarning',
     'UnsettledFieldWarning', 'permittivity_at',

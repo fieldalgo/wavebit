@@ -316,6 +316,10 @@ def exponential(xp, q, scale, coupled=False):
       3.4x .. 5.9x of what they cost before traced layers were rebuilt, against 1.01x .. 1.20x
       and 1.12x .. 1.46x with the closed form.
 
+    An integer ``coupled`` gives the structural pair capacity to the traced rule;
+    ``True`` retains the conical layout's fixed capacity. The value is never inspected
+    to decide whether a layer carries pairs.
+
     Both are exact: the closed form matched a 40-digit ``expm`` of ``[[A, E], [0, A]]`` to 4e-16
     of ``max|L|`` over confluent, near-confluent, widely spread and complex-scaled cases (SciPy's
     ``expm_frechet`` 1.8e-16 .. 2.8e-14), and with either rule the eager gradients at the
@@ -347,8 +351,11 @@ def exponential(xp, q, scale, coupled=False):
             if count is None:
                 # Abstract norm (jit, vmap, a lax.map / scan body, checkpoint, an eager record
                 # passed into a trace): the formula for the value, the closed-form Frechet
-                # derivative for the tangent (:func:`_jax_coupled_exponential`).
-                return _jax_coupled_exponential()(q, scale)
+                # derivative for the tangent (:func:`_jax_coupled_exponential`). An integer
+                # `coupled` is the most coupled rows (and columns) the caller can produce -- a 2D
+                # layer's pair cap (`solve_2d._rebuild_defective_pairs`) -- `True` the 1D default.
+                cap = _COUPLED_CAP if coupled is True else max(_COUPLED_CAP, int(coupled))
+                return _jax_coupled_exponential(cap)(q, scale)
         exact = _expm(xp, a, count)
         return exponential(xp, _stop(q), _stop(scale)) + (exact - _stop(exact))
     values = xp.linalg.diagonal(q)
@@ -511,7 +518,7 @@ def _dd_from_subsets(points, subs, e0):
     return jnp.where(jnp.max(dist, axis=-1) > _DD_SERIES_DIAMETER, recurrence, series)
 
 
-def _coupled_frechet(q, scale, E):
+def _coupled_frechet(q, scale, E, cap=None):
     """``L(scale q, E)``: the Frechet derivative of ``exp`` at a coupled ``scale * q`` in direction
     ``E``, in closed form. JAX only; ``scale`` may carry leading (batch) axes, and ``E`` with it.
 
@@ -571,7 +578,7 @@ def _coupled_frechet(q, scale, E):
     L = F1 * E
     rows = jnp.any(tau != 0, axis=1)
     cols = jnp.any(tau != 0, axis=0)
-    c = min(_COUPLED_CAP, m)
+    c = min(_COUPLED_CAP if cap is None else cap, m)
     nr, nc = jnp.sum(rows), jnp.sum(cols)
     ok = (nr <= c) & (nc <= c) & ~jnp.any(rows & cols)
     J = jnp.nonzero(rows, size=c, fill_value=0)[0]
@@ -607,10 +614,10 @@ def _coupled_frechet(q, scale, E):
     return L * jnp.where(ok, 1.0, float('nan'))
 
 
-_JAX_COUPLED_EXP = None
+_JAX_COUPLED_EXP = {}
 
 
-def _jax_coupled_exponential():
+def _jax_coupled_exponential(cap=None):
     """``exp(scale * q)`` for a coupled ``q`` under an abstract trace, as a ``jax.custom_jvp``.
 
     The value is :func:`exponential`'s divided-difference formula, exact for a coupled value
@@ -630,8 +637,8 @@ def _jax_coupled_exponential():
     two directions in ``q``, and those raise at the modal operator's first-order guard
     (measured bit-identical with ``L`` at the live ``q``).
     """
-    global _JAX_COUPLED_EXP
-    if _JAX_COUPLED_EXP is None:
+    cap = _COUPLED_CAP if cap is None else cap
+    if cap not in _JAX_COUPLED_EXP:
         import jax
 
         @jax.custom_jvp
@@ -643,12 +650,13 @@ def _jax_coupled_exponential():
             q, scale = primals
             dq, d_scale = tangents
             out = coupled_exp(q, scale)
-            tangent = (_coupled_frechet(_stop(q), scale, scale[..., None, None] * dq)
+            tangent = (_coupled_frechet(_stop(q), scale, scale[..., None, None] * dq,
+                                        None if cap == _COUPLED_CAP else cap)
                        + d_scale[..., None, None] * (q @ out))
             return out, tangent
 
-        _JAX_COUPLED_EXP = coupled_exp
-    return _JAX_COUPLED_EXP
+        _JAX_COUPLED_EXP[cap] = coupled_exp
+    return _JAX_COUPLED_EXP[cap]
 
 
 def two_face(xp, q, scale, top, bottom, keep, coupled=False):
@@ -693,6 +701,10 @@ def two_face(xp, q, scale, top, bottom, keep, coupled=False):
     lost 1.5e-2 in the field. ``coupled=False`` (the default, and every other layer) is the
     arithmetic above, unchanged.
 
+    ``coupled='pairs'`` also reads the coupling's columns from the bottom face.
+    A rebuilt 2D pair has no conical constraint on its lower tangent entry, so
+    keeping that column would divide an unrestricted tangent by the vanishing pair gap.
+
     **What makes that first variation exact is partly the tangent, not this function.** A kept
     row ``k`` in ``K`` sits beside its cluster partner ``j`` in ``J``, a row the rule above drops
     whatever its ``|scale*q|``, and the two roots are a cutoff pair: ``q_k - q_j`` is the pair's
@@ -716,6 +728,12 @@ def two_face(xp, q, scale, top, bottom, keep, coupled=False):
     if coupled:
         tau = _stop(q) - eye * _stop(values)
         keep = xp.logical_and(keep, xp.logical_not(xp.any(tau != 0, axis=1)))
+        if coupled == 'pairs':
+            # A 2D layer's rebuilt pairs (`solve_2d._rebuild_defective_pairs`): the coupling's
+            # columns are read off the bottom face too. Their tangent's lower entry `d_ba` is
+            # not tied to the pair's gap, as a conical cutoff pair's is (below), so a kept `b`
+            # beside its dropped `a` would divide it by that gap.
+            keep = xp.logical_and(keep, xp.logical_not(xp.any(tau != 0, axis=0)))
     e = xp.exp(xp.where(keep, scale * values, xp.zeros_like(values)))
     difference = values[:, None] - values[None, :]
     argument = scale * difference
