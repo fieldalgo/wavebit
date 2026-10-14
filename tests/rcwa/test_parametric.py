@@ -935,6 +935,23 @@ def test_a_shape_wider_than_the_period_runs_into_its_own_image():
         solve([rod(150.0, lx=340.0)])
 
 
+def test_the_closed_form_refuses_a_lone_shape_wider_than_the_period_on_its_own():
+    """The builder below the public check, called directly, must not sum that shape either.
+
+    Its overlap refusal returned early for fewer than two shapes, so ``assemble_eps_coeffs``
+    handed straight one 340-wide rod on a 300 cell summed it: a coefficient set for a layer
+    the parameters do not describe. Every public route stops it in ``check_layer_shapes``
+    first (the test above); this pins the builder's own guard, which internal callers reach
+    without that check.
+    """
+    lattice = as_lattice(period=CHECK_CFG['period'])
+    with pytest.raises(ValueError, match='own periodic image'):
+        _assemble_eps_coeffs(xnp, [rod(150.0, lx=340.0)], 1.0, 2, 2, lattice, xnp.complex128)
+    eps_c, _ = _assemble_eps_coeffs(xnp, [rod(150.0, lx=300.0)], 1.0, 2, 2, lattice,
+                                    xnp.complex128)                 # exactly one period: touching
+    assert np.all(np.isfinite(np.asarray(eps_c)))
+
+
 def test_detection_follows_the_shapes_and_not_their_bounding_boxes():
     """Rotation and curvature are where a lazy test would refuse a perfectly good layer.
 

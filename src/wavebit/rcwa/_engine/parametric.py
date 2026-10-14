@@ -518,7 +518,10 @@ def shape_ft(xp, shape, ky, kx, lattice):
 
 def _refuse_overlap(shapes, lattice):
     """Raise if these shapes overlap -- the case the superposition below cannot represent."""
-    if len(shapes) < 2:
+    # One shape is enough to overlap: a shape wider than the period runs into its own image,
+    # and summing it is the same plausible wrong answer. Every public route refuses that in
+    # `check_layer_shapes` first; this keeps a direct call from summing it silently.
+    if not shapes:
         return
     try:
         Px, Py = (checked_float(v) for v in periods_of(lattice))

@@ -609,10 +609,11 @@ def test_a_shape_wider_than_the_period_is_refused_here_too():
     1.2x1.4-period rod alone: ``<1/eps>`` = 0.186 where the geometry is 0.250; and on a pair
     where one rod is 1.4 periods tall and the two do not tile the cell, 0.618 against 0.695.
 
-    The pair matters more than the single, because the single was already refused (one shape
-    cannot overlap another, so the closed form would have taken it and refused). A *pair* routes
-    here, which is the branch where being wrong looks like an answer. ``check_layer_shapes`` is
-    where it is stopped, ahead of the routing, so both branches are covered by one refusal.
+    The pair matters more than the single, because a lone shape never routes here: it goes to
+    the closed form, whose own overlap guard refuses it too (since 2026-10-15; before, that guard
+    returned early for one shape). A *pair* routes here, which is the branch where being wrong
+    looks like an answer. ``check_layer_shapes`` is where it is stopped, ahead of the routing, so
+    both branches are covered by one refusal.
     """
     tall = [dict(type='rectangle', cx=-0.20, cy=0.0, lx=0.30, ly=1.4, angle=0.0, material=4.0),
             dict(type='rectangle', cx=0.10, cy=0.0, lx=0.30, ly=0.30, angle=0.0, material=9.0)]
