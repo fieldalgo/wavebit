@@ -497,8 +497,9 @@ uniform-stack test uses.
 The golden is `tests/references/golden_reticolo_conical_sweep.npz`, cut from a 2024-09-09
 RETICOLO run by `gen_goldens_reticolo_conical_sweep.py`. Everything the tests need is in the
 repository; the study it was cut from — notebooks, the raw `.mat` files, before/after data and
-the figures — is retained privately by the authors and is not required to reproduce anything
-here. Regenerating the golden needs a RETICOLO installation and nothing else.
+the figures — is retained privately by the authors and is not required to run anything here.
+Regenerating the golden needs those `.mat` files and no RETICOLO installation, since the
+generator only cuts its slice out of them; rerunning the sweep itself is what needs RETICOLO.
 
 ---
 
