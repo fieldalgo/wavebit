@@ -136,9 +136,9 @@ def test_smoothed_bottom_conical_eight_parameter_graph(backend):
     p = np.array([.13, -.09, .16, .12, .37, 2.4, 1.13, .14])
     f = lambda p, b=backend: sharp_response(p, b, smoothing=(.04, .03))
     value, jac = value_and_jacobian(f, p, backend)
-    np.testing.assert_allclose(value, f(p, 0), atol=2e-11)
+    np.testing.assert_allclose(value, f(p, 'numpy'), atol=2e-11)
     for step in (2e-5, 1e-5):
-        finite = np.stack([(f(p+d, 0)-f(p-d, 0))/(2*step) for d in np.eye(8)*step], axis=-1)
+        finite = np.stack([(f(p+d, 'numpy')-f(p-d, 'numpy'))/(2*step) for d in np.eye(8)*step], axis=-1)
         np.testing.assert_allclose(jac, finite, atol=3e-8, rtol=5e-5)
     assert np.min(np.max(abs(jac), axis=0)) > 1e-5
 

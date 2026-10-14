@@ -453,7 +453,7 @@ def _two_host_devices(child):
     env['JAX_PLATFORMS'] = 'cpu'
     env['XLA_FLAGS'] = (env.get('XLA_FLAGS', '') +
                         ' --xla_force_host_platform_device_count=2').strip()
-    env['PYTHONPATH'] = str(tests.parent)
+    env['PYTHONPATH'] = os.pathsep.join([str(tests.parent / 'src'), str(tests.parent)])   # src/: an uninstalled checkout
     out = subprocess.run([sys.executable, '-c', textwrap.dedent(child.format(tests=str(tests)))],
                          capture_output=True, text=True, env=env, cwd=str(tests.parent))
     assert out.returncode == 0, out.stderr[-3000:]
