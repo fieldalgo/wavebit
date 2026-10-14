@@ -10,7 +10,8 @@ is committed. It holds::
 
     run_reti.m               the sweep driver
     Reticolo_RCWA_1D.m       the per-point wrapper
-    reti_res_80.mat          truncation_order=80   (reti_res2.mat is the same run, to 3e-14)
+    reti_res_80.mat          truncation_order=80   (reti_res2.mat is a second run: equal on the
+                                                    (0,0) reflection to 3e-14, ~1e-6 elsewhere)
     reti_res_200.mat         truncation_order=200
 
 Pass that directory as the first argument and run this file with Octave-free Python; the golden
