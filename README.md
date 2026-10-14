@@ -26,6 +26,7 @@ that experimental path.
 * **Modeling** — describe a structure parametrically or as a raster
 * **EM simulation** — RCWA solver, rigorous and fully vectorial
 * **Optimization** — gradients flow end to end, from geometry to diffraction efficiency
+  (shape dimensions on PyTorch; see [which inputs differentiate on which backend](docs/guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend))
 
 The ordinary solver uses one implementation of the physics on NumPy, JAX and PyTorch;
 cross-backend agreement is checked in the test suite. Experimental auxiliary families have
@@ -148,6 +149,13 @@ def transmitted(thickness):
 
 gradient = jax.grad(transmitted)(jnp.asarray(300.))
 ```
+
+In RCWA, material, wavelength, layer-thickness and raster-permittivity derivatives
+work on JAX and PyTorch alike. Shape dimensions differentiate on PyTorch. Under a JAX
+transform `prepared.run` refuses them (`prepared.host_topology`), because checking that
+the shapes' topology has not changed needs concrete values. The
+[differentiation guide](docs/guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
+has the full table and the compatibility route for JAX shape derivatives.
 
 FDTD also validates fixed grid, duration, source and observation dependencies.
 Geometry derivatives require explicitly reserved support where the engine

@@ -5,6 +5,15 @@ the first table is the *shape* path where a block one used to be. Measured on CP
 silicon, single process, float64).
 **Every number here is from one CPU host; see the caveats before carrying any of it elsewhere.**
 
+**Interface scope (added 2026-10-15).** Every mode below was measured through the solver
+interface now kept as `wavebit.compat.legacy`: `solver.freeze_geometry()` and
+`solver.solve(geometry=...)`. The public lifecycle, `rcwa.prepare(...)` then `prepared.run(problem)`,
+refuses a JAX-traced shape dimension with `prepared.host_topology`. So the "jax jit on shapes"
+rows and recommendations apply to the compatibility interface and do not carry over to that
+lifecycle, where a shape derivative is a PyTorch derivative. Backend speed through `prepared.run`
+has not been measured. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
+lists which inputs differentiate on which backend there.
+
 Targets:
 - `studies/rcwa/benchmark_backends/benchmark_backends.py` — the sweep this document reports
 - `src/wavebit/rcwa/_engine/geometry.py::StaticGeometry` — what a freeze records, and what its equality
@@ -330,6 +339,9 @@ ellipse: −12.4% / +1.6%), so a record was better taken slightly above the expe
 point than at the centre of the search range.
 
 ## What to use
+
+For the compatibility interface these were measured on. Through `rcwa.prepare(...)` and
+`prepared.run(problem)`, a JAX-traced shape is refused; see the interface scope at the top.
 
 | situation | use |
 |---|---|

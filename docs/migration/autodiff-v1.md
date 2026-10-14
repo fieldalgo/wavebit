@@ -593,8 +593,10 @@ passes.
 Not a matter of taste, and the answer differs by modeling path — a jitted JAX step wins at
 every size on a shape recipe, while on a raster below `truncation_order ~ 5` eager PyTorch beats
 it outright. Before choosing either on a shape recipe, look at `shape_nvf_grid_size`, which outweighs
-both. The table is in [`backends.md`](../guide/common/backends.md); the measurements are in
-[`../backend-choice.md`](../validation/rcwa/backend-choice.md).
+both. The table is in [`backends-v1.md`](backends-v1.md); the measurements are in
+[`../backend-choice.md`](../validation/rcwa/backend-choice.md). Both describe this compatibility
+interface; the current lifecycle refuses a JAX-traced shape (see the
+[differentiation guide](../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)).
 
 Tutorials [`02-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/02-autograd-and-optimization-jax.ipynb) and
 [`02-pytorch`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/02-autograd-and-optimization-pytorch.ipynb) run a full

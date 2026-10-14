@@ -7,3 +7,44 @@ For example, an objective can replace a material or layer thickness and return a
 Backend transform support and physical differentiability are separate questions. A geometry boundary crossing a fixed observation point may change which material is sampled. FDTD also fixes a discrete grid and source/monitor stencil, so derivatives refer to that discretized problem. Inspect validity information when checks depend on traced values, and verify gradients against an independent perturbation before using them in optimization.
 
 JAX double precision requires explicit x64 configuration; see [backends](backends.md). For the established kernel-level derivations, transform checks, finite-difference comparisons and legacy examples, see the [compatibility autodiff manual](../../migration/autodiff-v1.md) and [FDTD differentiation study guide](../fdtd/fd-differentiation.md). Their evidence retains its stated geometry, backend and discretization scope.
+
+## RCWA: which inputs differentiate on which backend
+
+Through `rcwa.prepare(...)` and `prepared.run(problem)`, the backends do not admit the same live inputs:
+
+| Live input | PyTorch (eager autograd) | JAX (`jax.grad`, `jax.jit`) |
+| --- | --- | --- |
+| Material coefficients, including the half-space media | supported | supported |
+| Wavelength | supported | supported |
+| Layer thickness | supported | supported |
+| Raster permittivity values | supported | supported; see [held raster preparations](#a-held-raster-preparation-under-jit) |
+| Region geometry, such as `Circle.radius`, `Rectangle.size` or `Rectangle.angle` | supported | **refused** for every geometry field: `UnsupportedFeatureError`, code `prepared.host_topology` |
+| The cell, `Stack.period` | supported when the period is one tensor | **refused**: `prepared.host_topology`, as for `Stack.lattice` |
+
+Each supported entry was compared with a central difference on one example, with relative agreement between 2e-9 and 2e-7. The PyTorch geometry entries checked were a circle radius (4.6e-9), a rectangle width (1.8e-8) and a rectangle angle (1.3e-7); the raster entries used `('sampled', 'li')`. On PyTorch, pass a differentiated period as one tensor, for example `torch.stack([px, py])`. A tuple holding a gradient-tracking tensor currently fails with a bare `RuntimeError` from NumPy conversion.
+
+So, through this lifecycle, the derivative from geometry to diffraction efficiency is a PyTorch derivative. The JAX refusal applies to `jax.grad` alone as well as under `jax.jit`.
+
+### Why JAX-traced geometry is refused
+
+A prepared run checks that the geometry still has the topology it was prepared with: which regions overlap and which edges cross. That check reads concrete values. A PyTorch tensor carries its value, so every eager run is guarded, and a step that crosses a topology boundary raises `IncompatibleProblemError` with code `prepared.topology`; prepare that geometry again. A JAX tracer carries no readable value, and the lifecycle has no traced form of the check. It therefore refuses traced geometry when the trace is built, rather than replaying a stale record.
+
+This is the lifecycle's stated contract, not a defect. The [unified API design](../../design/unified-api.md#7-prepared-reuse-and-differentiation) does not promise unrestricted geometry differentiation, and it requires that unguarded host-only topology decisions be rejected at trace construction. Material, wavelength and layer-thickness derivatives keep their JAX graphs.
+
+For a JAX derivative with respect to a shape, use the compatibility interface: `wavebit.compat.legacy`, with `solver.freeze_geometry()` taken outside the transform and `solver.solve(geometry=...)` inside it. The [compatibility autodiff manual](../../migration/autodiff-v1.md) describes that workflow and when a frozen record goes stale.
+
+### A held raster preparation under jit
+
+Raster values stay live, but some Fourier paths record which pixels share a phase when they are prepared. Under `jax.jit`, a run given a pattern whose phase partition differs from the prepared one returns NaN outputs, and `result.validity.checks['raster_partition']` is false. It does not return a stale answer. On PyTorch, the same run raises `IncompatibleProblemError`.
+
+| `fourier_coefficients`, `factorization` | A moved pattern through one held preparation |
+| --- | --- |
+| `'sampled'`, `'li'` | correct; nothing is recorded |
+| `'sampled'`, `'nvf'` | NaN under jit; PyTorch raises |
+| `'integrated'`, `'li'` | NaN under jit; PyTorch raises |
+
+When a pattern moves every step under jit, use `('sampled', 'li')` or prepare each concrete pattern outside the transform.
+
+### Backend speed
+
+The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the solver interface now kept as `wavebit.compat.legacy` (`freeze_geometry()` and `solve(geometry=...)`). They are not measurements of this lifecycle, where JAX shape derivatives are refused. Backend speed through `prepared.run` has not been measured.
