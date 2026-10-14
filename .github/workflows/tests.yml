@@ -10,7 +10,7 @@
 #              source-writing tests execute serially in a private source snapshot.
 #   slow     — runs the tests marked `slow` (tests/conftest.py): the FDTD line's
 #              resolution-refinement studies, finite-difference gradient checks
-#              and Meep comparisons, and develop's painted-overlap polygon tests.
+#              and Meep comparisons.
 #              Together with `test` it covers the default tier on every push, split so
 #              that neither half runs into the job limit.
 #   minimal  — builds an sdist and its wheel, installs in an isolated venv, and
@@ -185,9 +185,11 @@ jobs:
         # would not be.
         #
         # The six tests that cost 32 of those 77 minutes -- four in `test_boundary.py`, two in
-        # `test_oblique_lattice.py` -- are marked slow now and run in `slow` below. They are
-        # slow for a reason -- f453b21 folds polygon segments over the 3x3 periodic images,
-        # which is 9x the segments and is correctness work, not a regression to revert.
+        # `test_oblique_lattice.py` -- were marked slow on 2026-09-15 and are back in this tier
+        # since 2026-10-14: each now states the small shape-NVF grid its assertion cannot
+        # tell from the default, and none takes more than 11 s. The default grid is what made
+        # them slow -- f453b21 folds polygon segments over the 3x3 periodic images, which is
+        # 9x the segments and is correctness work, not a regression to revert.
         #
         # `--timeout` turns a hung test into a named failure instead of a dead job.
         # Without it the run that hangs reports nothing at all: pytest prints its

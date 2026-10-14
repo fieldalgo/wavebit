@@ -443,7 +443,6 @@ def test_li_is_refused_on_a_skewed_cell():
         totals(raster(HEX), lattice=HEX, factorization='li')
 
 
-@pytest.mark.slow
 def test_a_painted_overlap_survives_a_unimodular_shear():
     """Resolving an overlap into polygons works skewed: the clipper never sees the cell.
 
@@ -461,16 +460,22 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
              'material': 5.76},
             {'type': 'circle', 'cx': P / 2 + 40.0 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
              'material': 9.0}]}]
+        # A stated grid, not the default. This arm does read the normal field, so the grid is
+        # a real input, but what is asserted has converged long before 1024: the gap
+        # |painted(None) - painted(SHEAR)| is 2.38e-4 / 2.32e-4 / 2.26e-4 / 2.23e-4 at 128 /
+        # 256 / 512 / 1024, against the 1e-3 below (measured 2026-10-14). 128 runs in 14 s
+        # where the default took 793 s. A mutant that samples the sheared cell as a rectangle
+        # still fails it here. The default is sized for a rotated rectangle's angle gradient
+        # (``engine._NORMAL_GRID_DEFAULT``), and nothing here is differentiated.
         s = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=[6, 6], thickness=[H],
                            wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                           factorization='nvf', **_cell(lattice))
+                           factorization='nvf', shape_nvf_grid_size=128, **_cell(lattice))
         res = s.solve()
         return float(np.sum(np.asarray(res.T)))
 
     assert painted(None) == pytest.approx(painted(SHEAR), abs=1e-3)
 
 
-@pytest.mark.slow
 def test_a_painted_overlap_is_not_the_same_as_summing_it():
     """Guards the test above from being vacuous: the two rules must give different answers.
 
@@ -491,10 +496,14 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
     apart = [shapes[0], dict(shapes[1], cx=P / 2 + 200.0 - ox)]
 
     def mean_eps(cell):
+        # The aliasing floor, 4 * 6 + 1, not the default: this reads ``epz_i``, which never
+        # reads the normal field, so the grid cannot move it. Both values are bit-identical at
+        # 25, 128 and the default 1024 (measured 2026-10-14); the default spent 408 s building
+        # a field nothing here reads.
         s = _legacy_wavebit.rcwa(backend='numpy', structure=[{'background': 1.0, 'shapes': cell}],
                          truncation_order=[6, 6], thickness=[H], wavelength=WL,
                          top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
-                         factorization='nvf', lattice=SHEAR)
+                         factorization='nvf', lattice=SHEAR, shape_nvf_grid_size=25)
         epz_i = np.asarray(s.eps_conv_matrices().epz_i[0])
         return float(np.real(np.linalg.inv(epz_i)[0, 0]))
 

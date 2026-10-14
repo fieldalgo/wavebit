@@ -362,7 +362,12 @@ def test_permittivity_matches_the_analytic_path_for_one_shape(truncation_order):
     """
     from wavebit.rcwa._engine.parametric import to_conv_mat_parametric_nvf
     shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=0.42, ly=0.31, angle=0.4, material=4.0)
-    ng = 1024
+    # The aliasing floor, not the default: ``epz_i`` never reads the normal field, so the grid
+    # that field is sampled on cannot move what is compared here. Measured 2026-10-14: both
+    # builders' ``epz_i`` are bit-identical at this grid and at 1024, for both orders, and the
+    # pair costs 0.05 s instead of 7 s. The default is sized for a rotated rectangle's angle
+    # gradient (``engine._NORMAL_GRID_DEFAULT``), and nothing here is differentiated.
+    ng = 4 * truncation_order + 1
     (mine, _) = _mats(xnp, [(0.5, 0.5, 0.42, 0.31, 0.4, 4.0)], truncation_order=truncation_order, ng=ng)
     theirs = to_conv_mat_parametric_nvf(xnp, [shape], 1.0, truncation_order, truncation_order,
                                     CELL, xnp.complex128, shape_nvf_grid_size=ng)
@@ -472,7 +477,6 @@ def test_shape_vertices_reads_the_dict_like_the_transform(shape, spelt_out):
 
 
 @pytest.mark.parametrize('truncation_order', [4, 8])
-@pytest.mark.slow
 def test_a_circle_without_ly_is_the_same_circle_on_both_paths(truncation_order):
     """Painted and summed hold the same permittivity for a lone circle -- so it must be round.
 
@@ -644,7 +648,6 @@ def test_a_circle_without_ly_solves_on_the_closed_form_side():
     assert 0.0 < _total(solver.solve()) < 1.0
 
 
-@pytest.mark.slow
 def test_a_circle_without_ly_survives_the_polygon_path():
     """The regression: an overlap sends the same dict through ``shape_vertices``.
 
@@ -667,7 +670,6 @@ def test_a_circle_without_ly_survives_the_polygon_path():
     assert got[0] == got[1], got
 
 
-@pytest.mark.slow
 def test_a_painted_ellipse_is_polygonised():
     """Curved primitives are polygonised for this path; the answer must still be sane."""
     shapes = [dict(type='ellipse', cx=-0.08, cy=-0.04, lx=0.44, ly=0.28, angle=0.5, material=4.0),
