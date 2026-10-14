@@ -1247,8 +1247,9 @@ def _pn_totals(basis, method, lattice_blind=False):
     """``(sum(R), sum(T))`` for the rod on ``basis``, through the Popov-Neviere builder.
 
     The tensor path has no front door -- ``structure`` is a scalar raster -- so this is the
-    documented route in: build the five slots and hand them to ``solve_conv``
-    (``docs/theory/rcwa/patterned-anisotropic-factorization.md`` section 9).
+    documented route in: build the five slots and hand them to the private ``_solve_conv``, which
+    takes the builders' corner-frame slots (the public ``solve_conv`` takes centre-frame ones,
+    ``db2e5c5e``; ``docs/theory/rcwa/patterned-anisotropic-factorization.md`` section 9).
     """
     inside = _pn_disc(basis)
     eps33 = _pn_tensor(inside)
@@ -1335,6 +1336,36 @@ def test_a_patterned_tensor_is_the_same_physics_under_a_unimodular_shear(method)
 
     r_blind, _ = _pn_totals(SHEAR_2A1, method, lattice_blind=True)
     assert abs(r_blind - r_o) > 5e-3, r_blind - r_o
+
+
+@pytest.mark.parametrize('method', ['contour', 'spectral', 'smooth'])
+def test_the_permeability_builder_reads_the_skewed_cell_as_the_permittivity_one_does(method):
+    """The test above holds the permittivity builder; its permeability twin had no skewed cell.
+
+    :func:`~wavebit.rcwa._engine.factorization.to_conv_mat_raster_pn_mu` makes its own
+    ``normal_vector_field`` call, so a dropped ``lattice=`` there would not show in the test
+    above. Handed the same tensor raster, the two builders are the same arithmetic -- bit for
+    bit on the sheared cell, measured 2026-10-15 -- so equality carries the shear test over to
+    mu. The second half is the guard: reading this cell as a rectangle moves the slots the
+    rearrangement exists for (``epxy``, ``epyx``) by 0.67 to 1.0, so equality on the sheared cell
+    is not equality by default.
+    """
+    if method == 'contour':
+        pytest.importorskip('contourpy',
+                            reason="raster_normal_method='contour' needs the optional dependency")
+    from wavebit.rcwa._engine.factorization import to_conv_mat_raster_pn_mu
+
+    tensor = _pn_tensor(_pn_disc(SHEAR_2A1))[None]
+    eps = to_conv_mat_raster_pn_eps(tensor, *PN_ORDERS, lattice=SHEAR_2A1,
+                                    raster_normal_method=method)
+    mu = to_conv_mat_raster_pn_mu(tensor, *PN_ORDERS, lattice=SHEAR_2A1,
+                                  raster_normal_method=method)
+    for a, b in zip(eps, mu):
+        assert np.array_equal(np.asarray(a), np.asarray(b))
+    blind = to_conv_mat_raster_pn_mu(tensor, *PN_ORDERS, lattice=None,
+                                     raster_normal_method=method)
+    assert np.abs(np.asarray(blind.epxy) - np.asarray(mu.epxy)).max() > (
+        0.5 * np.abs(np.asarray(mu.epxy)).max())
 
 
 # ------------------------------------------------------------ period against a cell basis
