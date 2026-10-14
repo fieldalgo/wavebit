@@ -93,12 +93,19 @@ def _transverse_k(n, theta):
     return np.copysign((low + high) / 2, np.real(theta))
 
 
+def _refuse_unknown_tetm(tetm):
+    """Both oracles branch on ``tetm == 'te'``, so any other value would read as TM silently."""
+    if tetm not in ('te', 'tm'):
+        raise ValueError(f"tetm must be 'te' or 'tm', not {tetm!r}")
+
+
 def analytic_r(ns, thicknesses, wavelength, theta, tetm):
     """Reflection coefficient of a uniform stack: ``ns = [n_top, *layers, n_bot]``.
 
     Airy recursion from the bottom interface up — the standard thin-film result, valid for
     complex (absorbing) indices as written.
     """
+    _refuse_unknown_tetm(tetm)
     k_par = _transverse_k(ns[0], theta)
     k = [_kz(n, k_par) for n in ns]
 
@@ -385,6 +392,7 @@ def analytic_t(ns, thicknesses, wavelength, theta, tetm):
     Same conventions as :func:`analytic_r`; for TM the characteristic transfer works in the
     magnetic variable, so the last line converts its ratio back to an E-field one.
     """
+    _refuse_unknown_tetm(tetm)
     k_par = _transverse_k(ns[0], theta)
     k = [_kz(n, k_par) for n in ns]
 

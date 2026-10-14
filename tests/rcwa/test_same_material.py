@@ -105,7 +105,7 @@ def test_absorbing_layer_on_its_own_substrate_at_any_thickness(d):
     blew up. It is now an ordinary matched interface -- the layer is optically indistinguishable
     from the substrate, so any thickness must give the bare air/gold Fresnel reflectance.
     """
-    want = _airy_R([1.0, AU, AU], [d], 0.3, 1)
+    want = _airy_R([1.0, AU, AU], [d], 0.3, 'tm')
     assert _R(_solver([1.0, AU, AU], [d], tetm='tm', theta=0.3)) == pytest.approx(want, abs=1e-12)
 
 
