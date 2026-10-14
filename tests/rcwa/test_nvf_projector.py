@@ -536,6 +536,14 @@ def test_it_crosses_a_jit_boundary_and_carries_a_gradient():
 
     The gradient matters as much as the value. The magnitude is frozen geometry like the
     direction, so it must be a constant to the trace and not a hole in it.
+
+    And it is held to a value, not to `!= 0`: no other test differentiates through this
+    projector, and a gradient that loses one path keeps the others. A random raster direction
+    cannot be differenced here -- it moves the interfaces the record froze, and the replay
+    refuses -- so each material region is moved as a whole: the ring, then the background.
+    The oracle is a NumPy solver with its own record. Measured 2026-10-14: 1.1e-9 and 2.9e-9
+    at h = 1e-5. Holding `ep_inv` constant before its inverse in `_nvf_assemble` leaves every
+    value unchanged and the nonzero check passing, and puts the gradient 65% and 77% off.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -552,7 +560,20 @@ def test_it_crosses_a_jit_boundary_and_carries_a_gradient():
         jnp.asarray(ANNULUS[None]))
     grad = np.asarray(grad)
     assert np.isfinite(grad).all(), 'the circular projector put a NaN in the gradient'
-    assert np.abs(grad).max() > 0.0, 'the gradient to the raster vanished entirely'
+
+    reference = _legacy_wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
+    record = reference.freeze_geometry()
+
+    def total(e):
+        return float(np.real(np.asarray(reference.solve(structure=e, geometry=record).T)).sum())
+
+    h = 1e-5
+    for region, value in (('ring', 12.25), ('background', 1.0)):
+        direction = (ANNULUS == value)[None].astype(float)
+        expected = (total(ANNULUS[None] + h * direction)
+                    - total(ANNULUS[None] - h * direction)) / (2 * h)
+        got = float(np.sum(grad * direction))
+        assert got == pytest.approx(expected, rel=1e-6), (region, got, expected)
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
