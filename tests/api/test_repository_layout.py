@@ -4,8 +4,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from tests.conftest import _relocate_cached_nodeids
-from tools.repository_paths import repository_path, repository_root, relocate_nodeid
+from tools.repository_paths import (RepositoryPath, relocate_nodeid, repository_path,
+                                    repository_root)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,6 +45,31 @@ def test_historical_joins_resolve_after_the_filename_is_known():
     assert path.parent / 'sibling.py' == ROOT / 'tests/cross_solver/sibling.py'
     assert repository_path('studies/results') / 'new-unrecorded-run.json' == (
         ROOT / 'artifacts/studies/new-unrecorded-run.json')
+
+
+def test_only_joins_resolve_and_a_derived_path_names_one_file(monkeypatch):
+    """A path pathlib derives (``with_name``, ``relative_to``'s argument) keeps its string.
+
+    On Python 3.12 such a path used to resolve underneath while pathlib overwrote its string,
+    so ``str(p)`` and ``Path(p)`` named different files, and ``relative_to`` resolved a plain
+    old location and passed for a path that is not under it.
+    """
+    old, new = 'examples/anisotropic_material.py', 'examples/rcwa/anisotropic_material.py'
+    assert json.loads((ROOT / 'tools/relocations.json').read_text())['paths'][old] == new
+    derived = (repository_root() / 'examples' / 'foo.py').with_name('anisotropic_material.py')
+    assert str(Path(derived)) == str(derived) == str(ROOT / old)
+    # Joins resolve the same name: `/`, `key / path` and absolute(), which joins the cwd.
+    assert repository_root() / 'examples' / 'anisotropic_material.py' == ROOT / new
+    assert str(ROOT) / RepositoryPath(old) == ROOT / new
+    monkeypatch.chdir(ROOT)
+    assert str(RepositoryPath(old).absolute()) == str(ROOT / new)
+
+    moved = repository_path('studies/results') / 'new-unrecorded-run.json'
+    assert moved.relative_to(ROOT / 'artifacts/studies') == Path('new-unrecorded-run.json')
+    for location in (ROOT / 'studies/results', str(ROOT / 'studies/results')):
+        assert not moved.is_relative_to(location)
+        with pytest.raises(ValueError):
+            moved.relative_to(location)
 
 
 def test_archived_globs_keep_the_historical_roster_without_duplicate_paths():

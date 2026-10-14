@@ -49,6 +49,10 @@ class RepositoryPath(type(Path())):
 
     A historical root such as studies/results spans several new question
     folders. Resolve when its filename is joined, not by inventing one new root.
+    Only construction and joins resolve: ``/``, ``joinpath``, ``key / path``
+    and ``absolute()``, which joins the working directory. A path pathlib
+    derives from another (parent, with_name, iterdir and glob children,
+    relative_to's argument) keeps the string it is given, as its identity.
     """
     if sys.version_info >= (3, 12):
         def __init__(self, *parts):
@@ -56,20 +60,36 @@ class RepositoryPath(type(Path())):
             resolved = (resolve_repository_path(self._historical)
                         if self._historical.is_absolute() else self._historical)
             super().__init__(resolved)
+
+        def with_segments(self, *pathsegments):
+            # Every derived path comes through here. Built through __init__ it
+            # would resolve, and pathlib would then overwrite its string with the
+            # unresolved one: str() and Path() of one path disagreed, and
+            # relative_to(<old location>) resolved its argument and passed for a
+            # path that is not under it.
+            path = super().__new__(type(self))
+            super(RepositoryPath, path).__init__(*pathsegments)
+            path._historical = Path(*pathsegments)
+            return path
     else:
         # Python 3.11 (fwref, the env the fmmax generators run in) has no
-        # with_segments(): Path.__new__ builds the instance in _from_parts and
-        # never passes the parts to __init__, and derived paths (parent,
-        # with_name, iterdir and glob children) come from _from_parsed_parts.
-        # Mirror 3.12: parts given to the constructor resolve as __init__ does
-        # there, and a derived path keeps its own string as its identity.
-        @classmethod
-        def _from_parts(cls, args):
-            historical = Path(*args)
+        # with_segments(): Path.__new__ builds every instance in _from_parts and
+        # never passes the parts to __init__, and derived paths come from
+        # _from_parts (absolute, resolve) or _from_parsed_parts (parent,
+        # with_name, iterdir and glob children). Construction resolves here, in
+        # __new__; both classmethods keep their string, as with_segments does.
+        def __new__(cls, *parts):
+            historical = Path(*parts)
             resolved = (resolve_repository_path(historical)
                         if historical.is_absolute() else historical)
-            self = super()._from_parts((resolved,))
+            self = super().__new__(cls, resolved)
             self._historical = historical
+            return self
+
+        @classmethod
+        def _from_parts(cls, args):
+            self = super()._from_parts(args)
+            self._historical = Path(self)
             return self
 
         @classmethod
@@ -80,6 +100,17 @@ class RepositoryPath(type(Path())):
 
     def __truediv__(self, key):
         return type(self)(self._historical / key)
+
+    def __rtruediv__(self, key):
+        # A join, so it resolves; pathlib would build it as a derived path.
+        try:
+            return type(self)(key, self)
+        except TypeError:
+            return NotImplemented
+
+    def absolute(self):
+        # The working directory joined with this path, so it resolves too.
+        return self if self.is_absolute() else type(self)(super().absolute())
 
     def joinpath(self, *parts):
         return type(self)(self._historical.joinpath(*parts))
