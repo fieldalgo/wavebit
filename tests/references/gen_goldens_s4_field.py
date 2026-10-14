@@ -50,13 +50,13 @@ gone rather than moved.** S4's ``Epsilon`` always wanted a permittivity; what ch
 2026-08-20 is that wavebit does too, so the conversion this generator was performing has no
 remaining side to be on. The golden was first written before that flip, and its ``__stack``
 arrays held a refractive index in their second column until it was regenerated on 2026-10-14;
-they hold permittivity now, and ``test_s4_field_golden`` compares them as such.
+they hold permittivity now, and ``test_s4_field_golden`` compares them as such. Nothing else
+moved: every field array is bit-for-bit the one frozen on 2026-08-14.
 
-**That regeneration moved the field arrays by at most 1.1e-15** (7.2e-16 of their scale), so a
-rerun here reproduces the physics, not the last digit. The generator's code and the ``s4`` env
-were unchanged since 2026-08-20, when a rerun had reproduced every field array bit for bit, and
-the output does not depend on the OpenBLAS thread count; the difference comes from outside the
-env, where S4 links the system's libc++ and libm.
+**Regenerate with the project env's S4 build.** Another build of the same extension (a Python
+3.11 one, linking its own OpenBLAS) reproduces these fields only to 1.1e-15, 7.2e-16 of their
+scale: the physics, not the last digit. A first regeneration on 2026-10-14 ran on that build and
+was replaced the same day.
 """
 
 import sys as _repository_sys

@@ -57,7 +57,7 @@ class RepositoryPath(type(Path())):
                         if self._historical.is_absolute() else self._historical)
             super().__init__(resolved)
     else:
-        # Python 3.11 (the fmmax, S4 and gyptis reference envs) has no
+        # Python 3.11 (fwref, the env the fmmax generators run in) has no
         # with_segments(): Path.__new__ builds the instance in _from_parts and
         # never passes the parts to __init__, and derived paths (parent,
         # with_name, iterdir and glob children) come from _from_parsed_parts.

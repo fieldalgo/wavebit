@@ -43,9 +43,8 @@ regenerating `golden_reticolo.npz` (72 arrays), `golden_reticolo_field.npz` (33)
 `golden_reticolo_conical_field.npz` (33) against V10 after the flip reproduces **every array
 bit for bit**. Nothing in the frozen data moved, so the scenes are the ones they always were.
 `gen_goldens_s4_field.py` was rerun too: 26 of its 28 arrays are bit-identical and the two that
-differ are exactly the `__stack` pair above. The 2026-10-14 regeneration, with the same code and
-the same `s4` env, also moved the 24 field arrays, by at most 1.1e-15 (7.2e-16 of their scale);
-the generator's docstring says where that difference comes from.
+differ are exactly the `__stack` pair above. That pair is all the 2026-10-14 regeneration
+changed; its generator's docstring says which S4 build reproduces the fields bit for bit.
 
 ## The oracles
 
