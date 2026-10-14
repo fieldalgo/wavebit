@@ -21,6 +21,7 @@ and is exact (and to ``jax.hessian`` on one scene, which shares no rule with it)
 from wavebit.compat import legacy as _legacy_wavebit
 import ast
 import functools
+import importlib
 import itertools
 import pathlib
 
@@ -931,7 +932,7 @@ def test_every_solve_goes_through_linear_solve():
     the scan sees, so the scan is seen to read the files -- and since every exemption is under
     the common array helpers or RCWA engine, the scan's reach across solver/shared packages
     is asserted by name below so a narrowed inventory cannot silently pass."""
-    package = pathlib.Path(wavebit.__file__).parent
+    package = pathlib.Path(importlib.import_module('wavebit').__file__).parent   # not compat.legacy
     found, scanned = [], []
     for path in sorted(package.rglob('*.py')):
         name = path.relative_to(package).as_posix()

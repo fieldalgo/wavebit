@@ -416,14 +416,15 @@ def test_gradient_reaches_the_shape_parameters():
     # The contrast envelope retains nearest-point switches: h=1e-6 crosses
     # one for cx, while 1e-7 and 1e-8 are local. Difference the matrix entries
     # before summation using |a|^2-|b|^2 = Re((a-b)*conj(a+b)); subtracting
-    # two large scalar norms erased the small second-angle sensitivity.
+    # two large scalar norms erased the small second-angle sensitivity. At 1e-8 the difference
+    # loses digits to rounding: Linux (OpenBLAS) read cx's second angle (i=9) 1.9e-5 off.
     for i in (0, 2, 4, 9):
-        for h in (1e-7, 1e-8):
+        for h, tol in ((1e-7, 1e-5), (1e-8, 5e-5)):
             plus, minus = matrices(p0.at[i].add(h)), matrices(p0.at[i].add(-h))
             fd = sum(float(jnp.sum(jnp.real((plus[k]-minus[k])*jnp.conj(plus[k]+minus[k]))))
                      for k in (0, 2)) / (2*h)
             an = float(g[i])
-            assert abs(fd - an) <= 1e-5 * max(abs(fd), abs(an), 1.0), (i, h, fd, an)
+            assert abs(fd - an) <= tol * max(abs(fd), abs(an), 1.0), (i, h, fd, an)
 
 
 # --------------------------------------------------------------- one dict, one reading

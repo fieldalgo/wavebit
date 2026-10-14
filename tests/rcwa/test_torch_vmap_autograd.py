@@ -547,11 +547,11 @@ FLOOR_LANES = {'gold, dielectric': [GOLD.real, 4.0], 'dielectric, gold': [4.0, G
 def test_floor_lanes_that_disagree_about_binding(lanes):
     """Gold disks bind the NVF floor; at a ``Re eps`` of 4.0 or 4.5 it does not. Batched together,
     whether it binds is a per-lane answer the solve cannot read, so the floor runs on every lane
-    and a per-lane ``where`` hands each lane where it does not bind ``B`` itself: the read-out
-    with a ``requires_grad`` input is eager's to the bit, lane by lane. Without the ``where`` the
-    gradients stayed right and the dielectric lanes' values moved in the last digits (``B``
-    rebuilt from its SVD) -- which is why the bitwise assertion is here. ``backward()`` and
-    ``forward_ad`` through ``vmap`` are eager's per lane."""
+    and a per-lane ``where`` hands each lane where it does not bind ``B`` itself. The read-out,
+    ``backward()`` and ``forward_ad`` through ``vmap`` are eager's per lane. The values are compared
+    to 1e-13, not to the bit: on Linux (OpenBLAS) the batched solve itself differs from the eager one
+    by 1.6e-15 even where nothing binds, so the ``where`` is checked bit for bit on the floor alone
+    (:func:`test_a_lane_where_the_floor_does_not_bind_gets_its_matrix_back_bit_for_bit`)."""
     f = gold_disks('Re eps')
     points = FLOOR_LANES[lanes]
     w = torch.as_tensor(_weights(4))
@@ -566,13 +566,43 @@ def test_floor_lanes_that_disagree_about_binding(lanes):
     x = _t(points).requires_grad_(True)
     values = func.vmap(lambda p: f('torch', p))(x)
     for got, want in zip(values.detach(), eager_values):
-        assert torch.equal(got, want), (got - want)
+        assert _close(got, want, 1e-13), (got - want)
     (values * w).sum().backward()
     assert _close(x.grad, eager_gradients, 1e-11)
     with forward_ad.dual_level():
         dual = forward_ad.make_dual(_t(points), torch.ones(2, dtype=torch.float64))
         tangent = forward_ad.unpack_dual(func.vmap(lambda p: f('torch', p))(dual)).tangent
     assert _close(tangent, np.stack(eager_tangents), 1e-11)
+
+
+def test_a_lane_where_the_floor_does_not_bind_gets_its_matrix_back_bit_for_bit():
+    """The per-lane ``where`` of :func:`_floor_singular_values` under ``vmap``, alone: a batch of
+    one matrix the floor binds on (smallest singular value 1e-3 under a floor of 0.1) and one it
+    does not (smallest 0.5), each requiring grad. The second lane is that matrix itself, to the
+    bit, on every platform: the ``where`` selects it, nothing recomputes it. Without the ``where``
+    it came back rebuilt from its SVD, a few ULPs off -- the defect the end-to-end test above can
+    only see to its tolerance. The first lane is the eager floor's."""
+    from wavebit._common.backend import array_namespace
+    from wavebit.rcwa._engine.factorization import _floor_singular_values
+
+    xp = array_namespace(torch.zeros(1))
+    rng = np.random.default_rng(7)
+
+    def unitary():
+        q, _ = np.linalg.qr(rng.standard_normal((5, 5)) + 1j * rng.standard_normal((5, 5)))
+        return q
+
+    def with_singular_values(s):
+        return unitary() @ np.diag(s) @ unitary().conj().T
+
+    B = torch.as_tensor(np.stack([with_singular_values([2.0, 1.5, 1.0, 0.7, 1e-3]),
+                                  with_singular_values([2.0, 1.5, 1.0, 0.7, 0.5])])).requires_grad_(True)
+    floor = 0.1
+    got = func.vmap(lambda b: _floor_singular_values(xp, b, floor))(B)
+    assert torch.equal(got[1].detach(), B[1].detach())
+    eager = _floor_singular_values(xp, B[0], floor)
+    assert float((got[0] - eager).abs().max()) <= 1e-13 * float(eager.abs().max())
+    assert not torch.equal(got[0].detach(), B[0].detach())        # premise: it binds there
 
 
 # --------------------------------------------------------------------------- the rules alone

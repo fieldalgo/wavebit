@@ -547,7 +547,9 @@ def test_the_gap_has_waves_at_an_imaginary_k_par(extra, monkeypatch):
 
     assert np.abs(amplitudes('SMM') - amplitudes('ETM')).max() < 1e-14
     monkeypatch.setattr(scattering, '_gap_waves', _old_gap)
-    with np.errstate(all='ignore'), pytest.raises(FloatingPointError):
+    # The old gap fails either way: macOS (Accelerate) carries its infinite impedance to a
+    # non-finite result, Linux (OpenBLAS) refuses to invert it.
+    with np.errstate(all='ignore'), pytest.raises((FloatingPointError, np.linalg.LinAlgError)):
         amplitudes('SMM')
 
 
