@@ -649,8 +649,17 @@ def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
         assert np.asarray(built(dtype).structure).dtype == np.complex128, dtype
 
     for dtype in (np.float16, np.int16, np.int8, np.uint8, np.bool_):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match='unsupported dtype'):
             built(dtype)
+    # A native raster of the traced backends reaches the same refusal, not a cast.
+    if backend == 'jax':
+        import jax.numpy as jnp
+        with pytest.raises(ValueError, match='unsupported dtype'):
+            _legacy_wavebit.rcwa(structure=jnp.ones((1, 4, 4), dtype=bool), **cfg)
+    elif backend == 'torch':
+        import torch
+        with pytest.raises(ValueError, match='unsupported dtype'):
+            _legacy_wavebit.rcwa(structure=torch.ones((1, 4, 4), dtype=torch.bool), **cfg)
 
     # `mu` reaches the same function with nothing in front of it, so its type gate is the only
     # thing standing between a nested list and a cast.
