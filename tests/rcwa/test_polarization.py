@@ -144,6 +144,54 @@ def test_the_pair_phase_is_kept():
                                atol=1e-14)
 
 
+#: Complex, unnormalized and off every axis: a recipe that dropped the phase, the norm or either
+#: variant cannot reproduce it.
+_SWEEP_PAIR = (0.7 - 0.2j, 0.4 - 1.3j)
+
+
+def _assert_variants_combine_into_the_pair(res, pair):
+    a_s, a_p = np.asarray(pair) / np.linalg.norm(pair)
+    for name in _AMPLITUDE_FIELDS + ('r_xyz', 't_xyz'):
+        np.testing.assert_allclose(np.asarray(getattr(res.incident, name)),
+                                   a_s * np.asarray(getattr(res.s_inc, name))
+                                   + a_p * np.asarray(getattr(res.p_inc, name)),
+                                   atol=1e-14, rtol=0, err_msg=name)
+    # What docs/guide/rcwa/light.md warns against: an efficiency is a squared magnitude, so
+    # summing the variants' efficiencies drops their cross term. Asserted so the amplitude check
+    # above is known to run where the cross term is not zero.
+    summed = abs(a_s) ** 2 * np.asarray(res.s_inc.R) + abs(a_p) ** 2 * np.asarray(res.p_inc.R)
+    assert np.abs(summed - np.asarray(res.incident.R)).max() > 1e-3
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('formulation', ['second_order', 'first_order'])
+def test_one_solve_answers_every_polarization(formulation, algo, side):
+    """A polarization sweep needs one solve: ``s_inc`` / ``p_inc`` give every pair's amplitudes.
+
+    The recipe ``docs/guide/rcwa/light.md`` states is ``(a_s/n) * s_inc + (a_p/n) * p_inc``,
+    with ``n`` the pair's Euclidean norm and its overall phase kept. Measured to 8e-16.
+    """
+    solver = _legacy_wavebit.rcwa(polarization=_SWEEP_PAIR, structure=STRUCTURE_2D,
+                                  layer_algorithm=algo, incidence_side=side, **CFG_2D)
+    solver.formulation = formulation
+    res = solver.solve()
+    assert solver.formulation_assigned == formulation
+    _assert_variants_combine_into_the_pair(res, _SWEEP_PAIR)
+
+
+@pytest.mark.parametrize('case', ['conical', 'excitation'])
+def test_one_solve_answers_every_polarization_off_the_2d_plane_wave(case):
+    """The same recipe on the conical path, and with several lit orders under ``excitation=``."""
+    if case == 'conical':
+        kw = dict(CFG_1D, structure=STRUCTURE_1D, theta=0.3, phi=0.4)
+    else:                           # orders (0, 0) and (-1, 0) both propagate in the n = 1.5 top
+        kw = dict(CFG_2D, structure=STRUCTURE_2D, top=2.25, bot=1.0,
+                  excitation={(0, 0): 1.0, (-1, 0): 0.5j})
+    _assert_variants_combine_into_the_pair(
+        _legacy_wavebit.rcwa(polarization=_SWEEP_PAIR, **kw).solve(), _SWEEP_PAIR)
+
+
 def test_pair_reproduces_psi_under_backside_illumination():
     """The two incidence features compose: the pair means the same thing from either side."""
     psi_v = 0.7

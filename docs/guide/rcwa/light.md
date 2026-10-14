@@ -10,7 +10,7 @@ excitation = rcwa.Excitation(
                             theta=.2, phi=0.),))
 ```
 
-Plane-wave amplitude is in V/m. Polarization is `"s"`, `"p"`, or a complex `(s,p)` Jones pair normalized to unit electric magnitude; its relative phase is retained. `OrderExcitation` names coherent incident diffraction orders. `GaussianBeam` describes an angular spectrum. `ElectricDipole(position=..., moment=...)` specifies a physical electric dipole moment in C·m. These source families have different support and normalization requirements; `check` validates the requested combination.
+Plane-wave amplitude is in V/m. Polarization is `"s"`, `"p"`, or a complex `(s,p)` Jones pair normalized to unit electric magnitude; its relative phase is retained. The outgoing amplitudes are linear in that normalized pair: `amplitude_s`, `amplitude_p` and `cartesian` for `(a_s, a_p)` are `a_s/n` times those for `"s"` plus `a_p/n` times those for `"p"`, with `n = sqrt(|a_s|**2 + |a_p|**2)`, and the source `amplitude` does not change them. Two runs therefore give the amplitudes of every polarization at one direction and wavelength. Combine amplitudes, never `R`, `T` or `power`: those are squared magnitudes, and adding them drops the cross term between the two states. `OrderExcitation` names coherent incident diffraction orders. `GaussianBeam` describes an angular spectrum. `ElectricDipole(position=..., moment=...)` specifies a physical electric dipole moment in C·m. These source families have different support and normalization requirements; `check` validates the requested combination.
 
 The [reference](../../reference/rcwa/index.md) lists their constructors. The following earlier-interface derivations remain useful for polarization, phase and complex transverse wavevectors, with compatibility calls identified explicitly.
 
@@ -182,6 +182,16 @@ Naming `tetm` with either of the others raises, and so does `psi` with `polariza
 reach for is usually decided by what you are doing: `(psi, chi)` is two real numbers with
 nothing redundant in them, so a gradient over the polarization state is an ordinary 2D problem,
 where the pair spends two of its four real numbers on directions that cannot change any power.
+
+**A polarization sweep needs one solve.** Every solve at `answers='amplitude'` or above also
+returns `result.s_inc` and `result.p_inc`, the responses to pure s and pure p from the same
+factorization. For any pair `(a_s, a_p)`, the amplitudes `r_s`, `r_p`, `t_s`, `t_p`, `r_xyz` and
+`t_xyz` equal `a_s/n` times the `s_inc` array plus `a_p/n` times the `p_inc` one, with
+`n = sqrt(|a_s|**2 + |a_p|**2)` and the pair's overall phase kept. This holds on both
+formulations, under ETM and SMM, from either side and under `excitation=`. Combine the
+amplitudes, not `R` and `T`: an efficiency is a squared magnitude, so adding the two variants'
+efficiencies drops their cross term. `s_inc` and `p_inc` are `None` under `tetm=` and at
+`answers='efficiency'`.
 
 Every order named in `excitation` has to propagate in the incidence medium. One past the light
 line would drive the structure while contributing nothing to the incident flux every efficiency

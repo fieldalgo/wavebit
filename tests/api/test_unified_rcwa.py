@@ -193,6 +193,39 @@ def test_empty_stack_is_the_single_interface_with_physical_port_labels(side):
     assert result.reflection.reference['z'] == (0.,)
 
 
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_amplitudes_are_linear_in_the_normalized_jones_pair(side):
+    """Two runs, 's' and 'p', give every polarization's amplitudes (docs/guide/rcwa/light.md).
+
+    A patterned layer at an oblique azimuth couples s and p, so each port's s and p amplitudes
+    both carry a cross term the recipe has to reproduce. The source amplitude (V/m) does not
+    enter the dimensionless amplitudes; summed efficiencies are not the pair's efficiency.
+    """
+    eps = np.array([[4.0, 1.0, 2.25, 1.0], [1.0, 9.0, 1.0, 4.0]])
+
+    def run(polarization, amplitude=1.):
+        problem = rcwa.Problem(
+            stack=rcwa.Stack(period=(700., 700.), top=Material(1.), bottom=Material(2.25),
+                             layers=(rcwa.Layer(thickness=200., epsilon=eps),
+                                     rcwa.Layer(thickness=100., epsilon=eps))),
+            excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(
+                side=side, polarization=polarization, theta=.3, phi=.4, amplitude=amplitude),)))
+        return rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 1)))
+
+    pair = (0.7 - 0.2j, 0.4 - 1.3j)
+    a_s, a_p = np.asarray(pair) / np.linalg.norm(pair)
+    s, p, both, brighter = run('s'), run('p'), run(pair), run(pair, amplitude=3.)
+    for port in ('reflection', 'transmission'):
+        for name in ('amplitude_s', 'amplitude_p', 'cartesian'):
+            got = np.asarray(getattr(getattr(both, port), name))
+            np.testing.assert_allclose(got, a_s*np.asarray(getattr(getattr(s, port), name))
+                                       + a_p*np.asarray(getattr(getattr(p, port), name)),
+                                       atol=1e-14, rtol=0, err_msg=f'{port}.{name}')
+            np.testing.assert_array_equal(np.asarray(getattr(getattr(brighter, port), name)), got)
+    summed = abs(a_s)**2*np.asarray(s.R) + abs(a_p)**2*np.asarray(p.R)
+    assert np.abs(summed - np.asarray(both.R)).max() > 1e-3
+
+
 def test_negative_rectangular_period_is_refused_before_solving():
     problem = slab(wavelength=.8)
     invalid = problem.replace(stack=problem.stack.replace(period=(-1., 1.)))
