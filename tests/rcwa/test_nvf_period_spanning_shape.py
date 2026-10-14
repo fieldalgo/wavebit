@@ -549,12 +549,12 @@ def test_a_merged_pair_leaves_no_null_normal_behind():
     opposite normals cancel to ``(0, 0)``. A null normal is not a harmless projector; it is a null
     projection.
 
-    **It is the fold, not the equality test.** Forcing ``merged_u`` / ``merged_v`` to False leaves
-    the count unchanged at 256 with ``max|n_x|`` still 0.000000: at ``lx = |a1 + a2|`` the fold
-    alone already makes the two u distances equal everywhere, so the pair cancels whether or not
-    anything drops it. Any mechanism that removes a pair inherits this, which is why the sibling
-    session's independent construction -- an explicit face-pair drop rather than a fold -- lands on
-    exactly the same 128 / 256 / 512.
+    **Any way of removing the pair leaves the tie** (measured 2026-09-05, on the fold construction
+    that preceded today's face-piece blend). Turning that construction's pair-merge flags off left
+    the count at 256 with ``max|n_x|`` still 0.000000: at ``lx = |a1 + a2|`` the fold alone made the
+    two u distances equal everywhere, so the pair cancelled whether or not anything dropped it, and
+    a sibling session's explicit face-pair drop landed on exactly the same 128 / 256 / 512. Those
+    flags are gone; ``parametric._piece_field`` now breaks the tie by the rule below.
 
     A square cell hides it. The surviving pair's midline is ``x = cx`` there, and a centred
     ``(i + 0.5)/N`` grid with even ``N`` never samples it: the same shape on a 700 square cell

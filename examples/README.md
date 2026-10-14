@@ -103,9 +103,11 @@ The verification pair also stopped being able to lean on a bit-identity. They co
 **block** path against a commensurate raster, and on such a grating the block path *was* the
 raster's arithmetic — Li's rule over the same segments — so it agreed to the last bit while
 saying nothing about whether either was right. That path was removed on 2026-08-26. The shape
-path runs NVF off an analytic normal field instead, so the same commensurate geometry now gives
-two answers that converge on each other rather than one number twice, and each file ends with
-the truncation sweep that shows it.
+path runs NVF off an analytic normal field instead. In 2D the same commensurate geometry now
+gives two answers that converge on each other rather than one number twice. In 1D each rod spans
+the cell, so its covered face pair carries no normal, the field is constant, and the NVF
+projector *is* Li's rule: the two agree to 4e-16, which is a check of the face-pair rule rather
+than a repeat of the raster. Each file ends with the truncation sweep that shows it.
 
 **It cannot see a material read as the wrong quantity either**, and that is worth stating next
 to the mirror, because it is the same shape of defect. `structure` is **relative
