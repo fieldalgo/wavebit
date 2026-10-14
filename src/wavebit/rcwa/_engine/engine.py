@@ -49,7 +49,7 @@ from wavebit._common.conventions import transverse_component_problem
 from wavebit._common.conventions import warn_if_xy_on_a_skewed_cell
 from wavebit.materials.response import Material
 from wavebit.materials.response import as_material
-from wavebit.materials.response import index_from_eps
+from wavebit.materials.response import refractive_index_from_eps
 from wavebit.materials.tabulated import TabulatedMaterial
 from wavebit.materials.tabulated import evaluate_material
 from wavebit.materials.tabulated import evaluate_structure
@@ -322,8 +322,8 @@ def _half_space_index(material, where='top'):
     lies in the closed upper half plane, whose principal square root lies in the first
     quadrant: ``Im(n) >= 0``, which is loss again. That is the same argument
     :func:`~wavebit._common.conventions.boundary_kz` rests on, and it is why
-    :func:`~wavebit._common.periodic.index_from_eps` -- the principal root and nothing else -- is
-    already the right function here.
+    :func:`~wavebit.materials.response.refractive_index_from_eps` -- the principal root and nothing
+    else -- is already the right function here.
 
     **A magnetic medium: ``sqrt(eps)*sqrt(mu)``** (:func:`~wavebit._common.conventions.signed_index`).
     The principal root of the product is the index wherever it keeps ``Im(n) >= 0`` for a
@@ -358,7 +358,7 @@ def _half_space_index(material, where='top'):
     _refuse_shaped_half_space(material, where)
     _refuse_negative_index_half_space(material, where)
     if not material.is_magnetic:
-        return index_from_eps(material.epsilon)
+        return refractive_index_from_eps(material.epsilon)
     return signed_index(material.epsilon, material.mu)
 
 
@@ -1120,8 +1120,8 @@ class CoreSolveMixin:
     # working unchanged.
     _top = Material(1.0)
     _bot = Material(1.0)
-    _n_top = index_from_eps(1.0)
-    _n_bot = index_from_eps(1.0)
+    _n_top = refractive_index_from_eps(1.0)
+    _n_bot = refractive_index_from_eps(1.0)
 
     @property
     def top(self):

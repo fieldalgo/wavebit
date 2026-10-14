@@ -307,7 +307,7 @@ def test_the_patterned_stacks_are_actually_patterned(stack):
     assert np.abs(o - o[:, :1]).max() > 1e-9, 'RETICOLO saw a uniform layer'
 
     structure = STACKS[stack][1]
-    ours_index = wavebit.index_from_eps(structure)
+    ours_index = wavebit.refractive_index_from_eps(structure)
     idx = np.clip((x_samples() / (PERIOD / structure.shape[2])).astype(int), 0,
                   structure.shape[2] - 1)
     for k in range(n_layers(stack)):

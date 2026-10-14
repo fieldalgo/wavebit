@@ -78,8 +78,8 @@ def _bar(lo_nm, hi_nm, eps_bg, eps_hi):
 # of the refractive index this file carried before 2026-08-20, so the committed RETICOLO numbers
 # still describe it: 2.25 was 1.5, 4 was 2, and 3.9975+0.2j was 2+0.05j. The untidy ones --
 # `1.6900000000000002`, `2.5600000000000005` -- are `1.3 ** 2` and `1.6 ** 2` as doubles, and
-# the tidy decimals beside them are different numbers; the bridge's `index_from_eps` carries
-# that difference straight back into the texture Octave is handed.
+# the tidy decimals beside them are different numbers; the bridge's `refractive_index_from_eps`
+# carries that difference straight back into the texture Octave is handed.
 STACKS = {
     # No truncation and no factorization question: this is where the frame and the amplitude
     # normalisation are decided, and it must be exact on all three components in both polarisations.

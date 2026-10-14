@@ -8,7 +8,8 @@ __version__ = '0.1.0'
 
 from . import materials, rcwa, fdtd
 from .materials import (Material, MaterialResponse, ConductiveMaterial, DispersiveMaterial,
-                        TabulatedMaterial, Drude, Lorentz, Debye, eps_from_index, index_from_eps)
+                        TabulatedMaterial, Drude, Lorentz, Debye, eps_from_refractive_index,
+                        refractive_index_from_eps)
 from .units import Units
 from .lattice import Lattice
 from ._common.execution import Execution, CheckReport
@@ -20,7 +21,8 @@ from .jobs import Job, run
 
 __all__ = ['materials', 'rcwa', 'fdtd', 'Material', 'MaterialResponse', 'ConductiveMaterial',
            'DispersiveMaterial', 'TabulatedMaterial', 'Drude', 'Lorentz', 'Debye',
-           'eps_from_index', 'index_from_eps', 'Units', 'Lattice', 'Execution', 'CheckReport',
-           'Backend', 'DiffractionOrders', 'FieldSamples', 'SpectralFieldSamples',
-           'RawDiffractionSpectrum', 'TimeSeries', 'Validity', 'ValidationError',
-           'UnsupportedFeatureError', 'IncompatibleProblemError', 'NumericalError', 'Issue', 'Job', 'run']
+           'eps_from_refractive_index', 'refractive_index_from_eps', 'Units', 'Lattice',
+           'Execution', 'CheckReport', 'Backend', 'DiffractionOrders', 'FieldSamples',
+           'SpectralFieldSamples', 'RawDiffractionSpectrum', 'TimeSeries', 'Validity',
+           'ValidationError', 'UnsupportedFeatureError', 'IncompatibleProblemError',
+           'NumericalError', 'Issue', 'Job', 'run']

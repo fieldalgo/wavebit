@@ -17,7 +17,7 @@ silent:
   and not a theoretical one.
 * **the lazy registration.** It must happen without ``import wavebit`` importing JAX, since
   importing the JAX backend flips ``jax_enable_x64`` process-wide for the caller.
-* **the branch in :func:`index_from_eps`.** The principal root is the passive one for
+* **the branch in :func:`refractive_index_from_eps`.** The principal root is the passive one for
   ``Im(eps) >= 0``, and the negative lip of the cut is where that stops being true.
 """
 
@@ -30,7 +30,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit import Material, eps_from_index, index_from_eps
+from wavebit import Material, eps_from_refractive_index, refractive_index_from_eps
 from wavebit.materials.response import as_material
 
 try:
@@ -168,7 +168,7 @@ def test_a_lossy_material_holds_its_complex_value_untouched():
     assert m.epsilon == 4.0 + 0.8j
     assert type(m.epsilon) is complex
 
-    n = index_from_eps(m.epsilon)
+    n = refractive_index_from_eps(m.epsilon)
     assert n.imag > 0, 'a passive permittivity must give a passive index'
 
 
@@ -205,40 +205,40 @@ def test_is_magnetic_asks_whether_a_permeability_was_named():
 
 # ------------------------------------------------------------------- the conversions
 
-def test_eps_from_index_is_exactly_the_square():
+def test_eps_from_refractive_index_is_exactly_the_square():
     """No dtype handling and no namespace, so tracers and gradients pass straight through.
 
     Exactness matters beyond tidiness here: the suite carries bit-exact assertions, and
     ``3.5**2`` is ``12.25`` on the nose while a hand-written decimal for a less friendly
     index would not be.
     """
-    assert eps_from_index(3.5) == 12.25
-    assert eps_from_index(1.5) == 2.25
-    assert eps_from_index(2.2) == 2.2 * 2.2                 # and not the tidy 4.84
-    assert eps_from_index(1.0) == 1.0
-    assert eps_from_index(3.5 + 0.1j) == (3.5 + 0.1j) ** 2
+    assert eps_from_refractive_index(3.5) == 12.25
+    assert eps_from_refractive_index(1.5) == 2.25
+    assert eps_from_refractive_index(2.2) == 2.2 * 2.2      # and not the tidy 4.84
+    assert eps_from_refractive_index(1.0) == 1.0
+    assert eps_from_refractive_index(3.5 + 0.1j) == (3.5 + 0.1j) ** 2
 
 
-def test_index_from_eps_takes_the_passive_root():
+def test_refractive_index_from_eps_takes_the_passive_root():
     """The principal root, verified against the convention rather than chosen by fiat.
 
     A passive medium has ``Im(eps) >= 0``, which puts ``eps`` in the closed upper half plane,
     whose principal root is in the first quadrant -- so ``Im(n) >= 0``, loss again. This is
     the same argument that makes ``conventions.boundary_kz`` principal at real ``k_par``.
     """
-    assert index_from_eps(12.25) == 3.5
-    assert index_from_eps(1.0) == 1.0
+    assert refractive_index_from_eps(12.25) == 3.5
+    assert refractive_index_from_eps(1.0) == 1.0
 
-    n = index_from_eps(4.0 + 0.8j)
+    n = refractive_index_from_eps(4.0 + 0.8j)
     assert n.real > 0 and n.imag > 0
     assert n ** 2 == pytest.approx(4.0 + 0.8j)
 
     # A metal: negative real permittivity, evanescent and decaying, not growing.
-    assert index_from_eps(-2.0).imag == pytest.approx(2.0 ** 0.5)
-    assert index_from_eps(-12.0 + 0.4j).imag > 0
+    assert refractive_index_from_eps(-2.0).imag == pytest.approx(2.0 ** 0.5)
+    assert refractive_index_from_eps(-12.0 + 0.4j).imag > 0
 
 
-def test_index_from_eps_is_always_complex():
+def test_refractive_index_from_eps_is_always_complex():
     """Even for ``2.25``. Two reasons, and both are about what the alternative costs.
 
     A real ``sqrt`` of a metal's negative permittivity is ``nan`` -- silent, and metals are a
@@ -247,26 +247,26 @@ def test_index_from_eps_is_always_complex():
     through a sweep crossing zero, and under ``jax.jit`` the sign cannot be read at all, so
     eager and traced calls would disagree about the output type.
     """
-    assert index_from_eps(2.25) == 1.5 + 0j
-    assert isinstance(index_from_eps(2.25), complex)
-    assert np.isdtype(index_from_eps(np.asarray(2.25)).dtype, 'complex floating')
+    assert refractive_index_from_eps(2.25) == 1.5 + 0j
+    assert isinstance(refractive_index_from_eps(2.25), complex)
+    assert np.isdtype(refractive_index_from_eps(np.asarray(2.25)).dtype, 'complex floating')
 
 
-def test_index_from_eps_preserves_precision_width():
+def test_refractive_index_from_eps_preserves_precision_width():
     """``float32`` in gives ``complex64`` out -- promotion must not widen behind the caller.
 
     A single-precision solve that silently got a complex128 half-space index would carry the
     widening into every downstream promotion, which is the sort of thing that makes a
     precision comparison unreproducible.
     """
-    out32 = index_from_eps(np.asarray([-2.0, 4.0], dtype=np.float32))
+    out32 = refractive_index_from_eps(np.asarray([-2.0, 4.0], dtype=np.float32))
     assert out32.dtype == np.complex64
-    out64 = index_from_eps(np.asarray([-2.0, 4.0], dtype=np.float64))
+    out64 = refractive_index_from_eps(np.asarray([-2.0, 4.0], dtype=np.float64))
     assert out64.dtype == np.complex128
     assert np.asarray(out64).imag[0] > 0                     # still the passive root
 
 
-def test_index_from_eps_negative_zero_is_the_documented_hazard():
+def test_refractive_index_from_eps_negative_zero_is_the_documented_hazard():
     """The trap, pinned so that it stays *known* rather than becoming a surprise.
 
     The principal cut runs along the negative real axis and IEEE signed zero decides which lip
@@ -277,9 +277,9 @@ def test_index_from_eps_negative_zero_is_the_documented_hazard():
     medium, and clamping would make gain media unrepresentable. Callers that build a
     permittivity by subtraction own this.
     """
-    assert index_from_eps(complex(-2.0, 0.0)).imag > 0
-    assert index_from_eps(complex(-2.0, -0.0)).imag < 0       # the hazard, not a bug here
-    assert index_from_eps(complex(4.0, -1e-18)).imag < 0      # round-off scale, same lip
+    assert refractive_index_from_eps(complex(-2.0, 0.0)).imag > 0
+    assert refractive_index_from_eps(complex(-2.0, -0.0)).imag < 0   # the hazard, not a bug here
+    assert refractive_index_from_eps(complex(4.0, -1e-18)).imag < 0  # round-off scale, same lip
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -289,8 +289,8 @@ def test_a_signed_zero_names_the_same_root_on_every_backend(backend):
     ``jax.numpy.sqrt`` put both zeros on the upper lip (jaxlib 0.11.0, eager and under ``jit``,
     complex64 and complex128): ``sqrt(complex(-4, -0.0)) = +2j`` where NumPy, PyTorch and
     :mod:`cmath` give ``-2j``. So a lossless value written with ``-0.0`` and handed in as a JAX
-    array got the other root from ``index_from_eps`` and ``signed_index``, the other ``n_bot``
-    and the other sign of ``t_p`` (``+t_s`` against ``-t_s`` at normal incidence).
+    array got the other root from ``refractive_index_from_eps`` and ``signed_index``, the other
+    ``n_bot`` and the other sign of ``t_p`` (``+t_s`` against ``-t_s`` at normal incidence).
     ``backend.principal_sqrt`` turns it there; off the cut JAX's root is its own to the bit.
     """
     import cmath
@@ -309,12 +309,12 @@ def test_a_signed_zero_names_the_same_root_on_every_backend(backend):
         convert = lambda v: torch.tensor(v, dtype=torch.complex128)   # noqa: E731
         back, solver_backend = (lambda t: t.numpy()), 'torch'
     for dtype in (np.complex128, np.complex64):
-        got = back(index_from_eps(convert(np.asarray(values, dtype=dtype))))
+        got = back(refractive_index_from_eps(convert(np.asarray(values, dtype=dtype))))
         assert np.all(np.sign(got.imag) == np.sign(want.imag)), dtype
         np.testing.assert_allclose(got, want, rtol=1e-6)
     if backend == 'jax':
-        eager = np.asarray(index_from_eps(jax.numpy.asarray(values)))
-        traced = np.asarray(jax.jit(index_from_eps)(jax.numpy.asarray(values)))
+        eager = np.asarray(refractive_index_from_eps(jax.numpy.asarray(values)))
+        traced = np.asarray(jax.jit(refractive_index_from_eps)(jax.numpy.asarray(values)))
         assert traced.tobytes() == eager.tobytes()
         # On the cut the bits are NumPy's, the real zero included.
         on_cut = slice(0, 4)
@@ -339,13 +339,13 @@ def test_the_two_conversions_round_trip():
     """``eps -> n -> eps`` closes, which is the only claim either helper makes jointly.
 
     Written as a test because the pair is what a migrating script uses: an index-shaped
-    datasheet goes in through ``eps_from_index`` and a solver-side permittivity comes back out
-    through ``index_from_eps`` at the half-spaces.
+    datasheet goes in through ``eps_from_refractive_index`` and a solver-side permittivity comes
+    back out through ``refractive_index_from_eps`` at the half-spaces.
     """
     for eps in (1.0, 2.25, 12.25, 4.0 + 0.8j, -12.0 + 0.4j):
-        assert eps_from_index(index_from_eps(eps)) == pytest.approx(eps)
+        assert eps_from_refractive_index(refractive_index_from_eps(eps)) == pytest.approx(eps)
     for n in (1.0, 1.5, 3.5, 3.5 + 0.1j):
-        assert index_from_eps(eps_from_index(n)) == pytest.approx(n)
+        assert refractive_index_from_eps(eps_from_refractive_index(n)) == pytest.approx(n)
 
 
 # ------------------------------------------------------------------ the JAX pytree
@@ -480,7 +480,7 @@ def test_a_traced_epsilon_survives_construction_inside_a_trace():
     worse, drop the tangent and return a plausible zero.
     """
     def loss(x):
-        m = Material(eps_from_index(x))                    # tracer in, tracer out
+        m = Material(eps_from_refractive_index(x))         # tracer in, tracer out
         return jnp.real(m.epsilon) * 10.0
 
     assert float(jax.grad(loss)(3.0)) == pytest.approx(60.0)   # d(10 x^2) = 20 x
@@ -539,19 +539,19 @@ def test_is_magnetic_answers_the_same_eagerly_and_under_trace():
 
 
 @requires_jax
-def test_index_from_eps_runs_on_a_jax_array():
+def test_refractive_index_from_eps_runs_on_a_jax_array():
     """Backend-agnostic through the Array-API namespace, tracer included."""
-    n = index_from_eps(jnp.asarray(4.0 + 0.8j))
-    assert complex(n) == pytest.approx(index_from_eps(4.0 + 0.8j))
-    traced = jax.jit(index_from_eps)(jnp.asarray(-2.0))
+    n = refractive_index_from_eps(jnp.asarray(4.0 + 0.8j))
+    assert complex(n) == pytest.approx(refractive_index_from_eps(4.0 + 0.8j))
+    traced = jax.jit(refractive_index_from_eps)(jnp.asarray(-2.0))
     assert complex(traced.imag) == pytest.approx(2.0 ** 0.5)
 
 
 def test_material_is_exported_from_the_package_root():
     """The public surface: the type and both conversions, importable as ``wavebit.X``."""
     assert wavebit.Material is Material
-    assert wavebit.eps_from_index is eps_from_index
-    assert wavebit.index_from_eps is index_from_eps
+    assert wavebit.eps_from_refractive_index is eps_from_refractive_index
+    assert wavebit.refractive_index_from_eps is refractive_index_from_eps
 
 
 

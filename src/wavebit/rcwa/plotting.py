@@ -26,7 +26,7 @@ import wavebit.rcwa._engine.boundary as _boundary
 import wavebit._common.geometry.clipper as _clipper
 import wavebit.rcwa._engine.factorization as _fac
 from wavebit.materials.response import as_material
-from wavebit.materials.response import index_from_eps
+from wavebit.materials.response import refractive_index_from_eps
 from wavebit.rcwa._engine.enums import ModelingPath
 from wavebit.lattice import meshgrid_xy
 from wavebit.lattice import reduced_basis
@@ -79,16 +79,17 @@ def _passive(eps):
     """``eps`` with round-off-level *negative* imaginary parts flushed to ``+0``.
 
     Only for the ``show='n'`` conversion, and only because this is the one caller that can
-    honestly tell round-off from a medium. :func:`~wavebit._common.periodic.index_from_eps` takes
-    the principal root and deliberately does not repair the branch -- a helper cannot know
-    whether a tiny negative ``Im`` is noise or a deliberately active medium -- and hands that
-    responsibility to callers that build a permittivity by subtraction. This is exactly such a
-    caller: the band-limited reconstruction is a truncated Fourier sum, so a *lossless* layer
-    comes back with imaginary parts of both signs at the 1e-16 level, and the ones that land on
-    a pixel whose real part went negative (Gibbs overshoot below zero, which the docstring of
-    :func:`slice_structure` measures at ``[-0.186, 13.850]`` for a lossless pair of shapes)
-    take the lower lip of the cut. Their root is then ``-0.43j`` -- **gain**, drawn on a
-    structure that has none, on 24 of 16384 pixels of the measured case.
+    honestly tell round-off from a medium.
+    :func:`~wavebit.materials.response.refractive_index_from_eps` takes the principal root and
+    deliberately does not repair the branch -- a helper cannot know whether a tiny negative ``Im``
+    is noise or a deliberately active medium -- and hands that responsibility to callers that build
+    a permittivity by subtraction. This is exactly such a caller: the band-limited reconstruction is
+    a truncated Fourier sum, so a *lossless* layer comes back with imaginary parts of both signs at
+    the 1e-16 level, and the ones that land on a pixel whose real part went negative (Gibbs
+    overshoot below zero, which the docstring of :func:`slice_structure` measures at
+    ``[-0.186, 13.850]`` for a lossless pair of shapes) take the lower lip of the cut. Their root is
+    then ``-0.43j`` -- **gain**, drawn on a structure that has none, on 24 of 16384 pixels of the
+    measured case.
 
     The flush is relative and tiny: an imaginary part below ``1e-12`` of the value's own
     magnitude is noise at double precision, and a real absorber or a real gain medium is orders
@@ -463,7 +464,7 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False, *, c
                 X, Y = sample_grid(xnp, (n, n), solver.lattice, np.float64)
                 values = _render_summed(lay, X, Y, basis, *period)
 
-    return values if show == 'eps' else index_from_eps(_passive(values))
+    return values if show == 'eps' else refractive_index_from_eps(_passive(values))
 
 
 @eager_under_torch_compile

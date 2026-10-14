@@ -2426,17 +2426,17 @@ def section_literature():
         pass
     print('  the principal sqrt of complex(-1, -0.0): ' + ', '.join(rows))
     # Wavebit's own index of it, each backend's array (`backend.principal_sqrt`).
-    index_from_eps = wavebit.index_from_eps
-    rows = [f'Python number {c(index_from_eps(complex(-1.0, -0.0)), 0)}',
-            f'NumPy {c(complex(index_from_eps(np.asarray(complex(-1.0, -0.0)))), 0)}']
+    refractive_index_from_eps = wavebit.refractive_index_from_eps
+    rows = [f'Python number {c(refractive_index_from_eps(complex(-1.0, -0.0)), 0)}',
+            f'NumPy {c(complex(refractive_index_from_eps(np.asarray(complex(-1.0, -0.0)))), 0)}']
     try:
         import jax.numpy as jnp
         import torch
-        rows += [f'JAX {c(complex(index_from_eps(jnp.asarray(complex(-1.0, -0.0)))), 0)}',
-                 f'PyTorch {c(index_from_eps(torch.tensor(complex(-1.0, -0.0))).item(), 0)}']
+        rows += [f'JAX {c(complex(refractive_index_from_eps(jnp.asarray(complex(-1.0, -0.0)))), 0)}',
+                 f'PyTorch {c(refractive_index_from_eps(torch.tensor(complex(-1.0, -0.0))).item(), 0)}']
     except ImportError:                              # pragma: no cover - environment
         pass
-    print('  index_from_eps of complex(-1, -0.0): ' + ', '.join(rows))
+    print('  refractive_index_from_eps of complex(-1, -0.0): ' + ', '.join(rows))
     rng = np.random.default_rng(13)
     values = (rng.uniform(-3, 3, 2000) + 1j * rng.uniform(-1, 1, 2000)) * (
         rng.uniform(-3, 3, 2000) + 1j * rng.uniform(-1, 1, 2000))

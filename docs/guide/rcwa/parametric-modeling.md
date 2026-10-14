@@ -385,7 +385,7 @@ Both material slots are **relative permittivity** — `12.25` is the `n = 3.5` t
 to spell, `2.25` the `n = 1.5` background, `9.0` the `n = 3` ellipse. A bare number is the
 shorthand for `wavebit.Material(epsilon=x)`; write the object out to give a region a
 permeability as well (`material=wavebit.Material(12.25, mu=2.0)`), and
-`wavebit.eps_from_index(3.5)` if what you hold is a datasheet index. The retired keys
+`wavebit.eps_from_refractive_index(3.5)` if what you hold is a datasheet index. The retired keys
 `n_base` and `n_index` are refused by name, because renaming them and keeping the number
 builds a different structure that solves and conserves energy — see
 [`conventions.md`](../../reference/common/conventions.md).

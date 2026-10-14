@@ -64,7 +64,7 @@ The [common conventions](reference/common/conventions.md) and [current lifecycle
 
 | Convention | Meaning |
 | --- | --- |
-| **Material values are relative permittivity** | Use `eps_from_index` when starting from refractive index. |
+| **Material values are relative permittivity** | Use `eps_from_refractive_index` when starting from refractive index. |
 | **Phasors use `e^{-iωt}`** | Positive imaginary permittivity represents passive electric loss. |
 | **Stack layers run bottom to top** | z starts at the bottom interface and increases upward. |
 | **Power and amplitude differ** | Efficiencies are power ratios; complex amplitudes retain phase. |

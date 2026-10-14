@@ -37,7 +37,7 @@ import warnings
 import numpy as np
 import pytest
 
-from wavebit import eps_from_index
+from wavebit import eps_from_refractive_index
 from wavebit._common import conventions as _conventions
 from wavebit._common.backend import array_namespace
 from wavebit._common.conventions import boundary_kz, mode_q
@@ -128,10 +128,10 @@ def _amp(n_top, n_bot, n_layer, d, theta, tetm):
     # The cases are written in refractive index because ``theta_cut`` is derived from the
     # half-space *permittivities* below and would read circularly if both were the same
     # spelling. The conversion happens here, where the public API takes over.
-    solver = _legacy_wavebit.rcwa(backend='numpy', tetm=tetm, top=eps_from_index(n_top),
-                            bot=eps_from_index(n_bot), theta=theta + _FORMAL,
+    solver = _legacy_wavebit.rcwa(backend='numpy', tetm=tetm, top=eps_from_refractive_index(n_top),
+                            bot=eps_from_refractive_index(n_bot), theta=theta + _FORMAL,
                             truncation_order=0, wavelength=WL, period=[WL * 2],
-                            structure=eps_from_index(np.array([[[n_layer, n_layer]]])),
+                            structure=eps_from_refractive_index(np.array([[[n_layer, n_layer]]])),
                             thickness=[d])
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
@@ -315,11 +315,11 @@ def test_a_gain_substrate_reflects_as_switching_its_gain_on_says(theta_deg, gain
 # ---------------------------------------------------------------- a layer's root is free
 
 LAYER_CASES = [
-    ('real_angle', dict(top=1.0, bot=eps_from_index(1.5), theta=0.2)),
-    ('absorbing_superstrate', dict(top=eps_from_index(1.5 + 0.3j),
-                                   bot=eps_from_index(1.5), theta=0.6)),
-    ('absorbing_superstrate_on_gold', dict(top=eps_from_index(1.5 + 0.4j),
-                                           bot=eps_from_index(AU), theta=1.3)),
+    ('real_angle', dict(top=1.0, bot=eps_from_refractive_index(1.5), theta=0.2)),
+    ('absorbing_superstrate', dict(top=eps_from_refractive_index(1.5 + 0.3j),
+                                   bot=eps_from_refractive_index(1.5), theta=0.6)),
+    ('absorbing_superstrate_on_gold', dict(top=eps_from_refractive_index(1.5 + 0.4j),
+                                           bot=eps_from_refractive_index(AU), theta=1.3)),
 ]
 
 
@@ -327,7 +327,7 @@ def _grating(tetm, thickness, **kw):
     # SMM, because the freedom pinned below is SMM's. ETM's recursion inverts a transmission into
     # the medium below each layer, so its labels are not free: they take the half-space's root
     # (`etm_mode_q`), pinned in `tests/rcwa/test_etm_layer_labels.py`.
-    cell = eps_from_index(np.array([[[1.0] * 8 + [3.4] * 8]]))
+    cell = eps_from_refractive_index(np.array([[[1.0] * 8 + [3.4] * 8]]))
     return dict(backend='numpy', tetm=tetm, truncation_order=6, wavelength=WL, period=[300.0], structure=cell,
                 thickness=[thickness], layer_algorithm='SMM', **kw)
 
@@ -400,8 +400,8 @@ def test_the_mode_q_tie_break_is_worth_nothing():
         flip = xp.where(xp.abs(xp.real(v)) > 1e-12, xp.real(v) < 0, xp.imag(v) < 0)
         return xp.where(flip, -v, v)
 
-    cfg = _grating('te', 120.0, top=eps_from_index(1.5 + 0.3j), bot=eps_from_index(1.5),
-                   theta=0.6)
+    cfg = _grating('te', 120.0, top=eps_from_refractive_index(1.5 + 0.3j),
+                   bot=eps_from_refractive_index(1.5), theta=0.6)
     base = _run(cfg)
     original = _conventions.mode_q
     try:
@@ -455,9 +455,9 @@ BACKENDS = ['numpy', 'jax', 'torch']
 # A grating whose orders straddle the vacuum light line, so one solve carries both kinds and the
 # propagating ones witness that the solve is not simply empty.
 CUT_OFF_SCENE = dict(wavelength=500., period=[900.], truncation_order=[5, 0],
-                     top=1., bot=eps_from_index(1.5), theta=0.3, phi=0.,
-                     structure=np.array([[[1.0, eps_from_index(3.5),
-                                           1.0, eps_from_index(3.5)]]]),
+                     top=1., bot=eps_from_refractive_index(1.5), theta=0.3, phi=0.,
+                     structure=np.array([[[1.0, eps_from_refractive_index(3.5),
+                                           1.0, eps_from_refractive_index(3.5)]]]),
                      thickness=[300.])
 CUT_OFF_U = np.array([np.sin(0.3) + m * 500. / 900. for m in range(-5, 6)])
 

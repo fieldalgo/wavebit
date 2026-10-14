@@ -8,17 +8,17 @@ import wavebit
 def run():
     # A material carries permittivity and permeability together, and permittivity is the
     # quantity the API takes. These three are non-magnetic, so `Material(eps)` is enough --
-    # and `eps_from_index` is here because every nk datasheet hands you the other quantity.
-    # Writing the conversion out is the point: 3.638... reread as a permittivity is a legal,
-    # energy-conserving, different silicon, and nothing downstream can flag it.
+    # and `eps_from_refractive_index` is here because every nk datasheet hands you the other
+    # quantity. Writing the conversion out is the point: 3.638... reread as a permittivity is a
+    # legal, energy-conserving, different silicon, and nothing downstream can flag it.
     #
-    # Absorbing Si would be eps_from_index(3.638751670074983+0.007498295841854125j).
+    # Absorbing Si would be eps_from_refractive_index(3.638751670074983+0.007498295841854125j).
     # Im(eps) > 0 is loss here, which is the same convention the bundled nk tables use
-    # (n + 1j*k) -- eps_from_index carries it over, since the principal square of the upper
-    # half plane stays in it.
-    si = wavebit.Material(wavebit.eps_from_index(3.638751670074983))
-    sio2 = wavebit.Material(wavebit.eps_from_index(1.4518))
-    si3n4 = wavebit.Material(wavebit.eps_from_index(2.0056))
+    # (n + 1j*k) -- eps_from_refractive_index carries it over, since the principal square of the
+    # upper half plane stays in it.
+    si = wavebit.Material(wavebit.eps_from_refractive_index(3.638751670074983))
+    sio2 = wavebit.Material(wavebit.eps_from_refractive_index(1.4518))
+    si3n4 = wavebit.Material(wavebit.eps_from_refractive_index(2.0056))
 
     # The silicon underneath is the substrate, so it goes in `bot`. Both half-spaces take a
     # Material too -- `top=1` is the scalar shorthand for Material(epsilon=1), i.e. vacuum.

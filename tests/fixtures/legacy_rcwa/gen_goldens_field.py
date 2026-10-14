@@ -44,7 +44,7 @@ leave is worth naming so nobody re-freezes for it.** The layers are exact: ``1d_
 half-spaces are both vacuum, reproduces every array **bit for bit** with its raster rewritten
 from ``3`` to ``9``, which is what says the flip itself moves nothing. Six of the seven cases
 *do* move, by 1.0e-14 to 2.4e-13, and all six are the ones with a non-vacuum half-space: a
-half-space material now reaches the solve as ``index_from_eps(eps)``, which is complex by
+half-space material now reaches the solve as ``refractive_index_from_eps(eps)``, which is complex by
 construction (``2+0j`` where ``2.0`` used to sit), and complex arithmetic reassociates the same
 expression. That is round-off from a dtype, not a change of answer, and it sits an order inside
 the ``atol=1e-12`` both this file's own diff and ``tests/rcwa/test_field_core.py`` compare at.

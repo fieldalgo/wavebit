@@ -38,8 +38,8 @@ LATTICE = as_lattice(period=(P, P))
 
 # Materials are **relative permittivity**. The contrast axis keeps naming its media by
 # refractive index, because that is what the printed row labels say and what the two earlier
-# measurements were posed in; `eps_from_index` converts where the shape is built.
-EPS = wavebit.eps_from_index
+# measurements were posed in; `eps_from_refractive_index` converts where the shape is built.
+EPS = wavebit.eps_from_refractive_index
 BASE = dict(period=[P, P], thickness=[0.25], psi=0.0, wavelength=WL, top=1.0, bot=EPS(1.5))
 AXES = dict(contrast={'high': (3.0, 2.2), 'low': (1.9, 1.6)},
             incidence={'oblique': (0.35, 0.4), 'normal': (0.0, 0.0)},

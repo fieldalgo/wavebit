@@ -132,8 +132,8 @@ msgid "**Materials are relative permittivity**"
 msgstr "**재료는 상대 유전율로 지정합니다**"
 
 #: docs/index.md:59
-msgid "not refractive index; `eps_from_index` converts"
-msgstr "굴절률이 아닙니다. `eps_from_index`로 변환합니다"
+msgid "not refractive index; `eps_from_refractive_index` converts"
+msgstr "굴절률이 아닙니다. `eps_from_refractive_index`로 변환합니다"
 
 #: docs/index.md:59
 msgid "**Time convention is `e^{-iωt}`**"

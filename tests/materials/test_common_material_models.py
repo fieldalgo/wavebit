@@ -58,7 +58,7 @@ def test_constants_preserve_structural_mu_and_explicit_spectral_axis():
 
 
 def test_tables_retain_interpolation_and_source_units():
-    model=TabulatedMaterial.from_index((500.,1000.),(2.,3.),wavelength_unit='nm')
+    model=TabulatedMaterial.from_refractive_index((500.,1000.),(2.,3.),wavelength_unit='nm')
     expected=2.6**2
     assert model.at(.8,units=Units(length='um')).epsilon==pytest.approx(expected)
     assert model.interpolation=='index'

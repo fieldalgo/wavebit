@@ -168,9 +168,9 @@ _MISSING_VERSION = (
     f"solves, it conserves energy, and it describes a different structure (n = 3.5 is "
     f"eps = 12.25). The version is the only field that can tell the two apart, so it has to "
     f"be written rather than assumed. Add 'version': {SPEC_VERSION!r} once you have checked "
-    f"the numbers are permittivities -- wavebit.eps_from_index converts -- or build the spec "
-    f"in Python instead: JobSpec(...) takes the version of the build that constructs it, "
-    f"which is the one case where absence really does mean current.")
+    f"the numbers are permittivities -- wavebit.eps_from_refractive_index converts -- or build "
+    f"the spec in Python instead: JobSpec(...) takes the version of the build that constructs "
+    f"it, which is the one case where absence really does mean current.")
 
 #: Incidence fields a sweep may vary. Geometry sweeps wait for the parametric geometry
 #: layer — sweeping a raster grid point-by-point is not a thing anyone wants to declare.
@@ -430,7 +430,8 @@ def _material_from_json(value, where):
                 mu = table.get('mu')
                 mu = None if mu is None else [_constitutive_from_json(v, where) for v in mu]
                 if quantity == 'index':
-                    return TabulatedMaterial.from_index(table['wavelengths'], values, mu=mu)
+                    return TabulatedMaterial.from_refractive_index(table['wavelengths'], values,
+                                                                   mu=mu)
                 return TabulatedMaterial(table['wavelengths'], values, mu)
             except (TypeError, ValueError) as exc:
                 raise SpecError(f'{where}.dispersion: {exc}') from exc

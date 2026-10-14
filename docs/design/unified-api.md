@@ -140,7 +140,7 @@ magnetic = Material(epsilon=2.25, mu=1.1)
 constructor contracts are `ConductiveMaterial(epsilon, conductivity, mu=None)`,
 `DispersiveMaterial(epsilon_inf, poles, mu=None)`, and
 `TabulatedMaterial(wavelengths, epsilon, *, wavelength_unit, mu=None)`.
-TabulatedMaterial also provides an explicit `from_index` constructor. The
+TabulatedMaterial also provides an explicit `from_refractive_index` constructor. The
 stored interpolation contract records whether index or permittivity is
 interpolated; moving a table must not silently change that choice.
 

@@ -79,9 +79,9 @@ class Material:
     win, and an index cannot carry the pair: ``mu`` was always taken raw, so a single material
     argument spelled as an index would have meant "index" for one of its two numbers and
     "permeability" for the other. It is also the direction with no branch cut in it. ``eps =
-    n**2`` is unambiguous where ``n = sqrt(eps)`` is a choice (:func:`index_from_eps`), and the
-    half-space square root is on this project's short list of recurring traps, so the boundary
-    is a bad place to have to make that choice repeatedly.
+    n**2`` is unambiguous where ``n = sqrt(eps)`` is a choice (:func:`refractive_index_from_eps`),
+    and the half-space square root is on this project's short list of recurring traps, so the
+    boundary is a bad place to have to make that choice repeatedly.
 
     The flip is not free and is not silent-safe: the same literal
     ``3.5`` read as an index gives ``R = 0.3086`` and read as a permittivity ``R = 0.0920``,
@@ -137,7 +137,7 @@ class Material:
       for values that cannot give one would be lying about the values.
 
     Two conversions live beside this class for callers who hold the other quantity:
-    :func:`eps_from_index` and :func:`index_from_eps`.
+    :func:`eps_from_refractive_index` and :func:`refractive_index_from_eps`.
     """
 
     epsilon: Any
@@ -294,7 +294,7 @@ def as_material(value, where='material') -> Material:
 
 
 @eager_under_torch_compile
-def eps_from_index(n, *, mu=None):
+def eps_from_refractive_index(n, *, mu=None):
     """Convert isotropic refractive index to relative permittivity.
 
     Return ``n**2`` when ``mu`` is omitted (relative permeability one), or
@@ -306,7 +306,7 @@ def eps_from_index(n, *, mu=None):
     Supplied permeability must be finite and nonzero. Invalid values raise
     ``ValueError`` eagerly; traced JAX arrays produce NaN at invalid entries.
     Assign the same permeability to the resulting material, for example
-    ``Material(eps_from_index(n, mu=mu), mu=mu)``.
+    ``Material(eps_from_refractive_index(n, mu=mu), mu=mu)``.
     """
     if mu is None:
         return n ** 2
@@ -325,7 +325,7 @@ def eps_from_index(n, *, mu=None):
 
 
 @eager_under_torch_compile
-def index_from_eps(eps):
+def refractive_index_from_eps(eps):
     """Refractive index of a medium with relative permittivity ``eps`` -- the passive root.
 
     The square root of a complex number has two values and only one of them is a physical

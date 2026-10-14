@@ -27,10 +27,10 @@
 | 상수 ε와 μ | `wavebit.Material(epsilon=4., mu=1.2)` | εᵣ와 μᵣ를 함께 지정 |
 | 번들 재료표 | `wavebit.materials.load('Si')` | 계산 파장에서 자동 평가한 εᵣ |
 | 직접 가진 파장별 ε·μ | `wavebit.TabulatedMaterial(...)` | 사용자 표에서 보간한 스칼라 또는 텐서 εᵣ·μᵣ |
-| 외부 n+ik 표 | `wavebit.TabulatedMaterial.from_index(..., mu=...)` | 굴절률과 선택적 투자율로 유전율 계산; mu 생략 시 비자성 |
+| 외부 n+ik 표 | `wavebit.TabulatedMaterial.from_refractive_index(..., mu=...)` | 굴절률과 선택적 투자율로 유전율 계산; mu 생략 시 비자성 |
 | 이방성 유전율 텐서 | `Material(epsilon=[2.25, 4., 2.25])` 또는 3×3 배열 | 방향별 응답과 성분 간 결합; 아래 별도 예제 참고 |
 
-상수와 사용자 표는 등방성·이방성 모두 표현할 수 있습니다. 번들 n·k 자료는 비자성 등방성 재료로 평가합니다. `from_index`는 등방성 재료용이며, `mu`를 주면 자성 재료도 변환합니다. 래스터에는 평가된 숫자 배열을 넣습니다. 도형의 `material`과 층의 `background`에는 스칼라 또는 지원되는 텐서 재료·분산 객체를 할당합니다. `top`·`bot` 반무한 매질은 스칼라 재료만 받으며, 실수와 복소수 모두 사용할 수 있습니다. 입력 방법은 아래 {ref}`반무한 매질 설명 <material-half-spaces>`을 참고합니다.
+상수와 사용자 표는 등방성·이방성 모두 표현할 수 있습니다. 번들 n·k 자료는 비자성 등방성 재료로 평가합니다. `from_refractive_index`는 등방성 재료용이며, `mu`를 주면 자성 재료도 변환합니다. 래스터에는 평가된 숫자 배열을 넣습니다. 도형의 `material`과 층의 `background`에는 스칼라 또는 지원되는 텐서 재료·분산 객체를 할당합니다. `top`·`bot` 반무한 매질은 스칼라 재료만 받으며, 실수와 복소수 모두 사용할 수 있습니다. 입력 방법은 아래 {ref}`반무한 매질 설명 <material-half-spaces>`을 참고합니다.
 
 ## 실리콘을 한 번 지정하고 파장만 바꾸기
 
@@ -149,7 +149,7 @@ value = magnetic.at(850.)
 
 외부 광학 자료는 흔히 `n, k` 표로 제공됩니다. `materials.load`로 선택한 재료는 이 표의 n과 k를 보간한 뒤, 비자성 조건 μᵣ=1에서 `(n+ik)²`로 유전율을 계산합니다. 이 변환은 내부에서 처리됩니다. 직접 가진 유전율 표를 쓰면 그 변환이 필요 없습니다. 두 방식은 보간하는 양도 다르므로, 굴절률을 먼저 보간해 제곱하는 것과 유전율을 바로 보간하는 것이 표 사이에서 항상 같지는 않습니다.
 
-직접 가진 n+ik 자료는 `TabulatedMaterial.from_index(wavelengths, index)`로 명시적으로 가져옵니다. 유전율로부터 굴절률 그래프가 필요하면 비자성 조건에서 `wavebit.index_from_eps(silicon.at(wavelengths).epsilon)`을 쓸 수 있습니다. `.at`에는 파장 배열도 넣을 수 있으며, 출력 유전율도 같은 모양의 배열입니다. 별도의 굴절률 검색 함수나 재료 이름의 숨은 접미사는 사용하지 않습니다. Wavebit의 시간 규약은 `exp(−iωt)`이며, 보통의 수동 매질은 스칼라 유전율의 양의 허수부로 손실을 표현합니다.
+직접 가진 n+ik 자료는 `TabulatedMaterial.from_refractive_index(wavelengths, index)`로 명시적으로 가져옵니다. 유전율로부터 굴절률 그래프가 필요하면 비자성 조건에서 `wavebit.refractive_index_from_eps(silicon.at(wavelengths).epsilon)`을 쓸 수 있습니다. `.at`에는 파장 배열도 넣을 수 있으며, 출력 유전율도 같은 모양의 배열입니다. 별도의 굴절률 검색 함수나 재료 이름의 숨은 접미사는 사용하지 않습니다. Wavebit의 시간 규약은 `exp(−iωt)`이며, 보통의 수동 매질은 스칼라 유전율의 양의 허수부로 손실을 표현합니다.
 
 
 ## 자성 재료의 굴절률을 유전율로 바꾸기
@@ -160,13 +160,13 @@ value = magnetic.at(850.)
 εᵣ = n_complex² / μᵣ
 ```
 
-`eps_from_index`에 `mu`를 함께 주면 이 변환을 수행합니다. 예를 들어 굴절률이 2이고 상대 투자율이 1.25이면 상대 유전율은 3.2입니다. 변환에 사용한 투자율을 `Material`에도 함께 넣습니다.
+`eps_from_refractive_index`에 `mu`를 함께 주면 이 변환을 수행합니다. 예를 들어 굴절률이 2이고 상대 투자율이 1.25이면 상대 유전율은 3.2입니다. 변환에 사용한 투자율을 `Material`에도 함께 넣습니다.
 
 ```python
 n_complex = 2.0
 mu_r = 1.25
 magnetic = wavebit.Material(
-    epsilon=wavebit.eps_from_index(n_complex, mu=mu_r),
+    epsilon=wavebit.eps_from_refractive_index(n_complex, mu=mu_r),
     mu=mu_r,
 )
 # magnetic.epsilon = 3.2, magnetic.mu = 1.25
@@ -175,7 +175,7 @@ magnetic = wavebit.Material(
 파장별 굴절률 표에도 투자율을 함께 지정할 수 있습니다.
 
 ```python
-magnetic = wavebit.TabulatedMaterial.from_index(
+magnetic = wavebit.TabulatedMaterial.from_refractive_index(
     wavelengths=[800., 1000.],
     index=[2., 3.],
     mu=[1., 2.],

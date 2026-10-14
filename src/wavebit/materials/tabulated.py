@@ -12,7 +12,7 @@ from wavebit._common.backend import _concrete
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
 from wavebit.materials.response import Material
-from wavebit.materials.response import eps_from_index
+from wavebit.materials.response import eps_from_refractive_index
 from wavebit._common.backend import eager_under_torch_compile
 
 _PYTREE_REGISTERED = False
@@ -30,7 +30,7 @@ class TabulatedMaterial:
     Each sample may be a scalar, three diagonal values, or a 3x3 tensor;
     tensor entries are interpolated component by component in the same xyz frame.
 
-    ``from_index(wavelengths, index, mu=...)`` instead interpolates isotropic
+    ``from_refractive_index(wavelengths, index, mu=...)`` instead interpolates isotropic
     index and optional permeability before computing ``epsilon = index**2/mu``.
 
     ``material.at(wavelength)`` returns a numerical :class:`Material`. RCWA does
@@ -83,7 +83,7 @@ class TabulatedMaterial:
         self._register_pytree()
 
     @classmethod
-    def from_index(cls, wavelengths, index, *, mu=None):
+    def from_refractive_index(cls, wavelengths, index, *, mu=None):
         """Import an isotropic index table, optionally with relative permeability.
 
         ``index`` contains one complex scalar per wavelength. ``mu`` may be a
@@ -191,7 +191,7 @@ class TabulatedMaterial:
         mu = None if self.mu is None else interpolate(self.mu)
         epsilon = interpolate(self.values)
         if self._quantity == 'index':
-            epsilon = eps_from_index(epsilon, mu=mu)
+            epsilon = eps_from_refractive_index(epsilon, mu=mu)
         return Material(epsilon, mu,
                         _wavelength_shape=tuple(w.shape) if w.ndim else None)
 

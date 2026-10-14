@@ -15,8 +15,8 @@ The analytic modeling path is selected by passing ``structure`` as a list of lay
 Every material here is a **relative permittivity** -- ``background``, each shape's
 ``material``, and ``top`` / ``bot``.  A bare number is the scalar shorthand for
 ``wavebit.Material(epsilon=x)``.  The structures below are named by refractive index because
-that is how the printed tables label them, so ``wavebit.eps_from_index`` does the conversion
-at the point the index is written down; an index left in one of those slots is a legal,
+that is how the printed tables label them, so ``wavebit.eps_from_refractive_index`` does the
+conversion at the point the index is written down; an index left in one of those slots is a legal,
 energy-conserving, *different* structure and nothing downstream can flag it.
 
 Run from the repo root:
@@ -51,8 +51,8 @@ def make_circle_raster(N, R, n_rod, n_bg=1.0):
     """
     x = (np.arange(N) + 0.5) / N - 0.5
     X, Y = np.meshgrid(x, x)
-    layer = np.full((N, N), wavebit.eps_from_index(n_bg), dtype=complex)
-    layer[(X ** 2 + Y ** 2) <= R ** 2] = wavebit.eps_from_index(n_rod)
+    layer = np.full((N, N), wavebit.eps_from_refractive_index(n_bg), dtype=complex)
+    layer[(X ** 2 + Y ** 2) <= R ** 2] = wavebit.eps_from_refractive_index(n_rod)
     return layer[None]
 
 
@@ -71,7 +71,7 @@ def bench_tilted_dielectric():
     cfg = dict(top=1.0, bot=1.0, theta=0.0, phi=None,
                period=(1.0, 1.0), wavelength=1.6, thickness=(0.6,), psi=0.0)  # TM
     NR, ang, L, c = 3.5, np.deg2rad(30), 0.5, 0.5
-    eps_r = wavebit.eps_from_index(NR)
+    eps_r = wavebit.eps_from_refractive_index(NR)
     # `c` is the absolute centre the staircase below is built around; a shape's centre is
     # measured from the middle of the cell, which on this period-1 cell is 0.5.
     analytic = [dict(background=1.0, shapes=[dict(type='rectangle', cx=c - 0.5, cy=c - 0.5,
@@ -114,7 +114,7 @@ def bench_metallic_circle():
     # (a dropped `ly` optimises with an exactly-zero gradient).
     analytic = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
                                                   lx=2 * R,
-                                                  material=wavebit.eps_from_index(NM))])]
+                                                  material=wavebit.eps_from_refractive_index(NM))])]
     ref, _ = solve('numpy', analytic, 16, **cfg)
     print("\n" + "=" * 74)
     print(f"[2] Metallic circle (n={NM}, R={R}, TM subwavelength)")
@@ -136,7 +136,7 @@ def bench_energy_and_backends():
     # polarization angle as psi = (1 - pol)*pi/2.
     cfg = dict(top=1.0, bot=1.0, theta=np.deg2rad(5), phi=np.deg2rad(20),
                period=(1.0, 1.2), wavelength=1.5, thickness=(0.2, 0.3), psi=0.35 * np.pi)
-    eps = wavebit.eps_from_index
+    eps = wavebit.eps_from_refractive_index
     structure = [
         dict(background=eps(1.5), shapes=[dict(type='rectangle', cx=-0.1, cy=-0.1, lx=0.4,
                                                ly=0.5, angle=np.deg2rad(25),

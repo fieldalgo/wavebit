@@ -27,10 +27,10 @@ Consider two independent questions: **does the material depend on direction (iso
 | Constant ε and μ | `wavebit.Material(epsilon=4., mu=1.2)` | εᵣ and μᵣ supplied together |
 | Bundled material table | `wavebit.materials.load('Si')` | εᵣ evaluated automatically at the calculation wavelength |
 | Your wavelength-dependent ε and μ data | `wavebit.TabulatedMaterial(...)` | Scalar or tensor εᵣ and μᵣ interpolated from your table |
-| External n+ik table | `wavebit.TabulatedMaterial.from_index(..., mu=...)` | Permittivity calculated from index and optional permeability; nonmagnetic if mu is omitted |
+| External n+ik table | `wavebit.TabulatedMaterial.from_refractive_index(..., mu=...)` | Permittivity calculated from index and optional permeability; nonmagnetic if mu is omitted |
 | Anisotropic permittivity tensor | `Material(epsilon=[2.25, 4., 2.25])` or a 3×3 array | Directional response and coupling between components; see the examples below |
 
-Constants and user tables can represent both isotropic and anisotropic materials. Bundled n·k data are evaluated as nonmagnetic isotropic materials. `from_index` applies to isotropic materials and also converts magnetic materials when `mu` is supplied. A raster contains evaluated numerical arrays. Assign a scalar, supported tensor material or dispersive object to a shape’s `material` or a layer’s `background`. The `top` and `bot` half-spaces accept only scalar materials, with real or complex values. See the {ref}`half-space discussion <material-half-spaces>` below for the input details.
+Constants and user tables can represent both isotropic and anisotropic materials. Bundled n·k data are evaluated as nonmagnetic isotropic materials. `from_refractive_index` applies to isotropic materials and also converts magnetic materials when `mu` is supplied. A raster contains evaluated numerical arrays. Assign a scalar, supported tensor material or dispersive object to a shape’s `material` or a layer’s `background`. The `top` and `bot` half-spaces accept only scalar materials, with real or complex values. See the {ref}`half-space discussion <material-half-spaces>` below for the input details.
 
 ## Assign silicon once and change only the wavelength
 
@@ -149,7 +149,7 @@ Assigning this object as a material makes ε and μ change together with wavelen
 
 External optical data are often provided as `n, k` tables. For a material selected with `materials.load`, n and k are interpolated first, then converted to permittivity using `(n+ik)²` under the nonmagnetic assumption μᵣ=1. This conversion is internal. It is unnecessary when using a permittivity table directly. The two workflows also interpolate different quantities: interpolating index and then squaring it need not equal direct permittivity interpolation between samples.
 
-Import your own n+ik data explicitly with `TabulatedMaterial.from_index(wavelengths, index)`. To plot index from permittivity under the nonmagnetic assumption, use `wavebit.index_from_eps(silicon.at(wavelengths).epsilon)`. `.at` also accepts a wavelength array and returns a permittivity array with the corresponding shape. There is no separate index lookup function or hidden suffix on material names. Wavebit uses the `exp(−iωt)` time convention; ordinary passive media express loss through a positive imaginary part of scalar permittivity.
+Import your own n+ik data explicitly with `TabulatedMaterial.from_refractive_index(wavelengths, index)`. To plot index from permittivity under the nonmagnetic assumption, use `wavebit.refractive_index_from_eps(silicon.at(wavelengths).epsilon)`. `.at` also accepts a wavelength array and returns a permittivity array with the corresponding shape. There is no separate index lookup function or hidden suffix on material names. Wavebit uses the `exp(−iωt)` time convention; ordinary passive media express loss through a positive imaginary part of scalar permittivity.
 
 
 ## Converting a magnetic material’s refractive index to permittivity
@@ -160,13 +160,13 @@ For an isotropic material with complex index `n_complex`, `n_complex² = εᵣ �
 εᵣ = n_complex² / μᵣ
 ```
 
-Passing `mu` to `eps_from_index` performs this conversion. For example, index 2 and relative permeability 1.25 give relative permittivity 3.2. Include the same permeability in the resulting `Material`.
+Passing `mu` to `eps_from_refractive_index` performs this conversion. For example, index 2 and relative permeability 1.25 give relative permittivity 3.2. Include the same permeability in the resulting `Material`.
 
 ```python
 n_complex = 2.0
 mu_r = 1.25
 magnetic = wavebit.Material(
-    epsilon=wavebit.eps_from_index(n_complex, mu=mu_r),
+    epsilon=wavebit.eps_from_refractive_index(n_complex, mu=mu_r),
     mu=mu_r,
 )
 # magnetic.epsilon = 3.2, magnetic.mu = 1.25
@@ -175,7 +175,7 @@ magnetic = wavebit.Material(
 Permeability can also accompany a wavelength-dependent index table.
 
 ```python
-magnetic = wavebit.TabulatedMaterial.from_index(
+magnetic = wavebit.TabulatedMaterial.from_refractive_index(
     wavelengths=[800., 1000.],
     index=[2., 3.],
     mu=[1., 2.],

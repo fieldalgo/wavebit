@@ -49,9 +49,9 @@ properties every one of them carries.
    :no-index:
    :members:
 
-.. autofunction:: wavebit.compat.legacy.eps_from_index
+.. autofunction:: wavebit.compat.legacy.eps_from_refractive_index
 
-.. autofunction:: wavebit.compat.legacy.index_from_eps
+.. autofunction:: wavebit.compat.legacy.refractive_index_from_eps
 
 .. autofunction:: wavebit.compat.legacy.layer_thicknesses
 

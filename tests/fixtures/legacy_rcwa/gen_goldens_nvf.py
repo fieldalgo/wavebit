@@ -164,8 +164,8 @@ def main():
             continue
         for key, attr in EFFICIENCIES:
             out[f'{NAME}__{sub}__{key}'] = np.asarray(getattr(s, attr))
-        for key, attr, factor in amplitude_entries(wavebit.index_from_eps(CASE['top']),
-                                                   wavebit.index_from_eps(CASE['bot'])):
+        for key, attr, factor in amplitude_entries(wavebit.refractive_index_from_eps(CASE['top']),
+                                                   wavebit.refractive_index_from_eps(CASE['bot'])):
             out[f'{NAME}__{sub}__{key}'] = np.asarray(getattr(s, attr)) / factor / sign
 
     out[f'{NAME}__T1'] = np.asarray(solver.T1)

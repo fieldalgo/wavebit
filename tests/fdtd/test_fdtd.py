@@ -99,8 +99,8 @@ def _legacy_rcwa(**kwargs):
 WL, PERIOD, THICK = 900.0, 700.0, 300.0
 N_TOOTH, N_TOP, N_BOT = 3.5, 1.0, 1.5
 
-EPS_TOP = wavebit.eps_from_index(N_TOP)
-EPS_BOT = wavebit.eps_from_index(N_BOT)
+EPS_TOP = wavebit.eps_from_refractive_index(N_TOP)
+EPS_BOT = wavebit.eps_from_refractive_index(N_BOT)
 
 
 def _grating(duty=0.5):
@@ -112,14 +112,15 @@ def _grating(duty=0.5):
     """
     if duty != 0.5:
         n = 1000
-        col = np.full(n, wavebit.eps_from_index(N_TOP))
-        col[:int(round(duty * n))] = wavebit.eps_from_index(N_TOOTH)
+        col = np.full(n, wavebit.eps_from_refractive_index(N_TOP))
+        col[:int(round(duty * n))] = wavebit.eps_from_refractive_index(N_TOOTH)
         return col.reshape(1, 1, n)
-    return np.array([[[wavebit.eps_from_index(N_TOOTH), wavebit.eps_from_index(N_TOP)]]])
+    return np.array([[[wavebit.eps_from_refractive_index(N_TOOTH),
+                       wavebit.eps_from_refractive_index(N_TOP)]]])
 
 
 def _uniform(index=N_TOOTH, n_layers=1):
-    return np.full((n_layers, 1, 2), wavebit.eps_from_index(index))
+    return np.full((n_layers, 1, 2), wavebit.eps_from_refractive_index(index))
 
 
 def _fdtd(structure, thickness, tetm, **kw):
@@ -242,7 +243,7 @@ def test_a_multilayer_stack_matches_the_closed_form(tetm):
     """
     n_list = [2.1, 3.5, 1.45, 2.9]
     d_list = [137.3, 211.7, 89.1, 173.9]
-    structure = np.array([[[wavebit.eps_from_index(n)]] for n in n_list])
+    structure = np.array([[[wavebit.eps_from_refractive_index(n)]] for n in n_list])
     result = _fdtd(structure, d_list, tetm)
     _, _, R_a, T_a = _stack_rt(WL, N_TOP, n_list, d_list, N_BOT, tetm)
     orders = _by_order(result)
@@ -590,8 +591,8 @@ def test_the_absorber_holds_up_against_a_dense_substrate():
     not: the same code with the factor the other way up returns `T = 1.037` from a lossless
     stack and `R` wrong by 27%.
     """
-    structure = np.full((1, 1, 2), wavebit.eps_from_index(2.0))
-    eps_bot = wavebit.eps_from_index(3.5)
+    structure = np.full((1, 1, 2), wavebit.eps_from_refractive_index(2.0))
+    eps_bot = wavebit.eps_from_refractive_index(3.5)
     result = solve_fdtd(structure=structure, thickness=[THICK], top=EPS_TOP, bot=eps_bot,
                         period=[PERIOD], wavelength=WL, tetm='te', resolution=0.1,
                         n_periods=60)
@@ -616,7 +617,7 @@ def test_the_answer_does_not_depend_on_the_length_unit():
     ``R + T = 1.22`` on a discretisation identical to the visible case that looked fine.
     """
     def run(scale):
-        structure = np.full((1, 1, 2), wavebit.eps_from_index(N_TOOTH))
+        structure = np.full((1, 1, 2), wavebit.eps_from_refractive_index(N_TOOTH))
         return _by_order(solve_fdtd(
             structure=structure, thickness=[THICK * scale], top=EPS_TOP, bot=EPS_BOT,
             period=[PERIOD * scale], wavelength=WL * scale, tetm='te', n_periods=60))[0]
@@ -673,7 +674,7 @@ def test_point_sampling_costs_an_order_of_accuracy():
     bit-identical at every resolution this file uses, and an A/B between them would measure
     nothing while looking like it measured something.
     """
-    structure = np.full((1, 1, 2), wavebit.eps_from_index(N_TOOTH))
+    structure = np.full((1, 1, 2), wavebit.eps_from_refractive_index(N_TOOTH))
     _, _, R_a, _ = _stack_rt(WL, N_TOP, [N_TOOTH], [317.0], N_BOT, 'te')
     errors = {}
     for subpixel in (True, False):
@@ -758,7 +759,8 @@ def test_a_profile_with_no_mirror_symmetry_agrees_on_the_AMPLITUDES():
     * **The de-referencing phase**, which is what `|r|**2` discarded when it hid a half-cell
       monitor offset and a two-leg dispersion correction.
     """
-    column = np.array([wavebit.eps_from_index(N_TOOTH), wavebit.eps_from_index(2.0), 1.0, 1.0])
+    column = np.array([wavebit.eps_from_refractive_index(N_TOOTH),
+                       wavebit.eps_from_refractive_index(2.0), 1.0, 1.0])
     structure = column.reshape(1, 1, 4)
 
     reference = _rcwa(structure, [THICK], 'te')
@@ -1277,7 +1279,7 @@ def test_the_default_order_window_follows_the_incidence():
     is what ordinary absorption looks like.
     """
     theta = np.deg2rad(60.0)
-    eps_bot = wavebit.eps_from_index(2.0)
+    eps_bot = wavebit.eps_from_refractive_index(2.0)
     result = solve_fdtd(structure=_grating(), thickness=[THICK], top=EPS_TOP, bot=eps_bot,
                         period=[PERIOD], wavelength=WL, tetm='te', theta=theta,
                         resolution=0.1, n_periods=140)
@@ -1880,7 +1882,7 @@ def test_the_coarse_cells_refine_with_the_fine_ones():
 
 def _record(n_index, record_field=1, **over):
     """A uniform medium, so the recorded front has one speed to measure rather than two."""
-    eps = wavebit.eps_from_index(n_index)
+    eps = wavebit.eps_from_refractive_index(n_index)
     kw = dict(structure=np.full((1, 1, 2), eps), thickness=[100.], top=eps, bot=eps,
               period=[PERIOD], wavelength=WL, tetm='te', theta=0.0, resolution=0.05,
               n_periods=60, record_field=record_field, return_diagnostics=True)
@@ -2038,8 +2040,8 @@ def _crossed_grid(theta_deg=20.0, phi_deg=30.0, n_y=8, n_x=8, resolution=0.05):
     """
     from wavebit.fdtd._periodic.legacy import _Grid
     raster = np.full((1, n_y, n_x), EPS_TOP, dtype=complex)
-    raster[0, :n_y // 2, :n_x // 2] = wavebit.eps_from_index(N_TOOTH)
-    raster[0, n_y // 2:, :n_x // 4] = wavebit.eps_from_index(2.0)
+    raster[0, :n_y // 2, :n_x // 2] = wavebit.eps_from_refractive_index(N_TOOTH)
+    raster[0, n_y // 2:, :n_x // 4] = wavebit.eps_from_refractive_index(2.0)
     return _Grid(WL, PERIOD, raster, [THICK], EPS_TOP, EPS_BOT, resolution, 12, 0.99, True,
                  theta=np.deg2rad(theta_deg), phi=np.deg2rad(phi_deg),
                  mu_top=1.0 + 0j, mu_bot=1.0 + 0j, period_y=PERIOD)
@@ -2080,7 +2082,7 @@ def test_a_crossed_raster_without_a_y_period_is_refused():
     """Two periods, and assuming they are equal is a silently square cell."""
     from wavebit.fdtd._periodic.legacy import _Grid
     raster = np.full((1, 4, 4), EPS_TOP, dtype=complex)
-    raster[0, :2, :2] = wavebit.eps_from_index(N_TOOTH)
+    raster[0, :2, :2] = wavebit.eps_from_refractive_index(N_TOOTH)
     with pytest.raises(ValueError, match='needs a y period'):
         _Grid(WL, PERIOD, raster, [THICK], EPS_TOP, EPS_BOT, 0.05, 12, 0.99, True,
               theta=0.0, mu_top=1.0 + 0j, mu_bot=1.0 + 0j)
@@ -2168,8 +2170,8 @@ def _crossed_raster(n=16, hi=N_TOOTH, lo=2.0):
     transpose, is the same either way.
     """
     raster = np.full((1, n, n), EPS_TOP, dtype=complex)
-    raster[0, :n // 2, :n // 2] = wavebit.eps_from_index(hi)
-    raster[0, n // 2:, :n // 4] = wavebit.eps_from_index(lo)
+    raster[0, :n // 2, :n // 2] = wavebit.eps_from_refractive_index(hi)
+    raster[0, n // 2:, :n // 4] = wavebit.eps_from_refractive_index(lo)
     return raster
 
 
@@ -2215,7 +2217,7 @@ def test_a_crossed_grating_reduces_to_the_2d_path_when_it_is_y_invariant():
     `period_y` is small enough that no y order propagates (`wl/Py > 2n`), so the y axis is
     exercised without adding physics the 2D path cannot express.
     """
-    column = np.array([wavebit.eps_from_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
+    column = np.array([wavebit.eps_from_refractive_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
     flat = column.reshape(1, 1, 16)
     stacked = np.repeat(column.reshape(1, 1, 16), 6, axis=1)
     common = dict(thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, wavelength=WL,
@@ -2255,7 +2257,7 @@ def test_a_crossed_raster_answers_the_polarisation_it_was_asked_for(tetm):
     identically zero when only the p leg is driven -- and a shape-only assertion on it saw
     nothing.
     """
-    column = np.array([wavebit.eps_from_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
+    column = np.array([wavebit.eps_from_refractive_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
     common = dict(thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, wavelength=WL,
                   resolution=0.05, n_periods=100, theta=0.0, tetm=tetm)
     flat = solve_fdtd(structure=column.reshape(1, 1, 16), period=[PERIOD], **common)
@@ -2286,7 +2288,7 @@ def test_the_record_of_a_crossed_run_carries_the_field_that_was_driven():
     y-invariant raster while the whole field sat in `field_ex`. An all-zero array called `the
     field` is worse than no array.
     """
-    column = np.array([wavebit.eps_from_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
+    column = np.array([wavebit.eps_from_refractive_index(N_TOOTH)] * 8 + [EPS_TOP] * 8)
     _, diag = solve_fdtd(structure=np.repeat(column.reshape(1, 1, 16), 6, axis=1),
                          thickness=[THICK], top=EPS_TOP, bot=EPS_BOT, period=[PERIOD, 200.0],
                          wavelength=WL, tetm='te', theta=0.0, resolution=0.05, n_periods=60,

@@ -19,7 +19,7 @@ def job(material=None, raster=None):
 
 @pytest.mark.parametrize('index', [False, True])
 def test_table_roundtrip_preserves_unit_interpolation_and_permeability(index):
-    make = TabulatedMaterial.from_index if index else TabulatedMaterial
+    make = TabulatedMaterial.from_refractive_index if index else TabulatedMaterial
     material = make((500.,1000.), (2.+.1j,3.+.2j), mu=(1.1,1.3), wavelength_unit='nm')
     original = job(material)
     restored = Job.from_json(original.to_json())

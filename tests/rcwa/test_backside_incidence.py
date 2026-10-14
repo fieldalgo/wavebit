@@ -48,13 +48,13 @@ from wavebit.compat import legacy as _legacy_wavebit
 import numpy as np
 import pytest
 
-from wavebit import eps_from_index
+from wavebit import eps_from_refractive_index
 
 from tests.rcwa.test_lossy_media import analytic_r, analytic_t
 
 # Same arrangement as ``test_lossy_media``: the stacks stay lists of refractive INDEX, since
-# the Airy oracles imported above are written that way, and `eps_from_index` is applied where
-# each one enters wavebit.
+# the Airy oracles imported above are written that way, and `eps_from_refractive_index` is applied
+# where each one enters wavebit.
 
 WL = 500.0
 AU = 0.18 + 3.0j          # gold at 500nm — strongly absorbing
@@ -77,17 +77,17 @@ IDS = [f'{p}_theta{t}' for p, t in INCIDENCE]
 
 # A 1D grating stack that is asymmetric in z, with an absorbing layer, so nothing about it
 # can hide a side mix-up: two patterned layers of different duty cycle and index.
-_GRATING = eps_from_index(np.array([
+_GRATING = eps_from_refractive_index(np.array([
     [[2.2 + 0.3j] * 8 + [1.0] * 4],
     [[3.0] * 6 + [1.0] * 6],
 ]))
 #: The substrate's index, kept beside its permittivity: the reciprocity angle below is a
 #: Snell relation and needs the index, while the constructor takes the square.
 N_SUB = 2.0
-GRATING_KW = dict(backend='numpy', top=1.0, bot=eps_from_index(N_SUB), truncation_order=10, period=[0.7],
+GRATING_KW = dict(backend='numpy', top=1.0, bot=eps_from_refractive_index(N_SUB), truncation_order=10, period=[0.7],
                   wavelength=0.85, structure=_GRATING, thickness=[0.22, 0.15])
 
-_GRATING_LOSSLESS = eps_from_index(np.array([
+_GRATING_LOSSLESS = eps_from_refractive_index(np.array([
     [[2.2] * 8 + [1.0] * 4],
     [[3.0] * 6 + [1.0] * 6],
 ]))
@@ -96,19 +96,19 @@ _GRATING_LOSSLESS = eps_from_index(np.array([
 def _solver(ns, ds, theta, tetm, path, algo, side):
     """A solver on the *scene* ``ns`` (top..bottom), illuminated from ``side``."""
     layers = ns[1:-1][::-1]
-    common = dict(backend='numpy', layer_algorithm=algo, top=eps_from_index(ns[0]),
-                  bot=eps_from_index(ns[-1]), theta=theta,
+    common = dict(backend='numpy', layer_algorithm=algo, top=eps_from_refractive_index(ns[0]),
+                  bot=eps_from_refractive_index(ns[-1]), theta=theta,
                   wavelength=WL, thickness=ds[::-1], incidence_side=side)
     if path == '1d':
         return _legacy_wavebit.rcwa(tetm=tetm, truncation_order=0, period=[WL * 2],
-                              structure=eps_from_index(
+                              structure=eps_from_refractive_index(
                                   np.array([[[n, n]] for n in layers])), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
     return _legacy_wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
                           truncation_order=[0, 0] if path == '2d' else 0,
                           period=[WL * 2, WL * 2],
-                          structure=eps_from_index(np.array(cell)), **common)
+                          structure=eps_from_refractive_index(np.array(cell)), **common)
 
 
 def _amps(res, tetm):

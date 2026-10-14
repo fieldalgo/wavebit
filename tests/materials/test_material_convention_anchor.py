@@ -58,8 +58,8 @@ def _api_material(eps):
     Before the flip this was ``np.sqrt(np.asarray(eps, dtype=complex))``, and the square root
     is the thing that went away: converting an index to a permittivity is unambiguous, while
     the other direction is a branch choice, and the half-space root is on this project's
-    standing list of traps. It survives as :func:`wavebit.index_from_eps` for callers that
-    genuinely need an index, where the branch is argued once instead of at every call site.
+    standing list of traps. It survives as :func:`wavebit.refractive_index_from_eps` for callers
+    that genuinely need an index, where the branch is argued once instead of at every call site.
     """
     return eps
 

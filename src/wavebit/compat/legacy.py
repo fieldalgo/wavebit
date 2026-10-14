@@ -122,8 +122,8 @@ from wavebit._common.periodic import Layer
 from wavebit._common.periodic import Stack
 from wavebit._common.periodic import Incidence
 from wavebit.materials.response import Material
-from wavebit.materials.response import eps_from_index
-from wavebit.materials.response import index_from_eps
+from wavebit.materials.response import eps_from_refractive_index
+from wavebit.materials.response import refractive_index_from_eps
 from wavebit._common.periodic import layer_thicknesses
 from wavebit.materials.tabulated import TabulatedMaterial
 # The type `eps_conv_matrices()` hands back and `solve_conv()` takes: a NamedTuple, so the five
@@ -202,7 +202,7 @@ __all__ = [
     'sample_fdtd_fields', 'fdtd_poynting', 'fit_fdtd_modes', 'fdtd_grid',
     'Answers', 'Backend', 'Tetm', 'FourierCoefficients', 'Factorization', 'Formulation',
     'NormalMethod', 'Projector', 'Nesting',
-    'Layer', 'Stack', 'Incidence', 'Material', 'TabulatedMaterial', 'eps_from_index', 'index_from_eps',
+    'Layer', 'Stack', 'Incidence', 'Material', 'TabulatedMaterial', 'eps_from_refractive_index', 'refractive_index_from_eps',
     'ConvMatrices', 'TensorConvMatrices', 'ConformingNVF', 'AffineProfileNVF', 'CartesianRectangleNVF', 'CartesianRectanglePairNVF',
     'CartesianPairOpeningPlan', 'CartesianPairTransmissionGalerkinGapCell',
     'ScatteringMatrix', 'Port',

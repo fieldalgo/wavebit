@@ -43,7 +43,7 @@ import time
 
 import numpy as np
 
-from wavebit import eps_from_index
+from wavebit import eps_from_refractive_index
 from wavebit._common.conventions import boundary_kz, order_azimuth
 from wavebit.rcwa._engine.factorization import _nvf_assemble, fourier2d_piecewise_constant, fourier2d_pointwise, normal_vector_field, to_conv_mat_raster_nvf
 from wavebit.rcwa._engine.solve_1d import _block, _diag, final_matching
@@ -255,8 +255,8 @@ def make_cell(kind, ngrid=512, n_ridge=3.48, n_bg=1.0, fill=0.4, rotation=0.):
     """Square-lattice pillar with a fixed fill factor, as a **permittivity** raster.
 
     The two materials are named by refractive index because that is how the structures are
-    labelled in the tables below and in the write-up, and :func:`wavebit.eps_from_index` is
-    the conversion.  Written out rather than folded into the literals so the quantity is
+    labelled in the tables below and in the write-up, and :func:`wavebit.eps_from_refractive_index`
+    is the conversion. Written out rather than folded into the literals so the quantity is
     visible at the point the datasheet number arrives: a raster is what
     ``to_conv_mat_raster_nvf`` and ``normal_vector_field`` take, and both read permittivity
     now -- the ``n ** 2`` that used to sit inside them is gone, so an index left here is a
@@ -279,7 +279,7 @@ def make_cell(kind, ngrid=512, n_ridge=3.48, n_bg=1.0, fill=0.4, rotation=0.):
     else:
         raise ValueError(kind)
 
-    return np.where(mask, eps_from_index(n_ridge), eps_from_index(n_bg))
+    return np.where(mask, eps_from_refractive_index(n_ridge), eps_from_refractive_index(n_bg))
 
 
 # ------------------------------------------------------------------ driver

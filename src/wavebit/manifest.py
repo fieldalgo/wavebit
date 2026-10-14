@@ -174,7 +174,10 @@ from wavebit.compat._jobs_v1 import SPEC_VERSION
 #: Version 18 adds rotated ellipse cells and live centre/axis/angle derivatives.
 #: Version 19 adds live periodic painting of multiple rotated area rectangles.
 # '20': integrate the develop RCWA contract and general/periodic FDTD capabilities.
-MANIFEST_VERSION = '20'
+# '21': the index conversions say what index they mean: eps_from_refractive_index,
+# refractive_index_from_eps and TabulatedMaterial.from_refractive_index (2026-10-14). Same
+# argument as '12': these are names a consumer calls, and the old ones are gone, not aliased.
+MANIFEST_VERSION = '21'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -254,7 +257,7 @@ MATERIAL_QUANTITY = {
     # while mu=1.0 names it and builds that path for the same numbers. The distinction is
     # structural so that it can be read inside a jax.jit trace, where a value cannot be.
     'non_magnetic_spelling': 'mu=None',
-    'conversions': ('eps_from_index', 'index_from_eps'),
+    'conversions': ('eps_from_refractive_index', 'refractive_index_from_eps'),
     #: No `retired` map since 2026-08-26: the retired-spelling machinery it was derived
     #: from is gone. wavebit has never been released, so the reader those messages
     #: addressed does not exist yet; the renames belong in the first release's notes.
@@ -802,7 +805,7 @@ def manifest() -> dict:
             'catalog': 'wavebit.materials.catalog.load',
             'catalog_units': ['nm', 'um', 'mm', 'm'],
             'evaluation': 'material.at(wavelength): scalar or array',
-            'index_import': 'from_index(wavelengths, index, mu=None): isotropic index**2/mu',
+            'index_import': 'from_refractive_index(wavelengths, index, mu=None): isotropic index**2/mu',
             'index_permeability': 'constant scalar or scalar samples on the index wavelength grid',
             'automatic_slots': ['top', 'bot', 'layer.background', 'shape.material'],
             'backends': ['numpy', 'jax', 'torch'],

@@ -438,8 +438,8 @@ def test_the_published_conversions_exist_and_invert_each_other():
     """``conversions`` names the way out of the flip; a name that is not exported is no way out."""
     for name in MATERIAL_QUANTITY['conversions']:
         assert hasattr(wavebit, name), f'manifest names wavebit.{name}, which is not exported'
-    assert wavebit.eps_from_index(3.5) == 12.25
-    assert complex(wavebit.index_from_eps(12.25)) == pytest.approx(3.5)
+    assert wavebit.eps_from_refractive_index(3.5) == 12.25
+    assert complex(wavebit.refractive_index_from_eps(12.25)) == pytest.approx(3.5)
 
 
 # ------------------------------------------------ the results contract, against a real result

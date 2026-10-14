@@ -602,10 +602,10 @@ decaying branch and the lossless-limit power direction have to be chosen consist
 
 The call sites are the two solvers in `solve_1d.py`, `solve_2d.py`, `solve_2d_first_order.py`, and
 the two computation paths in `scattering.py`. The `Re(kz)>0` check in `_incident_flux` has to
-change too. Changing the meaning of a general conversion function such as `index_from_eps`
-unconditionally, or substituting the same rule into `mode_q` for internal finite layers, is
-outside the scope of the fix. The boundary conditions of half-spaces and the mode
-representation of internal finite layers have to be kept distinct.
+change too. Changing the meaning of a general conversion function such as
+`refractive_index_from_eps` unconditionally, or substituting the same rule into `mode_q` for
+internal finite layers, is outside the scope of the fix. The boundary conditions of half-spaces and
+the mode representation of internal finite layers have to be kept distinct.
 
 ### 5. Order of the fix and pass criteria
 

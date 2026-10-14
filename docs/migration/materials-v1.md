@@ -250,12 +250,12 @@ permeability are both known at the same wavelength, convert explicitly:
 ```python
 n_complex, mu_r = 2.+0.1j, 1.25
 material = wavebit.Material(
-    epsilon=wavebit.eps_from_index(n_complex, mu=mu_r),
+    epsilon=wavebit.eps_from_refractive_index(n_complex, mu=mu_r),
     mu=mu_r,
 )
 ```
 
-`eps_from_index(n, mu=...)` computes `n**2 / mu`; omitting `mu` retains the
+`eps_from_refractive_index(n, mu=...)` computes `n**2 / mu`; omitting `mu` retains the
 non-magnetic `n**2` conversion. This is a scalar isotropic relation, also applied
 elementwise to batches. It does not recover anisotropic tensors from an index.
 Permeability must be finite and nonzero: invalid values raise eagerly, or become
@@ -264,7 +264,7 @@ NaN at invalid entries of a traced JAX array.
 For wavelength-dependent index data, provide permeability on the same grid:
 
 ```python
-magnetic = wavebit.TabulatedMaterial.from_index(
+magnetic = wavebit.TabulatedMaterial.from_refractive_index(
     wavelengths=[800., 1000.],
     index=[2., 3.],
     mu=[1., 2.],
@@ -306,7 +306,7 @@ crystal = wavebit.TabulatedMaterial(
 # Assign crystal to a background or shape; it is evaluated at each solve wavelength.
 ```
 
-`from_index` is an isotropic scalar import, optionally including scalar mu.
+`from_refractive_index` is an isotropic scalar import, optionally including scalar mu.
 Tensor permeability is rejected on this path. A general tensor cannot be
 specified by one refractive index. For tensor data, `.at(wavelengths).epsilon`
 appends `(3,)` or `(3, 3)` to the wavelength-array shape. Such a spectrum is for
@@ -315,16 +315,16 @@ analysis; assign the table itself or evaluate one wavelength for a region.
 For external data published as refractive index, import it explicitly:
 
 ```python
-material = wavebit.TabulatedMaterial.from_index(
+material = wavebit.TabulatedMaterial.from_refractive_index(
     wavelengths=[800., 1000.], index=[2.+0.1j, 3.+0.3j],
 )
 ```
 
 This non-magnetic model interpolates n and k before computing `(n + 1j*k)**2`.
 The bundled catalog follows this convention. Interpolating epsilon directly is
-a different model between samples. With `mu=...`, `from_index` also interpolates
+a different model between samples. With `mu=...`, `from_refractive_index` also interpolates
 permeability and divides the squared index by that value. Solver inputs remain epsilon and mu.
-`index_from_eps(value.epsilon)` is available for derived index plots; no separate
+`refractive_index_from_eps(value.epsilon)` is available for derived index plots; no separate
 index lookup or name suffix is needed. Removing absorption changes the physical
 model and should be explicit in the supplied data.
 

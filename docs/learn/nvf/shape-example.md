@@ -23,7 +23,7 @@ The code below is the same as the {download}`complete Example 1 file <../../../e
 
 ## Input conventions to check
 
-**Material numbers mean relative permittivity ε, not refractive index n.** The example's `material=4.` corresponds to n=2 for a nonmagnetic material. `bot=2.25` corresponds to n=1.5. Convert an index using `wavebit.eps_from_index(n)` when necessary. With the `exp(−iωt)` time convention, passive loss ordinarily uses `Im(ε)>0`.
+**Material numbers mean relative permittivity ε, not refractive index n.** The example's `material=4.` corresponds to n=2 for a nonmagnetic material. `bot=2.25` corresponds to n=1.5. Convert an index using `wavebit.eps_from_refractive_index(n)` when necessary. With the `exp(−iωt)` time convention, passive loss ordinarily uses `Im(ε)>0`.
 
 For `circle`, `lx=320.` is the **diameter**, not the radius. Shape coordinates `cx=0, cy=0` refer to the cell center. `thickness` lists patterned-layer thicknesses from bottom to top. `top` and `bot` are the semi-infinite media above and below. Use the same length unit for `wavelength`, `period`, `thickness`, and shape dimensions; angles are in radians.
 

@@ -228,7 +228,7 @@ class TabulatedMaterial(LegacyTabulatedMaterial):
         self._register_pytree()
 
     @classmethod
-    def from_index(cls, wavelengths, index, *, wavelength_unit, mu=None):
+    def from_refractive_index(cls, wavelengths, index, *, wavelength_unit, mu=None):
         from wavebit.units import Units
         unit = Units(length=wavelength_unit)
         obj = object.__new__(cls)
@@ -279,4 +279,4 @@ class TabulatedMaterial(LegacyTabulatedMaterial):
             raise ValidationError('unknown table field', code='unknown_field', path='material', actual=sorted(set(changes)-allowed))
         values = dict(wavelengths=self.wavelengths, **{'epsilon' if self._quantity=='epsilon' else 'index':self.values}, mu=self.mu, wavelength_unit=self.wavelength_unit)
         values.update(changes)
-        return (type(self).from_index if self._quantity=='index' else type(self))(**values)
+        return (type(self).from_refractive_index if self._quantity=='index' else type(self))(**values)

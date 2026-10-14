@@ -39,13 +39,13 @@ from wavebit.compat import legacy as _legacy_wavebit
 import numpy as np
 import pytest
 
-from wavebit import eps_from_index
+from wavebit import eps_from_refractive_index
 
 # Every stack in this file is written as a list of refractive INDICES, and stays that way:
 # the Airy/transfer oracles below are written in n, and restating them in permittivity would
 # make them inherit the quantity the solver takes -- which is the one thing an oracle must
-# not do. `eps_from_index` is applied at each call into wavebit instead, which is exactly the
-# migration a user with an nk table performs.
+# not do. `eps_from_refractive_index` is applied at each call into wavebit instead, which is exactly
+# the migration a user with an nk table performs.
 
 WL = 500.0
 AU = 0.18 + 3.0j          # gold at 500nm — strongly absorbing
@@ -125,9 +125,10 @@ def analytic_r(ns, thicknesses, wavelength, theta, tetm):
 
 def solver_RT(ns, thicknesses, wavelength, theta, tetm, algo='ETM'):
     """Total ``(R, T)`` of the same stack through the solver (uniform layers, truncation_order=0)."""
-    structure = eps_from_index(np.array([[[n, n]] for n in ns[1:-1][::-1]]))
+    structure = eps_from_refractive_index(np.array([[[n, n]] for n in ns[1:-1][::-1]]))
     solver = _legacy_wavebit.rcwa(backend='numpy', layer_algorithm=algo, tetm=tetm,
-                           top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+                           top=eps_from_refractive_index(ns[0]),
+                           bot=eps_from_refractive_index(ns[-1]),
                            theta=theta, truncation_order=0, wavelength=wavelength,
                            period=[wavelength * 2], structure=structure,
                            thickness=thicknesses[::-1])
@@ -229,8 +230,8 @@ def test_absorbing_layer_identical_to_its_substrate(tetm, theta):
     ns, ds = [1.0, AU, AU], [20.0]
     want = abs(analytic_r(ns, ds, WL, theta, tetm)) ** 2   # == the bare air/gold interface
 
-    structure = eps_from_index(np.array([[[AU, AU]]]))
-    common = dict(backend='numpy', tetm=tetm, top=1.0, bot=eps_from_index(AU), theta=theta, truncation_order=0,
+    structure = eps_from_refractive_index(np.array([[[AU, AU]]]))
+    common = dict(backend='numpy', tetm=tetm, top=1.0, bot=eps_from_refractive_index(AU), theta=theta, truncation_order=0,
                   wavelength=WL, period=[WL * 2], structure=structure, thickness=ds)
     tmm = _legacy_wavebit.rcwa(layer_algorithm='ETM', **common).solve()
     smm = _legacy_wavebit.rcwa(layer_algorithm='SMM', **common).solve()
@@ -247,8 +248,8 @@ def solver_R_analytic(ns, thicknesses, wavelength, theta, tetm):
     solve (the parametric path always does), so the polarization comes in as ``psi`` rather than
     ``tetm``, and the period must be 2D.
     """
-    structure = [dict(background=eps_from_index(n), shapes=[]) for n in ns[1:-1][::-1]]
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+    structure = [dict(background=eps_from_refractive_index(n), shapes=[]) for n in ns[1:-1][::-1]]
+    solver = _legacy_wavebit.rcwa(backend='numpy', top=eps_from_refractive_index(ns[0]), bot=eps_from_refractive_index(ns[-1]),
                             theta=theta, phi=0.0,
                             psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=0,
                             wavelength=wavelength, period=[wavelength * 2, wavelength * 2],
@@ -308,7 +309,7 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
     resolver is for.
     """
     P = 400.0
-    eps = eps_from_index(n)
+    eps = eps_from_refractive_index(n)
     shapes = [dict(type='rectangle', cx=-0.25 * P, cy=0.0, lx=0.50 * P, ly=1.0 * P,
                    material=eps),
               dict(type='rectangle', cx=0.20 * P, cy=0.0, lx=0.60 * P, ly=1.0 * P,
@@ -361,9 +362,9 @@ def test_complex_n_bot_keeps_full_precision_on_every_backend(backend):
     ns, ds = [1.0, 1.5, AU], [20.0]
     want = solver_R(ns, ds, WL, 0.3, 'te')                  # numpy reference
 
-    structure = eps_from_index(np.array([[[n, n] for n in ns[1:-1][::-1]]][0])[None])
-    solver = _legacy_wavebit.rcwa(backend=backend, tetm='te', top=eps_from_index(ns[0]),
-                           bot=eps_from_index(ns[-1]), theta=0.3,
+    structure = eps_from_refractive_index(np.array([[[n, n] for n in ns[1:-1][::-1]]][0])[None])
+    solver = _legacy_wavebit.rcwa(backend=backend, tetm='te', top=eps_from_refractive_index(ns[0]),
+                           bot=eps_from_refractive_index(ns[-1]), theta=0.3,
                            truncation_order=2, wavelength=WL, period=[WL * 2], structure=structure,
                            thickness=ds)
     got = float(np.sum(np.asarray(solver.solve().R)))
@@ -421,19 +422,19 @@ def solver_amps(ns, thicknesses, wavelength, theta, tetm, path, algo='ETM'):
     footnote that conversion now lives without.)
     """
     layers = ns[1:-1][::-1]
-    common = dict(backend='numpy', layer_algorithm=algo, top=eps_from_index(ns[0]),
-                  bot=eps_from_index(ns[-1]), theta=theta,
+    common = dict(backend='numpy', layer_algorithm=algo, top=eps_from_refractive_index(ns[0]),
+                  bot=eps_from_refractive_index(ns[-1]), theta=theta,
                   wavelength=wavelength, thickness=thicknesses[::-1])
     if path == '1d':
         solver = _legacy_wavebit.rcwa(tetm=tetm, truncation_order=0, period=[wavelength * 2],
-                                structure=eps_from_index(
+                                structure=eps_from_refractive_index(
                                     np.array([[[n, n]] for n in layers])), **common)
     else:
         cell = ([[[n, n]] for n in layers] if path == 'conical'
                 else [[[n, n], [n, n]] for n in layers])
         solver = _legacy_wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=[0, 0],
                                 period=[wavelength * 2, wavelength * 2],
-                                structure=eps_from_index(np.array(cell)), **common)
+                                structure=eps_from_refractive_index(np.array(cell)), **common)
     res = solver.solve().incident
     r = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     t = np.asarray(res.t_s if tetm == 'te' else res.t_p).ravel()
@@ -465,16 +466,17 @@ def test_absorbing_incident_reflectance_matches_airy(beta, algo):
     ns, ds = [n_top, 2.0, 1.0], [30.0]
 
     def eff(path):
-        common = dict(backend='numpy', top=eps_from_index(ns[0]), bot=eps_from_index(ns[-1]),
+        common = dict(backend='numpy', top=eps_from_refractive_index(ns[0]),
+                      bot=eps_from_refractive_index(ns[-1]),
                       theta=theta, wavelength=WL, thickness=ds, layer_algorithm=algo)
         if path == '1d':
             s = _legacy_wavebit.rcwa(tetm='tm', truncation_order=0, period=[WL * 2],
-                               structure=eps_from_index(
+                               structure=eps_from_refractive_index(
                                    np.array([[[n, n]] for n in ns[1:-1][::-1]])), **common)
         else:
             s = _legacy_wavebit.rcwa(phi=0.0, psi=0.0, truncation_order=[0, 0],
                                period=[WL * 2, WL * 2],
-                               structure=eps_from_index(
+                               structure=eps_from_refractive_index(
                                    np.array([[[n, n], [n, n]] for n in ns[1:-1][::-1]])), **common)
         res = s.solve()
         return float(np.sum(np.asarray(res.R))), res

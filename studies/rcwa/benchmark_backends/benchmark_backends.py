@@ -30,8 +30,8 @@ Two paths are swept, because they differentiate different things:
 Every material below is a **relative permittivity**: ``structure`` (raster pixels, or a shape
 layer's background and each shape's own ``material``) and the ``top`` / ``bot`` half-spaces
 alike.
-The structures are written from refractive indices through ``wavebit.eps_from_index`` so the
-scenes stay the ones these timings were taken on -- the quantity changed with the keyword
+The structures are written from refractive indices through ``wavebit.eps_from_refractive_index`` so
+the scenes stay the ones these timings were taken on -- the quantity changed with the keyword
 names, and a datasheet index left in a material slot is a legal, different medium.
 
 Run from the repo root::
@@ -104,12 +104,12 @@ STRATEGIES = {
 
 # The three media every structure below is built from, as **relative permittivity** -- named
 # by the refractive index they came from, because that is how they were written before the
-# flip and keeping the timings comparable means keeping the same scenes. `eps_from_index` is
-# `n**2` and nothing else; it is spelled out rather than inlined as a literal because the
+# flip and keeping the timings comparable means keeping the same scenes. `eps_from_refractive_index`
+# is `n**2` and nothing else; it is spelled out rather than inlined as a literal because the
 # rounding matters elsewhere in this repository and a tidy decimal is not the same number.
-EPS_HIGH = wavebit.eps_from_index(3.5)          # 12.25
-EPS_MID = wavebit.eps_from_index(2.0)           # 4.0
-EPS_LOW = wavebit.eps_from_index(1.0)           # 1.0
+EPS_HIGH = wavebit.eps_from_refractive_index(3.5)  # 12.25
+EPS_MID = wavebit.eps_from_refractive_index(2.0)   # 4.0
+EPS_LOW = wavebit.eps_from_refractive_index(1.0)   # 1.0
 
 #: TE, as a polarization angle. This was `pol=0`, which additionally declared a solver path;
 #: `psi` says only the angle, which is what these 2D scenes can use.

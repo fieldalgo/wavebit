@@ -19,7 +19,7 @@ def _study(name):
 def _stub_tree(root, *, layout='flat', compatibility=False):
     package = root / ('src' if layout == 'src' else '') / 'wavebit'
     package.mkdir(parents=True)
-    (package / '__init__.py').write_text('MARKER = "selected package"\neps_from_index = lambda n: n**2\n')
+    (package / '__init__.py').write_text('MARKER = "selected package"\neps_from_refractive_index = lambda n: n**2\n')
     enums = ('from enum import IntEnum\nclass Backend(IntEnum):\n'
              '    NUMPY=0\n    JAX=1\n    TORCH=2\n'
              'class Formulation:\n    pass\n')
@@ -31,7 +31,7 @@ def _stub_tree(root, *, layout='flat', compatibility=False):
         compat = package / 'compat'
         compat.mkdir()
         (compat / '__init__.py').write_text('')
-        (compat / 'legacy.py').write_text('MARKER = "compatibility API"\neps_from_index = lambda n: n**2\n')
+        (compat / 'legacy.py').write_text('MARKER = "compatibility API"\neps_from_refractive_index = lambda n: n**2\n')
     return package
 
 

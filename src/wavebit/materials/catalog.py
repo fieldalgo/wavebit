@@ -80,4 +80,4 @@ def _load(identifier, wavelength_unit):
     if data.ndim != 2 or data.shape[1] != 3:
         raise ValueError(f'bundled material {identifier!r} must have wavelength, n, k columns')
     wavelengths = data[:, 0] * (_UNIT_METRES['nm'] / _UNIT_METRES[wavelength_unit])
-    return TabulatedMaterial.from_index(wavelengths, data[:, 1] + 1j*data[:, 2], wavelength_unit=wavelength_unit)
+    return TabulatedMaterial.from_refractive_index(wavelengths, data[:, 1] + 1j*data[:, 2], wavelength_unit=wavelength_unit)

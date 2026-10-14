@@ -19,8 +19,8 @@ def _index(eps):
     generator instead would have to be repeated in each of the three that drive this class, and
     a copy that must stay identical is a copy that will not.
 
-    :func:`wavebit.index_from_eps` is the principal root, which is the passive branch under this
-    project's ``e^{-iwt}``: ``Im(eps) >= 0`` (loss) maps into the first quadrant, so
+    :func:`wavebit.refractive_index_from_eps` is the principal root, which is the passive branch
+    under this project's ``e^{-iwt}``: ``Im(eps) >= 0`` (loss) maps into the first quadrant, so
     ``Im(n) >= 0`` (loss again). That is the same spelling RETICOLO uses, and it is checked
     rather than assumed -- on the ``lossy`` field case ``res3``'s index map comes back as
     ``2+0.05j``, exactly what this returns for ``eps = (2+0.05j)**2``.
@@ -30,7 +30,7 @@ def _index(eps):
     missed one would be silent: ``eps = 9`` read as ``n = 9`` is a legal, energy-conserving
     medium, and the oracle would then be validating the solver against a different structure.
     """
-    return wavebit.index_from_eps(eps)
+    return wavebit.refractive_index_from_eps(eps)
 
 
 class Reticolo:
@@ -260,10 +260,10 @@ if __name__ == '__main__':
         'period': [1000],
         'factorization': 'nvf',
         # Permittivity, like every other scene in the tree. Written through
-        # `eps_from_index` rather than as squared literals because the numbers below came
+        # `eps_from_refractive_index` rather than as squared literals because the numbers below came
         # from an index table, and that is what the migration looks like at a call site --
         # the conversion visible, rather than four rounded constants nobody can check.
-        'structure': wavebit.eps_from_index(np.array(
+        'structure': wavebit.eps_from_refractive_index(np.array(
             [
                 [[3.1, 1.1, 1.2, 1.6, 3.1]],
             ]

@@ -63,7 +63,7 @@ HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE.parents[1]))   # repo root, for `import wavebit`
 sys.path.insert(0, str(HERE))              # the bridge and the test module beside it
 
-from wavebit import index_from_eps         # noqa: E402  (after the sys.path lines above)
+from wavebit import refractive_index_from_eps  # noqa: E402  (after the sys.path lines above)
 
 # No default: where RETICOLO is installed is a property of the machine, not of this project,
 # and a default that happens to match one checkout silently resolves to nothing everywhere else.
@@ -89,7 +89,7 @@ def _index(eps):
     an exact zero. An absorbing ambient would need the complex index, and the count below would
     need a different criterion than ``|k_par| < n`` anyway.
     """
-    return float(np.real(index_from_eps(eps)))
+    return float(np.real(refractive_index_from_eps(eps)))
 
 
 def _propagating_indices(kw, n_side):

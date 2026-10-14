@@ -50,8 +50,8 @@ GOLDEN_PATH = repository_path('tests/references/golden_reticolo.npz')
 # square of the refractive index this file carried before 2026-08-20 -- 9 was 3, 12.25 was 3.5,
 # 4.84 was 2.2 -- so the frozen RETICOLO numbers still describe it and are not regenerated.
 # `4.840000000000001` is `2.2 ** 2` as a double and not a typo for `4.84`; the tidy decimal is a
-# different number by 8.9e-16, and it is the bridge's `index_from_eps` that would carry the
-# difference back into the texture Octave is handed.
+# different number by 8.9e-16, and it is the bridge's `refractive_index_from_eps` that would carry
+# the difference back into the texture Octave is handed.
 _HALF = np.array([[[9.0] * 5 + [1.0] * 5]])
 _QUARTER = np.array([[[12.25] * 3 + [1.0] * 9]])
 _TWO_LAYER = np.array([[[9.0] * 6 + [1.0] * 6], [[4.840000000000001] * 8 + [1.0] * 4]])
@@ -195,8 +195,8 @@ def _solve_bottom(name, backend='numpy'):
     comparison would then fail as a solver disagreement.
     """
     kw = dict(CASES[name])
-    n_top = wavebit.index_from_eps(kw['top']).real
-    n_bot = wavebit.index_from_eps(kw['bot']).real
+    n_top = wavebit.refractive_index_from_eps(kw['top']).real
+    n_bot = wavebit.refractive_index_from_eps(kw['bot']).real
     kw['theta'] = float(np.arcsin(n_top * np.sin(kw['theta']) / n_bot))
     return _legacy_wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
                           incidence_side='bottom', **kw).solve()

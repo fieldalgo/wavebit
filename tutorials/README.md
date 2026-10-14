@@ -28,8 +28,8 @@ belongs there as markdown instead.
 
 Every scene below states its materials as **relative permittivity** — `structure`, `top` and
 `bot`, and the `Material(epsilon, mu=1.0)` a shape names. Where a notebook starts from a
-datasheet refractive index it converts once, visibly, with `wavebit.eps_from_index(n)`. The
-contract is [`../docs/reference/common/conventions.md`](../docs/reference/common/conventions.md); the retired spellings
+datasheet refractive index it converts once, visibly, with `wavebit.eps_from_refractive_index(n)`.
+The contract is [`../docs/reference/common/conventions.md`](../docs/reference/common/conventions.md); the retired spellings
 (`ucell`, `n_top`, `n_bot`, `n_base`, `n_index`) are refused by name, because the quantity
 changed with them and a script that only renames its keywords would solve a different
 structure without saying so.

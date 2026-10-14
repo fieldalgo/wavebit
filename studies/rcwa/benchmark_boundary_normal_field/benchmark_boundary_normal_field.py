@@ -67,8 +67,8 @@ PIX = P / NORMAL_GRID
 # Materials are **relative permittivity** throughout -- `top` / `bot` and every shape's
 # `material`. The scene is unchanged from the one the header's numbers were measured on: the
 # indices it was written in are converted here, at the point they are written down, rather
-# than folded into literals. `eps_from_index` is `n**2` and nothing else.
-EPS = wavebit.eps_from_index
+# than folded into literals. `eps_from_refractive_index` is `n**2` and nothing else.
+EPS = wavebit.eps_from_refractive_index
 CFG = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
            wavelength=WL, top=1.0, bot=EPS(1.5))
 

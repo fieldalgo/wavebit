@@ -1038,7 +1038,7 @@ def test_n_top_and_n_bot_are_told_the_slots_are_permittivity_not_pointed_at_them
         for message in (str(assigned.value), str(parsed.value)):
             assert 'Did you mean' not in message, message
             assert f"{name!r} is spelled like a refractive index" in message, message
-            assert _INDEX_NOTE in message and 'eps_from_index' in message, message
+            assert _INDEX_NOTE in message and 'eps_from_refractive_index' in message, message
         assert (stack.top, stack.bot) == (1.0, 2.25) and name not in vars(stack)
 
 
@@ -1139,7 +1139,7 @@ def test_several_index_spellings_share_one_note_beside_the_guesses():
     ('n1', {'index'}), ('top_index', {'index'}), ('refractiveIndex', {'index'}),
     ('mu_top', {'permeability'}), ('mubot', {'permeability'}), ('permeability', {'permeability'}),
     ('eps_top', {'permittivity'}), ('epsilon', {'permittivity'}), ('top', {'permittivity'}),
-    ('background', {'permittivity'}), ('eps_from_index', {'permittivity', 'index'}),
+    ('background', {'permittivity'}), ('eps_from_refractive_index', {'permittivity', 'index'}),
     # an `n` that is not a word of its own, and not glued to a slot, is no index
     ('nesting', set()), ('normal_method', set()), ('nvf_projector', set()), ('thet', set()),
     # `ri` is an index wherever it stands; so is `n` / `ri` glued to any name a slot goes by

@@ -803,8 +803,8 @@ def _maystre_factor(factor):
     real axis, ``Im(z) = 0``, the root is ``+-i*sqrt(-Re(z))`` and ``Im(w)`` alone decides, as
     the sum did. A Python number stays one; an array goes through ``where``.
     """
-    from wavebit.materials.response import index_from_eps          # `domain` imports this module
-    root = index_from_eps(factor)
+    from wavebit.materials.response import refractive_index_from_eps  # `domain` imports this module
+    root = refractive_index_from_eps(factor)
     if not hasattr(root, 'dtype'):
         return -root if factor.real < 0 and root.imag < 0 else root
     xp = array_namespace(root)
@@ -820,7 +820,7 @@ def signed_index(epsilon, mu):
     field door, read it, and so does the coherent door's plane-wave basis
     (``illumination._plane_basis``): two spellings could disagree about what a ``p`` amplitude
     or an angle means. A non-magnetic medium never comes here; its index is
-    :func:`~wavebit._common.periodic.index_from_eps` of ``epsilon`` alone.
+    :func:`~wavebit.materials.response.refractive_index_from_eps` of ``epsilon`` alone.
 
     **Why a product of two roots.** ``eps*mu`` has two square roots, and only one is the index.
     For a passive medium each factor lies in the closed upper half plane, so each principal root
@@ -871,7 +871,7 @@ def signed_index(epsilon, mu):
     changes); and for every active double negative that propagates, which is refused. One
     consequence: a gain metal named with ``mu = 1`` (``Material(-2-0.1j, mu=1.0)``) now has the
     opposite ``n`` -- and ``t_p`` -- to the same permittivity unnamed, whose index stays
-    :func:`~wavebit._common.periodic.index_from_eps`, the principal root.
+    :func:`~wavebit.materials.response.refractive_index_from_eps`, the principal root.
 
     **What the sign decides.** ``n**2`` does not depend on it, so no ``kz`` does. The kernels
     quote a ``p`` amplitude along a ``p_hat`` normalised by ``n``, so it sets the sign of
@@ -910,13 +910,13 @@ def signed_index(epsilon, mu):
     (``eps = -2+0.1j``, ``mu = 1+0.05j``) has ``Im(eps*mu) = +0`` and gets the decaying root
     either way.
 
-    Python numbers in, a Python number out (through :mod:`cmath`, as ``index_from_eps``); a NumPy
-    scalar in, a NumPy scalar out, as the principal root gave. Arrays and tracers go through
+    Python numbers in, a Python number out (through :mod:`cmath`, as ``refractive_index_from_eps``);
+    a NumPy scalar in, a NumPy scalar out, as the principal root gave. Arrays and tracers go through
     their own namespace, with ``where`` rather than a branch on a value, so the sign is decided
     under ``jax.jit`` too.
     """
-    from wavebit.materials.response import index_from_eps          # `domain` imports this module
-    n = index_from_eps(epsilon * mu)
+    from wavebit.materials.response import refractive_index_from_eps  # `domain` imports this module
+    n = refractive_index_from_eps(epsilon * mu)
     q = _maystre_factor(epsilon + 0j) * _maystre_factor(mu + 0j)
     if not hasattr(n, 'dtype') and not hasattr(q, 'dtype'):
         return -n if (n.conjugate() * q).real < 0 and n.real != 0 else n

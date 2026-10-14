@@ -50,7 +50,7 @@ def test_dispersive_film_against_airy_and_repeated_wavelengths(backend):
 def test_imported_index_interpolation_and_explicit_snapshot():
     wavelengths = np.array([800., 1000.])
     index = np.array([2.+.1j, 3.+.3j])
-    model = TabulatedMaterial.from_index(wavelengths, index)
+    model = TabulatedMaterial.from_refractive_index(wavelengths, index)
     snapshot = model.at(900.)
     assert snapshot.epsilon == pytest.approx((2.5+.2j)**2)
     assert snapshot.at(950.) is snapshot
@@ -119,7 +119,7 @@ def test_jobspec_round_trip_retains_model_and_sweep():
 
 
 def test_index_table_and_magnetic_table_json_round_trip():
-    for m in (TabulatedMaterial.from_index([800., 1000.], [2.+.1j, 3.+.2j]),
+    for m in (TabulatedMaterial.from_refractive_index([800., 1000.], [2.+.1j, 3.+.2j]),
               TabulatedMaterial([800., 1000.], [4., 9.], mu=[1.1, 1.2])):
         spec = JobSpec(stack=Stack([Layer(0., np.ones((1, 1)))], top=m, period=(600., 600.)))
         restored = JobSpec.from_json(spec.to_json())

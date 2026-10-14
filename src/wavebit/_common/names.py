@@ -43,7 +43,7 @@ _QUANTITY_HOME = {
     'index': ("a refractive index",
               "every material slot -- `top`, `bot`, `structure`, a layer's `background`, a "
               "shape's `material` -- takes relative permittivity (eps = n**2) or a Material; "
-              "wavebit.eps_from_index(n) converts"),
+              "wavebit.eps_from_refractive_index(n) converts"),
     'permeability': ("a permeability",
                      "a permeability is `mu` beside a raster `structure`, or the `mu` of a "
                      "Material(epsilon, mu) in any material slot"),

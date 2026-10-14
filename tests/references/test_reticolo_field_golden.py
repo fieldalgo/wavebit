@@ -261,10 +261,10 @@ def test_the_patterned_stacks_are_actually_patterned(stack):
 
     # and the index map must be our own structure, rooted and sampled on the same x, **complex**
     # — the `lossy` stack is where that matters, and it doubles as a convention check on the
-    # branch: `index_from_eps(3.9975+0.2j)` is `2+0.05j`, which is what RETICOLO stores, so both
-    # codes spell loss as `Im(n) > 0` and the principal root is the one that lands there.
+    # branch: `refractive_index_from_eps(3.9975+0.2j)` is `2+0.05j`, which is what RETICOLO stores,
+    # so both codes spell loss as `Im(n) > 0` and the principal root is the one that lands there.
     structure = STACKS[stack][1]
-    ours_index = wavebit.index_from_eps(structure)
+    ours_index = wavebit.refractive_index_from_eps(structure)
     idx = np.clip((x_samples() / (PERIOD / structure.shape[2])).astype(int), 0,
                   structure.shape[2] - 1)
     for k in range(n_layers(stack)):

@@ -77,10 +77,10 @@ import numpy as np
 from wavebit.compat import legacy as wavebit
 from wavebit.compat.legacy import Stack, Layer, Incidence
 
-eps_hi = wavebit.eps_from_index(3.5)                       # 12.25
+eps_hi = wavebit.eps_from_refractive_index(3.5)            # 12.25
 scene = Stack(layers=[Layer(thickness=300.,
                             structure=np.array([[1., 1., eps_hi, eps_hi]]))],
-              top=1., bot=wavebit.eps_from_index(1.5), period=(700.,))
+              top=1., bot=wavebit.eps_from_refractive_index(1.5), period=(700.,))
 light = Incidence(wavelength=900., theta=0., phi=0., tetm='te')
 
 harmonic = wavebit.rcwa(backend='numpy', stack=scene, incidence=light,
@@ -192,7 +192,7 @@ gold = [(0.0, 2 * np.pi / 17000., (2 * np.pi / 136.) ** 2)]
 band = [820., 900., 980.]
 
 scene = Stack(layers=[Layer(thickness=60., structure=np.ones((1, 2)))],
-              top=1., bot=wavebit.eps_from_index(1.5), period=(700.,))
+              top=1., bot=wavebit.eps_from_refractive_index(1.5), period=(700.,))
 light = Incidence(wavelength=band, theta=0., phi=0., tetm='te')
 
 spectrum = wavebit.fdtd(stack=scene, incidence=light, resolution=0.1, n_periods=100,
@@ -202,7 +202,7 @@ for wl, r in zip(band, spectrum):
     eps = wavebit.permittivity_at(gold, wl)     # the closed form the stepping discretises
     ref = wavebit.rcwa(backend='numpy', wavelength=wl, period=[700.], theta=0., phi=0., tetm='te',
                        truncation_order=dict(x=60, y=0), top=1.,
-                       bot=wavebit.eps_from_index(1.5),
+                       bot=wavebit.eps_from_refractive_index(1.5),
                        structure=np.array([[[eps, 1.]]]), thickness=[60.]).solve()
     print(f'{wl:.0f} nm  eps {eps.real:8.3f}{eps.imag:+.3f}j   '
           f'T0 fdtd {r.order(0, 0).T:.4f} rcwa {ref.order(0, 0).T:.4f}   '
@@ -245,10 +245,10 @@ import numpy as np
 from wavebit.compat import legacy as wavebit
 from wavebit.compat.legacy import Stack, Layer, Incidence
 
-eps_hi = wavebit.eps_from_index(3.5)
+eps_hi = wavebit.eps_from_refractive_index(3.5)
 scene = Stack(layers=[Layer(thickness=300.,
                             structure=np.array([[1., 1., eps_hi, eps_hi]]))],
-              top=1., bot=wavebit.eps_from_index(1.5), period=(700.,))
+              top=1., bot=wavebit.eps_from_refractive_index(1.5), period=(700.,))
 light = Incidence(wavelength=900., theta=0., phi=0., tetm='te')
 
 result, diagnostics = wavebit.fdtd(stack=scene, incidence=light, resolution=0.1,

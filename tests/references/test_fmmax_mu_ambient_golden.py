@@ -246,10 +246,10 @@ def test_backside_incidence_is_reciprocal_with_magnetic_ambients(theta_top, algo
     """
     top, bot = (1.9, 1.3), (2.6, 1.7)
     # Snell is written in indices, and a magnetic medium's is `sqrt(eps*mu)` -- so the product
-    # goes into `index_from_eps` rather than the permittivity alone. Dropping the `mu` here
-    # would not raise; it would just state the wrong angle and read as a broken mirror.
-    n_t = float(wavebit.index_from_eps(top[0] * top[1]).real)
-    n_b = float(wavebit.index_from_eps(bot[0] * bot[1]).real)
+    # goes into `refractive_index_from_eps` rather than the permittivity alone. Dropping the `mu`
+    # here would not raise; it would just state the wrong angle and read as a broken mirror.
+    n_t = float(wavebit.refractive_index_from_eps(top[0] * top[1]).real)
+    n_b = float(wavebit.refractive_index_from_eps(bot[0] * bot[1]).real)
     theta_bot = np.rad2deg(np.arcsin(n_t * np.sin(np.deg2rad(theta_top)) / n_b))
 
     down = solve(top, bot, np.eye(3) * 2.2, np.eye(3), theta_top, algo=algo)

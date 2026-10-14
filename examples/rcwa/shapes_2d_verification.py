@@ -42,19 +42,19 @@ def run_raster(rcwa_options, backend, fourier_coefficients):
 
 if __name__ == '__main__':
     # Permittivity, not refractive index -- that is the quantity the API takes, and
-    # `eps_from_index` is the conversion for the nk datasheet these came off. Written as bare
-    # numbers rather than as `Material(...)` on purpose: the same value has to serve both
+    # `eps_from_refractive_index` is the conversion for the nk datasheet these came off. Written as
+    # bare numbers rather than as `Material(...)` on purpose: the same value has to serve both
     # paths compared here, and only one of them takes materials. The shape path below reads a
     # bare number through the scalar shorthand, `Material(epsilon=x)`; the raster is a
     # *sampled field* rather than an assignment, so its pixels are permittivity samples and a
     # Material could not go in an ndarray at all. That asymmetry is the whole reason the
     # raster keeps arrays.
     #
-    # Absorbing Si would be eps_from_index(3.638751670074983+0.007498295841854125j).
+    # Absorbing Si would be eps_from_refractive_index(3.638751670074983+0.007498295841854125j).
     # Im(eps) > 0 is loss here, the same convention the bundled nk tables use (n + 1j*k).
-    si = wavebit.eps_from_index(3.638751670074983)
-    sio2 = wavebit.eps_from_index(1.4518)
-    si3n4 = wavebit.eps_from_index(2.0056)
+    si = wavebit.eps_from_refractive_index(3.638751670074983)
+    sio2 = wavebit.eps_from_refractive_index(1.4518)
+    si3n4 = wavebit.eps_from_refractive_index(2.0056)
 
     # The silicon underneath is the substrate, so it goes in `bot`.
     rcwa_options = dict(backend='numpy', thickness=[205], period=dict(x=300, y=300),

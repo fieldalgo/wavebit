@@ -115,8 +115,8 @@ conserves energy; only the structure is different. The pre-rename spellings (`uc
 `n_bot`, `n_base`, `n_index`) were refused by name for that reason until the refusals were
 deleted on 2026-08-26 — nothing has been released, so there is no recipe in the world still
 using them — and a *value* nobody renamed was always invisible here anyway.
-`wavebit.eps_from_index(n)` is the conversion, and these scripts write it out at the point the
-datasheet number arrives rather than folding it into a literal.
+`wavebit.eps_from_refractive_index(n)` is the conversion, and these scripts write it out at the
+point the datasheet number arrives rather than folding it into a literal.
 
 The same check runs locally, from the repository root:
 

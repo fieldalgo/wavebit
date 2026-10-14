@@ -51,8 +51,8 @@ gone rather than moved.** S4's ``Epsilon`` always wanted a permittivity; what ch
 remaining side to be on. One consequence is worth knowing before rerunning this: the
 ``__stack`` arrays in the **committed** golden were written before that flip and hold a
 refractive index in their second column. ``test_s4_field_golden`` reads them through
-``index_from_eps`` and says so; rerun this and they become permittivities, at which point that
-conversion has to come out. Nothing else in the file moves — the physics is identical and the
+``refractive_index_from_eps`` and says so; rerun this and they become permittivities, at which point
+that conversion has to come out. Nothing else in the file moves — the physics is identical and the
 field arrays are bit-for-bit the same, which is the only reason this is a safe thing to leave
 half-migrated.
 """

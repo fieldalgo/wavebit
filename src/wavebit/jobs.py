@@ -111,7 +111,7 @@ def _decode(value, registry, path):
         from .materials import TabulatedMaterial
         if value['interpolation'] not in ('index', 'epsilon'):
             raise _error('Unknown table interpolation quantity.', path)
-        constructor = TabulatedMaterial.from_index if value['interpolation'] == 'index' else TabulatedMaterial
+        constructor = TabulatedMaterial.from_refractive_index if value['interpolation'] == 'index' else TabulatedMaterial
         return constructor(_decode(value['wavelengths'], registry, path+'.wavelengths'),
                            _decode(value['values'], registry, path+'.values'),
                            mu=_decode(value['mu'], registry, path+'.mu'), wavelength_unit=value['wavelength_unit'])

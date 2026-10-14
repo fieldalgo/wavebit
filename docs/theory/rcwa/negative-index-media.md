@@ -37,7 +37,7 @@ Targets:
   `CoreFactorizationMixin._refuse_half_space_negation_pair`, `CoreSolveMixin._incident_kxy`,
   `_lit_index_is_negative`, `_frame_azimuth`, `_indices_signed_by_pairs`,
   `CoreFactorizationMixin._layer_double_negative`
-- `src/wavebit/_common/periodic.py` — `index_from_eps`; `src/wavebit/_common/backend.py` — `principal_sqrt`
+- `src/wavebit/materials/response.py` — `refractive_index_from_eps`; `src/wavebit/_common/backend.py` — `principal_sqrt`
 - `src/wavebit/rcwa/_engine/illumination.py` — `_plane_basis`, the coherent door's ports
 - `src/wavebit/rcwa/_engine/source_expansion.py` — `resolve_wave`, `gaussian_waves`
 - `src/wavebit/rcwa/_engine/solve_2d_first_order.py` — `split_forward_backward`
@@ -646,7 +646,8 @@ Names avoided, and why:
 `conventions.signed_index(eps, mu)` is the one place an `(eps, mu)` pair becomes an index. The
 public `n_top` / `n_bot` / `n_inc` read it, and so do the kernels' `n/mu`, the incident `k_par`,
 the field door and the coherent door's plane-wave basis. A medium with no permeability never
-reaches it: its index is the principal `sqrt(eps)` (`index_from_eps`), as always *(study §3)*:
+reaches it: its index is the principal `sqrt(eps)` (`refractive_index_from_eps`), as always
+*(study §3)*:
 
 | medium `(eps, mu)` | principal `sqrt(eps*mu)` (develop's index) | signed `n` (now) | `s` |
 | --- | --- | --- | --- |
@@ -721,8 +722,9 @@ normal-incidence `kz` itself would, by construction. The magnetic metal with gai
 `kx = +0.1939` (until 2026-10: `-0.6383-0.7826i`, `s = -1`, `kx = -0.1939`) *(study §7)*.
 
 **Naming `mu = 1` no longer keeps a gain metal's index.** A non-magnetic medium's index is still
-the principal `sqrt(eps)` (`index_from_eps`, unchanged), so `Material(-2-0.1i, mu=1.0)` gets the
-opposite `n` -- and `t_p` -- to `-2-0.1i` unnamed. Every power quantity, `r` and `t_s` agree.
+the principal `sqrt(eps)` (`refractive_index_from_eps`, unchanged), so
+`Material(-2-0.1i, mu=1.0)` gets the opposite `n` -- and `t_p` -- to `-2-0.1i` unnamed. Every
+power quantity, `r` and `t_s` agree.
 
 ### How it is computed, and why it keeps every other medium's bits
 
@@ -1560,7 +1562,7 @@ What the survey taught, and where Wavebit's rules come from:
   `(-1-1.2i, -1-1.2i)` -- have `n` pointing against the normal-incidence `kz`, so `t_p = -t_s`
   at normal incidence: 5,839 and 2,903 of 400,000 random media *(study §3)*. A sign taken from
   that `kz` itself would agree everywhere (and keep every passive medium's bits); it was not
-  adopted here. Non-magnetic gain metals keep the principal `index_from_eps`, and with it
+  adopted here. Non-magnetic gain metals keep the principal `refractive_index_from_eps`, and with it
   `t_p = -t_s` at normal incidence.
 * **Near the negation pair nothing warns.** The refusal of §9 reads only an *exact* lossless
   pair. A tiny loss or a tiny real mismatch is solved without a word, and an excited evanescent
@@ -1576,10 +1578,10 @@ What the survey taught, and where Wavebit's rules come from:
 * **Each backend's square root is its own.** On the cut they now agree: the principal root of
   `complex(-1, -0.0)` is `-1j` in `cmath`, NumPy and PyTorch -- the lip the sign of the zero names
   (W. Kahan 1987) -- and `+1j` in JAX 0.11.0, whose `sqrt` puts both zeros on the upper lip, and
-  `index_from_eps` turns JAX's root there (`backend.principal_sqrt`), so a value on the negative
-  real axis carrying a `-0.0` imaginary part -- `eps`, or `eps*mu` on the axis for a magnetic
-  medium -- gets the lower lip's root and the same sign of `t_p` on every backend *(study §13)*.
-  Off the cut they are each their library's: `cmath.sqrt` and `np.sqrt` differ on 45 of 2,000
+  `refractive_index_from_eps` turns JAX's root there (`backend.principal_sqrt`), so a value on the
+  negative real axis carrying a `-0.0` imaginary part -- `eps`, or `eps*mu` on the axis for a
+  magnetic medium -- gets the lower lip's root and the same sign of `t_p` on every backend *(study
+  §13)*. Off the cut they are each their library's: `cmath.sqrt` and `np.sqrt` differ on 45 of 2,000
   random products `eps*mu`, by one ulp in a component on 38 and by two on 7 *(study §13)*, so the
   same medium handed in as a Python number and as a NumPy scalar can give indices an ulp or two
   apart (the mirror test of §12 keeps both as Python numbers for that reason).
@@ -1836,8 +1838,8 @@ followed is named by commit title, since its ids change if the branch is rebased
    refused only where a retained order is evanescent, since a truncation of propagating orders is
    regular and was solved exactly before the refusal (§9); a factor's Maystre root is decided on
    the factor's real part, not on the round-off of its root's `Re + Im`, which had decided the
-   cut's tie by backend (§6); `index_from_eps` takes the lip a signed zero names on JAX too
-   (§15); and corrections to this page -- the mirror symmetry is Lakhtakia's, which Grunhut and
+   cut's tie by backend (§6); `refractive_index_from_eps` takes the lip a signed zero names on JAX
+   too (§15); and corrections to this page -- the mirror symmetry is Lakhtakia's, which Grunhut and
    Depine cite; §12's scene has one first order propagating; PyMoosh is not the only code lit
    from a double negative; the gaps between `cmath` and NumPy are one or two ulp.
 

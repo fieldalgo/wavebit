@@ -8,7 +8,7 @@ silicon = wavebit.materials.catalog.load('Si')
 wl, d = 900., 120.
 material = silicon.at(wl)
 # Index is needed only for the independent closed-form Airy calculation below.
-n = wavebit.index_from_eps(material.epsilon)
+n = wavebit.refractive_index_from_eps(material.epsilon)
 rows = []
 for algorithm in ('ETM', 'SMM'):
     solver = wavebit.rcwa(

@@ -154,8 +154,8 @@ def test_the_golden_was_frozen_on_the_stacks_this_file_solves():
     ``__stack`` (refractive index, frozen before 2026-08-20). Two sources for one scene is
     exactly the arrangement that lets a case list be edited while the golden goes on answering
     for the old one, so it is checked here rather than assumed: thicknesses entry for entry, and
-    each material through :func:`wavebit.index_from_eps`, which is the same principal root the
-    generator's own conversion used to take.
+    each material through :func:`wavebit.refractive_index_from_eps`, which is the same principal
+    root the generator's own conversion used to take.
 
     **When this file is regenerated the conversion below has to come out**, because ``__stack``
     will then hold permittivity and comparing it against an index fails loudly with this
@@ -166,11 +166,11 @@ def test_the_golden_was_frozen_on_the_stacks_this_file_solves():
         stored = GOLDEN[f'{name}__stack']
         assert stored.shape == (len(stack), 2), (name, stored.shape)
         assert np.allclose(stored[:, 0], [d for d, _ in stack], atol=0), name
-        want = [wavebit.index_from_eps(e).real for _, e in stack]
+        want = [wavebit.refractive_index_from_eps(e).real for _, e in stack]
         assert np.allclose(stored[:, 1], want, rtol=0, atol=1e-12), (
             f'{name}: the golden was frozen on {stored[:, 1]} (refractive index) and STACKS '
             f'now says {want}. If this file has just been regenerated, that column is a '
-            f'permittivity now and the index_from_eps above is what has to go.')
+            f'permittivity now and the refractive_index_from_eps above is what has to go.')
 
 
 def test_every_component_is_exercised_somewhere():

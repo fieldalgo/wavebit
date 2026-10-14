@@ -34,21 +34,21 @@ shorthand for `Material(epsilon=x)`; non-magnetic is the overwhelming default an
 to write.
 
 ```python
-from wavebit.compat.legacy import Material, eps_from_index, index_from_eps
+from wavebit.compat.legacy import Material, eps_from_refractive_index, refractive_index_from_eps
 
-Material(12.25)                # a dielectric, n = 3.5, non-magnetic
-Material(-12.2475 + 0.35j)     # a metal, n = 0.05 + 3.5j; Im(eps) > 0 is loss
-Material(4.0, mu=1.5)          # magnetic
-eps_from_index(3.5)            # 12.25 -- the conversion for a datasheet index
-index_from_eps(12.25)          # (3.5+0j) -- and back, on the passive root
+Material(12.25)                   # a dielectric, n = 3.5, non-magnetic
+Material(-12.2475 + 0.35j)        # a metal, n = 0.05 + 3.5j; Im(eps) > 0 is loss
+Material(4.0, mu=1.5)             # magnetic
+eps_from_refractive_index(3.5)    # 12.25 -- the conversion for a datasheet index
+refractive_index_from_eps(12.25)  # (3.5+0j) -- and back, on the passive root
 ```
 
 The values are **permittivity, not refractive index**, and that is the one thing to carry over
 from older scripts. An index cannot hold the pair -- `mu` was always taken raw, so a single
 material spelled as an index would mean "index" for one of its two numbers and "permeability"
 for the other. It is also the direction with no branch cut in it: `eps = n**2` is unambiguous
-where `n = sqrt(eps)` is a choice, and `index_from_eps` is that choice made explicitly, taking
-the passive root (`Im(n) >= 0`).
+where `n = sqrt(eps)` is a choice, and `refractive_index_from_eps` is that choice made explicitly,
+taking the passive root (`Im(n) >= 0`).
 
 `Material` is frozen and a registered JAX pytree whose children are `(epsilon, mu)`, so a
 material is a design variable like any other -- `jax.grad` reaches inside it.
