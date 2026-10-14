@@ -40,6 +40,7 @@ traced-and-jitted solve still rely on them.
 
 from wavebit.compat import legacy as _legacy_wavebit
 import functools
+import re
 import warnings
 
 import numpy as np
@@ -669,25 +670,47 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
 
 
 def test_auto_detune_keeps_gradients_flowing_through_the_retry():
-    """The retry multiplies the knob, so an autodiff graph survives it.
+    """``jax.grad`` through the retry is the gradient of the problem the warning names.
 
-    ``jax.grad`` through the refused exact-zero point (truncation_order=3): the first pass raises, the
-    ladder re-solves at the detuned wavelength, and the gradient that comes back is the
-    nearby problem's — finite, and nonzero for a parameter the reflectance depends on.
+    At the refused exact-zero point (truncation_order=3) the first pass raises and the ladder
+    re-solves off the point; under autodiff the step is ``1e-8``, not the forward default's
+    ``1e-12`` (``engine._AUTO_DETUNE_GRAD_REL``). The contract is that the
+    :class:`AutoDetuneWarning` names the wavelength actually used and the gradient belongs to
+    that nearby problem, so the oracle is a central difference of an ordinary NumPy solve at
+    exactly the wavelength the warning reports.
+
+    The parameter is the pillar's thickness. Until 2026-10-14 it was the spacer's, and the
+    spacer sits on a substrate of its own index, so it is invisible: dR/dt is zero (a NumPy
+    central difference gives -3.5e-18), and ``g != 0`` passed on a gradient of 1.2e-26 --
+    rounding noise. A blanket ``simplefilter('ignore')`` also threw away the warning, the only
+    evidence that a retry happened. Measured on the pillar: -2.0785776e-2 against the
+    difference to 2.4e-8. Read at the ``1e-12`` landing instead, the difference moves by 1e-3
+    -- the derivative changes that fast this close to the substrate's Rayleigh anomaly -- so a
+    warning that misreports the landing fails here by two orders over the tolerance. The
+    grazing layer's own permittivity, the wavelength, and the ``1e-8`` step itself are
+    :mod:`test_rayleigh_gradient_retry`'s.
     """
     jax = pytest.importorskip('jax')
     _legacy_wavebit.enable_x64()
     import jax.numpy as jnp
+    from wavebit._common.backend import AutoDetuneWarning
 
-    def loss(thickness):
+    def loss(pillar):
         r = _legacy_wavebit.rcwa(backend='jax', wavelength=WL, truncation_order=[3, 0], structure=_STACK,
-                         **_KW).solve(thickness=[thickness, 200.0])
+                         **_KW).solve(thickness=[300.0, pillar])
         return jnp.real(jnp.asarray(r.R)).sum()
 
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        g = float(jax.grad(loss)(300.0))
-    assert np.isfinite(g) and g != 0.0
+    with pytest.warns(AutoDetuneWarning, match='re-solved at wavelength') as record:
+        g = float(jax.grad(loss)(200.0))
+    notice = next(str(r.message) for r in record if issubclass(r.category, AutoDetuneWarning))
+    landed = float(re.search(r'wavelength\*\(1\+[^)]*\) = (\d+\.\d+)', notice).group(1))
+    assert landed != WL
+
+    h = 1e-3
+    def reflectance(pillar):
+        return _totals(_solve('numpy', 3, wavelength=landed, thickness=[300.0, pillar]))[0]
+    expected = (reflectance(200.0 + h) - reflectance(200.0 - h)) / (2 * h)
+    assert g == pytest.approx(expected, rel=1e-5), (g, expected, notice)
 
 
 def test_exact_zero_eigenvalue_is_loud_on_every_backend():
