@@ -117,7 +117,7 @@ include = ["wavebit*"]
 # material -- which is why the CI `minimal` job installs the built package and runs outside
 # the checkout rather than importing the source tree.
 [tool.setuptools.package-data]
-wavebit = ["data/filmetrics/*.txt", "data/matlab/*.mat"]
+wavebit = ["data/filmetrics/*.txt"]
 
 # The rule set is narrow on purpose: every entry below names a defect, none names a
 # preference. That distinction is the whole policy. Ruff's own default set reports 651

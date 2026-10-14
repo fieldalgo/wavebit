@@ -15,8 +15,6 @@ from wavebit._common.backend import eager_under_torch_compile as _eager_under_to
 __all__ = ['available', 'load']
 
 # Explicit entries preserve source identity and avoid filesystem-order defaults.
-# The older p_Si.mat asset has no wavelength-unit or source metadata; it is not
-# exposed as a catalog material until those are established.
 _CATALOG = {
     f'filmetrics/{name}': f'filmetrics/{name}.txt'
     for name in ('Al2O3', 'Si', 'Si3N4', 'SiO2')

@@ -39,8 +39,8 @@ Names are case-insensitive. Short names such as `Si` work when unambiguous;
 qualified names identify a specific dataset. The catalog contains
 `filmetrics/Al2O3`, `filmetrics/Si`, `filmetrics/Si3N4` and `filmetrics/SiO2`.
 A formula does not specify all deposition conditions or forms of a material;
-choose data appropriate to the sample. The older `p_Si.mat` asset is not exposed
-in this catalog because it does not declare its wavelength unit or data source.
+choose data appropriate to the sample. An older `p_Si.mat` asset that declared neither
+its wavelength unit nor its data source was removed from the package on 2026-10-14.
 
 ## Choose the scene's length unit
 

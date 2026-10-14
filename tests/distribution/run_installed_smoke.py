@@ -28,8 +28,8 @@ def main():
         assert len(matches) == 1, (name, matches)
         assert distribution.locate_file(matches[0]).stat().st_size > 0, name
 
-    for asset in ('wavebit/data/filmetrics/Si.txt', 'wavebit/data/matlab/p_Si.mat'):
-        assert distribution.locate_file(asset).is_file(), asset
+    asset = 'wavebit/data/filmetrics/Si.txt'
+    assert distribution.locate_file(asset).is_file(), asset
     names = wavebit.materials.catalog.available()
     assert set(names) == {'filmetrics/Si', 'filmetrics/SiO2',
                           'filmetrics/Si3N4', 'filmetrics/Al2O3'}

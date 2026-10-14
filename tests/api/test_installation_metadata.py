@@ -15,5 +15,4 @@ def test_installed_metadata_matches_the_checkout_distribution_contract():
     requires = {value.replace(' ', '') for value in distribution.requires or ()}
     assert {value.replace(' ', '') for value in project['dependencies']} <= requires
     package = importlib.resources.files('wavebit')
-    for asset in ('data/filmetrics/Si.txt', 'data/matlab/p_Si.mat'):
-        assert package.joinpath(asset).is_file(), asset
+    assert package.joinpath('data/filmetrics/Si.txt').is_file()

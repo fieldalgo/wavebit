@@ -103,7 +103,7 @@ value = silicon_um.at(0.9)                       # 0.9 μm = 900 nm
 
 Short names such as `Si` are case-insensitive. If several sources make a name ambiguous, one is not chosen arbitrarily: include the source, as in `filmetrics/Si`. **The same chemical formula can have different optical properties under different fabrication conditions, so choosing data is part of defining the physical model.** Only the requested file is read, and its immutable object is reused; you do not need to preload the entire material library.
 
-The default length unit is `nm`. Setting `wavelength_unit='um'` converts the table’s wavelength axis to μm. Supply the calculation wavelength, period, shape dimensions and layer thicknesses in μm as well. Supported units are `nm`, `um`, `mm` and `m`; existing geometry is not silently rescaled. The previously bundled `p_Si.mat` lacks unit and original-source metadata, so it is not included in the new public catalog.
+The default length unit is `nm`. Setting `wavelength_unit='um'` converts the table’s wavelength axis to μm. Supply the calculation wavelength, period, shape dimensions and layer thicknesses in μm as well. Supported units are `nm`, `um`, `mm` and `m`; existing geometry is not silently rescaled. An earlier bundled asset, `p_Si.mat`, lacked unit and original-source metadata; it was never part of this catalog and was removed from the package on 2026-10-14.
 
 Material values read from `solver.structure`, `solver.top` and `solver.bot` are evaluated at the current wavelength. Reassign `structure`, `top` or `bot` when supplying a new material or shape. Avoid directly editing part of a retrieved evaluation dictionary: doing so does not change the original dispersion definition.
 

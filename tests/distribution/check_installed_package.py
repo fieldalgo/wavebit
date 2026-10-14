@@ -15,8 +15,8 @@ assert package == expected and package.is_relative_to(Path(sys.prefix).resolve()
 for optional in ('jax', 'torch', 'matplotlib'):
     assert importlib.util.find_spec(optional) is None, f'{optional} present in base environment'
 
-for asset in ('wavebit/data/filmetrics/Si.txt', 'wavebit/data/matlab/p_Si.mat'):
-    assert importlib.metadata.distribution('wavebit').locate_file(asset).is_file(), asset
+asset = 'wavebit/data/filmetrics/Si.txt'
+assert importlib.metadata.distribution('wavebit').locate_file(asset).is_file(), asset
 names = wavebit.materials.catalog.available()
 assert set(names) == {'filmetrics/Si', 'filmetrics/SiO2',
                       'filmetrics/Si3N4', 'filmetrics/Al2O3'}
