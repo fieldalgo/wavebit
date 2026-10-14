@@ -27,7 +27,11 @@ So, through this lifecycle, the derivative from geometry to diffraction efficien
 
 ### Why JAX-traced geometry is refused
 
-A prepared run checks that the geometry still has the topology it was prepared with: which regions overlap and which edges cross. That check reads concrete values. A PyTorch tensor carries its value, so every eager run is guarded, and a step that crosses a topology boundary raises `IncompatibleProblemError` with code `prepared.topology`; prepare that geometry again. A JAX tracer carries no readable value, and the lifecycle has no traced form of the check. It therefore refuses traced geometry when the trace is built, rather than replaying a stale record.
+The derivative is the same computation on both backends. Where both admit an input they agree to round-off: one layer-thickness derivative measured 7.695586811926e-4 on PyTorch and 7.695586811925e-4 under `jax.jit`. The backends differ only in a check that runs before that computation.
+
+Preparation records the geometry's combinatorics: which regions overlap and which edges cross. Vertex coordinates stay live and carry the gradient. Each run checks that the new geometry still fits that record, and the check branches on concrete values. A PyTorch tensor carries its value, so every eager run is checked, and a step that crosses a topology boundary raises `IncompatibleProblemError` with code `prepared.topology`; prepare that geometry again.
+
+The two JAX transforms are not alike here. Under `jax.jit` a tracer has a shape and dtype but no value, so the check cannot run. Skipping it could replay a record the geometry no longer fits and return a wrong answer with no error. Under `jax.grad` without `jit`, the tracer's primal is concrete and can be read one element at a time, which is how the compatibility interface takes its geometry decisions. The lifecycle does not currently tell the two apart, and it refuses both when the trace is built. Admitting geometry under `jax.jit` would need a traced form of the check: computed in array operations and reported as NaN with a failed validity check, as the raster partition guard already is.
 
 This is the lifecycle's stated contract, not a defect. The [unified API design](../../design/unified-api.md#7-prepared-reuse-and-differentiation) does not promise unrestricted geometry differentiation, and it requires that unguarded host-only topology decisions be rejected at trace construction. Material, wavelength and layer-thickness derivatives keep their JAX graphs.
 
