@@ -33,9 +33,9 @@ directions off rather than assuming a single rule:
 
 Two goldens store a material and could not follow: `golden_reticolo_conical_sweep.npz` (a
 2024-09-09 study whose `.mat` inputs are not in this repository) and `golden_s4_field.npz`'s
-`__stack` arrays. The RETICOLO sweep holds a refractive index still, converted **at the read**,
-and says so where the conversion sits. The S4 field golden did the same until it was
-regenerated on 2026-10-14; its `__stack` arrays hold permittivity now and are read as such.
+`__stack` arrays. Both held a refractive index, converted **at the read**, until they were
+regenerated (the S4 field golden on 2026-10-14, the RETICOLO sweep from its study directory on
+2026-10-15); both store permittivity now and are read as such.
 
 The RETICOLO change is the one that could have moved numbers, so it was checked the way this
 directory's own note on a generator that could not reproduce its own golden prescribes:

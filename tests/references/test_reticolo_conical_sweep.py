@@ -52,22 +52,18 @@ def _golden():
 
 
 def _scene(g):
-    """The golden's scene as the solver now states one: ``structure`` / ``top`` / ``bot``, in
-    **permittivity**.
+    """The golden's scene as the solver states one: ``structure`` / ``top`` / ``bot``, in
+    **permittivity**, with its top-down layer axis turned bottom-up.
 
-    The stored arrays are called ``ucell`` / ``n_top`` / ``n_bot`` and hold a refractive
-    **index**. That is not an oversight left lying around — this golden is a slice of a
-    2024-09-09 RETICOLO run, and its generator cannot re-emit it under the new names: the 7-19 MB
-    ``.mat`` inputs are not in this repository and the sweep is not reproducible without them.
-    A golden that cannot be regenerated is converted at the *read* rather than rewritten in
-    place, so the file on disk stays the one the oracle produced.
-
-    Convert the stored index to permittivity and its top-down layer axis to bottom-up.
-    The thickness is reversed at each call site as well. This is not cosmetic. ``n_bot = 5`` is ``eps = 25``; handing 5 to ``bot=`` describes a substrate of
-    index 2.24 instead — a legal medium, energy-conserving, and not the one RETICOLO swept.
+    The thickness is reversed at each call site as well. The golden stores permittivity since
+    its 2026-10-15 regeneration; before that it held RETICOLO's refractive indices as ``ucell``
+    / ``n_top`` / ``n_bot`` and this squared them. The squaring now happens once, in the
+    generator. It is not cosmetic: ``n_bot = 5`` is ``eps = 25``, and handing 5 to ``bot=``
+    describes a substrate of index 2.24 instead — a legal medium, energy-conserving, and not the
+    one RETICOLO swept.
     """
-    return dict(structure=np.asarray(g['ucell'])[::-1] ** 2,
-                top=float(g['n_top']) ** 2, bot=float(g['n_bot']) ** 2)
+    return dict(structure=np.asarray(g['structure'])[::-1],
+                top=float(g['top']), bot=float(g['bot']))
 
 
 def _grid(g):
