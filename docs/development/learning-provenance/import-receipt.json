@@ -2647,7 +2647,7 @@
     {
       "source_relative": "wavebit-sphinx-guide/verification.json",
       "sha256": "55d52d6f069077c9bd4079b8efb20dcd865907c2fdb432757f8162a25b4f6cf9",
-      "redacted": "2026-10-14: two scratch log paths (<scratch>/...) replaced by <scratch>/...; bytes otherwise as imported",
+      "redacted": "2026-10-14: two scratch log paths outside the checkout replaced by <scratch>/...; bytes otherwise as imported",
       "imported_sha256": "66b62edc5457c4cf5418456be7593d16faa7afc0af52b1ba3db038f4aefdcd1c",
       "source_commit": "89bff30b31dd37455d9c3292ecf030522fd36b05",
       "working_tree_state": "clean",
