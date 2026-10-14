@@ -210,4 +210,4 @@ E의 법선장 구성에 따른 진동과 S4 Pol의 편광값 차이는 금속 �
 
 이 관측만으로 원인을 하나로 확정할 수는 없습니다. 다음 단계는 스펙트럼의 의심 구간에서 **어떤 내부 연산이 큰 응답을 만드는지** 확인하는 것입니다. [14장](metal-inverse-rule.md)에서는 {math}`\left[\!\left[1/\varepsilon\right]\!\right]`의 역행렬을 직접 살펴봅니다.
 
-원본 번호별 상세 목록은 [당시 연구 노트](https://github.com/yonghakim/wavebit-lab/blob/main/docs/nvf/nvf_metal_inverse_rule.ko.md), 그림·비교 CSV는 [실험 자료 폴더](https://github.com/yonghakim/wavebit-lab/tree/main/nvf-metal-inverse-rule)에 보존되어 있습니다. 이 장의 그림은 수정 전 비교이며, 보정 전후의 직접 비교는 [15장](metal-regularization.md)에서 이어집니다.
+원본 번호별 상세 목록과 그림·비교 CSV는 공개되지 않는 별도 lab 저장소에 보존되어 있습니다. 이 장의 그림은 수정 전 비교이며, 보정 전후의 직접 비교는 [15장](metal-regularization.md)에서 이어집니다.

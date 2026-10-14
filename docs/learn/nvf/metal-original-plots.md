@@ -212,4 +212,4 @@ These figures help distinguish three observations.
 
 These observations alone cannot establish one cause. Next ask **which internal operation produces a large response** in the suspicious interval. [Chapter 14](metal-inverse-rule.md) directly examines the inverse of {math}`\left[\!\left[1/\varepsilon\right]\!\right]`.
 
-The original numbered details remain in the [contemporaneous research notes](https://github.com/yonghakim/wavebit-lab/blob/main/docs/nvf/nvf_metal_inverse_rule.ko.md); figures and comparison CSVs are in the [experimental data folder](https://github.com/yonghakim/wavebit-lab/tree/main/nvf-metal-inverse-rule). This chapter shows pre-correction comparisons. Direct before/after comparisons follow in [Chapter 15](metal-regularization.md).
+The original numbered details and the comparison CSVs remain in a separate lab repository that is not published. This chapter shows pre-correction comparisons. Direct before/after comparisons follow in [Chapter 15](metal-regularization.md).

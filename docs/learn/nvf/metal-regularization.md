@@ -159,8 +159,8 @@ The original study also tested alternative assemblies intended to preserve a pas
 
 | What to check | Source |
 | --- | --- |
-| Sweep numbers in this chapter | [CSVs and figure-generation code](https://github.com/yonghakim/wavebit-lab/tree/main/nvf-metal-inverse-rule) |
-| Original issue labels P·F·S·R·L and detailed comparisons | [Contemporaneous research notes](https://github.com/yonghakim/wavebit-lab/blob/main/docs/nvf/nvf_metal_inverse_rule.ko.md) |
+| Sweep numbers in this chapter | CSVs and figure-generation code in a separate lab repository, not published |
+| Original issue labels P·F·S·R·L and detailed comparisons | Contemporaneous research notes in the same unpublished lab repository; the published counterpart is the English record below |
 | Floor, symmetric assembly and stopped derivatives | [factorization.py at `f90cf1d`](https://github.com/fieldalgo/wavebit/blob/f90cf1d/wavebit/_core/factorization.py) |
 | Design decisions and measurements at the time | [English record at `c5267d8`](https://github.com/fieldalgo/wavebit/blob/c5267d8/docs/nvf-metal-inverse-rule.md) |
 | Backend and central-difference comparison conditions | [Tests at `56f1cd5`](https://github.com/fieldalgo/wavebit/blob/56f1cd5/tests/test_nvf_metal_inverse_rule.py) |

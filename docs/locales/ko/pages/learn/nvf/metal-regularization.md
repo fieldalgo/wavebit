@@ -159,8 +159,8 @@ A에서 매끄러웠던 fmmax 정사각도 B에서는 {math}`R+T\approx16.1`을 
 
 | 확인할 것 | 자료 |
 | --- | --- |
-| 이 장의 스윕 수치 | [CSV와 그림 생성 코드](https://github.com/yonghakim/wavebit-lab/tree/main/nvf-metal-inverse-rule) |
-| 원래 문제 번호 P·F·S·R·L과 상세 비교표 | [당시 연구 노트](https://github.com/yonghakim/wavebit-lab/blob/main/docs/nvf/nvf_metal_inverse_rule.ko.md) |
+| 이 장의 스윕 수치 | 별도 lab 저장소(비공개)의 CSV와 그림 생성 코드 |
+| 원래 문제 번호 P·F·S·R·L과 상세 비교표 | 같은 비공개 lab 저장소의 당시 연구 노트. 공개된 대응물은 아래 영문 기록 |
 | 하한·대칭 조립·미분 차단 구현 | [`f90cf1d`의 factorization.py](https://github.com/fieldalgo/wavebit/blob/f90cf1d/wavebit/_core/factorization.py) |
 | 당시의 설계 판단과 측정 기록 | [`c5267d8`의 영문 기록](https://github.com/fieldalgo/wavebit/blob/c5267d8/docs/nvf-metal-inverse-rule.md) |
 | 백엔드·중심차분 비교 조건 | [`56f1cd5`의 테스트](https://github.com/fieldalgo/wavebit/blob/56f1cd5/tests/test_nvf_metal_inverse_rule.py) |
