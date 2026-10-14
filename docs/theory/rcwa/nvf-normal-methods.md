@@ -662,7 +662,7 @@ pre-change tree.
   including the filtered densities of a mid-run topology optimization — delegate to
   `'distance'`, documented rather than silent-by-omission. The SSP-style filtered-density
   indicator (arXiv:2503.20189) this paragraph used to name as the follow-up has since
-  been built and measured (2026-08-17, branch `claude/nvf-grayscale-contour`): read the
+  been built and measured (2026-08-17, not landed): read the
   graded band's own mid-range level set of `Re(eps)` subpixel, take the exact
   distance-to-curve directions off it, delegate binary layers to `'contour'`, and extend
   the frozen record with a digest of the normalized values (a graded band can move
@@ -693,11 +693,9 @@ pre-change tree.
   0.2-5 s/layer at large N. A wavelength sweep over fixed geometry wants
   `freeze_geometry()` once and `solve(geometry=...)` per point — the pattern
   [`backend-choice.md`](../../validation/rcwa/backend-choice.md) already recommends for fits.
-- **Multi-phase rasters** (3+ distinct values) delegate to `'distance'` under `'contour'`
-  and `'smooth'` — the two-phase indicator cannot say which of three materials is inside,
-  and the distance mask sees every interface. `'spectral'` uses `Re(eps)` as its source
-  there (exact for two phases, approximate beyond), falling back to `'distance'` only if
-  the band has no spectral contrast at all.
+- **Multi-phase rasters** (3+ distinct values) delegate to `'distance'` under `'contour'`,
+  `'spectral'` and `'smooth'` alike — the two-phase indicator cannot say which of three
+  materials is inside, and the distance mask sees every interface.
 - **Thin features** under `'contour'`: a strip narrower than ~1.4 sigma px loses its 0.5
   crossing and vanishes from the *field* (the permittivity is untouched); such pixels get
   the nearest surviving contour's direction. The threshold is `0.35/sqrt(N)` of the

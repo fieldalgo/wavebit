@@ -184,33 +184,30 @@ is still being investigated belongs here until a reference value is established.
 ## Rejected, and why
 
 Some questions end in "do not do this". The code stays out of `develop` — it would be dead
-weight — but the answer should not have to be rediscovered, and the branch holding it should not
-have to be diffed to find that out.
+weight — but the answer should not have to be rediscovered, and the prototype should not have
+to be read to find that out.
 
 **Eigendecomposition-free propagator, by matrix square root.** Replacing the per-layer `eig` with
-`sqrtm` + `expm` is algebraically exact, not an approximation, and it measures that way:
-efficiencies, amplitudes, phases and gradients all match the eig path to 1e-13. It is rejected
-anyway, because no branch rule is safe for every structure. Whether a given structure is safe
-turns out to depend on the *raster* rather than the optics — the same grating at 48 cells carries
-a growing mode where 40, 44, 52 and 56 do not — and the only way to check is to run the
-eigendecomposition the method exists to remove. The error is invisible on a thin layer and
-unbounded on a thick one, and neither the square root's residual nor energy conservation detects
-it. This conclusion is specific to the matrix-square-root formulation; R-DIT and PIM never form a
-square root and are not covered by it.
+`sqrtm` + `expm` (F. Van der Ceelen, Y. Shao and W. Coene, *Prog. Electromagn. Res. C* **163**,
+60-72 (2026), doi:10.2528/PIERC25091202) is algebraically exact, not an approximation, and it
+measures that way: efficiencies, amplitudes, phases and gradients all match the eig path to 1e-13.
+It is rejected anyway, because no branch rule is safe for every structure. Whether a given structure
+is safe turns out to depend on the *raster* rather than the optics — the same grating at 48 cells
+carries a growing mode where 40, 44, 52 and 56 do not — and the only way to check is to run the
+eigendecomposition the method exists to remove. The error is invisible on a thin layer and unbounded
+on a thick one, and neither the square root's residual nor energy conservation detects it. This
+conclusion is specific to the matrix-square-root formulation; R-DIT and PIM never form a square root
+and are not covered by it.
 
-- Branch `claude/rcwa-no-eigendecomposition-b92d89`, tag `study/no-merge/matfun-propagator`.
-  **Not merged, and deliberately not rebased.** The value is the measurements, and they are tied
-  to the tree they were taken on: `study_matfun_envelope.py` reproduces them against that tree,
-  not a later one. Rebasing forward would leave new code carrying old numbers.
-- A consequence worth knowing before you sweep: **that branch is out of scope for API renames and
-  for `develop`-wide refactors.** Its tree predates the result API rename and the
-  `factorization.py` renaming, so it still reads `de_ri` / `de_ti` and
-  `to_conv_mat_raster_discrete`. That is expected, not a defect to fix. It also predates the
-  material convention, so its structures are **refractive index** where everything here is now
-  relative permittivity — do not carry a scene across in either direction without converting,
-  since neither reading raises.
-- `git diff develop..claude/rcwa-no-eigendecomposition-b92d89` looks enormous. That is staleness,
-  not a revert; `git log develop..<branch>` shows the two commits that are actually there.
+It does not buy speed on a CPU either: NumPy ran 1.06-1.31x and PyTorch 1.5-1.6x slower than
+`eig` at truncation orders 3 to 9 (the published speedups are GPU numbers, not measured here). And
+the one safeguard, a runtime check that the propagator decays, cannot run inside a JAX or PyTorch
+trace: there a 4 um layer returned a gradient off by 6.5e-3 with no diagnostic at all.
+
+All of it was measured on 2026-08-10, on the tree of that day, and the prototype was kept out of
+`develop`. That tree predates the result-API rename and the switch of `structure` from refractive
+index to permittivity, so do not carry a scene from it across without converting; neither reading
+raises.
 
 ## Reading a timing table
 

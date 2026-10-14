@@ -51,7 +51,8 @@ Shared conventions, stated once:
   field would break the geometry-only contract the frozen-record staleness tell relies
   on. The record additionally pins the phase *count*, the one value-derived fact the
   mask cannot see. The grayscale case is a stated limit, not an accident: an SSP-style
-  filtered-density indicator (arXiv:2503.20189) is the known follow-up.
+  filtered-density indicator (arXiv:2503.20189) was built and measured on 2026-08-17 and not
+  landed, because its better angles did not reach the solve (``docs/theory/rcwa/nvf-normal-methods.md``).
 - **Covariance under a mirror is exact for one of the three.** ``'smooth'`` mirrors
   bit-exactly in both directions, like ``'distance'``. ``'contour'`` and ``'spectral'``
   carry tie-breaks — the nearest polyline sample, the nearest valid band donor — and a
