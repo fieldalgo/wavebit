@@ -13,8 +13,12 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_every_preserved_reference_and_record_keeps_its_original_bytes():
     evidence = json.loads((ROOT / 'tools/relocations.json').read_text())['immutable']
     # 7336 until 2026-10-14, when the 6,943 study records no test or live study input reads
-    # were archived outside the repository and their ledger rows removed with them.
-    assert len(evidence) == 393
+    # were archived outside the repository and their ledger rows removed with them; 322 since the
+    # same day, when the 71 tests/references rows left: goldens and oracles are regenerated and
+    # extended on purpose (bc48a2ad added arrays to golden_fmmax_field.npz), so a byte pin on
+    # them fails at every legitimate change. The ledger keeps study records, branding masters,
+    # fixtures and tutorial inputs, which are preserved rather than regenerated.
+    assert len(evidence) == 322
     for old, row in evidence.items():
         path = ROOT / row['target']
         assert path.is_file(), (old, path)
