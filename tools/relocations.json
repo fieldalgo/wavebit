@@ -1168,8 +1168,11 @@
     },
     "studies/results/fdtd_conductive_stack_calibration_attempt1.json": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_calibration_attempt1.json",
-      "sha256": "3d8e49163ac9b555e864413c5e1e19681fbc7a24b4f69abf17cce0fee6a84645",
-      "git_blob": "e56d9a5b21d77f4dc186cc14fdeaed765bafe353",
+      "sha256": "0de70e5b1d54e7b374fa312b699be61dc192f231a4de96ba57d251b3b2e8bb24",
+      "git_blob": "ef84d2e0ac683b3dcd293c610ce9f343bc3209da",
+      "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
+      "original_sha256": "3d8e49163ac9b555e864413c5e1e19681fbc7a24b4f69abf17cce0fee6a84645",
+      "original_git_blob": "e56d9a5b21d77f4dc186cc14fdeaed765bafe353",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/cfl-only-first-member.log": {
@@ -1384,8 +1387,11 @@
     },
     "studies/results/fdtd_conductive_stack_targeted.json": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_targeted.json",
-      "sha256": "28c2190c243b4c4489f58ae39f3f238da0eb385ebd6f59f2df80ae318f9afacb",
-      "git_blob": "c03efdfa76cb7f2874a46ea7ce5f06103917379d",
+      "sha256": "bf15184857411ffe1746fa9591e32f2d721cb52919735612cccdfc49907b744e",
+      "git_blob": "fbd1164e64e8cbf6315f3533bc20dc679ce8f9a1",
+      "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
+      "original_sha256": "28c2190c243b4c4489f58ae39f3f238da0eb385ebd6f59f2df80ae318f9afacb",
+      "original_git_blob": "c03efdfa76cb7f2874a46ea7ce5f06103917379d",
       "git_mode": "100644"
     },
     "studies/results/fdtd_cpml_evanescent.log": {
@@ -1432,8 +1438,11 @@
     },
     "studies/results/fdtd_debye_stack_calibration_attempt1.json": {
       "target": "studies/fdtd/debye_stack/records/fdtd_debye_stack_calibration_attempt1.json",
-      "sha256": "ee0a2b693152bece67cf787ae77dec468cc22739ef71d07e02304689a0130344",
-      "git_blob": "0d000704e2eb4c0ad45da44af0d80e6062759765",
+      "sha256": "3349406c8339eedb83dc68d6f05d49d5f9425c678e88d2e925d57dcb8989aa0e",
+      "git_blob": "07313c5d194cb06bff25a749398c8e7dcf5a295f",
+      "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
+      "original_sha256": "ee0a2b693152bece67cf787ae77dec468cc22739ef71d07e02304689a0130344",
+      "original_git_blob": "0d000704e2eb4c0ad45da44af0d80e6062759765",
       "git_mode": "100644"
     },
     "studies/results/fdtd_debye_stack_report.json": {
@@ -1444,8 +1453,11 @@
     },
     "studies/results/fdtd_debye_stack_targeted.json": {
       "target": "studies/fdtd/debye_stack/records/fdtd_debye_stack_targeted.json",
-      "sha256": "103911cdadf198e72fa31745103a7294aff0abcae697bb8693484be2792df2c7",
-      "git_blob": "9a3e01edb3f2383323c3dc1ac3016d6a075319f0",
+      "sha256": "4cf9d8d0e776a67163b3b8dc10138f2b917a150f2ae15a3ed9973770cdb7dacc",
+      "git_blob": "50a97c068fdd2012867f99dfd473b78011028cb1",
+      "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
+      "original_sha256": "103911cdadf198e72fa31745103a7294aff0abcae697bb8693484be2792df2c7",
+      "original_git_blob": "9a3e01edb3f2383323c3dc1ac3016d6a075319f0",
       "git_mode": "100644"
     },
     "studies/results/fdtd_debye_sum_film_calibration_acceptance.json": {
@@ -1498,8 +1510,11 @@
     },
     "studies/results/fdtd_inactive_lorentz_targeted.json": {
       "target": "studies/fdtd/inactive_lorentz/records/fdtd_inactive_lorentz_targeted.json",
-      "sha256": "bc63ecc79e83c17a407ae51a1347fe7908f16bb7f1176d98ddfe30760af6f620",
-      "git_blob": "279b7cc3cb29581d730799cd6c47055e2367d31b",
+      "sha256": "5b6a7f189db8c0ae4e2448a8d3ef9b6569b740ea9dfc426c4014ddb5705f9e94",
+      "git_blob": "2535a24c74879fd929a9d773ab1139f1fd69a1ba",
+      "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
+      "original_sha256": "bc63ecc79e83c17a407ae51a1347fe7908f16bb7f1176d98ddfe30760af6f620",
+      "original_git_blob": "279b7cc3cb29581d730799cd6c47055e2367d31b",
       "git_mode": "100644"
     },
     "studies/results/fdtd_junction_production_ties.log": {
@@ -1840,8 +1855,11 @@
     },
     "studies/results/fdtd_oscillator_stack_calibration_attempt1.json": {
       "target": "studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_attempt1.json",
-      "sha256": "c497ea9211ca98a3b9f9a9b08bf93fb135169570a9f8324e74288ddeaef81741",
-      "git_blob": "d9ec16d1cf43a0808aa1db232fbac622c616e444",
+      "sha256": "62b9b0298a808290d7a338535ac273423314a17cbe2f19dd8fe446aecbd2634b",
+      "git_blob": "e728c2f59c694952fbf6f8eea38c93820c7c2b1c",
+      "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
+      "original_sha256": "c497ea9211ca98a3b9f9a9b08bf93fb135169570a9f8324e74288ddeaef81741",
+      "original_git_blob": "d9ec16d1cf43a0808aa1db232fbac622c616e444",
       "git_mode": "100644"
     },
     "studies/results/fdtd_oscillator_stack_report.json": {
@@ -1852,8 +1870,11 @@
     },
     "studies/results/fdtd_oscillator_stack_targeted.json": {
       "target": "studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_targeted.json",
-      "sha256": "2b17fdd2238f042a47b7a93e469aaa9b69804c0af40d3c37bdd3335fc90fbadf",
-      "git_blob": "053cd929397dad3a773ad5598c20cfe5b6cf416a",
+      "sha256": "651f71ef9954bbc6eb664dd7d2b7f00dae48ea8740d0bf443d08e57e6fda149e",
+      "git_blob": "2d6e664df1fb999cdb19f688c86e4069ca6fdb01",
+      "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
+      "original_sha256": "2b17fdd2238f042a47b7a93e469aaa9b69804c0af40d3c37bdd3335fc90fbadf",
+      "original_git_blob": "053cd929397dad3a773ad5598c20cfe5b6cf416a",
       "git_mode": "100644"
     },
     "studies/results/fdtd_oscillator_sum_film_calibration_acceptance.json": {
