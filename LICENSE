@@ -290,3 +290,21 @@
    copy, and one bridge script, tests/references/interface/reti_aniso.m, lays
    out its calls after RETICOLO's example exemple_V9_0D_anisotrope.m.
    tests/references/README.md records the check.
+
+   ---
+   From 2022-09-20 to 2026-08-03 this repository's history carried scattering-
+   matrix helpers whose file header states that "many codes for scattering
+   matrix method are from" the 'Rigorous-Coupled-Wave-Analysis' package of
+   Nathan Zhao (Stanford University),
+   https://github.com/zhaonat/Rigorous-Coupled-Wave-Analysis, reached through
+   the fork https://github.com/yonghakim/zhaonat-rcwa: meent/integ/smm_util.py
+   and meent/integ/scattering_method.py, later fieldwave/on_numpy/,
+   on_jax/ and on_torch/emsolver/smm_util.py and scattering_method.py. That
+   package is licensed under the MIT License; its LICENSE file carries the MIT
+   text under a template copyright line ("Copyright (c) 2018 The Python
+   Packaging Authority"), checked on 2026-10-14. The MIT License requires that
+   its copyright notice and permission notice be retained, so this notice
+   records the origin for the history that still contains those files. They
+   were deleted on 2026-08-03 (commit 244cb819, "delete the triplicated
+   transfer/convolution/scattering modules") and nothing in the current tree
+   derives from them.
