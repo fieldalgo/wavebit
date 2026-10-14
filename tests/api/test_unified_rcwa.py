@@ -335,3 +335,73 @@ def test_prepared_refuses_wrong_problem_type_through_the_public_error_contract()
     with pytest.raises(ValidationError) as error:
         prepared.run(None)
     assert error.value.issue.code == 'problem.type'
+
+
+def patterned(geometry, period=(600., 600.)):
+    """One patterned layer in nanometres, wavelength off every Rayleigh anomaly."""
+    regions = tuple(rcwa.Region(geometry=g, material=Material(12.25))
+                    for g in (geometry if isinstance(geometry, tuple) else (geometry,)))
+    return rcwa.Problem(units=Units(length='nm'),
+        stack=rcwa.Stack(period=period, bottom=Material(2.25),
+                         layers=(rcwa.Layer(thickness=200., background=Material(1.), regions=regions),)),
+        excitation=rcwa.Excitation(wavelength=850., sources=(rcwa.PlaneWave(polarization='s'),)))
+
+
+PATTERNED_NUMERICS = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=256)
+
+# The lifecycle's stated scope (docs/design/unified-api.md section 7, docs/guide/common/autodiff.md):
+# its topology guard reads concrete values, so JAX-traced geometry is refused at trace
+# construction rather than replayed against a record it may no longer fit.
+TRACED_GEOMETRY = {
+    'circle radius': (lambda v: patterned(rcwa.Circle(radius=v)), 160.,
+                      'stack.layers[0].regions[0].geometry.radius'),
+    'rectangle size': (lambda v: patterned(rcwa.Rectangle(size=(v, 200.))), 260.,
+                       'stack.layers[0].regions[0].geometry.size'),
+    'rectangle center': (lambda v: patterned(rcwa.Rectangle(size=(260., 200.), center=(v, 0.))), 10.,
+                         'stack.layers[0].regions[0].geometry.center'),
+    'rectangle angle': (lambda v: patterned(rcwa.Rectangle(size=(260., 200.), angle=v)), .1,
+                        'stack.layers[0].regions[0].geometry.angle'),
+    'period': (lambda v: patterned(rcwa.Circle(radius=150.), period=(v, 600.)), 600., 'stack.cell'),
+}
+
+
+@pytest.mark.parametrize('transform', ['grad', 'jit'])
+@pytest.mark.parametrize('case', sorted(TRACED_GEOMETRY))
+def test_jax_traced_geometry_is_refused_by_a_prepared_run(case, transform):
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    build, value, path = TRACED_GEOMETRY[case]
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(build(value), numerics=PATTERNED_NUMERICS, backend='jax')
+        loss = lambda v: jnp.sum(prepared.run(build(v)).T)
+        apply = jax.grad(loss) if transform == 'grad' else jax.jit(loss)
+        with pytest.raises(UnsupportedFeatureError) as error:
+            apply(jnp.asarray(value))
+    assert error.value.issue.code == 'prepared.host_topology'
+    assert error.value.issue.path == path
+
+
+def test_torch_differentiates_a_shape_dimension_through_a_prepared_run():
+    torch = pytest.importorskip('torch')
+    build = lambda r: patterned(rcwa.Circle(radius=r))
+    prepared = rcwa.prepare(build(torch.tensor(150., dtype=torch.float64)),
+                            numerics=PATTERNED_NUMERICS, backend='torch')
+    radius = torch.tensor(160., dtype=torch.float64, requires_grad=True)
+    prepared.run(build(radius)).T.sum().backward()
+    transmitted = lambda r: float(prepared.run(build(torch.tensor(r, dtype=torch.float64))).T.sum())
+    step = 1e-3
+    finite_difference = (transmitted(160.+step) - transmitted(160.-step))/(2*step)
+    assert abs(finite_difference) > 1e-3
+    assert float(radius.grad) == pytest.approx(finite_difference, rel=1e-7)
+
+
+def test_torch_shape_step_across_a_topology_boundary_asks_for_a_new_preparation():
+    torch = pytest.importorskip('torch')
+    pair = lambda w: patterned(tuple(rcwa.Rectangle(size=(w, 200.), center=(c, 0.)) for c in (-60., 60.)))
+    prepared = rcwa.prepare(pair(100.), numerics=PATTERNED_NUMERICS, backend='torch')
+    width = torch.tensor(110., dtype=torch.float64, requires_grad=True)
+    prepared.run(pair(width)).T.sum().backward()
+    assert torch.isfinite(width.grad)
+    with pytest.raises(IncompatibleProblemError) as error:
+        prepared.run(pair(torch.tensor(130., dtype=torch.float64, requires_grad=True)))
+    assert error.value.issue.code == 'prepared.topology'
