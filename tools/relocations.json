@@ -3091,8 +3091,11 @@
     },
     "tests/references/golden_fmmax_field.npz": {
       "target": "tests/references/golden_fmmax_field.npz",
-      "sha256": "c4d8d5d12709577def13604b0062789342557e754d98270c87d7f008921486d0",
-      "git_blob": "abce790c7c1a884995297aeba6124cb25bc65838",
+      "sha256": "277b04cf7bac4d3ea0d8e476c7bcf6b5b65820345918e08d32d5ca69a66a979c",
+      "git_blob": "55e53acec2ee6f84e140a54038097442657d9655",
+      "changed": "2026-10-14 (bc48a2ad): arrays for an x/y-asymmetric crossed patch and a uniform control added; the 13 original arrays are unchanged",
+      "original_sha256": "c4d8d5d12709577def13604b0062789342557e754d98270c87d7f008921486d0",
+      "original_git_blob": "abce790c7c1a884995297aeba6124cb25bc65838",
       "git_mode": "100644"
     },
     "tests/references/golden_fmmax_laurent.npz": {
