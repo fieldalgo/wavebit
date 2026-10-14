@@ -85,6 +85,7 @@ subtrees:
           - file: guide/rcwa/cartesian-rectangle-pair-nvf
           - file: guide/rcwa/coherent-illumination
           - file: guide/rcwa/conforming-nvf
+          - file: guide/rcwa/exceptional-points
           - file: guide/rcwa/fields
           - file: guide/rcwa/full-tensor-patterns
           - file: guide/rcwa/light

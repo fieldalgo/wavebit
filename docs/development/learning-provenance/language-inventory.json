@@ -8,7 +8,7 @@
     "design": 3,
     "development": 10,
     "getting-started": 5,
-    "guide": 38,
+    "guide": 39,
     "learn": 43,
     "migration": 7,
     "reference": 10,
@@ -312,6 +312,12 @@
       "section": "guide"
     },
     {
+      "path": "docs/guide/rcwa/exceptional-points.md",
+      "sha256": "9a512b5553b2d2f4866e3c46efbcb9f625f9e393fd6c0fcfc66e4f1489d778da",
+      "language": "en",
+      "section": "guide"
+    },
+    {
       "path": "docs/guide/rcwa/fields.md",
       "sha256": "b4667dafa12c3be697dd2915d5164c8af966efef599899d5112dc6143ca62ce6",
       "language": "en",
@@ -325,7 +331,7 @@
     },
     {
       "path": "docs/guide/rcwa/index.md",
-      "sha256": "55ea22a4cc7ad132c5f470ef8b83aae8a56c35fb819b65f3c98728e160489bc0",
+      "sha256": "a6ddaf9843ea4797a9594ff72f642fa33bafb0e182ba708b1f45c09bd4b34a50",
       "language": "en",
       "section": "guide"
     },
@@ -1575,6 +1581,13 @@
       "review": "SVG prose and accessibility text audited; glyph figures covered by explicit label/geometry receipt"
     },
     {
+      "path": "docs/_static/ep-eigenvectors.svg",
+      "sha256": "d3a7ce2f4dd596f8a6e684ec9b9305e919aafb7bfb0896c2568b3ecc6812aa40",
+      "language": "en",
+      "korean_original": null,
+      "review": "Authored mathematical illustration of eigenvector coalescence; shared by both language editions."
+    },
+    {
       "path": "docs/_static/learning/08-coherent-illumination.svg",
       "sha256": "3df0a9570a1a43a344e83bbdb45c614e8055c74eb324b0ce5fcfa640799d42dc",
       "language": "en",
@@ -2368,7 +2381,7 @@
   ],
   "course_pages": 40,
   "course_figures": 100,
-  "translated_body_overlays": 44,
+  "translated_body_overlays": 45,
   "additional_korean_pages": "Authored current API and developer translations listed below; gettext where available; explicit English fallback otherwise.",
   "scientific_records": "Preserved with original hashes; no solver rerun for translation.",
   "browser_review": [
@@ -2411,6 +2424,14 @@
       "korean_overlay_sha256": "32142308987d8ecb4c2715c12174dd9b929cc15b3ce468ee8d6294a2845a08d6",
       "scope": "Complete translation of maintained current guidance; distinct from the forty imported historical course chapters.",
       "link_destinations": "Same canonical routes and source files; verified in both language builds."
+    },
+    {
+      "canonical": "docs/guide/rcwa/exceptional-points.md",
+      "canonical_sha256": "9a512b5553b2d2f4866e3c46efbcb9f625f9e393fd6c0fcfc66e4f1489d778da",
+      "korean_overlay": "docs/locales/ko/pages/guide/rcwa/exceptional-points.md",
+      "korean_overlay_sha256": "258037558d8aaea1132a0e42ac3bc679f1287ef8faaf586a95a45eb36b32eb41",
+      "scope": "Complete authored explanation of exceptional points and basis-change appendices.",
+      "link_destinations": "Same canonical routes and shared mathematical figure."
     }
   ],
   "previous_build_checks": {
@@ -2430,5 +2451,13 @@
     "static_checks": "Ruff and diff whitespace checks passed for the changed documentation guard."
   },
   "build_checks_scope": "Historical translation checkpoint before private-source publication filtering; its page counts are not the current published inventory.",
-  "publication_boundary": "Only maintained teaching material and selected numerical records are published. Raw author notes, draft designs, session links, source illustrations, exploratory notebooks and prototype bundles stay in the private lab."
+  "publication_boundary": "Only maintained teaching material and selected numerical records are published. Raw author notes, draft designs, session links, source illustrations, exploratory notebooks and prototype bundles stay in the private lab.",
+  "ep_explainer_update": {
+    "scope": "Authored exceptional-point explanation with five detailed basis-change appendices; no numerical runtime changes or new solver-validation claims.",
+    "builds": "English and Korean Sphinx -W builds passed without warnings.",
+    "contracts": "All 150 documentation contract tests passed.",
+    "links": "227 local references across both explanation pages checked; no missing targets or fragments.",
+    "translation": "All 31 display equations match apart from sentence punctuation; link destinations match.",
+    "browser": "Both pages render math and the shared figure without errors; Korean introduction and appendices visually reviewed, with no page overflow at 390 px width."
+  }
 }

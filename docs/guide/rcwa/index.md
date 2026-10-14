@@ -12,6 +12,7 @@ Use `rcwa.Problem`, `rcwa.Numerics` and the shared check/prepare/run lifecycle. 
 - [Two Cartesian rectangles on an oblique lattice](cartesian-rectangle-pair-nvf.md)
 - [Coherent illumination and internal sources](coherent-illumination.md)
 - [Conforming NVF from rectangle layers](conforming-nvf.md)
+- [Exceptional points: why changing the basis fixes propagation](exceptional-points.md)
 - [Near fields](fields.md)
 - [Full tensor materials in patterned layers](full-tensor-patterns.md)
 - [Saying what the light is](light.md)
