@@ -1973,7 +1973,9 @@
     },
     {
       "source_relative": "wavebit-sphinx-guide/source/records/learn-measurements.json",
-      "sha256": "4b837967ade3d80b9362f5bac9847998a6a8a1df1b142bf012f00f347de1eb3f",
+      "sha256": "6a78b571ded7e8bd153d20ac839026a10482630b147bc38473dfb170e9a7f553",
+      "redacted": "2026-10-14: machine paths outside the checkout replaced by <checkout>, <conda env> and <pytorch source>; bytes otherwise as imported",
+      "imported_sha256": "4b837967ade3d80b9362f5bac9847998a6a8a1df1b142bf012f00f347de1eb3f",
       "source_commit": "89bff30b31dd37455d9c3292ecf030522fd36b05",
       "working_tree_state": "clean",
       "category": "provenance",
@@ -2006,7 +2008,9 @@
     },
     {
       "source_relative": "wavebit-sphinx-guide/source/records/power-plot-toolchain.json",
-      "sha256": "544dd6111768f866c953173f253bb3df9866d24d26e9d88431410af95e1f9dd0",
+      "sha256": "464af23ea3ddc86a2a9671175f4d6d2ee61e0ced476e5976701785ca08c9d22f",
+      "redacted": "2026-10-14: machine paths outside the checkout replaced by <checkout>, <conda env> and <pytorch source>; bytes otherwise as imported",
+      "imported_sha256": "544dd6111768f866c953173f253bb3df9866d24d26e9d88431410af95e1f9dd0",
       "source_commit": "89bff30b31dd37455d9c3292ecf030522fd36b05",
       "working_tree_state": "clean",
       "category": "provenance",
@@ -2061,7 +2065,9 @@
     },
     {
       "source_relative": "wavebit-sphinx-guide/source/records/tensor-material-regression.log",
-      "sha256": "c462be61dcb5794bf53e82546c03960c242ba217b892cd813b9bcb6d113b9f6e",
+      "sha256": "8ce5143e28345c45fb5cc43dfa7319dffae4be9d2ab7394b2902971f00869751",
+      "redacted": "2026-10-14: machine paths outside the checkout replaced by <checkout>, <conda env> and <pytorch source>; bytes otherwise as imported",
+      "imported_sha256": "c462be61dcb5794bf53e82546c03960c242ba217b892cd813b9bcb6d113b9f6e",
       "source_commit": "89bff30b31dd37455d9c3292ecf030522fd36b05",
       "working_tree_state": "clean",
       "category": "provenance",
