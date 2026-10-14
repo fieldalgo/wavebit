@@ -79,6 +79,12 @@ def test_it_builds_and_differentiates_on_every_backend(name):
 
     The gradient is checked too, not just the forward build: this factorization exists to be
     optimised through, and a build that traces but detaches would pass a values-only test.
+    A build that detaches only *part* of the graph passes a nonzero check as well, so the
+    gradient is held to a NumPy central difference. The functional weights all five slots
+    with fixed complex weights: smooth, unlike the ``abs().sum()`` of slot 0 this used to take,
+    whose kinks at near-zero entries left the difference 1e-6 off. Measured 2026-10-14:
+    1.3e-9 on both backends at h = 1e-5. Detaching ``block(B)`` before its inverse leaves
+    every value unchanged and the nonzero check passing, and fails this.
     """
     pytest.importorskip(name)
     from wavebit._common.backend import array_namespace
@@ -89,28 +95,45 @@ def test_it_builds_and_differentiates_on_every_backend(name):
     normal_x, normal_y = normal_vector_field(eps)
     ref = [np.asarray(m) for m in pn_eps_conv_matrices(np, e33, normal_x, normal_y, 4, 4)]
 
+    rng = np.random.default_rng(7)
+    weights = [rng.standard_normal((25, 25)) + 1j * rng.standard_normal((25, 25)) for _ in range(5)]
+    direction = rng.standard_normal(e33.shape) + 1j * rng.standard_normal(e33.shape)
+
+    def functional(e, normals, weights, real):
+        slots = pn_eps_conv_matrices(array_namespace(e), e, *normals, 2, 2)
+        return sum(real((w * s).sum()) for w, s in zip(weights, slots))
+
     if name == 'jax':
         import jax
         import jax.numpy as jnp
         jax.config.update('jax_enable_x64', True)
         args = (jnp.asarray(e33), jnp.asarray(normal_x), jnp.asarray(normal_y))
         xp = array_namespace(args[0])
-        grad = jax.grad(lambda e: jnp.abs(
-            pn_eps_conv_matrices(xp, e, args[1], args[2], 2, 2)[0]).sum())(args[0])
+        grad = jax.grad(functional)(args[0], args[1:], [jnp.asarray(w) for w in weights], jnp.real)
+        # For a real function of a complex input JAX returns df/dx - i df/dy ...
+        along = float(np.real(np.sum(np.asarray(grad) * direction)))
     else:
         import torch
         args = (torch.as_tensor(e33).clone().requires_grad_(True),
                 torch.as_tensor(np.asarray(normal_x)), torch.as_tensor(np.asarray(normal_y)))
         xp = array_namespace(args[0])
-        pn_eps_conv_matrices(xp, args[0], args[1], args[2], 2, 2)[0].abs().sum().backward()
+        functional(args[0], args[1:], [torch.as_tensor(w) for w in weights], torch.real).backward()
         grad = args[0].grad
+        # ... and PyTorch its conjugate, df/dx + i df/dy.
+        along = float(np.real(np.sum(np.conj(grad.numpy()) * direction)))
 
     def numpy(a):                     # torch refuses .numpy() on a grad-tracking tensor
         return np.asarray(a.detach() if hasattr(a, 'detach') else a)
 
     got = pn_eps_conv_matrices(xp, args[0], args[1], args[2], 4, 4)
     assert max(np.abs(numpy(a) - b).max() for a, b in zip(got, ref)) < 1e-12
-    assert np.isfinite(numpy(grad)).all() and np.abs(numpy(grad)).max() > 0
+
+    h = 1e-5
+    normals = (normal_x, normal_y)
+    expected = (functional(e33 + h * direction, normals, weights, np.real)
+                - functional(e33 - h * direction, normals, weights, np.real)) / (2 * h)
+    assert np.isfinite(numpy(grad)).all()
+    assert along == pytest.approx(expected, rel=1e-6), (along, expected)
 
 
 # --------------------------------------------------------------- the gate that caught the bug

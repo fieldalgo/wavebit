@@ -1542,11 +1542,23 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
     `jnp.array` agree on values and on gradients for a list of scalars, measured -- but it was
     a branch no JAX test reached, since every JAX caller in this suite passes `period` as one
     whole `jnp.asarray([...])`. This is that case.
+
+    The gradient is held to a NumPy central difference, not to `!= 0`. A pair rebuilt with the
+    second entry detached still differentiates through the first: measured 2026-10-14, cutting
+    the second leaf in the `period` setter gave -1.25e-4 against the true -1.10e-3 on both
+    backends, and the nonzero check passed it. Both backends agree with the difference to 2.4e-9.
     """
     structure = np.ones((1, 8, 8))
     structure[0, 2:6, 2:6] = 4.0
     cfg = dict(truncation_order=[3, 3], thickness=[150.0], wavelength=900.0, top=1.0, bot=1.0,
                theta=0.2, phi=0.3, psi=0.4)
+
+    def reference(p):
+        return float(np.real(np.asarray(_legacy_wavebit.rcwa(
+            backend='numpy', structure=structure, period=[p, 2.0 * p], **cfg).solve().T)).sum())
+
+    h = 1e-3
+    expected = (reference(400.0 + h) - reference(400.0 - h)) / (2 * h)
 
     if backend == 'jax':
         jax = pytest.importorskip('jax')
@@ -1558,8 +1570,8 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
             return jnp.sum(jnp.asarray(solver.solve().T))
 
         p = jnp.asarray(400.0)
-        grad = jax.grad(loss)(p)
-        assert np.isfinite(float(grad)) and float(grad) != 0.0
+        grad = float(jax.grad(loss)(p))
+        assert grad == pytest.approx(expected, rel=1e-6), (grad, expected)
         # and the pair really was built from both entries, not from the first twice
         solver = _legacy_wavebit.rcwa(backend='jax', structure=jnp.asarray(structure),
                               period=[p, 2.0 * p], **cfg)
@@ -1569,7 +1581,8 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
         solver = _legacy_wavebit.rcwa(backend='torch', structure=torch.asarray(structure),
                               period=[leaf, 2.0 * leaf], **cfg)
         torch.real(solver.solve().T).sum().backward()
-        assert leaf.grad is not None and float(leaf.grad) != 0.0
+        assert leaf.grad is not None
+        assert float(leaf.grad) == pytest.approx(expected, rel=1e-6), (float(leaf.grad), expected)
 
     got = np.asarray(solver.period, dtype=float) if backend == 'jax' else\
         solver.period.detach().numpy()
