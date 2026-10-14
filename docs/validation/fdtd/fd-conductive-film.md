@@ -225,8 +225,9 @@ calibration exposures and their provenance limitations.
 
 The campaign was registered at 2026-10-06T05:13:04 UTC with fingerprint
 `27d10f1eea7acf4696358d039eef0c502a391577ae0903e565baa44c0fc62ddc`.
-Its source copies, known exposures and runtime identities are retained in
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_registration.json`.
+Its source copies, known exposures and runtime identities are retained in the
+registration record `fdtd_conductive_film_registration.json`, archived outside the
+repository.
 
 Every placement, polarization, wavelength and complex `r`/`t` coefficient
 is retained: 24 cells in total. The empirical noise proxy is the sum of
@@ -281,9 +282,9 @@ exactly as decoded values and as canonical JSON, including complex amplitudes,
 powers, absorptance, decay, energy diagnostics, time step, grid and source
 configuration. The complete cell records are also identical. Result-file hashes
 differ because source identities, timestamps and wall times are separate
-metadata. This comparison is recorded in
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_final_source_v1_audit.json`; it establishes
-unchanged measured film behaviour across the refusal-routing correction.
+metadata. This comparison is recorded in the audit record
+`fdtd_conductive_film_final_source_v1_audit.json`, archived outside the repository; it
+establishes unchanged measured film behaviour across the refusal-routing correction.
 
 **Report recovery, without new calculations.** After the twentieth successful
 worker the controller exited 1 while serializing a NumPy Boolean in the
@@ -299,9 +300,9 @@ is explicitly a reproduction.
 
 The recovery audit recomputes all 24 cells and verifies the registration,
 source identities, worker ledger and all 40 raw worker result/log files.
-Its canonical record is
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_report_recovery.json`, including the
-preserved failure's provenance, artifact hashes and descriptive summary.
+Its canonical record, `fdtd_conductive_film_report_recovery.json`, is archived outside
+the repository; it includes the preserved failure's provenance, artifact hashes and
+descriptive summary.
 The final-source physical confirmation, full and slow tiers, and frozen
 reference checks are complete. Curved conductive bodies,
 Drude/Lorentz interfaces, mixed lossy junctions and their derivatives remain
@@ -326,9 +327,11 @@ mutated and restored source hashes, replacement text, raw log hashes, one
 assertion failure with exit 1 per witness, and the restored 53-pass baseline.
 It accepted all nine without rerunning a mutation or a field solve. This is a
 correction to evidence parsing, not a relaxed production test. The canonical
-record is `studies/fdtd/conductive_film/records/fdtd_conductive_film_mutations.json`; it points to
-the preserved first attempt and audit. Earlier targeted fixture failures and
-calibration exposures also remain in the controls directory and registration.
+record is `fdtd_conductive_film_mutations.json`; it points to the preserved first
+attempt and audit. Earlier targeted fixture failures and calibration exposures
+remain in the study's controls directory, `fdtd_conductive_film_controls`, and in
+the registration. The record, the attempt, the audit and the controls directory are
+archived outside the repository.
 
 After the stencil-refusal correction, a combined run passed all 54 cases:
 the 53 new film cases and the existing stencil case that failed in the full
@@ -336,19 +339,20 @@ suite. The same nine production mutations were then repeated on the corrected
 source. All nine produced accepted assertion failures, every source was
 restored byte for byte, and the restored 53-case film suite passed with exit 0.
 This second attempt is recorded separately in
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_final_source_v1_mutations_attempt2.json`;
-it does not overwrite the original witnesses or their parsing history.
+`fdtd_conductive_film_final_source_v1_mutations_attempt2.json`, archived outside the
+repository; it does not overwrite the original witnesses or their parsing history.
 
 Ruff 0.16.2 checked 614 tracked and new Python files with `--no-cache`; all
 seven batches exited 0. The later recovery utility also passed with exit 0,
 bringing the recorded coverage to 615 files. The original manifest
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_ruff_validation.json` retains the file
-inventory, complete log, exits and unchanged source identities; the added-file
-check is in `studies/fdtd/conductive_film/records/fdtd_conductive_film_ruff_recovery_validation.json`.
+`fdtd_conductive_film_ruff_validation.json` retains the file inventory, complete log,
+exits and unchanged source identities; the added-file check is in
+`fdtd_conductive_film_ruff_recovery_validation.json`.
 The corrected production module and new confirmation adapter also passed
 `--no-cache`, bringing the cumulative inventory to 616 files. Their log,
 current source hashes and inventory are recorded in
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_ruff_final_source_validation.json`.
+`fdtd_conductive_film_ruff_final_source_validation.json`. All three Ruff manifests
+are archived outside the repository.
 The FD digest, like the campaign's, hashes each sorted path relative to the
 hashed subtree and LF-normalized file with NUL separators. This differs intentionally from the older regression
 wrapper's delimiter-free digest and must not be compared as the same algorithm.
@@ -360,16 +364,15 @@ The first full regression attempt stopped at
 2,443 tests passed, eight were skipped and one failed in 2,078.58 seconds.
 Pytest exited 2 after stopping on the first failure; the validation controller
 exited 1. This is an incomplete failed run, not a passing full suite. Its raw
-log and validation manifest are retained as
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_controls/full_attempt1.log` and
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_validation_attempt1.json`.
+log, `full_attempt1.log` in the controls directory, and its validation manifest,
+`fdtd_conductive_film_validation_attempt1.json`, are archived outside the repository.
 
 The new unsupported-film bypass guard intercepted a stencil scene before the
 stencil operator could issue its existing certificate error. The correction
 narrows that guard to voxel discretization, preserving the stencil refusal.
 It changes guard dispatch rather than the film's numerical formulas.
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_source_transition.json` verifies that
-overlaying the archived pre-correction module on the final package reproduces
+The transition record `fdtd_conductive_film_source_transition.json`, archived outside
+the repository, verifies that overlaying the archived pre-correction module on the final package reproduces
 both original source digests. Its normalized diff contains only that refusal
 routing change. The final FD digest is
 `09fe9737be88b1f2e297dbfe8e92de4e44fc46a51f8e9a657ec3516ad98989f5`
@@ -399,8 +402,8 @@ and audit passed, with all 20 physical payloads identical to the originals.
 The final-source full tier collected 2,806 cases and passed with 2,798 passed
 and eight skipped, exit 0, in 2,355.36 seconds as reported by pytest
 (2,356.09 seconds including the wrapper). There were no failures or worker
-crashes. Its manifest is `studies/fdtd/conductive_film/records/fdtd_conductive_film_validation.json`
-and its raw log is `studies/fdtd/conductive_film/records/fdtd_conductive_film_controls/full.log`.
+crashes. Its manifest, `fdtd_conductive_film_validation.json`, and its raw log,
+`full.log` in the controls directory, are archived outside the repository.
 The wrapper identifies the same final FD source with its delimiter-free digest,
 `b7f5ed7b04c8d75b6c4c6fac127bb19683cddb4e8b64d1832e99af4ff5d84535`.
 
@@ -409,7 +412,7 @@ introducing one additional documentation parameter case. The final document
 contract check separately collected and passed all 67 cases, exit 0, including
 that addition; it is not included in the 2,806 collected above. The count,
 complete collection/run logs and unchanged source hashes are recorded in
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_docs_final_validation.json`.
+`fdtd_conductive_film_docs_final_validation.json`, archived outside the repository.
 
 The separate slow tier collected and passed all 81 cases, exit 0, in
 1,201.38 seconds as reported by pytest (1,201.92 seconds including the
@@ -417,9 +420,10 @@ wrapper), without failures or worker crashes. The four read-only freezers
 reproduced 143, 288, 140 and 570 arrays respectively: all 1,141 arrays matched
 bit for bit, all four processes exited 0, and no golden was rewritten.
 These results are in the same validation manifest, with `slow.log` and
-`freezer0.log` through `freezer3.log` in the controls directory. Production
-source identity remained unchanged throughout the successful gates.
+`freezer0.log` through `freezer3.log` in the controls directory, all archived
+outside the repository. Production source identity remained unchanged throughout
+the successful gates.
 
 The final Sphinx build uses `-W`, with output and exit status retained in
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_sphinx_final_validation.json` and
-`studies/fdtd/conductive_film/records/fdtd_conductive_film_controls/sphinx_final.log`.
+`fdtd_conductive_film_sphinx_final_validation.json` and in `sphinx_final.log` in the
+controls directory, both archived outside the repository.

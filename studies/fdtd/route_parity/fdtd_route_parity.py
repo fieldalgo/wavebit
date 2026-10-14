@@ -5,7 +5,7 @@ top-to-bottom layers, downward z coordinates and corner phase. It validates
 the private engines; public API conventions are covered by separate tests.
 The narrative below records the original experiment and its route names.
 
-    python studies/fdtd/route_parity/fdtd_route_parity.py --scene all --output studies/fdtd/route_parity/records/fdtd_route_parity.json
+    python studies/fdtd/route_parity/fdtd_route_parity.py --scene all --output artifacts/fdtd_route_parity.json
     python studies/fdtd/route_parity/fdtd_route_parity.py --list
     python studies/fdtd/route_parity/fdtd_route_parity.py --scene slab-1d-dielectric-normal --output smoke.json
 

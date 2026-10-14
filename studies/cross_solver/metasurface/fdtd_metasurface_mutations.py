@@ -3,7 +3,8 @@
 Each mutation edits one line of ``src/wavebit/fdtd``, runs one test, and must make that test fail
 on an assertion (exit code 1, an ``AssertionError``, no collection error), not on a crash; the
 original bytes are written back and checked before the next. Logs and ``witnesses.json`` go to
-``results/fdtd_metasurface_controls``.
+``results/fdtd_metasurface_controls`` (the 2026 witnesses there are archived outside the
+repository).
 """
 
 import sys as _repository_sys

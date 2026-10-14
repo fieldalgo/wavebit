@@ -403,12 +403,12 @@ all 234 collected cases, exit zero, no skips, in 118.17 pytest seconds
 | Lose the four-array report override | Actual initialized-state allocation |
 
 A fixture, import or runtime error does not count as a caught defect.
-The targeted manifest and its raw logs/source snapshots are in
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_controls/targeted_attempt1.json` and its
-containing directory. The mutation manifest is
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_mutations.json`; exact before/after sources,
-assertion logs and the restored baseline are retained in
-`studies/results/fdtd_hybrid_film_mutations_attempt1`.
+The targeted manifest, `targeted_attempt1.json`, and its raw logs/source
+snapshots (the study's `fdtd_hybrid_film_controls` directory) are archived
+outside the repository. So is the mutation manifest,
+`fdtd_hybrid_film_mutations.json`, together with the exact before/after
+sources, assertion logs and the restored baseline of its first attempt
+(`fdtd_hybrid_film_mutations_attempt1`).
 
 
 ## Disclosed calibration and accepted regression ceilings
@@ -468,12 +468,13 @@ other campaign rows or establish a convergence rate. The test's pending
 ceiling constant was then replaced with those accepted values; the exact
 pre-acceptance test is archived. Production and the probe did not change.
 
-Records are
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_calibration_attempt1.json`,
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_calibration_acceptance.json` and
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_calibration_acceptance_test_update.json`.
-All six raw result/log pairs and pre-response helper/controller snapshots
-are retained in `studies/results/fdtd_hybrid_film_calibration_attempt1`.
+The acceptance record is
+`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_calibration_acceptance.json`.
+The calibration record `fdtd_hybrid_film_calibration_attempt1.json`, the
+test-update record `fdtd_hybrid_film_calibration_acceptance_test_update.json`,
+and all six raw result/log pairs with the pre-response helper/controller
+snapshots (the `fdtd_hybrid_film_calibration_attempt1` directory) are archived
+outside the repository.
 
 The FD and package digests are respectively
 `5aa63f0f692d85cf83b988d6f97cfa0b5835ec876e890fca976628df3fc08838` and
@@ -501,10 +502,11 @@ records; they are not 83 independent physical experiments. Before the
 first registration, the collector was extended to include every completed
 development record required by the final auditor. The old collector is
 archived in the annotation
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_registration_collection_fix.json`.
+`fdtd_hybrid_film_registration_collection_fix.json`.
 This provenance-only change precedes registration and changes no production,
 probe, tests, mutation harness, numerical criteria or response. The
-registration itself is `studies/fdtd/hybrid_film/records/fdtd_hybrid_film_registration.json`.
+registration itself is the run record `fdtd_hybrid_film_registration.json`.
+Both records are archived outside the repository.
 The completed campaign and its cellwise exceptions are recorded below.
 
 Only an otherwise valid unsettled 120-period base row may receive a single
@@ -580,12 +582,13 @@ order intervals, not these global maxima. Both matching NumPy coarse
 p/fraction-0.3 physical payloads repeat the known calibration exactly;
 that repeat documents provenance rather than independent corroboration.
 
-The raw 40-row sequence, 80 raw result/log files and complete report are
-retained in `studies/fdtd/hybrid_film/records/fdtd_hybrid_film_campaign.jsonl`,
-`studies/results/fdtd_hybrid_film_campaign_jobs` and
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_report.json`. The controller's saved-data
-audit exits zero at 20:44:14 UTC, recorded in
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_campaign_audit_execution.json`.
+The complete report is
+`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_report.json`. The raw
+40-row sequence (`fdtd_hybrid_film_campaign.jsonl`) and the 80 raw result/log
+files (the `fdtd_hybrid_film_campaign_jobs` directory) are archived outside
+the repository. The controller's saved-data audit exits zero at 20:44:14 UTC,
+recorded in `fdtd_hybrid_film_campaign_audit_execution.json`, also archived
+outside the repository.
 
 An independent standard-library audit exits zero at 20:44:23 UTC. It
 verifies 280 input hashes and reconstructs every cell without importing
@@ -599,9 +602,9 @@ exact-arithmetic algebra, with closed-system, representability and bulk
 scale limitations; they add no PML energy or universal scattering theorem.
 
 The independent report and observed child-exit record are
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_independent_audit_attempt1.json` and
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_independent_audit_attempt1_execution.json`;
-the raw log and exact auditor/runner archives remain alongside them.
+`fdtd_hybrid_film_independent_audit_attempt1.json` and
+`fdtd_hybrid_film_independent_audit_attempt1_execution.json`; they, the raw
+log and the exact auditor/runner archives are archived outside the repository.
 Procedural and independent audits verify the records, including their
 exceptions. They do not promote mixed or unresolved classifications to
 second. These two three- and five-pole physical examples support only the
@@ -628,9 +631,10 @@ bit, 1,141 in total, without writing the committed golden files. Stage 2
 and stage 3 retain notices about historical case/freezer provenance;
 these notices are distinct from their exact array comparisons.
 
-The eight collection/run/freezer checks are recorded in
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_validation.json`; all raw logs remain in
-`studies/results/fdtd_hybrid_film_controls`. The validation wrapper records
+The eight collection/run/freezer checks are recorded in the run record
+`fdtd_hybrid_film_validation.json`; it and all raw logs (the
+`fdtd_hybrid_film_controls` directory) are archived outside the repository.
+The validation wrapper records
 FD digest
 `de8ebf7f5ae5fa58ee1b786a96f937236c02ed771d67b05d52b38457ceaa2e48`,
 using the inherited sorted-relative-path plus LF-byte algorithm without
@@ -639,7 +643,7 @@ campaign identity above. Completed regression gates do not change the
 campaign's mixed or noise-unresolved scientific classifications.
 
 Final documentation and preservation acceptance is a separate release
-requirement. Its prescribed outputs under `studies/results` are named
+requirement. Its prescribed outputs are named
 `fdtd_hybrid_film_final_docs.json`,
 `fdtd_hybrid_film_final_evidence_audit.json` and
 `fdtd_hybrid_film_final_evidence_audit_execution.json`.
@@ -647,12 +651,13 @@ Acceptance requires observed zero exits for documentation collection/tests
 and Sphinx `-W`, recorded lint checks, unchanged document-source hashes
 during verification, and a complete saved-data audit with an independently
 recorded zero process exit. The preserved audit and documentation-runner
-sources are
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_controls/final_evidence_audit.py.txt.gz`
-and
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_controls/final_documentation_gates.py.txt.gz`.
-Consult those execution records for the final gate outcome; this article
-specifies the evidence requirements without predeclaring their result.
+sources are `final_evidence_audit.py.txt.gz` and
+`final_documentation_gates.py.txt.gz`. This article specifies the evidence
+requirements without predeclaring their result. The execution records, which
+are archived outside the repository with those sources, report it for
+2026-10-06: documentation collection, the documentation contract (73
+collected, 73 passed) and the warning-as-error Sphinx build each exited zero,
+and the saved-data audit completed with exit zero.
 
 The preceding oscillator milestone retains its frozen source evidence
 and registered mixed/unresolved results. This extension preserves those

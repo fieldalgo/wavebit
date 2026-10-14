@@ -1,7 +1,8 @@
 """Traced material values beside traced geometry: a pillar's index with its shape.
 
 The scenes are ``studies/fdtd/traced_material/fdtd_traced_material_probe.py``'s (results in
-``studies/results/fdtd_traced_material_*.json``). Host planning reads a traced ``eps`` or ``mu``
+``studies/fdtd/traced_material/records/``; the rest are archived outside the repository). Host
+planning reads a traced ``eps`` or ``mu``
 at the plan's own value (``src/wavebit/fdtd/_prepare/shape_ranges.py::_seeded_materials``), lowering
 reads it live, and the runtime guards judge the live value
 (``shape_ranges.resolution_guard`` beside the existing ones).

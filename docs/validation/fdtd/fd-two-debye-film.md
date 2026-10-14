@@ -282,8 +282,8 @@ A separate 10,000-case algebra exploration records maximum relative
 response and material-moment differences of 1.046299e-15 and 1.051992e-15.
 It ran no field solve and imported no production package. The identical
 script and observed output were preserved afterward in
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_algebra_attempt1.py.txt` and
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_algebra_attempt1.json`; the source hash
+`fdtd_two_debye_film_algebra_attempt1.py.txt` and
+`fdtd_two_debye_film_algebra_attempt1.json`, both archived outside the repository; the source hash
 was captured after execution without an intervening source edit. This is a
 development calculation, not a pytest gate, registered physical result or
 measurement of production propagation accuracy.
@@ -344,10 +344,9 @@ The recorded runtime is Windows with Python 3.12.14, NumPy 2.5.1,
 JAX/JAXlib 0.11.0 and Torch 2.13.0. The OMP, OpenBLAS and MKL thread limits
 are each one. These records establish no hardware performance comparison.
 
-The manifest is
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_calibration_attempt1.json`. Raw results,
-logs and frozen probe/controller copies remain under
-`studies/results/fdtd_two_debye_film_calibration_attempt1/`. All six raw
+The manifest is `fdtd_two_debye_film_calibration_attempt1.json`. Raw results, logs and
+frozen probe/controller copies remain in the attempt directory
+`fdtd_two_debye_film_calibration_attempt1`. Both are archived outside the repository. All six raw
 result/log hashes and both frozen-source hashes match the manifest. Each
 worker confirms unchanged before/after source identity, and the controller
 records `source_unchanged=true`. Its FD digest is
@@ -363,9 +362,8 @@ xfailed or xpassed, exit 0, in 65.30 seconds as reported by pytest. It
 comprises 127 new cases in nine test functions, 99 single-Debye cases,
 94 Drude/Lorentz film cases, 53 conductive-film cases and one existing
 stencil refusal case. The manifest, collection/run logs and test/controller
-snapshots are retained under
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_controls/targeted_attempt1.json` and
-the surrounding controls directory.
+snapshots are retained as `targeted_attempt1.json` and the rest of the study's controls
+directory, `fdtd_two_debye_film_controls`, archived outside the repository.
 
 Nine actual production mutations each produce an assertion or missing-refusal
 failure, exit 1:
@@ -385,16 +383,16 @@ failure, exit 1:
 All modified production bytes are restored, and before/after source identities
 match. The restored new-test file passes all 127 cases, exit 0, in 50.67
 seconds as reported by pytest. The canonical manifest is
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_mutations.json`; attempt 1, its raw
-logs, test/harness snapshots and original/mutant source copies remain under
-the corresponding `fdtd_two_debye_film_mutations_attempt1` paths in
-`studies/results/`. These witnesses check the tests' ability to detect the
+`fdtd_two_debye_film_mutations.json`; attempt 1, its raw logs, test/harness snapshots and
+original/mutant source copies remain under the corresponding
+`fdtd_two_debye_film_mutations_attempt1` names. All of them are archived outside the
+repository. These witnesses check the tests' ability to detect the
 specified errors; they do not establish arbitrary-material accuracy.
 
 ## Registration and retained packaging correction
 
-The accepted registration is
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_registration.json`, dated
+The accepted registration, archived outside the repository, is
+`fdtd_two_debye_film_registration.json`, dated
 2026-10-06T13:43:47 UTC, with fingerprint
 `3c883d48c26ee57c91cae5c42a69d8da02622b46367de77974c2aed0d8d64fbe`.
 It follows an invalid first registration that is preserved rather than
@@ -413,10 +411,10 @@ The initial fingerprint was
 Only the registration timestamp, the completed launcher-log exposure hash
 and the resulting fingerprint differ. Production, tests, controller, probe,
 criteria and protocol are unchanged. The initial registration and four
-frozen source copies remain under
-`studies/results/fdtd_two_debye_film_registration_attempt1/`; the correction
-and checksums are recorded in
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_registration_packaging.json`.
+frozen source copies remain in the attempt directory
+`fdtd_two_debye_film_registration_attempt1`; the correction and checksums are recorded in
+`fdtd_two_debye_film_registration_packaging.json`. Both are archived outside the
+repository.
 All preserved hashes and all 61 accepted exposure/frozen-source links match.
 The first campaign worker started at 13:44:05 UTC, after the accepted
 registration. No campaign response preceded the correction.
@@ -512,9 +510,10 @@ arm. The registration also discloses targeted and mutation exposures.
 
 Full cell values, sensitivity intervals and noise terms are in
 `studies/fdtd/two_debye_film/records/fdtd_two_debye_film_report.json`. The worker ledger is
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_campaign.jsonl`, with raw files under
-`studies/results/fdtd_two_debye_film_campaign_jobs/`; the procedural audit
-is `studies/fdtd/two_debye_film/records/fdtd_two_debye_film_campaign_audit.log`.
+`fdtd_two_debye_film_campaign.jsonl`, with raw files in the job directory
+`fdtd_two_debye_film_campaign_jobs`; the procedural audit is
+`fdtd_two_debye_film_campaign_audit.log`. The ledger, the job directory and the audit log
+are archived outside the repository.
 
 A separate read-only audit reconstructs the continuum film with a complex
 cosine/sine transfer matrix, without importing the solver, probe, campaign
@@ -533,9 +532,9 @@ endpoints:
 | Final 24 direct-order intervals | [1.986162, 2.128853] |
 
 The audit script, log and result are retained as
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_independent_audit_attempt1.py.txt`,
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_independent_audit_attempt1.log` and
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_independent_audit_attempt1.json`.
+`fdtd_two_debye_film_independent_audit_attempt1.py.txt`,
+`fdtd_two_debye_film_independent_audit_attempt1.log` and
+`fdtd_two_debye_film_independent_audit_attempt1.json`, archived outside the repository.
 This independent reconstruction checks recorded quantities and reference
 algebra; it adds no new field response or physical acceptance criterion.
 
@@ -566,9 +565,8 @@ changes to historical case-list or freezer-source provenance. Those notices
 are distinct from numerical mismatches: the arrays and committed golden
 bytes remain unchanged.
 
-The final manifest is
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_validation.json`, with raw logs under
-`studies/results/fdtd_two_debye_film_controls/`. The validation wrapper records
+The final manifest is `fdtd_two_debye_film_validation.json`, with raw logs in the
+controls directory; both are archived outside the repository. The validation wrapper records
 FD source digest
 `3395a14fbb4910ce2dca0b77ea2dff6f0dbea97a7a03ee1edbcc2716684190bd`
 using sorted relative paths and LF-normalized source bytes without delimiters.
@@ -577,8 +575,8 @@ not a change of tested source. The preserved prevalidation maps cover 97
 production files, 81 FD test files, four golden files and 607 earlier film
 evidence files; all remain unchanged through these gates. The maps and
 frozen validation inputs are recorded in
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_prevalidation.json` and
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_validation_setup.json`.
+`fdtd_two_debye_film_prevalidation.json` and
+`fdtd_two_debye_film_validation_setup.json`, archived outside the repository.
 
 Earlier measurements retain their original material scopes and open limits.
 General C8 smoothing is incomplete and C7 remains unpassed.

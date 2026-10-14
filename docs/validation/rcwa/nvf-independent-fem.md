@@ -2368,4 +2368,5 @@ physical solutions with reporting disabled/enabled, count actual inverse
 applications, and verify that a callback exception stops before the next one.
 
 Selected results, with prototype-versus-packaged flux provenance, are retained in
-[`studies/rcwa/nvf_fem_reference/records/nvf_fem_reference.log`](../../../studies/rcwa/nvf_fem_reference/records/nvf_fem_reference.log).
+the run record `nvf_fem_reference.log`, archived outside the repository; the
+commands above rerun `studies/rcwa/nvf_fem_reference/nvf_fem_reference.py`.

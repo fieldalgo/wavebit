@@ -19,7 +19,8 @@ from tests.fixtures.fdtd.fd_helpers import backends, to_numpy
 
 # Disclosed calibration attempt1, n40/p120/PML24/fraction.3, all three backends:
 # max absolute r/t errors .003564006/.008260100; largest decay ratio 8.6143e-9.
-# Raw hashes/results: studies/fdtd/debye_film/records/fdtd_debye_film_calibration_attempt1.json.
+# Raw hashes/results: calibration attempt1 record (fdtd_debye_film_calibration_attempt1.json),
+# archived outside the repository.
 # Retain the inherited candidate ceilings unchanged; this is a single-grid
 # regression, and the separately registered study decides convergence.
 CANDIDATE_CEILINGS = (.005, .010)

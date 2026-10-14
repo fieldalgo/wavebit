@@ -97,9 +97,9 @@ infinity. Field updates and fixed-duration execution do not use these helpers.
 
 ## Measured stopping behavior
 
-[Calibration attempt 1](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_calibration_attempt1.json)
-ran a uniform periodic conductor and an open point source on NumPy, JAX and
-Torch CPU. Each row compared automatic stopping with a fixed run to the same
+Calibration attempt 1, recorded in `fdtd_decay_stop_calibration_attempt1.json` and archived
+outside the repository, ran a uniform periodic conductor and an open point source on NumPy,
+JAX and Torch CPU. Each row compared automatic stopping with a fixed run to the same
 actual step and another fixed run to twice the cap. All six worker exits were
 0 and all saved arrays were finite. The chosen threshold was 1e-5 and the
 window was 1; these are test settings, not recommended defaults.
@@ -157,34 +157,37 @@ the component reduction and window merge, as described above. Later failures
 were test-fixture defects; their corrections did not weaken the stopping
 condition or numerical allowances.
 
-| Preserved attempt | Observed result | Correction or conclusion |
+| Preserved attempt and its record | Observed result | Correction or conclusion |
 | --- | --- | --- |
-| [Structural 1](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_structural_attempt1.json) | 53 passed, 1 failed | JAX reduced a nonzero subnormal amplitude to zero; fixed both optional reduction sites. |
-| [Structural 2](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_structural_attempt2.json) | 86 passed, 16 failed | Synthetic Torch `where` fixtures needed array booleans. |
-| [Structural 3](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_structural_attempt3.json) | 102 passed | Expanded structural checks passed before physical calibration. |
-| [Targeted 1](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_targeted_attempt1.json) | 165 passed, 9 failed | Magnetic-Dipole fixtures omitted their explicit magnetic kind. |
-| [Targeted 2](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_targeted_attempt2.json) | New tests: 174 passed; compatibility: 625 passed, 3 failed | A test-only skeleton helper needed to omit an absent optional decay field. |
-| [Targeted 3](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_targeted_attempt3.json) | New tests: 174 passed; compatibility: 628 passed | Both commands exited 0 after the fixture corrections. |
-| [Full regression 1](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_validation_attempt1.json) | 4,026 passed, 8 existing skips, 1 failed | Another legacy test reconstructed the static plan without excluding the absent optional decay field. Slow tests and freezers were not started in this attempt. |
+| Structural 1, `fdtd_decay_stop_structural_attempt1.json` | 53 passed, 1 failed | JAX reduced a nonzero subnormal amplitude to zero; fixed both optional reduction sites. |
+| Structural 2, `fdtd_decay_stop_structural_attempt2.json` | 86 passed, 16 failed | Synthetic Torch `where` fixtures needed array booleans. |
+| Structural 3, `fdtd_decay_stop_structural_attempt3.json` | 102 passed | Expanded structural checks passed before physical calibration. |
+| Targeted 1, `fdtd_decay_stop_targeted_attempt1.json` | 165 passed, 9 failed | Magnetic-Dipole fixtures omitted their explicit magnetic kind. |
+| Targeted 2, `fdtd_decay_stop_targeted_attempt2.json` | New tests: 174 passed; compatibility: 625 passed, 3 failed | A test-only skeleton helper needed to omit an absent optional decay field. |
+| Targeted 3, `fdtd_decay_stop_targeted_attempt3.json` | New tests: 174 passed; compatibility: 628 passed | Both commands exited 0 after the fixture corrections. |
+| Full regression 1, `fdtd_decay_stop_validation_attempt1.json` | 4,026 passed, 8 existing skips, 1 failed | Another legacy test reconstructed the static plan without excluding the absent optional decay field. Slow tests and freezers were not started in this attempt. |
 
-The [three magnetic-kind additions](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_fixture_repair_after_calibration/repair.patch)
-and [optional-field test-helper correction](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_fixture_repair_after_calibration/skeleton_helper/repair.patch)
-are preserved with the earlier failing logs and source snapshots. They do
+The attempt records named in the first column are archived outside the repository.
+
+The three magnetic-kind additions and the optional-field test-helper correction are
+preserved as two `repair.patch` files in the repair record
+`fdtd_decay_stop_fixture_repair_after_calibration`, with the earlier failing logs and
+source snapshots; that record is archived outside the repository. They do
 not change the calibration fixtures, production equations, or five frozen
 study helpers.
 
-The original calibration and acceptance remain unchanged. An archived
-[registration adapter](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_fixture_repair_after_calibration/registration_adapter.py.raw)
-separately binds the two test-only repairs, their exact before/after bytes,
-and the observed failing and following gates. It proves that deleting the
+The original calibration and acceptance remain unchanged. A registration adapter,
+`registration_adapter.py.raw` in the same archived repair record, separately binds the
+two test-only repairs, their exact before/after bytes, and the observed failing and
+following gates. It proves that deleting the
 three constructor keywords and the one helper tuple entry recovers the
 original complete test syntax trees. Numerical criteria and the original
 physical controller's non-registration functions remain unchanged.
 
 ## Registered physical comparison
 
-The [registered campaign](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_campaign.json)
-completed all 18 fixed workers, with no replacement or parameter change.
+The registered campaign, recorded in `fdtd_decay_stop_campaign.json` and archived outside
+the repository, completed all 18 fixed workers, with no replacement or parameter change.
 Each worker performed the automatic, fixed-prefix and twice-cap solves.
 Every registered contract passed. Three rows ended by decay and 15 reached
 the cap; the cap rows are not counted as successful convergence.
@@ -209,15 +212,15 @@ The Debye counterfactual checks the stated all-memory contract. Static
 retained polarization is not evidence of a later physical error. Neither
 this example nor the other cap rows proves a future-echo bound, and the
 fixed-grid temporal comparisons make no spatial convergence claim.
-A [saved-array replay](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_campaign_audit.json)
-independently reconstructs the stopping receipts, prefix/spectral metrics
+A saved-array replay, `fdtd_decay_stop_campaign_audit.json` (archived outside the
+repository), independently reconstructs the stopping receipts, prefix/spectral metrics
 and both scalar recurrences from the saved evidence without a field solve.
 
 ## Regression and deliberate faults
 
-All [20 actual production-source mutations](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_mutations.json)
-caused their intended assertion or missing-refusal failures across the ten
-new and four changed test functions. They cover false early windows,
+All 20 actual production-source mutations, recorded in `fdtd_decay_stop_mutations.json`
+and archived outside the repository, caused their intended assertion or missing-refusal
+failures across the ten new and four changed test functions. They cover false early windows,
 rounded ratios, dropped memory groups, incorrect sample clocks and DFT
 endpoints, AD conversion, unsupported execution, and the fixed-run cadence.
 Every original source byte was restored; the combined restored selection
@@ -226,13 +229,14 @@ passed all 185 cases. A separate
 records the actual first failure from each log.
 
 The first full regression then found one additional stale fixture in the
-junction test. Its [one-constant correction](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_postcampaign_fixture_repair/repair.patch)
+junction test. Its one-constant correction, `repair.patch` in the repair record
+`fdtd_decay_stop_postcampaign_fixture_repair` (archived outside the repository),
 excludes absent `decay` from the independently reconstructed legacy plan.
 The entire test module is otherwise syntax-tree identical. The numerical
 implementation, physical fixtures, acceptance and registered responses remain
 unchanged; the failed full run and its original source snapshots are retained.
 
-A separate [post-campaign witness](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_postcampaign_fixture_repair/completed.json)
+A separate post-campaign witness, `completed.json` in that repair record,
 passed the 174 new cases plus this corrected old test, then removed the actual
 production omission of absent `decay`. The repaired test failed at its intended
 skeleton equality. Exact production restoration was followed by that test
@@ -240,14 +244,14 @@ passing again. This brings the total to 21 real source-mutation mechanisms
 covering ten new and five changed test functions; the earlier 20-mechanism,
 185-case restoration record remains unchanged.
 
-An archived [validation adapter](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_postcampaign_fixture_repair/validation_adapter.py.raw)
+A validation adapter, `validation_adapter.py.raw` in the same repair record,
 binds that exact test-only change to fresh validation snapshots. It preserves
 the original five study helpers and the original prevalidation record, and
 runs the same full, separate slow and read-only freezer commands.
 
-The [second full regression and separate slow run](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_validation_attempt2.json)
-completed with 4,027 passed and the same eight existing skips in the non-slow
-selection, followed by all 81 slow cases passing. The disjoint selections
+The second full regression and separate slow run, recorded in
+`fdtd_decay_stop_validation_attempt2.json` and archived outside the repository, completed
+with 4,027 passed and the same eight existing skips in the non-slow selection, followed by all 81 slow cases passing. The disjoint selections
 contain 4,116 cases including the skips; documentation-contract cases are
 already part of the full selection and are not added again.
 

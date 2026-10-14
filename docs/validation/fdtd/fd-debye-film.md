@@ -299,10 +299,9 @@ The recorded runtime is Windows with Python 3.12.14, NumPy 2.5.1,
 JAX/JAXlib 0.11.0 and Torch 2.13.0. The OMP, OpenBLAS and MKL thread limits
 are each one. No hardware performance comparison is claimed.
 
-The manifest is
-`studies/fdtd/debye_film/records/fdtd_debye_film_calibration_attempt1.json`; raw results,
-logs and frozen probe/controller copies are under
-`studies/results/fdtd_debye_film_calibration_attempt1/`. All six raw
+The manifest is `fdtd_debye_film_calibration_attempt1.json`; raw results, logs and
+frozen probe/controller copies are in the attempt directory
+`fdtd_debye_film_calibration_attempt1`. Both are archived outside the repository. All six raw
 result/log hashes and both frozen-source hashes match the manifest. Each
 run confirms unchanged before/after source identity, and the controller
 records `source_unchanged=true`. The FD source digest is
@@ -324,8 +323,9 @@ conductive-film cases and one existing stencil refusal case.
 | 2 | 247 passed; pytest 43.81 seconds | The source-band assertion independently checks the band certificate as well as retaining the public planning refusal. |
 
 The manifests, collection/run logs and actual test/controller snapshots are
-under `studies/results/fdtd_debye_film_controls/`, named
-`targeted_attempt1` and `targeted_attempt2`. The source remains the recorded
+in the study's controls directory, `fdtd_debye_film_controls`, named
+`targeted_attempt1` and `targeted_attempt2`; that directory is archived outside
+the repository. The source remains the recorded
 calibration source throughout both attempts. The snapshot and log hashes
 match their manifests.
 
@@ -361,11 +361,11 @@ with assertion or missing-refusal failures, each exit 1:
 
 Every changed production file was restored byte for byte. The final restored
 Debye test file collects and passes all 99 cases, exit 0, in 42.22 seconds
-as reported by pytest. The canonical record is
-`studies/fdtd/debye_film/records/fdtd_debye_film_mutations.json`; both original attempts are
-retained as `studies/fdtd/debye_film/records/fdtd_debye_film_mutations_attempt1.json` and
-`studies/fdtd/debye_film/records/fdtd_debye_film_mutations_attempt2.json`, with separate raw
-logs, original/mutant snapshots and test/harness snapshots. Their raw and
+as reported by pytest. The canonical record is `fdtd_debye_film_mutations.json`;
+both original attempts are retained as `fdtd_debye_film_mutations_attempt1.json` and
+`fdtd_debye_film_mutations_attempt2.json`, with separate raw logs, original/mutant
+snapshots and test/harness snapshots. These records and their raw files are archived
+outside the repository. Their raw and
 snapshot hashes match, and both source identities are unchanged after
 restoration. The surviving first-attempt mutant remains visible in that
 record; it is not counted among the nine accepted second-attempt witnesses.
@@ -375,7 +375,7 @@ record; it is not counted among the nine accepted second-attempt witnesses.
 The 20-worker physical campaign was registered at
 2026-10-06T10:51:06 UTC before its new responses, with fingerprint
 `281293ccfa40d48716b21623ec9d91c671d10d635e51e221782b763154d7179a`.
-The registration is `studies/fdtd/debye_film/records/fdtd_debye_film_registration.json`.
+The registration, `fdtd_debye_film_registration.json`, is archived outside the repository.
 It uses the disclosed material, face fractions 0.3 and 0.1, both s and p
 polarization, and NumPy with an exact `Axis1D` transverse derivative.
 Each of four placement/polarization groups has five fixed rows:
@@ -465,10 +465,10 @@ recorded worker remain preserved.
 
 The complete per-cell values, noise terms and intervals are in
 `studies/fdtd/debye_film/records/fdtd_debye_film_report.json`. The worker ledger is
-`studies/fdtd/debye_film/records/fdtd_debye_film_campaign.jsonl`, with raw files under
-`studies/results/fdtd_debye_film_campaign_jobs/`. The procedural audit is
-retained in
-`studies/fdtd/debye_film/records/fdtd_debye_film_controls/campaign_audit_attempt1.log`.
+`fdtd_debye_film_campaign.jsonl`, with raw files in the job directory
+`fdtd_debye_film_campaign_jobs`. The procedural audit is retained in
+`campaign_audit_attempt1.log` in the controls directory. The ledger, the job
+directory and the audit log are archived outside the repository.
 
 The measured decision is second-order behaviour under the registered rule
 for this material, thickness, incidence, two face fractions, three wavelengths
@@ -480,7 +480,7 @@ The bulk spectral guard retains its narrower scale-resolution meaning.
 ## Regression gates and evidence preservation
 
 The completed sequential validation controller exits 0. The final results
-are recorded in `studies/fdtd/debye_film/records/fdtd_debye_film_validation.json`:
+are recorded in `fdtd_debye_film_validation.json`, archived outside the repository:
 
 | Gate | Collected or compared | Result | Exit |
 | --- | --- | --- | --- |
@@ -509,11 +509,11 @@ production code, tests, numerical tolerances and acceptance rules did not
 change. The complete full tier was then repeated and passed as recorded
 above.
 
-The failed manifest and logs remain under
-`studies/results/fdtd_debye_film_validation_attempt1/`. The mapping from
-the original snapshot name to its compressed location, checksums and
-byte-exact decompression verification is in
-`studies/fdtd/debye_film/records/fdtd_debye_film_evidence_packaging.json`. The preserved
+The failed manifest and logs remain in the attempt directory
+`fdtd_debye_film_validation_attempt1`. The mapping from the original snapshot name
+to its compressed location, checksums and byte-exact decompression verification is
+in `fdtd_debye_film_evidence_packaging.json`. Both are archived outside the
+repository. The preserved
 failure records and compressed/uncompressed hashes match that annotation.
 The prevalidation comparison also retains unchanged maps for 95 production
 files, 80 test files, four golden files and 428 earlier evidence files.

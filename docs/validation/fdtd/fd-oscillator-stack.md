@@ -184,6 +184,8 @@ The numerical evidence is complete; production integration additionally requires
 the strict documentation build and the final saved-evidence audit with their
 actual completed parent exits. Neither later gate is claimed complete here.
 Original failures, warnings, raw records and frozen references remain preserved.
+The raw run records are archived outside the repository, except those linked under
+Preserved evidence below.
 A successful plan or stable field alone cannot replace these measurements.
 
 ## Targeted verification obligations
@@ -306,10 +308,10 @@ The largest middle-grid sensitivity proxy is 5.13136627e-06.
 - [Disclosed calibration and raw backend rows](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_attempt1.json).
 - [Accepted known-case ceilings and preserved test transition](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_acceptance.json).
 - [Exact new and related test rosters](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_targeted.json).
-- [Actual source witnesses and exact restored baseline](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_mutations.json).
-- [Registered protocol, source identities and prior exposures](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_registration.json).
+- Actual source witnesses and exact restored baseline: `fdtd_oscillator_stack_mutations.json`, archived outside the repository.
+- Registered protocol, source identities and prior exposures: `fdtd_oscillator_stack_registration.json`, archived outside the repository.
 - [Every physical cell, verdict and selected duration](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_report.json).
-- [Full/slow regressions and all four frozen-reference comparisons](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_validation.json).
+- Full/slow regressions and all four frozen-reference comparisons: `fdtd_oscillator_stack_validation.json`, archived outside the repository.
 
 The final auditor separately verifies saved source, raw process and numerical
 records after documentation validation. This publication replay does not claim

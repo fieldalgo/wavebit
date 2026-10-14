@@ -23,9 +23,8 @@ far, and so how far the operator is from the default rule's.
 
 **The first form, and why it is not this one.** The lift's first form, in the history just
 before the star, used Werner, Bauer and Cary's eight 3x3 blocks per node. This study measured it
-first, with the same instruments and rule; its rows are
-``studies/fdtd/subpixel_lift/records/fdtd_subpixel_lift_blocks.log``.
-The rule picked ``THETA = 0.02`` for it (worst static error over the rule's set 1.814%, against
+first, with the same instruments and rule; its rows (fdtd_subpixel_lift_blocks.log) are
+archived outside the repository. The rule picked ``THETA = 0.02`` for it (worst static error over the rule's set 1.814%, against
 9.217% unlifted), and its ``order`` rows showed what that rule could not: at ``eps = 25`` the
 lifted error settled near -0.2% from 12 to 24 cells across (the unlifted rule went +0.96% ->
 +0.36% and is positive definite there), because the eight blocks move 5-12% of a positive
@@ -36,8 +35,8 @@ one of them); it moves no star of an ``eps = 12`` sphere at 8 to 24 cells across
 ``eps = 25`` its error follows the unlifted rule's down (24 cells, the mean over three placements:
 +0.30% against +0.35%).
 
-**The star runs' result** (``studies/fdtd/subpixel_lift/records/fdtd_subpixel_lift.log``). No star of any ``eps <= 6``
-body moved at any ``THETA`` tried; the worst static errors over the rule's set were 5.189 / 5.196
+**The star runs' result** (fdtd_subpixel_lift.log, archived outside the repository). No star of
+any ``eps <= 6`` body moved at any ``THETA`` tried; the worst static errors over the rule's set were 5.189 / 5.196
 / 5.207 / 5.239 / 5.279% at ``THETA`` 0.02 / 0.05 / 0.1 / 0.2 / 0.3 (9.217% unlifted, which
 cannot be solved at all at ``eps = 100`` and 16 cells across at three of five placements), so the
 rule chose 0.02. Its fitted static orders, 8 to 24 cells across: 1.808 at ``eps = 12`` (the
@@ -55,9 +54,10 @@ cancellation hid the bias; ``eps = 25`` was added after that run.) The dynamic c
 independent of this instrument, is the Mie scattering of the small high-index sphere.
 
 Run from the repository root: ``python studies/fdtd/subpixel_lift/fdtd_subpixel_lift.py [selftest|counts|bits|
-static|order]``; rows go to ``studies/fdtd/subpixel_lift/records/fdtd_subpixel_lift.log`` as JSON lines (appended; a
-rerun resumes the static and order rows), each with the SHA-256 of ``stars.py`` it measured.
-Single-threaded BLAS.
+static|order]``; rows go to ``studies/fdtd/subpixel_lift/records/fdtd_subpixel_lift.log`` as JSON
+lines (appended; a rerun resumes the static and order rows), each with the SHA-256 of
+``stars.py`` it measured. The recorded run's log is archived outside the repository, so a rerun
+here starts empty. Single-threaded BLAS.
 """
 
 import sys as _repository_sys

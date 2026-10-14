@@ -117,10 +117,11 @@ The suite includes the existing independent full-Fourier, Cartesian interval,
 Airy, contact and JAX/doubling checks. Log:
 `studies/rcwa/nvf_mirror_modal_memory/records/nvf_mirror_modes_validation.log`.
 
-The exact pre-change modal/matching comparison script is retained as
-`studies/rcwa/nvf_mirror_modal_memory/records/nvf_mirror_propagation_check.py.txt`. Copy it to a `.py`
-file and run with arguments `original 32 p` or `panels 32 p` after generating
-the specified cap-96 projection. The benchmark runtime and source hashes were
+The exact pre-change modal/matching comparison script was retained as
+`nvf_mirror_propagation_check.py.txt` in the `nvf_mirror_modal_memory` study's records
+and is now archived outside the repository. Copied to a `.py` file, it runs with
+arguments `original 32 p` or `panels 32 p` after generating the specified cap-96
+projection. The benchmark runtime and source hashes were
 recorded in a manifest beside that log (`nvf_modal_memory_manifest.json`, a
 machine-readable file the results directory does not commit). It records the
 dirty-worktree implementation rather than implying a committed release.

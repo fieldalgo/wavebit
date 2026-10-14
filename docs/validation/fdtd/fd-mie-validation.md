@@ -873,9 +873,10 @@ electromagnetic source mutations. C3 remains open.
 
 ## Public sphere measurements with the coupled kernel
 
-The [production measurement record](../../../studies/fdtd/subpixel_mie_sphere/records/fdtd_subpixel_production_sphere.log)
-uses kernel commit `c2c8d98`. All runs use the public scene and `fd.run`, JAX
-float64, radius .25, wavelength 1, the three stated placements and 24 periods
+The production measurement record, `fdtd_subpixel_production_sphere.log`
+(archived outside the repository; it belongs to the
+`studies/fdtd/subpixel_mie_sphere/` study), uses kernel commit `c2c8d98`. All runs use the public scene and
+`fd.run`, JAX float64, radius .25, wavelength 1, the three stated placements and 24 periods
 unless the time column says otherwise. Every completed process exits 0.
 
 | Epsilon | Mean errors at 20 / 28 / 40 cells | Mean order | Log-fit scatter | RMS order |
@@ -1239,8 +1240,9 @@ The full spatial comparison now exits 0 with 24 of 24 rows and unchanged
 source hashes. The same eight placements, period 50, gate 45 and three
 resolutions are used; neither a favorable subset nor a new resolution range
 is selected after seeing these results. The complete measurements and
-energy histories are in the
-[research comparison record](../../../studies/fdtd/subpixel_triplet_cylinder/records/fdtd_subpixel_triplet_cylinder.log).
+energy histories are in the research comparison record,
+`fdtd_subpixel_triplet_cylinder.log`, archived outside the repository (study
+`studies/fdtd/subpixel_triplet_cylinder/`).
 
 | Cells per wavelength | Mean relative error | Placement RMS error | Placement range |
 | ---: | ---: | ---: | ---: |
@@ -1472,7 +1474,8 @@ or weak forward-phase discrepancy into C3 passes.
 
 The complete 19 physical rows, energy histories, source hashes, initial
 geometry/operator measurements and mutation witnesses are retained in the
-[3D research record](../../../studies/fdtd/subpixel_triplet_sphere/records/fdtd_subpixel_triplet_sphere.log).
+3D research record, `fdtd_subpixel_triplet_sphere.log`, archived outside the
+repository (study `studies/fdtd/subpixel_triplet_sphere/`).
 The glass measurement and mutation audit precede an additive CLI radius
 option; their exact source hashes are preserved. The material, geometry,
 assembly and certificate arithmetic is unchanged in the weak and small

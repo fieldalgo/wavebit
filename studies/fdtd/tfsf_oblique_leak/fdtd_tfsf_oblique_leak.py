@@ -54,8 +54,8 @@ processes on 12 logical CPUs, one thread each; 250 runs, 23731 s of worker time,
 sixteen 80-cells-per-wavelength runs). Run from the repo root; an optional argument names the
 JSON output (default ``artifacts/studies/fdtd_tfsf_oblique_leak.json``, not checked in);
 ``--quick`` runs only the 0/45 deg rows at 10 cells per wavelength with the mutant (seconds);
-the checked-in ``studies/fdtd/tfsf_oblique_leak/records/fdtd_tfsf_oblique_leak.log`` is the printed output. Measured
-(each cell: plain / matched / matched+cubic / +K):
+the printed output of the recorded run, fdtd_tfsf_oblique_leak.log, is archived outside the
+repository. Measured (each cell: plain / matched / matched+cubic / +K):
 
 | s-pol leak = peak scattered / peak incident | 0 deg | 15 deg | 30 deg | 45 deg | 60 deg |
 | --- | --- | --- | --- | --- | --- |

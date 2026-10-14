@@ -346,18 +346,20 @@ cleared, which takes away part of this reading's premise.)
 Before registration a dry run of every command on a toy configuration (rungs 40 and 80, 40
 periods, a small RCWA ladder) was seen: local orders between 40 and 80 of 2.10 / 2.05 (R12), 2.00
 / 1.99 (R4) and 1.99 / 1.95 (F12). The rule was written before that run and not changed after;
-the study's docstring says so, and the dry run's rows and report are kept beside the campaign's.
+the study's docstring says so. The dry run's rows and report, `fdtd_metasurface_corners_dryrun.jsonl`
+and `fdtd_metasurface_corners_dryrun_report.log`, are archived outside the repository.
 The registration records the study file's SHA-256, and the file committed with the results is
 that file byte for byte.
 
 The follow-up changed no production source. Its gates: the full fd/docs tier 2745 passed and 8
 skipped of 2753, the slow tier 81 of 81, the four freezers 143/288/140/570 arrays bit for bit,
-`ruff check .` and `sphinx-build -W` clean (`studies/cross_solver/metasurface_corners/records/fdtd_metasurface_corners_validation.json`,
-logs under `studies/results/fdtd_metasurface_corners_controls/`). A first attempt stopped on the
+`ruff check .` and `sphinx-build -W` clean (recorded in `fdtd_metasurface_corners_validation.json`,
+with the logs in the controls directory `fdtd_metasurface_corners_controls`; both are archived
+outside the repository). A first attempt stopped on the
 documentation contract -- the cross-check record cited its scripts from its own folder, and a
 copy of the registered study, kept beside the logs as C7's is, cited paths from the study's
 directory; the record was corrected, the copy dropped (the committed study is the registered
-file), and the attempt's logs are kept.
+file), and the attempt's logs are archived with the others.
 
 ## Is it the rim? (2026-10-04)
 
@@ -484,13 +486,14 @@ against toy ladders:
 The registered rule replaced the draft's after the first dry run: that run's numbers were seen
 before the self-convergence statistic, its thresholds and `GAP` 0.10 were written. The rule was
 written before the second dry run. Since then it has changed only at the second registration
-below. The dry runs' rows and reports, and the second's copy of its file, are kept in
-`studies/results/fdtd_metasurface_lifted_dryrun/`.
+below. The dry runs' rows and reports, and the second's copy of its file, are kept in the
+dry-run directory `fdtd_metasurface_lifted_dryrun`, archived outside the repository.
 
 **A second registration.** The rule was first registered with C7's whole ladder (20 to 32). The
 campaign was stopped by hand before any FDTD row, after four RCWA rows. An RCWA solve of this
 size allocates about 34 complex matrices of size 2N x 2N, for one layer or two alike
-(`studies/results/fdtd_metasurface_lifted_memory/`). That is some 23 GB at rung 28, 31 GB at
+(measured in the memory record `fdtd_metasurface_lifted_memory`, archived outside the
+repository). That is some 23 GB at rung 28, 31 GB at
 rung 30 and 39 GB at rung 32, against 21 GB of free memory and 31 GB of free commit on this
 machine that day. Rung 28 fits only by paging, rung 30 would leave under 1 GB of commit, and
 rung 32 exceeds it.
@@ -508,14 +511,13 @@ second registration, and `part_register`'s docstring with them:
   depends on it.
 
 The four RCWA rows were reused: their provenance key covers the solve, not the ladder. Three
-things from the first attempt are kept:
+things from the first attempt are preserved, archived outside the repository:
 
 * the first registration;
 * the stopped campaign's log;
-* the first registration's file,
-  `studies/cross_solver/metasurface_lifted/records/fdtd_metasurface_lifted_registered_attempt1.py.txt`. It was rebuilt from the
-  second dry run's copy and the one paragraph it changed, and checked against the registered
-  hash.
+* the first registration's file, `fdtd_metasurface_lifted_registered_attempt1.py.txt`. It was
+  rebuilt from the second dry run's copy and the one paragraph it changed, and checked against
+  the registered hash.
 
 The study file committed with the results hashes to the second registration.
 
@@ -538,8 +540,8 @@ The rule's thresholds and its code are not among them.
   and the kept copy "the second's copy of this file". The registered file hashes to
   `5af4a441...` and was never dry-run. `f71c2dd2` is the dry run's file, identical to the first
   registration's file (`fe87f8f9`) but for that paragraph, as the docstring says. The changes
-  from it to the registered file are listed in
-  `studies/cross_solver/metasurface_lifted/records/fdtd_metasurface_lifted_dryrun/README.md`.
+  from it to the registered file are listed in the `README.md` of the dry-run directory
+  `fdtd_metasurface_lifted_dryrun`, archived outside the repository.
 * Rule item 1's "C7's own run-length check included" means the flush box's own 120- and
   180-period pair. It is judged by this study's line, a tenth of `D2`, not by C7's.
 
@@ -560,8 +562,9 @@ This follow-up changed no production source either: the fd source SHA-256 is sti
   (`docs_contract_after_review.log`).
 
 Reported totals match collection, with no INTERNALERROR and no worker crash. The pytest tiers and
-the freezers are recorded in `studies/cross_solver/metasurface_lifted/records/fdtd_metasurface_lifted_validation.json`. All the
-logs named above are under `studies/results/fdtd_metasurface_lifted_controls/`.
+the freezers are recorded in `fdtd_metasurface_lifted_validation.json`. It and all the logs
+named above, which are in the controls directory `fdtd_metasurface_lifted_controls`, are archived
+outside the repository.
 
 ## Is it the y faces? (2026-10-04)
 
@@ -645,8 +648,8 @@ they show that the rule catches a first-order term that large, not one a fractio
 error.
 
 **But the y faces are not cleared.** After the campaign, a review split the same rows by
-wavelength (`studies/cross_solver/metasurface_ridges/instruments/fdtd_metasurface_ridges_split/split.py`, output in `split.log`
-beside it). The rule did not register this analysis. At every rung the worst cell is a p cell at
+wavelength (`studies/cross_solver/metasurface_ridges/instruments/fdtd_metasurface_ridges_split/split.py`; its
+output, `split.log`, is archived outside the repository). The rule did not register this analysis. At every rung the worst cell is a p cell at
 1.05, near the resonance, and it converges at about 1.9; that cell sets the registered statistic.
 Away from the resonance the amplitudes converge more slowly, and their order keeps falling:
 
@@ -701,7 +704,8 @@ excess sits at the resonant wavelength.
 
 **What was seen first.** Three dry runs tried the harness on epsilon-6 ridges against a toy
 ladder before registration. Their numbers are disclosed in the study's docstring, and their
-overrides, passes and digests in `studies/cross_solver/metasurface_ridges/records/fdtd_metasurface_ridges_dryrun/README.md`. The
+overrides, passes and digests in the `README.md` of the dry-run directory
+`fdtd_metasurface_ridges_dryrun`, archived outside the repository. The
 epsilon-6 ridges have no resonance in the band (R_p 0.019 to 0.028 from 0.95 to 1.05), so the
 dry runs could not show it. The judged steps moved to 80 -> 160 and 160 -> 320 on the RCWA scan
 and a review's RCWA proxy, not on an FDTD row of these ridges.
@@ -744,8 +748,9 @@ No production source changed either: the fd source SHA-256 is still `50574088...
   (`docs_contract_after_review.log`).
 
 Reported totals match collection, with no INTERNALERROR and no worker crash. The pytest tiers and
-the freezers are recorded in `studies/cross_solver/metasurface_ridges/records/fdtd_metasurface_ridges_validation.json`. All the
-logs named above are under `studies/results/fdtd_metasurface_ridges_controls/`.
+the freezers are recorded in `fdtd_metasurface_ridges_validation.json`. It and all the logs
+named above, which are in the controls directory `fdtd_metasurface_ridges_controls`, are archived
+outside the repository.
 
 ## The y ridge through 640 cells (2026-10-05--06)
 
@@ -753,8 +758,11 @@ The owner chose to extend the y-ridge study before C8. This follow-up registers
 every wavelength and observable separately, after the previous campaign's
 worst-cell statistic hid slower cells. `studies/cross_solver/metasurface_fine/fdtd_metasurface_fine.py` was
 registered at 20:42:24 KST on 2026-10-05, before its new FDTD rows. Its saved copy,
-registration, ledger, worker logs and report use the prefix
-`studies/results/fdtd_metasurface_fine`. The registration fingerprints the study,
+registration, ledger, worker logs and report use the file-name prefix `fdtd_metasurface_fine`.
+The report stays in the study's records
+(`studies/cross_solver/metasurface_fine/records/fdtd_metasurface_fine_report.json`, with its
+`.log`); the saved copy, registration, ledger and worker logs are archived outside the
+repository. The registration fingerprints the study,
 its dependencies, the package, the historical inputs and numerical versions.
 
 **Choosing the controls before FDTD.** Reference-only scans used N = 40 and 80
@@ -926,7 +934,7 @@ were uncommitted during the run. The registration's source and package hashes,
 checked by every worker, identify the actual numerical code.
 
 The procedural audit (`studies/cross_solver/metasurface_fine/fdtd_metasurface_fine_audit.py`, output
-`studies/cross_solver/metasurface_fine/records/fdtd_metasurface_fine_audit.log`) checks all 103 ledger rows:
+`fdtd_metasurface_fine_audit.log`, archived outside the repository) checks all 103 ledger rows:
 33 imported rows retain their original values, and 70 new rows match their raw
 worker JSONs, with exit 0 and no repeated attempts. It reconstructs the
 conditional control and reference-refinement decisions using only the reference
@@ -941,11 +949,12 @@ the existing 40-cell M3 campaign-row replay. That replay is a regression check,
 not a new 3D convergence ladder. The reported totals match collection, with no
 INTERNALERROR or worker crash. The four read-only freezers reproduced
 143/288/140/570 arrays bit for bit, 1141 in total; nothing was rewritten.
-`studies/cross_solver/metasurface_fine/records/fdtd_metasurface_fine_validation.json` records the exit codes,
-counts, elapsed times and unchanged fd source hash `50574088...`.
+The validation record `fdtd_metasurface_fine_validation.json` holds the exit codes, counts,
+elapsed times and unchanged fd source hash `50574088...`.
 
-The raw logs, including pytest's diagnostic warnings, are under
-`studies/results/fdtd_metasurface_fine_controls/`. Ruff 0.16.2 reports no findings;
+The raw logs, including pytest's diagnostic warnings, are in the controls directory
+`fdtd_metasurface_fine_controls`; it and the validation record are archived outside the
+repository. Ruff 0.16.2 reports no findings;
 the repository-wide scan retains filesystem-access warnings, while the explicit
 `wavebit tests studies docs` scan and the seven new study scripts are clean
 (`ruff_source_trees.log`, `ruff_study.log`). The final documentation contract
@@ -959,9 +968,9 @@ production source change was introduced by this extension.
 
 `studies/cross_solver/metasurface_height/fdtd_metasurface_height_preflight.py` is a preparation and historical-data
 audit, **not a registered tall-box campaign**. It performs no new FDTD or RCWA
-field solve. Its `.json` and `.log` under `studies/results/` retain all 108 old
-M3 cells, source/input hashes, geometry checks, cost estimates and a resource
-snapshot. These findings were seen before any proposed height-study protocol.
+field solve. Its output, `fdtd_metasurface_height_preflight.json` with a matching `.log`, is
+archived outside the repository; it retains all 108 old M3 cells, source/input hashes,
+geometry checks, cost estimates and a resource snapshot. These findings were seen before any proposed height-study protocol.
 
 The script reads the existing 40/80/120 M3 rows and the 80-cell 180-period
 controls. Unlike the earlier worst-cell statistic, it computes each cell's
@@ -1067,8 +1076,11 @@ Tall-minus-baseline intervals are descriptive. Changing height simultaneously
 changes vertical-edge length, fields at corners and resonances, so this
 comparison cannot assign the cause to one of them, establish an asymptote,
 describe a new p-incidence convergence result, or certify C7. Registration, a frozen source
-copy, original inputs, worker attempts and the complete cell report use the
-`studies/results/fdtd_metasurface_tall*` prefix. All workers check the registered
+copy, original inputs, worker attempts and the complete cell report carry the file-name
+prefix `fdtd_metasurface_tall`. The abort, time and settled reports stay in the study's
+records, as do the two tall 40-cell worker rows the time calibration below reads; the
+registration, source copy, ledger, other raw worker attempts and audit logs are archived
+outside the repository. All workers check the registered
 code, dependency, package, version and input identities. The companion audit
 recomputes all cells and verifies imported data and raw worker records; it is a
 single-agent procedural audit, not independent physical or agent review.
@@ -1096,16 +1108,17 @@ not accepted spatial-convergence data. The running tall 80-cell base worker
 was deliberately stopped once the invalid selected 40-cell row was confirmed:
 finishing the remaining rungs cannot repair that failure within the frozen
 protocol. Its empty raw log, nonzero worker exit, controller failure and the
-reason in `fdtd_metasurface_tall_halt.json` are retained. No tall 80- or 120-cell
-result or tall spatial-order verdict was produced. This operational early stop
+reason in `fdtd_metasurface_tall_halt.json` are retained, archived outside the
+repository. No tall 80- or 120-cell result or tall spatial-order verdict was produced. This operational early stop
 does **not** count as completion of the preregistered experiment.
 
 `fdtd_metasurface_tall_audit.py` checks all 36 original ledger rows: 19 imports,
 16 completed new workers, and one intentionally stopped worker. It verifies
 the raw files, the exact replay, the unresolved validity failure and the
-absence of a completed height report. Its `.log` and
-`fdtd_metasurface_tall_abort_report.json` retain the audit and all 54 separately
-valid baseline cells. The original source and registration remain frozen.
+absence of a completed height report. Its log, `fdtd_metasurface_tall_abort_audit.log`
+(archived outside the repository), and
+`studies/cross_solver/metasurface_tall/records/fdtd_metasurface_tall_abort_report.json` retain the
+audit and all 54 separately valid baseline cells. The original source and registration remain frozen.
 
 A separate time calibration, `studies/cross_solver/metasurface_tall/fdtd_metasurface_tall_time.py`, was
 registered after disclosing this failure. It fixes additional durations
@@ -1203,8 +1216,11 @@ unpassed**. There is no new p-incidence ladder or tall 120-cell result.
 The new spatial workers took 8843.31 seconds (2.46 hours) in total, from 10:56
 to 13:23 KST on 2026-10-06; this excludes the earlier failed campaign and time
 calibration. The 80-cell tall run alone took 3492.28 seconds. The full cell
-report, descriptive summary, audit and plots are saved under
-`studies/results/fdtd_metasurface_tall_settled*`. The audit verifies every raw
+report and descriptive summary stay in the study's records
+(`studies/cross_solver/metasurface_tall/records/fdtd_metasurface_tall_settled_report.json` and
+`studies/cross_solver/metasurface_tall/records/fdtd_metasurface_tall_settled_summary.json`, each
+with a `.log`). The audit log and the order plot, `fdtd_metasurface_tall_settled_audit.log` and
+`fdtd_metasurface_tall_settled_orders.svg`, are archived outside the repository. The audit verifies every raw
 worker and imported row, recomputes all 108 spatial records and checks the
 54-cell calibration without rewriting its frozen report.
 
@@ -1212,12 +1228,13 @@ worker and imported row, recomputes all 108 spatial records and checks the
 audit and completed-comparison audit pass. The documentation tier collects and
 passes all 66 cases, exit 0. No production or test source changed. The full and
 slow suites and read-only freezers were **not rerun** for this study: their
-recent results from `fdtd_metasurface_fine_validation.json` are reused only
+recent results from `fdtd_metasurface_fine_validation.json` (archived outside the
+repository) are reused only
 after verifying the exact package identity and unchanged production/tests since
 `33aab0f9`. Those prior runs collected 2753 full-tier cases (2745 passed, eight
 skipped), passed all 81 slow cases, and reproduced 1141 freezer arrays bit for
 bit. The new audit/docs exits and the explicit evidence-reuse record are in
-`fdtd_metasurface_tall_validation.json`.
+`fdtd_metasurface_tall_validation.json`, archived outside the repository.
 
 ## What the tests hold
 
@@ -1234,10 +1251,11 @@ bit. The new audit/docs exits and the explicit evidence-reuse record are in
   centred pillar as the campaign refers it.
 
 Each test function has a production mutation that fails it on an assertion
-(`studies/cross_solver/metasurface/fdtd_metasurface_mutations.py`, logs in
-`studies/results/fdtd_metasurface_controls/`): the u and the v order projections conjugated,
+(`studies/cross_solver/metasurface/fdtd_metasurface_mutations.py`; its logs are in the controls
+directory `fdtd_metasurface_controls`, archived outside the repository): the u and the v order projections conjugated,
 the half-cell stagger left in the orders, the de-embedding walked the wrong way, a standing
-box's u edge mixed by its v wall's weight. Two first attempts are kept with their logs: keeping
+box's u edge mixed by its v wall's weight. Two first attempts are kept with their logs in that
+directory: keeping
 the v stagger survived M2's test (M2's orders all have `n = 0`, so no v phase reaches it -- the
 y half is M1's), and making `'staircase'` every structure's junction default raised a refusal
 on the substrate rather than failing an assertion.
@@ -1251,9 +1269,9 @@ The full fd/docs tier collected 2753 cases and exited 0 with 2745 passed and 8 s
 among them, exit 0 (1120.79 seconds). Reported totals match collection, with no INTERNALERROR
 or worker crash. The four read-only freezers reproduced all 143/288/140/570 committed arrays
 bit for bit; no golden was rewritten. `ruff check .` (0.16.2) and `sphinx-build -W` pass.
-Counts and timings are in `studies/cross_solver/metasurface/records/fdtd_metasurface_validation.json`, the runner is
-`studies/cross_solver/metasurface/fdtd_metasurface_validation.py`, and the raw logs are under
-`studies/results/fdtd_metasurface_controls/`.
+Counts and timings are in the run record `fdtd_metasurface_validation.json`, and the raw logs
+in the controls directory `fdtd_metasurface_controls`; both are archived outside the repository.
+The runner is `studies/cross_solver/metasurface/fdtd_metasurface_validation.py`.
 
 ## What this does not show
 
@@ -1324,7 +1342,8 @@ matrices from the finished report. `python studies/cross_solver/metasurface_fine
 runs the full fd/docs tier, the separate slow tier and the four read-only freezers
 sequentially. `python studies/cross_solver/metasurface_fine/fdtd_metasurface_fine_audit.py` checks the saved evidence
 without launching numerical solves. Keep the registration, saved source, input scans, ledger and worker logs
-together when reproducing or reviewing this extension.
+together when reproducing or reviewing this extension. The registration, saved source, ledger
+and worker logs are archived outside the repository, so the audit does not run on a fresh clone.
 
 The height follow-up has three separately frozen protocols. The original
 `studies/cross_solver/metasurface_tall/fdtd_metasurface_tall.py` campaign stopped with an invalid selected
@@ -1340,7 +1359,9 @@ reuses recorded successful rows under the exact registered identity and stops
 at the registered validity limits; its `report` command only recomputes the
 saved rows. Use the same interpreter, checkout `PYTHONPATH` and three thread
 environment variables described above. Preserve all registrations, saved
-source copies, imported inputs, raw attempts and ledgers together.
+source copies, imported inputs, raw attempts and ledgers together. Most of these
+records are archived outside the repository, so neither tall-box audit runs on a
+fresh clone.
 
 `python studies/cross_solver/metasurface_tall/fdtd_metasurface_tall_settled_audit.py` checks the raw calibration
 and spatial records, recomputes the 54 calibration cell records without rewriting

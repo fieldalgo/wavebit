@@ -1,7 +1,7 @@
 """Fixed support for concrete sphere sweeps, before the traced-geometry door of C6.
 
-The source-mutation witnesses and the measured numerical errors are retained in
-studies/fdtd/sphere_range/records/fdtd_sphere_range_controls and fdtd_sphere_range_probe.json.
+The measured numerical errors are in studies/fdtd/sphere_range/records/fdtd_sphere_range_probe.json;
+the source-mutation witnesses are archived outside the repository.
 """
 import math
 import warnings

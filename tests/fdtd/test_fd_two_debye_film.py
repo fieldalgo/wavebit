@@ -22,7 +22,8 @@ CANDIDATE_CEILINGS = (.005, .010)
 # Disclosed attempt1: n40/p/T120/PML24/fraction.3 on NumPy/JAX/Torch.
 # Maximum |r-error|=.004119745238; |t-error|=.009808685985; decay<9.96e-9.
 # Backend differences <=1.183e-15; raw results and accepted unchanged ceilings
-# are recorded under studies/fdtd/two_debye_film/records/fdtd_two_debye_film_calibration_attempt1*.
+# are recorded in the fdtd_two_debye_film_calibration_attempt1 records, archived outside the
+# repository.
 # The .010 transmission ceiling has only .000191314015 margin at this row;
 # it is a regression ceiling, not evidence of convergence at other grids.
 CALIBRATED_CEILINGS = (.005, .010)

@@ -38,7 +38,8 @@ WAVELENGTHS = (.95, 1., 1.05)
 #: The ball's centre is .103, not .1: at .1 it lies exactly on a node plane, where reverse mode
 #: gave a centre derivative of R0 of .1196 (JAX) and .1641 (Torch) against a central difference
 #: of .1267 that is the same at every step from 1e-4 to 1e-6, while at .1013 and .0987 all three
-#: agree to eight digits (``fdtd_traced_partner_controls/center_tie_diagnostic.log``). That
+#: agree to eight digits (``fdtd_traced_partner_controls/center_tie_diagnostic.log``, archived
+#: outside the repository). That
 #: defect predates this probe and is not what it measures.
 POINTS = {'substrate': np.array((.12, .3)), 'mirror': np.array((.12, .103))}
 OBJECTIVES = {'substrate': ('T0', 'R0'), 'mirror': ('R0', 'transmitted_flux')}

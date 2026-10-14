@@ -74,8 +74,8 @@ weighing at 320 cells: the corner term overtakes it only as ``dx^(2 nu - 2)``, s
 *Seen before registration.* A dry run of every command on a toy configuration (rungs 40 and 80,
 40 periods, an RCWA ladder up to N = 60) was made to test this harness, and its numbers were
 seen before this registration: local orders between 40 and 80 of 2.10 / 2.05 (``A`` / ``F``) for
-``R12``, 2.00 / 1.99 for ``R4`` and 1.99 / 1.95 for ``F12``
-(``results/fdtd_metasurface_corners_dryrun_report.log``). The rule above was written before that
+``R12``, 2.00 / 1.99 for ``R4`` and 1.99 / 1.95 for ``F12`` (the dry run's report log, archived
+outside the repository). The rule above was written before that
 run and is unchanged by it; only this paragraph and the cross-check sentence above were added.
 
 Run: ``python studies/cross_solver/metasurface_corners/fdtd_metasurface_corners.py [register exponents rcwa fd report]``.

@@ -365,9 +365,10 @@ counts set to one. Worker wall times include process/backend setup:
 | Multiple Lorentz | 8.247971 | 5.357459 | 27.282940 |
 
 These timings are not a controlled backend performance comparison.
-The record is `studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_calibration_attempt1.json`;
-its directory retains six result/raw-log pairs and frozen probe/controller
-sources. All 14 linked artifact hashes match. The explicit acceptance is
+The record is `fdtd_oscillator_sum_film_calibration_attempt1.json`; its directory retains
+six result/raw-log pairs and frozen probe/controller sources. The record and its
+directory are archived outside the repository. All 14 linked artifact hashes match.
+The explicit acceptance is
 `studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_calibration_acceptance.json`.
 The recorded FD and package digests are respectively
 `86e2f7078c49a546d63f20b9acfc822d7c3c519363577599b56659572dcf193f` and
@@ -396,9 +397,9 @@ the disclosed calibration configurations and are regression checks, not
 unseen physical corroboration.
 
 The manifest, collection/run logs, runner and exact test snapshots are
-retained under `studies/results/fdtd_oscillator_sum_film_controls/`, with
-the result in
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_controls/targeted_attempt1.json`.
+retained in the study's controls directory, `fdtd_oscillator_sum_film_controls`, with
+the result in `targeted_attempt1.json` there; the directory is archived outside the
+repository.
 The eight snapshots and both logs match their recorded hashes.
 
 ## Actual mutation witnesses and restoration
@@ -426,9 +427,10 @@ The exactly restored new-file baseline passes all 148 cases with exit
 zero, no skips or expected/unexpected failures, in 79.85 pytest seconds
 (82.014707 wrapper seconds); its raw log retains 170 warnings. The before
 and after source identities agree. The manifest is
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_mutations.json`; original/mutant
-snapshots, assertion logs and the restored baseline remain under
-`studies/results/fdtd_oscillator_sum_film_mutations_attempt1/`. All 32 linked
+`fdtd_oscillator_sum_film_mutations.json`; original/mutant snapshots, assertion logs and
+the restored baseline remain in the attempt directory
+`fdtd_oscillator_sum_film_mutations_attempt1`. Both are archived outside the
+repository. All 32 linked
 snapshot, collection-log, assertion-log and restored-log hashes match.
 These witnesses test the specified faults; they are not an exhaustive
 proof against every possible implementation defect.
@@ -437,8 +439,8 @@ proof against every possible implementation defect.
 
 After the disclosed calibration, targeted tests and real production
 mutation witnesses, the protocol was registered at 17:21:31 UTC on
-2026-10-06. Its record is
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_registration.json`, with fingerprint
+2026-10-06. Its record, archived outside the repository, is
+`fdtd_oscillator_sum_film_registration.json`, with fingerprint
 `81cb9013510869cfea71b56f398039a89817f015fd19368c32c153e4b0aaaf10`.
 All 66 linked known-exposure records and four frozen controller, probe,
 criteria and test snapshots match their recorded hashes. The registration
@@ -563,17 +565,19 @@ physical absorptance also remain part of the record.
 
 The complete cell report is
 `studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_report.json`, with the fixed
-sequence in `studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_campaign.jsonl` and
-raw pairs under `studies/results/fdtd_oscillator_sum_film_campaign_jobs/`.
-The separate saved-data audit is
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_independent_audit_attempt1.json`.
+sequence in `fdtd_oscillator_sum_film_campaign.jsonl` and raw pairs in the job directory
+`fdtd_oscillator_sum_film_campaign_jobs`; the sequence and the job directory are
+archived outside the repository. The separate saved-data audit is
+`fdtd_oscillator_sum_film_independent_audit_attempt1.json`, also archived outside the
+repository.
 It checks all 259 recorded input hashes and reconstructs every cell
 without importing the solver, probe, controller or criteria. Its separate
 cos/sin transfer-matrix continuum differs by at most 3.510833e-16;
 reconstructed cell arithmetic differs by at most 6.661338e-16. The raw
 log and auditor/runner source archives are retained, and
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_independent_audit_attempt1_execution.json`
-records the observed child exit zero and unchanged source identity.
+`fdtd_oscillator_sum_film_independent_audit_attempt1_execution.json`
+records the observed child exit zero and unchanged source identity; these too are
+archived outside the repository.
 Passing this audit verifies the record and its arithmetic, including the
 mixed and unresolved outcomes; it does not convert those outcomes to passes.
 
@@ -601,10 +605,9 @@ freezers exit zero and reproduce 143/288/140/570 arrays bit for bit,
 and stage-3 logs retain notices about historical case/freezer provenance;
 those notices are distinct from the exact array comparisons.
 
-The observed outcomes are recorded in
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_validation.json`; raw collection,
-run and freezer logs are retained in
-`studies/results/fdtd_oscillator_sum_film_controls`.
+The observed outcomes are recorded in `fdtd_oscillator_sum_film_validation.json`; raw
+collection, run and freezer logs are retained in the controls directory. Both are archived
+outside the repository.
 The wrapper records FD source digest
 `15002f0d0c251979103dace7866f02f29a3e22b9aea99c81926497c1aa17a6b8`.
 That inherited helper hashes sorted relative paths and LF-normalized
@@ -613,16 +616,21 @@ NUL-delimited campaign identity above. Completed regression gates do not
 change the campaign's mixed or noise-unresolved physical classifications.
 
 Final documentation and saved-evidence acceptance is a separate release
-requirement. Its prescribed outputs under `studies/results` are named
+requirement. Its prescribed outputs are named
 `fdtd_oscillator_sum_film_final_docs.json`,
 `fdtd_oscillator_sum_film_final_evidence_audit.json` and
-`fdtd_oscillator_sum_film_final_evidence_audit_execution.json`.
+`fdtd_oscillator_sum_film_final_evidence_audit_execution.json`; all three are archived
+outside the repository.
 Acceptance requires actual zero exits for documentation collection/tests
 and Sphinx `-W`, unchanged document-source hashes during those checks,
 and a complete saved-data audit with an independently recorded zero
 process exit. The preserved auditor and documentation-runner sources are
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_controls/final_evidence_audit.py.txt.gz`
-and
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_controls/final_documentation_gates.py.txt.gz`.
-Consult those execution records for the final gate outcome; this article
-specifies the required evidence without predeclaring their result.
+`final_evidence_audit.py.txt.gz` and `final_documentation_gates.py.txt.gz` in the
+controls directory, archived outside the repository.
+This article specifies the required evidence without predeclaring their
+result. The execution records, archived with those sources, report it for
+2026-10-06: documentation collection, the documentation contract (72
+collected, 72 passed) and the warning-as-error Sphinx build each exited zero.
+The saved-data audit's first attempt exited one because a controller audit
+log was missing; the second, with the same audit source and no change to
+numerical source or records, completed with exit zero.

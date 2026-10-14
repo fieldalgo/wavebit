@@ -40,13 +40,14 @@ every face keeps its fraction of a cell. Every scene propagates only the zeroth 
 scene's rung 80 is also run at 180 periods (the run-length check). The corner study's xz ridge
 ``R12`` is not run again: its rows are read (item 2).
 
-**The resonance.** An RCWA scan before registration
-(``studies/cross_solver/metasurface_ridges/records/fdtd_metasurface_ridges_scan/scan.log``) shows a p resonance of the epsilon-12
-yz ridge at the band's long end: R_p 0.61, 0.41 and 0.10 at 1.025, 1.05 and 1.075. A grid error
-that shifts the resonance answers nonlinearly at coarse rungs. The step 40 -> 80 is therefore
-printed but not judged, and the class reads the steps 80 -> 160 and 160 -> 320. M3's own order
-was low across 40 to 120, so a cause in the y faces would also show at 80 -> 160. The dry runs'
-epsilon-6 ridges have no resonance in the band (R_p 0.019 to 0.031), so they could not show it.
+**The resonance.** An RCWA scan before registration (the scan's log, scan.log of the
+pre-registration run fdtd_metasurface_ridges_scan, archived outside the repository) shows a p
+resonance of the epsilon-12 yz ridge at the band's long end: R_p 0.61, 0.41 and 0.10 at
+1.025, 1.05 and 1.075. A grid error that shifts the resonance answers nonlinearly at coarse
+rungs. The step 40 -> 80 is therefore printed but not judged, and the class reads the steps
+80 -> 160 and 160 -> 320. M3's own order was low across 40 to 120, so a cause in the y faces
+would also show at 80 -> 160. The dry runs' epsilon-6 ridges have no resonance in the band
+(R_p 0.019 to 0.031), so they could not show it.
 
 **The reference** is ``wavebit.rcwa`` with the ridge centred, on its shape path, where the
 normal-vector-field rule is Li's. It is solved at the run's own angle over the truncation
@@ -150,18 +151,19 @@ not a registered outcome.
   at 160 -> 320. A review scored the same ``R12`` rows with this study's zeroth-order statistic:
   1.99 / 2.05, 2.00 / 2.01 and 2.00 / 2.01, with ``u`` 6.7e-6 / 6.6e-6. That passes this rule's
   gate with margins of only 1.09 (A) and 1.21 (F); its zeroth-order A(320) is 3.65e-4.
-* The yz ridge's own ladder, measured before registration
-  (``studies/cross_solver/metasurface_ridges/records/fdtd_metasurface_ridges_scan/ladder.log``). At top 600, ``u_A`` is 7.5e-6
-  and ``u_F`` 1.4e-6, which would bar any ridge whose A(320) is under 3.8e-4; ``R12``'s 3.65e-4
-  would be barred. At top 800, ``u_A`` is 3.8e-6 and ``u_F`` 6.8e-7, a floor of 1.9e-4 and
-  3.4e-5. The 600 rung sits 6.1e-7 from the 800 rung. The eps-shift proxy of item 2 puts
-  ``Y12``'s A(320) at 2.1 to 3.2e-3.
+* The yz ridge's own ladder, measured before registration (the ladder's log, ladder.log of the
+  pre-registration run fdtd_metasurface_ridges_scan, archived outside the repository). At top
+  600, ``u_A`` is 7.5e-6 and ``u_F`` 1.4e-6, which would bar any ridge whose A(320) is under
+  3.8e-4; ``R12``'s 3.65e-4 would be barred. At top 800, ``u_A`` is 3.8e-6 and ``u_F``
+  6.8e-7, a floor of 1.9e-4 and 3.4e-5. The 600 rung sits 6.1e-7 from the 800 rung. The
+  eps-shift proxy of item 2 puts ``Y12``'s A(320) at 2.1 to 3.2e-3.
 * Split by wavelength, C7's M3 s rows read self-convergence orders 1.97 / 1.70 (0.95), 1.63 /
   2.14 (1.0) and 1.66 / 1.47 (1.05). The low order is not confined to one wavelength.
 * No FDTD number of these ridges was seen before the rule was written. Three dry runs then
   tried the harness on epsilon-6 ridges against a toy ladder (N 20 to 60), each with module
-  constants overridden from outside. ``studies/cross_solver/metasurface_ridges/records/fdtd_metasurface_ridges_dryrun/README.md``
-  lists every override, pass and digest; the numbers they printed were seen.
+  constants overridden from outside. The README.md of the dry-run directory
+  fdtd_metasurface_ridges_dryrun (archived outside the repository) lists every override, pass
+  and digest; the numbers they printed were seen.
   * *Dry run 1* used a first draft (SHA-256 ``53828629...``) at rungs 30 / 60 / 120. The draft's
     ``Y12`` and ``X12`` were Bloch-differenced over 4 cells; its ``Axis1D`` ``Y12a`` is today's
     ``Y12``. Both read local orders 2.00 / 2.08 (30 -> 60) and 1.96 / 2.03 (60 -> 120). The

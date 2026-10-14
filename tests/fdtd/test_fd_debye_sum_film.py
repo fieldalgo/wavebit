@@ -22,7 +22,8 @@ CANDIDATE_CEILINGS = (.005, .010)
 # Disclosed attempt1: n40/p/T120/PML24/fraction.3 on NumPy/JAX/Torch.
 # Maximum |r-error|=.003993837708; |t-error|=.009375278239; decay<1.018e-8.
 # Backend scaled differences <=9.993e-16; all three runs have finite energy.
-# Raw results and acceptance are retained under studies/results/fdtd_debye_sum_film_calibration*.
+# Acceptance: studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_calibration_acceptance.json;
+# the raw calibration results are archived outside the repository.
 # Inherited ceilings are unchanged; r/t margins are .001006162292/.000624721761.
 # This is a fixed-configuration regression ceiling, not a convergence guarantee.
 CALIBRATED_CEILINGS = (.005, .010)

@@ -9,7 +9,6 @@ Targets:
 - `src/wavebit/fdtd/_periodic/scene.py`
 - `src/wavebit/fdtd/_periodic/grid.py`
 - `studies/fdtd/route_parity/fdtd_route_parity.py`
-- `studies/fdtd/route_parity/records/fdtd_route_parity.json`
 - `tests/fdtd/test_fdtd_route_parity_capture.py`
 - `tests/fdtd/test_fdtd_pole_colocation.py`
 
@@ -102,12 +101,15 @@ imported from anywhere else):
 
 ```shell
 python studies/fdtd/route_parity/fdtd_route_parity.py --list
-python studies/fdtd/route_parity/fdtd_route_parity.py --scene all --output studies/fdtd/route_parity/records/fdtd_route_parity.json
+python studies/fdtd/route_parity/fdtd_route_parity.py --scene all --output artifacts/fdtd_route_parity.json
 ```
 
-The committed record was run with `--arms matched` and `--common-pad legacy` (both defaults),
-without `--check-inert`, and with the `-pml16` twins at target 1e-16, 24 cells and 640 periods
-(`settings` in the JSON). It holds no wall clock, and this page states no cost.
+The output goes to `artifacts/`, which is ignored: a rerun is a local generated output, not
+evidence that arrives with a clone. The measured run's record, `fdtd_route_parity.json`, is
+archived outside the repository; this page states what it measured. It was run with
+`--arms matched` and `--common-pad legacy` (both defaults), without `--check-inert`, and with
+the `-pml16` twins at target 1e-16, 24 cells and 640 periods (`settings` in the JSON). It holds
+no wall clock, and this page states no cost.
 
 | Field | Value |
 | --- | --- |
@@ -225,8 +227,8 @@ Over the 80 calls: `same_error` 50, `unresolved_against_settling` 14,
 different cases on 15. Where `same_error`, `d/min(e)` runs 0.0070-0.27 on amplitude and
 0.0046-0.24 on power.
 
-Per scene, generated from `studies/fdtd/route_parity/records/fdtd_route_parity.json`, whose name for the shared
-engine is `common`. `unresolved` is
+Per scene, generated from the run record `fdtd_route_parity.json` (archived outside the
+repository), whose name for the shared engine is `common`. `unresolved` is
 `unresolved_against_settling` and `both_below` is `both_below_reference_resolution`; `d/min(e)`
 is on the largest-`d` channel and is reported whatever the case.
 

@@ -1148,7 +1148,7 @@ star, used WBC's own pieces, eight 3x3 blocks per node with one edge per axis, w
 smaller of an axis's two edges. A design review (four agents) confirmed its proof and found no
 scene whose lifted operator was indefinite, and found that the block test is much stronger
 than the operator's positivity. `studies/fdtd/subpixel_lift/fdtd_subpixel_lift.py` then measured what that costs
-(its rows: `studies/fdtd/subpixel_lift/records/fdtd_subpixel_lift_blocks.log`): an `eps = 12` sphere, positive
+(its rows: run record `fdtd_subpixel_lift_blocks.log`, archived outside the repository): an `eps = 12` sphere, positive
 definite, moved 3.1% and 2.0% of its blocks at 8 and 16 cells across (the mean over five
 placements, `THETA = 0.02`), and at `eps = 25` (placement `c`, `THETA = 0.05`) the lifted static
 error read -0.20, -0.26 and -0.20% at 12, 16 and 24 cells across while the unlifted rule's fell
@@ -1444,7 +1444,8 @@ skeleton checks exposed the same omission rule missing in nested source
 plans. Applying the empty-record omission recursively restores the original
 six skeletons. All thirteen focused checks then passed, and removing the
 nested omission again fails the pre-existing plane-wave golden check.
-The failed full log is retained in `fdtd_junction_review_controls/`.
+The failed full log is retained in the `fdtd_junction_review_controls`
+directory, archived outside the repository.
 No golden or numerical acceptance threshold was changed.
 
 The exact-tie height sweep initially found a Box jump of
@@ -1502,8 +1503,8 @@ previously reported rim order on scene B or extend the supported geometry.
 
 All 24 new test functions have actual source-mutation witnesses. The runner
 `studies/cross_solver/junction/fdtd_junction_mutations.py` writes each pytest failure log and an
-exit-code/source-hash manifest under
-`studies/results/fdtd_junction_mutations/`, restoring source bytes in a
+exit-code/source-hash manifest in a `fdtd_junction_mutations` directory
+(the recorded run is archived outside the repository), restoring source bytes in a
 `finally` block and checking the restoration. The witnesses cover the
 public choices, scope refusals, independent laminate, listing order,
 staircase ownership, stale plans, backend agreement, material and internal
@@ -1514,7 +1515,7 @@ by the pre-existing frozen plane-wave test.
 
 One negative control survived: swapping alpha with 1-alpha did not fail
 the loose `.035` A-scene RCWA sanity gate proposed by the draft. Its passing
-log is retained under `fdtd_junction_review_controls/`; the gate was not
+log is retained with the archived `fdtd_junction_review_controls`; the gate was not
 tightened. A reciprocal-conversion error does fail that sanity test. Small
 junction formula errors are tested by the independent `1e-13` laminate
 oracle and `1e-10` archived complex-amplitude comparisons, not by treating
@@ -1531,9 +1532,9 @@ rewriting a golden. Seven additional no-junction scenes retained all 42
 coefficient arrays and report/skeleton byte strings from the node-fill-fix
 baseline `fe3ff20c`.
 
-The source SHA-256 and collected/reported counts are recorded in
-`studies/cross_solver/junction/records/fdtd_junction_validation.json`. Successful full/slow logs and
-the four freezer outputs are retained alongside the failed review controls.
+The source SHA-256 and collected/reported counts are recorded in the run record
+`fdtd_junction_validation.json`. It, the successful full/slow logs and
+the four freezer outputs are archived outside the repository, alongside the failed review controls.
 
 ## Polygon boundary and nearest-face ties (2026-09-28)
 
@@ -1599,8 +1600,8 @@ first-face selection at the geometry and field levels, and exact boundary
 comparison. A sixth mutation broadens the tie tolerance and fails the
 off-tie unique-normal check. Two further mutations substitute the proxy for
 the supporting plane: one fails the independent vertex-containment check,
-the other fails the existing T-junction integration test. Logs and source hashes are retained under
-`studies/results/fdtd_polygon_tie_mutations/`. The initial Torch scalar
+the other fails the existing T-junction integration test. Logs and source hashes are retained in the
+`fdtd_polygon_tie_mutations` directory, archived outside the repository. The initial Torch scalar
 argument failure and the missing pytest temporary-parent failure are also
 retained as failed controls; neither counted as numerical validation.
 
@@ -1613,8 +1614,8 @@ not address the separate CSG timing or cylinder-convergence work.
 
 The first complete integration run found two issues: 2490 passed, 8 skipped,
 2 failed out of 2500 collected, exit 1. Its log and source hash are retained
-as `initial_full_failures.log` and `initial_full_validation.json` under
-`studies/results/fdtd_polygon_tie_controls/`.
+as `initial_full_failures.log` and `initial_full_validation.json` in the
+`fdtd_polygon_tie_controls` directory, archived outside the repository.
 
 The T-junction failure was a real regression: a bisector paired with the
 nearest-face distance is not a supporting plane of the convex polygon. It
@@ -1642,9 +1643,9 @@ passed. Neither reported an INTERNALERROR or worker crash. All four
 read-only freezers exited 0 and reproduced 143/288/140/570 arrays bit for
 bit. The final public mirror comparison retained the `8.986e-16` relative
 gap, the full-turn normal-tensor gap was `9.104e-15`, and the cyclic-vertex
-gap was zero. No golden was rewritten. Exact counts and timings are in
-`studies/fdtd/polygon_tie/records/fdtd_polygon_tie_validation.json`; complete success and
-failed-control logs are in `studies/results/fdtd_polygon_tie_controls/`.
+gap was zero. No golden was rewritten. Exact counts and timings are in the run record
+`fdtd_polygon_tie_validation.json`; complete success and
+failed-control logs are in `fdtd_polygon_tie_controls`. Both are archived outside the repository.
 
 ### CSG pair-predicate cost (2026-09-28)
 
@@ -1698,7 +1699,7 @@ Four real source mutations each failed the new regression with an assertion:
 omitting the first endpoint, omitting the third knot, treating contact as
 positive volume, and using the wrong complementary weight. The source was
 restored byte for byte after each run. `studies/fdtd/csg_pair/fdtd_csg_pair_mutations.py`
-and `studies/results/fdtd_csg_pair_controls/` retain the commands, failure
+and its `fdtd_csg_pair_controls` directory (archived outside the repository) retain the commands, failure
 logs and source hashes. The provenance record also checks that the study's
 legacy arithmetic matches `cd5ea836` and its candidate matches production.
 
@@ -1709,7 +1710,7 @@ collected (1805.54 seconds); the separate slow tier exited 0 with all 80
 collected cases passed (1140.18 seconds). Neither had an INTERNALERROR or
 worker crash. The four read-only freezers exited 0 and reproduced
 143/288/140/570 arrays bit for bit. No golden was rewritten. Counts and
-timings are recorded in `studies/fdtd/csg_pair/records/fdtd_csg_pair_validation.json`.
+timings are recorded in the run record `fdtd_csg_pair_validation.json`, archived outside the repository.
 
 ### Fixed support for sphere sweeps (C6 allocation, 2026-09-28)
 
@@ -1763,7 +1764,7 @@ The probe's raw values are in `studies/fdtd/sphere_range/records/fdtd_sphere_ran
 actual volume reports, changed declarations and preserved refusal paths.
 `studies/fdtd/sphere_range/fdtd_sphere_range_mutations.py` records real source mutations for
 every new test function, restoring source bytes after each run; its logs
-are in `studies/results/fdtd_sphere_range_controls/`. The required suite and
+are in the `fdtd_sphere_range_controls` directory, archived outside the repository. The required suite and
 read-only freezer runner is `studies/fdtd/sphere_range/fdtd_sphere_range_validation.py`.
 
 The first full-suite attempt exposed four failures in two existing tests'
@@ -1774,16 +1775,16 @@ empty. Two additional source mutations include empty ranges in production's
 hash and fail these checks, confirming that they still reject a changed
 legacy skeleton. Together with the eight feature mutations, all ten were
 killed and restored byte for byte. The interrupted run and the isolated
-four-failure reproduction are retained as `full_attempt1_interrupted.log`
-and `legacy_schema_failure.log`; the numerical implementation did not need
+four-failure reproduction are retained in that archived directory as
+`full_attempt1_interrupted.log` and `legacy_schema_failure.log`; the numerical implementation did not need
 to change for this correction. The runner now stops on the first failure.
 
 Validation used fd source SHA-256
 `b5dedea160f99136ef48864e6aaccbf7c323aee55b464bca7df9f6e3b08c597c`.
 The complete fd/docs tier exited 0 with 2512 passed and 8 skipped out of
 2520 collected (1778.33 seconds). No INTERNALERROR or worker crash was
-reported. Counts, exit codes and timings are retained in
-`studies/fdtd/sphere_range/records/fdtd_sphere_range_validation.json`.
+reported. Counts, exit codes and timings are retained in the run record
+`fdtd_sphere_range_validation.json`, archived outside the repository.
 The separate slow tier exited 0 with all 80 collected cases passed
 (1145.97 seconds). All four read-only freezers exited 0 and reproduced
 143/288/140/570 arrays bit for bit; no golden was rewritten. The corrected
@@ -1834,7 +1835,7 @@ The measurement script sweeps difference steps from `1e-4` to `1e-6` before
 choosing the test step and tolerance. A second geometry verifies both time
 records and frequency-domain field monitors, and traced reports omit seed
 measurements. Source mutation logs, including restored-byte hashes, are kept
-in `studies/results/fdtd_sphere_grad_controls/`.
+in the `fdtd_sphere_grad_controls` directory, archived outside the repository.
 
 The four measured derivatives are approximately `(-91.85684752, 71.12144111,
 -4.10230317, 1.29480474)`, in radius/x/y/z order. At the selected `3e-6`
@@ -1873,9 +1874,9 @@ The full fd/docs tier collected 2525 cases and exited 0 with 2517 passed and
 80 cases, exit 0 (1151.36 seconds). Neither reported INTERNALERROR or a worker
 crash, and reported totals match collection. Read-only stage-0/1/2/3 freezers
 reproduced all 143/288/140/570 committed arrays bit for bit; no golden was
-rewritten. Timings and counts are in
-`studies/fdtd/sphere_grad/records/fdtd_sphere_grad_validation.json`, with raw logs under
-`studies/results/fdtd_sphere_grad_controls/`. The three study scripts carry
+rewritten. Timings and counts are in the run record
+`fdtd_sphere_grad_validation.json`, with raw logs in
+`fdtd_sphere_grad_controls`; both are archived outside the repository. The three study scripts carry
 the probe, mutation controls and required sequential validation procedure.
 
 
@@ -1926,11 +1927,12 @@ rim approximation and previously measured convergence order near 1.60 have
 not improved. Continuum sensitivities still need separate convergence work.
 
 Measurements are retained in `studies/fdtd/cylinder_grad/records/fdtd_cylinder_grad_probe.json`
-and `fdtd_cylinder_grad_volumes.json`, alongside their raw logs. The first
+and `fdtd_cylinder_grad_volumes.json`; their raw logs are archived outside the repository. The first
 targeted run correctly accepted height 0.7 on the z-axis, because its caps
 at -0.359 and 0.341 fit the declared range. That invalid-input test fixture
 was corrected to height 0.8; no production threshold changed. The original
-failure is retained in `fdtd_cylinder_grad_controls/targeted_attempt1.log`.
+failure is retained as `targeted_attempt1.log` in the `fdtd_cylinder_grad_controls`
+directory, archived outside the repository.
 
 All 47 cylinder and existing sphere cases passed after that correction.
 Fifteen source mutations were killed by assertions or missing-refusal
@@ -1938,9 +1940,9 @@ assertions, covering every new test function. They remove containment,
 reservation, derivative preservation, height resolution, cap containment,
 static-axis recording, scene isolation, seed height, static-vector refusal
 or honest reporting; each run restores the exact original source bytes.
-The mutation runner and raw logs are retained in
-`studies/fdtd/cylinder_grad/fdtd_cylinder_grad_mutations.py` and
-`studies/results/fdtd_cylinder_grad_controls/`.
+The mutation runner is
+`studies/fdtd/cylinder_grad/fdtd_cylinder_grad_mutations.py`; its raw logs are in the
+archived `fdtd_cylinder_grad_controls` directory.
 
 Validation used fd source SHA-256
 `cf447c4d3ce7b5312f8b7005134b40b863e44ffd6c3eba0e46cbfc6d5c597b70`.
@@ -1949,10 +1951,10 @@ The full fd/docs tier collected 2555 cases and exited 0 with 2547 passed and
 80 cases, exit 0 (1152.16 seconds). Reported totals match collection; neither
 tier reported INTERNALERROR or a worker crash. The four read-only freezers
 reproduced all 143/288/140/570 committed arrays bit for bit and rewrote no
-golden. Counts, source identity and timings are retained in
-`studies/fdtd/cylinder_grad/records/fdtd_cylinder_grad_validation.json`. The sequential runner is
-`studies/fdtd/cylinder_grad/fdtd_cylinder_grad_validation.py`; raw outputs remain under
-`studies/results/fdtd_cylinder_grad_controls/`.
+golden. Counts, source identity and timings are retained in the run record
+`fdtd_cylinder_grad_validation.json`, archived outside the repository; the sequential runner
+`studies/fdtd/cylinder_grad/fdtd_cylinder_grad_validation.py` regenerates it. Its raw outputs
+are in the archived `fdtd_cylinder_grad_controls` directory.
 
 
 ### Public box geometry derivatives (C6, 2026-09-28)
@@ -1990,9 +1992,9 @@ an unreadable tuple of such leaves has no array namespace. The guard now
 stacks typed leaves without reading or detaching them before applying its
 existing positive/finite rule. Concrete tuples retain their previous host
 validation and arithmetic. The original failure is retained in
-`studies/fdtd/box_grad/records/fdtd_box_grad_probe_attempt1.log`; the successful numerical
-measurements are in `fdtd_box_grad_probe_attempt2.log` and
-`fdtd_box_grad_probe.json`.
+`fdtd_box_grad_probe_attempt1.log` and the successful run's log in
+`fdtd_box_grad_probe_attempt2.log`, both archived outside the repository; the successful numerical
+measurements are in `studies/fdtd/box_grad/records/fdtd_box_grad_probe.json`.
 
 The fixture measures final electric-field squared norm on a 16-cubed domain
 for 24 steps, with relative permittivity 2.25 and permeability 1.2. Four
@@ -2022,15 +2024,15 @@ third quadrants about every axis. Its eight-corner oracle checks all four sign
 combinations of sine and cosine, including exact contact and one-step inward
 bounds. The first full-suite run was interrupted early to add these nine
 cases before final validation; its collection, partial run and manifest are
-retained with the `full_attempt1_interrupted` prefix.
+retained with the `full_attempt1_interrupted` prefix, archived outside the repository.
 Seventeen real source mutations were killed by assertions or missing-refusal assertions,
 covering every new test function, and each restored the exact original source
 bytes. The controls cover rotated containment, fixed allocation and reporting,
 size and centre derivatives, tuple-size conversion, all three minimum sizes,
 static orientation, isolation, concrete seeds and static-input refusals.
-Their runner is `studies/fdtd/box_grad/fdtd_box_grad_mutations.py`, with raw logs and restored
-source hashes under `studies/results/fdtd_box_grad_controls/`. The added
-signed-sine mutation's separate record is in its `quadrants/` subdirectory
+Their runner is `studies/fdtd/box_grad/fdtd_box_grad_mutations.py`; the raw logs and restored
+source hashes are in the `fdtd_box_grad_controls` directory, archived outside the repository. The added
+signed-sine mutation's separate record is in its `quadrants` subdirectory
 (run the script with `quadrants` to repeat just that control).
 
 Final validation used fd source SHA-256
@@ -2041,10 +2043,10 @@ tier collected and passed all 80 cases, exit 0 (1058.32 seconds). Reported
 totals match collection; neither tier reported INTERNALERROR or a worker
 crash. All 143/288/140/570 committed reference arrays reproduced bit for bit
 in the four read-only freezers; no golden was rewritten. Source identity,
-counts and runner timings are retained in
-`studies/fdtd/box_grad/records/fdtd_box_grad_validation.json`. The sequential runner is
-`studies/fdtd/box_grad/fdtd_box_grad_validation.py`; raw outputs remain under
-`studies/results/fdtd_box_grad_controls/`.
+counts and runner timings are retained in the run record
+`fdtd_box_grad_validation.json`, archived outside the repository; the sequential runner
+`studies/fdtd/box_grad/fdtd_box_grad_validation.py` regenerates it. Its raw outputs
+are in the archived `fdtd_box_grad_controls` directory.
 
 
 ### Public prism geometry derivatives (C6, 2026-09-29)
@@ -2099,9 +2101,9 @@ permeability 1.2. All 64 measured geometry derivatives are nonzero. The
 initial observation, the entire final electric-field squared norm, was
 source-dominated at about 1070: its smallest sensitivity was 0.001768 and
 central differences lost relative accuracy through cancellation. Those
-measurements remain in `studies/fdtd/prism_grad/records/fdtd_prism_grad_full_field_probe.json`
-and `fdtd_prism_grad_probe_attempt1.log`; running the probe with `full-field`
-repeats that observation.
+measurements remain in `studies/fdtd/prism_grad/records/fdtd_prism_grad_full_field_probe.json`;
+its log, `fdtd_prism_grad_probe_attempt1.log`, is archived outside the repository. Running the probe
+with `full-field` repeats that observation.
 
 Before choosing the regression difference step, the observation was changed
 to the fixed central region `E[:, 5:11, 5:11, 5:11]`, excluding the drive.
@@ -2112,8 +2114,8 @@ worst relative derivative discrepancy is `8.06e-7`; at `1e-6` it is
 the existing `2e-6` relative derivative budget with zero absolute allowance.
 The smallest absolute sensitivity is `6.641e-4`, and JAX/Torch derivatives
 differ by at most `4.62e-14` in absolute value. The local observation's
-measurements are in `fdtd_prism_grad_probe.json` and
-`fdtd_prism_grad_probe_attempt2.log`.
+measurements are in `fdtd_prism_grad_probe.json`; its log,
+`fdtd_prism_grad_probe_attempt2.log`, is archived outside the repository.
 
 Ranged and unranged fields agree within `3.66e-16` of the largest field,
 retaining the existing 128-double-epsilon field budget. All six component
@@ -2132,11 +2134,11 @@ An initial topology test constructed a contact by averaging decimal
 coordinates. Its signed cross product was `6.0715e-18`, so both the concrete
 and runtime predicates accepted the actual tiny gap. The contact fixture now
 uses exactly representable dyadic coordinates; no predicate tolerance was
-changed. The diagnosis is retained in
-`studies/fdtd/prism_grad/records/fdtd_prism_grad_controls/touch_predicate_probe.log`. A second
+changed. The diagnosis is retained as `touch_predicate_probe.log` in the
+`fdtd_prism_grad_controls` directory, archived outside the repository. A second
 fixture fix copies the reversed NumPy outline before passing it to Torch,
 which cannot consume a negative-stride NumPy view. The two targeted attempts
-were stopped after these fixture failures, with their partial logs retained;
+were stopped after these fixture failures, with their partial logs archived there too;
 the focused topology checks then passed on all three backends.
 
 The targeted prism/box/cylinder/sphere and public-body run passed all 159
@@ -2150,8 +2152,9 @@ source-byte restoration. In the first mutation batch, detached vertices
 produced zero reverse sensitivities but a later `jvp` errored before those
 sensitivities were compared. The test now checks the reverse result first;
 its unchanged-code baseline passed before rerunning all controls. The first
-batch's records remain in `fdtd_prism_grad_controls/mutation_attempt1/`, and
-the complete accepted witnesses are in that directory's parent. The runner
+batch's records remain in the `mutation_attempt1` subdirectory of the archived
+`fdtd_prism_grad_controls`, and the complete accepted witnesses are in that
+directory itself. The runner
 is `studies/fdtd/prism_grad/fdtd_prism_grad_mutations.py`.
 
 Final validation used fd source SHA-256
@@ -2162,10 +2165,10 @@ tier collected and passed all 80 cases, exit 0 (1094.43 seconds). Reported
 totals match collection; neither tier reported INTERNALERROR or a worker
 crash. All 143/288/140/570 committed reference arrays reproduced bit for bit
 in the four read-only freezers; no golden was rewritten. Source identity,
-counts and runner timings are retained in
-`studies/fdtd/prism_grad/records/fdtd_prism_grad_validation.json`. The sequential runner is
-`studies/fdtd/prism_grad/fdtd_prism_grad_validation.py`; raw outputs remain under
-`studies/results/fdtd_prism_grad_controls/`.
+counts and runner timings are retained in the run record
+`fdtd_prism_grad_validation.json`, archived outside the repository; the sequential runner
+`studies/fdtd/prism_grad/fdtd_prism_grad_validation.py` regenerates it. Its raw outputs
+are in the archived `fdtd_prism_grad_controls` directory.
 
 
 ### Simultaneous separated-body geometry derivatives (C6, 2026-09-29)
@@ -2226,7 +2229,7 @@ derivative. Raw values and controls remain in
 `studies/fdtd/multi_shape_grad/records/fdtd_multi_shape_grad_probe.json`,
 `fdtd_multi_shape_grad_small_steps.json`, `fdtd_multi_shape_grad_controls_probe.json`,
 `fdtd_multi_shape_grad_coefficients.json` and
-`fdtd_multi_shape_grad_component_switches.json`, with their logs.
+`fdtd_multi_shape_grad_component_switches.json`; their logs are archived outside the repository.
 
 The four-body NumPy fields are exactly unchanged by removing the ranges or
 reversing structure order. Backend field differences are at most `6.13e-16`
@@ -2247,15 +2250,15 @@ failure confirmed `bool(NaN)` is true even though both the guard and output
 coefficients were correctly NaN. The assertion now checks the numeric guard
 directly. The domain-boundary fixture also uses PEC to distinguish that
 refusal from the independent absorber refusal. Production geometry guards
-were not weakened. All attempts remain under
-`studies/results/fdtd_multi_shape_grad_controls/`.
+were not weakened. All attempts remain in the
+`fdtd_multi_shape_grad_controls` directory, archived outside the repository.
 
 The first mutation batch detached every geometry leaf and made the objective
 constant. Its subsequent autograd exception was correctly rejected as a
 non-assertion witness. The test now asserts that the objective retains its
 derivative graph before requesting the reverse derivative; its unmodified-code
 baseline passed (32.87 seconds). That rejected attempt's log and source hashes
-remain in `fdtd_multi_shape_grad_controls/mutation_attempt1/`.
+remain in the `mutation_attempt1` subdirectory of `fdtd_multi_shape_grad_controls`.
 
 All 18 controls in the complete rerun failed by value assertions or missing-refusal
 assertions, covering every new test function, and each restored the original
@@ -2264,7 +2267,7 @@ all painters and seeds, concrete partners, every reserved pair and its halo,
 every material, combined runtime guards, range records, domain/absorber clearance,
 report labels and static scene identity. The runner is
 `studies/fdtd/multi_shape_grad/fdtd_multi_shape_grad_mutations.py`; the accepted records and raw failures
-are in `studies/fdtd/multi_shape_grad/records/fdtd_multi_shape_grad_controls/witnesses.json` and its directory.
+are in `witnesses.json` and the rest of `fdtd_multi_shape_grad_controls`, archived outside the repository.
 
 Final validation used fd source SHA-256
 `21c8da796417791295b974880cd6d0962dc1dd18d36f7853f7d9b620dd7c598d`.
@@ -2275,9 +2278,9 @@ all 80 cases, exit 0 (1142.39 seconds). Reported totals match collection;
 neither tier reported INTERNALERROR or a worker crash. All 143/288/140/570
 committed reference arrays reproduced bit for bit in the four read-only
 freezers; no golden was rewritten. Source identity, counts and runner timings
-are retained in `studies/fdtd/multi_shape_grad/records/fdtd_multi_shape_grad_validation.json`.
-The sequential runner is `studies/fdtd/multi_shape_grad/fdtd_multi_shape_grad_validation.py`; raw
-outputs remain under `studies/results/fdtd_multi_shape_grad_controls/`.
+are retained in the run record `fdtd_multi_shape_grad_validation.json`, archived outside the repository;
+the sequential runner `studies/fdtd/multi_shape_grad/fdtd_multi_shape_grad_validation.py`
+regenerates it. Its raw outputs are in the archived `fdtd_multi_shape_grad_controls` directory.
 
 ### Geometry derivatives under plane-wave illumination (C6, 2026-10-01)
 
@@ -2397,7 +2400,7 @@ unchanged by moving the planes and absorbers half a wavelength further out,
 while the default 24-cell PML brings it to `8.9e-7` and closes `dT + dR` to
 0.1 per cent of `dT`. The diagnostic
 `studies/fdtd/traced_illumination/instruments/fdtd_traced_illumination_controls/reflux_diagnostic.py`
-(log beside it) shows residuals up to `5.9e-4` at normal incidence with
+(its log, `reflux_diagnostic.log`, is archived outside the repository) shows residuals up to `5.9e-4` at normal incidence with
 eight cells, and the zero orders agree with independent flux planes to
 `2e-5` in every case, so the residual is the solve's own balance with that
 absorber, not the order algebra. With no pillar,
@@ -2418,8 +2421,8 @@ TFSF entry pair `(25, 26)` reached by a body beside the box, and admit a
 concrete partner reaching a pair and supports ending exactly at a read
 layer. The last test refuses a forward-mode dual radius in `layer_share`.
 
-**Source-mutation witnesses** (`studies/fdtd/traced_illumination/fdtd_traced_illumination_mutations.py`,
-records in `studies/fdtd/traced_illumination/records/fdtd_traced_illumination_controls/witnesses.json`).
+**Source-mutation witnesses** (`studies/fdtd/traced_illumination/fdtd_traced_illumination_mutations.py`;
+its record `witnesses.json` is archived outside the repository).
 All ten failed by assertion or a missing refusal, and each restored the
 source bytes exactly: detaching the diffraction order power and the closed
 flux box (both caught by the graph assertion), dropping Torch forward
@@ -2440,7 +2443,8 @@ validation helper's hash) and reproduced every value, difference and
 Jacobian bit for bit (`probe_measure.log`, `probe_fields.log`). The first
 `settled` launch failed on a syntax error in an edited newline literal; its
 log is `probe_settled_attempt1_syntax.log`. The settled and empty-cell runs
-are concrete NumPy solves, which this change does not reach.
+are concrete NumPy solves, which this change does not reach. The logs named in
+this paragraph are in the `fdtd_traced_illumination_controls` directory, archived outside the repository.
 
 **Validation.** A targeted run of the new file with the sphere, cylinder,
 box, prism and multi-body gradient files, the PlaneWave, Diffraction,
@@ -2455,10 +2459,10 @@ skipped (2136.16 seconds). The separate slow tier collected and passed all
 80 cases, exit 0 (1132.23 seconds). Reported totals match collection, and
 neither tier reported INTERNALERROR or a worker crash. The four read-only
 freezers reproduced all 143/288/140/570 committed arrays bit for bit; no
-golden was rewritten. Counts and timings are in
-`studies/fdtd/traced_illumination/records/fdtd_traced_illumination_validation.json`; the runner is
-`studies/fdtd/traced_illumination/fdtd_traced_illumination_validation.py` and the raw logs are under
-`studies/results/fdtd_traced_illumination_controls/`.
+golden was rewritten. Counts and timings are in the run record
+`fdtd_traced_illumination_validation.json` (2026-10-01), archived outside the repository;
+`studies/fdtd/traced_illumination/fdtd_traced_illumination_validation.py` regenerates it. The raw
+logs, `docs_check.log` among them, are in the archived `fdtd_traced_illumination_controls` directory.
 
 
 ### Concrete partners beside traced bodies (C6, 2026-10-01)
@@ -2540,15 +2544,15 @@ family was first measured with the ball's centre at `z = .1`, exactly on a
 node plane. There the centre-height derivative of `R0` was `.1196` by JAX
 and `.1641` by Torch, against a central difference of `.1267` that was the
 same at every step from `1e-4` to `1e-6`; the radius column agreed to
-`2e-10` (`probe_measure_tie.json` and `.log`). At `.1013` and `.0987` all
+`2e-10` (`probe_measure_tie.json` and `.log`, archived outside the repository). At `.1013` and `.0987` all
 three agree to eight digits
-(`studies/fdtd/traced_partner/instruments/fdtd_traced_partner_controls/center_tie_diagnostic.py`
-and its log). The function is smooth through the tie and reverse mode is wrong at it,
+(`studies/fdtd/traced_partner/instruments/fdtd_traced_partner_controls/center_tie_diagnostic.py`;
+its log, `center_tie_diagnostic.log`, is archived outside the repository). The function is smooth through the tie and reverse mode is wrong at it,
 differently on each backend. The defect predates this change: on the
 committed bd149464, a lone ranged sphere in a PEC box
-(`studies/fdtd/traced_partner/instruments/fdtd_traced_partner_controls/center_tie_at_d9b4311f.py`
-and its log, whose first line, a scratch import path, was replaced by a
-note) gives a centre-z derivative of `20.468` by central differences against
+(`studies/fdtd/traced_partner/instruments/fdtd_traced_partner_controls/center_tie_at_d9b4311f.py`;
+its log `center_tie_at_d9b4311f.log`, whose first line, a scratch import path, was replaced
+by a note, is archived outside the repository) gives a centre-z derivative of `20.468` by central differences against
 `-20.522` (Torch) and `28.671` (JAX) with the centre at `z = .05`, a half-node
 plane where Ez, Hx and Hy sit, while at `z = 0` and `.0013` all three agree to
 ten digits. A sphere centred on a symmetry plane of its grid is the common
@@ -2566,8 +2570,8 @@ junction beside a traced body refused in `fd.lower` and `fd.run`; and
 `jax.jit(fd.lower)` of a traced Cylinder beside an unranged unturned Box,
 including the guard's NaN for a two-cell radius.
 
-**Source-mutation witnesses** (`studies/fdtd/traced_partner/fdtd_traced_partner_mutations.py`,
-records in `studies/fdtd/traced_partner/records/fdtd_traced_partner_controls/witnesses.json`).
+**Source-mutation witnesses** (`studies/fdtd/traced_partner/fdtd_traced_partner_mutations.py`;
+its record `witnesses.json` is archived outside the repository).
 All twelve failed by assertion or a missing refusal and restored the source
 bytes exactly: detaching the order power (substrate) and the Drude pole's
 drive field (mirror; the values stay equal and the Jacobian moves), dropping
@@ -2577,7 +2581,7 @@ reach, an overlap test that counts a shared boundary, skipping the partner
 check, putting partners under the range rules, skipping the partner material
 check or its walk into dataclasses, and admitting the junction beside a
 traced body. A first complete witness run preceded a docstring-only edit of
-`shape_ranges.py`; it is kept under `first_witnesses/`, and the run at the
+`shape_ranges.py`; it is kept in an archived `first_witnesses` subdirectory, and the run at the
 final source is the one recorded beside it.
 
 **Validation.** The probe, its controls and the twelve witnesses were rerun
@@ -2592,10 +2596,10 @@ fd/docs tier collected 2683 cases and exited 0 with 2675 passed and 8 skipped
 exit 0 (1137.90 seconds). Reported totals match collection, and neither tier
 reported INTERNALERROR or a worker crash. The four read-only freezers
 reproduced all 143/288/140/570 committed arrays bit for bit; no golden was
-rewritten. Counts and timings are in
-`studies/fdtd/traced_partner/records/fdtd_traced_partner_validation.json`; the runner is
-`studies/fdtd/traced_partner/fdtd_traced_partner_validation.py` and the raw logs are under
-`studies/results/fdtd_traced_partner_controls/`.
+rewritten. Counts and timings are in the run record
+`fdtd_traced_partner_validation.json`, archived outside the repository;
+`studies/fdtd/traced_partner/fdtd_traced_partner_validation.py` regenerates it. The raw logs are
+in the archived `fdtd_traced_partner_controls` directory.
 
 
 ### The sphere's centre tie (C6 fix, 2026-10-01)
@@ -2622,8 +2626,8 @@ Reverse mode broke it there twice.
   present regime has a positive limit and picks `c` without a tie.
 
 Measured (`studies/fdtd/sphere_center_tie/fdtd_sphere_center_tie_probe.py`, before on a git
-archive of a8eda4e0, after on the fix; `fdtd_sphere_center_tie_{fill,run}_
-{before,after}.json`):
+archive of a8eda4e0, after on the fix; the run records
+`fdtd_sphere_center_tie_{fill,run}_{before,after}.json` are archived outside the repository):
 
 | Check | Before: Torch / JAX | After: Torch / JAX |
 | --- | --- | --- |
@@ -2638,10 +2642,10 @@ through the centre. The fill check's first point set placed a face at
 exactly the radius from the centre, a true jump of the second derivative:
 there the central difference converged to reverse mode only linearly in the
 step, from both one-sided slopes
-(`studies/fdtd/sphere_center_tie/instruments/fdtd_sphere_center_tie_controls/first_offsets_fd_steps.py`
-and its log), so the points moved to `.37` and `.41` cell offsets. A ranged
+(`studies/fdtd/sphere_center_tie/instruments/fdtd_sphere_center_tie_controls/first_offsets_fd_steps.py`;
+its log is archived outside the repository), so the points moved to `.37` and `.41` cell offsets. A ranged
 Cylinder with its axis on half-node or node planes already agreed to
-`3.6e-8` (`cylinder_tie_check.py` and its log): its disc clip carries the
+`3.6e-8` (`cylinder_tie_check.py`; its log is archived too): its disc clip carries the
 signed branch.
 
 Every volume is unchanged to the bit: the regression compares
@@ -2667,7 +2671,8 @@ the one-chord limit passed the `z` case, because the regime with both chords
 gone is cut only by a voxel whose far corner passes the radius on two axes
 at once, and every such voxel of the first point sets is empty. The `corner`
 case was added for it (before: `1.03` Torch, `4.09` JAX), and the runner's
-logs from that attempt are under `attempt1/`.
+logs from that attempt are in the `attempt1` subdirectory of
+`fdtd_sphere_center_tie_controls`, archived outside the repository.
 
 **Validation.** Final fd source SHA-256
 `2b2ed31683618f986dda84fd07ddd57a4c41d1bdee6d52e9571090d2038843a0`; the
@@ -2681,10 +2686,10 @@ skipped (2121.25 seconds); the separate slow tier collected and passed all 80
 cases, exit 0 (1110.58 seconds). Reported totals match collection, with no
 INTERNALERROR or worker crash. The four read-only freezers reproduced all
 143/288/140/570 committed arrays bit for bit; no golden was rewritten.
-Counts and timings are in
-`studies/fdtd/sphere_center_tie/records/fdtd_sphere_center_tie_validation.json`, the runner is
-`studies/fdtd/sphere_center_tie/fdtd_sphere_center_tie_validation.py`, and the raw logs are under
-`studies/results/fdtd_sphere_center_tie_controls/`.
+Counts and timings are in the run record
+`fdtd_sphere_center_tie_validation.json`, archived outside the repository;
+`studies/fdtd/sphere_center_tie/fdtd_sphere_center_tie_validation.py` regenerates it. The raw logs
+are in the archived `fdtd_sphere_center_tie_controls` directory.
 
 
 ### A traced pillar standing on its substrate (C6, 2026-10-01)
@@ -2710,8 +2715,8 @@ half a cell of the plane to exclude the far cap, and with the four-cell height
 floor the far cap never reaches the rows (at most 3.5 cells past the plane). A
 mutant widening that half cell to one and a half survived every mask
 comparison in the first witness run, so the test was removed from the live
-predicate rather than kept unreachable (`fdtd_traced_junction_controls/
-attempt1`).
+predicate rather than kept unreachable (`attempt1` of the archived
+`fdtd_traced_junction_controls`).
 
 **The certificate for the range** (`shape_ranges._certify_junction`, called by
 `planning_scene` for each recorded junction whose standing body is traced):
@@ -2742,7 +2747,10 @@ plan=p)` with concrete values at another geometry is refused by the skeleton,
 as before this change. Differentiation reuses the seed's plan; `jax.jit` of
 `fd.lower` compiled once for two geometries.
 
-**Measurements** (`studies/fdtd/traced_junction/fdtd_traced_junction_probe.py`). The cell is the
+**Measurements** (`studies/fdtd/traced_junction/fdtd_traced_junction_probe.py`). Of the result
+files named below, `studies/fdtd/traced_junction/records/fdtd_traced_junction_settled.json` stays
+in the repository; the others, and the instrument scripts' logs, are archived outside the repository.
+The cell is the
 12 x 12 x 42 Bloch cell at `dx = .05` with eight-cell PMLs, a glass (2.1)
 substrate spanning the cell through the bottom PML, and an eps 2.25 pillar
 (Cylinder radius .12, height .3, centre x .011; or Box .23 x .21 x .3), under a
@@ -2808,12 +2816,12 @@ predicate, painting cells and nodes with the seed's mask, comparing the plan
 on the traced scene (caught by `jax.jit` and by the partner test), detaching
 the section fraction, each part of the certificate, the partner exception
 widened to every partner, a traced face admitted, and the base guard dropped.
-The first run ended on the survivor described above; its logs are under
-`attempt1/`.
+The first run ended on the survivor described above; its logs are in the
+archived `attempt1` directory named above.
 
-Every probe mode was rerun at the final fd source (SHA-256 in
-`fdtd_traced_junction_controls/final_source.txt`) and reproduced the earlier
-values bit for bit; the earlier files are under `before_final/`.
+Every probe mode was rerun at the final fd source (SHA-256 in `final_source.txt`
+of `fdtd_traced_junction_controls`) and reproduced the earlier values bit for bit;
+the earlier files are in its `before_final` subdirectory. Both are archived outside the repository.
 
 **Validation.** Final fd source SHA-256
 `09bf4bedc88ed35ff206dd3a146ab09bd3fea4fac8b20b4e2089fc2b3cab5b2d`. A targeted
@@ -2825,9 +2833,9 @@ skipped (2134.11 seconds); the separate slow tier collected and passed all 80
 cases, exit 0 (1127.48 seconds). Reported totals match collection, with no
 INTERNALERROR or worker crash. The four read-only freezers reproduced all
 143/288/140/570 committed arrays bit for bit; no golden was rewritten. Counts
-and timings are in `studies/fdtd/traced_junction/records/fdtd_traced_junction_validation.json`, the
-runner is `studies/fdtd/traced_junction/fdtd_traced_junction_validation.py`, and the raw logs are
-under `studies/results/fdtd_traced_junction_controls/`.
+and timings are in the run record `fdtd_traced_junction_validation.json`, archived outside the repository;
+`studies/fdtd/traced_junction/fdtd_traced_junction_validation.py` regenerates it. The raw logs
+are in the archived `fdtd_traced_junction_controls` directory.
 
 ### Traced material values beside traced geometry (C6, 2026-10-01)
 
@@ -2917,7 +2925,8 @@ the forward-mode time step above, a jitted-run test that could not fail (4 steps
 reached the pillar), and the manual's over-wide claims.
 
 **Measurements** (`studies/fdtd/traced_material/fdtd_traced_material_probe.py`, the junction probe's cell with
-the pillar's permittivity a leaf; results in `studies/results/fdtd_traced_material_*.json`).
+the pillar's permittivity a leaf; results in `studies/fdtd/traced_material/records/` (the files
+named below; the probe's other outputs are archived outside the repository)).
 
 * A traced Torch lowering and a 40-step run from the seed's plan equal the concrete NumPy
   scene planned at each of four points per case -- both pillar kinds, with the geometry
@@ -2988,9 +2997,9 @@ unguarded; each reader of the background door removed, the PML door dropped or b
 the Diffraction condition, the mirror door dropped or applied to any touching term, the
 Diffraction, per-axis, type, `mu`-naming and direct-lowering doors dropped, the per-axis
 reading applied to every partner, a conductivity refused on `fd.lower`, and the skin-depth
-re-run skipped. The first run (`attempt1/`) ended on that last survivor -- the report after
+re-run skipped. The first run (`attempt1` of the archived `fdtd_traced_material_controls`) ended on that last survivor -- the report after
 the run caught the same partner, so the test could not tell before from after; it now fails
-if the run starts. The second (`attempt2/`, after the review's changes) ended on the
+if the run starts. The second (`attempt2`, after the review's changes) ended on the
 `mu`-naming mutation, which failed with a `TypeError` rather than an assertion; the refusal
 test now asserts a refusal by name whatever else happens.
 
@@ -3001,11 +3010,11 @@ separate slow tier collected and passed all 80 cases, exit 0 (1211.22 seconds). 
 totals match collection, with no INTERNALERROR or worker crash. The four read-only freezers
 reproduced all 143/288/140/570 committed arrays bit for bit; no golden was rewritten.
 Every probe mode was then rerun at the final source and reproduced its earlier JSON bit for
-bit, timings aside (`studies/fdtd/traced_material/records/fdtd_traced_material_controls/rerun_at_final_source.json`; the earlier
-files are under `before_final/`). Counts and timings are in
-`studies/fdtd/traced_material/records/fdtd_traced_material_validation.json`, the runner is
-`studies/fdtd/traced_material/fdtd_traced_material_validation.py`, and the raw logs are under
-`studies/results/fdtd_traced_material_controls/`.
+bit, timings aside (`rerun_at_final_source.json`, with the earlier files in its
+`before_final` subdirectory, both in `fdtd_traced_material_controls`, archived outside the repository).
+Counts and timings are in the run record `fdtd_traced_material_validation.json`, archived outside the repository;
+`studies/fdtd/traced_material/fdtd_traced_material_validation.py` regenerates it. The raw logs
+are in the archived `fdtd_traced_material_controls` directory.
 
 ### A traced substrate: the grazing rule at run time (C6, 2026-10-02)
 
@@ -3033,8 +3042,8 @@ live `min_c eps_c mu_c` may not lie in any interval. Like the other guards it is
 for a seeded scene with a traced material, so every other run's `stable` is unchanged.
 
 **Measurements** (`studies/fdtd/traced_material/fdtd_traced_material_probe.py`, mode `substrate`;
-`fdtd_traced_material_substrate.json`, logs under
-`studies/results/fdtd_traced_substrate_controls/`).
+`fdtd_traced_material_substrate.json`; the logs are in the `fdtd_traced_substrate_controls`
+directory, archived outside the repository).
 
 * The cell with the substrate's eps traced beside the pillar's shape and index, a 40-step
   run from the seed's plan: equal to the concrete scene at three points (substrate eps 1.8,
@@ -3053,8 +3062,8 @@ for a seeded scene with a traced material, so every other run's `stable` is unch
   of its small `dT` (`-0.030` per wavelength), against 0.005% for the pillar's eps. That is
   the slope of the residual itself: `T + R - 1` stays within `1.4e-6` from substrate eps 2.0
   to 2.2 but ripples at that level as the thick substrate's optical path changes
-  (`substrate_residual_sweep.json`), and matching the bottom PML to each perturbed medium
-  changes the derivatives by under `4e-6` (`substrate_settled_matched.json`), so the PML's
+  (`substrate_residual_sweep.json`, archived with those logs), and matching the bottom PML to each perturbed medium
+  changes the derivatives by under `4e-6` (`substrate_settled_matched.json`, likewise archived), so the PML's
   match held at the seed is not the cause.
 
 **Regressions** (`tests/fdtd/test_fd_traced_material.py`, two new functions; the refusal test now
@@ -3079,12 +3088,11 @@ separate slow tier collected and passed all 80 cases, exit 0 (1084.26 seconds). 
 totals match collection, with no INTERNALERROR or worker crash. The four read-only freezers
 reproduced all 143/288/140/570 committed arrays bit for bit; no golden was rewritten. Every
 probe mode, the previous section's included, was rerun at the final source and reproduced
-its earlier JSON bit for bit, timings aside
-(`studies/fdtd/traced_substrate/records/fdtd_traced_substrate_controls/rerun_at_final_source.json`; the earlier
-files are under `before_final/`). Counts and timings are in
-`studies/fdtd/traced_substrate/records/fdtd_traced_substrate_validation.json`, the runner is
-`studies/fdtd/traced_substrate/fdtd_traced_substrate_validation.py`, and the raw logs are under
-`studies/results/fdtd_traced_substrate_controls/`.
+its earlier JSON bit for bit, timings aside (`rerun_at_final_source.json`, with the earlier
+files in its `before_final` subdirectory, both in `fdtd_traced_substrate_controls`, archived outside the repository).
+Counts and timings are in the run record `fdtd_traced_substrate_validation.json`, archived outside the repository;
+`studies/fdtd/traced_substrate/fdtd_traced_substrate_validation.py` regenerates it. The raw logs
+are in the archived `fdtd_traced_substrate_controls` directory.
 
 ### The metasurface against RCWA (C7, 2026-10-03)
 
@@ -3147,7 +3155,8 @@ uniform second order nor greater accuracy for the taller box. Height changes
 corner fields and resonances together, so it does not isolate M3's mechanism;
 **C7 remains unpassed**. There is no new p-incidence ladder or tall 120-cell
 result. The failed protocol, calibration and completed comparison are preserved
-separately in the validation document and `studies/results/fdtd_metasurface_tall*`.
+separately in the validation document. That follow-up's summary reports stay in
+`studies/cross_solver/metasurface_tall/records/`; its raw run records are archived outside the repository.
 
 **Validation.** No production source changed in C7 (fd source SHA-256
 `50574088a3e1e766f334890bcbbd5dbd5ad1dc600c9469766f65d63c949832d9`, the tree of `273514f4`).
@@ -3156,9 +3165,9 @@ The full fd/docs tier collected 2753 cases and exited 0 with 2745 passed and 8 s
 among them, exit 0 (1120.79 seconds). Reported totals match collection, with no INTERNALERROR
 or worker crash. The four read-only freezers reproduced all 143/288/140/570 committed arrays
 bit for bit; no golden was rewritten. `ruff check .` (0.16.2) and `sphinx-build -W` pass.
-Counts and timings are in `studies/cross_solver/metasurface/records/fdtd_metasurface_validation.json`, the runner is
-`studies/cross_solver/metasurface/fdtd_metasurface_validation.py`, and the raw logs are under
-`studies/results/fdtd_metasurface_controls/`.
+Counts and timings are in the run record `fdtd_metasurface_validation.json`, archived outside the repository;
+`studies/cross_solver/metasurface/fdtd_metasurface_validation.py` regenerates it. The raw logs
+are in the archived `fdtd_metasurface_controls` directory.
 
 ### First C8 scope: an axis-aligned conductive film (2026-10-06)
 
@@ -3233,8 +3242,8 @@ the original verdict. The full regression tier passes with 2,894 passed and
 eight skipped out of 2,902 collected, exit 0. All 81 separate slow-tier cases
 pass, and all four read-only freezers reproduce 143, 288, 140 and 570 arrays
 bit for bit without rewriting a golden. Counts, exits and the unchanged
-source identity are retained in
-`studies/fdtd/single_pole_film/records/fdtd_single_pole_film_validation.json`. The bounded
+source identity are retained in the run record
+`fdtd_single_pole_film_validation.json`, archived outside the repository. The bounded
 implementation and its required numerical gates are complete on the feature
 branch. This is not a blanket physical pass.
 General C8 smoothing remains incomplete, and C7 remains unpassed.
@@ -3274,7 +3283,7 @@ witnesses are accepted and all 99 restored Debye cases pass. The full tier
 passes with 2,994 passed and eight skipped out of 3,002 collected; all 81
 slow cases pass. Four read-only freezers reproduce 143, 288, 140 and 570
 arrays bit for bit, without rewriting a golden. These outcomes are retained
-in `studies/fdtd/debye_film/records/fdtd_debye_film_validation.json`. The first full attempt's
+in the run record `fdtd_debye_film_validation.json`, archived outside the repository. The first full attempt's
 documentation-snapshot packaging failure and exact compressed preservation
 are disclosed in the linked document and evidence annotation; production
 code, live tests and numerical criteria were unchanged for the successful
@@ -3329,7 +3338,7 @@ records the complete provenance and per-cell ranges. The full tier passes
 3,122 of 3,130 collected cases with eight skips; the separate slow tier passes
 all 81 cases. All 1,141 frozen-reference arrays are bit-exact, with no golden
 files written. The final numerical record is
-`studies/fdtd/two_debye_film/records/fdtd_two_debye_film_validation.json`. The bounded implementation
+`fdtd_two_debye_film_validation.json`, archived outside the repository. The bounded implementation
 and required numerical gates are complete on the feature branch. This physical
 result is scoped to the declared material and experiment; the bulk spectral
 guard makes no broader accuracy promise. Earlier records and open limits retain
@@ -3373,9 +3382,8 @@ repeat. The full tier collects 3,293 cases and passes 3,285 with eight skips;
 the separate slow tier passes all 81. All four read-only frozen-reference
 checks exit zero and reproduce 143/288/140/570 arrays bit for bit (1,141 in
 total), with no golden writes. The bounded implementation and required
-numerical gates are complete; the manifest and retained logs are
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_validation.json` and
-`studies/results/fdtd_debye_sum_film_controls/`.
+numerical gates are complete; the manifest `fdtd_debye_sum_film_validation.json` and its logs
+(the controls directory `fdtd_debye_sum_film_controls`) are archived outside the repository.
 
 This measured result is specific to the registered four-pole material and
 experiment. The implementation removes a pole-count boundary
@@ -3431,7 +3439,7 @@ fine-grid error bound. Full regression passes 3,434 cases with eight skips
 and the separate slow tier passes all 81. All four read-only freezers
 reproduce 143/288/140/570 arrays bit for bit (1,141 total), with no golden
 writes. The completed numerical records are retained in
-`studies/fdtd/oscillator_sum_film/records/fdtd_oscillator_sum_film_validation.json`. Existing
+`fdtd_oscillator_sum_film_validation.json`, archived outside the repository. Existing
 single-oscillator and Debye paths retain
 their own implementations and evidence, including their unresolved cells.
 This extension does not mix Debye with Drude/Lorentz poles or admit curved
@@ -3494,7 +3502,7 @@ exit zero; the separate slow tier passes all 81. All four read-only
 freezers reproduce 143/288/140/570 arrays bit for bit (1,141 total), with
 no golden writes. Raw warnings and stage-2/3 provenance-only notices are
 retained. The numerical records are in
-`studies/fdtd/hybrid_film/records/fdtd_hybrid_film_validation.json`. Final documentation
+`fdtd_hybrid_film_validation.json`, archived outside the repository. Final documentation
 and preservation acceptance use separate execution records and required
 checks described in the main article. No broader convergence claim follows
 from these registered three- and five-pole examples.

@@ -284,9 +284,9 @@ without importing the solver package or performing a field solve. Its
 script and all 99 production Python files were archived, and the initial
 manifest written, before those functions executed. All 100 recorded raw
 source hashes and the archive hash remain unchanged. The complete record
-and source archive are
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_algebra_attempt1.json` and
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_algebra_attempt1_sources.zip`.
+and source archive, `fdtd_debye_sum_film_algebra_attempt1.json` and
+`fdtd_debye_sum_film_algebra_attempt1_sources.zip`, are archived outside the
+repository.
 This is a disclosed development calculation, not a pytest gate, full-scene
 admission test or registered physical convergence result.
 
@@ -337,11 +337,11 @@ counts set to one. Worker wall times are 7.7645, 5.3392 and 27.7193 seconds
 for NumPy, JAX and Torch respectively, including their worker setup; this
 is not a backend performance comparison.
 
-The manifest and accepted calibration ceilings are
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_calibration_attempt1.json` and
+The accepted calibration ceilings are in
 `studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_calibration_acceptance.json`.
-The raw three-backend JSON/log pairs and frozen probe/controller are under
-`studies/results/fdtd_debye_sum_film_calibration_attempt1/`.
+The calibration manifest `fdtd_debye_sum_film_calibration_attempt1.json`, the raw
+three-backend JSON/log pairs and the frozen probe/controller (attempt directory
+`fdtd_debye_sum_film_calibration_attempt1`) are archived outside the repository.
 The calibration and algebra records share FD source digest
 `27a90c01598447fa9354873141e37d5e0b0490120246211ac71213309f4dc261`
 and package digest
@@ -357,10 +357,9 @@ film suites and the existing stencil-refusal compatibility case. Pytest
 takes 51.84 seconds; the wrapper records 52.404453 seconds. Production and
 probe identities are unchanged before and after the run.
 
-The manifest is
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_controls/targeted_attempt1.json`.
-Its collection/run logs and frozen runner/test snapshots remain in the
-same directory. These checks separate response algebra, numerical
+The manifest, `targeted_attempt1.json` in the controls directory
+`fdtd_debye_sum_film_controls`, is archived outside the repository together
+with its collection/run logs and frozen runner/test snapshots. These checks separate response algebra, numerical
 representation, recurrence energy, summed planning rates and scope
 refusals from physical propagation.
 
@@ -383,9 +382,10 @@ Every changed source is restored byte for byte; the complete source
 identities before and after agree. The restored suite collects and passes
 all 162 cases, with no skip, failure or expected/unexpected pass, exit zero.
 It takes 46.76 pytest seconds (48.852146 wrapper seconds). The canonical
-manifest is `studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_mutations.json`; original
+manifest `fdtd_debye_sum_film_mutations.json`, the original
 and mutant source snapshots, raw witness logs and the restored baseline
-remain under `studies/results/fdtd_debye_sum_film_mutations_attempt1/`.
+(attempt directory `fdtd_debye_sum_film_mutations_attempt1`) are archived outside
+the repository.
 The witnesses establish sensitivity to these faults, not arbitrary-material
 accuracy or a physical convergence result.
 
@@ -394,8 +394,8 @@ accuracy or a physical convergence result.
 Registration completes on its first attempt at 2026-10-06
 15:48:00.431256 UTC, before campaign responses. Its fingerprint is
 `f113b590a811d1d0653d49eb53d897118f3f356fe6a8cca9e16d44d4dcc9d498`.
-The fixed record is
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_registration.json`, which links 59
+The fixed record, `fdtd_debye_sum_film_registration.json` (archived outside the
+repository), links 59
 known-exposure records and four frozen source files. Calibration,
 standalone algebra, targeted tests and mutation exposures are disclosed.
 The matching coarse p/fraction-0.3 campaign row is a repeated known
@@ -496,12 +496,11 @@ character unchanged.
 
 The known coarse p/fraction-0.3 row repeats every NumPy calibration physical
 value exactly. It remains disclosed prior knowledge, not an independent
-arm. Raw workers are under
-`studies/results/fdtd_debye_sum_film_campaign_jobs/`, the ledger is
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_campaign.jsonl`, and the full per-cell
-values and procedural audit are
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_report.json` and
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_campaign_audit.log`.
+arm. The full per-cell values are in
+`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_report.json`. The raw workers
+(the job directory `fdtd_debye_sum_film_campaign_jobs`), the ledger
+`fdtd_debye_sum_film_campaign.jsonl` and the procedural audit
+`fdtd_debye_sum_film_campaign_audit.log` are archived outside the repository.
 
 A separate standard-library audit reads the saved data without importing
 the solver, probe, campaign or classification helper. Its independently
@@ -518,11 +517,11 @@ all cells, interval endpoints have these envelopes:
 | 48 direct-order intervals | [1.982360, 2.173370] |
 | 24 final direct-order intervals | [1.982360, 2.114193] |
 
-The independent result, source and observed execution record are
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_independent_audit_attempt1.json`,
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_independent_audit_attempt1.py.txt` and
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_independent_audit_attempt1_execution.json`.
-The raw log and runner snapshot are retained alongside them. This audit
+The independent result, source and observed execution record,
+`fdtd_debye_sum_film_independent_audit_attempt1.json`,
+`fdtd_debye_sum_film_independent_audit_attempt1.py.txt` and
+`fdtd_debye_sum_film_independent_audit_attempt1_execution.json`, are archived
+outside the repository together with the raw log and runner snapshot. This audit
 adds no field solve or additional physical acceptance claim.
 
 The measured conclusion applies to this four-pole material and fixed
@@ -553,9 +552,9 @@ historical case-list or freezer-source provenance notices. These are
 distinct from numerical mismatches; the committed golden bytes remain
 unchanged.
 
-The final manifest is
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_validation.json`, with raw logs under
-`studies/results/fdtd_debye_sum_film_controls/`. The validation wrapper
+The final manifest `fdtd_debye_sum_film_validation.json` and its raw logs
+(controls directory `fdtd_debye_sum_film_controls`) are archived outside the
+repository. The validation wrapper
 records FD source digest
 `fe58bb53f8e9d0bb046d9a33f7b02d82075692d26e009ca989ca79e9b786918a`
 using sorted paths relative to `src/wavebit/fd` and LF-normalized source bytes
@@ -565,8 +564,8 @@ a change of numerical source. The preserved raw-byte prevalidation maps
 cover 99 production files, 82 FD test files, four golden files and 748
 earlier film evidence files. All remain unchanged after the gates. The
 maps and frozen validation inputs are recorded in
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_prevalidation.json` and
-`studies/fdtd/debye_sum_film/records/fdtd_debye_sum_film_validation_setup.json`.
+`fdtd_debye_sum_film_prevalidation.json` and
+`fdtd_debye_sum_film_validation_setup.json`, archived outside the repository.
 
 This extension concerns the finite passive relaxation family in one flat
 film. It does not settle curved interfaces, mixed Drude/Lorentz/Debye sums,

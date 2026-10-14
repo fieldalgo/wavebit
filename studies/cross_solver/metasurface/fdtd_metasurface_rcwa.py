@@ -145,10 +145,10 @@ run is reported, not judged.
 statistic (its 'totals', split junction) at least-squares orders 1.74 (A: epsilon 4 on 2.25,
 height 0.6, 20/40/80 -- M1's materials and rungs) and 1.73 (B: epsilon 5.8 on 2.13 -- M2's
 materials), 1.48 (C') and 1.77 (T') for cylinders, and 1.89 (D', a box) and 2.02 (R, a ridge)
--- ``studies/fdtd/subpixel_junction/records/fdtd_subpixel_junction_report.log``. Cylinders may therefore fail
-criterion 3 here for the reason C3 names (the default voxel rule's curved wall,
-``docs/validation/fdtd/fd-mie-validation.md``); that campaign's junction-free twins put the split junction's own
-share of the error near zero. This campaign does not separate the two again.
+-- the subpixel_junction campaign's report log, fdtd_subpixel_junction_report.log, archived
+outside the repository. Cylinders may therefore fail criterion 3 here for the reason C3 names
+(the default voxel rule's curved wall, ``docs/validation/fdtd/fd-mie-validation.md``); that
+campaign's junction-free twins put the split junction's own share of the error near zero. This campaign does not separate the two again.
 
 **Amendments before the campaign** (2026-10-03; no fd row existed, the RCWA rows were rekeyed):
 the pillar's sizes made whole cells at every rung (M1 diameter 0.45 -> 0.40, M2 diameter 0.30 ->

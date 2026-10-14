@@ -29,6 +29,10 @@ substantial. The full and separate slow regressions passed, and all four freezer
 comparisons were bit-exact. No termination-accuracy or convergence result is
 claimed.
 
+The run records this page names by file name belong to the study in
+`studies/fdtd/constitutive_absorber/`. They are archived outside the repository;
+the measurements they hold are stated on this page.
+
 ## Contract and what the proof covers
 
 | Item | Bounded admission |
@@ -173,9 +177,11 @@ was written before importing the test instruments, and all 117 recorded
 production/instrument input hashes remained unchanged. These are direct calls to
 the independent instruments with the comparison recorder substituted in memory;
 they are not a completed pytest or numerical-tolerance gate. Structural and
-positivity assertions remained active. See the
-[disclosure record](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_algebra_attempt1/result.json)
-and [actual parent exit](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_controls/algebra_launch_attempt1/exit.json).
+positivity assertions remained active. The disclosure record (`result.json` of run
+`fdtd_constitutive_absorber_algebra_attempt1`) and the actual parent exit
+(the `algebra_launch_attempt1` launch's `exit.json` in the study's controls
+directory) are archived outside the
+repository.
 
 For a nonzero reference `b`, the algebra recorder uses NumPy's complex modulus:
 `max(abs(a-b))/max(1,max(abs(b)))`, where `abs(z)=sqrt(real(z)^2+imag(z)^2)`.
@@ -215,9 +221,11 @@ with a positive-material short/reference pair and a zero-contrast shaped/omitted
 pair. All child exits and the observed parent exit were zero. Recorded arrays were
 finite, the runtime `stable` flags were true, and all declared mapping/path checks
 held. Source identities were unchanged. These checks do not establish a settled
-DFT or small termination sensitivity. See the
-[calibration record](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_calibration_attempt1.json)
-and [actual parent exit](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_controls/calibration_launch_attempt1/exit.json).
+DFT or small termination sensitivity. The calibration record
+`fdtd_constitutive_absorber_calibration_attempt1.json` and the actual parent exit
+(the `calibration_launch_attempt1` launch's `exit.json` in the study's controls
+directory) are archived outside the
+repository.
 
 The fixed calibration uses vacuum resolution 20, placement 0.3, transverse
 polarization u, time 16, axial lengths 3.2 and 6.4, and physical absorber thickness
@@ -298,11 +306,13 @@ still-driven Gaussian-pulse observations.
 
 ### Accepted instrument allowances and preserved targeted failure
 
-The [recorded decision](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_acceptance_attempt1/decision.json)
+The recorded decision (`decision.json` of run
+`fdtd_constitutive_absorber_acceptance_attempt1`, archived outside the repository)
 accepted the following allowances at 2026-10-07 05:31:22.974254 UTC, after the
 completed algebra and physical disclosures and their independent saved-data
-reviews. Its [observed parent process](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_controls/acceptance_launch_attempt1/exit.json)
-exited zero. The test's allowance assignment was `None` during both disclosures.
+reviews. Its observed parent process (the `acceptance_launch_attempt1` launch's
+`exit.json` in the study's controls directory, also archived) exited zero. The test's
+allowance assignment was `None` during both disclosures.
 Here `epsilon` is float64 machine epsilon.
 
 | Comparison group | Accepted allowance | Largest disclosed metric | Allowance / observed maximum |
@@ -331,13 +341,14 @@ that schema correction are retained; no simulation or response was rerun for
 this review repair. This review failure is distinct from the 24 successful
 calibration worker executions.
 
-[Targeted attempt 1](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_targeted_attempt1.json)
-collected 148 new cases and finished with 147 passed and one failed, in 73.69
+Targeted attempt 1 (run record `fdtd_constitutive_absorber_targeted_attempt1.json`,
+archived outside the repository) collected 148 new cases and finished with 147 passed and one failed, in 73.69
 pytest seconds. The child and observed parent exited one, and the later
 compatibility selection was not reached. Source and guard identities were
 unchanged during that attempt. The preserved
-[raw failure](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_controls/targeted_attempt1/new_constitutive_absorber.log)
-is the `pml` scope-refusal fixture: constructing `PML(cells=2)` raised the ordinary
+raw failure (`new_constitutive_absorber.log` of the `targeted_attempt1` run in the
+study's controls directory,
+archived outside the repository) is the `pml` scope-refusal fixture: constructing `PML(cells=2)` raised the ordinary
 minimum-depth error before the test entered its expected
 `ConstitutiveAbsorberScope` assertion. This result does not identify a production
 update or C9 refusal defect.
@@ -347,34 +358,36 @@ boundary with `allow_thin=True`. Static inspection shows that the fixture first
 builds the valid extrusion plan, then calls the C9 scope guard directly with the
 replaced boundary. Allowing the thin PML object to be constructed therefore lets
 the existing C9 face-type check reject PML as intended; it does not admit PML to
-the new route. The [preserved correction receipt](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_fixture_repair_attempt1/receipt.json)
-records exactly that one keyword addition, with unchanged production, helper,
+the new route. The preserved correction receipt (`receipt.json` of run
+`fdtd_constitutive_absorber_fixture_repair_attempt1`, archived outside the
+repository) records exactly that one keyword addition, with unchanged production, helper,
 assertion, case and numerical-allowance content. The executed retry is reported
 separately below.
 
 ### Targeted retry, actual source faults and registration
 
-[Targeted attempt 2](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_targeted_attempt2.json)
-passed all 148 new cases and all 646 cases in the broader targeted selection,
+Targeted attempt 2 (run record `fdtd_constitutive_absorber_targeted_attempt2.json`,
+archived outside the repository) passed all 148 new cases and all 646 cases in the broader targeted selection,
 with actual child and parent exit zero. The 148 are a subset of the 646; these
 are not 794 distinct cases. Source and guard identities were unchanged during
 the retry.
 
-The [original source-fault run](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_mutations_attempt1.json)
-accepted all 19 intended assertion or missing-refusal witnesses across the 11
+The original source-fault run (`fdtd_constitutive_absorber_mutations_attempt1.json`,
+archived outside the repository) accepted all 19 intended assertion or missing-refusal witnesses across the 11
 new test functions. Each production change was restored exactly, and the final
 restored baseline passed all 148 new cases. A separate witness then removed the
 CPML-specific refusal exercised by the repaired fixture, confirming that the
 fixture actually detects that missing protection.
 
-The [first supplemental attempt](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_acceptance_fixture_repair/cpml_witness_attempt1/result.json)
-exited one because its output parser expected the older class-form spelling of
+The first supplemental attempt (`result.json` of the
+`fdtd_constitutive_absorber_acceptance_fixture_repair` run `cpml_witness_attempt1`,
+archived outside the repository) exited one because its output parser expected the older class-form spelling of
 pytest's missing-exception message. The actual failure was
 `Failed: DID NOT RAISE ValueError`, rather than the expected spelling containing
 `<class 'ValueError'>`. The production bytes were restored and the restored node
 passed even in that rejected attempt. Its log and source snapshots remain
 unchanged. After a parser-only correction accepting these two exact spellings,
-[attempt 2](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_acceptance_fixture_repair/cpml_witness_attempt2/result.json)
+attempt 2 (`result.json` of run `cpml_witness_attempt2`, also archived)
 repeated the same actual source fault, accepted the intended missing-refusal
 failure, restored the exact source, and passed the restored node. The supplemental
 controller and its enclosing parent exited zero; the intentionally failing mutant
@@ -382,8 +395,8 @@ pytest child exited one and the restored pytest child exited zero. This gives
 20 accepted mechanisms in total, without changing
 production behavior, physical instruments or numerical allowances.
 
-The [finalized acceptance](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_acceptance.json)
-retains the original decision, allowance values and acceptance time. A separately
+The finalized acceptance (`fdtd_constitutive_absorber_acceptance.json`, archived
+outside the repository) retains the original decision, allowance values and acceptance time. A separately
 archived adapter proves the two test-text changes (allowance assignment, then
 `allow_thin=True`), both preserved failures, and the supplemental source witness;
 the eight frozen numerical helpers are unchanged. Actual finalization and
@@ -398,16 +411,17 @@ responses when repeated; registration does not make those repeats unseen tests.
 
 ### Completed registered physical characterization
 
-The [registered report](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_report.json)
-contains all 60 fixed NumPy solves, with no replacements or response-based
-extension. The [actual campaign parent](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_controls/campaign_launch_attempt1/exit.json)
-exited zero. The frozen controller's
-[saved-data audit](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_campaign_audit.json)
-and its actual parent also completed successfully. An
-[independent saved-array review](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_saved_reviews/campaign_attempt1/review.json)
-reproduced every comparison from 2,880 arrays, including the four known
+The registered report (`fdtd_constitutive_absorber_report.json`, archived outside
+the repository) contains all 60 fixed NumPy solves, with no replacements or response-based
+extension. The actual campaign parent (the `campaign_launch_attempt1` launch's
+`exit.json` in the study's controls directory)
+exited zero. The frozen controller's saved-data audit
+(`fdtd_constitutive_absorber_campaign_audit.json`) and its actual parent also
+completed successfully. An independent saved-array review (`review.json` of the
+`campaign_attempt1` review) reproduced every comparison from 2,880 arrays, including the four known
 calibration repeats, and verified 388 input hashes. This establishes the declared
-instrument checks, not a small termination error.
+instrument checks, not a small termination error. These four records are archived
+outside the repository.
 
 The 48 base solves form 24 short/reference pairs: two shapes, two placements,
 two transverse polarizations and three resolutions. Eight additional solves
@@ -494,8 +508,8 @@ continuum accuracy, spatial order and general C9 admission have not been proved.
 
 ### Preserved regression failure and archive-format correction
 
-[Validation attempt 1](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_validation_attempt1.json)
-collected 4,184 cases and finished its full tier with 4,175 passed, eight skipped
+Validation attempt 1 (`fdtd_constitutive_absorber_validation_attempt1.json`,
+archived outside the repository) collected 4,184 cases and finished its full tier with 4,175 passed, eight skipped
 and one failed (1,656 warnings; 1527.02 pytest seconds). Its actual parent exited
 one, and the slow/freezer stages were not reached. The sole failure was
 `test_nothing_published_points_outside_the_repository`: three preserved review
@@ -504,28 +518,31 @@ machine-local root paths, so the documentation scan treated them as published
 source. This was an archive-format failure, not a failed field calculation or
 a numerical-tolerance failure.
 
-The [archive relocation receipt](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_archive_extension_repair_attempt1/receipt.json)
-records all four saved review scripts, including the campaign review, moving
+The archive relocation receipt (`receipt.json` of run
+`fdtd_constitutive_absorber_archive_extension_repair_attempt1`, archived outside the
+repository) records all four saved review scripts, including the campaign review, moving
 from `.py` to `.py.raw` with identical bytes and hashes. The original copy and
 execution receipts retain their original names; the explicit relocation map
 connects those names to the preserved payloads. Production, tests, frozen helpers,
 budgets and raw response data were unchanged. The original failed full log and
-parent receipt remain available.
+parent receipt are archived with it.
 
 The relocation's actual parent exited zero. A
-[focused rerun of the unchanged documentation rule](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_controls/archive_docs_probe_launch_attempt1/exit.json)
-then passed its one selected case, with actual parent exit zero. That focused
+focused rerun of the unchanged documentation rule (the
+`archive_docs_probe_launch_attempt1` launch's `exit.json` in the study's controls
+directory, archived outside the repository) then passed its one selected case, with actual parent exit zero. That focused
 success was a focused check, separate from the complete retry reported below.
 The failed first attempt remains preserved alongside that retry.
 
 ### Completed regression gates and evidence preservation
 
-[Validation attempt 2](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_validation.json)
-completed on the unchanged production, test, helper and budget identities after
+Validation attempt 2 (`fdtd_constitutive_absorber_validation.json`, archived outside
+the repository) completed on the unchanged production, test, helper and budget identities after
 the archive-format correction. All eight recorded collection/run/freezer commands
 exited zero, and the
-[actual enclosing parent](../../../studies/fdtd/constitutive_absorber/records/fdtd_constitutive_absorber_controls/validation_launch_attempt2/exit.json)
-exited zero after 2714.1136 seconds.
+actual enclosing parent (the `validation_launch_attempt2` launch's `exit.json` in
+the study's controls directory,
+also archived) exited zero after 2714.1136 seconds.
 
 | Gate | Observed result | Pytest elapsed time |
 | --- | --- | ---: |
@@ -540,7 +557,7 @@ The full and slow raw logs retain 1,654 and 50 warning occurrences respectively.
 The four freezer comparisons reproduce 1,141 arrays in total; they were read-only,
 and the golden bytes were unchanged. The original failed validation, focused
 archive check, corrected complete run, source identities and raw logs remain
-separate records. No numerical tolerance was widened to obtain the retry result.
+separate records, archived outside the repository. No numerical tolerance was widened to obtain the retry result.
 
 These regressions support the bounded implementation and preservation of prior
 behavior. They do not reduce the measured finite-domain or finite-time sensitivity,

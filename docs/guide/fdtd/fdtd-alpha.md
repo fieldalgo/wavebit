@@ -257,7 +257,9 @@ and two linear polarizations. It compares complex amplitudes with RCWA, requires
 field, and checks that JAX, PyTorch and Matplotlib were not imported by the base calculation.
 On 2026-09-07, Python 3.12 with NumPy 2.5.3, SciPy 1.18.1 and array-api-compat
 1.15.0 passed all 36 cases: maximum amplitude difference 0.006079 and maximum residual
-4.35e-9. The measurements are in `studies/fdtd/installation/records/fdtd_alpha_install.json`.
+4.35e-9. The per-case measurements are in the run record `fdtd_alpha_install.json`
+(2026-09-07), archived outside the repository; `tests/distribution/fdtd_install_smoke.py`
+prints a report of the same form for a fresh installation.
 
 The optional plot extra was also installed (Matplotlib 3.11.1); a public `Stack`/`Incidence`
 conical solve recorded Ey/Ex and rendered an Ex slice from the installed package.

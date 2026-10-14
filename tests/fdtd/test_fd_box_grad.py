@@ -1,6 +1,7 @@
 """Public box derivatives with static orientation and a whole-body range certificate.
 
-Measurements and real source-mutation witnesses live in studies/results/fdtd_box_grad_*.
+Measurements: studies/fdtd/box_grad/records/fdtd_box_grad_probe.json and
+fdtd_box_grad_volumes.json; the source-mutation witnesses are archived outside the repository.
 """
 import dataclasses
 import itertools

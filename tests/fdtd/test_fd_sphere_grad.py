@@ -1,6 +1,7 @@
 """Public geometry derivatives and the entire-range safety contract.
 
-Real source mutations and numerical measurements live in studies/results/fdtd_sphere_grad_*.
+Measurement: studies/fdtd/sphere_grad/records/fdtd_sphere_grad_detached_center.json; the
+probe's other measurements and the real source mutations are archived outside the repository.
 """
 import dataclasses
 

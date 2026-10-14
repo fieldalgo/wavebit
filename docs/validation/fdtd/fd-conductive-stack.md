@@ -85,7 +85,8 @@ wave number; sampled wavelengths are `.9`, `1`, `1.1`. Analytic controls cover
 host phase, zero-depth deletion, singleton Airy agreement, lossless power,
 passivity, polarization signs and reversal reciprocity before field responses.
 
-The [registered protocol](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_registration.json)
+The registered protocol, the run record `fdtd_conductive_stack_registration.json`
+(archived outside the repository),
 was sealed on 2026-10-07 at 00:51:36 UTC, after calibration and the targeted
 and mutation tests. Its fingerprint is
 `3c7789eba8bbc92316b1392f0bc43d8e18836ef1373564c6c62dcd6f09f66a97`.
@@ -137,9 +138,9 @@ backend difference, scaled by `max(1, abs(NumPy value))`, was
 (`2.842170943040401e-14`). The
 [calibration record](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_calibration_attempt1.json)
 links all six raw responses and logs, their hashes, the pre-response
-production archive and analytic controls. Its
-[outer receipt](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/calibration_launch_attempt1/exit.json)
-records the actual controller exit.
+production archive and analytic controls. Its outer receipt, the calibration
+launch's `exit.json` (archived outside the repository), records the actual
+controller exit.
 
 After disclosure, shared optical regression ceilings of `.007` for `r` and
 `.014` for `t` were selected as `1.2` times each measured maximum, rounded
@@ -162,10 +163,8 @@ optical regressions on three backends, scope refusals, prepared identity,
 tracing refusals and every-member CFL and spectral guards. These results
 are recorded in the
 [targeted manifest](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_targeted.json),
-with separate raw logs for the
-[new tests](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/targeted_attempt1/new_stack.log)
-and the
-[targeted suite](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/targeted_attempt1/targeted.log).
+with separate raw logs for the new tests (`new_stack.log`) and the targeted
+suite (`targeted.log`); both raw logs are archived outside the repository.
 
 Ten deliberate changes to actual production files each caused the intended
 assertion failure, covering all nine functions. They altered later-member
@@ -174,13 +173,13 @@ overlapping supports; bypassed whole-stack identity or foreign-memory
 rejection; detached a Torch forward carrier; or checked only the first
 member's CFL rate or source band. Every source was restored to its original
 bytes, and the restored new-test suite passed all 136 cases again. The
-[mutation manifest](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations.json)
-links each exact original and mutant snapshot, one-case failure log and
-restoration hash, plus the
-[restored baseline log](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/restored_targeted_baseline.log).
-The [targeted exit receipt](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/targeted_launch_attempt1/exit.json)
-and [mutation exit receipt](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/mutations_launch_attempt1/exit.json)
-both record exit zero. Mutation detection checks the stated failure
+mutation manifest, `fdtd_conductive_stack_mutations.json` (archived outside
+the repository), links each exact original and mutant snapshot, one-case
+failure log and restoration hash; the
+[restored baseline log](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/restored_targeted_baseline.log)
+stays in the repository. The targeted and mutation exit receipts (each
+launch's `exit.json`, archived with the raw records) both record exit zero.
+Mutation detection checks the stated failure
 mechanisms; it does not prove the absence of other defects.
 
 ## Cellwise convergence and uncertainty rules
@@ -254,11 +253,12 @@ monitor, below the registered `1e-5` limit. All 40 rows retain
 `SubpixelAccuracyWarning`; four also retain `CoarseMeshWarning`. No growing
 or unstable-field warning was recorded.
 
-Both the [campaign process](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/campaign_launch_attempt1/exit.json)
-and its separate [saved-data audit](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/campaign_audit_launch_attempt1/exit.json)
-exited zero. The audit reproduces all per-cell records from the raw responses.
-The [ledger](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_campaign.jsonl)
-links each of the 40 response JSON files and raw logs by hash; the
+Both the campaign process and its separate saved-data audit exited zero (each
+launch's `exit.json` receipt is archived outside the repository). The audit
+reproduces all per-cell records from the raw responses. The ledger,
+`fdtd_conductive_stack_campaign.jsonl` (archived outside the repository with
+the raw responses), links each of the 40 response JSON files and raw logs by
+hash; the
 [complete report](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_report.json)
 retains all 48 cells. Both known NumPy calibration payloads repeat exactly;
 that agreement is a provenance check, not an additional independent result.
@@ -338,10 +338,11 @@ orders. There is no blanket second-order conclusion.
 
 ## Regression evidence and remaining scope
 
-The [completed validation manifest](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_validation.json)
-records every collected and reported test node, source guard, child command,
-raw log and actual process exit. Its [outer exit receipt](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/validation_launch_attempt1/exit.json)
-also records exit zero.
+The completed validation manifest, `fdtd_conductive_stack_validation.json`
+(archived outside the repository), records every collected and reported test
+node, source guard, child command, raw log and actual process exit. Its outer
+exit receipt, the validation launch's `exit.json` (archived with it), also
+records exit zero.
 
 | Gate | Completed result |
 | --- | --- |
@@ -352,15 +353,16 @@ also records exit zero.
 | Stage 2 frozen reference | 140 of 140 arrays bit for bit. |
 | Stage 3 frozen reference | 570 of 570 arrays bit for bit. |
 
-The raw [full log](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/validation_attempt1/full.log)
-and [slow log](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/validation_attempt1/slow.log)
-retain individual outcomes. Every freezer reports that the committed golden
+The raw full and slow logs (`full.log` and `slow.log` of the validation
+attempt, archived outside the repository) retain individual outcomes. Every
+freezer reports that the committed golden
 was reproduced and nothing was written. The guards retain the exact four
 golden files, all 1,738 prior evidence files and all 86 pre-existing FD test
 files. The extension adds one FD test module; the final production and FD-test
 inventories contain 104 and 87 Python files respectively.
 
-A separate [independent campaign replay](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_review_campaign/attempt1.json)
+A separate independent campaign replay (its record, `attempt1.json` of the
+review campaign, is archived outside the repository)
 checks 2,120 recorded input hashes, the exact 40-worker schedule, all per-cell
 intervals and both known calibration repeats. Its independently recursive
 Fresnel reference differs from the recorded characteristic-matrix answer by
@@ -373,22 +375,23 @@ warning-as-error Sphinx build. The [final evidence auditor](https://github.com/f
 verifies exact source and raw-log hashes, actual process exits, collected and
 reported test nodes, the unchanged skip identities, mutation restoration,
 preserved prior evidence and scalar continuum/per-cell arithmetic. These
-final checks retain their own source identities and execution records under
-the [study controls](https://github.com/fieldalgo/wavebit/tree/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls).
-The saved-evidence auditor reruns neither fields nor tests; its caller records
-its exit separately. Passing those checks certifies the stated evidence and
+final checks retain their own source identities and execution records in the
+study's controls directory, `fdtd_conductive_stack_controls`, which is archived
+outside the repository. The saved-evidence auditor reruns neither fields nor
+tests; its caller records its exit separately. Passing those checks certifies the stated evidence and
 regressions, not a universal spatial order or general C8 completion.
 
-The [first final-audit process](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_controls/audit_launch_attempt1/exit.json)
-exited one: it compared a Windows-spelled mutation log path directly with
-the POSIX spelling of the same file. The file and its SHA-256 were identical.
+The first final-audit process (its `exit.json` receipt is archived outside the
+repository) exited one: it compared a Windows-spelled mutation log path
+directly with the POSIX spelling of the same file. The file and its SHA-256 were identical.
 A saved-data review found the same path-spelling assumption in the interpreter
-and controller-report comparisons. The [archived replay source](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_audit_path_repair/audit_variant.py.raw)
-resolves those three same-file comparisons while retaining every raw hash
-and non-path field check. It also binds its own executed source into the
-input map. The [exact patch and observed path pairs](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_audit_path_repair/repair_proposal.json)
-retain the original source and failed attempt. This is a disclosed repair to
-the saved-evidence checker; the original ten helpers, numerical sources,
+and controller-report comparisons. The archived replay source,
+`audit_variant.py.raw`, resolves those three same-file comparisons while
+retaining every raw hash and non-path field check. It also binds its own
+executed source into the input map. The exact patch and observed path pairs,
+`repair_proposal.json`, retain the original source and failed attempt. Both
+files of the audit path repair are archived outside the repository. This is a
+disclosed repair to the saved-evidence checker; the original ten helpers, numerical sources,
 tests, calibration, registered physical criteria and numerical results
 remain byte-identical. The original auditor is not claimed to have passed.
 

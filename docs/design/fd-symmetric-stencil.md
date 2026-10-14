@@ -212,10 +212,11 @@ guard implementation mishandled normalized three-component materials and
 the first mask fixture was not serializable. Both failed healthy tests,
 were corrected, and the final suite above was run after restoration.
 
-The [complete measurement record](../../studies/fdtd/subpixel_symmetric_stencil/records/fdtd_subpixel_symmetric_stencil.log)
-retains source digests, per-case energy histories, rejected prototypes,
-translation and sparse-bound screens, actual process exits and mutant
-assertion witnesses. The public material operator is not replaced here.
+The complete measurement record, `fdtd_subpixel_symmetric_stencil.log` of the
+`studies/fdtd/subpixel_symmetric_stencil/` study, is archived outside the
+repository. It retains source digests, per-case energy histories, rejected
+prototypes, translation and sparse-bound screens, actual process exits and
+mutant assertion witnesses. The public material operator is not replaced here.
 
 ```bash
 python studies/fdtd/subpixel_symmetric_stencil/fdtd_subpixel_symmetric_stencil.py cylinder24.json --sweep-cylinder

@@ -188,8 +188,8 @@ run stopped (report log, ``anchor|1790516169``): in three of the sixteen cases -
 degrees p, placement 0.75, and FT' at 45 degrees p, both placements -- fewer than three rungs
 were floor-free. Arm 2's own error there fell at 2.01 / 2.00 / 2.00 (FC') and 2.02 / 2.00 / 1.07
 (FT'); the bare-substrate control K0 flattened from 80 cells at 2.7e-4 (eps 2.1) and 1.2e-3
-(eps 3.1). Diagnosed with ``floor_probe.py`` (``results/fdtd_subpixel_junction_floor.log``): the
-floor is the z PML's round-trip return at the default target 1e-8 -- at 45 degrees p and 160
+(eps 3.1). Diagnosed with ``floor_probe.py`` (its log, fdtd_subpixel_junction_floor.log, is
+archived outside the repository): the floor is the z PML's round-trip return at the default target 1e-8 -- at 45 degrees p and 160
 cells K0 is 2.67e-4 / 9.10e-5 / 9.08e-5 (eps 2.1) and 1.226e-3 / 1.580e-4 / 1.578e-4 (eps 3.1)
 at targets 1e-8 / 1e-12 / 1e-16, and at 1e-12 it falls at second order from 80 cells (orders
 1.99 and 2.00). So every oblique film case, every arm and the control alike, now runs with

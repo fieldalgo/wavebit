@@ -1,7 +1,8 @@
 """A traced pillar standing flush on a smoothed substrate: the range-aware 'split' junction.
 
-The scenes are ``studies/fdtd/traced_junction/fdtd_traced_junction_probe.py``'s metasurface cell (results in
-``studies/results/fdtd_traced_junction_*.json``). The write set is recomputed from the live
+The scenes are ``studies/fdtd/traced_junction/fdtd_traced_junction_probe.py``'s metasurface cell
+(results: ``studies/fdtd/traced_junction/records/fdtd_traced_junction_settled.json``; the probe's
+other outputs are archived outside the repository). The write set is recomputed from the live
 geometry (``src/wavebit/fdtd/_prepare/junction.py::live_write``), the range certificate is
 ``shape_ranges._certify_junction`` and the base guard is ``shape_ranges.guard``.
 """

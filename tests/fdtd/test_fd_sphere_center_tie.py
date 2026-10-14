@@ -3,8 +3,9 @@
 ``src/wavebit/fdtd/_shapes/_exact.py::clipped_ball_volume`` folds each corner with ``_fold`` and
 ``_ball_corner`` gives an empty regime a constant zero limit. Before, ``xp.abs`` dropped a
 derivative term on Torch and ``min(0, c)`` split one on both backends whenever a face held the
-centre. Measurements: ``studies/fdtd/sphere_center_tie/fdtd_sphere_center_tie_probe.py``, results
-``studies/results/fdtd_sphere_center_tie_{fill,run}_{before,after}.json``.
+centre. Measurements: ``studies/fdtd/sphere_center_tie/fdtd_sphere_center_tie_probe.py``; its
+results, ``fdtd_sphere_center_tie_{fill,run}_{before,after}.json``, are archived outside the
+repository.
 """
 import numpy as np
 import pytest

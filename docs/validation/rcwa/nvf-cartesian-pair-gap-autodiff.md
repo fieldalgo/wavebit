@@ -5,7 +5,6 @@ Written: 2026-09-10
 Targets:
 - `src/wavebit/rcwa/_engine/conforming/cartesian_pair_gap_autodiff.py`
 - `tests/rcwa/test_nvf_cartesian_pair_gap_autodiff.py`
-- `studies/rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_gap_autodiff.log`
 
 The separate experimental `CartesianPairGapEvaluator` evaluates coefficients
 and their selected energy closure through the exact rescaled finite-gap
@@ -141,9 +140,10 @@ Its process peak is 425,345,024 bytes. The full suite's observed peak is
 The source was promoted mechanically: four imports became relative and
 formatting changed, with the remaining numerical abstract syntax exact.
 Full-precision frozen measurements, source pins, original guard-only draft
-history and repository validation are retained in the
-[result log](https://github.com/fieldalgo/wavebit/blob/develop/studies/rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_gap_autodiff.log).
-Intentional invalid-input NaN values in committed strict JSON use an explicit
+history and repository validation are retained in the result log
+`nvf_cartesian_pair_gap_autodiff.log`, which is archived outside the repository;
+it belongs to the `studies/rcwa/nvf_cartesian_pair/` study.
+Intentional invalid-input NaN values in the log's strict JSON use an explicit
 `{"invalid_float": "NaN"}` encoding; valid outputs remain subject to finite
 guards. External source/checkpoint paths are sanitized without changing their
 recorded content hashes.

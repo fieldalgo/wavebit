@@ -53,7 +53,7 @@ registered one but for this paragraph; rungs 30 / 40 / 60, after 20 / 30 / 40 wa
 plan as under-resolved at epsilon 6) read self-convergence orders ``p_A`` 2.30 and ``p_F`` 2.48,
 median cell 2.81 -- a different material at different rungs, seen after the rule above was
 written and not used to set it. Both dry runs' rows and reports, and the second's copy of this
-file, are kept in ``results/fdtd_metasurface_lifted_dryrun/``.
+file, are archived outside the repository (directory fdtd_metasurface_lifted_dryrun).
 
 **Registration history.** The rule was first registered at 2026-10-04T11:49:29+0900 (SHA-256
 ``fe87f8f9...``) with C7's whole ladder, (20, 26, 28, 30, 32). Its campaign was stopped by hand

@@ -307,14 +307,14 @@ absorber reflection. The `SubpixelAccuracyWarning` likewise retains the
 bulk-only mesh qualification. The registered campaigns below include their
 own declared time and absorber controls.
 
-The controller manifest
-`studies/fdtd/single_pole_film/records/fdtd_single_pole_film_calibration_attempt1.json` retains the
-planned rows, pre-run frozen helper/controller copies, source and artifact
-hashes, runtime identities and both worker exits. Each raw result records its
-source identity and the successful before/after identity comparison; the
-controller also records `source_unchanged=true`. Raw results and logs remain
-under `studies/results/fdtd_single_pole_film_calibration_attempt1/`, with the
-controller log beside the manifest. No row was adapted within this attempt.
+The controller manifest `fdtd_single_pole_film_calibration_attempt1.json`
+retains the planned rows, pre-run frozen helper/controller copies, source and
+artifact hashes, runtime identities and both worker exits. Each raw result
+records its source identity and the successful before/after identity
+comparison; the controller also records `source_unchanged=true`. The manifest,
+the controller log and the raw results and logs (the
+`fdtd_single_pole_film_calibration_attempt1` directory) are archived outside
+the repository. No row was adapted within this attempt.
 The FD source digest for these responses is
 `67d4e3d04546626259e5d0d5e0c57f0a04560c51dedc6fafc469ffc5866f87ae`,
 using sorted paths relative to `src/wavebit/fd`, NUL separators and LF-normalized
@@ -345,12 +345,13 @@ The fixes changed the test setup and expectations, without widening a numerical
 tolerance. Production changes after the two calibration rows were limited to
 docstrings; these fixture repairs required no production numerical change.
 The contemporaneous manifests, collection/run logs and retained test sources
-are under `studies/results/fdtd_single_pole_film_controls/`. Attempt 1 and 2
+(the study's `fdtd_single_pole_film_controls` directory) are archived outside
+the repository. Attempt 1 and 2
 test copies were reconstructed afterward by reversing the two fixture fixes;
 their bytes match the hashes recorded during those attempts. They are not
 described as snapshots taken before execution. That qualification is retained
-in `targeted_test_snapshot_provenance.json` in the same directory. Attempt 4
-preserves the actual test and controller snapshots.
+in `targeted_test_snapshot_provenance.json` in the same archived directory.
+Attempt 4 preserves the actual test and controller snapshots.
 
 ### Supplementary backend comparison
 
@@ -364,7 +365,8 @@ using `|value-reference|/max(1,|reference|)`.
 The largest scaled difference is 3.065954806021319e-15, within the existing
 `128*float64_epsilon` budget of 2.842170943040401e-14, fixed before these
 repeated responses. The manifest, individual differences and raw artifact
-hashes are in `studies/fdtd/single_pole_film/records/fdtd_single_pole_film_backends/manifest.json`.
+hashes are in the `manifest.json` of the `fdtd_single_pole_film_backends`
+run, archived outside the repository.
 This is supplementary agreement on known configurations; it adds no physical
 acceptance rule and does not certify other material parameters, orientations
 or derivatives. It does not resolve the convergence exceptions reported below.
@@ -382,9 +384,9 @@ interior spectral-bound critical point.
 All nine mutated runs exited 1 on the intended assertion or missing refusal.
 Every production file was restored byte for byte. The restored new-test suite
 collected and passed all 94 cases, exit 0, with unchanged before/after source
-identities. The canonical manifest is
-`studies/fdtd/single_pole_film/records/fdtd_single_pole_film_mutations.json`, with the original
-attempt and raw logs retained separately. Startup failures are not counted
+identities. The canonical manifest is the run record
+`fdtd_single_pole_film_mutations.json`; it, the original attempt and the raw
+logs are archived outside the repository. Startup failures are not counted
 as mutation witnesses.
 
 ## Registered physical campaign
@@ -392,9 +394,9 @@ as mutation witnesses.
 The fixed 40-row campaign was registered at 2026-10-06T08:47:04 UTC with
 fingerprint
 `36813ffd5a6199a66a7fafd8ebed7fbf8b73241f2243a06f7f97acda6254c371`.
-Its record is `studies/fdtd/single_pole_film/records/fdtd_single_pole_film_registration.json`.
-The two disclosed materials each have face fractions 0.3 and 0.1, both s and
-p incidence, and a 40/80/160 ladder. Each of these eight groups has the three
+Its record, `fdtd_single_pole_film_registration.json`, is archived outside the
+repository. The two disclosed materials each have face fractions 0.3 and 0.1,
+both s and p incidence, and a 40/80/160 ladder. Each of these eight groups has the three
 60-period base rows plus two 80-cell controls: 120 periods with 24-cell PMLs,
 then the same duration with 48-cell PMLs. The declared time/absorber proxy and
 interval classifications are fixed before these campaign responses.
@@ -468,17 +470,17 @@ Across all 48 complex cells, the largest absolute error decreases from
 does not replace the cellwise verdicts above. All raw values, reference errors,
 noise components and absorptance are retained in
 `studies/fdtd/single_pole_film/records/fdtd_single_pole_film_report.json`; the successful procedural
-audit is in `studies/fdtd/single_pole_film/records/fdtd_single_pole_film_campaign_audit.log`.
+audit is in `fdtd_single_pole_film_campaign_audit.log`, archived outside the
+repository.
 
 ### Registered follow-up selected after the results
 
 The separate refinement v1 was registered at 2026-10-06T09:07:15 UTC with
 fingerprint
 `93cc246c0b5ba735ebb8e6baade1fb0a2ee23185a6372189d53db6f7f7546045`.
-Its record is
-`studies/fdtd/single_pole_film/records/fdtd_single_pole_film_refinement_v1_registration.json`.
-The selection consists of exactly two groups: face fraction 0.3 with Drude
-s incidence, and face fraction 0.3 with Lorentz p incidence. Both `r` and `t`
+Its record, `fdtd_single_pole_film_refinement_v1_registration.json`, is
+archived outside the repository. The selection consists of exactly two
+groups: face fraction 0.3 with Drude s incidence, and face fraction 0.3 with Lorentz p incidence. Both `r` and `t`
 at all three wavelengths remain, giving 12 cells rather than only the four
 original exceptions.
 
@@ -558,10 +560,10 @@ Lorentz `r`, 1.1 coarse pair.
 The two repeated known 80-cell/120-period/PML24 rows match the original
 controls exactly in every listed physical field and in canonical physical
 JSON. This remains a provenance/reproducibility check, with no independent
-corroboration or acceptance role. Complete values and the audit are retained
-in `studies/fdtd/single_pole_film/records/fdtd_single_pole_film_refinement_v1_report.json` and
-`studies/fdtd/single_pole_film/records/fdtd_single_pole_film_refinement_v1_audit.json`, with the
-raw worker records preserved separately.
+corroboration or acceptance role. Complete values are retained in
+`studies/fdtd/single_pole_film/records/fdtd_single_pole_film_refinement_v1_report.json`.
+The audit, `fdtd_single_pole_film_refinement_v1_audit.json`, and the raw
+worker records are archived outside the repository.
 
 The study ends at its declared 320-cell/240-period cap with these unresolved
 records. No further sweep is part of this validation. The empirical
@@ -584,9 +586,9 @@ All four read-only freezers exited 0 and reproduced 143, 288, 140 and 570
 arrays bit for bit: 1,141 arrays in total. No golden was rewritten or
 rebaselined. The numerical validation controller completed with exit 0.
 
-The controller retains counts and exits in
-`studies/fdtd/single_pole_film/records/fdtd_single_pole_film_validation.json`. Its unchanged FD
-source digest is
+The controller retains counts and exits in the run record
+`fdtd_single_pole_film_validation.json`, archived outside the repository. Its
+unchanged FD source digest is
 `e2eb97482f5b4d45c67db4464de193aca27a0f39b8d33ba5daa12bc719af60cf`.
 This inherited validation helper hashes sorted relative paths and
 LF-normalized source bytes without delimiters. The campaign digest above

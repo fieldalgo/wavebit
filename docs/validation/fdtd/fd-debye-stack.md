@@ -251,9 +251,11 @@ and intervals are rounded; classifications use the unrounded registered values.
 
 The first prevalidation attempt rejected equivalent Windows and POSIX report
 path spellings. Its failure, all original helpers and all numerical records
-remain preserved. Archived prepare/auditor variants resolve that report path
+remain preserved; the raw run material among them is archived outside the
+repository. Archived prepare/auditor variants resolve that report path
 inside the repository and bind their exact source changes and process arguments.
-The numerical criteria and results are unchanged; the [repair proof](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_path_repair/manifest.json)
+The numerical criteria and results are unchanged; the repair proof, the
+`manifest.json` of the study's path repair (archived outside the repository),
 records the original failure and both exact variant sources.
 
 ## Preserved evidence
@@ -261,10 +263,13 @@ records the original failure and both exact variant sources.
 - [Six disclosed backend measurements and all raw worker links](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_calibration_attempt1.json).
 - [Post-disclosure optical ceilings and before/after test bytes](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_calibration_acceptance.json).
 - [Exact collected/reported new and related test rosters](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_targeted.json).
-- [Thirteen actual source witnesses, restoration and final baseline](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_mutations.json).
-- [Fixed protocol, prior exposures and source fingerprints](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_registration.json).
+- Thirteen actual source witnesses, restoration and final baseline: the run record
+  `fdtd_debye_stack_mutations.json`, archived outside the repository.
+- Fixed protocol, prior exposures and source fingerprints: the run record
+  `fdtd_debye_stack_registration.json`, archived outside the repository.
 - [Every registered physical cell and selected duration](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_report.json).
-- [Full/slow rosters and four read-only frozen-reference comparisons](../../../studies/fdtd/debye_stack/records/fdtd_debye_stack_validation.json).
+- Full/slow rosters and four read-only frozen-reference comparisons: the run record
+  `fdtd_debye_stack_validation.json`, archived outside the repository.
 
 The saved-data auditor independently replays the scalar continuum reference,
 worker roster, every classification, raw pytest outcomes and source-mutation

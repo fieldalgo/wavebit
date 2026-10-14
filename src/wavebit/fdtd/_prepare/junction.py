@@ -399,7 +399,8 @@ def live_write(rt, record, scene, grid, points):
     rows reach at most three and a half cells past the plane, and the four-cell height floor
     the runtime guard enforces keeps the far cap beyond them: a mutant widening that half
     cell to one and a half survived every mask comparison (``fdtd_traced_junction_controls/
-    attempt1``), so the test cannot change a written point here.
+    attempt1``, archived outside the repository), so the test cannot change a written point
+    here.
     """
     from wavebit.fdtd._shapes import occupancy
     from wavebit.fdtd._legacy_geometry import Cylinder

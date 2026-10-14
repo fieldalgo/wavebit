@@ -1,6 +1,8 @@
 """Fixed cylinder allocations, public derivatives and the full-range certificate.
 
-Measurement and real source-mutation records: studies/results/fdtd_cylinder_grad_*.
+Measurements: studies/fdtd/cylinder_grad/records/fdtd_cylinder_grad_probe.json and
+fdtd_cylinder_grad_volumes.json; the source-mutation witnesses are archived outside the
+repository.
 """
 import dataclasses
 import math
