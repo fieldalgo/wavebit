@@ -13,19 +13,27 @@ round-off ``u`` but meet at a sine ``s ~ 1e-8 .. 1e-6``, the mode matrix's condi
   no warning;
 * a *genuinely 2D* lossless layer, where a pair of real ``q**2`` turns complex (codimension one in
   the wavelength: five to eight per 6% of wavelength on the cut pillars below). Before:
-  4e-11 .. 1.7e-6 (ETM) and 2.5e-9 .. 6.4e-6 (SMM).
+  4e-11 .. 1.7e-6 (ETM) and 2.5e-9 .. 6.4e-6 (SMM). The first-order formulation of the same
+  layer holds the same EP once in each direction; its eigenvector split was 1.0e-5 (ETM) and
+  0.32 (SMM, ``R + T - 1 = +0.3``) off at fy 0.95, silently.
 
 :func:`~wavebit.rcwa._engine.solve_2d._rebuild_defective_pairs` now rebuilds every such pair as an
 orthonormal Schur pair with an upper-triangular ``q``, gated by
-:func:`~wavebit.rcwa._engine.solve_2d._defective_pairs`. What this file pins:
+:func:`~wavebit.rcwa._engine.solve_2d._defective_pairs`; the first-order split's
+:func:`~wavebit.rcwa._engine.solve_2d_first_order._regular_pair` does the same per direction.
+What this file pins:
 
 1. the y-invariant EP scenes at ``rel`` 0, +-1e-15, +-1e-12, +-1e-9 against the 1D rebuild;
-2. a genuinely 2D EP against a Cauchy-circle oracle that never runs the rebuild;
-3. the rebuilt layer's two first-order relations and its conditioning;
+2. a genuinely 2D EP against a Cauchy-circle oracle that never runs the rebuild, on both
+   formulations;
+3. the rebuilt layer's two first-order relations and its conditioning (y-invariant and genuinely
+   2D, both formulations), and the coupled exponential against a closed form;
 4. the subspace step on a synthetic operator with two interacting Jordan pairs;
-5. derivatives (``jax.grad``, ``jvp``, torch reverse and forward mode) against the 1D rebuild's;
+5. derivatives (``jax.grad``, ``jvp``, torch reverse and forward mode) against the 1D rebuild's,
+   and at a genuinely 2D EP against Cauchy oracles that run no autodiff, eager and traced;
 6. values and derivatives under every abstract trace, and the overflow refusal;
-7. fields and field gradients, eager and under ``jax.jit``;
+7. fields and field gradients, eager and under ``jax.jit``; at a genuinely 2D EP against Cauchy
+   oracles;
 8. inertness off the band, and a uniform cutoff left as it was.
 
 Sizes stay at ``truncation_order=(5, 1)`` (``(5, 2)`` for the 2D EPs).
@@ -37,7 +45,8 @@ import warnings
 import numpy as np
 import pytest
 
-from wavebit.rcwa._engine import solve_2d
+from wavebit.rcwa._engine import modal_gradient, solve_2d
+from wavebit.rcwa._engine import solve_2d_first_order as fo
 from tests.rcwa.test_conical_cutoff import PATTERNED, R1, _np, _numbers, _rel, _solver, _strict
 
 _RELS = (0.0, 1e-15, -1e-15, 1e-12, -1e-12, 1e-9, -1e-9)
@@ -104,14 +113,45 @@ def _cut_pillar(fy, ny=20):
 _GENUINE = {'fy 0.5, 630.56 nm': (0.5, 630.558820467248), 'fy 0.95, 600.01 nm': (0.95, 600.010223815108)}
 
 
-def _genuine(fy, wavelength, theta, algo):
-    s = _legacy_wavebit.rcwa(backend='numpy', wavelength=wavelength, period=[1000., 700.],
-                     truncation_order=[5, 2], structure=_cut_pillar(fy), thickness=[300.], top=1.0,
-                     bot=2.1025, theta=theta, phi=np.pi / 2, psi=np.pi / 2, layer_algorithm=algo)
+def _genuine_solver(fy, wavelength, theta=0.3, algo='ETM', backend='numpy', first_order=False,
+                    **over):
+    """The cut pillar. ``first_order`` takes the first-order formulation, whose operator is built
+    from the same convolution matrices (measured: ``M``'s blocks carry ``epx``, ``epy`` and
+    ``Kx epz_i Kx`` to 4e-16, and its eigenvalues square to ``-q**2`` of the product's ``q`` to
+    2e-14 relative to ``max(1, |q**2|)``, 1e-2 off the point), so the same wavelengths are its EPs
+    -- one Jordan pair in each direction."""
+    s = _legacy_wavebit.rcwa(**{**dict(
+        backend=backend, wavelength=wavelength, period=[1000., 700.], truncation_order=[5, 2],
+        structure=_cut_pillar(fy), thickness=[300.], top=1.0, bot=2.1025, theta=theta,
+        phi=np.pi / 2, psi=np.pi / 2, layer_algorithm=algo), **over})
+    if first_order:
+        s.formulation = 'first_order'
+    return s
+
+
+def _genuine(fy, wavelength, theta, algo, first_order=False, **over):
+    s = _genuine_solver(fy, wavelength, theta, algo, first_order=first_order, **over)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         r = s.solve(auto_detune=False)
     return np.concatenate([_np(r.r_xyz).ravel(), _np(r.t_xyz).ravel()])
+
+
+def _close_the_gates(m):
+    """Both rebuilds off: the product construction and the first-order eigenvector split."""
+    m.setattr(solve_2d, '_EP_SINE', 0.0)
+    m.setattr(fo, '_PARALLEL_SIN', 0.0)
+
+
+def _circle(f, z0, radius, K, derivative=False):
+    """Cauchy: the mean of ``f`` over ``z0 + radius exp(2 pi i k / K)`` is ``f(z0)``, and with the
+    weight ``1 / (radius exp(2 pi i k / K))`` it is ``f'(z0)``, for ``f`` analytic on the disc: the
+    K-point trapezoidal rule on the circle, geometrically convergent in K (L. N. Trefethen and
+    J. A. C. Weideman, SIAM Rev. 56, 385, 2014, Sec. 12, eq. (12.3) and Theorem 12.1; numerical
+    differentiation on a circle goes back to J. N. Lyness and C. B. Moler, SIAM J. Numer. Anal. 4,
+    202, 1967)."""
+    unit = np.exp(2j * np.pi * np.arange(K) / K)
+    return np.mean([f(z0 + radius * u) / (radius * u if derivative else 1) for u in unit], axis=0)
 
 
 @pytest.mark.parametrize('name', list(_GENUINE))
@@ -134,6 +174,41 @@ def test_a_genuinely_2d_ep_matches_a_cauchy_oracle(name, monkeypatch):
         err = np.max(np.abs(_genuine(fy, wavelength, 0.3, algo) - oracle))
         assert err < 1e-12, f'{name} {algo}: {err:.1e} from the oracle'
     assert product > 1e-8, f'{name}: the product construction is {product:.1e} -- not an EP'
+
+
+@pytest.mark.parametrize('name', list(_GENUINE))
+def test_a_genuinely_2d_ep_on_the_first_order_path_matches_the_cauchy_oracle(name, monkeypatch):
+    """The first-order path at the same EPs, at ``rel`` 0, 1e-12 and -1e-9: within 1e-12 of the
+    product path's circle oracle -- another formulation of the same discretized layer -- with
+    ``R + T = 1``, a pair rebuilt in each direction, and no warning.
+
+    Measured (aadbc351): <= 3.9e-14, and a first-order circle oracle agreed with the product one
+    to 5.4e-15 here (1.1e-13 over all six measured EPs). With the split's gate closed, fy 0.95: 1.0e-5 (ETM) and 0.32 (SMM, ``R + T - 1 =
+    +0.3``, silent); fy 0.5: 6.3e-11 (ETM), SMM at its floor (1.1e-14).
+    """
+    fy, wl0 = _GENUINE[name]
+    pairs = []
+    original = fo._regular_pair
+
+    def counted(*args, **kwargs):
+        pairs.append(1)
+        return original(*args, **kwargs)
+    for rel in (0.0, 1e-12, -1e-9):
+        wavelength = wl0 * (1 + rel)
+        with monkeypatch.context() as m:
+            _close_the_gates(m)
+            oracle = _circle(lambda th: _genuine(fy, wavelength, th, 'ETM'), 0.3, 1e-4, 16)
+        for algo in ('ETM', 'SMM'):
+            with monkeypatch.context() as m:
+                m.setattr(fo, '_regular_pair', counted)
+                del pairs[:]
+                r = _strict(lambda: _genuine_solver(fy, wavelength, algo=algo, first_order=True)
+                            .solve(auto_detune=False))
+            err = np.max(np.abs(np.concatenate([_np(r.r_xyz).ravel(), _np(r.t_xyz).ravel()]) - oracle))
+            energy = float(np.sum(np.real(_np(r.R))) + np.sum(np.real(_np(r.T))) - 1)
+            assert len(pairs) >= 2, f'{name} {algo} rel {rel:g}: {len(pairs)} pairs rebuilt'
+            assert err < 1e-12, f'{name} {algo} rel {rel:g}: {err:.1e} from the oracle'
+            assert abs(energy) < 1e-12, f'{name} {algo} rel {rel:g}: R + T - 1 = {energy:.1e}'
 
 
 # ------------------------------------------------- 3. the rebuilt layer's two relations
@@ -177,6 +252,80 @@ def test_the_rebuilt_layer_satisfies_both_first_order_relations(name, monkeypatc
     r2 = np.linalg.norm(OL @ V - W @ q) / (np.linalg.norm(OL) * np.linalg.norm(V))
     assert r1 < 1e-13 and r2 < 1e-13, (r1, r2)
     assert np.linalg.cond(W) < 1e4, np.linalg.cond(W)
+
+
+def _couplings(q):
+    rows, cols = np.nonzero(q - np.diag(np.diag(q)))
+    return list(zip(rows.tolist(), cols.tolist()))
+
+
+def _coupled_entry(q, a, b, scale):
+    """``exp(scale q)[a, b]`` for one coupling in closed form, ``t s e^{s (alpha + beta)/2}
+    sinh(z) / z``, ``z = s (alpha - beta) / 2`` -- no divided difference to share with the code
+    (the 2 x 2 exponential in sinch form with its lower-left entry zero: A. H. Al-Mohy and
+    N. J. Higham, SIAM J. Matrix Anal. Appl. 31, 970, 2009, eq. (2.2))."""
+    alpha, beta, t = q[a, a], q[b, b], q[a, b]
+    z = scale * (alpha - beta) / 2
+    return t * scale * np.exp(scale * (alpha + beta) / 2) * np.sinc(1j * z / np.pi)
+
+
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_a_genuinely_2d_rebuilt_layer(first_order, monkeypatch):
+    """At fy 0.95, 600.01 nm, read off the solve's own call: one coupling (one per direction on
+    the first-order path), the modal relations to 1e-14 relative (``Omega_R W = V q`` and
+    ``Omega_L V = W q``; ``M psi = psi lam``), an orthonormal pair, a basis conditioned below 1e3,
+    and the coupled exponential the propagation takes equal to the closed form of its 2 x 2 block.
+
+    Measured (aadbc351): residuals <= 3.2e-16, condition 46 (2D) and 65 (``[psi_f, psi_b]``) where
+    ``eig``'s basis had 1.3e7 and 4.0e7, the exponential's coupling within 3.7e-18 of a 50-digit
+    one (SciPy's ``expm`` of the same generator: 1.7e-10 off).
+    """
+    fy, wavelength = _GENUINE['fy 0.95, 600.01 nm']
+    k0d = 2 * np.pi / wavelength * 300.
+    seen = []
+    if first_order:
+        original = fo._layer_split
+
+        def spy(xp, M, n, k0_d=None, **kw):
+            out = original(xp, M, n, k0_d, **kw)
+            seen.append((_np(M), out))
+            return out
+        monkeypatch.setattr(fo, '_layer_split', spy)
+    else:
+        original = solve_2d.layer_modes_2d
+
+        def spy(xp, Kx, Ky, I, epx, epy, epzi, epxy, epyx, C, **kw):
+            out = original(xp, Kx, Ky, I, epx, epy, epzi, epxy, epyx, C, **kw)
+            seen.append((_omega_factors(Kx, Ky, epx, epy, epzi, epxy, epyx), out))
+            return out
+        monkeypatch.setattr(solve_2d, 'layer_modes_2d', spy)
+    _strict(lambda: _genuine_solver(fy, wavelength, first_order=first_order).solve(auto_detune=False))
+    operator, out = seen[0]
+    assert out[-1], 'the layer was not rebuilt'
+    if first_order:
+        lam_f, psi_f, lam_b, psi_b = (_np(x) for x in out[:4])
+        blocks = [(lam_f, psi_f, 1j * k0d), (lam_b, psi_b, -1j * k0d)]
+        basis = np.concatenate([psi_f, psi_b], axis=1)
+        for lam, psi, _ in blocks:
+            res = (np.linalg.norm(operator @ psi - psi @ lam)
+                   / (np.linalg.norm(operator) * np.linalg.norm(psi)))
+            assert res < 1e-14, f'M psi - psi lam: {res:.1e}'
+    else:
+        (OL, OR), (W, V, q) = operator, (_np(x) for x in out[:3])
+        blocks = [(q, W, -k0d)]
+        basis = W
+        r1 = np.linalg.norm(OR @ W - V @ q) / (np.linalg.norm(OR) * np.linalg.norm(W))
+        r2 = np.linalg.norm(OL @ V - W @ q) / (np.linalg.norm(OL) * np.linalg.norm(V))
+        assert r1 < 1e-14 and r2 < 1e-14, (r1, r2)
+    assert np.linalg.cond(basis) < 1e3, np.linalg.cond(basis)
+    for generator, columns, scale in blocks:
+        (a, b), = _couplings(generator)
+        pair = columns[:, [a, b]]
+        if first_order:
+            assert np.max(np.abs(pair.conj().T @ pair - np.eye(2))) < 1e-14
+        E = _np(modal_gradient.exponential(np, generator, scale, coupled=True))
+        exact = _coupled_entry(generator, a, b, scale)
+        assert abs(E[a, b] - exact) < 1e-13 * abs(exact), (E[a, b], exact)
 
 
 # ---------------------------------------------- 4. two interacting pairs, synthetically
@@ -318,6 +467,104 @@ def test_derivatives_at_a_2d_ep_are_the_1d_rebuild_s(name, algo):
         tangent = forward_ad.unpack_dual(ft(torch.tensor(u0), w, torch.tensor(t0, dtype=torch.float64),
                                             torch.tensor(th0, dtype=torch.float64))).tangent
     assert _rel(float(tangent), ref[1]) < 1e-10
+
+
+#: The genuinely 2D EP the derivative and field oracles are built at; the circles below keep
+#: clear of its nearest Rayleigh point (0.033 in theta, 10.9 nm) and of a singularity a few nm
+#: away in the wavelength, eps_p and d that spoils larger circles (3 nm, 32 points: 1.9e-3).
+_ORACLE_EP = _GENUINE['fy 0.95, 600.01 nm']
+_ARGS = ('theta', 'wavelength', 'eps_p', 'thickness')
+
+
+def _pillar_eps(fy, eps):
+    return np.where(_cut_pillar(fy) > 1, eps, 1.0)
+
+
+@pytest.fixture(scope='module')
+def genuine_derivatives():
+    """``a`` (every order's ``r_xyz``, ``t_xyz``) and ``da/d(theta, wavelength, eps_p, d)`` at
+    ``_ORACLE_EP`` from NumPy values with both rebuilds closed: no autodiff, no rebuild.
+
+    ``a`` is analytic in all four. Cauchy's derivative formula (:func:`_circle`) on circles of 32
+    points, radius
+    3e-3 in theta, 0.5 nm, and 0.02 in the pillar permittivity: each moves the EP, so the circle
+    is off it. The EP does not move with ``d`` (and the solver refuses a complex thickness), so
+    ``da/dd`` is the theta-circle mean (16 points) of the centre derivative of a 24-node Chebyshev
+    interpolant on ``d +- 1.5`` nm. Measured spread over halved radii, doubled point counts and the
+    first-order formulation: <= 1.6e-12 of each column's largest entry.
+    """
+    fy, wl = _ORACLE_EP
+
+    def a(theta=0.3, wavelength=wl, eps=12.25, d=300.):
+        return _genuine(fy, wavelength, theta, 'ETM', structure=_pillar_eps(fy, eps), thickness=[d])
+
+    def d_thickness(theta):
+        x = np.cos(np.pi * (np.arange(24) + 0.5) / 24)
+        values = np.array([a(theta=theta, d=300. + 1.5 * xj) for xj in x])
+        cheb = np.polynomial.chebyshev
+        coef = np.linalg.solve(cheb.chebvander(x, 23), values)
+        return cheb.chebval(0.0, cheb.chebder(coef)) / 1.5
+    with pytest.MonkeyPatch.context() as m:
+        _close_the_gates(m)
+        value = _circle(lambda z: a(theta=z), 0.3, 1e-4, 16)
+        da = np.stack([_circle(lambda z: a(theta=z), 0.3, 3e-3, 32, derivative=True),
+                       _circle(lambda z: a(wavelength=z), wl, 0.5, 32, derivative=True),
+                       _circle(lambda z: a(eps=z), 12.25, 0.02, 32, derivative=True),
+                       _circle(d_thickness, 0.3, 3e-3, 16)], axis=1)
+    return value, da
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_genuinely_2d_ep_derivatives_match_cauchy_oracles(first_order, algo, genuine_derivatives):
+    """At a genuinely 2D EP, against :func:`genuine_derivatives`: ``jax.jacfwd`` of every amplitude
+    in ``(theta, wavelength, eps_p, d)``, and the gradient of ``sum |a|**2`` (oracle
+    ``2 Re(conj(a) . da)``, no circle over a power) by ``jax.grad``, ``jit(grad)``,
+    ``jit(vmap(grad))`` and torch backward, to 1e-10; the vmap's other lanes (``rel`` 1e-12, 1e-3)
+    to 1e-11 of eager ``jax.grad`` there.
+
+    Measured (aadbc351): <= 7.3e-13 on all four paths; at fy 0.8 / 620.39 and fy 0.5 / 630.56,
+    <= 3.2e-12. With the rebuilds closed, 1.4e-6 (first-order ETM, ``d``) .. 44 (theta).
+    """
+    jax = pytest.importorskip('jax')
+    _legacy_wavebit.enable_x64()
+    torch = pytest.importorskip('torch')
+    jnp = jax.numpy
+    fy, wl = _ORACLE_EP
+    a0, da = genuine_derivatives
+    g0 = 2 * np.real(np.conj(a0) @ da)
+    s = _genuine_solver(fy, wl, algo=algo, backend='jax', first_order=first_order)
+    mask = jnp.asarray(_cut_pillar(fy) > 1)
+
+    def f(x):
+        r = s.solve(theta=x[0], wavelength=x[1], structure=jnp.where(mask, x[2], 1.0),
+                    thickness=jnp.stack([x[3]]), auto_detune=False)
+        return jnp.concatenate([r.r_xyz.ravel(), r.t_xyz.ravel()])
+
+    def J(x):
+        return jnp.sum(jnp.abs(f(x)) ** 2)
+    x0 = jnp.asarray([0.3, wl, 12.25, 300.])
+    jac = np.asarray(jax.jacfwd(f)(x0))
+    for k, label in enumerate(_ARGS):
+        err = np.max(np.abs(jac[:, k] - da[:, k])) / np.max(np.abs(da[:, k]))
+        assert err < 1e-10, f'jacfwd {label}: {err:.1e}'
+    lanes = jnp.stack([x0.at[1].set(wl * (1 + rel)) for rel in (0.0, 1e-12, 1e-3)])
+    swept = np.asarray(jax.jit(jax.vmap(jax.grad(J)))(lanes))
+    grads = {'grad': jax.grad(J)(x0), 'jit(grad)': jax.jit(jax.grad(J))(x0), 'jit(vmap(grad))': swept[0]}
+    st = _genuine_solver(fy, wl, algo=algo, backend='torch', first_order=first_order)
+    tmask, one = torch.tensor(_cut_pillar(fy) > 1), torch.tensor(1.0, dtype=torch.float64)
+    xt = torch.tensor(np.asarray(x0), requires_grad=True)
+    rt = st.solve(theta=xt[0], wavelength=xt[1], structure=torch.where(tmask, xt[2], one),
+                  thickness=torch.stack([xt[3]]), auto_detune=False)
+    (torch.cat([rt.r_xyz.ravel(), rt.t_xyz.ravel()]).abs() ** 2).sum().backward()
+    grads['torch'] = xt.grad.numpy()
+    for label, g in grads.items():
+        err = np.abs(np.asarray(g) - g0) / np.abs(g0)
+        assert np.all(err < 1e-10), f'{label}: ' + ', '.join(f'{p} {e:.1e}' for p, e in zip(_ARGS, err))
+    for lane in (1, 2):
+        eager = np.asarray(jax.grad(J)(lanes[lane]))
+        err = np.max(np.abs(swept[lane] - eager) / np.abs(eager))
+        assert err < 1e-11, f'jit(vmap(grad)) lane {lane}: {err:.1e} from eager'
 
 
 # ------------------------------------------------------------ 6. abstract traces
@@ -463,6 +710,77 @@ def test_a_genuinely_2d_ep_field_gradient_agrees_across_algorithms():
     raster = np.max(np.abs(gu_s - gu_e)) / np.max(np.abs(gu_e))
     wavelength = abs(gw_s - gw_e) / abs(gw_e)
     assert raster < 2e-11 and wavelength < 2e-11, (raster, wavelength)
+
+
+_FIELD_AT = ([-200., 0., 130.], [0., 200.], [40., 150., 260.])
+
+
+@pytest.fixture(scope='module')
+def genuine_fields():
+    """The six components at ``_FIELD_AT`` (x, y, z in nm; z inside the layer) at ``_ORACLE_EP``,
+    and their theta and wavelength derivatives, from circles with both rebuilds closed: the field
+    is analytic in both (no conjugate is taken). Radii and point counts as in
+    :func:`genuine_derivatives`; measured spread over doubled counts, a doubled value radius and
+    the first-order formulation: <= 9.5e-13 of the largest entry (values: 1.9e-14)."""
+    fy, wl = _ORACLE_EP
+
+    def field(theta, wavelength):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            r = _genuine_solver(fy, wavelength, theta).solve(auto_detune=False, answers='field')
+            return _np(r.reconstruct_field(*(np.asarray(v) for v in _FIELD_AT)))
+    with pytest.MonkeyPatch.context() as m:
+        _close_the_gates(m)
+        return (_circle(lambda z: field(z, wl), 0.3, 1e-4, 16),
+                _circle(lambda z: field(z, wl), 0.3, 3e-3, 32, derivative=True),
+                _circle(lambda z: field(0.3, z), wl, 0.5, 32, derivative=True))
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_a_genuinely_2d_ep_field_matches_cauchy_oracles(first_order, algo, genuine_fields):
+    """The field at a genuinely 2D EP against :func:`genuine_fields`: NumPy (silent, the pair
+    rebuilt) and ``jax.jit`` values to 1e-12 of ``max|F|``; ``jax.jacfwd`` in theta and the
+    wavelength, eagerly and under ``jax.jit``, to 1e-10. The independent reference the
+    cross-algorithm field-gradient test above does not have.
+
+    Measured (aadbc351): values <= 4.5e-14, derivatives <= 4.7e-13 (fy 0.8 and fy 0.5:
+    <= 8.1e-14 and <= 1.8e-12, within their oracles' spread of 2.4e-12). With the rebuilds closed the values were 3.0e-6 (2D SMM) ..
+    0.88 (first-order SMM) off.
+    """
+    jax = pytest.importorskip('jax')
+    _legacy_wavebit.enable_x64()
+    jnp = jax.numpy
+    fy, wl = _ORACLE_EP
+    value, dtheta, dwl = genuine_fields
+    scale = np.max(np.abs(value))
+    rebuilt = []
+    module, name = (fo, '_regular_pair') if first_order else (solve_2d, '_rebuild_defective_pairs')
+    original = getattr(module, name)
+
+    def counted(*args, **kwargs):
+        rebuilt.append(1)
+        return original(*args, **kwargs)
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(module, name, counted)
+        r = _strict(lambda: _genuine_solver(fy, wl, algo=algo, first_order=first_order)
+                    .solve(auto_detune=False, answers='field'))
+    assert rebuilt
+    eager = _np(r.reconstruct_field(*(np.asarray(v) for v in _FIELD_AT)))
+    s = _genuine_solver(fy, wl, algo=algo, backend='jax', first_order=first_order)
+
+    def F(x):
+        return s.solve(theta=x[0], wavelength=x[1], auto_detune=False, answers='field').reconstruct_field(
+            *(jnp.asarray(v) for v in _FIELD_AT))
+    x0 = jnp.asarray([0.3, wl])
+    for label, got in (('numpy', eager), ('jit', np.asarray(jax.jit(F)(x0)))):
+        err = np.max(np.abs(got - value)) / scale
+        assert err < 1e-12, f'{label} field: {err:.1e}'
+    for label, jac in (('jacfwd', jax.jacfwd(F)(x0)), ('jit(jacfwd)', jax.jit(jax.jacfwd(F))(x0))):
+        jac = np.asarray(jac)
+        for k, ref in ((0, dtheta), (1, dwl)):
+            err = np.max(np.abs(jac[..., k] - ref)) / np.max(np.abs(ref))
+            assert err < 1e-10, f'{label} d/d{_ARGS[k]}: {err:.1e}'
 
 
 # ----------------------------------------------------------- 8. off the band, unchanged

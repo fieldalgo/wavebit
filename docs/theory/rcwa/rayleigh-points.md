@@ -540,7 +540,8 @@ residual and ETM = SMM to 2.3e-10: the flipped roots cost ETM nothing measurable
 
 The measurements below are the 2026-10-12 prototype and judge record against baseline
 `db37dbb8`, before the source-layout and FDTD integration changes. They describe those measured
-trees, not a new run on the current checkout.
+trees, not a new run on the current checkout -- except the paragraph "Genuinely 2D EPs on both
+formulations, re-measured", which is a run on `aadbc351`.
 
 **What it was.** The 2D path diagonalises each layer's product `Omega2 = Omega_L Omega_R`. Where
 two of its eigenvalues form a 2x2 Jordan block (an exceptional point, EP) `eig` returns two
@@ -648,7 +649,8 @@ and a zero coupling. More qualifying pairs than the cap multiply the layer's `q`
 | uniform cutoffs (`test_conical_cutoff.UNIFORM`, 13 scenes x exact, +1e-12, one ULP) | exact (2.3e-15..5.2e-14) | the same numbers: the gate never engaged, so the arithmetic is the product construction's |
 
 The Cauchy oracle: the Cartesian amplitudes are analytic in `theta`, so their value at `theta*` is
-their mean over `theta* + r exp(2 pi i k / K)`; on the circle the pair is off its EP and the product
+their mean over `theta* + r exp(2 pi i k / K)` (the trapezoidal rule on a circle, geometrically
+convergent in `K`: L. N. Trefethen and J. A. C. Weideman, SIAM Rev. 56, 385, 2014, Sec. 12); on the circle the pair is off its EP and the product
 construction is accurate. It reproduced direct solves off the EP to 2e-14, and itself across
 `r` 1e-4 / 2e-4, `K` 16 / 24 and ETM / SMM to 7e-14. (It cannot judge §7's points: there `wA`
 does not depend on `theta`, so the whole circle sits on the EP.)
@@ -701,6 +703,41 @@ can still select a diagonalizable pair with a poor eigenvector basis: across bot
 10 of 800 census solves moved by at most 1.2e-15 in `sum R` or `sum T`. This qualifies the
 digest claim: byte identity applies outside the gates, not to every non-exceptional layer.
 
+**Genuinely 2D EPs on both formulations, re-measured.** Run on `aadbc351` (2026-10-14; NumPy
+2.5.1, JAX 0.11.0, PyTorch 2.13.0), not carried over from the record above. The six cut-pillar
+points are still EPs there (eigenvector sine 1.2e-7..1.0e-6 at the point, growing like
+`sqrt(|rel|)`), and the first-order operator of the same layer is built from the same convolution
+blocks (to 4.4e-16) with eigenvalues `lam**2 = -q**2` (to 1.8e-14 relative to `max(1, |q**2|)`,
+measured 1e-2 off the point): one Jordan pair in each direction at the same wavelength. Against the Cauchy circle, whose spread over radius, point count, algorithm and
+formulation was at most 1.1e-13:
+
+| six points, `rel` 0, +-1e-12, +-1e-9, +-1e-6, amplitudes | gates closed | `aadbc351` |
+| --- | --- | --- |
+| 2D product, ETM / SMM | to 1.7e-6 / 6.4e-6 | <= 1.6e-13 |
+| first order, ETM / SMM | to 1.0e-5 / 0.32 (fy 0.95, 600.01 nm: `R + T - 1 = +0.3`, no warning) | <= 4.3e-13 (at fy 0.95 / 618.89 nm, whose first-order floor off the point is 4.1e-13; at 600.01 nm <= 3.9e-14) |
+
+At fy 0.95 / 600.01, fy 0.8 / 620.39 and fy 0.5 / 630.56 nm, derivatives in theta, the
+wavelength, the pillar permittivity and the thickness were compared with oracles that run neither
+autodiff nor a rebuild: Cauchy's derivative formula on circles (the trapezoidal rule on a circle:
+L. N. Trefethen and J. A. C. Weideman, SIAM Rev. 56, 385, 2014, Sec. 12; after J. N. Lyness and
+C. B. Moler, SIAM J. Numer. Anal. 4, 202, 1967), and for `d` (which does not move
+the EP, and which the solver refuses complex) a Chebyshev derivative in `d` averaged over a theta
+circle; spread at most 1.6e-12. `jax.jacfwd`, `jax.grad`, `jit`, `jit(vmap)`, torch backward and
+`torch.func.vmap` with backward, on both formulations with ETM and SMM: at most 3.2e-12. With the
+gates closed the same derivatives were up to 44 off at 600.01 nm (first-order SMM's eigenvector
+split happens to be accurate at the other two points). Fields inside the layer: at most 8.1e-14 of
+`max|F|`, their theta and wavelength derivatives, eager and under `jit`, at most 1.8e-12, within
+the field oracles' own spread of 2.4e-12 (gates closed: up to 0.88, first-order SMM). Rebuilt layers: modal residuals at most 4.7e-16, basis
+condition 9..140 against `eig`'s 4.7e6..4.0e7, and the coupled exponential within 4e-18 of a
+50-digit one (SciPy's `expm` of the same generator was 1.7e-10 off). Circles of 3 nm, or 0.15 in
+the permittivity, disagree by up to 6.2e-3 at 600.01 and 620.39 nm: something non-analytic lies a
+few nm away there, and the oracles use radii whose results converge. Tests:
+`test_a_genuinely_2d_ep_on_the_first_order_path_matches_the_cauchy_oracle`,
+`test_a_genuinely_2d_rebuilt_layer`, `test_genuinely_2d_ep_derivatives_match_cauchy_oracles`,
+`test_a_genuinely_2d_ep_field_matches_cauchy_oracles`. These are three layers of one cut-pillar
+family at truncation (5, 2), each a single regular pair per direction; they say nothing about
+coincident, multi-pair, NVF, anisotropic or grazing EPs.
+
 **Limits and unchanged behavior.**
 
 - Eagerly a layer with no gated pair keeps the product construction's arithmetic; the screen
@@ -728,7 +765,8 @@ digest claim: byte identity applies outside the gates, not to every non-exceptio
 `tests/rcwa/test_first_order_exceptional_point.py` and `tests/rcwa/test_exceptional_point_clusters.py`.
 
 As in §8, the measurements in this section are the 2026-10-12 prototype and judge record
-against baseline `db37dbb8`. The order-grid slot count and overflow handling below implement
+against baseline `db37dbb8`, except the genuinely 2D note after the table, which quotes §8's
+re-measurement on `aadbc351`. The order-grid slot count and overflow handling below implement
 the judge's follow-up specification; historical prototype timings and digests are identified
 separately from that implementation.
 
@@ -848,6 +886,13 @@ reduced those errors to 7.4e-14 and 9.6e-13. Four slots cost a traced 2D first-o
 | fields (eager, `jit`), eight scenes; field gradients (`jax.grad`, `jit(grad)`, torch) | 8.8e-7 .. 1.6e-4 / 1.3e-2 .. 7.3; to 5.3e2 | <= 2.0e-13; <= 7.1e-13; SMM = ETM to 3.3e-15 |
 | coherent `PlaneWave` through the sources' cascade: output powers / fields | 2.2e-2 .. 0.58 / 0.2 .. 2.9 | <= 1.0e-14 / <= 6.0e-14 |
 | y-invariant raster on this path, lit from either side | to 9e-5 / to 7.9 | <= 1.6e-13 |
+
+Every scene in that table is a 1D grating or a y-invariant raster. Genuinely 2D EPs (a pillar
+cut in y) reach this path as one Jordan pair per direction; §8's re-measurement on `aadbc351`
+covers them: the eigenvector split was 0.32 (SMM) and 1.0e-5 (ETM) off at fy 0.95 / 600.01 nm,
+silently, and the rebuilt split is within 4.3e-13 of the circle oracle in amplitudes, 3.2e-12 in
+derivatives, 8.1e-14 in fields and 1.8e-12 in field derivatives (the field oracles' spread:
+2.4e-12).
 
 **Historical prototype byte identity.** Outside the pair gate, a 464-line `sha256` digest of
 `R`, `T`, `r_xyz`, `t_xyz` and fields over 96 random first-order scenes (conical input, uniform,

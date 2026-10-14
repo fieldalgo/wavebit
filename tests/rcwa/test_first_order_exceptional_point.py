@@ -6,6 +6,10 @@ A patterned conical x-cutoff is a 2x2 Jordan block of the first-order operator
 split rebuilds the pair in an orthonormal basis of its invariant subspace with a triangular
 generator (``solve_2d_first_order._regular_pair``). The oracle is the landed 1D conical rebuild,
 which the same structure must reproduce with ``formulation='first_order'``.
+
+Every scene here is a 1D grating or a y-invariant raster. The genuinely 2D EPs (a pillar cut in
+y) on this path -- values, the rebuilt split, derivatives and fields against Cauchy oracles --
+are pinned in ``tests/rcwa/test_2d_exceptional_point.py`` beside the product path's.
 """
 
 from wavebit.compat import legacy as _legacy_wavebit
