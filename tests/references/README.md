@@ -92,7 +92,7 @@ the committed numbers. [The star lift](../../docs/validation/fdtd/fd-subpixel-oc
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
 | **S4**, the in-cell **field** | the six field components on *uniform* stacks — every reconstruction path, all angles and azimuths, exact at ~1e-15 | same | `golden_s4_field.npz` |
-| **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16) **and patterned layers to ~1e-4**, through the coupled 2D path | the `fwref` env | `golden_fmmax_field.npz` |
+| **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16), **x-patterned layers to ~1e-4**, and an **x/y-patterned** one to ~3e-2 on both formulations — the only outside check of a field whose `ky` orders come from the structure | the `fwref` env | `golden_fmmax_field.npz` |
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
 | **fmmax**, `Formulation.FFT` | `factorization='laurent'`, the same operator: **identity** on patterned layers -- 6.1e-13 to 3.2e-11 in total and per order, on a rectangular cell, a lossy metal and a hexagonal one -- once fmmax's sampled coefficients are extrapolated to the exact ones | the `fwref` env | `golden_fmmax_laurent.npz` |
@@ -396,6 +396,26 @@ constant: fmmax's unit **mode** amplitude relates to our unit **flux** incidence
 phase between the two codes' unit points: fmmax's incident wave is unit at its cell corner, ours
 at the cell centre. The test asserts that dependence, phase included, so a case added at a new
 angle is checked rather than accommodated.
+
+**The grating above varies along x only, and that turned out to matter** (2026-08-15). Its
+reconstructed field is y-constant to 2.5e-15, so no `ky != 0` order carries amplitude and the
+`Ky` terms of `Ez` / `Hz` multiply nothing. The same golden therefore also carries an
+x/y-asymmetric **crossed patch** whose field varies in y, at two truncations (49 and 361 orders)
+so that its floor can be shown not to shrink, and both formulations are compared against it:
+
+| | agreement | reaches |
+| --- | --- | --- |
+| `grating` (x only) | 1.9e-5 s, 7.2e-5 p | the transverse assignment; a wholesale `Kx`/`Ky` exchange |
+| `patch` (x and y) | 2.2e-2 to 3.0e-2, the same at 49 and 361 orders and on both formulations | also the `Ky` terms on orders the structure creates, and which end of the raster is `-y` |
+
+3e-2 is a much weaker oracle than 1e-4, and the test says so: it is the two vector
+factorizations disagreeing near the rectangle's corners, which is why more orders do not help.
+What it buys was measured on 2026-10-14 by mutating the field assembly. Reflecting the `Ky`
+entries of the structure's orders about the incident one, in either formulation's copy, fails
+the patch cases and no other outside golden (S4's field cases are uniform stacks, RETICOLO's
+conical cases have one `ky` row); only the internal comparisons in `tests/rcwa/` also see it. A
+`Ky`-only sign flip, by contrast, is caught by the S4 and RETICOLO conical field goldens as well,
+because the incident `ky` is not zero there.
 
 Two conventions had to be measured rather than assumed, and both are recorded in
 `gen_goldens_s4_field.py`: S4's p amplitude is a **global** `-1` against ours (not a frame
