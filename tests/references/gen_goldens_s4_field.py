@@ -48,13 +48,15 @@ and by the ``|E|``-decay check in ``docs/validation/rcwa/time-convention-audit.m
 **The stacks are stated in permittivity, and the ``** 2`` that used to sit at ``SetMaterial`` is
 gone rather than moved.** S4's ``Epsilon`` always wanted a permittivity; what changed on
 2026-08-20 is that wavebit does too, so the conversion this generator was performing has no
-remaining side to be on. One consequence is worth knowing before rerunning this: the
-``__stack`` arrays in the **committed** golden were written before that flip and hold a
-refractive index in their second column. ``test_s4_field_golden`` reads them through
-``refractive_index_from_eps`` and says so; rerun this and they become permittivities, at which point
-that conversion has to come out. Nothing else in the file moves — the physics is identical and the
-field arrays are bit-for-bit the same, which is the only reason this is a safe thing to leave
-half-migrated.
+remaining side to be on. The golden was first written before that flip, and its ``__stack``
+arrays held a refractive index in their second column until it was regenerated on 2026-10-14;
+they hold permittivity now, and ``test_s4_field_golden`` compares them as such.
+
+**That regeneration moved the field arrays by at most 1.1e-15** (7.2e-16 of their scale), so a
+rerun here reproduces the physics, not the last digit. The generator's code and the ``s4`` env
+were unchanged since 2026-08-20, when a rerun had reproduced every field array bit for bit, and
+the output does not depend on the OpenBLAS thread count; the difference comes from outside the
+env, where S4 links the system's libc++ and libm.
 """
 
 import sys as _repository_sys
@@ -80,7 +82,7 @@ RES_Z = 7                       # per layer, inclusive of both faces; interior i
 # so the interior samples sit where the field is actually structured.
 #
 # 2.25 and 4.41 are the index-1.5 and index-2.1 layers this list has always described; the
-# scene is unchanged and the committed golden still applies to it.
+# scene never changed, only the quantity it is stated in.
 STACKS = {
     'two_media': [(90.0, 1.0), (260.0, 2.25), (90.0, 1.0)],
     'three_media': [(90.0, 1.0), (260.0, 2.25), (140.0, 4.41), (90.0, 1.0)],
@@ -95,10 +97,6 @@ def z_samples(stack):
 
     That is S4's ``z`` and the order ``reconstruct_field`` returned samples in until
     2026-09-21; it now returns them bottom to top, and the test reverses its cell to match.
-
-    Reads only the thicknesses, so it is unaffected by which quantity the second column holds
-    — which is what lets ``test_s4_field_golden`` call it on the committed golden's ``__stack``
-    as well as on ``STACKS``.
     """
     zs, off = [], 0.0
     for d, _ in stack:

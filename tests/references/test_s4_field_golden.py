@@ -25,8 +25,6 @@ import sys
 import numpy as np
 import pytest
 
-import wavebit
-
 HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE))
 from tests.references.gen_goldens_s4_field import STACKS                                   # noqa: E402
@@ -74,9 +72,7 @@ def _reconstruct(path, stack_name, theta, phi, pol):
     """The stack solved through one reconstruction path.
 
     The scene comes from ``gen_goldens_s4_field.STACKS`` — the permittivities S4 itself was
-    handed — rather than from the golden's ``__stack`` array, which holds the same layers as
-    refractive indices because it was frozen before 2026-08-20. Reading the live list keeps this
-    stated in one quantity;
+    handed — rather than from the golden's ``__stack`` array, which holds the same layers;
     :func:`test_the_golden_was_frozen_on_the_stacks_this_file_solves` is what stops the two
     drifting apart, which is the guarantee ``__stack`` used to provide by being the only source.
     """
@@ -148,29 +144,24 @@ def test_the_reconstructed_field_matches_s4(path, key, stack_name, theta, phi, p
 
 
 def test_the_golden_was_frozen_on_the_stacks_this_file_solves():
-    """``STACKS`` and the golden's ``__stack`` must still describe one scene — in two quantities.
+    """``STACKS`` and the golden's ``__stack`` must still describe one scene.
 
-    The reconstruction reads ``STACKS`` (permittivity), the reference numbers came from
-    ``__stack`` (refractive index, frozen before 2026-08-20). Two sources for one scene is
-    exactly the arrangement that lets a case list be edited while the golden goes on answering
-    for the old one, so it is checked here rather than assumed: thicknesses entry for entry, and
-    each material through :func:`wavebit.refractive_index_from_eps`, which is the same principal
-    root the generator's own conversion used to take.
-
-    **When this file is regenerated the conversion below has to come out**, because ``__stack``
-    will then hold permittivity and comparing it against an index fails loudly with this
-    docstring attached. That is the intended way to find out — the alternative was squaring the
-    golden inside :func:`_reconstruct`, where a regeneration would silently solve ``eps**2``.
+    The reconstruction reads ``STACKS``, the reference numbers came from ``__stack``. Two
+    sources for one scene is exactly the arrangement that lets a case list be edited while the
+    golden goes on answering for the old one, so it is checked here rather than assumed:
+    thicknesses and permittivities entry for entry. Both are permittivity since the golden was
+    regenerated on 2026-10-14, so the comparison is exact; until then ``__stack`` held the
+    refractive indices it was frozen on before 2026-08-20, and this compared them through
+    ``refractive_index_from_eps``.
     """
     for name, stack in STACKS.items():
         stored = GOLDEN[f'{name}__stack']
         assert stored.shape == (len(stack), 2), (name, stored.shape)
         assert np.allclose(stored[:, 0], [d for d, _ in stack], atol=0), name
-        want = [wavebit.refractive_index_from_eps(e).real for _, e in stack]
-        assert np.allclose(stored[:, 1], want, rtol=0, atol=1e-12), (
-            f'{name}: the golden was frozen on {stored[:, 1]} (refractive index) and STACKS '
-            f'now says {want}. If this file has just been regenerated, that column is a '
-            f'permittivity now and the refractive_index_from_eps above is what has to go.')
+        want = [e for _, e in stack]
+        assert np.array_equal(stored[:, 1], want), (
+            f'{name}: the golden was frozen on permittivities {stored[:, 1]} and STACKS now '
+            f'says {want}, so the reference numbers answer for a different scene.')
 
 
 def test_every_component_is_exercised_somewhere():

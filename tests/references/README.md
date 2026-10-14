@@ -33,8 +33,9 @@ directions off rather than assuming a single rule:
 
 Two goldens store a material and could not follow: `golden_reticolo_conical_sweep.npz` (a
 2024-09-09 study whose `.mat` inputs are not in this repository) and `golden_s4_field.npz`'s
-`__stack` arrays. Both hold a refractive index still, both are converted **at the read**, and
-both say so where the conversion sits.
+`__stack` arrays. The RETICOLO sweep holds a refractive index still, converted **at the read**,
+and says so where the conversion sits. The S4 field golden did the same until it was
+regenerated on 2026-10-14; its `__stack` arrays hold permittivity now and are read as such.
 
 The RETICOLO change is the one that could have moved numbers, so it was checked the way this
 directory's own note on a generator that could not reproduce its own golden prescribes:
@@ -42,7 +43,9 @@ regenerating `golden_reticolo.npz` (72 arrays), `golden_reticolo_field.npz` (33)
 `golden_reticolo_conical_field.npz` (33) against V10 after the flip reproduces **every array
 bit for bit**. Nothing in the frozen data moved, so the scenes are the ones they always were.
 `gen_goldens_s4_field.py` was rerun too: 26 of its 28 arrays are bit-identical and the two that
-differ are exactly the `__stack` pair above.
+differ are exactly the `__stack` pair above. The 2026-10-14 regeneration, with the same code and
+the same `s4` env, also moved the 24 field arrays, by at most 1.1e-15 (7.2e-16 of their scale);
+the generator's docstring says where that difference comes from.
 
 ## The oracles
 
