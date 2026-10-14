@@ -4,6 +4,7 @@ This module is repository tooling, never an installed wavebit dependency. The
 ledger records a file move, not a new experiment or an updated historical hash.
 """
 import json
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -49,11 +50,33 @@ class RepositoryPath(type(Path())):
     A historical root such as studies/results spans several new question
     folders. Resolve when its filename is joined, not by inventing one new root.
     """
-    def __init__(self, *parts):
-        self._historical = Path(*parts)
-        resolved = (resolve_repository_path(self._historical)
-                    if self._historical.is_absolute() else self._historical)
-        super().__init__(resolved)
+    if sys.version_info >= (3, 12):
+        def __init__(self, *parts):
+            self._historical = Path(*parts)
+            resolved = (resolve_repository_path(self._historical)
+                        if self._historical.is_absolute() else self._historical)
+            super().__init__(resolved)
+    else:
+        # Python 3.11 (the fmmax, S4 and gyptis reference envs) has no
+        # with_segments(): Path.__new__ builds the instance in _from_parts and
+        # never passes the parts to __init__, and derived paths (parent,
+        # with_name, iterdir and glob children) come from _from_parsed_parts.
+        # Mirror 3.12: parts given to the constructor resolve as __init__ does
+        # there, and a derived path keeps its own string as its identity.
+        @classmethod
+        def _from_parts(cls, args):
+            historical = Path(*args)
+            resolved = (resolve_repository_path(historical)
+                        if historical.is_absolute() else historical)
+            self = super()._from_parts((resolved,))
+            self._historical = historical
+            return self
+
+        @classmethod
+        def _from_parsed_parts(cls, drv, root, parts):
+            self = super()._from_parsed_parts(drv, root, parts)
+            self._historical = Path(self)
+            return self
 
     def __truediv__(self, key):
         return type(self)(self._historical / key)
