@@ -194,6 +194,28 @@ def test_empty_stack_is_the_single_interface_with_physical_port_labels(side):
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_each_port_names_its_side_the_lit_side_and_its_medium(side):
+    """R and T are incidence-relative; the references say which medium each one is in.
+
+    On a stack whose half-spaces differ (an OLED: air one side, glass the other), "what reached
+    the air" is R lit from one side and T from the other. The answer has to be readable from
+    the result alone, without the problem that made it.
+    """
+    result = rcwa.run(slab(side=side), numerics=rcwa.Numerics())
+    other = 'bottom' if side == 'top' else 'top'
+    media = {'top': (2.25, 1.4), 'bottom': (3.24, 1.1)}          # slab()'s half-spaces
+    for observation, port in ((result.reflection, side), (result.transmission, other)):
+        reference = observation.reference
+        assert reference['port'] == port
+        assert reference['incident_port'] == side
+        assert reference['outward_normal'] == (0., 0., 1. if port == 'top' else -1.)
+        epsilon, mu = media[port]
+        assert len(reference['epsilon']) == len(result.wavelengths) == 3
+        np.testing.assert_array_equal(np.asarray(reference['epsilon'], dtype=complex), epsilon)
+        np.testing.assert_array_equal(np.asarray(reference['mu'], dtype=complex), mu)
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_amplitudes_are_linear_in_the_normalized_jones_pair(side):
     """Two runs, 's' and 'p', give every polarization's amplitudes (docs/guide/rcwa/light.md).
 
