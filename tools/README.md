@@ -16,5 +16,7 @@ use the resolver when following those paths. The ledger belongs with the checkou
 Write new experiment outputs under `artifacts/` and pass an explicit output path
 when replaying an instrument that would replace an existing record. The resolver
 places unrecorded historical `studies/results/` destinations under `artifacts/studies/`.
+That includes the old names of the records archived outside the repository on 2026-10-14,
+whose ledger rows were removed with them.
 Only review and add a result to a question's `records/` directory deliberately.
 JSON, CSV, logs, and images are not globally ignored formats.

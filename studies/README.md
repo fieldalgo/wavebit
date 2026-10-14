@@ -61,7 +61,7 @@ is still being investigated belongs here until a reference value is established.
 | `rcwa/nvf_cartesian_pair/nvf_cartesian_pair.py`, `rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair.log` | Can two physical equal-height rectangles retain separate/contact finite meshes and live derivatives on an oblique lattice? Compatibility imports preserve the independently verified small cells while an explicit public adapter freezes input identity and contact state; ordinary contact JVP excludes gap opening and optical qualification remains open. [Construction and limits](../docs/validation/rcwa/nvf-cartesian-pair.md). |
 | `rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_opening.log` | Does the analytical finite right-opening limit agree with independent nodal operators, moving-triangle integrals and closure derivatives across refinements and physical units? The bounded NumPy response passes fixed controls without widening ordinary contact JVP or optical claims. [Method and scope](../docs/validation/rcwa/nvf-cartesian-pair-opening.md). |
 | `rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_gap.log` | Does the exact rescaled finite gap family agree with original nodal equations and moving Fourier weights at contact and positive gap? The fixed NumPy controls preserve derivative units, exact labels and separate optical scope. [Method and limits](../docs/validation/rcwa/nvf-cartesian-pair-gap.md). |
-| `rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_gap_autodiff.log` | Do actual finite gap JVPs and reverse derivatives agree with original equations, endpoint weighted transforms and selected closures? Source-pinned bounded evidence preserves explicit right-derivative and optical limits. [Method](../docs/validation/rcwa/nvf-cartesian-pair-gap-autodiff.md). |
+| `rcwa/nvf_cartesian_pair/` (gap autodiff; its run log, `nvf_cartesian_pair_gap_autodiff.log`, is archived outside the repository) | Do actual finite gap JVPs and reverse derivatives agree with original equations, endpoint weighted transforms and selected closures? Source-pinned bounded evidence preserves explicit right-derivative and optical limits. [Method](../docs/validation/rcwa/nvf-cartesian-pair-gap-autodiff.md). |
 | `rcwa/nvf_affine_cells/records/nvf_affine_projection_memory.log` | Does batching the affine auxiliary Fourier projection reduce memory, and what does it cost in time? Alternating NumPy comparisons retain the same finite cell and all nine coefficient arrays. [Allocation scope and controls](../docs/validation/rcwa/nvf-affine-cells.md#bounded-fourier-projection-intermediates). |
 | `rcwa/nvf_coupled_pair_seam_galerkin/records/nvf_pair_positive_retained.log` | Does the refined positive-gap pair preserve its original physical guards after eliminating through the original weak matrix? The record includes the coincident-sweep-vertex failure and corrected source snapshot. [Geometry correction and coverage](../docs/validation/rcwa/nvf-coupled-pair-seam-galerkin.md#positive-gap-elimination-and-coincident-sweep-vertices). |
 | `rcwa/nvf_galerkin_error/nvf_galerkin_error.py`, `rcwa/nvf_galerkin_error/records/nvf_galerkin_error.log` | Does a small algebraic residual imply a resolved closed constitutive tensor? Conforming electric/flux mismatch measures the remaining cell error at fixed Fourier order. [Derivation and measurements](../docs/validation/rcwa/nvf-galerkin-error.md). |
@@ -222,16 +222,29 @@ taken from, the same configuration has measured 133 ms and 217 ms on different d
 code change between them, so treat a ratio within one run as meaningful and a third significant
 figure as not.
 
-Results stream to `results/` as they land, so an interrupted run still leaves what it finished.
-The `.log` is checked in; the machine-readable `.json` beside it is not (`*.json` is ignored).
+Results stream to `artifacts/studies/backends.json` as they land, so an interrupted run still
+leaves what it finished. The `.log` in `records/` is checked in; the `.json` is not, because
+`artifacts/` is ignored.
+
+## What a study's `records/` keeps
+
+A study's `records/` directory holds two kinds of file: those something in this tree reads (a
+test, or a study script that reuses recorded rows) and the small headline results a write-up
+cites as the source of a number. Raw run material does not belong there: attempt and job
+directories, mutation logs, source snapshots, raw arrays and large JSON reports. On 2026-10-14
+the 6,943 such files (483 MB) that no test and no live study input reads were removed from the
+repository and archived outside it. The scripts of registered campaigns (register, verify, audit,
+gates, mutations, validation) still name some of them; they could only pass on their recorded
+host, and now stop at the first archived file. The relocation ledger, `tools/relocations.json`,
+lists only the records still here.
 
 ## Imported validation records
 
 The FDTD records retain their recorded measurements and outcomes. During integration,
 host-specific directory prefixes in text logs were replaced by portable placeholders.
 Four unpublished file-reference occurrences were replaced by descriptive placeholders;
-these are listed separately from host paths in the
-[redaction receipt](_support/integration_records/records/integration-path-redactions.json).
+these are listed separately from host paths in the redaction receipt
+`integration-path-redactions.json`, which is archived outside the repository.
 
 Existing exact-hash registries apply to the **original bytes** at commit
 `d1119445bb2839dd03d2af0b769a2797d0be2d13`; use that commit's Git blobs when

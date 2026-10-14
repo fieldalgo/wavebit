@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_every_preserved_reference_and_record_keeps_its_original_bytes():
     evidence = json.loads((ROOT / 'tools/relocations.json').read_text())['immutable']
-    assert len(evidence) == 7336
+    # 7336 until 2026-10-14, when the 6,943 study records no test or live study input reads
+    # were archived outside the repository and their ledger rows removed with them.
+    assert len(evidence) == 393
     for old, row in evidence.items():
         path = ROOT / row['target']
         assert path.is_file(), (old, path)
@@ -86,7 +88,9 @@ def test_recursive_archived_inventory_preserves_every_old_filename():
     ledger = json.loads((ROOT / 'tools/relocations.json').read_text())['paths']
     expected = {ROOT / new: Path(old).relative_to('studies/results')
                 for old, new in ledger.items() if old.startswith('studies/results/')}
-    assert len(expected) > 1000
+    # The 276 records still tracked plus 37 relocated instruments (7256 before the
+    # 2026-10-14 archive); an exact count, so a row lost from the roster fails here.
+    assert len(expected) == 313
     historical = repository_path('studies/results')
     paths = [p for p in historical.rglob('*') if p.is_file()]
     assert len(paths) == len(set(paths))
