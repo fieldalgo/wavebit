@@ -68,13 +68,14 @@ OUTWARD = re.compile(
 )
 
 # This file quotes the patterns it forbids, and so does the contract that describes them.
-# CLAUDE.md, the agent instructions of a working checkout, names a local folder; whether it
-# ships is settled when the public mirror is cut, not here.
+# CLAUDE.md and AGENTS.md, the agent instructions of a working checkout (the second is the copy
+# other agent tools read), name local folders; whether they ship is settled when the public mirror
+# is cut, not here.
 # Imported historical learning records retain their original bytes and provenance.
 # Their exact content hashes are checked by test_repository_layout.py.
 PRESERVED_LEARNING_RECORDS = {'docs/validation/learning-records/complex-kx-roots.json', 'docs/development/learning-provenance/example-verification.json', 'docs/validation/learning-records/power-example.json', 'docs/validation/learning-records/tensor-material-api-tests.log', 'docs/development/learning-provenance/migration.json', 'docs/validation/learning-records/tensor-shape-integration.json', 'docs/validation/learning-records/tensor-integrated-regression.log', 'docs/validation/learning-records/chapter03-material-examples.json', 'docs/validation/learning-records/tensor-material-api.json', 'docs/development/learning-provenance/verification.json', 'docs/validation/learning-records/tensor-integrated-expanded.log', 'docs/development/learning-provenance/direct-k-verification.json', 'docs/development/learning-provenance/toolchain.json', 'docs/validation/learning-records/nvf-measurements.json'}
 
-EXEMPT = ({'tests/api/test_docs_contract.py', 'docs/README.md', 'CONTRIBUTING.md', 'CLAUDE.md'}
+EXEMPT = ({'tests/api/test_docs_contract.py', 'docs/README.md', 'CONTRIBUTING.md', 'CLAUDE.md', 'AGENTS.md'}
           | PRESERVED_LEARNING_RECORDS)
 
 # Paths that do not resolve and are named on purpose. Listed rather than pattern-matched, so
@@ -301,10 +302,11 @@ def _write(root, files):
         (root / rel).write_text(text + '\n', encoding='utf-8')
 
 
-# One outward line, four times: in a tracked file, in an untracked one at the top of the tree
-# the way `AGENTS.md` arrives, in an untracked one inside a published directory, and in the
-# exempt `CLAUDE.md`.
-STRAYS = {'README.md': LEAK, 'AGENTS.md': LEAK, 'docs/stray.md': LEAK, 'CLAUDE.md': LEAK}
+# One outward line, five times: in a tracked file, in an untracked one at the top of the tree,
+# in an untracked one inside a published directory, and in the exempt `CLAUDE.md` and `AGENTS.md`
+# (the agent instructions; `AGENTS.md` arrived untracked from agent tools until it was committed).
+STRAYS = {'README.md': LEAK, 'NOTES.md': LEAK, 'docs/stray.md': LEAK, 'CLAUDE.md': LEAK,
+          'AGENTS.md': LEAK}
 
 
 @needs_git
@@ -351,7 +353,7 @@ def test_without_a_checkout_of_its_own_the_tree_on_disk_is_read(tmp_path, where)
         root = tmp_path / 'unpacked'
     _write(root, STRAYS)
     assert outward_lines(root) == [f'{rel}:1: {LEAK}'
-                                   for rel in ('AGENTS.md', 'README.md', 'docs/stray.md')]
+                                   for rel in ('NOTES.md', 'README.md', 'docs/stray.md')]
 
 
 # One citation of each kind the checks resolve -- a `Targets:` file and glob, a path, a
