@@ -4,6 +4,9 @@ import importlib.resources
 from pathlib import Path
 import tomllib
 
+import wavebit
+from wavebit.compat import legacy
+
 
 def test_installed_metadata_matches_the_checkout_distribution_contract():
     root = Path(__file__).resolve().parents[2]
@@ -16,3 +19,10 @@ def test_installed_metadata_matches_the_checkout_distribution_contract():
     assert {value.replace(' ', '') for value in project['dependencies']} <= requires
     package = importlib.resources.files('wavebit')
     assert package.joinpath('data/filmetrics/Si.txt').is_file()
+
+
+def test_every_version_the_package_states_is_the_pyproject_one():
+    root = Path(__file__).resolve().parents[2]
+    version = tomllib.loads((root / 'pyproject.toml').read_text())['project']['version']
+    assert wavebit.__version__ == version
+    assert legacy.__version__ == version

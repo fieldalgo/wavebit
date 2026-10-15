@@ -214,6 +214,9 @@ __all__ = [
     'JobSpec', 'Numerics', 'Sweep', 'SpecError', 'run',
 ]
 
-__version__ = "0.1.0"
+# The package's number, not one of its own: this module is the old flat namespace, and its
+# copy stayed at 0.1.0 through the 0.0.x releases after it moved here.
+import wavebit as _package  # noqa: E402
+__version__ = _package.__version__
 
 from wavebit.fdtd import _legacy as fd
