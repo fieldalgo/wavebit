@@ -26,7 +26,8 @@ def fdtd(stack=None, incidence=None, **kwargs):
     of the z resolution, as a scalar or an ``(x, y)`` pair.
     Both paths support time records and user frequency planes; source and
     normalization conventions are documented in the time-domain guide.
-    Explicit backends also support bottom incidence and static z grading.
+    Both routes answer ``incidence_side='bottom'``; explicit backends also support
+    static z grading.
     They accept axis-aligned rectangle/square layer recipes with the same
     centre, absolute length and Material conventions as RCWA. Subpixel cell
     integration preserves shape gradients and periodic painting. Optional

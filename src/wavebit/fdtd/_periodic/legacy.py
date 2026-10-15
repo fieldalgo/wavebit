@@ -323,8 +323,9 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
             f'and any phi.')
     if incidence_side not in (None, 'top'):
         raise ValueError(
-            f"fdtd: incidence_side={incidence_side!r}. Only 'top' is implemented; the mirror "
-            f"the ETM applies for backside illumination has no counterpart here yet.")
+            f"fdtd: incidence_side={incidence_side!r}. This kernel illuminates its first layer "
+            f"only. `wavebit.compat.legacy.fdtd` answers 'bottom' by handing it the mirrored "
+            f"scene (`wavebit.fdtd._periodic.adapter._legacy_inputs`); call that instead.")
     if lattice is not None:
         raise ValueError(
             'fdtd: a `lattice` is not read here, axis-aligned or not -- pass `period`. The Yee '
@@ -2452,7 +2453,9 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
             ``phi``; runs the two eigenpolarisations as separate legs and recombines them.
         mu: permeability raster, laid out beside ``structure``. The half-spaces carry theirs
             inside their :class:`Material`.
-        incidence_side: only ``'top'`` is implemented.
+        incidence_side: ``'top'`` only -- this kernel illuminates its first layer. Public
+            bottom incidence reaches it mirrored: ``adapter._legacy_inputs`` swaps the
+            half-spaces and keeps the layer order, so ``'bottom'`` never arrives here.
         lattice: refused. The Yee grid is Cartesian; pass ``period``.
 
         resolution: cells per unit length. Default ``CELLS_PER_WAVELENGTH * n_max /
