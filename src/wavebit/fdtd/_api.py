@@ -103,9 +103,9 @@ def _snapped(problem,scene,plan):
                     f'{moves}. That is up to half a cell, a first-order error in the spacing, and '
                     f'any two spans inside the same cells run identically. Make the span a whole '
                     f'number of cells or check convergence as the spacing shrinks. A lossless, '
-                    f'non-dispersive layer clear of every Open face can instead be an unturned '
-                    f'fdtd.Box reaching a cell past both faces of the other two axes, whose smoothed '
-                    f'faces stay where they were asked.'))
+                    f'non-dispersive layer clear of every Open face and of every cell-snapped face '
+                    f'can instead be an unturned fdtd.Box reaching more than a cell past both faces '
+                    f'of the other two axes, whose smoothed faces stay where they were asked.'))
     return tuple(issues)
 
 
