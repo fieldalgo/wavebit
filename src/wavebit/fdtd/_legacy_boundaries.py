@@ -386,9 +386,16 @@ class PML(Absorbing):
         ``Resolution(wavelength=...)``; a PML with neither is refused by name.
     ``background``
         The medium the stretch is matched to: a material, a bare permittivity, or ``None``
-        for the scene's own ``background=``. A structure that reaches into this face must be
-        uniform along the axis there and must equal this, or the scene is refused naming
-        ``Absorber``.
+        for the scene's own ``background=``. A structure that reaches into this face must run
+        through it, uniform along the axis (an interface inside the layer is refused), and
+        must not be a ``Conductor`` or ``Dispersive`` (refused, naming ``Absorber``). A
+        lossless one that differs from this is accepted: the grading stays calibrated for
+        this medium rather than the layer's, which costs a factor and not a mirror. By the
+        exact layer return at ``dx = 0.05`` on 12 cells, at normal incidence, glass
+        (``eps = 2.25``) returns 5.3e-4 under a vacuum-matched face against 2.0e-4 under a
+        glass-matched one, and ``eps = 6.25`` 4.9e-3 against 1.3e-3. A layer across this
+        face's axis that runs into it gets ``AbsorberProximityWarning`` naming the index this
+        is matched to, unless this is its own material -- a substrate's usual spelling.
     ``reflection``
         The nominal normal-incidence round-trip amplitude the conductivity grading is aimed
         at (default 1e-8). It is a grading parameter, not a bound: the discrete reflection is

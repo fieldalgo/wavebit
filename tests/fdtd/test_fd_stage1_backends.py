@@ -431,7 +431,7 @@ def test_the_dispersive_half_space_warns_that_it_reaches_its_absorber():
     Every other test here silences ``AbsorberProximityWarning`` for the dispersive scene. A
     silenced warning nobody asserts is a warning that can stop firing unnoticed, and this one
     is load-bearing: the scene is a *half-space*, so the medium is meant to run out through
-    the absorber, and the layer is matched to the background rather than to it.
+    the absorber, and an ``Absorber`` is matched at normal incidence only, not to it.
     """
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
@@ -440,3 +440,4 @@ def test_the_dispersive_half_space_warns_that_it_reaches_its_absorber():
                 if issubclass(w.category, fd.AbsorberProximityWarning)]
     assert len(messages) == 1, [str(w.message) for w in caught]
     assert "'z+'" in messages[0] and 'structures[0]' in messages[0]
+    assert 'an Absorber there is matched at normal incidence only' in messages[0]

@@ -182,6 +182,27 @@ def test_the_model_is_the_kernels_steady_state_off_the_simple_case(case):
     _check(got, dt, 12, rho, kx, False, **case)
 
 
+@pytest.mark.parametrize('eps, matched, unmatched', [(2.25, 2.0e-4, 5.3e-4), (6.25, 1.3e-3, 4.9e-3)])
+def test_a_lossless_layer_under_a_face_matched_to_vacuum_pays_a_factor_not_a_mirror(
+        eps, matched, unmatched):
+    """The numbers the ``PML(background=)`` docstring quotes, on the kernel and the model alike.
+
+    ``check_absorbing_layers`` accepts a lossless layer running through a PML matched to another
+    medium -- it refuses only a lossy one -- and the docstring says what that costs at normal
+    incidence on 12 cells: glass returns 5.3e-4 under a vacuum-matched face against 2.0e-4 under
+    a glass-matched one, ``eps = 6.25`` 4.9e-3 against 1.3e-3. A grading calibrated for the
+    wrong index, not an interface: the docstring used to say such a scene is refused.
+    """
+    for match, want in ((None, matched), (1.0, unmatched)):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', fd.CoarseMeshWarning)
+            got, dt = kernel_return(12, 0.0, False, 0.0, eps=eps, match=match)
+        _check(got, dt, 12, 0.0, 0.0, False, eps=eps, match=match)
+        for side in '-+':
+            for pol in ('TE', 'TM'):
+                assert abs(got[side, pol]) == pytest.approx(want, rel=0.03), (match, side, pol)
+
+
 def _tangential_loss(pol, cells, t_E, t_H, t_EP, t_HP, j2):
     """Mutant: the loss on the tangential components as well as the normal one."""
     if pol == 'TE':

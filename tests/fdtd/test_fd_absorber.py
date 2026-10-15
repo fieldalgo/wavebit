@@ -507,6 +507,9 @@ def test_a_structure_close_to_an_absorbing_face_warns_and_names_the_distance():
     message = next(m for m in said if 'structures[0]' in m)
     assert f'{gap:g}' in message and f'{clearance:g}' in message, message
     assert "'z+'" in message and 'half a wavelength in its own medium' in message
+    # An Absorber has no medium to name; it used to say "matched to the background".
+    assert message.endswith(', and an Absorber there is matched at normal incidence only, not '
+                            "to this structure's near field"), message
 
 
 def test_the_same_structure_half_a_wavelength_clear_of_the_face_is_quiet():

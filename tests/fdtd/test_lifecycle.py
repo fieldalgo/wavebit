@@ -291,6 +291,7 @@ def test_a_continued_halfspace_has_no_proximity_note_and_a_film_near_the_face_do
     assert proximity(substrate) == []
     (below,) = proximity(fdtd.Structure('film', fdtd.Slab(z=(-.7, -.6)), glass))
     assert below.startswith("structures[0] is 0.1 from the inner face of the absorber on 'z-'")
+    assert 'the PML there is matched to index 1 (the background)' in below
     (above,) = proximity(substrate, fdtd.Structure('film', fdtd.Slab(z=(.6, .7)), glass))
     assert above.startswith("structures[1] is 0.1 from the inner face of the absorber on 'z+'")
 

@@ -162,15 +162,23 @@ def test_a_slab_across_the_absorbing_axis_runs_through_a_transverse_pml_and_is_a
     The stage-1 design's table refuses any structure reaching a PML face that is not the
     background. Taken literally that refuses this -- a z slab reaches the x and y layers of
     every open box -- so the rule as implemented is about the *absorbing axis*: uniform along
-    it, which a transverse slab is. The layer is still matched to the background, so the part
-    of it that is not the background reflects more than the table says, which is what
-    ``AbsorberProximityWarning`` is for.
+    it, which a transverse slab is. The x and y layers stay matched to the background, so the
+    part of them the slab fills returns more than the table says (the ``PML`` docstring's
+    numbers); it is accepted and not warned about, since a structure running through a
+    transverse face has no clearance to keep. ``AbsorberProximityWarning`` used to be named
+    here as the warning for it; it fires for this scene only on the slab's own z faces,
+    which it sits 0.3 from.
     """
     everywhere = fd.Boundaries.open(fd.PML(cells=12, wavelength=1.0))
     glass = fd.Structure(fd.Slab(z=(-0.1, 0.1)), fd.Material(eps=2.25))
-    plan = quiet(fd.plan, scene(boundaries=everywhere, structures=(glass,),
-                                domain=fd.Domain(size=(2.0, 2.0, 2.0)), initial=None))
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        plan = fd.plan(scene(boundaries=everywhere, structures=(glass,),
+                             domain=fd.Domain(size=(2.0, 2.0, 2.0)), initial=None))
     assert len(plan.pml_cells) == 6 and plan.spans[0][0] == 'z'
+    faces = sorted(str(w.message).split(' on ')[1][:4] for w in caught
+                   if issubclass(w.category, fd.AbsorberProximityWarning))
+    assert faces == ["'z+'", "'z-'"], faces
 
 
 # ---------------------------------------------------------------------------------------------
@@ -257,19 +265,25 @@ def test_a_layer_through_a_pml_matched_to_its_own_material_is_quiet_and_only_tha
         return [str(w.message) for w in caught
                 if issubclass(w.category, fd.AbsorberProximityWarning)]
 
+    to_vacuum = ', and the PML there is matched to index 1 (the background), not to this'
+    to_glass = ', and the PML there is matched to index 1.5, not to this'
     (vacuum,) = proximity(structures=(halfspace,))
     assert vacuum.startswith("structures[0] is -0.6 from the inner face of the absorber on 'z-'")
+    assert to_vacuum in vacuum
     for background in (fd.Material(eps=2.25), 2.25, fd.Material(eps=(2.25,) * 3, mu=1.0)):
         assert proximity(structures=(halfspace,), boundaries=matched(background)) == []
     near = fd.Structure(fd.Slab(z=(-0.35, -0.25)), glass)
     (short,) = proximity(structures=(near,), boundaries=matched(glass))
     assert short.startswith("structures[0] is 0.05 from the inner face of the absorber on 'z-'")
+    assert to_glass in short, 'the face is matched to glass, not to the vacuum background'
     denser = fd.Structure(fd.Slab(z=(-1.0, -0.2)), fd.Material(eps=4.0))
     (other,) = proximity(structures=(denser,), boundaries=matched(glass))
     assert other.startswith("structures[0] is -0.6 from the inner face of the absorber on 'z-'")
+    assert to_glass in other
     column = fd.Structure(fd.Region(size=(0.4, 1.0, 1.0), center=(0.0, 0.0, -0.6)), glass)
     (beside,) = proximity(structures=(column,), boundaries=matched(glass))
     assert beside.startswith("structures[0] is -0.6 from the inner face of the absorber on 'z-'")
+    assert to_glass in beside
 
 
 # ---------------------------------------------------------------------------------------------

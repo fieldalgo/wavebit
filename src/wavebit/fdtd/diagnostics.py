@@ -52,14 +52,18 @@ class CoarseMeshWarning(UserWarning):
 class AbsorberProximityWarning(UserWarning):
     """A structure sits within half a wavelength (in its own medium) of an absorbing face.
 
-    A PML is matched to the *background* it terminates, and it terminates the near field of
-    whatever is close to it as well. The legacy engine's measured clearance
+    A PML is matched to one medium -- the one that reaches its face: the background, or a
+    ``Slab`` continued through the padding (in the compatibility engine, whatever
+    ``PML(background=)`` names) -- and it terminates the near field of whatever is close to
+    it as well; the compatibility engine's ``Absorber`` is matched at normal incidence only.
+    The message names which. The legacy engine's measured clearance
     (``src/wavebit/fdtd/_periodic/legacy.py``, ``PAD_WAVELENGTHS``) is half a wavelength in the half-space:
     on the benchmark grating the worst per-order error runs 7.37e-4 at one wavelength of
     clearance, 6.57e-4 at half and 8.81e-4 at an eighth, so half is the optimum and less
     than half costs accuracy. This warns rather than refuses because a structure that
-    *crosses* the face is a legitimate scene (the PML then has to be matched to it, or be
-    an ``Absorber``); one that merely sits near it is only inaccurate.
+    *crosses* the face is a legitimate scene; one that merely sits near it is only
+    inaccurate. A layer that crosses into a PML matched to its own material is not warned
+    about at all: there it is the medium the stretch is matched to.
     """
 
 

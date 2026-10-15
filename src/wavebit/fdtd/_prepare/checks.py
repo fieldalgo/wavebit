@@ -1779,12 +1779,14 @@ def check_absorbing_layers(scene, plan):
 
     A structure that runs *across* the layer -- a z slab inside an x PML, which is what a
     slab in an open box always is -- is uniform along the absorbing axis and is allowed. The
-    stretch is still matched to the background, so the part of the layer that is not the
-    background reflects more than the table says; that is the ``AbsorberProximityWarning``
-    below, not a refusal. (The stage-1 design's table refuses this case outright. It is
-    relaxed here because the canonical stage-1 scene -- a dielectric slab with
-    ``Boundaries.open(...)`` -- is exactly it, and refusing the canonical scene would mean
-    nothing could use the feature.)
+    stretch is still matched to the face's one medium, so the part of the layer that is not
+    that medium returns more than the table says: by the exact layer return at ``dx = 0.05``
+    on 12 cells, 2.6x for glass in a vacuum-matched face at normal incidence (the ``PML``
+    docstring's numbers). It is accepted and not warned about: ``_proximity_notes`` skips a
+    structure that runs through a transverse face, which leaves it no clearance to keep.
+    (The stage-1 design's table refuses this case outright. It is relaxed here because the
+    canonical stage-1 scene -- a dielectric slab with ``Boundaries.open(...)`` -- is exactly
+    it, and refusing the canonical scene would mean nothing could use the feature.)
     """
     grid = plan.grid
     pml = dict(plan.pml_cells)
@@ -2830,8 +2832,9 @@ def _proximity_notes(scene, plan):
                             f'absorber on {name!r}; half a wavelength in its own medium is '
                             f'{clearance:g}. The measured optimum clearance is half a '
                             f'wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order '
-                            f'error at 0.5 against 8.81e-4 at 0.125), and the layer is '
-                            f'matched to the background, not to this structure\'s near field'))
+                            f'error at 0.5 against 8.81e-4 at 0.125), and '
+                            f'{_matched_phrase(scene, plan, name)}, not to this '
+                            f'structure\'s near field'))
     return out
 
 
@@ -2839,6 +2842,25 @@ def _matched_medium(scene, name):
     """The medium the ``PML`` on face ``name`` is matched to (``params._cpml`` reads the same)."""
     background = scene.boundaries.face(name).background
     return _background(scene) if background is None else background
+
+
+def _matched_phrase(scene, plan, name):
+    """What the absorbing face ``name`` is matched to, as the proximity note says it.
+
+    A ``PML`` is matched to one medium, named by the index its stretch is graded for
+    (:func:`~wavebit.fdtd._prepare.cpml.face_eps_r`) and marked when that medium is the
+    scene's background. An ``Absorber`` has no medium to name: its equal electric and
+    magnetic rates match it by construction, at normal incidence only.
+    """
+    if name not in dict(plan.pml_cells):
+        return 'an Absorber there is matched at normal incidence only'
+    from wavebit.fdtd._prepare.cpml import face_eps_r
+    matched = _matched_medium(scene, name)
+    eps_r = face_eps_r(matched, 'xyz'.index(name[0]))
+    if eps_r is None:
+        return 'the PML there is matched to a traced medium'
+    where = ' (the background)' if _same_medium(matched, _background(scene)) else ''
+    return f'the PML there is matched to index {math.sqrt(eps_r):g}{where}'
 
 
 def _same_medium(a, b):
