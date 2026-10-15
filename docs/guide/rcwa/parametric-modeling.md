@@ -76,10 +76,10 @@ result = prepared.run(problem)
 ```
 
 `rcwa.prepare` takes the geometry record the earlier interface's `freeze_geometry()` took, and
-`prepared.run` replays it on concrete values. A JAX-traced shape is not in the current API yet
-(code `prepared.host_topology`): the JIT derivatives and traced replay described in this section,
-and the examples linked from it, use the earlier interface, while through `prepared.run` a shape
-derivative is PyTorch's.
+`prepared.run` replays it on concrete values. A shape derivative through `prepared.run` runs on
+PyTorch and under eager `jax.grad`; a shape traced under `jax.jit` or `jax.vmap` is not in the
+current API yet (code `prepared.host_topology`), so the JIT derivatives and traced replay
+described in this section, and the examples linked from it, use the earlier interface.
 
 The construction sums positive normal dyads into `M`, forms the complex vector
 `J = M @ (1, i)`, and uses `P = J J^H / |J|^2`. Opposite normals reinforce as
@@ -413,9 +413,9 @@ builds a different structure that solves and conserves energy — see
 [`conventions.md`](../../reference/common/conventions.md).
 
 Sizes, centres, angles and materials may be backend tensors and are differentiable through
-`prepared.run`: materials on JAX and PyTorch, geometry on PyTorch, since a JAX-traced shape is
-refused (code `prepared.host_topology`). `Material` is a registered JAX pytree for exactly that
-reason.
+`prepared.run`: materials on JAX and PyTorch, geometry on PyTorch and under eager `jax.grad`,
+since a shape traced under `jax.jit` is refused (code `prepared.host_topology`). `Material` is a
+registered JAX pytree for exactly that reason.
 
 ## 4. Results (`studies/rcwa/benchmark_analytic/benchmark_analytic.py`)
 

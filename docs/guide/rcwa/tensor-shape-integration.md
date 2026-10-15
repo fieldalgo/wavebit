@@ -165,9 +165,9 @@ geometry record (on the earlier interface, JAX JIT requires a concrete
 interface topology, while material values and shape coordinates remain live.
 Position, size, angle and lattice derivatives therefore include the continuous
 boundary contribution rather than a zero derivative through a Boolean mask.
-Through `prepared.run` those are PyTorch derivatives, since a JAX-traced shape or
-cell is refused (code `prepared.host_topology`); material derivatives run on JAX
-and PyTorch.
+Through `prepared.run` those run on PyTorch and under eager `jax.grad`; a shape or
+cell traced under `jax.jit` is refused (code `prepared.host_topology`). Material
+derivatives run on JAX, jitted or not, and on PyTorch.
 
 Eager replay rejects stale topology (code `prepared.topology` through
 `prepared.run`). For the curves of a disjoint layer the

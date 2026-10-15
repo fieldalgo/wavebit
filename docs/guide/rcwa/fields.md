@@ -63,8 +63,9 @@ releases them instead of keeping a hidden reconstruction state.
 On JAX, prepare outside the transform and pass the live problem inside it, for example
 `jax.jit(lambda p: prepared.run(p).field(x=..., y=..., z=...).values)`. This holds for a single
 plane wave; other sources refuse a JAX-traced input. Explicit coordinate arrays and integer
-counts both work inside, and so does a traced layer thickness with explicit heights. A traced
-region geometry or cell is refused when the trace is built (code `prepared.host_topology`); see
+counts both work inside, and so does a traced layer thickness with explicit heights. A region
+geometry or cell traced under `jax.jit` is refused when the trace is built (code
+`prepared.host_topology`); eager `jax.grad` differentiates it; see
 [automatic differentiation](../common/autodiff.md). The earlier interface's compiled
 `solver.solve_field(..., geometry=g)` and its static-sampling rules belong to that interface
 only.

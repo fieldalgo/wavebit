@@ -3,8 +3,8 @@
 :::{note}
 The examples use the current `rcwa.Problem` / `rcwa.Numerics` lifecycle, except the one under
 [Differentiability](#differentiability), which keeps the earlier `wavebit.compat.legacy`
-interface because a JAX-traced shape (a frozen geometry under `jax.jit`) is not in the current
-API yet.
+interface because a shape traced under `jax.jit` (a frozen geometry) is not in the current API
+yet; eager `jax.grad` through `prepared.run` is.
 :::
 
 Written: 2026-08. Targets `src/wavebit/rcwa/_engine/boundary.py`, `src/wavebit/_common/geometry/clipper.py`, `src/wavebit/_common/geometry/polygon.py`,
@@ -201,7 +201,7 @@ not changed hits the JAX compilation cache — take the freeze again every step 
 on stale geometry).
 
 ```python
-# Earlier interface: a JAX-traced shape is not in the current API yet (prepared.host_topology).
+# Earlier interface: a shape traced under jax.jit is not in the current API yet (prepared.host_topology).
 from wavebit.compat import legacy as wavebit
 
 structure = [dict(background=1.0, shapes=[
@@ -445,8 +445,9 @@ the freeze every step rather than holding one; it costs 0–1 ms and its record 
 content.
 
 The table is the earlier interface's. Through `rcwa.prepare` and `prepared.run` the eager and
-PyTorch rows hold as written, and every JAX trace of a shape, `jax.grad` included, is refused
-before it reaches the geometry (code `prepared.host_topology`).
+PyTorch rows hold as written. Eager `jax.grad` of a shape is checked on its concrete primal, as
+a PyTorch tensor is; a shape traced under `jax.jit` or `jax.vmap` is refused before it reaches
+the geometry (code `prepared.host_topology`).
 
 ### What a frozen plan does and does not survive
 

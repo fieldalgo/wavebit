@@ -133,8 +133,9 @@ wavebit.Lattice.from_columns(np.column_stack((a1, a2)))
 ```
 
 They store no angle, so building one *inside* a differentiated function makes the cell's shape
-a design variable — through `prepared.run` that is a PyTorch derivative, since a JAX-traced cell
-is refused (code `prepared.host_topology`); see [`autodiff.md`](../common/autodiff.md).
+a design variable — through `prepared.run` that is a PyTorch or an eager `jax.grad` derivative;
+a cell traced under `jax.jit` is refused (code `prepared.host_topology`); see
+[`autodiff.md`](../common/autodiff.md).
 
 **The raster is read in lattice coordinates.** A raster layer's `epsilon[j, i]` is the
 permittivity at `u = (i + 0.5)/Nx`, `v = (j + 0.5)/Ny`, which — the cell being centred on the
