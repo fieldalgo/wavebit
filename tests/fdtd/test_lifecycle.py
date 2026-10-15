@@ -3,6 +3,7 @@ import dataclasses
 import math
 import numpy as np
 import pytest
+import warnings
 
 from wavebit import Material, Units, fdtd
 from wavebit.materials import ConductiveMaterial
@@ -259,6 +260,39 @@ def test_halfspace_continues_to_outer_edge_with_its_own_material():
     np.testing.assert_array_equal(legacy_scene.boundaries.face('z-').background.eps,(2.25,)*3)
     np.testing.assert_array_equal(legacy_scene.boundaries.face('z+').background.eps,(1.,)*3)
     assert metadata['physical_domain']['low'][2]==-.8
+
+
+def test_a_continued_halfspace_has_no_proximity_note_and_a_film_near_the_face_does():
+    """The padding continues the substrate and its PML is matched to it: nothing to keep clear.
+
+    The note used to say the substrate was -0.3 from the absorber and that the layer "is matched
+    to the background" -- false on both counts once the lowering continues it. A film stopping
+    short of an ``Open()`` face is still near a layer matched to vacuum, and still warns, in the
+    report and as a Python warning alike.
+    """
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(steps=2),
+                             absorber=fdtd.PML(cells=12))
+
+    def proximity(*structures):
+        p = plane_problem()
+        p = p.replace(scene=p.scene.replace(structures=structures))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            report = fdtd.check(p, numerics=numerics)
+        assert report.ok, report.issues
+        listed = [m for m in report.capabilities['warnings'] if 'inner face of the absorber' in m]
+        emitted = [str(w.message) for w in caught
+                   if issubclass(w.category, fdtd.diagnostics.AbsorberProximityWarning)]
+        assert listed == emitted
+        return listed
+
+    glass = Material(epsilon=2.25)
+    substrate = fdtd.Structure('substrate', fdtd.Slab(z=(-.8, 0.)), glass)
+    assert proximity(substrate) == []
+    (below,) = proximity(fdtd.Structure('film', fdtd.Slab(z=(-.7, -.6)), glass))
+    assert below.startswith("structures[0] is 0.1 from the inner face of the absorber on 'z-'")
+    (above,) = proximity(substrate, fdtd.Structure('film', fdtd.Slab(z=(.6, .7)), glass))
+    assert above.startswith("structures[1] is 0.1 from the inner face of the absorber on 'z+'")
 
 
 def test_source_cannot_be_placed_in_numerical_padding():

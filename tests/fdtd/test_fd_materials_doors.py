@@ -12,7 +12,9 @@ stage-1 design's refusal table, plus the ones the implementation added.
     a lossy medium in a PML layer                  Conductor/Dispersive   fd.Absorber on that face
     a structure cutting an absorbing layer         an interface inside    running through, or clear of it
     mesh vs the material                           < 8 cells/wavelength   >= 12 (8..12 warns)
-    a structure near an absorber                   (warns)                half a wavelength of clearance
+    a structure near an absorber                   (warns)                half a wavelength of clearance,
+                                                                          or a layer through a PML
+                                                                          matched to its material
     a complex permittivity                         Material(4+0.1j)       Conductor, Dispersive, eps_at
     a shape that is not a layer                    two axes, radius=...   Slab with one axis
     the pole CFL                                   dt past the bound      a lower courant
@@ -228,6 +230,46 @@ def test_a_structure_close_to_an_absorbing_face_warns_and_half_a_wavelength_is_q
     with warnings.catch_warnings():
         warnings.simplefilter('error', fd.AbsorberProximityWarning)
         assert fd.plan(scene(structures=(far,))).spans
+
+
+def test_a_layer_through_a_pml_matched_to_its_own_material_is_quiet_and_only_that_one():
+    """The note's premise is a layer matched to something other than the structure.
+
+    A glass half-space running out through the ``z-`` layer warns under the vacuum-matched PML,
+    gap negative. Under ``PML(background=glass)`` the stretch is matched to this very layer and
+    there is no interface in front of it to keep clear, so it is quiet -- which is what the
+    public module's continued substrate lowers to. Still warned about under that matched PML: a
+    glass slab stopping short of the face (vacuum between, which the layer is not matched to),
+    a different medium running through it, and a glass column running through it (not a layer:
+    vacuum beside it in the layer too).
+    """
+    glass = fd.Material(eps=2.25)
+    halfspace = fd.Structure(fd.Slab(z=(-1.0, -0.2)), glass)
+
+    def matched(background):
+        return fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(),
+                             z=fd.PML(cells=12, wavelength=1.0, background=background))
+
+    def proximity(**changes):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            fd.plan(scene(**changes))
+        return [str(w.message) for w in caught
+                if issubclass(w.category, fd.AbsorberProximityWarning)]
+
+    (vacuum,) = proximity(structures=(halfspace,))
+    assert vacuum.startswith("structures[0] is -0.6 from the inner face of the absorber on 'z-'")
+    for background in (fd.Material(eps=2.25), 2.25, fd.Material(eps=(2.25,) * 3, mu=1.0)):
+        assert proximity(structures=(halfspace,), boundaries=matched(background)) == []
+    near = fd.Structure(fd.Slab(z=(-0.35, -0.25)), glass)
+    (short,) = proximity(structures=(near,), boundaries=matched(glass))
+    assert short.startswith("structures[0] is 0.05 from the inner face of the absorber on 'z-'")
+    denser = fd.Structure(fd.Slab(z=(-1.0, -0.2)), fd.Material(eps=4.0))
+    (other,) = proximity(structures=(denser,), boundaries=matched(glass))
+    assert other.startswith("structures[0] is -0.6 from the inner face of the absorber on 'z-'")
+    column = fd.Structure(fd.Region(size=(0.4, 1.0, 1.0), center=(0.0, 0.0, -0.6)), glass)
+    (beside,) = proximity(structures=(column,), boundaries=matched(glass))
+    assert beside.startswith("structures[0] is -0.6 from the inner face of the absorber on 'z-'")
 
 
 # ---------------------------------------------------------------------------------------------

@@ -282,7 +282,7 @@ emits them as Python warnings from `wavebit.fdtd.diagnostics`.
 | --- | --- |
 | `CoarseMeshWarning` | 8 to 12 cells per wavelength in a medium, or a smoothed body 4 to 8 cells across |
 | `SubpixelAccuracyWarning` | the scene has a smoothed body; the default rule's accuracy gate is incomplete |
-| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face. It is also emitted for a layer that continues into the absorber, such as a substrate, whose PML the public module matches to that layer. |
+| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face, whose PML is matched to the medium that reaches the face rather than to the structure's near field. A `Slab` that continues into the absorber, such as a substrate, does not warn: its PML is matched to it. |
 | `GeometryClippedWarning` | a structure reaches past a `PEC` or `PMC` wall and loses that part |
 | `UnsettledFieldWarning` | a monitored region still held field at the end; its spectrum includes the truncation — run longer |
 | `GrowingFieldWarning` | the field still grows after every source ended; a longer run makes it worse. Usually a bound mode next to a PML: set `PML(stabilize=...)` to the value the message quotes |

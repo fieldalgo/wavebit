@@ -24,8 +24,9 @@ The table, and where each row lives:
                                                   vacuum too -- but with sources the refusal is
                                                   check_wavelength_resolution's, which runs
                                                   before the rules that read the band
-    a structure within half a wavelength of      check_resolution, here (warns)
-      an absorbing face
+    a structure within half a wavelength of      check_resolution, here (warns); not a
+      an absorbing face                            layer running into a PML matched to its
+                                                   own material
     a wavelength a rule will read at < 8 cells   check_wavelength_resolution, here (stage 3):
       per wavelength in a material                 a Diffraction monitor's, and the band
     complex eps                                 materials._value
@@ -74,6 +75,7 @@ from wavebit.fdtd.diagnostics import CoarseMeshWarning
 from wavebit.fdtd.diagnostics import PMLStabilityWarning
 from wavebit.materials.time_domain import Conductor
 from wavebit.materials.time_domain import Dispersive
+from wavebit.materials.time_domain import Material
 from wavebit.materials.time_domain import concrete
 from wavebit.materials.time_domain import eps_at
 
@@ -2735,7 +2737,15 @@ def check_wavelength_resolution(scene, grid):
 
 
 def _proximity_notes(scene, plan):
-    """A structure within half a wavelength, in its own medium, of an absorbing face."""
+    """A structure within half a wavelength, in its own medium, of an absorbing face.
+
+    Not a layer across the face's own axis that runs into a ``PML`` matched to its own
+    material: a substrate ``wavebit.fdtd`` continues through the padding, whose face it
+    matches to that substrate, or a compat ``fd.PML(background=)`` naming the layer's
+    material. There the stretch *is* matched to this structure and there is no interface
+    in front of the layer to keep clear. The same layer under a PML matched to anything
+    else, or under an ``Absorber``, keeps its note.
+    """
     wavelength = _wavelength(scene, plan)
     if wavelength is None or not plan.absorbing_faces:
         return []
@@ -2773,7 +2783,7 @@ def _proximity_notes(scene, plan):
     from wavebit.fdtd._prepare.oscillator_stack import descriptor as oscillator_stack_descriptor
     from wavebit.fdtd._prepare.oscillator_stack import index_at as oscillator_stack_index_at
     resonant_stack = oscillator_stack_descriptor(scene, plan.grid)
-    out, grid = [], plan.grid
+    out, grid, pml = [], plan.grid, dict(plan.pml_cells)
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if resonant_stack is not None:
             n, _ = oscillator_stack_index_at(resonant_stack.films[index], wavelength)
@@ -2799,7 +2809,15 @@ def _proximity_notes(scene, plan):
                 # The ``layer_axis`` half keeps a layer *across this very axis* out of the
                 # skip even where its span happens to fill the box -- a scene that meant
                 # ``Scene(background=)``; stage 1 printed the note for it and C0 moves no
-                # number, so it still does.
+                # number, so it still does -- unless the PML is matched to it, below.
+                continue
+            if (name in pml and structure.shape.layer_axis() == fa
+                    and (k0 < cells if side == '-' else k1 > grid.n[fa] - cells)
+                    and _same_medium(structure.material, _matched_medium(scene, name))):
+                # A layer across this axis running into a PML whose stretch is matched to
+                # its own material: the half-space the public module continues through the
+                # padding. The note's premise -- a layer matched to something other than
+                # this structure -- is false there, and its gap would be negative.
                 continue
             lo = grid.low[fa] + k0 * grid.dx
             hi = grid.low[fa] + k1 * grid.dx
@@ -2815,6 +2833,27 @@ def _proximity_notes(scene, plan):
                             f'error at 0.5 against 8.81e-4 at 0.125), and the layer is '
                             f'matched to the background, not to this structure\'s near field'))
     return out
+
+
+def _matched_medium(scene, name):
+    """The medium the ``PML`` on face ``name`` is matched to (``params._cpml`` reads the same)."""
+    background = scene.boundaries.face(name).background
+    return _background(scene) if background is None else background
+
+
+def _same_medium(a, b):
+    """Whether ``a`` and ``b`` are one plain ``Material``, ``eps`` and ``mu`` entry by entry.
+
+    Read from concrete numbers only: a traced entry is not known to agree, so it answers
+    ``False`` and the note stays. ``mu=None`` and ``mu=1`` agree, as ``mu_value`` reads them.
+    """
+    if type(a) is not Material or type(b) is not Material:
+        return False
+    for x, y in zip(a.eps + a.mu_value, b.eps + b.mu_value):
+        cx, cy = concrete(x), concrete(y)
+        if cx is None or cy is None or cx != cy:
+            return False
+    return True
 
 
 def warn_all(scene, plan, lifted=None):
