@@ -51,7 +51,7 @@ import numpy as np
 import pytest
 
 import wavebit
-from tests.rcwa.test_forward_mode import GOLD, GRATING, GRATING_DIRECTION, JAX_ONLY, ONE_D, PATHS, PIXELS, RASTER, SQUARE, TWO_D, _close, _difference, _lift, _read_out, _weights, gold_disks, raster
+from tests.rcwa.test_forward_mode import GOLD, GRATING, GRATING_DIRECTION, JAX_ONLY, ONE_D, PATHS, PIXELS, RASTER, SQUARE, TWO_D, _close, _difference, _lift, _read_out, _weights, gold_disks, raster, shape
 
 torch = pytest.importorskip('torch')
 from torch.autograd import forward_ad  # noqa: E402
@@ -91,11 +91,18 @@ _OWN = {
     'conical, reported grating, wavelength': (reported_conical, 520.0, 1e-3),
     '2d Li, pixel eps': (raster('eps'), 0.0, 1e-4),
     'dielectric disks, floor idle, Re eps': (gold_disks('Re eps'), 4.0, 1e-4),
+    # The width moves the rectangle's normal field, sampled 1024 x 1024 by default. Under `vmap`
+    # with a backward pass that grid took one worker of the Linux CI runner (7.9 GB, two workers)
+    # from 2.3 to 6.1 GB in five seconds and the runner was shut down, three runs out of three
+    # (2026-10-14/15). Each test here compares a transform with eager on the same function, so
+    # 256 per axis asks the same question: 0.55 GiB and 1.0 s instead of 2.49 GiB and 6.8 s
+    # (macOS), its gradient within 1% of the 1024 one.
+    'shape, rectangle lx, grid 256': (shape('lx', shape_nvf_grid_size=256), 0.385, 1e-5),
 }
 SCENES = {name: PATHS[name] for name in (
     '1d TE, eps, ETM', '1d TM, theta, SMM', 'conical, eps, ETM', 'conical, mu, SMM',
     '2d Li, theta', '2d Laurent, pixel eps', 'tensor first-order, theta', 'shape, disc wavelength',
-    'shape, rectangle lx', 'excitation, eps', 'scattering matrix, pixel eps',
+    'excitation, eps', 'scattering matrix, pixel eps',
     'gold disks, floor binds, Re eps')}
 SCENES.update(_OWN)
 ALL = {**SCENES, **JAX_ONLY}
@@ -818,7 +825,7 @@ def test_a_sampled_tensor_shape_refuses_a_geometry_derivative_under_vmap(moved, 
     806661e4 the batched diameter or period read as constant to those checks and went on to
     PyTorch's "Cannot access data pointer of Tensor that doesn't have storage". (A rectangle's
     width under ``vmap``, which reaches the shape cache's key, is exact:
-    :func:`test_backward_through_vmap_is_the_eager_derivative` on ``shape, rectangle lx``.)"""
+    :func:`test_backward_through_vmap_is_the_eager_derivative` on ``shape, rectangle lx, grid 256``.)"""
     x = _t([270.0, 280.0] if moved == 'lx' else [600.0, 610.0]).requires_grad_(True)
     with pytest.raises(ValueError, match=words):
         func.vmap(lambda p: _sampled_tensor_disc(**{moved: p}).solve().R.real.sum())(x)
