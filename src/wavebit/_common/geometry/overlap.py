@@ -25,9 +25,11 @@ warns instead of silently building a different structure, and says how to procee
 
 Shapes are checked against each other's *periodic images* as well, because the layer is a unit
 cell: two rods that miss inside the cell can still meet across the boundary, and a rod wider
-than the period runs into itself. Touching is not overlapping, so the caller's tolerance is
-what keeps abutting rectangles — a checkerboard, a rod exactly filling the period — from
-being reported.
+than the period runs into itself. Every image the two shapes' extents can reach is a candidate
+(:func:`_window`), not a fixed ring of neighbours: a thin bar turned along a longer lattice
+vector clears all eight of its neighbours and still runs into the image that vector names.
+Touching is not overlapping, so the caller's tolerance is what keeps abutting rectangles — a
+checkerboard, a rod exactly filling the period — from being reported.
 
 **Touching is the second question this module answers**, and it is asked of *faces* rather
 than of shapes. Two boxes that abut -- a shape against its own periodic image, or against
@@ -43,8 +45,9 @@ with the sweep, which is what makes it an oracle rather than a second copy.
 convex (2026-10-15). :func:`polygon_intersection` measures the intersection of two outlines --
 its area and its boundary length, exactly, by Green's theorem -- and
 :func:`overlapping_outlines` turns that into the depth this module's tolerance is stated in, over
-every periodic image whose bounding box can reach rather than a fixed ring. Any pair a polygon is
-in is swept that way; a pair of primitives keeps the closed forms above.
+every periodic image whose bounding box can reach -- the window the primitive sweep enumerates
+too. Any pair a polygon is in is swept that way; a pair of primitives keeps the closed forms
+above, over the same images.
 """
 import math
 from collections import namedtuple
@@ -65,10 +68,16 @@ ELLIPSE = 'ellipse'
 _BOX_TYPES = ('rectangle', 'square')
 _ELLIPSE_TYPES = ('circle', 'disk', 'ellipse')
 
-# Periodic images of the second shape, in cells of the *reduced* basis (`reduced_basis`, which
-# every sweep here applies first): there a shape reaching past one cell on both sides at once
-# is already reported against its own image, so one ring is enough. On the basis as given it
-# was not -- `a2 = 10 a1 + (50, 700)` has its (50, 700) neighbour at (-10, 1).
+# Ring one of the periodic images, in cells of the *reduced* basis (`reduced_basis`, which every
+# sweep here applies first), in the order the primitive sweep tries it before any other. It was
+# the whole sweep until 2026-10-15, on the argument that on the reduced basis a shape reaching
+# past one cell on both sides at once is already reported against its own image. That holds for
+# a shape wide in both directions and not for a thin one turned along a longer lattice vector:
+# on the unit square a 0.05-wide bar along (2, 1), sqrt(5) + 0.3 long, clears all eight
+# neighbours by 0.397 and overlaps its (2, 1) image across its whole width, and it was built as
+# if it did not. The sweep now reads every image the shapes' extents reach (`_window`); reducing
+# the basis is what keeps that window small -- on the basis as given, `a2 = 10 a1 + (50, 700)`
+# has its (50, 700) neighbour at (-10, 1).
 _IMAGES = tuple((ox, oy) for ox in (-1, 0, 1) for oy in (-1, 0, 1))
 
 #: The four faces of a box in the order every reader of a face index uses: outward normal
@@ -261,6 +270,54 @@ def _shifted(p, dx, dy):
     return (p[0], p[1] + dx, p[2] + dy, p[3], p[4], p[5], p[6])
 
 
+def _fractional_extent(p, w1, w2):
+    """``(lo1, hi1, lo2, hi2)``: how far ``p`` reaches in fractional coordinates, exactly.
+
+    ``w1`` and ``w2`` are the rows of ``A^-1``, so a point's coordinates are ``f_k = w_k . x``,
+    and a convex shape spans ``w_k . c +- r(w_k)`` along each -- ``r`` its support radius,
+    which is positively homogeneous, so :func:`_support_radius` handed a row of any length
+    reads the reach in cells. For a box that is the extent of its four corners, which is what
+    :func:`outline_images` reads off an outline; for an ellipse it is the curve's own.
+    """
+    f1 = w1[0] * p[1] + w1[1] * p[2]
+    f2 = w2[0] * p[1] + w2[1] * p[2]
+    r1, r2 = _support_radius(p, *w1), _support_radius(p, *w2)
+    return (f1 - r1, f1 + r1, f2 - r2, f2 + r2)
+
+
+def _window(p, q):
+    """``(m0, m1, n0, n1)``: the lattice offsets at which ``q + m a1 + n a2`` can meet ``p``.
+
+    ``p`` and ``q`` are extents in fractional coordinates, ``(lo1, hi1, lo2, hi2)``, and an
+    image moves ``q``'s by exactly ``(m, n)`` -- so it can reach ``p`` only where the two
+    overlap on both axes, which bounds the candidates for shapes of any size and outline. Both
+    sweeps here enumerate it (:func:`overlapping_pairs`, :func:`outline_images`). Empty when
+    ``m0 > m1`` or ``n0 > n1``. A candidate whose extent only touches is kept, by ``1e-9`` of
+    a cell, and the gap decides it.
+    """
+    return (math.ceil(p[0] - q[1] - 1e-9), math.floor(p[1] - q[0] + 1e-9),
+            math.ceil(p[2] - q[3] - 1e-9), math.floor(p[3] - q[2] + 1e-9))
+
+
+def _window_offsets(m0, m1, n0, n1):
+    """The window's offsets, nearest ring first: ring one in :data:`_IMAGES` order, then outward.
+
+    The sweep keeps the first image that overlaps, so this order is what a refusal names. Ring
+    one comes in the order it always had -- ``(0, 0)`` its fifth entry -- so every pair it
+    caught is reported as it was; the rings past it follow, lexicographic within each, and are
+    generated only as far as the sweep reads, so a long shape caught on ring one costs nothing
+    more.
+    """
+    for m, n in _IMAGES:
+        if m0 <= m <= m1 and n0 <= n <= n1:
+            yield m, n
+    for r in range(2, max(-m0, m1, -n0, n1) + 1):
+        for m in range(max(m0, -r), min(m1, r) + 1):
+            for n in (range(max(n0, -r), min(n1, r) + 1) if abs(m) == r else (-r, r)):
+                if n0 <= n <= n1:
+                    yield m, n
+
+
 def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False):
     """Every pair of primitives that interpenetrates by more than ``tol``.
 
@@ -270,8 +327,10 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
     the first image that overlaps is enough to say the layer is ambiguous.
 
     ``self_only`` drops the cross terms and reports just the ``i == j`` entries, turning the
-    sweep from quadratic into linear: 17 ms to 0.3 ms on a 144-shape layer, paid on every
-    rebuild of a fit. It was the whole question the removed block path's painting check asked.
+    sweep from quadratic into linear: 17 ms to 0.3 ms on a 144-shape layer while every pair
+    tested its eight neighbours, and 1.6 ms to 0.16 ms since the window drops most pairs
+    untested (a 12 x 12 grid of rectangles and circles), paid on every rebuild of a fit. It was
+    the whole question the removed block path's painting check asked.
 
     ``image_only`` drops the in-cell offset for *every* pair, so a hit means the layer needs a
     periodic image and not merely an overlap. That is the question the shape paths ask before
@@ -290,17 +349,29 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
     filling the period both come out at a gap of zero, and they are the same structure
     whether the layer superposes or paints.
 
-    Bounding circles reject a pair before :func:`signed_gap` sees it. That is not just an
-    optimisation on paper: most of the work here is the eight periodic images of every pair,
-    which are far apart by construction, and the direction search is a thousand evaluations
-    of Python arithmetic. The bound is one-sided — the true gap is never smaller than the
-    circles' — so rejecting on it can only skip a pair that was never going to be reported.
+    Two bounds reject candidates before :func:`signed_gap` sees them, and both are one-sided
+    -- the true gap is never smaller than either says -- so rejecting on them can only skip an
+    image that was never going to be reported. The window (:func:`_window`) rejects whole
+    pairs: two shapes whose extents miss each other modulo the lattice have no image to test,
+    which on a many-shape layer is most pairs. Bounding circles reject single images. Neither
+    is an optimisation on paper only: the direction search is a thousand evaluations of Python
+    arithmetic.
 
-    The images are the 3x3 of the **reduced** basis (:func:`~wavebit.lattice.reduced_basis`),
-    whatever spelling arrives: on ``a2 = 10 a1 + (50, 700)`` the neighbour that matters sits
-    at ``(-10, 1)`` of the basis as given, which a 3x3 on that basis never reaches, and a
-    100 x 800 box on that cell -- which overlaps its ``(50, 700)`` image over a 50 x 100
-    patch -- was accepted. ``image_*`` in the result count cells of the reduced basis too.
+    The images are every one the window holds, nearest ring first (:func:`_window_offsets`):
+    ring one in :data:`_IMAGES` order, which was the whole sweep until 2026-10-15 -- so every
+    pair it caught is reported as it was -- and then outward. One ring is not enough for a
+    thin shape turned along a longer lattice vector. On the unit square a 0.05-wide bar along
+    ``(2, 1)``, ``sqrt(5) + 0.3`` long, clears its eight neighbours by 0.397 and overlaps its
+    ``(2, 1)`` image across its whole width, and it was built; two such bars both centred in
+    the cell can likewise meet through ``(2, 1)`` alone. The same outline given as a polygon
+    was refused all along, by :func:`overlapping_outlines`, which enumerates the window too.
+
+    The window is counted on the **reduced** basis (:func:`~wavebit.lattice.reduced_basis`),
+    whatever spelling arrives, which is what keeps it small: on ``a2 = 10 a1 + (50, 700)`` the
+    neighbour that matters sits at ``(-10, 1)`` of the basis as given, and a 100 x 800 box on
+    that cell -- which overlaps its ``(50, 700)`` image over a 50 x 100 patch -- was accepted
+    while the sweep was a 3x3 on that basis. ``image_*`` in the result count cells of the
+    reduced basis too.
     """
     # The basis is read once, not per image: it is loop-invariant, and it is read the way the
     # shapes are, because `lattice` is a design variable too (2026-08-23). Spelled `float` it
@@ -311,9 +382,12 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
     lattice = reduced_basis(lattice)
     a1x, a2x = checked_float(lattice[0][0]), checked_float(lattice[0][1])
     a1y, a2y = checked_float(lattice[1][0]), checked_float(lattice[1][1])
+    det = a1x * a2y - a2x * a1y
+    w1, w2 = (a2y / det, -a2x / det), (-a1y / det, a1x / det)       # the rows of A^-1
 
     found = []
     radii = [None if p is None else _bounding_radius(p) for p in prims]
+    extents = [None if p is None else _fractional_extent(p, w1, w2) for p in prims]
     for i, p in enumerate(prims):
         if p is None:
             continue
@@ -321,8 +395,11 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
             q = prims[j]
             if q is None:
                 continue
+            m0, m1, n0, n1 = _window(extents[i], extents[j])
+            if m0 > m1 or n0 > n1:
+                continue                          # no image of `q` comes near `p`
             reach = radii[i] + radii[j]
-            for ox, oy in _IMAGES:
+            for ox, oy in _window_offsets(m0, m1, n0, n1):
                 if (ox, oy) == (0, 0) and (i == j or image_only):
                     continue                      # a shape always overlaps itself
                 # Images sit on the lattice, not on a rectangle: a skewed cell's neighbour
@@ -441,16 +518,20 @@ def polygon_intersection(P, Q, eps):
 def outline_images(P, Q, basis):
     """Every lattice offset ``(m, n)`` at which ``Q + m a1 + n a2`` can meet ``P``.
 
-    Bounded by the two outlines' extents in fractional coordinates, so it is complete for
-    outlines of any size and shape -- unlike a fixed ring, which on the reduced basis is enough
-    for a convex shape inside its cell and not for a long one threading between its images. A
-    candidate whose bounding box only touches is kept: the intersection decides it.
+    The window (:func:`_window`) of the two outlines' extents in fractional coordinates, so it
+    is complete for outlines of any size and shape -- unlike a fixed ring, which is enough for
+    shapes inside their cell and not for a long one, convex or threading between its images
+    (:data:`_IMAGES`). A candidate whose bounding box only touches is kept: the intersection
+    decides it.
     """
     inv = np.linalg.inv(basis)
-    fp, fq = P @ inv.T, Q @ inv.T
-    lo = np.ceil(fp.min(axis=0) - fq.max(axis=0) - 1e-9).astype(int)
-    hi = np.floor(fp.max(axis=0) - fq.min(axis=0) + 1e-9).astype(int)
-    return [(m, n) for m in range(lo[0], hi[0] + 1) for n in range(lo[1], hi[1] + 1)]
+    extents = []
+    for V in (P, Q):
+        F = V @ inv.T
+        (lo1, lo2), (hi1, hi2) = F.min(axis=0), F.max(axis=0)
+        extents.append((lo1, hi1, lo2, hi2))
+    m0, m1, n0, n1 = _window(*extents)
+    return [(m, n) for m in range(m0, m1 + 1) for n in range(n0, n1 + 1)]
 
 
 def overlapping_outlines(outlines, slack, tol, lattice, pairs):

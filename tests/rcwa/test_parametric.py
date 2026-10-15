@@ -1798,6 +1798,106 @@ def test_longer_than_the_period_is_not_the_same_as_running_into_its_own_image():
             _legacy_wavebit_rcwa(structure=rod(277.0, ang), **cfg).solve()
 
 
+#: Along the lattice vector (2, 1) of the unit square, which is sqrt(5) long: the bar's own
+#: (2, 1) image lies on its axis, and every image of ring one is 1/sqrt(5) = 0.447 off it.
+_ALONG_2_1 = float(np.arctan2(1.0, 2.0))
+#: Along (2, 1) - (0.9, 0.4) = (1.1, 0.6), for two bars centred (0.9, 0.4) apart in the cell.
+_SIDE_BY_SIDE = float(np.arctan2(0.6, 1.1))
+_BARS_SPAN_THE_CORNER = ' across the x and y period boundary'
+
+
+def _thin_bars(bars, polygon):
+    """Solve a unit-square layer of 0.05-wide bars ``(length, angle, centre)``, as either door."""
+    from wavebit import Material, rcwa
+    from wavebit._common.geometry.polygon import rect_verts
+    regions = []
+    for length, angle, (cx, cy) in bars:
+        if polygon:
+            geometry = rcwa.Polygon(vertices=np.asarray(rect_verts(np, cx, cy, length, .05, angle)))
+        else:
+            geometry = rcwa.Rectangle(size=(length, .05), angle=angle, center=(cx, cy))
+        regions.append(rcwa.Region(geometry=geometry, material=Material(6.25)))
+    layer = rcwa.Layer(thickness=.4, background=Material(1.), regions=tuple(regions))
+    stack = rcwa.Stack(layers=(layer,), bottom=Material(2.25), period=(1., 1.))
+    problem = rcwa.Problem(stack=stack, excitation=rcwa.Excitation(wavelength=1.3, sources=(
+        rcwa.PlaneWave(theta=.35, phi=.6, polarization='s'),)))
+    return rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 2), factorization='laurent'))
+
+
+def _conserves_energy(result):
+    return abs(float(np.sum(np.asarray(result.R)) + np.sum(np.asarray(result.T))) - 1.0) < 1e-12
+
+
+@pytest.mark.parametrize('polygon', [False, True], ids=['rectangle', 'polygon'])
+def test_a_thin_bar_runs_into_an_image_ring_one_never_reaches(polygon):
+    """A bar along a longer lattice vector clears its eight neighbours and meets the image it names.
+
+    On the unit square a 0.05-wide bar along ``(2, 1)`` clears every image of ring one by 0.397,
+    whatever its length, while its own ``(2, 1)`` image sits on its axis ``sqrt(5)`` along it.
+    Longer than ``sqrt(5)`` the two overlap across the bar's whole width, and the closed form
+    -- one sinc per shape -- counts the overlap twice:
+
+    ===================  =====================================  ========
+    length               primitive sweep until 2026-10-15       now
+    ===================  =====================================  ========
+    ``sqrt(5) - 0.3``    built                                  built
+    ``sqrt(5)``          built (touching its image)             built
+    ``sqrt(5) + 0.3``    **built**, ``sum(T)`` 0.98153 here     refused
+    ===================  =====================================  ========
+
+    The primitive sweep tried ring one alone, on the argument that on a reduced basis a shape
+    reaching past one cell is already reported against its own image -- true of a shape wide
+    in both directions, not of a thin one. The same outline as a polygon was refused all
+    along, its sweep reading every image whose extent can reach; both doors now read that
+    window, and refuse in their own words.
+    """
+    from wavebit._common.geometry.overlap import (_IMAGES, _shifted, overlapping_pairs,
+                                                   primitive, signed_gap)
+    bar = primitive('rectangle', 0.0, 0.0, np.sqrt(5) + 0.3, 0.05, _ALONG_2_1)
+    ring_one = [signed_gap(bar, _shifted(bar, m, n)) for m, n in _IMAGES if (m, n) != (0, 0)]
+    assert min(ring_one) == pytest.approx(1 / np.sqrt(5) - 0.05, abs=1e-12)
+    assert signed_gap(bar, _shifted(bar, 2.0, 1.0)) == pytest.approx(-0.05, abs=1e-12)
+    assert overlapping_pairs([bar], 1e-6, ((1.0, 0.0), (0.0, 1.0)), image_only=True) \
+        == [(0, 0, -2, -1, pytest.approx(-0.05, abs=1e-12))]
+
+    for length in (np.sqrt(5) - 0.3, np.sqrt(5)):
+        assert _conserves_energy(_thin_bars([(length, _ALONG_2_1, (0.0, 0.0))], polygon))
+    says = ('shape 0 (polygon) runs into its own periodic image' if polygon else
+            'shape 0 (rectangle) is larger than the period and runs into its own image')
+    with pytest.raises(ValueError) as refusal:
+        _thin_bars([(np.sqrt(5) + 0.3, _ALONG_2_1, (0.0, 0.0))], polygon)
+    assert says + _BARS_SPAN_THE_CORNER in str(refusal.value), str(refusal.value)
+
+
+@pytest.mark.parametrize('polygon', [False, True], ids=['rectangles', 'polygons'])
+def test_two_bars_centred_in_the_cell_meet_only_through_an_image_beyond_ring_one(polygon):
+    """The pair form of the same hole: it is not about a centre leaving the cell.
+
+    Two bars side by side along ``(1.1, 0.6)``, centred at ``(0.45, 0.2)`` and ``(-0.45,
+    -0.2)``, are 0.0298 clear of each other in the cell and of every ring-one image of each
+    other. Bar 1's ``(2, 1)`` image lands on bar 0's own axis, 1.253 along it, so 1.4-long bars
+    overlap over 0.147 of their length there -- through the cell's corner, and nowhere else --
+    and 1.2-long ones miss by 0.053. Until 2026-10-15 the primitive sweep built both.
+    """
+    from wavebit._common.geometry.overlap import (_IMAGES, _shifted, overlapping_pairs,
+                                                   primitive, signed_gap)
+    pair = [primitive('rectangle', 0.45, 0.2, 1.4, 0.05, _SIDE_BY_SIDE),
+            primitive('rectangle', -0.45, -0.2, 1.4, 0.05, _SIDE_BY_SIDE)]
+    assert min(signed_gap(pair[0], _shifted(pair[1], m, n)) for m, n in _IMAGES) \
+        == pytest.approx(0.0298, abs=1e-4)
+    assert overlapping_pairs(pair, 1e-6, ((1.0, 0.0), (0.0, 1.0)), image_only=True) \
+        == [(0, 1, 2, 1, pytest.approx(-0.05, abs=1e-12))]
+
+    bars = lambda length: [(length, _SIDE_BY_SIDE, (0.45, 0.2)),
+                           (length, _SIDE_BY_SIDE, (-0.45, -0.2))]
+    assert _conserves_energy(_thin_bars(bars(1.2), polygon))
+    kind = 'polygon' if polygon else 'rectangle'
+    with pytest.raises(ValueError) as refusal:
+        _thin_bars(bars(1.4), polygon)
+    assert (f'shapes 0 ({kind}) and 1 ({kind}) overlap only' + _BARS_SPAN_THE_CORNER
+            in str(refusal.value)), str(refusal.value)
+
+
 def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     """A negative length does not make a smaller shape. It makes a subtracted one.
 
