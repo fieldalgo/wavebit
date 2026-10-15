@@ -134,7 +134,8 @@ their numbers under the new keys would paint a different structure. See
 Shapes are in painting order — a later shape covers an earlier one. `rectangle`, `square`,
 `circle`, `disk` and `ellipse` are accepted; the curved ones are polygonised at
 `boundary.POLYGON_VERTICES` (256), which converges on the true shape at `O(1/n^2)` and puts that
-error far below the normal field's.
+error far below the normal field's. So is a `polygon`, given by its vertices -- see
+[Polygon regions](#polygon-regions).
 
 **Routing is on the overlap, and nothing else says it.** While no two shapes intersect,
 painting and adding describe the same structure, so the layer stays on the closed-form parametric
@@ -197,6 +198,17 @@ res = solver.solve(geometry=solver.freeze_geometry())
 
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
 normal field to the convolution matrices, and matches finite differences to 2.3e-08.
+
+**That agreement is pointwise, and pointwise is the one comparison that cannot fail here.** The
+normal field is sampled, and the nearest-interface direction jumps across the medial axis, so as
+a shape moves the solve changes by small steps as well as smoothly; a difference step smaller
+than a pixel stays inside one smooth piece and agrees with autodiff by construction. Integrated
+across a window several pixels wide, autodiff misses the steps' share of the change: measured
+2026-10-15 on one rotated rectangle painted under a second shape, 17% of the change across a
+four-pixel window, the same at `shape_nvf_grid_size` 64 and 256 -- a missing term, not a grid
+error. The closed-form route's blended field has no such steps (a lone rectangle closes the same
+window to 5e-4), and Laurent's rule builds no field at all, so its painted-layer derivative is
+exact. See [Polygon regions](#polygon-regions) for the measurement on outlines.
 
 ### It carried a position gradient the parametric path could not — and no longer does
 
@@ -449,6 +461,78 @@ cells so harmless length changes do not invalidate an unchanged overlap. Crossin
 bound, changing periodic contact, or changing the recorded reduced basis still requires a new
 freeze. Under JIT there is no concrete geometry to check, so callers must recheck eagerly
 between traced steps.
+
+## Polygon regions
+
+`rcwa.Polygon(vertices=...)`, or `dict(type='polygon', vertices=..., material=...)` on the
+compatibility interface: an outline given by its vertices, `(x, y)` pairs measured from the cell
+centre as `cx` / `cy` are, in order around the boundary. Added 2026-10-15; until then the
+declaration was refused, because no route built it.
+
+**A layer holding a polygon is always resolved here**, whatever it overlaps.
+`parametric.layer_needs_resolving` answers it from the shape's *type*, so the routing needs no
+value and is the same eager, under `grad` and under `jit`. The closed form has no normal field
+for an outline: its field is built per primitive, face by face and arc by arc. A lone polygon's
+plan is the trivial one-loop painting, and every reader of a primitive's
+`(cx, cy, lx, ly, angle)` refuses a polygon by name (`recipes.shape_geometry`) rather than reading
+its defaults as a zero-size box.
+
+**Either winding is the same region, bit for bit.** The clipper reads each outline's winding on
+concrete values and walks a clockwise one backwards (`clipper.resolve_painting`); what the plan
+records is an index order, so a traced outline replays in the order it was planned on and nothing
+downstream branches on the sign of an area. Taken as given, a clockwise outline would be its own
+hole -- which is what S4 does: its `SetRegionPolygon` solved a clockwise rectangle at `sum(T)`
+0.859 against the 0.974 of the same list counter-clockwise, without a word.
+
+**The outline must be simple**: at least three finite vertices, no zero-length edge, no edge
+doubling back, no two edges crossing or touching, and an area. A bow tie would be integrated with
+winding numbers of both signs, its lobes cancelling. Checked at the declaration when the values
+are concrete (`ValidationError`, codes `shape.vertices` and `shape.outline`), and again in
+`check_layer_shapes`, which a traced declaration reaches when it is prepared on values.
+
+**Periodic images are judged on the outline, not on its hull.** The clipper works in unwrapped
+coordinates, so an outline reaching into a copy of itself, or into another region's copy, would be
+double-counted. For a pair involving a polygon, `overlap.overlapping_outlines` measures the exact
+intersection with every image whose bounding box can reach -- its area and boundary length by
+Green's theorem, so `2 * area / length` is a depth held to the same `1e-6` of the period the
+primitives' separating-axis test uses. A curved partner is taken as the 256-gon this route builds,
+with a slack of its corners' stand-off (5.0e-5 of the semi-axis) so that touching the true curve is
+not refused. Measured on the cases `tests/rcwa/test_polygon_region.py` holds: a Z 1.2 periods wide
+whose arms run into the notches of its neighbours is built (its bounding box and hull both
+overlap their images); a U whose arm reaches 0.05 into its own image's, and an L 1e-4 past the
+period, are refused; the same L exactly spanning the period, or 1e-9 past it, is built.
+
+**Not built for a polygon**, each refused by name: `factorization='li'` (axis-aligned rectangles
+only), `nvf_projector='circular'` (it corrects the primitives' analytic extension near a curve),
+tensor materials, the conforming research paths, and the parametric periodic FDTD scene.
+
+What it has been checked against:
+
+| check | result |
+| --- | --- |
+| S4 `SetRegionPolygon`, direct rule, matched orders, against `factorization='laurent'`: a triangle, an L, an L across the cell edge, the wide Z, an L with a hole and with an inclusion painted inside it, an L on a sheared cell; every order, s and p, orders 3 and 6 | **identity**, 5.8e-13 at worst (`tests/references/test_s4_polygon_golden.py`) |
+| a rotated rectangle written as its four corners, against `rcwa.Rectangle`, Laurent | 5.5e-14 per order at orders (4, 4), 1.5e-13 at (8, 8) |
+| the same, this route's five matrices from a rectangle dict and from its corners, NVF | to 1e-14 |
+| the same, default NVF: corners on this route, the rectangle on the closed form | 7.1e-3 at orders (4, 4), 4.8e-4 at (8, 8): two normal fields, one limit |
+| an axis-aligned L at normal incidence, NVF, against an exact-pixel raster under Li's rule (converged: 0.4509 / 0.4511 at orders 12 / 16) | 0.4509, 0.4508 and 0.4507 at orders 4, 8 and 12, with excursions to 0.436 between; Laurent is still at 0.504 at order 12 |
+
+**The vertex derivative is exact under Laurent's rule** -- every coordinate of the L matched a
+central difference to 6e-9 against derivatives up to 7e-2, and integrated across a window the
+derivative closes on the change to the quadrature's 1.5e-4. **Under NVF it is not**, for the
+reason the [differentiability section](#differentiability) gives: integrated across a four-pixel
+window on a tilted L, it misses 9.4-11% of the change at orders (3, 3) for `shape_nvf_grid_size`
+64, 128, 256 and 512 alike, 6.8% at (6, 6) and 2.8% at (9, 9). The rectangle written as corners
+misses 26%. `test_under_nvf_the_vertex_derivative_integrates_to_the_change` holds this as a
+strict xfail, so a fix to the field is told when it lands.
+
+**An axis-aligned edge is a knife edge for a frozen plan.** The interface planner rounds each
+segment's fractional extent outward to whole cells, and an axis-aligned edge's extent across its
+axis is exactly zero, so the first move that tilts one changes the recorded image bounds: the
+replay is refused (`StaleGeometryError`; `prepared.topology` through the lifecycle) although
+nothing touches. Translating the outline, or moving an axis-aligned face along its normal,
+replays. It refuses rather than answers, and the primitives share it -- a painted rectangle
+turned off zero angle re-plans the same way -- but an optimiser moving the vertices of an
+axis-aligned design re-prepares on its first step.
 
 ## Two properties worth knowing before you trust a number
 

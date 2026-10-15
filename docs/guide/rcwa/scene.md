@@ -12,7 +12,7 @@ stack = rcwa.Stack(period=(.6, .6), layers=(layer,),
                    top=Material(epsilon=1.), bottom=Material(epsilon=2.25))
 ```
 
-Lengths use the enclosing problem's `Units`. `Circle` takes a radius, `Ellipse` principal radii, and `Rectangle` full widths. Shape rotations are radians. A raster layer instead takes sampled `epsilon` and optional `mu`; it cannot simultaneously declare a background and analytic regions. A rectangular cell uses `period=(Lx,Ly)`; an oblique cell uses `lattice`, with lattice vectors as columns. Do not provide both.
+Lengths use the enclosing problem's `Units`. `Circle` takes a radius, `Ellipse` principal radii, and `Rectangle` full widths. Shape rotations are radians. `Polygon` takes its `vertices`: `(x, y)` pairs measured from the centre of the cell, in order around the boundary, either way round. The outline must be simple, without crossing or touching itself, and enclose an area. It may reach past the cell edge, but not into a periodic copy of itself or of another region. A raster layer instead takes sampled `epsilon` and optional `mu`; it cannot simultaneously declare a background and analytic regions. A rectangular cell uses `period=(Lx,Ly)`; an oblique cell uses `lattice`, with lattice vectors as columns. Do not provide both.
 
 The [complete quickstart](../../getting-started/rcwa.md) connects this geometry to sources and execution. The detailed modeling examples below preserve the earlier explicit compatibility interface.
 
@@ -65,7 +65,7 @@ decided per layer, not per solver, so one `structure` can hold layers of both ki
 flowchart TD
     S["structure"] --> T{"what type?"}
     T -->|ndarray| R["<b>raster</b><br/>one permittivity per pixel"]
-    T -->|list of dict| A{"shapes intersect<br/>in this layer?"}
+    T -->|list of dict| A{"shapes intersect,<br/>or a polygon, in this layer?"}
     A -->|no| P["<b>parametric</b><br/>each shape's transform, added"]
     A -->|yes| B["<b>parametric</b>, overlap resolved<br/>into polygons, then transformed"]
 ```
@@ -88,6 +88,11 @@ structure = [dict(background=1.0, shapes=[
     dict(type='circle', cx=0., cy=0., lx=200., material=12.25),
 ])]
 ```
+
+A polygon is `dict(type='polygon', vertices=..., material=...)`, its vertices in the same frame as
+`cx` / `cy`. It takes no `cx`, `lx` or `angle`: the vertices place, size and turn it, and a key
+beside them would be dropped, so it is refused. A layer holding a polygon is always resolved into
+disjoint polygons, whatever it overlaps -- the closed-form transforms are written per primitive.
 
 A shape wider than the period is refused: its transform is a single sinc, which is not the
 transform of any periodic indicator, so the layer would not be the structure its parameters

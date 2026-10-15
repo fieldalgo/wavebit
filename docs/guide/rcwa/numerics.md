@@ -60,7 +60,8 @@ reports the *effective* value rather than what you asked.
 Shape integration applies to both isotropic and anisotropic materials.
 Disjoint circles, ellipses and rectangles use analytic region Fourier
 coefficients. Painting resolves overlaps into polygon regions; curved overlaps
-use polygon approximations. For a scalar raster, integrated coefficients describe
+use polygon approximations. A layer holding a `Polygon` is always resolved this way,
+with scalar materials only. For a scalar raster, integrated coefficients describe
 the supplied piecewise-constant pixels, not a reconstructed smooth boundary.
 
 Explicit scalar or tensor shape
@@ -79,7 +80,8 @@ projector. Tensor inputs retain NVF as the default. See
 **`raster_normal_method` selects a raster normal field** under `factorization='nvf'`.
 On that path, `nvf_projector` composes with all four field constructions. Shape NVF
 also accepts `nvf_projector='linear'` or `'circular'`: the circular shape construction
-supports rectangles, circles, ellipses and their polygon-resolved painting.
+supports rectangles, circles, ellipses and their polygon-resolved painting, and refuses a
+`Polygon`.
 For disjoint shapes with complex material inputs, the default piece field carries
 the phase of material differences and uses a Hermitian projector. Its phase cancels
 on each interface. Real material inputs keep real arithmetic; this does not select

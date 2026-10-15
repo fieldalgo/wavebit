@@ -18,12 +18,14 @@ Through `rcwa.prepare(...)` and `prepared.run(problem)`, the backends do not adm
 | Wavelength | supported | supported |
 | Layer thickness | supported | supported |
 | Raster permittivity values | supported | supported; see [held raster preparations](#a-held-raster-preparation-under-jit) |
-| Region geometry, such as `Circle.radius`, `Rectangle.size` or `Rectangle.angle` | supported | **refused** for every geometry field: `UnsupportedFeatureError`, code `prepared.host_topology` |
+| Region geometry, such as `Circle.radius`, `Rectangle.size`, `Rectangle.angle` or `Polygon.vertices` | supported | **refused** for every geometry field: `UnsupportedFeatureError`, code `prepared.host_topology` |
 | The cell, `Stack.period` | supported when the period is one tensor | **refused**: `prepared.host_topology`, as for `Stack.lattice` |
 
 Each supported entry was compared with a central difference on one example, with relative agreement between 2e-9 and 2e-7. The PyTorch geometry entries checked were a circle radius (4.6e-9), a rectangle width (1.8e-8) and a rectangle angle (1.3e-7); the raster entries used `('sampled', 'li')`. On PyTorch, pass a differentiated period as one tensor, for example `torch.stack([px, py])`. A tuple holding a gradient-tracking tensor currently fails with a bare `RuntimeError` from NumPy conversion.
 
 So, through this lifecycle, the derivative from geometry to diffraction efficiency is a PyTorch derivative. The JAX refusal applies to `jax.grad` alone as well as under `jax.jit`.
+
+`Polygon.vertices` differentiates as an `(N, 2)` tensor or as `N` pairs of scalars; prepare with the spelling you run with, since the two are different layouts. Its derivative is exact under `factorization='laurent'`. Under the default NVF it is not: the painting route's normal field jumps across its medial axis, and autodiff misses the jumps' share of the change -- 10% across a four-pixel window at `orders=(3, 3)` on an L-shaped outline, 3% at `(9, 9)`, whatever `shape_nvf_grid_size`, and the same holds for any region painted over another. See [polygon regions](../rcwa/boundary-modeling.md#polygon-regions).
 
 ### Why JAX-traced geometry is refused
 
