@@ -678,3 +678,10 @@ built — it is the filled cell, and agrees with a uniform slab of the same mate
 exists for and is unaffected by where it sits. And the bound follows the shape, not its bounding
 box: a 400x40 bar at 45 degrees spans 311 across a 300 cell and still misses its own image in
 every direction, so it is built.
+
+The check reads every image a shape can reach, not only the eight around the cell. A thin bar
+along a longer lattice vector can clear all eight and still run into the image that vector
+names: on a unit square a 0.05-wide bar along `(2, 1)` that is longer than `sqrt(5)` overlaps its
+`(2, 1)` image across its whole width, and it is refused. Until 2026-10-15 the check read only the
+eight neighbours of a rectangle, circle or ellipse, so it built that bar; the polygon check has
+always read every image whose bounding box can reach, and both now use that same range.
