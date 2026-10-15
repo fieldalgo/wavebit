@@ -70,8 +70,9 @@ class Material:
     physical 3x3 tensor in the public xyz frame. Assign tensors to a layer
     background or shape and call ``solve()``; internal convolution signs are
     handled automatically. ``rotated(angle, axis)`` rotates material axes.
-    Uniform full epsilon tensors and in-plane tensor patterns are
-    supported. Patterned z coupling and anisotropic half-spaces are not.
+    Uniform full tensors, in-plane tensor patterns and patterned full tensors
+    (a filled z row, since 2026-09-24) are supported; anisotropic half-spaces
+    are not. ``wavebit.manifest.MATERIALS`` states each case and its limits.
 
     **Why permittivity rather than index.** Everything past the front door already works in
     permittivity -- the Fourier factorizations, the tensor builders and ``solve_conv`` all
@@ -85,8 +86,10 @@ class Material:
 
     The flip is not free and is not silent-safe: the same literal
     ``3.5`` read as an index gives ``R = 0.3086`` and read as a permittivity ``R = 0.0920``,
-    both energy-conserving, which is why the retired spellings are refused by name rather than
-    quietly accepted, and why ``tests/materials/test_material_convention_anchor.py`` pins the convention
+    both energy-conserving, which is why the retired index spellings (``ucell``, ``n_top=``,
+    ``n_bot=``) are refused -- as unknown keywords, since their by-name messages were deleted
+    on 2026-08-26 -- rather than quietly accepted, and why
+    ``tests/materials/test_material_convention_anchor.py`` pins the convention
     against closed-form Fresnel instead of against a regenerated golden.
 
     **Scalar shorthand.** Anywhere a material is accepted, a bare number means
