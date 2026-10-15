@@ -1,7 +1,7 @@
 # Periodic metasurfaces with the general FDTD engine
 
 :::{note}
-The grating cell on this page stands a smoothed pillar on a substrate that runs through the bottom PML, which the current `wavebit.fdtd` cannot declare yet, so its FDTD example uses the earlier interface, `wavebit.compat.legacy.fd`; the RCWA comparison uses the current `wavebit.rcwa`.
+The FDTD example on this page retains the normalized declarations used for its historical measurements, through `wavebit.compat.legacy.fd`; the RCWA comparison uses the current `wavebit.rcwa`. The current FDTD API now supports the fixed Box substrate through explicit `Structure.continuation`; see [smoothed substrates](substrate-gradients.md) for its physical units and declaration constraints. This page's measurements have not been rerun through that API.
 :::
 
 `fd` solves one cell of a periodic array under a plane wave at any angle and reads the
@@ -18,7 +18,7 @@ through it leaves in two orders, `(0, 0)` and `(-1, 0)`, and the share of the se
 across the band (60% of the incident s power at 0.95, 21% at 1.0, 13% at 1.05).
 
 ```python
-# Earlier interface: wavebit.fdtd cannot yet run a smoothed substrate through the PML.
+# Earlier normalized declarations retained with the measurements on this page.
 from wavebit.compat.legacy import fd
 
 N = 25                                    # cells per vacuum wavelength

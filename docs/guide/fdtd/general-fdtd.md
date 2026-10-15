@@ -41,3 +41,5 @@ Use `check` to inspect resolved settings and restrictions, `prepare` to establis
 ## Validation and earlier interfaces
 
 The [FDTD curriculum](../../learn/fdtd/index.md) links source normalization, absorber behavior, refinement, material and gradient checks. The [complete earlier general-engine manual](../../migration/general-fdtd-v1.md) preserves its detailed kernels and validated limitations through `wavebit.compat.legacy.fd`. The [periodic stack manual](time-domain.md) describes the separately retained compatibility entry point `wavebit.compat.legacy.fdtd`; it is not the new module's constructor.
+
+For a fixed, unturned Box substrate through an open boundary, declare `Structure(..., continuation=("z-",))`. A fixed absorber stretch reference is `PML(reference_media={"z-": Material(...)})`. See [substrate continuation and gradients](substrate-gradients.md) for physical-domain sizing, supported geometry and independent checks.

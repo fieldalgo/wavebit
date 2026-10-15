@@ -36,6 +36,43 @@ def _geometry(shape, reserved=None):
     return getattr(old_geometry, type(shape).__name__)(**fields)
 
 
+def _continue_box(item, shape, pad, physical_low, physical_high,
+                  allocated_low, allocated_high, dx):
+    """Extend only the explicitly declared homogeneous, fixed substrate faces."""
+    path = 'scene.structures.' + item.name
+    def refuse(message):
+        raise UnsupportedFeatureError(message, code='padding_continuation', path=path)
+    if not isinstance(shape, old_geometry.Box) or shape.angle != 0 or shape.range is not None:
+        refuse('continuation requires a fixed, unturned Box; ranged or curved bodies cannot continue into PML')
+    axes = {face[0] for face in item.continuation}
+    if len(axes) != 1:
+        refuse('a continued Box must be uniform along both directions transverse to one axis')
+    axis_name = next(iter(axes))
+    axis = 'xyz'.index(axis_name)
+    if any(n for face, n in pad.items() if face[0] != axis_name):
+        refuse('a substrate crossing an orthogonal Open face has no homogeneous PML continuation')
+    low, high = list(shape.low), list(shape.high)
+    for a in range(3):
+        if a != axis and not (low[a] < physical_low[a]-dx and high[a] > physical_high[a]+dx):
+            refuse('a continued Box must fill both transverse directions with more than one cell of clearance')
+    for face in item.continuation:
+        if not pad[face]:
+            refuse('continuation must name an Open face with PML padding')
+        edge = physical_low[axis] if face[1] == '-' else physical_high[axis]
+        if not low[axis] <= edge <= high[axis]:
+            refuse('the continued Box must reach the named physical face')
+        # Keep a smoothing halo outside the allocated grid, never an interface
+        # inside the PML. The other physical face remains exactly as declared.
+        if face[1] == '-':
+            low[axis] = min(low[axis], allocated_low[axis]-2*dx)
+        else:
+            high[axis] = max(high[axis], allocated_high[axis]+2*dx)
+    if tuple(low) == tuple(shape.low) and tuple(high) == tuple(shape.high):
+        return shape
+    return shape.replace(size=tuple(b-a for a,b in zip(low,high)),
+                         center=tuple((a+b)/2 for a,b in zip(low,high)))
+
+
 def _pulse(value, units):
     if not isinstance(value, sources.GaussianPulse):
         raise ValidationError('expected GaussianPulse', path='sources.pulse')
@@ -136,6 +173,11 @@ def lower_problem(problem, numerics):
     for item in scene.structures:
         material = lower_material(item.material, units=units)
         shape = _geometry(item.shape, numerics.geometry_ranges.get(item.name))
+        if item.continuation:
+            shape = _continue_box(item, shape, pad, physical_low, physical_high,
+                                  allocated_low, allocated_high, dx)
+            for face in item.continuation:
+                faces[face] = material
         if isinstance(shape, old_geometry.Slab):
             axis_name = shape.axis
             axis = 'xyz'.index(axis_name)
@@ -160,19 +202,28 @@ def lower_problem(problem, numerics):
             else:
                 lo, hi = shape.low, shape.high
             for a, axis in enumerate('xyz'):
-                if ((pad[axis+'-'] and _number(lo[a], 'scene.structures.'+item.name) <= physical_low[a]) or
-                    (pad[axis+'+'] and _number(hi[a], 'scene.structures.'+item.name) >= physical_high[a])):
+                if ((pad[axis+'-'] and axis+'-' not in item.continuation
+                     and _number(lo[a], 'scene.structures.'+item.name) <= physical_low[a]) or
+                    (pad[axis+'+'] and axis+'+' not in item.continuation
+                     and _number(hi[a], 'scene.structures.'+item.name) >= physical_high[a])):
                     raise UnsupportedFeatureError('a finite body touches an Open face; its continuation into padding is unspecified', code='padding_continuation', path='scene.structures.'+item.name)
         structures.append(old_geometry.Structure(shape, material,
                           discretisation=numerics.discretisation, junction=numerics.junction))
     converted = {}
+    invalid_references = set(numerics.absorber.reference_media)-{f for f,n in pad.items() if n}
+    if invalid_references:
+        raise ValidationError('PML reference_media must name Open faces with padding',
+                              path='numerics.absorber.reference_media', actual=sorted(invalid_references))
     for axis in 'xyz':
         pair=[]
         for sign in '-+':
             face=scene.boundaries.face(axis+sign)
             if isinstance(face,boundaries.Open):
-                opts=dataclasses.asdict(numerics.absorber)
-                pair.append(old_boundaries.PML(**opts, background=faces[axis+sign]))
+                opts={f.name:getattr(numerics.absorber,f.name) for f in dataclasses.fields(numerics.absorber)
+                      if f.name != 'reference_media'}
+                reference = numerics.absorber.reference_media.get(axis+sign)
+                medium = faces[axis+sign] if reference is None else lower_material(reference, units=units)
+                pair.append(old_boundaries.PML(**opts, background=medium))
             elif isinstance(face,boundaries.Bloch):
                 pair.append(old_boundaries.Bloch(phase=face.phase,k=face.k))
             else:pair.append(face)

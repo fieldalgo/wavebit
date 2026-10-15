@@ -29,11 +29,21 @@ class Duration(Declaration):
 @eager_under_torch_compile
 @dataclass(frozen=True, kw_only=True)
 class PML(Declaration):
+    """Absorber controls and optional fixed physical reference media by face.
+
+    ``reference_media={'z-': Material(...)}`` fixes the stretch profile while a
+    continued substrate's physical material varies. It does not replace the
+    substrate material. Omitted faces follow their physical boundary medium.
+    """
     cells: int = 12
     wavelength: object = None
     reflection: float = 1e-8
     allow_thin: bool = False
     stabilize: object = None
+    reference_media: object = field(default_factory=dict)
+
+    def __post_init__(self):
+        object.__setattr__(self, 'reference_media', frozen_mapping(self.reference_media))
 
 @eager_under_torch_compile
 @dataclass(frozen=True, kw_only=True)

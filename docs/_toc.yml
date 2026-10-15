@@ -101,6 +101,7 @@ subtrees:
         - entries:
           - file: guide/fdtd/fd-constitutive-absorber
           - file: guide/fdtd/fd-differentiation
+          - file: guide/fdtd/substrate-gradients
           - file: guide/fdtd/fd-metasurface
           - file: guide/fdtd/fd-radiation
           - file: guide/fdtd/fdtd-alpha

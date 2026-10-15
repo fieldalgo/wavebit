@@ -48,7 +48,7 @@ def _signature(problem,numerics):
                   for f in fields(s.shape) if f.name in ('axis','angle')),
                   len(getattr(s.shape,'vertices',())))
         else:shape=_static(s.shape,'scene.structures.'+s.name+'.shape')
-        structures.append((s.name,shape,_material(s.material)))
+        structures.append((s.name,shape,_material(s.material),s.continuation))
     sources=[]
     for s in problem.sources:
         sources.append((type(s).__name__,tuple((f.name,_static(getattr(s,f.name),'sources.'+s.name+'.'+f.name))

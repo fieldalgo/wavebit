@@ -56,7 +56,22 @@ class Prism(Declaration):
 @eager_under_torch_compile
 @dataclass(frozen=True)
 class Structure(Declaration):
-    """A named physical body and its shared material model."""
+    """A named physical body and its shared material model.
+
+    ``continuation`` explicitly extends a fixed, unturned Box through named Open
+    faces (for example ``('z-',)`` for a substrate). The Box must fill both
+    transverse directions; finite scatterers cannot continue into an absorber.
+    """
     name: str
     shape: object
     material: object
+    continuation: tuple = ()
+
+    def __post_init__(self):
+        from wavebit.errors import ValidationError
+        faces = tuple(self.continuation)
+        if (len(set(faces)) != len(faces)
+                or any(f not in ('x-', 'x+', 'y-', 'y+', 'z-', 'z+') for f in faces)):
+            raise ValidationError('continuation needs distinct physical face names such as z-',
+                                  code='padding_continuation', path='scene.structures.'+self.name)
+        object.__setattr__(self, 'continuation', faces)

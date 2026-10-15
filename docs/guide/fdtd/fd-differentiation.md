@@ -1,7 +1,7 @@
 # Differentiating the general FDTD engine
 
 :::{note}
-The pillar cell on this page stands on a smoothed substrate that runs through the bottom PML, which the current `wavebit.fdtd` cannot declare yet (a finite body may not touch an `Open()` face, and a smoothed pillar may not stand on a cell-snapped `Slab`), so its examples use the earlier interface, `wavebit.compat.legacy.fd`. The current module runs the same engine and checks; [In the current module](#in-the-current-module) gives its spelling.
+This page retains the earlier engine declarations and their measured admission rules. The pillar scene now has a [complete current-API example](substrate-gradients.md), using an explicit smoothed substrate continuation through the bottom open face. The current module runs the same engine and checks; [In the current module](#in-the-current-module) maps the declarations below.
 :::
 
 `wavebit.compat.legacy.fd` runs on NumPy, JAX and PyTorch, and on the last two a run is
@@ -46,7 +46,7 @@ radius, height and permittivity are the design variables; the objective is the t
 zero order. The scene and its plan, on any backend:
 
 ```python
-# Earlier interface: wavebit.fdtd cannot yet run a smoothed substrate through the PML.
+# Historical engine declaration; see substrate-gradients.md for the physical API.
 from wavebit.compat.legacy import fd
 
 PLANE = -0.2375                                   # the substrate's top face
@@ -123,9 +123,7 @@ including at its undamped resonance. `fd.eps_at` inherits this convention when i
 sums the poles: an exactly inactive oscillator contributes no susceptibility, so
 its otherwise indeterminate `0 / 0` is removed before evaluating the denominator.
 This shortcut requires a concrete, exactly zero strength; it is not a tolerance
-that removes small nonzero strengths. The current `wavebit.materials.Lorentz` does not
-apply it yet: its `epsilon_term(omega)` with `strength=0` and `gamma=0` is `nan` at
-`omega_0`.
+that removes small nonzero strengths. The current `wavebit.materials.Lorentz.epsilon_term` implements the same inactive-pole convention with SI rates and strength; invalid traced parameters still produce NaN.
 
 A strength being differentiated may have a value of zero without being inactive.
 Away from resonance, for `D = omega_0**2 - omega**2 - 1j*gamma*omega`, its derivative

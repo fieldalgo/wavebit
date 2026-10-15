@@ -127,7 +127,7 @@ Moving a layer as a whole changes the phases of `r` and `t` measured at the decl
 the efficiencies; when phases must match another solver, a smoothed `Box` layer puts its faces
 where they were declared.
 
-What cell-snapped shapes can do that smoothed ones cannot:
+Cell-snapped shapes support these scopes without a smoothing declaration:
 
 - **Continue into an absorbing face.** A `Slab` across the axis of an `Open()` face (a substrate,
   a superstrate) continues through the PML, and that PML is matched to the slab's material.
@@ -164,7 +164,7 @@ The rule has limits, each enforced by `check`:
 | The smallest extent the body bounds must be at least 4 cells; 4 to 8 cells warns | across fewer cells, where the mixed cells fall decides the answer more than the body does |
 | Material: `Material` with a scalar permittivity and permeability; no per-axis values | the mixing rule is applied per component and assumes an isotropic body |
 | No `ConductiveMaterial` or `DispersiveMaterial`, except a flat film spanning the cell | lossy and dispersive mixing is validated only for those film scopes |
-| Must not touch an `Open()` face | its continuation into the absorber is not defined; use a `Slab` there |
+| Must not touch an `Open()` face unless an unturned, transversely uniform `Box` explicitly declares `Structure.continuation` | finite-body continuation is not inferred; see [smoothed substrates](substrate-gradients.md) |
 | Must not reach a `Periodic()` face, unless it runs the whole period reaching **more than** one cell past both faces | otherwise part of it would be lost at the seam |
 | Two smoothed surfaces may not pass through the same cell | the mixing rule describes two media and one surface per cell; separate them by a cell or write one body |
 | A smoothed surface may not cut a cell that a cell-snapped face also cuts | the cell would hold three media (see below) |
@@ -176,13 +176,16 @@ by `Numerics(junction="split")`, the default (`"staircase"` and `"refuse"` are t
 **Pillars on a substrate.** Because of the last rule, a smoothed pillar cannot stand flush on a
 `Slab` substrate. The choices are:
 
-1. a finite smoothed `Box` substrate that does not reach the `Open()` face, with the pillar flush
+1. a fixed, transversely uniform smoothed `Box` substrate with
+   `Structure(..., continuation=('z-',))`, with the pillar flush on its interior surface;
+2. a finite smoothed `Box` substrate that does not reach the `Open()` face, with the pillar flush
    on it (the junction rule above);
-2. a cell-snapped `Region` pillar on a `Slab` substrate (rectangular, faces snapped);
-3. a smoothed pillar raised at least half a cell above the `Slab` face.
+3. a cell-snapped `Region` pillar on a `Slab` substrate (rectangular, faces snapped);
+4. a smoothed pillar raised at least half a cell above the `Slab` face.
 
-None of these is a half-space substrate continuing into the absorber with a smoothed pillar
-standing on it; that scene cannot be written in the public module yet.
+The first choice continues a half-space substrate through the absorber. See
+[the physical example](substrate-gradients.md) for its geometric restrictions and the fixed
+`PML.reference_media` needed when differentiating the substrate material.
 
 **Accuracy of smoothing.** The default rule, `Numerics(discretisation="voxel")`, converged at
 order 2.02 on a controlled glass-sphere study, but has not passed the curved-interface accuracy
@@ -402,8 +405,7 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
 - No Gaussian beams, mode sources or mode monitors.
 - No automatic stopping, and no `Absorber` (the graded-conductivity fallback where a PML cannot be
   matched); both exist in the compatibility engine, `wavebit.compat.legacy.fd`.
-- No smoothed lossy or dispersive bodies outside flat films, and no smoothed pillar on a half-space
-  substrate (see [Pillars on a substrate](#structures-cell-snapped-and-smoothed)).
+- No smoothed lossy or dispersive bodies outside flat films.
 
 ## Further reading
 
