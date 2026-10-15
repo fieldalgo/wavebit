@@ -229,14 +229,29 @@ admits: fixed-cell Cartesian Li rectangles by default, the other scalar shapes w
 
 **That agreement is pointwise, and pointwise is the one comparison that cannot fail here.** The
 normal field is sampled, and the nearest-interface direction jumps across the medial axis, so as
-a shape moves the solve changes by small steps as well as smoothly; a difference step smaller
+a shape moved the solve changed by small steps as well as smoothly; a difference step smaller
 than a pixel stays inside one smooth piece and agrees with autodiff by construction. Integrated
-across a window several pixels wide, autodiff misses the steps' share of the change: measured
-2026-10-15 on one rotated rectangle painted under a second shape, 17% of the change across a
-four-pixel window, the same at `shape_nvf_grid_size` 64 and 256 -- a missing term, not a grid
-error. The closed-form route's blended field has no such steps (a lone rectangle closes the same
-window to 5e-4), and Laurent's rule builds no field at all, so its painted-layer derivative is
-exact. See [Polygon regions](#polygon-regions) for the measurement on outlines.
+across a window several pixels wide, autodiff missed the steps' share of the change: measured
+2026-10-15 on one rotated rectangle painted under a second shape, 18% to 20% of the change across
+a four-pixel window, the same at `shape_nvf_grid_size` 64, 128 and 256 -- a missing term, not a
+grid error. The closed-form route's blended field has no such steps (a lone rectangle closes the
+same window to 5e-4), and Laurent's rule builds no field at all, so its painted-layer derivative
+is exact.
+
+**Since 2026-10-15 the field averages each switch over half a sample step, and the window
+closes.** `boundary.material_projector_fields` keeps the nearest-interface extension and replaces
+each of its hard choices -- the nearest interval of a material pair, the nearest of the
+influential pairs -- by a soft minimum: a candidate weighs `exp(-b / w)`, `b` its distance to its
+bisector with the nearest candidate and `w` half the sample step, and what is averaged is the
+projector `n n^T`, which has no sign to flip across an interface. Every sample then moves
+smoothly with the geometry, and the same painted pair misses 0.05%, 0.12% and 0.22% of its
+window's change at grids 64, 128 and 256
+(`test_a_painted_layers_position_derivative_integrates_to_the_change`). The price -- a
+projector of rank two inside a switch, a different extension where material pairs of unequal
+contrast mix, the clipper's splits visible at second order, and the field's build time -- is
+measured in [the normal field's known limits](../../validation/rcwa/normal-field-known-limits.md),
+section 1b, which also says why the tensor shapes keep the hard field. See
+[Polygon regions](#polygon-regions) for the measurement on outlines.
 
 ### It carried a position gradient the parametric path could not — and no longer does
 
@@ -552,12 +567,16 @@ What it has been checked against:
 
 **The vertex derivative is exact under Laurent's rule** -- every coordinate of the L matched a
 central difference to 6e-9 against derivatives up to 7e-2, and integrated across a window the
-derivative closes on the change to the quadrature's 1.5e-4. **Under NVF it is not**, for the
-reason the [differentiability section](#differentiability) gives: integrated across a four-pixel
-window on a tilted L, it misses 9.4-11% of the change at orders (3, 3) for `shape_nvf_grid_size`
-64, 128, 256 and 512 alike, 6.8% at (6, 6) and 2.8% at (9, 9). The rectangle written as corners
-misses 26%. `test_under_nvf_the_vertex_derivative_integrates_to_the_change` holds this as a
-strict xfail, so a fix to the field is told when it lands.
+derivative closes on the change to the quadrature's 1.5e-4. **Under NVF it closes too since
+2026-10-15**, when the painted field began to average its switches (the
+[differentiability section](#differentiability) says why it had not): across the same four-pixel
+window on a tilted L it misses 0.15% of the change at orders (3, 3) and grid 128, at most 0.24%
+over grids 64 to 512, and 0.06% and 0.08% at orders (6, 6) and (9, 9) -- where the field taken
+hard missed 9-16% at every grid, 6.9% and 3.5%. The rectangle written as corners, one corner
+moved, closes to 0.014% where it missed 13-17%; a second L, of permittivity 5.76 on glass and lit
+from it, whose zeroth transmitted order the hard field missed by 89% at orders (3, 3), closes to
+0.25%. `test_under_nvf_the_vertex_derivative_integrates_to_the_change` holds the window, a slow
+twin holds it at grid 512, and `studies/rcwa/painted_switch_average` has every number.
 
 **An axis-aligned edge is a knife edge for a frozen plan.** The interface planner rounds each
 segment's fractional extent outward to whole cells, and an axis-aligned edge's extent across its
@@ -570,13 +589,20 @@ axis-aligned design re-prepares on its first step.
 
 ## Two properties worth knowing before you trust a number
 
-**The normal field is discontinuous on the medial axis**, where the closest boundary point swaps
-and the direction turns by up to 90 degrees. A *symmetric* shape therefore sits exactly on its own
-discontinuity: a square's 45-degree medial axis runs through the pixel centres of a square grid,
-those pixels are exact `argmin` ties, and the answer steps as the shape is perturbed either way.
-Finite differences there diverge like `1/h` (a constant jump of 0.42 straddled at every `h` from
-1e-3 to 1e-6) while the analytic gradient is the correct one-sided value. An optimizer started
-from a perfectly symmetric shape can see that step on its first move.
+**The nearest-interface direction is discontinuous on the medial axis**, where the closest
+boundary point swaps and the direction turns by up to 90 degrees, and until 2026-10-15 the field
+sampled it as it is. A *symmetric* shape therefore sat exactly on its own discontinuity: a
+square's 45-degree medial axis runs through the pixel centres of a square grid, those pixels were
+exact `argmin` ties, and the answer stepped as the shape was perturbed either way. Finite
+differences there diverged like `1/h` (a constant jump of 0.42 straddled at every `h` from 1e-3 to
+1e-6) while the analytic gradient was the one-sided value, and an optimizer started from a
+perfectly symmetric shape saw that step on its first move. The field now averages the switch over
+half a sample step, a tied sample reads the average of the two faces' projectors, and the step is
+gone. On a 0.5 square at the cell centre, grid 128, orders (4, 4), the central difference of total
+transmission in the half-width read 0.144 / 0.261 / 0.146 / 0.146 / 0.146 at `h` = 1e-3 to 1e-7
+with the field taken hard -- one step straddled at 1e-4 -- and reads 0.1476 / 0.1478 / 0.1477 /
+0.1477 / 0.1477 averaged. The raw probe `distance_gradient_normal_field`, which no solve reads,
+keeps the discontinuity.
 
 **The sampled normal field needs `4*m+1` points per axis**, `m` being that axis's entry of
 `rcwa.Numerics(orders=...)`. Below it, `k % n` folds distinct
