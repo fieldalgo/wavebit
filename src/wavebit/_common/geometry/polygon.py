@@ -176,6 +176,176 @@ def rect_verts(xp, cx, cy, lx, ly, angle):
     return xp.stack([cx + lx_ * c - ly_ * s, cy + lx_ * s + ly_ * c], axis=-1)
 
 
+def polygon_verts(xp, vertices, cx, cy):
+    """A declared polygon's vertices as an ``(N, 2)`` array of ``xp``, moved by ``(cx, cy)``.
+
+    ``vertices`` is what a ``type='polygon'`` shape carries: an ``(N, 2)`` array of any
+    namespace, or a sequence of ``N`` coordinate pairs, measured from the centre of the cell,
+    which ``(cx, cy)`` is (:func:`~wavebit._common.geometry.recipes.cell_centre`). The result
+    is in absolute Cartesian coordinates, as :func:`rect_verts` and :func:`ellipse_verts` are.
+
+    **The declared order is kept, clockwise included.** The winding is read once, on concrete
+    values, where the painting is planned (:func:`.clipper.resolve_painting`), and what a plan
+    records is an index order -- so a traced outline is replayed in exactly the order it was
+    planned on, and nothing here has to branch on the sign of an area.
+
+    A coordinate of ``xp`` itself passes untouched and keeps its graph (a tracer, a tensor that
+    requires grad); everything else is built in the dtype :func:`_vertex_dtype` picks -- float64
+    for Python numbers, on Torch too, as a box's corners are.
+    """
+    if getattr(vertices, 'ndim', None) == 2:
+        if in_namespace(xp, vertices):
+            V = vertices if xp.isdtype(vertices.dtype, 'real floating') else \
+                xp.astype(vertices, xp.float64)
+        else:
+            V = _scalar(xp, vertices, xp.float64)
+            if not xp.isdtype(V.dtype, 'real floating'):
+                V = xp.astype(V, xp.float64)
+        dt = V.dtype
+    else:
+        coords = [c for pair in vertices for c in pair]
+        dt = _vertex_dtype(xp, *coords, cx, cy)
+        values = [_scalar(xp, c, dt) for c in coords]
+        V = xp.reshape(xp.stack([v if v.dtype == dt else xp.astype(v, dt) for v in values]),
+                       (len(vertices), 2))
+    return V + xp.stack([_scalar(xp, cx, dt), _scalar(xp, cy, dt)])
+
+
+def outline_values(vertices):
+    """A declared outline as a plain float ``(N, 2)`` NumPy array -- what a check or a plan reads.
+
+    Read the way :func:`~wavebit._common.backend.checked_float` reads a scalar, and drawing the
+    same line: a Torch tensor is detached, a ``jax.grad`` tracer gives up its primal, and a
+    ``jax.jit`` tracer has no number at all, which raises ``TypeError`` -- the signal every
+    geometry check on the shape routes reads as *traced, skip* and every planner as *freeze
+    first*. A layout that is not ``N`` coordinate pairs, or a value that is not real, raises
+    ``ValueError``: that is about the outline, not about the trace.
+    """
+    import numpy as np
+
+    def number(v):
+        detach = getattr(v, 'detach', None)
+        if detach is not None:
+            v = detach()
+            v = v.cpu() if hasattr(v, 'cpu') else v
+        try:
+            return np.asarray(v)
+        except Exception:                      # noqa: BLE001 - a tracer of some kind
+            pass
+        if type(v).__module__.split('.')[0] == 'jax':
+            import jax                         # local: jax is optional
+            try:
+                return np.asarray(jax.lax.stop_gradient(v))
+            except Exception:                  # noqa: BLE001 - a jit tracer: no primal
+                pass
+        raise TypeError(f'{type(v).__name__} carries no value a check can read')
+
+    if getattr(vertices, 'ndim', None) is not None:
+        a = number(vertices)
+    elif isinstance(vertices, (tuple, list)):
+        rows = []
+        for pair in vertices:
+            if getattr(pair, 'ndim', None) is not None:
+                rows.append(number(pair))
+            elif isinstance(pair, (tuple, list)):
+                rows.append(np.asarray([number(c) for c in pair]))
+            else:
+                raise ValueError(f'a vertex is a coordinate pair, got {type(pair).__name__}')
+        if any(r.shape != (2,) for r in rows):
+            raise ValueError('every vertex is an (x, y) pair')
+        a = np.stack(rows) if rows else np.zeros((0, 2))
+    else:
+        raise ValueError(f'vertices are a sequence of (x, y) pairs or an (N, 2) array, got '
+                         f'{type(vertices).__name__}')
+    if a.ndim != 2 or a.shape[1] != 2:
+        raise ValueError(f'vertices are an (N, 2) array of (x, y) pairs, got shape {a.shape}')
+    if a.dtype.kind == 'c':
+        if np.any(a.imag != 0):
+            raise ValueError('vertex coordinates are lengths, so they must be real')
+        a = a.real
+    if a.dtype.kind not in 'fiu':
+        raise ValueError(f'vertex coordinates must be real numbers, got dtype {a.dtype}')
+    return a.astype(float)
+
+
+def polygon_defect(V):
+    """Why the outline ``V`` is not a simple polygon with area -- or ``None`` when it is one.
+
+    ``V`` is a concrete ``(N, 2)`` float array (:func:`outline_values`). Simple means what the
+    transform and the clipper both need: at least three vertices, every one finite, no
+    zero-length edge, no edge doubling back along its neighbour, no two other edges meeting
+    anywhere -- crossing, touching or running along each other -- and a non-zero area. A bow tie
+    is the case that matters: :func:`polygon_ft` would integrate it with winding numbers of
+    both signs, so its lobes would cancel instead of adding, and the result is a legal-looking
+    structure nobody drew.
+
+    A vertex in the middle of a straight run (two collinear edges in the same direction) is
+    allowed: the outline is still simple, and the transform of a straight edge is exact however
+    it is split.
+
+    The tolerance is rounding scale, ``1e-12`` of the outline's own span: the outline is checked
+    as a figure, before any cell is known.
+    """
+    import numpy as np
+    n = len(V)
+    if n < 3:
+        return f'it has {n} vertices; an outline needs at least three'
+    bad = np.flatnonzero(~np.all(np.isfinite(V), axis=1))
+    if bad.size:
+        return f'vertex {bad[0]} is {tuple(V[bad[0]])}, not a finite point'
+    span = float(max(np.ptp(V[:, 0]), np.ptp(V[:, 1])))
+    if span == 0.0:
+        return 'every vertex is the same point, so it encloses no area'
+    eps = 1e-12 * span
+    A, B = V, np.roll(V, -1, axis=0)
+    E = B - A
+    L = np.hypot(E[:, 0], E[:, 1])
+    short = np.flatnonzero(L <= eps)
+    if short.size:
+        i = int(short[0])
+        return f'vertices {i} and {(i + 1) % n} coincide, which leaves a zero-length edge'
+    En, Ln = np.roll(E, -1, axis=0), np.roll(L, -1)
+    cross = E[:, 0] * En[:, 1] - E[:, 1] * En[:, 0]
+    back = np.flatnonzero((np.abs(cross) <= 1e-12 * L * Ln) & (np.sum(E * En, axis=1) < 0))
+    if back.size:
+        i = int(back[0])
+        return f'edge {(i + 1) % n} doubles back along edge {i} at vertex {(i + 1) % n}'
+    for i in range(n - 2):
+        js = np.arange(i + 2, n if i else n - 1)
+        if not js.size:
+            continue
+        d = _segment_distances(A[i], B[i], A[js], B[js])
+        hit = np.flatnonzero(d <= eps)
+        if hit.size:
+            return (f'edges {i} and {int(js[hit[0]])} cross or touch, so the outline is not '
+                    f'simple')
+    if abs(0.5 * float(np.sum(A[:, 0] * B[:, 1] - B[:, 0] * A[:, 1]))) <= eps * span:
+        return 'its vertices are collinear, so it encloses no area'
+    return None
+
+
+def _segment_distances(p, q, a, b):
+    """Distance from segment ``pq`` to each segment ``a[k] b[k]``: zero where they cross."""
+    import numpy as np
+
+    def orient(o, s, t):
+        return (s[..., 0] - o[..., 0]) * (t[..., 1] - o[..., 1]) - \
+               (s[..., 1] - o[..., 1]) * (t[..., 0] - o[..., 0])
+
+    def to_segment(x, s, t):
+        d = t - s
+        dd = np.sum(d * d, axis=-1)
+        u = np.clip(np.sum((x - s) * d, axis=-1) / np.where(dd > 0, dd, 1.0), 0.0, 1.0)
+        f = s + u[..., None] * d
+        return np.hypot(*(x - f).T)
+
+    p, q = np.broadcast_to(p, a.shape), np.broadcast_to(q, a.shape)
+    crossing = (orient(p, q, a) * orient(p, q, b) < 0) & (orient(a, b, p) * orient(a, b, q) < 0)
+    d = np.minimum(np.minimum(to_segment(p, a, b), to_segment(q, a, b)),
+                   np.minimum(to_segment(a, p, q), to_segment(b, p, q)))
+    return np.where(crossing, 0.0, d)
+
+
 def ellipse_verts(xp, cx, cy, lx, ly, angle, n):
     """CCW polygonisation of an ellipse with ``n`` vertices, matched in **area**.
 

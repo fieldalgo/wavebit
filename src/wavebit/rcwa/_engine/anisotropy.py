@@ -219,8 +219,18 @@ def validate_options(solver):
     solver._reject_layer_count_mismatch()
     if isinstance(solver.structure, list):
         from wavebit._common.geometry.recipes import check_layer_spec
+        from wavebit._common.geometry.recipes import holds_polygon
         for i, layer in enumerate(solver.structure):
             check_layer_spec(layer, i)
+            if holds_polygon(layer):
+                # By type, before either tensor builder reads a shape: both are written over the
+                # primitives' parameters (the sampled masks and the integrated plan's centre
+                # shift), and neither has an outline to read. The scalar boundary route does.
+                raise NotImplementedError(
+                    f'layer {i} holds a polygon, and tensor materials are built for rectangles, '
+                    f'circles and ellipses only: neither tensor builder reads an outline given '
+                    f'by vertices. A polygon solves with scalar materials (on the boundary '
+                    f'route); for a tensor region, sample the layer onto a tensor raster.')
     if solver._factorization == Factorization.LAURENT:
         raise NotImplementedError(
             "factorization='laurent' is not built for tensor materials. A tensor layer is "

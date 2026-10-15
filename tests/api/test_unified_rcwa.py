@@ -422,18 +422,25 @@ def test_every_exported_region_geometry_is_listed_here():
     assert shapes == set(GEOMETRIES)
 
 
+#: Exported geometries refused at their declaration, with the ``(code, path)`` they raise. Empty:
+#: ``rcwa.Polygon`` was the one entry, refused from 9117370a until a polygon region was built.
+REFUSED_AT_DECLARATION = {}
+
+
 @pytest.mark.parametrize('name', sorted(GEOMETRIES))
 def test_a_region_geometry_is_built_or_refused_at_its_declaration(name):
     """No geometry is accepted when declared and refused only when the engine reaches it.
 
     ``rcwa.Polygon`` was: it lowered to a shape type no builder takes, ``check`` reported
-    nothing, and ``run`` refused it from inside the engine.
+    nothing, and ``run`` refused it from inside the engine. It was then refused at its
+    declaration, and now it is built: ``check`` passes it and ``run`` solves it.
     """
     try:
         geometry = getattr(rcwa, name)(**GEOMETRIES[name])
     except UnsupportedFeatureError as error:
-        assert (name, error.issue.code, error.issue.path) == ('Polygon', 'shape.polygon', 'geometry')
+        assert REFUSED_AT_DECLARATION.get(name) == (error.issue.code, error.issue.path)
         return
+    assert name not in REFUSED_AT_DECLARATION
     layer = rcwa.Layer(thickness=.2, background=Material(1.),
                        regions=(rcwa.Region(geometry=geometry, material=Material(4.)),))
     problem = rcwa.Problem(stack=rcwa.Stack(period=(1., 1.), layers=(layer,)),

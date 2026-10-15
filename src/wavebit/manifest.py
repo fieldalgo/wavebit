@@ -216,7 +216,10 @@ SPELLINGS = (
         #: sibling path entries cannot express. It is a property of this path instead.
         'overlap': {
             'allowed': True,
-            'decided': 'per layer, from the shapes\' own coordinates',
+            #: A polygon (2026-10-15) extends this without changing it for any shape it named
+            #: before, so it earned no bump: a layer holding one always resolves, by type.
+            'decided': 'per layer, from the shapes\' own coordinates; a layer holding a '
+                       'polygon always resolves',
             'selected_by': 'the overlap itself, not a keyword',
             'resolution': 'shapes that intersect are resolved into disjoint polygons before '
                           'the transform, so a later shape covers an earlier one and the '

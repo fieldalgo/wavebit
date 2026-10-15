@@ -6,7 +6,9 @@ sampled onto a raster. That removes staircase error entirely, so the same accura
 fewer harmonics on curved or tilted boundaries.
 
 A layer is ``dict(background=..., shapes=[...])`` and a shape is
-``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, material=...)``.
+``dict(type='rectangle'|'circle'|'ellipse', cx=, cy=, lx=, ly=, angle=, material=...)``. A
+``dict(type='polygon', vertices=..., material=...)`` is a shape too, but it is never transformed
+here: a layer holding one always takes the boundary route (:func:`layer_needs_resolving`).
 
 Both material slots take a :class:`~wavebit._common.periodic.Material` -- relative permittivity
 and the permeability that goes with it -- or a bare number, which is the scalar shorthand for
@@ -158,6 +160,10 @@ from wavebit._common.geometry.recipes import _cell_floats
 from wavebit._common.geometry.recipes import check_layer_spec
 from wavebit._common.geometry.recipes import check_shape_spec
 from wavebit._common.geometry.recipes import shape_geometry
+from wavebit._common.geometry.recipes import holds_polygon
+from wavebit._common.geometry.recipes import is_polygon
+from wavebit._common.geometry.polygon import outline_values
+from wavebit._common.geometry.polygon import polygon_defect
 import math
 from collections import namedtuple
 
@@ -208,11 +214,71 @@ def _primitives(shapes, lattice):
     call already had its eager pass through :meth:`freeze_geometry`, and turning a
     differentiable sweep into an exception would be a worse bargain than the one this check
     exists to fix.
+
+    A polygon is not a primitive and comes back ``None`` in its slot, the way an unknown type
+    does from :func:`~wavebit._common.geometry.overlap.primitive` -- decided by its *type*, ahead
+    of the read, because :func:`shape_geometry` refuses a polygon and the ``except`` below would
+    otherwise read that refusal as "traced" and skip every check on the layer. Its outline is
+    :func:`_polygon_outlines`'s to read.
     """
     try:
-        return [_overlap.primitive(*shape_geometry(shape, lattice)) for shape in shapes]
+        return [None if is_polygon(shape) else _overlap.primitive(*shape_geometry(shape, lattice))
+                for shape in shapes]
     except Exception:                                  # noqa: BLE001 - "not a concrete value"
         return None
+
+
+def _polygon_outlines(shapes, layer_index):
+    """``{index: (N, 2) float array}`` -- each polygon's declared vertices, concrete -- or ``None``.
+
+    ``None`` means a vertex had no value to read (a ``jax.jit`` tracer), which every check here
+    answers by stepping aside, as :func:`_primitives` does for a primitive's parameters. The
+    vertices stay relative to the cell centre; :func:`_layer_outlines` places them.
+    """
+    out = {}
+    for i, shape in enumerate(shapes):
+        if not is_polygon(shape):
+            continue
+        try:
+            out[i] = outline_values(shape['vertices'])
+        except TypeError:
+            return None
+        except ValueError as error:
+            raise ValueError(f'Analytic layer {layer_index}: shape {i} (polygon): '
+                             f'{error}.') from None
+    return out
+
+
+def _curve_slack_rel():
+    """How far outside the curve a polygonised ellipse's corners sit, per unit semi-axis.
+
+    :func:`~wavebit._common.geometry.polygon.ellipse_verts` scales its semi-axes by
+    ``sqrt(2 pi / (n sin(2 pi / n)))`` to match the area, so its corners stand out by that factor
+    minus one: 5.0e-5 at the boundary route's 256 vertices.
+    """
+    from wavebit.rcwa._engine.boundary import POLYGON_VERTICES as n
+    return math.sqrt(2.0 * math.pi / (n * math.sin(2.0 * math.pi / n))) - 1.0
+
+
+def _layer_outlines(shapes, lattice, prims):
+    """Every shape of a layer as the concrete outline the boundary route builds, with its slack.
+
+    Read through :func:`~wavebit.rcwa._engine.boundary.shape_vertices`, the route's own reader, so
+    the outlines swept are the ones the clipper will cut: a polygon is its vertices moved to the
+    cell centre, a box its four exact corners, and a curved primitive the area-matched polygon
+    the route integrates -- with a slack of its corners' stand-off, so that a shape touching the
+    true curve is not refused for a sliver of its chords
+    (:func:`~wavebit._common.geometry.overlap.overlapping_outlines`).
+    """
+    import numpy as np
+    from wavebit.rcwa._engine import boundary as _boundary
+    basis = _boundary._concrete_basis(lattice)
+    polys = [np.asarray(_boundary.shape_vertices(np, _boundary._concrete_shape(shape), basis,
+                                                 _boundary.POLYGON_VERTICES), float)
+             for shape in shapes]
+    slack = [_curve_slack_rel() * max(prim[3], prim[4])
+             if prim is not None and prim[0] == _overlap.ELLIPSE else 0.0 for prim in prims]
+    return polys, slack
 
 
 def _shape_name(shapes, i):
@@ -335,6 +401,22 @@ def check_layer_shapes(layer, lattice, layer_index=0):
         return
     if prims is None:
         return
+    outlines = _polygon_outlines(shapes, layer_index)
+    if outlines is None:
+        return
+
+    # A polygon's outline is checked before anything is swept against it, for the reason the
+    # lengths below are: the sweep measures overlap as an intersection's area, which on a bow
+    # tie is the difference of two lobes and on a degenerate outline is nothing at all.
+    for i, V in outlines.items():
+        defect = polygon_defect(V)
+        if defect is not None:
+            raise ValueError(
+                f'Analytic layer {layer_index}: shape {i} (polygon) is not a simple outline: '
+                f'{defect}. The transform integrates an outline with the winding number of '
+                f'each point it encloses, so a crossing outline is not a shape -- its lobes '
+                f'would cancel where they should add -- and a degenerate one has no inside to '
+                f'fill. Give the vertices in order around the boundary, each once.')
 
     # Before the sweep, not after -- not because the message would differ (a negative
     # half-width makes the sweep find nothing, so the length is reported either way; moving
@@ -343,6 +425,8 @@ def check_layer_shapes(layer, lattice, layer_index=0):
     # period returns `[]`, the same as for a rod that fits. Asking first means it is never
     # asked a question it has no way to answer.
     for i, prim in enumerate(prims):
+        if prim is None:
+            continue                                   # a polygon: checked above
         for half_width, key in zip(prim[3:5], _length_keys_of(shapes[i])):
             if half_width > 0.0:
                 continue
@@ -367,12 +451,24 @@ def check_layer_shapes(layer, lattice, layer_index=0):
     tol = OVERLAP_TOL_REL * max(Px, Py)
 
     hits = _overlap.overlapping_pairs(prims, tol, lattice, image_only=True)
+    if outlines:
+        # Every pair a polygon is in, on the outlines the boundary route will clip -- the
+        # primitive sweep above cannot read a polygon, and its pairs are its own.
+        polys, slack = _layer_outlines(shapes, lattice, prims)
+        pairs = [(i, j) for i in range(len(shapes)) for j in range(i, len(shapes))
+                 if i in outlines or j in outlines]
+        hits = hits + _overlap.overlapping_outlines(polys, slack, tol, lattice, pairs)
     if not hits:
         return
 
     i, j, ox, oy, _ = hits[0]
     more = f' (and {len(hits) - 1} more such pair(s))' if len(hits) > 1 else ''
-    if i == j:
+    if i == j and i in outlines:
+        what = (f'shape {_shape_name(shapes, i)} runs into its own periodic image'
+                f'{_across(ox, oy)}')
+        fix = ('Keep it clear of its own images -- an outline may reach past the cell, but '
+               'not into a copy of itself')
+    elif i == j:
         what = (f'shape {_shape_name(shapes, i)} is larger than the period and runs into its '
                 f'own image{_across(ox, oy)}')
         fix = 'Shrink it below the period'
@@ -408,8 +504,17 @@ def layer_needs_resolving(layer, lattice):
 
     PyTorch never hit this: its tensors convert to floats, so the check ran. JAX tracers do
     not, so it silently did not.
+
+    **A layer holding a polygon always resolves**, and is told so by the shape's type alone, so
+    the answer needs no value and is the same eager, under ``grad`` and under ``jit``. Nothing
+    here can sum a polygon: the closed form has no normal field for an outline that is a list
+    of vertices -- its field is built per primitive, face by face and arc by arc -- while the
+    boundary route builds its field from whatever loops it is handed. A lone polygon therefore
+    takes the route even with nothing to resolve, and its plan is the trivial one-loop painting.
     """
     shapes = layer.get('shapes', [])
+    if holds_polygon(layer):
+        return True
     if len(shapes) < 2:
         return False
     try:
@@ -977,7 +1082,14 @@ def plan_gamma(shapes, lattice):
     ``(50, 700)`` does -- ring 3, the pair at ``(0, 1)``, 21 offsets per face -- where it
     used to plan ring 14, the pair at ``(-10, 1)`` and 479 offsets, all of them the same
     images under longer names.
+
+    A layer holding a polygon has no plan here and is refused rather than planned without it:
+    the pieces are a primitive's faces and arcs, and a polygon's slot would be silently empty.
+    It is built on the boundary route, whose interface plan is part of the painting's record.
     """
+    if any(is_polygon(shape) for shape in shapes):
+        raise ValueError('a layer holding a polygon has no closed-form interface plan: it is '
+                         'built on the boundary route, whose plan is the painting record')
     prims = _primitives(shapes, lattice)
     if prims is None:
         return None
@@ -1628,6 +1740,12 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
 def check_dyadic_shapes(shapes):
     """Current complex shape projector support, shared by solve and freeze."""
     supported = _overlap._BOX_TYPES + _overlap._ELLIPSE_TYPES
+    if any(is_polygon(s) for s in shapes):
+        raise NotImplementedError(
+            "nvf_projector='circular' requires rectangles, circles or ellipses: it corrects the "
+            "primitives' own analytic extension near a curve, and a polygon has neither -- its "
+            "edges are straight and its field is the boundary route's nearest-interface one. "
+            "Leave nvf_projector unset (the linear projector) for a layer holding a polygon.")
     if any(s.get('type', 'rectangle') not in supported for s in shapes):
         raise NotImplementedError("nvf_projector='circular' requires rectangles, circles or ellipses")
 
@@ -2571,7 +2689,9 @@ def check_gamma_plan_still_fits(layer, lattice, plan, index, dyadic=False):
     Under a trace it is skipped -- a tracer has no primal to re-plan from, the same reading of
     "not concrete" :func:`_primitives` takes -- and the concreteness is probed *before* the
     planner is called, so a jitted replay never plans at all. ``None`` recorded for a layer
-    means its shapes were traced at the freeze: nothing was decided, and nothing is checked.
+    means nothing was decided for it here, and nothing is checked: its shapes were traced at
+    the freeze, or it holds a polygon and is built on the boundary route, whose own record
+    (:func:`~wavebit.rcwa._engine.boundary.check_plan_still_fits`) is what goes stale for it.
     """
     if plan is None:
         return

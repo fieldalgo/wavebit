@@ -38,6 +38,13 @@ combinatorial record the normal field replays. :func:`interfaces_of` is the inde
 instrument for both -- the outlines of every image, sampled densely, with each sample kept
 only if a step along its outward normal lands in no image at all -- and it shares no arithmetic
 with the sweep, which is what makes it an oracle rather than a second copy.
+
+**A polygon is answered on its outline**, since it has no support function and need not be
+convex (2026-10-15). :func:`polygon_intersection` measures the intersection of two outlines --
+its area and its boundary length, exactly, by Green's theorem -- and
+:func:`overlapping_outlines` turns that into the depth this module's tolerance is stated in, over
+every periodic image whose bounding box can reach rather than a fixed ring. Any pair a polygon is
+in is swept that way; a pair of primitives keeps the closed forms above.
 """
 import math
 from collections import namedtuple
@@ -330,6 +337,156 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
                 if gap < -tol:
                     found.append((i, j, ox, oy, gap))
                     break
+    return found
+
+
+# ------------------------------------------------------------------- outlines (polygons)
+#
+# A polygon is neither convex nor described by a support function, so none of the above
+# applies to it: no separating axis, no signed gap. What does apply is the question the image
+# sweep is asking in the first place -- would the unwrapped clipper double-count area that a
+# periodic image covers? -- and for two outlines that has an exact answer: the area of their
+# intersection, with the length of its boundary to turn it into a depth.
+
+def _shoelace(V):
+    return 0.5 * float(np.sum(V[:, 0] * np.roll(V[:, 1], -1) - np.roll(V[:, 0], -1) * V[:, 1]))
+
+
+def _ccw(V):
+    return V if _shoelace(V) > 0 else V[::-1]
+
+
+def _winding_at(x, y, V):
+    """Winding number of the closed outline ``V`` about the point ``(x, y)``."""
+    a, b = V, np.roll(V, -1, axis=0)
+    left = (b[:, 0] - a[:, 0]) * (y - a[:, 1]) - (x - a[:, 0]) * (b[:, 1] - a[:, 1])
+    up = (a[:, 1] <= y) & (b[:, 1] > y) & (left > 0)
+    down = (b[:, 1] <= y) & (a[:, 1] > y) & (left < 0)
+    return int(np.sum(up)) - int(np.sum(down))
+
+
+def _runs_inside(A, B, eps, shared):
+    """Green's-theorem area term and length of the part of ``A``'s boundary inside ``B``.
+
+    Both counter-clockwise. Every edge of ``A`` is cut at its crossings with ``B``'s edges and
+    at ``B``'s vertices that lie on it, so each piece is inside, outside or on ``B``'s boundary
+    as a whole, and its midpoint says which. A piece *on* the boundary belongs to the
+    intersection's outline only where both outlines run the same way there -- and is then
+    counted from one side alone, which ``shared`` selects -- while one running against it is a
+    seam between two touching shapes and belongs to neither.
+    """
+    b0 = B
+    eb = np.roll(B, -1, axis=0) - b0
+    lb2 = np.sum(eb * eb, axis=1)
+    area = length = 0.0
+    for p, q in zip(A, np.roll(A, -1, axis=0)):
+        d = q - p
+        L2 = float(d @ d)
+        L = math.sqrt(L2)
+        if L <= eps:
+            continue
+        cuts = [0.0, 1.0]
+        den = d[0] * eb[:, 1] - d[1] * eb[:, 0]
+        w = b0 - p
+        ok = np.abs(den) > 0.0
+        safe = np.where(ok, den, 1.0)
+        t = (w[:, 0] * eb[:, 1] - w[:, 1] * eb[:, 0]) / safe
+        u = (w[:, 0] * d[1] - w[:, 1] * d[0]) / safe
+        cuts.extend(t[ok & (t > 0.0) & (t < 1.0) & (u >= 0.0) & (u <= 1.0)])
+        s = (w @ d) / L2
+        off = np.abs(w[:, 0] * d[1] - w[:, 1] * d[0]) / L
+        cuts.extend(s[(off <= eps) & (s > 0.0) & (s < 1.0)])
+        cuts = np.unique(cuts)
+        for t0, t1 in zip(cuts[:-1], cuts[1:]):
+            if (t1 - t0) * L <= eps:
+                continue
+            m = p + 0.5 * (t0 + t1) * d
+            r = m - b0
+            foot = np.clip(np.sum(r * eb, axis=1) / np.where(lb2 > 0, lb2, 1.0), 0.0, 1.0)
+            near = np.hypot(*(r - foot[:, None] * eb).T) <= eps
+            if near.any():
+                along = np.abs(d[0] * eb[near, 1] - d[1] * eb[near, 0]) <= \
+                    1e-9 * L * np.sqrt(lb2[near])
+                inside = shared and bool(np.any(along & (eb[near] @ d > 0)))
+            else:
+                inside = _winding_at(m[0], m[1], B) != 0
+            if inside:
+                x0, x1 = p + t0 * d, p + t1 * d
+                area += 0.5 * float(x0[0] * x1[1] - x1[0] * x0[1])
+                length += float(t1 - t0) * L
+    return area, length
+
+
+def polygon_intersection(P, Q, eps):
+    """``(area, boundary length)`` of ``P ∩ Q`` for two simple outlines of either winding.
+
+    The intersection's boundary is the part of each outline inside the other, so its area is
+    the contour integral of ``(x dy - y dx) / 2`` over those parts (Green's theorem) and its
+    perimeter their length -- exact for straight edges, and indifferent to convexity, to how
+    many pieces the intersection falls into, and to one outline containing the other. A
+    shared run of boundary is counted once if the two interiors lie on the same side of it and
+    not at all if they lie on opposite sides, which is what keeps two shapes that only *touch*
+    -- a checkerboard, an outline abutting its own image -- at an area of exactly zero rather
+    than at rounding noise of either sign.
+
+    ``eps`` is the distance below which a point is *on* a boundary: rounding scale, not
+    geometry.
+    """
+    P, Q = _ccw(np.asarray(P, float)), _ccw(np.asarray(Q, float))
+    area_p, length_p = _runs_inside(P, Q, eps, shared=True)
+    area_q, length_q = _runs_inside(Q, P, eps, shared=False)
+    return area_p + area_q, length_p + length_q
+
+
+def outline_images(P, Q, basis):
+    """Every lattice offset ``(m, n)`` at which ``Q + m a1 + n a2`` can meet ``P``.
+
+    Bounded by the two outlines' extents in fractional coordinates, so it is complete for
+    outlines of any size and shape -- unlike a fixed ring, which on the reduced basis is enough
+    for a convex shape inside its cell and not for a long one threading between its images. A
+    candidate whose bounding box only touches is kept: the intersection decides it.
+    """
+    inv = np.linalg.inv(basis)
+    fp, fq = P @ inv.T, Q @ inv.T
+    lo = np.ceil(fp.min(axis=0) - fq.max(axis=0) - 1e-9).astype(int)
+    hi = np.floor(fp.max(axis=0) - fq.min(axis=0) + 1e-9).astype(int)
+    return [(m, n) for m in range(lo[0], hi[0] + 1) for n in range(lo[1], hi[1] + 1)]
+
+
+def overlapping_outlines(outlines, slack, tol, lattice, pairs):
+    """Every listed pair of outlines that interpenetrates through a periodic image.
+
+    The outline twin of :func:`overlapping_pairs` with ``image_only=True``, and the same
+    question: does outline ``i`` meet an image of outline ``j`` -- of itself when ``i == j`` --
+    anywhere but in the cell, where the painting would resolve it? Yields
+    ``(i, j, image_x, image_y, gap)``, one entry per pair, ``gap`` negative.
+
+    The depth of an overlap is ``2 * area / perimeter`` of the intersection: the thickness of a
+    sliver, half the side of a square, so it is the penetration :func:`signed_gap` measures for
+    two boxes and holds ``tol`` to the same meaning. ``slack[k]`` widens it for an outline that
+    stands in for a curve (:data:`~wavebit.rcwa._engine.boundary.POLYGON_VERTICES` chords around
+    an ellipse, whose vertices sit just outside it): a circle touching a polygon should not be
+    refused for a sliver its polygonisation invented.
+
+    ``image_*`` count cells of the reduced basis, as everywhere in this module.
+    """
+    lattice = reduced_basis(lattice)
+    basis = np.array([[checked_float(lattice[0][0]), checked_float(lattice[0][1])],
+                      [checked_float(lattice[1][0]), checked_float(lattice[1][1])]])
+    eps = COLLINEAR_TOL_REL * float(np.max(np.hypot(basis[0], basis[1])))
+    found = []
+    for i, j in pairs:
+        P, Q = outlines[i], outlines[j]
+        offsets = sorted(outline_images(P, Q, basis), key=lambda mn: (abs(mn[0]) + abs(mn[1]), mn))
+        for m, n in offsets:
+            if (m, n) == (0, 0):
+                continue                      # inside the cell the painting resolves it
+            shift = basis @ np.array([m, n], dtype=float)
+            area, length = polygon_intersection(P, Q + shift, eps)
+            depth = 2.0 * area / length if length > 0.0 else 0.0
+            if depth > tol + slack[i] + slack[j]:
+                found.append((i, j, m, n, -depth))
+                break
     return found
 
 

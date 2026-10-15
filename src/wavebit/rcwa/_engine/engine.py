@@ -47,6 +47,7 @@ from wavebit._common.conventions import parse_order_pair
 from wavebit._common.conventions import reject_complex_angle
 from wavebit._common.conventions import transverse_component_problem
 from wavebit._common.conventions import warn_if_xy_on_a_skewed_cell
+from wavebit._common.geometry.recipes import holds_polygon
 from wavebit.materials.response import Material
 from wavebit.materials.response import as_material
 from wavebit.materials.response import refractive_index_from_eps
@@ -5178,8 +5179,12 @@ class CoreFactorizationMixin:
             # Recorded for every layer whether or not the closed form builds it: a plan is
             # microseconds. It used to be `None` for a layer whose shapes were `jax.jit`
             # tracers at the freeze; that solver is refused above now, so every entry here is
-            # a plan (a `jax.grad` primal plans, as it always did).
-            geometry.gamma_plans = [_parametric.plan_gamma(layer.get('shapes', []), basis)
+            # a plan (a `jax.grad` primal plans, as it always did) -- except a layer holding a
+            # polygon, which is built on the boundary route whatever it overlaps and has no
+            # closed-form interface set to record. Its slot is None, which every reader of
+            # this record passes by, as it passes the interface set of a painted layer.
+            geometry.gamma_plans = [None if holds_polygon(layer)
+                                    else _parametric.plan_gamma(layer.get('shapes', []), basis)
                                     for layer in self.structure]
         return geometry
 
@@ -5211,7 +5216,11 @@ class CoreFactorizationMixin:
             what = None
             if self._modeling_path == ModelingPath.PARAMETRIC:
                 for index, layer in enumerate(self.structure):
-                    if _parametric._primitives(layer.get('shapes', []), basis) is None:
+                    shapes = layer.get('shapes', [])
+                    # A polygon's slot in `_primitives` is None by type, so its vertices are
+                    # asked separately -- or a jitted outline would be planned as no outline.
+                    if (_parametric._primitives(shapes, basis) is None
+                            or _parametric._polygon_outlines(shapes, index) is None):
                         what = f'structure (layer {index} holds a traced shape parameter)'
                         break
         if what is None:

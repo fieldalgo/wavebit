@@ -8,7 +8,7 @@ from dataclasses import field
 from .._common.declarations import spec
 from ..materials import Material
 from ..units import Units
-from ..errors import UnsupportedFeatureError, ValidationError
+from ..errors import ValidationError
 
 
 def _freeze_sequence(value):
@@ -62,23 +62,59 @@ class Ellipse:
 
 @spec
 class Polygon:
-    """Reserved: a polygon given by its vertices is not built yet, and is refused here.
+    """A polygon given by its vertices, in centered Cartesian cell coordinates.
 
-    The engine builds rectangles, circles and ellipses, and the polygons their overlaps
-    resolve into; it has no region whose outline is a list of vertices. The overlap test
-    reads convex primitives and the normal field is built per primitive type, so a polygon
-    needs both before it can be solved. Until then a declaration is refused at once with
-    ``UnsupportedFeatureError`` rather than accepted here and refused at ``run``.
+    ``vertices`` is a sequence of ``N >= 3`` ``(x, y)`` pairs, or an ``(N, 2)`` array, in the
+    Problem's length unit and measured from the center of the cell -- the frame a Rectangle's
+    ``center`` is given in -- listed in order around the boundary. Either winding is accepted
+    and the order is kept as given. The outline must be simple: no edge of zero length, none
+    doubling back, no two edges crossing or touching, and a nonzero area. A concrete outline
+    is checked here; a traced one when the problem is prepared on concrete values.
+
+    The edges are transformed in closed form, so a tilted edge has no staircase, and a layer
+    holding a polygon is always built on the painting route: regions still paint in order,
+    later over earlier. A polygon may reach past the cell edge, but not into a periodic image
+    of itself or of another region; that is refused when the problem is prepared.
+
+    Vertex coordinates differentiate as other region geometry does: through ``prepared.run``
+    on PyTorch, refused under a JAX transform (code ``prepared.host_topology``). Prepare with
+    the spelling you run with -- an ``(N, 2)`` array and ``N`` pairs are different layouts --
+    and a step that changes which edges cross, or moves an axis-aligned edge off its axis,
+    needs a new preparation.
+
+    Under the default NVF factorization the normal field is the painting route's
+    nearest-interface field rather than the closed-form field a lone Rectangle gets, so a
+    rectangle written as a polygon matches Rectangle to round-off under
+    ``factorization='laurent'`` and converges to it under NVF; on one rotated rectangle the
+    per-order efficiencies differ by 7.1e-3 at ``orders=(4, 4)`` and 4.8e-4 at ``(8, 8)``.
+    That field also limits the vertex derivative: it jumps across its medial axis, and the
+    derivative misses the jumps' share -- measured over a window, 10% of the change at
+    ``orders=(3, 3)``, 7% at ``(6, 6)`` and 3% at ``(9, 9)`` on an L-shaped outline, whatever
+    ``shape_nvf_grid_size``. Under ``factorization='laurent'`` the derivative is exact.
+    ``factorization='li'``, ``nvf_projector='circular'`` and tensor materials do not build a
+    polygon and refuse it by name.
     """
     vertices: object
 
     def __post_init__(self):
-        raise UnsupportedFeatureError(
-            'rcwa.Polygon is not built yet: a region outline given by vertices has no '
-            'engine path. Compose the shape from Rectangle, Circle and Ellipse regions '
-            '(later regions paint over earlier ones), or sample it into a raster layer, '
-            'rcwa.Layer(thickness=..., epsilon=<array>).',
-            code='shape.polygon', path='geometry')
+        from .._common.geometry.polygon import outline_values, polygon_defect
+        from .._common.geometry.recipes import outline_layout
+        object.__setattr__(self, 'vertices', _freeze_sequence(self.vertices))
+        problem = outline_layout(self.vertices)
+        if problem is not None:
+            raise ValidationError(f'Polygon vertices {problem}.', code='shape.vertices',
+                                  path='geometry.vertices')
+        try:
+            values = outline_values(self.vertices)
+        except TypeError:
+            return                       # traced: checked when prepared on concrete values
+        except ValueError as error:
+            raise ValidationError(f'Polygon {error}.', code='shape.vertices',
+                                  path='geometry.vertices') from None
+        defect = polygon_defect(values)
+        if defect is not None:
+            raise ValidationError(f'Polygon outline is not simple: {defect}.',
+                                  code='shape.outline', path='geometry.vertices')
 
 
 @spec
@@ -88,8 +124,8 @@ class Region:
     material: object
 
     def __post_init__(self):
-        if not isinstance(self.geometry, (Rectangle, Circle, Ellipse)):
-            raise ValidationError('Use Rectangle, Circle, or Ellipse geometry.',
+        if not isinstance(self.geometry, (Rectangle, Circle, Ellipse, Polygon)):
+            raise ValidationError('Use Rectangle, Circle, Ellipse, or Polygon geometry.',
                                   code='shape.type', path='region.geometry')
 
 

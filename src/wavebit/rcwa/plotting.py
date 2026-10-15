@@ -357,8 +357,7 @@ def _refuse_layer(solver, layer):
                     # time, which is why the geometry checks can run under a gradient, while a
                     # whole-array conversion is refused under any JAX trace. `detach` first so
                     # a torch leaf under autograd -- which can be drawn -- still is.
-                    probe = value.detach() if hasattr(value, 'detach') else value
-                    np.asarray(probe, dtype=float)
+                    _probe(value)
                 except Exception:                  # noqa: BLE001 - a tracer of some kind
                     raise ValueError(
                         f'a traced structure cannot be drawn: layer {index} has a {key!r} that '
@@ -367,6 +366,19 @@ def _refuse_layer(solver, layer):
                         f'something a jax.jit or vmap trace can be asked for.\n'
                         f'  Draw it outside the trace, at the values you want to look at.'
                     ) from None
+
+
+def _probe(value):
+    """Read ``value`` as a float array, entry by entry through a polygon's nested vertices.
+
+    Element-wise because ``vertices`` may be a tuple of Torch scalars that require grad, which
+    NumPy will not convert as one sequence but will one detached entry at a time.
+    """
+    if isinstance(value, (tuple, list)):
+        for entry in value:
+            _probe(entry)
+        return
+    np.asarray(value.detach() if hasattr(value, 'detach') else value, dtype=float)
 
 
 @eager_under_torch_compile
@@ -453,7 +465,8 @@ def slice_structure(solver, layer=0, n=512, show='eps', band_limited=False, *, c
                 # absolute Cartesian positions -- are tested where they actually are.
                 if not solver.lattice_is_axis_aligned:
                     raise NotImplementedError(
-                        'a painted, overlapping layer on a skewed cell is not drawn yet: the '
+                        'a painted layer -- overlapping shapes, or a polygon -- on a skewed cell '
+                        'is not drawn yet: the '
                         'loops are Cartesian polygons and the scanline fill runs on cell rows, '
                         'which stop being rows once the cell is sheared. State the layer '
                         'as a raster structure instead.')

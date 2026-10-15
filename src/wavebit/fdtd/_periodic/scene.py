@@ -213,6 +213,10 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
             if not isinstance(shape, dict):
                 raise ValueError('Parametric FDTD shapes must be dictionaries.')
             check_shape_spec(shape, j, i)
+            if shape.get('type', 'rectangle') == 'polygon':
+                raise ValueError('Parametric FDTD does not build a polygon: its area integration '
+                                 'is written over rectangles, circles and ellipses. Sample the '
+                                 'polygon onto the permittivity raster, or solve it with RCWA.')
             kind, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
             y_invariant &= isinstance(ly, (int, float, np.number)) and np.isreal(ly) and ly == periods[1]
             circular = kind in ('circle', 'disk')

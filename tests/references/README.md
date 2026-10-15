@@ -94,6 +94,7 @@ the committed numbers. [The star lift](../../docs/validation/fdtd/fd-subpixel-oc
 | **fmmax** (Liu & Fan lineage, MIT) | uniform complex tensors, **patterned** tensors, **permeability** | the `fwref` env — see below | `golden_fmmax.npz`, `golden_fmmax_magnetic.npz` |
 | **S4** (same lineage, C++) | real tensors, patterned | the S4 extension, already in the project env | `golden_s4.npz` |
 | **S4**, the in-cell **field** | the six field components on *uniform* stacks — every reconstruction path, all angles and azimuths, exact at ~1e-15 | same | `golden_s4_field.npz` |
+| **S4**, **polygon regions** | `SetRegionPolygon` against `rcwa.Polygon` under `factorization='laurent'`, the same operator on a matched order set: a triangle, an L, an L across the cell edge, a Z wider than the period, an L with a hole and with an inclusion painted inside it, an L on a sheared cell -- every order of `R` and `T`, s and p, **identity** to 5.8e-13. S4 takes its outlines counter-clockwise and solves a clockwise one as another structure; the generator refuses one | same | `golden_s4_polygon.npz` |
 | **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16), **x-patterned layers to ~1e-4**, and an **x/y-patterned** one to ~3e-2 on both formulations — the only outside check of a field whose `ky` orders come from the structure | the `fwref` env | `golden_fmmax_field.npz` |
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
@@ -1331,6 +1332,7 @@ and PyMoosh's its 4.0.1.
 | --- | --- | --- |
 | `golden_s4.npz` | the S4 Python extension `s4-fieldalgo 0.1.0+b98c80e`: FieldAlgo's fork of S4 1.1 (`victorliu/S4`) at fork commit `b98c80e` (branch `modernize/master-fixed`), built against Accelerate for Python 3.12 and installed in the project env | 2026-08-10 |
 | `golden_s4_field.npz` | the same build | 2026-08-14; regenerated 2026-10-14 on it, every field array bit for bit, only the two `__stack` arrays changed |
+| `golden_s4_polygon.npz` | the same build | 2026-10-15 |
 | `golden_fmmax.npz` | fmmax 1.7.1, jax and jaxlib 0.10.2, numpy 2.4.6, Python 3.11, in `fwref` | 2026-08-10 |
 | `golden_fmmax_magnetic.npz` | the same | 2026-08-10 |
 | `golden_fmmax_patterned.npz` | the same | 2026-08-14 |

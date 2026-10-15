@@ -448,16 +448,28 @@ def subtract_loop(table, ids, sub_ids):
 def resolve_painting(shapes):
     """Resolve drawing order into one region per shape.
 
-    ``shapes`` is a list of counter-clockwise vertex arrays, earliest drawn first; later
-    shapes paint over earlier ones. Returns ``(table_records, regions)`` where ``regions[i]``
-    is a list of ``loop_ids`` for shape ``i``'s visible part -- **counter-clockwise for
-    material, clockwise for a hole**, which is the whole of the bookkeeping. A hole inside a
-    hole comes back counter-clockwise again, i.e. material, by composition rather than by
-    multiplying signs.
+    ``shapes`` is a list of simple vertex arrays, earliest drawn first; later shapes paint over
+    earlier ones. Returns ``(table_records, regions)`` where ``regions[i]`` is a list of
+    ``loop_ids`` for shape ``i``'s visible part -- **counter-clockwise for material, clockwise
+    for a hole**, which is the whole of the bookkeeping. A hole inside a hole comes back
+    counter-clockwise again, i.e. material, by composition rather than by multiplying signs.
+
+    **An outline may arrive wound either way**, and one wound clockwise is walked backwards:
+    its table rows are taken in reverse index order, so every loop starts out counter-clockwise
+    and the rows still name the vertices as they were declared. The primitives are built
+    counter-clockwise and never take that branch; a user's polygon may. Reversing the *rows*
+    rather than the array is what lets a plan replay on traced vertices: the winding was read
+    here, once, on concrete values, and what survives of the decision is an index order --
+    so a replay never has to ask the sign of an area it cannot read. Taken as given instead,
+    a clockwise outline would be its own hole: the transform is signed, and S4, which takes
+    its polygons as given, solves a clockwise rectangle as a different structure (``sum(T)``
+    0.859 against 0.974, measured) without a word.
     """
     table = Table(shapes)
-    ids = [[table.src(i, k) for k in range(len(table.shapes[i]))]
-           for i in range(len(table.shapes))]
+    ids = []
+    for i, V in enumerate(table.shapes):
+        order = range(len(V)) if signed_area(V) >= 0 else range(len(V) - 1, -1, -1)
+        ids.append([table.src(i, k) for k in order])
 
     regions = []
     for i in range(len(shapes)):

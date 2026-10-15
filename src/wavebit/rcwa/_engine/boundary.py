@@ -50,8 +50,12 @@ from wavebit.lattice import reduced_basis
 from wavebit.lattice import reduction_transform
 from wavebit.lattice import sample_grid
 from wavebit._common.geometry.polygon import ellipse_verts
+from wavebit._common.geometry.polygon import outline_values
 from wavebit._common.geometry.polygon import polygon_ft
+from wavebit._common.geometry.polygon import polygon_verts
 from wavebit._common.geometry.polygon import rect_verts
+from wavebit._common.geometry.recipes import cell_centre
+from wavebit._common.geometry.recipes import is_polygon
 
 
 def _sum(xp, a, axis=-1):
@@ -970,7 +974,17 @@ def shape_vertices(xp, shape, lattice, n_poly=POLYGON_VERTICES):
     square. ``lattice`` is taken for the same reason the transform takes it: ``cx`` / ``cy``
     are measured from ``0.5*(a1 + a2)``, so the basis is what puts a shape anywhere at all.
     A ``period`` pair is not a substitute -- it has the cell's angle already thrown away.
+
+    A ``polygon`` is its own vertices (:func:`~wavebit._common.geometry.polygon.polygon_verts`),
+    measured from the same cell centre a primitive's ``cx`` / ``cy`` is, and returned in the
+    order they were declared -- clockwise included, since the winding is the planner's to read
+    (:func:`~wavebit._common.geometry.clipper.resolve_painting`). It is the one shape this
+    reader does not take through :func:`~wavebit.rcwa._engine.parametric.shape_geometry`, which
+    has no centre, length or angle to give for it and refuses it by name.
     """
+    if is_polygon(shape):
+        cx, cy = cell_centre(lattice)
+        return polygon_verts(xp, shape['vertices'], cx, cy)
     kind, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     if kind in ('rectangle', 'square'):
         return rect_verts(xp, cx, cy, lx, ly, angle)
@@ -978,7 +992,7 @@ def shape_vertices(xp, shape, lattice, n_poly=POLYGON_VERTICES):
         return ellipse_verts(xp, cx, cy, lx, ly, angle, n_poly)
     raise NotImplementedError(
         f"The boundary route cannot draw a {kind!r} yet; it needs the shape as a polygon. "
-        f"Supported: rectangle, square, circle, disk, ellipse.")
+        f"Supported: rectangle, square, circle, disk, ellipse, polygon.")
 
 
 def _concrete_shape(shape):
@@ -1002,8 +1016,18 @@ def _concrete_shape(shape):
     primal; the vertices that carry the gradient are re-cut by it downstream, which is why
     reading the primal here is right rather than merely convenient. Under ``jax.jit`` there is
     no primal and the read raises, which is the answer a frozen record exists for.
+
+    A polygon's ``vertices`` are read whole, as a float ``(N, 2)`` array
+    (:func:`~wavebit._common.geometry.polygon.outline_values`), and a traced one raises
+    ``TypeError`` here rather than being passed through: a primitive's unreadable value reaches
+    NumPy and fails there, but a sequence of tracers would be *stacked* first, and the failure
+    would then name NumPy instead of the trace.
     """
     out = {}
+    if is_polygon(shape):
+        out = {k: v for k, v in shape.items() if k != 'vertices'}
+        out['vertices'] = outline_values(shape['vertices'])
+        return out
     for k, v in shape.items():
         try:
             out[k] = checked_float(v)
@@ -1027,7 +1051,18 @@ def plan_layer(shapes, lattice, n_poly=POLYGON_VERTICES):
     intervals, unwrapped centroid representatives, and bounded image groups.
     """
     import numpy as np
-    verts = _plan_vertices(shapes, lattice, n_poly)
+    try:
+        verts = _plan_vertices(shapes, lattice, n_poly)
+    except TypeError:
+        if not any(is_polygon(s) for s in shapes):
+            raise
+        # A polygon layer reaches here by its type alone (`layer_needs_resolving` answers it
+        # without a value), so under `jax.jit` it is this read that meets the tracer. Said as
+        # the freeze it needs rather than as the NumPy conversion that failed.
+        from wavebit.rcwa._engine.parametric import _NEEDS_A_FREEZE
+        raise ValueError(_NEEDS_A_FREEZE.format(
+            what='how a polygon layer resolves into disjoint loops, which is planned on its '
+                 'concrete vertices,')) from None
     recs, regions = _clipper.resolve_painting(verts)
     transform = reduction_transform(lattice)
     vals = _clipper.eval_table(np, recs, verts)
