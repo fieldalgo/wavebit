@@ -28,6 +28,45 @@ So, through this lifecycle, a derivative from geometry to diffraction efficiency
 
 `Polygon.vertices` differentiates as an `(N, 2)` tensor or as `N` pairs of scalars; prepare with the spelling you run with, since the two are different layouts. Its derivative is exact under `factorization='laurent'`. Under the default NVF it is not: the painting route's normal field jumps across its medial axis, and autodiff misses the jumps' share of the change -- 10% across a four-pixel window at `orders=(3, 3)` on an L-shaped outline, 3% at `(9, 9)`, whatever `shape_nvf_grid_size`, and the same holds for any region painted over another. See [polygon regions](../rcwa/boundary-modeling.md#polygon-regions).
 
+### A thickness and a radius derivative
+
+One preparation serves every run of the objective. On JAX the layer thickness differentiates under `jax.jit` as well; the radius differentiates under eager `jax.grad` and is refused under `jax.jit`. On PyTorch the radius differentiates too. The small Fourier order and 64-point NVF grid make a quick demonstration, not a converged design:
+
+```python
+import jax
+jax.config.update('jax_enable_x64', True)
+import torch
+from wavebit import Material, Units, UnsupportedFeatureError, rcwa
+
+def problem(radius, thickness):
+    return rcwa.Problem(
+        units=Units(length='um'),
+        stack=rcwa.Stack(
+            period=(.6, .6), bottom=Material(epsilon=2.25),
+            layers=(rcwa.Layer(thickness=thickness, regions=(rcwa.Region(
+                geometry=rcwa.Circle(radius=radius), material=Material(epsilon=12.25)),)),)),
+        excitation=rcwa.Excitation(wavelength=.9, sources=(rcwa.PlaneWave(),)))
+
+numerics = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=64)
+
+on_jax = rcwa.prepare(problem(.12, .18), numerics=numerics, backend='jax')
+T00 = lambda t: on_jax.run(problem(.12, t)).transmission.order(0, 0).efficiency[0]
+print(jax.jit(jax.grad(T00))(.18))           # -2.461434...
+T00_r = lambda r: on_jax.run(problem(r, .18)).transmission.order(0, 0).efficiency[0]
+print(jax.grad(T00_r)(.12))                  # -8.662999...
+try:
+    jax.jit(jax.grad(T00_r))(.12)
+except UnsupportedFeatureError as error:
+    print(error.code)                        # prepared.host_topology
+
+on_torch = rcwa.prepare(problem(.12, .18), numerics=numerics, backend='torch')
+radius = torch.tensor(.12, dtype=torch.float64, requires_grad=True)
+on_torch.run(problem(radius, .18)).transmission.order(0, 0).efficiency[0].backward()
+print(float(radius.grad))                    # -8.662999...
+```
+
+Both radius derivatives agree with each other and with a central difference on NumPy (step `1e-6`) to 2e-8 or better.
+
 ### Why JAX-traced geometry is refused under jit
 
 The derivative is the same computation on both backends. Where both admit an input they agree to round-off: one layer-thickness derivative measured 7.695586811926e-4 on PyTorch and 7.695586811925e-4 under `jax.jit`. The backends differ only in a check that runs before that computation.
