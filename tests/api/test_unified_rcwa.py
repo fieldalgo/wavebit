@@ -350,7 +350,8 @@ def patterned(geometry, period=(600., 600.)):
 PATTERNED_NUMERICS = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=256)
 
 # The lifecycle's stated scope (docs/design/unified-api.md section 7, docs/guide/common/autodiff.md):
-# its topology guard reads concrete values, so JAX-traced geometry is refused at trace
+# its topology guard reads concrete values. An eager jax.grad tracer carries one, as a PyTorch
+# tensor does; under jit or vmap there is none, so that geometry is refused at trace
 # construction rather than replayed against a record it may no longer fit.
 TRACED_GEOMETRY = {
     'circle radius': (lambda v: patterned(rcwa.Circle(radius=v)), 160.,
@@ -365,7 +366,7 @@ TRACED_GEOMETRY = {
 }
 
 
-@pytest.mark.parametrize('transform', ['grad', 'jit'])
+@pytest.mark.parametrize('transform', ['jit', 'grad under jit', 'vmap'])
 @pytest.mark.parametrize('case', sorted(TRACED_GEOMETRY))
 def test_jax_traced_geometry_is_refused_by_a_prepared_run(case, transform):
     jax = pytest.importorskip('jax')
@@ -374,11 +375,39 @@ def test_jax_traced_geometry_is_refused_by_a_prepared_run(case, transform):
     with jax.enable_x64(True):
         prepared = rcwa.prepare(build(value), numerics=PATTERNED_NUMERICS, backend='jax')
         loss = lambda v: jnp.sum(prepared.run(build(v)).T)
-        apply = jax.grad(loss) if transform == 'grad' else jax.jit(loss)
+        apply = {'jit': jax.jit(loss), 'grad under jit': jax.jit(jax.grad(loss)),
+                 'vmap': jax.vmap(loss)}[transform]
         with pytest.raises(UnsupportedFeatureError) as error:
-            apply(jnp.asarray(value))
+            apply(jnp.asarray([value, value]) if transform == 'vmap' else jnp.asarray(value))
     assert error.value.issue.code == 'prepared.host_topology'
     assert error.value.issue.path == path
+
+
+@pytest.mark.parametrize('case', sorted(TRACED_GEOMETRY))
+def test_jax_grad_differentiates_geometry_as_pytorch_does(case):
+    # Outside jit the tracer's primal is read for the topology check; the run keeps the tangent.
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+    build, value, _ = TRACED_GEOMETRY[case]
+    at = 1.02*value
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(build(value), numerics=PATTERNED_NUMERICS, backend='jax')
+        derivative = float(jax.grad(lambda v: jnp.sum(prepared.run(build(v)).T))(jnp.asarray(at)))
+    prepared = rcwa.prepare(build(torch.tensor(value, dtype=torch.float64)),
+                            numerics=PATTERNED_NUMERICS, backend='torch')
+    live = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+    prepared.run(build(live)).T.sum().backward()
+    # measured 4e-14 to 3e-13 relative; a lone rectangle's centre derivative is zero by symmetry
+    assert derivative == pytest.approx(float(live.grad), rel=1e-10, abs=1e-14)
+    if case in ('circle radius', 'rectangle size', 'rectangle angle'):
+        concrete = rcwa.prepare(build(value), numerics=PATTERNED_NUMERICS)
+        step = 1e-6 if case == 'rectangle angle' else 1e-3
+        transmitted = lambda v: float(np.sum(concrete.run(build(v)).T))
+        finite_difference = (transmitted(at+step) - transmitted(at-step))/(2*step)
+        assert abs(finite_difference) > 1e-4
+        # measured 8e-10 (radius), 4e-8 (width) and 8e-8 (angle)
+        assert derivative == pytest.approx(finite_difference, rel=1e-6)
 
 
 def test_torch_differentiates_a_shape_dimension_through_a_prepared_run():
@@ -449,6 +478,19 @@ def test_torch_shape_step_across_a_topology_boundary_asks_for_a_new_preparation(
     assert torch.isfinite(width.grad)
     with pytest.raises(IncompatibleProblemError) as error:
         prepared.run(pair(torch.tensor(130., dtype=torch.float64, requires_grad=True)))
+    assert error.value.issue.code == 'prepared.topology'
+
+
+def test_jax_grad_shape_step_across_a_topology_boundary_asks_for_a_new_preparation():
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    pair = lambda w: patterned(tuple(rcwa.Rectangle(size=(w, 200.), center=(c, 0.)) for c in (-60., 60.)))
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(pair(100.), numerics=PATTERNED_NUMERICS, backend='jax')
+        derivative = jax.grad(lambda w: jnp.sum(prepared.run(pair(w)).T))
+        assert np.isfinite(float(derivative(jnp.asarray(110.))))
+        with pytest.raises(IncompatibleProblemError) as error:
+            derivative(jnp.asarray(130.))
     assert error.value.issue.code == 'prepared.topology'
 
 

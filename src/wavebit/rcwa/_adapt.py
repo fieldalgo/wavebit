@@ -254,6 +254,48 @@ def geometry_values(problem):
     return values
 
 
+def primal(value):
+    """``value`` with every JAX tracer replaced by the number it carries, for a check only.
+
+    An eager ``jax.grad`` or ``jax.jacfwd`` tracer holds a concrete primal, as a PyTorch
+    tensor does, and ``stop_gradient`` hands it over without touching the caller's value or
+    its tangent. A tracer under ``jax.jit`` or ``jax.vmap``, alone or beneath a grad, has no
+    number yet and the conversion raises (measured on jax 0.11.0).
+    """
+    if isinstance(value, (tuple, list)):
+        return tuple(primal(v) for v in value)
+    if not abstract(value):
+        return value
+    import jax
+    return np.asarray(jax.lax.stop_gradient(value))
+
+
+def carries_primal(value):
+    """Whether :func:`primal` can read every tracer in ``value``."""
+    import jax
+    try:
+        primal(value)
+    except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError):
+        return False
+    return True
+
+
+def primal_geometry(problem):
+    """``problem`` with the cell and every region geometry read by :func:`primal`.
+
+    Everything else is kept as given, so a topology check on it sees what a concrete
+    problem at the same design would show, and nothing it does reaches the traced run.
+    """
+    stack = problem.stack
+    cell = ({'lattice': primal(stack.lattice)} if stack.lattice is not None
+            else {'period': primal(stack.period)})
+    layers = tuple(dataclasses.replace(layer, regions=tuple(
+        dataclasses.replace(region, geometry=dataclasses.replace(region.geometry, **{
+            f.name: primal(getattr(region.geometry, f.name)) for f in dataclasses.fields(region.geometry)}))
+        for region in layer.regions)) for layer in stack.layers)
+    return dataclasses.replace(problem, stack=dataclasses.replace(stack, layers=layers, **cell))
+
+
 def check_structure(problem, expected):
     if structure_key(problem) != expected:
         raise IncompatibleProblemError('The problem declaration layout changed. Prepare it again (layer/source/model counts, tensor shape, magnetic presence, outputs, and spectral shape are structural).',

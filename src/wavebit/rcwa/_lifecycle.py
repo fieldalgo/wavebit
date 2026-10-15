@@ -84,7 +84,7 @@ def _report(problem, numerics, execution, solvers):
         capabilities={'eager': True, 'material_gradients': execution.backend != 'numpy' and single,
                       'jit': execution.backend == 'jax' and single,
                       'vmap': execution.backend == 'jax' and single,
-                      'geometry_reuse': 'concrete topology validation; traced host-only geometry changes are refused',
+                      'geometry_reuse': 'concrete topology validation, on the primal of an eager jax.grad tracer too; geometry traced under jit or vmap is refused',
                       'diffraction': single, 'coherent_boundary_power': not single,
                       'physical_convergence': 'not established by admission or finite arithmetic'},
         resolved={'order_window': window, 'wavelength_count': len(solvers),
@@ -201,16 +201,25 @@ class Prepared:
         if _adapt.coherent_dependencies(problem) != self._coherent_dependencies:
             raise IncompatibleProblemError('Coherent source grouping dependencies changed. Prepare again after changing directions, wavelengths, sampling, cell, or half-space response.',
                                            code='prepared.source_grouping', path='excitation.sources')
+        traced_geometry = False
         if _adapt.has_tracer(problem):
             for path, value in _adapt.geometry_values(problem).items():
-                if _adapt.has_tracer(value):
+                if not _adapt.has_tracer(value):
+                    continue
+                traced_geometry = True
+                # An eager jax.grad tracer carries its primal, so the topology is checked
+                # on that below, as a PyTorch tensor is. Under jit or vmap there is none.
+                if not _adapt.carries_primal(value):
                     raise UnsupportedFeatureError('This geometry decision has no traced topology guard. Prepare each concrete geometry outside the transform; material, wavelength, and layer-thickness derivatives retain their supported graphs.',
                                                   code='prepared.host_topology', path=path)
             if self.numerics.detuning is not None:
                 raise UnsupportedFeatureError('Adaptive detuning is eager-only. Use exact-point numerics under a transform, or explicitly change the physical input and prepare that problem.',
                                               code='prepared.detuning_transform', path='numerics.detuning')
         solvers = _resolve(problem, self.numerics, self.execution)
-        for solver, geometry in zip(solvers, self._geometry):
+        # Built only to be checked: the run keeps the traced values and their tangents.
+        checked = (_resolve(_adapt.primal_geometry(problem), self.numerics, self.execution)
+                   if traced_geometry else solvers)
+        for solver, geometry in zip(checked, self._geometry):
             try:
                 _engine_scene(solver)._refuse_a_stale_geometry_record(geometry)
             except (ValueError, RuntimeError) as error:
@@ -286,7 +295,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
                                  'coherent_grouping': 'cell, wavelength, source directions/sampling and half-space responses are fixed; prepare again to change them',
                                  'runtime_guards': ('finite inputs', 'positive wavelength', 'nonnegative thickness',
                                                     'nonzero polarization', 'raster phase partition'),
-                                 'traced_geometry': 'host-only geometry changes are refused',
+                                 'traced_geometry': 'checked on the primal under eager jax.grad; refused under jit or vmap, which carry none',
                                  'cache_policy': 'static geometry only; every run rebuilds material, mode, and propagation operators'})
     return Prepared(numerics=numerics, execution=execution, report=report, contract=contract,
                     _structure=_adapt.structure_key(problem), _geometry=geometry, _partitions=partitions,

@@ -77,7 +77,8 @@ class Polygon:
     of itself or of another region; that is refused when the problem is prepared.
 
     Vertex coordinates differentiate as other region geometry does: through ``prepared.run``
-    on PyTorch, refused under a JAX transform (code ``prepared.host_topology``). Prepare with
+    on PyTorch and under eager ``jax.grad``, refused under ``jax.jit`` or ``jax.vmap`` (code
+    ``prepared.host_topology``). Prepare with
     the spelling you run with -- an ``(N, 2)`` array and ``N`` pairs are different layouts --
     and a step that changes which edges cross, or moves an axis-aligned edge off its axis,
     needs a new preparation.

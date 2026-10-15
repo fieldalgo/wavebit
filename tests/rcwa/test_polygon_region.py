@@ -467,15 +467,26 @@ def test_the_lifecycle_replays_moved_vertices_and_refuses_a_changed_painting():
     assert error.value.issue.code == 'prepared.topology'
 
 
-def test_the_lifecycle_refuses_jax_traced_vertices_as_it_refuses_all_traced_geometry():
+def test_the_lifecycle_differentiates_jax_vertices_under_grad_and_refuses_them_under_jit():
+    """As all region geometry: eager ``jax.grad`` is checked on its primal, ``jit`` has none."""
     jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
     import jax.numpy as jnp
-    prepared = rcwa.prepare(problem(region(jnp.asarray(L_TILTED))), numerics=LAURENT,
-                            backend='jax')
-    with pytest.raises(UnsupportedFeatureError) as error:
-        jax.grad(lambda v: jnp.sum(prepared.run(problem(region(v))).T))(jnp.asarray(L_TILTED))
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(problem(region(jnp.asarray(L_TILTED))), numerics=LAURENT,
+                                backend='jax')
+        loss = lambda v: jnp.sum(prepared.run(problem(region(v))).T)
+        derivative = np.asarray(jax.grad(loss)(jnp.asarray(L_TILTED)))
+        with pytest.raises(UnsupportedFeatureError) as error:
+            jax.jit(loss)(jnp.asarray(L_TILTED))
     assert error.value.issue.code == 'prepared.host_topology'
     assert error.value.issue.path.endswith('geometry.vertices')
+    prepared = rcwa.prepare(problem(region(torch.tensor(L_TILTED, dtype=torch.float64))),
+                            numerics=LAURENT, backend='torch')
+    v = torch.tensor(L_TILTED, dtype=torch.float64, requires_grad=True)
+    prepared.run(problem(region(v))).T.sum().backward()
+    # measured 1.4e-13 against derivatives up to 8.6e-2
+    np.testing.assert_allclose(derivative, v.grad.numpy(), rtol=0, atol=1e-11)
 
 
 # ----------------------------------------------------------------------------- derivatives
