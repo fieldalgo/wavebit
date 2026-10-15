@@ -11,6 +11,7 @@ Since 2026-10-15 each solver has its own long-lived trunk:
 |---|---|
 | `rcwa` | RCWA work: `src/wavebit/rcwa/` and its tests, docs, studies and references |
 | `fdtd` | FDTD work: `src/wavebit/fdtd/`, `tests/fdtd/`, `docs/*/fdtd/`, `studies/fdtd/` and their references |
+| `main` | The last release, and the branch a visitor lands on. Nothing lands here directly: at each release `main` is fast-forwarded to the `develop` commit being released and tagged. Until the first release it simply tracks `develop`. |
 | `develop` | Integration. Shared work lands here directly: `src/wavebit/_common/`, materials, the package root and the public lifecycle, `tools/`, CI, the docs skeleton, and anything both solvers need at once. The public mirror is cut from `develop` alone. |
 
 A change belongs to the solver whose results it can move; a change that can move both
@@ -49,6 +50,6 @@ for: `729b898d` merged `fdtd-general`, which is retired; `fdtd` is its successor
   trunk, `git merge --ff develop` (a fast-forward while the trunk has nothing of its own,
   a merge commit otherwise). Resolve conflicts on the trunk, never on `develop`.
 - These merges are the only exception to `merge.ff=only`.
-- Never rewrite `develop`, `rcwa` or `fdtd` once pushed: docs, tests and studies cite their
+- Never rewrite `main`, `develop`, `rcwa` or `fdtd` once pushed: docs, tests and studies cite their
   commits by hash. Commits that exist only on one machine may be rebased onto the updated
   remote branch before they are pushed.

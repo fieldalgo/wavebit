@@ -27,20 +27,25 @@ response is the model that optimizes it.
 * **Checked against the outside world.** RETICOLO, fmmax and S4 for RCWA; Meep for FDTD; the Li (1997)
   crossed-grating benchmark. The numbers and how they were taken: [validation](docs/validation/index.md).
 
-**Status: 0.1.0, alpha.** RCWA is the mature path. FDTD runs on CPU in double precision; its geometry,
+**Status: 0.0.2, alpha.** RCWA is the mature path. FDTD runs on CPU in double precision; its geometry,
 material and derivative support is reported by `check` for each problem. The API may change before
 1.0. An experimental RCWA solver for metal contacts is opt-in and has its own, narrower scope; read
 [method selection](docs/guide/rcwa/nvf-method-selection.md) before enabling it.
 
 ## Install
 
-Python 3.12 or newer. The release is not on PyPI yet; install from a source checkout:
+Python 3.12 or newer.
+
+```shell
+pip install wavebit              # NumPy backend
+pip install 'wavebit[jax]'       # or 'wavebit[pytorch]', or 'wavebit[jax,pytorch]' — differentiation backends
+```
+
+From a source checkout, for development:
 
 ```shell
 git clone https://github.com/fieldalgo/wavebit.git && cd wavebit
-pip install .                  # NumPy backend
-pip install '.[jax]'           # or '.[pytorch]', or '.[jax,pytorch]' — differentiation backends
-pip install -e '.[jax,docs]'   # editable, with the documentation toolchain
+pip install -e '.[jax,docs]'     # editable, with the documentation toolchain
 ```
 
 `environment.yml` builds the full development environment, including what the studies need. The
