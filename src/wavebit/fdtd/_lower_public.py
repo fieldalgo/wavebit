@@ -27,6 +27,11 @@ def _number(value, path):
 def _geometry(shape, reserved=None):
     if isinstance(shape, (geometry.Slab, geometry.Region, geometry.Plane)):
         return shape
+    if isinstance(shape, geometry.Shape) and type(shape).__module__ != old_geometry.__name__:
+        if reserved is not None:
+            raise UnsupportedFeatureError('custom Shape geometry is static; geometry_ranges requires a built-in body',
+                                          path='numerics.geometry_ranges')
+        return shape
     if not isinstance(shape, (geometry.Sphere, geometry.Box, geometry.Cylinder, geometry.Prism)):
         raise UnsupportedFeatureError('unsupported geometry', path='scene.structures.shape', actual=type(shape).__name__)
     fields = {f.name: getattr(shape, f.name) for f in dataclasses.fields(shape)}
@@ -202,6 +207,13 @@ def lower_problem(problem, numerics):
                 lo, hi = shape.low, shape.high
             elif getattr(shape, 'range', None) is not None:
                 lo, hi = zip(*shape.range)
+            elif isinstance(shape, geometry.Shape) and type(shape).__module__ != old_geometry.__name__:
+                # The protocol exposes cell support, not guessed size/center attributes.
+                from ._kernel.grid import Grid
+                grid = Grid.from_domain(size=size, center=center, dx=dx)
+                support = shape.support(grid)
+                lo = tuple(grid.low[a] + pair[0]*dx for a, pair in enumerate(support))
+                hi = tuple(grid.low[a] + pair[1]*dx for a, pair in enumerate(support))
             else:
                 lo, hi = shape.low, shape.high
             for a, axis in enumerate('xyz'):

@@ -2,11 +2,11 @@
 from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass
 from wavebit._common.declarations import Declaration
-from ._legacy_geometry import Slab, Region, Plane
+from ._legacy_geometry import Shape, Slab, Region, Plane
 from ._scene import Domain
 from ._structure import tuples
 
-__all__ = ['Domain', 'Slab', 'Region', 'Plane', 'Sphere', 'Box', 'Cylinder', 'Prism', 'Structure']
+__all__ = ['Domain', 'Shape', 'Slab', 'Region', 'Plane', 'Sphere', 'Box', 'Cylinder', 'Prism', 'Structure']
 
 @eager_under_torch_compile
 @dataclass(frozen=True, kw_only=True)

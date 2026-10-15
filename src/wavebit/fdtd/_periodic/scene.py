@@ -1173,7 +1173,7 @@ def _solve_bottom_scene(options):
                 raise ValueError('Monitor z must be a finite real scalar.')
         mirrored['field_monitors'] = {name: depth-z for name, z in planes.items()}
     answer = solve_scene_fdtd(**mirrored)
-    if not options['return_diagnostics']:
+    if options.get('_validate_only') or not options['return_diagnostics']:
         return answer
     result, diagnostics = answer
     signs = dict(ex=1, ey=1, ez=-1, hx=-1, hy=-1, hz=1)
@@ -1302,7 +1302,8 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
                      source_distance=None, transverse_resolution=None, mesh_indices=None,
                      mesh_thickness=None, layer_smoothing=0., shape_smoothing=0., shape_integration='separable',
-                     variable_depth=False, _anchor_bottom=False, _public_order_frame=False):
+                     variable_depth=False, _anchor_bottom=False, _public_order_frame=False,
+                     _validate_only=False):
     """Solve a rectangular scene with fixed-mesh layer/angle/material gradients.
 
     Explicit resolution is required: optimizing materials must not resize the
@@ -1873,6 +1874,12 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                         convergence_window=convergence_window, convergence_tol=convergence_tol, dft_subsample=dft_subsample,
                         pml_wavelength=centre, pml_reflection=pml_reflection,
                         z_spacing=widths if nonuniform else None, bloch_phase=xp.stack((array(0.), ky0*ly, kx0*lx)))
+        if _validate_only:
+            report = fdtd_grid(epsilon, mu=permeability, poles=native_poles,
+                pml_background=background, record_field=record_field,
+                record_components=record_components, record_region=record_region,
+                **settings, _validate_only=True)
+            return dict(report, dt=dt, steps=steps, stable=scene_valid & report['stable'])
         reference = _uniform_reference(epsilon, et, mt, background[0], settings, kx0, ky0,
                                        dx, dy, xp=xp, array=array)
         actual = fdtd_grid(epsilon, mu=permeability, poles=native_poles,

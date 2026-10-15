@@ -1,6 +1,6 @@
 """Portable, versioned jobs with explicit solver dispatch.
 
-Legacy RCWA JobSpec files are handled by wavebit.compat.legacy; changing a schema
+Legacy RCWA JobSpec files require wavebit.migration.migrate_legacy_jobs; changing a schema
 number is not a coordinate or material migration.
 """
 import base64
@@ -34,6 +34,9 @@ _CLASS_MODULES = {
                      'GaussianPulse', 'Outputs', 'Record', 'Field', 'Flux',
                      'Diffraction', 'FarField', 'Numerics', 'UniformGrid', 'Duration', 'PML', 'Absorber', 'Decay'),
     'wavebit._common.execution': ('Execution',),
+    'wavebit.fdtd.native': ('Problem', 'Medium', 'Oscillator', 'Current', 'Initial',
+                           'Outputs', 'Record', 'Spectrum', 'Numerics', 'Grid', 'PML', 'Tail'),
+    'wavebit.fdtd.periodic': ('Problem', 'RasterDispersion', 'Pulse', 'Outputs', 'Record', 'Numerics'),
 }
 
 
@@ -175,8 +178,8 @@ class Job:
     execution: Execution = dataclasses.field(default_factory=Execution)
 
     def __post_init__(self):
-        if self.solver not in ('rcwa', 'fdtd'):
-            raise _error("solver must be 'rcwa' or 'fdtd'.", 'solver')
+        if self.solver not in ('rcwa', 'fdtd', 'fdtd.native', 'fdtd.periodic'):
+            raise _error("solver must be 'rcwa', 'fdtd', 'fdtd.native', or 'fdtd.periodic'.", 'solver')
         namespace = importlib.import_module(f'wavebit.{self.solver}')
         if not isinstance(self.problem, namespace.Problem) or not isinstance(self.numerics, namespace.Numerics):
             raise _error('Problem and Numerics must belong to the selected solver.', 'problem')

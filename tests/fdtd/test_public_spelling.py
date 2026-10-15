@@ -1,6 +1,6 @@
 """What the public FDTD module says to its caller is spelled in its own vocabulary.
 
-``wavebit.fdtd`` runs on the engine ``wavebit.compat.legacy.fd`` exposes, whose refusals and
+``wavebit.fdtd`` runs on the private normalized general-scene engine, whose refusals and
 warnings name compat calls: a public caller with an oblique plane wave was told to "Use
 fd.Bloch.from_source(pw, ...)", a call with another signature in a namespace they never
 imported. ``wavebit.fdtd._spelling`` translates what leaves the public entry points; these tests
@@ -91,13 +91,9 @@ def test_every_name_a_public_message_offers_exists_where_it_says():
     for _, text in engine_strings():
         if 'fd.' in text:
             offered |= set(re.findall(r'(?<![\w.])fdtd\.(\w+)', to_public(text)))
-            offered |= {'compat:' + n for n in
-                        re.findall(r'wavebit\.compat\.legacy\.fd\.(\w+)', to_public(text))}
+            assert 'wavebit.compat' not in to_public(text)
     for name in sorted(offered):
-        if name.startswith('compat:'):
-            assert hasattr(fd, name[7:]), name
-        else:
-            assert hasattr(fdtd, name), f'fdtd.{name}'
+        assert hasattr(fdtd, name), f'fdtd.{name}'
     for kind in ('Material', 'Conductor', 'Dispersive'):
         out = to_public(f'is an fd.{kind}.')
         assert re.fullmatch(r'is a (\w+)\.', out) and hasattr(wavebit.materials,

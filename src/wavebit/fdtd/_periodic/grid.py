@@ -32,7 +32,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
               pml_background=((1., 1.), (1., 1.)),
               record_field=None, record_components=None, z_spacing=None, record_region=None,
               convergence_window=None, convergence_tol=1e-4, dft_subsample=1,
-              pml_reflection=1e-8):
+              pml_reflection=1e-8, _validate_only=False):
     """Advance a 3D Yee grid and accumulate frequency-domain field planes.
 
     epsilon: positive scalar-per-cell (z,y,x) or diagonal/native (3,z,y,x)
@@ -432,6 +432,13 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     if convergence_window is not None:
         state += (field_norm_squared(e, h), array(0., dtype=real_dtype), accum, accum, material_zero, material_zero)
     records = {}
+    if _validate_only:
+        # Public native-grid preparation shares every admission check above and
+        # allocates its prospective state, but never advances Maxwell's equations.
+        return dict(stable=stable, cfl_dt=bound, shape=shape,
+                    state_bytes=sum(v.size * v.dtype.itemsize for v in (e, h, accum))
+                    if backend.value != 'torch' else
+                    sum(v.numel() * v.element_size() for v in (e, h, accum)))
     if record_field is None:
         state = runtime.advance(step, state, steps, checkpoint_steps)
     else:

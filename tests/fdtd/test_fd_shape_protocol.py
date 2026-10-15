@@ -781,3 +781,42 @@ def test_the_structure_door_is_fd_Shape_and_the_bare_protocol_is_not_a_shape():
     with pytest.raises(TypeError) as e:
         fd.Structure(fd.Plane(z=0.0), fd.Material(eps=2.0))     # a monitor region, not a shape
     assert 'subclassing fd.Shape' in str(e.value) and 'Plane' in str(e.value)
+
+
+def test_custom_protocol_survives_the_physical_boundary_and_static_reuse_guard():
+    """A mutable user shape must paint correctly and invalidate a held preparation."""
+    import numpy as np
+    from wavebit import fdtd, Material, Units
+    from wavebit.errors import IncompatibleProblemError
+    pebble = _Pebble(.18)
+    problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.8,)*3),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
+        structures=(fdtd.Structure('custom', pebble, Material(epsilon=2.)),)),
+        initial=fdtd.InitialField(E=(lambda x,y,z: np.cos(2*np.pi*x/.8), None, None)),
+        outputs=fdtd.Outputs(final_fields=True))
+    numerics=fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX),duration=fdtd.Duration(steps=4))
+    from wavebit.fdtd._lower_public import lower_problem
+    original,_=lower_problem(problem,numerics)
+    prepared=fdtd.prepare(problem,numerics=numerics)
+    result=prepared.run(problem)
+    baseline=fd.run(original)
+    np.testing.assert_array_equal(result.final_fields.values['E'],baseline.final.E)
+    assert isinstance(pebble,fdtd.Shape)
+    pebble.radius=.22
+    with pytest.raises(IncompatibleProblemError):prepared.run(problem)
+
+
+def test_custom_protocol_support_is_used_for_open_face_clearance():
+    from wavebit import fdtd, Material, Units
+    problem=fdtd.Problem(units=Units(length='um'),scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.8,)*3),boundaries=fdtd.Boundaries.open(),
+        structures=(fdtd.Structure('custom',_Pebble(.08),Material(epsilon=2.)),)))
+    numerics=fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX),duration=fdtd.Duration(steps=2),
+                          absorber=fdtd.Absorber(cells=4))
+    assert fdtd.check(problem,numerics=numerics).ok
+    touching=problem.replace(scene=problem.scene.replace(structures=(
+        fdtd.Structure('custom',_Pebble(.18,center=(.25,0.,0.)),Material(epsilon=2.)),)))
+    report=fdtd.check(touching,numerics=numerics)
+    assert not report.ok
+    assert any(issue.code=='padding_continuation' for issue in report.issues)

@@ -102,6 +102,8 @@ subtrees:
         - entries:
           - file: guide/fdtd/fd-constitutive-absorber
           - file: guide/fdtd/fd-differentiation
+          - file: guide/fdtd/native-grids
+          - file: guide/fdtd/periodic-problems
           - file: guide/fdtd/stopping-and-absorbers
           - file: guide/fdtd/substrate-gradients
           - file: guide/fdtd/fd-metasurface

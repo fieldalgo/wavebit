@@ -324,7 +324,7 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
     if incidence_side not in (None, 'top'):
         raise ValueError(
             f"fdtd: incidence_side={incidence_side!r}. This kernel illuminates its first layer "
-            f"only. `wavebit.compat.legacy.fdtd` answers 'bottom' by handing it the mirrored "
+            f"only. `fdtd.periodic.run with algorithm='reference'` answers 'bottom' by handing it the mirrored "
             f"scene (`wavebit.fdtd._periodic.adapter._legacy_inputs`); call that instead.")
     if lattice is not None:
         raise ValueError(
@@ -2412,7 +2412,7 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                subpixel=True, truncation_order=None, return_diagnostics=False,
                dispersion=None, poles=None, pad_scale=1.0, grading=None,
                record_field=None, record_components=None, field_monitors=None, chi=None, polarization=None,
-               _leg=None, _source_quadrature=False):
+               _leg=None, _source_quadrature=False, _validate_only=False):
     # `mu` is the raster's permeability field, layer-major beside `structure`, and the two
     # half-spaces carry theirs inside their `Material` -- the same two spellings the RCWA path
     # takes, so one `Stack` reaches both solvers unchanged.
@@ -2550,6 +2550,17 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                 or len(set(record_components)) != len(record_components)):
             raise ValueError('fdtd: record_components must name unique ex/ey/ez/hx/hy/hz components.')
     pair = _incident_pair(tetm, psi, chi, polarization)
+    if pair is not None and _validate_only:
+        # Both polarization bases share the same grid and material admission.
+        return solve_fdtd(structure, thickness, top, bot, period, wavelength,
+            tetm='te', theta=theta, phi=phi, mu=mu, incidence_side=incidence_side,
+            lattice=lattice, resolution=resolution, n_pml=n_pml,
+            pml_reflection=pml_reflection, n_periods=n_periods, courant=courant,
+            subpixel=subpixel, truncation_order=truncation_order,
+            return_diagnostics=return_diagnostics, dispersion=dispersion, poles=poles,
+            pad_scale=pad_scale, grading=grading, record_field=record_field,
+            record_components=record_components, field_monitors=field_monitors,
+            _leg='s', _validate_only=True)
     if pair is not None:
         return _solve_conical(
             pair=pair, phi=phi, theta=theta, structure=structure, thickness=thickness, top=top,
@@ -2647,6 +2658,9 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
                  mu_top=mu_top, mu_bot=mu_bot, pad_scale=pad_scale, grading=grading,
                  n_max=n_max, period_y=period_y, pml_reflection=pml_reflection)
     n_steps = int(np.ceil(n_periods * centre / grid.dt))
+    if _validate_only:
+        return dict(dt=grid.dt, steps=n_steps, shape=(grid.nz, grid.ny, grid.nx),
+                    stable=True, scope='reference grid/material admission; monitor extraction checked at run')
     out = _time_loop(grid, name, n_steps, band, leg=_leg, record_field=record_field,
                      source_quadrature=_source_quadrature, record_components=record_components,
                      field_monitors=None if _source_quadrature else field_monitors)

@@ -9,4 +9,6 @@ from ._structure import sample_structure
 __all__ = ['Problem', 'Stack', 'Layer', 'Region', 'Rectangle', 'Circle', 'Ellipse', 'Polygon',
            'Excitation', 'Outputs', 'PlaneWave', 'OrderExcitation', 'GaussianBeam', 'ElectricDipole',
            'Numerics', 'Result', 'BoundaryPower', 'Prepared', 'check', 'prepare', 'run',
-           'sample_structure']
+           'sample_structure', 'layer_thicknesses']
+
+from wavebit._common.periodic import layer_thicknesses

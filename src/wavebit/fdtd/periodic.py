@@ -1,0 +1,467 @@
+"""Physical periodic-stack FDTD with explicit numerical route selection.
+
+The Stack, Layer, typed shapes and plane-wave excitation are shared with RCWA.
+Geometry is in declared length units; all times and material rates are SI.
+``algorithm='shared'`` supports NumPy/JAX/Torch; ``'reference'`` selects the
+independent NumPy stepping formulation, useful for historical reproduction.
+"""
+from dataclasses import field
+from collections.abc import Mapping
+import numpy as np
+
+from wavebit._common.backend import eager_under_torch_compile, array_namespace, _concrete
+from wavebit._common.declarations import spec
+from wavebit._common.execution import Execution, CheckReport, frozen_mapping
+from wavebit._common.pytrees import register_dataclass
+from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
+from wavebit.materials import Material, Drude, Lorentz
+from wavebit.observations import DiffractionOrders, FieldSamples, TimeSeries, Validity
+from wavebit.rcwa import Stack, Layer, Region, Rectangle, Circle, Ellipse, Polygon, Excitation, PlaneWave
+from wavebit.units import require_units, Z0
+
+
+@spec
+class RasterDispersion:
+    """Integer raster labels mapped to physical Drude/Lorentz pole tuples.
+
+    Label zero is nondispersive. Stack raster epsilon is epsilon-infinity.
+    Coefficients are SI rates, independently of the geometry's length unit.
+    """
+    labels: object
+    models: object
+
+    def __post_init__(self):
+        models = {k: tuple(v) for k, v in self.models.items()}
+        if any(type(k) is not int or k == 0 for k in models):
+            raise ValidationError('models require nonzero integer labels', path='dispersion.models')
+        if any(not isinstance(p, (Drude, Lorentz)) for v in models.values() for p in v):
+            raise ValidationError('use physical Drude/Lorentz poles', path='dispersion.models')
+        object.__setattr__(self, 'models', frozen_mapping(models))
+
+
+@spec
+class Pulse:
+    """Gaussian source envelope with optional causal notches at positive Hz."""
+    width_seconds: object = None
+    notch_frequencies_hz: object = None
+
+
+@spec
+class Record:
+    """Native Yee records, optional physical coordinate bounds by x/y/z."""
+    every: int = 1
+    components: tuple = ('ex', 'ey', 'ez', 'hx', 'hy', 'hz')
+    bounds: object = None
+
+    def __post_init__(self):
+        object.__setattr__(self, 'components', tuple(self.components))
+        if self.bounds is not None:
+            object.__setattr__(self, 'bounds', frozen_mapping(self.bounds))
+
+
+@spec
+class Outputs:
+    planes: object = field(default_factory=dict)
+    record: object = None
+
+    def __post_init__(self):
+        object.__setattr__(self, 'planes', frozen_mapping(self.planes))
+        if self.record is not None and not isinstance(self.record, Record):
+            raise ValidationError('expected periodic.Record', path='outputs.record')
+
+
+@spec
+class Numerics:
+    """Fixed numerical choices; spatial quantities use the problem's length unit.
+
+    ``spacing`` is nominal z spacing; ``transverse_spacing`` optionally chooses
+    x/y separately. Duration is an SI hard cap rounded up to whole time steps.
+    ``tail_steps`` only diagnoses the final window; it never stops a run early.
+    Reference stepping admits only its explicitly supported subset and refuses
+    shared-only controls, rather than silently ignoring them.
+    """
+    spacing: float
+    duration_seconds: float
+    algorithm: str = 'shared'
+    courant: float = .8
+    pml_cells: int = 12
+    pml_reflection: float = 1e-8
+    subpixel: bool = True
+    orders: object = None
+    padding_scale: float = 1.
+    grading: object = None
+    transverse_spacing: object = None
+    nominal_indices: object = None
+    nominal_layer_thickness: object = None
+    align_layers: bool = False
+    variable_depth: bool = False
+    layer_smoothing: float = 0.
+    shape_smoothing: object = 0.
+    shape_integration: str = 'separable'
+    extraction_distance: object = None
+    extraction_method: str = 'electric'
+    source_distance: object = None
+    checkpoint_steps: int = 32
+    dft_subsample: int = 1
+    tail_steps: object = None
+    tail_tolerance: float = 1e-4
+
+    def __post_init__(self):
+        if self.algorithm not in ('shared', 'reference'):
+            raise ValidationError("algorithm must be 'shared' or 'reference'", path='numerics.algorithm')
+        for name in ('spacing', 'duration_seconds'):
+            v=getattr(self,name)
+            if isinstance(v,bool) or np.ndim(v) or not np.isfinite(v) or v<=0:
+                raise ValidationError('expected a finite positive static scalar', path='numerics.'+name)
+
+
+@spec
+class Problem:
+    stack: Stack
+    excitation: Excitation
+    units: object
+    dispersion: object = None
+    pulse: Pulse = field(default_factory=Pulse)
+    outputs: Outputs = field(default_factory=Outputs)
+
+    def __post_init__(self):
+        require_units(self.units)
+        for name, typ in (('stack',Stack),('excitation',Excitation),('pulse',Pulse),('outputs',Outputs)):
+            if not isinstance(getattr(self,name),typ):
+                raise ValidationError(f'expected {typ.__name__}',path=name)
+        if len(self.excitation.sources)!=1 or not isinstance(self.excitation.sources[0],PlaneWave):
+            raise UnsupportedFeatureError('periodic FDTD requires exactly one PlaneWave',path='excitation.sources')
+        if self.dispersion is not None and not isinstance(self.dispersion,RasterDispersion):
+            raise ValidationError('expected RasterDispersion',path='dispersion')
+
+
+def _execution(numerics,backend,device,precision):
+    if not isinstance(numerics,Numerics):
+        raise ValidationError('expected periodic.Numerics',path='numerics')
+    execution=Execution(backend=backend,device=device,precision=precision).validate()
+    if precision!='double':
+        raise UnsupportedFeatureError('periodic execution requires double precision',path='execution.precision')
+    if numerics.algorithm=='reference' and backend!='numpy':
+        raise UnsupportedFeatureError('reference stepping supports NumPy only',path='execution.backend')
+    return execution
+
+
+def _arguments(problem,numerics,execution):
+    from wavebit.rcwa._adapt import _namespace, _array, geometry_recipe, polarization
+    if not isinstance(problem,Problem) or not isinstance(numerics,Numerics):
+        raise ValidationError('expected periodic.Problem and periodic.Numerics',path='problem')
+    xp=_namespace(execution)
+    source=problem.excitation.sources[0]
+    if source.kx is not None or source.ky is not None:
+        raise UnsupportedFeatureError('use real theta/phi for periodic FDTD',path='excitation.sources')
+    amplitude=_array(xp,source.amplitude,execution,True)
+    if amplitude.shape or _concrete(xp.isfinite(amplitude)) is False:
+        raise ValidationError('amplitude must be a finite scalar in V/m',path='excitation.sources.amplitude')
+    pair=polarization(source,xp,execution)
+    if _concrete(xp.all(xp.isfinite(pair))) is False:
+        raise ValidationError('polarization must be a finite nonzero Jones pair',path='excitation.sources.polarization')
+    def material(value):
+        if not isinstance(value,Material):
+            raise UnsupportedFeatureError('periodic regions and ports require nondispersive Material; use RasterDispersion for electric poles',path='stack.material')
+        return value
+    stack=problem.stack
+    if not stack.layers:
+        raise ValidationError('periodic FDTD requires at least one finite layer',path='stack.layers')
+    sampled=[layer.epsilon is not None for layer in stack.layers]
+    if any(sampled) and not all(sampled):
+        raise UnsupportedFeatureError('use either sampled layers or typed regions throughout a stack',path='stack.layers')
+    if all(sampled):
+        structure=xp.stack([_array(xp,l.epsilon,execution,True) for l in stack.layers])
+        mu=xp.stack([xp.ones_like(structure[0]) if l.mu is None else _array(xp,l.mu,execution,True) for l in stack.layers])
+    else:
+        structure=[dict(background=material(l.background),shapes=[dict(geometry_recipe(r.geometry),material=material(r.material)) for r in l.regions]) for l in stack.layers]
+        mu=None
+    # Concrete thickness without nominal geometry is intentionally static. A
+    # nominal mesh keeps live thickness leaves on their backend without detach.
+    thickness=([l.thickness for l in stack.layers] if numerics.nominal_layer_thickness is None
+               else xp.stack([_array(xp,l.thickness,execution) for l in stack.layers]))
+    band=np.atleast_1d(np.asarray(problem.excitation.wavelength,float))
+    if band.ndim!=1 or not len(band) or not np.isfinite(band).all() or np.any(band<=0):
+        raise ValidationError('wavelength must be a positive finite scalar or vector',path='excitation.wavelength')
+    ts=problem.units.time_seconds
+    centre=float((band.min()+band.max())/2)
+    record=problem.outputs.record
+    options=dict(structure=structure,thickness=thickness,top=material(stack.top),bot=material(stack.bottom),
+        period=stack.period,lattice=stack.lattice,wavelength=band,mu=mu,
+        theta=0. if source.theta is None else source.theta,phi=source.phi,
+        incidence_side=source.side,polarization=pair,
+        resolution=1/numerics.spacing,n_periods=numerics.duration_seconds/(ts*centre),
+        n_pml=numerics.pml_cells,pml_reflection=numerics.pml_reflection,
+        courant=numerics.courant,subpixel=numerics.subpixel,truncation_order=numerics.orders,
+        pad_scale=numerics.padding_scale,grading=numerics.grading,return_diagnostics=True,
+        field_monitors=dict(problem.outputs.planes) or None,
+        record_field=None if record is None else record.every,
+        record_components=None if record is None else record.components)
+    if problem.dispersion is not None:
+        poles={}
+        for key,terms in problem.dispersion.models.items():
+            poles[key]=tuple((0.,p.gamma*ts,(p.omega_p*ts)**2) if isinstance(p,Drude)
+                else (p.omega_0*ts,p.gamma*ts,p.strength*ts**2) for p in terms)
+        options.update(dispersion=problem.dispersion.labels,poles=poles)
+    if numerics.algorithm=='reference':
+        defaults=Numerics(spacing=numerics.spacing,duration_seconds=numerics.duration_seconds,algorithm='reference')
+        for name in ('transverse_spacing','nominal_indices','nominal_layer_thickness','align_layers',
+                     'variable_depth','layer_smoothing','shape_smoothing','shape_integration',
+                     'extraction_distance','extraction_method','source_distance','checkpoint_steps',
+                     'dft_subsample','tail_steps','tail_tolerance'):
+            value=getattr(numerics,name)
+            if isinstance(value,(np.ndarray,Mapping)) or value!=getattr(defaults,name):
+                raise UnsupportedFeatureError('this control requires shared stepping',path='numerics.'+name)
+        if problem.pulse.width_seconds is not None or problem.pulse.notch_frequencies_hz is not None:
+            raise UnsupportedFeatureError('custom pulse controls require shared stepping',path='pulse')
+        if record is not None and record.bounds is not None:
+            raise UnsupportedFeatureError('record bounds require shared stepping',path='outputs.record.bounds')
+        return options,None
+    device=execution.device
+    if execution.backend=='jax':
+        import jax
+        platform,_,index=device.partition(':');device=jax.devices(platform)[int(index or 0)]
+    transverse=None
+    if numerics.transverse_spacing is not None:
+        spacing=np.asarray(numerics.transverse_spacing)
+        if spacing.shape not in ((),(2,)) or np.iscomplexobj(spacing) or not np.isfinite(spacing).all() or np.any(spacing<=0):
+            raise ValidationError('expected positive x/y spacing',path='numerics.transverse_spacing')
+        transverse=1/spacing
+    notches=problem.pulse.notch_frequencies_hz
+    options.update(device=device,transverse_resolution=transverse,mesh_indices=numerics.nominal_indices,
+        mesh_thickness=numerics.nominal_layer_thickness,align_layers=numerics.align_layers,
+        variable_depth=numerics.variable_depth,layer_smoothing=numerics.layer_smoothing,
+        shape_smoothing=numerics.shape_smoothing,shape_integration=numerics.shape_integration,
+        diffraction_distance=numerics.extraction_distance,diffraction_method=numerics.extraction_method,
+        source_distance=numerics.source_distance,checkpoint_steps=numerics.checkpoint_steps,
+        dft_subsample=numerics.dft_subsample,convergence_window=numerics.tail_steps,
+        convergence_tol=numerics.tail_tolerance,record_bounds=None if record is None or record.bounds is None else dict(record.bounds),
+        pulse_width=None if problem.pulse.width_seconds is None else problem.pulse.width_seconds/ts,
+        pulse_notches=None if notches is None else np.asarray(notches)*ts)
+    return options,execution.backend
+
+
+def _signature(problem,numerics):
+    if not isinstance(problem,Problem) or not isinstance(numerics,Numerics):
+        raise ValidationError('expected periodic.Problem and periodic.Numerics',path='problem')
+    from ._api import _static
+    from wavebit.rcwa._adapt import structure
+    fixed=dict(units=problem.units.length,numerics=_static(numerics,'numerics'),
+        cell=_static((problem.stack.period,problem.stack.lattice),'stack.cell'),
+        wavelength=_static(problem.excitation.wavelength,'excitation.wavelength'),
+        outputs=_static(problem.outputs,'outputs'))
+    if numerics.nominal_layer_thickness is None:
+        fixed['thickness']=_static(tuple(l.thickness for l in problem.stack.layers),'stack.layers.thickness')
+    if problem.dispersion is not None:
+        fixed['labels']=_static(problem.dispersion.labels,'dispersion.labels')
+    if numerics.nominal_indices is None:
+        fixed['ports']=_static((problem.stack.top,problem.stack.bottom),'stack.ports')
+    source=problem.excitation.sources[0]
+    phi=source.phi
+    static_phi=phi is None or isinstance(phi,(int,float,np.number))
+    fixed['direction_layout']=(static_phi, (phi is None or phi==0) if static_phi else None)
+    return structure(problem),fixed
+
+
+def _validated(problem,numerics,execution):
+    from ._periodic.adapter import solve_periodic_fdtd
+    with execution.scope():
+        options,backend=_arguments(problem,numerics,execution)
+        raw=solve_periodic_fdtd(dict(options,_validate_only=True),backend=backend)
+    return CheckReport(resolved={'shape':raw['shape'],'steps':raw['steps'],
+        'time_step_seconds':raw['dt']*problem.units.time_seconds},
+        capabilities={'algorithm':numerics.algorithm,'backend':execution.backend,
+            'precision':execution.precision,'device':execution.device,
+            'scope':raw.get('scope','full shared-grid admission without time advancement')})
+
+
+@eager_under_torch_compile
+def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
+    try:
+        execution=_execution(numerics,backend,device,precision)
+        _signature(problem,numerics)
+        return _validated(problem,numerics,execution)
+    except (TypeError,ValueError,NotImplementedError) as exc:
+        issue=exc if isinstance(exc,ValidationError) else ValidationError(str(exc),path='problem')
+        return CheckReport(issues=(issue.issue,))
+
+
+@spec
+class Prepared:
+    numerics: Numerics
+    execution: Execution
+    report: CheckReport
+    _signature: object
+
+    def validate(self, problem):
+        """Check concrete reuse and input admission without advancing fields."""
+        try:
+            if _signature(problem, self.numerics) != self._signature:
+                raise IncompatibleProblemError('periodic layout changed; prepare this problem again', path='problem')
+            return _validated(problem, self.numerics, self.execution)
+        except (TypeError, ValueError, NotImplementedError) as exc:
+            issue = exc if isinstance(exc, ValidationError) else ValidationError(str(exc), path='problem')
+            return CheckReport(issues=(issue.issue,))
+
+    def run(self,problem):
+        if _signature(problem,self.numerics)!=self._signature:
+            raise IncompatibleProblemError('periodic layout changed; prepare this problem again',path='problem')
+        return _run(problem,self.numerics,self.execution)
+
+
+@eager_under_torch_compile
+def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
+    execution=_execution(numerics,backend,device,precision)
+    return Prepared(numerics=numerics,execution=execution,report=_validated(problem,numerics,execution),
+                    _signature=_signature(problem,numerics))
+
+
+@spec
+class Result:
+    reflection: DiffractionOrders
+    transmission: DiffractionOrders
+    basis: object
+    fields: object
+    planes: object
+    plane_power_z: object
+    validity: Validity
+    diagnostics: object
+    provenance: object
+    _snapshot: object = None
+
+    def __post_init__(self):
+        register_dataclass(type(self))
+        for name in ('basis','fields','planes','plane_power_z','diagnostics','provenance'):
+            object.__setattr__(self,name,frozen_mapping(getattr(self,name)))
+
+    @property
+    def R(self): return self.reflection.efficiency
+
+    @property
+    def T(self): return self.transmission.efficiency
+
+    def sample(self,*,x=0.,y=0.,z,times=None):
+        """Concrete offline interpolation of all six fields at SI times.
+
+        Requires all six recorded components. Interpolation across the source
+        discontinuity is refused; this NumPy postprocessing does not retain AD.
+        """
+        from ._periodic.probes import sample_fdtd_fields
+        ts=self.provenance['time_unit_seconds']
+        raw=sample_fdtd_fields(self._snapshot,x=x,y=y,z=z,t=None if times is None else np.asarray(times)/ts)
+        amplitude=self.provenance['incident_amplitude']
+        return TimeSeries(values=np.concatenate((raw['E'],raw['H']/Z0),axis=-1)*amplitude,
+            coordinates={'x':x,'y':y,'z':z},components=('Ex','Ey','Ez','Hx','Hy','Hz'),
+            units={'E':'V/m','H':'A/m','coordinates':self.provenance['length_unit']},
+            times=raw['t']*ts,sampling='linear space/time interpolation of Yee records',
+            metadata={'region':raw['region'],'axis_order':('time','component')})
+
+
+def _adapt(raw,diag,problem,numerics):
+    raw=raw if isinstance(raw,list) else [raw]
+    xp=array_namespace(raw[0].R)
+    wavelengths=xp.asarray(np.atleast_1d(problem.excitation.wavelength))
+    source=problem.excitation.sources[0];amplitude=source.amplitude;u=problem.units
+    depth=sum(l.thickness for l in problem.stack.layers)
+    def orders(which,leg):
+        subs=[getattr(r,leg) for r in raw]
+        if any(s is None for s in subs): return None
+        efficiency=xp.stack([getattr(s,which.upper()) for s in subs])
+        nv,nu=efficiency.shape[-2:]
+        # Engine windows can be offset; retain their explicit integer labels.
+        (cu,hu),(cv,hv)=raw[0].order_window
+        z=depth if (source.side=='top')==(which=='r') else 0.
+        return DiffractionOrders(wavelengths=wavelengths,
+            orders_u=tuple(range(cu-hu,cu+hu+1)),orders_v=tuple(range(cv-hv,cv+hv+1)),
+            efficiency=efficiency,amplitude_s=xp.stack([getattr(s,which+'_s') for s in subs])*amplitude,
+            amplitude_p=xp.stack([getattr(s,which+'_p') for s in subs])*amplitude,
+            reference={'z':z,'side':source.side if which=='r' else ('bottom' if source.side=='top' else 'top'),
+                'coordinates':u.length,'lateral_origin':'cell_centre','polarization_frame':'per-order s/p',
+                'amplitude_units':'V/m','incident_amplitude':amplitude},
+            reference_wavelength_fields=(),
+            metadata={'theta_radians':diag.get('angles'),'normalization':'incident-only power; unit Jones pair'})
+    basis={}
+    for leg in ('s_inc','p_inc'):
+        reflected=orders('r',leg)
+        if reflected is not None: basis[leg]=(reflected,orders('t',leg))
+    fields={}
+    for name,data in diag.get('fields',{}).items():
+        fields[name]=TimeSeries(values=data['values']*amplitude/(Z0 if name.startswith('h') else 1.),
+            coordinates={a:data[a] for a in ('x','y','z')},components=(name,),
+            units={'field':'A/m' if name.startswith('h') else 'V/m','coordinates':u.length},
+            times=data['t']*u.time_seconds,sampling='native Yee stagger',
+            metadata={'axis_order':('time','z','y','x'),
+                'calibration':diag.get('field_normalization',diag.get('normalization'))})
+    planes={};powers={}
+    for name,data in diag.get('monitors',{}).items():
+        components=('ex','ey','ez','hx','hy','hz')
+        values=xp.stack([data['fields'][c]*amplitude/(Z0 if c.startswith('h') else 1.) for c in components],axis=-1)
+        planes[name]=FieldSamples(values=values,components=('Ex','Ey','Ez','Hx','Hy','Hz'),
+            coordinates=dict({k:data[k] for k in ('x','y','z') if k in data},wavelength=wavelengths),
+            units={'E':'V/m','H':'A/m','coordinates':u.length},sampling='collocated phasor',
+            metadata={'normalization':data.get('normalization'),'axis_order':('wavelength','y','x','component'),
+                      'power_unit':'W/m' if data['per_unit_y'] else 'W',
+                      'integration_measure':data['cell_area']*u.length_metres**(1 if data['per_unit_y'] else 2)})
+        powers[name]=data['power_z']*abs(amplitude)**2*u.length_metres**(1 if data['per_unit_y'] else 2)/Z0
+    # Only explicitly physical diagnostics cross the public boundary. The private
+    # retained snapshot supports existing offline interpolation, without exporting
+    # normalized arrays or internal grid objects as user-facing measurements.
+    diagnostics={k:diag[k] for k in ('shape','spacing','steps','n_steps','dft_subsample','dft_samples',
+        'z_nodes','z_spacing','source_z','pml_bounds','layer_planes','angles','azimuth',
+        'invariant_y','diffraction','residual') if k in diag}
+    if 'dt' in diag: diagnostics['time_step_seconds']=diag['dt']*u.time_seconds
+    elif 'grid' in diag: diagnostics['time_step_seconds']=diag['grid'].dt*u.time_seconds
+    if 'pulse' in diag:
+        pulse={}
+        for key,value in diag['pulse'].items():
+            if key in ('width','peak_time','sampled_peak_time'):
+                pulse[key+'_seconds']=value*u.time_seconds
+            elif key in ('frequency','notches'):
+                pulse[key+'_hz']=value/u.time_seconds
+            else: pulse[key]=value
+        diagnostics['pulse']=pulse
+    def tail(value):
+        if isinstance(value,(tuple,list)): return tuple(tail(v) for v in value)
+        if not isinstance(value,Mapping): return value
+        result={}
+        for key,v in value.items():
+            if key=='comparison_time': result['comparison_time_seconds']=v*u.time_seconds
+            elif key=='electric_spectrum_before_window': result[key]=v*u.time_seconds
+            elif key=='magnetic_spectrum_before_window': result[key]=v*u.time_seconds/Z0
+            else: result[key]=tail(v)
+        return result
+    convergence=tail(diag.get('convergence',{}))
+    if convergence:
+        convergence['units']={'amplitude_change':'relative incident amplitude',
+            'scattering_change_bound':'relative incident amplitude',
+            'electric_spectrum_before_window':'V s/m, uncalibrated current basis',
+            'magnetic_spectrum_before_window':'A s/m, uncalibrated current basis',
+            'material_activity':'internal relative norm; not physical energy'}
+        diagnostics['convergence']=convergence
+    checks={'stable':diag.get('stable',True),'finite':xp.all(xp.isfinite(xp.stack([r.R for r in raw])))}
+    return Result(reflection=orders('r','incident'),transmission=orders('t','incident'),basis=basis,
+        fields=fields,planes=planes,plane_power_z=powers,
+        validity=Validity(checks=checks,convergence=dict(convergence,residual=diag.get('residual'))),
+        diagnostics=diagnostics,provenance={'length_unit':u.length,'time_unit_seconds':u.time_seconds,
+            'incident_amplitude':amplitude,'algorithm':numerics.algorithm,
+            'plane_power_units':{name:plane.metadata['power_unit'] for name,plane in planes.items()},
+            'time_convention':'exp(-i omega t)','coordinate_convention':'+z up; bottom interface z=0'},
+        _snapshot=diag)
+
+
+def _run(problem,numerics,execution):
+    from ._periodic.adapter import solve_periodic_fdtd
+    with execution.scope():
+        options,backend=_arguments(problem,numerics,execution)
+        raw,diag=solve_periodic_fdtd(options,backend=backend)
+        return _adapt(raw,diag,problem,numerics)
+
+
+@eager_under_torch_compile
+def run(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
+    return _run(problem,numerics,_execution(numerics,backend,device,precision))
+
+
+__all__=['Stack','Layer','Region','Rectangle','Circle','Ellipse','Polygon','Excitation','PlaneWave',
+         'RasterDispersion','Pulse','Record','Outputs','Numerics','Problem','Prepared','Result',
+         'check','prepare','run']

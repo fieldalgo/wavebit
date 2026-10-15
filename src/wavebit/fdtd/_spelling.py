@@ -1,20 +1,7 @@
-"""The public spelling of what the engine's messages name in the compat vocabulary.
+"""Translate normalized engine diagnostics to the physical public vocabulary.
 
-``wavebit.fdtd`` runs on the engine ``wavebit.compat.legacy.fd`` exposes, and the engine's
-refusals and warnings name what to do in that namespace: ``fd.Bloch.from_source(pw)``,
-``fd.plan(scene)``, ``fd.Material(eps=...)``. Right for a compat caller, and wrong for a public
-one, who has ``fdtd.Bloch.from_source(source, units=...)``, ``fdtd.prepare(problem,
-numerics=...)`` and ``Material(epsilon=...)`` instead -- or, for a custom shape,
-nothing at all outside the compat namespace.
-
-So the public entry points (``check``, ``prepare``, ``Prepared.validate``/``run``, ``run`` and
-``Bloch.from_source``) translate what leaves them: exceptions through :func:`public_error`,
-and the planning and runtime warnings through :func:`spoken`, which speaks the public
-vocabulary only while one of those calls is running. A compat caller reads the engine's text
-unchanged. :data:`PHRASES` is ordered: whole phrases whose public form differs in more than
-the namespace come first, then the names the public module shares, then the names it lacks,
-which keep their compat spelling in full. ``tests/fdtd/test_public_spelling.py`` reads every
-string constant in the engine and requires each ``fd.`` name to come out spelled here.
+Public check/prepare/run calls scope this translation with a context variable;
+internal numerical instruments retain the engine's original diagnostic text.
 """
 import contextlib
 import contextvars
@@ -22,17 +9,17 @@ import re
 
 _PUBLIC = contextvars.ContextVar('wavebit_fdtd_public_spelling', default=False)
 
-#: A compat name, not one already inside ``wavebit.compat.legacy.fd.`` or ``fdtd.``.
+#: An engine shorthand, not a qualified path or ``fdtd.``.
 _FD = r'(?<![\w.])fd\.'
 
 #: Names ``wavebit.fdtd`` exports with the meaning the compat name has.
 _SHARED = ('Slab', 'Region', 'Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'PlaneWave',
            'Dipole', 'TFSF', 'Record', 'Flux', 'Field', 'FarField', 'Diffraction', 'Bloch',
            'Boundaries', 'Periodic', 'PEC', 'PMC', 'Symmetry', 'Axis1D', 'InitialField',
-           'Domain', 'Structure', 'PML', 'Absorber', 'Decay')
+           'Domain', 'Shape', 'Structure', 'PML', 'Absorber', 'Decay')
 
-#: The shape protocol and stage-7 stubs still have no public counterpart.
-_COMPAT_ONLY = ('Shape', 'ModeSource', 'ModeMonitor', 'GaussianBeam')
+#: Stage-7 placeholders have never implemented a calculation.
+_UNIMPLEMENTED = ('ModeSource', 'ModeMonitor', 'GaussianBeam')
 
 PHRASES = (
     (r'Run\(decay=Decay\(threshold=\.\.\., window=\.\.\.\)\)',
@@ -70,7 +57,7 @@ PHRASES = (
     (_FD + r'Conductor\b', 'ConductiveMaterial'),
     (_FD + r'Dispersive\b', 'DispersiveMaterial'),
     # A public structure is named, and the stencil's memory bound is a compat keyword.
-    (_FD + r'Structure\(\.\.\., discretisation=', 'wavebit.compat.legacy.fd.Structure(..., discretisation='),
+    (_FD + r'Structure\(\.\.\., discretisation=', 'fdtd.Numerics(discretisation='),
     (_FD + r'Structure\(fd\.', 'fdtd.Structure(name, fd.'),
     (_FD + r'Structure\(shape, ', 'fdtd.Structure(name, shape, '),
     # The lifecycle: a plan is a preparation, lowering a traced scene is Prepared.run.
@@ -90,7 +77,7 @@ PHRASES = (
     # CSG is named as a spelling to come; it is in neither namespace yet.
     (_FD + r'(Union|Intersection|Difference)\b', r'\1'),
     (_FD + r'(' + '|'.join(_SHARED) + r')\b', r'fdtd.\1'),
-    (_FD + r'(' + '|'.join(_COMPAT_ONLY) + r')\b', r'wavebit.compat.legacy.fd.\1'),
+    (_FD + r'(' + '|'.join(_UNIMPLEMENTED) + r')\b', r'\1 (unimplemented)'),
 )
 
 _COMPILED = tuple((re.compile(pattern), replacement) for pattern, replacement in PHRASES)

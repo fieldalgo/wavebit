@@ -20,6 +20,17 @@ def _static(v,path):
     if isinstance(v,Mapping):return tuple((k,_static(x,path+'.'+str(k))) for k,x in v.items())
     if isinstance(v,(tuple,list)):return tuple(_static(x,path) for x in v)
     if is_dataclass(v):return (type(v).__name__,tuple((f.name,_static(getattr(v,f.name),path+'.'+f.name)) for f in fields(v)))
+    from .geometry import Shape
+    if isinstance(v, Shape):
+        # Custom protocol implementations are static declarations. Include inherited
+        # slots as well as ordinary attributes; object-array bytes are pointer identity.
+        names = set(vars(v)) if hasattr(v, '__dict__') else set()
+        for cls in type(v).__mro__:
+            slots = getattr(cls, '__slots__', ())
+            names.update((slots,) if isinstance(slots, str) else slots)
+        names -= {'__dict__', '__weakref__'}
+        return (type(v), tuple((name, _static(getattr(v, name), path+'.'+name))
+                              for name in sorted(names) if hasattr(v, name)))
     try:
         if getattr(v,'requires_grad',False):raise ValueError('differentiable static value')
         array=np.asarray(v)

@@ -188,6 +188,8 @@ def solve_periodic_fdtd(options, backend=None):
         if options.get('mesh_indices') is not None:
             internal['mesh_indices'] = _validate_mesh_indices(options['mesh_indices'])[::-1]
         raw = solve_scene_fdtd(backend=backend, **internal)
+    if options.get('_validate_only'):
+        return raw
     result, diagnostics = raw if options.get('return_diagnostics') else (raw, None)
     invariant_y = False
     if diagnostics is not None:
