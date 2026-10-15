@@ -22,8 +22,8 @@ response is the model that optimizes it.
 * **One implementation of the physics** on three array backends. Cross-backend agreement is part of
   the test suite, not a promise.
 * **Gradients where you need them.** Wavelength, materials, layer thicknesses and raster
-  permittivities differentiate on JAX and PyTorch; shape dimensions on PyTorch. The full table is in
-  the [differentiation guide](docs/guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend).
+  permittivities differentiate on JAX and PyTorch; shape dimensions on PyTorch and under eager
+  `jax.grad`, not under `jax.jit`. The full table is in the [differentiation guide](docs/guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend).
 * **Checked against the outside world.** RETICOLO, fmmax and S4 for RCWA; Meep for FDTD; the Li (1997)
   crossed-grating benchmark. The numbers and how they were taken: [validation](docs/validation/index.md).
 

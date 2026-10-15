@@ -428,6 +428,9 @@ failure produces an explicit failed validity check and NaN numerical outputs,
 not a detached tangent or an unreported clamp. Diagnostics metadata remains
 readable. Unsupported host-only topology decisions must be rejected at trace
 construction, or prepared again from each concrete design outside the transform.
+A tracer that carries a concrete primal, as under an eager `jax.grad`, may be
+checked on that primal as an eager PyTorch tensor is, raising eagerly when the
+check fails; the run keeps the traced value and its tangent.
 If a traced change cannot be safely checked, it is not an admitted live field.
 
 Shape optimization may prepare each concrete iterate and reuse compiled kernels
@@ -1178,7 +1181,7 @@ not extend that scope.
 | `fdtd.Problem`, `Scene`, `Domain`, `Boundaries`, `Structure`, `PlaneWave`, `GaussianPulse`, `Outputs`, `Record`, `Numerics`, `UniformGrid`, `Duration`, `PML`, with the PML outside the physical domain (§6) | implemented; CPU and double precision only (§13) | `src/wavebit/fdtd/` |
 | FDTD `GaussianBeam`, mode sources and monitors, decay termination, nonuniform grids, GPU (§6) | not implemented, and not exposed | -- |
 | `fdtd.Numerics.geometry_ranges` (§7) | implemented | `src/wavebit/fdtd/numerics.py` |
-| Host-only topology decisions rejected under an external transform (§7) | implemented: since 2026-10-15 an RCWA `Prepared.run` refuses a JAX-traced geometry value (`prepared.host_topology`, `78149a3a`, `82a6b510`); RCWA shape derivatives go through PyTorch | `src/wavebit/rcwa/_lifecycle.py` |
+| Host-only topology decisions rejected under an external transform (§7) | implemented: an RCWA `Prepared.run` refuses a geometry value traced under `jax.jit` or `jax.vmap` (`prepared.host_topology`, `78149a3a`, `82a6b510`); since 2026-10-15 it checks an eager `jax.grad` tracer's primal as it checks a PyTorch tensor, so RCWA shape derivatives go through PyTorch or eager `jax.grad` | `src/wavebit/rcwa/_lifecycle.py` |
 | `outputs`, `validity`, `diagnostics`, `provenance` on every result; `DiffractionOrders` with `order(m, n)`, `FieldSamples`, `SpectralFieldSamples`, `RawDiffractionSpectrum`, `TimeSeries` (§8) | implemented | `src/wavebit/observations/` |
 | Shared error families with a stable code and input path (§9) | implemented | `src/wavebit/errors.py` |
 | `wavebit.job/v1`, `Job.to_json` / `from_json` / `key`, and `wavebit.run(job)` for a `Job` only (§9) | implemented; saved run records added beside it (`wavebit.records`, 2026-10-13) | `src/wavebit/jobs.py`, `src/wavebit/records.py` |

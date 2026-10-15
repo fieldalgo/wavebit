@@ -8,9 +8,10 @@ silicon, single process, float64).
 **Interface scope (added 2026-10-15).** Every mode below was measured through the solver
 interface now kept as `wavebit.compat.legacy`: `solver.freeze_geometry()` and
 `solver.solve(geometry=...)`. The public lifecycle, `rcwa.prepare(...)` then `prepared.run(problem)`,
-refuses a JAX-traced shape dimension with `prepared.host_topology`. So the "jax jit on shapes"
-rows and recommendations apply to the compatibility interface and do not carry over to that
-lifecycle, where a shape derivative is a PyTorch derivative. Backend speed through `prepared.run`
+refuses a shape dimension traced under `jax.jit` with `prepared.host_topology`, and differentiates
+one under eager `jax.grad` by checking its topology on the tracer's primal. So the "jax jit on
+shapes" rows and recommendations apply to the compatibility interface and do not carry over to
+that lifecycle, where a shape derivative is a PyTorch or an eager `jax.grad` derivative. Backend speed through `prepared.run`
 has not been measured. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
 lists which inputs differentiate on which backend there.
 
@@ -341,7 +342,8 @@ point than at the centre of the search range.
 ## What to use
 
 For the compatibility interface these were measured on. Through `rcwa.prepare(...)` and
-`prepared.run(problem)`, a JAX-traced shape is refused; see the interface scope at the top.
+`prepared.run(problem)`, a shape traced under `jax.jit` is refused and one under `jax.grad` runs
+eagerly; see the interface scope at the top.
 
 | situation | use |
 |---|---|

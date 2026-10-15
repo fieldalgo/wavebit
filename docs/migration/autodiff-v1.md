@@ -595,7 +595,8 @@ every size on a shape recipe, while on a raster below `truncation_order ~ 5` eag
 it outright. Before choosing either on a shape recipe, look at `shape_nvf_grid_size`, which outweighs
 both. The table is in [`backends-v1.md`](backends-v1.md); the measurements are in
 [`../backend-choice.md`](../validation/rcwa/backend-choice.md). Both describe this compatibility
-interface; the current lifecycle refuses a JAX-traced shape (see the
+interface; the current lifecycle refuses a shape traced under `jax.jit` and differentiates one only
+under eager `jax.grad` (see the
 [differentiation guide](../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)).
 
 Tutorials [`02-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/02-autograd-and-optimization-jax.ipynb) and

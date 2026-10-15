@@ -851,8 +851,8 @@ field with respect to width and permittivity. The raster field and solver round-
 regressions remain applicable too.
 
 Since 2026-10-13 this recipe is the compatibility interface, `wavebit.compat.legacy`. The
-public lifecycle, `rcwa.prepare(...)` then `prepared.run(problem)`, refuses a JAX-traced shape
-dimension (`prepared.host_topology`).
+public lifecycle, `rcwa.prepare(...)` then `prepared.run(problem)`, refuses a shape dimension
+traced under `jax.jit` (`prepared.host_topology`) and differentiates one under eager `jax.grad`.
 
 
 ### 8e. The seam contrast (2026-09-11)
