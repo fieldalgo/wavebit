@@ -945,9 +945,36 @@ def test_fdtd_manifest_scopes_backend_omission_to_legacy_numpy():
     assert legacy['backends'] == ('numpy',)
     assert legacy['differentiable'] is False
     assert legacy['incidence_sides'] == ('top', 'bottom')
-    result = _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, tetm='te',
-                                incidence_side='bottom', n_periods=60))
-    assert np.isfinite(result.T).all()
+
+
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_the_default_fdtd_route_answers_the_bottom_incidence_it_lists(tetm):
+    """``legacy_numpy`` lists ``'bottom'``, and its kernel refuses it: both are true.
+
+    ``solve_fdtd`` illuminates its first layer only, and refuses ``incidence_side='bottom'``.
+    The public route never hands it one: ``adapter._legacy_inputs`` swaps the half-spaces and
+    keeps the layer order, so the kernel solves the same scene lit from the other face. So the
+    listing is a claim about that mapping, and a finite ``T`` cannot check it -- on a
+    symmetric scene, or with the layers in the wrong order, it is finite and wrong. Held here
+    against RCWA, amplitude by amplitude, on a scene whose two faces differ: two layers and
+    two half-spaces, at an angle. Measured 2026-10-15: the worst gap is 3.9e-2 / 9.6e-3 (TE)
+    and 3.7e-2 / 1.0e-2 (TM) at 20 / 40 cells per unit, falling at second order, and the
+    same scene lit from the top face gives 3.8e-2 / 9.1e-3 and 3.9e-2 / 9.0e-3. An adapter
+    that also reverses the layers misses by 0.25 at both resolutions, one that ignores the
+    side by 0.58.
+    """
+    scene = dict(structure=np.array([[[2.1]], [[3.2]]]), thickness=[.13, .21], top=1., bot=2.25,
+                 period=.4, wavelength=1., theta=.27, tetm=tetm, incidence_side='bottom',
+                 truncation_order=0)
+    reference = _legacy_wavebit.rcwa(backend='numpy', **scene).solve()
+    gaps = []
+    for resolution in (20, 40):
+        result = _legacy_wavebit.fdtd(**scene, resolution=resolution, n_periods=60)
+        gaps.append(max(np.abs(np.asarray(getattr(result.incident, name))
+                               - np.asarray(getattr(reference.incident, name))).max()
+                        for name in ('r_s', 'r_p', 't_s', 't_p')))
+    assert gaps[1] < .015, gaps
+    assert gaps[1] < gaps[0] / 3, gaps
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
