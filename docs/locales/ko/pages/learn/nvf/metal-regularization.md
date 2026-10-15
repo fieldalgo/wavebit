@@ -1,7 +1,7 @@
 # 15. 작은 특이값에 하한을 두면: 보정과 검증
 
 :::{note}
-이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
+다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
 
 [14장](metal-inverse-rule.md)에서 문제를 일으킬 수 있는 연산을 찾았습니다. {math}`B=\left[\!\left[1/\varepsilon\right]\!\right]`의 작은 특이값이 역행렬에서 큰 증폭으로 바뀝니다. 이번 수정은 이 작은 값에 하한을 두고, 기존 NVF 조립은 유지하는 방법입니다.

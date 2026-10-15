@@ -2,7 +2,7 @@
 # Appendix B. Extending to loss and gain: absorbing incidence, displaced branch points, and gain media
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 {ref}`Appendix A <complex-kx-roots>` explained which of the two half-space {math}`k_z` roots to choose, considering only a lossless medium. This appendix relaxes {ref}`assumption 2 <ckr-premises>` (losslessness) and examines what changes when the incident medium absorbs light, when the half-space whose root is selected absorbs light, and when that half-space amplifies light (gain). The two roots, branch points, branch cuts, paths D and E, and the four rules (path D, path E, Maystre, and {math}`\operatorname{Im}k_z>0`) retain the meanings defined in Appendix A.

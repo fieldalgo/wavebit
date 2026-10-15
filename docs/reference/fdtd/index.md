@@ -108,6 +108,12 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 .. autoclass:: wavebit.fdtd.PML
    :members:
 
+.. autoclass:: wavebit.fdtd.Absorber
+   :members:
+
+.. autoclass:: wavebit.fdtd.Decay
+   :members:
+
 .. autoclass:: wavebit.fdtd.Numerics
    :members:
 

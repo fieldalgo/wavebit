@@ -1,10 +1,10 @@
 # 15. Connecting layers: ETM and SMM
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
-After finding each layer’s modes, the layers still need to be connected to obtain total reflection and transmission. `layer_algorithm` selects this connection method. **It is separate from material Fourier order and the NVF construction.**
+After finding each layer’s modes, the layers still need to be connected to obtain total reflection and transmission. `rcwa.Numerics(algorithm=...)` selects this connection method. **It is separate from material Fourier order and the NVF construction.**
 
 ```{figure} ../../figures/learn/learn/14-layers.svg
 :alt: ETM and SMM connect the same layer modes using different algorithms
@@ -13,11 +13,11 @@ After finding each layer’s modes, the layers still need to be connected to obt
 Figure 15-1. ETM and SMM connect the same layer modes using different algorithms
 ```
 
-ETM is the default. It computes the response to specified incidence using stabilized connection equations. SMM constructs a scattering matrix relating incoming and outgoing waves and cascades those relations. Both share the same modes and physical conventions, so agreement checks the connection algorithms rather than providing a fully independent physical validation.
+SMM is the current default. `algorithm="etm"` computes the response to specified incidence using stabilized connection equations. SMM constructs a scattering matrix relating incoming and outgoing waves and cascades those relations. Both share the same modes and physical conventions, so agreement checks the connection algorithms rather than providing a fully independent physical validation.
 
-Both can be used for isotropic materials and anisotropic second- and first-order calculations, historically called `2ff` and `4ff`. When xz, yz, zx or zy components of ε or μ select the first-order path, `layer_algorithm="SMM"` remains available. Both methods support top and bottom incidence and electric and magnetic fields inside the structure. `top` and `bot` must be isotropic media.
+Both can be used for isotropic materials and anisotropic second- and first-order calculations, historically called `2ff` and `4ff`. When xz, yz, zx or zy components of ε or μ select the first-order path, `algorithm="smm"` remains available. Both methods support top and bottom incidence and electric and magnetic fields inside the structure. `top` and `bot` must be isotropic media.
 
-After an SMM solve with at least `answers='amplitude'`, `solver.scattering` returns a `ScatteringMatrix`. ETM does not form that matrix, and **accessing `solver.scattering` currently raises an error**; do not assume it returns `None`. Cascading scattering matrices requires compatible `Port` bases, orders and media. Layers are not connected by ordinary matrix multiplication.
+`Outputs(scattering=True)` requests SMM scattering operators; `result.scattering` returns one matrix per wavelength as a tuple. ETM does not form that operator, so requesting it is refused. Do not assume unrequested result properties are available. Cascading scattering matrices requires compatible `Port` bases, orders and media. Layers are not connected by ordinary matrix multiplication.
 
 Runnable file: {download}`08_material_and_layers.py <../../../examples/rcwa/learning/learn/08_material_and_layers.py>`
 

@@ -1,20 +1,19 @@
-"""Uniform TE film: the field layout is (z, y, x, Ex/Ey/Ez/Z0Hx/Z0Hy/Z0Hz)."""
-
+"""Uniform s-polarized film: explicit spectral axis, E in V/m and H in A/m."""
 import json
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    backend='numpy', wavelength=900., period=(700., 700.),
-    structure=np.array([[[4.]]]), thickness=[120.],
-    top=1., bot=2.25, tetm='te', truncation_order=(0, 0),
-    answers='field',
-)
-result = solver.solve()
+problem = rcwa.Problem(units=Units(length='nm'),
+    stack=rcwa.Stack(period=(700., 700.), bottom=Material(2.25), layers=(
+        rcwa.Layer(thickness=120., background=Material(4.)),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(polarization='s'),)),
+    outputs=rcwa.Outputs(fields=True))
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))
 z = np.linspace(0., 120., 25)
-cell = result.reconstruct_field(sample_x=[0.], sample_y=[0.], sample_z=z)
-Ey = np.asarray(cell[:, 0, 0, 1])
-print(json.dumps(dict(shape=list(cell.shape), components=['Ex', 'Ey', 'Ez', 'Z0Hx', 'Z0Hy', 'Z0Hz'],
-    R=float(result.R.sum()), T=float(result.T.sum()), z_nm=z.tolist(),
-    Ey_real=Ey.real.tolist(), Ey_imag=Ey.imag.tolist(),
-    Ey_abs2=(np.abs(Ey)**2).tolist()), indent=2))
+field = result.field(x=[0.], y=[0.], z=z)
+Ey = np.asarray(field.values[0, :, 0, 0, 1])
+np.testing.assert_allclose(result.R.sum()+result.T.sum(), 1., atol=2e-12)
+assert field.units['E'] == 'V/m' and field.units['H'] == 'A/m'
+print(json.dumps(dict(shape=list(field.values.shape), components=list(field.components),
+    units=dict(field.units), R=float(result.R.sum()), T=float(result.T.sum()), z_nm=z.tolist(),
+    Ey_real=Ey.real.tolist(), Ey_imag=Ey.imag.tolist(), Ey_abs2=(np.abs(Ey)**2).tolist()), indent=2))

@@ -1,20 +1,20 @@
-"""Select Li or NVF on the same supported Cartesian rectangle."""
-
+"""Select Li or NVF for the same physical Cartesian rectangle."""
 import json
-from wavebit.compat import legacy as wavebit
+import numpy as np
+from wavebit import Material, Units, rcwa
 
 
 def run(method):
     options = dict(nvf_projector='linear', shape_nvf_grid_size=128) if method == 'nvf' else {}
-    result = wavebit.rcwa(
-        backend='numpy', complex_dtype=0,
-        period=(700., 700.), wavelength=900., thickness=(180.,),
-        top=1., bot=2.25, theta=.2, phi=.3, psi=0.,
-        truncation_order=(2, 2), factorization=method,
-        structure=[dict(background=1., shapes=[
-            dict(type='rectangle', cx=0., cy=0., lx=300., ly=220., material=4.)])],
-        **options).solve()
+    problem = rcwa.Problem(units=Units(length='nm'),
+        stack=rcwa.Stack(period=(700., 700.), bottom=Material(2.25), layers=(
+            rcwa.Layer(thickness=180., regions=(rcwa.Region(
+                geometry=rcwa.Rectangle(size=(300., 220.)), material=Material(4.)),)),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(
+            rcwa.PlaneWave(theta=.2, phi=.3, polarization='p'),)))
+    result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 2), factorization=method, **options))
     r, t = float(result.R.sum()), float(result.T.sum())
+    np.testing.assert_allclose(r+t, 1., atol=2e-12)
     return dict(method=method, R_p=r, T_p=t, energy_balance_residual=abs(r+t-1.))
 
 

@@ -1,7 +1,7 @@
 # 05. Wavebit는 NVF를 어떤 식으로 조립하나
 
 :::{note}
-이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
+다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
 
 이제 원리와 실제 코드를 연결하겠습니다. 이 장의 식은 기준 커밋의 [`_nvf_assemble`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py)와 [`nvf_from_coeffs`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py)를 읽기 쉽게 다시 쓴 것입니다. 모든 행렬은 같은 유지 모드 순서를 사용합니다.

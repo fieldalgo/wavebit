@@ -1,7 +1,7 @@
 # 15. Flooring small singular values: correction and validation
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 [Chapter 14](metal-inverse-rule.md) identified a potentially problematic operation: small singular values of {math}`B=\left[\!\left[1/\varepsilon\right]\!\right]` become large amplification in its inverse. This correction floors those small values while retaining the existing NVF assembly.

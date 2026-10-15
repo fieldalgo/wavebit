@@ -1,16 +1,14 @@
-"""The same film and derivative as example 05, using eager PyTorch."""
-
+"""The same physical film and derivative as example 05, using eager PyTorch."""
 import json
 import torch
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-q = torch.tensor(0.10, dtype=torch.float64, requires_grad=True)
-solver = wavebit.rcwa(
-    backend='torch', wavelength=900., period=(700., 700.),
-    structure=torch.tensor([[[4.]]], dtype=torch.float64),
-    thickness=(900.*q).reshape(1), top=1., bot=2.25,
-    tetm='te', truncation_order=(0, 0),
-)
-R = solver.solve().R.sum()
+q = torch.tensor(.10, dtype=torch.float64, requires_grad=True)
+problem = rcwa.Problem(units=Units(length='nm'),
+    stack=rcwa.Stack(period=(700., 700.), bottom=Material(2.25), layers=(
+        rcwa.Layer(thickness=900.*q, background=Material(4.)),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(polarization='s'),)))
+R = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)), backend='torch').R.sum()
 R.backward()
+assert torch.isfinite(q.grad) and abs(q.grad) > 0
 print(json.dumps(dict(R=float(R.detach()), gradient=float(q.grad)), indent=2))

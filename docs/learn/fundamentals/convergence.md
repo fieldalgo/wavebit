@@ -1,7 +1,7 @@
 # 19. Judging a result: energy conservation is not enough
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 First check the physical problem you defined, then check whether its numerical solution stabilizes. Energy conservation can still hold when refractive index was entered in place of permittivity or incidence was interpreted backward. “R+T=1” and “the accurate answer to my intended scene” are therefore different statements.

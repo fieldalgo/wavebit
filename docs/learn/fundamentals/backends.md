@@ -1,7 +1,7 @@
 # 16. NumPy, JAX and PyTorch: the same physics with different computation tools
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 A backend provides arrays, linear algebra and automatic differentiation. Changing backend does not replace RCWA with a different physical theory. The standard solvers share a core, while backend adapters handle differences in arrays, eigensolvers and related operations.

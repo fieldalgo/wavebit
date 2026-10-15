@@ -1,12 +1,14 @@
 # 14. 위치별 전기장과 자기장 구하기
 
 :::{note}
-이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
+다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
 
 반사율·투과율은 빛이 전달하는 전력의 비율입니다. 층 안에서 전기장과 자기장이 어떻게 분포하는지 보려면, 계산이 끝난 뒤 원하는 위치에서 **필드**를 읽습니다. 필드를 읽는다는 것은 그 위치의 전기장·자기장 성분을 구한다는 뜻입니다.
 
 일반 입사, 여러 평면파, 가우시안 빔, 다이폴 소스 모두 `solve()`가 반환한 **결과 객체**에서 필드를 읽습니다. 이 장에서는 계산 준비, 위치 지정, 반환 배열, 경계면의 장을 차례로 설명한 뒤 복소수의 의미와 자기장 단위를 다룹니다.
+
+**현재 예제와 이전 설명의 구분:** 실행 파일은 `Outputs(fields=True)`와 `result.field(x=..., y=..., z=...)`를 사용합니다. 현재 결과에는 파장 축이 있고 H는 이미 A/m입니다. 이 장의 나머지 `answers`, `reconstruct_field`, Z₀H 배열과 단위 변환 설명은 이전 인터페이스의 규약입니다. 현재 결과에 그 변환을 중복 적용하지 마세요. [현재 필드 안내](../../guide/rcwa/fields.md)를 참고하세요.
 
 (field-preparation)=
 ## 계산 결과에서 필드 읽기
@@ -39,17 +41,17 @@ cell = result.reconstruct_field(sample_x=41, sample_y=21, sample_z=20)
 
 ### 실행 예제
 
-두께 120 nm인 균일한 층에 TE 편광으로 입사하는 예제입니다. `solve()`로 먼저 계산한 다음, 층 바닥부터 윗면까지 25개 높이에서 필드를 읽습니다. 이 예제의 길이 단위는 nm입니다.
+두께 120 nm인 균일한 층에 TE 편광으로 입사하는 예제입니다. 현재 `rcwa.run()`으로 계산한 다음, 층 바닥부터 윗면까지 25개 높이에서 필드를 읽습니다. 이 예제의 길이 단위는 nm입니다.
 
 실행 파일: {download}`03_fields.py <../../../examples/rcwa/learning/learn/03_fields.py>`
 
 ```{literalinclude} ../../../examples/rcwa/learning/learn/03_fields.py
 :language: python
 :start-at: import numpy as np
-:end-at: Ey = np.asarray(cell[:, 0, 0, 1])
+:end-at: Ey = np.asarray(field.values[0, :, 0, 0, 1])
 ```
 
-`cell`의 모양은 `(25, 1, 1, 6)`입니다. 마지막 축의 두 번째 성분이 `Ey`이므로, `cell[:, 0, 0, 1]`은 25개 높이에서 읽은 전기장 y 성분입니다. 균일한 층에 수직 입사하므로 이 예제의 장은 x·y 위치에 따라 달라지지 않습니다.
+`field.values`의 모양은 `(1, 25, 1, 1, 6)`이며 첫 축은 파장입니다. `field.values[0, :, 0, 0, 1]`은 25개 높이에서 읽은 전기장 y 성분입니다. 현재 API는 E를 V/m, H를 A/m로 반환하므로 H를 Z₀로 다시 나누지 않습니다. 균일한 층에 수직 입사하므로 이 예제의 장은 x·y 위치에 따라 달라지지 않습니다.
 
 ```{figure} ../../figures/learn/learn/12-field-data.svg
 :alt: 두께 120 nm인 균일한 층에서 높이에 따른 Ey의 실수부, 허수부와 크기의 제곱

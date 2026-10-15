@@ -1,7 +1,7 @@
 # 10. Fourier orders: accuracy and computational cost
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 Fourier order determines the range of spatial-frequency components retained in a calculation. First examine the relation between orders and matrix size, then distinguish what geometry resolution, coefficient calculation, Li and NVF each change.

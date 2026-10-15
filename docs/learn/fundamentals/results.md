@@ -1,7 +1,7 @@
 # 12. Reading results: uppercase R/T and lowercase r/t
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 The `result` returned by `solver.solve()` contains **power fractions by diffraction order** and **complex amplitude coefficients by diffraction order**. Uppercase `R` and `T` are the reflected and transmitted power in each order divided by incident power. Lowercase `r_s`, `r_p`, `t_s`, and `t_p` are complex amplitude coefficients expressing each reflected or transmitted order in its s and p polarization components.

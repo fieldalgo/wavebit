@@ -1,7 +1,7 @@
 # 02. RCWA: solving complex light as a sum of waves
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 RCWA stands for Rigorous Coupled-Wave Analysis. Here, “splitting” does not mean dividing space into a fine grid for time stepping. It means expressing the transverse distribution within a layer as **a sum of waves with different spatial frequencies**. The periodic material couples these waves to one another.

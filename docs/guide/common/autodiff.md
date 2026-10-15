@@ -19,7 +19,7 @@ Through `rcwa.prepare(...)` and `prepared.run(problem)`, the backends do not adm
 | Layer thickness | supported | supported |
 | Raster permittivity values | supported | supported; see [held raster preparations](#a-held-raster-preparation-under-jit) |
 | Fixed-cell, zero-angle rectangles under Cartesian Li (`factorization='li'`): sizes and centres | supported | supported under `jax.jit`, `jax.jit(jax.grad(...))` and `jax.vmap`; guarded edge order |
-| Other region geometry, such as `Circle.radius`, `Rectangle.size`, `Rectangle.angle` or `Polygon.vertices` | supported | supported under eager `jax.grad`; **refused** under `jax.jit` or `jax.vmap`: `UnsupportedFeatureError`, code `prepared.host_topology` |
+| Other region geometry, such as `Circle.radius`, `Rectangle.size`, `Rectangle.angle` or `Polygon.vertices` | supported | supported under eager `jax.grad`; JIT/vmap over admitted scalar shapes requires explicit `Numerics(topology_check='host')`; default device policy refuses it with `prepared.host_topology` |
 | The cell, `Stack.period` | supported | as region geometry, and so is `Stack.lattice` |
 | A Jones polarization pair, `PlaneWave(polarization=(s, p))` | supported | supported |
 
@@ -31,7 +31,7 @@ Fixed-cell Cartesian Li rectangles have an array-valued edge-order guard. Their 
 
 ### A thickness and a radius derivative
 
-One preparation serves every run of the objective. On JAX the layer thickness differentiates under `jax.jit` as well; the radius differentiates under eager `jax.grad` and is refused under `jax.jit`. On PyTorch the radius differentiates too. The small Fourier order and 64-point NVF grid make a quick demonstration, not a converged design:
+This example uses the default device policy. One preparation serves every run of the objective. On JAX the layer thickness differentiates under `jax.jit` as well; the radius differentiates under eager `jax.grad` and is refused under `jax.jit`. On PyTorch the radius differentiates too. The small Fourier order and 64-point NVF grid make a quick demonstration, not a converged design:
 
 ```python
 import jax
@@ -74,11 +74,11 @@ The derivative is the same computation on both backends. Where both admit an inp
 
 Outside the guarded Cartesian Li subset, preparation records the geometry's combinatorics: which regions overlap and which edges cross. Vertex coordinates stay live and carry the gradient. Each run checks that the new geometry still fits that record, and the check branches on concrete values. A PyTorch tensor carries its value, so every eager run is checked, and a step that crosses a topology boundary raises `IncompatibleProblemError` with code `prepared.topology`; prepare that geometry again.
 
-The two JAX transforms are not alike here. Under `jax.jit` a tracer has a shape and dtype but no value, so the check cannot run. Skipping it could replay a record the geometry no longer fits and return a wrong answer with no error. Under `jax.grad` without `jit`, the tracer's primal is concrete. Each run reads it through `jax.lax.stop_gradient` and checks the topology on that copy, as it checks a PyTorch tensor's value; the solve keeps the traced value and its tangent. A grad step that crosses a topology boundary raises `prepared.topology`, as on PyTorch. The lifecycle tells the two apart by trying that read. Under `jax.jit` or `jax.vmap`, including a `jax.grad` inside a `jit`, it fails, and the geometry is refused with `prepared.host_topology` when the trace is built. The Cartesian Li subset supplies that check in array operations. General NVF and painted-curve topology still lack a corresponding runtime guard and remain refused under external JIT/vmap.
+The two JAX transforms are not alike here. Under `jax.jit` a tracer has a shape and dtype but no value, so the check cannot run. Skipping it could replay a record the geometry no longer fits and return a wrong answer with no error. Under `jax.grad` without `jit`, the tracer's primal is concrete. Each run reads it through `jax.lax.stop_gradient` and checks the topology on that copy, as it checks a PyTorch tensor's value; the solve keeps the traced value and its tangent. A grad step that crosses a topology boundary raises `prepared.topology`, as on PyTorch. The lifecycle tells the two apart by trying that read. Under `jax.jit` or `jax.vmap`, including a `jax.grad` inside a `jit`, it fails, and the geometry is refused with `prepared.host_topology` when the trace is built. The Cartesian Li subset supplies that check in array operations. General NVF and painted-curve topology remain refused under the default device policy. Explicit `Numerics(topology_check='host')` instead runs the shared concrete checks through a JAX CPU callback and returns `shape_topology=False` with NaN outputs on invalid reuse. Checks run sequentially under vmap; numerical inputs and derivatives retain their JAX graphs. See [checked shape JIT](../rcwa/guarded-shape-jit.md) for scope and costs.
 
 This is the lifecycle's stated contract, not a defect. The [unified API design](../../design/unified-api.md#7-prepared-reuse-and-differentiation) does not promise unrestricted geometry differentiation, and it requires that host-only topology decisions be rejected at trace construction when they cannot be checked. Material, wavelength and layer-thickness derivatives keep their JAX graphs under `jax.jit` as well.
 
-For a shape derivative outside the guarded Cartesian Li subset under `jax.jit`, the retained compatibility interface is: `wavebit.compat.legacy`, with `solver.freeze_geometry()` taken outside the transform and `solver.solve(geometry=...)` inside it. The [compatibility autodiff manual](../../migration/autodiff-v1.md) describes that workflow and when a frozen record goes stale.
+Current examples for [contact](../../../examples/rcwa/nvf_contact.py), [tangent ellipses](../../../examples/rcwa/nvf_curved_contact.py) and [painted curves](../../../examples/rcwa/nvf_curved_painting.py) use the explicit host policy. The [compatibility autodiff manual](../../migration/autodiff-v1.md) preserves the earlier unchecked traced-replay workflow for historical reproduction; its performance measurements do not establish the callback policy's speed.
 
 ### A held raster preparation under jit
 
@@ -94,4 +94,4 @@ When a pattern moves every step under jit, use `('sampled', 'li')` or prepare ea
 
 ### Backend speed
 
-The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the solver interface now kept as `wavebit.compat.legacy` (`freeze_geometry()` and `solve(geometry=...)`). They are not measurements of this lifecycle or its new Cartesian Li runtime guard. Backend speed through `prepared.run` has not been measured.
+The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the solver interface now kept as `wavebit.compat.legacy` (`freeze_geometry()` and `solve(geometry=...)`). They are not measurements of this lifecycle or its Cartesian Li runtime guard or host callback policy. Backend speed through `prepared.run` has not been measured.

@@ -2,7 +2,7 @@
 # 09. Multiple incident waves and internal sources
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 [Chapter 8](light.md) specified the direction and polarization of a single incident wave. This chapter calculates the fields and output power produced by several waves together. We first examine the common calculation flow for external illumination and internal sources, then explain the assumptions behind superposition and the input formats. Examples cover illumination from one side, illumination from both sides, and order-resolved inputs, followed by Gaussian beams and electric dipoles inside layers.

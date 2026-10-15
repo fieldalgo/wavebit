@@ -1,7 +1,7 @@
 # 01. What questions does Wavebit answer?
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 “When light illuminates a periodically repeated nanostructure, where does it go, and how much goes in each direction?” This is the central question addressed by the RCWA calculations in this course. Given the wavelength, materials, geometry, layer thicknesses, incident direction, and polarization, Wavebit calculates the reflected and transmitted intensities by direction, complex amplitudes, and electromagnetic fields inside the structure. With JAX or PyTorch, you can also find how much a result changes when a design variable changes slightly.

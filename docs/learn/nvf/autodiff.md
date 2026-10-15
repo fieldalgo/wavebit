@@ -1,7 +1,7 @@
 # 10. Differentiating with JAX: start with material values
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 One of Wavebit's benefits is the ability to differentiate the selected finite calculation. Begin with an example that changes one material value ε while keeping the shape arrangement fixed. This makes the differentiation flow easier to understand without simultaneously handling changes in shape contacts or overlaps.
@@ -30,9 +30,9 @@ The {download}`complete Example 4 file <../../../examples/rcwa/learning/nvf/04_j
 :linenos:
 ```
 
-`freeze_geometry()` reads a concrete structure and records discrete geometry decisions before tracing. Passing that record through `solve(geometry=geometry)` lets JAX follow the continuous calculation with respect to material values. “Preparing geometry” does not mean cutting off derivatives of every input.
+`rcwa.prepare()` records discrete geometry decisions from a concrete problem. Calling `prepared.run(updated_problem)` inside JIT keeps the updated material calculation and its JAX derivatives live. “Preparing geometry” does not mean cutting off derivatives of every input.
 
-This example reuses its prepared geometry because **only material values change within the same shape arrangement**. Do not blindly reuse a record when shape counts, overlap relations, periodic-image requirements, or similar structure changes. Not every invalid reuse can be detected inside JIT. New geometric relationships must be prepared and checked again from concrete inputs.
+This example reuses its prepared geometry because **only material values change within the same shape arrangement**. Do not blindly reuse a record when shape counts, overlap relations, periodic-image requirements, or similar structure changes. This example keeps geometry fixed. To vary general shapes inside JIT, select the explicit host topology policy and inspect result validity. New geometric relationships must be prepared and checked again from concrete inputs.
 
 ## Measured derivative and finite-difference comparison
 

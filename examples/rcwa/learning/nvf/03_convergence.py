@@ -10,7 +10,7 @@ spec.loader.exec_module(shape_example)
 
 
 def run(orders, grid):
-    result = shape_example.make_solver(orders, grid).solve()
+    result = shape_example.run(orders, grid)
     r, t = float(result.R.sum()), float(result.T.sum())
     return dict(orders=list(orders), shape_nvf_grid_size=grid, R_p=r, T_p=t,
                 energy_balance_residual=abs(r+t-1.))

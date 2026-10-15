@@ -1,7 +1,7 @@
 # 06. Beyond a square: lattices and two coordinate systems
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 **A raster assigns material to lattice cells; a shape defines an object in physical space.** Below, both side lengths stay at 600 nm while only the angle `α` between the two lattice vectors changes from 90° to 60°. We are changing the angle between the sides, which is different from rotating the entire structure as one object.

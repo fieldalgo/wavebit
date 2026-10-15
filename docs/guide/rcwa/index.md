@@ -2,6 +2,7 @@
 
 Use `rcwa.Problem`, `rcwa.Numerics` and the shared check/prepare/run lifecycle. Start with [a complete current example](../../getting-started/rcwa.md), then [scene declarations](scene.md), [illumination](light.md), [numerics](numerics.md) and [observations](fields.md). The advanced guides below retain explicit compatibility interfaces where they preserve established scientific workflows.
 
+- [Checking shape topology inside JAX transforms](guarded-shape-jit.md)
 - [Conforming NVF from affine profiles](affine-profile-nvf.md)
 - [Anisotropic and magnetic materials — what the solver already takes, and what each gap costs](anisotropic-materials.md)
 - [Boundary modeling — painting an overlap without staircasing the edges](boundary-modeling.md)

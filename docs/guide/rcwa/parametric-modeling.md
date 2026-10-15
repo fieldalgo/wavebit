@@ -77,9 +77,11 @@ result = prepared.run(problem)
 
 `rcwa.prepare` takes the geometry record the earlier interface's `freeze_geometry()` took, and
 `prepared.run` replays it on concrete values. A shape derivative through `prepared.run` runs on
-PyTorch and under eager `jax.grad`; an NVF shape traced under `jax.jit` or `jax.vmap` is not in the
-current API yet (code `prepared.host_topology`), so the JIT derivatives and traced replay
-described in this section, and the examples linked from it, use the earlier interface.
+PyTorch and under eager `jax.grad`. For JIT/vmap over admitted scalar shapes, explicitly select
+`Numerics(topology_check='host')`: a CPU callback checks topology on every run, while the
+numerical calculation retains its JAX graph. The default device policy still refuses this
+path (`prepared.host_topology`). The linked examples use the current API and this explicit
+policy; see [checked shape JIT](guarded-shape-jit.md) for scope and transfer costs.
 
 The construction sums positive normal dyads into `M`, forms the complex vector
 `J = M @ (1, i)`, and uses `P = J J^H / |J|^2`. Opposite normals reinforce as
@@ -93,11 +95,11 @@ limits have no sampled value step, on both odd and even grids. Frozen JIT geomet
 and material derivatives agree with finite differences. A circular NVF geometry
 record can be prepared at contact and replayed while the gap opens: it reads image
 bounds, not the linear field's signed pair cancellation records. A new overlap,
-changed shape count, or enlarged image set still requires a new preparation. Traced calls
-cannot enforce those checks, so keep those constraints when optimizing.
+changed shape count, or enlarged image set still requires a new preparation. The explicit
+host policy checks traced values and masks invalid reuse with NaN outputs.
 
 See [the runnable NVF contact example](../../../examples/rcwa/nvf_contact.py), which evaluates
-both contact and the one-sided opening derivative through the earlier interface's JAX solver.
+both contact and the one-sided opening derivative through the current prepared JAX solve.
 `shape_nvf_grid_size` remains an integration-resolution control; it is not a smoothing
 parameter for a gap. The default projector remains `linear` to preserve existing
 results. Select `circular` explicitly for this NVF construction.
@@ -136,8 +138,8 @@ Frozen-contact JIT derivatives match one-sided finite differences. Its exact
 boundary normals, periodicity, rotation covariance, image-ring independence,
 centre regularity, and NumPy/JAX/Torch agreement are tested separately.
 
-See [the curved-contact example](../../../examples/rcwa/nvf_curved_contact.py) (earlier
-interface, for the traced contact derivative). This extension
+See [the curved-contact example](../../../examples/rcwa/nvf_curved_contact.py) (current API
+with explicit host topology checks for the traced contact derivative). This extension
 does not settle the rectangular split/merged accuracy target or the tilted
 resonant-convergence investigation.
 
@@ -162,7 +164,7 @@ Prepare on concrete values (`rcwa.prepare`; `freeze_geometry()` before JIT on th
 interface) and stay within its recorded intersections and periodic image bounds. Prepare again
 when painting topology changes. See
 [the curved painting example](../../../examples/rcwa/nvf_curved_painting.py), which evaluates
-geometry and material derivatives through the earlier interface's JAX solver.
+geometry and material derivatives through the current API with host topology checks.
 
 **Polygon approximation is still an accuracy limit.** Crossing between analytic
 disjoint curves and polygon-resolved overlaps changes the material approximation.
@@ -209,7 +211,7 @@ geometry when the ordering changes. At contact, the plan defines the one-sided
 opening-gap derivative, not a claim that overlap has the same derivative.
 
 See [the runnable contact example](../../../examples/rcwa/rectilinear_contact.py) for JIT
-transmission and gap/material gradients on the earlier interface. Tests compare convolution matrices with
+transmission and gap/material gradients on the current API with its device edge-order guard. Tests compare convolution matrices with
 independently painted commensurate rasters, including overlaps, complex materials,
 and magnetic layers, and compare derivatives with two finite-difference steps.
 Exact geometry integration does not remove Fourier truncation error; still check
@@ -414,10 +416,10 @@ builds a different structure that solves and conserves energy — see
 
 Sizes, centres, angles and materials may be backend tensors and are differentiable through
 `prepared.run`: materials on JAX and PyTorch, geometry on PyTorch and under eager `jax.grad`,
-with the additional supported JIT/vmap subset of fixed-cell, zero-angle rectangles under Cartesian Li. Other shape geometry traced under `jax.jit` is refused (code `prepared.host_topology`). `Material` is a
+with the additional device-guarded JIT/vmap subset of fixed-cell, zero-angle rectangles under Cartesian Li. Other admitted scalar shapes/cells can explicitly select `topology_check='host'`; the default device policy refuses them (`prepared.host_topology`). `Material` is a
 registered JAX pytree for exactly that reason.
 
-The current [Cartesian Li contact example](../../../examples/rcwa/rectilinear_contact.py) checks live edge order and positive sizes. Crossing the prepared order or leaving the cell sets `validity.checks['rectilinear_topology']` false and masks every numerical observation, including retained fields and scattering, with NaN. A contact derivative follows the gap-opening side; overlap requires a fresh preparation. Cell and orientation changes remain concrete.
+The current [Cartesian Li contact example](../../../examples/rcwa/rectilinear_contact.py) checks live edge order and positive sizes. Crossing the prepared order or leaving the cell sets `validity.checks['rectilinear_topology']` false and masks every numerical observation, including retained fields and scattering, with NaN. A contact derivative follows the gap-opening side; overlap requires a fresh preparation. Outside that device-guarded subset, use the explicit host policy where the selected geometry construction admits traced evaluation.
 
 ## 4. Results (`studies/rcwa/benchmark_analytic/benchmark_analytic.py`)
 
@@ -611,8 +613,10 @@ carries no number to read. Five of the six doors are closed (NumPy, JAX eager, `
 in [`boundary-modeling.md`](boundary-modeling.md) and [`backend-choice.md`](../../validation/rcwa/backend-choice.md).
 Those are the earlier interface's doors. Through the current lifecycle a non-positive `size`,
 `radius` or `radii` entry is refused by `rcwa.prepare` (code `rcwa.invalid`) and by
-`prepared.run` (code `prepared.topology`), and a JAX trace never reaches the check, since a
-traced shape is refused first; `rcwa.check` does not run it yet.
+eager `prepared.run` (code `prepared.topology`). Admitted JIT geometry uses its device
+guard or explicit host callback: invalid dimensions fail result validity and produce NaN
+observations. Other traced geometry is refused when the trace is built. `rcwa.check`
+performs admission checks without a numerical solve.
 
 ## Overlapping shapes
 

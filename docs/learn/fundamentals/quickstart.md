@@ -1,7 +1,7 @@
 # 04. Installation and a complete first calculation
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 The source requires **Python 3.12 or later**. The commands below install Wavebit from its source directory. The released alpha is also on PyPI (`pip install wavebit`); see [Installation](../../getting-started/installation.md). You do not need to install every backend if you will not use them all.
@@ -39,6 +39,6 @@ Both the figure and code show **relative permittivity directly**: `1.` for air, 
 | Total R | 0.205331628258 |
 | Total T | 0.794668371742 |
 | Zeroth-order T | 0.353101123079 |
-| Result array shape (`result.T.shape`) | (1, 21) |
+| Result array shape (`result.T.shape`) | (1, 1, 21) |
 
 With the incident energy normalized to 1, about 20.53% is reflected and 79.47% is transmitted. Zeroth-order transmission is about 35.31%; the rest of the transmitted power leaves through other propagating orders. **Total transmission and zeroth-order transmission are different quantities.** In this example, `R+T≈1` checks lossless energy balance, but it does not by itself establish that enough Fourier orders have been retained.

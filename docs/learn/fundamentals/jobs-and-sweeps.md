@@ -1,141 +1,102 @@
 (jobs-and-sweeps)=
-# 18. From one calculation to an experiment: JobSpec and sweeps
+# 18. From one calculation to an experiment: Jobs and sweeps
 
-:::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
-:::
+A current `Job` holds a solver name, physical `Problem`, `Numerics` and `Execution`.
+Constructing or serializing it does not solve. `wavebit.run(job)` executes one job
+in the calling Python environment; it does not submit a cloud job or parallelize a sweep.
 
-Create a solver with `wavebit.rcwa(...)` and call `solver.solve()` to calculate directly in Python. **`JobSpec` is an optional object for saving settings or organizing calculations across multiple conditions.** It groups structure, materials, light and numerical settings; constructing it does not start a solve.
+| Declaration | What it records |
+| --- | --- |
+| `Problem` | Units, materials, geometry, illumination and requested outputs |
+| `Numerics` | Discretization and algorithm choices |
+| `Execution` | Backend, device and precision; NumPy/CPU/double by default |
+| `Job` | The three declarations and a solver identifier |
 
-## What are JobSpec, expand() and run()?
+## A silicon layer at three wavelengths
 
-All three are provided by Wavebit. Below, `spec` is the variable holding a user-created `JobSpec`.
-
-| Name | Kind | Role |
-| --- | --- | --- |
-| `wavebit.JobSpec(...)` | Class | Groups a structure and its calculation conditions into one object |
-| `spec.expand()` | `JobSpec` method | Splits a sweep into settings for individual wavelengths or angles; does not solve |
-| `wavebit.run(point)` | Function | Calculates one set of settings and returns a `Result` |
-
-**These work in a local Python environment.** They can also help build a program that sends settings to a server, but this API itself neither submits cloud jobs nor automatically parallelizes calculations. `run()` executes in the calling environment using the selected backend.
-
-## What does a calculation specification contain?
-
-`JobSpec` groups the following objects. A sweep means **repeating calculations while changing inputs such as wavelength or incidence angle**.
-
-| Object | Contents | Location in `JobSpec` |
-| --- | --- | --- |
-| `Layer` | One layer’s thickness and material distribution | Element of `Stack.layers` |
-| `Stack` | Layer list, upper and lower media, lattice | `stack` |
-| `Incidence` | Wavelength, direction, polarization and incident side | `incidence` |
-| `Numerics` | Backend, Fourier orders, factorization and other numerical options | `numerics` |
-| `Sweep` | Inputs to change and their values | `sweep` |
-
-```{figure} ../../figures/learn/learn/18-jobspec.svg
-:alt: Structure, incidence, numerical settings and sweep form a JobSpec; several wavelengths and angles expand into all combinations
-:figclass: learning-figure
-
-Figure 18-1. All wavelength–angle combinations become calculation settings while structure and numerical options remain fixed.
-```
-
-## Example: a silicon layer at three wavelengths
-
-Assign the wavelength-dependent material object from [Chapter 7](materials.md) to a layer’s `background`. `shapes=[]` makes the entire layer uniform silicon, so Fourier order 0 is sufficient. Lengths are in nm.
+Assign the wavelength-dependent material from [Chapter 7](materials.md) to the
+layer background. A uniform layer needs only order zero. Explicitly construct one
+job per wavelength with immutable `.replace(...)` operations:
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Job, Material, Units, materials, rcwa, run
 
-silicon = wavebit.materials.load('Si')
-spec = wavebit.JobSpec(
-    stack=wavebit.Stack(
-        layers=[wavebit.Layer(
-            thickness=100.,
-            structure=dict(background=silicon, shapes=[]),
-        )],
-        top=1., bot=2.25, period=(600., 600.),
-    ),
-    incidence=wavebit.Incidence(
-        wavelength=900., theta=0., polarization=(1., 0.),
-    ),
-    numerics=wavebit.Numerics(truncation_order=(0, 0)),
-    sweep=wavebit.Sweep.from_dict({'wavelength': [800., 900., 1000.]}),
-)
-```
-
-`incidence.wavelength=900.` is the base wavelength; this example replaces it with each of the three `sweep` values. So far, only settings have been constructed.
-
-### expand(): split the specification into three points
-
-```python
-points = spec.expand()
-print([point.incidence.wavelength for point in points])
-# [800.0, 900.0, 1000.0]
-```
-
-Each element of `points` is **a `JobSpec` with its own wavelength**, not merely a wavelength number. Structure, materials and numerical options remain fixed; only wavelength changes to 800, 900 or 1,000 nm. Calling `expand()` on a specification without a sweep returns a list containing that original specification.
-
-### run(): calculate each point
-
-```python
+problem = rcwa.Problem(
+    units=Units(length='nm'),
+    stack=rcwa.Stack(period=(600., 600.), bottom=Material(2.25), layers=(
+        rcwa.Layer(thickness=100., background=materials.load('Si')),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(
+        rcwa.PlaneWave(polarization='s'),)))
+job = Job(solver='rcwa', problem=problem, numerics=rcwa.Numerics(orders=(0, 0)))
+points = [job.replace(problem=problem.replace(
+    excitation=problem.excitation.replace(wavelength=wavelength)))
+    for wavelength in (800., 900., 1000.)]
 for point in points:
-    result = wavebit.run(point)
-    print(point.incidence.wavelength, result.R.sum(), result.T.sum())
+    result = run(point)
+    print(point.problem.excitation.wavelength, result.R.sum(), result.T.sum())
 ```
 
-This loop executes three calculations in sequence. The 800 nm calculation uses silicon-table values at 800 nm; the 900 nm calculation uses values at 900 nm. This is what **automatic evaluation of materials at the calculation wavelength** means. Read outputs just as for `solver.solve()`; see [Chapter 12](results.md).
-
-`run()` accepts one condition. Passing a specification containing a sweep directly to `wavebit.run(spec)` raises an error, so call `expand()` before running its points.
+Each job retains its own wavelength and the same silicon table. The solver evaluates
+that table at the point's wavelength. A numerical raster instead stores fixed
+permittivity values; changing wavelength does not turn those values into a material model.
 
 (jobs-json)=
-## Saving to JSON and restoring
-
-**JSON represents settings as text.** `to_json()` creates a JSON string; `from_json()` reconstructs a `JobSpec` from it. The `Path` code below handles writing and reading the file.
+## Saving and restoring one portable point
 
 ```python
 from pathlib import Path
 
-path = Path('silicon-sweep.json')
-path.write_text(spec.to_json(indent=2), encoding='utf-8')
-
-restored = wavebit.JobSpec.from_json(path.read_text(encoding='utf-8'))
-for point in restored.expand():
-    result = wavebit.run(point)
-    print(point.incidence.wavelength, result.R.sum(), result.T.sum())
+path = Path('silicon-point.json')
+path.write_text(points[0].to_json(indent=2), encoding='utf-8')
+restored = Job.from_json(path.read_text(encoding='utf-8'))
+assert restored.key == points[0].key
+result = run(restored)
 ```
 
-Here **JSON stores the loaded wavelength-dependent silicon table, not just the name silicon**. The restored specification evaluates that table at each wavelength. Index-derived materials preserve the index table and optional permeability table; permittivity-derived materials preserve the permittivity table and optional permeability table. Anisotropic tensor components are preserved too.
+`to_json()` stores the current `wavebit.job/v1` schema, including explicit units and
+material declarations. Bundled table data is embedded, so a restored job evaluates
+the same table. `.key` is a property that identifies canonical inputs. It is not a
+result cache or proof of numerical reproducibility; also record package/dependency
+versions and the execution environment.
 
-If instead the constant 900 nm values were assigned, JSON stores those values. They remain fixed after restoring and changing wavelength, as explained for the two material objects in [Chapter 7](materials.md). Wrap them in a `Material` first, as in `value = silicon.at(900.)` and then `wavebit.Material(epsilon=value.epsilon, mu=value.mu)`: `.at()` on a bundled table returns a `MaterialResponse`, which `to_json()` refuses.
+Old `JobSpec` JSON is a different format. It is not silently converted into this
+schema: use the [historical job manual](../../migration/jobs-v1.md) to interpret
+old units, polarization and sweeps before constructing current declarations.
 
-`spec.key()` identifies input settings for comparison. If `spec.key() == restored.key()` after saving and restoring, the normalized inputs match. To reproduce results, also record Wavebit and dependency versions, backend and precision. JSON includes a format `version`, currently 10 in this workflow. See the [specification guide](../../migration/jobs-v1.md#what-a-document-must-say-and-what-is-refused) for conversion rules for earlier formats.
+## Sweeping wavelength and angle together
 
-## Sweeping multiple inputs together
+Use `itertools.product` for all twelve combinations of three wavelengths and four
+angles. The loop is explicit and sequential:
 
-`Sweep` supports the following inputs.
+```python
+from itertools import product
 
-| Input | Quantity varied |
-| --- | --- |
-| `wavelength` | Vacuum wavelength |
-| `theta`, `phi` | Incident phase angle and azimuth |
-| `kx`, `ky` | Direct x and y wavevector components |
-| `psi`, `chi` | Polarization angles |
+for wavelength, theta in product((800., 900., 1000.), (0., .1, .2, .3)):
+    source = problem.excitation.sources[0].replace(theta=theta)
+    updated = problem.replace(excitation=problem.excitation.replace(
+        wavelength=wavelength, sources=(source,)))
+    result = run(job.replace(problem=updated))
+```
 
-Three wavelengths and four angles create **all twelve combinations**, not three or four index-paired settings. Equally spaced values can be written as `{'linspace': [start, stop, count]}`, as in the example file below.
+Angles are radians. Holding angle fixed during a wavelength sweep differs from
+holding physical wavevector fixed; see [illumination](../../guide/rcwa/light.md).
+The current `Job` has no `expand()` method. Use Python/NumPy to construct the points
+or a wavelength vector when the problem supports that spectral batch.
 
-`theta`·`phi` and `kx`·`ky` are alternative direction inputs from {ref}`Chapter 8 <incident-direction-inputs>` and cannot be mixed. For direct-wavevector sweeps, construct the base incidence as `Incidence(kx=..., ky=...)` too. Holding angles fixed during a wavelength sweep differs physically from holding actual wavevectors fixed.
+## Runnable round-trip and sweep example
 
-Update geometry or dispersive numerical rasters in a separate Python loop. Numerical rasters do not retain material tables, so changing wavelength alone does not update their permittivity arrays. When dispersive objects are assigned to shapes, backgrounds or half-spaces, the solver evaluates them at each wavelength.
-
-## Runnable file: save and restore a raster, then sweep wavelength
-
-The file below saves and restores a raster containing ε=1 and ε=12.25 through JSON, then solves at three wavelengths. Material values are constant here, so the comparison varies the structure’s response with wavelength.
-
-Runnable file: {download}`04_jobspec.py <../../../examples/rcwa/learning/learn/04_jobspec.py>`
+The filename {download}`04_jobspec.py <../../../examples/rcwa/learning/learn/04_jobspec.py>`
+is retained for existing links. Its implementation now saves/restores current Jobs,
+expands three wavelengths explicitly and checks lossless energy balance at each point.
 
 ```{literalinclude} ../../../examples/rcwa/learning/learn/04_jobspec.py
 :language: python
 :linenos:
 ```
+
+The original course recorded these totals for the same raster. The stored historical
+measurements and source provenance remain unchanged; their format is distinct from
+the current Job schema.
 
 | Wavelength (nm) | R | T |
 | --- | --- | --- |
@@ -143,4 +104,5 @@ Runnable file: {download}`04_jobspec.py <../../../examples/rcwa/learning/learn/0
 | 900.0 | 0.205331628 | 0.794668372 |
 | 1000.0 | 0.171513741 | 0.828486259 |
 
-See the [compatibility job manual](../../migration/jobs-v1.md) for all options and JSON format, and the [API reference](../../migration/legacy-api.md#a-run-as-data) for classes and methods. The [capability-manifest guide](../../reference/common/capability-manifest.md) separately describes the capability list available to external programs.
+The [capability manifest](../../reference/common/capability-manifest.md) is separate
+from a Job and records its own interface version.

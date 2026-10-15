@@ -1,7 +1,7 @@
 # 02. Start with boundary conditions: the whole E field is not continuous
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 For a material with scalar relative permittivity ε, `D = ε₀ ε E`. To simplify the notation below, define the normalized displacement `d = D/ε₀`. The vector n is a unit normal to the material boundary, and t is tangent to the boundary in the xy plane. The figures in this chapter resolve the transverse electric field E_xy into those two directions. The z component is also tangent to such vertical boundaries within a layer; Chapter 5 treats it in a separate slot.

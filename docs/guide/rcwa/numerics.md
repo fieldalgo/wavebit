@@ -13,6 +13,11 @@ numerics = rcwa.Numerics(
 
 Rayleigh detuning is opt-in: `detuning=None` requests the exact physical input. A positive `detuning` declares a relative step and the result records the changed coordinates. Never interpret a detuned result as the unmodified requested wavelength without reading that metadata.
 
+`topology_check='device'` uses available array guards and refuses other traced geometry.
+Explicit `'host'` admits supported scalar region geometry through a JAX CPU callback;
+checks execute sequentially under vmap and can limit throughput. See [checked shape
+JIT](guarded-shape-jit.md) for validity masking, supported shapes and examples.
+
 Increase orders and geometric/NVF resolution independently and compare the output you actually need. Energy balance alone does not establish optical or gradient convergence. The measurements quoted below were taken through the earlier `wavebit.compat.legacy` interface, which runs the same engine.
 
 ## What each setting changes

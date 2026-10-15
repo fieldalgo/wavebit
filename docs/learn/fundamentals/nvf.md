@@ -1,7 +1,7 @@
 # 11. Where does NVF enter the calculation?
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 NVF is **a way of constructing Fourier matrices for products of materials and fields while respecting material boundary conditions**. These matrices determine each layer’s eigenmodes; matching boundary conditions between layers then gives reflection, transmission, and electric and magnetic fields. This chapter follows the need for NVF through its directional representation, settings and calculation sequence.

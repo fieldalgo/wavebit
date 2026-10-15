@@ -1,7 +1,7 @@
 # A book about the whole of Wavebit
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 **From drawing a structure to calculating its optical response and changing its design.** Rather than list Wavebit's features one by one, this book follows a calculation through its stages. If you have already studied NVF, you can now see where it fits into the complete solver.

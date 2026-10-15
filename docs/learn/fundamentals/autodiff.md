@@ -1,7 +1,7 @@
 # 17. Automatic differentiation and optimization: which change helps?
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 A forward calculation maps design variables to outputs. A derivative asks how much a target quantity changes under a small design variation. Automatic differentiation gives the **derivative of the finite-order numerical program that was executed**. Whether the physical solution is sufficiently converged is a separate question.

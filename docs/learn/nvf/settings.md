@@ -1,7 +1,7 @@
 # 06. Two input types and the role of each setting
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 Wavebit accepts material structures in two main forms. **Raster and shape describe geometry inputs; NVF is a computational method that incorporates boundary information into material matrices.** A pixel image and a continuous shape represent different actual input geometries, even when both depict the same circle.

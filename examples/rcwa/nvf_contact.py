@@ -1,29 +1,33 @@
 """NVF contact and material derivatives with the rectangular Jones projector."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit import Material, Units, rcwa
+import numpy as np
 import jax
 import jax.numpy as jnp
 
 jax.config.update('jax_enable_x64', True)
 
 
-def solver(gap, epsilon):
-    return _legacy_wavebit.rcwa(
-        backend='jax', period=(700., 700.), wavelength=900., top=1., bot=2.25,
-        theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(3, 3),
-        factorization='nvf', nvf_projector='circular', shape_nvf_grid_size=128,
-        structure=[dict(background=1., shapes=[
-            dict(type='rectangle', cx=-150.-gap/2, lx=300., ly=300., material=4.),
-            dict(type='rectangle', cx=150.+gap/2, lx=300., ly=300., material=epsilon)])])
+def problem(gap, epsilon):
+    regions = tuple(rcwa.Region(geometry=rcwa.Rectangle(size=(300., 300.), center=(center, 0.)), material=Material(material))
+                    for center, material in ((-150.-gap/2, 4.), (150.+gap/2, epsilon)))
+    return rcwa.Problem(units=Units(length='nm'),
+        stack=rcwa.Stack(period=(700., 700.), bottom=Material(2.25),
+            layers=(rcwa.Layer(thickness=300., regions=regions),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(theta=.2, polarization='p'),)))
+
+
+NUMERICS = rcwa.Numerics(orders=(3, 3), factorization='nvf', nvf_projector='circular',
+                         shape_nvf_grid_size=128, topology_check='host')
 
 
 def main():
-    # Circular NVF can freeze at contact and open the gap with the same record.
-    # Crossing into overlap still requires a new concrete painting plan.
-    geometry = solver(0., 9.).freeze_geometry()
+    # Host validation checks the shape/image plan on every traced geometry.
+    # Contact may open into a gap; overlap needs a new preparation.
+    prepared = rcwa.prepare(problem(0., 9.), numerics=NUMERICS, backend='jax')
 
     def transmission(gap, epsilon):
-        return jnp.sum(solver(gap, epsilon).solve(geometry=geometry).T).real
+        return jnp.sum(prepared.run(problem(gap, epsilon)).T).real
 
     evaluate = jax.jit(jax.value_and_grad(transmission, argnums=(0, 1)))
     print('factorization=nvf, nvf_projector=circular')
@@ -32,7 +36,8 @@ def main():
         value, (dg, de) = evaluate(jnp.asarray(gap), jnp.asarray(9.))
         print(f'{gap:8.1e}  {float(value):.12f}  {float(dg):+.8e}  {float(de):+.8e}')
     # Independent eager evaluation verifies the traced contact value.
-    print(f'contact     {float(solver(0., 9.).solve().T.sum()):.12f}')
+    np.testing.assert_allclose(value, rcwa.run(problem(0., 9.), numerics=NUMERICS).T.sum(), atol=2e-12)
+    print(f'contact     {float(rcwa.run(problem(0., 9.), numerics=NUMERICS).T.sum()):.12f}')
 
 
 if __name__ == '__main__':

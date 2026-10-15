@@ -2,7 +2,7 @@
 # 부록 B. 흡수·이득 매질로 넓히기: 흡수 입사 매질, 떠 있는 branch point, 이득 매질
 
 :::{note}
-이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
+다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
 
 {ref}`부록 A <complex-kx-roots>`는 무손실 매질 하나만 놓고, 반공간의 {math}`k_z` 두 근 가운데 무엇을 고르는지를 끝까지 설명했습니다. 이 부록은 부록 A의 {ref}`전제 2 <ckr-premises>`(무손실)를 풀고, 입사 매질이 빛을 흡수할 때, 근을 고르는 반공간이 흡수할 때, 반공간이 빛을 키울 때(이득) 무엇이 달라지는지 봅니다. 두 근, branch point, branch cut, 경로 D·E, 네 규칙(경로 D, 경로 E, Maystre, {math}`\operatorname{Im}k_z>0`)은 부록 A에서 설명한 뜻 그대로 씁니다.

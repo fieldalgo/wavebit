@@ -20,6 +20,8 @@ All checks live alongside the example so a copied script retains its verificatio
 | [`rectilinear_contact.py`](rcwa/rectilinear_contact.py) | Cartesian Li gap/material derivatives under JIT with checked topology and NaN for overlap. | JAX |
 | [`anisotropic_material.py`](rcwa/anisotropic_material.py), [`coherent_illumination.py`](rcwa/coherent_illumination.py) | Physical tensor spectra and two-source boundary power. | Base install |
 | [`nvf_method_selection.py`](rcwa/nvf_method_selection.py) | Explicit ordinary NVF/Li and experimental auxiliary operators for the same pair. | Base install |
+| [`learning/`](rcwa/learning/) | 15 teaching scripts: physical geometry, SI fields, Job round trips, sweeps, lossless/Airy checks and gradients. | Base install; JAX/PyTorch for gradients |
+| [`nvf_contact.py`](rcwa/nvf_contact.py), [`nvf_curved_contact.py`](rcwa/nvf_curved_contact.py), [`nvf_curved_painting.py`](rcwa/nvf_curved_painting.py) | Scalar-shape JIT derivatives with explicit host topology checks and fresh finite differences. | JAX |
 | [`pillar_gradient.py`](fdtd/pillar_gradient.py) | Physical pillar gradients with smoothed substrate continuation through outside PML. | PyTorch or JAX |
 | [`pulse_slab.py`](fdtd/pulse_slab.py) | A physical pulse, outside PML padding and a named time record. | Base install |
 | [`film_optimization.py`](rcwa/film_optimization.py) | Reuse a prepared RCWA calculation, differentiate film thickness with JAX and minimize reflectance; check the derivative against an independent Airy formula and the design against the quarter-wave thickness. | `wavebit[jax]` |
@@ -62,6 +64,8 @@ starting a new physical problem. See the [migration guide](../docs/migration/ind
 | [`fdtd_record.py`](fdtd/fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/guide/fdtd/fdtd-alpha.md). |
 | [`shapes_1d_verification.py`](rcwa/shapes_1d_verification.py), [`shapes_2d_verification.py`](rcwa/shapes_2d_verification.py) | Historical shape/raster comparisons through the compatibility interface; the plain shape examples above use the current API. |
 
+## Shape derivative examples using the current API
+
 [`rectilinear_contact.py`](rcwa/rectilinear_contact.py) selects exact Cartesian shape Li
 and prints JIT transmission, gap derivatives, and material derivatives through contact, using the current physical API and a runtime edge-order guard.
 It requires the JAX extra. Unlike the default NVF examples, it uses fixed zero-angle
@@ -69,7 +73,9 @@ rectangles wholly inside the cell.
 
 [`nvf_contact.py`](rcwa/nvf_contact.py) keeps `factorization='nvf'` and uses the
 rectangular circular projector for contact and material gradients, including a
-frozen plan at contact. It requires JAX. See
+prepared plan at contact. These three NVF examples require JAX and explicitly select
+`topology_check='host'` for CPU callbacks that check each live geometry; under vmap
+checks run sequentially. See [the policy and its costs](../docs/guide/rcwa/guarded-shape-jit.md) and
 [shape NVF projector details](../docs/guide/rcwa/parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
 
 [`nvf_curved_contact.py`](rcwa/nvf_curved_contact.py) exercises the same NVF options on

@@ -1,7 +1,7 @@
 # 03. Direct and inverse rules: which matrix is inverted?
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 RCWA needs material matrices **to express pointwise multiplication of permittivity and electric field as an operation on vectors of Fourier coefficients**. We first examine what is being multiplied, then see why collecting the product by order gives a convolution matrix. Finally, we connect this to the difference between the direct and inverse rules at finite truncation.

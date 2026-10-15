@@ -2,7 +2,7 @@
 # Appendix A. Choosing kz in a lossless medium: two roots, branch points, and branch cuts
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 In a half-space—the semi-infinite medium above or below the structure—the normal wavevector {math}`k_z` is determined by a square root, so there are always two candidates. We must select the one describing a wave traveling away from the structure. In a lossless medium with real transverse wavevector {math}`k_x`, that choice follows automatically. When complex `theta` makes {math}`k_x` complex, however, **a separate rule is needed**. Considering only lossless media, this appendix explains from the beginning why such a rule is needed, how the rules differ, and which rules Wavebit and other solvers use. {ref}`Appendix B <complex-kx-lossy-gain>` then examines the changes introduced by absorption and gain.

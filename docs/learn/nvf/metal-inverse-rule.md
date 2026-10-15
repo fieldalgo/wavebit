@@ -1,7 +1,7 @@
 # 14. Small denominators, large responses: metals and the inverse rule
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 [Chapter 13](metal-original-plots.md) showed power sums exceeding 1 and narrow, truncation-dependent features in gold nanohole and disk calculations. We now return to **constructing the material matrices**, before reflectance and transmittance are calculated.

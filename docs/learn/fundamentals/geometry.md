@@ -1,7 +1,7 @@
 # 05. Two languages for building structures: rasters and shapes
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 A raster uses an array to say “which material fills each cell.” Shape input uses parameters to say “where an object is placed and how large it is.” Both describe the same kind of layered Maxwell problem. The **data type** of `structure` selects the path; there is no separate mode-selection switch.
@@ -22,6 +22,8 @@ In a raster, different layers are stacked along the first axis of the same array
 
 Executable file: {download}`02_shape.py <../../../examples/rcwa/learning/learn/02_shape.py>`
 
+The current script uses `rcwa.Layer(regions=...)` and `rcwa.Circle(radius=120.)`. `radius` is a radius; `size` is the full extent. Results include a leading wavelength axis. Dictionary shapes and `lx` in the historical explanation and figures describe the earlier interface.
+
 ```{literalinclude} ../../../examples/rcwa/learning/learn/02_shape.py
 :language: python
 :linenos:
@@ -32,7 +34,7 @@ Executable file: {download}`02_shape.py <../../../examples/rcwa/learning/learn/0
 | R | 0.006360910053 |
 | T | 0.993639089946 |
 | R + T | 1.000000000000 |
-| Result array shape (`result.T.shape`) | (5, 5) |
+| Result array shape (`result.T.shape`) | (1, 5, 5) |
 
 This example uses `shape_nvf_grid_size=64` and order `(2, 2)` to keep execution short while introducing the API. The result is not presented as a converged value for a final design. Analytically calculating the Fourier coefficients of material geometry and sampling the NVF projection field are separate stages.
 

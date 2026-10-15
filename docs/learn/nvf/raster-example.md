@@ -1,7 +1,7 @@
 # 08. Using pixel input and selecting NVF
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 For an image or an existing material array, use {download}`Example 2 <../../../examples/rcwa/learning/nvf/02_raster_nvf.py>`. It constructs a circle on a 64×64 pixel grid, then applies integrated coefficients and NVF. Membership in the circle of radius 160 nm is evaluated at pixel centers, so its geometry is not exactly the continuous circle in Example 1.

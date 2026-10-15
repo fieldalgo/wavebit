@@ -64,9 +64,11 @@ On JAX, prepare outside the transform and pass the live problem inside it, for e
 `jax.jit(lambda p: prepared.run(p).field(x=..., y=..., z=...).values)`. This holds for a single
 plane wave; other sources refuse a JAX-traced input. Explicit coordinate arrays and integer
 counts both work inside, and so does a traced layer thickness with explicit heights. A region
-geometry or cell traced under `jax.jit` is refused when the trace is built (code
-`prepared.host_topology`); eager `jax.grad` differentiates it; see
-[automatic differentiation](../common/autodiff.md). The earlier interface's compiled
+geometry or cell under `jax.jit` needs the Cartesian Li device guard or explicit
+`Numerics(topology_check='host')` for admitted scalar regions. Invalid topology masks
+retained fields as well as powers; other traced geometry is refused with
+`prepared.host_topology`. Eager `jax.grad` checks its concrete primal. See
+[automatic differentiation](../common/autodiff.md) and [checked shape JIT](guarded-shape-jit.md). The earlier interface's compiled
 `solver.solve_field(..., geometry=g)` and its static-sampling rules belong to that interface
 only.
 

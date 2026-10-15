@@ -93,6 +93,7 @@ subtrees:
           - file: guide/rcwa/numerics
           - file: guide/rcwa/nvf-method-selection
           - file: guide/rcwa/parametric-modeling
+          - file: guide/rcwa/guarded-shape-jit
           - file: guide/rcwa/rayleigh-handling-walkthrough
           - file: guide/rcwa/scene
           - file: guide/rcwa/tensor-shape-integration
@@ -101,6 +102,7 @@ subtrees:
         - entries:
           - file: guide/fdtd/fd-constitutive-absorber
           - file: guide/fdtd/fd-differentiation
+          - file: guide/fdtd/stopping-and-absorbers
           - file: guide/fdtd/substrate-gradients
           - file: guide/fdtd/fd-metasurface
           - file: guide/fdtd/fd-radiation

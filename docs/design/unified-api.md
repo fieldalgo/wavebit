@@ -423,10 +423,12 @@ gradient = jax.grad(loss)(jnp.asarray(2.25))
 
 This contract does not promise unrestricted geometry differentiation. Under an
 external JAX transform, a structural change detectable from Python metadata is
-rejected. A supported value-dependent guard executes in backend operations;
+rejected. A supported value-dependent guard executes in backend operations or,
+when explicitly selected with `Numerics(topology_check='host')`, in a CPU callback;
 failure produces an explicit failed validity check and NaN numerical outputs,
 not a detached tangent or an unreported clamp. Diagnostics metadata remains
-readable. Unsupported host-only topology decisions must be rejected at trace
+readable. The explicit host policy must state transfer costs and sequential vmap
+behavior. Host-only topology decisions without an admitted callback must be rejected at trace
 construction, or prepared again from each concrete design outside the transform.
 A tracer that carries a concrete primal, as under an eager `jax.grad`, may be
 checked on that primal as an eager PyTorch tensor is, raising eagerly when the
@@ -1181,7 +1183,7 @@ not extend that scope.
 | `fdtd.Problem`, `Scene`, `Domain`, `Boundaries`, `Structure`, `PlaneWave`, `GaussianPulse`, `Outputs`, `Record`, `Numerics`, `UniformGrid`, `Duration`, `PML`, with the PML outside the physical domain (§6) | implemented; CPU and double precision only (§13) | `src/wavebit/fdtd/` |
 | FDTD `GaussianBeam`, mode sources and monitors, decay termination, nonuniform grids, GPU (§6) | not implemented, and not exposed | -- |
 | `fdtd.Numerics.geometry_ranges` (§7) | implemented | `src/wavebit/fdtd/numerics.py` |
-| Host-only topology decisions rejected under an external transform (§7) | implemented: fixed-cell Cartesian Li rectangle sizes/centres use an array-valued edge-order guard under JIT/vmap. Other geometry traced under `jax.jit` or `jax.vmap` is refused (`prepared.host_topology`, `78149a3a`, `82a6b510`); an eager `jax.grad` tracer's primal is checked as a PyTorch tensor is | `src/wavebit/rcwa/_lifecycle.py` |
+| Host-only topology decisions rejected under an external transform (§7) | implemented: fixed-cell Cartesian Li rectangle sizes/centres use an array-valued edge-order guard under JIT/vmap. Other scalar region geometry can explicitly select `topology_check='host'` for checked CPU callbacks. The default device policy refuses it under `jax.jit` or `jax.vmap` (`prepared.host_topology`); an eager `jax.grad` tracer's primal is checked as a PyTorch tensor is | `src/wavebit/rcwa/_lifecycle.py` |
 | `outputs`, `validity`, `diagnostics`, `provenance` on every result; `DiffractionOrders` with `order(m, n)`, `FieldSamples`, `SpectralFieldSamples`, `RawDiffractionSpectrum`, `TimeSeries` (§8) | implemented | `src/wavebit/observations/` |
 | Shared error families with a stable code and input path (§9) | implemented | `src/wavebit/errors.py` |
 | `wavebit.job/v1`, `Job.to_json` / `from_json` / `key`, and `wavebit.run(job)` for a `Job` only (§9) | implemented; saved run records added beside it (`wavebit.records`, 2026-10-13) | `src/wavebit/jobs.py`, `src/wavebit/records.py` |

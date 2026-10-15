@@ -1,12 +1,14 @@
 # 14. Electric and magnetic fields at specified positions
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 Reflectance and transmittance describe fractions of the power carried by light. To see the electric and magnetic field distributions inside a layer, read the **fields** at the desired positions after solving. Reading a field means obtaining its electric and magnetic components at that position.
 
 For ordinary incidence, multiple plane waves, Gaussian beams, and dipole sources alike, fields are read from the **result object** returned by `solve()`. This chapter covers preparation, sampling coordinates, returned arrays, and boundary fields, then explains complex amplitudes and magnetic-field units.
+
+**Current example versus earlier conventions:** the runnable file uses `Outputs(fields=True)` and `result.field(x=..., y=..., z=...)`. Its arrays include a wavelength axis and H is already A/m. The remaining explanations of `answers`, `reconstruct_field`, Z₀H arrays and conversion below describe the earlier interface. Do not apply that conversion twice to current results; see the [current field guide](../../guide/rcwa/fields.md).
 
 (field-preparation)=
 ## Reading fields from a solved result
@@ -39,17 +41,17 @@ For a result with specified sources, recalculating power over a different observ
 
 ### Runnable example
 
-This example illuminates a uniform 120 nm layer with TE-polarized light. After calling `solve()`, it reads the fields at 25 heights from the bottom to the top of the layer. The length unit in this example is nm.
+This example illuminates a uniform 120 nm layer with TE-polarized light. After calling the current `rcwa.run()`, it reads the fields at 25 heights from the bottom to the top of the layer. The length unit in this example is nm.
 
 Example file: {download}`03_fields.py <../../../examples/rcwa/learning/learn/03_fields.py>`
 
 ```{literalinclude} ../../../examples/rcwa/learning/learn/03_fields.py
 :language: python
 :start-at: import numpy as np
-:end-at: Ey = np.asarray(cell[:, 0, 0, 1])
+:end-at: Ey = np.asarray(field.values[0, :, 0, 0, 1])
 ```
 
-`cell` has shape `(25, 1, 1, 6)`. The second component of the last axis is `Ey`, so `cell[:, 0, 0, 1]` contains the electric-field y component at the 25 heights. Because the layer is uniform and the incidence is normal, this field does not vary with x or y.
+`field.values` has shape `(1, 25, 1, 1, 6)`, with wavelength first. `field.values[0, :, 0, 0, 1]` contains Ey at the 25 heights. The current API returns E in V/m and H in A/m; do not divide its H by Z₀ again. Because the layer is uniform and the incidence is normal, this field does not vary with x or y.
 
 ```{figure} ../../figures/learn/learn/12-field-data.svg
 :alt: Real part, imaginary part, and squared magnitude of Ey versus height inside a uniform 120 nm layer

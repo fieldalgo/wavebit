@@ -2,7 +2,7 @@
 # 13. Power flow and diffraction efficiency
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 Reflection and transmission efficiencies are **power ratios**. Squaring a complex electric-field amplitude coefficient gives a ratio of squared electric-field magnitudes; converting it to a power ratio also requires the magnetic field and propagation direction. At a boundary where incident and reflected waves overlap, calculate net entering power from their combined total fields.

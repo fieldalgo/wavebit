@@ -75,7 +75,10 @@ coordinates, and `Field` returns each component on its own points. Nothing is in
 
 **Absorbing layers are added outside.** Each `Open()` face gets `PML(cells=12)` cells (the
 default) beyond the physical domain, so adding PML cells never moves or shrinks the region you
-declared (`resolved["padding_cells"]`, `resolved["allocated_domain"]`).
+declared (`resolved["padding_cells"]`, `resolved["allocated_domain"]`). Explicit
+`Numerics(absorber=fdtd.Absorber(cells=...))` instead chooses graded conductivity
+padding for supported media that PML cannot match; see [its attenuation floor and
+scope](stopping-and-absorbers.md).
 
 ## Time stepping
 
@@ -87,9 +90,12 @@ medium with `ε·μ < 1`, or a dispersive pole, lowers the largest stable step, 
 `check` reports `resolved["dt_seconds"]` and `resolved["steps"]`.
 
 `Duration` takes exactly one of `steps`, `seconds`, or `periods` with `source="name"` (that
-many periods of the named source's centre wavelength). There is no automatic stopping in the
-public module: a run lasts its declared duration, and a warning says when the field had not
-decayed by the end (see [Warnings](#warnings)).
+many periods of the named source's centre wavelength). By default a run lasts that duration.
+An explicit `Numerics(decay=fdtd.Decay(threshold=..., window_seconds=...))` makes it a hard cap
+for concrete forward CPU execution and may stop at an earlier completed decay window.
+See [automatic stopping](stopping-and-absorbers.md) for supported sources, actual-prefix
+results and why this policy refuses differentiation. End-of-run decay warnings remain
+separate from convergence guarantees (see [Warnings](#warnings)).
 
 ## Structures: cell-snapped and smoothed
 
@@ -403,8 +409,6 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
 - No per-cell permittivity arrays (rasters), no constructive solid geometry (union, intersection,
   difference), no tilted extrusion axes.
 - No Gaussian beams, mode sources or mode monitors.
-- No automatic stopping, and no `Absorber` (the graded-conductivity fallback where a PML cannot be
-  matched); both exist in the compatibility engine, `wavebit.compat.legacy.fd`.
 - No smoothed lossy or dispersive bodies outside flat films.
 
 ## Further reading

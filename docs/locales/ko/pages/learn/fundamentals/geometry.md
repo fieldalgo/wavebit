@@ -1,7 +1,7 @@
 # 05. 구조를 만드는 두 언어: 래스터와 도형
 
 :::{note}
-이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
+다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
 
 래스터는 ‘각 칸을 어떤 재료로 채우는가’를 배열로 말합니다. 도형 방식은 ‘어디에 어떤 크기의 물체를 놓는가’를 매개변수로 말합니다. 둘 다 같은 종류의 층별 Maxwell 문제를 설명합니다. `structure`의 **자료형**이 경로를 선택하므로 모드 선택 스위치를 따로 붙이지 않습니다.
@@ -22,6 +22,8 @@
 
 실행 파일: {download}`02_shape.py <../../../examples/rcwa/learning/learn/02_shape.py>`
 
+현재 실행 예제는 `rcwa.Layer(regions=...)`와 `rcwa.Circle(radius=120.)`를 사용합니다. `radius`는 반지름이며 `size`는 전체 크기입니다. 결과에는 파장 축이 앞에 붙습니다. 아래 원래 그림·설명의 dict와 `lx` 표기는 이전 인터페이스의 규약입니다.
+
 ```{literalinclude} ../../../examples/rcwa/learning/learn/02_shape.py
 :language: python
 :linenos:
@@ -32,7 +34,7 @@
 | R | 0.006360910053 |
 | T | 0.993639089946 |
 | R + T | 1.000000000000 |
-| 결과 배열 크기 (`result.T.shape`) | (5, 5) |
+| 결과 배열 크기 (`result.T.shape`) | (1, 5, 5) |
 
 이 예제의 `shape_nvf_grid_size=64`와 차수 `(2, 2)`는 짧게 실행해 API를 배우기 위한 설정입니다. 이 결과를 최종 설계의 수렴값으로 제시하지 않습니다. 재료 형상의 Fourier 계수를 해석적으로 구하는 것과, NVF 투영장을 표본화하는 것은 다른 단계입니다.
 

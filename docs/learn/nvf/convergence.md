@@ -1,7 +1,7 @@
 # 09. Before trusting a result: how to check convergence
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 Convergence checks ask whether the quantity you need remains sufficiently stable as numerical settings are refined. First decide whether your objective is total transmittance, a particular diffraction order, a phase, or a material or shape gradient.

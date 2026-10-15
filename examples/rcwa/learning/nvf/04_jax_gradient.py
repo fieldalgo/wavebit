@@ -1,42 +1,40 @@
-"""Material derivative with fixed shape topology; compare two FD step sizes."""
-
+"""Material derivative at fixed topology, checked against two fresh differences."""
 import json
+import numpy as np
 import jax
 import jax.numpy as jnp
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
 jax.config.update('jax_enable_x64', True)
 
 
-def make_solver(epsilon):
-    return wavebit.rcwa(
-        backend='jax', complex_dtype=0,
-        period=(700., 700.), wavelength=900., thickness=(180.,),
-        top=1., bot=2.25, theta=.2, phi=.3, psi=0.,
-        truncation_order=(2, 2),
-        factorization='nvf', nvf_projector='circular', shape_nvf_grid_size=128,
-        structure=[dict(background=1., shapes=[
-            dict(type='rectangle', cx=0., cy=0., lx=300., ly=220.,
-                 angle=.25, material=epsilon)])])
+def problem(epsilon):
+    return rcwa.Problem(units=Units(length='nm'),
+        stack=rcwa.Stack(period=(700., 700.), bottom=Material(2.25), layers=(
+            rcwa.Layer(thickness=180., regions=(rcwa.Region(
+                geometry=rcwa.Rectangle(size=(300., 220.), angle=.25),
+                material=Material(epsilon)),)),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(
+            rcwa.PlaneWave(theta=.2, phi=.3, polarization='p'),)))
+
+
+NUMERICS = rcwa.Numerics(orders=(2, 2), factorization='nvf',
+    nvf_projector='circular', shape_nvf_grid_size=128)
 
 
 if __name__ == '__main__':
-    # Take the discrete geometry decisions before JIT tracing.
-    geometry = make_solver(4.).freeze_geometry()
-
+    prepared = rcwa.prepare(problem(4.), numerics=NUMERICS, backend='jax')
     def transmission(epsilon):
-        result = make_solver(epsilon).solve(geometry=geometry)
-        return jnp.real(jnp.sum(result.T))
-
+        return prepared.run(problem(epsilon)).T.sum()
     value, gradient = jax.jit(jax.value_and_grad(transmission))(jnp.asarray(4.))
-    # Rebuild eagerly for finite differences: no reuse of the frozen record.
+    # Independent eager preparations on NumPy for each finite-difference point.
     def eager(epsilon):
-        return float(make_solver(epsilon).solve().T.sum())
-
+        return float(rcwa.run(problem(epsilon), numerics=NUMERICS).T.sum())
     differences = []
     for h in (1e-3, 5e-4):
         fd = (eager(4.+h)-eager(4.-h))/(2*h)
-        differences.append(dict(h=h, derivative=fd,
-                                absolute_difference=abs(fd-float(gradient))))
+        np.testing.assert_allclose(gradient, fd, rtol=2e-5, atol=1e-8)
+        differences.append(dict(h=h, derivative=fd, absolute_difference=abs(fd-float(gradient))))
+    np.testing.assert_allclose(value, eager(4.), atol=2e-12)
     print(json.dumps(dict(T_p=float(value), dT_d_epsilon=float(gradient),
                          eager_T_p=eager(4.), finite_differences=differences), indent=2))

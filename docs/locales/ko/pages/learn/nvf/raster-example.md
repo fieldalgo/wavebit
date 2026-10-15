@@ -1,7 +1,7 @@
 # 08. 픽셀 입력으로 사용하고 NVF를 선택하기
 
 :::{note}
-이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
+다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
 
 이미지나 기존 재료 배열이 있다면 {download}`예제 2 <../../../examples/rcwa/learning/nvf/02_raster_nvf.py>`를 사용합니다. 64×64 픽셀로 원을 만든 뒤 integrated 계수와 NVF를 적용합니다. 반지름 160 nm의 원을 픽셀 중심에서 판정하므로, 예제 1의 연속 원과 기하가 완전히 같지는 않습니다.

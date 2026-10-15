@@ -1,7 +1,7 @@
 # 03. Conventions to establish first: coordinates, units, and materials
 
 :::{note}
-The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
+The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 Wavebit cannot infer from a number whether you mean nm or µm. Use **one consistent length unit** for `wavelength`, `period`, `thickness`, and shape positions and sizes. The executable examples in this book use nm. Angles are in radians, so 30 degrees is `np.deg2rad(30.)`.
