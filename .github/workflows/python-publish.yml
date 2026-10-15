@@ -47,4 +47,4 @@ jobs:
         python -m pip install --upgrade pip build
         python -m build
     - name: Publish package
-      uses: pypa/gh-action-pypi-publish@27b31702a0e7fc50959f5ad993c78deac1bdfc29
+      uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26  # v1.14.2 (2026-07-29); the 2021 pin predated trusted publishing
