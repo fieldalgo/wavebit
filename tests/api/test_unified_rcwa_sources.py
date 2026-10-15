@@ -38,23 +38,23 @@ def test_two_bloch_sectors_match_the_analytic_finite_aperture_power(unit, scale)
 
 
 def test_problem_owns_python_containers_but_keeps_backend_array_leaves():
-    vertices = [[-.1, -.1], [.1, -.1], [0., .1]]
+    center = [.1, -.1]
     polarization = [1., 1j]
     wavelengths = [.8, .9]
     raster = [[[2., 3.], [4., 5.]]]
     basis = [[1., 0.], [0., 1.]]
-    polygon = rcwa.Polygon(vertices=vertices)
+    rectangle = rcwa.Rectangle(size=(.2, .1), center=center)
     beam = rcwa.GaussianBeam(waist=1., polarization=polarization)
     orders = rcwa.OrderExcitation(orders=(((0, 0), 1.),), polarization=polarization)
     excitation = rcwa.Excitation(wavelength=wavelengths, sources=(beam, orders))
     layer = rcwa.Layer(thickness=.2, epsilon=raster)
     stack = rcwa.Stack(lattice=basis)
-    vertices[0][0] = 10.
+    center[0] = 10.
     polarization[0] = 0.
     wavelengths[0] = 100.
     raster[0][0][0] = 9.
     basis[0][0] = 7.
-    assert polygon.vertices[0][0] == -.1
+    assert rectangle.center == (.1, -.1)
     assert beam.polarization == orders.polarization == (1., 1j)
     assert excitation.wavelength == (.8, .9)
     assert layer.epsilon[0][0][0] == 2.

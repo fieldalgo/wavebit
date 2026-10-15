@@ -8,7 +8,7 @@ from dataclasses import field
 from .._common.declarations import spec
 from ..materials import Material
 from ..units import Units
-from ..errors import ValidationError
+from ..errors import UnsupportedFeatureError, ValidationError
 
 
 def _freeze_sequence(value):
@@ -62,11 +62,23 @@ class Ellipse:
 
 @spec
 class Polygon:
-    """A polygon whose ordered vertices use centered Cartesian cell coordinates."""
+    """Reserved: a polygon given by its vertices is not built yet, and is refused here.
+
+    The engine builds rectangles, circles and ellipses, and the polygons their overlaps
+    resolve into; it has no region whose outline is a list of vertices. The overlap test
+    reads convex primitives and the normal field is built per primitive type, so a polygon
+    needs both before it can be solved. Until then a declaration is refused at once with
+    ``UnsupportedFeatureError`` rather than accepted here and refused at ``run``.
+    """
     vertices: object
 
     def __post_init__(self):
-        object.__setattr__(self, 'vertices', _freeze_sequence(self.vertices))
+        raise UnsupportedFeatureError(
+            'rcwa.Polygon is not built yet: a region outline given by vertices has no '
+            'engine path. Compose the shape from Rectangle, Circle and Ellipse regions '
+            '(later regions paint over earlier ones), or sample it into a raster layer, '
+            'rcwa.Layer(thickness=..., epsilon=<array>).',
+            code='shape.polygon', path='geometry')
 
 
 @spec
@@ -76,8 +88,8 @@ class Region:
     material: object
 
     def __post_init__(self):
-        if not isinstance(self.geometry, (Rectangle, Circle, Ellipse, Polygon)):
-            raise ValidationError('Use Rectangle, Circle, Ellipse, or Polygon geometry.',
+        if not isinstance(self.geometry, (Rectangle, Circle, Ellipse)):
+            raise ValidationError('Use Rectangle, Circle, or Ellipse geometry.',
                                   code='shape.type', path='region.geometry')
 
 

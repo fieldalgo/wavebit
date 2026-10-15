@@ -11,7 +11,7 @@ import numpy as np
 from .._common.backend import as_array
 from ..materials import Material, TabulatedMaterial
 from ..errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
-from .problem import Rectangle, Circle, Ellipse, Polygon
+from .problem import Rectangle, Circle, Ellipse
 from .sources import PlaneWave
 
 
@@ -94,8 +94,6 @@ def region_recipe(region, wavelength, units, execution):
     if isinstance(g, Ellipse):
         return dict(base, type='ellipse', cx=g.center[0], cy=g.center[1],
                     lx=2*g.radii[0], ly=2*g.radii[1], angle=g.angle)
-    if isinstance(g, Polygon):
-        return dict(base, type='polygon', vertices=g.vertices)
     raise ValidationError('Unsupported typed region geometry.', code='shape.type', path='stack.layers.regions')
 
 

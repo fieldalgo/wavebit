@@ -405,3 +405,40 @@ def test_torch_shape_step_across_a_topology_boundary_asks_for_a_new_preparation(
     with pytest.raises(IncompatibleProblemError) as error:
         prepared.run(pair(torch.tensor(130., dtype=torch.float64, requires_grad=True)))
     assert error.value.issue.code == 'prepared.topology'
+
+
+#: One declaration of every region geometry the public namespace exports.
+GEOMETRIES = {'Rectangle': dict(size=(.3, .2), angle=.3),
+              'Circle': dict(radius=.15),
+              'Ellipse': dict(radii=(.2, .1), angle=.4),
+              'Polygon': dict(vertices=((-.2, -.2), (.2, -.2), (0., .2)))}
+
+
+def test_every_exported_region_geometry_is_listed_here():
+    from wavebit.rcwa import problem as declarations
+    shapes = {name for name in rcwa.__all__
+              if getattr(getattr(rcwa, name), '__module__', None) == declarations.__name__
+              and name not in ('Problem', 'Stack', 'Layer', 'Region', 'Excitation', 'Outputs')}
+    assert shapes == set(GEOMETRIES)
+
+
+@pytest.mark.parametrize('name', sorted(GEOMETRIES))
+def test_a_region_geometry_is_built_or_refused_at_its_declaration(name):
+    """No geometry is accepted when declared and refused only when the engine reaches it.
+
+    ``rcwa.Polygon`` was: it lowered to a shape type no builder takes, ``check`` reported
+    nothing, and ``run`` refused it from inside the engine.
+    """
+    try:
+        geometry = getattr(rcwa, name)(**GEOMETRIES[name])
+    except UnsupportedFeatureError as error:
+        assert (name, error.issue.code, error.issue.path) == ('Polygon', 'shape.polygon', 'geometry')
+        return
+    layer = rcwa.Layer(thickness=.2, background=Material(1.),
+                       regions=(rcwa.Region(geometry=geometry, material=Material(4.)),))
+    problem = rcwa.Problem(stack=rcwa.Stack(period=(1., 1.), layers=(layer,)),
+                           excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(),)))
+    numerics = rcwa.Numerics(orders=(2, 2))
+    assert rcwa.check(problem, numerics=numerics).ok
+    result = rcwa.run(problem, numerics=numerics)
+    np.testing.assert_allclose(np.sum(result.R) + np.sum(result.T), 1., rtol=0, atol=1e-10)
