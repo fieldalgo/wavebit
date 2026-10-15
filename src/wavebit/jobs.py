@@ -83,8 +83,13 @@ def _encode(value, registry, path):
         tag = next((tag for tag, cls in registry.items() if type(value) is cls), None)
         if tag is None:
             raise _error(f'{type(value).__name__} is not a portable public job declaration.', path)
+        # A field added to a v1 declaration after the format was fixed is written only when it
+        # differs from its default, so every job that does not use it keeps its key (and every
+        # saved run record its identity); the decoder gives an absent field its default.
+        later = getattr(type(value), '_FIELDS_ADDED_IN_V1', ())
         return {'type': tag, 'fields': {f.name: _encode(getattr(value, f.name), registry, f'{path}.{f.name}')
-                                      for f in dataclasses.fields(value) if f.init and not f.name.startswith('_')}}
+                                      for f in dataclasses.fields(value) if f.init and not f.name.startswith('_')
+                                      and not (f.name in later and getattr(value, f.name) == f.default)}}
     if isinstance(value, tuple):
         return {'type': 'tuple', 'items': [_encode(v, registry, f'{path}[{i}]') for i, v in enumerate(value)]}
     if isinstance(value, list):
