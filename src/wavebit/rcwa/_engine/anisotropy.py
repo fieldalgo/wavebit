@@ -102,12 +102,8 @@ def _labels(tensor):
     return labels.reshape(a.shape[:2])
 
 
-def _periodic_shape_mask(shape, X, Y, basis):
-    """Paint all images intersecting the cell, including an unreduced lattice.
-
-    Bounding each shape in fractional coordinates avoids a fixed image ring,
-    which misses translated shapes and long/sheared cells.
-    """
+def _shape_values(shape, basis):
+    """A sampled shape's kind and ``(cx, cy, lx, ly, angle)``, refused where no mask can be painted."""
     from wavebit._common.geometry.recipes import shape_geometry
     kind, *values = shape_geometry(shape, basis)
     if kind not in ('circle', 'disk', 'ellipse', 'rectangle', 'square'):
@@ -118,6 +114,16 @@ def _periodic_shape_mask(shape, X, Y, basis):
     cx, cy, lx, ly, angle = values.real
     if min(lx, ly) <= 0:
         raise ValueError('shape lengths must be positive')
+    return kind, cx, cy, lx, ly, angle
+
+
+def _periodic_shape_mask(shape, X, Y, basis):
+    """Paint all images intersecting the cell, including an unreduced lattice.
+
+    Bounding each shape in fractional coordinates avoids a fixed image ring,
+    which misses translated shapes and long/sheared cells.
+    """
+    kind, cx, cy, lx, ly, angle = _shape_values(shape, basis)
     c, s = np.cos(angle), np.sin(angle)
     rotation = np.array([[c, -s], [s, c]])
     inverse = np.linalg.inv(basis)
@@ -140,15 +146,20 @@ def _periodic_shape_mask(shape, X, Y, basis):
     return mask
 
 
-def _shape_snapshot(solver, basis=None, n=None):
-    """Read only geometry, never material values, to make a reusable sampling record."""
+def _shape_snapshot(solver, basis=None, n=None, paint=True):
+    """Read only geometry, never material values, to make a reusable sampling record.
+
+    ``paint=False`` meets every refusal of the record and paints no mask -- one is
+    ``shape_nvf_grid_size`` squared per shape, 1024 x 1024 by default -- and returns None:
+    the admission check's call (:func:`check_layers`).
+    """
     import wavebit.rcwa._engine.parametric as parametric
     from wavebit.lattice import sample_grid
     xp = array_namespace(np.asarray(0.))
     try:
         basis = np.asarray(fac._to_numpy(solver.lattice) if basis is None else basis, dtype=float)
         n = solver.shape_nvf_grid_size if n is None else n
-        X,Y = sample_grid(xp, (n,n), basis, np.float64)
+        X,Y = sample_grid(xp, (n,n), basis, np.float64) if paint else (None, None)
         masks, keys = [], []
         for i, layer in enumerate(solver.structure):
             parametric.check_layer_spec(layer, i)
@@ -163,9 +174,12 @@ def _shape_snapshot(solver, basis=None, n=None):
                                          'keep geometry fixed and differentiate material values')
                 key.append(tuple(sorted((k, repr(fac._to_numpy(v)) if hasattr(v, 'shape') else repr(v))
                                         for k,v in geometry.items())))
-                current.append(_periodic_shape_mask(shape, X, Y, basis))
+                if paint:
+                    current.append(_periodic_shape_mask(shape, X, Y, basis))
+                else:
+                    _shape_values(shape, basis)
             masks.append(current);keys.append(tuple(key))
-        return masks, (n, basis.tobytes(), tuple(keys))
+        return (masks, (n, basis.tobytes(), tuple(keys))) if paint else None
     except (TypeError, ValueError) as exc:
         if isinstance(exc, ValueError) and 'geometry derivatives' in str(exc):
             raise
@@ -311,6 +325,29 @@ def freeze(solver):
                 labels.astype(float), lattice=solver.lattice, method=solver.raster_normal_method)
             record[quantity].append((labels, normal))
     return StaticGeometry(tensor_geometry=record)
+
+
+def check_layers(solver):
+    """The layer refusals :func:`freeze` meets, without the record it takes.
+
+    Each builder refuses a shape layer as it records it, so this makes the call its freeze
+    makes, on the same arguments, and keeps nothing: Cartesian Li's plans, which refuse a
+    rectangle that leaves the cell; the integrated shapes' layer checks
+    (:func:`~wavebit.rcwa._engine.tensor_shapes.check_layers`); and the sampled snapshot,
+    unpainted. The sampled masks wrap every shape periodically, so a shape larger than the
+    period is sampled like any other there; the snapshot refuses a length that is not positive.
+    """
+    if not isinstance(solver.structure, list):
+        return
+    if solver._factorization == 'li':
+        import wavebit.rcwa._engine.rectilinear as rectilinear
+        for layer in solver.structure:
+            rectilinear.plan_layer(layer.get('shapes', []), solver.lattice)
+    elif integrated_shapes(solver):
+        import wavebit.rcwa._engine.tensor_shapes as tensor_shapes
+        tensor_shapes.check_layers(solver)
+    elif any(layer.get('shapes') for layer in solver.structure):
+        _shape_snapshot(solver, paint=False)
 
 
 def _sampled_fields(solver, geometry, quantity):

@@ -536,3 +536,107 @@ def test_a_region_geometry_is_built_or_refused_at_its_declaration(name):
     assert rcwa.check(problem, numerics=numerics).ok
     result = rcwa.run(problem, numerics=numerics)
     np.testing.assert_allclose(np.sum(result.R) + np.sum(result.T), 1., rtol=0, atol=1e-10)
+
+
+# A layer whose regions cannot be built is refused while its geometry is frozen, on concrete
+# values. `check` freezes nothing, so until 2026-10-15 it passed every case below, for every
+# shape type, and `run` refused it: the shape of 0cd24a45, one level down. Each test asks
+# `check` and `prepare` for the same issue, so a refusal reaching only one of them fails.
+
+TENSOR = Material(np.diag([4., 4.5, 5.]))
+#: Material and numerics of each build a region layer can take. Laurent shares the scalar NVF
+#: layer checks; Li and the sampled tensor masks refuse with checks of their own.
+BUILDS = {'scalar': (Material(4.), rcwa.Numerics(orders=(2, 2))),
+          'tensor': (TENSOR, rcwa.Numerics(orders=(2, 2))),
+          'scalar li': (Material(4.), rcwa.Numerics(orders=(2, 2), factorization='li')),
+          'tensor li': (TENSOR, rcwa.Numerics(orders=(2, 2), factorization='li')),
+          'tensor sampled': (TENSOR, rcwa.Numerics(orders=(2, 2), fourier_coefficients='sampled'))}
+
+
+def one_layer(*geometries, build='scalar'):
+    """A problem of ``geometries`` painted in order on one layer of a unit cell, and the
+    numerics to check it with: both as ``build`` says."""
+    material, numerics = BUILDS[build]
+    regions = tuple(rcwa.Region(geometry=g, material=material) for g in geometries)
+    layer = rcwa.Layer(thickness=.2, background=Material(1.), regions=regions)
+    return rcwa.Problem(stack=rcwa.Stack(period=(1., 1.), layers=(layer,)),
+                        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(),))), numerics
+
+
+def the_issue_check_and_prepare_report(problem, numerics):
+    report = rcwa.check(problem, numerics=numerics)
+    assert report.ok is False
+    with pytest.raises(ValidationError) as refused:
+        rcwa.prepare(problem, numerics=numerics)
+    assert report.issues == (refused.value.issue,)
+    return report.issues[0]
+
+
+@pytest.mark.parametrize('geometry,build,says', [
+    (rcwa.Rectangle(size=(1.3, .4)), 'scalar', 'is larger than the period and runs into its own image'),
+    (rcwa.Circle(radius=.6), 'scalar', 'is larger than the period and runs into its own image'),
+    (rcwa.Ellipse(radii=(.6, .2), angle=.1), 'scalar', 'is larger than the period and runs into its own image'),
+    (rcwa.Rectangle(size=(1.3, .4)), 'tensor', 'is larger than the period and runs into its own image'),
+    (rcwa.Circle(radius=.6), 'tensor', 'is larger than the period and runs into its own image'),
+    (rcwa.Ellipse(radii=(.6, .2), angle=.1), 'tensor', 'is larger than the period and runs into its own image'),
+    (rcwa.Rectangle(size=(1.3, .4)), 'scalar li', 'requires rectangles inside one cell'),
+    (rcwa.Rectangle(size=(1.3, .4)), 'tensor li', 'requires rectangles inside one cell'),
+], ids=['rectangle', 'circle', 'ellipse', 'tensor-rectangle', 'tensor-circle', 'tensor-ellipse',
+        'li-rectangle', 'tensor-li-rectangle'])
+def test_check_refuses_a_region_larger_than_the_period(geometry, build, says):
+    issue = the_issue_check_and_prepare_report(*one_layer(geometry, build=build))
+    assert issue.code == 'rcwa.invalid'
+    assert says in issue.message
+
+
+def test_check_refuses_a_polygon_reaching_into_its_own_image():
+    bar = rcwa.Polygon(vertices=((-.65, -.1), (.65, -.1), (.65, .1), (-.65, .1)))
+    issue = the_issue_check_and_prepare_report(*one_layer(bar))
+    assert issue.code == 'rcwa.invalid'
+    assert 'shape 0 (polygon) runs into its own periodic image' in issue.message
+
+
+# Each pair overlaps only through the x edge: the first reaches past x = 0.5 into the second's
+# image. A painted mix of types, since the sweep pairs primitives and outlines differently.
+EDGE_PAIRS = {'rectangles': (rcwa.Rectangle(size=(.2, .2), center=(.45, 0.)),
+                             rcwa.Rectangle(size=(.2, .2), center=(-.45, 0.))),
+              'circle-ellipse': (rcwa.Circle(radius=.1, center=(.45, 0.)),
+                                 rcwa.Ellipse(radii=(.1, .05), center=(-.45, 0.))),
+              'polygon-rectangle': (rcwa.Polygon(vertices=((.35, -.1), (.55, -.1), (.55, .1), (.35, .1))),
+                                    rcwa.Rectangle(size=(.2, .2), center=(-.45, 0.)))}
+
+
+@pytest.mark.parametrize('pair,build', [('rectangles', 'scalar'), ('circle-ellipse', 'scalar'),
+                                        ('polygon-rectangle', 'scalar'), ('rectangles', 'tensor'),
+                                        ('circle-ellipse', 'tensor')])
+def test_check_refuses_regions_that_overlap_only_across_a_cell_edge(pair, build):
+    issue = the_issue_check_and_prepare_report(*one_layer(*EDGE_PAIRS[pair], build=build))
+    assert issue.code == 'rcwa.invalid'
+    assert 'overlap only across the x period boundary' in issue.message
+
+
+@pytest.mark.parametrize('geometry,build,says', [
+    (rcwa.Rectangle(size=(-.3, .2)), 'scalar', 'has lx = -0.3. A length here is a size'),
+    (rcwa.Circle(radius=0.), 'scalar', 'has lx = 0. A length here is a size'),
+    (rcwa.Ellipse(radii=(.2, -.1)), 'scalar', 'has ly = -0.2. A length here is a size'),
+    (rcwa.Rectangle(size=(-.3, .2)), 'tensor', 'has lx = -0.3. A length here is a size'),
+    (rcwa.Rectangle(size=(-.3, .2)), 'scalar li', 'requires positive finite sizes'),
+    (rcwa.Rectangle(size=(-.3, .2)), 'tensor li', 'requires positive finite sizes'),
+    (rcwa.Circle(radius=-.1), 'tensor sampled', 'shape lengths must be positive'),
+], ids=['rectangle', 'circle', 'ellipse', 'tensor', 'li', 'tensor-li', 'tensor-sampled'])
+def test_check_refuses_a_region_whose_size_is_not_positive(geometry, build, says):
+    issue = the_issue_check_and_prepare_report(*one_layer(geometry, build=build))
+    assert issue.code == 'rcwa.invalid'
+    assert says in issue.message
+
+
+def test_check_passes_what_only_touches_its_images():
+    # The other side of each refusal above: the checks do not refuse a legal layer.
+    legal = [one_layer(rcwa.Rectangle(size=(1., .4))),                    # fills the period
+             one_layer(rcwa.Rectangle(size=(.2, .2), center=(.4, 0.)),    # abut across the edge
+                       rcwa.Rectangle(size=(.2, .2), center=(-.4, 0.))),
+             one_layer(rcwa.Polygon(vertices=((.3, -.1), (.7, -.1), (.7, .1), (.3, .1)))),  # past the edge
+             one_layer(rcwa.Rectangle(size=(1.3, .4)), build='tensor sampled')]  # masks wrap
+    for problem, numerics in legal:
+        assert rcwa.check(problem, numerics=numerics).ok
+        rcwa.prepare(problem, numerics=numerics)

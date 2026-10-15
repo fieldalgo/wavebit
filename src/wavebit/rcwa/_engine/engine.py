@@ -5146,9 +5146,7 @@ class CoreFactorizationMixin:
             # 0.9590 and a `dT/dlx` of 9.8e-4 where the true derivative is exactly zero. Both
             # `check_layer_shapes` docstrings named this call as the one that still sees them;
             # until 2026-08-27 it did not make it.
-            for index, layer in enumerate(self.structure):
-                _parametric.check_layer_spec(layer, index)
-                _parametric.check_layer_shapes(layer, basis, index)
+            self._check_layer_geometry()
             # Only a layer that actually overlaps has a plan to freeze. One with nothing
             # overlapping means the same structure either way and stays on the closed-form
             # path, so its slot stays None and the replay never looks.
@@ -5188,6 +5186,41 @@ class CoreFactorizationMixin:
                                     else _parametric.plan_gamma(layer.get('shapes', []), basis)
                                     for layer in self.structure]
         return geometry
+
+    def _check_layer_geometry(self):
+        """The layer refusals of :meth:`freeze_geometry`, without the record it takes.
+
+        Whether a layer's shapes can be built at all -- no shape larger than the period or
+        reaching into its own image, none meeting another only through a cell edge, no length
+        that is not positive -- is decided on concrete values: by the freeze, and again by every
+        replay of its record (:meth:`_refuse_a_stale_geometry_record`).
+        :meth:`_check_before_building` asks only what a build can be asked for. The public
+        ``check`` takes no record, so it ran that alone and passed every such layer, which
+        ``prepare`` then refused; it calls this now.
+
+        Each builder refuses with the call its freeze makes, on the same arguments, so ``check``
+        and ``prepare`` report the same issue: the parametric path's two layer checks, which the
+        freeze runs by calling this method; Cartesian Li's plans, which refuse a rectangle that
+        leaves the cell as they are taken, and are taken here and dropped; and the tensor
+        builders' (:func:`~wavebit.rcwa._engine.anisotropy.check_layers`). A raster has no
+        shapes to refuse. Nothing else of the record is built, since that is what a freeze
+        costs: on three painted shapes at orders (3, 3) the boundary and interface plans took
+        172 ms where these checks took under 0.1 ms, and a 256 x 256 raster's NVF normal field
+        16 ms with nothing to check (measured 2026-10-15).
+        """
+        if self._has_tensor_materials():
+            _anisotropy.check_layers(self)
+            return
+        if self._modeling_path != ModelingPath.PARAMETRIC:
+            return
+        basis = self._geometry_lattice_for(None, freezing=True)
+        if self.factorization == Factorization.LI:
+            for layer in self.structure:
+                _rectilinear.plan_layer(layer.get('shapes', []), basis)
+            return
+        for index, layer in enumerate(self.structure):
+            _parametric.check_layer_spec(layer, index)
+            _parametric.check_layer_shapes(layer, basis, index)
 
     def _refuse_a_freeze_on_a_tracer(self, basis):
         """Refuse to take a record off a cell or a shape layer that is a tracer with no primal.

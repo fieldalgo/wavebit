@@ -108,6 +108,12 @@ def freeze(solver):
                                           'settings':_settings(solver)})
 
 
+def check_layers(solver):
+    """The layer checks :func:`_plan` opens with, on the layers :func:`freeze` plans, unplanned."""
+    for i,layer in enumerate(solver.structure):
+        P.check_layer_shapes(_shifted(layer)[0],solver.lattice,i)
+
+
 def _polygons(xp, shapes, lattice, plan):
     import wavebit._common.geometry.clipper as clipper
     vertices = [boundary.shape_vertices(xp,s,lattice,boundary.POLYGON_VERTICES) for s in shapes]

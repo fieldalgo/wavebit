@@ -113,6 +113,13 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
             raise UnsupportedFeatureError('check requires concrete inputs; call it outside an autodiff transform.',
                                           code='check.concrete', path='problem')
         solvers = _resolve(problem, numerics, execution)
+        # prepare refuses a layer whose regions cannot be built while it freezes their geometry,
+        # which check does not do, so the freeze's layer refusals run here without its record.
+        # Once: the solvers differ only in their materials, each evaluated at its wavelength.
+        # The refusals read the regions and the cell, and the builder a material picks --
+        # tensor or scalar -- is the same at every wavelength.
+        with execution.scope():
+            _engine_scene(solvers[0])._check_layer_geometry()
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
         return CheckReport(issues=(_issue(error),))

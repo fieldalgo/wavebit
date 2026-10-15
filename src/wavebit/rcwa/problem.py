@@ -74,7 +74,7 @@ class Polygon:
     The edges are transformed in closed form, so a tilted edge has no staircase, and a layer
     holding a polygon is always built on the painting route: regions still paint in order,
     later over earlier. A polygon may reach past the cell edge, but not into a periodic image
-    of itself or of another region; that is refused when the problem is prepared.
+    of itself or of another region; ``check`` reports that, and ``prepare`` refuses it.
 
     Vertex coordinates differentiate as other region geometry does: through ``prepared.run``
     on PyTorch and under eager ``jax.grad``, refused under ``jax.jit`` or ``jax.vmap`` (code
