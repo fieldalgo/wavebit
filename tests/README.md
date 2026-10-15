@@ -22,8 +22,8 @@ Each run writes an exact collection and result record to a new directory under
 nodes only when inputs, environment, configuration and collection still match.
 Source mutation tests run in a separate serial snapshot. CI uses two workers per shard
 and retains the per-test timeouts: 1,200 seconds for the ordinary partition, 2,400 seconds
-for slow tests, both with the thread timeout method. The ordinary partition runs as four
-shards of at most 90 minutes, the slow one as two of at most 180; a `complete` job after
+for slow tests, both with the thread timeout method. The ordinary partition runs as six
+shards and the slow one as two, each shard limited to 120 minutes; a `complete` job after
 each checks with `tools/verify_shards.py` that the shards add up to the whole partition.
 Artifacts `verification-default-N` and `verification-slow-N` keep each shard's receipts,
 inventories, JSONL events, JUnit XML and logs; the writable source snapshot is not uploaded.

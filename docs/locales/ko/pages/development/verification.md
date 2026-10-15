@@ -62,10 +62,10 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)는
 research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
-`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 4개, slow 범위는 2개입니다.
+`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 6개, slow 범위는 2개입니다.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/4 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/6 --workers 2 \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/default
 python tools/run_verification.py --profile full --slow only --shard 1/2 --workers 2 \
@@ -84,8 +84,8 @@ shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shar
 
 shard는 시간보다 runner 메모리 때문입니다. 일반 범위를 worker 2개 한 번에 돌리면
 사용 가능한 7.9 GB를 넘어 매번 50~61 %에서 종료되었습니다. 테스트별 제한은
-1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 일반 shard 90분, slow shard
-180분입니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
+1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 shard당 120분입니다(정상 길이는
+일반 약 50분, slow 약 40분). 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
 대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.
 
 GitHub artifact `verification-default-N`과 `verification-slow-N`에는 shard별 JSON 결과

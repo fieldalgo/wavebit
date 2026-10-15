@@ -62,10 +62,10 @@ returns a nonzero exit status; it does not claim that unreported nodes passed.
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)
 uses the runner for both non-research partitions, each split across runners with
-`--shard INDEX/COUNT`: four shards for the ordinary partition, two for the slow one.
+`--shard INDEX/COUNT`: six shards for the ordinary partition, two for the slow one.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/4 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/6 --workers 2 \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/default
 python tools/run_verification.py --profile full --slow only --shard 1/2 --workers 2 \
@@ -85,7 +85,8 @@ named failure there, not an absence.
 Sharding is a response to the runners' memory, not to the clock: a single two-worker run
 of the ordinary partition grew past the 7.9 GB available and was shut down at 50 to 61 %
 every time. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
-the job limits are 90 minutes per ordinary shard and 180 per slow shard. Source-mutating
+the job limits are 120 minutes per shard, against healthy lengths of about 50 (ordinary)
+and 40 (slow) minutes. Source-mutating
 cases within a shard run in the runner's separate serial snapshot, not in the shared
 parallel checkout.
 
