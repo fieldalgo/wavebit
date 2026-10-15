@@ -146,14 +146,14 @@ boundary/source-position controls remain necessary.
 ## Reproduce
 
 ```shell
-python -m studies.fdtd_pulse_notches --source-only
-python -m studies.fdtd_pulse_notches --case single40
-python -m studies.fdtd_pulse_notches --case double40
-python -m studies.fdtd_pulse_notches --case physical40
-python -m studies.fdtd_pulse_notches --case long40
-python -m studies.fdtd_pulse_notches --case double-long40
-python -m studies.fdtd_pulse_notches --case single80
-python -m studies.fdtd_pulse_notches --case double80
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --source-only
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --case single40
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --case double40
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --case physical40
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --case long40
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --case double-long40
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --case single80
+python -m studies.fdtd.pulse_notches.fdtd_pulse_notches --case double80
 ```
 
 The default study backend is double-precision JAX on CPU. `--backend numpy`

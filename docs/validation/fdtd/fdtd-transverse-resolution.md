@@ -188,10 +188,10 @@ GPU execution or derivatives with respect to mesh settings.
 ## Reproduce
 
 ```shell
-python -m studies.fdtd_transverse_resolution
-python -m studies.fdtd_transverse_resolution --fixed-dt 0.0024
-python -m studies.fdtd_transverse_resolution --case x80 --cpml
-python -m studies.fdtd_transverse_resolution --case x80 --time --periods 1600
+python -m studies.fdtd.transverse_resolution.fdtd_transverse_resolution
+python -m studies.fdtd.transverse_resolution.fdtd_transverse_resolution --fixed-dt 0.0024
+python -m studies.fdtd.transverse_resolution.fdtd_transverse_resolution --case x80 --cpml
+python -m studies.fdtd.transverse_resolution.fdtd_transverse_resolution --case x80 --time --periods 1600
 ```
 
 The first two commands compare all eight outgoing-boundary harmonic meshes.

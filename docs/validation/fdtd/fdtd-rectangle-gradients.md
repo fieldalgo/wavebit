@@ -30,7 +30,10 @@ squares with static angle zero; it refuses curved/rotated shapes, raster
 dispersion labels on recipes and separate raster mu. Magnetic recipe materials
 use the existing `Material(epsilon, mu=...)` carrier. The
 [usage contract](../../guide/fdtd/time-domain.md#transverse-rectangle-shape-derivatives)
-includes a runnable JAX example and every supported constraint.
+includes a runnable JAX example and every supported constraint. Later on 2026-09-09,
+`shape_integration='area'` admitted rotated rectangles ([record](fdtd-rotation-gradients.md)),
+circles ([record](fdtd-circle-gradients.md)) and ellipses ([record](fdtd-ellipse-gradients.md));
+the default separable route still refuses them.
 
 Every periodic face is folded into the rectangular cell and sorted. The
 resulting material partition has a fixed number of entries; its boundaries
@@ -200,7 +203,7 @@ Torch 2.13.0 float64. No GPU execution or arbitrary-shape compatibility is
 established by this experiment. Run from the repository root:
 
 ```shell
-python -m studies.fdtd_rectangle_gradients --output artifacts/rectangle-gradients.json
+python -m studies.cross_solver.rectangle_gradients.fdtd_rectangle_gradients --output artifacts/rectangle-gradients.json
 pytest -q tests/fdtd/test_fdtd_rectangles.py tests/references/test_meep_rectangle.py
 ```
 

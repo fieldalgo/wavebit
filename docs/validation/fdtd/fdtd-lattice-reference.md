@@ -222,12 +222,12 @@ a small boundary error.
 ## Reproduce
 
 ```shell
-python -m studies.fdtd_lattice_reference
-python -m studies.fdtd_lattice_reference --resolution 40 80 --cpml
-python -m studies.fdtd_lattice_reference --resolution 40 80 --cpml --pml-width 1.2 --pml-reflection 1e-160
-python -m studies.fdtd_lattice_time_check --resolution 40 --periods 1600
-python -m studies.fdtd_lattice_time_check --resolution 40 --periods 3200
-python -m studies.fdtd_lattice_time_check --resolution 80 --periods 800
+python -m studies.fdtd.lattice_reference.fdtd_lattice_reference
+python -m studies.fdtd.lattice_reference.fdtd_lattice_reference --resolution 40 80 --cpml
+python -m studies.fdtd.lattice_reference.fdtd_lattice_reference --resolution 40 80 --cpml --pml-width 1.2 --pml-reflection 1e-160
+python -m studies.fdtd.lattice_time_check.fdtd_lattice_time_check --resolution 40 --periods 1600
+python -m studies.fdtd.lattice_time_check.fdtd_lattice_time_check --resolution 40 --periods 3200
+python -m studies.fdtd.lattice_time_check.fdtd_lattice_time_check --resolution 80 --periods 800
 ```
 
 The time study uses double-precision JAX CPU by default (`--backend numpy`

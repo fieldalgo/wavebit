@@ -155,7 +155,8 @@ Two durations (80/100), two diameter steps (`1e-4`/`5e-5`), two resolutions (20/
 and an independent profile refinement (256/512 at resolution 20) are retained.
 Public epsilon-grid probes check profile placement before scattering is recorded.
 
-Run the studies with `python -m studies.fdtd_circle_gradients --output circle.json`
+Run the studies with
+`python -m studies.cross_solver.circle_gradients.fdtd_circle_gradients --output circle.json`
 and add `--smoothing 0` to study the sharp target separately. Regenerate external
 candidates only in an environment providing Meep, NumPy and SciPy, using
 `python tests/references/interface/meep_rotation.py --shape circle --smoothing .05

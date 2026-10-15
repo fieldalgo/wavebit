@@ -197,8 +197,8 @@ empty-cell calibration and discrete phase transport to the layer faces. Both
 polarizations, durations 80/100, difference steps `1e-4`/`5e-5`, FDTD resolutions
 20/40 and profile grids 256/512 are preserved in the archives.
 
-Run `python -m studies.fdtd_painted_shapes --output painted.json` to repeat the
-native study. Generate an external candidate with
+Run `python -m studies.cross_solver.painted_shapes.fdtd_painted_shapes --output painted.json`
+to repeat the native study. Generate an external candidate with
 `python tests/references/interface/meep_rotation.py --shape painted_rectangles
 --smoothing .05 --resolution 20 --output candidate.npz`. Repeat at resolution 40
 and separately with `--profile-grid 512` at resolution 20. Preserve raw

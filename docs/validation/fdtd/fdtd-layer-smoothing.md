@@ -157,7 +157,7 @@ dispersive interfaces. h=0 derivatives remain position-dependent and need not
 improve monotonically at every individual interface position.
 
 ```shell
-python -m studies.fdtd_layer_smoothing --output artifacts/layer-smoothing.json
+python -m studies.fdtd.layer_smoothing.fdtd_layer_smoothing --output artifacts/layer-smoothing.json
 ```
 
 ## Independent Meep material-function comparison
@@ -209,7 +209,7 @@ archives with the extended wrapper preserves their data.
 ## Coating optimization with a final sharp check
 
 ```shell
-python -m examples.fdtd_layer_optimization --smoothing-cells 1
+python -m examples.fdtd.fdtd_layer_optimization --smoothing-cells 1
 ```
 
 A coating with epsilon 1.5 lies between air and epsilon 2.25 substrate.
@@ -225,4 +225,6 @@ from being reported as the exact physical performance.
 
 This remains a bounded single-parameter example. Total-depth changes,
 transverse shape derivatives, anisotropic shape homogenization and GPU
-execution need separate implementation and evidence.
+execution need separate implementation and evidence. Total-depth and transverse
+rectangle derivatives received theirs later on 2026-09-09
+([variable depth](fdtd-variable-depth.md), [rectangles](fdtd-rectangle-gradients.md)).

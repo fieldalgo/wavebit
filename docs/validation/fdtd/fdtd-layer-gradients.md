@@ -126,7 +126,7 @@ or choose only an unusually favorable interface position.
 Reproduce the measurement from the repository root:
 
 ```shell
-python -m studies.fdtd_layer_gradients --output artifacts/layer-gradients.json
+python -m studies.fdtd.layer_gradients.fdtd_layer_gradients --output artifacts/layer-gradients.json
 ```
 
 ## Independent Meep perturbations
@@ -171,6 +171,9 @@ The later [interface-averaging extension](fdtd-layer-smoothing.md) adds optional
 C1 sampling with a fixed physical averaging width. The default sharp-overlap
 measurements above remain unchanged. Total-depth variation, transverse
 shape/raster-boundary derivatives, anisotropic shape homogenization and GPU
-execution remain outside this change. Fixed-total layer derivatives can be
-combined with existing angle/material derivatives, but each new physical
-regime still needs optical and gradient refinement checks.
+execution remain outside this change. Later on 2026-09-09, `variable_depth=True`
+added total-depth derivatives ([record](fdtd-variable-depth.md)), and transverse
+rectangle derivatives landed ([record](fdtd-rectangle-gradients.md)).
+Fixed-total layer derivatives can be combined with existing angle/material
+derivatives, but each new physical regime still needs optical and gradient
+refinement checks.

@@ -63,7 +63,10 @@ This scope excludes multiple poles, Debye poles, a dispersive host, anisotropy,
 magnetism, rotated or curved bodies, lossy junctions, and differentiation of
 geometry, material parameters or source bands. These guards do not expressly
 refuse source-amplitude differentiation; no amplitude-gradient validation gate
-is claimed here.
+is claimed here. Later scopes admit two or more Drude/Lorentz poles
+([record](fd-oscillator-sum-film.md)) and mixed Debye/oscillator poles
+([record](fd-hybrid-film.md)) in one film (2026-10-07), and separated
+single-oscillator films ([record](fd-oscillator-stack.md), 2026-10-09).
 Existing cell-snapped material paths retain their own contracts. Unsupported
 voxel scenes cannot bypass the restrictions by reusing a non-film plan;
 existing stencil certificates retain their own refusal path.

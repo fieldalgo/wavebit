@@ -183,7 +183,7 @@ Measured on an arm64 CPU with Python 3.12.9, NumPy 2.5.1, JAX 0.11.0 x64 and
 Torch 2.13.0 float64. No GPU execution is established. From the repository root:
 
 ```shell
-python -m studies.fdtd_rotation_smoothing --output artifacts/rotation-smoothing.json --meep-reference tests/references/golden_meep_rotation_smoothing.npz
+python -m studies.fdtd.rotation_smoothing.fdtd_rotation_smoothing --output artifacts/rotation-smoothing.json --meep-reference tests/references/golden_meep_rotation_smoothing.npz
 pytest -q tests/fdtd/test_fdtd_rotation_smoothing.py tests/references/test_meep_rotation_smoothing.py
 ```
 
@@ -199,4 +199,7 @@ Independent references must pass their own controls before replacing frozen
 archives. Close amplitudes alone are insufficient evidence for shape-gradient
 accuracy. Rotated effective tensors, multiple shapes per area layer, curved
 boundaries, dispersive recipe materials and variable total depth remain outside
-this feature.
+this feature. Later on 2026-09-09 the area route took circles, ellipses and several
+painted rectangles per layer ([circles](fdtd-circle-gradients.md),
+[ellipses](fdtd-ellipse-gradients.md), [painted](fdtd-painted-shapes.md)), and
+`variable_depth=True` added total-depth derivatives ([record](fdtd-variable-depth.md)).

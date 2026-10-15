@@ -67,7 +67,10 @@ This scope excludes other pole counts or pole types, subclasses, a lossy or
 dispersive host, anisotropy, magnetism, curved or rotated bodies, junctions,
 and traced geometry, materials or source bands. No gradient correctness is
 claimed, including for source amplitudes. Existing snapped-material and
-stencil paths retain their own contracts.
+stencil paths retain their own contracts. Later scopes admit three or more
+Debye poles ([record](fd-debye-sum-film.md)) and mixed Debye/oscillator poles
+([record](fd-hybrid-film.md)) in one film (2026-10-07), and separated Debye
+films ([record](fd-debye-stack.md), 2026-10-09).
 
 ## Coupled harmonic reduction
 

@@ -18,6 +18,8 @@ termination while retaining the explicit `steps`, `time` or `periods` limit.
 Both the threshold and the window are caller choices. They are not defaults
 fitted to a scattering example and do not promise a spectral error bound.
 The window is a time in the same length unit as `Run(time=...)`, with `c=1`.
+Since 2026-10-13 `Decay` is reachable only through `wavebit.compat.legacy.fd`;
+the public `wavebit.fdtd` module runs a fixed `Duration` and has no automatic stop.
 
 The stop condition reads the complete electric and magnetic field arrays,
 every CPML history array and each supported material's evolving memory array.

@@ -167,8 +167,8 @@ Both polarizations are run. Two durations (80/100), two parameter steps
 (`1e-4`/`5e-5`), resolutions 20/40 and an independent profile-grid doubling
 (256/512 at resolution 20) remain in the committed archives.
 
-Run `python -m studies.fdtd_ellipse_gradients --output ellipse.json` for the
-native convergence and controls; `--smoothing 0` selects a separate sharp-target
+Run `python -m studies.cross_solver.ellipse_gradients.fdtd_ellipse_gradients --output ellipse.json`
+for the native convergence and controls; `--smoothing 0` selects a separate sharp-target
 study. Generate external candidates with
 `python tests/references/interface/meep_rotation.py --shape ellipse --smoothing .05
 --resolution 20 --output candidate.npz`. Repeat at resolution 40 and separately

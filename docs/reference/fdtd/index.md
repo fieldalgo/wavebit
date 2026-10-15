@@ -117,4 +117,10 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 .. autoclass:: wavebit.fdtd.Result
    :members:
 
+.. autoclass:: wavebit.fdtd.SpectralFlux
+   :members:
+
+.. autoclass:: wavebit.fdtd.FarFieldSpectrum
+   :members:
+
 ```

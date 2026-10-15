@@ -48,7 +48,8 @@ round trip. The geometry engine's JIT endpoint repair remains in place; see
 The planar analytic-fill, transfer-matrix, translation and derivative tests remain
 the independent gates. Differentiation uses a plan built from concrete geometry,
 then differentiates only numerical lowering. Public radius/centre tracing awaits a
-declared support range. Existing shape subclasses must answer `body()` explicitly;
+declared support range (it has one since 2026-09-28: "Public sphere geometry derivatives"
+below). Existing shape subclasses must answer `body()` explicitly;
 `None` selects snapped cells. `Sphere.min_extent(grid)` follows the current protocol,
 and non-finite radii and coordinates are refused by name.
 
@@ -1417,7 +1418,8 @@ The signature includes all scene geometry, because moving an unrelated
 third painter can invalidate the ground. Material values remain live backend
 arrays; NumPy, JAX and Torch use the same expressions. Public geometry is
 still static, while the internal value function carries geometry derivatives
-for the future range-aware interface. A plan's discrete membership is fixed;
+for the future range-aware interface (public since 2026-10-01: "A traced pillar
+standing on its substrate" below). A plan's discrete membership is fixed;
 changing geometry requires replanning.
 
 ### Measurement provenance
@@ -2877,7 +2879,8 @@ certificate taken on the host has one of three fates:
   refuses a medium under 8 cells per wavelength at the band's shortest wavelength and every
   Diffraction wavelength, and a traced plain Material in a seeded scene is now held to
   `max_c eps_c mu_c <= (w / 8 dx)^2` on the backend (a medium with poles or loss keeps the
-  plan's skin-depth reading and is not held to it);
+  plan's skin-depth reading and is not held to it); since 2026-10-15 (c6f0ab6c) the guard is
+  built for every scene with a traced plain-Material value, seeded or not;
 * a **refusal by name**, where only a host rule reads the value: a traced conductivity or
   pole parameter (no seed); a traced `eps` or `mu` given per axis on a medium lowering reads
   as one number -- the background, a smoothed shape, a junction medium, anything within a

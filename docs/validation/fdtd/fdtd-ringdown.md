@@ -134,9 +134,9 @@ convergence remain necessary.
 ## Reproduce
 
 ```shell
-python -m studies.fdtd_ringdown --pad-scale 1 --save-records artifacts/ringdown-1.npz
-python -m studies.fdtd_ringdown --pad-scale 2 --save-records artifacts/ringdown-2.npz
-python -m studies.fdtd_ringdown --load-records artifacts/ringdown-1.npz
+python -m studies.fdtd.ringdown.fdtd_ringdown --pad-scale 1 --save-records artifacts/ringdown-1.npz
+python -m studies.fdtd.ringdown.fdtd_ringdown --pad-scale 2 --save-records artifacts/ringdown-2.npz
+python -m studies.fdtd.ringdown.fdtd_ringdown --load-records artifacts/ringdown-1.npz
 ```
 
 The default backend is double-precision JAX; `--backend numpy` uses the same

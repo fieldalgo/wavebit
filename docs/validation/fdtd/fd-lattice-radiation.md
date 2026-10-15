@@ -227,6 +227,8 @@ still has a 3.77084% small high-index sphere power error against the existing
 3% control. Those are material tests, unaffected by a radiation postprocess.
 C3 therefore remains incomplete. A boundary reconstruction must demonstrate
 both consistency and stability before it can replace the current operator.
+Since 2026-09-26, C3 passes for `discretisation='stencil'`
+([Mie record](fd-mie-validation.md)); the default discretisation still fails the cylinder.
 
 ### Basis for the next boundary experiment
 

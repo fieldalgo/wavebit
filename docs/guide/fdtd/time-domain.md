@@ -10,7 +10,8 @@ layer, incidence and complex diffraction-amplitude conventions.
 
 This page covers the periodic-stack API. For `from wavebit.compat.legacy import fd` and its
 explicit `fd.Scene` domain, sources, boundaries and named monitors, see the
-[general FDTD guide](general-fdtd.md). The scene types and conventions are separate.
+[general FDTD guide](../../migration/general-fdtd-v1.md). The scene types and conventions are
+separate.
 
 This path is a **research alpha**. Read the [supported scope and validation evidence](fdtd-alpha.md)
 before using a new combination of geometry, incidence and material.
@@ -112,7 +113,7 @@ grid's: it is second order, so a 5 nm cell brings it to ~7e-4 and 2.5 nm to ~1.9
 energy to `O(dz^2)`, the same order it computes everything else to, so a lossless scene comes
 back a little short; the RCWA row above is 1 to a few times 1e-15 for contrast. There is
 deliberately no generic guard on it here — one existed and fired on 85 of 243 ordinary
-time-domain solves, which is why it was removed ([`../result-guards.md`](../../reference/common/result-guards.md)).
+time-domain solves, which is why it was removed ([`result-guards.md`](../../reference/common/result-guards.md)).
 
 **`T[+1] == T[-1]` is a symmetry check for this scene at normal incidence.** A symmetric
 discretization can preserve that equality even on a coarse grid, so it does not bound the
@@ -138,9 +139,10 @@ state at all: a record of the field arriving, and a material given as a pole mod
 as one complex number per wavelength.
 
 Reach for `rcwa()` for harmonic fields through `reconstruct_field`, a skewed
-`lattice`, curved/rotated parametric shapes and evanescent (complex-angle) incidence. Explicit
-FDTD backends support JAX/PyTorch material gradients through the common scene
-adapter described below. Elliptical diffraction is available using
+`lattice`, curved shapes beyond one circle or ellipse per layer (the explicit route's
+[area recipes](#rotated-rectangle-area-integration)) and evanescent (complex-angle)
+incidence. Explicit FDTD backends support JAX/PyTorch material gradients through the
+common scene adapter described below. Elliptical diffraction is available using
 `psi` with `chi`, or `polarization=(a_s, a_p)`; for example `(1, 1j)` is a circular
 state in the s/p frame. The pair is normalized while preserving its overall phase.
 Time recording also supports complex coefficients through additional quadrature-source
@@ -152,7 +154,7 @@ The scene keywords are unchanged — `structure`, `thickness`, `top`, `bot`, `pe
 `wavelength`, `theta`, `phi`, `tetm`, `psi`. **Angles are radians**, as everywhere in wavebit.
 The table below gives defaults for the **backend-omitted NumPy route**. Explicit-backend
 defaults are listed under [the common scene adapter](#common-scene-adapter). These defaults were measured, and
-[`../fdtd.md`](fdtd.md) is the measurement.
+[`fdtd.md`](fdtd.md) is the measurement.
 
 | Keyword | Default | What it is for |
 | --- | --- | --- |
@@ -280,7 +282,7 @@ Rebuilding an axis instead of reading it is wrong three ways, each silently: `fi
 `arange(nz) * dz` once the mesh is graded, `field_x` does not start at zero because every
 in-plane coordinate in this library is measured from the centre of the cell, and the pixel
 centres `wavebit.meshgrid_xy` returns are half a cell from where `Ey` lives. The measurements
-behind all three are in [`../fdtd.md`](fdtd.md) §8h.
+behind all three are in [`fdtd.md`](fdtd.md) §8h.
 
 The same record can be plotted or animated with optional Matplotlib
 (`pip install 'wavebit[plot]'`):
@@ -315,9 +317,9 @@ residual of the two basis runs. Recording is still off by default.
 
 ## Where to read further
 
-[`../fdtd.md`](fdtd.md) is the decision document: what each default was measured against,
+[`fdtd.md`](fdtd.md) is the decision document: what each default was measured against,
 the full list of refusals and what each one protects, and the two questions a time-domain
-solver can state that a harmonic one cannot. [`../result-guards.md`](../../reference/common/result-guards.md) says
+solver can state that a harmonic one cannot. [`result-guards.md`](../../reference/common/result-guards.md) says
 what a solve checks about its own answer, and why there is no generic energy warning.
 
 
@@ -410,8 +412,9 @@ retains those capabilities on NumPy; selecting a JAX backend on that interface
 is still unsupported.
 
 JAX uses compiled scans and recomputes blocks during reverse differentiation.
-Torch uses eager autograd with non-reentrant block checkpointing; Torch compile
-has not been validated.
+Torch uses eager autograd with non-reentrant block checkpointing; under
+`torch.compile` it runs eagerly, outside the compiled graph (see
+[`torch.compile`](../../development/torch-compile.md)).
 `checkpoint_steps` trades stored block boundaries against recomputation and
 within-block storage. Time history is optional via `record_field=N`; reverse-mode
 memory and requested snapshot storage still grow with simulation length. Shapes, spacing, step count and monitor configuration
@@ -543,7 +546,7 @@ vacuum-end CPML and reports a spectral plane-power derivative.
 ## Backend architecture
 
 The native solver now uses the same `array_api_compat` namespaces and
-`_core.backend.as_array` conversion as RCWA. Maxwell curls, CPML, ADE, Bloch
+`wavebit._common.backend.as_array` conversion as RCWA. Maxwell curls, CPML, ADE, Bloch
 wrapping and Fourier-plane accumulation have one implementation in
 `src/wavebit/fdtd/_periodic/grid.py`. Array creation/device selection and time-loop execution
 live in `src/wavebit/fdtd/_periodic/runtime.py`: a NumPy loop, JAX scan, or Torch checkpointed
@@ -580,7 +583,7 @@ result = wavebit.fdtd(scene, Incidence(wavelength=1., tetm='te'),
 derivative, = torch.autograd.grad(result.T.sum(), value)
 ```
 
-The same adapter runs on NumPy (`0`), JAX (`1`) and Torch (`2`). JAX results are
+The same adapter runs on NumPy, JAX and Torch. JAX results are
 registered pytrees, so a function returning the complete `Result` can be jitted.
 Incidence `theta`/`phi`, raster epsilon, raster mu, electric Drude/Lorentz parameters and Jones amplitudes
 retain their backend graphs. Raster cell boundaries are static; harmonic averaging

@@ -179,7 +179,7 @@ See the [API guide](../../guide/fdtd/time-domain.md#changing-the-total-stack-dep
 the input and coordinate contract.
 
 ```shell
-python -m studies.fdtd_variable_depth --output artifacts/variable-depth.json
+python -m studies.fdtd.variable_depth.fdtd_variable_depth --output artifacts/variable-depth.json
 pytest -q tests/fdtd/test_fdtd_variable_depth.py tests/fdtd/test_fdtd_variable_depth_optics.py
 pytest -q tests/references/test_meep_variable_depth.py
 ```

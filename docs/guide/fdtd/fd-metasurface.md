@@ -9,7 +9,7 @@ light that leaves it as diffraction orders: each order's complex amplitude in it
 and its efficiency, in the same `Result` layout `wavebit.rcwa` returns. This page builds such a
 cell, says how to choose its period and angle, how to read the orders, and how to compare them
 with RCWA. The measurements behind it are in
-[`../fd-metasurface-validation.md`](../../validation/fdtd/fd-metasurface-validation.md).
+[`fd-metasurface-validation.md`](../../validation/fdtd/fd-metasurface-validation.md).
 
 ## A grating cell
 
@@ -150,9 +150,9 @@ for i, lam in enumerate(wavelengths):
 `ref.s_inc` and `ref.p_inc`.
 
 **Where the pillar is matters for the phases.** Both engines quote an order's amplitude at the
-cell's low corner, but RCWA places its shape from the cell's centre and `wavebit.fd` places the
-pillar wherever its `center=` says. If the pillar sits at `(xc, yc)` and the RCWA shape at
-`(0, 0)`, order `(m, n)`'s amplitude differs by `exp(-2 pi i (m xc / Px + n yc / Py))`. The
+cell's centre, and RCWA places its shape from there, but `wavebit.fd` places the pillar
+wherever its `center=` says. If the pillar sits at `(xc, yc)` from the centre and the RCWA
+shape at `(0, 0)`, order `(m, n)`'s amplitude differs by `exp(-2 pi i (m xc / Px + n yc / Py))`. The
 efficiencies and the zeroth order do not care. Either give RCWA the same `cx`, `cy`, or
 multiply the FDTD amplitudes by `exp(+2 pi i (m xc / Px + n yc / Py))` before comparing.
 
@@ -178,7 +178,7 @@ polarisations and three wavelengths -- the worst cell, not a typical one:
 wavelength *inside* the densest material (so 25 is the floor for epsilon 5.8 at this band, 40
 for epsilon 12) and warns below 12. The two cylinders' largest errors fall at second order -- each
 doubling divides them by about four; the epsilon-12 box's falls at order 1.5 to 1.75, so a
-doubling divides it by about three ([`../fd-metasurface-validation.md`](../../validation/fdtd/fd-metasurface-validation.md)
+doubling divides it by about three ([`fd-metasurface-validation.md`](../../validation/fdtd/fd-metasurface-validation.md)
 says what is and is not known about why). The slower rate does not need the box's contact with
 the glass. The same box lifted 0.1 off its substrate converges at the same rate, with errors
 1.3 times (amplitudes) and 1.6 to 1.7 times (efficiencies) larger. Whether the contact adds an

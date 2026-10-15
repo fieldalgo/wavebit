@@ -2,6 +2,15 @@
 
 Spatial, temporal, material and boundary studies. Each report states its measured configuration and remaining limits.
 
+These records predate the public `wavebit.fdtd` module (2026-10-13) and name the interfaces they
+measured. The general engine they call `wavebit.fd` (`fd.Scene`, `fd.plan`, `fd.run`, `fd.check`)
+is retained as `wavebit.compat.legacy.fd`, which alone keeps `Absorber` and `Decay`; the periodic
+stack solver the `fdtd-*` records measure is retained as `wavebit.compat.legacy.fdtd`. For current
+usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
+[earlier general-engine manual](../../migration/general-fdtd-v1.md). Source digests quoted
+"relative to `src/wavebit/fd`" describe how those runs hashed the tree before it moved to
+`src/wavebit/fdtd/`.
+
 - [C8: one conductive film in a dielectric](fd-conductive-film.md)
 - [C8: separated parallel conductive films](fd-conductive-stack.md)
 - [Matched absorption of commuting coupled dielectrics](fd-constitutive-absorber.md)

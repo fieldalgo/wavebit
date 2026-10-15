@@ -200,7 +200,7 @@ python tests/references/interface/meep_adjoint_rotation.py --resolution 40 --out
 Validate candidates before replacing archives. With Wavebit's test dependencies:
 
 ```shell
-python -m studies.fdtd_adjoint_comparison --output artifacts/adjoint-comparison.json
+python -m studies.fdtd.adjoint_comparison.fdtd_adjoint_comparison --output artifacts/adjoint-comparison.json
 pytest -q tests/references/test_meep_adjoint_rotation.py
 pytest -q tests/fdtd/test_fdtd_rotation_smoothing.py -k 'sinc_profile or fourier_reference or forward_reverse'
 ```

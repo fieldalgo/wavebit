@@ -180,7 +180,7 @@ Measured on an arm64 CPU with Python 3.12.9, NumPy 2.5.1, JAX 0.11.0 x64 and
 Torch 2.13.0 float64. No GPU execution is established. From the repository root:
 
 ```shell
-python -m studies.fdtd_rotation_gradients --output artifacts/rotation-gradients.json
+python -m studies.cross_solver.rotation_gradients.fdtd_rotation_gradients --output artifacts/rotation-gradients.json
 pytest -q tests/fdtd/test_fdtd_rotated_rectangles.py tests/references/test_meep_rotation.py
 ```
 

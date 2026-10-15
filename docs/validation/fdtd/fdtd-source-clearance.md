@@ -95,7 +95,7 @@ to discrete dispersion still require independent time and spatial checks.
 ## Reproduce
 
 ```shell
-python -m studies.fdtd_source_clearance
+python -m studies.fdtd.source_clearance.fdtd_source_clearance
 ```
 
 The default is double-precision JAX on CPU; `--backend numpy` uses the same

@@ -63,7 +63,11 @@ Multiple poles, pole subclasses, a dispersive or conducting host, anisotropy,
 magnetism, rotated or curved bodies, lossy junctions, and geometry/material/
 source-band differentiation remain outside the contract. Source-amplitude
 differentiation is not a validation claim of this scope. Existing snapped
-material paths and stencil certificates retain their own contracts.
+material paths and stencil certificates retain their own contracts. Later
+scopes admit two ([record](fd-two-debye-film.md)) or more
+([record](fd-debye-sum-film.md)) Debye poles and mixed Debye/oscillator poles
+([record](fd-hybrid-film.md)) in one film (2026-10-07), and separated Debye
+films ([record](fd-debye-stack.md), 2026-10-09).
 
 ## Exact harmonic and arithmetic laws
 

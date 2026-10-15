@@ -32,7 +32,8 @@ within the stated lossless-host film contract.
 The scope keeps the earlier concrete, axis-aligned film geometry and
 preserves the existing single-oscillator route. It does not combine Debye
 and second-order poles, admit a dispersive host, or validate curved bodies,
-junctions or geometry/material/band differentiation. The prior
+junctions or geometry/material/band differentiation; mixed Debye/oscillator
+films later got their own scope ([record](fd-hybrid-film.md), 2026-10-07). The prior
 [single-oscillator](fd-single-pole-film.md),
 [finite-Debye-sum](fd-debye-sum-film.md) and
 [conductive-film](fd-conductive-film.md) records retain their own scope and

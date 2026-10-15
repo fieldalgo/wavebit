@@ -198,8 +198,8 @@ copied or linked into Wavebit.
 From the repository root in an environment with Wavebit's JAX extra and SciPy:
 
 ```shell
-python -m examples.fdtd_multilayer_optimization > artifacts/design.json
-python -m studies.fdtd_multilayer_optimization --design artifacts/design.json --output artifacts/multilayer-check.json
+python -m examples.fdtd.fdtd_multilayer_optimization > artifacts/design.json
+python -m studies.fdtd.multilayer_optimization.fdtd_multilayer_optimization --design artifacts/design.json --output artifacts/multilayer-check.json
 pytest -q tests/common/test_layer_thicknesses.py tests/fdtd/test_fdtd_multilayer_optimization.py tests/references/test_meep_multilayer.py
 ```
 

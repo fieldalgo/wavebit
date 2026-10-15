@@ -100,7 +100,7 @@ the FDTD literature, each one a place the two would otherwise silently part comp
 | `+z` points **down**, into the stack | `docs/reference/common/conventions.md`, `src/wavebit/rcwa/_engine/fields.py` | Negates `E_z`, `H_x`, `H_y`; conserves energy, leaves every efficiency untouched. `fields.py` carried exactly this defect undetected for months |
 | `e^{-iωt}` | `docs/theory/rcwa/formulation.md` | A phasor needs an `exp(+iωt)` kernel. `np.fft.fft` over the *time* axis applies the opposite one and conjugates every amplitude |
 | `kx_m = n_inc sin θ cos φ + m·λ/Λ` | `src/wavebit/rcwa/_engine/engine.py` `n_inc` | Reversing the order index mirrors `+1` onto `-1` **while conserving energy exactly** |
-| TE all on `s`, TM all on `p`; `r_p` magnetic, `t_E = t_H·n_top/n_bot` | `src/wavebit/rcwa/_engine/solve_1d.py:316-341` | A sign `\|r\|^2` cannot see |
+| TE all on `s`, TM all on `p`; `r_p` magnetic, `t_E = t_H·n_top/n_bot` | `src/wavebit/rcwa/_engine/solve_1d.py::solve_1d` | A sign `\|r\|^2` cannot see |
 | `H̃ = Z0 H`, `c = ε0 = μ0 = 1` | `docs/theory/rcwa/formulation.md` | A scale factor on every amplitude |
 
 The amplitude conventions were not adopted, they were *derived and found to already agree*: a
@@ -1191,11 +1191,14 @@ ey, ex, time = diag['field_e'].real, diag['field_ex'].real, diag['field_t']
   traceable; the field updates here are slice-shifted differences and would port unchanged. It
   is only the time LOOP that has nowhere to live — a `for` over ~10^4 steps is what `jax.jit`
   unrolls and autograd tapes, and the primitive that would fix it is a design decision about the
-  whole backend layer rather than about this module.
+  whole backend layer rather than about this module. (Since 2026-09-08 an explicit `backend`
+  sends the same `Stack` and `Incidence` to a shared NumPy/JAX/Torch engine with its own time-loop
+  policies, §7 and the [common scene adapter](time-domain.md#common-scene-adapter); the
+  backend-omitted loop is still NumPy only.)
 
   **fdtdx** (Mahlau et al., https://github.com/ymahlau/fdtdx, MIT; JOSS 10.21105/joss.08912) is
   the prior art, and three sentences that stood here were wrong. They were written from a survey;
-  the tree is now at `third_party/fdtd/fdtdx` and was read, which is possible because it is MIT —
+  the source tree has since been read, which is possible because it is MIT —
   the point of having it beside oracles whose source this project does not open. Corrected:
 
   - **There is no `scan` in it.** Not one `jax.lax.scan` in the tree. Both entry points step the
@@ -1255,7 +1258,9 @@ ey, ex, time = diag['field_e'].real, diag['field_ex'].real, diag['field_t']
   than a geometric ramp — the literature's subgridding schemes (Okoniewski 1997, Berenger 2006)
   buy a smaller reflection for a more complicated interface, and none of them is measured here.
 - **Field output.** The solve returns two monitor planes; cross-checking `reconstruct_field` —
-  the part of the solver with the most recent bug history — is impossible without it.
+  the part of the solver with the most recent bug history — is impossible without it. (Since
+  2026-09-07 `field_monitors` stream six-component Fourier planes at chosen heights; see
+  [below](#streaming-fields-and-compiled-native-grids).)
 - **The Yee grid's numerical anisotropy** is unmeasured. Convergence order was measured at
   normal incidence only, and phase-velocity error as a function of propagation angle is
   exactly what limits the high-`|m|` orders a grating oracle exists to check.

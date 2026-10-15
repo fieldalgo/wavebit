@@ -52,7 +52,10 @@ permuting x, y and z.
 film is not a fallback for a finite conductive box, a rotated box, a sphere,
 an anisotropic or magnetic conductor, a conductive host, or a `Dispersive`
 body. Those unsupported smoothed cases remain refused. A prepared non-film
-plan cannot be supplied to bypass these restrictions.
+plan cannot be supplied to bypass these restrictions. Later scopes admit
+isolated flat `Dispersive` films (from 2026-10-06: [Drude/Lorentz](fd-single-pole-film.md),
+[Debye](fd-debye-film.md) and their successors in the [index](index.md)) and separated
+parallel conductive films (2026-10-07, [record](fd-conductive-stack.md)).
 
 For this admitted film, mesh checks include conductivity when calculating the
 phase index: `n_phase = Re(sqrt(eps + i*sigma/omega))`. The existing floor of

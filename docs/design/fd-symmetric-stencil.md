@@ -5,6 +5,10 @@ and the verdict"). Public `fd.run` reaches it only when a structure asks for it
 (`fd.Structure(..., discretisation='stencil')`, since 2026-09-24); the default is unchanged
 and does not pass C3's cylinder arm. Since 2026-09-26 it prepares with no `studies/` behind
 it, from an installed package as from a checkout (see "The seam, closed").
+Since 2026-10-13 `fd` is the earlier interface, `wavebit.compat.legacy.fd`, and `fd` on this
+page means it; the public `wavebit.fdtd` module asks for the operator for a whole scene with
+`fdtd.Numerics(discretisation='stencil')`, the default staying `'voxel'`
+([the FDTD model guide](../guide/fdtd/model.md)).
 The production cylinder has mean/RMS orders 1.60337/1.58655. The older
 three-dimensional symmetric triplet candidate misses the small high-index
 sphere control: 3.77084% error against the unchanged 3% limit.
@@ -424,7 +428,7 @@ runs of one unchanged tree already disagree on.
 
 `geometry` and `triplet_baseline` still reach into `studies/` for the exact edge
 and face fraction helpers and the triplet orientation maps, so they import them
-where they use them. That seam is why the module sits in `_lower` and is not
+where they use them. That seam is why the module sits in `_lower` (now `_prepare`) and is not
 exported: importing it pulls no study and cannot cycle, and `fit`,
 `energy_bounds` and `padded` need no study at all, but the two that do will not
 run outside a checkout that has `studies` importable. Closing the seam means
@@ -1013,7 +1017,8 @@ already refused there as not an integer.)
   accepted" when the next door could still refuse it; they say it removes this refusal
   now. `StencilSourceRefused` read "d is an Dipole"; it names the source and its type.
 
-Verified on the committed source: the fast tier (every `tests/test_fd_*.py` and
+Verified on the committed source: the fast tier (every `tests/test_fd_*.py`, now under
+`tests/fdtd/`, and
 `test_docs_contract.py`, `-m "not slow"`, `-n 3`, two BLAS threads) 2098 passed and 8
 skipped, exit 0, 2106 JUnit cases, no INTERNALERROR; the four freezers reproduce
 143/288/140/570 arrays bit for bit with nothing written; the default-unmoved digest (822
@@ -1364,7 +1369,8 @@ local maps -- `studies/fdtd/subpixel_triplet_sphere/fdtd_subpixel_triplet_sphere
 `local_map`, `circle_fraction` and `circle_maps` -- moved into
 `src/wavebit/fdtd/_prepare/triplet.py` as `TRIPLETS`, `triplet_map`, `sphere_maps`, `PAIRS`,
 `pair_map`, `circle_fraction` and `circle_maps`. `triplet_baseline` imports them from there,
-so nothing in `src/wavebit/fd` imports a study any more, and `discretisation='stencil'` prepares
+so nothing in `src/wavebit/fdtd` (then `src/wavebit/fd`) imports a study any more, and
+`discretisation='stencil'` prepares
 from an installed package as it does from a checkout. `_study_module`, `StencilStudyRefused`
 and `StencilSeamRefused` are deleted with the seam they named. The two studies import the
 moved objects under their old names -- they are the same objects, not copies -- and keep

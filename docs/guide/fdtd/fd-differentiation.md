@@ -9,7 +9,7 @@ material values, a body's shape and position, a source's amplitude, phase, delay
 and the Bloch phase can all be leaves of `jax.grad` or Torch autograd. This page says how to
 set that up, what may be traced, and what the run does when a traced value leaves the
 region it can certify. The measurements behind it are the C6 sections at the end of
-[`../fd-subpixel-occupancy.md`](../../validation/fdtd/fd-subpixel-occupancy.md), the last of them "Traced
+[`fd-subpixel-occupancy.md`](../../validation/fdtd/fd-subpixel-occupancy.md), the last of them "Traced
 material values beside traced geometry".
 
 ## The one rule: plan concrete, run traced
@@ -167,15 +167,15 @@ gradients, and `result.diagnostics['stable']` reads `False`. The runtime checks:
 | Resolution | a traced medium falls below 8 cells per wavelength (`eps * mu` above `(w / 8 dx)**2`) at the band's shortest wavelength or any shorter `Diffraction` wavelength `w` | "cells per wavelength" |
 | Grazing order | a traced medium filling a PML layer along a PlaneWave's axis lets an order a `Diffraction` monitor asks for leave at an exit angle the layer does not accept | "Grazing order refused" |
 
-The resolution and grazing checks run with traced geometry or beside a Sphere, Cylinder,
-Prism or turned Box. Elsewhere -- a traced `eps` on a Slab, a Region or an unturned Box with concrete
-geometry -- the plan only warns that it could not count the cells, and holding the value
-under the floor is yours. At `dx = 0.05` and the band above (shortest wavelength 0.642), the
-floor admits `eps * mu` up to `(0.642 / (8 * 0.05))**2 = 2.58`: a pillar index past 1.6
-needs a finer grid. In the same cell (period 0.6, 8-cell PMLs) the substrate's first
-diffracted orders begin to propagate at wavelength 0.95 once its `eps` passes
-`(0.95 / 0.6)**2 = 2.507`, just above the horizon, which no PML absorbs: from there the run
-is `nan`, as the concrete scene is refused. If an optimizer's step returns `nan`, step back
+The grazing check runs with traced geometry or beside a Sphere, Cylinder, Prism or turned
+Box. The resolution check runs for every traced plain `fd.Material`: since 2026-10-15 that
+includes a traced `eps` on a Slab, a Region or an unturned Box with concrete geometry, where
+the plan can only warn that it could not count the cells. At `dx = 0.05` and the band above
+(shortest wavelength 0.642), the floor admits `eps * mu` up to
+`(0.642 / (8 * 0.05))**2 = 2.58`: a pillar index past 1.6 needs a finer grid. In the same
+cell (period 0.6, 8-cell PMLs) the substrate's first diffracted orders begin to propagate
+at wavelength 0.95 once its `eps` passes `(0.95 / 0.6)**2 = 2.507`, just above the
+horizon, which no PML absorbs: from there the run is `nan`, as the concrete scene is refused. If an optimizer's step returns `nan`, step back
 and bound the variable; the run's report (`result.report.warnings`) names the checks a
 traced value is held to.
 

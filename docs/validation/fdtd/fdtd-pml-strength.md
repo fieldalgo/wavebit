@@ -47,7 +47,7 @@ no external implementation was opened or copied for this change.
 Run from the checkout with JAX installed:
 
 ```shell
-python -m studies.fdtd_pml_strength --case all
+python -m studies.fdtd.pml_strength.fdtd_pml_strength --case all
 ```
 
 `--backend numpy` selects the same shared engine without compilation. The study

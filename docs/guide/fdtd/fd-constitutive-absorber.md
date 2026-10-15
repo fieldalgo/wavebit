@@ -89,4 +89,4 @@ energy values need not match.
 
 The route does not admit coupled material in CPML or general lossy/magnetic
 smoothing. See [the derivation and scoped measurements](../../validation/fdtd/fd-constitutive-absorber.md)
-and [the general FDTD API](general-fdtd.md) for the remaining contracts.
+and [the general FDTD API](../../migration/general-fdtd-v1.md) for the remaining contracts.

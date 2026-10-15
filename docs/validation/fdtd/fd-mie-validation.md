@@ -43,7 +43,9 @@ The **default** discretisation is unchanged. It passes every sphere order arm (t
 epsilon-12 sphere below at 1.8268534, -6.18% at 80 cells) but still fails the cylinder
 (1.6033652), and at the same grids it is the more accurate of the two on glass, weak and
 small high-index spheres. The following earlier experiments are retained as history; their
-"C3 remains incomplete" sentences describe the state before 2026-09-26.
+"C3 remains incomplete" sentences describe the state before 2026-09-26, as do those calling C4
+pending: the extruded bodies, public `fd.Cylinder` among them, shipped the same day
+([occupancy record](fd-subpixel-occupancy.md), "C4: the extruded bodies").
 
 Latest radiation result: the separately derived lattice map,
 `FarField(propagation='yee')`, reduces the weak-sphere optical residuals to
@@ -1667,7 +1669,7 @@ including a translated sphere. Agreement of only intensity would not suffice.
 ### The 162 measurements
 
 The raw record is
-[`fdtd_subpixel_mie_transform.log`](https://github.com/fieldalgo/wavebit/blob/fdtd-general/studies/fdtd/subpixel_mie_transform/records/fdtd_subpixel_mie_transform.log).
+[`fdtd_subpixel_mie_transform.log`](../../../studies/fdtd/subpixel_mie_transform/records/fdtd_subpixel_mie_transform.log).
 All 162 cases complete with exit 0 and unchanged production/study/reference
 hashes in 207.07 s of summed measurement time. Inputs are epsilon 1.1/2.25/12,
 20/28/40 cells per wavelength, the original three sphere placements, radiation

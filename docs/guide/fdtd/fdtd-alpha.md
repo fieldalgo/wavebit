@@ -6,7 +6,7 @@ This detailed guide documents the retained `wavebit.compat.legacy` interface and
 
 The periodic `wavebit.fdtd` path is experimental. Its intended use is research on
 periodic isotropic stacks, with diffraction results comparable to RCWA. The
-separate [general FDTD API](general-fdtd.md) uses `wavebit.fd.Scene`; this
+separate [general FDTD API](../../migration/general-fdtd-v1.md) uses `wavebit.fd.Scene`; this
 page covers the periodic Stack/Incidence routes.
 It is not yet a general-purpose replacement for an established FDTD package. This page
 states what has evidence, what remains uncertain, and how to reproduce the checks.
@@ -231,10 +231,11 @@ the current CPU-only machine. See the [native-grid guide](time-domain.md).
 
 The distribution runner builds a source archive, builds its wheel from that archive,
 checks metadata with `twine check --strict`, and installs into a fresh virtual environment.
-It verifies package origin, bundled material tables, a NumPy RCWA solve, and the 36-case
-FDTD matrix. It then installs the same wheel's `plot` extra and runs the public
-`examples/fdtd/fdtd_record.py` scene to save a field image. Python isolated mode prevents the
-checkout or `PYTHONPATH` from shadowing the installed package. No artifacts are published.
+It verifies package origin, bundled material tables, a NumPy RCWA solve, the 36-case
+FDTD matrix and the current-API `examples/fdtd/pulse_slab.py`. It then installs the same
+wheel's `plot` extra and runs the compatibility-API `examples/fdtd/fdtd_record.py` scene to
+save a field image. Python isolated mode prevents the checkout or `PYTHONPATH` from
+shadowing the installed package. No artifacts are published.
 
 ```sh
 python -m pip install build twine
@@ -510,14 +511,16 @@ python studies/fdtd/metal_validation/fdtd_metal_validation.py --output studies/f
 
 ## Remaining release gates
 
-Before a tagged public alpha, run the configured CI against the final revision, including
-clean installs on the claimed platforms; no remote CI result is asserted by this local
-report. Select and publish the supported scope with the release, and retain warnings and
-known limitations in examples. Before claiming a broader 3D material capability, add
-more independent material cases, especially low-loss metals and strong resonances, and
-repeat runtime/absorber refinement for those scenes. The selected cases above do not
+Since 2026-10-15 Wavebit is published as a tagged alpha, and the configured CI, including
+the clean installs on the claimed platforms, runs on `develop`; no remote CI result is
+asserted by this page. Select and publish the supported scope with each release, and
+retain warnings and known limitations in examples. Before claiming a broader 3D material
+capability, add more independent material cases, especially low-loss metals and strong
+resonances, and repeat runtime/absorber refinement for those scenes. The selected cases above do not
 cover the whole input space.
-GPU execution, autodiff and a general field API are separate development projects.
+GPU execution is a separate development project. Autodiff has since landed on the
+explicit-backend route above, and general domains, sources and field monitors in the
+[current FDTD module](general-fdtd.md).
 
 The common area route also accepts `circle`/`disk` with a live centre and diameter.
 [Disk integration and validation](../../validation/fdtd/fdtd-circle-gradients.md) cover exact sharp-cell

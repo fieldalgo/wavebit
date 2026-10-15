@@ -33,7 +33,9 @@ engine.
 ## 1. The question, and how the two engines differ
 
 `wavebit.fdtd` has two routes (`src/wavebit/manifest.py`, `fdtd.routes`; `default_route` is
-`legacy_numpy`). With `backend` omitted, `src/wavebit/fdtd/_periodic/api.py::fdtd` calls
+`legacy_numpy`). Since 2026-10-13 this periodic entry point is `wavebit.compat.legacy.fdtd`, and
+`wavebit.fdtd` names the public general FDTD module. With `backend` omitted,
+`src/wavebit/fdtd/_periodic/api.py::fdtd` calls
 `src/wavebit/fdtd/_periodic/legacy.py::solve_fdtd`, the **legacy engine**: NumPy only, not differentiable, top
 incidence only. With an explicit `backend` it calls `src/wavebit/fdtd/_periodic/scene.py::solve_scene_fdtd`,
 the **shared engine** over `src/wavebit/fdtd/_periodic/grid.py`: NumPy, JAX and Torch, differentiable on JAX and

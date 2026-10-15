@@ -37,7 +37,9 @@ The scope remains one concrete, axis-aligned film in a plain dielectric
 host. Finite Debye count does not mean arbitrary pole families or arbitrary
 geometry. Curved dispersive bodies, mixed-family sums, lossy or dispersive
 hosts, junctions and geometry/material/band differentiation remain outside
-this extension. General C8 smoothing remains incomplete, and the
+this extension. Mixed Debye/oscillator films later got their own scope
+([record](fd-hybrid-film.md), 2026-10-07), as did separated Debye films
+([record](fd-debye-stack.md), 2026-10-09). General C8 smoothing remains incomplete, and the
 [C7 metasurface verdict](fd-metasurface-validation.md) remains unpassed.
 
 ## Bounded contract
