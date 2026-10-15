@@ -170,6 +170,32 @@ axes, which are `a1` / `a2` once skewed. Li is the raster default, so a skewed r
 See [`../oblique-lattice.md`](../../theory/rcwa/oblique-lattice.md) and
 [`tutorial 05`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/05-oblique-lattice.ipynb).
 
+## Inspecting a structure without solving
+
+`rcwa.sample_structure` reads a physical problem directly. It returns an owned
+complex NumPy array, with rows along y and columns along x. For an existing
+`problem`, inspect relative constitutive values with:
+
+```python
+epsilon = rcwa.sample_structure(problem, layer=0, n=192)
+mu = rcwa.sample_structure(problem, layer=0, n=192, quantity='mu')
+```
+
+No `prepare` or `run` is needed, and no scattering or Fourier operator is
+computed. `layer=0` is the bottom finite layer. Region samples are cell-centred
+along the two lattice vectors; sampled layers keep their native resolution.
+Use `wavelength_index` for a spectrum: material tables are evaluated in the
+problem's explicit length unit. Tensor material pictures require a component,
+for example `component='xy'`; scalar pictures do not take a component. Values
+are relative epsilon or mu, not refractive index or a band-limited Fourier image.
+
+Run inspection outside autodiff transforms. Later regions paint over earlier
+ones through the same renderer used by the engine. Its curved-painting
+approximation, limited periodic-image sampling and refusal of painted skewed
+cells still apply. A selected layer can be pictured independently, including
+inside a mixed-encoding stack, without certifying that the whole problem is
+accepted by `rcwa.check` or optically converged.
+
 ## Passing the scene as objects
 The scene is typed objects and nothing else: `rcwa.Stack` carries what the earlier interface's
 `Stack` did, `rcwa.Excitation` and its sources what `Incidence` did, and a `Job` holding them is
