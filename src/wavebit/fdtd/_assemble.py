@@ -17,6 +17,7 @@ import wavebit.fdtd._post as _post
 from wavebit.fdtd._prepare.cpml import MEASURED_STABILIZE
 from wavebit.fdtd._prepare.cpml import spell
 from wavebit.fdtd._prepare.cpml import sufficient_stabilize
+from wavebit.fdtd._spelling import spoken
 from wavebit.fdtd._prepare.monitors import FACE_SEP
 from wavebit.fdtd._prepare.monitors import box_faces
 from wavebit.fdtd._prepare.monitors import diffraction_layout
@@ -757,7 +758,7 @@ def _growth_cause(scene, plan):
         cause += (' This scene starts from an InitialField, and one passive case reads the same: '
                   'its content near zero frequency, which a PML does not absorb (its CFS term '
                   'makes it transparent there), returns off the wall behind the layer as a slow, '
-                  'steady rise that stabilize does not change (src/wavebit/fd/_assemble.py::'
+                  'steady rise that stabilize does not change (src/wavebit/fdtd/_assemble.py::'
                   'GROWTH_THRESHOLD). A kick with no zero-frequency content is not affected.')
     return cause if cause is not None else _no_pml_cause()
 
@@ -772,7 +773,7 @@ def _pml_cause(scene, plan):
             f'backed by its PEC wall feeds an evanescent field that reaches it: a lossless '
             f'structure with a bound mode just past the light line (a grating\'s guided '
             f'resonance at a Rayleigh wavelength, a slab under a fixed transverse k) grows '
-            f'under it (src/wavebit/fd/_lower/cpml.py::stabilizing_rate). {_knob(scene, pure)} on '
+            f'under it (src/wavebit/fdtd/_prepare/cpml.py::stabilizing_rate). {_knob(scene, pure)} on '
             f'those faces adds the loss that stopped it on every slab family it was measured '
             f'on, at the price of a reflection at oblique incidence (2.1e-4 at 30 degrees on 12 '
             f'cells at 3e-3).')
@@ -788,7 +789,7 @@ def _pml_cause(scene, plan):
         return (
             f'Every PML face is stabilized -- {"; ".join(parts)} -- and the loss is a measured '
             f'balance on sampled slab families, not passivity '
-            f'(src/wavebit/fd/_lower/cpml.py::stabilizing_rate): this structure lies outside the '
+            f'(src/wavebit/fdtd/_prepare/cpml.py::stabilizing_rate): this structure lies outside the '
             f'families it was measured on. Raise stabilize on those faces (it costs reflection '
             f'at oblique incidence in proportion).')
     return None
@@ -799,7 +800,7 @@ def _no_pml_cause():
             'field once its sources have ended (every material is passive: gain is refused '
             'where a material is declared): the energy this reads is the leapfrog\'s own, '
             'exactly conserved in a closed lossless box whatever the field is made of '
-            '(src/wavebit/fd/_kernel/observe.py::InteriorEnergy). So this is a defect of the '
+            '(src/wavebit/fdtd/_kernel/observe.py::InteriorEnergy). So this is a defect of the '
             'solver -- please report it with the scene.')
 
 
@@ -938,11 +939,11 @@ def decay_report(scene, plan, state, rt, sources, stable=True):
     if overflow is not None:
         # Every monitor's series is garbage past the overflow: one warning, and no other.
         seen = list(series)
-        warnings.warn(
+        warnings.warn(spoken(
             f"the field OVERFLOWED -- the energy in the scene's interior was no longer finite "
             f'from t = {overflow:.4g} on. It grew past the range of the floating-point type, '
             f"and a passive scene's energy cannot grow at all once nothing drives it. "
-            + _growth_cause(scene, plan), GrowingFieldWarning, stacklevel=4)
+            + _growth_cause(scene, plan)), GrowingFieldWarning, stacklevel=4)
     elif growing:
         seen = [name for name in series
                 if (growth[name] is not None and growth[name] > 1.0)
@@ -970,22 +971,22 @@ def decay_report(scene, plan, state, rt, sources, stable=True):
             own = growth[name]
             sees = ('' if own is None else
                     f' -- and this monitor sees it: its own peak rose {own:.3g} times')
-            warnings.warn(f'monitor {name!r}: the field is GROWING -- {head}{sees}.' + cause,
+            warnings.warn(spoken(f'monitor {name!r}: the field is GROWING -- {head}{sees}.' + cause),
                           GrowingFieldWarning, stacklevel=4)
         if not seen:
-            warnings.warn(f'the field is GROWING, though no monitor sees it yet -- {head}.'
-                          + cause, GrowingFieldWarning, stacklevel=4)
+            warnings.warn(spoken(f'the field is GROWING, though no monitor sees it yet -- {head}.'
+                                 + cause), GrowingFieldWarning, stacklevel=4)
     for name, ratio in monitors.items():
         if name in seen:
             continue
         if ratio is not None and ratio > UNSETTLED_THRESHOLD:
-            warnings.warn(
+            warnings.warn(spoken(
                 f'monitor {name!r}: the field in its region was still {ratio:.2e} of its peak '
                 f'energy in the last period of its longest wavelength (the line is '
                 f'{UNSETTLED_THRESHOLD:.0e}). Its DFT is of a signal cut off before it '
                 f'decayed, so the phasors -- and every flux, order and normalisation built on '
                 f'them -- carry that truncation. Run longer (Run(steps=), Run(periods=), '
-                f'Run(time=)).',
+                f'Run(time=)).'),
                 UnsettledFieldWarning, stacklevel=4)
     return dict(decay=monitors, records=records, sources=srcs, growth=growth,
                 interior_growth=interior_growth, interior_spread=spread,

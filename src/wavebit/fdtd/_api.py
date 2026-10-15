@@ -11,6 +11,7 @@ from ._lower_public import lower_problem
 from ._execution import _planned, run as execute
 from ._prepare.report import report as legacy_report
 from .result import adapt_result
+from ._spelling import public as _public_spelling, public_error, to_public
 
 
 def _static(v,path):
@@ -118,11 +119,22 @@ def _report(problem,numerics,execution,scene,plan,metadata):
                        estimates={'state_bytes':r.bytes_per_state,'parameter_bytes':r.bytes_per_params,
         'scope':'main E/H, CPML and material arrays; excludes runtime, temporary, source and observation storage'},
         capabilities={'backend':execution.backend,'precision':execution.precision,'device':execution.device,
-                      'warnings':r.warnings,'geometry_ranges':tuple(numerics.geometry_ranges)},resolved=resolved)
+                      'warnings':tuple(to_public(w) for w in r.warnings),
+                      'geometry_ranges':tuple(numerics.geometry_ranges)},resolved=resolved)
 
 
 def _issue(exc):
+    """``exc`` as a structured error, in the public vocabulary (``_spelling``)."""
+    exc=public_error(exc)
     return exc if isinstance(exc,ValidationError) else ValidationError(str(exc),code='fdtd_input',path='problem')
+
+
+def _reraise_public(exc):
+    """Raise ``exc`` again, spelled for a public caller; its type is kept."""
+    translated=public_error(exc)
+    if translated is exc:
+        raise exc
+    raise translated from exc
 
 
 @eager_under_torch_compile
@@ -130,7 +142,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
     """Validate and estimate resources without advancing any field."""
     try:
         execution=_execution(backend,device,precision)
-        with execution.scope():
+        with execution.scope(),_public_spelling():
             scene,metadata=lower_problem(problem,numerics)
             plan,_=_planned(scene)
             _signature(problem,numerics)
@@ -153,7 +165,7 @@ class Prepared:
     def validate(self,problem):
         """Validate concrete reuse; runtime guards still judge transformed values."""
         try:
-            with self.execution.scope():
+            with self.execution.scope(),_public_spelling():
                 self._lower(problem)
             return CheckReport(resolved=self.report.resolved,capabilities=self.report.capabilities)
         except (TypeError,ValueError,NotImplementedError) as exc:
@@ -176,19 +188,22 @@ class Prepared:
     @eager_under_torch_compile
     def run(self,problem):
         """Run the complete supplied live problem; never update this preparation."""
-        with self.execution.scope():
+        with self.execution.scope(),_public_spelling():
             try:scene,metadata=self._lower(problem)
             except (TypeError,ValueError,NotImplementedError) as exc:
                 raise _issue(exc) from exc
-            raw=execute(scene,backend=self.execution.backend,device=self.execution.device,plan=self._plan)
-            return adapt_result(problem,self.numerics,self.execution,raw,metadata)
+            try:
+                raw=execute(scene,backend=self.execution.backend,device=self.execution.device,plan=self._plan)
+                return adapt_result(problem,self.numerics,self.execution,raw,metadata)
+            except (TypeError,ValueError,NotImplementedError,RuntimeError) as exc:
+                _reraise_public(exc)
 
 
 @eager_under_torch_compile
 def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
     """Validate concrete inputs and fix the computational structure for later runs."""
     execution=_execution(backend,device,precision)
-    with execution.scope():
+    with execution.scope(),_public_spelling():
         try:
             scene,metadata=lower_problem(problem,numerics)
             plan,_=_planned(scene)

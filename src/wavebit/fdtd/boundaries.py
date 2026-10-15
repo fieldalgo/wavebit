@@ -36,9 +36,17 @@ class Bloch(Declaration):
         from wavebit.units import require_units
         from ._lower_public import _source
         from ._legacy_boundaries import Bloch as LegacyBloch
+        from ._spelling import public, public_error
         require_units(units)
         medium=Material(epsilon=1.) if background is None else background
-        values=LegacyBloch.from_source(_source(source,units),lower_material(medium,units=units),axis1d)
+        with public():
+            try:
+                values=LegacyBloch.from_source(_source(source,units),lower_material(medium,units=units),axis1d)
+            except (TypeError,ValueError,NotImplementedError) as exc:
+                translated=public_error(exc)
+                if translated is exc:
+                    raise
+                raise translated from exc
         return {axis:Bloch(phase=value.phase,k=value.k) if isinstance(value,LegacyBloch) else value
                 for axis,value in values.items()}
 

@@ -865,7 +865,7 @@ def _lossy_message(row, pw, what, scene, plan, others):
             f"above the {row['return_pure']:.2e} the same face returns without the loss, so it "
             f"is the loss that takes the order past what the rule allows. Both are the face's "
             f"exact discrete return, computed for this kernel by "
-            f"src/wavebit/fd/_lower/layer_return.py; the loss's own part, |r - r_pure|, is "
+            f"src/wavebit/fdtd/_prepare/layer_return.py; the loss's own part, |r - r_pure|, is "
             f"{row['return_loss']:.2e}, and the continuum round trip R_c = {row['R_c']:.2e}. "
             f"The loss sits on the field component normal to the face: it is inert at normal "
             f"incidence and sends back more the more oblique the order, first order in "
@@ -907,7 +907,7 @@ def _lossy_message(row, pw, what, scene, plan, others):
         need = sufficient_stabilize(R)
         if need is None:
             text += (f' -- and reflection={R:g} is a weaker target than any the loss was '
-                     f'measured at (src/wavebit/fd/_lower/cpml.py::MEASURED_STABILIZE)')
+                     f'measured at (src/wavebit/fdtd/_prepare/cpml.py::MEASURED_STABILIZE)')
         elif fix['rho'] < need * (1.0 - 1e-12):
             text += (f' -- below the {spell(need)} MEASURED_STABILIZE gives for '
                      f'reflection={R:g}, so a bound mode the loss holds may grow again '
@@ -988,7 +988,7 @@ def _message(row, pw, scene=None, plan=None, others=()):
                f'on the other orders, up to 2x the return between a sheet and the layer (the '
                f'echo), and a window term at or below 3e-4 after 160 periods.')
     return (head + fix + _refused_too(others) + '\n' + GRAZING_TABLE
-            + '\n(studies/fdtd/grazing_return/fdtd_grazing_return.py; src/wavebit/fd/_lower/grazing.py derives the law.)')
+            + '\n(studies/fdtd/grazing_return/fdtd_grazing_return.py; src/wavebit/fdtd/_prepare/grazing.py derives the law.)')
 
 
 def enforce(scene, plan):

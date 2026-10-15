@@ -2185,7 +2185,7 @@ def _lift_notes(scene, plan, lifted=None):
              f'node\'s Kottke tensor ({each} stars; the largest move is {largest:.3g} of the '
              f'way) so that the smoothed operator is positive definite: at this contrast the '
              f'default rule falls below the floor there. The run is stable by construction '
-             f'(src/wavebit/fd/_lower/stars.py); the effect on accuracy is measured in '
+             f'(src/wavebit/fdtd/_prepare/stars.py); the effect on accuracy is measured in '
              f'docs/validation/fdtd/fd-subpixel-occupancy.md, "The star lift".')]
 
 
@@ -2483,7 +2483,7 @@ def _stabilize_notes(scene, plan):
                         f'PML on {face.name!r}: stabilize={face.stabilize:g} at '
                         f'reflection={reflection:g}; the measured value that stops a bound mode '
                         f'growing at this target is {spell(need)} (3e-3 holds only at the default '
-                        f'1e-8 and stronger targets; src/wavebit/fd/_lower/cpml.py::'
+                        f'1e-8 and stronger targets; src/wavebit/fdtd/_prepare/cpml.py::'
                         f'MEASURED_STABILIZE). Below it, a lossless structure with a bound '
                         f'mode next to this face may grow instead of settling'))
     return out
@@ -2819,5 +2819,6 @@ def _proximity_notes(scene, plan):
 
 def warn_all(scene, plan, lifted=None):
     """Emit every note as a real warning; ``plan`` calls this, ``report`` lists them instead."""
+    from wavebit.fdtd._spelling import spoken
     for category, message in notes(scene, plan, lifted=lifted):
-        warnings.warn(message, category, stacklevel=3)
+        warnings.warn(spoken(message), category, stacklevel=3)

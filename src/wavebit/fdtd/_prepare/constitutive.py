@@ -377,7 +377,7 @@ def _reach(background, structures):
     return (f'The phases here span a contrast of {contrast:.3g}; from about 1e12 a fill\'s '
             'round-off (about 1e-13) times the contrast breaks the mix itself, which no lift '
             'can repair (measured on spheres: every contrast up to 1e11 certified, refusals from '
-            '1e12; src/wavebit/fd/_lower/stars.py, "Float64\'s reach").')
+            '1e12; src/wavebit/fdtd/_prepare/stars.py, "Float64\'s reach").')
 
 
 def pole_rate(scene, rt):

@@ -704,7 +704,7 @@ def _refuse_structure(structure, index, when='plan'):
             f'StencilShapeRefused: {where} asked for discretisation={STENCIL!r}. The operator '
             f'is assembled from a ball\'s exact edge and dual-face fills, and fd.Sphere is '
             f'the one shape that answers both in closed form today '
-            f'(src/wavebit/fd/_shapes/_bodies.py) -- fd.Sphere itself, not a subclass, whose '
+            f'(src/wavebit/fdtd/_shapes/_bodies.py) -- fd.Sphere itself, not a subclass, whose '
             f'body may be its own. The tangent plane\'s forms beside them are not wired in as '
             f'a fallback: every convergence order this operator has measured was taken with '
             f'the exact ones, and the plane\'s mean gap to the exact sphere falls only like '
