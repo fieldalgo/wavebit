@@ -4,7 +4,7 @@ from collections.abc import Mapping
 import numpy as np
 from wavebit._common.execution import Execution, CheckReport, frozen_mapping
 from wavebit._common.backend import eager_under_torch_compile
-from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
+from wavebit.errors import Issue, ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from wavebit.materials import Material, ConductiveMaterial, DispersiveMaterial
 from .problem import Problem
 from ._lower_public import lower_problem
@@ -68,13 +68,54 @@ def _execution(backend,device,precision):
     return value
 
 
+def _snapped(problem,scene,plan):
+    """A warning for each cell-snapped structure whose interfaces the grid moved.
+
+    A Slab or Region fills whole cells, so an interface between two cell boundaries lands on
+    the nearer one: up to half a cell, a first-order error in the spacing. Two spans inside
+    the same cells give bit-identical runs -- a 0.317 and a 0.325 film at 0.025 spacing did --
+    and the compat report printed the move while this one dropped it. The rows are the
+    declared shape's on the run's grid, so a half-space continued into an Open face's padding,
+    or a span clipped by the domain, is not reported as a move: only a face inside the grid is.
+    """
+    grid=plan.grid
+    tol=1e-9*plan.dx
+    issues=[]
+    for declared,lowered in zip(problem.scene.structures,scene.structures):
+        if lowered.shape.body() is not None:
+            continue                                  # smoothed: faces stay where asked
+        asked,got=[],[]
+        for label,lo,hi,low,high in declared.shape.span_rows(grid):
+            a='xyz'.index(label[-1])
+            span=(max(lo,grid.low[a]),min(hi,grid.high[a]))
+            if abs(span[0]-low)>tol or abs(span[1]-high)>tol:
+                asked.append(('xyz'[a],)+span)
+                got.append(('xyz'[a],float(f'{low:.12g}'),float(f'{high:.12g}')))
+        if not asked:
+            continue
+        moves=', '.join(f'{a}=({lo:.6g}, {hi:.6g}) -> ({slo:.6g}, {shi:.6g})'
+                        for (a,lo,hi),(_,slo,shi) in zip(asked,got))
+        issues.append(Issue(code='geometry.cell_snapped',severity='warning',
+            path='scene.structures.'+declared.name,expected=tuple(asked),actual=tuple(got),
+            message=f'fdtd.{type(declared.shape).__name__} {declared.name!r} is cell-snapped: its '
+                    f'interfaces move to the nearest cell boundary at spacing {plan.dx:g}, '
+                    f'{moves}. That is up to half a cell, a first-order error in the spacing, and '
+                    f'any two spans inside the same cells run identically. Make the span a whole '
+                    f'number of cells or check convergence as the spacing shrinks. A lossless, '
+                    f'non-dispersive layer clear of every Open face can instead be an unturned '
+                    f'fdtd.Box reaching a cell past both faces of the other two axes, whose smoothed '
+                    f'faces stay where they were asked.'))
+    return tuple(issues)
+
+
 def _report(problem,numerics,execution,scene,plan,metadata):
     r=legacy_report(scene,plan)
     resolved=dict(metadata,grid_shape=(plan.nx,plan.ny,plan.nz),spacing=plan.dx,
                   dt_seconds=plan.dt*problem.units.time_seconds,steps=plan.steps,
                   duration_seconds=plan.steps*plan.dt*problem.units.time_seconds,dtype=plan.dtype,
                   monitor_samples=tuple((o.name,getattr(o,'indices',None)) for o in plan.observers))
-    return CheckReport(estimates={'state_bytes':r.bytes_per_state,'parameter_bytes':r.bytes_per_params,
+    return CheckReport(issues=_snapped(problem,scene,plan),
+                       estimates={'state_bytes':r.bytes_per_state,'parameter_bytes':r.bytes_per_params,
         'scope':'main E/H, CPML and material arrays; excludes runtime, temporary, source and observation storage'},
         capabilities={'backend':execution.backend,'precision':execution.precision,'device':execution.device,
                       'warnings':r.warnings,'geometry_ranges':tuple(numerics.geometry_ranges)},resolved=resolved)

@@ -36,7 +36,7 @@ Shared material rates are SI quantities. The FDTD adapter converts them to the i
 
 Named monitors determine what is accumulated. `Record` returns a `TimeSeries` with seconds and field units; E is V/m and H is A/m. Electric and magnetic samples retain their Yee time staggering. Spectral field, flux, diffraction and far-field declarations have different normalization and validity requirements; use the [reference](../../reference/fdtd/index.md) and inspect returned metadata. A raw diffracted spectrum does not automatically certify normalized R/T or complete entering power.
 
-Use `check` to inspect resolved settings and restrictions, `prepare` to establish a reusable discrete contract, and `prepared.run(problem)` for each complete live input. Earlier results retain their own observations. Changing discrete source/monitor layout, grid topology or incompatible time stepping needs a new preparation.
+Use `check` to inspect resolved settings and restrictions, `prepare` to establish a reusable discrete contract, and `prepared.run(problem)` for each complete live input. `check` also lists warnings that leave `report.ok` true: a cell-snapped `Slab` or `Region` whose interfaces fall between cell boundaries is reported as `geometry.cell_snapped`, with the requested span in `expected` and the cell boundaries it runs at in `actual`. Earlier results retain their own observations. Changing discrete source/monitor layout, grid topology or incompatible time stepping needs a new preparation.
 
 ## Validation and earlier interfaces
 

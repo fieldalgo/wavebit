@@ -427,3 +427,32 @@ def test_a_torch_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_v
     r = prepared.run(_with_epsilon(problem, eps))
     assert not bool(r.validity.checks['runtime_stability'])
     assert torch.isnan(r['e'].values).all()
+
+
+def _film(shape):
+    p = plane_problem()
+    return p.replace(scene=p.scene.replace(structures=(fdtd.Structure('film', shape, Material(epsilon=2.25)),)))
+
+
+def test_check_reports_a_cell_snapped_interface_the_grid_moved():
+    """A 0.317 film at 0.025 spacing runs as the 0.325 one, bit for bit; check says so."""
+    n = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(steps=60),
+                      absorber=fdtd.PML(cells=12))
+    moved, whole = _film(fdtd.Slab(z=(0., .317))), _film(fdtd.Slab(z=(0., .325)))
+    np.testing.assert_array_equal(fdtd.run(moved, numerics=n)['e'].values,
+                                  fdtd.run(whole, numerics=n)['e'].values)
+    report = fdtd.check(moved, numerics=n)
+    assert report.ok
+    (issue,) = report.issues
+    assert (issue.code, issue.severity, issue.path) == ('geometry.cell_snapped', 'warning', 'scene.structures.film')
+    assert issue.expected == (('z', 0., .317),) and issue.actual == (('z', 0., .325),)
+    assert 'fdtd.Box' in issue.message and 'fd.' not in issue.message.replace('fdtd.', '')
+    assert fdtd.check(whole, numerics=n).issues == ()
+    assert [i.code for i in fdtd.prepare(moved, numerics=n).report.issues] == ['geometry.cell_snapped']
+    # A half-space continued into the padding moves only its inner face; a Region clipped
+    # by the periodic faces moves only along z; a smoothed Box stays where it was asked.
+    (issue,) = fdtd.check(_film(fdtd.Slab(z=(-.8, .317))), numerics=n).issues
+    assert issue.expected == (('z', -.8, .317),) and issue.actual == (('z', -.8, .325),)
+    (issue,) = fdtd.check(_film(fdtd.Region(size=(.3, .3, .317), center=(0., 0., .1585))), numerics=n).issues
+    assert [row[0] for row in issue.expected] == ['z']
+    assert fdtd.check(_film(fdtd.Box(size=(.2, .2, .317), center=(0., 0., .1585))), numerics=n).issues == ()
