@@ -1,7 +1,12 @@
 # Installation
 
-This checkout prepares **0.1.0**, an alpha candidate. The solver release has not been
-published to PyPI. From the source checkout for the version you want to evaluate:
+This is **0.0.2**, an alpha. It is on PyPI:
+
+```shell
+pip install wavebit
+```
+
+Or from the source checkout for the version you want to evaluate:
 
 ```shell
 pip install .
