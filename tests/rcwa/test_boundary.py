@@ -8,11 +8,14 @@ to convolution matrices.
 
 Two facts these tests exist to pin down, both learned the hard way:
 
-* The **normal field is discontinuous on the medial axis**, so a *symmetric* shape sits exactly
-  on its own discontinuity -- a square's 45-degree medial axis passes through the pixel centres
-  of a square grid, those pixels are exact ``argmin`` ties, and finite differences there diverge
-  like 1/h while the analytic gradient is the correct one-sided value. Every gradient test here
-  therefore uses asymmetric shapes on purpose.
+* The **nearest-interface direction is discontinuous on the medial axis**, so a *symmetric*
+  shape sits exactly on its own discontinuity -- a square's 45-degree medial axis passes through
+  the pixel centres of a square grid, and those pixels are exact ``argmin`` ties. The solver's
+  field averages that switch over half a sample step since 2026-10-15
+  (``boundary.material_projector_fields``); the raw probe ``distance_gradient_normal_field``
+  still takes it hard, and there finite differences diverge like 1/h while the analytic
+  gradient is the one-sided value. The gradient tests here use asymmetric shapes, which every
+  test written before the average had to.
 * The sampled normal field needs **4*truncation_order+1 points per axis** or distinct orders alias onto one
   bin, and the damage is structural rather than gradual (a constant normal field stops
   transforming to the identity, so NVF no longer collapses onto Li's rules).
@@ -420,8 +423,8 @@ def test_gradient_reaches_the_shape_parameters():
     assert np.all(np.isfinite(np.asarray(g)))
     assert np.abs(np.asarray(g)).max() > 1.0            # not a dead gradient
 
-    # The contrast envelope retains nearest-point switches: h=1e-6 crosses
-    # one for cx, while 1e-7 and 1e-8 are local. Difference the matrix entries
+    # The contrast envelope took its nearest-point switches hard until 2026-10-15,
+    # and h=1e-6 crossed one for cx; 1e-7 and 1e-8 stay local. Difference the matrix entries
     # before summation using |a|^2-|b|^2 = Re((a-b)*conj(a+b)); subtracting
     # two large scalar norms erased the small second-angle sensitivity. At 1e-8 the difference
     # loses digits to rounding: Linux (OpenBLAS) read cx's second angle (i=9) 1.9e-5 off.
@@ -432,6 +435,55 @@ def test_gradient_reaches_the_shape_parameters():
                      for k in (0, 2)) / (2*h)
             an = float(g[i])
             assert abs(fd - an) <= tol * max(abs(fd), abs(an), 1.0), (i, h, fd, an)
+
+
+def _integrated_against_the_change(value_and_grad, centre, pixels=4, per_pixel=8, pixel=1/128):
+    """The derivative integrated across a window, against the change of the loss across it.
+
+    Pointwise, autodiff and a sub-pixel central difference cannot disagree on a sampled field:
+    both read the smooth piece they sit on. Integrated across several pixels, only a derivative
+    that carries whatever the field does between samples closes on the change. The gradient is
+    taken on the loss's own abscissae, ``per_pixel`` to a pixel of ``pixel`` width, because it
+    varies below a pixel and a coarser gradient grid would alias into whatever it selected.
+    """
+    ps = centre + np.linspace(-pixels/2, pixels/2, int(pixels*per_pixel) + 1)*pixel
+    values, grads = map(np.asarray, zip(*(value_and_grad(float(p)) for p in ps)))
+    change = values[-1] - values[0]
+    return abs(np.trapezoid(grads, ps) - change)/abs(change)
+
+
+def test_a_painted_layers_position_derivative_integrates_to_the_change():
+    """A rotated rectangle painted under a second one, moved along x: total transmission.
+
+    The painting route's normal field switches across its medial axis -- between the intervals
+    of one material pair and between pairs -- and the switches move with the rectangle. Sampled
+    as hard switches, every sample a switch crossed stepped and autodiff saw none of it: the
+    integral missed 18% to 20% of this window's change at ``shape_nvf_grid_size`` 64, 128 and
+    256 alike. Averaged over half a sample step (``boundary.material_projector_fields``) every
+    sample moves smoothly: measured 0.05% at grid 64 and 0.12% at 128.
+    """
+    torch = pytest.importorskip('torch')
+    from wavebit import Material, rcwa
+
+    def problem(cx):
+        first = rcwa.Region(geometry=rcwa.Rectangle(size=(.5, .22), center=(cx, -.05), angle=.3),
+                            material=Material(6.25))
+        second = rcwa.Region(geometry=rcwa.Rectangle(size=(.3, .4), center=(.15, .12),
+                                                     angle=-.15), material=Material(3.))
+        layer = rcwa.Layer(thickness=.4, background=Material(1.), regions=(first, second))
+        return rcwa.Problem(
+            stack=rcwa.Stack(period=(1., 1.), layers=(layer,), bottom=Material(2.25)),
+            excitation=rcwa.Excitation(wavelength=1.3, sources=(
+                rcwa.PlaneWave(theta=.35, phi=.6, polarization='s'),)))
+
+    def value_and_grad(cx):
+        q = torch.tensor(cx, dtype=torch.float64, requires_grad=True)
+        total = rcwa.run(problem(q), numerics=rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=128),
+                         backend='torch').T.sum()
+        total.backward()
+        return float(total.detach()), float(q.grad)
+
+    assert _integrated_against_the_change(value_and_grad, -.08) < 1e-2
 
 
 # --------------------------------------------------------------- one dict, one reading
@@ -1419,7 +1471,7 @@ def test_a_painted_layer_reads_the_same_field_on_every_spelling_of_its_cell():
         assert angle.max() < 1e-4 and angle.mean() < 1e-6, (k, angle.max(), angle.mean())
 
 
-def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction(monkeypatch):
+def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction():
     """The painted layer on ``k = 1 / 3 / 10`` is the ``k = 0`` structure, and says so in its record.
 
     For one revision this spelling was *refused* by name on a painted layer, because
@@ -1439,29 +1491,24 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction(monkeypatch)
     name, and the disjoint control -- the closed form -- is bitwise the same on every spelling.
     """
     reference = _spelled_total(_spelled(0, _TWO_OVERLAPPING))
-    # The old numeric pin included a same-material internal seam. Replace that
-    # defective field's golden with the independently specified union contour.
-    original = _b.normal_projector_coeffs
-    def union_projector(xp, loops, grid, lattice, hu, hv, dtype, cdtype, **kwargs):
-        union = _b.shape_vertices(xp, _box(lx=500., ly=300.), lattice)
-        a, e, l2 = _b.segments_of(xp, [union])
-        return original(xp, [union], grid, lattice, hu, hv, dtype, cdtype,
-                        transform=kwargs['transform'], images=kwargs['images'],
-                        segment_data=(a, e, l2, xp.ones(a.shape[0], dtype=xp.bool)))
-    with monkeypatch.context() as patch:
-        patch.setattr(_b, 'normal_projector_coeffs', union_projector)
-        oracle = _spelled_total(_spelled(0, _TWO_OVERLAPPING))
-    assert reference == pytest.approx(oracle, rel=0, abs=1e-12)
     assert _spelled_total(_spelled(10, _TWO_OVERLAPPING)) == reference
     odd = [_spelled_total(_spelled(k, _TWO_OVERLAPPING)) for k in (1, 3)]
     assert odd[0] == odd[1]
-    # Odd spellings sample a different quadrature grid. Compare each to its
-    # independently specified union, then test grid convergence rather than the
-    # old 2e-4 allowance measured on the defective internal-seam field.
-    with monkeypatch.context() as patch:
-        patch.setattr(_b, 'normal_projector_coeffs', union_projector)
-        for k, value in zip((1, 3), odd):
-            assert value == pytest.approx(_spelled_total(_spelled(k, _TWO_OVERLAPPING)), rel=0, abs=1e-12)
+    # The old numeric pin included a same-material internal seam, and its replacement read the
+    # independently specified union contour exactly -- true of the hard nearest-interface field,
+    # which no interval split can reach. The field averages its switches over half a sample
+    # step since 2026-10-15 and so reads, at second order in the step, where the outline passes
+    # from one box's material pair to the other's: against the union written as one polygon on
+    # the same route, every spelling reads 6.3e-4 / 6.5e-4 at grid 64 and 1.7e-4 / 1.6e-4 at
+    # 128 (k even / odd), and 3.8e-5 at 256.
+    union = [dict(type='polygon', vertices=((-250., -150.), (250., -150.), (250., 150.),
+                                            (-250., 150.)), material=12.25)]
+    gaps = [[abs(_spelled_total(_spelled(k, _TWO_OVERLAPPING, shape_nvf_grid_size=grid))
+                 - _spelled_total(_spelled(k, union, shape_nvf_grid_size=grid))) for k in (0, 1)]
+            for grid in (64, 128)]
+    assert all(fine < coarse / 3 and fine < 3e-4 for coarse, fine in zip(*gaps)), gaps
+    # Odd spellings sample a different quadrature grid: their gap to the even ones closes as
+    # the grid refines (1.4e-5 at 64, 6.0e-7 at 128).
     refined = [_spelled_total(_spelled(k, _TWO_OVERLAPPING, shape_nvf_grid_size=128)) for k in (0, 1)]
     assert abs(refined[1] - refined[0]) < abs(odd[0] - reference) / 4
 

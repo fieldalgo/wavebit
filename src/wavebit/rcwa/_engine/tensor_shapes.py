@@ -398,8 +398,12 @@ def _projector(solver, shapes, plan, loops, values):
     contrast = norm(a-b)/xp.where(scale>0,scale,xp.ones_like(scale))
     curves = (_curve_fields(xp,shapes,solver.lattice,dtype,plan[2])
               if len(plan) == 3 else None)
+    # The hard nearest choices (`average=False`): this field's curves are exact candidates,
+    # one each, which an average over a polygon's facets would blur where its facets meet --
+    # the polygon route would stop converging onto them. The painted scalar route averages.
     return boundary.material_projector_fields(xp,(n,n),solver.lattice,dtype,
-        segments,contrast,interfaces,transform=transform,candidate_fields=curves)
+        segments,contrast,interfaces,transform=transform,candidate_fields=curves,
+        average=False)
 
 
 def _layer(solver, layer, plan, quantity):
