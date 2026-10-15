@@ -45,7 +45,7 @@ optical convergence or opening derivative:
 The suite is [`tests/`](https://github.com/fieldalgo/wavebit/tree/develop/tests); everything with a statable criterion lives there, including the
 slower cross-backend and optimizer checks. CI runs its default set on every push. The tests of
 the experimental conforming NVF module and its study instruments form a
-[research tier](../../tests/README.md#the-research-tier) that CI does not run; it is run while that
+[research tier](https://github.com/fieldalgo/wavebit/blob/develop/tests/README.md#the-research-tier) that CI does not run; it is run while that
 research code is being developed. Every eager NumPy solve also checks what it is
 about to hand back — a NaN or infinity raises `FloatingPointError` naming the contaminated
 array.
