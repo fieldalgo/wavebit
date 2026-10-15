@@ -1177,8 +1177,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/cfl-only-first-member.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/cfl-only-first-member.log",
-      "sha256": "15f9ff41ae2194a8032974cb98763d8c96568b200e8c158a1244eafae293a9f7",
-      "git_blob": "d368d00b33ce4c789ee2c0ac1e642fb7728736ac",
+      "sha256": "b04fbcef9c159b58916d89b45745b05b53014fdd55111365eb3c738e3c82acb3",
+      "git_blob": "425623095e8f33f9d7fdf41f0c027e35ecef3968",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "15f9ff41ae2194a8032974cb98763d8c96568b200e8c158a1244eafae293a9f7",
+      "original_git_blob": "d368d00b33ce4c789ee2c0ac1e642fb7728736ac",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/cfl-only-first-member.mutant.raw": {
@@ -1195,8 +1198,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/foreign-ordinary-memory-ignored.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/foreign-ordinary-memory-ignored.log",
-      "sha256": "502756d2a6650925d16f7883d0661f6765d997eddbf594f8670af1c6c33ca281",
-      "git_blob": "6916695bf2b77731c06df65c2519f0230b38e3ac",
+      "sha256": "afe01980cdb22837271da52738ecb07a0391c794c46af1ff669c97340950e7d6",
+      "git_blob": "bdc6d4233511dbe40e545ab0380cdc3553851655",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "502756d2a6650925d16f7883d0661f6765d997eddbf594f8670af1c6c33ca281",
+      "original_git_blob": "6916695bf2b77731c06df65c2519f0230b38e3ac",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/foreign-ordinary-memory-ignored.mutant.raw": {
@@ -1219,8 +1225,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-member-bulk-conductivity-omitted.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/later-member-bulk-conductivity-omitted.log",
-      "sha256": "b99288613f0a76a8273951f35f279573d0f4ebb45a27adc37fc28827ac04fa95",
-      "git_blob": "400457050186e772a19fada17494fcd3737c4fe6",
+      "sha256": "e2dd77c77e0e03d7d3d28350a65868e76356b02df0378322938053b6f887b12a",
+      "git_blob": "05ab4aa84a87ded3a9b915dd9327afaffb9be62c",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "b99288613f0a76a8273951f35f279573d0f4ebb45a27adc37fc28827ac04fa95",
+      "original_git_blob": "400457050186e772a19fada17494fcd3737c4fe6",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-member-bulk-conductivity-omitted.mutant.raw": {
@@ -1237,8 +1246,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-member-real-profile-wrong.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/later-member-real-profile-wrong.log",
-      "sha256": "1e43ac4b8ec4c89fdad0d30226716d8bd1846cf48801afde301bd778e6f2fdca",
-      "git_blob": "7a3443aab7011a726cc51387e60ef2d6fa13d339",
+      "sha256": "97fc1cbf8ffba561018404761dede456d21abb1a7d8879434a241b1227778394",
+      "git_blob": "0a3c9d9ad25c0bf93e62b247b25d79782d8244cb",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "1e43ac4b8ec4c89fdad0d30226716d8bd1846cf48801afde301bd778e6f2fdca",
+      "original_git_blob": "7a3443aab7011a726cc51387e60ef2d6fa13d339",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-member-real-profile-wrong.mutant.raw": {
@@ -1255,8 +1267,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-member-storage-weight-omitted.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/later-member-storage-weight-omitted.log",
-      "sha256": "3409ae9e26cb71875152c6549a89970923509bfed1564e7d0bd90127bcfb3c2c",
-      "git_blob": "1d8b0bbabf365717eb8bc8acf45aa28b9c4a4cb2",
+      "sha256": "037ed04014f822b246b906fd6ed7e651c5f1ab3e76983f04f303aa891efcf0d2",
+      "git_blob": "c5eb46ea12f5aa342774f2d9a4c3c948e477b971",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "3409ae9e26cb71875152c6549a89970923509bfed1564e7d0bd90127bcfb3c2c",
+      "original_git_blob": "1d8b0bbabf365717eb8bc8acf45aa28b9c4a4cb2",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-member-storage-weight-omitted.mutant.raw": {
@@ -1273,8 +1288,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-memory-allocation-omitted.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/later-memory-allocation-omitted.log",
-      "sha256": "2862f136c29224b8c4319e728f82f65ae390eec5693eafa37a8755845f469e15",
-      "git_blob": "6629fb2733745cd223e0348b54e773bc0285013e",
+      "sha256": "52590084c44e2233293950655c47be940157a359b79c0b24a31eafc323cafc19",
+      "git_blob": "54c924c97d06438b283adb96925219b3d22c73c8",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "2862f136c29224b8c4319e728f82f65ae390eec5693eafa37a8755845f469e15",
+      "original_git_blob": "6629fb2733745cd223e0348b54e773bc0285013e",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/later-memory-allocation-omitted.mutant.raw": {
@@ -1291,8 +1309,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/padded-support-overlap-admitted.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/padded-support-overlap-admitted.log",
-      "sha256": "f896c91f5748aa723753d5e185cae9b535c82ae2ef6947a49d65baa4177ecef4",
-      "git_blob": "3e25bd4bf51fd13961cc9abff1f02d1bd47b7042",
+      "sha256": "9b0638c86bc5a37cf3f2bab68752e749ff8f2f4c3c0dc6fbcadfd5e5c7f972b6",
+      "git_blob": "d7923f801141294b1a15fbf1a538c6250b22b487",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "f896c91f5748aa723753d5e185cae9b535c82ae2ef6947a49d65baa4177ecef4",
+      "original_git_blob": "3e25bd4bf51fd13961cc9abff1f02d1bd47b7042",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/padded-support-overlap-admitted.mutant.raw": {
@@ -1309,14 +1330,20 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/restored_targeted_baseline.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/restored_targeted_baseline.log",
-      "sha256": "6b7b79326e5112ff9db52701d602768461e28ce793f8298dc226c1f0b67bb026",
-      "git_blob": "3c42f6510ee50949769a394eccee3f0da1a00893",
+      "sha256": "e6b8c0e76592f800cb07cbd15dab59f567c2d09933e73fd538639f2ed2f0e19a",
+      "git_blob": "7711c6bc6b5e896f6163434e7840bbac92c7460c",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "6b7b79326e5112ff9db52701d602768461e28ce793f8298dc226c1f0b67bb026",
+      "original_git_blob": "3c42f6510ee50949769a394eccee3f0da1a00893",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/source-band-only-first-member.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/source-band-only-first-member.log",
-      "sha256": "8512bfb9ced3d7a40a06e9a13b78f4f84f7f045f3b0fead6030d18200053a38c",
-      "git_blob": "e78f0b3ef984cde17f42b6dec8e3e83e5be2dc39",
+      "sha256": "32f8ed07efa45ccea3e6c85918584d899b8571f5bd5e9d9ae090c293b55f6af8",
+      "git_blob": "9c63748002a68c73dbb4516269c10dc4ea455af1",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "8512bfb9ced3d7a40a06e9a13b78f4f84f7f045f3b0fead6030d18200053a38c",
+      "original_git_blob": "e78f0b3ef984cde17f42b6dec8e3e83e5be2dc39",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/source-band-only-first-member.mutant.raw": {
@@ -1345,8 +1372,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/torch-forward-carrier-detached.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/torch-forward-carrier-detached.log",
-      "sha256": "31e3c3c4df6ab58f5d32e55c6d2b91b63c6865c8cfa39a03af79706ec03fded6",
-      "git_blob": "10ae1cc01aa687231ffb55fbcac843fb15d54b3a",
+      "sha256": "6ebccacc2fd341c0a7202cf6fc6d5904bc107ddd6f90c0170f8afdd4fde5ab25",
+      "git_blob": "266daf2a18e0b085a28bb7e2140ba25b5199d096",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "31e3c3c4df6ab58f5d32e55c6d2b91b63c6865c8cfa39a03af79706ec03fded6",
+      "original_git_blob": "10ae1cc01aa687231ffb55fbcac843fb15d54b3a",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/torch-forward-carrier-detached.mutant.raw": {
@@ -1363,8 +1393,11 @@
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/whole-prepared-identity-bypassed.log": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/whole-prepared-identity-bypassed.log",
-      "sha256": "36711fb050f64995e249a1ca9c071eccf880a8219fef1f0a808dc7bde200b64a",
-      "git_blob": "c6175e96cde0f07a33852e7a2407e3c12f6900ac",
+      "sha256": "7557ef9b3c374c2fdd8fca5d247bf62fd0ba76b08d7f41143d33d8da851e907c",
+      "git_blob": "9b0aed8d42762ad0edd76c33d4d822f30f26f852",
+      "redacted": "2026-10-15: the agent worktree folder in two recorded paths replaced by <worktrees>; bytes otherwise as recorded",
+      "original_sha256": "36711fb050f64995e249a1ca9c071eccf880a8219fef1f0a808dc7bde200b64a",
+      "original_git_blob": "c6175e96cde0f07a33852e7a2407e3c12f6900ac",
       "git_mode": "100644"
     },
     "studies/results/fdtd_conductive_stack_mutations_attempt1/whole-prepared-identity-bypassed.mutant.raw": {
