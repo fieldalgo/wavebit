@@ -58,28 +58,39 @@ inputs are errors, not successful empty runs. A passed call is reusable only
 after its teardown completes. An interrupted run retains completed events and
 returns a nonzero exit status; it does not claim that unreported nodes passed.
 
-## CI keeps the existing two partitions
+## CI runs the two partitions in shards
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)
-uses the runner for both existing non-research partitions:
+uses the runner for both non-research partitions, each split across runners with
+`--shard INDEX/COUNT`: four shards for the ordinary partition, two for the slow one.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/4 --workers 2 \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/default
-python tools/run_verification.py --profile full --slow only --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/2 --workers 2 \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/slow
 ```
 
-The ordinary and slow jobs retain their 1,200-second and 2,400-second per-test
-limits, respectively, and their existing 180-minute and 240-minute job limits.
-The selected tests do not change: the two partitions together cover the
-non-research suite. Source-mutating cases within either partition run in the
-runner's separate serial snapshot, not in the shared parallel checkout.
+A shard is a selection within the profile, not a different profile. Every shard collects
+the whole partition and records it as `collected-nodeids-all.json`; whole test files are
+then assigned to shards deterministically, largest file first to the lightest shard, so
+a file is never split and the same collection always gives the same shards. After the
+shard jobs, `tools/verify_shards.py --count N` reads their receipts and fails unless every
+shard is present once, all collected the same list, the shards partition it, and each
+exited 0. That job is what makes the partition verified; a shard whose runner died is a
+named failure there, not an absence.
 
-GitHub artifacts `verification-default` and `verification-slow` retain the JSON
-receipts and inventories, JSONL events, JUnit XML and logs. The writable source
+Sharding is a response to the runners' memory, not to the clock: a single two-worker run
+of the ordinary partition grew past the 7.9 GB available and was shut down at 50 to 61 %
+every time. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
+the job limits are 90 minutes per ordinary shard and 180 per slow shard. Source-mutating
+cases within a shard run in the runner's separate serial snapshot, not in the shared
+parallel checkout.
+
+GitHub artifacts `verification-default-N` and `verification-slow-N` retain each shard's
+JSON receipts and inventories, JSONL events, JUnit XML and logs. The writable source
 snapshot is excluded from upload to avoid copying the repository into every
 artifact. These are verification records, not full source snapshots.
 
@@ -89,7 +100,7 @@ artifact. These are verification records, not full source snapshots.
 python tools/run_verification.py --profile full --workers 4 --resume RUN_DIRECTORY
 ```
 
-Keep the profile, slow filter, paths, worker and timeout settings, output mode,
+Keep the profile, slow filter, shard, paths, worker and timeout settings, output mode,
 checkout inputs and environment unchanged. The runner fingerprints them again and recollects the whole selection.
 It refuses reuse if any fingerprint or collected node ID changed, including new,
 missing or reordered tests. Failures and unfinished tests run again by default;

@@ -58,28 +58,38 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 끝나야 재사용할 수 있습니다. 중단된 실행은 완료된 이벤트를 남기고 0이 아닌
 종료 상태를 반환하며, 보고되지 않은 노드를 통과했다고 처리하지 않습니다.
 
-## CI의 기존 두 실행 범위 유지
+## CI는 두 실행 범위를 shard로 나눠 실행
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)는
-research를 제외하는 기존 두 범위 모두에 검증 도구를 사용합니다.
+research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
+`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 4개, slow 범위는 2개입니다.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/4 --workers 2 \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/default
-python tools/run_verification.py --profile full --slow only --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/2 --workers 2 \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/slow
 ```
 
-일반 job과 slow job은 각각 기존의 테스트별 1,200초·2,400초 제한과
-job 전체의 180분·240분 제한을 유지합니다. 선택하는 테스트는 바뀌지 않으며,
-두 범위를 합치면 research를 제외한 전체 테스트가 됩니다. 각 범위 안에서
-소스를 수정하는 사례는 공유 체크아웃의 병렬 실행 대신 도구가 만든 별도
-스냅샷에서 순차 실행합니다.
+shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shard가 범위 전체를
+수집해 `collected-nodeids-all.json`에 기록한 뒤, 테스트 파일 단위로 결정적으로
+배정합니다. 큰 파일부터 가장 가벼운 shard에 넣으므로 파일이 갈리지 않고, 같은
+수집 목록은 항상 같은 shard를 만듭니다. shard job들이 끝나면
+`tools/verify_shards.py --count N`이 그 기록을 읽어, 모든 shard가 한 번씩 있고
+같은 목록을 수집했고 그 목록을 빈틈없이 나눴고 각각 종료 코드 0으로 끝났을 때만
+통과합니다. 이 job이 범위를 검증한 것으로 만들며, runner가 죽은 shard는 사라지는
+대신 이름이 남는 실패가 됩니다.
 
-GitHub artifact `verification-default`와 `verification-slow`에는 JSON 결과 기록과
-입력 목록, JSONL 이벤트, JUnit XML, 로그를 보관합니다. artifact마다 저장소를
+shard는 시간보다 runner 메모리 때문입니다. 일반 범위를 worker 2개 한 번에 돌리면
+사용 가능한 7.9 GB를 넘어 매번 50~61 %에서 종료되었습니다. 테스트별 제한은
+1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 일반 shard 90분, slow shard
+180분입니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
+대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.
+
+GitHub artifact `verification-default-N`과 `verification-slow-N`에는 shard별 JSON 결과
+기록과 입력 목록, JSONL 이벤트, JUnit XML, 로그를 보관합니다. artifact마다 저장소를
 복제해 올리지 않도록 쓰기 가능한 소스 스냅샷은 업로드에서 제외합니다.
 이 artifact는 검증 기록이며 전체 소스 스냅샷이 아닙니다.
 
@@ -89,7 +99,7 @@ GitHub artifact `verification-default`와 `verification-slow`에는 JSON 결과 
 python tools/run_verification.py --profile full --workers 4 --resume RUN_DIRECTORY
 ```
 
-profile, slow 필터, 경로, worker·timeout 설정, 출력 방식, 체크아웃 입력과 환경을
+profile, slow 필터, shard, 경로, worker·timeout 설정, 출력 방식, 체크아웃 입력과 환경을
 그대로 유지해야 합니다.
 도구는 이를 다시 fingerprint로 계산하고 선택 범위 전체를 다시 수집합니다.
 새 테스트, 사라진 테스트, 순서가 바뀐 테스트를 포함해 fingerprint나 수집한

@@ -379,9 +379,55 @@ def test_full_slow_shards_partition_the_original_full_profile(checkout):
     assert 'cannot select --slow only' in result.stderr
 
 
+def test_shards_partition_the_collection_by_whole_file_and_the_check_notices_a_missing_one(checkout):
+    (checkout/'tests/test_a.py').write_text('def test_a1(): pass\ndef test_a2(): pass\ndef test_a3(): pass\n')
+    (checkout/'tests/test_b.py').write_text('def test_b1(): pass\ndef test_b2(): pass\n')
+    (checkout/'tests/test_c.py').write_text('def test_c1(): pass\n')
+    receipts = {}
+    for index in (1, 2):
+        result, receipt = run(checkout, checkout/'artifacts'/f'shard{index}', '--shard', f'{index}/2')
+        assert result.returncode == 0, result.stdout + result.stderr
+        receipts[index] = receipt
+        assert receipt['shard']['index'] == index and receipt['shard']['count'] == 2
+        assert receipt['shard']['nodes_total'] == 6
+        assert receipt['counts'] == {'passed': receipt['shard']['nodes_in_shard']}
+        full = json.loads((checkout/'artifacts'/f'shard{index}/collected-nodeids-all.json').read_text())
+        assert len(full) == 6
+        for node in receipt['collected_nodeids']:
+            assert node.split('::')[0] in receipt['shard']['files']
+    # Largest file first, then the lighter shard: a (3) alone; b (2) and c (1) together.
+    assert receipts[1]['shard']['files'] == ['tests/test_a.py']
+    assert receipts[2]['shard']['files'] == ['tests/test_b.py', 'tests/test_c.py']
+    one, two = (set(receipts[index]['collected_nodeids']) for index in (1, 2))
+    assert one.isdisjoint(two) and len(one | two) == 6
+    # The same run without --shard is the union, in the same order.
+    result, whole = run(checkout, checkout/'artifacts/whole')
+    assert result.returncode == 0
+    assert set(whole['collected_nodeids']) == one | two
+    assert 'shard' not in whole
+    check = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '2']
+    both = [str(checkout/'artifacts/shard1'), str(checkout/'artifacts/shard2')]
+    result = subprocess.run(check + both, text=True, capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout.rsplit('\n}', 1)[0] + '\n}')['counts'] == {'passed': 6}
+    result = subprocess.run(check + both[:1], text=True, capture_output=True, timeout=60)
+    assert result.returncode == 1 and 'missing shard(s): 2/2' in result.stdout
+    result = subprocess.run(check + both + both[:1], text=True, capture_output=True, timeout=60)
+    assert result.returncode == 1 and 'also recorded by' in result.stdout
+    result = subprocess.run(check + [str(checkout/'artifacts/whole'), both[1]], text=True,
+                            capture_output=True, timeout=60)
+    assert result.returncode == 1 and 'not from a --shard run' in result.stdout
+    for bad in ('0/2', '3/2', '2', 'a/b'):
+        result, receipt = run(checkout, checkout/'artifacts'/('bad' + bad.replace('/', '_')), '--shard', bad)
+        assert result.returncode == 2 and receipt is None, bad
+        assert '--shard' in result.stderr
+    result, receipt = run(checkout, checkout/'artifacts/toomany', '--shard', '4/4')
+    assert result.returncode == 2 and 'selects no tests' in receipt['integrity_errors'][0]
+
+
 @pytest.mark.parametrize('options', [
     ['--slow', 'exclude'], ['--timeout', '2'], ['--timeout-method', 'signal'],
-    ['--verbose'], ['--live-output'],
+    ['--verbose'], ['--live-output'], ['--shard', '1/2'],
 ])
 def test_ci_configuration_changes_refuse_resume(checkout, options):
     if '--timeout' in options:

@@ -50,6 +50,45 @@ def validate_paths(root, paths):
     return list(paths)
 
 
+def parse_shard(value):
+    """'INDEX/COUNT' with 1 <= INDEX <= COUNT, as a (index, count) pair."""
+    try:
+        index, count = (int(part) for part in value.split('/'))
+    except ValueError:
+        raise ValueError(f'--shard must be INDEX/COUNT, for example 2/4: {value!r}') from None
+    if count < 1 or not 1 <= index <= count:
+        raise ValueError(f'--shard needs 1 <= INDEX <= COUNT: {value!r}')
+    return index, count
+
+
+def shard_files(nodes, count):
+    """Assign every test file to one of `count` shards, deterministically and by size.
+
+    Files, not nodes, because CI distributes with `--dist loadfile` and because test modules
+    set process-wide state at import (see tests.yml), so a file must never be split. Largest
+    file first, each to the shard with the fewest nodes so far: the same collection always
+    gives the same assignment, and the shards are as even as whole files allow.
+    """
+    sizes = {}
+    for node in nodes:
+        name = node.split('::', 1)[0]
+        sizes[name] = sizes.get(name, 0) + 1
+    assignment, load = {}, [0] * count
+    for name in sorted(sizes, key=lambda name: (-sizes[name], name)):
+        shard = load.index(min(load))
+        assignment[name] = shard + 1
+        load[shard] += sizes[name]
+    return assignment
+
+
+def shard_nodes(nodes, index, count):
+    """The nodes of shard `index` of `count`, in collection order, and its files."""
+    assignment = shard_files(nodes, count)
+    files = sorted(name for name, shard in assignment.items() if shard == index)
+    selected = [node for node in nodes if assignment[node.split('::', 1)[0]] == index]
+    return selected, files
+
+
 def collections(directory):
     records = [load(path) for path in sorted(directory.glob('collection-*.json'))]
     if not records:
@@ -167,10 +206,12 @@ def run(args):
     expression = EXPRESSIONS[args.profile]
     if args.profile != 'quick' and args.slow != 'include':
         expression += ' and ' + ('slow' if args.slow == 'only' else 'not slow')
+    shard = parse_shard(args.shard) if args.shard else None
     config = dict(profile=args.profile, expression=expression, paths=paths,
                   workers=args.workers, plugin_autoload=False, distribution='loadfile',
                   slow=args.slow, timeout=args.timeout, timeout_method=args.timeout_method,
-                  verbose=args.verbose, live_output=args.live_output)
+                  verbose=args.verbose, live_output=args.live_output,
+                  shard=None if shard is None else dict(index=shard[0], count=shard[1]))
     before = hashes(root)
     inputs = dict(root=str(root), files=before, environment=environment(), config=config)
     fingerprint = digest(inputs)
@@ -200,10 +241,23 @@ def run(args):
         collection = phase_run(output, 'collection', root, config, collect=True)
         phases.append(collection)
         nodes = collection['collected']
-        save(output / 'collected-nodeids.json', nodes)
         errors.extend(collection['collection_errors'])
         if collection['exit_code'] or errors or not nodes:
             raise ValueError('Collection failed or selected no tests; see collection/pytest.log.')
+        all_nodes = nodes
+        if shard is not None:
+            # The phases still expect the whole collection -- a shard is a selection within
+            # it, not a different profile -- so every shard of a run collects the same list,
+            # and tools/verify_shards.py can check that the shards add up to exactly that list.
+            index, count = shard
+            nodes, files = shard_nodes(all_nodes, index, count)
+            save(output / 'collected-nodeids-all.json', all_nodes)
+            receipt['shard'] = dict(index=index, count=count, files=files,
+                                    nodes_total=len(all_nodes), nodes_in_shard=len(nodes))
+            save(output / 'shard.json', receipt['shard'])
+            if not nodes:
+                raise ValueError(f'Shard {index}/{count} selects no tests; use fewer shards.')
+        save(output / 'collected-nodeids.json', nodes)
         if previous:
             if previous['collected_nodeids'] != nodes:
                 raise ValueError('Resume refused: collected nodeids changed (new, missing, reordered or duplicated nodes).')
@@ -215,7 +269,7 @@ def run(args):
             mutations = [node for node in pending if node in collection['mutation_nodes']]
             ordinary = [node for node in pending if node not in mutations]
             if ordinary:
-                result = phase_run(output, 'tests', root, config, expected=nodes, selected=ordinary)
+                result = phase_run(output, 'tests', root, config, expected=all_nodes, selected=ordinary)
                 phases.append(result)
                 if result['interrupted'] or result['exit_code'] == 2:
                     raise KeyboardInterrupt
@@ -293,6 +347,9 @@ def main():
     parser.add_argument('--workers', type=int, default=0, help='xdist workers; 0 is serial (default)')
     parser.add_argument('--output', type=Path, help='new output directory; an existing path is always refused')
     parser.add_argument('--resume', type=Path, help='reuse completed successful/skip/xfail nodes from an identical run')
+    parser.add_argument('--shard', metavar='INDEX/COUNT',
+                        help='run only shard INDEX of COUNT, whole test files assigned deterministically; '
+                             'every shard records the full collection, tools/verify_shards.py checks they add up')
     parser.add_argument('--collect-only', action='store_true')
     args = parser.parse_args()
     if args.profile == 'quick' and args.slow == 'only':
