@@ -4,11 +4,11 @@ Wavebit takes a **relative permittivity** at the front door -- ``structure``, ``
 and the shape material slots -- and hands it to the factorization unconverted. That
 is a convention, not a fact, and until the migration of 2026-08-20 it was the other one: the
 API took a refractive index and squared it on the way in
-(``_core.factorization._layer_eps``), which left the package holding two conventions at once --
-``solve_conv`` and the tensor builders took permittivity, ``mu`` was taken raw, and
-``domain.Layer.eps`` was named for permittivity while holding an index. The flip removed that
-seam. What this file pins is that the flip happened *here*, in the one function that names the
-convention, rather than being routed around it.
+(``wavebit.rcwa._engine.factorization._layer_eps``), which left the package holding two
+conventions at once -- ``solve_conv`` and the tensor builders took permittivity, ``mu`` was
+taken raw, and ``domain.Layer.eps`` was named for permittivity while holding an index. The flip
+removed that seam. What this file pins is that the flip happened *here*, in the one function
+that names the convention, rather than being routed around it.
 
 This file exists so that changing the convention cannot happen quietly. It is the anchor the
 migration was measured against, and it has one property nothing else in the suite has: **its

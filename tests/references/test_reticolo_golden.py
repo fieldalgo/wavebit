@@ -165,9 +165,10 @@ def test_the_order_axis_is_not_symmetric_in_these_cases(name):
 
     The failure this oracle is best placed to catch is a wrong Fourier order-index sign: it
     swaps +1 with -1, conserves energy perfectly, and is invisible to every other check here
-    (``_core.conventions`` records that RETICOLO is what found it last time). But a grating
-    that is mirror-symmetric, at normal incidence, has ``de(+m) == de(-m)`` *physically*, so
-    reversing the order axis changes nothing and the comparison passes either way.
+    (``wavebit._common.conventions`` records that RETICOLO is what found it last time). But a
+    grating that is mirror-symmetric, at normal incidence, has ``de(+m) == de(-m)``
+    *physically*, so reversing the order axis changes nothing and the comparison passes either
+    way.
 
     Reversing ``T`` on the four symmetric cases above moves them by ~1e-15 — nothing. On
     these it moves them by 1e-3 to 3e-1. So the guard lives entirely in the asymmetric cases,

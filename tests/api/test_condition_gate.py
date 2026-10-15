@@ -8,8 +8,8 @@ complaint and were refused later, one at a time, by the solver's setters.
 Two things make this a layer rather than a second set of rules.
 
 **The rules are called, not restated.** `reject_complex_angle` and `incidence_clashes` live in
-`_core.conventions`, below `domain` and `spec` in the import graph and above only `backend`, so
-the setters and the carriers are two callers of one rule. The alternative is what
+`wavebit._common.conventions`, below `domain` and `spec` in the import graph and above only
+`backend`, so the setters and the carriers are two callers of one rule. The alternative is what
 `truncation_order` was until `0dde6c5`: two checks that had drifted so far apart that the JSON
 door refused five spellings `rcwa()` accepts, while missing two the solver needed.
 

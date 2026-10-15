@@ -221,9 +221,10 @@ def test_a_conditional_option_builds_where_its_condition_holds():
 def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
     """The `parametric` entry's options are claimed for every layer that spelling accepts.
 
-    An overlapping layer takes a different route inside (`_core.boundary` rather than the
-    closed-form sum), and while it was published as its own path that route had its own row of
-    the option battery. Collapsing the entries must not quietly drop the coverage with them.
+    An overlapping layer takes a different route inside (`wavebit.rcwa._engine.boundary` rather
+    than the closed-form sum), and while it was published as its own path that route had its own
+    row of the option battery. Collapsing the entries must not quietly drop the coverage with
+    them.
     """
     entry = PATHS['parametric']
     for value in entry['factorization']:
@@ -452,8 +453,8 @@ def test_results_section_matches_a_real_result():
     and hold each published name to the object: uppercase fields must exist and be real
     (power), lowercase must exist and be complex (amplitude), the incidence variants must be
     present, the accessor must work and agree with the arrays at the claimed layout, and the
-    JobSpec facts must match ``_core.spec``. A future rename that misses the manifest fails
-    here rather than in a consumer's UI.
+    JobSpec facts must match ``wavebit.compat._jobs_v1``. A future rename that misses the
+    manifest fails here rather than in a consumer's UI.
     """
     from wavebit.compat._jobs_v1 import SPEC_VERSION, JobSpec
 
