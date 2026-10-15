@@ -395,6 +395,51 @@ def test_torch_differentiates_a_shape_dimension_through_a_prepared_run():
     assert float(radius.grad) == pytest.approx(finite_difference, rel=1e-7)
 
 
+def test_torch_differentiates_a_tuple_period_like_a_stacked_one():
+    # Validation reads a tuple's leaves one by one; np.asarray on the tuple itself
+    # raised a bare RuntimeError on the grad-tracking component.
+    torch = pytest.importorskip('torch')
+    f64 = dict(dtype=torch.float64)
+    as_tuple = lambda p: patterned(rcwa.Circle(radius=150.), period=(p, 600.))
+    as_tensor = lambda p: patterned(rcwa.Circle(radius=150.), period=torch.stack([p, torch.tensor(600., **f64)]))
+    gradients = []
+    for build in (as_tuple, as_tensor):
+        prepared = rcwa.prepare(build(torch.tensor(600., **f64)), numerics=PATTERNED_NUMERICS, backend='torch')
+        period = torch.tensor(610., **f64, requires_grad=True)
+        prepared.run(build(period)).T.sum().backward()
+        gradients.append(float(period.grad))
+    transmitted = lambda p: float(prepared.run(as_tensor(torch.tensor(p, **f64))).T.sum())
+    step = 1e-3
+    finite_difference = (transmitted(610.+step) - transmitted(610.-step))/(2*step)
+    assert abs(finite_difference) > 1e-5
+    assert gradients[0] == pytest.approx(gradients[1], rel=1e-12)
+    assert gradients[0] == pytest.approx(finite_difference, rel=1e-7)
+
+
+def test_torch_differentiates_a_jones_pair_tuple_like_a_stacked_one():
+    # The same sequence read as the period, then a lowering that stacks the
+    # components, since torch.asarray on the tuple would sever the graph.
+    torch = pytest.importorskip('torch')
+    import dataclasses
+    f64 = dict(dtype=torch.float64)
+    with_jones = lambda pair: dataclasses.replace(patterned(rcwa.Rectangle(size=(300., 150.))),
+        excitation=rcwa.Excitation(wavelength=850., sources=(rcwa.PlaneWave(polarization=pair),)))
+    as_tuple = lambda a: with_jones((1., a))
+    as_tensor = lambda a: with_jones(torch.stack([torch.tensor(1., **f64), a]))
+    gradients = []
+    for build in (as_tuple, as_tensor):
+        prepared = rcwa.prepare(build(torch.tensor(.3, **f64)), numerics=PATTERNED_NUMERICS, backend='torch')
+        component = torch.tensor(.3, **f64, requires_grad=True)
+        prepared.run(build(component)).T.sum().backward()
+        gradients.append(float(component.grad))
+    transmitted = lambda a: float(prepared.run(as_tensor(torch.tensor(a, **f64))).T.sum())
+    step = 1e-4
+    finite_difference = (transmitted(.3+step) - transmitted(.3-step))/(2*step)
+    assert abs(finite_difference) > 1e-3
+    assert gradients[0] == pytest.approx(gradients[1], rel=1e-12)
+    assert gradients[0] == pytest.approx(finite_difference, rel=1e-6)
+
+
 def test_torch_shape_step_across_a_topology_boundary_asks_for_a_new_preparation():
     torch = pytest.importorskip('torch')
     pair = lambda w: patterned(tuple(rcwa.Rectangle(size=(w, 200.), center=(c, 0.)) for c in (-60., 60.)))

@@ -19,9 +19,10 @@ Through `rcwa.prepare(...)` and `prepared.run(problem)`, the backends do not adm
 | Layer thickness | supported | supported |
 | Raster permittivity values | supported | supported; see [held raster preparations](#a-held-raster-preparation-under-jit) |
 | Region geometry, such as `Circle.radius`, `Rectangle.size`, `Rectangle.angle` or `Polygon.vertices` | supported | **refused** for every geometry field: `UnsupportedFeatureError`, code `prepared.host_topology` |
-| The cell, `Stack.period` | supported when the period is one tensor | **refused**: `prepared.host_topology`, as for `Stack.lattice` |
+| The cell, `Stack.period` | supported | **refused**: `prepared.host_topology`, as for `Stack.lattice` |
+| A Jones polarization pair, `PlaneWave(polarization=(s, p))` | supported | supported |
 
-Each supported entry was compared with a central difference on one example, with relative agreement between 2e-9 and 2e-7. The PyTorch geometry entries checked were a circle radius (4.6e-9), a rectangle width (1.8e-8) and a rectangle angle (1.3e-7); the raster entries used `('sampled', 'li')`. On PyTorch, pass a differentiated period as one tensor, for example `torch.stack([px, py])`. A tuple holding a gradient-tracking tensor currently fails with a bare `RuntimeError` from NumPy conversion.
+Each supported entry was compared with a central difference on one example, with relative agreement between 4e-10 and 2e-7. The PyTorch geometry entries checked were a circle radius (4.6e-9), a rectangle width (1.8e-8) and a rectangle angle (1.3e-7); the raster entries used `('sampled', 'li')`. A period or Jones pair may be a tuple holding a gradient-tracking tensor, such as `(px, 600.)`, or one tensor, such as `torch.stack([px, py])`. The two spellings give the same PyTorch derivative (central-difference agreement 4.1e-10 for a period length and 1.5e-8 for a Jones component); prepare with the spelling you run with, since the two are different layouts.
 
 So, through this lifecycle, the derivative from geometry to diffraction efficiency is a PyTorch derivative. The JAX refusal applies to `jax.grad` alone as well as under `jax.jit`.
 

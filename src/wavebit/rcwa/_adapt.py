@@ -48,7 +48,10 @@ def host(value, path):
         raise UnsupportedFeatureError('This value makes a host-only geometry decision. Prepare a concrete problem outside the transform.',
                                       code='rcwa.host_geometry', path=path)
     # Reading values is only for validation; the original leaves are passed to
-    # the engine untouched and keep their derivative graph.
+    # the engine untouched and keep their derivative graph. A sequence is read
+    # leaf by leaf, since np.asarray cannot read a grad-tracking tensor in it.
+    if isinstance(value, (list, tuple)):
+        return np.asarray([host(v, path) for v in value])
     if hasattr(value, 'detach'):
         return value.detach().cpu().numpy()
     return np.asarray(value)
@@ -122,7 +125,12 @@ def polarization(source, xp, execution):
     value = source.polarization
     if isinstance(value, str):
         value = (1., 0.) if value == 's' else (0., 1.)
-    pair = _array(xp, value, execution, complex_value=True)
+    if isinstance(value, (list, tuple)):
+        # torch.asarray copies a sequence of tensors into a fresh leaf, which
+        # would sever a grad-tracking component; stack the components instead.
+        pair = xp.stack([_array(xp, v, execution, complex_value=True) for v in value])
+    else:
+        pair = _array(xp, value, execution, complex_value=True)
     if pair.shape != (2,):
         raise ValidationError('Jones polarization must have exactly two components.',
                               code='source.polarization_shape', path='excitation.sources.polarization')
