@@ -12,9 +12,9 @@ tests hold it to, beside the S4 identity in ``tests/references/test_s4_polygon_g
   threads between its own images is built, and one that reaches into a copy of itself, or into
   another region's copy, is refused;
 * a frozen plan replays on traced vertices and goes stale when the painting changes;
-* the vertex derivative is the solve's derivative under Laurent's rule, window-integrated, and
-  -- an open defect of the painting route's normal field, pinned as a strict xfail -- is not
-  under NVF.
+* the vertex derivative is the solve's derivative, window-integrated, under Laurent's rule and
+  under NVF -- under NVF since the painting route's normal field averages its medial-axis
+  switches over the sample spacing (it missed 11% of this window before).
 """
 
 import os
@@ -546,15 +546,25 @@ def test_under_laurent_the_vertex_derivative_integrates_to_the_change():
     assert _window(LAURENT, 4, 8) < 1e-3
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "open: the painting route's nearest-interface normal field jumps across its medial axis, "
-    "and autodiff of the sampled field never sees the jumps' transport term. Measured on this "
-    "window: 9.4-11% of the change missed at shape_nvf_grid_size 64-512 (order 3), 6.8% at "
-    "order 6, 2.8% at order 9 -- not a grid error. Every painted layer shares it (two painted "
-    "rectangles: 17%); the closed-form route does not (a lone Rectangle: 5e-4)."))
 def test_under_nvf_the_vertex_derivative_integrates_to_the_change():
+    """A strict xfail until the painting route's normal field averaged its switches.
+
+    The nearest-interface direction turns across the medial axis, and the turn moves with the
+    vertex: every sample it crossed stepped, and autodiff of the sampled field saw none of the
+    steps -- 9.4-11% of this window's change missed at ``shape_nvf_grid_size`` 64 to 512 alike,
+    a missing term rather than a grid error. Averaged over half a sample step
+    (``boundary.material_projector_fields``) every sample moves smoothly: measured 0.15%.
+    """
     pytest.importorskip('torch')
     assert _window(NVF, 4, 8) < 1e-2
+
+
+@pytest.mark.slow
+def test_under_nvf_the_vertex_derivative_integrates_to_the_change_on_a_finer_normal_grid():
+    """The same window, sixteen pixels of a 512 grid: a switch is half a step wide at any grid,
+    so the derivative holds as the grid refines (measured 0.11%; 0.24% at 256)."""
+    pytest.importorskip('torch')
+    assert _window(rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=512), 4, 8) < 1e-2
 
 
 # ------------------------------------------------------------------------------- pictures

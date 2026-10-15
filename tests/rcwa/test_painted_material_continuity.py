@@ -64,7 +64,15 @@ def test_painted_materials_preserve_reflection_and_rotation(materials):
     np.testing.assert_allclose(values, values[0], rtol=0., atol=2e-10)
 
 
-def test_complex_painted_projector_is_hermitian_rank_one_and_chunk_independent():
+def test_complex_painted_projector_is_a_real_unit_trace_average_and_chunk_independent():
+    """Complex materials leave the projector real; chunking leaves it bit for bit.
+
+    It was rank one everywhere until 2026-10-15, the projector of one normalized vector. It is
+    now an average of projectors (``boundary.material_projector_fields``): rank two inside a
+    switch of the nearest interface, which it averages over half a sample step, and wherever
+    two material pairs of unequal contrast both carry influence -- so what holds everywhere is a
+    real symmetric matrix of unit trace with both eigenvalues in [0, 1].
+    """
     vertices = [B.shape_vertices(np, s, CELL, 256) for s in shapes(4.+.2j, 9.+.3j)]
     recs, regions, transform, plan = B.plan_layer(shapes(4.+.2j, 9.+.3j), CELL)
     vals = B._clipper.eval_table(np, recs, vertices)
@@ -81,7 +89,8 @@ def test_complex_painted_projector_is_hermitian_rank_one_and_chunk_independent()
     xx, xy, yy = a
     np.testing.assert_allclose(xx+yy, 1., atol=1e-14)
     assert all(np.isrealobj(v) for v in a)
-    np.testing.assert_allclose(xx*yy-xy*xy, 0., atol=1e-14)
+    smaller = (xx+yy)/2 - np.sqrt(((xx-yy)/2)**2 + xy*xy)
+    assert smaller.min() > -1e-14 and (xx*yy - xy*xy).max() <= .25 + 1e-14
 
 
 @pytest.mark.parametrize('right', [4.+1e-3, 4.+1e-8, 4.+.5j, -4.+1j])

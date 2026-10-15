@@ -265,9 +265,11 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     `SolverNumpy.grad` raises -- the growth above appears under `jit` with no differentiation
     at all, so "it does not differentiate" would be the wrong reason for the right conclusion.
     Torch is a different matter: it does differentiate and it does keep the unrolled loop, so
-    the same class of problem plausibly sits there unmeasured. Its answer would be
-    `torch.utils.checkpoint`, a different call with its own caveats, and nobody has yet shown
-    it is needed.
+    the same class of problem sits there. It was measured on the solver's own field
+    (:func:`material_projector_fields`) on 2026-10-15 -- one backward pass through a painted L
+    beside a 256-gon reached 3.1 GB at a 128 grid, and passed 10 GB once that field averaged its
+    switches -- and answered there with `torch.utils.checkpoint` (:func:`_chunked`), under plain
+    reverse mode only. This raw probe keeps the loop.
 
     (`cost_analysis()` cannot arbitrate this, and the way it fails is worth knowing because it
     fails *towards* the answer you want. It counts a scan body once rather than once per trip,
@@ -636,10 +638,311 @@ def _on_interface_threshold2(xp, lattice, dtype):
     return (64*xp.finfo(dtype).eps*_cell_scale(xp, lattice, dtype))**2
 
 
+#: The width, as a fraction of the longer sample step, over which
+#: :func:`material_projector_fields` averages each switch of its nearest interface: the scale
+#: of a logistic in the distance to the switch, so 10% to 90% of the switch takes 2.2 steps.
+_SWITCH_WIDTH = 0.5
+
+#: Two directions closer than this (in the norm of their difference) are one direction to
+#: :func:`material_projector_fields`'s average; it bounds the division that turns a distance
+#: gap into a distance to a bisector, and nothing else reads it.
+_SAME_DIRECTION = 1e-3
+
+
+def _sample_spacing(xp, grid_shape, lattice, dtype, transform=None):
+    """``max(|r1| / Nx, |r2| / Ny)`` on the reduced basis ``(r1, r2)``: the longer of the two
+    shortest steps between the samples of :func:`~wavebit.lattice.sample_grid`.
+
+    Read on the reduced basis because the samples are folded onto it
+    (:func:`_folded_sample_points`): an unreduced spelling such as ``a2 = 10 a1 + b`` samples the
+    same points, ten times further apart along its own ``a2``.
+    """
+    Ny, Nx = grid_shape
+    reduced = reduced_basis(lattice, transform)
+    r1 = xp.sqrt(xp.asarray(reduced[0][0], dtype=dtype)**2 + xp.asarray(reduced[1][0], dtype=dtype)**2)
+    r2 = xp.sqrt(xp.asarray(reduced[0][1], dtype=dtype)**2 + xp.asarray(reduced[1][1], dtype=dtype)**2)
+    return xp.maximum(r1/Nx, r2/Ny)
+
+
 def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
                                interface_plan, transform=None, chunk=None,
+                               candidate_fields=None, average=True):
+    """The contrast-weighted nearest-interface normal projector, averaged at the sample spacing.
+
+    **The extension.** Group the live interface intervals by their unordered pair of region
+    labels; all of a pair's intervals have one contrast. Each pair is a candidate: its distance
+    is the distance to its nearest interval, its direction the unit vector from that nearest
+    point toward the sample. Its influence is ``contrast**4 / distance**4``. Order the
+    candidates by influence and average, over every influence threshold, the projector of the
+    nearest candidate at least that influential: with influences ``I_1 >= I_2 >= ...``, the
+    projector is ``sum_j (I_j - I_{j+1}) N_j N_j^T / I_1``, where ``N_j`` is the nearest of the
+    first ``j``. Equal nonzero contrasts give the nearest-interface projector; a vanishing
+    contrast loses its influence continuously off its own interface; on an interface its pole
+    leaves the exact normal dyad. The vectors and weights are real even for complex materials.
+
+    **Every nearest-candidate choice is averaged over half a sample step**
+    (:data:`_SWITCH_WIDTH`). The nearest interval switches across the medial axis -- between
+    the intervals of a pair, and between pairs -- and the direction turns there by up to a
+    right angle. A shape parameter moves the switch, so every sample it crossed stepped, and
+    autodiff of the sampled field saw none of the steps, only the smooth part of the field
+    around them. Integrated across a window of four normal-grid pixels at orders (3, 3), the
+    derivative missed 9% to 16% of the change of total transmission on a tilted L polygon and
+    18% to 20% on a rotated rectangle painted under a second one, at ``shape_nvf_grid_size`` 64
+    to 512: a missing term, not a grid error. So each candidate (interval, then pair) carries the weight
+    ``exp(-b / w)``, where ``w`` is half the longer sample step (on the reduced basis, which the
+    samples are folded onto, so every spelling of a cell averages alike) and ``b`` is the
+    candidate's distance to its bisector with the nearest one, to first order: the gap between
+    their distances over the norm of the difference of their directions, which is the gap's
+    gradient. The nearest carries one. A switch then completes over about two samples wherever
+    it lies, and the same windows close to 0.15% and 0.12% at grid 128. Where the nearest itself
+    switches, both candidates sit at one distance and carry weight one, so the average is
+    continuous there; a third candidate's weight is measured against the nearest, and within
+    about a sample of a point where three candidates meet it can still step.
+
+    **What is averaged is the projector ``u u^T``, never the vector.** The direction from the
+    interface toward the sample turns over as the sample crosses the interface, which a
+    projector does not see and a sum of signed vectors does: averaged as vectors, a corner's
+    two directions -- one weighted fully, the other within half a step of it -- sum differently
+    on the two sides of the interface, and the sample steps as the edge sweeps across it.
+    Averaged as projectors there is nothing to step. The price is rank: inside a switch, and
+    wherever two material pairs of unequal contrast both carry influence, the projector is a
+    convex combination of dyads -- real, symmetric, of trace one and rank two, the average a
+    pixel straddling the switch would see. The factorization reads its three components
+    linearly (:func:`~wavebit.rcwa._engine.factorization._nvf_assemble`).
+
+    **Why the bisector distance and not the plain distance gap.** Beside a corner, the corner
+    point and the edge next to it are almost equidistant over a strip about ``sqrt(d w)`` wide
+    at distance ``d`` -- their distances touch rather than cross, and the field is continuous
+    there -- so averaging on the gap mixes them across that whole strip, on one side only: a
+    first-order bias in the sample step. Over the strip the bisector distance is half the
+    distance along the edge, and the strip is a sample wide.
+
+    **Limits.** As the grid is refined the average tends to the extension above with hard
+    choices. For one material pair, or pairs of equal contrast, that is the nearest-interface
+    projector the field was before 2026-10-15, and the two converge on one value. Where pairs of
+    unequal contrast mix, the limit is the projector-weighted threshold average; until
+    2026-10-15 the signed vectors were averaged and one projector formed from their sum. And the
+    average sees, at second order in the step, where the clipper split a straight interface:
+    two overlapping boxes of one material and the box they make no longer read the same
+    matrices to rounding. ``docs/validation/rcwa/normal-field-known-limits.md`` section 1b has
+    each of these measured against the field it replaced.
+
+    ``average=False`` takes every choice hard (:func:`_nearest_projector_fields`), the field
+    before 2026-10-15, bit for bit. The tensor shapes read it so
+    (:func:`~wavebit.rcwa._engine.tensor_shapes._projector`): their curves are exact candidates,
+    one each, while the same curve drawn as a polygon is many intervals, and averaging those
+    blurs the field where its facets meet -- the polygon route then no longer converges onto the
+    exact curve, which ``tests/rcwa/test_tensor_curve_normals.py`` holds it to. Their
+    derivatives keep the steps described above, on the polygonal pieces.
+
+    ``candidate_fields`` optionally supplies analytic candidates for uncut curved
+    interfaces, keyed by their unordered region pair. Each callable returns, at the
+    supplied Cartesian points, the squared distance to its exact curve and a unit vector:
+    from the interface toward the sample on both sides, as ``(p - foot) / |p - foot|`` is, and
+    on the interface itself -- a squared distance within :func:`_on_interface_threshold2` --
+    the interface normal. Off the interface the vector need not be the nearest-point one: the
+    tensor curve candidates carry the level-set direction
+    (:func:`~wavebit.rcwa._engine.tensor_shapes._curve_direction`). A curve is one candidate
+    of its pair with no intervals to average over; its exact curve replaces the polygon's
+    facets and corners without changing material contrasts or the actual-interface plan for
+    contacts and painted regions.
+    """
+    if not average:
+        return _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
+                                         interface_plan, transform, chunk, candidate_fields)
+    from wavebit.rcwa._engine.parametric import _BLEND_EXPONENT
+    A, E, L2, active = segment_data
+    ids = [i for group in interface_plan.groups for i in group]
+    groups = {}
+    for image_index, i in enumerate(ids):
+        piece = interface_plan.pieces[i]
+        key = tuple(sorted((piece.left, piece.right)))
+        if key[0] != key[1]:
+            groups.setdefault(key, []).append(image_index)
+    if not groups:
+        one = xp.ones(grid_shape, dtype=dtype)
+        zero = xp.zeros_like(one)
+        return one, zero, zero
+    A, E, L2 = periodic_segments(xp, A, E, L2, lattice, transform,
+                                interface_plan.images, interface_plan.groups)
+    extended = xp.asarray(ids, dtype=xp.int64)
+    active, contrasts = active[extended], contrasts[extended]
+    candidates = []
+    for key, indices in groups.items():
+        index = xp.asarray(indices, dtype=xp.int64)
+        valid = xp.sum(E[index]*E[index], axis=1) > 0.
+        field = None if candidate_fields is None else candidate_fields.get(key)
+        candidates.append((A[index], E[index], L2[index], contrasts[indices[0]], valid, field))
+    pts = _folded_sample_points(xp, grid_shape, lattice, dtype, transform)
+    reference = E[xp.argmax(xp.astype(active, xp.int32))]
+    cross = E[:, 0]*reference[1] - E[:, 1]*reference[0]
+    parallel = xp.all((cross == 0.) | ~active)
+    reference2 = xp.sum(reference*reference)
+    normal = xp.stack([reference[1], -reference[0]]) / xp.sqrt(
+        xp.where(reference2 > 0., reference2, xp.ones_like(reference2)))
+    scale = _cell_scale(xp, lattice, dtype)
+    threshold2 = _on_interface_threshold2(xp, lattice, dtype)
+    # The ratio weights below are formed in units of the cell: the power of two nearest the
+    # squared scale, which divides without rounding, so float64 is unchanged. JAX
+    # differentiates minimum / d2 through 1 / d2**2, and on its CPU backend a float32 square
+    # below the smallest normal number is flushed to zero: a sample nearer an interface than
+    # about 3.3e-10, in whatever unit lengths are given, read an infinite cotangent (0.33 nm
+    # with lengths in metres). In units of the cell every kept d2 exceeds half the
+    # on-interface threshold's (64 eps)**2, and its square stays normal at any length unit.
+    # Spelled as pow: JAX's exp2 is not exact at integers (127 of 160 powers off in float32).
+    unit2 = xp.pow(xp.asarray(2., dtype=dtype), 2*xp.round(xp.log2(scale)))
+    contrast = xp.stack([item[3] for item in candidates])
+    strengths = contrast**_BLEND_EXPONENT*xp.stack([
+        xp.astype(xp.any(item[4]), dtype) for item in candidates])
+    count = len(candidates)
+    width = _SWITCH_WIDTH*_sample_spacing(xp, grid_shape, lattice, dtype, transform)
+    # An interval of zero length is no candidate: it reads this squared distance, finite so
+    # that no infinity reaches a derivative, and carries no weight.
+    remote2 = (1e3*scale)**2
+    if chunk is None:
+        chunk = max(1, min(pts.shape[0], 1_500_000 // max(len(A), 1)))
+
+    def root(d2):
+        """``sqrt(d2)``, read as zero on an interface; the root never sees a zero argument."""
+        off = d2 > threshold2
+        return xp.where(off, xp.sqrt(xp.where(off, d2, xp.ones_like(d2))), xp.zeros_like(d2))
+
+    def bisector(gap, turn):
+        """A distance gap over the norm of the difference of the two directions: the distance
+        to the bisector, to first order. The floor keeps two equal directions finite."""
+        norm2 = xp.maximum(xp.sum(turn*turn, axis=-1),
+                           xp.asarray(_SAME_DIRECTION**2, dtype=dtype))
+        return gap/xp.sqrt(norm2)
+
+    def evaluate(p):
+        rows = xp.arange(p.shape[0])
+        distances, directions, projectors = [], [], []
+        for a, e, l2, _, valid, field in candidates:
+            if field is not None:
+                distance, direction = field(p)
+                dx, dy = direction[:, 0], direction[:, 1]
+                distances.append(distance)
+                directions.append(direction)
+                projectors.append(xp.stack([dx*dx, dx*dy, dy*dy], axis=-1))
+                continue
+            dist2, foot = _seg_dist(xp, p, a, e, l2)
+            dist2 = xp.where(valid[None, :], dist2, remote2)
+            nearest = xp.argmin(dist2, axis=1)
+            distance = dist2[rows, nearest]
+            off = dist2 > threshold2
+            length = root(dist2)
+            inverse = 1./xp.where(off, length, xp.ones_like(length))
+            n_edge = xp.stack([e[:, 1], -e[:, 0]], axis=-1)
+            edge2 = xp.sum(n_edge*n_edge, axis=1)
+            n_edge = n_edge / xp.sqrt(xp.where(edge2 > 0., edge2, xp.ones_like(edge2)))[:, None]
+            ux = xp.where(off, (p[:, None, 0]-foot[:, :, 0])*inverse, n_edge[None, :, 0])
+            uy = xp.where(off, (p[:, None, 1]-foot[:, :, 1])*inverse, n_edge[None, :, 1])
+            tx, ty = ux[rows, nearest], uy[rows, nearest]
+            # |u - t|**2 for two unit vectors, under the floor `bisector` puts on it.
+            turn2 = xp.maximum(2. - 2.*(ux*tx[:, None] + uy*ty[:, None]),
+                               xp.asarray(_SAME_DIRECTION**2, dtype=dtype))
+            # On the pair's own interface only the intervals through the sample count: the
+            # pole that leaves the exact normal there.
+            weight = xp.where((distance <= threshold2)[:, None], xp.astype(~off, dtype), xp.exp(
+                -(length - length[rows, nearest][:, None])/(xp.sqrt(turn2)*width)))
+            weight = xp.where(valid[None, :], weight, xp.zeros_like(weight))
+            total = xp.sum(weight, axis=1)
+            total = xp.where(total > 0., total, xp.ones_like(total))
+            wx = weight*ux
+            distances.append(distance)
+            directions.append(xp.stack([tx, ty], axis=-1))
+            projectors.append(xp.stack([xp.sum(wx*ux, axis=1), xp.sum(wx*uy, axis=1),
+                                        xp.sum(weight*uy*uy, axis=1)], axis=-1)/total[:, None])
+        d2 = xp.stack(distances, axis=1)
+        minimum = xp.min(xp.where(strengths[None, :] > 0., d2,
+                                  xp.asarray(float('inf'), dtype=dtype)), axis=1)
+        minimum = xp.where(xp.any(strengths > 0.), minimum, xp.ones_like(minimum))
+        on = minimum <= threshold2
+        # On an interface only the exact-interface weights below are used, and
+        # a zero-strength candidate (an interval whose two materials agree in
+        # this pass, as a magnetic-only shape's do for epsilon) is discarded
+        # everywhere -- `on` never looks at it. Form neither's inverse distance:
+        # its squared distance has no lower bound, in float32 a tiny one squares
+        # to zero, and the discarded 0 * inf poisons the cotangent. The kept
+        # ones are bounded below and formed in units of the cell (`unit2`).
+        ratio = xp.where(on, xp.ones_like(minimum), minimum/unit2)[:, None] / xp.where(
+            (d2 > 0.) & ~on[:, None] & (strengths[None, :] > 0.), d2/unit2, xp.ones_like(d2))
+        influence = strengths[None, :] * xp.where(on[:, None], xp.astype(d2 <= threshold2, dtype),
+                                                   ratio**(_BLEND_EXPONENT/2))
+        # The threshold average, in influence order: prefix j holds the j most influential
+        # candidates and contributes (I_j - I_{j+1}) times the average of their projectors,
+        # each weighted by its distance to the bisector with the prefix's nearest. Two
+        # candidates trading places in this order do so at equal influence, where the prefix
+        # they differ in contributes nothing; a zero influence contributes nothing anywhere.
+        order = xp.argsort(-influence, axis=1, stable=True)
+        ranked = influence[rows[:, None], order]
+        reach = root(d2)[rows[:, None], order]
+        toward = xp.stack(directions, axis=1)[rows[:, None], order]
+        projector = xp.stack(projectors, axis=1)[rows[:, None], order]
+        step = ranked - xp.concat([ranked[:, 1:], xp.zeros_like(ranked[:, :1])], axis=1)
+        best, best_toward = reach[:, 0], toward[:, 0]
+        mixed = xp.zeros_like(projector[:, 0])
+        for j in range(count):
+            if j:
+                nearer = reach[:, j] < best
+                best = xp.where(nearer, reach[:, j], best)
+                best_toward = xp.where(nearer[:, None], toward[:, j], best_toward)
+            share = xp.exp(-bisector(reach[:, :j+1] - best[:, None],
+                                     toward[:, :j+1] - best_toward[:, None, :])/width)
+            mixed = mixed + step[:, j][:, None]*xp.sum(share[:, :, None]*projector[:, :j+1], axis=1) \
+                / xp.sum(share, axis=1)[:, None]
+        peak = ranked[:, 0]
+        mixed = mixed / xp.where(peak > 0., peak, xp.ones_like(peak))[:, None]
+        xx, xy, yy = mixed[:, 0], mixed[:, 1], mixed[:, 2]
+        # A closed periodic set of parallel interfaces is a one-dimensional layer: its exact
+        # line normal, and no extension at all.
+        xx = xp.where(parallel, normal[0]*normal[0], xx)
+        xy = xp.where(parallel, normal[0]*normal[1], xy)
+        yy = xp.where(parallel, normal[1]*normal[1], yy)
+        live = xp.any(active)
+        return xp.stack([xp.where(live, xx, 1.), xp.where(live, xy, 0.),
+                         xp.where(live, yy, 0.)], axis=-1)
+
+    result = _chunked(xp, evaluate, pts, chunk, 3, A, E, contrasts, width)
+    return tuple(xp.reshape(result[:, i], grid_shape) for i in range(3))
+
+
+def _chunked(xp, evaluate, pts, chunk, width, *live):
+    """``evaluate`` over ``pts`` in chunks of ``chunk`` points: one ``(len(pts), width)`` array.
+
+    JAX scans it (:func:`_scanned_normals`). PyTorch differentiating in reverse mode -- some of
+    ``live`` requires grad, outside every ``torch.func`` transform and forward-mode level --
+    runs each chunk under ``torch.utils.checkpoint`` (non-reentrant, so the closure's tensors
+    are differentiated too). Without it autograd keeps every chunk's ``(points x intervals)``
+    temporaries until the backward pass, all at once: one backward pass through the L of
+    ``tests/rcwa/test_polygon_region.py`` beside a circle, which this route draws as a 256-gon,
+    passed 10 GB at ``shape_nvf_grid_size=128`` (checkpointed, 0.73 GB), and a finer grid
+    scales that by the square of the ratio. The checkpoint keeps a chunk's input and output and evaluates it again when
+    the backward pass reaches it. Anywhere else, the plain loop.
+    """
+    if 'jax' in xp.__name__:
+        return _scanned_normals(xp, evaluate, pts, pts.shape[0], chunk, width=width)
+    parts = range(0, pts.shape[0], chunk)
+    if 'torch' in xp.__name__:
+        import torch
+        from wavebit._common.backend import _functorch_active, forward_tangent
+        tensors = [t for t in live if isinstance(t, torch.Tensor)]
+        if (torch.is_grad_enabled() and not _functorch_active(torch)
+                and any(t.requires_grad for t in tensors)
+                and not any(forward_tangent(t) for t in tensors)):
+            from torch.utils.checkpoint import checkpoint
+            return xp.concat([checkpoint(evaluate, pts[lo:lo+chunk], use_reentrant=False)
+                              for lo in parts], axis=0)
+    return xp.concat([evaluate(pts[lo:lo+chunk]) for lo in parts], axis=0)
+
+
+def _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
+                               interface_plan, transform=None, chunk=None,
                                candidate_fields=None):
-    """A contrast-weighted extension of the nearest-interface normal projector.
+    """:func:`material_projector_fields` with every nearest choice taken hard: the field before
+    2026-10-15, which the tensor shapes still read (``average=False``).
+
+    A contrast-weighted extension of the nearest-interface normal projector.
 
     Keep only the nearest point per unordered pair of region labels: all its intervals
     have the same contrast, and a farther copy cannot increase its inverse-distance
@@ -657,6 +960,14 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
 
     This retains nearest-point spatial switches and the usual zero-vector tie;
     it does not promise global smoothness at medial axes or disappearing interfaces.
+
+    ``average=False`` takes every choice hard (:func:`_nearest_projector_fields`), the field
+    before 2026-10-15, bit for bit. The tensor shapes read it so
+    (:func:`~wavebit.rcwa._engine.tensor_shapes._projector`): their curves are exact candidates,
+    one each, while the same curve drawn as a polygon is many intervals, and averaging those
+    blurs the field where its facets meet -- the polygon route then no longer converges onto the
+    exact curve, which ``tests/rcwa/test_tensor_curve_normals.py`` holds it to. Their
+    derivatives keep the steps described above, on the polygonal pieces.
 
     ``candidate_fields`` optionally supplies analytic candidates for uncut curved
     interfaces, keyed by their unordered region pair. Each callable returns, at the
