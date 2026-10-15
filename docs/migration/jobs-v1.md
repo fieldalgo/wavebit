@@ -66,8 +66,8 @@ door gives, and an assignment refused leaves the field as it was.
 ## Running one
 
 ```python
-import numpy as np, wavebit
-from wavebit import JobSpec, Numerics, Sweep, Layer, Stack, Incidence, run
+import numpy as np
+from wavebit.compat.legacy import JobSpec, Numerics, Sweep, Layer, Stack, Incidence, run
 
 eps_hi = 12.25
 spec = JobSpec(

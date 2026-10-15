@@ -2,7 +2,21 @@
 
 Written: 2026-08-11.
 
-Updated 2026-09-28 (latest): public convolution matrices and the `solve_conv` input use the
+Updated 2026-10-14 (latest): manifest version **21** publishes the renamed index conversions,
+`eps_from_refractive_index` and `refractive_index_from_eps` in `material_quantity.conversions`
+and `from_refractive_index` in `material_dispersion` -- names a consumer calls, and the old ones
+are gone rather than aliased.
+
+Updated 2026-10-13: manifest version **20** integrates the RCWA contract with the general and
+periodic FDTD capabilities. Its detailed `paths`, `results`, refusal tables and `solvers` entries
+describe the compatibility interface (`solvers.rcwa.entry_point` is
+`wavebit.compat.legacy.rcwa`, `solvers.fdtd.entry_point` is `wavebit.compat.legacy.fdtd`); a new
+`current_lifecycle` key names the current `wavebit.rcwa` / `wavebit.fdtd` modules, their
+`check` / `prepare` / `run`, `wavebit.CheckReport` and the `wavebit.Job` schema. The FDTD versions
+the TL;DR names (10 to 12; the branch reached 19) were counted on the FDTD branch, beside the
+RCWA `10` to `12` below.
+
+Updated 2026-09-28: public convolution matrices and the `solve_conv` input use the
 cell centre (`amplitude-sp-frame.md` §8). `lattice.fourier_origin = 'cell_centre'` and
 `lattice.fourier_origin_expression` are additive keys, so the manifest version is unchanged.
 Private builders and ordinary `solve()` keep their arithmetic and outputs. Hand-built
@@ -154,7 +168,9 @@ middle of, so the manifest is tied to what the solver *does* rather than to what
 `lattice.refused_on_oblique` describes the two refusals a skewed cell carries, in prose. The
 same two are also listed by name in `paths_refused_on_oblique` and
 `factorizations_refused_on_oblique`, because a consumer deciding what to recommend needs a
-membership test and prose is not one.
+membership test and prose is not one. Since 2026-08-26 there is one: the block path, the only
+path refused there, was removed, so `paths_refused_on_oblique` is empty and the prose describes
+`factorization='li'` alone.
 
 A third list, `normal_methods_refused_on_oblique`, is **empty** and kept rather than dropped —
 it held three entries until 2026-08-21, when all four normal-field constructions gained the
@@ -169,7 +185,7 @@ acts on — so a mismatch would leave the document reading correctly and behavin
 ## The one fact that had to become machine-readable (2026-08-20)
 
 `material_quantity` says what a material number *is*: `quantity: 'permittivity'`, relative,
-complex, `Im(eps) > 0` for loss, the `Material(epsilon, mu=1.0)` type it is written as, the
+complex, `Im(eps) > 0` for loss, the `Material(epsilon, mu=None)` type it is written as, the
 scalar shorthand, the two conversion helpers, and a `retired` map from every old spelling to
 its replacement.
 
@@ -183,7 +199,9 @@ key and refuse the run instead of quietly solving a different structure.
 `retired` is *derived* from the same table the solver's own refusals are generated from
 (`_core/domain.RETIRED_MATERIAL_NAMES`) rather than restated beside it, which is what keeps
 the promise true of the list rather than of a copy of it. Same reasoning as "the constraint
-that is stated twice" above, applied before the second spelling had a chance to drift.
+that is stated twice" above, applied before the second spelling had a chance to drift. Since
+2026-08-26 there is no `retired` map: the retired spellings were deleted rather than refused by
+name, the table went with them, and the key was removed without a version bump.
 
 `MANIFEST_VERSION` went `4` -> `5` for this, and the bump is the point: a rename alone would
 not have earned one, since a consumer reading unknown keys degrades gracefully. A changed
@@ -242,6 +260,8 @@ The `z_coupled` entry is the one to watch, and it has already turned over once: 
 describe work that existed but was not reachable — the first-order operator written and pinned with
 nothing dispatching to it. It now reads `supported: true`, and its `why` carries the two limits
 that ride with it (`layer_algorithm` must be `ETM`, no `mu`) — and it has already been edited
-once more since, when field reconstruction landed and stopped being one of them. That is the shape
+once more since, when field reconstruction landed and stopped being one of them. Since
+2026-09-24 it names neither limit: ETM and SMM are both public choices, `mu` is carried, and every
+`materials[]` entry, `patterned_z_coupled` included, reads `supported: true`. That is the shape
 these entries are meant to take: a `true` with its edges named, rather than a `false` that
 quietly becomes stale the day the capability lands.

@@ -49,9 +49,12 @@ Sphinx gettext catalogs live under `docs/locales/ko/LC_MESSAGES/`. Untranslated
 passages fall back to English on the Korean site, so every page remains usable.
 The homepage and all forty imported course chapters have complete Korean Markdown
 overlays under `docs/locales/ko/pages/`. Their source is loaded only in the Korean
-build; English pages remain canonical. Maintained developer pages such as the
-[current implementation map](source-map.md) may also provide complete overlays, recorded
-separately from the imported course translations in the language inventory. Other pages use gettext where available
+build; English pages remain canonical. Maintained guide and developer pages may also provide
+complete overlays — currently the [current implementation map](source-map.md),
+[recorded verification](verification.md), [run records](../guide/run-records.md),
+[exceptional points](../guide/rcwa/exceptional-points.md) and
+[how the FDTD solver models a problem](../guide/fdtd/model.md) — recorded separately from the
+imported course translations in the language inventory. Other pages use gettext where available
 and otherwise display an explicit English-fallback notice. Localized SVG and PNG
 assets live under `docs/locales/ko/assets/` with the same canonical relative paths.
 The source-read extension selects them without changing English content.

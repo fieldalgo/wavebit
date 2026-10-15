@@ -17,7 +17,7 @@ The device and precision contracts below belong to the legacy RCWA factory.
 ![NumPy, JAX and PyTorch](../figures/backends.png "Backends")
 
 * [NumPy](https://github.com/numpy/numpy) — the baseline. No autodiff, no GPU, nothing to
-  compile, and the only backend that checks its own output.
+  compile.
 * [JAX](https://github.com/google/jax) — autodiff and XLA. `jax.grad` works straight off the
   public API; `jax.jit` additionally needs a frozen geometry ([`autodiff.md`](../guide/common/autodiff.md)).
 * [PyTorch](https://github.com/pytorch/pytorch) — autodiff eagerly, with no record to freeze
@@ -127,7 +127,7 @@ Not a matter of taste, and not the same answer for a forward solve as for a diff
 
 | Situation | Backend |
 | --- | --- |
-| Forward solves, small to medium | **NumPy** — lightest to install, and the one that warns when a result cannot be physical |
+| Forward solves, small to medium | **NumPy** — lightest to install |
 | Differentiating a shape recipe | **jitted JAX** at every size measured — 2.3x PyTorch at `truncation_order=3`, 1.3x at 13 — repaying its compilation in 13 steps at worst |
 | Differentiating a raster, `truncation_order ≲ 5` | **eager PyTorch**, outright; JAX's compilation does not repay itself at that size |
 | Differentiating a raster, `truncation_order ≳ 7`, long run | **jitted JAX**, roughly 1.5x PyTorch, repaying compilation in under a dozen steps |

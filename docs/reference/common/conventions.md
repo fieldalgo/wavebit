@@ -45,7 +45,7 @@ rather than accepted. See "the retired spellings" below.
 `Material` is the type that carries one:
 
 ```python
-wavebit.Material(epsilon, mu=1.0)
+wavebit.Material(epsilon, mu=None)
 ```
 
 Frozen, and a registered JAX pytree whose children are `(epsilon, mu)` — a material is a
@@ -79,7 +79,7 @@ is the third and is not an assignment at all but a **sampled field**, one number
 which is exactly why topology optimisation reaches for it. A field has one quantity in it, so
 the raster's permeability is a second array (`mu=`) rather than a second slot on an object.
 
-### The retired spellings, and why they are refused by name
+### The retired spellings, and why they were refused by name
 
 | retired | now | what it names |
 | --- | --- | --- |
@@ -89,14 +89,17 @@ the raster's permeability is a second array (`mu=`) rather than a second slot on
 | `n_index` (parametric shape key) | `material` | a shape's material |
 | `ucell_materials` | — | deleted; it was assigned by every backend and read by nothing |
 
-Every one of these raises, naming its replacement **and** saying that the quantity changed
-with it. That second half is the point. A user who renames the keyword and keeps the number
-has not made a mistake anything downstream can see: `3.5` is a perfectly good permittivity, so
+Until 2026-08-26 every one of these raised, naming its replacement **and** saying that the
+quantity changed with it. That second half was the point. A user who renames the keyword and
+keeps the number has not made a mistake anything downstream can see: `3.5` is a perfectly good permittivity, so
 the solve runs, conserves energy, and answers a different question — the README quickstart with
 every material literal left at the index it used to be sums `R` to 0.1753 where the migrated
 scene gives 0.2053, with no warning. The two are close on purpose, as an argument: a migration
 that broke loudly would announce itself, where a shift the size of a truncation wobble gets
-believed. Silence is not available here, so the refusal is.
+believed. Silence is not available here, so the refusal is. Since 2026-08-26 the spellings are
+deleted rather than refused by name: each door reports one as what it now is, an unknown keyword,
+layer key or shape key, and a name spelled like an index (`n_top` handed to `solve()`, `n_index`
+in a shape) is still told that every material slot takes a relative permittivity.
 
 Two conversions are exported for callers holding the other quantity:
 
@@ -228,7 +231,7 @@ This is S4's convention (*"the unit cell is the Wigner-Seitz cell centered at th
 Meep's. It arrived on 2026-08-31; before it the origin was the cell's corner, and both the
 README and `oblique-lattice.md` opened their raster example by computing the cell centre by
 hand. Internally the Fourier machinery still integrates over `u, v` in `[0, 1]`, and
-`_core.lattice.sample_grid` is that internal corner frame. Reaching for it from user-facing
+`wavebit.lattice.sample_grid` is that internal corner frame. Reaching for it from user-facing
 code misplaces a structure by half a period, silently.
 
 Since 2026-09-28 every published Fourier operator also uses the centre:

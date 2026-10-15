@@ -1,5 +1,11 @@
 # What a solve answers — and why the field state is off by default
 
+:::{note}
+The `answers` keyword belongs to the retained `wavebit.compat.legacy` solver. The current
+`rcwa` lifecycle declares it for you: `rcwa.Outputs(fields=True)` keeps `'field'`, and otherwise
+a solve keeps `'amplitude'` (`src/wavebit/rcwa/_adapt.py`). The measurements below are unchanged.
+:::
+
 Written: 2026-08-20; runtime allocation and arithmetic follow-ups
 on 2026-09-09 in sections 9–11.
 Sections 1–8 were measured on an Apple M4 (16 GB), NumPy 2.5.1 against Accelerate, float64,

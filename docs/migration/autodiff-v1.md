@@ -84,7 +84,7 @@ same function works with NumPy, JAX and Torch arrays; no FDTD-specific shape
 object is introduced.
 
 ```python
-from wavebit import layer_thicknesses, Stack
+from wavebit.compat.legacy import layer_thicknesses, Stack
 
 # Use float64 design variables for FDTD geometry and gradient comparisons.
 weights = jnp.array([-.2, .3, 0.], dtype=jnp.float64)
@@ -392,7 +392,7 @@ def transmission(width, backend):
     return wavebit.rcwa(backend=backend, structure=[dict(background=1.0, shapes=[disc])],
                         ...).solve().T
 
-primal, tangent = jax.jvp(lambda w: transmission(w, 1), (jnp.asarray(w0),), (jnp.asarray(1.0),))
+primal, tangent = jax.jvp(lambda w: transmission(w, 'jax'), (jnp.asarray(w0),), (jnp.asarray(1.0),))
 ```
 
 and on PyTorch:
@@ -402,7 +402,7 @@ from torch.autograd import forward_ad
 with forward_ad.dual_level():
     width = forward_ad.make_dual(torch.tensor(w0, dtype=torch.float64),
                                  torch.tensor(1.0, dtype=torch.float64))
-    tangent = forward_ad.unpack_dual(transmission(width, 2)).tangent
+    tangent = forward_ad.unpack_dual(transmission(width, 'torch')).tangent
 ```
 
 A forward pass carries one input direction, a reverse pass one output, so forward

@@ -22,7 +22,8 @@ optical convergence or opening derivative:
   [`tests/references/golden_meep_1d.npz`](../../tests/references/golden_meep_1d.npz) (the 1D
   benchmark, both polarisations, two resolutions, with a planar closed-form calibration
   gating the run) and `golden_meep_crossed.npz` (a crossed grating at a conical mount,
-  per-order complex amplitudes), and CI reads them on every push: on the benchmark grating at
+  per-order complex amplitudes), and CI reads them on every push to `develop` and every pull
+  request: on the benchmark grating at
   the 5 nm grid, our worst per-order gap against the converged RCWA answer is 6.6e-4 (TE) /
   6.9e-4 (TM), against Meep's own 4.9e-4 / 7.4e-4 on that grid — read both against the fact
   that the Meep column moves by 1.6e-3 between two of its own PML settings at that same
@@ -43,7 +44,8 @@ optical convergence or opening derivative:
 * **Analytic gradients against finite differences**, for the parameters an optimizer moves.
 
 The suite is [`tests/`](https://github.com/fieldalgo/wavebit/tree/develop/tests); everything with a statable criterion lives there, including the
-slower cross-backend and optimizer checks. CI runs its default set on every push. The tests of
+slower cross-backend and optimizer checks. CI runs its default set on every push to `develop` and
+every pull request. The tests of
 the experimental conforming NVF module and its study instruments form a
 [research tier](https://github.com/fieldalgo/wavebit/blob/develop/tests/README.md#the-research-tier) that CI does not run; it is run while that
 research code is being developed. Every eager NumPy solve also checks what it is

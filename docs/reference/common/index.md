@@ -27,6 +27,10 @@ Physical materials and units are shared by both solvers. A common declaration do
 .. autoclass:: wavebit.TabulatedMaterial
    :members:
 
+.. autofunction:: wavebit.eps_from_refractive_index
+
+.. autofunction:: wavebit.refractive_index_from_eps
+
 .. autoclass:: wavebit.Units
    :members:
 
@@ -36,11 +40,16 @@ Physical materials and units are shared by both solvers. A common declaration do
 .. autoclass:: wavebit.Execution
    :members:
 
+.. autoclass:: wavebit.Backend
+   :members:
+
 .. autoclass:: wavebit.CheckReport
    :members:
 
 .. autoclass:: wavebit.Job
    :members:
+
+.. autofunction:: wavebit.run
 
 .. autoclass:: wavebit.DiffractionOrders
    :members:

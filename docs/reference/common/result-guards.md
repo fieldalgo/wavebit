@@ -49,7 +49,7 @@ in either direction. If `1.1` can be the correct value, a warning on `1.1` carri
 information about whether this `1.1` is.
 
 The library had already settled the same question the other way once, in
-`src/wavebit/rcwa/plotting.py`: `refractive_index_from_eps` takes the principal root and
+`src/wavebit/materials/response.py`: `refractive_index_from_eps` takes the principal root and
 deliberately does not repair the branch, because a helper cannot know whether a tiny negative `Im`
 is noise or a deliberately active medium. It hands that judgement to its caller. `check_physical`
 made the judgement instead, and made it wrong on every active structure.

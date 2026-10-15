@@ -83,7 +83,7 @@ Through wavebit on 2.13.0:
 - a 1D TM grating's thickness second derivative read 1.1801616522e-04 for 1.1001006774e-04;
 - a 2D raster's read 760.746214 for 812.595272 on ETM, and 725.018988 on SMM with field values.
 
-The full list is in [`docs/guide/common/autodiff.md`](../guide/common/autodiff.md). A related reverse-over-forward
+The full list is in [`docs/migration/autodiff-v1.md`](../migration/autodiff-v1.md#forward-mode). A related reverse-over-forward
 route (`torch.func.jvp`, then `backward()` to a parameter captured with `requires_grad`) has the
 same before-and-after: wrong on 2.13.0 and 2.14.1, right on 2.15.0 and the nightly.
 

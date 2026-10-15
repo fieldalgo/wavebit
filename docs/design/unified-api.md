@@ -1,14 +1,16 @@
 # Unified RCWA and FDTD API: design and implementation checkpoint
 
-Status: the shared public lifecycle, materials, source layout and bilingual
-learning-site migration are implemented in the integration working tree. Focused
-acceptance checks have passed; the full default test suite is still running.
-This is an unreleased implementation checkpoint, not a release or a claim of
-universal physical convergence.
+Status (updated 2026-10-15): implemented. The shared public lifecycle, materials,
+source layout and bilingual learning-site migration landed on develop in `4272c7ce`
+(2026-10-13): `wavebit.Job` / `wavebit.run`, `wavebit.rcwa` and `wavebit.fdtd`.
+`rcwa.Polygon` regions followed in `97c6d73f` (2026-10-15), and both are part of the
+0.0.2 and 0.0.3 releases. [Section 14](#14-what-of-the-proposal-is-implemented-2026-10-15)
+marks, item by item, what of the proposal is implemented today and what is still a
+proposal. None of this is a claim of universal physical convergence.
 
 Design written: 2026-10-07. Implementation checkpoint: 2026-10-13, against the
-working tree based on `3116a50a`. The evidence below describes those uncommitted
-integration changes, not the contents of that base commit alone.
+working tree based on `3116a50a`, committed as `4272c7ce`. The evidence in §13
+describes that commit, not the contents of the base commit alone.
 
 Sections 1–12 preserve the accepted design and its original rationale. Their
 proposed examples and future-tense requirements are design history; the current
@@ -259,7 +261,8 @@ another_result = prepared.run(another)
 ```
 
 This example is a proposed homogeneous film API, not an executable example of
-the reviewed commits. A Layer can also carry typed 2D regions or a sampled
+the reviewed commits. (It runs as written since `4272c7ce`; the JAX preparation
+needs x64 enabled first, as §2 says.) A Layer can also carry typed 2D regions or a sampled
 epsilon field. A raster is an explicitly sampled quantity, not an array of
 Material objects. A separate mu field describes magnetic raster data.
 
@@ -332,6 +335,9 @@ ey = result.outputs["probe"].values
 prepared = fdtd.prepare(problem, numerics=numerics, backend="jax")
 result = prepared.run(problem)
 ```
+
+(Since `4272c7ce` these declarations are the public `wavebit.fdtd` types and
+construct as written.)
 
 The source amplitude convention is electric-field amplitude for PlaneWave,
 with phase and normalization explicitly recorded in source references.
@@ -1151,3 +1157,32 @@ and temporal refinement for these four problems. They are not a broadband,
 oblique, lossy, tensor, three-dimensional or all-backend convergence guarantee.
 Raw FDTD pulse energies are not compared to monochromatic RCWA powers; the
 comparison uses each method's declared or measured incident normalization.
+
+## 14. What of the proposal is implemented (2026-10-15)
+
+Checked against `src/` on develop at 0.0.3. "Implemented" means the public name
+exists and behaves as the section describes within the scope §13 states; it does
+not extend that scope.
+
+| Proposal | Status | Where |
+| --- | --- | --- |
+| One lifecycle for both solvers: `check`, `prepare`, `run`, `Prepared.validate`, `Prepared.run(problem)` (§1, §2) | implemented | `src/wavebit/rcwa/_lifecycle.py`, `src/wavebit/fdtd/_api.py` |
+| Backend, device and precision vocabulary; a JAX double-precision request without x64 refused with the remedy; importing `wavebit` imports no optional backend and changes no precision (§2) | implemented | `src/wavebit/_common/execution.py` |
+| `prepared.report` and `prepared.contract` (§2, §7) | implemented | the two `Prepared` types |
+| `Material`, `ConductiveMaterial`, `DispersiveMaterial`, `TabulatedMaterial` (with `from_refractive_index`), `Drude` / `Lorentz` / `Debye`, `model.at(...)` returning `MaterialResponse`; `materials.load` and `materials.available` (§3, §10) | implemented, with the constructor signatures of §3 | `src/wavebit/materials/` |
+| An explicit material-fitting operation (§3, §10) | still a proposal: no fitting API is exposed | -- |
+| `Units(length=...)` and the fixed public units of §4 | implemented | `src/wavebit/units.py` |
+| `rcwa.Problem`, `Stack`, `Layer`, `Region`, `Excitation`, `Outputs`, `Numerics` and the source types (§5) | implemented; the §5 example runs. Region geometry is `Rectangle`, `Circle`, `Ellipse` and, since `97c6d73f`, `Polygon` on the painting route, refused by name where a route cannot build it (Li, `nvf_projector='circular'`, tensor materials) | `src/wavebit/rcwa/` |
+| `rcwa.operators` and `rcwa.experimental` (§5) | implemented, as submodules imported explicitly | `src/wavebit/rcwa/operators.py`, `src/wavebit/rcwa/experimental/` |
+| Detuning as explicit, recorded policy (§8) | implemented: `rcwa.Numerics(detuning=None)` is the default and solves the requested point | `src/wavebit/rcwa/numerics.py` |
+| `fdtd.Problem`, `Scene`, `Domain`, `Boundaries`, `Structure`, `PlaneWave`, `GaussianPulse`, `Outputs`, `Record`, `Numerics`, `UniformGrid`, `Duration`, `PML`, with the PML outside the physical domain (§6) | implemented; CPU and double precision only (§13) | `src/wavebit/fdtd/` |
+| FDTD `GaussianBeam`, mode sources and monitors, decay termination, nonuniform grids, GPU (§6) | not implemented, and not exposed | -- |
+| `fdtd.Numerics.geometry_ranges` (§7) | implemented | `src/wavebit/fdtd/numerics.py` |
+| Host-only topology decisions rejected under an external transform (§7) | implemented: since 2026-10-15 an RCWA `Prepared.run` refuses a JAX-traced geometry value (`prepared.host_topology`, `78149a3a`, `82a6b510`); RCWA shape derivatives go through PyTorch | `src/wavebit/rcwa/_lifecycle.py` |
+| `outputs`, `validity`, `diagnostics`, `provenance` on every result; `DiffractionOrders` with `order(m, n)`, `FieldSamples`, `SpectralFieldSamples`, `RawDiffractionSpectrum`, `TimeSeries` (§8) | implemented | `src/wavebit/observations/` |
+| Shared error families with a stable code and input path (§9) | implemented | `src/wavebit/errors.py` |
+| `wavebit.job/v1`, `Job.to_json` / `from_json` / `key`, and `wavebit.run(job)` for a `Job` only (§9) | implemented; saved run records added beside it (`wavebit.records`, 2026-10-13) | `src/wavebit/jobs.py`, `src/wavebit/records.py` |
+| Package layout (§10) | implemented as drawn, plus private modules not listed there | `src/wavebit/` |
+| The old periodic FDTD route kept behind an explicit compatibility entry point (§11) | implemented: `wavebit.compat.legacy.fdtd`, beside `legacy.rcwa` and `legacy.fd` | `src/wavebit/compat/legacy.py` |
+| Whole-repository layout (§12) | implemented for `src/`, the test categories, the documentation sections, `examples/`, `tutorials/` and `studies/`. Not created: `benchmarks/`, a cross-solver tutorials folder, the guide's how-to and troubleshooting folders, release notes, and a glossary page | the repository root |
+| Study records as a README, a run script and `records/<record-id>/manifest.json` (§12) | not adopted: a study is a script with an optional committed `records/` log, and the raw study records left the repository on 2026-10-14 (`0f2bb088`) | `studies/` |

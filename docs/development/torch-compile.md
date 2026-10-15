@@ -224,8 +224,9 @@ This would be worth revisiting if any of the following changed:
 - **The cost stops being dense eigendecomposition** — a different mode solver, or batching many
   small solves so per-call overhead dominates again.
 
-Until then, `jax.jit` is the working answer for a traced solve; see "Differentiating a
-simulation" in the README.
+Until then, `jax.jit` is the working answer for a traced solve; see
+[differentiating a solve](../migration/autodiff-v1.md) (the README's "Differentiating a
+simulation" when this was written).
 
 ## 6. 2026-10: Inductor miscompiles the complex identity, so wavebit runs eagerly
 
@@ -285,7 +286,8 @@ returned 5.0 with no error). And the arithmetic is not wrong; the compiler is. S
 its frames out of the graph. `src/wavebit/_common/backend.py::eager_under_torch_compile` decorates
 every class in `wavebit.__all__`, every type a public call returns and every wavebit base of
 either — each public method, property accessor, `classmethod`/`staticmethod` and dunder of the
-class's own namespace — and the public functions: 65 sites. A class only ever built and used
+class's own namespace — and the public functions: 65 sites. Since 2026-10-13 the `wavebit.rcwa`
+and `wavebit.fdtd` lifecycle functions and their declaration and result types are doors as well. A class only ever built and used
 inside a door, and never handed to a caller, needs none: everything a door calls is already
 kept out. A door
 
