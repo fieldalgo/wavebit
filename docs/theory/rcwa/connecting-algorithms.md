@@ -622,8 +622,16 @@ row a dark order came out at 0.50):
 SMM's cascade, joined through its gap medium, stayed at 1e-15 to 3e-14 on every split, and the
 uncut stack's ETM sits where the right-hand column does. The field row is SMM's field state,
 which is read off the gap and takes no labels (above), so it does not care how the slices decide; while
-it took the ETM's labels it met the same pivot, at 2.2e-5 and 2.3e-11. Two things now make a cut
-layer one layer:
+it took the ETM's labels it met the same pivot, at 2.2e-5 and 2.3e-11.
+
+The middle column is the LAPACK's as much as the rule's. Across the plane each turned row of `a`
+is `(1 + Y) - (1 - Y)`, two O(1) terms whose difference is that mode's `Y`; in the first row that
+is 2e-13 for one mode and 1e-19 and 1e-31 for two more, which are rounding alone. The numbers above
+are Accelerate's (macOS). OpenBLAS rounds those two rows to a residue that swamps them and lands on
+the right limit, and only the 2e-13 mode's lost digits remain: 4.2e-10 and 4.1e-9 for the two TE
+rows on arm64, 5.7e-10 and 6.8e-9 on x86-64; TM and conical read 5.4e-7 and 2.0e-8 on arm64.
+The tests therefore ask a control only to break the bound, which those lost digits do on every
+LAPACK. Two things now make a cut layer one layer:
 
 - `layer_runs` joins adjacent layers whose slots agree to `sqrt(eps)` of the largest entry over
   all their slots, under the same double-negative verdict, and `run_k0_d` hands every slice of a
@@ -652,8 +660,13 @@ layer one layer:
   label pivots on 1.7e-18 there, which only the whole run's `exp(-k0 q d)` balances -- and
   `W^-1 W (I + Y)` put an exact zero on the next slice's `a`: `LinAlgError` where the uncut layer
   is right to 2.4e-13 (TE, `eps = 5.79` on itself, 0.5 um + 60 um, `theta = 0.43+0.067j`; also
-  TM, 2D, and gain at a real angle). Stepped exactly, a split layer is the uncut layer, the
-  derivative included: `W_b - W` stays zero along any direction that keeps the slices equal.
+  TM, 2D, and gain at a real angle). Past `2**53`, `1 + Y` rounds to `Y`, so the plain form's
+  diagonal is `Y` times the difference of two roundings of one: zero where they round alike, as
+  under Accelerate, and finite noise where they do not, as under OpenBLAS on TE (31 there, which
+  the mode, in its limit, never feels: 3.9e-14 from the uncut layer; TM still raises). Either way
+  the identity is gone, and that, not the raise, is what the test reads. Stepped exactly, a split
+  layer is the uncut layer, the derivative included: `W_b - W` stays zero along any direction that
+  keeps the slices equal.
 
 At a real `k_par` a passive layer's modes do not grow, with one exception, and it is the same
 defect: a truncated metal operator can hold a spurious root with `Im(q**2) > 0`. A 295 nm
@@ -690,7 +703,10 @@ References); a graph that has not settled is taken as one block. ETM and SMM use
 on the run's thickness as above, and the ETM steps across a run's planes exactly
 (`_run_pq`). Without the runs a 20 um + 1.5 um gyrotropic layer put first-order SMM 0.75 off the
 uncut one: its interface matrix held 29 eigenvectors twice (cond 5.5e17), and this path's SMM has no
-gap medium to join slices through. The coherent-source door (`excitation=`,
+gap medium to join slices through. That is garbage on every LAPACK (3.1e5 under OpenBLAS arm64). The
+first-order ETM pivots on rounding instead, and its error went from 1.4e-10 under Accelerate to 0.47
+under OpenBLAS arm64 and 2.8e-14 on x86-64, at `theta = 0.5+0.3j`; what holds everywhere is that
+the slices swap 58 modes apart, and that is what the test's control reads for the ETM. The coherent-source door (`excitation=`,
 `illumination._cascade`) runs its own first-order SMM cascade and took no cap until 2026-10-10: the
 gain row below was 1.1e-2 off there at 50 um and came back as `R = 5861` (for 3.659) at 200 um. It
 now caps on the run's thickness as well, at 2e-15 and 7e-15 in `R`

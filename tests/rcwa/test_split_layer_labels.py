@@ -20,6 +20,12 @@ exact step away, and must break each case. Since 2026-10-15 a complex ``k_par`` 
 and they keep a split layer the uncut one without the cap's thickness at all; so each case is held
 on the labels a solve takes and on the rule alone (``maxvol_labels.MODE = 'off'``), and the
 controls take the runs away from the rule alone, which is where the runs are load-bearing.
+
+What a control may claim is what holds on every LAPACK. Taken back, the old rule leaves the ETM
+pivoting on rounding, and where that rounding falls is the LAPACK's: 1 um + 8 um TE is 3.0e-1 off
+under Accelerate (macOS) and 4.2e-10 under OpenBLAS (arm64; 5.7e-10 on x86-64). So the amplitude
+and field controls ask only that the test's own bound fails, which digits lost above rounding
+guarantee everywhere, and the exact step's control reads the step itself.
 At a real ``k_par`` in a passive layer no cap fires, whatever thickness it is handed -- with one
 exception, the spurious root a truncated metal operator can hold above the real axis, where a
 split metal grating's ETM field was 1.5e-11 off the uncut one and now agrees. The last tests pin
@@ -96,18 +102,23 @@ def _relative(a, b):
     return float(np.max(np.abs(a - b)) / np.max(np.abs(b)))
 
 
-#: (path, thick slice in nm, what the per-layer control left the split ETM at)
-SPLITS = [('te', 8e3, 3.0e-1), ('te', 6e3, 1.2e-3), ('tm', 4.3e3, 1.9e-7),
-          ('conical', 4.3e3, 1.7e-8)]
+#: (path, thick slice in nm)
+SPLITS = [('te', 8e3), ('te', 6e3), ('tm', 4.3e3), ('conical', 4.3e3)]
 
 
-@pytest.mark.parametrize('path,thick,before', SPLITS,
-                         ids=[f'{p}-1+{t / 1e3:g}um' for p, t, _ in SPLITS])
-def test_a_split_layer_answers_as_the_uncut_one(rule, per_layer, path, thick, before):
+@pytest.mark.parametrize('path,thick', SPLITS, ids=[f'{p}-1+{t / 1e3:g}um' for p, t in SPLITS])
+def test_a_split_layer_answers_as_the_uncut_one(rule, per_layer, path, thick):
     """Split ETM against the uncut stack's SMM: within the uncut stack's own ETM level, 1e-12.
 
-    The control (each slice on its own thickness) must leave it at least a decade above, at
-    what it was before -- 3.0e-1 at 1 um + 8 um TE, 1.7e-8 conical.
+    The control (each slice on its own thickness) must break that bound, and how far is the
+    LAPACK's. The thick slice turns modes the thin one keeps; across the plane between them,
+    which reflects nothing, each turned row of the ETM's ``a`` is ``(1 + Y) - (1 - Y)``, two O(1)
+    terms whose difference is that mode's ``Y``. In the 1 um + 8 um TE stack that is 2e-13 for one
+    mode, which keeps all but ``eps/|Y|`` of itself on any LAPACK, and 1e-19 and 1e-31 for two
+    more, which are rounding alone. The first sets the floor; where the other two round decides
+    the rest. Off the uncut stack, Accelerate (macOS) / OpenBLAS arm64 / OpenBLAS x86-64:
+    3.0e-1 / 4.2e-10 / 5.7e-10 at 1 + 8 um TE, 1.2e-3 / 4.1e-9 / 6.8e-9 at 1 + 6 um; TM 1.9e-7 /
+    5.4e-7, conical 1.7e-8 / 2.0e-8. With the runs every path is within 5e-13 on both local ones.
     """
     merged = ([UNIFORM, GRATING], [1000.0 + thick, 4800.0])
     split = ([UNIFORM, UNIFORM, GRATING], [1000.0, thick, 4800.0])
@@ -119,7 +130,7 @@ def test_a_split_layer_answers_as_the_uncut_one(rule, per_layer, path, thick, be
 
     per_layer()
     broken = _relative(_amplitudes(*split, 'ETM', path), reference)
-    assert broken > before / 10, broken
+    assert broken > 1e-12, broken
 
 
 def _amplitudes_2d(layers, thickness, algorithm):
@@ -154,9 +165,15 @@ def test_the_field_of_a_split_layer_is_the_uncut_field(rule, per_layer, path):
 
     The ETM's field state walks each layer's ``+`` amplitude on the ETM's labels, so it needs the
     run: with each slice deciding alone its field went 6.3e-1 (TE), 9.7e-8 (TM) and 4.6e-9
-    (conical) off. SMM's walks the gap amplitude between layers and reads no labels
+    (conical) off under Accelerate, and 8.3e-10, 8.4e-7 and 5.5e-8 under OpenBLAS arm64 (TE
+    4.5e-10 on x86-64) -- the same pivot on rounding as the amplitudes above. SMM's walks the gap
+    amplitude between layers and reads no labels
     (:func:`~wavebit.rcwa._engine.scattering._field_state`), so it is the uncut field either way --
     which it was not while it was rebuilt on the ETM's labels (429f4ac): 1.0 off, conical.
+
+    The bound is twenty times the uncut stack's own ETM-SMM gap, floored at 1e-11. With the runs
+    the split fields sit at 1.1e-13 (TE, TM) and 2.2e-12 (conical, whose bound is 7.6e-11) on both
+    local LAPACKs; a floor of 1e-9, as here before, let OpenBLAS's TE control pass under it.
     """
     thick = 8e3 if path != 'tm' else 4.3e3
     fractions = np.array([0.02, 0.08, 0.15, 0.4, 0.6, 0.8, 0.97])
@@ -172,7 +189,7 @@ def test_the_field_of_a_split_layer_is_the_uncut_field(rule, per_layer, path):
     split = ([UNIFORM, UNIFORM, GRATING], [1000.0, thick, 4800.0])
     reference = field(*merged, 'SMM')
     level = _relative(field(*merged, 'ETM'), reference)       # the uncut stack's own agreement
-    bound = max(20 * level, 1e-9)
+    bound = max(20 * level, 1e-11)
     for algorithm in ('ETM', 'SMM'):
         assert _relative(field(*split, algorithm), reference) < bound
     rule()
@@ -356,10 +373,16 @@ def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch, rule)
     """A run of the far half-space's own material, its thin slice touching the half-space.
 
     The run's capped label pivots on 1.7e-18 against the half-space, which only the whole run's
-    ``exp(-k0 q d)`` balances: the thin slice's top carries a ``Y`` of 4e17. Through ``W^-1 W``
-    the next slice's ``a`` came out with an exact zero on its diagonal and raised, where the
-    uncut layer is right to 2.4e-13. The exact step (``a = I``, ``b = Y``) is the control's
-    absence: with it taken away the split must break.
+    ``exp(-k0 q d)`` balances: the thin slice's top carries a ``Y`` of 4e17. Past ``2**53`` the
+    plain form ``a = (W^-1 W (I + Y) + V^-1 V (I - Y))/2`` cannot hold its exact value ``I``:
+    ``1 + Y`` rounds to ``Y``, so a diagonal entry comes out as ``Y`` times the difference of two
+    roundings of one -- an exact zero where they round alike, finite noise where they do not. The
+    exact step writes ``a = I``, ``b = Y`` and the split is the uncut layer to 2.4e-13.
+
+    The control reads that plane. What the lost identity then does to the answer is the LAPACK's:
+    Accelerate rounds both to the same value and raises, on TE and TM; OpenBLAS (arm64 and
+    x86-64) leaves noise of 31 on TE, which the mode, being in its limit, never feels -- the split
+    stayed 3.9e-14 from the uncut layer -- and an exact zero on TM.
 
     A solve merges such a run into its half-space (``tests/rcwa/test_half_space_merge.py``), so
     split and uncut are then one medium; the run's step is held with the merge off, on the rule
@@ -380,12 +403,26 @@ def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch, rule)
 
     monkeypatch.setattr(engine.CoreFactorizationMixin, '_half_space_merge_plan', lambda self: None)
     rule()
+    run_ab = solve_1d._run_ab
+    plane = []
+
+    def recorded(xp, I, W_i, V_i, W, V, F, G, below, join):
+        a, b = run_ab(xp, I, W_i, V_i, W, V, F, G, below, join)
+        if below is not None:                  # the plane inside the run
+            plane.append((np.asarray(a), np.asarray(b), np.asarray(below[2])))
+        return a, b
+
     uncut = amplitudes([60500.0])
+    monkeypatch.setattr(solve_1d, '_run_ab', recorded)
     assert _relative(amplitudes([500.0, 60000.0]), uncut) < 1e-12
+    a, b, Y = plane.pop()
+    assert np.max(np.abs(np.diag(Y))) > 2.0 ** 53
+    assert np.array_equal(a, np.eye(len(a))) and np.array_equal(b, Y)
 
     monkeypatch.setattr(solve_1d, '_run_join', lambda links, index, below: False)
     try:
-        broken = _relative(amplitudes([500.0, 60000.0]), uncut)
+        amplitudes([500.0, 60000.0])
     except np.linalg.LinAlgError:
-        return
-    assert broken > 1e-6, broken
+        pass
+    a, _, _ = plane.pop()
+    assert np.max(np.abs(np.diag(a) - 1)) > 0.5

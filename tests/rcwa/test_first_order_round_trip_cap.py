@@ -227,19 +227,41 @@ def split_uniform(ds, alg, theta=0.5+0.3j):
 def test_a_split_layer_is_the_uncut_layer(monkeypatch, alg, theta):
     """Slices of one material cap as one layer: 20 um + 1.5 um answers as 21.5 um does.
 
-    The control lets each slice decide on its own thickness; SMM then went 0.8 (0.5+0.3j) and
-    0.2 (0.2+0.6j) off the uncut layer, ETM 1.4e-10 at 0.5+0.3j -- a hundred times this
-    test's bound, where with the runs both sit at 1e-15.
+    With the runs both slices swap the same pairs, and both algorithms sit at 1e-15. The control
+    lets each slice decide on its own thickness (``k0 d`` 172 and 13, the run's 185), and the
+    slices then swap 58 (0.5+0.3j) and 52 (0.2+0.6j) modes apart. SMM has no gap medium to join
+    them through: its interface matrix holds eigenvectors twice (cond 5.5e17), and its answer is
+    garbage on every LAPACK -- 0.75 and 0.23 off under Accelerate (macOS), 3.1e5 under OpenBLAS
+    arm64. The ETM pivots on rounding instead, and where it rounds is the LAPACK's: 1.4e-10 /
+    0.47 / 2.8e-14 at 0.5+0.3j and 2.6e-7 / 8.8e2 / 1.7e-11 at 0.2+0.6j, Accelerate / OpenBLAS
+    arm64 / OpenBLAS x86-64. So the control asks both algorithms that the slices decide apart,
+    and SMM that its answer breaks.
     """
+    cap = first_order._cap_round_trips
+    decided = []
+
+    def recorded(xp, M, lam, psi, forward, k0_d):
+        forward = cap(xp, M, lam, psi, forward, k0_d)
+        decided.append(np.asarray(forward))
+        return forward
+
     reference = amplitudes(split_uniform([21.5e3], 'SMM', theta))
+    monkeypatch.setattr(first_order, '_cap_round_trips', recorded)
     assert relative(amplitudes(split_uniform([20e3, 1.5e3], alg, theta)), reference) < 1e-12
+    thick, thin = decided
+    assert np.array_equal(thick, thin)
+
+    decided.clear()
     monkeypatch.setattr(first_order, 'layer_runs', lambda xp, slots, rules=None:
                         [False] * (len(slots) - 1))
     try:
         broken = relative(amplitudes(split_uniform([20e3, 1.5e3], alg, theta)), reference)
     except (FloatingPointError, np.linalg.LinAlgError):
-        return
-    assert broken > 1e-10, broken
+        broken = np.inf
+    thick, thin = decided
+    assert not np.array_equal(thick, thin)
+    if alg == 'SMM':
+        assert broken > 1e-10, broken
 
 
 def test_a_layer_written_twice_to_rounding_is_one_run(monkeypatch):
