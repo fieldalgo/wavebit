@@ -406,7 +406,7 @@ def test_a_traced_y_invariant_raster_gradient_matches_eager():
 
     One slot left a relative derivative error of 2.4e2; three slots measured
     9.6e-13 against the 1D reference in the design experiment. Traced against eager:
-    below 1e-12 on macOS (Accelerate), 2.6e-12 on the Linux runner (OpenBLAS) -- an absolute
+    1.2e-13 on macOS (Accelerate), 2.6e-12 on the Linux runner (OpenBLAS) -- an absolute
     1.1e-15 on a gradient of 4.3e-4 that is small by cancellation -- so the bound is 1e-10, the
     one this file's other traced gradients take.
     """
