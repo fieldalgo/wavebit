@@ -1,12 +1,15 @@
-# Publishes the Sphinx site to GitHub Pages on every push to `develop`, and on demand from the
+# Publishes the Sphinx site to GitHub Pages on every push to `main`, and on demand from the
 # Actions tab. The website proxies `wavebit.fieldalgo.com/docs/*` to the Pages site.
 #
-# `develop` rather than `main`: documentation lands on `develop`, and `main` only moves at a
-# release, so a documentation fix would otherwise wait for one. The version the site shows is
-# whatever `develop`'s package declares (`docs/conf.py` reads `wavebit.__version__`).
+# `main` because the published documentation describes the released package (owner decision,
+# 2026-10-15; the NumPy and PyTorch convention): `main` only moves when a release fast-forwards
+# it from `develop`, so the site changes exactly when the package does, and the version it shows
+# (`docs/conf.py` reads `wavebit.__version__`) is the version on PyPI. The `github-pages`
+# environment's deployment branch policy allows `main` alone, so a run from any other ref is
+# refused before it builds. Documentation for `develop` (a `/dev/` site with a version switcher)
+# is a later step and needs that policy widened first.
 #
-# Pages must be set to deploy from GitHub Actions (Settings -> Pages -> Source) for the deploy
-# step to succeed; until then the build runs and the deploy fails, which is harmless.
+# Pages must be set to deploy from GitHub Actions (Settings -> Pages -> Source), which it is.
 #
 # A custom domain (`docs.fieldalgo.com`, say) is a `CNAME` file listed in `html_extra_path`
 # plus the DNS record; nothing here changes for it.
@@ -15,7 +18,7 @@ name: docs deploy
 on:
   workflow_dispatch:
   push:
-    branches: [develop]
+    branches: [main]
 
 # The Pages deployment needs these three and nothing else. `id-token` is what lets
 # `deploy-pages` prove to Pages that this run is the one that built the artifact.
