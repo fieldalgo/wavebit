@@ -4,7 +4,7 @@ FDTD advances electric and magnetic fields in time. A useful answer depends on b
 
 ## 1. Define the physical problem
 
-Start with the [general FDTD guide](../../guide/fdtd/general-fdtd.md): specify a finite domain, objects, source, boundary conditions and requested monitors. Distinguish the physical domain from its absorbing boundary region. For a periodic layered structure with plane-wave illumination, follow the [periodic FDTD guide](../../guide/fdtd/time-domain.md).
+Start with the [general FDTD guide](../../guide/fdtd/general-fdtd.md) and [how the solver models a problem](../../guide/fdtd/model.md): specify a finite domain, objects, source, boundary conditions and requested monitors. Distinguish the physical domain from its absorbing boundary region. For a periodic layered structure with plane-wave illumination, follow the [periodic FDTD guide](../../guide/fdtd/time-domain.md).
 
 ## 2. Resolve space and time
 

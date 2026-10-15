@@ -106,6 +106,7 @@ subtrees:
           - file: guide/fdtd/fdtd-alpha
           - file: guide/fdtd/fdtd
           - file: guide/fdtd/general-fdtd
+          - file: guide/fdtd/model
           - file: guide/fdtd/time-domain
   - file: reference/index
     title: API reference
