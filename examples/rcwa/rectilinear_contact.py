@@ -1,34 +1,37 @@
-"""Exact Cartesian Li for a closing gap; run from the repository with PYTHONPATH=."""
-
-from wavebit.compat import legacy as _legacy_wavebit
+"""Exact Cartesian Li: guarded JIT derivatives of a closing rectangular gap."""
 import jax
 import jax.numpy as jnp
+import numpy as np
+from wavebit import Material, Units, rcwa
 
 jax.config.update('jax_enable_x64', True)
 
 
-def solver(gap, right_epsilon=9.):
-    shapes = [dict(type='rectangle', cx=-150.-gap/2, lx=300., ly=300., material=4.),
-              dict(type='rectangle', cx=150.+gap/2, lx=300., ly=300., material=right_epsilon)]
-    return _legacy_wavebit.rcwa(
-        backend='jax', period=(700., 700.), wavelength=900., top=1., bot=2.25,
-        theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(3, 3),
-        factorization='li', structure=[dict(background=1., shapes=shapes)])
+def problem(gap, right_epsilon=9.):
+    regions = tuple(rcwa.Region(geometry=rcwa.Rectangle(size=(300., 300.),
+        center=(sign*(150.+gap/2), 0.)), material=Material(epsilon))
+        for sign, epsilon in ((-1., 4.), (1., right_epsilon)))
+    return rcwa.Problem(units=Units(length='nm'),
+        stack=rcwa.Stack(period=(700., 700.), bottom=Material(2.25),
+            layers=(rcwa.Layer(thickness=300., background=Material(1.), regions=regions),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(theta=.2, phi=0., polarization='p'),)))
 
 
 def main():
-    # This edge order permits contact and positive gaps. Refreeze for overlaps.
-    geometry = solver(0.).freeze_geometry()
-
+    numerics = rcwa.Numerics(orders=(3, 3), factorization='li')
+    prepared = rcwa.prepare(problem(0.), numerics=numerics, backend='jax')
     def transmission(gap, epsilon):
-        return jnp.sum(solver(gap, epsilon).solve(geometry=geometry).T).real
-
+        return prepared.run(problem(gap, epsilon)).T.sum().real
     evaluate = jax.jit(jax.value_and_grad(transmission, argnums=(0, 1)))
     print('gap            T              dT/dgap       dT/d(right epsilon)')
     for gap in (1., 1e-2, 1e-4, 1e-6, 0.):
         value, (dg, de) = evaluate(jnp.asarray(gap), jnp.asarray(9.))
+        assert np.isfinite([value, dg, de]).all()
         print(f'{gap:8.1e}  {float(value):.12f}  {float(dg):+.8e}  {float(de):+.8e}')
-    # The derivative at contact follows the gap-opening side of the frozen plan.
+    # Contact follows the opening side. Overlap invalidates the retained order.
+    invalid = jax.jit(lambda gap: prepared.run(problem(gap)))(-1.)
+    assert not bool(invalid.validity.checks['rectilinear_topology'])
+    assert np.isnan(invalid.T).all()
 
 
 if __name__ == '__main__':

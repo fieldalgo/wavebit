@@ -84,7 +84,7 @@ def _report(problem, numerics, execution, solvers):
         capabilities={'eager': True, 'material_gradients': execution.backend != 'numpy' and single,
                       'jit': execution.backend == 'jax' and single,
                       'vmap': execution.backend == 'jax' and single,
-                      'geometry_reuse': 'concrete topology validation, on the primal of an eager jax.grad tracer too; geometry traced under jit or vmap is refused',
+                      'geometry_reuse': 'concrete topology validation, including eager JAX gradients; fixed-cell Cartesian Li rectangle sizes and centres also have a traced edge-order guard',
                       'diffraction': single, 'coherent_boundary_power': not single,
                       'physical_convergence': 'not established by admission or finite arithmetic'},
         resolved={'order_window': window, 'wavelength_count': len(solvers),
@@ -193,6 +193,46 @@ class Prepared:
     _partitions: tuple = field(repr=False)
     _coherent_dependencies: object = field(repr=False)
 
+    def _traced_rectangles(self, problem):
+        """The exact Cartesian edge plan has a complete array-valued guard.
+
+        Other painting/normal-field plans still require their concrete checks.
+        Cell and orientation remain fixed during an external transformation.
+        """
+        from .problem import Rectangle
+        if (self.numerics.factorization != 'li'
+                or _adapt.has_tracer(problem.stack.lattice if problem.stack.lattice is not None else problem.stack.period)
+                or any(g.rectilinear_plans is None for g in self._geometry)):
+            return False
+        return all(isinstance(r.geometry, Rectangle)
+                   and not _adapt.has_tracer(r.geometry.angle) and r.geometry.angle == 0
+                   for layer in problem.stack.layers for r in layer.regions)
+
+    def _topology_checks(self, problem):
+        if not self._traced_rectangles(problem):
+            return {}
+        xp = _adapt._namespace(self.execution)
+        valid = xp.asarray(True)
+        periods = (problem.stack.period if problem.stack.lattice is None else
+                   (problem.stack.lattice[0][0], problem.stack.lattice[1][1]))
+        for geometry in self._geometry:
+            for layer, plan in zip(problem.stack.layers, geometry.rectilinear_plans):
+                for axis, nodes in enumerate((plan.x, plan.y)):
+                    period = _adapt._array(xp, periods[axis], self.execution)
+                    positions = []
+                    for owner, side in nodes:
+                        if owner == -1:
+                            positions.append(side*period)
+                        else:
+                            rectangle = layer.regions[owner].geometry
+                            size = _adapt._array(xp, rectangle.size[axis], self.execution)
+                            center = _adapt._array(xp, rectangle.center[axis], self.execution)
+                            valid = valid & (size > 0)
+                            positions.append(period/2+center+side*size/2)
+                    edges = xp.stack(positions)
+                    valid = valid & xp.all(edges[:-1] <= edges[1:])
+        return {'rectilinear_topology': valid}
+
     def _solvers(self, problem):
         if not isinstance(problem, Problem):
             raise ValidationError('Prepared.run/validate require rcwa.Problem.',
@@ -202,6 +242,7 @@ class Prepared:
             raise IncompatibleProblemError('Coherent source grouping dependencies changed. Prepare again after changing directions, wavelengths, sampling, cell, or half-space response.',
                                            code='prepared.source_grouping', path='excitation.sources')
         traced_geometry = False
+        concrete_topology = True
         if _adapt.has_tracer(problem):
             for path, value in _adapt.geometry_values(problem).items():
                 if not _adapt.has_tracer(value):
@@ -210,16 +251,19 @@ class Prepared:
                 # An eager jax.grad tracer carries its primal, so the topology is checked
                 # on that below, as a PyTorch tensor is. Under jit or vmap there is none.
                 if not _adapt.carries_primal(value):
-                    raise UnsupportedFeatureError('This geometry decision has no traced topology guard. Prepare each concrete geometry outside the transform; material, wavelength, and layer-thickness derivatives retain their supported graphs.',
-                                                  code='prepared.host_topology', path=path)
+                    if self._traced_rectangles(problem):
+                        concrete_topology = False
+                    else:
+                        raise UnsupportedFeatureError('This geometry decision has no traced topology guard. Fixed-cell Cartesian Li rectangle sizes and centres are supported; prepare other concrete geometry outside the transform.',
+                                                      code='prepared.host_topology', path=path)
             if self.numerics.detuning is not None:
                 raise UnsupportedFeatureError('Adaptive detuning is eager-only. Use exact-point numerics under a transform, or explicitly change the physical input and prepare that problem.',
                                               code='prepared.detuning_transform', path='numerics.detuning')
         solvers = _resolve(problem, self.numerics, self.execution)
         # Built only to be checked: the run keeps the traced values and their tangents.
         checked = (_resolve(_adapt.primal_geometry(problem), self.numerics, self.execution)
-                   if traced_geometry else solvers)
-        for solver, geometry in zip(checked, self._geometry):
+                   if traced_geometry and concrete_topology else solvers)
+        for solver, geometry in zip(checked if concrete_topology else (), self._geometry):
             try:
                 _engine_scene(solver)._refuse_a_stale_geometry_record(geometry)
             except (ValueError, RuntimeError) as error:
@@ -235,6 +279,7 @@ class Prepared:
             with self.execution.scope():
                 solvers = self._solvers(problem)
                 checks = _runtime_checks(problem, self.execution, self._partitions)
+                checks.update(self._topology_checks(problem))
                 for name, passed in checks.items():
                     if not bool(_adapt.host(passed, name)):
                         raise IncompatibleProblemError('The prepared runtime guard failed.',
@@ -249,6 +294,7 @@ class Prepared:
         with self.execution.scope(), _normalize_errors():
             solvers = self._solvers(problem)
             checks = _runtime_checks(problem, self.execution, self._partitions)
+            checks.update(self._topology_checks(problem))
             for name, passed in checks.items():
                 if not _adapt.has_tracer(passed) and not bool(_adapt.host(passed, name)):
                     raise IncompatibleProblemError('The prepared runtime guard failed.', code=f'prepared.{name}', path='problem')
@@ -294,8 +340,9 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
                                           'layer thickness', 'concrete geometry within validated topology for a single plane wave'),
                                  'coherent_grouping': 'cell, wavelength, source directions/sampling and half-space responses are fixed; prepare again to change them',
                                  'runtime_guards': ('finite inputs', 'positive wavelength', 'nonnegative thickness',
-                                                    'nonzero polarization', 'raster phase partition'),
-                                 'traced_geometry': 'checked on the primal under eager jax.grad; refused under jit or vmap, which carry none',
+                                                    'nonzero polarization', 'raster phase partition',
+                                                    'Cartesian Li rectangle edge order and positive sizes'),
+                                 'traced_geometry': 'fixed-cell Cartesian Li rectangle sizes and centres use an array-valued topology guard under jit/vmap; other geometry requires concrete values or the primal of eager jax.grad',
                                  'cache_policy': 'static geometry only; every run rebuilds material, mode, and propagation operators'})
     return Prepared(numerics=numerics, execution=execution, report=report, contract=contract,
                     _structure=_adapt.structure_key(problem), _geometry=geometry, _partitions=partitions,

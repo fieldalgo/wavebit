@@ -77,7 +77,7 @@ result = prepared.run(problem)
 
 `rcwa.prepare` takes the geometry record the earlier interface's `freeze_geometry()` took, and
 `prepared.run` replays it on concrete values. A shape derivative through `prepared.run` runs on
-PyTorch and under eager `jax.grad`; a shape traced under `jax.jit` or `jax.vmap` is not in the
+PyTorch and under eager `jax.grad`; an NVF shape traced under `jax.jit` or `jax.vmap` is not in the
 current API yet (code `prepared.host_topology`), so the JIT derivatives and traced replay
 described in this section, and the examples linked from it, use the earlier interface.
 
@@ -414,8 +414,10 @@ builds a different structure that solves and conserves energy — see
 
 Sizes, centres, angles and materials may be backend tensors and are differentiable through
 `prepared.run`: materials on JAX and PyTorch, geometry on PyTorch and under eager `jax.grad`,
-since a shape traced under `jax.jit` is refused (code `prepared.host_topology`). `Material` is a
+with the additional supported JIT/vmap subset of fixed-cell, zero-angle rectangles under Cartesian Li. Other shape geometry traced under `jax.jit` is refused (code `prepared.host_topology`). `Material` is a
 registered JAX pytree for exactly that reason.
+
+The current [Cartesian Li contact example](../../../examples/rcwa/rectilinear_contact.py) checks live edge order and positive sizes. Crossing the prepared order or leaving the cell sets `validity.checks['rectilinear_topology']` false and masks every numerical observation, including retained fields and scattering, with NaN. A contact derivative follows the gap-opening side; overlap requires a fresh preparation. Cell and orientation changes remain concrete.
 
 ## 4. Results (`studies/rcwa/benchmark_analytic/benchmark_analytic.py`)
 
