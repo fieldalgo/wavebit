@@ -87,18 +87,22 @@ def physical_material(model, wavelength, units, execution=None):
 
 
 def region_recipe(region, wavelength, units, execution):
-    g = region.geometry
-    base = {'material': physical_material(region.material, wavelength, units, execution)}
+    return dict(geometry_recipe(region.geometry),
+                material=physical_material(region.material, wavelength, units, execution))
+
+
+def geometry_recipe(g):
+    """Numeric shape fields shared by the solver and its topology-only checks."""
     if isinstance(g, Rectangle):
-        return dict(base, type='rectangle', cx=g.center[0], cy=g.center[1],
+        return dict(type='rectangle', cx=g.center[0], cy=g.center[1],
                     lx=g.size[0], ly=g.size[1], angle=g.angle)
     if isinstance(g, Circle):
-        return dict(base, type='circle', cx=g.center[0], cy=g.center[1], lx=2*g.radius)
+        return dict(type='circle', cx=g.center[0], cy=g.center[1], lx=2*g.radius)
     if isinstance(g, Ellipse):
-        return dict(base, type='ellipse', cx=g.center[0], cy=g.center[1],
+        return dict(type='ellipse', cx=g.center[0], cy=g.center[1],
                     lx=2*g.radii[0], ly=2*g.radii[1], angle=g.angle)
     if isinstance(g, Polygon):
-        return dict(base, type='polygon', vertices=g.vertices)
+        return dict(type='polygon', vertices=g.vertices)
     raise ValidationError('Unsupported typed region geometry.', code='shape.type', path='stack.layers.regions')
 
 

@@ -65,6 +65,12 @@ def _resolve(problem, numerics, execution):
         for wavelength in _adapt.wavelengths(problem):
             solver = _adapt.build_solver(problem, numerics, execution, wavelength)
             scene = _engine_scene(solver)
+            if numerics.topology_check == 'host' and (
+                    not _adapt.single_plane(problem)
+                    or any(layer.epsilon is not None for layer in problem.stack.layers)
+                    or scene._has_tensor_materials()):
+                raise UnsupportedFeatureError('Host topology checks support scalar-material region layers and one plane wave; raster, tensor and coherent paths retain their own guards.',
+                                              code='prepared.host_topology_scope', path='numerics.topology_check')
             scene._check_before_building()
             solvers.append(solver)
     return solvers
@@ -84,7 +90,8 @@ def _report(problem, numerics, execution, solvers):
         capabilities={'eager': True, 'material_gradients': execution.backend != 'numpy' and single,
                       'jit': execution.backend == 'jax' and single,
                       'vmap': execution.backend == 'jax' and single,
-                      'geometry_reuse': 'concrete topology validation, including eager JAX gradients; fixed-cell Cartesian Li rectangle sizes and centres also have a traced edge-order guard',
+                      'geometry_reuse': 'concrete topology validation, including eager JAX gradients; Cartesian Li edge-order device guard or explicitly selected scalar-shape host callback under JIT/vmap',
+                      'topology_check': numerics.topology_check,
                       'diffraction': single, 'coherent_boundary_power': not single,
                       'physical_convergence': 'not established by admission or finite arithmetic'},
         resolved={'order_window': window, 'wavelength_count': len(solvers),
@@ -192,6 +199,7 @@ class Prepared:
     _geometry: tuple = field(repr=False)
     _partitions: tuple = field(repr=False)
     _coherent_dependencies: object = field(repr=False)
+    _host_topology: object = field(repr=False, default=None)
 
     def _traced_rectangles(self, problem):
         """The exact Cartesian edge plan has a complete array-valued guard.
@@ -210,6 +218,11 @@ class Prepared:
 
     def _topology_checks(self, problem):
         if not self._traced_rectangles(problem):
+            if self._host_topology is not None and any(
+                    _adapt.has_tracer(v) and not _adapt.carries_primal(v)
+                    for v in _adapt.geometry_values(problem).values()):
+                from ._host_topology import traced_check
+                return {'shape_topology': traced_check(problem, self._host_topology)}
             return {}
         xp = _adapt._namespace(self.execution)
         valid = xp.asarray(True)
@@ -251,7 +264,7 @@ class Prepared:
                 # An eager jax.grad tracer carries its primal, so the topology is checked
                 # on that below, as a PyTorch tensor is. Under jit or vmap there is none.
                 if not _adapt.carries_primal(value):
-                    if self._traced_rectangles(problem):
+                    if self._traced_rectangles(problem) or self._host_topology is not None:
                         concrete_topology = False
                     else:
                         raise UnsupportedFeatureError('This geometry decision has no traced topology guard. Fixed-cell Cartesian Li rectangle sizes and centres are supported; prepare other concrete geometry outside the transform.',
@@ -334,6 +347,11 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)
         report = _report(problem, numerics, execution, solvers)
         partitions = _partition_guards(problem, solvers)
+        host_topology = None
+        if numerics.topology_check == 'host':
+            from ._host_topology import make_check
+            scene = _engine_scene(solvers[0])
+            host_topology = make_check(problem, geometry, scene.factorization.value, scene.nvf_projector.value)
     contract = MappingProxyType({'static': ('numerics', 'execution', 'units', 'layer/source/model counts',
                                           'array/tensor shapes', 'magnetic presence', 'outputs', 'spectral shape'),
                                  'live': ('material coefficients', 'wavelength', 'source amplitude and polarization',
@@ -342,11 +360,13 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
                                  'runtime_guards': ('finite inputs', 'positive wavelength', 'nonnegative thickness',
                                                     'nonzero polarization', 'raster phase partition',
                                                     'Cartesian Li rectangle edge order and positive sizes'),
-                                 'traced_geometry': 'fixed-cell Cartesian Li rectangle sizes and centres use an array-valued topology guard under jit/vmap; other geometry requires concrete values or the primal of eager jax.grad',
+                                 'traced_geometry': 'fixed-cell Cartesian Li rectangle sizes and centres use an array-valued topology guard under jit/vmap; other admitted scalar shapes/cells can explicitly select topology_check=host, otherwise they require concrete values or the primal of eager jax.grad',
+                                 'topology_check': numerics.topology_check,
+                                 'host_topology': 'when explicitly selected, live scalar shape/cell geometry is checked by a CPU callback; vmap checks sequentially, numerical derivatives stay on the selected backend',
                                  'cache_policy': 'static geometry only; every run rebuilds material, mode, and propagation operators'})
     return Prepared(numerics=numerics, execution=execution, report=report, contract=contract,
                     _structure=_adapt.structure_key(problem), _geometry=geometry, _partitions=partitions,
-                    _coherent_dependencies=_adapt.coherent_dependencies(problem))
+                    _coherent_dependencies=_adapt.coherent_dependencies(problem), _host_topology=host_topology)
 
 
 @eager_under_torch_compile

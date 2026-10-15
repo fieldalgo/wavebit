@@ -5765,32 +5765,9 @@ class CoreFactorizationMixin:
         if self._modeling_path != ModelingPath.PARAMETRIC:
             return
         self._reject_layer_count_mismatch()
-        if self.factorization == Factorization.LI:
-            _rectilinear.validate(self.structure, self.lattice)
-            plans = geometry.rectilinear_plans
-            if plans is None or len(plans) != len(self.structure):
-                raise _fac.StaleGeometryError('Cartesian Li layer plans changed; freeze_geometry() again')
-            for layer, plan in zip(self.structure, plans):
-                _rectilinear.check_plan(layer.get('shapes', []), self.lattice, plan)
-            return
-        plans, gammas = geometry.boundary_plans, geometry.gamma_plans
-        for records in (plans, gammas if self.factorization == Factorization.NVF else None):
-            if records is not None and len(records) != len(self.structure):
-                raise _fac.StaleGeometryError('shape layer count changed; freeze_geometry() again')
-        lattice = self._geometry_lattice_for(geometry)
-        for index, layer in enumerate(self.structure):
-            _parametric.check_layer_spec(layer, index)
-            _parametric.check_layer_shapes(layer, lattice, index)
-            plan = None if plans is None else plans[index]
-            if plans is not None:
-                if plan is None:
-                    _parametric.check_no_plan_still_fits(layer, lattice, index)
-                else:
-                    _boundary.check_plan_still_fits(layer.get('shapes', []), lattice, plan)
-            if (self.factorization == Factorization.NVF and gammas is not None
-                    and (plan is None or self.nvf_projector == 'circular')):
-                _parametric.check_gamma_plan_still_fits(
-                    layer, lattice, gammas[index], index, dyadic=self.nvf_projector == 'circular')
+        from .topology import check_shape_record
+        check_shape_record(self.structure, self._geometry_lattice_for(geometry), geometry,
+                           self.factorization.value, self.nvf_projector.value)
 
     def _refuse_a_stale_raster_record(self, geometry):
         """Run the raster builders' record checks now, without building -- for a traced build.

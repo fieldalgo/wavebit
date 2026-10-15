@@ -5,6 +5,12 @@ from ..errors import ValidationError
 
 @spec
 class Numerics:
+    """RCWA approximation and topology-check policy.
+
+    ``topology_check='device'`` uses available array guards and refuses other
+    traced geometry. ``'host'`` explicitly permits a CPU callback for admitted
+    scalar region geometry under JAX transforms; vmap checks run sequentially.
+    """
     orders: tuple = (0, 0)
     algorithm: str = 'smm'
     fourier_coefficients: str | None = None
@@ -15,6 +21,7 @@ class Numerics:
     shape_nvf_grid_size: int | None = None
     li_nesting: str | None = None
     detuning: object = None
+    topology_check: str = 'device'
 
     def __post_init__(self):
         object.__setattr__(self, 'orders', tuple(self.orders))
@@ -27,7 +34,8 @@ class Numerics:
                    'formulation': ('auto', 'first_order', 'second_order'),
                    'raster_normal_method': (None, 'distance', 'contour', 'spectral', 'smooth'),
                    'nvf_projector': (None, 'linear', 'circular'),
-                   'li_nesting': (None, 'fixed', 'symmetric')}
+                   'li_nesting': (None, 'fixed', 'symmetric'),
+                   'topology_check': ('device', 'host')}
         for name, allowed in choices.items():
             if getattr(self, name) not in allowed:
                 raise ValidationError(f'{name} must be one of {allowed}.',
