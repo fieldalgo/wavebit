@@ -13,8 +13,9 @@ entries, ``Σ`` included.
 So this module does three things, and the order is the argument:
 
 1. **reads the markdown** -- both of §2's tables, cell by cell, and the four headline gaps
-   quoted in §2's TL;DR and in ``README.md`` -- and compares every value to
-   ``golden_fdtd_table.npz``. A digit edited in a document is now a failing test;
+   quoted in §2's TL;DR, on the validation overview and in the documentation index -- and
+   compares every value to ``golden_fdtd_table.npz``. A digit edited in a document is now a
+   failing test;
 2. **re-solves the two columns this environment can** and compares them to the same
    artefact, so the artefact cannot drift away from the code either;
 3. **asserts the recorded conditions are still the shipped ones**
@@ -63,7 +64,10 @@ from tests.references.gen_goldens_fdtd_table import _fdtd, _grid, _rcwa, _shippe
 
 ROOT = HERE.parent.parent
 DOC = ROOT / 'docs' / 'guide' / 'fdtd' / 'fdtd.md'
-README = ROOT / 'README.md'
+#: Every other page that quotes §2's headline. ``README.md`` was one until 2026-10-15
+#: (78a47487), when the public README became one screen with no numbers in it and its
+#: account of the validation moved, numbers included, to the validation overview.
+HEADLINE_QUOTES = (ROOT / 'docs' / 'validation' / 'index.md', ROOT / 'docs' / 'README.md')
 TABLE_PATH = HERE / 'golden_fdtd_table.npz'
 MEEP_PATH = HERE / 'golden_meep_1d.npz'
 
@@ -311,16 +315,17 @@ def test_the_document_prints_the_frozen_convergence_table(table, doc):
 
 
 def test_the_headline_gaps_quoted_in_prose_are_the_frozen_ones(table, doc):
-    """§2's TL;DR and ``README.md`` both quote four numbers; here they are.
+    """§2's TL;DR and the pages in ``HEADLINE_QUOTES`` all quote four numbers; here they are.
 
     A table can be right while the sentence above it is wrong, and the sentence is what
-    most readers take away -- ``README.md``'s is the FDTD path's whole public claim. Both
-    are transcriptions of the same four ``worst`` entries in the artefact and are held to
-    the last figure they print.
+    most readers take away -- the validation overview's is the FDTD path's whole public
+    claim. All are transcriptions of the same four ``worst`` entries in the artefact and are
+    held to the last figure they print.
     """
     want = [float(table[f'fdtd__{leg}__{FDTD_PUBLISHED}__worst']) for leg in ('te', 'tm')]
     want += [float(table[f'meep__{leg}__worst']) for leg in ('te', 'tm')]
-    for name, text in (('docs/guide/fdtd/fdtd.md', doc), ('README.md', README.read_text())):
+    quotes = [(str(path.relative_to(ROOT)), path.read_text()) for path in HEADLINE_QUOTES]
+    for name, text in [('docs/guide/fdtd/fdtd.md', doc)] + quotes:
         printed = _numbers_after(text, 'worst per-order gap', 4)
         for a, b in zip(want, printed):
             assert abs(a - float(b)) <= _half_ulp(b) * SLACK, (
