@@ -12,6 +12,9 @@
 #
 # Pages is set to deploy from GitHub Actions (Settings -> Pages -> Source).
 #
+# Like the PyPI upload, it waits for `release-gate.yml`: the site is not published unless
+# `tests` already passed on the commit being published.
+#
 # A custom domain (`docs.fieldalgo.com`, say) is a `CNAME` file listed in `html_extra_path`
 # plus the DNS record; nothing here changes for it.
 name: docs deploy
@@ -36,7 +39,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gate:
+    uses: ./.github/workflows/release-gate.yml
+    permissions:
+      actions: read
+
   deploy:
+    needs: gate
     name: build and deploy
     runs-on: ubuntu-latest
 

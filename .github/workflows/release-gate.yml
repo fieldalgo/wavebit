@@ -1,0 +1,43 @@
+# The gate in front of everything a release publishes. `python-publish.yml` (PyPI) and
+# `docs-deploy.yml` (the documentation site) call it first and publish only if it passes.
+#
+# It passes when `tests.yml` has already finished successfully on the exact commit being
+# released (`github.sha`: the commit the release tag points to, or the ref picked for a manual
+# docs rebuild). It does not run the suite again. The `test` and `slow` jobs take two to three
+# hours on these runners, the release commit is a `develop` commit whose push already ran them,
+# and re-running would check the same commit twice (owner decision, 2026-10-15: tests block
+# releases automatically; 0.0.3 had gone to PyPI while its tests were still running).
+#
+# So the release order is: push to develop, wait for `tests` to go green on that commit, then
+# publish the release. A release published too early fails here and publishes nothing; once
+# the tests pass, re-run the failed workflow runs from the Actions tab. `tests.yml` cancels a
+# run superseded by a newer push, so a commit that was not the tip long enough to finish needs
+# `tests` started on it by hand (Actions -> tests -> Run workflow, pick the tag).
+name: release gate
+
+on:
+  workflow_call:
+
+permissions:
+  actions: read
+
+jobs:
+  tested:
+    name: tests passed on the release commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a successful tests run on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          passed=$(gh api "repos/$REPO/actions/workflows/tests.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')
+          if [ "$passed" -gt 0 ]; then
+            echo "tests passed on $SHA"
+            exit 0
+          fi
+          latest=$(gh api "repos/$REPO/actions/workflows/tests.yml/runs?head_sha=$SHA&per_page=1" \
+            --jq '.workflow_runs[0] | "\(.status) \(.conclusion // "-") \(.html_url)"')
+          echo "::error::no successful tests run on $SHA (latest: ${latest:-none}). If tests is still running, re-run this workflow when it has passed; if it was cancelled by a later push, start tests on this commit (Actions -> tests -> Run workflow, pick the tag) and re-run this workflow after it passes."
+          exit 1

@@ -6,7 +6,8 @@
 # `python-publish.yml`, environment `pypi`.
 #
 # The job refuses to upload when the release tag does not spell the version in pyproject.toml,
-# so a tag cannot publish a different version than the one it names.
+# so a tag cannot publish a different version than the one it names, and it waits for
+# `release-gate.yml`: nothing is uploaded unless `tests` already passed on the release commit.
 
 name: Upload Python Package
 
@@ -18,7 +19,13 @@ permissions:
   contents: read
 
 jobs:
+  gate:
+    uses: ./.github/workflows/release-gate.yml
+    permissions:
+      actions: read
+
   deploy:
+    needs: gate
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
