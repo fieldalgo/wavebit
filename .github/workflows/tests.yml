@@ -39,7 +39,7 @@ name: tests
 on:
   push:
     # develop only: main is fast-forwarded from develop at releases, so its commits are already
-    # tested, and the rcwa/fdtd trunks are tested locally while they are developed (owner, 2026-10-15).
+    # tested, and feature branches are tested locally before they land.
     branches: [develop]
   pull_request:
   workflow_dispatch:
