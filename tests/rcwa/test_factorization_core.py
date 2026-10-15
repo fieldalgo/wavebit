@@ -719,7 +719,8 @@ def test_nvf_is_covariant_when_the_whole_scene_is_turned(truncation_order):
     (theta, psi) pairs: 8.6e-16 to 2.7e-13, so 1e-12 keeps roughly two decades of headroom at
     the configurations parametrized here and about 4x at the worst corner of that wider sweep.
     Exact on all three backends (numpy 1.4e-15, jax 1.8e-15, torch 3.3e-15) -- torch used to
-    refuse ``np.rot90``'s negative strides, which ``_core.backend.forward_strided`` fixed.
+    refuse ``np.rot90``'s negative strides, which ``wavebit._common.backend.forward_strided``
+    fixed.
 
     **What this is structurally blind to, measured rather than assumed.** A relabelling
     covariance test cannot see a bug that is *itself* a consistent relabelling of the two axes:

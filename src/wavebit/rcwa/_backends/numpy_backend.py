@@ -32,7 +32,7 @@ class _BaseRCWA(CoreSolveMixin):
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
     _BACKEND_ID = Backend.NUMPY
 
-    #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
+    #: Derived, not declared: `wavebit._common.enums.DIFFERENTIABLE_BACKENDS` is the one table,
     #: so `manifest.py` can publish this without importing this module to ask.
     _DIFFERENTIABLE = _BACKEND_ID in _DIFFERENTIABLE_BACKENDS
 

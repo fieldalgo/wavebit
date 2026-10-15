@@ -2,7 +2,7 @@
 
 Use the same Array API namespaces and graph-preserving conversion as RCWA.
 Only execution/checkpointing differs here; Maxwell/ADE/CPML equations stay in
-_core.grid_fdtd and must not be duplicated by a backend.
+wavebit.fdtd._periodic.grid and must not be duplicated by a backend.
 """
 import dataclasses
 import functools

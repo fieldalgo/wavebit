@@ -1854,7 +1854,8 @@ class CoreSolveMixin:
     # ---------------------------------------------------------------- the incidence angles
     #
     # One copy. These were three, differing only in how a value became an array: `np.array`,
-    # `jnp.array`, and a local `_as_tensor` that was a second copy of `_core.backend.as_array`.
+    # `jnp.array`, and a local `_as_tensor` that was a second copy of
+    # `wavebit._common.backend.as_array`.
     # `as_array` is what all three became, for the two reasons that hold on this repo's floor:
     # it normalises strides, which Torch needs and the other two do not, and it honours
     # `device=` for a value already in the namespace. Not for autograd -- `torch.asarray` did
@@ -2938,8 +2939,8 @@ class CoreSolveMixin:
 
         ``None`` before a structure has been assigned. The *type of the object* passed as
         ``structure`` is the choice -- there is no separate mode switch -- so this is the only
-        place that says which one was read, and it is what ``_core.draw`` reads to label a
-        picture with the path that drew it. Read-only.
+        place that says which one was read, and it is what ``wavebit.rcwa.plotting`` reads to
+        label a picture with the path that drew it. Read-only.
 
         A ``str`` enum, so ``solver.modeling_path == 'raster'`` holds without importing
         anything. It was a bare integer (``modeling_type``, ``0`` and ``2``) until the paths
@@ -5432,7 +5433,7 @@ class CoreFactorizationMixin:
         is correct only until somebody reorders. Each slot is ``(n_layers, n_orders, n_orders)``
         with ``n_orders = (2*half_width_u+1) * (2*half_width_v+1)``; ``epxy`` and ``epyx`` are
         ``None`` on the paths that produce three rather than five (see
-        :func:`~._core.factorization.nvf_conv_matrices`).
+        :func:`~wavebit.rcwa._engine.factorization.nvf_conv_matrices`).
 
         A full material tensor, uniform or patterned, may instead return
         :class:`wavebit.TensorConvMatrices`, which appends ``epxz, epyz, epzx,
@@ -5938,9 +5939,10 @@ class CoreFactorizationMixin:
                 f'there is nothing to build convolution matrices from. Assign `structure`: '
                 f'its type is what selects the path.')
 
-        # Returned as the builder made it. Every builder in `_core.factorization` and
-        # `_core.parametric` answers with a `ConvMatrices`, the Li-rule ones carrying `None` in
-        # the off-diagonal pair, so there is no padding step here to get the arity wrong.
+        # Returned as the builder made it. Every builder in `wavebit.rcwa._engine.factorization`
+        # and `wavebit.rcwa._engine.parametric` answers with a `ConvMatrices`, the Li-rule ones
+        # carrying `None` in the off-diagonal pair, so there is no padding step here to get the
+        # arity wrong.
         return conv
 
     # ------------------------------------------------------------------------- permeability

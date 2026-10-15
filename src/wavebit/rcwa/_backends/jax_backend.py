@@ -70,7 +70,7 @@ class _BaseRCWA(CoreSolveMixin):
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
     _BACKEND_ID = Backend.JAX
 
-    #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
+    #: Derived, not declared: `wavebit._common.enums.DIFFERENTIABLE_BACKENDS` is the one table,
     #: so `manifest.py` can publish this without importing this module to ask.
     _DIFFERENTIABLE = _BACKEND_ID in _DIFFERENTIABLE_BACKENDS
 
@@ -148,7 +148,8 @@ jax.tree_util.register_pytree_node_class(FieldState)
 
 # `Port` registers itself when a port is built, so a matrix built before JAX arrived kept its
 # channel as a string leaf until another one was built. Registering on this import -- the first
-# use of the backend -- repairs it. See `_core.scattering._register_pytree_if_jax_loaded`.
+# use of the backend -- repairs it. See
+# `wavebit.rcwa._engine.scattering._register_pytree_if_jax_loaded`.
 import wavebit.rcwa._engine.scattering as _scattering
 _scattering._register_pytree_if_jax_loaded()
 

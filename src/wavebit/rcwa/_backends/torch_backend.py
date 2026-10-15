@@ -32,7 +32,7 @@ class _BaseRCWA(CoreSolveMixin):
     #: `_tree_unflatten` hands it straight back to `__init__` on every jitted call.
     _BACKEND_ID = Backend.TORCH
 
-    #: Derived, not declared: `_core.enums.DIFFERENTIABLE_BACKENDS` is the one table,
+    #: Derived, not declared: `wavebit._common.enums.DIFFERENTIABLE_BACKENDS` is the one table,
     #: so `manifest.py` can publish this without importing this module to ask.
     _DIFFERENTIABLE = _BACKEND_ID in _DIFFERENTIABLE_BACKENDS
 
@@ -51,8 +51,9 @@ class _BaseRCWA(CoreSolveMixin):
         Strings are accepted, which they were not: `rcwa(backend='torch', device='cpu')` raised a
         bare `ValueError` while `RCWATorch.__init__` declared `device='cpu'` as its own
         default, so the documented default could not be written out. JAX took the strings all
-        along, and `_core.modeler._resolve_device` -- the same mapping, for the modeler --
-        has taken them since it was written.
+        along, and so did the vector modeler's `_resolve_device` -- the same mapping, for the
+        modeler -- from the day it was written until ad415b40 removed it with the block
+        modeling path.
         """
         if value is None or value in (0, 'cpu'):
             return torch.device('cpu')

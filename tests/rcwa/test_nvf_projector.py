@@ -334,8 +334,8 @@ def test_both_projectors_converge_to_the_same_physics():
     answer eventually, and one that did not would not be a factorization of this structure at
     all. This is what rules out the failure that *looks* like a working option: a projector
     landed in the wrong slot returns a plausible, energy-conserving, entirely different number
-    (the slot-order trap in `_core/factorization`'s module docstring, measured at `R + T =
-    1.61`).
+    (the slot-order trap in `wavebit.rcwa._engine.factorization`'s module docstring, measured
+    at `R + T = 1.61`).
 
     Against the analytic reference at `truncation_order=14` — the exact shape with the exact
     normal, a different modeller and a different series — on the circle of the doc's own A/B

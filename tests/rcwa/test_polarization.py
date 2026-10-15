@@ -705,11 +705,11 @@ def test_the_solved_field_turns_the_same_way(side, path):
 # ------------------------------------------------------------------ field reconstruction
 
 # The pair reaches the near field only implicitly. The boundary match writes the incident
-# amplitudes into `T1[0]` (`final_matching` in _core/solve_1d.py, `_smm_sp` in
-# _core/scattering.py) and `reconstruct_field` reconstructs from exactly that column — nothing
-# downstream of the match mentions `polarization` at all. That is why this needs pinning
-# separately from the efficiencies: the equivalence above could hold across the whole result
-# surface and still be dropped on the way to the field.
+# amplitudes into `T1[0]` (`final_matching` in src/wavebit/rcwa/_engine/solve_1d.py, `_smm_sp`
+# in src/wavebit/rcwa/_engine/scattering.py) and `reconstruct_field` reconstructs from exactly
+# that column — nothing downstream of the match mentions `polarization` at all. That is why this
+# needs pinning separately from the efficiencies: the equivalence above could hold across the
+# whole result surface and still be dropped on the way to the field.
 FIELD_RES = dict(sample_x=5, sample_y=4, sample_z=6)
 
 

@@ -58,10 +58,11 @@ from wavebit.fdtd._periodic.legacy import solve_fdtd
 def _legacy_rcwa(**kwargs):
     """Current RCWA as a reference for the private, historical FDTD kernel.
 
-    This file directly tests ``_core.fdtd.solve_fdtd``, whose private stack is
-    top-to-bottom and whose amplitudes use the corner Fourier reference. The
-    public FDTD adapter is tested separately. Keep this physical scene and
-    comparison frame explicit; do not regenerate references after a rename.
+    This file directly tests ``wavebit.fdtd._periodic.legacy.solve_fdtd``, whose
+    private stack is top-to-bottom and whose amplitudes use the corner Fourier
+    reference. The public FDTD adapter is tested separately. Keep this physical
+    scene and comparison frame explicit; do not regenerate references after a
+    rename.
     """
     from types import SimpleNamespace
     from wavebit.compat.legacy import rcwa as current_rcwa

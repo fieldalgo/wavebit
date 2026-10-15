@@ -12,7 +12,7 @@ TM at normal and oblique incidence.
 What it pins: every quantity must enter in the same convention the layers do — boundaries and
 Fourier builders alike. Three places did not. The first two are stated in the pre-2026-08
 conjugated formulation, which is what the code ran on when they were found (see
-``_core.conventions`` for what replaced it).
+``wavebit._common.conventions`` for what replaced it).
 
 * The substrate permittivity was raw ``n_bot**2``, so the stack reflected as though the
   substrate were ``conj(n_bot)`` — absorbing read as gain. Only the reflection *phase* was
@@ -288,10 +288,10 @@ def solver_R_painted(n, thickness, wavelength, theta, tetm):
     """Total reflectance of a *uniform* layer of index ``n`` built through the PAINTED path.
 
     Two overlapping rectangles of the same index, together covering the cell. The overlap is
-    what routes the layer to ``_core.boundary.to_conv_mat_boundary_layer`` (a layer with nothing
-    overlapping stays on the summed closed form), and same-index-everywhere is what leaves a
-    uniform slab at the end of it, so the Airy oracle applies exactly and none of the shape
-    machinery is under test. The material convention is the entire point, again.
+    what routes the layer to ``wavebit.rcwa._engine.boundary.to_conv_mat_boundary_layer`` (a
+    layer with nothing overlapping stays on the summed closed form), and same-index-everywhere is
+    what leaves a uniform slab at the end of it, so the Airy oracle applies exactly and none of
+    the shape machinery is under test. The material convention is the entire point, again.
 
     Every edge of the pair lands exactly on a cell edge or inside it, and that is not
     cosmetic. The boundary builder does not read a shape's *periodic images* -- it clips loops

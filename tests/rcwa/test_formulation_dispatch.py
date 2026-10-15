@@ -342,10 +342,10 @@ def test_field_reconstruction_is_dispatched_on_the_formulation_not_the_grating_t
     Asserted by watching which reconstruction actually runs, rather than by trusting the
     numbers — ``tests/rcwa/test_field_first_order.py`` is where the numbers are checked.
     """
-    # `reconstruct_field` folded into `_core.engine` in C8, so the names it dispatches on
-    # are looked up there now. Patching the backend module would patch a name nothing
-    # reads any more -- the spy would see nothing and the assertion would read as a
-    # dispatch failure rather than as a stale patch target.
+    # `reconstruct_field` folded into the engine module in C8 (now `wavebit.rcwa._engine.engine`),
+    # so the names it dispatches on are looked up there now. Patching the backend module would
+    # patch a name nothing reads any more -- the spy would see nothing and the assertion would
+    # read as a dispatch failure rather than as a stale patch target.
     import wavebit.rcwa._engine.engine as dispatch_site
 
     mee = solver(thickness=[180.0], answers='field')
