@@ -5,8 +5,9 @@ This detailed guide documents the retained `wavebit.compat.legacy` interface and
 :::
 
 **Code**: `src/wavebit/_common/conventions.py` — `lit_orders`, `incident_column`;
-`src/wavebit/rcwa/_engine/solve_1d.py` — `_incident_flux`, the two matchings;
-`src/wavebit/rcwa/_engine/scattering.py` — the SMM twins; `src/wavebit/rcwa/_engine/engine.py` — `excitation`.
+`src/wavebit/rcwa/_engine/solve_1d.py` — the two matchings; `src/wavebit/observations/power.py` —
+`incident_power`; `src/wavebit/rcwa/_engine/scattering.py` — the SMM twins;
+`src/wavebit/rcwa/_engine/engine.py` — `excitation`.
 **Tests**: `tests/rcwa/test_excitation.py`.
 
 ```python
@@ -74,9 +75,8 @@ An order past the light line carries no time-averaged z-flux. Lighting one is re
 and one order at a time:
 
 ```
-the excitation lights order 5, which is evanescent in the incidence medium -- it carries no
-time-averaged power, so it cannot be part of an incident flux and every efficiency would be
-measured against the rest.
+the excitation lights order 5, which is evanescent or carries no positive incident power in
+this medium; a zero-power near-field excitation cannot be normalized as an incident plane wave.
 ```
 
 This is not fussiness. Every efficiency is `outgoing power / incident power`, and an evanescent

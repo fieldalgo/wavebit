@@ -201,5 +201,5 @@ Reproduce with the existing numerical environment:
 
 ```sh
 PYTHONPATH=. python -m pytest -q tests/rcwa/test_nvf_periodic_galerkin.py
-PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_periodic_galerkin
+PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_periodic_galerkin.nvf_periodic_galerkin
 ```

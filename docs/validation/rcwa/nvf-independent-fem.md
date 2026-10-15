@@ -2304,12 +2304,12 @@ The lattice-helper extension adds seven tests and moves two existing
 algebraic tests into `FEMAlgebraicTests`, which constructs no mesh. Its
 nine checks pass separately; the ten unchanged mesh/solve checks were
 not rerun for this boundary-data-only change. Run the small selection with
-`python -m unittest tests.test_nvf_fem_reference.FEMAlgebraicTests -v`.
+`python -m unittest tests.rcwa.test_nvf_fem_reference.FEMAlgebraicTests -v`.
 The subsequent geometry extension passes all eight affine geometry tests
 plus those nine algebraic tests in 0.358 s:
 
 ```bash
-PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_fem_affine_geometry tests.test_nvf_fem_reference.FEMAlgebraicTests -v
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.rcwa.test_nvf_fem_affine_geometry tests.rcwa.test_nvf_fem_reference.FEMAlgebraicTests -v
 ```
 
 Five existing square-fixture mesh and periodic-identification tests also
@@ -2321,7 +2321,7 @@ The full affine integration is checked separately, including both
 polarizations, the driven degree-4 slab, Robin power and local sizing:
 
 ```bash
-PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_fem_boundary_power tests.test_nvf_fem_affine_scattering tests.test_nvf_fem_affine_geometry tests.test_nvf_fem_reference.FEMAlgebraicTests -v
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.rcwa.test_nvf_fem_boundary_power tests.rcwa.test_nvf_fem_affine_scattering tests.rcwa.test_nvf_fem_affine_geometry tests.rcwa.test_nvf_fem_reference.FEMAlgebraicTests -v
 ```
 
 This selection passes 29 tests in 11.693 s. To reproduce a physical affine
@@ -2331,7 +2331,7 @@ solve through the Python entry point:
 PYTHONPATH=$PWD "$NVF_FEM_PYTHON" - <<'PY'
 import json
 import ngsolve as ng
-from studies.nvf_fem_reference import solve_affine_rayleigh
+from studies.rcwa.nvf_fem_reference.nvf_fem_reference import solve_affine_rayleigh
 ng.SetNumThreads(1)
 result = solve_affine_rayleigh(h=.18, order=4, cut=2, pad=.1)
 print(json.dumps(result, allow_nan=False))
@@ -2345,8 +2345,8 @@ its reported control above uses `cut=1`. The physical-edge trial uses
 of mesh and FEM degree. The default command-line entry
 point continues to select the historical square fixture.
 The boundary-storage and fixed-mesh degree controls are available as
-`tests.test_nvf_fem_boundary_storage`, `tests.test_nvf_fem_space` and
-`tests.test_nvf_fem_affine_degree`. To raise the film neighborhood on
+`tests.rcwa.test_nvf_fem_boundary_storage`, `tests.rcwa.test_nvf_fem_space` and
+`tests.rcwa.test_nvf_fem_affine_degree`. To raise the film neighborhood on
 the target-.12 mesh, use `solve_affine_rayleigh(h=.18, order=5, cut=4,
 pad=.2, edge_h=.12, film_degree=6, film_degree_pad=.05)`.
 For the separate physical-corner mesh control, use

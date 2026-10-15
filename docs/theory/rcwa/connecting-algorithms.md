@@ -18,6 +18,10 @@ Targets:
 `'ETM'` / `'SMM'` / `'TMM'` did not move). "Connecting algorithm" stays the name of the *idea*
 throughout this document, because that is what the literature calls it; the keyword says what
 it selects — how the per-layer solutions are chained into a stack — without an abbreviation.
+Since 2026-10-13 the public `wavebit.rcwa` module spells the choice
+`rcwa.Numerics(algorithm='smm' | 'etm')` and defaults to `'smm'`; `layer_algorithm`, with its
+`'ETM'` default, is the keyword of the earlier interface, `wavebit.compat.legacy`, which the
+snippets below use (`wavebit` there means `from wavebit.compat import legacy as wavebit`).
 
 **This document is about the connecting algorithm, not about anisotropy.** The choice is the same
 question for an isotropic grating as for a magneto-optic film — it changes no physics, only how
@@ -65,7 +69,8 @@ which does have gratings, rather than assumed.
    one on its own medium. The one stack ETM cannot write is Pendry's perfect-lens pair, which
    it names (§11). Where a layer sets negative permittivity beside positive, SMM lost up to
    4.5e-10 to rounding at its gap until 2026-10-09, when the gap's waves changed (§11).
-2. ETM is cheaper everywhere measured, so it is the default on both paths.
+2. ETM is cheaper everywhere measured, so it is the earlier interface's default on both paths
+   (the public `rcwa.Numerics` defaults to `'smm'`, above).
 3. A plain transfer matrix is not a third option you would ever pick. It cannot run a grating at
    all — not because layers are thick, but because **diffraction orders are evanescent**, and it
    is already refusing at 25 orders on a 220 nm layer.
@@ -248,7 +253,9 @@ ETM became the default.
 
 An SMM solve builds the stack's whole `S` — both sides, every order — in order to answer at all
 (`R` and `T` are two of its blocks applied to the incident vector) and used to throw it away.
-`solver.scattering` is what survives now:
+`solver.scattering` is what survives now, on the earlier interface below. (Since 2026-10-13 the
+public module returns it as `result.scattering` when `rcwa.Outputs(scattering=True)` is asked of
+an `algorithm='smm'` run, and refuses that request under `'etm'`.)
 
 ```python
 solver = wavebit.rcwa(layer_algorithm='SMM', answers='amplitude', ...)

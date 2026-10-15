@@ -7,8 +7,9 @@ This detailed guide documents the retained `wavebit.compat.legacy` interface and
 The experimental `CartesianPairOpeningPlan` and `CartesianPairOpeningCell`
 provide a separate NumPy-only contact value and analytical right derivative
 as a physical gap opens between two horizontal equal-height rectangles.
-Import them from `wavebit.rcwa._engine.conforming.cartesian_pair_opening`.
-This interface does not alter the contact-preserving JAX contract of
+Import them from `wavebit.rcwa._engine.conforming.cartesian_pair_opening`; the plan is
+also exported by `wavebit.rcwa.experimental`. This interface does not alter the
+contact-preserving JAX contract of
 [`CartesianRectanglePairNVF`](cartesian-rectangle-pair-nvf.md).
 
 ```python

@@ -104,7 +104,7 @@ converged optical result.
 ## Use and reproduction
 
 ```python
-from studies.nvf_posed_gap import PosedGapModel
+from studies.rcwa.nvf_posed_gap.nvf_posed_gap import PosedGapModel
 
 model = PosedGapModel(
     2, rows=4, body_degree=4, gap_degree=6, edge_fraction=1e-5,
@@ -119,9 +119,9 @@ response = model.response(
 ```
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_posed_gap --jax
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_posed_gap --rows 8 --subdivisions 3 --flux-basis local --grading-radius .0001 --azimuth .68 --contact-check
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_posed_gap --gap 0 --body-degree 1 --subdivisions 3 --flux-basis local --grading-radius .0001 --azimuth .68 --jax --contact-check
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_posed_gap.nvf_posed_gap --jax
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_posed_gap.nvf_posed_gap --rows 8 --subdivisions 3 --flux-basis local --grading-radius .0001 --azimuth .68 --contact-check
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_posed_gap.nvf_posed_gap --gap 0 --body-degree 1 --subdivisions 3 --flux-basis local --grading-radius .0001 --azimuth .68 --jax --contact-check
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_posed_gap.py tests/rcwa/test_nvf_local_flux.py
 ```
 

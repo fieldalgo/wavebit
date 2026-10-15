@@ -17,7 +17,8 @@ Targets:
 shape-layer dictionaries and feeds the existing `solve_conv()` pipeline.
 The cell kernels now live in the library; the study classes reuse them and
 keep only their fixed-fixture optical readouts in `studies/`. The shared
-closure is `ConvMatrices.from_energy()`.
+closure is `ConvMatrices.from_energy()`. Since 2026-10-13 both names are exported from
+`wavebit.compat.legacy`, not from the top-level `wavebit` namespace.
 
 This removes the need to reconstruct the five-slot layout, invert the zz
 matrix or guess the off-diagonal signs in an adapter. The consuming solver

@@ -21,8 +21,8 @@ errors breed — three shipped as gain-media bugs, one as a branch-cut defect
 (`docs/validation/rcwa/time-convention-audit.md`). This document removes the translation step: **the full
 derivation, from Maxwell's equations to the diffraction efficiencies, natively in
 `e^{-iωt}`**, with every intermediate quantity named after the variable that holds it in
-`_core/`. Each boxed result was checked against the code the day this was written — the
-check is stated next to the result.
+`src/wavebit/rcwa/_engine/`. Each boxed result was checked against the code the day this was
+written — the check is stated next to the result.
 
 Conventions, all of them, up front:
 
@@ -99,7 +99,8 @@ Ey(x̃, z̃) = Σ_m  S_m(z̃) exp(+i kx_m x̃),      kx_m = n_I sinθ cosφ + m 
 ```
 
 with `m` running `-M..M` — the sign of `m` here and the `+i` in the phase are one choice.
-Code: `_separable_kxy` builds exactly this vector (`max_order_x_range = arange(-M, M+1)`).
+Code: `_separable_kxy` builds exactly this vector (`orders_u = arange(cx - hx, cx + hx + 1)`,
+which is `-M..M` on the default window, centred on order 0).
 
 The permittivity expands in the **same** sign:
 
@@ -300,11 +301,13 @@ V_21 = Ky B⁻¹ Kx εz⁻¹ W1      V_22 = B⁻¹ W2 q2                    (C3)
 same `q` — and the eigenvector convention difference is absorbed by the `V` blocks.
 Bit-parity with the legacy chain and the RETICOLO conical sweep pin this jointly.)
 
-The boundary works in the s/p basis, rotated per order by `varphi = atan(ky/kx)`
-(`F_c = diag(cos varphi)`, `F_s = diag(sin varphi)`); `sp_modes_1d_conical` /
-`sp_modes_2d` assemble `big_W` (mode → boundary primaries) and `big_V` (mode → boundary
-partners) from (C3)/(2D4). The rotation is pure geometry and carries no convention
-content beyond `varphi`'s sign, which is fixed by the `ky` order vector of §2.1.
+The boundary works in the s/p basis, rotated per order by `varphi`, the direction of
+`(kx, ky)` -- `atan2(ky, kx)`; `order_azimuth` spelled it `atan(ky/kx)` until 2026-08-16
+(`docs/theory/rcwa/amplitude-sp-frame.md`) -- with `F_c = diag(cos varphi)` and
+`F_s = diag(sin varphi)`; `sp_modes_1d_conical` / `sp_modes_2d` assemble `big_W` (mode →
+boundary primaries) and `big_V` (mode → boundary partners) from (C3)/(2D4). The rotation is
+pure geometry and carries no convention content beyond `varphi`'s sign, which is fixed by the
+`ky` order vector of §2.1.
 
 ---
 

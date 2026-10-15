@@ -125,12 +125,12 @@ mesh. The direct polynomial-flux CLI defaults to body/flux degree 2 and the
 material-graded mesh, matching its model constructor.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 0 --meshes 1:8 --gap-degrees 6 --body-degree 4 --flux-degree 2 --grading 8:.01 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 16 --meshes 1:8 --gap-degrees 6 --body-degree 3 --flux-degree 3 --grading 8:.01 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 16 --meshes 3:8 --gap-degrees 6 --body-degree 3 --grading 8:.01 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 16 --meshes 3:8 --gap-degrees 6 --body-degree 4 --grading 8:.01 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_polynomial_flux --order 2 --gaps 0 17 --seams 0 --body-degree 2 --flux-degree 3 --gap-degree 4 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_polynomial_flux --static --seams 0 31 --rows 4 --body-degree 2 --flux-degree 3 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 0 --meshes 1:8 --gap-degrees 6 --body-degree 4 --flux-degree 2 --grading 8:.01 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 16 --meshes 1:8 --gap-degrees 6 --body-degree 3 --flux-degree 3 --grading 8:.01 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 16 --meshes 3:8 --gap-degrees 6 --body-degree 3 --grading 8:.01 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 16 --meshes 3:8 --gap-degrees 6 --body-degree 4 --grading 8:.01 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_polynomial_flux.nvf_polynomial_flux --order 2 --gaps 0 17 --seams 0 --body-degree 2 --flux-degree 3 --gap-degree 4 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_polynomial_flux.nvf_polynomial_flux --static --seams 0 31 --rows 4 --body-degree 2 --flux-degree 3 --edge-fraction 1e-5
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_polynomial_flux.py tests/rcwa/test_nvf_polynomial_body.py tests/rcwa/test_nvf_directional_convergence.py tests/rcwa/test_nvf_interface_resolution.py tests/rcwa/test_nvf_gap_convergence.py tests/rcwa/test_nvf_gap_reference.py tests/rcwa/test_nvf_continuous_flux.py tests/rcwa/test_nvf_harmonic_coordinates.py tests/rcwa/test_nvf_partitioned_gap_energy.py tests/rcwa/test_nvf_thin_gap_energy.py tests/rcwa/test_nvf_cell_bounds.py tests/rcwa/test_nvf_cell_corrector.py tests/rcwa/test_nvf_harmonic_energy.py tests/rcwa/test_nvf_harmonic_energy_jax.py tests/rcwa/test_resonant_nvf_probe.py tests/rcwa/test_contact_jones_probe.py::test_equal_material_split_is_equivalent_to_one_rectangle
 ```
 

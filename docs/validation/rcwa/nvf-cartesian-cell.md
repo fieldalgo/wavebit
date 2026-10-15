@@ -62,7 +62,7 @@ integer-quantized vertex keys resolve planning ties. This tolerance does
 not relax the strict containment or positive-area guards.
 
 ```python
-from studies.nvf_cartesian_cell import CartesianRectangleCell, CartesianRectanglePlan
+from studies.rcwa.nvf_cartesian_cell.nvf_cartesian_cell import CartesianRectangleCell, CartesianRectanglePlan
 
 geometry = dict(basis=[[700., 315.], [0., 490.]], width=350., height=300.,
                 angle=3.45, offset=(49., -21.))

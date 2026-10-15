@@ -199,8 +199,9 @@ band straddles the boundary symmetrically, so no sub-pixel offset enters and the
 symmetry of the field is exact (`normal_vector_field` is bit-exactly covariant under a flip).
 
 None of this is a defect *refinement* can fix -- that is the finding of this file -- and it is
-part of why the analytic, boundary and levelset paths exist, all three of which build the
-normal field from the shape instead of from its raster. It did, however, turn out to be a
+part of why the analytic and boundary paths exist, both of which build the normal field from
+the shape instead of from its raster (a levelset path did too; it is no longer in the
+package). It did, however, turn out to be a
 defect a different construction can fix on the raster itself: the quantization lives in the
 integer-grid differencing, not in the raster, and smoothing the indicator before
 differentiating removes it. Three such constructions were measured and shipped behind the

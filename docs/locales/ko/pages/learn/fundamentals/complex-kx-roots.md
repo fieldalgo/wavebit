@@ -611,7 +611,7 @@ RETICOLO에 모든 차수를 보고하게 하면 {math}`\operatorname{Im}\theta=
 이 부록의 결론은 {ref}`전제 2 <ckr-premises>`(무손실)에 기댑니다. {ref}`부록 B <complex-kx-lossy-gain>`는 이 전제 하나만 풀고 나머지 셋은 그대로 둔 채, 무엇이 달라지는지 봅니다.
 
 - **입사 매질이 흡수하면**, 실수 `theta`(위상각 규약)와 복소 `theta`(형식적인 {math}`n\sin\theta`)가 서로 다른 {math}`k_x`를 줍니다. 복소 `theta`가 더는 실수 `theta`를 살짝 비튼 입력이 아닙니다({ref}`흡수 입사 매질 <ckr-absorbing-incidence>`).
-- **근을 고르는 반공간이 흡수하면**, branch point가 실수축에서 떠서 실수 {math}`k_x` 근처에서는 네 규칙이 모두 같아집니다. Wavebit의 연속성 보정이 실제로 일하는 곳도 여기입니다({ref}`흡수 반공간 <ckr-lossy>`).
+- **근을 고르는 반공간이 흡수하면**, branch point가 실수축에서 떠서 실수 {math}`k_x` 근처에서는 네 규칙이 모두 같아집니다. 2026년 10월 2일 전 Wavebit의 연속성 보정이 일했던 곳도 여기입니다({ref}`흡수 반공간 <ckr-lossy>`).
 - **반공간이 빛을 키우면(이득)**, 실수 {math}`k_x`에서도 두 기준이 서로 다른 근을 가리켜 규칙이 필요해지고, 답은 인과율이 정합니다({ref}`이득 매질 <ckr-gain>`).
 - 흡수나 이득이 있어야 드러나는 코드 차이는 {ref}`부록 B의 코드 비교 <ckr-b-codes>`에 있습니다.
 

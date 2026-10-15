@@ -39,9 +39,9 @@ Wavebit는 재료 구조를 크게 두 방식으로 받습니다. **raster·shap
 
 ## 계수를 얻는 방식과 곱 규칙은 서로 독립
 
-`fourier_coefficients`는 재료의 Fourier 계수를 얻는 방법이고, `factorization`은 불연속 곱을 처리하는 방법입니다. raster에서는 sampled/integrated와 li/nvf의 네 조합이 가능합니다. integrated raster는 각 픽셀 사각형의 적분을 반영하지만, 원래 픽셀 배열의 계단형 기하를 매끈한 원으로 바꾸지는 않습니다.
+`fourier_coefficients`는 재료의 Fourier 계수를 얻는 방법이고, `factorization`은 불연속 곱을 처리하는 방법입니다. raster에서는 sampled/integrated와 li/nvf의 네 조합이 가능합니다. 세 번째 factorization인 선택형 `'laurent'`(모든 곱에 직접 규칙)는 그 규칙을 쓰는 솔버와 비교하기 위해 있으며, 이 교재에서는 사용하지 않습니다. integrated raster는 각 픽셀 사각형의 적분을 반영하지만, 원래 픽셀 배열의 계단형 기하를 매끈한 원으로 바꾸지는 않습니다.
 
-shape 경로는 단순한 원·타원·회전 사각형의 재료 계수를 해석적 적분으로 만들 수 있습니다. 다만 모든 도형 조합을 항상 닫힌 식으로 처리하는 것은 아닙니다. 겹치는 곡선의 painting 등에는 다각형 근사와 별도의 기하 정밀도 조절이 들어갑니다. NVF의 투영 계수도 별도의 수치 적분이 필요하므로, “재료 계수의 해석적 적분”이 “광학 해의 정확한 닫힌 해”를 뜻하지 않습니다.
+shape 경로는 단순한 원·타원·회전 사각형의 재료 계수를 해석적 적분으로 만들 수 있습니다. `type='polygon'` 외곽선(2026-10-15부터)은 대신 painting 경로에서 정확하게 변환됩니다. [다각형 영역](../../guide/rcwa/boundary-modeling.md#polygon-regions)을 참고하세요. 다만 모든 도형 조합을 항상 닫힌 식으로 처리하는 것은 아닙니다. 겹치는 곡선의 painting 등에는 다각형 근사와 별도의 기하 정밀도 조절이 들어갑니다. NVF의 투영 계수도 별도의 수치 적분이 필요하므로, “재료 계수의 해석적 적분”이 “광학 해의 정확한 닫힌 해”를 뜻하지 않습니다.
 
 ```{figure} ../../figures/learn/nvf/08-settings.svg
 :alt: 생성 방법, 투영 방식, 샘플 수와 Fourier 차수는 서로 다른 설정이다

@@ -66,7 +66,7 @@ pinned against the production code before anything is read off them:
 |---|---|
 | G-difference build vs `fourier2d_pointwise` | 1.7e-16 |
 | G-difference build vs `fourier2d_piecewise_constant` | 4.5e-16 |
-| `solve_flat` on a rectangular set vs `_core.solve_2d` (NVF) | 4.0e-15 |
+| `solve_flat` on a rectangular set vs `rcwa._engine.solve_2d` (NVF) | 4.0e-15 |
 
 Reference drift (`truncation_order=18` against `truncation_order=20`) is 4e-4 to 9e-4 under NVF, five to eight times
 below the smallest error compared.

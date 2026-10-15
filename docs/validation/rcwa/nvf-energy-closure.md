@@ -124,7 +124,7 @@ Set `NVF_CACHE` to an existing scratch directory for generated projection files.
 
 ```bash
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_energy_closure.py tests/rcwa/test_nvf_mirror_convergence.py tests/rcwa/test_nvf_mirror_cartesian.py tests/rcwa/test_nvf_mirror_doubling.py
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_convergence --orders 48 --flux-basis local --save-projection "$NVF_CACHE/wavebit-mirror-local-cap96.npz" --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_convergence.nvf_mirror_convergence --orders 48 --flux-basis local --save-projection "$NVF_CACHE/wavebit-mirror-local-cap96.npz" --progress
 ```
 
 The mirror symmetry, real-field conjugacy, effective Hermiticity and power

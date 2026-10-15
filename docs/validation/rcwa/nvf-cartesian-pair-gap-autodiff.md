@@ -17,7 +17,8 @@ the [manual](../../guide/rcwa/cartesian-pair-gap-autodiff.md).
 
 ## Finite equations and contact semantics
 
-The same immutable collapse topology supplies C and Z at refinement 0 or 1.
+The same immutable collapse topology supplies C and Z at refinement 0 or 1 (0 through 3 since
+2026-09-13; see [the refinement record](nvf-pair-refinement.md)).
 Normalize physical lengths by L = √det(A), set s = g/L, and use the physical
 potential `w = L*(C*u + s*Z*v)`. The analytically removed thin poles give
 

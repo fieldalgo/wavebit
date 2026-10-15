@@ -342,6 +342,6 @@ periodic-topology code. Reproduce from the checkout:
 
 ```sh
 PYTHONPATH=. python -m pytest -q tests/rcwa/test_nvf_pair_galerkin.py tests/rcwa/test_nvf_pair_quadratic.py
-PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_pair_galerkin
-PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_pair_galerkin --degree 2 --orders 4 8 12 --out studies/rcwa/nvf_pair_galerkin/records/nvf_pair_galerkin_quadratic.log
+PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_pair_galerkin.nvf_pair_galerkin
+PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_pair_galerkin.nvf_pair_galerkin --degree 2 --orders 4 8 12 --out studies/rcwa/nvf_pair_galerkin/records/nvf_pair_galerkin_quadratic.log
 ```

@@ -105,7 +105,7 @@ for point in restored.expand():
 
 이 예제에서는 **실리콘 이름만 저장하는 것이 아니라, 불러온 파장별 재료표도 JSON에 함께 저장합니다.** 복원한 설정은 그 표를 사용해 각 파장의 재료값을 구합니다. 굴절률에서 만든 재료는 굴절률 표와 선택적으로 지정한 투자율 표를, 유전율에서 만든 재료는 유전율 표와 선택적으로 지정한 투자율 표를 보존합니다. 이방성 재료의 텐서 성분도 보존합니다.
 
-반면 `silicon.at(900.)`으로 만든 `Material`을 할당했다면 JSON에도 900 nm에서 구한 고정값이 들어갑니다. 복원한 뒤 파장을 바꿔도 그 고정값을 사용한다는 점은 [7장의 두 재료 객체 설명](materials.md)과 같습니다.
+반면 900 nm에서 구한 고정값을 할당했다면 JSON에도 그 고정값이 들어갑니다. 복원한 뒤 파장을 바꿔도 그 고정값을 사용한다는 점은 [7장의 두 재료 객체 설명](materials.md)과 같습니다. 이때는 `value = silicon.at(900.)`로 값을 구한 뒤 `wavebit.Material(epsilon=value.epsilon, mu=value.mu)`처럼 `Material`로 감싸 할당합니다. 내장 표의 `.at()`은 `MaterialResponse`를 돌려주며, `to_json()`은 이를 거부합니다.
 
 `spec.key()`는 입력 설정을 비교하기 위한 식별값입니다. 저장 전후 `spec.key() == restored.key()`이면 정규화한 입력 설정이 같습니다. 계산 결과를 재현하려면 이 설정과 함께 Wavebit·의존성 버전, 백엔드와 정밀도도 기록합니다. JSON에는 파일 형식을 구분하는 `version`이 포함되며 현재 값은 10입니다. 이전 형식 파일을 사용할 때의 변환 규칙은 [영문 설정 안내](../../migration/jobs-v1.md#what-a-document-must-say-and-what-is-refused)를 참고합니다.
 
@@ -143,4 +143,4 @@ for point in restored.expand():
 | 900.0 | 0.205331628 | 0.794668372 |
 | 1000.0 | 0.171513741 | 0.828486259 |
 
-전체 인자와 JSON 형식은 [영문 사용 안내](../../guide/common/specs.md), 클래스와 메서드 목록은 [API 문서](../../migration/legacy-api.md#a-run-as-data)에서 확인할 수 있습니다. 외부 프로그램이 사용할 기능 목록은 [기능 매니페스트 안내](../../reference/common/capability-manifest.md)에 따로 설명합니다.
+전체 인자와 JSON 형식은 [영문 호환 작업 안내](../../migration/jobs-v1.md), 클래스와 메서드 목록은 [API 문서](../../migration/legacy-api.md#a-run-as-data)에서 확인할 수 있습니다. 외부 프로그램이 사용할 기능 목록은 [기능 매니페스트 안내](../../reference/common/capability-manifest.md)에 따로 설명합니다.

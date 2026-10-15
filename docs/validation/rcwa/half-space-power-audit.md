@@ -126,7 +126,7 @@ Minimal reproduction:
 
 ```python
 import numpy as np
-import wavebit
+from wavebit.compat import legacy as wavebit
 
 common = dict(
     backend='numpy',
@@ -142,6 +142,9 @@ for psi in (np.pi / 2, 0.):
 # TE: 0.5680836058777344
 # TM: 0.5243848669640628
 ```
+
+Since 2026-10-13 this solver interface is `wavebit.compat.legacy`, imported as above; run after
+the fix, both lines print the TE value.
 
 What this investigation checked:
 
@@ -203,6 +206,10 @@ to `ε=−2+0.1i`, `μ=−1+0.1i`, the independent calculation gives `R=0.029282
 `T=0.970717943`. The current result is `R=34.150606141`, `T=−33.150606141`, with an
 unphysical-result warning. A substrate with positive real parts, `ε=4+0.2i`, `μ=1.5+0.1i`,
 passed.
+
+Since 2026-10-04 a magnetic half-space takes the signed index `sqrt(ε)*sqrt(μ)`, and both
+examples above solve to the independent values (`R=0`, `T=1`; `R=0.029282057`,
+`T=0.970717943`); see [`negative-index-media.md`](../../theory/rcwa/negative-index-media.md).
 
 ## Scope of support and direction of the fix
 

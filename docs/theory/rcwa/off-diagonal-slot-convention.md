@@ -189,7 +189,9 @@ That mirrored structure is a perfectly good physical structure, and at normal in
 | **`T_p` (amplitude)** | **+0.203278+0.376021j** | **-0.203278-0.376021j** | **sign flipped** |
 
 Every efficiency agrees to machine zero. Only the complex `T_p` moves, and it moves by exactly a
-sign — because `|T_p|²` cannot see a mirror, but `T_p` can.
+sign — because `|T_p|²` cannot see a mirror, but `T_p` can. (The table uses the names of
+2026-08-10. Since 2026-08-12 the complex amplitudes are the lowercase `t_s` / `t_p`, and
+`T_s` / `T_p` name the per-order efficiencies that `de_ti_s` / `de_ti_p` were.)
 
 > **If you are checking a hand-filled tensor against anything, check an amplitude.** A validation
 > built from R and T numbers is structurally incapable of catching this.
@@ -491,7 +493,7 @@ the library unpacks by name, so the reorder is invisible to `solve`.
 | Effect on released behaviour | none — verified bit-identical on real gratings |
 | Oblique incidence, stacks, complex asymmetric tensors | covered by `tests/rcwa/test_anisotropic_berreman.py` |
 | Which magnetization `+i·g` means | **open** |
-| A *patterned* anisotropic layer | **out of scope here** — needs the factorization in `anisotropic-materials.md` §3 |
+| A *patterned* anisotropic layer | **out of scope here**; the factorization it needed landed on 2026-08-14 ([`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md)) |
 | The z-row slots (`epxz`, `epyz`, `epzx`, `epzy`) | same sign rule, chosen not forced (§2.1); judged against Berreman, where a wrong sign *does* move a power efficiency |
 
 ### What the oracle is, and is not
@@ -566,7 +568,10 @@ validated, at all, is any anisotropic behaviour of a *patterned* layer.
 
 That gap will not close by adding cases here: a patterned anisotropic layer needs a factorization
 that does not exist yet (`anisotropic-materials.md` §3), so there is nothing to test, and no
-uniform-layer oracle could reach it if there were.
+uniform-layer oracle could reach it if there were. (It has existed since 2026-08-14, the
+Popov–Nevière factorization of [`patterned-anisotropic-factorization.md`](patterned-anisotropic-factorization.md),
+judged against fmmax there; tensor Li joined it on 2026-09-24,
+[`tensor-li-factorization.md`](tensor-li-factorization.md).)
 
 It is, however, reachable when the time comes — though not by the route this document first claimed.
 RETICOLO draws the line between patterned and uniform, and its own V10 manual states it on page 1:

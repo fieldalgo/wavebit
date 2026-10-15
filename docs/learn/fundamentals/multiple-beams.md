@@ -581,7 +581,7 @@ Putting `PlaneWave` and `ElectricDipole` in one source list adds their complex f
 (planewave)=
 ## Supported scope and field access
 
-Passing `PlaneWave`, `OrderExcitation`, `GaussianBeam`, or `ElectricDipole` source objects through `excitation` uses **the first-order formulation (`first_order`, formerly 4ff) and SMM**. Ordinary NumPy, JAX, and PyTorch execution is supported; `jit`, `vmap`, `torch.compile`, automatic differentiation, and `JobSpec` serialization are outside this interface's supported scope. The upper and lower half-spaces must be isotropic. Gaussian-beam incident media and dipole-containing layers must meet the conditions described in their respective sections.
+Passing `PlaneWave`, `OrderExcitation`, `GaussianBeam`, or `ElectricDipole` source objects through `excitation` uses **the first-order formulation (`first_order`, formerly 4ff) and SMM**. Ordinary NumPy, JAX, and PyTorch execution is supported; `jit`, `vmap`, automatic differentiation, and `JobSpec` serialization are outside this interface's supported scope. Under `torch.compile` it runs eagerly inside the compiled caller. The upper and lower half-spaces must be isotropic. Gaussian-beam incident media and dipole-containing layers must meet the conditions described in their respective sections.
 
 This source API does not separately define solution selection for amplifying media. If a retained order reaches exact grazing incidence and makes the matrix singular, the wavelength is not changed automatically; check convergence at nearby wavelengths or incidence conditions. The [detailed API and calculation definitions](../../guide/rcwa/coherent-illumination.md) describe inputs and result objects further.
 

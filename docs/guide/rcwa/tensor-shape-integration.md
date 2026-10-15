@@ -63,6 +63,8 @@ components close together, and the resulting zz operator is inverted.
 ## Geometry and remaining approximations
 
 - Disjoint circles, ellipses and rectangles use analytic indicator transforms.
+  A `polygon` region (`rcwa.Polygon`) is refused by name with a tensor material;
+  it is built with scalar materials only ([Polygon regions](boundary-modeling.md#polygon-regions)).
 - Overlaps paint later shapes over earlier ones. The existing contour resolver
   produces disjoint polygon regions, including holes. Rectangle contours are
   exact; curved painted regions use 256-vertex polygon approximations.

@@ -581,7 +581,7 @@ dipole_field = dipole_result.reconstruct_field(
 (planewave)=
 ## 지원 범위와 필드 읽기
 
-`PlaneWave`, `OrderExcitation`, `GaussianBeam`, `ElectricDipole` 소스 객체를 `excitation`에 넣는 방식은 **1차 정식화(`first_order`, 옛 이름 4ff)와 SMM**으로 계산합니다. NumPy·JAX·PyTorch의 일반 실행을 지원하며, `jit`·`vmap`·`torch.compile`, 자동미분과 `JobSpec` 저장은 지원 범위에 포함되지 않습니다. 위·아래 반무한 매질은 등방성이어야 합니다. 가우시안 빔의 입사 매질과 다이폴이 놓이는 층의 조건은 각 소스 절에서 설명한 범위를 따릅니다.
+`PlaneWave`, `OrderExcitation`, `GaussianBeam`, `ElectricDipole` 소스 객체를 `excitation`에 넣는 방식은 **1차 정식화(`first_order`, 옛 이름 4ff)와 SMM**으로 계산합니다. NumPy·JAX·PyTorch의 일반 실행을 지원하며, `jit`·`vmap`, 자동미분과 `JobSpec` 저장은 지원 범위에 포함되지 않습니다. `torch.compile` 안에서는 컴파일된 호출자 안에서 즉시 실행(eager)됩니다. 위·아래 반무한 매질은 등방성이어야 합니다. 가우시안 빔의 입사 매질과 다이폴이 놓이는 층의 조건은 각 소스 절에서 설명한 범위를 따릅니다.
 
 증폭 매질의 해 선택은 이 소스 API에서 별도로 정의하지 않습니다. 계산 차수가 정확히 스침 입사 조건에 놓여 행렬이 특이해지면 파장을 자동으로 바꾸지 않으므로, 가까운 파장이나 입사 조건에서 결과의 수렴을 확인합니다. [상세 API와 계산 정의(영문)](../../guide/rcwa/coherent-illumination.md)에서 입력값과 결과 객체를 더 자세히 확인할 수 있습니다.
 

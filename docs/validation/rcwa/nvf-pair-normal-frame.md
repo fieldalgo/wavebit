@@ -258,7 +258,7 @@ two errors, not a rigorous quadrature enclosure. Refining this field's
 integrals alone does not remove the large outer discrepancy.
 
 ```bash
-PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python -m studies.nvf_pair_normal_frame_quadrature
+PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python -m studies.rcwa.nvf_pair_normal_frame_quadrature.nvf_pair_normal_frame_quadrature
 ```
 
 The original optical record below describes the initial whole-grid

@@ -12,8 +12,8 @@ For an image or an existing material array, use {download}`Example 2 <../../../e
 ```
 
 ```bash
-python examples/02_raster_nvf.py
-python examples/05_select_li_or_nvf.py
+python examples/rcwa/learning/nvf/02_raster_nvf.py
+python examples/rcwa/learning/nvf/05_select_li_or_nvf.py
 ```
 
 The measured result for Example 2 is `R_p=0.002827293719`, `T_p=0.997172706281`, with energy residual `2.22×10⁻¹⁶`. Its difference from Example 1 includes both pixel-geometry differences and differences in normal-field construction. Those two results alone cannot establish which path is closer to the true value.

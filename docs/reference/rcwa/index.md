@@ -60,4 +60,7 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
 .. autoclass:: wavebit.rcwa.Result
    :members:
 
+.. autoclass:: wavebit.rcwa.BoundaryPower
+   :members:
+
 ```

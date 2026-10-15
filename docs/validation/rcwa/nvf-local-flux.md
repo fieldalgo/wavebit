@@ -178,6 +178,6 @@ the fitted projection generated in [the independent cell study](nvf-gap-converge
 Set `NVF_CACHE` to an existing scratch directory for generated projection files.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 8 --meshes 3:8 --gap-degrees 6 --body-degree 4 --edge-fraction 1e-5 --flux-basis local --grading 8:.0001 --projection "$NVF_CACHE/wavebit-gap-reference-h003-cap48.npz"
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_contact_sweep
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 8 --meshes 3:8 --gap-degrees 6 --body-degree 4 --edge-fraction 1e-5 --flux-basis local --grading 8:.0001 --projection "$NVF_CACHE/wavebit-gap-reference-h003-cap48.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_contact_sweep.nvf_contact_sweep
 ```

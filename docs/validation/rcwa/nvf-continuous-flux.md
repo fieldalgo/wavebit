@@ -161,10 +161,10 @@ outer Fourier-order uncertainties described in the earlier studies remain.
 Run from the repository root with NumPy, SciPy and JAX installed:
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_continuous_flux --gap-degree 1
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_continuous_flux --static --gap-degree 1
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_continuous_flux --order 2 --gaps 17 --seams 0 --gap-degree 1
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_continuous_flux --order 7 --gaps 0 --seams 31 --values 12.25 12.25 --rows 8 --edge-fraction 0.00001 --gap-degree 1
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_continuous_flux.nvf_continuous_flux --gap-degree 1
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_continuous_flux.nvf_continuous_flux --static --gap-degree 1
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_continuous_flux.nvf_continuous_flux --order 2 --gaps 17 --seams 0 --gap-degree 1
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_continuous_flux.nvf_continuous_flux --order 7 --gaps 0 --seams 31 --values 12.25 12.25 --rows 8 --edge-fraction 0.00001 --gap-degree 1
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_continuous_flux.py tests/rcwa/test_nvf_harmonic_coordinates.py tests/rcwa/test_nvf_partitioned_gap_energy.py tests/rcwa/test_nvf_thin_gap_energy.py tests/rcwa/test_nvf_cell_bounds.py tests/rcwa/test_nvf_cell_corrector.py tests/rcwa/test_nvf_harmonic_energy.py tests/rcwa/test_nvf_harmonic_energy_jax.py tests/rcwa/test_resonant_nvf_probe.py tests/rcwa/test_contact_jones_probe.py::test_equal_material_split_is_equivalent_to_one_rectangle
 ```
 

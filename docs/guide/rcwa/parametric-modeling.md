@@ -42,8 +42,10 @@ Two qualifications, both measured, both easy to trip over:
   geometric error has a floor no Fourier order removes.
 - **On an axis-aligned boundary the default parametric NVF route is the slower one.** Li's rules along x and y
   are already optimal when the interfaces are axis-aligned, so NVF only costs there. Measured
-  against RETICOLO: the block path matches at 1e-14 every order while the parametric path needs
-  truncation_order≈16 to reach 1e-4.
+  against RETICOLO: the block path matched at 1e-14 every order while the parametric path needs
+  truncation_order≈16 to reach 1e-4. The block path was removed on 2026-08-26; on axis-aligned
+  rectangles `factorization='li'` now builds Li's rules on the exact edges (see *Cartesian
+  rectangles with explicit Li factorization* below).
 
 Choose the path by the boundary, not on a general expectation that the parametric path wins.
 
@@ -241,11 +243,12 @@ stand in those two expressions is gone**, which is one of the sites the flip to 
 made of, and there is no conjugation on the way in either: wavebit is `e^{-iωt}` throughout,
 so `Im(eps) > 0` is loss as written. Same reading as `to_conv_mat_raster_nvf`.
 `conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
-`⟦1/ε⟧` from this `(4*truncation_order+1)²` coefficient grid in the same ordering as the `dfs2d_*` builders.
+`⟦1/ε⟧` from this `(4*truncation_order+1)²` coefficient grid in the same ordering as the raster
+path's `fourier2d_pointwise` (`test_conv_matrix_matches_grid_convention`).
 
 ## 2. Coupling with the NVF factorization
 
-Key observation: the five matrices the NVF consumer (`transfer_2d_2`) needs —
+Key observation: the five matrices the NVF consumer (`solve_2d.py::layer_modes_2d`) needs —
 `(εxx, εyy, −εxy, −εyx, inv⟦ε⟧)` — and their building blocks (`⟦ε⟧`, `⟦1/ε⟧`, and the normal
 projectors `⟦nx²⟧,⟦nx ny⟧,⟦ny²⟧`) are **all Laurent (direct-rule) convolutions**. No
 axis-aligned 1D Li factorization is required. So the analytic coefficients plug straight
@@ -377,7 +380,7 @@ structure = [dict(background=1.0, shapes=[
                       angle=np.deg2rad(25), material=1.0),
                  dict(type='ellipse', cx=0.3, cy=0.4, lx=0.3, ly=0.2,
                       angle=0.6, material=9.0)])]
-solver = wavebit.rcwa(backend='numpy', structure=structure, truncation_order=dict(x=11, y=11), ...)  # shape_nvf_grid_size=256 (default)
+solver = wavebit.rcwa(backend='numpy', structure=structure, truncation_order=dict(x=11, y=11), ...)  # shape_nvf_grid_size=1024 (default)
 res = solver.solve()
 ```
 
@@ -458,7 +461,8 @@ precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−tor
 
 - numpy: `scipy.special.j1`. jax: a self-contained hybrid `_j1` (ascending series +
   asymptotic expansion, `<9e-13` on `[0,95]`, differentiable) — jax's `bessel_jn` returns
-  NaN for small arguments and is unusable. torch: `torch.special.bessel_j1` (accurate but
+  NaN for small arguments and is unusable. torch: by default (`set_j1_implementation('auto')`)
+  the same hybrid in float64 and, in float32, `torch.special.bessel_j1` (accurate but
   **has no backward**) wrapped in a custom autograd providing the analytic derivative
   `J1' = J0 − J1/x`.
 - The ellipse coefficient's `κ=√(...)` has a NaN sqrt(0) derivative at the DC point, guarded
@@ -476,8 +480,8 @@ keep passing.
 
 ## 7. Limitations and next steps
 
-- Shapes are assumed **non-overlapping** (indicator addition). Overlap support needs
-  inclusion–exclusion handling.
+- Shapes are assumed **non-overlapping** (indicator addition). An overlapping layer is resolved
+  into disjoint polygons by the boundary route instead (see *Overlapping shapes* below).
 - The normal field for multiple shapes is a **distance-product blend** of each shape's own
   field, exact at every surface. It was a superposition of level-set gradients until
   2026-08-17 (`c128fd8`), which weighted a shape ten cells away as heavily as the one
@@ -595,9 +599,16 @@ While nothing intersects the two rules mean the same structure, and the layer st
 Nothing is asked of the recipe either way; `layer_needs_resolving` reads the geometry. A
 `combine=` key named the rule until 2026-08-27 and is now refused as an unread layer key.
 
+A layer holding a `polygon` (`rcwa.Polygon`, since 2026-10-15) never stays here, whatever it
+overlaps: this module has no closed form or normal field for an outline, so
+`layer_needs_resolving` sends it to the boundary route by its type alone. Its periodic images
+are judged on the outline there; see [Polygon regions](boundary-modeling.md#polygon-regions).
+
 ### A shape larger than the period
 
-This one is refused outright, by `check_layer_shapes`. Nothing in either builder clips a shape
+This one is refused outright, by `check_layer_shapes`; since 2026-10-15 the closed form's own
+overlap guard (`_refuse_overlap`) refuses a lone such shape too, for a caller that reaches
+`assemble_eps_coeffs` without the public check. Nothing in either builder clips a shape
 against a *translated copy of itself*, so the only reading of "later over earlier" that means
 anything when the two are the same shape — their union — is out of reach, and the sum is not a
 second meaning one could have documented either.

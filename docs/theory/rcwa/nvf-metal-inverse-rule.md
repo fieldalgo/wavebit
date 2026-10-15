@@ -342,8 +342,8 @@ replaces this one, the floor stays.
 - **The projector's own transition band.** `||C^2 − C|| = 0.25` is a statement about the normal
   field's series, and the shape path's analytic field is the one whose `P_yx` on the a-Si ellipse
   zigzags with truncation (0.2814 / 0.3026 / 0.2907 / 0.2956 / 0.2936 at 121 / 441 / 961 / 1225 /
-  1681) where the raster path with `normal_method='contour'` does not (0.2926 → 0.2926). Not this
-  change's subject; the numbers are unchanged by it.
+  1681) where the raster path with `raster_normal_method='contour'` does not (0.2926 → 0.2926).
+  Not this change's subject; the numbers are unchanged by it.
 - **Truncation shape.** fmmax's Jones-direct with *circular* truncation is the one formulation that
   settled monotonically on both gold cases; every square truncation, wavebit's included, swings by
   several nanometres between neighbouring truncations. See `fourier-truncation-shape.md` for why
@@ -356,8 +356,9 @@ replaces this one, the floor stays.
 - **Tensor layers.** A scene with a tensor material anywhere in it — a shape, a background or a
   tensor raster, on any layer — is built entirely by the Popov–Nevière route,
   `[[A]] @ inv([[B]])` (`tensor_shapes.build` for shapes, `pn_eps_conv_matrices` for rasters),
-  which never reaches `_nvf_assemble`. So **no layer of such a scene is floored**, a metal
-  included. Whether that inverse carries the same pole was not swept. At the one point checked,
+  or under `factorization='li'` by tensor Li, and neither reaches `_nvf_assemble`. So **no
+  layer of such a scene is floored**, a metal included. Whether that inverse carries the same
+  pole was not swept. At the one point checked,
   the gold disks at 852 nm / 121 with the glass background spelled `diag(2.25, 2.25, 2.25)`, the
   tensor route returns `R + T = 0.9682` where the floored scalar route returns 0.8158. That is
   not gain, but it is not the same answer either.

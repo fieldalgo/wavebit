@@ -207,11 +207,11 @@ environment. Existing square-order calls retain their previous behavior.
 Set `NVF_CACHE` to an existing scratch directory for generated projection files.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_reference --cap 64 --h .04 --degree 8 --quadrature 32 --output "$NVF_CACHE/wavebit-gap-reference-cap64.npz"
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 12:20 20:12 16:20 20:16 --meshes --projection "$NVF_CACHE/wavebit-gap-reference-cap64.npz"
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 20:24 24:20 24 --meshes --projection "$NVF_CACHE/wavebit-gap-reference-cap64.npz"
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 0 --meshes 2:8:2 2:8:4 --gap-degrees 4 6 --grading 8:.01
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 16 24 --meshes 2:8:4 --gap-degrees 6 --grading 8:.01 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_reference.nvf_gap_reference --cap 64 --h .04 --degree 8 --quadrature 32 --output "$NVF_CACHE/wavebit-gap-reference-cap64.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 12:20 20:12 16:20 20:16 --meshes --projection "$NVF_CACHE/wavebit-gap-reference-cap64.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 20:24 24:20 24 --meshes --projection "$NVF_CACHE/wavebit-gap-reference-cap64.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 0 --meshes 2:8:2 2:8:4 --gap-degrees 4 6 --grading 8:.01
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 16 24 --meshes 2:8:4 --gap-degrees 6 --grading 8:.01 --edge-fraction 1e-5
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_directional_convergence.py tests/rcwa/test_nvf_interface_resolution.py tests/rcwa/test_nvf_gap_convergence.py tests/rcwa/test_nvf_gap_reference.py tests/rcwa/test_nvf_continuous_flux.py tests/rcwa/test_nvf_harmonic_coordinates.py tests/rcwa/test_nvf_partitioned_gap_energy.py tests/rcwa/test_nvf_thin_gap_energy.py tests/rcwa/test_nvf_cell_bounds.py tests/rcwa/test_nvf_cell_corrector.py tests/rcwa/test_nvf_harmonic_energy.py tests/rcwa/test_nvf_harmonic_energy_jax.py tests/rcwa/test_resonant_nvf_probe.py tests/rcwa/test_contact_jones_probe.py::test_equal_material_split_is_equivalent_to_one_rectangle
 ```
 

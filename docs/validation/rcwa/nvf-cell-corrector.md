@@ -162,10 +162,10 @@ Set `NVF_CACHE` to an existing scratch directory for generated projection files.
 Set `NVF_FEM_PYTHON` to the Python executable with the optional NGSolve dependencies.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_cell_bounds --inners 31 63 127
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 "$NVF_FEM_PYTHON" -m studies.nvf_cell_corrector --cap 44 --degree 8 --quadrature 28 --refine 80 --output "$NVF_CACHE/nvf_cell.npz"
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_cell_bounds --projection "$NVF_CACHE/nvf_cell.npz" --orders 6 10 14 18 22
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_harmonic_energy_jax --inners 31 127 255 --polarizations s
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_cell_bounds.nvf_cell_bounds --inners 31 63 127
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 "$NVF_FEM_PYTHON" -m studies.rcwa.nvf_cell_corrector.nvf_cell_corrector --cap 44 --degree 8 --quadrature 28 --refine 80 --output "$NVF_CACHE/nvf_cell.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_cell_bounds.nvf_cell_bounds --projection "$NVF_CACHE/nvf_cell.npz" --orders 6 10 14 18 22
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_harmonic_energy_jax.nvf_harmonic_energy_jax --inners 31 127 255 --polarizations s
 PYTHONPATH=$PWD python -m pytest -q tests/rcwa/test_nvf_cell_bounds.py tests/rcwa/test_nvf_harmonic_energy.py tests/rcwa/test_nvf_harmonic_energy_jax.py
 PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest discover -s tests -p test_nvf_cell_corrector.py
 ```

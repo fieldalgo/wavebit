@@ -65,11 +65,11 @@ silicon = wavebit.materials.load('Si')
 | 숫자 `12.25` | 숫자 | 유전율 12.25를 유지; 객체 생성 불필요 |
 | `wavebit.Material(epsilon=4., mu=1.2)` | `Material` | 유전율 4와 투자율 1.2를 함께 유지 |
 | `wavebit.materials.load('Si')` | `TabulatedMaterial` | 실리콘 표에서 새 파장에 해당하는 값을 구함 |
-| `silicon.at(900.)` | `Material` | 900 nm에서 구한 유전율과 투자율을 유지 |
+| `silicon.at(900.)` | `MaterialResponse` | 900 nm에서 구한 유전율과 투자율을 유지 |
 
 `materials.load('Si')`는 실리콘의 **파장별 재료 데이터**를 불러옵니다. 이 재료를 도형이나 층에 할당하면 계산 파장에 맞는 재료값을 자동으로 사용합니다.
 
-`silicon.at(900.)`은 **900 nm에서의 유전율과 투자율을 구해 `Material` 객체에 담습니다.** 이 결과를 도형이나 층에 할당하면, 계산 파장을 바꿔도 900 nm에서 구한 유전율과 투자율을 그대로 사용합니다.
+`silicon.at(900.)`은 **900 nm에서의 유전율과 투자율을 구해 `MaterialResponse` 객체에 담으며**, 이 객체는 `Material`처럼 할당합니다. 이 결과를 도형이나 층에 할당하면, 계산 파장을 바꿔도 900 nm에서 구한 유전율과 투자율을 그대로 사용합니다.
 
 ### 두 객체 모두 같은 자리에 재료로 할당합니다
 
@@ -77,7 +77,7 @@ silicon = wavebit.materials.load('Si')
 
 ```python
 silicon = wavebit.materials.load('Si')       # TabulatedMaterial: 파장별 데이터
-silicon_900 = silicon.at(900.)              # Material: 900 nm의 ε·μ 값
+silicon_900 = silicon.at(900.)              # MaterialResponse: 900 nm의 ε·μ 값
 
 # 계산 파장에 맞춰 실리콘의 재료값을 구하는 층
 layer = dict(background=silicon, shapes=[])

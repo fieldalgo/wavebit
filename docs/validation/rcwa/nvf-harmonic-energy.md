@@ -217,7 +217,7 @@ Run in the existing Wavebit environment, from the NVF worktree:
 
 ```bash
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python studies/rcwa/nvf_harmonic_energy/nvf_harmonic_energy.py --inners 31 63 127 --orders 6 10 14 --gates
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_harmonic_energy_jax --inners 31 63 127 255
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_harmonic_energy_jax.nvf_harmonic_energy_jax --inners 31 63 127 255
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_harmonic_energy.py tests/rcwa/test_nvf_harmonic_energy_jax.py
 ```
 

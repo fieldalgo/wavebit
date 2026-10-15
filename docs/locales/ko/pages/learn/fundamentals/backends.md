@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | `backend='numpy'` / `Backend.NUMPY` | 첫 계산, 결과 확인, 일반 NumPy 작업 | 자동미분 백엔드가 아님 |
 | `backend='jax'` / `Backend.JAX` | JAX 자동미분, 지원 경로의 JIT·배치화 | 64비트 설정과 정적 형상 정보 |
-| `backend='torch'` / `Backend.TORCH` | PyTorch eager 자동미분 | 지원 범위를 넘어선 `torch.compile`을 가정하지 않기 |
+| `backend='torch'` / `Backend.TORCH` | PyTorch eager 자동미분 | `torch.compile` 안에서도 Wavebit은 즉시 실행(eager)되므로 컴파일로 얻는 이득이 없음. `fullgraph=True`, `torch.export`, `torch.jit.trace`는 거부됨 |
 
 기본값은 `'numpy'`입니다. 이름은 각 라이브러리를 import하는 이름 그대로이고, `Backend`는 같은 세 값을 가진 문자열 열거형이라 `Backend.JAX == 'jax'`입니다. 2026-10-11까지는 정수 `0`/`1`/`2`로 골랐지만, 지금은 정수(그리고 `'JAX'`, `'pytorch'` 같은 다른 철자)를 받을 수 있는 이름 목록과 함께 거부합니다.
 

@@ -17,7 +17,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
 from wavebit.rcwa._engine.conforming.cartesian_pair_gap_autodiff import CartesianPairGapEvaluator
-from wavebit.rcwa._engine.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+from wavebit.rcwa.experimental import CartesianPairOpeningPlan
 
 geometry = dict(
     basis=np.array([[700.0, 315.0], [0.0, 490.0]]),

@@ -4,14 +4,14 @@
 The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
 :::
 
-Run the examples in an environment with the Wavebit source checkout installed. The reference version's installation instructions use `python -m pip install .` from the source directory. Do not assume that a PyPI package reserved under the same name is identical to this source unless its release status has been checked separately. Follow the checkout's [installation guide](../../getting-started/installation.md) for Python and dependency requirements.
+Run the examples in an environment with the Wavebit source checkout installed. The reference version's installation instructions use `python -m pip install .` from the source directory. Wavebit is also published on PyPI (`pip install wavebit`); a release may differ from the checkout you are reading, so compare `wavebit.__version__`. Follow the checkout's [installation guide](../../getting-started/installation.md) for Python and dependency requirements.
 
 ```bash
 # First install from the Wavebit source directory
 python -m pip install .
 
-# Then run from this course's example directory
-python examples/01_shape_nvf.py
+# Then run from the same directory
+python examples/rcwa/learning/nvf/01_shape_nvf.py
 ```
 
 The code below is the same as the {download}`complete Example 1 file <../../../examples/rcwa/learning/nvf/01_shape_nvf.py>`. All lengths are interpreted in nm. `make_solver` and `summarize` are functions defined in this example for explanatory purposes.

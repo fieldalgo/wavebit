@@ -43,9 +43,10 @@ than its content — the z-coupling row, which is why it needed a second solver 
 rest are content: new matrices for the same machinery.
 
 The patterned row landed as §3 predicted — a factorization, both solvers untouched. The row
-below it is the combination, and it is held back by evidence rather than by difficulty: fmmax was
-the only solver that reached the patterned case and it has no z-row arguments, so there is
-nothing to check the answer against.
+below it is the combination, and it was held back by evidence rather than by difficulty: fmmax was
+the only solver that reached the patterned case and it has no z-row arguments, so there was
+nothing to check the answer against. Since 2026-09-24 it is supported, with the checks in
+[full tensor patterns](full-tensor-patterns.md).
 
 ## 1. What the mode operator already accepts
 
@@ -91,7 +92,7 @@ So the solved tensor class is
 with `epxy` and `epyx` as separate arguments — but **only a symmetric pair is actually solved
 correctly**; see §6.1. The `ezz` entry enters only as its
 inverse because `E_z` is eliminated algebraically as `E_z = ezz⁻¹ D_z`, which is also why field
-reconstruction reads nothing but `epz_conv_i` (`fields.py::214`).
+reconstruction reads nothing but `epz_conv_i` (`fields.py::_field_coupled`).
 
 The slots reach the user through `solve_conv`, on every backend. Patterned hand-built
 slots use Fourier coordinates measured from the cell centre, like `eps_conv_matrices()`:
@@ -334,8 +335,8 @@ order, `exp(+q z)` and `exp(-q z)` solve it with the **same eigenvector** — th
 ```
 
 That `±` pairing is baked into every consumer: the `big_W (I + Y)` / `big_V (I - Y)` construction
-(`solve_2d.py::183`), the single `[epz_conv_i, W, V, q, d, big_A_i, big_B]` stored per layer, the
-four-quadrant split in `sp_modes_2d`, the branch rule in `conventions.py::mode_q`, and the field
+(`solve_2d.py::solve_2d`), the single `[epz_conv_i, W, V, q, d, big_A_i, big_B]` stored per layer,
+the four-quadrant split in `sp_modes_2d`, the branch rule in `conventions.py::mode_q`, and the field
 reconstruction in `fields.py`. All of it assumes the second-order shape.
 
 Cost is not only structural: `eig` is `O(N³)`, so second-order → first-order is roughly **8x** on
@@ -357,16 +358,17 @@ and truncation-independent. A tilted magnetisation — xy and yz populated toget
 a real magnetised film has — is past that edge, so it still rests on our own Berreman. The
 measurements and the reasoning are in `tests/references/README.md`.
 
-Nothing dispatches to it. It is, however, stable for any thickness: layers are joined by an
-enhanced-transmittance recursion (`layer_algorithm='ETM'`, the same string and the same
-technique as the second-order path) or by scattering matrices (`'SMM'`), and both hold ~1e-13
+Nothing dispatched to it when this was written; since 2026-08-13 the solver does (§8). It is
+stable for any thickness: layers are joined by an enhanced-transmittance recursion
+(`layer_algorithm='ETM'`, the same string and the same technique as the second-order path) or by scattering matrices (`'SMM'`), and both hold ~1e-13
 relative accuracy out to a modal exponent of 2500, where they reproduce the closed-form
 single-interface Fresnel reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for
 cross-checking and refuses past the point where it is accurate — which on a 220 nm layer means from
 25 Fourier orders upward, since diffraction orders above the light line are strongly evanescent
 whatever the thickness. That is the historical reason RCWA needed the enhanced form, not a
 preference between two recursions. The block layout is checked at 9 and 25 orders; what is still
-missing is order *coupling*, which needs the patterned factorization of §3. Field reconstruction
+missing is order *coupling*, which needs the patterned factorization of §3 (since 2026-09-24 it
+exists; see [full tensor patterns](full-tensor-patterns.md)). Field reconstruction
 landed 2026-08-14 (`docs/theory/rcwa/first-order-formulation.md` §4b) — its `E_z` is the one formula the
 second-order path could not lend, because a populated z row leaves two more terms in the
 elimination.
@@ -468,7 +470,7 @@ need and the code alone does not carry it.
 
 **The principle is already in the codebase.** `engine.py::_assign_grating_type` reads the `structure`
 shape, `tetm` and `phi` and picks the cheapest formulation that can express the problem — its
-docstring says so in as many words: *"This decides the efficient formulation for given case."*
+docstring opens *"Pick the formulation this scene needs: pure 1D TE/TM, 1D conical, or 2D."*
 1D TE/TM splits into scalars, 1D conical does not, 2D couples everything. Anisotropy adds axes to
 that same decision rather than a new kind of decision.
 

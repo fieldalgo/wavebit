@@ -630,12 +630,13 @@ And one convention borrowed from a neighbouring implementation rather than a pap
   defining property of its approximation, because an inscribed polygon's area deficit lands on
   the DC coefficient and pollutes every low order. Cite as Hugonin & Lalanne,
   [arXiv:2101.00901](https://arxiv.org/abs/2101.00901).
-  **`polygon.ellipse_verts` currently inscribes** and therefore carries that deficit. Against
-  the closed-form transform of a circle (`D = 0.6`, unit cell, `truncation_order = 11`), the error is 2.84e-5
-  at the default 256 vertices where the area-matched construction gives 8.4e-10. For scale, the
-  NVF normal-field grid floor is ~1.3e-6 at grid 1024, so polygonisation is currently the
-  dominant error on a curved painted shape and would stop mattering afterwards.
+  **`polygon.ellipse_verts` inscribed** when this was written and therefore carried that deficit.
+  Against the closed-form transform of a circle (`D = 0.6`, unit cell, `truncation_order = 11`),
+  the error was 2.84e-5 at the default 256 vertices where the area-matched construction gives
+  8.4e-10. For scale, the NVF normal-field grid floor is ~1.3e-6 at grid 1024, so polygonisation
+  was then the dominant error on a curved painted shape and would stop mattering afterwards.
 
   The fix is one scale factor on the semi-axes, `s = sqrt(2*pi / (n*sin(2*pi/n)))` for `n`
   vertices. It reads as a magic constant, so the attribution above belongs in a comment beside
-  it rather than only here.
+  it rather than only here. Since 2026-08-10 (`a7aa28b6`) `ellipse_verts` applies it, and its
+  docstring carries the attribution.

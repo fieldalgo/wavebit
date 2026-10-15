@@ -417,7 +417,7 @@ for a production replacement.
 Reproduce the library measurement with
 
 ```shell
-python -m studies.nvf_pair_angular_resolution --order 4 --degree 4 --refinement 0 --quadrature 80 --angular-quadrature 80 --transmission-branches 4
+python -m studies.rcwa.nvf_pair_angular_resolution.nvf_pair_angular_resolution --order 4 --degree 4 --refinement 0 --quadrature 80 --angular-quadrature 80 --transmission-branches 4
 ```
 
 The study records source digests, full diagnostics and both polarizations.
@@ -644,7 +644,7 @@ To measure an enlarged space with the full original physical and reflection
 checks, use the existing study entry point, for example:
 
 ```shell
-python -m studies.nvf_pair_angular_resolution --order 4 --degree 5 --refinement 0 --quadrature 100 --angular-quadrature 80 --transmission-branches 2 --transmission-cutoff-order 1
+python -m studies.rcwa.nvf_pair_angular_resolution.nvf_pair_angular_resolution --order 4 --degree 5 --refinement 0 --quadrature 100 --angular-quadrature 80 --transmission-branches 2 --transmission-cutoff-order 1
 ```
 
 A nested cutoff choice is an explicit trial-space choice, not an automatic

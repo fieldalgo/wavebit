@@ -12,8 +12,8 @@
 ```
 
 ```bash
-python examples/02_raster_nvf.py
-python examples/05_select_li_or_nvf.py
+python examples/rcwa/learning/nvf/02_raster_nvf.py
+python examples/rcwa/learning/nvf/05_select_li_or_nvf.py
 ```
 
 예제 2의 실제 결과는 `R_p=0.002827293719`, `T_p=0.997172706281`, 에너지 잔차 `2.22×10⁻¹⁶`입니다. 예제 1과의 차이에는 픽셀 기하와 법선 구성 방식의 차이가 함께 들어 있습니다. 이 두 값만으로 어느 경로가 참값에 더 가깝다고 판정할 수는 없습니다.

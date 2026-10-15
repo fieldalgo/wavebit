@@ -17,6 +17,8 @@ energy closure. This establishes a bounded finite response, not continuum or
 optical accuracy. Ordinary `CartesianRectanglePairNVF` contact replay and its
 contact-preserving JAX tangents retain their existing contract. The explicit
 interface is described in the [manual](../../guide/rcwa/cartesian-pair-opening.md).
+Since 2026-09-13 the pair plans also admit refinements 2 and 3; the measurements below are at
+0 and 1, and the finer spaces are checked in [the refinement record](nvf-pair-refinement.md).
 
 ## A physical gap and an exact collapse
 

@@ -162,8 +162,8 @@ and optical gates now pass; a positive-gap derivative discrepancy remains.
 ## Reproduction and validation
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_partitioned_gap_energy --order 7 --edge-fraction 0.000001 --shape-gates
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_partitioned_gap_energy --order 3 --width 600 --epsilon 4 --gap 400 --shape-gates
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_partitioned_gap_energy.nvf_partitioned_gap_energy --order 7 --edge-fraction 0.000001 --shape-gates
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_partitioned_gap_energy.nvf_partitioned_gap_energy --order 3 --width 600 --epsilon 4 --gap 400 --shape-gates
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_partitioned_gap_energy.py tests/rcwa/test_nvf_thin_gap_energy.py
 ```
 

@@ -242,7 +242,9 @@ matching a reference.
 | SMM 1D | 5.5e-16 | 2.3e-16 | 3.2e-16 |
 | SMM conical | 1.0e-15 | 5.6e-16 | 2.0e-16 |
 
-(vs the analytic Airy reference in `tests/rcwa/test_lossy_media.py`, uniform slab.)
+(vs the analytic Airy reference in `tests/rcwa/test_lossy_media.py`, uniform slab. TMM here is
+the enhanced recursion, named `'ETM'` since 2026-08-11; `'TMM'` now names only the plain,
+unstabilised transfer of [`connecting-algorithms.md`](connecting-algorithms.md).)
 
 ---
 
@@ -471,7 +473,8 @@ This is the part worth keeping.
   exercised, so it rotted with nothing objecting — the same blind-spot shape as the normal-field
   goldens being all 1D or square-pixel.
 
-What pins it now, in `tests/references/test_reticolo_conical_sweep.py`:
+What pins it now, in `tests/references/test_reticolo_conical_sweep.py` (the first three rows)
+and `tests/rcwa/test_fp_warnings.py` (the last three):
 
 | Test | Catches |
 | --- | --- |

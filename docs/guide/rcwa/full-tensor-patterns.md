@@ -27,7 +27,7 @@ solver = wavebit.rcwa(
     incidence_side='top',
 )
 result = solver.solve()
-print(solver.formulation_assigned)  # first_order
+print(solver.formulation_assigned)  # Formulation.FIRST_ORDER, equal to 'first_order'
 ```
 
 ## Geometry and numerical choices

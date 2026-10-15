@@ -20,7 +20,7 @@ Wavevectors and attenuation in lossy exterior media are discussed separately in 
 (incident-direction-inputs)=
 ## Two ways to specify the incident propagation direction
 
-`theta` is the angle between the **direction of phase propagation** in the incident medium and the inward surface normal (`−z` for top incidence, `+z` for bottom incidence); `phi` is the azimuth. Phase propagation describes how points of equal phase, such as wave crests, move. Angles are in radians. Polarization, the direction in which the electric field oscillates, is specified separately in the next section.
+`theta` is the angle between the **direction of phase propagation** in the incident medium and the inward surface normal (`−z` for top incidence, `+z` for bottom incidence); `phi` is the azimuth. Phase propagation describes how points of equal phase, such as wave crests, move. In a negative-index incident medium, where phase runs against the energy flow, `theta` instead gives the direction in which light enters the structure (since 2026-10-05; [negative-index media](../../theory/rcwa/negative-index-media.md), Section 7). Angles are in radians. Polarization, the direction in which the electric field oscillates, is specified separately in the next section.
 
 This direction input specifies one incident wave with uniform intensity along the surface. In an absorbing incident medium, phase propagation and power flow can differ in direction; see the {ref}`lossy-medium section <absorbing-incidence>` for the corresponding wavevectors.
 

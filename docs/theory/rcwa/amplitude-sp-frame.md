@@ -502,7 +502,9 @@ the centre-referenced answer now. The efficiencies of a single-wave solve did no
 design. The FDTD module, not on develop at this change, extracts its per-order amplitudes from
 its grid's corner; when it lands, its extraction has to meet this contract (each order times
 `c_m` at its extraction plane, and `alpha` for its Bloch source at oblique incidence), and the
-`OrderExcitation` comparison above is the oracle to reuse.
+`OrderExcitation` comparison above is the oracle to reuse. Since 2026-10-13 it is on develop, and
+its order amplitudes meet the contract: both FDTD paths refer each order to the cell centre in its
+own s/p frame (`src/wavebit/fdtd/_assemble.py`, `src/wavebit/fdtd/_periodic/adapter.py`).
 
 
 ## 8. The Fourier-space doors move to the centre (2026-09-28)

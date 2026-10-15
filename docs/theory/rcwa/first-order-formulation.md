@@ -101,11 +101,13 @@ that product in the first-order form too.
 The first-order layer operator consumes full epsilon and mu convolution tensors from
 Li or linear NVF. Patterned xz/yz/zx/zy coupling, scalar magnetic half-spaces,
 both incidence sides and all six reconstructed fields are supported. The public
-layer algorithms are ETM (default) and SMM; anisotropic half-spaces remain unsupported.
+layer algorithms are ETM and SMM (SMM is the default of `rcwa.Numerics`, ETM that of the earlier
+interface, `wavebit.compat.legacy`); anisotropic half-spaces remain unsupported.
 
 SMM cascades the distinct forward and backward eigenspaces and reconstructs
 internal fields using decaying propagation factors referenced to opposite layer
-faces. It exposes `solver.scattering` with `answers='amplitude'` or `'field'`,
+faces. It exposes `solver.scattering` with `answers='amplitude'` or `'field'` on the earlier
+interface, and `result.scattering` under `rcwa.Outputs(scattering=True)` on the public one,
 using the same scalar half-space port convention as the second-order solver. Compatible
 second-order and first-order stacks can therefore be joined with `.cascade()`.
 

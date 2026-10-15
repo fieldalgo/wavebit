@@ -8,12 +8,12 @@ The experimental NumPy-only `CartesianPairGapCell` evaluates one finite pair
 at an explicit nonnegative physical gap, including exact contact. It returns
 coefficients or a selected energy closure together with their analytical gap
 derivative. Import it from `wavebit.rcwa._engine.conforming.cartesian_pair_gap` and
-supply the existing `CartesianPairOpeningPlan`.
+supply the existing `CartesianPairOpeningPlan` from `wavebit.rcwa.experimental`.
 
 ```python
 import numpy as np
 from wavebit.rcwa._engine.conforming.cartesian_pair_gap import CartesianPairGapCell
-from wavebit.rcwa._engine.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+from wavebit.rcwa.experimental import CartesianPairOpeningPlan
 
 geometry = dict(
     basis=np.array([[700.0, 315.0], [0.0, 490.0]]),
@@ -116,7 +116,8 @@ It requires a shift-zero plan on the symmetric Cartesian pair mesh.
 Its `closure` returns `(value, tangent, metadata)`. Both matrix sets are about the cell
 centre, the frame `solve_conv()` reads; `offset` places the pair relative to that public
 origin. The private construction described above keeps its existing chart.
-Both the cell and opening plan are available from `wavebit`. The [selection guide](nvf-method-selection.md)
+Both the cell and opening plan are available from `wavebit.rcwa.experimental` and, as below,
+from `wavebit.compat.legacy`. The [selection guide](nvf-method-selection.md)
 shows how to choose this construction or leave it off.
 
 ```python

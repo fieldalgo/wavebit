@@ -19,8 +19,8 @@ If your environment does not include JAX, install the documented optional depend
 # From the Wavebit source directory, only if needed
 python -m pip install '.[jax]'
 
-# From the course example directory
-python examples/04_jax_gradient.py
+# From the same directory
+python examples/rcwa/learning/nvf/04_jax_gradient.py
 ```
 
 The {download}`complete Example 4 file <../../../examples/rcwa/learning/nvf/04_jax_gradient.py>` uses a rotated rectangle and a circular projector. Its structure differs from the earlier circle example.

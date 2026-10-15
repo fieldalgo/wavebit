@@ -18,7 +18,7 @@ Figure 5-1. A comparison of the two input representations only: a raster array o
 | Raster | An ndarray of shape `(number of layers, number of rows, number of columns)` | Permittivity at each pixel, material distribution |
 | Shapes | A `background` and a list of `shapes` for each layer | Center position, width, height, angle |
 
-In a raster, different layers are stacked along the first axis of the same array. Shape input supports `rectangle`, `circle`, and `ellipse`. `cx` and `cy` are absolute lengths measured from the cell center; `lx` and `ly` are also absolute lengths. **A circle's `lx` is its diameter.** Rectangles and ellipses specify the full size along each of their two axes. The rotation `angle` is in radians.
+In a raster, different layers are stacked along the first axis of the same array. Shape input supports `rectangle`, `circle`, and `ellipse`, and since 2026-10-15 a `polygon`, `dict(type='polygon', vertices=..., material=...)`, which is placed and sized by its vertices alone and always takes the painting path described below. `cx` and `cy` are absolute lengths measured from the cell center; `lx` and `ly` are also absolute lengths. **A circle's `lx` is its diameter.** Rectangles and ellipses specify the full size along each of their two axes. The rotation `angle` is in radians.
 
 Executable file: {download}`02_shape.py <../../../examples/rcwa/learning/learn/02_shape.py>`
 
@@ -47,4 +47,4 @@ Figure 5-2. Overlap is resolved in shape-list order: the material of a rectangle
 
 Place the shapes in order in `shapes`. **The material of a later shape covers an earlier shape.** Permittivities are not added in overlapping regions. For example, placing a shape made of the background material last can represent a hole. The shapes, intersections, and contacts that are accepted depend on the constraints of the current computational path.
 
-For a layer with overlaps, the boundaries are analyzed to partition the geometry into non-overlapping regions. A painting path that includes curves may introduce polygonal boundary approximations. “Shape input” therefore does not mean that every stage handles curves with infinite precision. You can also inspect the input scene with `wavebit.plot_structure(...)` or `wavebit.slice_structure(...)`. See the [API reference](../../reference/api.md) for the detailed arguments.
+For a layer with overlaps, the boundaries are analyzed to partition the geometry into non-overlapping regions. A painting path that includes curves may introduce polygonal boundary approximations. “Shape input” therefore does not mean that every stage handles curves with infinite precision. You can also inspect the input scene with `wavebit.plot_structure(...)` or `wavebit.slice_structure(...)`. See the [earlier-interface API reference](../../migration/legacy-api.md) for the detailed arguments.

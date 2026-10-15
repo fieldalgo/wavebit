@@ -8,8 +8,9 @@ Target: `src/wavebit/rcwa/_engine/solve_2d.py` — `layer_modes_2d`, `solve_2d`;
 
 **Scope.** Layers (§1–§4), half-spaces (§5–§6), patterned layers (§7) and field
 reconstruction (§9, added 2026-08-20) on the **2D path**; the **1D and conical paths** since
-2026-09-01 (§11), diagonal slots only. The first-order solve still takes no `mu` and
-refuses rather than ignores, as do the two off-diagonal slots on the 1D paths.
+2026-09-01 (§11), diagonal slots only. The first-order solve took no `mu` until 2026-09-24 and
+takes full permeability tensors since (§8, §10); the two off-diagonal slots still refuse rather
+than ignore on the pure 1D paths.
 
 ---
 
@@ -159,7 +160,9 @@ perfectly. A bare interface has an exact answer, so §6 can check the two admitt
 The SMM cascade inserts a fictitious "gap" medium so every interface is computed the same way.
 It is left non-magnetic deliberately. It is a bookkeeping device, not a medium in the scene, and
 it cancels out of the result — giving it a material property would be a category error that
-happens to cancel, which is harder to notice than one that does not.
+happens to cancel, which is harder to notice than one that does not. (Since 2026-10-09 the gap is
+written by its waves alone, `sqrt(1 + |k_par|**2)` as both the s admittance and the p impedance,
+rather than as a medium: [`connecting-algorithms.md`](connecting-algorithms.md), "SMM's gap".)
 
 ## 6. What checks the half-spaces
 
@@ -310,7 +313,10 @@ them on.
 ## 8. Reaching it
 
 **Through the front door, since 2026-08-20.** A permeability travels with the material it
-belongs to, so on the three *assignment* paths there is nothing extra to pass:
+belongs to, so on the three *assignment* paths there is nothing extra to pass. (The snippets in
+this section use the earlier interface, `from wavebit.compat import legacy as wavebit`. Since
+2026-10-13 the public `wavebit.rcwa` module takes the same `Material(epsilon, mu)` in a region, and
+`rcwa.Layer(epsilon=..., mu=...)` beside a sampled raster.)
 
 ```python
 structure = [dict(background=1.0, shapes=[
@@ -434,6 +440,11 @@ lookup, which used to infer the layout from the entry's length, now takes the in
 caller instead.
 
 ## 10. What is not implemented, and why
+
+**Superseded (2026-09-24).** The first-order operator now takes full epsilon and mu tensors, and
+its reconstruction keeps `mu`'s whole z row, `Hz = inverse(mzz) (Kx Ey - Ky Ex - mzx Hx - mzy Hy)`
+([`first-order-formulation.md`](first-order-formulation.md) §4). The paragraph below records the
+refusal that stood until then.
 
 **Magnetic `mu` on the first-order solve.** No `mu` in the operator, and
 `fields.field_2d_first_order`'s `H_z = Kx Ey - Ky Ex` likewise has no `mu_zz` in it. Two ways to

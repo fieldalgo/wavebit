@@ -16,7 +16,7 @@
 | 먼저 읽을 곳 | 이해할 질문 |
 | --- | --- |
 | [src/wavebit/__init__.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/__init__.py), [src/wavebit/compat/legacy.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/legacy.py) | 공개 API는 무엇이며 어떤 백엔드를 만드는가 |
-| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/periodic.py), [spec.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/_jobs_v1.py) | 장면·재료·빛·계산 명세를 어떻게 표현하는가 |
+| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/periodic.py), [materials/](https://github.com/fieldalgo/wavebit/tree/develop/src/wavebit/materials/), [compat/_jobs_v1.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/_jobs_v1.py) | 장면·재료·빛·계산 명세를 어떻게 표현하는가 |
 | [src/wavebit/lattice.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/lattice.py), [geometry.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/geometry.py) | 셀 좌표와 고정할 기하학 정보는 무엇인가 |
 | [src/wavebit/rcwa/_engine/parametric.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py), [boundary.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/boundary.py) | 도형 Fourier 계수와 겹침 경계를 어떻게 처리하는가 |
 | [src/wavebit/rcwa/_engine/factorization.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py), [normal_methods.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py) | 재료와 장의 곱이 어떤 행렬로 조립되는가 |
@@ -37,7 +37,7 @@
 | `AffineProfileNVF` | 별도의 affine profile 구성 계열 | [범위와 예제](../../guide/rcwa/affine-profile-nvf.md) |
 | `CartesianRectangleNVF`, `CartesianRectanglePairNVF` | 한 사각형·사각형 쌍에 특화된 구성 계열 | [한 사각형](../../guide/rcwa/cartesian-rectangle-nvf.md), [사각형 쌍](../../guide/rcwa/cartesian-rectangle-pair-nvf.md) |
 | `CartesianPairOpeningPlan`, `CartesianPairTransmissionGalerkinGapCell` | 간격과 접촉을 다루는 별도 실험 구성 | [gap 계열의 범위](../../guide/rcwa/cartesian-pair-gap.md) |
-| `ScatteringMatrix`, `Port` | SMM의 양쪽 입·출력 관계와 연결 | [공개 API](../../reference/api.md) |
+| `ScatteringMatrix`, `Port` | SMM의 양쪽 입·출력 관계와 연결 | [이전 인터페이스 API](../../migration/legacy-api.md#results-and-state) |
 | `Formulation` | 2차 정식화(`second_order`, 옛 이름 2ff)와 1차 정식화(`first_order`, 옛 이름 4ff) 중 어느 쪽으로 풀지 고르고 확인; 일반 생성자 인자가 아닌 속성 | [1차 정식화](../../theory/rcwa/first-order-formulation.md) |
 | Bessel J1 구현 선택 함수 | 특수함수 구현의 고급 진단 | [Bessel J1](../../validation/rcwa/bessel-j1.md) |
 

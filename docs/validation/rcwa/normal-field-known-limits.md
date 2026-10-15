@@ -850,6 +850,10 @@ checks static declarations versus dynamic values, and differentiates the reconst
 field with respect to width and permittivity. The raster field and solver round-trip
 regressions remain applicable too.
 
+Since 2026-10-13 this recipe is the compatibility interface, `wavebit.compat.legacy`. The
+public lifecycle, `rcwa.prepare(...)` then `prepared.run(problem)`, refuses a JAX-traced shape
+dimension (`prepared.host_topology`).
+
 
 ### 8e. The seam contrast (2026-09-11)
 
@@ -1075,8 +1079,8 @@ the pair sweep reading a fixed 3x3 instead of the ring (a bar along `2 a1 + a2` 
 as long as that vector, whose flush contact sits at `(m, n) = (2, 1)` -- it stood on an unreduced
 spelling's `(-2, 1)` contact until §8c made that spelling plan as its reduction), and `mu = None`
 read as unequal to 1.0 -- that one run in
-a fresh interpreter, because `domain.py` defines `Material`, which `as_material` type-checks
-against and `engine` imports by name, so a reload would leave two classes of that name in one
+a fresh interpreter, because `domain.py` then defined `Material`, which `as_material` type-checked
+against and `engine` imported by name, so a reload would leave two classes of that name in one
 process. Fourteen then; the verifiers' round added eight more -- the self substitution keyed by
 instance alone (the double-covered face), the arc ring dropped and the ring picking by the
 algebraic distance (the ellipse that leaves its cell), the sign window always open, the sign

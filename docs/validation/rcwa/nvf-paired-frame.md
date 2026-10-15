@@ -223,7 +223,7 @@ and production adoption remain open. Matrix structure alone is not an
 optical stopping criterion.
 
 ```bash
-PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python -m studies.nvf_pair_reciprocal_energy
+PYTHONPATH=. OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python -m studies.rcwa.nvf_pair_reciprocal_energy.nvf_pair_reciprocal_energy
 ```
 
 No new dependency, external solver or copied third-party implementation

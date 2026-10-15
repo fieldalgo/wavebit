@@ -6,7 +6,7 @@ the 2D and first-order exceptional-point design and judge measurements from 2026
 Measured on CPU (Apple Accelerate), NumPy / JAX / PyTorch, float64; the single-precision
 caveat is stated where it applies. This file is the measurement record; for the
 narrative walkthrough of how the pieces hand off to each other at solve time, read
-`rayleigh-handling-walkthrough.md`.
+[`rayleigh-handling-walkthrough.md`](../../guide/rcwa/rayleigh-handling-walkthrough.md).
 
 Targets:
 - `src/wavebit/rcwa/_engine/solve_1d.py` — `layer_modes_1d_conical` (the reformulation), `layer_modes_1d`,
@@ -49,7 +49,10 @@ hunt for a *configuration* that separates failing from working cases found none,
 `solve` handles the practical side by default: `auto_detune=True` retries a solve that
 refused or fired `RayleighPointWarning`, first at `wavelength*(1+1e-12)`, then also
 `theta*(1+1e-12)` for the one graze wavelength cannot move — and reports every knob it
-moved in an `AutoDetuneWarning`. Nothing is ever moved silently.
+moved in an `AutoDetuneWarning`. Nothing is ever moved silently. (That default is the earlier
+interface's, `wavebit.compat.legacy`. Since 2026-10-13 the public `wavebit.rcwa` module makes the
+retry opt-in: `rcwa.Numerics(detuning=None)`, the default, solves the requested point exactly,
+and a positive `detuning` is the relative step, recorded with the result.)
 
 ---
 
@@ -118,7 +121,8 @@ refusal is narrower: it fires only where the basis provably does not exist).
 
 ## 4. `auto_detune` — the ladder, and its contract
 
-Default on. When a solve refuses with a degeneracy (`FloatingPointError` /
+Default on in the earlier interface's `solve()`; opt-in through `rcwa.Numerics(detuning=...)` in
+the public module since 2026-10-13. When a solve refuses with a degeneracy (`FloatingPointError` /
 `LinAlgError`) or fires `RayleighPointWarning`:
 
 1. retry at `wavelength * (1 + 1e-12)` — moves every `m != 0` order;

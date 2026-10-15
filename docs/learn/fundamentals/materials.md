@@ -65,11 +65,11 @@ The table shows that the permittivity inside the circle changes along with wavel
 | Number `12.25` | Number | Permittivity stays at 12.25; no object construction required |
 | `wavebit.Material(epsilon=4., mu=1.2)` | `Material` | Permittivity 4 and permeability 1.2 remain fixed |
 | `wavebit.materials.load('Si')` | `TabulatedMaterial` | Evaluates the silicon table at the new wavelength |
-| `silicon.at(900.)` | `Material` | Keeps the permittivity and permeability evaluated at 900 nm |
+| `silicon.at(900.)` | `MaterialResponse` | Keeps the permittivity and permeability evaluated at 900 nm |
 
 `materials.load('Si')` loads silicon’s **wavelength-dependent material data**. Assigning it to a shape or layer automatically uses values appropriate to the calculation wavelength.
 
-`silicon.at(900.)` **evaluates permittivity and permeability at 900 nm and places them in a `Material` object.** Assign that result to a shape or layer and it keeps those 900 nm values even if the calculation wavelength changes.
+`silicon.at(900.)` **evaluates permittivity and permeability at 900 nm and places them in a `MaterialResponse` object**, which is assigned like a `Material`. Assign that result to a shape or layer and it keeps those 900 nm values even if the calculation wavelength changes.
 
 ### Both objects can be assigned to the same material positions
 
@@ -77,7 +77,7 @@ Both object types can be used for a shape’s `material`, a layer’s `backgroun
 
 ```python
 silicon = wavebit.materials.load('Si')       # TabulatedMaterial: wavelength-dependent data
-silicon_900 = silicon.at(900.)              # Material: ε and μ at 900 nm
+silicon_900 = silicon.at(900.)              # MaterialResponse: ε and μ at 900 nm
 
 # A layer whose silicon values follow the calculation wavelength
 layer = dict(background=silicon, shapes=[])

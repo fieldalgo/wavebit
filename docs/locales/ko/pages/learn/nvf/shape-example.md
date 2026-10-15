@@ -4,14 +4,14 @@
 이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
 :::
 
-예제는 Wavebit의 현재 소스 checkout을 설치한 환경에서 실행합니다. 이 기준 버전의 설치 안내는 소스에서 `python -m pip install .`을 사용하는 방식입니다. 배포 상태가 별도로 확인되지 않은 이름 예약용 PyPI 패키지를 이 소스와 같다고 가정하지 마세요. Python과 의존성 조건은 현재 checkout의 [설치 안내](../../getting-started/installation.md)를 따릅니다.
+예제는 Wavebit의 현재 소스 checkout을 설치한 환경에서 실행합니다. 이 기준 버전의 설치 안내는 소스에서 `python -m pip install .`을 사용하는 방식입니다. Wavebit는 PyPI에도 배포되어 있습니다(`pip install wavebit`). 릴리스는 지금 읽는 checkout과 다를 수 있으니 `wavebit.__version__`을 비교하세요. Python과 의존성 조건은 현재 checkout의 [설치 안내](../../getting-started/installation.md)를 따릅니다.
 
 ```bash
 # 먼저 Wavebit 소스 폴더에서 설치
 python -m pip install .
 
-# 그다음 이 교재 폴더에서 실행
-python examples/01_shape_nvf.py
+# 그다음 같은 폴더에서 실행
+python examples/rcwa/learning/nvf/01_shape_nvf.py
 ```
 
 아래는 {download}`예제 1 전체 파일 <../../../examples/rcwa/learning/nvf/01_shape_nvf.py>`과 같은 코드입니다. 길이는 모두 nm로 해석하며, 함수 이름 `make_solver`와 `summarize`는 설명을 위해 이 예제에서 정의한 함수입니다.

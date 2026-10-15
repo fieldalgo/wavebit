@@ -157,11 +157,11 @@ that study's documented command. Forward selection is explicit:
 Set `NVF_CACHE` to an existing scratch directory for generated projection files.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 16 24 --propagation doubling --progress
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 24 --propagation doubling --doublings 7 --progress
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_scattering_doubling --mirror --jax
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_scattering_doubling --mirror --jax --gap 0
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_doubling --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 4 8 --repeats 7
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_convergence.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 16 24 --propagation doubling --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_convergence.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 24 --propagation doubling --doublings 7 --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_scattering_doubling.nvf_scattering_doubling --mirror --jax
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_scattering_doubling.nvf_scattering_doubling --mirror --jax --gap 0
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_doubling.nvf_mirror_doubling --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 4 8 --repeats 7
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_scattering_doubling.py tests/rcwa/test_nvf_mirror_convergence.py tests/rcwa/test_nvf_mirror_cartesian.py tests/rcwa/test_nvf_mirror_doubling.py
 ```
 

@@ -16,7 +16,7 @@ Figure 20-1. Source-code flow from public API through geometry, matrices, modes 
 | Start here | Question to understand |
 | --- | --- |
 | [src/wavebit/__init__.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/__init__.py), [src/wavebit/compat/legacy.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/legacy.py) | What is public, and which backend is constructed? |
-| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/periodic.py), [spec.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/_jobs_v1.py) | How are scenes, materials, light and calculation specifications represented? |
+| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/periodic.py), [materials/](https://github.com/fieldalgo/wavebit/tree/develop/src/wavebit/materials/), [compat/_jobs_v1.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/_jobs_v1.py) | How are scenes, materials, light and calculation specifications represented? |
 | [src/wavebit/lattice.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/lattice.py), [geometry.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/geometry.py) | What are the cell coordinates and the geometry information held fixed? |
 | [src/wavebit/rcwa/_engine/parametric.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py), [boundary.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/boundary.py) | How are shape Fourier coefficients and overlap boundaries handled? |
 | [src/wavebit/rcwa/_engine/factorization.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py), [normal_methods.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py) | How are products of materials and fields assembled into matrices? |
@@ -37,7 +37,7 @@ Users need not import all implementation files directly. Write normal programs a
 | `AffineProfileNVF` | Separate affine-profile construction family | [Scope and example](../../guide/rcwa/affine-profile-nvf.md) |
 | `CartesianRectangleNVF`, `CartesianRectanglePairNVF` | Specialized constructions for one rectangle or a rectangle pair | [One rectangle](../../guide/rcwa/cartesian-rectangle-nvf.md), [rectangle pair](../../guide/rcwa/cartesian-rectangle-pair-nvf.md) |
 | `CartesianPairOpeningPlan`, `CartesianPairTransmissionGalerkinGapCell` | Separate experimental gap and contact constructions | [Gap-family scope](../../guide/rcwa/cartesian-pair-gap.md) |
-| `ScatteringMatrix`, `Port` | SMM relations and connections between both-side inputs and outputs | [Public API](../../reference/api.md) |
+| `ScatteringMatrix`, `Port` | SMM relations and connections between both-side inputs and outputs | [Earlier-interface API](../../migration/legacy-api.md#results-and-state) |
 | `Formulation` | Select and inspect second-order (`second_order`, formerly 2ff) versus first-order (`first_order`, formerly 4ff) solving; a property rather than an ordinary constructor argument | [First-order formulation](../../theory/rcwa/first-order-formulation.md) |
 | Bessel J1 implementation selectors | Advanced special-function diagnostics | [Bessel J1](../../validation/rcwa/bessel-j1.md) |
 

@@ -6,7 +6,7 @@ The runnable examples in this imported course explicitly use `wavebit.compat.leg
 
 This course explains how electric-field components behave at material boundaries and follows those principles through to Wavebit's material matrices and executable code.
 
-**Baseline: a Wavebit 0.1.0 development working copy.** The discussion focuses on nonmagnetic materials and scalar relative permittivity. Consult the English user guide as well for the scope of tensor materials and advanced auxiliary cells.
+**Baseline: a Wavebit development working copy of September 21, 2026, based on develop `a1d23fc` (then versioned 0.1.0, before the public 0.0.x releases).** The discussion focuses on nonmagnetic materials and scalar relative permittivity. Consult the English user guide as well for the scope of tensor materials and advanced auxiliary cells.
 
 **This book has three goals:** to help you explain why NVF is needed, read how Wavebit turns a normal field into a material matrix, and apply NVF to your own structure and check the accuracy of the result.
 

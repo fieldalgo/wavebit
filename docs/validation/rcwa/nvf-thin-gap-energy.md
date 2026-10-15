@@ -139,8 +139,8 @@ regularization limitation remains recorded in the earlier tests.
 ## Reproduction
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_thin_gap_energy --rows 8 --edge-fraction 0.000001 --gaps 0 0.0001 0.00001 --autodiff
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.nvf_thin_gap_energy --rows 8 16 --edge-fraction 0.00001 --gaps 0 0.00001 --autodiff
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_thin_gap_energy.nvf_thin_gap_energy --rows 8 --edge-fraction 0.000001 --gaps 0 0.0001 0.00001 --autodiff
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m studies.rcwa.nvf_thin_gap_energy.nvf_thin_gap_energy --rows 8 16 --edge-fraction 0.00001 --gaps 0 0.00001 --autodiff
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_thin_gap_energy.py
 ```
 

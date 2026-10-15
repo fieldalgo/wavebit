@@ -14,10 +14,13 @@ Targets:
 
 A hexagonal array used to be spelled as an `a x a*sqrt(3)` rectangular supercell holding two
 motifs. That doubles the cell area, the retained order count scales with area, and the measured
-cost exponent is 2.86 -- so it cost **7.3x**. Pass the basis instead:
+cost exponent is 2.86 -- so it cost **7.3x**. Pass the basis instead (this page's snippets use the
+interface it was written against, which since 2026-10-13 is `wavebit.compat.legacy`; the public
+module takes the same `wavebit.Lattice` as `rcwa.Stack(lattice=...)`):
 
 ```python
-import numpy as np, wavebit
+import numpy as np
+from wavebit.compat import legacy as wavebit
 
 solver = wavebit.rcwa(
     backend='numpy', structure=cell, truncation_order=dict(x=10, y=10), thickness=[300.0], wavelength=900.0,
@@ -441,7 +444,7 @@ The two refusals raise rather than answering, and that matters: both of them *ru
 cell and return a plausible wrong number, with energy still conserving to 1e-15.
 
 `li` applies the inverse rule along the **raster axes**
-(`epx = fourier2d_piecewise_constant(cell, 0, 1)`), and the solve
+(`epx = fourier2d_piecewise_constant(..., inverse_rule='u')`), and the solve
 consumes the result as Cartesian `eps_xx` / `eps_yy`. On a skewed cell those axes are `a1` / `a2`,
 not `x` / `y`. Repairing it means Li's covariant formulation (JOSA A **14**(10), 2758).
 
@@ -468,11 +471,12 @@ wavelength, normal incidence — but the containment above is structural and hol
 ## Fields on a skewed cell
 
 `reconstruct_field` works, with one change you have to handle when plotting: **samples land on the
-cell's parallelogram**, `r = u*a1 + v*a2` for `u, v` in `[0, 1]`, so the returned grid is indexed
-by `(v, u)` and not by `(y, x)`. Convert before drawing:
+cell's parallelogram**, `r = (u - 0.5)*a1 + (v - 0.5)*a2` for `u, v` in `[0, 1]` (the cell has been
+centred on the origin since 2026-08-31), so the returned grid is indexed by `(v, u)` and not by
+`(y, x)`. Convert before drawing:
 
 ```python
-u = np.linspace(0, 1, sample_x); v = np.linspace(0, 1, sample_y)
+u = np.linspace(0, 1, sample_x) - 0.5; v = np.linspace(0, 1, sample_y) - 0.5
 U, V = np.meshgrid(u, v)
 X = U * a1[0] + V * a2[0]
 Y = U * a1[1] + V * a2[1]
@@ -496,20 +500,22 @@ boundaries, or at matched order sets.
 ## Reading the complex amplitude (not lattice-specific, but everyone hits it)
 
 Efficiencies come out of `result.T` and are polarisation-summed, so they are always safe. The
-**complex** amplitudes are split into s and p, and the one carrying the light depends on `psi`:
+**complex** amplitudes are split into s and p, and the one carrying the light depends on `psi`.
+(Since 2026-08-12 they are the lowercase `t_s` / `t_p`; the uppercase `T_s` / `T_p` are now real
+per-order efficiencies, whose `np.angle` is zero everywhere.)
 
 | `psi` | incidence | the amplitude is in |
 |---|---|---|
-| `0` | TM (p) | `T_p` — **`T_s` is identically zero** |
-| `pi/2` | TE (s) | `T_s` — `T_p` is zero |
+| `0` | TM (p) | `t_p` — **`t_s` is near zero** (the cross-polarized part only) |
+| `pi/2` | TE (s) | `t_s` — `t_p` is near zero |
 
-Reading the wrong one gives an array of zeros, and `np.angle` of a near-zero complex number is
+Reading the wrong one gives an array of near-zeros, and `np.angle` of a near-zero complex number is
 noise that looks like a plausible phase. The safe route is the pure-TE / pure-TM variants the
 solve computes anyway, where the assignment is unambiguous:
 
 ```python
 res = solver.solve()
-ts = np.asarray(res.s_inc.T_s)          # pure-TE incidence: T_s is the whole amplitude
+ts = np.asarray(res.s_inc.t_s)          # pure-TE incidence: t_s is the whole amplitude
 c = (ts.shape[0] // 2, ts.shape[1] // 2)     # the zero order sits at the centre
 t0 = complex(ts[c])
 amplitude, phase = abs(t0), np.angle(t0)
@@ -625,7 +631,8 @@ this kind of sweep and ~7x when you genuinely need the harmonics.
 
 The measurement behind "The two frames a raster can mean" — the case where the two separate
 most, because a tilt is not a similarity. `studies/rcwa/sweep_cell_angle/sweep_cell_angle.py` runs it three ways and
-prints the table below; the figure it writes is `studies/results/sweep_cell_angle.png`.
+prints the table below; the figure it writes is
+`docs/figures/oblique-lattice/cell-angle-sweep.png`.
 
 ```python
 for gamma in angles:
@@ -636,9 +643,9 @@ for gamma in angles:
 ```
 
 The same coordinate expression describes the same physical circle at every angle, because
-`A.grid` returns genuine Cartesian coordinates. Drawing the raster once and passing it on gives
-the other frame: the array holds pixel *indices*, so its lit pixels tilt with the basis and the
-circle shears into an ellipse. Measured against parametric circles — which are the Cartesian
+`A.meshgrid_xy` returns genuine Cartesian coordinates. Drawing the raster once and passing it on
+gives the other frame: the array holds pixel *indices*, so its lit pixels tilt with the basis and
+the circle shears into an ellipse. Measured against parametric circles — which are the Cartesian
 frame by construction, and so are the control for *that* frame only — `truncation_order=10`,
 N=256:
 
@@ -809,8 +816,8 @@ only diagonal `Kx` / `Ky`, and substituting `r = u*a1 + v*a2` leaves
     eps_hat[m, n] = \int_0^1 \int_0^1 eps(u, v) exp(-2i*pi*(m*u + n*v)) du dv
 
 an ordinary DFT on the lattice grid for *any* basis — still indexed by integer differences,
-still block-Toeplitz. The `dfs2d_*` builders, the Toeplitz builds and `final_matching` are
-untouched. Truncation
+still block-Toeplitz. The `dfs2d_*` builders (the `fourier2d_*` builders since 2026-09-25), the
+Toeplitz builds and `final_matching` are untouched. Truncation
 stays rectangular in `(m, n)`; Li introduced circular truncation *in* the non-orthogonal setting
 and still found the parallelogramic one superior, and it measured worse here too.
 

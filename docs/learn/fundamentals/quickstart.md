@@ -4,7 +4,7 @@
 The runnable examples in this imported course explicitly use `wavebit.compat.legacy` to preserve the workflow behind its historical numerical records. For new work, use the [current getting-started guide](../../getting-started/index.md) and [API migration guide](../../migration/index.md). Historical measurements were not regenerated during this documentation import.
 :::
 
-The source requires **Python 3.12 or later**. The commands below install Wavebit from its source directory. They do not assume that a public package of unconfirmed release status has been installed. You do not need to install every backend if you will not use them all.
+The source requires **Python 3.12 or later**. The commands below install Wavebit from its source directory. The released alpha is also on PyPI (`pip install wavebit`); see [Installation](../../getting-started/installation.md). You do not need to install every backend if you will not use them all.
 
 ```sh
 python -m pip install .

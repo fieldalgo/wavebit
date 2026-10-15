@@ -19,8 +19,8 @@ JAX 환경이 없다면 Wavebit 소스 폴더에서 문서화된 선택 의존�
 # Wavebit 소스 폴더에서 필요한 경우에만
 python -m pip install '.[jax]'
 
-# 이 교재 폴더에서
-python examples/04_jax_gradient.py
+# 같은 폴더에서
+python examples/rcwa/learning/nvf/04_jax_gradient.py
 ```
 
 {download}`예제 4 전체 파일 <../../../examples/rcwa/learning/nvf/04_jax_gradient.py>`은 회전 사각형과 circular projector를 사용합니다. 앞의 원 예제와는 다른 구조입니다.

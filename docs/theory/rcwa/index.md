@@ -2,6 +2,11 @@
 
 Derivations and mathematical conventions underlying the Fourier-domain solver.
 
+These pages are dated records, written against the solver interface of their date. Their code
+snippets use the earlier interface, which since 2026-10-13 is `wavebit.compat.legacy`: where a
+snippet calls `wavebit.rcwa(...)`, `wavebit` means `from wavebit.compat import legacy as wavebit`.
+The public `wavebit.rcwa` module is introduced in the [RCWA guide](../../guide/rcwa/index.md).
+
 - [The per-order s/p frame the complex amplitudes are quoted in](amplitude-sp-frame.md)
 - [Branch cuts — which square root, and the two ways it went wrong](branch-cuts.md)
 - [Connecting algorithms — ETM, SMM, and why a plain transfer is not on the list](connecting-algorithms.md)

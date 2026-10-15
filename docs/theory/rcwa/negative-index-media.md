@@ -1623,14 +1623,17 @@ What the survey taught, and where Wavebit's rules come from:
 
 A double negative is a `Material` with both real parts negative. Everything else is as for any
 medium. Every value in the comments below is what the code prints *(study §11, which runs these
-examples as written)*.
+examples as written)*. The examples use the interface this page was written against, which since
+2026-10-13 is `wavebit.compat.legacy`; `wavebit` below means
+`from wavebit.compat import legacy as wavebit`, and the public `wavebit.rcwa` module takes the same
+`Material(epsilon, mu)`.
 
 **As the substrate** (the worked example of §3). `result.R` and `result.T` are the requested
 polarization's per-order efficiencies; at normal incidence s and p agree:
 
 ```python
 import numpy as np
-import wavebit
+from wavebit.compat import legacy as wavebit
 
 solver = wavebit.rcwa(
     top=2.25, bot=wavebit.Material(-2 + 0.1j, mu=-1 + 0.1j),

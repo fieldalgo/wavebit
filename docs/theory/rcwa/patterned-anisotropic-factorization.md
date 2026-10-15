@@ -317,11 +317,13 @@ permittivity too, so the raster below and the tensor beside it are now the same 
 rank apart.
 
 The public `structure` accepts tensor rasters of shape `(layers, Ny, Nx, 3, 3)` and
-shapes carrying tensor `Material` values. The ordinary door builds the required slots:
+shapes carrying tensor `Material` values. The ordinary door builds the required slots (the
+snippet uses the earlier interface, `wavebit.compat.legacy` since 2026-10-13; the public module
+takes a tensor raster as `rcwa.Layer(epsilon=...)`):
 
 ```python
 import numpy as np
-import wavebit
+from wavebit.compat import legacy as wavebit
 
 eps = np.where(mask, 2.56, 1.0).astype(complex)          # (Ny, Nx)
 g = np.where(mask, 0.30j, 0.0).astype(complex)

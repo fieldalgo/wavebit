@@ -233,7 +233,8 @@ directional order-48 cases in one process, whose peak resident memory is
 storage changes, while using the same cell export and equations. The full
 system, JAX and order-40 comparisons test these algebraic changes. Raw records
 are in `nvf_mirror_order48.log`, `nvf_mirror_order48_directional.log` and
-`nvf_mirror_order48_summary.log` under `studies/results/`.
+`nvf_mirror_order48_summary.log` under
+`studies/rcwa/nvf_mirror_convergence/records/`.
 
 The separately factorized Cartesian control gives:
 
@@ -262,10 +263,10 @@ powers during long solves.
 Set `NVF_CACHE` to an existing scratch directory for generated projection files.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_convergence --orders 24 32:24 24:32 32 --save-projection "$NVF_CACHE/wavebit-mirror-cap64.npz" --progress
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_convergence --orders 40 --save-projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --progress
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 32:40 40:32 --progress
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_cartesian --orders 24 32 40 --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_convergence.nvf_mirror_convergence --orders 24 32:24 24:32 32 --save-projection "$NVF_CACHE/wavebit-mirror-cap64.npz" --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_convergence.nvf_mirror_convergence --orders 40 --save-projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_convergence.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-cap80.npz" --orders 32:40 40:32 --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_cartesian.nvf_mirror_cartesian --orders 24 32 40 --progress
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_mirror_convergence.py tests/rcwa/test_nvf_mirror_cartesian.py
 ```
 
@@ -328,8 +329,8 @@ Lossless residuals are 4.12e-11 / 2.19e-12. The single-sector runs take
 part of each run, so these are not isolated throughput measurements. Raw
 records: `nvf_mirror_order56_directional.log`,
 `nvf_mirror_order56_summary.log` and `nvf_mirror_cap112_projection.log` in
-`studies/results/`. The remaining s-y change motivates the next directional
-refinement before spending memory on the larger square system.
+`studies/rcwa/nvf_mirror_convergence/records/`. The remaining s-y change motivates the next
+directional refinement before spending memory on the larger square system.
 
 ## The next s-y interval, through 64
 
@@ -355,7 +356,7 @@ process RSS is 6,038,323,200 bytes (6.04 GB) across that combined process;
 it is an observed resident-memory peak, not an allocation bound for larger
 orders. There is no concurrent large optical solve. Logs are
 `nvf_mirror_order64_directional.log` and `nvf_mirror_order64_summary.log` in
-`studies/results/`.
+`studies/rcwa/nvf_mirror_convergence/records/`.
 
 If further qualification against the provisional 1e-5 target is needed,
 the next bounded checks are:

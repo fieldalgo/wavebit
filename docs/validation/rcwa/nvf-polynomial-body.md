@@ -176,16 +176,16 @@ same conclusion at the higher optical order.
 
 Run from the repository root. The separate reference export requires NGSolve;
 JIT validation requires JAX x64. The optional class is importable as
-`studies.nvf_polynomial_body.PolynomialBodyGapModel`.
+`studies.rcwa.nvf_polynomial_body.nvf_polynomial_body.PolynomialBodyGapModel`.
 
 Set `NVF_CACHE` to an existing scratch directory for generated projection files.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 16 24 --meshes 2:8:1 --gap-degrees 6 --body-degree 4 --grading 8:.01 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 0 --meshes 2:8:1 2:8:2 --gap-degrees 6 --body-degree 2 --grading 8:.01 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_polynomial_body --order 2 --gaps 0 17 --seams 0 --body-degree 4 --gap-degree 6 --edge-fraction 1e-5
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_reference --cap 48 --h .03 --degree 8 --quadrature 28 --output "$NVF_CACHE/wavebit-gap-reference-h003-cap48.npz"
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_gap_convergence --orders 16 24 --meshes --projection "$NVF_CACHE/wavebit-gap-reference-h003-cap48.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 16 24 --meshes 2:8:1 --gap-degrees 6 --body-degree 4 --grading 8:.01 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 0 --meshes 2:8:1 2:8:2 --gap-degrees 6 --body-degree 2 --grading 8:.01 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_polynomial_body.nvf_polynomial_body --order 2 --gaps 0 17 --seams 0 --body-degree 4 --gap-degree 6 --edge-fraction 1e-5
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_reference.nvf_gap_reference --cap 48 --h .03 --degree 8 --quadrature 28 --output "$NVF_CACHE/wavebit-gap-reference-h003-cap48.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_gap_convergence.nvf_gap_convergence --orders 16 24 --meshes --projection "$NVF_CACHE/wavebit-gap-reference-h003-cap48.npz"
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_polynomial_body.py tests/rcwa/test_nvf_directional_convergence.py tests/rcwa/test_nvf_interface_resolution.py tests/rcwa/test_nvf_gap_convergence.py tests/rcwa/test_nvf_gap_reference.py tests/rcwa/test_nvf_continuous_flux.py tests/rcwa/test_nvf_harmonic_coordinates.py tests/rcwa/test_nvf_partitioned_gap_energy.py tests/rcwa/test_nvf_thin_gap_energy.py tests/rcwa/test_nvf_cell_bounds.py tests/rcwa/test_nvf_cell_corrector.py tests/rcwa/test_nvf_harmonic_energy.py tests/rcwa/test_nvf_harmonic_energy_jax.py tests/rcwa/test_resonant_nvf_probe.py tests/rcwa/test_contact_jones_probe.py::test_equal_material_split_is_equivalent_to_one_rectangle
 ```
 

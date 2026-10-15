@@ -2,6 +2,8 @@
 
 Measured numerical studies and their limits. A small conservation residual alone does not establish optical convergence.
 
+Records written before 2026-10-13 use the solver interface of their day, kept since then as `wavebit.compat.legacy`; the names they take from the top-level `wavebit` namespace, such as `rcwa(...)`, `ConformingNVF`, `AffineProfileNVF`, `CartesianRectangleNVF`, `CartesianRectanglePairNVF`, `ConvMatrices` and `set_j1_implementation`, are exported from there.
+
 - [Backend choice for a differentiated run — measurements](backend-choice.md)
 - [The Bessel $J_1$ every backend uses, and why its two constants are what they are — measurements](bessel-j1.md)
 - [Boundary conditions and power in complex half-spaces, audited](half-space-power-audit.md)

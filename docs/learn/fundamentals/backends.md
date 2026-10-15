@@ -17,7 +17,7 @@ Figure 16-1. Shared physics core, three array backends and optional automatic di
 | --- | --- | --- |
 | `backend='numpy'` / `Backend.NUMPY` | First calculations, result inspection, ordinary NumPy workflows | Not an automatic-differentiation backend |
 | `backend='jax'` / `Backend.JAX` | JAX differentiation, JIT and batching on supported paths | 64-bit settings and static geometry information |
-| `backend='torch'` / `Backend.TORCH` | PyTorch eager differentiation | Do not assume `torch.compile` support beyond its documented scope |
+| `backend='torch'` / `Backend.TORCH` | PyTorch eager differentiation | Under `torch.compile` Wavebit runs eagerly, so compiling buys it nothing; `fullgraph=True`, `torch.export` and `torch.jit.trace` are refused |
 
 The default is `'numpy'`. Names match the libraries’ import names; `Backend` is a string enum containing the same three values, so `Backend.JAX == 'jax'`. Before 2026-10-11, integers `0`/`1`/`2` selected backends. Integers, and alternative spellings such as `'JAX'` or `'pytorch'`, are now rejected with a list of accepted names.
 

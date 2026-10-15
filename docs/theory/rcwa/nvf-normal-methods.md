@@ -104,6 +104,10 @@ longer of the construction: `339df21` made `'distance'` itself periodic, which m
 wavebit.rcwa(structure=raster, factorization='nvf', raster_normal_method='contour', ...)
 ```
 
+(This page's snippets use the interface it was written against, which since 2026-10-13 is
+`wavebit.compat.legacy`. The public module takes the same two keywords on
+`rcwa.Numerics(factorization='nvf', raster_normal_method='contour', nvf_projector=...)`.)
+
 The keyword is read exactly where a raster normal field is built — a raster `structure` under
 `factorization='nvf'` (and the tensor-raster builders, called directly). Explicitly set
 anywhere else it is refused rather than ignored, for the same reason `enhanced_dfs` was
@@ -498,7 +502,8 @@ wavebit.rcwa(structure=raster, factorization='nvf',
 Folding it into `raster_normal_method` would have made one list of eight where there are two lists of
 four and two — every construction can be read either way, and the two choices answer different
 questions. Same precedent as `fourier_coefficients` x `factorization`. It is read exactly where
-`raster_normal_method` is read, and refused rather than ignored everywhere else.
+`raster_normal_method` is read, and refused rather than ignored everywhere else. (Since
+2026-09-09 the shape path under `factorization='nvf'` reads it too; see the note at the top.)
 
 ### What it is
 

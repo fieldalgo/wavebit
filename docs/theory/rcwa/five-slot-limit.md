@@ -123,7 +123,7 @@ decide every row, and neither needs another solver to agree:
 | solver | behaviour | evidence |
 |---|---|---|
 | **Wavebit second-order** | refuses | `ValueError` naming the slot, only reachable by asking for `formulation='second_order'` |
-| **Wavebit patterned (PN)** | refuses | `ValueError` naming the z row; it **accepted and silently dropped** until 2026-08-27, which is the row below, in this table, about this solver |
+| **Wavebit patterned (PN)** | refused; handles it since 2026-09-24 | `ValueError` naming the z row from 2026-08-27; before that it **accepted and silently dropped** it, which is the row below, in this table, about this solver. Since 2026-09-24 a patterned z-coupled tensor takes the first-order path under PN or tensor Li ([full tensor patterns](../../guide/rcwa/full-tensor-patterns.md)) |
 | **fmmax** 1.7.1 | cannot be asked | no `xz/yz/zx/zy` arguments exist |
 | **inkstone** 0.3.15 | **accepts, silently drops** | takes a `(3,3)` array; output bit-identical to the z row zeroed |
 | **EMpy** 2.2.3 | reads it, diverges | uses the z row, but returns `R + T = 1.6e13` for a plain Faraday tensor at normal incidence |
@@ -171,8 +171,9 @@ gives up the free `±` mode pairing every second-order consumer assumes — forw
 become genuinely different mode sets. `src/wavebit/rcwa/_engine/solve_2d_first_order.py` implements it, and
 since 2026-08-13 the public entry does reach it: `solve_conv` takes nine slots rather than five,
 and giving any of the four z-row slots selects the first-order path (`formulation='first_order'`
-forces it, `'second_order'` refuses a z row rather than dropping it). What crossing the edge still
-costs, beyond the 8x, is `mu` and `layer_algorithm='SMM'`; the module's docstring keeps that list.
+forces it, `'second_order'` refuses a z row rather than dropping it). What crossing the edge also
+cost, beyond the 8x, was `mu` and `layer_algorithm='SMM'`; both have run on the first-order path
+since 2026-09-24, and the module's docstring keeps what it supports.
 Field reconstruction was on it until 2026-08-14 and is not any more —
 `reconstruct_field` reads the formulation, since the grating type cannot tell the two paths apart.
 

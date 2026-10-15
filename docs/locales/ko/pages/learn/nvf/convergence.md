@@ -16,7 +16,7 @@
 {download}`예제 3 <../../../examples/rcwa/learning/nvf/03_convergence.py>`은 예제 1과 같은 구조에서 두 축을 따로 바꿉니다. 다음은 직접 실행한 값이며, 짧은 학습용 사다리입니다.
 
 ```bash
-python examples/03_convergence.py
+python examples/rcwa/learning/nvf/03_convergence.py
 ```
 
 | 비교 | Fourier 차수 | shape_nvf_grid_size | p 투과율 T |

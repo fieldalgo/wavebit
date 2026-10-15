@@ -93,6 +93,8 @@ A polygon is `dict(type='polygon', vertices=..., material=...)`, its vertices in
 `cx` / `cy`. It takes no `cx`, `lx` or `angle`: the vertices place, size and turn it, and a key
 beside them would be dropped, so it is refused. A layer holding a polygon is always resolved into
 disjoint polygons, whatever it overlaps -- the closed-form transforms are written per primitive.
+Its periodic images are judged on the outline: it may reach past the cell edge, but not into a
+periodic copy of itself or of another region.
 
 A shape wider than the period is refused: its transform is a single sinc, which is not the
 transform of any periodic indicator, so the layer would not be the structure its parameters
@@ -171,4 +173,4 @@ solver = wavebit.rcwa(
 
 They adapt in, so do not also pass the keywords they supply — `Stack` covers `structure`,
 `thickness`, `top`, `bot`, `period`, `lattice` and `mu`; `Incidence` covers `wavelength`,
-`theta`, `phi`, `tetm`, `psi`, `chi`, `polarization` and `incidence_side`.
+`theta`, `phi`, `kx`, `ky`, `tetm`, `psi`, `chi`, `polarization` and `incidence_side`.

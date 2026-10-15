@@ -144,8 +144,8 @@ Set `NVF_FEM_PYTHON` to the Python executable with the optional NGSolve dependen
 
 ```bash
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$NVF_FEM_PYTHON" -m unittest discover -s tests -p test_nvf_mirror_reference.py -v
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$NVF_FEM_PYTHON" -m studies.nvf_mirror_reference --cap 96 --h .03 --degree 8 --quadrature 32 --output "$NVF_CACHE/wavebit-mirror-fem-cap96.npz"
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-fem-cap96.npz" --orders 16 24 40 48 --progress
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$NVF_FEM_PYTHON" -m studies.rcwa.nvf_mirror_reference.nvf_mirror_reference --cap 96 --h .03 --degree 8 --quadrature 32 --output "$NVF_CACHE/wavebit-mirror-fem-cap96.npz"
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_mirror_convergence.nvf_mirror_convergence --projection "$NVF_CACHE/wavebit-mirror-fem-cap96.npz" --orders 16 24 40 48 --progress
 ```
 
 ## Element ownership at high quadrature
@@ -178,7 +178,8 @@ q32 export by at most 7.55e-15. Thus the earlier q32-based optical comparisons
 are unaffected at coefficient precision. This observation is not an optical
 error bound or a new full 3D reference. Diagnostic and validation records:
 `nvf_mirror_reference_element_lookup.log`, `nvf_fem_element_validation.log`
-and `nvf_mirror_reference_element_projection.log` under `studies/results/`.
+and `nvf_mirror_reference_element_projection.log` under
+`studies/rcwa/nvf_mirror_reference/records/`.
 
 After element-local evaluation, q32-to-q36 changes the cap-112 coefficients
 by only **3.1086e-15**, compared with 3.3862e-11 before the fix. The q36 mean

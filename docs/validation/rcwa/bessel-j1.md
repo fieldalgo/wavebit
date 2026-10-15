@@ -180,8 +180,11 @@ both precisions, the choice is exposed rather than decided for you.
 
 ## The switch
 
+Since 2026-10-13 the switch is exported from `wavebit.compat.legacy`, not from the top-level
+`wavebit` namespace; it stays process-wide, as described below.
+
 ```python
-import wavebit
+from wavebit.compat import legacy as wavebit
 wavebit.set_j1_implementation('hybrid')     # returns the previous setting
 wavebit.get_j1_implementation()
 ```

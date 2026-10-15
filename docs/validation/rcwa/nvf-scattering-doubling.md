@@ -157,7 +157,7 @@ or outer Fourier convergence studies.
 ## Use and reproduction
 
 ```python
-from studies.nvf_scattering_doubling import ScatteringDoublingGapModel
+from studies.rcwa.nvf_scattering_doubling.nvf_scattering_doubling import ScatteringDoublingGapModel
 
 model = ScatteringDoublingGapModel(
     2, rows=4, body_degree=4, gap_degree=6, edge_fraction=1e-5,
@@ -176,9 +176,9 @@ interface. Direct use of `doubling_powers(order, slots, xp)` accepts any
 compatible finite constitutive matrices under the lossless contract.
 
 ```bash
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_scattering_doubling --jax
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_scattering_doubling --mirror --jax
-PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.nvf_scattering_doubling --gap 0 --seams --values 12.25 --jax
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_scattering_doubling.nvf_scattering_doubling --jax
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_scattering_doubling.nvf_scattering_doubling --mirror --jax
+PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m studies.rcwa.nvf_scattering_doubling.nvf_scattering_doubling --gap 0 --seams --values 12.25 --jax
 PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python -m pytest -q tests/rcwa/test_nvf_scattering_doubling.py
 ```
 

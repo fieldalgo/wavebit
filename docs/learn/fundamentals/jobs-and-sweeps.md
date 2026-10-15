@@ -105,7 +105,7 @@ for point in restored.expand():
 
 Here **JSON stores the loaded wavelength-dependent silicon table, not just the name silicon**. The restored specification evaluates that table at each wavelength. Index-derived materials preserve the index table and optional permeability table; permittivity-derived materials preserve the permittivity table and optional permeability table. Anisotropic tensor components are preserved too.
 
-If instead a `Material` from `silicon.at(900.)` was assigned, JSON stores those constant 900 nm values. They remain fixed after restoring and changing wavelength, as explained for the two material objects in [Chapter 7](materials.md).
+If instead the constant 900 nm values were assigned, JSON stores those values. They remain fixed after restoring and changing wavelength, as explained for the two material objects in [Chapter 7](materials.md). Wrap them in a `Material` first, as in `value = silicon.at(900.)` and then `wavebit.Material(epsilon=value.epsilon, mu=value.mu)`: `.at()` on a bundled table returns a `MaterialResponse`, which `to_json()` refuses.
 
 `spec.key()` identifies input settings for comparison. If `spec.key() == restored.key()` after saving and restoring, the normalized inputs match. To reproduce results, also record Wavebit and dependency versions, backend and precision. JSON includes a format `version`, currently 10 in this workflow. See the [specification guide](../../migration/jobs-v1.md#what-a-document-must-say-and-what-is-refused) for conversion rules for earlier formats.
 
@@ -143,4 +143,4 @@ Runnable file: {download}`04_jobspec.py <../../../examples/rcwa/learning/learn/0
 | 900.0 | 0.205331628 | 0.794668372 |
 | 1000.0 | 0.171513741 | 0.828486259 |
 
-See the [user guide](../../guide/common/specs.md) for all options and JSON format, and the [API reference](../../migration/legacy-api.md#a-run-as-data) for classes and methods. The [capability-manifest guide](../../reference/common/capability-manifest.md) separately describes the capability list available to external programs.
+See the [compatibility job manual](../../migration/jobs-v1.md) for all options and JSON format, and the [API reference](../../migration/legacy-api.md#a-run-as-data) for classes and methods. The [capability-manifest guide](../../reference/common/capability-manifest.md) separately describes the capability list available to external programs.

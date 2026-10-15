@@ -39,9 +39,9 @@ Figure 6-1. A circle represented by pixels and by a circle shape
 
 ## Coefficient construction and product rules are independent
 
-`fourier_coefficients` selects how material Fourier coefficients are obtained, whereas `factorization` selects how discontinuous products are treated. Raster input permits all four combinations of sampled/integrated with li/nvf. Integrated raster accounts for integrals over each rectangular pixel, but it does not turn the input's staircase geometry into a smooth circle.
+`fourier_coefficients` selects how material Fourier coefficients are obtained, whereas `factorization` selects how discontinuous products are treated. Raster input permits all four combinations of sampled/integrated with li/nvf. A third factorization, the opt-in `'laurent'` (the direct rule for every product), exists for comparison with solvers that use it; this course does not use it. Integrated raster accounts for integrals over each rectangular pixel, but it does not turn the input's staircase geometry into a smooth circle.
 
-For simple circles, ellipses, and rotated rectangles, the shape path can construct material coefficients through analytic integration. Not every combination of shapes is handled in closed form, however. Painting overlapping curves, for example, involves polygonal approximations and separate geometry-accuracy controls. NVF projector coefficients also require numerical integration, so “analytic integration of material coefficients” does not mean “an exact closed-form optical solution.”
+For simple circles, ellipses, and rotated rectangles, the shape path can construct material coefficients through analytic integration. A `type='polygon'` outline (since 2026-10-15) is transformed exactly on the painting route instead; see [polygon regions](../../guide/rcwa/boundary-modeling.md#polygon-regions). Not every combination of shapes is handled in closed form, however. Painting overlapping curves, for example, involves polygonal approximations and separate geometry-accuracy controls. NVF projector coefficients also require numerical integration, so “analytic integration of material coefficients” does not mean “an exact closed-form optical solution.”
 
 ```{figure} ../../figures/learn/nvf/08-settings.svg
 :alt: Construction method, projector type, sample count, and Fourier orders are different settings

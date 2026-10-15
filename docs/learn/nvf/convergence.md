@@ -16,7 +16,7 @@ Figure 9-1. Check optical truncation and the projector integration grid separate
 {download}`Example 3 <../../../examples/rcwa/learning/nvf/03_convergence.py>` varies these two axes separately for the structure in Example 1. The following values come from actual execution and form a short learning-oriented refinement sequence.
 
 ```bash
-python examples/03_convergence.py
+python examples/rcwa/learning/nvf/03_convergence.py
 ```
 
 | Comparison | Fourier orders | shape_nvf_grid_size | p transmittance T |

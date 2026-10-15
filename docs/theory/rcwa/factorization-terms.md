@@ -79,8 +79,9 @@ M[(r,s),(c,d)] = coeff(ky = r - c, kx = s - d)
 ```
 
 That is all it does. It never sees a permittivity, and it does not know which rule its caller
-is building. In `to_conv_mat_parametric_nvf` it is called five times in a row — on `eps`, on
-`1/eps`, and on the three normal-field products `nx^2`, `nx ny`, `ny^2`:
+is building. In `nvf_from_coeffs`, the last step of `to_conv_mat_parametric_nvf`, it is called
+five times in a row — on `eps`, on `1/eps`, and on the three normal-field products `nx^2`,
+`nx ny`, `ny^2`:
 
 ```python
 ep_dir = conv_matrix_2d(xp, eps_c,     half_width_u, half_width_v)
@@ -89,7 +90,8 @@ ep_inv = conv_matrix_2d(xp, inv_eps_c, half_width_u, half_width_v)
 delta_ep = ep_dir - xp.linalg.inv(ep_inv)
 ```
 
-The inverse rule's *inversion* is the caller's, on the line after. The builder is shared.
+The inverse rule's *inversion* is the caller's, in `_nvf_assemble` right after. The builder is
+shared.
 
 This is what the old name got wrong: it carried a rule word into a place where no rule has been
 chosen yet, so `ep_inv = laurent_conv_2d(...)` read as a contradiction without being one.

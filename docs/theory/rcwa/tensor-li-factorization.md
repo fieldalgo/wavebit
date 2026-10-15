@@ -2,10 +2,12 @@
 
 Set `factorization='li'` to use successive Cartesian Fourier factorization for
 full permittivity and permeability tensors. Tensor inputs default to NVF.
-Both choices emit five slots for z-decoupled tensors or nine for full tensors.
+Both choices emit five slots for z-decoupled tensors or nine for full tensors. The example uses
+the earlier interface, `wavebit.compat.legacy` since 2026-10-13; the public module selects the
+same builder with `rcwa.Numerics(factorization='li')`.
 
 ```python
-import wavebit
+from wavebit.compat import legacy as wavebit
 
 crystal = wavebit.Material(epsilon=[2.25, 4., 2.8]).rotated(0.3, axis='y')
 solver = wavebit.rcwa(

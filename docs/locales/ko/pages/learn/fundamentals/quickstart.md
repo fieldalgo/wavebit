@@ -4,7 +4,7 @@
 이 교재의 실행 예제는 원래 수치 기록을 재현할 수 있도록 `wavebit.compat.legacy` 인터페이스를 명시적으로 사용합니다. 새 작업은 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 참고하세요. 기존 측정값은 이번 문서 이행에서 다시 계산하지 않았습니다.
 :::
 
-현재 소스의 Python 요구사항은 **3.12 이상**입니다. 아래는 Wavebit 소스 폴더에서 설치하는 방법입니다. 아직 배포 여부가 확정되지 않은 공개 패키지를 설치했다고 가정하지 않습니다. 사용하지 않는 백엔드를 모두 설치할 필요는 없습니다.
+현재 소스의 Python 요구사항은 **3.12 이상**입니다. 아래는 Wavebit 소스 폴더에서 설치하는 방법입니다. 공개된 알파 버전은 PyPI에서도 설치할 수 있습니다(`pip install wavebit`). [설치 안내](../../getting-started/installation.md)를 참고하세요. 사용하지 않는 백엔드를 모두 설치할 필요는 없습니다.
 
 ```sh
 python -m pip install .

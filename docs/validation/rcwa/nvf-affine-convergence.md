@@ -670,7 +670,7 @@ NPZ path outside the checkout:
 ```bash
 PYTHONPATH=$PWD "$NVF_FEM_PYTHON" studies/rcwa/nvf_gap_reference/nvf_gap_reference.py --cap 32 --h .04 --degree 8 --quadrature 28 --refine 40 --transform 1 .45 0 .7 --output "$NVF_AFFINE_REF"
 PYTHONPATH=$PWD python studies/rcwa/nvf_affine_convergence/nvf_affine_convergence.py --orders 8 12:8 8:12 12 16:12 12:16 16 --projections "$NVF_AFFINE_REF" --cells 2:4:4:6
-PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.test_nvf_affine_reference tests.test_nvf_cell_corrector tests.test_nvf_gap_reference
+PYTHONPATH=$PWD "$NVF_FEM_PYTHON" -m unittest tests.rcwa.test_nvf_affine_reference tests.rcwa.test_nvf_cell_corrector tests.rcwa.test_nvf_gap_reference
 ```
 
 The comparison loader requires the identical transform, profile and

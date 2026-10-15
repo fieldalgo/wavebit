@@ -1,5 +1,12 @@
 # Keyword reference
 
+:::{note}
+This page lists the keywords of the retained `wavebit.compat.legacy` factories; `wavebit` below
+means `from wavebit.compat import legacy as wavebit`. The current lifecycle states the same
+physics on `rcwa.Problem`, `rcwa.Numerics` and `wavebit.Execution`; start with
+[the common guide](../guide/common/lifecycle.md) and the [RCWA reference](rcwa/index.md).
+:::
+
 Every keyword `wavebit.rcwa()` takes, what it accepts and what it defaults to. Grouped by the
 question it answers rather than by the constructor's order, which is chronological.
 
@@ -16,13 +23,14 @@ guide takes them one subject at a time: [the light](../guide/rcwa/light.md),
 
 Two rules cover the whole surface and are worth stating once:
 
-* **An unknown keyword is refused, not swallowed.** `rcwa(thicknes=300.)` raises and names the
-  nearest real keyword. So does assignment after construction -- `solver.thicknes = 300.` is a
-  refusal, not a new attribute.
-* **A retired spelling is refused by name**, with the refusal saying that the *quantity* moved
-  too. `ucell`, `n_top`, `n_bot`, `n_base` and `n_index` all held a refractive index; the
-  fields that replaced them hold a relative permittivity, and `3.5` reread as a permittivity is
-  a legal, energy-conserving, different medium.
+* **An unknown keyword is refused, not swallowed.** `rcwa(thicknes=300.)` raises. A per-call
+  keyword names the nearest real one -- `solve(thicknes=300.)` suggests `thickness` -- and so
+  does assignment after construction: `solver.thicknes = 300.` is a refusal, not a new attribute.
+* **A retired spelling is refused like any unknown name** (by name, saying that the *quantity*
+  moved too, until 2026-08-26). `ucell`, `n_top`, `n_bot`, `n_base` and `n_index` all held a
+  refractive index; the fields that replaced them hold a relative permittivity, and `3.5` reread
+  as a permittivity is a legal, energy-conserving, different medium. A name spelled like an
+  index (`n_top` in `solve()`, `n_index` in a shape) is still told so.
 
 ## The light
 
@@ -83,7 +91,7 @@ Explained in [Choosing the numerics](../guide/rcwa/numerics.md), except
 | `raster_normal_method` | `'distance'` | raster NVF only: `'distance'`, `'contour'`, `'spectral'`, `'smooth'` |
 | `nvf_projector` | `'linear'` | raster and shape NVF projection: `'linear'` or `'circular'`; independent of incident polarization |
 | `li_nesting` | `'fixed'` | Li only: the order Li's rules are nested in. `'fixed'` (`v` inside `u` for every slot) or `'symmetric'` (each slot's inverse-rule axis inside -- covariant under swapping x and y). Read on rasters and on axis-aligned rectangles; refused under `'nvf'` and `'laurent'`; tensor Li builds `'fixed'` only |
-| `shape_nvf_grid_size` | `max(1024, 4*Nx+1, 4*Ny+1)` | shape NVF only: projector sampling points per cell axis; `128` means a 128×128 grid |
+| `shape_nvf_grid_size` | `max(1024, 4*half_width_u+1, 4*half_width_v+1)` | shape NVF only: projector sampling points per cell axis; `128` means a 128×128 grid |
 | `answers` | `'amplitude'` | what the solve keeps the state to answer — see [Near fields](../guide/rcwa/fields.md) |
 
 ### NVF names changed on 2026-09-21
@@ -130,8 +138,9 @@ directly and needs none of this.
 The string values have enum equivalents, if you prefer them to the literals:
 
 ```python
-from wavebit import (Answers, Backend, Tetm, FourierCoefficients, Factorization, NormalMethod,
-                     Projector, Nesting)
+from wavebit.compat import legacy as wavebit
+from wavebit.compat.legacy import (Answers, Backend, Tetm, FourierCoefficients, Factorization,
+                                   NormalMethod, Projector, Nesting)
 
 solver = wavebit.rcwa(backend=Backend.JAX, tetm=Tetm.TM, factorization=Factorization.NVF, ...)
 ```

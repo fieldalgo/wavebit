@@ -611,7 +611,7 @@ If RETICOLO is configured to report every order, the summed reflection efficienc
 This appendix's conclusions depend on {ref}`assumption 2 <ckr-premises>`, losslessness. {ref}`Appendix B <complex-kx-lossy-gain>` relaxes that assumption alone, keeping the other three, and examines what changes.
 
 - **If the incident medium absorbs**, real `theta`, using the phase-angle convention, and complex `theta`, using the formal {math}`n\sin\theta`, produce different {math}`k_x`. Complex `theta` is no longer a slight perturbation of real `theta` ({ref}`absorbing incident media <ckr-absorbing-incidence>`).
-- **If the half-space whose root is being selected absorbs**, its branch points move off the real axis, and all four rules agree near real {math}`k_x`. This is also where Wavebit's continuity correction actually operates ({ref}`absorbing half-spaces <ckr-lossy>`).
+- **If the half-space whose root is being selected absorbs**, its branch points move off the real axis, and all four rules agree near real {math}`k_x`. This is also where Wavebit's pre-October-2, 2026 continuity correction operated ({ref}`absorbing half-spaces <ckr-lossy>`).
 - **If the half-space amplifies light, or has gain**, the two criteria can point to different roots even at real {math}`k_x`. A rule is then needed, and causality determines the answer ({ref}`gain media <ckr-gain>`).
 - Code differences that emerge only with absorption or gain are collected in {ref}`Appendix B's code comparison <ckr-b-codes>`.
 
