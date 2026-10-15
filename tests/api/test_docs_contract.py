@@ -770,6 +770,28 @@ def test_every_path_a_licence_names_is_in_the_repository():
                      'nothing; name where the code lives now.')
 
 
+def test_every_fmmax_and_s4_golden_names_the_build_it_was_frozen_with():
+    """`tests/references/README.md` records the oracle build behind each fmmax and S4 golden.
+
+    An archive holds arrays and no version stamp. Until 2026-10-15 two of the eight fmmax
+    generators named their fmmax and JAX and nothing named the S4 build, so a golden frozen
+    again could not be told apart from an oracle that had changed under it.
+    """
+    readme = (ROOT / 'tests/references/README.md').read_text(encoding='utf-8')
+    heading = '\n## What each golden was frozen with\n'
+    assert heading in readme, 'tests/references/README.md has no section recording oracle builds'
+    section = readme.split(heading, 1)[1].split('\n## ', 1)[0]
+    rows = dict(re.findall(r'^\| `([^`]+)` \| ([^|]+?) \|', section, re.M))
+    goldens = [posixpath.basename(p) for p in sorted(tree())
+               if re.fullmatch(r'tests/references/golden_(?:fmmax|s4)\w*\.npz', p)]
+    assert len(goldens) >= 10
+    missing = [g for g in goldens if g not in rows]
+    assert not missing, f'no build recorded for {missing}'
+    named = [g for g in goldens if not rows[g].startswith('the same')]    # 'the same' = row above
+    for g in named:
+        assert re.search(r'\d+\.\d+', rows[g]), f'{g}: no version in {rows[g]!r}'
+
+
 @pytest.mark.parametrize('text,found', [
     ('gradient in wavebit/_core/backend.py is a port', 'wavebit/_core/backend.py'),
     ('the Cartesian shape path (src/wavebit/rcwa/_engine/rectilinear.py) through',

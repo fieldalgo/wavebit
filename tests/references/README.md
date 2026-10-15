@@ -1321,6 +1321,33 @@ Two consequences worth knowing before touching those generators:
   of a high-contrast patterned layer. Invisible at the 1e-4 the vector-formulation comparisons
   here work to; decisive for an identity comparison -- see the fmmax FFT section above.
 
+## What each golden was frozen with
+
+A golden archive holds arrays and no version stamp, and the suite never runs an oracle, so the
+build that produced the numbers is recorded here. RETICOLO's rows name V10 in the table above,
+and PyMoosh's its 4.0.1.
+
+| Golden | Frozen with | When |
+| --- | --- | --- |
+| `golden_s4.npz` | the S4 Python extension `s4-fieldalgo 0.1.0+b98c80e`: FieldAlgo's fork of S4 1.1 (`victorliu/S4`) at fork commit `b98c80e` (branch `modernize/master-fixed`), built against Accelerate for Python 3.12 and installed in the project env | 2026-08-10 |
+| `golden_s4_field.npz` | the same build | 2026-08-14; regenerated 2026-10-14 on it, every field array bit for bit, only the two `__stack` arrays changed |
+| `golden_fmmax.npz` | fmmax 1.7.1, jax and jaxlib 0.10.2, numpy 2.4.6, Python 3.11, in `fwref` | 2026-08-10 |
+| `golden_fmmax_magnetic.npz` | the same | 2026-08-10 |
+| `golden_fmmax_patterned.npz` | the same | 2026-08-14 |
+| `golden_fmmax_mu_ambient.npz` | the same | 2026-08-14 |
+| `golden_fmmax_patterned_mu.npz` | the same | 2026-08-14 |
+| `golden_fmmax_field.npz` | the same | 2026-08-15; the `patch` case added 2026-10-14 |
+| `golden_fmmax_laurent.npz` | the same | 2026-09-27 |
+| `golden_fmmax_dng.npz` | the same; its generator refuses any other fmmax | 2026-10-04 |
+| the RETICOLO Li-nesting totals, inline in `test_reticolo_li_nesting.py` | RETICOLO V10 under Octave, `parm.res1.li` set by hand | 2026-09; **no generator in this repository** -- they were measured in an Octave session whose script is not here, and the bridge in `interface/` does not expose `li`. `Reticolo.run_res2` with that one field set, on the scene the test describes, would regenerate them |
+
+`fwref` has held exactly those versions since it was built on 2026-08-10, before the first of
+these goldens. Frozen again in it on 2026-10-15, six of the eight fmmax archives came back bit for
+bit; `golden_fmmax_patterned.npz` and `golden_fmmax_patterned_mu.npz` moved in the last bits
+(8.7e-19 in one array and 5.8e-17 at worst in five), far inside what their tests allow. Both S4
+archives came back bit for bit on the build above. A different fmmax, JAX or S4 build makes a new
+golden, to be compared against these before it replaces them.
+
 ## Which file does what
 
 | Piece | Needs |
