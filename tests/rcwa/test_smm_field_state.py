@@ -44,6 +44,7 @@ import pytest
 
 import wavebit
 from wavebit.rcwa._engine import engine
+from wavebit.rcwa._engine import maxvol_labels
 from wavebit.rcwa._engine import scattering
 
 pytestmark = pytest.mark.filterwarnings('ignore::wavebit._common.backend.ComplexIncidenceWarning')
@@ -636,7 +637,7 @@ def test_the_state_differentiates_as_the_etms_does(case, backend):
 
 
 #: ``(kind, theta, structure eps, thickness, incidence side, half-space eps)``: a layer whose root
-#: grows past the ETM's cap, where the ETM's own derivative is no referee.
+#: grows past the ETM's cap, where a fourth-order central difference of the field is the referee.
 PAST_CAP = {
     'vacuum-te': ('te', THETA, 1.0, 1e4, 'top', 1.0),
     'vacuum-tm': ('tm', THETA, 1.0, 1e4, 'top', 1.0),
@@ -645,14 +646,13 @@ PAST_CAP = {
 }
 
 
-@pytest.mark.parametrize('case', list(PAST_CAP))
-def test_the_state_differentiates_past_the_cap(case):
-    """``d sum|E|**2 / ds`` past the ETM's cap, ``s`` scaling the layer's permittivity.
+def _past_cap_derivative(case, algo, backend):
+    """``(autodiff, central difference)`` of ``d sum|E|**2 / ds`` past the cap, ``s`` scaling the
+    layer's permittivity.
 
-    Against a fourth-order central difference of the field itself: SMM's ``jax.grad`` is within
-    1.5e-9 to 3.9e-9 of it. The ETM's has the wrong sign on the vacuum TE row, is 16% off on the
-    conical one and 2% off on the chip -- a defect of the ETM's own record, which is why
-    :func:`test_the_state_differentiates_as_the_etms_does` stops below the cap.
+    The difference is fourth order with ``h = 1e-7`` on JAX's eager field of the same algorithm:
+    past the cap every algorithm's *value* is right (the table above), so only the derivative is
+    under test.
     """
     pytest.importorskip('jax')
     _legacy_wavebit_enable_x64()
@@ -662,18 +662,64 @@ def test_the_state_differentiates_past_the_cap(case):
     kw = dict(tetm=kind) if kind in ('te', 'tm') else dict(psi=0.27, phi=0.41)
     order, period = ([7], [1654.489947568981]) if case == 'chip-conical' else ([0], [2000.])
     wavelength = 1000. if case == 'chip-conical' else WL
+    samples = dict(sample_x=5, sample_y=1, sample_z=6)
+
+    def scene(backend_name, structure):
+        return _legacy_wavebit_rcwa(backend=backend_name, top=medium, bot=medium, theta=theta,
+                                    wavelength=wavelength, thickness=[thickness], period=period,
+                                    truncation_order=order, incidence_side=side, structure=structure,
+                                    layer_algorithm=algo, answers='field', **kw)
 
     def loss(s):
-        solver = _legacy_wavebit_rcwa(backend='jax', top=medium, bot=medium, theta=theta,
-                              wavelength=wavelength, thickness=[thickness], period=period,
-                              truncation_order=order, incidence_side=side,
-                              structure=jnp.full((1, 1, 8), eps + 0j) * (1 + s),
-                              layer_algorithm='SMM', answers='field', **kw)
-        cell = solver.solve_field_eager(sample_x=5, sample_y=1, sample_z=6)[1]
+        cell = scene('jax', jnp.full((1, 1, 8), eps + 0j) * (1 + s)).solve_field_eager(**samples)[1]
         return jnp.sum(jnp.abs(cell) ** 2)
 
     h = 1e-7
     difference = (8 * (float(loss(h)) - float(loss(-h)))
                   - (float(loss(2 * h)) - float(loss(-2 * h)))) / (12 * h)
-    gradient = float(jax.grad(loss)(0.0))
+    if backend == 'jax':
+        return float(jax.grad(loss)(0.0)), difference
+    import torch
+    s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+    structure = torch.full((1, 1, 8), eps + 0j, dtype=torch.complex128) * (1 + s)
+    torch.sum(torch.abs(scene('torch', structure).solve_field(**samples)[1]) ** 2).backward()
+    return float(s.grad), difference
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('algo', ['SMM', 'ETM'])
+@pytest.mark.parametrize('case', list(PAST_CAP))
+def test_the_state_differentiates_past_the_cap(case, algo, backend):
+    """``d sum|E|**2 / ds`` past the ETM's cap, on both algorithms and both autodiff backends.
+
+    SMM's derivative is within 6e-10 to 3.9e-9 of the difference. The ETM's is within 7e-11 to
+    4.2e-9 since its complex-``k_par`` labels are taken from the state below each layer
+    (``maxvol_labels``, 2026-10-15). Before, from the layer alone, the field's *value* was right
+    and its derivative was not: relative errors 3.7 (the wrong sign), 1.7, 0.16 and 0.021 on the
+    four rows under JAX, 0.042 to 1.0 under PyTorch.
+    :func:`test_without_maxvol_the_etms_derivative_past_the_cap_breaks` is the control.
+    """
+    pytest.importorskip('jax')
+    pytest.importorskip(backend)
+    gradient, difference = _past_cap_derivative(case, algo, backend)
     assert abs(gradient - difference) < 1e-6 * abs(difference), (gradient, difference)
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('case', list(PAST_CAP))
+def test_without_maxvol_the_etms_derivative_past_the_cap_breaks(case, backend, monkeypatch):
+    """The control: the layer-alone rule back (``maxvol_labels.MODE = 'off'``), the ETM's
+    derivative past the cap misses the bound :func:`test_the_state_differentiates_past_the_cap`
+    holds it to.
+
+    Asserted against that test's own bound, not against the sizes it missed by on this machine
+    (2.1e-2 at least, Accelerate): how far a rule that pivots past the cap misses can depend on
+    the LAPACK underneath, as the split-layer controls found on Linux. On PyTorch the rule's TE and
+    TM solves can raise, and ``auto_detune`` answers ``1e-8`` off the point; the derivative there
+    still misses by orders of magnitude more than that move.
+    """
+    pytest.importorskip('jax')
+    pytest.importorskip(backend)
+    monkeypatch.setattr(maxvol_labels, 'MODE', 'off')
+    gradient, difference = _past_cap_derivative(case, 'ETM', backend)
+    assert abs(gradient - difference) > 1e-6 * abs(difference), (gradient, difference)

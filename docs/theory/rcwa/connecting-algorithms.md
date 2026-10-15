@@ -598,7 +598,8 @@ the ETM nor a closed form: inside a layer the modes satisfy Maxwell by construct
 continuous at every interface and equal at the outer faces to the half-space fields its own `R`
 and `T` imply is the truncated problem's unique solution (`studies/rcwa/smm_field_state/smm_field_state.py` section 9
 has it on gratings too, where every tree passes). `tests/rcwa/test_smm_field_state.py` pins the table,
-the oracle and the derivative past the cap, each against a mutant or an old tree it catches.
+the oracle and the derivative past the cap -- SMM's and, since the labels below, the ETM's -- each
+against a mutant or an old tree it catches.
 
 **One decision per run.** Added 2026-10-09. The cap reads a thickness, and a layer cut in two
 is two layers to it. A thin slice beside a thick one of the same material then kept the
@@ -771,7 +772,12 @@ over TE, TM, conical and 2D, metals, ETM and SMM, are develop's to the byte -- a
 rule too. The derivative is the modes' and not the choice's: on three etched gratings JAX eager,
 `jit(grad)` and PyTorch gradients of `r0` with respect to a thickness are SMM's and a central
 difference's to 1e-8..6e-7, where the rule's were 5x to 1e15 off, and a traced `theta` under `jit`
-is the eager solve to 2.4e-12. The cost is at a complex `k_par` only (eager NumPy, the decision's
+is the eager solve to 2.4e-12. Past the cap the rule's field was right in value and wrong in its
+derivative: on the four layers of `PAST_CAP` in `tests/rcwa/test_smm_field_state.py` (10 um of
+vacuum, TE, TM and conical, and the 4869 nm chip) the ETM's `d sum|E|**2` with respect to the layer's
+permittivity sat 3.7 (the wrong sign), 1.7, 0.16 and 0.021 off a fourth-order difference under JAX,
+0.042 to 1.0 under PyTorch. With these labels it is within 7e-11 to 4.2e-9 on both backends, as
+SMM's is; `test_without_maxvol_the_etms_derivative_past_the_cap_breaks` is the control. The cost is at a complex `k_par` only (eager NumPy, the decision's
 inverses reused for the layer): TE +29%, conical +77% (its decision builds the `V` blocks twice),
 2D +34-40%. The controls of `tests/rcwa/test_etm_layer_labels.py` and
 `tests/rcwa/test_split_layer_labels.py` -- put the old rule back, let each slice decide -- run with
