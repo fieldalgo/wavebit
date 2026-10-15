@@ -9,8 +9,9 @@ The fourth body, the sphere, is the one this repository owned no form for, and
 :func:`clipped_ball_volume` is written here (see its own docstring for the derivation and for
 why it is written rather than left to the plane).
 
-**Four of the five are ported, not imported.** Nothing under ``src/wavebit/fd/`` imports the old
-engines (``src/wavebit/fdtd/_prepare/cpml.py`` states the rule and the reason); what is copied here is
+**Four of the five are ported, not imported.** Nothing under ``src/wavebit/fdtd/`` outside
+``_periodic/`` imports the old engines (``src/wavebit/fdtd/_prepare/cpml.py`` states the rule
+and the reason); what is copied here is
 the arithmetic and the guards, with the source named at each one. :func:`clipped_ball_volume` is
 the exception and has no source: it is derived in this file, and it mirrors
 :func:`clipped_disc_area`'s structure (an odd-extended corner primitive summed over the box's

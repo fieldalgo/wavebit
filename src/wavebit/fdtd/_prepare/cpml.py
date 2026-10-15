@@ -1,8 +1,9 @@
 """The CPML profiles: ``b``, ``a`` and ``1/kappa`` per cell of depth, at the E and H points.
 
 Ported from ``src/wavebit/fdtd/_periodic/legacy.py::cpml_coefficients`` -- a **kernel seed**: the formula and
-its units audit are copied here, the function is never imported (nothing under ``src/wavebit/fd/``
-imports the old engines). Roden & Gedney 2000; Taflove & Hagness sec. 7.9.
+its units audit are copied here, the function is never imported (nothing under
+``src/wavebit/fdtd/`` outside ``_periodic/`` imports the old engines). Roden & Gedney 2000;
+Taflove & Hagness sec. 7.9.
 
 The recurrence the kernel runs, per psi (``src/wavebit/fdtd/_kernel/cpml.py``)::
 

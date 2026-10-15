@@ -313,7 +313,7 @@ def _refuse_out_of_scope(structure, mu, theta, phi, tetm, incidence_side, lattic
         raise ValueError(
             f'fdtd: theta={theta!r} is complex. Evanescent incidence has no propagating '
             f'incident wave to normalise against, and the TFSF plane injects one by '
-            f'construction. The RCWA path answers this; see docs/branch-cuts.md.')
+            f'construction. The RCWA path answers this; see docs/theory/rcwa/branch-cuts.md.')
     if phi is not None and float(np.real(phi)) != 0.0:
         raise ValueError(
             f'fdtd: phi={phi!r} with tetm={tetm!r}. A conical mount couples the two '

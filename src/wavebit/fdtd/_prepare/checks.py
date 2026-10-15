@@ -2209,7 +2209,7 @@ def _radiation_notes(scene):
         'residuals 52.05%/26.38%/12.91% at 20/28/40 cells per wavelength. '
         'These are examples, not an error bound for this scene. Use propagation="yee" '
         'for the validated lattice radiation map within its supported frequency band; '
-        'keep continuum only when its approximation is intended. See docs/fd-lattice-radiation.md.')]
+        'keep continuum only when its approximation is intended. See docs/validation/fdtd/fd-lattice-radiation.md.')]
 
 
 def _smoothed_notes(scene, plan, rows=None):
@@ -2244,7 +2244,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'parallel Conductor films in a plain lossless dielectric; touching '
                     'films, other pole families and junctions are outside it. Validate '
                     'observables under refinement and check duration and absorbers '
-                    'separately. See docs/fd-conductive-stack.md.'))
+                    'separately. See docs/validation/fdtd/fd-conductive-stack.md.'))
     if film is not None:
         out.append((SubpixelAccuracyWarning,
                     'The conductive film uses an induced Debye memory at normal mixed '
@@ -2253,7 +2253,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'conductors, declared dispersive poles and junctions are not supported. '
                     'An exact local material response alone does not establish spatial '
                     'convergence. Validate the observables under refinement and check run '
-                    'duration separately. See docs/fd-conductive-film.md.'))
+                    'duration separately. See docs/validation/fdtd/fd-conductive-film.md.'))
     from wavebit.fdtd._prepare.debye_stack import descriptor as debye_stack_descriptor
     relaxation_stack = debye_stack_descriptor(scene, plan.grid)
     if relaxation_stack is not None:
@@ -2265,7 +2265,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'lossless dielectric. Touching films, mixed pole families, initial '
                     'fields, tracing and Decay are outside this bounded scope. Validate '
                     'observables under refinement and check duration and absorbers '
-                    'separately. See docs/fd-debye-stack.md.'))
+                    'separately. See docs/validation/fdtd/fd-debye-stack.md.'))
     from wavebit.fdtd._prepare.oscillator_stack import descriptor as oscillator_stack_descriptor
     resonant_stack = oscillator_stack_descriptor(scene, plan.grid)
     if resonant_stack is not None:
@@ -2277,7 +2277,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'response is unchanged. This bounded scope excludes within-film '
                     'sums, Debye poles, touching films, initial fields, tracing and Decay. '
                     'Validate observables under refinement and check duration and '
-                    'absorbers separately. See docs/fd-oscillator-stack.md.'))
+                    'absorbers separately. See docs/validation/fdtd/fd-oscillator-stack.md.'))
     from wavebit.fdtd._prepare.single_pole_film import descriptor as single_pole_descriptor
     dispersive_film = single_pole_descriptor(scene, plan.grid)
     if dispersive_film is not None:
@@ -2287,7 +2287,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'scope is one concrete axis-aligned film in a lossless dielectric. '
                     'The source-band mesh bound certifies bulk material scales only; '
                     'validate observables under refinement and check run duration '
-                    'separately. See docs/fd-single-pole-film.md.'))
+                    'separately. See docs/validation/fdtd/fd-single-pole-film.md.'))
     from wavebit.fdtd._prepare.debye_film import descriptor as debye_descriptor
     relaxation_film = debye_descriptor(scene, plan.grid)
     if relaxation_film is not None:
@@ -2297,7 +2297,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'scope is one concrete axis-aligned film in a plain dielectric. '
                     'The source-band mesh bound certifies bulk scales only; validate '
                     'observables under refinement and check run duration and absorbers '
-                    'separately. See docs/fd-debye-film.md.'))
+                    'separately. See docs/validation/fdtd/fd-debye-film.md.'))
     from wavebit.fdtd._prepare.two_debye_film import descriptor as two_debye_descriptor
     two_relaxation_film = two_debye_descriptor(scene, plan.grid)
     if two_relaxation_film is not None:
@@ -2307,7 +2307,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'bounded C8 scope is one concrete axis-aligned film in a plain '
                     'dielectric. Validate observables under refinement and check '
                     'duration and absorbers separately. The spectral guard covers '
-                    'bulk scales only. See docs/fd-two-debye-film.md.'))
+                    'bulk scales only. See docs/validation/fdtd/fd-two-debye-film.md.'))
     from wavebit.fdtd._prepare.debye_sum_film import descriptor as debye_sum_descriptor
     sum_relaxation_film = debye_sum_descriptor(scene, plan.grid)
     if sum_relaxation_film is not None:
@@ -2317,7 +2317,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'This bounded C8 scope is one concrete axis-aligned film in a '
                     'plain dielectric. Validate observables under refinement and '
                     'check duration and absorbers separately. The spectral guard '
-                    'covers bulk scales only. See docs/fd-debye-sum-film.md.'))
+                    'covers bulk scales only. See docs/validation/fdtd/fd-debye-sum-film.md.'))
     from wavebit.fdtd._prepare.oscillator_sum_film import descriptor as oscillator_sum_descriptor
     sum_oscillator_film = oscillator_sum_descriptor(scene, plan.grid)
     if sum_oscillator_film is not None:
@@ -2328,7 +2328,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'C8 scope is one concrete axis-aligned film in a plain dielectric. '
                     'Validate observables under refinement and check duration and '
                     'absorbers separately. The spectral guard covers bulk scales only. '
-                    'See docs/fd-oscillator-sum-film.md.'))
+                    'See docs/validation/fdtd/fd-oscillator-sum-film.md.'))
     from wavebit.fdtd._prepare.hybrid_film import descriptor as hybrid_descriptor
     hybrid = hybrid_descriptor(scene, plan.grid)
     if hybrid is not None:
@@ -2338,7 +2338,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'This bounded C8 scope is one concrete axis-aligned film in a '
                     'plain dielectric. Validate observables under refinement and '
                     'check duration and absorbers separately. The spectral guard '
-                    'covers bulk scales only. See docs/fd-hybrid-film.md.'))
+                    'covers bulk scales only. See docs/validation/fdtd/fd-hybrid-film.md.'))
     if (len(asked) < len(smoothed) and film is None and stack is None and dispersive_film is None
             and relaxation_stack is None and resonant_stack is None and relaxation_film is None
             and two_relaxation_film is None
@@ -2372,7 +2372,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     '(epsilon=2.25) and 2.057 at epsilon=1.1 (20/28/40). On glass and weak '
                     'spheres at those grids its error is larger than with the default rule. These '
                     'benchmarks are not an error bound for this scene. Validate its observables '
-                    'under refinement. See docs/fd-symmetric-stencil.md.'))
+                    'under refinement. See docs/design/fd-symmetric-stencil.md.'))
     report = Approximations()
     proxy_stats, proxy_by_index = {}, {}
     magnetic = _background(scene).is_magnetic or any(

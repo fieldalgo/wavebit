@@ -902,7 +902,7 @@ class Sphere(Body):
     At the centre the gradient does not exist and the normal returned is ``+x``. Nothing can
     observe it: the fill there is 1 for any direction whenever ``radius >= dx sqrt(3)/2``, and a
     public sphere under four cells across -- radius under ``2 dx`` -- is refused
-    (``_lower.checks.check_cells_across``, C5).
+    (``src/wavebit/fdtd/_prepare/checks.py::check_cells_across``, C5).
 
     **Why the exact fill is written here after all.** Study S3(a) and the first draft of this
     package both decided the tangent plane was enough, on the grounds that its ``+0.250 (h/R)^2``

@@ -69,7 +69,7 @@ precedents) -- a second spelling of "which cells" is exactly the ambiguity this 
 either *fills cells whole* (:class:`Slab`, :class:`Region`) or *fills them fractionally*
 (:class:`Sphere`, and from C4 the extruded bodies :class:`Box`, :class:`Cylinder` and
 :class:`Prism`). :meth:`Shape.body` is that answer -- the
-``src/wavebit/fd/_shapes`` body this shape is smoothed from, or ``None``. It is a method and not a
+``src/wavebit/fdtd/_shapes`` body this shape is smoothed from, or ``None``. It is a method and not a
 ``smoothing=`` keyword on :class:`Structure` on purpose: a rule that could be switched, or
 that keyed itself on whether a radius happened to be traced, would make ``jax.grad`` and a
 finite difference compute two different functions, and it is the route-naming knob
@@ -156,7 +156,7 @@ class Shape:
             'not a cell boundary fills cells fractionally and has no such box.')
 
     def body(self):
-        """The ``src/wavebit/fd/_shapes`` body this shape is **smoothed** from, or ``None``.
+        """The ``src/wavebit/fdtd/_shapes`` body this shape is **smoothed** from, or ``None``.
 
         ``None`` means cell-snapped: the shape fills the cells :meth:`filled_cells` names
         whole, and :func:`wavebit.fdtd._prepare.coefficients.build` paints its material over them
@@ -520,7 +520,7 @@ class Structure:
                 f'Structure(discretisation={self.discretisation!r}): the two spellings are '
                 f'{DEFAULT!r} -- the rule this structure\'s shape already names, which is what '
                 f'every scene has had -- and {STENCIL!r}, the symmetric extended-stencil '
-                f'operator of docs/fd-symmetric-stencil.md. A value nobody reads is silently '
+                f'operator of docs/design/fd-symmetric-stencil.md. A value nobody reads is silently '
                 f'ignored, so a third one is refused here rather than falling back to the '
                 f'default: the two converge at different orders and a scene that got the one '
                 f'it did not ask for would read as a physics result.')
@@ -1139,7 +1139,7 @@ _TRANSVERSE = ((1, 2), (2, 0), (0, 1))
 class _Extruded(Shape):
     """What :class:`Box`, :class:`Cylinder` and :class:`Prism` share: a section along an axis.
 
-    Private; the three classes below are the API. Each is a ``src/wavebit/fd/_shapes`` body with a
+    Private; the three classes below are the API. Each is a ``src/wavebit/fdtd/_shapes`` body with a
     cross-section, an extrusion ``axis`` and a ``center``, smoothed at every component's
     own Yee point exactly as :class:`Sphere` is -- the same ``coefficients.mix``, the same
     doors. What an extrusion adds is an axis the body is **uniform along**, and that is the one
@@ -1295,7 +1295,7 @@ class Box(_Extruded):
     using a concrete prebuilt plan. The range contains the entire rotated box.
     The angle and axis remain static and are recorded in the plan, so crossing
     between the zero-angle and rotated operators requires a new plan.
-    Without a range all geometry stays static. It is ``src/wavebit/fd/_shapes``'
+    Without a range all geometry stays static. It is ``src/wavebit/fdtd/_shapes``'
     :class:`~wavebit.fdtd._shapes.Box`, the four-vertex prism, whose fill and diagonal
     moment are exact at its faces, edges and corners. Rotated constitutive cross
     terms still use the nearest-surface proxy; derivatives do not certify convergence.
@@ -1439,7 +1439,7 @@ class Prism(_Extruded):
     outline is refused here, at construction, by the kernel's own check. A non-convex outline
     is legal. ``angle`` (degrees) turns the outline counter-clockwise about ``+axis`` through
     ``center``. Fill and diagonal moment are exact at every edge and corner
-    (``src/wavebit/fd/_shapes``' :class:`~wavebit.fdtd._shapes.Prism`). With ``range=`` and a
+    (``src/wavebit/fdtd/_shapes``' :class:`~wavebit.fdtd._shapes.Prism`). With ``range=`` and a
     concrete prebuilt plan, vertices, height and centre may be differentiated under
     :class:`Sphere`'s isolated-body restrictions. The vertex count, axis and angle stay
     static. The full rotated outline and both caps must stay inside the range.

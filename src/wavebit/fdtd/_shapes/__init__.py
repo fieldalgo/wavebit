@@ -57,7 +57,7 @@ Meep-derived FDTDX projection file this repository has already excluded
 ``_exact.py``
     The closed forms this repository already owns, **ported** with their guards and their
     sources named: the 1-D overlap, the disc-box clip, the polygon-box clip and the polygon's
-    edge moments. Nothing under ``src/wavebit/fd/`` imports the old engines
+    edge moments. Nothing under ``src/wavebit/fdtd/`` outside ``_periodic/`` imports the old engines
     (``src/wavebit/fdtd/_prepare/cpml.py`` states that rule), and two of the four needed generalising
     from four vertices to ``n`` anyway, which the originals refuse by name. The ball-box clip is
     the one form here that is *not* a port, because there was nothing to port.

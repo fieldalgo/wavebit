@@ -45,7 +45,7 @@ class CoarseMeshWarning(UserWarning):
 
     It also warns of a smoothed body 4 to 8 cells across its smallest extent (stage 4, C5):
     study S2b measured an eps-12 body's polarizability within 9.2% at 4 cells and 2.7% at 8,
-    and under 4 the scene is refused (``_lower.checks.check_cells_across``).
+    and under 4 the scene is refused (``src/wavebit/fdtd/_prepare/checks.py::check_cells_across``).
     """
 
 
@@ -131,9 +131,9 @@ class GeometryClippedWarning(UserWarning):
     4, C5). A structure meant to run on out of the box -- a substrate, a waveguide -- is spelled
     with ``fd.PML`` or ``fd.Absorber`` on that face, and one meant to fill a periodic axis spans
     it; neither warns. A cell-snapped shape across one periodic seam without spanning the period
-    is refused instead (``_lower.checks.check_seams``), because its periodic image is missing,
-    and a smoothed body that is not uniform across a face never gets this far
-    (``_lower.checks.check_smoothed``).
+    is refused instead (``src/wavebit/fdtd/_prepare/checks.py::check_seams``), because its
+    periodic image is missing, and a smoothed body that is not uniform across a face never gets
+    this far (``src/wavebit/fdtd/_prepare/checks.py::check_smoothed``).
     """
 
 

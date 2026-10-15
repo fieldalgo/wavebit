@@ -24,7 +24,7 @@ operator, and ``padded`` compresses it to its active rows. Positive energy is no
 anywhere: the whole assembled operator is inspected before any field is advanced.
 
 **No study behind it (2026-09-26).** ``geometry`` takes its exact edge and face fractions
-from ``src/wavebit/fd/_shapes``'s :class:`~wavebit.fdtd._shapes.Sphere`, and ``triplet_baseline``
+from ``src/wavebit/fdtd/_shapes``'s :class:`~wavebit.fdtd._shapes.Sphere`, and ``triplet_baseline``
 its orientation table and local maps from :mod:`~wavebit.fdtd._prepare.triplet`. Both used to be
 imported out of ``studies/`` at plan time, so ``discretisation='stencil'`` ran from a
 repository checkout and not from an installed wheel. Both were moved into the package

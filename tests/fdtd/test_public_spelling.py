@@ -113,6 +113,38 @@ def test_every_module_path_a_message_names_exists():
     assert not missing, '\n'.join(missing)
 
 
+#: A path the engine's text cites: a source file or folder, a page, a test or a study record.
+CITED = re.compile(r'(?<![\w/.])((?:src/wavebit|docs|tests|studies)/[\w/.*-]*[\w*/])')
+
+
+def test_every_path_the_engine_cites_anywhere_exists():
+    """Docstrings and comments cite files too, and so do messages outside ``src/``.
+
+    The src move left ``src/wavebit/fd/_shapes`` and ``_lower.checks.check_seams`` in fourteen
+    docstrings; the docs reorganisation left twelve ``fd-*.md`` pages cited at the root of
+    ``docs/`` (now under ``docs/validation/fdtd/`` and ``docs/design/``) and the branch-cut page
+    at its old place in the messages a reader is told to follow, and a moved study log's old
+    path twice. Every cited path resolves, a glob matches, a function cited in a file is defined
+    there, and no dotted ``_lower.`` module is named.
+    """
+    root = ENGINE.parents[2]
+    missing = []
+    for path in sorted(ENGINE.rglob('*.py')):
+        where = path.relative_to(ENGINE)
+        text = path.read_text(encoding='utf-8')
+        for cited in CITED.findall(text):
+            cited = cited.rstrip('.')
+            if not (any(root.glob(cited)) if '*' in cited else (root / cited).exists()):
+                missing.append(f'{where}: {cited}')
+        for cited, name in re.findall(r'(src/wavebit/[\w/]+\.py)::(\w+)', text):
+            source = root / cited
+            if source.is_file() and not re.search(rf'^\s*(?:def|class) {name}\b|^{name} =',
+                                                  source.read_text(encoding='utf-8'), re.M):
+                missing.append(f'{where}: {cited}::{name}')
+        missing += [f'{where}: {dotted}' for dotted in re.findall(r'(?<![\w.])_lower\.\w+', text)]
+    assert not missing, '\n'.join(missing)
+
+
 def oblique_on_periodic_faces():
     """A plane wave at 0.3 rad in a cell that is Periodic across it: a refusal names Bloch."""
     return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(

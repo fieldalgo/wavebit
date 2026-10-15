@@ -1,6 +1,6 @@
 """The one lowering stage between the geometry and the coefficients.
 
-``src/wavebit/fd/_shapes`` answers for a *point*: given a body and an array of points, what
+``src/wavebit/fdtd/_shapes`` answers for a *point*: given a body and an array of points, what
 fraction of the voxel around each point the body fills and which way its surface faces there.
 This module is the other end of that wire. It knows what a scene is, what a grid is and where
 each of the six field components sits, and it turns "structures[2] is a ball of radius 0.2"

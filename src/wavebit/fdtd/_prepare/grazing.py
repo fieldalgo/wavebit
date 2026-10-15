@@ -1,9 +1,9 @@
 """The grazing-order rule: which orders a PML face may be asked to absorb, measured first.
 
 **What was measured** (``studies/fdtd/grazing_return/fdtd_grazing_return.py``, 2026-09-19, its log in
-``studies/results/fdtd_grazing_return.log``): a ``PlaneWave`` in a Bloch cell leaving toward a
-PEC-backed PML at exit ``cos theta`` 0.15 .. 0.7, doubling method, over the layer's cells, its
-``reflection=`` target and the run length. The PEC backing does **not** remove the grazing
+``studies/fdtd/grazing_return/records/fdtd_grazing_return.log``): a ``PlaneWave`` in a Bloch cell
+leaving toward a PEC-backed PML at exit ``cos theta`` 0.15 .. 0.7, doubling method, over the
+layer's cells, its ``reflection=`` target and the run length. The PEC backing does **not** remove the grazing
 return: it makes the return exactly the round trip the grading is designed for. In the continuum
 a PEC-backed graded CFS-PML reflects
 
@@ -253,7 +253,8 @@ GRAZING_CELLS = 24
 GRAZING_PERIODS = 160
 
 #: The measurement the refusal quotes: ``R_taper`` at the band centre, 640 periods, s, the
-#: layer's own return (``studies/results/fdtd_grazing_return.log``), and the continuum law.
+#: layer's own return (``studies/fdtd/grazing_return/records/fdtd_grazing_return.log``), and
+#: the continuum law.
 GRAZING_TABLE = """\
   measured PML return at f0 (640 periods, s), columns = exit cos theta:
                         0.15     0.2      0.26     0.3      0.4      0.5      0.7
