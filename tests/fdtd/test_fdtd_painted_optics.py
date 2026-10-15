@@ -21,6 +21,17 @@ def test_independent_inclusion_exclusion_mean_and_parameter_slopes():
     np.testing.assert_allclose(superposed-mean(p), .8*overlap*.16/(.36*1.25), atol=3e-15)
 
 
+def _needs_memory(required):
+    try:
+        import os
+        available = os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES')
+    except (ValueError, OSError, AttributeError):
+        return
+    if available < required:
+        pytest.skip(f'needs about {required / 2**30:.0f} GiB of memory for the resolution-30 '
+                    f'Jacobian; this machine has {available / 2**30:.0f} GiB')
+
+
 @pytest.fixture(scope='module')
 def target():
     p = np.array([.37, .055, .22])
@@ -38,6 +49,10 @@ def test_independent_painted_reference_grid_order_and_step_controls(target):
 @pytest.mark.slow
 def test_painted_eight_complex_channels_and_three_shape_derivatives_refine(target, record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
+    # The resolution-30 Jacobian under jit asks XLA for one 22.9 GB buffer (CI run 38738075697,
+    # slow shard 1: RESOURCE_EXHAUSTED on a 7.9 GB runner). No sharding of the suite changes
+    # that, so the case runs where the memory is -- the desktop -- and says so elsewhere.
+    _needs_memory(32 * 2**30)
     p, value, jac = target
     errors = []
     for resolution in (20, 30):
