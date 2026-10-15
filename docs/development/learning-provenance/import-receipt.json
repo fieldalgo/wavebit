@@ -1962,7 +1962,9 @@
     },
     {
       "source_relative": "wavebit-sphinx-guide/source/records/complex-kx-roots.json",
-      "sha256": "5d55bba48fd5a1f046b252fee054bcb21fc9dd00336f5ca675356d2981ca4cbb",
+      "sha256": "f82095d6cead6df7885af06bd4a9f76f37c2890216cd218f5341abfd15b7926f",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "imported_sha256": "5d55bba48fd5a1f046b252fee054bcb21fc9dd00336f5ca675356d2981ca4cbb",
       "source_commit": "89bff30b31dd37455d9c3292ecf030522fd36b05",
       "working_tree_state": "clean",
       "category": "provenance",
@@ -1986,7 +1988,9 @@
     },
     {
       "source_relative": "wavebit-sphinx-guide/source/records/nvf-measurements.json",
-      "sha256": "96049fc0aa35690e6b45c9b456f7b57c9641d7e91e72c40a7da95d58a9075aff",
+      "sha256": "c1924c3283d988f41850099d3645de9c70e68979b6c9ecf87e337eb32f22d727",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "imported_sha256": "96049fc0aa35690e6b45c9b456f7b57c9641d7e91e72c40a7da95d58a9075aff",
       "source_commit": "89bff30b31dd37455d9c3292ecf030522fd36b05",
       "working_tree_state": "clean",
       "category": "provenance",

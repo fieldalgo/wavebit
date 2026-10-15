@@ -1420,8 +1420,9 @@
     },
     "studies/results/fdtd_conductive_stack_targeted.json": {
       "target": "studies/fdtd/conductive_stack/records/fdtd_conductive_stack_targeted.json",
-      "sha256": "bf15184857411ffe1746fa9591e32f2d721cb52919735612cccdfc49907b744e",
-      "git_blob": "fbd1164e64e8cbf6315f3533bc20dc679ce8f9a1",
+      "sha256": "be79bf0cfa8d2e11701b96c949418e3c7e176779cffdb6075ce20b4431894de0",
+      "git_blob": "f1fe423acf4172a2a67bf23d9ef7315a38f99d59",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
       "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
       "original_sha256": "28c2190c243b4c4489f58ae39f3f238da0eb385ebd6f59f2df80ae318f9afacb",
       "original_git_blob": "c03efdfa76cb7f2874a46ea7ce5f06103917379d",
@@ -1435,14 +1436,20 @@
     },
     "studies/results/fdtd_csg_pair_kernel.json": {
       "target": "studies/fdtd/csg_pair/records/fdtd_csg_pair_kernel.json",
-      "sha256": "49911232dec4cc64ecdf77565abe26ec740949625fe0658095ddf3463c691cc9",
-      "git_blob": "52919ca947b4c4d797abf65ca2879020b4730104",
+      "sha256": "d570c04634ac9a28c30e9727d010b8575e8ae940c78bc5428897478aa8cffc9c",
+      "git_blob": "e1c6f2552a29dd940f8599c7298ed35b134b6bd8",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "49911232dec4cc64ecdf77565abe26ec740949625fe0658095ddf3463c691cc9",
+      "original_git_blob": "52919ca947b4c4d797abf65ca2879020b4730104",
       "git_mode": "100644"
     },
     "studies/results/fdtd_csg_pair_nodes.json": {
       "target": "studies/fdtd/csg_pair/records/fdtd_csg_pair_nodes.json",
-      "sha256": "4e2689e9411eb1dbf6df715034f05cda31ba9dc4508eea8e721d55283883f9fa",
-      "git_blob": "84d78681b43be149585d70fe2e7886f51ca12ad1",
+      "sha256": "cc06579d9bd095b37033fd15d0e9b119ace46fba09895518e9e750a299adbbe4",
+      "git_blob": "ba7c6bd9d8c1eecbaae5a08c04d020aeae02fc4b",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "4e2689e9411eb1dbf6df715034f05cda31ba9dc4508eea8e721d55283883f9fa",
+      "original_git_blob": "84d78681b43be149585d70fe2e7886f51ca12ad1",
       "git_mode": "100644"
     },
     "studies/results/fdtd_cylinder_grad_probe.json": {
@@ -1471,8 +1478,9 @@
     },
     "studies/results/fdtd_debye_stack_calibration_attempt1.json": {
       "target": "studies/fdtd/debye_stack/records/fdtd_debye_stack_calibration_attempt1.json",
-      "sha256": "3349406c8339eedb83dc68d6f05d49d5f9425c678e88d2e925d57dcb8989aa0e",
-      "git_blob": "07313c5d194cb06bff25a749398c8e7dcf5a295f",
+      "sha256": "ae35169e5afd97a474728586316016c56bd994b76e0bf6d2c16f5df3417bbe49",
+      "git_blob": "d11c284dcb0e96e8c26f4e4ebb5c533930728133",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
       "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
       "original_sha256": "ee0a2b693152bece67cf787ae77dec468cc22739ef71d07e02304689a0130344",
       "original_git_blob": "0d000704e2eb4c0ad45da44af0d80e6062759765",
@@ -1486,8 +1494,9 @@
     },
     "studies/results/fdtd_debye_stack_targeted.json": {
       "target": "studies/fdtd/debye_stack/records/fdtd_debye_stack_targeted.json",
-      "sha256": "4cf9d8d0e776a67163b3b8dc10138f2b917a150f2ae15a3ed9973770cdb7dacc",
-      "git_blob": "50a97c068fdd2012867f99dfd473b78011028cb1",
+      "sha256": "5e9fca08598d73c98d47e26eb32891fe405d27ef324f560f89f483f460c0efc7",
+      "git_blob": "f064badeb56b08a1d346f92233745df5a7b7a7cc",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
       "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
       "original_sha256": "103911cdadf198e72fa31745103a7294aff0abcae697bb8693484be2792df2c7",
       "original_git_blob": "9a3e01edb3f2383323c3dc1ac3016d6a075319f0",
@@ -1543,8 +1552,9 @@
     },
     "studies/results/fdtd_inactive_lorentz_targeted.json": {
       "target": "studies/fdtd/inactive_lorentz/records/fdtd_inactive_lorentz_targeted.json",
-      "sha256": "5b6a7f189db8c0ae4e2448a8d3ef9b6569b740ea9dfc426c4014ddb5705f9e94",
-      "git_blob": "2535a24c74879fd929a9d773ab1139f1fd69a1ba",
+      "sha256": "a545c9055feddbe853a58dc257838b708e2c8ce3a1e73385bc25d464d03183c0",
+      "git_blob": "354c808595c04f9eb82cf1bae3a934c03b46b8e1",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
       "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
       "original_sha256": "bc63ecc79e83c17a407ae51a1347fe7908f16bb7f1176d98ddfe30760af6f620",
       "original_git_blob": "279b7cc3cb29581d730799cd6c47055e2367d31b",
@@ -1744,8 +1754,11 @@
     },
     "studies/results/fdtd_metasurface_rcwa.jsonl": {
       "target": "studies/cross_solver/metasurface/records/fdtd_metasurface_rcwa.jsonl",
-      "sha256": "8d73a5e45e70f5841051a2723f90b504fc5662a15bbb9f612e4d4fb409750eec",
-      "git_blob": "0feffe62c466ed6289e3351872c2345b0ff53421",
+      "sha256": "a1eac0975c245df666f06ecb3e5975b7d8c1849617ca3d1b78912360ae325873",
+      "git_blob": "3fedd996296bff7bfdd37d9954601f7d4b162cec",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "8d73a5e45e70f5841051a2723f90b504fc5662a15bbb9f612e4d4fb409750eec",
+      "original_git_blob": "0feffe62c466ed6289e3351872c2345b0ff53421",
       "git_mode": "100644"
     },
     "studies/results/fdtd_metasurface_rcwa_reference.jsonl": {
@@ -1756,26 +1769,38 @@
     },
     "studies/results/fdtd_metasurface_rcwa_registration.json": {
       "target": "studies/cross_solver/metasurface/records/fdtd_metasurface_rcwa_registration.json",
-      "sha256": "9a929ff89e78f9478421a05be740faf8efe33fc695c16eeadf4b4a7bbe4f6635",
-      "git_blob": "cbcc4c6095048e3241a88c85253851bac34b9078",
+      "sha256": "5fde337e88b5f7495453ab9f4758ffe1984f5eb00e6ade896ba14158ef24b548",
+      "git_blob": "54bedf19c8a90bd34084177974c12535a7ac60af",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "9a929ff89e78f9478421a05be740faf8efe33fc695c16eeadf4b4a7bbe4f6635",
+      "original_git_blob": "cbcc4c6095048e3241a88c85253851bac34b9078",
       "git_mode": "100644"
     },
     "studies/results/fdtd_metasurface_rcwa_report.log": {
       "target": "studies/cross_solver/metasurface/records/fdtd_metasurface_rcwa_report.log",
-      "sha256": "522fb85d5d098aad21df36ad05ec336d625692dda2762fafb8945f8eeafe04ba",
-      "git_blob": "f1a333b7756ad2f267c35cfe6b3835c225f0c709",
+      "sha256": "4d7d983a9ec7f1b5bb7369c280118f9f117b7eed22fb58c838b61a1b09050153",
+      "git_blob": "40bda14f132cd20fbecc02ce3e965b1f10061deb",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "522fb85d5d098aad21df36ad05ec336d625692dda2762fafb8945f8eeafe04ba",
+      "original_git_blob": "f1a333b7756ad2f267c35cfe6b3835c225f0c709",
       "git_mode": "100644"
     },
     "studies/results/fdtd_metasurface_ridges.jsonl": {
       "target": "studies/cross_solver/metasurface_ridges/records/fdtd_metasurface_ridges.jsonl",
-      "sha256": "7fb417f28c634a3b56006fa5fda9f95193b753be79969b7e5cb595cb1bd37a42",
-      "git_blob": "b427c90d2a6424ce595ab973237bc3d203cdd3a2",
+      "sha256": "e5105bb6a0d7191920d714c3f725aa31046c1d71ab5b93d1729caa273f432256",
+      "git_blob": "254ed8861130d40289d7fa2abaac5c9d67887d8d",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "7fb417f28c634a3b56006fa5fda9f95193b753be79969b7e5cb595cb1bd37a42",
+      "original_git_blob": "b427c90d2a6424ce595ab973237bc3d203cdd3a2",
       "git_mode": "100644"
     },
     "studies/results/fdtd_metasurface_ridges_registration.json": {
       "target": "studies/cross_solver/metasurface_ridges/records/fdtd_metasurface_ridges_registration.json",
-      "sha256": "946100a696dad4e28785e0d14fa3f06770bc9e022b7dceccf14164df08027c43",
-      "git_blob": "a53b5ee436d403ef91aeec0d5739e4b403691cc3",
+      "sha256": "cc6d7e7de7f02d0187c862b79993938d39c7e35e2b67fa2f2b43e8d0a0defd10",
+      "git_blob": "f2cd4b137703c46864e0d167482da80d911588a8",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "946100a696dad4e28785e0d14fa3f06770bc9e022b7dceccf14164df08027c43",
+      "original_git_blob": "a53b5ee436d403ef91aeec0d5739e4b403691cc3",
       "git_mode": "100644"
     },
     "studies/results/fdtd_metasurface_ridges_report.log": {
@@ -1810,14 +1835,20 @@
     },
     "studies/results/fdtd_metasurface_tall_jobs/fd_tall_40_base_attempt1.json": {
       "target": "studies/cross_solver/metasurface_tall/records/fdtd_metasurface_tall_jobs/fd_tall_40_base_attempt1.json",
-      "sha256": "46c54d2920118ec9e3d5b9b2e597c63a67c88f344cad8a0a9418117a5d225b29",
-      "git_blob": "19327706797a28da20d41add7993acb145df0d41",
+      "sha256": "fab880db29189da14b1b79fa9d852232bcc6b206cfe8897995b3fb685dc40474",
+      "git_blob": "a1be6e069e3c45fe0d9213e66bcfdaa26d22da3e",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "46c54d2920118ec9e3d5b9b2e597c63a67c88f344cad8a0a9418117a5d225b29",
+      "original_git_blob": "19327706797a28da20d41add7993acb145df0d41",
       "git_mode": "100644"
     },
     "studies/results/fdtd_metasurface_tall_jobs/fd_tall_40_long_attempt1.json": {
       "target": "studies/cross_solver/metasurface_tall/records/fdtd_metasurface_tall_jobs/fd_tall_40_long_attempt1.json",
-      "sha256": "389113c2674c2a1e671d348a0e9ceae6e3f33ce74a4fdc1124678667bbf76777",
-      "git_blob": "0df7777809e5f8b52deba4461d8a8fd5b63e2973",
+      "sha256": "e1266b5786ae662b5921627284cad0852e906a2c622c74fe9ca73bb28556aaa8",
+      "git_blob": "0a72cef531f9d0a4082ec4da1bb90a74adf00afc",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "389113c2674c2a1e671d348a0e9ceae6e3f33ce74a4fdc1124678667bbf76777",
+      "original_git_blob": "0df7777809e5f8b52deba4461d8a8fd5b63e2973",
       "git_mode": "100644"
     },
     "studies/results/fdtd_metasurface_tall_settled_report.json": {
@@ -1888,8 +1919,9 @@
     },
     "studies/results/fdtd_oscillator_stack_calibration_attempt1.json": {
       "target": "studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_attempt1.json",
-      "sha256": "62b9b0298a808290d7a338535ac273423314a17cbe2f19dd8fe446aecbd2634b",
-      "git_blob": "e728c2f59c694952fbf6f8eea38c93820c7c2b1c",
+      "sha256": "2d2bfb56da0d58647b33eb38093648240b934480b5bf28bece8fa300b17548cb",
+      "git_blob": "4176deb6e77abd9878273555656c4e8f227c4cd4",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
       "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
       "original_sha256": "c497ea9211ca98a3b9f9a9b08bf93fb135169570a9f8324e74288ddeaef81741",
       "original_git_blob": "d9ec16d1cf43a0808aa1db232fbac622c616e444",
@@ -1903,8 +1935,9 @@
     },
     "studies/results/fdtd_oscillator_stack_targeted.json": {
       "target": "studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_targeted.json",
-      "sha256": "651f71ef9954bbc6eb664dd7d2b7f00dae48ea8740d0bf443d08e57e6fda149e",
-      "git_blob": "2d6e664df1fb999cdb19f688c86e4069ca6fdb01",
+      "sha256": "f34b6b23d94b61ef157cd8857e5c046511690dd70a9de941541e560699378705",
+      "git_blob": "01f75db6eaa306eeccfede7556e532cb38f8ffbd",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
       "redacted": "2026-10-14: the Windows user folder and worktree folder in the recorded interpreter, PYTHONPATH and cache paths replaced by C:\\<conda env> and C:\\<worktrees>; bytes otherwise as recorded",
       "original_sha256": "2b17fdd2238f042a47b7a93e469aaa9b69804c0af40d3c37bdd3335fc90fbadf",
       "original_git_blob": "053cd929397dad3a773ad5598c20cfe5b6cf416a",
@@ -1990,8 +2023,11 @@
     },
     "studies/results/fdtd_subpixel_constitutive.log": {
       "target": "studies/fdtd/subpixel_constitutive/records/fdtd_subpixel_constitutive.log",
-      "sha256": "ecd1e0601735193888b1909f61f39be4f09bad236f8c8fb46066eca6fca0711c",
-      "git_blob": "1abe07bd7af3e41a92384b2f7e41053c19940acc",
+      "sha256": "72d301335f2c675cd545b19048e828bac8d47c65b4342f8579b84ce725d7ee8d",
+      "git_blob": "104f3c1ba0215edc181fe30f6eea410825439905",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "ecd1e0601735193888b1909f61f39be4f09bad236f8c8fb46066eca6fca0711c",
+      "original_git_blob": "1abe07bd7af3e41a92384b2f7e41053c19940acc",
       "git_mode": "100644"
     },
     "studies/results/fdtd_subpixel_coupled_cylinder.log": {
@@ -2002,14 +2038,20 @@
     },
     "studies/results/fdtd_subpixel_coupled_kernel.log": {
       "target": "studies/fdtd/subpixel_coupled_cylinder/records/fdtd_subpixel_coupled_kernel.log",
-      "sha256": "c2e712ecfac27e7c61c4f0dc9eb1c2501112875994b59f1a425c19106e865115",
-      "git_blob": "695ab2cba8b48ec5c28f2b25c02f6a725ea6c5e1",
+      "sha256": "9b77ffff83b9a11791a468ec6263fcb09b4a479067f62b28d58e54bfbbc91357",
+      "git_blob": "f2b2efac0574cd7b9a55ae2b55c06c450ffe6a03",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "c2e712ecfac27e7c61c4f0dc9eb1c2501112875994b59f1a425c19106e865115",
+      "original_git_blob": "695ab2cba8b48ec5c28f2b25c02f6a725ea6c5e1",
       "git_mode": "100644"
     },
     "studies/results/fdtd_subpixel_junction.log": {
       "target": "studies/fdtd/subpixel_junction/records/fdtd_subpixel_junction.log",
-      "sha256": "094c7196f74f476fa63f7f6b3137d45e8031bd34d9aa23a77bfc9f4826337df4",
-      "git_blob": "b5c597f1c23f25274d733adf6cb41cbc3690dac6",
+      "sha256": "95adc1855712e3ffaf814209679b0789c467c91ed492483650cf5dfb994eba54",
+      "git_blob": "8549c094f8dd34cee82767d4e0c20bd297b565a3",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "094c7196f74f476fa63f7f6b3137d45e8031bd34d9aa23a77bfc9f4826337df4",
+      "original_git_blob": "b5c597f1c23f25274d733adf6cb41cbc3690dac6",
       "git_mode": "100644"
     },
     "studies/results/fdtd_subpixel_junction_rcwa.log": {
@@ -2038,14 +2080,20 @@
     },
     "studies/results/fdtd_subpixel_mie_external.log": {
       "target": "studies/fdtd/mie_validation/records/fdtd_subpixel_mie_external.log",
-      "sha256": "965feee8db38c7c7bb5834b39a0d57c7d28c93d4a3349df5721fa8a6aadec7b3",
-      "git_blob": "c63e09f0e3d7dd10f48e010243343274ac32dd65",
+      "sha256": "afc03d7be0b50c23dfd72c404457955c54bc0bcd0042ca041d02561a47e9ce3b",
+      "git_blob": "5984736c1a2246e5522e941735bffcbd7fcd2a33",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "965feee8db38c7c7bb5834b39a0d57c7d28c93d4a3349df5721fa8a6aadec7b3",
+      "original_git_blob": "c63e09f0e3d7dd10f48e010243343274ac32dd65",
       "git_mode": "100644"
     },
     "studies/results/fdtd_subpixel_mie_transform.log": {
       "target": "studies/fdtd/subpixel_mie_transform/records/fdtd_subpixel_mie_transform.log",
-      "sha256": "fae70ea1c8f1c3d1c8a2161a1af7199b9430aa69281f71fc9216a5d9d63cfbda",
-      "git_blob": "0292977790abcbf5e999c811dc4004ab5d465402",
+      "sha256": "6254f4a9ae454faaaf10b57febbad847919137d6b32b8cbc9f8e8d0d1dc2f81d",
+      "git_blob": "790d0a97acfc14e7041e13cd66c653b30a57853f",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "fae70ea1c8f1c3d1c8a2161a1af7199b9430aa69281f71fc9216a5d9d63cfbda",
+      "original_git_blob": "0292977790abcbf5e999c811dc4004ab5d465402",
       "git_mode": "100644"
     },
     "studies/results/fdtd_subpixel_phase_control.log": {
@@ -2254,8 +2302,11 @@
     },
     "studies/results/negative_index_media.log": {
       "target": "studies/rcwa/negative_index_media/records/negative_index_media.log",
-      "sha256": "fc7e97e71ab11b3890dd3e9c7c74cd1837625f706baf2b388dfb05b7b4da200f",
-      "git_blob": "a2942a50a39bd3fcdd60a9dd286456d2b0403d88",
+      "sha256": "10f0a907710c8ecf7baea501cdc7a198ba2e8e2128e00a0db54f14c0b23dcd27",
+      "git_blob": "add8ad274b9a07ee91fdc52c6b0477bd7bbf973b",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "fc7e97e71ab11b3890dd3e9c7c74cd1837625f706baf2b388dfb05b7b4da200f",
+      "original_git_blob": "a2942a50a39bd3fcdd60a9dd286456d2b0403d88",
       "git_mode": "100644"
     },
     "studies/results/nvf_affine_cell_validation.log": {
@@ -3040,14 +3091,20 @@
     },
     "studies/results/smm_field_state.log": {
       "target": "studies/rcwa/smm_field_state/records/smm_field_state.log",
-      "sha256": "57011b70303370730b79ce317ab940e395007fa3824244fa826c0db8ffb7a5d3",
-      "git_blob": "018bf81002c1021355999fb5813001283eff9abe",
+      "sha256": "236dc19232598bf6dc7d60808d36e169447b71f8b68be8f055a1a7203c634025",
+      "git_blob": "401c934f328ade6e612b9b83e3fcf90eefb7b23d",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "57011b70303370730b79ce317ab940e395007fa3824244fa826c0db8ffb7a5d3",
+      "original_git_blob": "018bf81002c1021355999fb5813001283eff9abe",
       "git_mode": "100644"
     },
     "studies/results/smm_gap_waves.log": {
       "target": "studies/rcwa/smm_gap_waves/records/smm_gap_waves.log",
-      "sha256": "5e09cf74ccb37435e2bd397fa176d846fd985ff708dca86cb766e822a59d2a0c",
-      "git_blob": "f9b5abed2ca9609b2aacb0e697b4656cc0b19b07",
+      "sha256": "f52d5d653b914cf59009888c8d4b9c7b281ea812135a22dc5fadf64bb3dee4d6",
+      "git_blob": "841aed6977a2fac735a70ff27450228ecfdac1fa",
+      "rewritten": "2026-10-15: commit ids written inside the file were respelled to the published history's ids when the repository was rewritten for publication; bytes otherwise unchanged",
+      "original_sha256": "5e09cf74ccb37435e2bd397fa176d846fd985ff708dca86cb766e822a59d2a0c",
+      "original_git_blob": "f9b5abed2ca9609b2aacb0e697b4656cc0b19b07",
       "git_mode": "100644"
     },
     "tests/data/golden_field.npz": {
