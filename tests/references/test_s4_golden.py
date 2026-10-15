@@ -23,7 +23,7 @@ Values are frozen in ``golden_s4.npz`` by ``gen_goldens_s4.py``, which needs the
 This file needs only numpy.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -47,7 +47,7 @@ def solve(eps, theta_deg):
     """``[R_s, T_s, R_p, T_p]`` for one uniform anisotropic layer between vacuum."""
     I = np.eye(1, dtype=np.complex128)
     e = np.asarray(eps, dtype=complex)
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK])
     res = mee.solve_conv(np.stack([e[0, 0] * I]), np.stack([e[1, 1] * I]),

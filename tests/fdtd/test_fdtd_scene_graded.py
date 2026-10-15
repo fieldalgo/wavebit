@@ -1,6 +1,8 @@
 """Static graded scene meshes preserve interfaces, records and backend graphs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -23,7 +25,7 @@ def test_graded_slab_saves_cells_and_converges_to_airy():
     expected=(1-r*r)*np.exp(1j*phase)/(1-r*r*np.exp(2j*phase))
     errors=[]
     for resolution in (40,80):
-        result,diag=_legacy_wavebit.fdtd(structure=np.full((1,1,1),2.25),backend='numpy',
+        result,diag=_legacy_wavebit_fdtd(structure=np.full((1,1,1),2.25),backend='numpy',
                                  **options(resolution=resolution,return_diagnostics=True))
         errors.append(abs(result.incident.t_s.item()-expected))
         np.testing.assert_allclose(result.R+result.T,1,atol=.004)
@@ -40,7 +42,7 @@ def test_graded_scene_material_gradient_and_original_bottom_coordinates(backend)
     kw=options(resolution=30,incidence_side='bottom',return_diagnostics=True,
                record_field=17,record_components=['ey','hx'],field_monitors={'out':.7})
     def run(v,which):
-        _,d=_legacy_wavebit.fdtd(structure=np.full((1,1,1),v) if which=='numpy' else v*ones,backend=which,**kw)
+        _,d=_legacy_wavebit_fdtd(structure=np.full((1,1,1),v) if which=='numpy' else v*ones,backend=which,**kw)
         return d['monitors']['out']['power_z'],d['fields']['ey']['values'],d['fields']['ey']['z']
     if backend=='jax':
         jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
@@ -70,7 +72,7 @@ def test_graded_scene_material_gradient_and_original_bottom_coordinates(backend)
 @pytest.mark.slow
 def test_graded_bottom_stack_against_independent_meep_reference():
     ref=json.loads((repository_path('tests/references/golden_scene_bottom_meep.json')).read_text())
-    result=_legacy_wavebit.fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),backend='numpy',
+    result=_legacy_wavebit_fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),backend='numpy',
                         **options(thickness=ref['thickness'][::-1],wavelength=ref['wavelengths'],
                                   resolution=80,incidence_side='bottom',n_periods=35))
     for key in ('r','t'):
@@ -83,8 +85,8 @@ def test_graded_conical_magnetic_slab_against_rcwa():
     structure=np.array([[[2.1]],[[3.2]]]);mu=np.array([[[1.1]],[[1.3]]])
     kw=options(thickness=[.13,.21],top=wavebit.Material(1.2,1.1),bot=wavebit.Material(2.,1.3),
                theta=.27,phi=.41,tetm=None,polarization=(1.,.6j),resolution=50)
-    result=_legacy_wavebit.fdtd(structure=structure,mu=mu,backend='numpy',**kw)
-    reference=_legacy_wavebit.rcwa(structure=structure,mu=mu,backend='numpy',
+    result=_legacy_wavebit_fdtd(structure=structure,mu=mu,backend='numpy',**kw)
+    reference=_legacy_wavebit_rcwa(structure=structure,mu=mu,backend='numpy',
                            **{k:v for k,v in kw.items() if k not in ('resolution','n_periods','grading')}).solve()
     for name in ('r_s','r_p','t_s','t_p'):
         np.testing.assert_allclose(getattr(result.incident,name),getattr(reference.incident,name),atol=.012)

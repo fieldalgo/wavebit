@@ -1,6 +1,6 @@
 """Temporal quadrature must rotate a physical field, not its spatial Bloch phase."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -21,7 +21,7 @@ def test_quadrature_source_has_positive_i_phase_in_the_published_dft_convention(
 @pytest.mark.parametrize('crossed', [False, True])
 @pytest.mark.parametrize('hand', [-1, 1])
 def test_vacuum_circular_record_rotates_with_the_requested_handedness(crossed, hand):
-    result, diag = _legacy_wavebit.fdtd(
+    result, diag = _legacy_wavebit_fdtd(
         structure=np.ones((1, 2 if crossed else 1, 2)), thickness=[.1], top=1., bot=1.,
         period=[.1, .14] if crossed else [.1], wavelength=.9, theta=0., phi=0.,
         polarization=(1., hand*1j), resolution=20., n_periods=160,
@@ -63,15 +63,15 @@ def test_elliptical_recording_preserves_diffraction_and_physical_superposition(c
                   wavelength=.9, theta=theta, phi=phi, resolution=20., n_periods=60)
     pair = np.array([.3+.4j, .7-.2j])
     pair /= np.linalg.norm(pair)
-    recorded, diag = _legacy_wavebit.fdtd(**common, polarization=pair, record_field=10,
+    recorded, diag = _legacy_wavebit_fdtd(**common, polarization=pair, record_field=10,
                                   return_diagnostics=True)
-    plain = _legacy_wavebit.fdtd(**common, polarization=pair)
+    plain = _legacy_wavebit_fdtd(**common, polarization=pair)
     for key in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
         np.testing.assert_array_equal(getattr(recorded.incident, key), getattr(plain.incident, key))
     assert np.isfinite(diag['field_e']).all() and np.isfinite(diag['field_ex']).all()
     # A global sign reverses every instantaneous field, including the quadrature,
     # while leaving power unchanged. It must not become a spatial conjugation.
-    negative, flipped = _legacy_wavebit.fdtd(**common, polarization=-pair, record_field=10,
+    negative, flipped = _legacy_wavebit_fdtd(**common, polarization=-pair, record_field=10,
                                      return_diagnostics=True)
     for key in ('field_e', 'field_ex'):
         np.testing.assert_allclose(flipped[key], -diag[key], atol=1e-14)
@@ -87,10 +87,10 @@ def test_normal_incidence_real_coefficients_do_not_launch_quadrature_runs(monkey
     monkeypatch.setattr(core, '_time_loop', count)
     common = dict(structure=np.ones((1, 1, 2)), thickness=[.1], top=1., bot=1.,
                   period=[.1], wavelength=.9, resolution=15., n_periods=60, record_field=20)
-    _legacy_wavebit.fdtd(**common, psi=.4)
+    _legacy_wavebit_fdtd(**common, psi=.4)
     assert quadratures == [False, False]
     quadratures.clear()
-    _legacy_wavebit.fdtd(**common, polarization=(1., 1j))
+    _legacy_wavebit_fdtd(**common, polarization=(1., 1j))
     assert quadratures == [False, False, True]
 
 
@@ -98,8 +98,8 @@ def test_broadband_elliptical_record_keeps_every_frequency_result():
     common = dict(structure=np.full((1, 1, 2), 2.25), thickness=[.1], top=1., bot=1.44,
                   period=[.1], wavelength=[.85, .9, .95], theta=0., phi=.4,
                   psi=.3, chi=.2, resolution=20., n_periods=80)
-    recorded, diag = _legacy_wavebit.fdtd(**common, record_field=5, return_diagnostics=True)
-    plain = _legacy_wavebit.fdtd(**common)
+    recorded, diag = _legacy_wavebit_fdtd(**common, record_field=5, return_diagnostics=True)
+    plain = _legacy_wavebit_fdtd(**common)
     assert len(recorded) == len(plain) == 3
     for left, right in zip(recorded, plain):
         for key in ('r_s', 'r_p', 't_s', 't_p'):

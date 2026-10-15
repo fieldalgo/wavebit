@@ -1,6 +1,8 @@
 """Physical cell metric, unequal periods, and differentiable rectangular lattices."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.conforming import ConformingNVF as _legacy_wavebit_ConformingNVF
+
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
 import numpy as np
 from tests.fixtures.common._conv_frame import about_centre
 import pytest
@@ -33,7 +35,7 @@ def test_unequal_period_material_integrals_and_exact_contact(aspect, gap):
     p[1], p[7] = gap, p[6]/aspect
     structure, lattice = scene(p)
     order = (2, 1)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     layer = structure[0]
     eps, inverse = assemble_eps_coeffs(np, layer['shapes'], layer['background'],
                                        *order, lattice, np.complex128)
@@ -51,7 +53,7 @@ def test_unequal_period_material_integrals_and_exact_contact(aspect, gap):
 @pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_rectangular_lattice_rigid_motion_and_uniform_scaling_preserve_engine_powers(order):
-    builder = _legacy_wavebit.ConformingNVF(order, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(order, **SETTINGS)
     structure, lattice = scene()
     baseline = solve(builder.conv_matrices(structure, lattice), lattice, order)
     p = PARAMETERS.copy()
@@ -114,7 +116,7 @@ def test_independent_periods_remain_live_in_jit_and_in_a_reused_plan():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*scene())
     def objective(p, xp):
         return _objective(builder.conv_matrices(*scene(p, xp), plan=plan, xp=xp), xp)
@@ -141,7 +143,7 @@ def test_rectangular_contact_retains_the_full_one_sided_gap_derivative(angle, ro
     jax.config.update('jax_enable_x64', True)
     p = PARAMETERS.copy()
     p[1], p[8] = roundoff, angle
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*scene(p))
     def objective(gap, xp):
         live = xp.asarray(p)+xp.asarray(np.eye(11)[1])*gap
@@ -153,7 +155,7 @@ def test_rectangular_contact_retains_the_full_one_sided_gap_derivative(angle, ro
         secant = 2*(objective(h/2, np)-baseline)/(h/2)-(objective(h, np)-baseline)/h
         assert gradient == pytest.approx(secant, abs=3e-6)
     assert abs(gradient) > 1e-3
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         objective(-1e-8, np)
     jax.clear_caches()
 
@@ -168,7 +170,7 @@ def test_zero_or_sheared_traced_second_axis_poison_every_layer():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(0, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(0, **SETTINGS)
     p = PARAMETERS.copy()
     p[8] = 0.
     structure, lattice = scene(p)

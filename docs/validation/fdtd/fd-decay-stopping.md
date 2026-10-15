@@ -1,5 +1,11 @@
 # Automatic stopping after a transient
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Written: 2026-10-07
 
 Targets: `src/wavebit/fdtd/_scene.py`, `src/wavebit/fdtd/monitors.py`,

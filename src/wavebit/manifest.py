@@ -1,10 +1,10 @@
-"""Compatibility-engine capability manifest, with a separate current lifecycle index.
+"""Capability manifest: physical public interfaces and scoped internal engine facts.
 
-The detailed paths, result shapes, refusal tables, and ``solvers`` entries describe
-``wavebit.compat.legacy``. They must not be read as the current physical Problem
-API. ``current_lifecycle`` names the current solver modules, declarations, validation
-reports, and portable Job schema; those modules' check/prepare/run methods own the
-current admission contract.
+``current_lifecycle`` names the supported Problem/Numerics/check/prepare/run
+interfaces. The remaining detailed tables describe internal normalized engines,
+identified by ``scope`` and private entry points; they are numerical diagnostic
+facts, not a public construction schema. Public admission belongs to each
+physical interface's check/prepare methods.
 
 Wavebit already knows this about itself, in pieces: ``src/wavebit/rcwa/_engine/enums.py`` holds the legal
 values, the ``structure`` setter decides which modeling path a structure takes, and
@@ -48,7 +48,7 @@ from wavebit.rcwa._engine.engine import _COEFFICIENTS_IMPLEMENTED_BY
 from wavebit.rcwa._engine.engine import _COEFFICIENTS_REASON
 from wavebit.rcwa._engine.engine import _FACTORIZATION_IMPLEMENTED_BY
 from wavebit.rcwa._engine.engine import _FACTORIZATION_REASON
-from wavebit.compat._jobs_v1 import SPEC_VERSION
+from wavebit._common._jobs_v1 import SPEC_VERSION
 
 #: Bumped when the document's *shape* changes, so a consumer can refuse one it cannot read.
 #: An **added** key is not that: a consumer reading unknown keys degrades gracefully, and
@@ -177,7 +177,9 @@ from wavebit.compat._jobs_v1 import SPEC_VERSION
 # '21': the index conversions say what index they mean: eps_from_refractive_index,
 # refractive_index_from_eps and TabulatedMaterial.from_refractive_index (2026-10-14). Same
 # argument as '12': these are names a consumer calls, and the old ones are gone, not aliased.
-MANIFEST_VERSION = '21'
+# '22': retired facade paths become explicitly scoped private engine diagnostics;
+# physical native/periodic interfaces and explicit Job migration join current_lifecycle.
+MANIFEST_VERSION = '22'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -623,7 +625,7 @@ RESULTS = {
 #: for and raises, and ``sections`` names keys of this very document.
 SOLVERS = {
     'rcwa': {
-        'entry_point': 'wavebit.compat.legacy.rcwa',
+        'entry_point': 'wavebit.rcwa._factory.rcwa',
         'domain': 'frequency',
         'returns': 'a solver object; call .solve()',
         #: Derived from the same enum ``enums.backend`` is, so the two spellings cannot drift.
@@ -633,7 +635,7 @@ SOLVERS = {
                      'backends', 'material_quantity', 'results'),
     },
     'fdtd': {
-        'entry_point': 'wavebit.compat.legacy.fdtd',
+        'entry_point': 'wavebit.fdtd._periodic.api.fdtd',
         'domain': 'time',
         'returns': 'a Result directly, or a list for a wavelength vector; optional diagnostics '
                    'return a (result, diagnostics) pair',
@@ -758,7 +760,7 @@ CURRENT_LIFECYCLE = {
             'prepare': f'wavebit.{name}.prepare',
             'run': f'wavebit.{name}.run',
             'prepared': f'wavebit.{name}.Prepared',
-        } for name in ('rcwa', 'fdtd')
+        } for name in ('rcwa', 'fdtd', 'fdtd.native', 'fdtd.periodic')
     },
     'execution_keywords': ['backend', 'device', 'precision'],
     'prepared_run_requires': 'the complete live Problem',
@@ -777,7 +779,8 @@ CURRENT_LIFECYCLE = {
         'schema': 'wavebit.job/v1',
         'run': 'wavebit.run',
         'serialization': ['to_json', 'from_json'],
-        'legacy_policy': 'Legacy JobSpec requires explicit migration.',
+        'legacy_policy': 'JobSpec v10 requires explicit physical units and migration.',
+        'migration': 'wavebit.migration.migrate_legacy_jobs',
     },
 }
 
@@ -788,6 +791,8 @@ def manifest() -> dict:
 
     return {
         'manifest_version': MANIFEST_VERSION,
+        'scope': {'current_lifecycle': 'public physical API',
+                  'other_tables': 'private normalized engine diagnostics; not public input schemas'},
         'current_lifecycle': CURRENT_LIFECYCLE,
         'wavebit_version': __version__,
         'enums': {

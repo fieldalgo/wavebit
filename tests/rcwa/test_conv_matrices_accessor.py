@@ -14,7 +14,11 @@ The permeability accessor is checked in the same public centre frame, including 
 with the permittivity builder.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.factorization import ConvMatrices as _legacy_wavebit_ConvMatrices
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -34,7 +38,7 @@ def disc_raster(N, r=0.30):
 
 def test_it_is_exactly_what_solve_conv_takes():
     """The round trip is the contract: feeding the result back reproduces solve()."""
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE)
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE)
     direct = solver.solve().incident.T
     relayed = solver.solve_conv(*solver.eps_conv_matrices()).incident.T
     assert np.abs(np.asarray(direct) - np.asarray(relayed)).max() == 0.0
@@ -44,9 +48,9 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
     """The point of the accessor: one quantity, comparable across paths that share nothing."""
     n_orders = (2 * 4 + 1) ** 2
     paths = {
-        'raster+nvf': _legacy_wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE),
-        'smooth': _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE),
-        'boundary': _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[
+        'raster+nvf': _legacy_wavebit_rcwa(structure=disc_raster(96), factorization='nvf', **BASE),
+        'smooth': _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **BASE),
+        'boundary': _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[
             dict(type='rectangle', cx=-0.10, cy=-0.10, lx=0.34, ly=0.34, material=4.0),
             dict(type='rectangle', cx=0.06, cy=0.06, lx=0.34, ly=0.34, angle=0.3,
                  material=9.0)])], **BASE),
@@ -60,7 +64,7 @@ def test_every_modeling_path_answers_with_the_same_shaped_object():
 
 
 def test_a_frozen_geometry_is_accepted_the_same_way_solve_accepts_one():
-    solver = _legacy_wavebit.rcwa(structure=disc_raster(96), factorization='nvf', **BASE)
+    solver = _legacy_wavebit_rcwa(structure=disc_raster(96), factorization='nvf', **BASE)
     eager = solver.eps_conv_matrices()
     replayed = solver.eps_conv_matrices(geometry=solver.freeze_geometry())
     for a, b in zip(eager, replayed):
@@ -74,7 +78,7 @@ def test_it_does_not_solve():
     """Cheaper than solve by the whole eigenproblem — otherwise there is no reason to have
     it separately, and a sweep over geometries would pay for a solve it discards."""
     import time
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, truncation_order=[8, 8]))
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[CIRCLE])], **dict(BASE, truncation_order=[8, 8]))
     solver.eps_conv_matrices(), solver.solve()             # warm
 
     t = time.perf_counter()
@@ -98,9 +102,9 @@ def test_a_misspelled_layer_key_is_refused_rather_than_ignored():
     Found the hard way, on a layer whose one meaningful key went to a build that did not read it.
     """
     with pytest.raises(ValueError, match='not read by any path'):
-        _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapez=[CIRCLE])], **BASE).solve()
+        _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapez=[CIRCLE])], **BASE).solve()
     with pytest.raises(ValueError, match='not read by any path'):
-        _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[CIRCLE], combyne='add')],
+        _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[CIRCLE], combyne='add')],
                        **BASE).solve()
 
 
@@ -135,7 +139,7 @@ def _rectangle_matrix(basis, order, shape, background=1., value=None):
 def test_an_off_centre_rectangle_publishes_its_closed_form(rule):
     order, basis = (2, 1), np.diag([1.6, 1.8])
     shape = dict(type='rectangle', cx=.13, cy=-.11, lx=.47, ly=.63, material=3.2)
-    s = _legacy_wavebit.rcwa(lattice=basis, thickness=[.2], truncation_order=order,
+    s = _legacy_wavebit_rcwa(lattice=basis, thickness=[.2], truncation_order=order,
                     structure=[dict(background=1., shapes=[shape])], factorization=rule)
     conv = s.eps_conv_matrices()
     expected = _rectangle_matrix(basis, order, shape)
@@ -148,7 +152,7 @@ def test_an_off_centre_rectangle_publishes_its_closed_form(rule):
 def test_a_centred_disc_has_the_bessel_coefficients_on_any_cell(basis):
     from scipy.special import j1
     order, radius, epsilon = (1, 1), .27, 3.2
-    s = _legacy_wavebit.rcwa(lattice=basis, thickness=[.2], truncation_order=order,
+    s = _legacy_wavebit_rcwa(lattice=basis, thickness=[.2], truncation_order=order,
         structure=[dict(background=1., shapes=[dict(type='circle', lx=2*radius, material=epsilon)])],
         factorization='laurent')
     modes = _labels(order)
@@ -164,13 +168,13 @@ def test_a_centred_disc_has_the_bessel_coefficients_on_any_cell(basis):
 
 def test_a_centred_raster_stripe_and_magnetic_shape_publish_positive_first_harmonics():
     raster = np.ones((1, 1, 100)); raster[..., 30:70] = 3.
-    s = _legacy_wavebit.rcwa(period=(1.6, 1.8), thickness=[.2], truncation_order=(2, 0),
+    s = _legacy_wavebit_rcwa(period=(1.6, 1.8), thickness=[.2], truncation_order=(2, 0),
                     structure=raster, tetm='te')
     np.testing.assert_allclose(s.eps_conv_matrices().epy[0, 3, 2],
                                2*.4*np.sinc(.4), atol=2e-14, rtol=0)
     shape = dict(type='rectangle', cx=.13, cy=-.11, lx=.47, ly=.63,
                  material=wavebit.Material(3.2, mu=1.7))
-    magnetic = _legacy_wavebit.rcwa(period=(1.6, 1.8), thickness=[.2], truncation_order=(2, 1),
+    magnetic = _legacy_wavebit_rcwa(period=(1.6, 1.8), thickness=[.2], truncation_order=(2, 1),
         structure=[dict(background=wavebit.Material(1., mu=1.1), shapes=[shape])], factorization='laurent')
     expected = _rectangle_matrix(np.diag([1.6, 1.8]), (2, 1), shape, background=1.1, value=1.7)
     np.testing.assert_allclose(magnetic.mu_conv_matrices().epx[0], expected, atol=3e-14, rtol=0)
@@ -185,18 +189,18 @@ def test_a_hand_built_centre_stack_is_the_shape_it_draws(side, excitation):
     kw = dict(lattice=basis, thickness=[.17, .12], wavelength=.8, theta=.17, phi=.3,
               truncation_order=order, top=1., bot=2.25, factorization='laurent',
               layer_algorithm='SMM', incidence_side=side, excitation=excitation)
-    s = _legacy_wavebit.rcwa(structure=[dict(background=1., shapes=[a]) for a in shapes], **kw)
+    s = _legacy_wavebit_rcwa(structure=[dict(background=1., shapes=[a]) for a in shapes], **kw)
     order = tuple(window[1] for window in s.order_window)
     expected = s.solve()
     expected_s = s.scattering
     eps = np.stack([_rectangle_matrix(basis, order, a) for a in shapes])
-    conv = _legacy_wavebit.ConvMatrices(eps, eps, np.linalg.inv(eps), None, None)
+    conv = _legacy_wavebit_ConvMatrices(eps, eps, np.linalg.inv(eps), None, None)
     for mixed in (False, True):
         # Mixing an accessor layer with a hand-built layer tests relative placement,
         # which a one-wave efficiency on a wholly translated stack cannot see.
         if mixed:
             built = s.eps_conv_matrices()
-            conv = _legacy_wavebit.ConvMatrices(*(None if a is None else
+            conv = _legacy_wavebit_ConvMatrices(*(None if a is None else
                 np.concatenate([b[:1], a[1:]]) for a, b in zip(conv, built)))
         actual = s.solve_conv(*conv)
         for name in ('R', 'T', 'r_s', 'r_p', 't_s', 't_p', 'r_xyz', 't_xyz'):
@@ -233,7 +237,7 @@ def _round_trip_scene(case, backend):
         from tests.rcwa.test_full_tensor_patterns import tensors
         shape['material'] = wavebit.Material(*tensors(.04))
         kw['factorization'] = 'li'
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def _snapshot(solver, result):
@@ -265,12 +269,12 @@ def test_the_origin_swap_is_exact_and_its_own_inverse(backend):
     from wavebit._common.conventions import swap_fourier_origin
     from tests.fixtures.common._conv_frame import about_centre
     pytest.importorskip(backend)
-    s = _legacy_wavebit.rcwa(backend=backend)
+    s = _legacy_wavebit_rcwa(backend=backend)
     values = np.arange(81, dtype=float).reshape(9, 9).astype(complex)
     values[0, 1] = complex(-0., 0.);values[1, 0] = complex(0., -0.)
     values[2, 3] = complex(np.nan, -0.)
     a = s.xp.asarray(values, dtype=s.xp.complex128)
-    for slots in (_legacy_wavebit.ConvMatrices(a, a, a, None, None), (a, None), [a, None]):
+    for slots in (_legacy_wavebit_ConvMatrices(a, a, a, None, None), (a, None), [a, None]):
         got = swap_fourier_origin(slots, (1, 1), (-1, 1))
         back = swap_fourier_origin(got, (1, 1), (-1, 1))
         assert type(got) is type(slots) and type(back) is type(slots)
@@ -310,10 +314,10 @@ def test_from_energy_preserves_the_supplied_centre_frame():
     inverse = np.linalg.inv(q)
     tensor = inverse.conj().T@g@inverse
     expected = (tensor[:9, :9], tensor[9:, 9:], np.linalg.inv(z), -tensor[:9, 9:], -tensor[9:, :9])
-    actual = _legacy_wavebit.ConvMatrices.from_energy(q, g, z)
+    actual = _legacy_wavebit_ConvMatrices.from_energy(q, g, z)
     for a, b in zip(actual, expected):
         np.testing.assert_allclose(a, b, atol=8e-14, rtol=0)
-    translated = _legacy_wavebit.ConvMatrices.from_energy(*(about_centre(a, (1, 1)) for a in (q, g, z)))
+    translated = _legacy_wavebit_ConvMatrices.from_energy(*(about_centre(a, (1, 1)) for a in (q, g, z)))
     for a, b in zip(translated, actual):
         np.testing.assert_allclose(a, about_centre(b, (1, 1)), atol=8e-14, rtol=0)
 
@@ -322,7 +326,7 @@ def test_from_energy_preserves_the_supplied_centre_frame():
 def test_a_public_matrix_gradient_is_the_kernel_gradient_restated(backend):
     from tests.fixtures.common._conv_frame import about_centre
     module = pytest.importorskip(backend)
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     s = _round_trip_scene('laurent', backend)
     public, corner = s.eps_conv_matrices(), s._eps_conv_matrices()
     def loss(v, rest, solve):
@@ -335,7 +339,7 @@ def test_a_public_matrix_gradient_is_the_kernel_gradient_restated(backend):
         np.testing.assert_allclose(traced, eager, atol=1e-12, rtol=0)
         # Differentiate a raster value through the accessor, before any eigensolve.
         row = module.numpy.asarray([[[1., 3., 2., 1.]]])
-        a = _legacy_wavebit.rcwa(backend='jax', period=(1.6, 1.8), thickness=[.2],
+        a = _legacy_wavebit_rcwa(backend='jax', period=(1.6, 1.8), thickness=[.2],
                          truncation_order=(1, 0), structure=row)
         jp = module.jacfwd(lambda v: a.eps_conv_matrices(structure=row.at[0, 0, 1].set(v)).epx)(3.)
         def kernel(v):
@@ -358,7 +362,7 @@ def test_a_public_matrix_gradient_is_the_kernel_gradient_restated(backend):
 @pytest.mark.parametrize('theta', [0., .1])
 def test_born_links_the_published_harmonic_to_the_published_amplitude(theta):
     period, width, center = 1.6, .48, .13
-    s = _legacy_wavebit.rcwa(period=(period, period), wavelength=1., thickness=[1/400],
+    s = _legacy_wavebit_rcwa(period=(period, period), wavelength=1., thickness=[1/400],
         truncation_order=(4, 0), theta=theta, phi=0., factorization='laurent',
         structure=[dict(background=1., shapes=[dict(type='rectangle',
             cx=center, lx=width, ly=period, material=1.02)])])
@@ -410,7 +414,7 @@ def test_the_permeability_accessor_is_exactly_what_solve_conv_takes_as_mu(factor
     geometry and hands them to the same ``solve_conv``, so a difference in any digit would mean
     the accessor built something the solve does not.
     """
-    solver = _legacy_wavebit.rcwa(structure=EPS_RASTER, mu=MU_RASTER, **_magnetic_kw(factorization))
+    solver = _legacy_wavebit_rcwa(structure=EPS_RASTER, mu=MU_RASTER, **_magnetic_kw(factorization))
     direct = solver.solve().incident
     relayed = solver.solve_conv(*solver.eps_conv_matrices(),
                                 mu=solver.mu_conv_matrices()).incident
@@ -429,9 +433,9 @@ def test_the_permeability_is_the_permittivity_builder_run_on_the_mu_field(factor
     names, so the type is asserted with it.
     """
     kw = _magnetic_kw(factorization)
-    magnetic = _legacy_wavebit.rcwa(structure=EPS_RASTER, mu=MU_RASTER, **kw).mu_conv_matrices()
-    as_eps = _legacy_wavebit.rcwa(structure=MU_RASTER, **kw).eps_conv_matrices()
-    assert isinstance(magnetic, _legacy_wavebit.ConvMatrices)
+    magnetic = _legacy_wavebit_rcwa(structure=EPS_RASTER, mu=MU_RASTER, **kw).mu_conv_matrices()
+    as_eps = _legacy_wavebit_rcwa(structure=MU_RASTER, **kw).eps_conv_matrices()
+    assert isinstance(magnetic, _legacy_wavebit_ConvMatrices)
     assert [_slot_gap(a, b) for a, b in zip(magnetic, as_eps)] == [0.0] * 5
 
 
@@ -446,9 +450,9 @@ def test_a_shape_layers_permeability_is_its_permittivity_builder_too():
     def layer(material):
         return [dict(background=1.0, shapes=[dict(CIRCLE, material=material)])]
 
-    magnetic = _legacy_wavebit.rcwa(structure=layer(wavebit.Material(9.0, mu=2.0)),
+    magnetic = _legacy_wavebit_rcwa(structure=layer(wavebit.Material(9.0, mu=2.0)),
                             **MAGNETIC).mu_conv_matrices()
-    as_eps = _legacy_wavebit.rcwa(structure=layer(2.0), **MAGNETIC).eps_conv_matrices()
+    as_eps = _legacy_wavebit_rcwa(structure=layer(2.0), **MAGNETIC).eps_conv_matrices()
     assert [_slot_gap(a, b) for a, b in zip(magnetic, as_eps)] == [0.0] * 5
 
 
@@ -459,8 +463,8 @@ def test_nothing_magnetic_in_the_layers_answers_none_and_a_magnetic_half_space_s
     layers' permeability is still ``None`` -- and the half-space must still move the answer,
     or ``None`` would be a permeability the solve quietly dropped.
     """
-    plain = _legacy_wavebit.rcwa(structure=EPS_RASTER, **MAGNETIC)
-    over_magnetic = _legacy_wavebit.rcwa(structure=EPS_RASTER,
+    plain = _legacy_wavebit_rcwa(structure=EPS_RASTER, **MAGNETIC)
+    over_magnetic = _legacy_wavebit_rcwa(structure=EPS_RASTER,
                                  **dict(MAGNETIC, bot=wavebit.Material(2.25, mu=1.5)))
     assert plain.mu_conv_matrices() is None
     assert over_magnetic.mu_conv_matrices() is None

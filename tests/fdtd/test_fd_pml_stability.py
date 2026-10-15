@@ -87,7 +87,7 @@ layer grows there and warns ``GrowingFieldWarning`` naming ``PML(stabilize=3e-3)
 ``stabilize=3e-3`` is its twin that does not grow.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import math
 import warnings
 
@@ -247,7 +247,7 @@ def test_a_growing_scene_whose_only_monitor_is_a_record_warns_under_jax_grad():
     whose only monitor is a Record is exactly where a silent growth would do its harm."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     scene = slab_column(time=200.0, stabilize=None).replace(monitors=COLUMN_MONITORS[:1])
     seen = []
 
@@ -278,7 +278,7 @@ def test_the_backends_agree_on_the_growth():
         except ImportError:
             continue
         if backend == 'jax':
-            _legacy_wavebit.enable_x64()
+            _legacy_wavebit_enable_x64()
         d = _monitored(backend, stabilize=None)[0].diagnostics
         values[backend] = dict(d['growth'], interior=d['interior_growth'])
     reference = values.pop('numpy')
@@ -293,7 +293,7 @@ def test_under_jit_the_growth_is_none_and_nothing_warns():
     column does not warn -- the diagnostic reads values, and a trace has none yet. Outside the
     jit the same column warns (the tests above)."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     scene = slab_column(time=200.0, stabilize=None).replace(monitors=COLUMN_MONITORS)
     seen = []
 
@@ -532,7 +532,7 @@ def test_a_stabilized_run_differentiates_on_jax_and_on_torch():
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     from wavebit.fdtd._execution import execute
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     scene = _box(STABILIZING_LOSS).replace(run=fd.Run(steps=30), monitors=())
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')

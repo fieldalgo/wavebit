@@ -35,7 +35,9 @@ The regenerated golden kept the first five cases bit for bit. The new cases agre
 the old rule they missed by 0.003 .. 0.06 in efficiency.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ComplexIncidenceWarning as _legacy_wavebit_ComplexIncidenceWarning
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -99,7 +101,7 @@ _LOSSLESS_TOP = ('te_grating_lossless_top', 'tm_grating_lossless_top',
 
 
 def _solver(name):
-    return _legacy_wavebit.rcwa(backend='numpy', fourier_coefficients='integrated', **CASES[name])
+    return _legacy_wavebit_rcwa(backend='numpy', fourier_coefficients='integrated', **CASES[name])
 
 
 def _golden():
@@ -162,7 +164,7 @@ def test_orders_match_reticolo(name):
     g = _golden()
     kw = CASES[name]
     n = kw['truncation_order']
-    with pytest.warns(_legacy_wavebit.ComplexIncidenceWarning):
+    with pytest.warns(_legacy_wavebit_ComplexIncidenceWarning):
         result = _solver(name).solve()
     kx = np.asarray(_solver(name).order_kxy()[0]).ravel()
     for kind, values, side in (('r', result.R, 'top'), ('t', result.T, 'bot')):

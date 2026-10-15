@@ -1,6 +1,8 @@
 """The modal gradient guard preserves the public numerical retry contract."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 import numpy as np
 import pytest
@@ -20,7 +22,7 @@ def value(backend, parameter, knob, auto_detune=True):
     eps = parameter if knob == 'epsilon' else 2.25
     structure = xp.stack([xp.ones((1, 20), dtype=xp.float64)*eps, xp.asarray(PILLAR)])
     cfg = CFG | ({'wavelength': parameter} if knob == 'wavelength' else {})
-    s = _legacy_wavebit.rcwa(backend=backend, **cfg, structure=structure)
+    s = _legacy_wavebit_rcwa(backend=backend, **cfg, structure=structure)
     return xp.real(s.solve(auto_detune=auto_detune).R).sum()
 
 
@@ -34,7 +36,7 @@ def test_rayleigh_parameter_gradient_reaches_the_detuned_retry(backend, knob, de
         if backend == 'jax':
             jax = pytest.importorskip('jax')
             import jax.numpy as jnp
-            _legacy_wavebit.enable_x64()
+            _legacy_wavebit_enable_x64()
             got = float(jax.grad(lambda t: value('jax', t, knob, detune))(jnp.asarray(point)))
         else:
             torch = pytest.importorskip('torch')

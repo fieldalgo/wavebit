@@ -5,7 +5,6 @@ from pathlib import Path
 import tomllib
 
 import wavebit
-from wavebit.compat import legacy
 
 
 def test_installed_metadata_matches_the_checkout_distribution_contract():
@@ -25,4 +24,10 @@ def test_every_version_the_package_states_is_the_pyproject_one():
     root = Path(__file__).resolve().parents[2]
     version = tomllib.loads((root / 'pyproject.toml').read_text())['project']['version']
     assert wavebit.__version__ == version
-    assert legacy.__version__ == version
+
+
+
+def test_retired_namespace_is_not_distributed_or_importable():
+    import importlib.util
+    assert importlib.util.find_spec('wavebit.compat') is None
+    assert not importlib.resources.files('wavebit').joinpath('compat').is_dir()

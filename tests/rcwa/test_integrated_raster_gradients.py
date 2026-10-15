@@ -1,6 +1,8 @@
 """Equal raster values are independent design variables, including under a frozen plan."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import lru_cache
 
 import numpy as np
@@ -18,7 +20,7 @@ def _solver(backend, quantity, rule, pixels):
     conditions = {quantity: pixels}
     if quantity == 'mu':
         conditions['structure'] = np.full_like(PIXELS, 2.25)
-    return _legacy_wavebit.rcwa(backend=backend, **CFG, factorization=rule, **conditions)
+    return _legacy_wavebit_rcwa(backend=backend, **CFG, factorization=rule, **conditions)
 
 
 @lru_cache(maxsize=None)
@@ -50,7 +52,7 @@ def test_every_pixel_gradient_matches_fresh_numpy_under_compression(mode, quanti
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         solver = _solver('jax', quantity, rule, PIXELS)
         geometry = solver.freeze_geometry()
         def objective(pixels):
@@ -76,14 +78,14 @@ def test_every_pixel_gradient_matches_fresh_numpy_under_compression(mode, quanti
 def test_fit_updates_every_uniform_pixel_using_independent_derivatives(quantity):
     jax = pytest.importorskip('jax')
     optax = pytest.importorskip('optax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     cfg = dict(period=(700., 700.), thickness=(120.,), wavelength=900.,
                truncation_order=(0, 0), theta=.13, phi=.21, psi=.37,
                fourier_coefficients='integrated')
     pixels = np.full((1, 3, 3), 4.)
     if quantity == 'mu':
         cfg['structure'] = np.full_like(pixels, 2.25)
-    solver = _legacy_wavebit.rcwa(backend='jax', **cfg, **{quantity: pixels})
+    solver = _legacy_wavebit_rcwa(backend='jax', **cfg, **{quantity: pixels})
     observed = []
     optimizer = optax.sgd(.1)
 
@@ -99,7 +101,7 @@ def test_fit_updates_every_uniform_pixel_using_independent_derivatives(quantity)
     assert len(observed) == 2
     expected = pixels.copy()
     def fresh(p):
-        return float(_legacy_wavebit.rcwa(backend='numpy', **cfg, **{quantity: p}).solve().T.sum().real)
+        return float(_legacy_wavebit_rcwa(backend='numpy', **cfg, **{quantity: p}).solve().T.sum().real)
     for point, actual in observed:
         np.testing.assert_allclose(point, expected, atol=1e-9, rtol=0)
         want = np.empty_like(point)

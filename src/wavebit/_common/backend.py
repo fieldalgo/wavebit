@@ -190,36 +190,18 @@ def lift_jax_x64(required=False):
     ``complex_dtype=0`` everywhere once returned ``|R| = 3.94`` against a true 0.67. See
     :class:`PrecisionLossWarning` and ``docs/theory/rcwa/branch-cuts.md``.
 
-    So every public door onto JAX must call this **after** JAX is loaded (the body acts only
-    on the ``jax`` in ``sys.modules``) and **before** the first array is built behind it, and
-    there must be exactly one body doing it -- a door without the call is how the FDTD time
-    loop ended up running its first call of a process at complex64 while ``rcwa`` did not.
-    The doors:
+    Historical numerical engine entry points call this after JAX is loaded and
+    before building their first array: the private JAX RCWA backend, the periodic
+    JaxTimeLoop, lattice sampling and the explicit _enable_x64 instrument helper.
+    The current physical lifecycle uses Execution.scope to disable those automatic
+    changes and validates the user's explicit precision configuration instead.
+    Importing wavebit never lifts the cap.
 
-    * ``src/wavebit/rcwa/_backends/jax_backend.py``, at its top, above the imports that could build an
-      array (``rcwa``);
-    * ``wavebit.fdtd._periodic.runtime.JaxTimeLoop.__init__``, before it hands out ``xp``
-      (``fdtd`` and ``fdtd_grid``);
-    * ``wavebit.meshgrid_xy(..., backend=1)``, before it samples the grid;
-    * ``wavebit.__init__``, on ``import wavebit`` when JAX is *already* loaded;
-    * ``wavebit.enable_x64()``, the public early lift, which additionally *imports* JAX.
-
-    Code that only ever receives arrays one of those produced (``eig``, the float reads, the
-    boundary and factorization kernels) is behind a door, not one.
-
-    This does not import JAX. That is deliberate and load-bearing in two directions: the
-    setting is process-wide and does not belong to a caller who never asks for JAX, and
-    ``import wavebit`` already imports ``wavebit.fdtd._periodic.runtime``, so a lift at that
-    module's top level would pull JAX into every ``import wavebit`` -- which four committed
-    assertions pin against (``tests/rcwa/test_fp_warnings.py``, ``tests/materials/test_material.py``,
-    ``tests/distribution/fdtd_install_smoke.py``). Hence a function call rather than a side-effect
-    import, which ``F401`` would flag anyway.
-
-    Idempotent. With ``required=False`` -- only ``import wavebit``, which may run with JAX
-    absent or mid-import -- a cap it cannot lift is a no-op and the return value says so.
-    Every other door has just imported JAX and is about to build arrays, so it passes
-    ``required=True``: a lift that did not take raises there rather than letting the run
-    proceed at single precision, which is the failure this function exists to stop.
+    This function does not import JAX. With required=False, an absent or partially
+    imported JAX is a no-op and the return value reports the current cap. Internal
+    callers that have imported JAX and require double precision pass required=True,
+    so a failed lift raises before arrays are constructed. Under Execution.scope,
+    the helper only reports the setting and never changes it.
     """
     import sys
     jax = sys.modules.get('jax')
@@ -1356,7 +1338,7 @@ def check_input_precision(name, value, target_dtype):
         theta = jnp.asarray(0.4 + 0.3j)          # complex64 -- x64 is not on yet
         wavebit.rcwa(backend='jax', theta=theta, complex_dtype=0, ...)   # asks for double
 
-    ``wavebit.enable_x64()`` before the second line is the fix.
+    ``jax.config.update("jax_enable_x64", True)`` before the second line is the fix.
 
     ``jnp.array(theta, dtype=complex128)`` in the setter then promotes it without recovering
     anything, and the solve runs with ~8 significant digits missing from its incidence angle.
@@ -1375,9 +1357,9 @@ def check_input_precision(name, value, target_dtype):
         f'{name} was given at {8 * have}-bit precision but this solve runs at '
         f'{8 * target}-bit, and widening it cannot recover the digits already lost. If this '
         'is JAX, the usual cause is building the array before JAX\'s 32-bit cap was lifted: '
-        'call `wavebit.enable_x64()` once, before building it. `import wavebit` lifts the cap '
-        'only if JAX was already loaded, and the backend lifts it at the first solve, which '
-        'is too late for an array made before that.',
+        'call `jax.config.update("jax_enable_x64", True)` before building it. '
+        '`import wavebit` leaves that setting unchanged; a later precision change cannot '
+        'restore an array made before it.',
         PrecisionLossWarning, stacklevel=3)
 
 
@@ -1864,3 +1846,17 @@ def sinc(z):
     xp = ac.array_namespace(z)
     safe = xp.where(z == 0, xp.ones_like(z), z)
     return xp.where(z == 0, xp.ones_like(z), xp.sin(safe) / safe)
+
+
+@eager_under_torch_compile
+def _enable_x64():
+    """Explicit precision setup for private numerical regression instruments.
+
+    Public callers configure JAX before creating arrays; importing Wavebit never
+    changes their precision. This helper keeps historical engine tests explicit.
+    """
+    import importlib
+    importlib.import_module('jax')
+    lift_jax_x64(required=True)
+    from wavebit.rcwa._engine.scattering import _register_pytree_if_jax_loaded
+    _register_pytree_if_jax_loaded()

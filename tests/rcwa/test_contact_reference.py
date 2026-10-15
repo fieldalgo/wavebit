@@ -1,6 +1,6 @@
 """Validate the independent thin-gap instrument before using its derivative."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import array_api_compat.numpy as xp
 import pytest
@@ -27,7 +27,7 @@ def test_reference_retains_a_subpixel_gap_and_its_derivative(monkeypatch):
     jax.config.update('jax_enable_x64',True)
     monkeypatch.setattr(P,'to_conv_mat_parametric_nvf',rectangular_li)
     def solver(height,backend):
-        return _legacy_wavebit.rcwa(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
+        return _legacy_wavebit_rcwa(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
                            theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(3,3),
                            structure=[dict(background=1.,shapes=[dict(type='rectangle',cx=0.,
                            cy=0.,lx=350.,ly=height,angle=0.,material=12.25)])])
@@ -52,7 +52,7 @@ def test_partial_derivatives_reconstruct_the_live_nvf_gradient(monkeypatch):
     center = 700. - 1e-4
 
     def solver(height, backend):
-        return _legacy_wavebit.rcwa(
+        return _legacy_wavebit_rcwa(
             backend=backend, period=(700., 700.), wavelength=900., top=1., bot=2.25,
             theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(3, 3),
             shape_nvf_grid_size=256, structure=[dict(background=1., shapes=[dict(

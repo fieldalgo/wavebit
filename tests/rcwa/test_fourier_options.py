@@ -16,7 +16,7 @@ path that implements only one of its values in
 ``test_factorization_by_modeling_path.py`` / ``test_fourier_coefficients_by_modeling_path.py``.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -40,7 +40,7 @@ CFG_1D = dict(backend='numpy', structure=np.array([[[9., 9., 1., 1., 9., 1., 1.,
 
 
 def _totals(cfg, **strategy):
-    res = _legacy_wavebit.rcwa(**cfg, **strategy).solve()
+    res = _legacy_wavebit_rcwa(**cfg, **strategy).solve()
     return (float(np.sum(np.asarray(res.R))), float(np.sum(np.asarray(res.T))))
 
 
@@ -57,7 +57,7 @@ def test_the_default_is_sampled_li():
     other two modeling paths implement one rule apiece and resolve the default to it. See
     ``test_factorization_by_modeling_path.py``.
     """
-    solver = _legacy_wavebit.rcwa(**CFG_2D)
+    solver = _legacy_wavebit_rcwa(**CFG_2D)
     assert solver.fourier_coefficients == 'sampled'
     assert solver.factorization == 'li'
 
@@ -82,7 +82,7 @@ def test_the_removed_fourier_type_alias_is_not_silently_swallowed(backend):
     if backend != 'numpy':
         pytest.importorskip(backend)
     with pytest.raises(TypeError, match='fourier_type'):
-        _legacy_wavebit.rcwa(**dict(CFG_2D, backend=backend), fourier_type=2)
+        _legacy_wavebit_rcwa(**dict(CFG_2D, backend=backend), fourier_type=2)
 
 
 @pytest.mark.parametrize('keyword,bad', [('fourier_coefficients', 'discrete'),
@@ -92,12 +92,12 @@ def test_the_removed_fourier_type_alias_is_not_silently_swallowed(backend):
 def test_an_invalid_value_is_rejected_at_the_keyword_that_took_it(keyword, bad):
     """The error names the keyword, so a typo does not surface as a wrong-physics run."""
     with pytest.raises(ValueError, match=keyword):
-        _legacy_wavebit.rcwa(**CFG_2D, **{keyword: bad})
+        _legacy_wavebit_rcwa(**CFG_2D, **{keyword: bad})
 
 
 @pytest.mark.parametrize('coefficients', ['SAMPLED', 'Integrated'])
 def test_values_are_case_insensitive(coefficients):
-    solver = _legacy_wavebit.rcwa(**CFG_2D, fourier_coefficients=coefficients)
+    solver = _legacy_wavebit_rcwa(**CFG_2D, fourier_coefficients=coefficients)
     assert solver.fourier_coefficients == coefficients.lower()
 
 
@@ -105,7 +105,7 @@ def test_the_axes_are_independent():
     """Neither keyword may quietly change the other — that entanglement was the bug."""
     for coefficients in ('sampled', 'integrated'):
         for factorization in ('li', 'nvf'):
-            solver = _legacy_wavebit.rcwa(**CFG_2D, fourier_coefficients=coefficients,
+            solver = _legacy_wavebit_rcwa(**CFG_2D, fourier_coefficients=coefficients,
                                     factorization=factorization)
             assert (solver.fourier_coefficients, solver.factorization) == (coefficients,
                                                                           factorization)

@@ -1,14 +1,19 @@
 """Index and permeability determine both phase and interface impedance."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import json
 
 import numpy as np
 import pytest
 
 import wavebit
-from wavebit.compat.legacy import Incidence, JobSpec, Layer, Stack
-from wavebit.compat.legacy import TabulatedMaterial
+from wavebit._common.periodic import Incidence
+from wavebit._common._jobs_v1 import JobSpec
+from wavebit._common.periodic import Layer
+from wavebit._common.periodic import Stack
+from wavebit.materials.tabulated import TabulatedMaterial
 from wavebit import eps_from_refractive_index
 
 
@@ -41,7 +46,7 @@ def test_conversion_keeps_broadcasting_precision_and_both_gradients(backend, pre
         result = eps_from_refractive_index(n, mu=mu)
     elif backend == 'jax':
         jax = pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         n, mu = jax.numpy.array(n_values, dtype=precision), jax.numpy.array(mu_values, dtype=precision)
         fn = jax.jit(lambda a, b: eps_from_refractive_index(a, mu=b).sum())
         dn, dm = jax.grad(fn, argnums=(0, 1))(n, mu)
@@ -72,7 +77,7 @@ def test_index_and_mu_are_interpolated_before_conversion(backend):
         actual = model.at(w)
     elif backend == 'jax':
         jax = pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         w = jax.numpy.array(wavelengths)
         actual = jax.jit(model.at)(w)
         derivative = jax.jit(jax.grad(lambda x: model.at(x).epsilon.real.sum()))(w)
@@ -120,7 +125,7 @@ def test_zero_interpolated_mu_has_eager_and_jit_failure_semantics():
     with pytest.raises(ValueError, match='nonzero'):
         model.at(900.)
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     w = jax.numpy.array([850., 900., 950.])
     actual = jax.jit(model.at)(w)
     assert np.isnan(actual.epsilon[1])
@@ -151,7 +156,7 @@ def test_magnetic_index_json_preserves_source_tables_and_interpolation(mu):
 def test_constant_index_changing_mu_matches_fresnel_impedance(backend, slot):
     pytest.importorskip(backend)
     model = TabulatedMaterial.from_refractive_index([800., 1000.], [2., 2.], mu=[1., 3.])
-    solver = _legacy_wavebit.rcwa(backend=backend, wavelength=800., period=600.,
+    solver = _legacy_wavebit_rcwa(backend=backend, wavelength=800., period=600.,
                           structure=np.ones((1, 1, 1)), thickness=[0.],
                           truncation_order=0, tetm='te', **{slot: model})
     for w, mu in [(800., 1.), (900., 2.), (1000., 3.)]:

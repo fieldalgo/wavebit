@@ -4,7 +4,7 @@ FDTDX is executed as an external package, not copied into the Wavebit solver.
 Uses its low-level update_E/update_H functions, not a geometry or source test.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import argparse
 import hashlib
 import importlib.metadata
@@ -63,7 +63,7 @@ def worker(backend):
     else:
         import wavebit
         def run(parameter):
-            out=_legacy_wavebit.fdtd_grid(2+.2*pattern,mu=mu,spacing=(1.,)*3,dt=DT,
+            out=_legacy_wavebit_fdtd_grid(2+.2*pattern,mu=mu,spacing=(1.,)*3,dt=DT,
                                  poles=((0.,.3,.7*(1+parameter*pattern)),
                                         (1.2,.2,.8*(1+parameter*pattern))),
                                  steps=STEPS,electric=e,magnetic=h,backend='jax',checkpoint_steps=8)

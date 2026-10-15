@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from wavebit.compat import legacy as wavebit
+from wavebit.materials.response import Material as wavebit_Material
 from wavebit.fdtd._periodic.runtime import time_loop_backend
 from studies.fdtd.layer_gradients.fdtd_layer_gradients import BAND, BACKGROUND, FILM, DEPTH
 from studies.fdtd.layer_smoothing.fdtd_layer_smoothing import graded_film
@@ -58,7 +58,7 @@ def response(d, resolution, *, backend='jax', side='top', smoothing=.025, durati
     ef, mf = FILM
     results = legacy_fdtd(structure=np.array([[[ef]]]), mu=np.array([[[mf]]]), thickness=[d],
         mesh_thickness=[.2], variable_depth=True, layer_smoothing=smoothing,
-        top=wavebit.Material(et, mt), bot=wavebit.Material(eb, mb), period=.05,
+        top=wavebit_Material(et, mt), bot=wavebit_Material(eb, mb), period=.05,
         wavelength=BAND, backend=backend, resolution=resolution, n_pml=resolution,
         n_periods=duration, pulse_width=3., align_layers=True, incidence_side=side,
         diffraction_method='directional', truncation_order=0)

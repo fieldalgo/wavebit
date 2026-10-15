@@ -1,5 +1,11 @@
 # Known limits of the normal field
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Written: 2026-09-03. Measured on CPU, NumPy backend, float64, unless a row says otherwise.
 
 This file collects the places where a normal-vector field this solver builds is **knowingly not

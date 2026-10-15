@@ -1,5 +1,11 @@
 # Far-field radiation in the general FDTD engine
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Use `fdtd.FarField` for a closed measurement box in an open scene.
 The box must enclose every object and stay in a uniform isotropic background,
 clear of absorbing layers and source surfaces.

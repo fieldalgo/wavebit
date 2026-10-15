@@ -1,6 +1,8 @@
 """Common result fields: boundary physics, snapshots and differentiable sampling."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -36,7 +38,7 @@ def test_all_paths_match_legacy_and_tangential_boundary_continuity(kind, side, a
     if kind in ('second_order', 'first_order'):
         options.update(structure=np.repeat(options['structure'], 2, axis=1),
                        truncation_order=(1, 1))
-    solver = _legacy_wavebit.rcwa(**options)
+    solver = _legacy_wavebit_rcwa(**options)
     if kind == 'first_order':
         solver.formulation = 'first_order'
     result = solver.solve(auto_detune=False)
@@ -62,8 +64,8 @@ def test_all_paths_match_legacy_and_tangential_boundary_continuity(kind, side, a
 @pytest.mark.parametrize('sources', [False, True])
 def test_count_coordinate_layout_and_result_lifetime(backend, sources):
     options = scene(backend=backend, truncation_order=0)
-    options.update({'excitation': _legacy_wavebit.PlaneWave(theta=.2)} if sources else {'tetm':'te', 'theta':.2})
-    solver = _legacy_wavebit.rcwa(**options)
+    options.update({'excitation': _legacy_wavebit_PlaneWave(theta=.2)} if sources else {'tetm':'te', 'theta':.2})
+    solver = _legacy_wavebit_rcwa(**options)
     result = solver.solve()
     field = host(result.reconstruct_field(3, 2, 4))
     assert field.shape == (8, 2, 3, 6)
@@ -80,9 +82,9 @@ def test_count_coordinate_layout_and_result_lifetime(backend, sources):
 @pytest.mark.parametrize('source', [False, True])
 def test_interface_normal_jump_and_layer_count_limits(source):
     options = scene(truncation_order=0, structure=np.array([[[2.]], [[5.]]]))
-    options.update({'excitation': _legacy_wavebit.PlaneWave(theta=.3, polarization=(0.,1.))}
+    options.update({'excitation': _legacy_wavebit_PlaneWave(theta=.3, polarization=(0.,1.))}
                    if source else {'theta':.3, 'phi':0., 'polarization':(0.,1.)})
-    result = _legacy_wavebit.rcwa(**options).solve()
+    result = _legacy_wavebit_rcwa(**options).solve()
     count = host(result.reconstruct_field([0.], [0.], 2))[:,0,0]
     point = host(result.reconstruct_field([0.], [0.], [.17]))[0,0,0]
     np.testing.assert_allclose(count[2], point, atol=1e-13)
@@ -94,7 +96,7 @@ def test_interface_normal_jump_and_layer_count_limits(source):
 def test_jax_jit_result_and_thickness_derivative(sampling):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    solver = _legacy_wavebit.rcwa(**scene(backend='jax', truncation_order=0, tetm='te'))
+    solver = _legacy_wavebit_rcwa(**scene(backend='jax', truncation_order=0, tetm='te'))
     geometry = solver.freeze_geometry()
     def solve(d):
         return solver.solve(thickness=jnp.array([d, .23]), geometry=geometry, auto_detune=False)
@@ -113,7 +115,7 @@ def test_jax_jit_result_and_thickness_derivative(sampling):
 @pytest.mark.parametrize('sampling', [4, [.05, .12]])
 def test_torch_thickness_derivative(sampling):
     torch = pytest.importorskip('torch')
-    solver = _legacy_wavebit.rcwa(**scene(backend='torch', truncation_order=0, tetm='te'))
+    solver = _legacy_wavebit_rcwa(**scene(backend='torch', truncation_order=0, tetm='te'))
     def loss(d):
         r = solver.solve(thickness=torch.stack([d, d.new_tensor(.23)]), auto_detune=False)
         return torch.sum(torch.abs(r.reconstruct_field([0.], [0.], sampling)[...,1])**2)
@@ -126,7 +128,7 @@ def test_torch_thickness_derivative(sampling):
 
 
 def test_answer_levels_and_invalid_coordinates():
-    solver = _legacy_wavebit.rcwa(**scene(answers='amplitude', tetm='te'))
+    solver = _legacy_wavebit_rcwa(**scene(answers='amplitude', tetm='te'))
     result = solver.solve()
     assert result.boundary_fields('top', [0.], [0.]).shape == (1,1,6)
     with pytest.raises(RuntimeError, match="answers='field'"):
@@ -159,7 +161,7 @@ def test_boundary_flux_matches_efficiencies_with_absorbing_magnetic_ports(polari
                     theta=.2, excitation=LIT[lit])
     options.update({'tetm':polarization} if polarization != 'coupled'
                    else {'phi':.3, 'polarization':(.6,.8j)})
-    solver = _legacy_wavebit.rcwa(**options)
+    solver = _legacy_wavebit_rcwa(**options)
     result = solver.solve(auto_detune=False)
     kx = np.real(host(solver.order_kxy()[0])).ravel()
     (centre, half), _ = solver.order_window
@@ -178,7 +180,7 @@ def test_boundary_flux_matches_efficiencies_with_absorbing_magnetic_ports(polari
 
 
 def test_result_owns_mutable_solve_arrays_and_pure_variants():
-    solver = _legacy_wavebit.rcwa(**scene(theta=.2, phi=.3, polarization=(.6,.8j)))
+    solver = _legacy_wavebit_rcwa(**scene(theta=.2, phi=.3, polarization=(.6,.8j)))
     result = solver.solve()
     points = dict(sample_x=[-.1,.2], sample_y=[0.], sample_z=[.04,.21])
     for name in ('incident','s','p'):

@@ -29,7 +29,7 @@ actually couple. What none of them reach is a patterned *anisotropic* layer, whi
 factorization yet.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -620,7 +620,7 @@ def test_a_real_grating_matches_the_second_order_solve(truncation_order, theta_d
     structure = np.ones((1, 40, 40))
     structure[0, 12:28, 12:28] = 6.760000000000001     # permittivity: 2.6**2
 
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                             phi=np.deg2rad(phi_deg), psi=0.0, truncation_order=(truncation_order, truncation_order),
                             period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                             structure=structure)

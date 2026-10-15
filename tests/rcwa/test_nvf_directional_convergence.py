@@ -1,6 +1,6 @@
 """Directional Fourier truncation retains the physical problem and conventions."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -71,7 +71,7 @@ def test_directional_mixed_cell_powers_match_public_scattering_path(order):
     slots = projected_matrices(coefficients, order)
     t, r = polarized_powers(order, slots)
     for i, psi in enumerate((0., np.pi/2)):
-        solver = _legacy_wavebit.rcwa(backend='numpy', period=(PERIOD, PERIOD), wavelength=WAVELENGTH,
+        solver = _legacy_wavebit_rcwa(backend='numpy', period=(PERIOD, PERIOD), wavelength=WAVELENGTH,
                               top=1., bot=2.25, theta=THETA, phi=0., psi=psi,
                               thickness=(THICKNESS,), truncation_order=order)
         result = solver._solve_conv(*(s[None] for s in slots))

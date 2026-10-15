@@ -1,6 +1,8 @@
 """A lossy negative-epsilon 3D Drude pattern against an independent Meep reference."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -34,7 +36,7 @@ def golden():
 
 @pytest.fixture(scope='module')
 def computed():
-    result, diagnostics = _legacy_wavebit.fdtd(
+    result, diagnostics = _legacy_wavebit_fdtd(
         **scene(CASE), dispersion=CASE['dispersion'], poles=CASE['poles'],
         resolution=60., n_periods=240, n_pml=12, pad_scale=1., courant=.99,
         subpixel=True, grading=None, return_diagnostics=True)
@@ -92,7 +94,7 @@ def test_finer_external_grid_reduces_reference_error(golden):
     kw = scene(CASE)
     kw['structure'] = epsilon(CASE, CASE['wavelength'])
     kw['truncation_order'] = dict(x=11, y=11)
-    ref = extract(_legacy_wavebit.rcwa(backend='numpy', **kw).solve(), CASE)
+    ref = extract(_legacy_wavebit_rcwa(backend='numpy', **kw).solve(), CASE)
     errors = [gap(frozen(golden, 'metal', resolution), ref, CASE) for resolution in (30, 60, 120)]
     print('METAL_MEEP_REFINEMENT', errors, flush=True)
     assert errors[2] < errors[1] < errors[0]

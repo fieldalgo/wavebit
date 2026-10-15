@@ -1,5 +1,10 @@
 # 01. Wavebit는 어떤 질문에 답할까
 
+> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
+> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
+> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
+
+
 :::{note}
 다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
@@ -17,7 +22,7 @@
 
 ## 현재 범위와 FDTD의 자리
 
-이 교재에서 다루는 솔버는 **RCWA**입니다. 시간의 진동을 복소수로 표현하고 지정한 파장에서 문제를 풉니다. 횡방향으로 주기적인 층 구조에 적합합니다. FDTD는 시간에 따라 전자기장을 격자 위에서 진전시키는 별도의 계산 방식입니다. 현재 저장소는 공개 `wavebit.fdtd` 모듈의 `fdtd.Problem`, `fdtd.prepare`, `fdtd.run`을 제공합니다. 사용법은 [현재 FDTD 가이드](../../guide/fdtd/general-fdtd.md)를 참고하세요. 이전 주기 구조·일반 장면 팩터리는 `wavebit.compat.legacy` 아래에 남아 있으며, [주기 구조용 설명서](../../guide/fdtd/time-domain.md)와 [일반 장면 설명서](../../migration/general-fdtd-v1.md)에서 호환 범위를 구분합니다. 이 교재는 원래 RCWA 학습 흐름과 당시 측정 기록을 유지합니다.
+이 교재에서 다루는 솔버는 **RCWA**입니다. 시간의 진동을 복소수로 표현하고 지정한 파장에서 문제를 풉니다. 횡방향으로 주기적인 층 구조에 적합합니다. FDTD는 시간에 따라 전자기장을 격자 위에서 진전시키는 별도의 계산 방식입니다. 현재 저장소는 공개 `wavebit.fdtd` 모듈의 `fdtd.Problem`, `fdtd.prepare`, `fdtd.run`을 제공합니다. 사용법은 [현재 FDTD 가이드](../../guide/fdtd/general-fdtd.md)를 참고하세요. 이전 주기 구조·일반 장면 팩터리의 `wavebit.compat.legacy` 경로는 퇴역했으며, [주기 구조용 설명서](../../guide/fdtd/time-domain.md)와 [일반 장면 설명서](../../migration/general-fdtd-v1.md)에서 호환 범위를 구분합니다. 이 교재는 원래 RCWA 학습 흐름과 당시 측정 기록을 유지합니다.
 
 | 질문 | 현재 접근 |
 | --- | --- |

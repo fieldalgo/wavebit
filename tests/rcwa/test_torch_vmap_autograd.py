@@ -44,7 +44,7 @@ What else is pinned here, each against the change that would break it:
   batched gradients stay right.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import functools
 
 import numpy as np
@@ -81,7 +81,7 @@ def reported_conical(b, p):
     """The conical grating the defect was reported on: a pillar under a spacer, the wavelength the
     parameter. Its ``dR/d(wavelength)`` read -0.003033 through ``vmap`` and -0.004225 eager."""
     structure = _lift(b, np.concatenate([np.ones((1, 1, 20)), PILLAR]))
-    solver = _legacy_wavebit.rcwa(backend=b, structure=structure, wavelength=520., **REPORTED)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=structure, wavelength=520., **REPORTED)
     return _read_out(b, solver.solve(wavelength=p, auto_detune=False), 'r_s', 5)
 
 
@@ -198,7 +198,7 @@ def test_forward_ad_through_vmap_of_vmap_is_the_eager_tangent(name):
 def _one_d_captured(b, q, wavelength):
     eps = _lift(b, GRATING) + q * _lift(b, GRATING_DIRECTION)
     cfg = dict(ONE_D, layer_algorithm='ETM', tetm='te', wavelength=wavelength)
-    solver = _legacy_wavebit.rcwa(backend=b, structure=eps, **cfg)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=eps, **cfg)
     return _read_out(b, solver.solve(), 'r_s', 3, point=([57.], [0.], [83.]))
 
 
@@ -206,7 +206,7 @@ def _raster_captured(direction, **options):
     def f(b, q, wavelength):
         cfg = dict(TWO_D, wavelength=wavelength, **options)
         structure = _lift(b, RASTER) + q * _lift(b, direction)
-        solver = _legacy_wavebit.rcwa(backend=b, structure=structure, **cfg)
+        solver = _legacy_wavebit_rcwa(backend=b, structure=structure, **cfg)
         return _read_out(b, solver.solve(), 'r_s', 6, point=([0.1], [-0.05], [0.07]),
                          counted=(3, 2, [0.07]))
     return f
@@ -214,7 +214,7 @@ def _raster_captured(direction, **options):
 
 def _gold_captured(b, q, wavelength):
     piece = dict(type='circle', cx=0.0, cy=0.0, lx=140.0, material=q + 1j * GOLD.imag)
-    solver = _legacy_wavebit.rcwa(backend=b, structure=[dict(background=2.25, shapes=[piece])],
+    solver = _legacy_wavebit_rcwa(backend=b, structure=[dict(background=2.25, shapes=[piece])],
                           top=2.25, bot=2.25, theta=0.3, phi=0.4, psi=0.7, wavelength=wavelength,
                           period=(450.0, 450.0), thickness=(50.0,), truncation_order=(4, 4))
     return _read_out(b, solver.solve(), 'r_s', 40)
@@ -319,7 +319,7 @@ def test_a_parameter_that_moves_no_operator_is_exact_under_every_transform(name,
 def _one_d_thickness(b, q, d):
     """``test_forward_mode``'s 1D TM SMM thickness scene, its permittivity moved by ``q``."""
     eps = _lift(b, GRATING) + q * _lift(b, GRATING_DIRECTION)
-    solver = _legacy_wavebit.rcwa(backend=b, structure=eps,
+    solver = _legacy_wavebit_rcwa(backend=b, structure=eps,
                           **dict(ONE_D, layer_algorithm='SMM', tetm='tm', thickness=(d,)))
     return _read_out(b, solver.solve(), 'r_p', 3, point=([57.], [0.], [83.]))
 
@@ -327,7 +327,7 @@ def _one_d_thickness(b, q, d):
 def _gold_thickness(b, q, d):
     """The gold disks, ``Re eps`` ``q`` and thickness ``d``: the NVF floor binds."""
     piece = dict(type='circle', cx=0.0, cy=0.0, lx=140.0, material=q + 1j * GOLD.imag)
-    solver = _legacy_wavebit.rcwa(backend=b, structure=[dict(background=2.25, shapes=[piece])],
+    solver = _legacy_wavebit_rcwa(backend=b, structure=[dict(background=2.25, shapes=[piece])],
                           top=2.25, bot=2.25, theta=0.3, phi=0.4, psi=0.7, wavelength=852.0,
                           period=(450.0, 450.0), thickness=(d,), truncation_order=(4, 4))
     return _read_out(b, solver.solve(), 'r_s', 40)
@@ -810,7 +810,7 @@ def test_eig_through_vmap():
 # ------------------------------------------------------------------------ the geometry readers
 
 def _sampled_tensor_disc(lx=270.0, period=600.0):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='torch', wavelength=700., period=(period, 600.), thickness=[170.],
         structure=[dict(background=1., shapes=[dict(type='circle', lx=lx,
                                                       material=wavebit.Material([2., 3., 4.]))])],

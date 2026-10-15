@@ -1,6 +1,6 @@
 """Temporary recipe edits include NumPy leaves and arrays inside Materials."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -11,7 +11,7 @@ jax=pytest.importorskip('jax')
 def make(backend='jax',width=100.,epsilon=(4.,3.,2.),thickness=170.):
     recipe=[dict(background=1.,shapes=[dict(type='rectangle',lx=np.array(width),ly=100.,
                                            material=wavebit.Material(np.array(epsilon)))])]
-    return _legacy_wavebit.rcwa(backend=backend,structure=recipe,period=(600.,750.),thickness=[thickness],
+    return _legacy_wavebit_rcwa(backend=backend,structure=recipe,period=(600.,750.),thickness=[thickness],
                        wavelength=900.,theta=.13,phi=.21,truncation_order=(0,0),factorization='li')
 
 

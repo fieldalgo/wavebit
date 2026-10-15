@@ -8,8 +8,8 @@ not run during documentation builds and do not regenerate numerical evidence.
 The figure tools write to an explicit output path, or to
 `artifacts/docs/learning/ko/`. `draw_power_chapter.py` reads the preserved
 `docs/validation/learning-records/power-example.json` and accepts `--output-dir`.
-The wavevector measurement tool uses the current checkout through the explicit
-compatibility interface; its default output is under `artifacts/docs/learning/`
+The wavevector measurement tool uses the current checkout through the exact private
+RCWA engine it measures (not a stable public interface); its default output is under `artifacts/docs/learning/`
 and it refuses to overwrite the preserved learning-records directory. Existing
 historical records are never silently relabeled as new measurements.
 

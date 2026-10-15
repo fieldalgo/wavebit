@@ -27,7 +27,9 @@ numbers below are what that is worth, and they are absolute now rather than rela
 spread, because there is no longer a spread to measure against.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 from wavebit.lattice import as_lattice
 import pytest
@@ -37,7 +39,7 @@ from wavebit.rcwa._engine import parametric as _an
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
-_legacy_wavebit.enable_x64()
+_legacy_wavebit_enable_x64()
 
 P = 0.77
 BASE = dict(period=[P, P], thickness=[0.25], theta=0.35, phi=0.4, psi=0.0,
@@ -70,7 +72,7 @@ def _shape(kind, param, value):
 def _position_gradients(kind, param):
     """``d(sum R)/d(param)`` at each position. Every entry should be zero."""
     def objective(v):
-        res = _legacy_wavebit.rcwa(backend='jax', structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
+        res = _legacy_wavebit_rcwa(backend='jax', structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).solve()
         return jnp.real(jnp.sum(res.R))
 
@@ -88,7 +90,7 @@ def test_translation_invariance_holds_in_the_objective(kind, param):
     bound is where a real regression, not a rounding difference, would land.
     """
     def total(v):
-        res = _legacy_wavebit.rcwa(backend='numpy', structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
+        res = _legacy_wavebit_rcwa(backend='numpy', structure=[dict(background=1.0, shapes=[_shape(kind, param, v)])],
                              **BASE).solve()
         return float(np.sum(np.asarray(res.R)).real)
 
@@ -239,12 +241,12 @@ def _stack(cx0, cx1):
 
 
 def _stack_total(cx0, cx1):
-    res = _legacy_wavebit.rcwa(backend='numpy', structure=_stack(cx0, cx1), **STACK).solve()
+    res = _legacy_wavebit_rcwa(backend='numpy', structure=_stack(cx0, cx1), **STACK).solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
 def _stack_jtotal(cx0, cx1):
-    res = _legacy_wavebit.rcwa(backend='jax', structure=_stack(cx0, cx1), **STACK).solve()
+    res = _legacy_wavebit_rcwa(backend='jax', structure=_stack(cx0, cx1), **STACK).solve()
     return jnp.real(jnp.sum(res.R))
 
 
@@ -339,7 +341,7 @@ def _two(pair, ca, cb):
 
 
 def _two_total(pair, ca, cb):
-    res = _legacy_wavebit.rcwa(backend='numpy', structure=_two(pair, ca, cb), **TWO_CFG).solve()
+    res = _legacy_wavebit_rcwa(backend='numpy', structure=_two(pair, ca, cb), **TWO_CFG).solve()
     return float(np.real(np.sum(np.asarray(res.R))))
 
 
@@ -351,11 +353,11 @@ def _two_frozen(pair, ca, cb):
     and replayed. Every pair below stays disjoint across its window, so one freeze covers the
     whole sweep and the record never goes stale.
     """
-    return _legacy_wavebit.rcwa(backend='numpy', structure=_two(pair, ca, cb), **TWO_CFG).freeze_geometry()
+    return _legacy_wavebit_rcwa(backend='numpy', structure=_two(pair, ca, cb), **TWO_CFG).freeze_geometry()
 
 
 def _two_jtotal(pair, ca, cb, geometry=None):
-    solver = _legacy_wavebit.rcwa(backend='jax', structure=_two(pair, ca, cb), **TWO_CFG)
+    solver = _legacy_wavebit_rcwa(backend='jax', structure=_two(pair, ca, cb), **TWO_CFG)
     res = solver.solve(geometry=geometry)
     return jnp.real(jnp.sum(res.R))
 
@@ -449,7 +451,7 @@ def test_a_layer_of_two_shapes_is_translation_invariant_too():
                   dict(type='circle', cx=0.20 + d, cy=-0.20, lx=0.22, angle=0.0, material=5.76)]
         structure = [dict(background=1.0, shapes=shapes)]
         return float(np.sum(np.asarray(
-            _legacy_wavebit.rcwa(structure=structure, shape_nvf_grid_size=grid, **cfg).solve().T)).real)
+            _legacy_wavebit_rcwa(structure=structure, shape_nvf_grid_size=grid, **cfg).solve().T)).real)
 
     on_grid = [total(k / 256) for k in (0, 8, 16, 32, 64)]
     assert np.ptp(on_grid) < 1e-11, np.ptp(on_grid)
@@ -514,7 +516,7 @@ def test_a_multishape_layer_is_periodic_across_the_cell_edge():
                       material=12.1104)
         structure = [dict(background=1.0, shapes=[moving] + shapes_after)]
         return float(np.sum(np.asarray(
-            _legacy_wavebit.rcwa(structure=structure, shape_nvf_grid_size=256, **cfg).solve().T)).real)
+            _legacy_wavebit_rcwa(structure=structure, shape_nvf_grid_size=256, **cfg).solve().T)).real)
 
     alone = [total(cx, []) for cx in (-0.40, 0.60, 1.60)]
     assert np.ptp(alone) < 1e-12, alone
@@ -552,7 +554,7 @@ def test_a_common_translation_of_every_shape_leaves_the_answer_alone():
                        angle=0.0, material=12.1104),
                   dict(type='rectangle', cx=0.22 + shift, cy=0.12, lx=0.26, ly=0.30,
                        angle=0.0, material=4.41)]
-        return float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+        return float(np.sum(np.asarray(_legacy_wavebit_rcwa(
             structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=256, **cfg)
             .solve().T)).real)
 

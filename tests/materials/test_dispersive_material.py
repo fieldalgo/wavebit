@@ -1,14 +1,28 @@
 """Dispersion is reevaluated, serialized and differentiated rather than frozen."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common._jobs_v1 import SpecError as _legacy_wavebit_SpecError
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import json
 
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import Incidence, JobSpec, Layer, Stack, Sweep
+from wavebit._common.periodic import Incidence
+
+from wavebit._common._jobs_v1 import JobSpec
+
+from wavebit._common.periodic import Layer
+
+from wavebit._common.periodic import Stack
+
+from wavebit._common._jobs_v1 import Sweep
 from wavebit import Material
-from wavebit.compat.legacy import TabulatedMaterial
+from wavebit.materials.tabulated import TabulatedMaterial
 
 
 def scalar(value):
@@ -18,7 +32,7 @@ def scalar(value):
 
 
 def film(material, backend='numpy', **kwargs):
-    return _legacy_wavebit.rcwa(backend=backend, wavelength=900., period=(600., 600.),
+    return _legacy_wavebit_rcwa(backend=backend, wavelength=900., period=(600., 600.),
                         structure=[dict(background=material, shapes=[])], thickness=[120.],
                         truncation_order=(0, 0), polarization=(1., 0.), factorization="li", **kwargs)
 
@@ -64,7 +78,7 @@ def test_imported_index_interpolation_and_explicit_snapshot():
 @pytest.mark.parametrize('slot', ['top', 'bot'])
 def test_half_space_refresh_and_atomic_range_error(slot):
     m = TabulatedMaterial([800., 1000.], [4., 9.])
-    solver = _legacy_wavebit.rcwa(period=600., wavelength=900., structure=np.ones((1, 1, 1)),
+    solver = _legacy_wavebit_rcwa(period=600., wavelength=900., structure=np.ones((1, 1, 1)),
                           thickness=[0.], tetm='te', **{slot: m})
     for w, n in ((800., 2.), (900., np.sqrt(6.5)), (1000., 3.)):
         result = solver.solve(wavelength=w, auto_detune=False)
@@ -82,12 +96,12 @@ def test_shape_material_is_updated_without_mutating_input_and_can_be_replaced():
     material = TabulatedMaterial([800., 1000.], [4., 9.])
     shape = dict(type='circle', cx=0., cy=0., lx=180., material=material)
     structure = [dict(background=1., shapes=[shape])]
-    solver = _legacy_wavebit.rcwa(wavelength=900., period=(600., 600.), thickness=[100.],
+    solver = _legacy_wavebit_rcwa(wavelength=900., period=(600., 600.), thickness=[100.],
                           structure=structure, truncation_order=(1, 1),
                           shape_nvf_grid_size=32, polarization=(1., 0.))
     for w in (850., 950.):
         actual = solver.solve(wavelength=w, auto_detune=False)
-        manual = _legacy_wavebit.rcwa(wavelength=w, period=(600., 600.), thickness=[100.],
+        manual = _legacy_wavebit_rcwa(wavelength=w, period=(600., 600.), thickness=[100.],
                               structure=[dict(background=1., shapes=[dict(shape, material=material.at(w))])],
                               truncation_order=(1, 1), shape_nvf_grid_size=32,
                               polarization=(1., 0.)).solve(auto_detune=False)
@@ -109,12 +123,12 @@ def test_jobspec_round_trip_retains_model_and_sweep():
     assert restored.stack.check() == ()
     for point in restored.expand():
         w = point.incidence.wavelength
-        result = _legacy_wavebit.run(point)
+        result = _legacy_wavebit_run(point)
         np.testing.assert_allclose([result.R.sum(), result.T.sum()],
                                    airy(w, 4.+(w-800.)/200.*5.), atol=1e-12)
     obj = json.loads(spec.to_json())
     obj['stack']['layers'][0]['structure']['background']['dispersion']['unused'] = 1
-    with pytest.raises(_legacy_wavebit.SpecError):
+    with pytest.raises(_legacy_wavebit_SpecError):
         JobSpec.from_dict(obj)
 
 
@@ -140,7 +154,7 @@ def test_invalid_tables_are_refused(w, eps, mu):
 def test_jax_wavelength_gradient_jit_and_solver_pytree_keep_dispersion():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     m = TabulatedMaterial([800., 1000.], [4., 9.])
     solver = film(m, backend='jax')
     geometry = solver.freeze_geometry()
@@ -208,16 +222,16 @@ def test_manifest_and_schema_declare_dispersion():
     assert info['material_dispersion']['automatic_slots'] == [
         'top', 'bot', 'layer.background', 'shape.material']
     assert info['results']['jobspec']['spec_version'] == '10'
-    with pytest.raises(_legacy_wavebit.SpecError, match="version='10'"):
+    with pytest.raises(_legacy_wavebit_SpecError, match="version='10'"):
         JobSpec.from_dict({'version': '8'})
 
 
 def test_jit_assignment_restores_definition_with_its_evaluated_values():
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     old = TabulatedMaterial([800., 1000.], [4., 9.])
     new = TabulatedMaterial([800., 1000.], [16., 25.])
-    solver = _legacy_wavebit.rcwa(backend='jax', wavelength=900., period=600.,
+    solver = _legacy_wavebit_rcwa(backend='jax', wavelength=900., period=600.,
                           structure=np.ones((1, 1, 1)), thickness=[0.],
                           top=old, tetm='te', fourier_coefficients='integrated')
     geometry = solver.freeze_geometry()
@@ -237,7 +251,7 @@ def test_permeability_dispersion_reaches_interface_impedance(backend, slot):
     """Changing mu alone changes Fresnel reflection; index-only ingest cannot pass."""
     pytest.importorskip(backend)
     m = TabulatedMaterial([800., 1000.], [4., 4.], mu=[1., 4.])
-    solver = _legacy_wavebit.rcwa(backend=backend, wavelength=800., period=600.,
+    solver = _legacy_wavebit_rcwa(backend=backend, wavelength=800., period=600.,
                           structure=np.ones((1, 1, 1)), thickness=[0.],
                           truncation_order=0, tetm='te', **{slot: m})
     for w in (800., 900., 1000.):
@@ -256,7 +270,7 @@ def test_permeability_dispersion_reaches_interface_impedance(backend, slot):
 def test_restored_tables_follow_the_concrete_wavelength_kept_by_a_traced_call(slot, order, door):
     from functools import partial
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     material = TabulatedMaterial([800., 1000.], [2.25, 4.])
     def declaration(value):
         return [dict(background=value, shapes=[])] if slot == 'structure' else value
@@ -264,7 +278,7 @@ def test_restored_tables_follow_the_concrete_wavelength_kept_by_a_traced_call(sl
                theta=.13, phi=.21, wavelength=900., answers='field',
                structure=np.full((1, 1, 1), 5.))
     cfg[slot] = declaration(material)
-    solver = _legacy_wavebit.rcwa(backend='jax', **cfg)
+    solver = _legacy_wavebit_rcwa(backend='jax', **cfg)
     geometry = solver.freeze_geometry()
     forward = getattr(solver, door)
     if door == 'solve_field':
@@ -285,7 +299,7 @@ def test_restored_tables_follow_the_concrete_wavelength_kept_by_a_traced_call(sl
     assert scalar(live.epsilon) == pytest.approx(4.)
     if slot != 'structure':
         assert scalar(getattr(solver, f'n_{slot}')) == pytest.approx(2.)
-    reference = _legacy_wavebit.rcwa(backend='numpy', **(cfg | dict(wavelength=1000.))).solve()
+    reference = _legacy_wavebit_rcwa(backend='numpy', **(cfg | dict(wavelength=1000.))).solve()
     np.testing.assert_allclose(solver.solve().T, reference.T, atol=2e-12, rtol=0)
 
 
@@ -294,13 +308,13 @@ def test_restored_tables_follow_the_concrete_wavelength_kept_by_a_traced_call(sl
 def test_restoration_outside_the_original_table_recovers_a_usable_scene(slot, fails):
     from functools import partial
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     material = TabulatedMaterial([800., 1000.], [2.25, 4.])
     value = [dict(background=material, shapes=[])] if slot == 'structure' else material
     cfg = dict(period=600., thickness=(170.,), truncation_order=0, wavelength=900.,
                structure=np.full((1, 1, 1), 5.), answers='field')
     cfg[slot] = value
-    solver = _legacy_wavebit.rcwa(backend='jax', **cfg)
+    solver = _legacy_wavebit_rcwa(backend='jax', **cfg)
     initial = solver.solve()
     geometry = solver.freeze_geometry()
     def loss(result):

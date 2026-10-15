@@ -403,13 +403,17 @@ declared top face differs from the closed form by 0.163 rad at 0.8 µm, and by 0
 tangential field (see [Cell-snapped shapes](#cell-snapped-shapes-slab-and-region)). Written with a
 coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` and run as 0.1 µm.
 
-## What the public module does not do yet
+## General-scene limits
 
 - GPU devices and single precision are refused; the grid is uniform and cubic.
-- No per-cell permittivity arrays (rasters), no constructive solid geometry (union, intersection,
-  difference), no tilted extrusion axes.
+- Per-cell sampled grids use `fdtd.native`; this general-scene formulation has no raster body.
+  Constructive solid geometry (union, intersection, difference) and tilted extrusion axes are unsupported.
 - No Gaussian beams, mode sources or mode monitors.
 - No smoothed lossy or dispersive bodies outside flat films.
+
+Custom static geometry implements `fdtd.Shape`; prepared reuse checks its declared instance state.
+Its cell support must stay clear of Open padding. See the [migration guide](../../migration/index.md)
+for the protocol and [stopping/absorbers](stopping-and-absorbers.md) for numerical policies.
 
 ## Further reading
 

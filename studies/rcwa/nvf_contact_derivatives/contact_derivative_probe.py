@@ -12,7 +12,7 @@ from pathlib import Path as _RepositoryPath
 if __package__ in (None, ""):
     _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import argparse
 import json
 from unittest.mock import patch
@@ -24,7 +24,7 @@ from tests.fixtures.rcwa.contact_instruments import rectangular_li, split_nvf_de
 
 def total(height, order, grid):
     P._PROJECTOR_CACHE.clear()
-    solver = _legacy_wavebit.rcwa(
+    solver = _legacy_wavebit_rcwa(
         backend='numpy', period=(700., 700.), wavelength=900., top=1., bot=2.25,
         theta=.2, phi=0., psi=0., thickness=(300.,),
         truncation_order=(order, order), shape_nvf_grid_size=grid,

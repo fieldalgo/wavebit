@@ -1,6 +1,8 @@
 """Maxwell length-scaling invariance constrains simultaneous geometry gradients."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -14,7 +16,7 @@ def conditions(scale,family):
 
 
 def make(backend,family,scale=1.):
-    return _legacy_wavebit.rcwa(backend=backend,truncation_order=(1,1),theta=.17,phi=.29,
+    return _legacy_wavebit_rcwa(backend=backend,truncation_order=(1,1),theta=.17,phi=.29,
                        polarization=(.8,.6j),answers='field',factorization='nvf' if family=='scalar-nvf' else 'li',
                        shape_nvf_grid_size=16 if family=='scalar-nvf' else None,**conditions(scale,family))
 
@@ -37,7 +39,7 @@ def test_all_lengths_scale_without_changing_the_optical_problem(backend,family):
     if backend in ('jax','jit'):
         import jax
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         geometry=s.freeze_geometry() if backend=='jit' else None
         calculate=jax.value_and_grad(lambda scale:objective(s,jnp,scale,family,geometry))
         if backend=='jit':calculate=jax.jit(calculate)

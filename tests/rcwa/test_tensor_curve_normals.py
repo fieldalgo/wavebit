@@ -1,6 +1,10 @@
 """Smooth tensor primitives must not acquire corners from an interface mesh."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import partial
 
 import numpy as np
@@ -34,7 +38,7 @@ def solver(backend='numpy', quantity='epsilon', p=POINT, n=16, **options):
               factorization='nvf', shape_nvf_grid_size=n, answers='field',
               structure=[layer(p, quantity)])
     kw.update(options)
-    return _legacy_wavebit.rcwa(backend=backend, **kw)
+    return _legacy_wavebit_rcwa(backend=backend, **kw)
 
 
 def objective(s, xp, p, quantity='epsilon', geometry=None):
@@ -70,7 +74,7 @@ def test_shape_derivatives_at_the_old_polygon_vertex(backend, quantity):
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         s = solver('jax', quantity)
         geometry = s.freeze_geometry() if backend == 'jit' else None
         calculate = jax.value_and_grad(lambda p: objective(s, jnp, p, quantity, geometry))
@@ -211,7 +215,7 @@ def _window(name, n=32):
     values, gradients = [], []
     for x in xs:
         p = torch.tensor(x, dtype=torch.float64, requires_grad=True)
-        s = _legacy_wavebit.rcwa(backend='torch', lattice=cell, wavelength=900., thickness=[170.],
+        s = _legacy_wavebit_rcwa(backend='torch', lattice=cell, wavelength=900., thickness=[170.],
                          truncation_order=(1, 1), theta=.17, phi=.3, polarization=(.8, .6j),
                          factorization='nvf', shape_nvf_grid_size=n,
                          structure=[dict(background=1., shapes=scene(**{parameter: p}))])
@@ -304,7 +308,7 @@ def test_regression_sum_T_at_order_7_on_a_256_grid():
 def test_one_jit_gradient_replays_across_the_old_corner():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     s = solver('jax')
     geometry = s.freeze_geometry()
     calculate = jax.jit(jax.value_and_grad(lambda p: objective(s, jnp, p, geometry=geometry)))
@@ -515,7 +519,7 @@ def zero_strength_transmission(backend, xp, p, scale, precision=1, geometry=None
     circle's radius is two samples of the odd grid, so samples lie on it."""
     tensor = wavebit.Material([3.8+.04j, 4.2+.06j, 4.5+.08j]).rotated(.2, 'y').epsilon
     dtype = xp.float32 if precision else xp.float64
-    s = _legacy_wavebit.rcwa(backend=backend, lattice=xp.asarray(np.diag([600., 600.]), dtype=dtype)*scale,
+    s = _legacy_wavebit_rcwa(backend=backend, lattice=xp.asarray(np.diag([600., 600.]), dtype=dtype)*scale,
                      wavelength=900.*scale, thickness=[170.*scale], truncation_order=(1, 1),
                      theta=.17, phi=.3, polarization=(.8, .6j), factorization='nvf',
                      shape_nvf_grid_size=15, complex_dtype=precision,
@@ -552,8 +556,8 @@ def test_float32_gradients_are_finite_with_a_zero_strength_curve(backend):
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
-        geometry = _legacy_wavebit.rcwa(
+        _legacy_wavebit_enable_x64()
+        geometry = _legacy_wavebit_rcwa(
             backend='numpy', lattice=np.diag([600., 600.]), wavelength=900., thickness=[170.],
             truncation_order=(1, 1), factorization='nvf', shape_nvf_grid_size=15,
             structure=[dict(background=1., shapes=[
@@ -575,7 +579,7 @@ def off_centre_transmission(backend, xp, p, scale, precision=1, geometry=None):
     """A centred circle beside an off-centre tensor ellipse; ``p`` is the ellipse's lx, ly
     and cx."""
     dtype = xp.float32 if precision else xp.float64
-    s = _legacy_wavebit.rcwa(backend=backend, lattice=xp.asarray(CELL, dtype=dtype)*scale,
+    s = _legacy_wavebit_rcwa(backend=backend, lattice=xp.asarray(CELL, dtype=dtype)*scale,
                      wavelength=900.*scale, thickness=[170.*scale], truncation_order=(1, 1),
                      theta=.17, phi=.3, polarization=(.8, .6j), factorization='nvf',
                      shape_nvf_grid_size=16, complex_dtype=precision,
@@ -613,8 +617,8 @@ def test_float32_gradients_of_an_off_centre_ellipse_are_finite_in_any_length_uni
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
-        geometry = _legacy_wavebit.rcwa(
+        _legacy_wavebit_enable_x64()
+        geometry = _legacy_wavebit_rcwa(
             backend='numpy', lattice=CELL, wavelength=900., thickness=[170.], truncation_order=(1, 1),
             factorization='nvf', shape_nvf_grid_size=16, structure=[dict(background=1., shapes=[
                 dict(type='circle', lx=150., material=2.25),
@@ -928,7 +932,7 @@ def test_gradients_through_the_neighbour_sweep_of_an_in_cell_ellipse(backend):
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         geometry = in_cell_solver('numpy', point).freeze_geometry()
         with jax.checking_leaks():
             gradient = np.asarray(jax.jit(jax.grad(
@@ -1011,8 +1015,8 @@ def test_the_polygon_route_converges_to_the_nearest_point_vector_and_not_to_the_
 
 def stale_solver(backend, shapes, cell):
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
-    return _legacy_wavebit.rcwa(backend=backend, lattice=cell, wavelength=900., thickness=[170.],
+        _legacy_wavebit_enable_x64()
+    return _legacy_wavebit_rcwa(backend=backend, lattice=cell, wavelength=900., thickness=[170.],
                         truncation_order=(1, 1), theta=.17, phi=.3, polarization=(.8, .6j),
                         factorization='nvf', shape_nvf_grid_size=16,
                         structure=[dict(background=1., shapes=shapes)])
@@ -1071,7 +1075,7 @@ def test_an_ellipse_growing_out_of_its_wigner_seitz_cell_is_refused_by_name(back
             == boundary._plan_key(boundary.plan_layer(growing_ellipse(710.), lattice)))
     assert (len(_ellipse_images(709.)), len(_ellipse_images(710.))) == (1, 11)
     geometry = stale_solver('numpy', growing_ellipse(709.), ELLIPSE_CELL).freeze_geometry()
-    with pytest.raises(_legacy_wavebit.StaleGeometryError) as refusal:
+    with pytest.raises(_legacy_wavebit_StaleGeometryError) as refusal:
         stale_solver(backend, growing_ellipse(710.), ELLIPSE_CELL).solve(geometry=geometry,
                                                                          auto_detune=False)
     message = str(refusal.value)
@@ -1126,7 +1130,7 @@ def _value_and_gradient(differentiate, shapes_of, lx, cell, geometry=None):
         return float(value.detach()), float(gradient)
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     value, gradient = jax.value_and_grad(lambda width: jnp.real(stale_solver(
         'jax', shapes_of(width), cell).solve(geometry=geometry, auto_detune=False).T.sum()))(
         jnp.asarray(lx))
@@ -1154,5 +1158,5 @@ def test_the_curve_check_reads_shape_values_under_differentiation(differentiate)
     else:
         np.testing.assert_allclose(replay, fresh, rtol=1e-13, atol=0.)
     geometry = stale_solver('numpy', growing_ellipse(709.), ELLIPSE_CELL).freeze_geometry()
-    with pytest.raises(_legacy_wavebit.StaleGeometryError, match=r"\(1 -> 11 instances"):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError, match=r"\(1 -> 11 instances"):
         _value_and_gradient(differentiate, growing_ellipse, 710., ELLIPSE_CELL, geometry)

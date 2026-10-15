@@ -156,7 +156,7 @@ stabilized twin decays under the floor (not judged) and ``PML(24, 1e-12)``, the 
 0.52 (its probe falls, 4.8e-4 -> 3.0e-4); neither warns growing.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import dataclasses
 import functools
 import importlib
@@ -276,7 +276,7 @@ def test_a_run_under_jax_grad_reads_the_values_and_under_jit_reports_none():
     ``jax.jit`` they are tracers, the ratio is ``None`` and nothing warns."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     reference, caught = _run_collecting(_short_box())
     assert len(caught) == 1
 
@@ -641,7 +641,7 @@ def test_the_functional_backends_read_the_same_exact_energy(dtype, backend):
     exactly conserved (measured 1e-15 .. 1e-14), and NumPy's series to round-off."""
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     scene = _random_box(0.9, dtype)
     _, reference = _every_step(scene)
     _, W = _every_step(scene, backend)
@@ -680,7 +680,7 @@ def test_the_backends_read_the_same_energy_where_a_term_adds_to_the_curl(backend
     and 6.3e-16 (Torch) of the run's peak, where dropping it is 1.1e-1 (the mutant below)."""
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     _, reference = _magnetic_dipole_series()
     _, W = _every_step(_magnetic_dipole(), backend)
     W = to_numpy(W)
@@ -889,7 +889,7 @@ def test_the_traced_pole_reading_is_numpys():
     never rises. (Mutant: the ``where``'s branches swapped -- each pole read as the other kind
     -- moves the JAX series off NumPy's by order one.)"""
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     scene = _lorentz_and_debye()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')

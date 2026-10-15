@@ -53,7 +53,7 @@ Run from the repo root:
     python studies/rcwa/sweep_cell_angle/sweep_cell_angle.py
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 
 import wavebit
@@ -193,7 +193,7 @@ def aspect_of(lit, cell):
 
 
 def solve(cell, structure, **kw):
-    s = _legacy_wavebit.rcwa(backend='numpy', lattice=cell, structure=structure, thickness=[THICKNESS],
+    s = _legacy_wavebit_rcwa(backend='numpy', lattice=cell, structure=structure, thickness=[THICKNESS],
                      wavelength=WAVELENGTH, truncation_order=[TRUNCATION, TRUNCATION],
                      top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, **kw)
     return float(np.sum(np.asarray(s.solve().T)))

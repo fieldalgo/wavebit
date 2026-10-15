@@ -23,7 +23,7 @@ layer above. :func:`test_an_interface_returns_the_upper_layers_limit` pins that,
 nudge that recovers the other side.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -63,7 +63,7 @@ def _solver(path, backend='numpy'):
     else:
         kw.update(psi=np.pi / 2, phi=np.deg2rad(15.0), truncation_order=(3, 3), period=PERIOD,
                   structure=np.repeat(TWO_LAYER, 4, axis=1))
-    s = _legacy_wavebit.rcwa(**kw)
+    s = _legacy_wavebit_rcwa(**kw)
     if path == 'first_order':
         s.formulation = 'first_order'
     s.solve()
@@ -123,7 +123,7 @@ def test_the_shape_origin_and_the_sample_origin_are_one_origin():
               period=[P], answers='field')
 
     def field(structure, sample_x, **over):
-        s = _legacy_wavebit.rcwa(structure=structure, **dict(kw, **over))
+        s = _legacy_wavebit_rcwa(structure=structure, **dict(kw, **over))
         s.solve()
         return np.asarray(s.reconstruct_field(sample_x=sample_x, sample_y=1, sample_z=6))
 
@@ -355,7 +355,7 @@ def test_traced_thickness_with_explicit_z_says_why_it_cannot(backend, side):
                                                   torch.ones(2, dtype=torch.float64))
 
     def run(thick, sample_z):
-        s = _legacy_wavebit.rcwa(backend='jax' if backend == 'jax' else 'torch', top=1.0, bot=1.0, wavelength=WL,
+        s = _legacy_wavebit_rcwa(backend='jax' if backend == 'jax' else 'torch', top=1.0, bot=1.0, wavelength=WL,
                          thickness=thick, theta=np.deg2rad(24.0), tetm='tm', phi=None,
                          truncation_order=4, period=[PERIOD[0]], structure=xp.asarray(TWO_LAYER),
                          fourier_coefficients='integrated', answers='field', incidence_side=side)

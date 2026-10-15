@@ -1,7 +1,9 @@
 # FDTD user guide
 
-Start with the [current FDTD problem API](general-fdtd.md), [how the solver models a problem](model.md) and the [runnable pulse example](../../getting-started/fdtd.md). The detailed research and periodic-stack guides below explicitly identify the retained compatibility interface and preserve its measured scope.
+Start with the [current FDTD problem API](general-fdtd.md), [how the solver models a problem](model.md) and the [runnable pulse example](../../getting-started/fdtd.md). The physical native-grid and periodic-stack guides cover the other formulations. Historical research guides retain their measured scope and pinned source versions.
 
+- [Physical native Yee grids](native-grids.md)
+- [Physical periodic-stack problems](periodic-problems.md)
 - [Automatic stopping and graded absorbing padding](stopping-and-absorbers.md)
 - [Coupled dielectric geometry in a matched absorber](fd-constitutive-absorber.md)
 - [Smoothed substrate continuation and physical gradients](substrate-gradients.md)

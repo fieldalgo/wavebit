@@ -1,6 +1,6 @@
 """Independent field sensitivities at a symmetric uniform patterned-layer limit."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -13,7 +13,7 @@ CFG = dict(period=(1400., 1500.), wavelength=900., thickness=(170.,),
 
 
 def value(backend, raster, observe, coherent=False):
-    s = _legacy_wavebit.rcwa(backend=backend, **CFG, structure=raster,
+    s = _legacy_wavebit_rcwa(backend=backend, **CFG, structure=raster,
                      excitation={(-1, 0): 1., (1, 0): .7j} if coherent else None)
     result = s.solve()
     if observe == 'power':

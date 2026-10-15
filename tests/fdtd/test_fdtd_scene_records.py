@@ -1,6 +1,10 @@
 """Shared-scene monitors and causal carrier records, including autograd."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.plotting import plot_fdtd_field as _legacy_wavebit_plot_fdtd_field
+
+from wavebit.fdtd._periodic.probes import sample_fdtd_fields as _legacy_wavebit_sample_fdtd_fields
 import numpy as np
 import pytest
 
@@ -12,9 +16,9 @@ def settings(**kw):
 
 def test_record_dft_equals_normalized_monitor_and_preserves_diffraction():
     material=np.full((1,1,1),2.)
-    result,d=_legacy_wavebit.fdtd(structure=material,backend='numpy',record_field=1,
+    result,d=_legacy_wavebit_fdtd(structure=material,backend='numpy',record_field=1,
                          field_monitors={'out':-.45},**settings())
-    bare,_=_legacy_wavebit.fdtd(structure=material,backend='numpy',**settings())
+    bare,_=_legacy_wavebit_fdtd(structure=material,backend='numpy',**settings())
     np.testing.assert_array_equal(result.T,bare.T)
     field=d['fields']['ey']
     time=field['t']; z=field['z']; dz=d['spacing'][0]
@@ -27,18 +31,18 @@ def test_record_dft_equals_normalized_monitor_and_preserves_diffraction():
     np.testing.assert_allclose(offline,d['monitors']['out']['fields']['ey'][0],atol=1e-12)
     assert d['monitors']['out']['region']=='total'
     assert d['fields']['hx']['t'][0] == d['dt']/2
-    sample=_legacy_wavebit.sample_fdtd_fields(d,z=-.4)
+    sample=_legacy_wavebit_sample_fdtd_fields(d,z=-.4)
     assert sample['region']=='total'
     assert np.isfinite(sample['E']).all()
     with pytest.raises(ValueError,match='source discontinuity'):
-        _legacy_wavebit.sample_fdtd_fields(d,z=d['source_z'])
+        _legacy_wavebit_sample_fdtd_fields(d,z=d['source_z'])
 
 
 @pytest.mark.parametrize('backend',['jax','torch'])
 def test_monitor_and_history_material_gradients_and_numpy_parity(backend):
     kw=settings(record_field=13,record_components=['ey','hx'],field_monitors={'out':-.45})
     def run(value,which):
-        _,d=_legacy_wavebit.fdtd(structure=value*ones if which != 'numpy' else value*np.ones((1,1,1)),backend=which,**kw)
+        _,d=_legacy_wavebit_fdtd(structure=value*ones if which != 'numpy' else value*np.ones((1,1,1)),backend=which,**kw)
         return d['fields']['ey']['values'],d['monitors']['out']['power_z']
     if backend=='jax':
         jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
@@ -67,14 +71,14 @@ def test_monitor_and_history_material_gradients_and_numpy_parity(backend):
 
 
 def test_circular_carrier_preserves_quadrature_and_plots_current_sheet():
-    _,d=_legacy_wavebit.fdtd(structure=np.ones((1,1,1)),backend='numpy',
+    _,d=_legacy_wavebit_fdtd(structure=np.ones((1,1,1)),backend='numpy',
                      **settings(record_field=3,tetm=None,polarization=(1.,1j)))
     ex=d['fields']['ex']['values'];ey=d['fields']['ey']['values']
     np.testing.assert_allclose(ex,-1j*ey,atol=1e-12)
     pytest.importorskip('matplotlib')
     import matplotlib
     matplotlib.use('Agg')
-    fig,ax,_=_legacy_wavebit.plot_fdtd_field(d,component='hx',frame=-1)
+    fig,ax,_=_legacy_wavebit_plot_fdtd_field(d,component='hx',frame=-1)
     assert any('Current sheet' in t for t in ax.get_legend_handles_labels()[1])
     import matplotlib.pyplot as plt
     plt.close(fig)
@@ -89,12 +93,12 @@ def test_circular_carrier_preserves_quadrature_and_plots_current_sheet():
 ])
 def test_invalid_record_and_monitor_requests(extra,match):
     with pytest.raises(ValueError,match=match):
-        _legacy_wavebit.fdtd(structure=np.ones((1,1,1)),backend='numpy',**settings(**extra))
+        _legacy_wavebit_fdtd(structure=np.ones((1,1,1)),backend='numpy',**settings(**extra))
 
 
 def test_time_calibration_does_not_add_grazing_diffraction_orders_to_band():
     # Carrier=1 is exactly grazing for m=+-1, but neither requested wavelength is.
-    result,diag=_legacy_wavebit.fdtd(structure=np.ones((1,1,1)),backend='numpy',
+    result,diag=_legacy_wavebit_fdtd(structure=np.ones((1,1,1)),backend='numpy',
                              **settings(period=1.,wavelength=[.9,1.1],truncation_order=1,
                                         record_field=20))
     assert len(result)==2

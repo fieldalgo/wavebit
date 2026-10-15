@@ -1,6 +1,10 @@
 """Exact periodic geometry and derivatives for shared rectangle recipes."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -79,7 +83,7 @@ def test_periodic_cell_integrals_match_independent_displacement_integration(back
 
 
 def scene_for(p):
-    return _legacy_wavebit.Stack.from_structure([
+    return _legacy_wavebit_Stack.from_structure([
         dict(background=wavebit.Material(1.3, 1.02), shapes=[
             dict(lx=p[2], ly=p[3], cx=p[0], cy=p[1], material=wavebit.Material(p[4], p[5])),
             dict(lx=.1, ly=.09, cx=.07, cy=.015, material=wavebit.Material(1.8, 1.06))]),
@@ -89,7 +93,7 @@ def scene_for(p):
 
 def solve_joint(p, backend, *, diagnostics=False):
     xp = time_loop_backend(backend).xp
-    result, out = _legacy_wavebit.fdtd(scene_for(p), _legacy_wavebit.Incidence(wavelength=.9, theta=.16, phi=.2,
+    result, out = _legacy_wavebit_fdtd(scene_for(p), _legacy_wavebit_Incidence(wavelength=.9, theta=.16, phi=.2,
                                 polarization=(1., .5j), incidence_side='bottom'),
                                backend=backend, resolution=10, transverse_resolution=[12., 16.],
                                n_pml=6, n_periods=40, pulse_width=1.5, truncation_order=0,
@@ -145,8 +149,8 @@ def test_aligned_recipe_equals_exact_raster_on_both_incidence_sides(side):
     options = dict(thickness=[.2], period=[.4, .3], top=1., bot=1.21, wavelength=.9,
                    theta=.2, phi=.3, polarization=(1., .4j), backend='numpy', resolution=12,
                    n_pml=6, pulse_width=1.5, n_periods=35, truncation_order=0, incidence_side=side)
-    actual = _legacy_wavebit.fdtd(structure=recipe, **options)
-    expected = _legacy_wavebit.fdtd(structure=raster, mu=mu, **options)
+    actual = _legacy_wavebit_fdtd(structure=recipe, **options)
+    expected = _legacy_wavebit_fdtd(structure=raster, mu=mu, **options)
     for column in ('incident', 's_inc', 'p_inc'):
         for name in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
             np.testing.assert_allclose(getattr(getattr(actual, column), name),
@@ -160,7 +164,7 @@ def test_one_jit_trace_preserves_periodic_motion_and_masks_invalid_shapes(side):
     def run(p):
         traces.append(None)
         scene = [dict(background=1.2, shapes=[dict(lx=p[1], ly=.14, cx=p[0], material=p[2])])]
-        result, out = _legacy_wavebit.fdtd(structure=scene, thickness=[.2], period=[.4, .3], top=1., bot=1.21,
+        result, out = _legacy_wavebit_fdtd(structure=scene, thickness=[.2], period=[.4, .3], top=1., bot=1.21,
                                    wavelength=1., backend='jax', resolution=8, n_pml=5, n_periods=30,
                                    shape_smoothing=.03, truncation_order=0, return_diagnostics=True,
                                    incidence_side=side)
@@ -226,7 +230,7 @@ def test_recipe_option_constraints_are_refused_before_time_stepping(change):
                    thickness=[.2], top=1., bot=1., period=[.4, .3], wavelength=1., backend='numpy',
                    resolution=10, n_pml=5, n_periods=30, truncation_order=0)
     with pytest.raises(ValueError):
-        _legacy_wavebit.fdtd(**dict(options, **change))
+        _legacy_wavebit_fdtd(**dict(options, **change))
 
 
 def test_only_statically_full_height_recipes_use_one_row_partition():

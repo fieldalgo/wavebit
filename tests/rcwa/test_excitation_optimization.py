@@ -1,6 +1,6 @@
 """Excitation weights remain differentiable values and custom edits stay temporary."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -13,7 +13,7 @@ CFG = dict(period=(1800., 900.), wavelength=900.,
 
 def solver(backend='jax', **kwargs):
     cfg = dict(CFG, excitation={0: 1., 1: .4j}) | kwargs
-    return _legacy_wavebit.rcwa(backend=backend, **cfg)
+    return _legacy_wavebit_rcwa(backend=backend, **cfg)
 
 
 def value(excitation, thickness=170.):

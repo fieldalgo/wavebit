@@ -1,5 +1,11 @@
 # Periodic metasurfaces with the general FDTD engine
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 :::{note}
 The FDTD example on this page retains the normalized declarations used for its historical measurements, through `wavebit.compat.legacy.fd`; the RCWA comparison uses the current `wavebit.rcwa`. The current FDTD API now supports the fixed Box substrate through explicit `Structure.continuation`; see [smoothed substrates](substrate-gradients.md) for its physical units and declaration constraints. This page's measurements have not been rerun through that API.
 :::

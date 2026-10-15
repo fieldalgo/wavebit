@@ -1,5 +1,11 @@
 # Conforming NVF energy matrices in the Wavebit engine
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Since 2026-09-28 the exported public matrices are restated about the cell centre at the
 API boundary. The private construction described below is unchanged; see
 [the Fourier-origin record](../../theory/rcwa/amplitude-sp-frame.md#8-the-fourier-space-doors-move-to-the-centre-2026-09-28).

@@ -1,6 +1,12 @@
 """Two-sided electric inputs: independent slab matching, flux and field superposition."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.enums import Nesting as _legacy_wavebit_Nesting
+
+from wavebit.rcwa._engine.sources import OrderExcitation as _legacy_wavebit_OrderExcitation
+
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -22,9 +28,9 @@ def scene(**kwargs):
 @pytest.mark.parametrize('pol', [(1., 0.), (0., 1.), (.6, .8j)])
 def test_one_sided_limit_matches_existing_pattern_solver(side, pol):
     options = scene()
-    old = _legacy_wavebit.rcwa(**options, theta=.25, phi=.6, polarization=pol,
+    old = _legacy_wavebit_rcwa(**options, theta=.25, phi=.6, polarization=pol,
                        incidence_side=side, layer_algorithm='SMM')
-    new = _legacy_wavebit.rcwa(**options, excitation={side: _legacy_wavebit.PlaneWave(theta=.25, phi=.6, polarization=pol)})
+    new = _legacy_wavebit_rcwa(**options, excitation={side: _legacy_wavebit_PlaneWave(theta=.25, phi=.6, polarization=pol)})
     a, b = old.solve(auto_detune=False), new.solve()
     np.testing.assert_allclose(b.output_top if side == 'top' else b.output_bottom, a.R.sum(), atol=2e-12)
     np.testing.assert_allclose(b.output_bottom if side == 'top' else b.output_top, a.T.sum(), atol=2e-12)
@@ -52,8 +58,8 @@ def test_the_pure_1d_solve_is_the_coherent_plane_wave(tetm, pol, side, theta):
     unit at the cell corner, and this comparison carried ``exp(-1j k_inc . P/2)``.
     """
     options = scene()
-    old = _legacy_wavebit.rcwa(**options, theta=theta, tetm=tetm, incidence_side=side)
-    new = _legacy_wavebit.rcwa(**options, excitation={side: _legacy_wavebit.PlaneWave(theta=theta,
+    old = _legacy_wavebit_rcwa(**options, theta=theta, tetm=tetm, incidence_side=side)
+    new = _legacy_wavebit_rcwa(**options, excitation={side: _legacy_wavebit_PlaneWave(theta=theta,
                                                                       polarization=pol)})
     a, b = old.solve(auto_detune=False), new.solve()
     np.testing.assert_allclose(b.output_top if side == 'top' else b.output_bottom, a.R.sum(), atol=2e-12)
@@ -98,9 +104,9 @@ def test_two_sided_matches_independent_magnetic_slab(pol, phase, lossy_ports):
                     structure=[dict(background=wavebit.Material(eps[1], mus[1]), shapes=[])],
                     bot=wavebit.Material(eps[0], mus[0]), top=wavebit.Material(eps[2], mus[2]))
     pair = (1., 0.) if pol == 's' else (0., 1.)
-    s = _legacy_wavebit.rcwa(**options, excitation={
-        'top': _legacy_wavebit.PlaneWave(kx=kx, polarization=pair),
-        'bottom': _legacy_wavebit.PlaneWave(kx=kx, polarization=pair, amplitude=np.exp(1j*phase))})
+    s = _legacy_wavebit_rcwa(**options, excitation={
+        'top': _legacy_wavebit_PlaneWave(kx=kx, polarization=pair),
+        'bottom': _legacy_wavebit_PlaneWave(kx=kx, polarization=pair, amplitude=np.exp(1j*phase))})
     r = s.solve()
     out, absorb, values = slab_reference(wavelength, d, eps, mus, kx, pol, phase)
     np.testing.assert_allclose([r.output_top, r.output_bottom], out, atol=2e-12)
@@ -138,11 +144,11 @@ def test_patterned_oblique_tensor_superposition(backend):
                                dict(background=material, shapes=[])])
     # period=None still names the argument; use only lattice.
     options.pop('period')
-    top = _legacy_wavebit.PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j))
-    bottom = _legacy_wavebit.PlaneWave(kx=.2, ky=.3, polarization=(.8, .6), amplitude=.5j)
-    separate = [_legacy_wavebit.rcwa(**options, excitation={side: beam}).solve()
+    top = _legacy_wavebit_PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j))
+    bottom = _legacy_wavebit_PlaneWave(kx=.2, ky=.3, polarization=(.8, .6), amplitude=.5j)
+    separate = [_legacy_wavebit_rcwa(**options, excitation={side: beam}).solve()
                 for side, beam in [('top', top), ('bottom', bottom)]]
-    joint = _legacy_wavebit.rcwa(**options, excitation={'top': top, 'bottom': bottom}).solve()
+    joint = _legacy_wavebit_rcwa(**options, excitation={'top': top, 'bottom': bottom}).solve()
     assert joint.group_count == 1
     for side in ('top', 'bottom'):
         for part in ('incoming', 'outgoing', 'total'):
@@ -155,11 +161,11 @@ def test_patterned_oblique_tensor_superposition(backend):
 
 
 def test_different_sectors_preserve_local_interference_and_integrate_rectangle():
-    beams = {'top': _legacy_wavebit.PlaneWave(kx=.2), 'bottom': _legacy_wavebit.PlaneWave(kx=.8, amplitude=.7j)}
+    beams = {'top': _legacy_wavebit_PlaneWave(kx=.2), 'bottom': _legacy_wavebit_PlaneWave(kx=.8, amplitude=.7j)}
     options = scene(top=1., bot=1., structure=np.ones((1, 1, 1)), truncation_order=0, thickness=[.3])
     with pytest.raises(ValueError, match='explicit power_region'):
-        _legacy_wavebit.rcwa(**options, excitation=beams).solve()
-    r = _legacy_wavebit.rcwa(**options, excitation=beams, power_region=((-2., 3.), (-1., 1.))).solve()
+        _legacy_wavebit_rcwa(**options, excitation=beams).solve()
+    r = _legacy_wavebit_rcwa(**options, excitation=beams, power_region=((-2., 3.), (-1., 1.))).solve()
     assert r.group_count == 2
     assert r.absorption is None  # A finite box can have lateral energy flow.
     x = np.linspace(-2., 3., 20001)
@@ -188,13 +194,13 @@ def test_reciprocal_shift_shares_one_group_and_order_phase_reference():
     options = scene(top=1., bot=1., thickness=[.23], truncation_order=(1, 0))
     q, g = .2, 2*np.pi/options['period'][0]
     # The same physical inputs expressed as separate Beam directions or orders.
-    a = _legacy_wavebit.rcwa(**options, excitation={'top': [_legacy_wavebit.PlaneWave(kx=q), _legacy_wavebit.PlaneWave(kx=q+g, amplitude=.5j)]}).solve()
-    b = _legacy_wavebit.rcwa(**options, excitation={'top': _legacy_wavebit.OrderExcitation(kx=q, orders={0: 1., 1: .5j})}).solve()
+    a = _legacy_wavebit_rcwa(**options, excitation={'top': [_legacy_wavebit_PlaneWave(kx=q), _legacy_wavebit_PlaneWave(kx=q+g, amplitude=.5j)]}).solve()
+    b = _legacy_wavebit_rcwa(**options, excitation={'top': _legacy_wavebit_OrderExcitation(kx=q, orders={0: 1., 1: .5j})}).solve()
     assert a.group_count == b.group_count == 1
     for side in ('top', 'bottom'):
         np.testing.assert_allclose(a.boundary_fields(side, [-.3, 0., .2]),
                                    b.boundary_fields(side, [-.3, 0., .2]), atol=2e-12)
-    old = _legacy_wavebit.rcwa(**options, kx=q, polarization=(1., 0.), layer_algorithm='SMM',
+    old = _legacy_wavebit_rcwa(**options, kx=q, polarization=(1., 0.), layer_algorithm='SMM',
                        excitation={0: 1., 1: .5j})
     old.solve(auto_detune=False)
     args = dict(sample_x=[-.3, 0., .2], sample_y=[0.], sample_z=[.1])
@@ -203,8 +209,8 @@ def test_reciprocal_shift_shares_one_group_and_order_phase_reference():
 
 def test_normal_incidence_azimuth_rotates_jones_axes():
     options = scene(top=1., bot=1., structure=np.ones((1, 1, 1)), truncation_order=0)
-    a = _legacy_wavebit.rcwa(**options, excitation={'top': _legacy_wavebit.PlaneWave(theta=0., phi=np.pi/2)}).solve()
-    b = _legacy_wavebit.rcwa(**options, excitation={'top': _legacy_wavebit.PlaneWave(polarization=(0., 1.))}).solve()
+    a = _legacy_wavebit_rcwa(**options, excitation={'top': _legacy_wavebit_PlaneWave(theta=0., phi=np.pi/2)}).solve()
+    b = _legacy_wavebit_rcwa(**options, excitation={'top': _legacy_wavebit_PlaneWave(polarization=(0., 1.))}).solve()
     np.testing.assert_allclose(a.boundary_fields('top', [0.]), b.boundary_fields('top', [0.]), atol=1e-12)
 
 
@@ -229,9 +235,9 @@ def test_torch_gradients_at_normal_incidence_are_the_one_sided_limit(top):
             x - 5.25 + 0.1j, mu=-0.5 + 0.05j)
 
     def outputs(re_eps, theta, backend):
-        r = _legacy_wavebit.rcwa(backend=backend, wavelength=500., period=[700.], structure=grating,
+        r = _legacy_wavebit_rcwa(backend=backend, wavelength=500., period=[700.], structure=grating,
                          thickness=[180.], truncation_order=(3, 0), answers='field', top=lit(re_eps),
-                         bot=2.25, excitation={'top': _legacy_wavebit.PlaneWave(
+                         bot=2.25, excitation={'top': _legacy_wavebit_PlaneWave(
                              theta=theta, phi=0.6, polarization=(0.6, 0.8j))}).solve()
         fields = [r.boundary_fields(side, [37.], [0.], part=part).reshape(-1)
                   for side, part in (('top', 'incoming'), ('top', 'outgoing'), ('bottom', 'total'))]
@@ -268,26 +274,26 @@ def test_torch_gradients_at_normal_incidence_are_the_one_sided_limit(top):
 
 def test_cancellation_and_conflicting_or_evanescent_inputs_are_rejected():
     with pytest.raises(ValueError, match='not both'):
-        _legacy_wavebit.PlaneWave(theta=.2, kx=.3)
+        _legacy_wavebit_PlaneWave(theta=.2, kx=.3)
     with pytest.raises(ValueError, match='not both'):
-        _legacy_wavebit.PlaneWave(polarization=(1., 0.), psi=.4)
+        _legacy_wavebit_PlaneWave(polarization=(1., 0.), psi=.4)
     with pytest.raises(ValueError, match='incidence_side'):
-        _legacy_wavebit.rcwa(**scene(), incidence_side='bottom', excitation={'top': _legacy_wavebit.PlaneWave()})
+        _legacy_wavebit_rcwa(**scene(), incidence_side='bottom', excitation={'top': _legacy_wavebit_PlaneWave()})
     with pytest.raises(ValueError, match='positive normal power'):
-        _legacy_wavebit.rcwa(**scene(), excitation={'top': [_legacy_wavebit.PlaneWave(), _legacy_wavebit.PlaneWave(amplitude=-1.)]}).solve()
+        _legacy_wavebit_rcwa(**scene(), excitation={'top': [_legacy_wavebit_PlaneWave(), _legacy_wavebit_PlaneWave(amplitude=-1.)]}).solve()
     with pytest.raises(ValueError, match='evanescent'):
-        _legacy_wavebit.rcwa(**scene(), excitation={'top': _legacy_wavebit.PlaneWave(kx=100.)}).solve()
+        _legacy_wavebit_rcwa(**scene(), excitation={'top': _legacy_wavebit_PlaneWave(kx=100.)}).solve()
 
 
 def test_thick_absorber_and_solve_updates():
     options = scene(top=1., bot=1., structure=np.array([[[(-15.96+1.6j)]]]), thickness=[1000.], truncation_order=0)
-    s = _legacy_wavebit.rcwa(**options, excitation={'top': _legacy_wavebit.PlaneWave(), 'bottom': _legacy_wavebit.PlaneWave(amplitude=1j)})
+    s = _legacy_wavebit_rcwa(**options, excitation={'top': _legacy_wavebit_PlaneWave(), 'bottom': _legacy_wavebit_PlaneWave(amplitude=1j)})
     r = s.solve()
     np.testing.assert_allclose(r.output_top+r.output_bottom, abs((1-(.2+4j))/(1+(.2+4j)))**2, atol=2e-12)
     f = s.reconstruct_field([0.], [0.], [0., 500., 1000.])
     assert np.isfinite(f).all()
     np.testing.assert_allclose(f[1], 0., atol=1e-100)
-    changed = s.solve(excitation={'top': _legacy_wavebit.PlaneWave()})
+    changed = s.solve(excitation={'top': _legacy_wavebit_PlaneWave()})
     np.testing.assert_allclose(changed.output_top, r.output_top+r.output_bottom, atol=2e-12)
     np.testing.assert_allclose(changed.output_bottom, 0., atol=1e-100)
 
@@ -296,9 +302,9 @@ def test_thick_absorber_and_solve_updates():
 def test_tilted_tensor_one_sided_matches_etm(side):
     mat = wavebit.Material([2.4, 3.1, 4.2], mu=[1.1, 1.3, 1.2]).rotated(.3, 'y')
     options = scene(truncation_order=0, structure=[dict(background=mat, shapes=[])])
-    old = _legacy_wavebit.rcwa(**options, kx=.2, ky=.3, polarization=(.6, .8j), incidence_side=side, layer_algorithm='ETM')
+    old = _legacy_wavebit_rcwa(**options, kx=.2, ky=.3, polarization=(.6, .8j), incidence_side=side, layer_algorithm='ETM')
     a = old.solve(auto_detune=False)
-    b = _legacy_wavebit.rcwa(**options, excitation={side: _legacy_wavebit.PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j))}).solve()
+    b = _legacy_wavebit_rcwa(**options, excitation={side: _legacy_wavebit_PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j))}).solve()
     np.testing.assert_allclose(b.output_top if side == 'top' else b.output_bottom, a.R.sum(), atol=3e-12)
     points = dict(sample_x=[-.1, .2], sample_y=[.08], sample_z=[.01, .11])
     expected = old.reconstruct_field(**points)[0]       # both unit at x = y = 0: no factor
@@ -307,10 +313,10 @@ def test_tilted_tensor_one_sided_matches_etm(side):
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_backend_outputs_match_numpy(backend):
-    options = scene(excitation={'top': _legacy_wavebit.PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j)),
-                                'bottom': _legacy_wavebit.PlaneWave(kx=.2, ky=.3, amplitude=.5j)})
-    reference = _legacy_wavebit.rcwa(**options).solve()
-    actual = _legacy_wavebit.rcwa(**options, backend=backend).solve()
+    options = scene(excitation={'top': _legacy_wavebit_PlaneWave(kx=.2, ky=.3, polarization=(.6, .8j)),
+                                'bottom': _legacy_wavebit_PlaneWave(kx=.2, ky=.3, amplitude=.5j)})
+    reference = _legacy_wavebit_rcwa(**options).solve()
+    actual = _legacy_wavebit_rcwa(**options, backend=backend).solve()
     np.testing.assert_allclose([host(actual.output_top), host(actual.output_bottom)],
                                [reference.output_top, reference.output_bottom], atol=3e-12)
     np.testing.assert_allclose(host(actual.reconstruct_field([.1], [.2], [.05])),
@@ -320,15 +326,15 @@ def test_backend_outputs_match_numpy(backend):
 @pytest.mark.parametrize('amplitude', [[1., .5], complex('nan')])
 def test_amplitude_is_a_finite_scalar(amplitude):
     with pytest.raises(ValueError, match='finite complex number'):
-        _legacy_wavebit.rcwa(**scene(), excitation={'top': _legacy_wavebit.PlaneWave(amplitude=amplitude)}).solve()
+        _legacy_wavebit_rcwa(**scene(), excitation={'top': _legacy_wavebit_PlaneWave(amplitude=amplitude)}).solve()
 
 
 def test_common_polarization_angles_and_beam_local_override():
     options = scene(psi=.4, chi=.2)
-    common = _legacy_wavebit.rcwa(**options, excitation={'top': _legacy_wavebit.PlaneWave()}).solve()
-    local = _legacy_wavebit.rcwa(**scene(), excitation={'top': _legacy_wavebit.PlaneWave(psi=.4, chi=.2)}).solve()
+    common = _legacy_wavebit_rcwa(**options, excitation={'top': _legacy_wavebit_PlaneWave()}).solve()
+    local = _legacy_wavebit_rcwa(**scene(), excitation={'top': _legacy_wavebit_PlaneWave(psi=.4, chi=.2)}).solve()
     np.testing.assert_allclose(common.boundary_fields('top', [0.]), local.boundary_fields('top', [0.]), atol=2e-12)
-    solver = _legacy_wavebit.rcwa(**options, excitation={'top': _legacy_wavebit.PlaneWave(polarization=(1., 0.))})
+    solver = _legacy_wavebit_rcwa(**options, excitation={'top': _legacy_wavebit_PlaneWave(polarization=(1., 0.))})
     assert solver.formulation == 'first_order'
     solver.solve()
     with pytest.raises(ValueError, match='source'):
@@ -345,7 +351,7 @@ _FACADE_OWN = {'excitation', 'power_region', 'length_unit'}
 
 
 def _facade(backend):
-    return _legacy_wavebit.rcwa(**scene(), backend=backend, excitation={'top': _legacy_wavebit.PlaneWave()})
+    return _legacy_wavebit_rcwa(**scene(), backend=backend, excitation={'top': _legacy_wavebit_PlaneWave()})
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -364,7 +370,7 @@ def test_an_unknown_attribute_on_the_facade_is_refused_like_on_the_solver(backen
     ``AttributeError`` and the same hint, drawn from what the facade can actually set -- which
     leaves out the incidence each source states for itself.
     """
-    facade, plain = _facade(backend), _legacy_wavebit.rcwa(**scene(), backend=backend)
+    facade, plain = _facade(backend), _legacy_wavebit_rcwa(**scene(), backend=backend)
     refusal = str(pytest.raises(AttributeError, setattr, facade, typo, [.3]).value)
     assert f'CoherentSolver has no attribute {typo!r} to set.' in refusal, refusal
     assert typo not in vars(facade) and not hasattr(facade, typo)
@@ -379,7 +385,7 @@ def test_an_unknown_attribute_on_the_facade_is_refused_like_on_the_solver(backen
     with pytest.raises(TypeError, match=typo):
         facade.solve(**{typo: [.3]})
     with pytest.raises(TypeError, match=typo):
-        _legacy_wavebit.rcwa(**scene(), backend=backend, excitation={'top': _legacy_wavebit.PlaneWave()},
+        _legacy_wavebit_rcwa(**scene(), backend=backend, excitation={'top': _legacy_wavebit_PlaneWave()},
                      **{typo: [.3]})
 
 
@@ -432,11 +438,11 @@ def test_the_facade_door_forwards_every_scene_condition_and_keeps_its_own(backen
         setattr(facade, name, getattr(facade, name))
         assert name not in vars(facade), name
     facade.li_nesting = 'symmetric'
-    assert facade._scene.li_nesting == _legacy_wavebit.Nesting.SYMMETRIC == facade.li_nesting
+    assert facade._scene.li_nesting == _legacy_wavebit_Nesting.SYMMETRIC == facade.li_nesting
     assert facade.layer_algorithm == 'SMM'
 
     # the facade's own state stays on the facade, and the scene never sees it
-    sources = {'bottom': _legacy_wavebit.PlaneWave(amplitude=.5)}
+    sources = {'bottom': _legacy_wavebit_PlaneWave(amplitude=.5)}
     facade.excitation, facade.power_region, facade.length_unit = sources, 'cell', 1e-6
     assert [vars(facade)[name] for name in ('excitation', 'power_region', 'length_unit')] \
         == [sources, 'cell', 1e-6]

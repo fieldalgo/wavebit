@@ -17,7 +17,9 @@ Two changes, at the two ends:
   wrong way gets a length mismatch instead of a number.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import AxisNameWarning as _legacy_wavebit_AxisNameWarning
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -44,7 +46,7 @@ def _solver(truncation_order, lattice=None, period=None):
         kw['lattice'] = lattice
     else:
         kw['period'] = period if period is not None else RECT
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 @pytest.mark.parametrize('spelling', [[4, 1], (4, 1), np.array([4, 1]),
@@ -85,10 +87,10 @@ def test_xy_on_a_skewed_cell_is_read_as_uv_and_said_so():
         uv = np.asarray(_solver(dict(u=4, v=1), lattice=HEX).solve().R)
         bare = np.asarray(_solver([4, 1], lattice=HEX).solve().R)
         rect = np.asarray(_solver(dict(x=4, y=1)).solve().R)       # true here, nothing to say
-        assert not [w for w in caught if w.category is _legacy_wavebit.AxisNameWarning]
+        assert not [w for w in caught if w.category is _legacy_wavebit_AxisNameWarning]
 
         xy = np.asarray(_solver(dict(x=4, y=1), lattice=HEX).solve().R)
-        said = [w for w in caught if w.category is _legacy_wavebit.AxisNameWarning]
+        said = [w for w in caught if w.category is _legacy_wavebit_AxisNameWarning]
 
     assert len(said) == 1 and 'read as u/v' in str(said[0].message)
     assert xy.tobytes() == uv.tobytes() == bare.tobytes()
@@ -138,7 +140,7 @@ def test_the_labels_follow_a_moved_window_not_the_declaration():
     """
     e = _eps()
     # long enough that orders 0 and 2 both propagate: |kx_m| = |m| * wl / period < 1
-    s = _legacy_wavebit.rcwa(backend='numpy', wavelength=900.0, period=[2400.0, 1100.0],
+    s = _legacy_wavebit_rcwa(backend='numpy', wavelength=900.0, period=[2400.0, 1100.0],
                      truncation_order=dict(u=6, v=2), top=1.0, bot=1.0, theta=0.0, phi=0.0,
                      psi=0.2, structure=e, thickness=[300.0],
                      excitation={0: 1.0, 2: 0.5 - 0.3j})
@@ -152,13 +154,13 @@ def test_the_labels_follow_a_moved_window_not_the_declaration():
 
 
 @pytest.mark.parametrize('build, allowed', [
-    (lambda kw: _legacy_wavebit.rcwa(truncation_order=dict(x=4, y=1), lattice=HEX, **kw), False),
-    (lambda kw: _legacy_wavebit.rcwa(lattice=HEX, truncation_order=dict(x=4, y=1), **kw), False),
-    (lambda kw: _set_after(_legacy_wavebit.rcwa(period=RECT, truncation_order=dict(x=4, y=1), **kw),
+    (lambda kw: _legacy_wavebit_rcwa(truncation_order=dict(x=4, y=1), lattice=HEX, **kw), False),
+    (lambda kw: _legacy_wavebit_rcwa(lattice=HEX, truncation_order=dict(x=4, y=1), **kw), False),
+    (lambda kw: _set_after(_legacy_wavebit_rcwa(period=RECT, truncation_order=dict(x=4, y=1), **kw),
                            lattice=HEX), False),
-    (lambda kw: _set_after(_legacy_wavebit.rcwa(lattice=HEX, truncation_order=dict(u=4, v=1), **kw),
+    (lambda kw: _set_after(_legacy_wavebit_rcwa(lattice=HEX, truncation_order=dict(u=4, v=1), **kw),
                            truncation_order=dict(x=4, y=1)), False),
-    (lambda kw: _set_after(_legacy_wavebit.rcwa(lattice=HEX, truncation_order=dict(u=4, v=1), **kw),
+    (lambda kw: _set_after(_legacy_wavebit_rcwa(lattice=HEX, truncation_order=dict(u=4, v=1), **kw),
                            truncation_order=dict(x=4, y=1), lattice=None, period=RECT), True),
 ], ids=['ctor-order-first', 'ctor-lattice-first', 'lattice-set-later',
         'spelling-set-later', 'skewed-then-back-to-rectangular'])
@@ -177,7 +179,7 @@ def test_the_check_reads_the_present_state_whatever_order_it_arrived_in(build, a
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         build(kw).solve()
-        said = [w for w in caught if w.category is _legacy_wavebit.AxisNameWarning]
+        said = [w for w in caught if w.category is _legacy_wavebit_AxisNameWarning]
     assert bool(said) is (not allowed), [str(w.message) for w in said]
 
 

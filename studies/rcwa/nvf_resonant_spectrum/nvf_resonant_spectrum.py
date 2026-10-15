@@ -22,7 +22,7 @@ Run from the repository root:
         --methods circular wavebit-direct --wavelengths $(seq 905 925)
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -45,7 +45,7 @@ PERIOD, THETA, N_SUBSTRATE = 700., .2, 1.5
 
 
 def make_solver(order, grid, method, wavelength):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', period=(PERIOD, PERIOD), wavelength=wavelength,
         top=1., bot=2.25, theta=THETA, phi=0., psi=0., thickness=(300.,),
         truncation_order=(order, order), shape_nvf_grid_size=grid,

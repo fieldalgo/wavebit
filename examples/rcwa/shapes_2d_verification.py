@@ -1,43 +1,39 @@
-
-from wavebit.compat import legacy as _legacy_wavebit
+"""Compare typed physical shapes and independently sampled constitutive rasters."""
 import numpy as np
-
 import wavebit
+from wavebit import rcwa, Material, Units
+
+
+def _solve(options, backend, layers, coefficients=None):
+    if backend == 'jax':
+        import jax
+        jax.config.update('jax_enable_x64', True)
+    period=options['period']
+    orders=options['truncation_order']
+    problem=rcwa.Problem(units=Units(length='nm'),
+        stack=rcwa.Stack(period=(period['x'],period['y']),layers=tuple(layers),
+            top=Material(options['top']),bottom=Material(options['bot'])),
+        excitation=rcwa.Excitation(wavelength=options['wavelength'],sources=(rcwa.PlaneWave(),)))
+    result=rcwa.run(problem,backend=backend,numerics=rcwa.Numerics(
+        orders=(orders['x'],orders['y']),algorithm='etm',fourier_coefficients=coefficients))
+    return result.R[0],result.T[0]
 
 
 def run_shapes(rcwa_options, backend):
-
-    rcwa_options['backend'] = backend
-    solver = _legacy_wavebit.rcwa(**rcwa_options)
-    solver.structure = structure_shapes
-
-    res = solver.solve()
-
-    return res.R, res.T
+    layers=[]
+    for thickness,layer in zip(rcwa_options['thickness'],structure_shapes):
+        regions=tuple(rcwa.Region(material=Material(shape['material']),
+            geometry=rcwa.Rectangle(size=(shape['lx'],shape['ly']),
+                center=(shape['cx'],shape['cy']),angle=shape['angle'])) for shape in layer['shapes'])
+        layers.append(rcwa.Layer(thickness=thickness,background=Material(layer['background']),regions=regions))
+    return _solve(rcwa_options,backend,layers)
 
 
 def run_raster(rcwa_options, backend, fourier_coefficients):
-
-    rcwa_options['backend'] = backend
-    rcwa_options['fourier_coefficients'] = fourier_coefficients
-    # 'sampled': discrete Fourier series; 'integrated': the closed-form series over the
-    # pixels. This structure is commensurate with its grid, so the two agree here.
-
-    # One array for every backend. Handing torch the Python list instead would build it at
-    # torch's *default* dtype -- float32 -- and no later cast recovers the digits the
-    # constructor already dropped. That showed up here as torch disagreeing with the shape
-    # path by 5.6e-5 while numpy and jax agreed to 1e-13, which reads as a solver defect and
-    # is not one.
-    structure_raster_1 = np.asarray(structure_raster)
-
-    rcwa_options['structure'] = structure_raster_1
-
-    solver = _legacy_wavebit.rcwa(**rcwa_options)
-
-    res = solver.solve()
-    R, T = res.R, res.T
-
-    return R, T
+    # A single float64 source raster gives every backend the same input precision.
+    layers=[rcwa.Layer(thickness=d,epsilon=epsilon) for d,epsilon in
+            zip(rcwa_options['thickness'],np.asarray(structure_raster))]
+    return _solve(rcwa_options,backend,layers,fourier_coefficients)
 
 
 if __name__ == '__main__':

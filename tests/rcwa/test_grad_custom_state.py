@@ -1,6 +1,6 @@
 """A custom gradient query cannot leave derived conditions or edited recipes behind."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -18,7 +18,7 @@ def solver(backend='jax', **kwargs):
     cfg = dict(period=(600., 750.), structure=design(100.), thickness=(100.,),
                wavelength=900., truncation_order=(0, 0), theta=.13, phi=.21,
                factorization='li', answers='field')
-    return _legacy_wavebit.rcwa(backend=backend, **(cfg | kwargs))
+    return _legacy_wavebit_rcwa(backend=backend, **(cfg | kwargs))
 
 
 @pytest.mark.parametrize('write', ['structure', 'inplace', 'wavelength'])

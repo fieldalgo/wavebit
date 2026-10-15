@@ -1,6 +1,8 @@
 """Independent transverse sampling: optics, coordinate symmetry and material graphs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -21,13 +23,13 @@ def test_invalid_transverse_resolution_is_refused_before_time_stepping(monkeypat
         raise AssertionError('invalid mesh request reached time stepping')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='transverse_resolution'):
-        _legacy_wavebit.fdtd(**options(transverse_resolution=value))
+        _legacy_wavebit_fdtd(**options(transverse_resolution=value))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_explicit_original_sampling_preserves_default_results_exactly(side):
-    old, a = _legacy_wavebit.fdtd(**options(incidence_side=side))
-    same, b = _legacy_wavebit.fdtd(**options(incidence_side=side, transverse_resolution=[10., 10.]))
+    old, a = _legacy_wavebit_fdtd(**options(incidence_side=side))
+    same, b = _legacy_wavebit_fdtd(**options(incidence_side=side, transverse_resolution=[10., 10.]))
     for basis in ('incident', 's_inc', 'p_inc'):
         for key in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
             np.testing.assert_array_equal(getattr(getattr(old, basis), key), getattr(getattr(same, basis), key))
@@ -39,8 +41,8 @@ def test_rectangular_sampling_keeps_z_geometry_and_recomputes_cfl():
     kw = options(structure=np.full((1, 2, 3), 2.25), thickness=[.213], period=[.41, .37],
                  tetm=None, phi=.3, polarization=(1., .4j), resolution=20, grading=True,
                  source_distance=1., diffraction_distance=.2)
-    _, old = _legacy_wavebit.fdtd(**kw)
-    _, new = _legacy_wavebit.fdtd(**dict(kw, transverse_resolution=(30., 10.)))
+    _, old = _legacy_wavebit_fdtd(**kw)
+    _, new = _legacy_wavebit_fdtd(**dict(kw, transverse_resolution=(30., 10.)))
     assert new['shape'][1:] == (4, 13)
     assert new['transverse_resolution'] == (30., 10.)
     dx, dy = .41/13, .37/4
@@ -55,7 +57,7 @@ def test_rectangular_sampling_keeps_z_geometry_and_recomputes_cfl():
 
 @pytest.mark.parametrize('explicit_y_period', [False, True])
 def test_invariant_y_retains_two_cells_with_declared_or_implicit_period(explicit_y_period):
-    _, d = _legacy_wavebit.fdtd(**options(period=[.2, .6] if explicit_y_period else .2,
+    _, d = _legacy_wavebit_fdtd(**options(period=[.2, .6] if explicit_y_period else .2,
                                   transverse_resolution=(20., 15.)))
     assert d['shape'][1:] == (2, 4)
     assert d['spacing'][1] == pytest.approx(.3 if explicit_y_period else 1/15)
@@ -67,7 +69,7 @@ def test_coarse_transverse_sampling_cannot_hide_a_requested_nyquist_violation(mo
         raise AssertionError('undersampled diffraction reached time stepping')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='spatial Nyquist'):
-        _legacy_wavebit.fdtd(**options(truncation_order=1, transverse_resolution=(5., 10.)))
+        _legacy_wavebit_fdtd(**options(truncation_order=1, transverse_resolution=(5., 10.)))
 
 
 def test_normal_then_tangential_means_match_independent_series_parallel_values(monkeypatch):
@@ -85,7 +87,7 @@ def test_normal_then_tangential_means_match_independent_series_parallel_values(m
     monkeypatch.setattr(scene, 'fdtd_grid', capture)
     pattern = np.array([[[1., 4.], [9., 16.]]])
     with pytest.raises(Captured):
-        _legacy_wavebit.fdtd(**options(structure=pattern, mu=pattern, thickness=[.3],
+        _legacy_wavebit_fdtd(**options(structure=pattern, mu=pattern, thickness=[.3],
                                 period=[.2, .2], transverse_resolution=15.))
     # Both transverse overlaps are one half. Average each series pair in y
     # first, then the two parallel columns: ((1||9) + (4||16))/2 = 4.1.
@@ -105,8 +107,8 @@ def test_axis_exchange_rotates_the_same_discrete_maxwell_problem(subpixel, separ
                  polarization=(1., .7j), phi=.31, transverse_resolution=(12., 13.) if separate else None,
                  diffraction_method='directional', incidence_side='bottom',
                  source_distance=1., diffraction_distance=.3, subpixel=subpixel)
-    original, a = _legacy_wavebit.fdtd(**kw)
-    exchanged, b = _legacy_wavebit.fdtd(**dict(kw, structure=structure.transpose(0, 2, 1),
+    original, a = _legacy_wavebit_fdtd(**kw)
+    exchanged, b = _legacy_wavebit_fdtd(**dict(kw, structure=structure.transpose(0, 2, 1),
                                        mu=mu.transpose(0, 2, 1), period=[.3, .4],
                                        transverse_resolution=(13., 12.) if separate else None, phi=np.pi/2-.31))
     assert a['shape'][1:] == b['shape'][:0:-1]
@@ -132,7 +134,7 @@ def test_unequal_axis_refinement_converges_to_conical_magnetic_airy():
                                   (1-r*r)*phase/(1-r*r*phase**2)]).T
     errors = []
     for resolution in (40, 80):
-        results, _ = _legacy_wavebit.fdtd(**options(
+        results, _ = _legacy_wavebit_fdtd(**options(
             structure=np.full((1, 1, 1), epsilon), mu=np.full((1, 1, 1), mu),
             wavelength=band, period=.05, theta=theta, tetm=None, phi=.4, polarization=(1., 1j),
             resolution=resolution, transverse_resolution=(1.5*resolution, .75*resolution),
@@ -152,7 +154,7 @@ def test_anisotropic_scene_preserves_material_pole_and_record_gradients(backend)
     def objective(p, which):
         from wavebit.fdtd._periodic.runtime import time_loop_backend
         array = time_loop_backend(which).array
-        result, d = _legacy_wavebit.fdtd(**options(
+        result, d = _legacy_wavebit_fdtd(**options(
             structure=p[0]*array(pattern), mu=p[1]*array(np.ones_like(pattern)), period=[.2, .2],
             dispersion=np.ones_like(pattern, dtype=int), poles={1: [(8., .3, p[2])]},
             backend=which, transverse_resolution=(20., 15.), tetm=None, phi=.4,
@@ -190,12 +192,12 @@ def test_crossed_magnetic_pattern_refines_against_independent_rcwa():
     def central(result):
         return np.array([np.asarray(getattr(getattr(result, basis), key)).ravel()[result.incident.R.size//2]
                          for basis in ('s_inc', 'p_inc') for key in ('r_s', 'r_p', 't_s', 't_p')])
-    references = [central(_legacy_wavebit.rcwa(backend='numpy', truncation_order=dict(x=order, y=order), **physical).solve())
+    references = [central(_legacy_wavebit_rcwa(backend='numpy', truncation_order=dict(x=order, y=order), **physical).solve())
                   for order in (3, 5)]
     assert np.max(abs(references[1]-references[0])) < .001
     errors = []
     for resolution in (20, 40):
-        result = _legacy_wavebit.fdtd(**physical, backend='jax', truncation_order=0, resolution=resolution,
+        result = _legacy_wavebit_fdtd(**physical, backend='jax', truncation_order=0, resolution=resolution,
                               transverse_resolution=(1.5*resolution, resolution),
                               n_pml=round(.4*resolution), n_periods=60, pulse_width=3.,
                               align_layers=True, diffraction_method='directional',

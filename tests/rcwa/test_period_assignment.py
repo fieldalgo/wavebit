@@ -1,6 +1,6 @@
 """Rejected periods preserve the chosen cell, including its declaration."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -14,7 +14,7 @@ def backend(request):
 
 
 def solver(backend, **kwargs):
-    return _legacy_wavebit.rcwa(backend=backend, wavelength=900., thickness=(170.,),
+    return _legacy_wavebit_rcwa(backend=backend, wavelength=900., thickness=(170.,),
                        truncation_order=(0, 0), **kwargs)
 
 

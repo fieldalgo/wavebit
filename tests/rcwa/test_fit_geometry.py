@@ -6,7 +6,13 @@ wrong. Raster tests independently rebuild the geometry for every reference gradi
 callbacks observe the actual compiled values/gradients, not just the final parameter.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import partial
 
 import numpy as np
@@ -30,7 +36,7 @@ def _design(width):
 
 
 def _shape_value(width):
-    return float(_legacy_wavebit.rcwa(backend='numpy', **SHAPE_KW, **_design(width)).solve().T.sum().real)
+    return float(_legacy_wavebit_rcwa(backend='numpy', **SHAPE_KW, **_design(width)).solve().T.sum().real)
 
 
 def _shape_gradient(width):
@@ -61,9 +67,9 @@ def _loss(values, traces, field=False):
 
 @pytest.mark.parametrize('door', ['solve', 'solve_field', 'solve_field_eager'])
 def test_fit_crosses_an_overlap_with_fresh_numpy_values_and_gradients(door, monkeypatch):
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     params = dict(width=jnp.asarray(1.18, dtype=jnp.float64))
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(**params))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(**params))
     initial_geometry = solver.freeze_geometry()
     # This is also the old tutorial's spelling: a freeze captured in a partial. fit must
     # replace it, including on solve_field where there is a second compiled boundary.
@@ -111,7 +117,7 @@ def test_fit_crosses_an_overlap_with_fresh_numpy_values_and_gradients(door, monk
                          ids=['nvf', 'integrated', 'both'])
 @pytest.mark.parametrize('quantity', ['structure', 'mu'])
 def test_fit_replans_a_raster_when_equal_pixels_separate(strategy, quantity, monkeypatch):
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     cfg = dict(period=(700., 700.), thickness=(200.,), wavelength=900.,
                truncation_order=(1, 1), theta=.13, phi=.21, psi=.37, **strategy)
     # Equal neighbours initially share a block/interface mask. Their unequal derivatives
@@ -121,7 +127,7 @@ def test_fit_replans_a_raster_when_equal_pixels_separate(strategy, quantity, mon
     params = {quantity: jnp.asarray(raster)}
     if quantity == 'mu':
         cfg['structure'] = np.where(raster == 4., 2.25, 1.)
-    solver = _legacy_wavebit.rcwa(backend='jax', **cfg, **params)
+    solver = _legacy_wavebit_rcwa(backend='jax', **cfg, **params)
     initial = solver.freeze_geometry()
     values, observations, traces, records = [], [], [], []
     freeze = solver.freeze_geometry
@@ -139,12 +145,12 @@ def test_fit_replans_a_raster_when_equal_pixels_separate(strategy, quantity, mon
     jax.effects_barrier()
     assert len(records) == len(values) == len(observations) == 3
     assert records[0] != records[1], 'the test must invalidate the starting raster record'
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
-        _legacy_wavebit.rcwa(backend='jax', **cfg, **observations[1][0]).solve(geometry=initial)
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
+        _legacy_wavebit_rcwa(backend='jax', **cfg, **observations[1][0]).solve(geometry=initial)
     expected, state = params, optimizer.init(params)
     for value, (point, gradient) in zip(values, observations):
         np.testing.assert_allclose(point[quantity], expected[quantity], atol=2e-10, rtol=0)
-        fresh = _legacy_wavebit.rcwa(backend='jax', **cfg, **point)
+        fresh = _legacy_wavebit_rcwa(backend='jax', **cfg, **point)
         geometry = fresh.freeze_geometry()
         def loss(material):
             return fresh.solve(**{quantity: material}, geometry=geometry).T.sum().real
@@ -159,7 +165,7 @@ def test_fit_replans_a_raster_when_equal_pixels_separate(strategy, quantity, mon
 
 def test_fit_reuses_a_compilation_when_the_shape_plan_stays_equal(monkeypatch):
     params = dict(width=jnp.asarray(1., dtype=jnp.float64))
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(**params))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(**params))
     records, values, traces = [], [], []
     freeze = solver.freeze_geometry
 
@@ -181,12 +187,12 @@ def test_fit_reuses_a_compilation_when_the_shape_plan_stays_equal(monkeypatch):
 @pytest.mark.parametrize('mapped', [False, True])
 def test_custom_forward_requires_and_consumes_fresh_preparation(mapped):
     params = dict(width=jnp.asarray(1.18, dtype=jnp.float64))
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(**params))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(**params))
     prepared, used, traces = [], [], []
 
     def prepare(**conditions):
         scene = conditions if mapped else _design(**conditions)
-        geometry = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **scene).freeze_geometry()
+        geometry = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **scene).freeze_geometry()
         prepared.append(geometry)
         return geometry
 
@@ -217,7 +223,7 @@ def test_fixed_partial_conditions_and_dynamic_overrides_match_a_fresh_solver():
     raster[0, 1:4, 2:4] = 4.
     cfg = dict(period=(700., 700.), wavelength=900., truncation_order=(1, 1),
                theta=.13, phi=.21, psi=.37)
-    solver = _legacy_wavebit.rcwa(backend='jax', **cfg, thickness=(200.,), structure=np.ones_like(raster))
+    solver = _legacy_wavebit_rcwa(backend='jax', **cfg, thickness=(200.,), structure=np.ones_like(raster))
     # Preparation must use the partial's pattern/rules, while the dynamic thickness must
     # override the partial's 10, just as calling the partial directly would.
     fixed = dict(structure=raster, factorization='nvf', fourier_coefficients='integrated')
@@ -228,7 +234,7 @@ def test_fixed_partial_conditions_and_dynamic_overrides_match_a_fresh_solver():
     jax.effects_barrier()
 
     def fresh(t):
-        return float(_legacy_wavebit.rcwa(backend='numpy', **cfg, **fixed, thickness=(t,)).solve().T.sum().real)
+        return float(_legacy_wavebit_rcwa(backend='numpy', **cfg, **fixed, thickness=(t,)).solve().T.sum().real)
 
     assert len(values) == len(observations) == 3
     for value, (point, gradient) in zip(values, observations):
@@ -243,7 +249,7 @@ def test_fixed_partial_conditions_and_dynamic_overrides_match_a_fresh_solver():
 
 def test_nested_design_variables_retain_their_gradients_and_final_mapping():
     params = dict(design=dict(width=jnp.asarray(1., dtype=jnp.float64)))
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     final = solver.fit(params, solver.solve, lambda r: r.T.sum().real, optax.sgd(.1),
                        iteration=1, parameterize=lambda design: _design(design['width']))
     want = 1. - .1 * _shape_gradient(1.)
@@ -253,7 +259,7 @@ def test_nested_design_variables_retain_their_gradients_and_final_mapping():
 
 
 def test_failed_traced_loss_leaves_concrete_conditions_and_no_reusable_solve_state():
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     expected = float(solver.solve().T.sum().real)
 
     def fail(result):
@@ -274,7 +280,7 @@ def test_failed_traced_loss_leaves_concrete_conditions_and_no_reusable_solve_sta
     (lambda width: dict(misspelled_structure=[]), TypeError, 'misspelled_structure'),
 ])
 def test_bad_parameterization_is_refused_before_compiling(mapping, error, message):
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     values, traces = [], []
     with pytest.raises(error, match=message):
         solver.fit(dict(width=jnp.asarray(1.)), solver.solve, _loss(values, traces),
@@ -284,14 +290,14 @@ def test_bad_parameterization_is_refused_before_compiling(mapping, error, messag
 
 
 def test_another_solvers_forward_is_not_mistaken_for_this_solvers_scene():
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
-    other = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.3))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    other = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.3))
     with pytest.raises(TypeError, match='prepare_geometry'):
         solver.fit(['thickness'], other.solve, lambda r: r.T.sum().real, optax.sgd(.1))
 
 
 def test_zero_iterations_preserve_the_design_and_eager_solve_state(monkeypatch):
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     solver.solve()
     field = solver.reconstruct_field(2, 2, 2)
     thickness = np.asarray(solver.thickness).copy()
@@ -307,7 +313,7 @@ def test_zero_iterations_preserve_the_design_and_eager_solve_state(monkeypatch):
 
 
 def test_preparation_failure_stops_before_another_step_and_clears_retained_tracers():
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     prepared = []
     values, observations, traces = [], [], []
 
@@ -335,7 +341,7 @@ def test_preparation_failure_stops_before_another_step_and_clears_retained_trace
 
 
 def test_geometry_preparation_cannot_be_hidden_inside_an_outer_jit():
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
 
     def run(width):
         return solver.fit(dict(width=width), solver.solve, lambda r: r.T.sum().real,
@@ -348,7 +354,7 @@ def test_geometry_preparation_cannot_be_hidden_inside_an_outer_jit():
 
 
 def test_fit_differentiates_a_field_intensity_objective_against_fresh_numpy_fields():
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     values, observations = [], []
 
     def loss(pair):
@@ -358,7 +364,7 @@ def test_fit_differentiates_a_field_intensity_objective_against_fresh_numpy_fiel
         return value
 
     def fresh(width):
-        reference = _legacy_wavebit.rcwa(backend='numpy', **SHAPE_KW, **_design(width))
+        reference = _legacy_wavebit_rcwa(backend='numpy', **SHAPE_KW, **_design(width))
         _, field = reference.solve_field(2, 2, 2)
         return float(np.mean(np.abs(field)**2))
 
@@ -390,8 +396,8 @@ def _airy_reflection(w):
 
 @pytest.mark.parametrize('door', ['solve', 'solve_field'])
 def test_dispersive_wavelength_fit_uses_live_materials(door):
-    material = _legacy_wavebit.TabulatedMaterial([800., 1000.], [4., 9.])
-    solver = _legacy_wavebit.rcwa(backend='jax', wavelength=900., period=(600., 600.),
+    material = _legacy_wavebit_TabulatedMaterial([800., 1000.], [4., 9.])
+    solver = _legacy_wavebit_rcwa(backend='jax', wavelength=900., period=(600., 600.),
                          structure=[dict(background=material, shapes=[])], thickness=[120.],
                          truncation_order=(0, 0), polarization=(1., 0.),
                          factorization='li', answers='field')
@@ -429,7 +435,7 @@ def test_joint_shape_and_cell_optimization_matches_fresh_numpy(door):
     cfg = {k: v for k, v in SHAPE_KW.items() if k != 'period'}
     params = dict(width=jnp.asarray(1.1, dtype=jnp.float64),
                   scale=jnp.asarray(1.03, dtype=jnp.float64))
-    solver = _legacy_wavebit.rcwa(backend='jax', **cfg, **parameterize(**params))
+    solver = _legacy_wavebit_rcwa(backend='jax', **cfg, **parameterize(**params))
     observations, values = [], []
     forward = getattr(solver, door)
     if door == 'solve_field':
@@ -444,7 +450,7 @@ def test_joint_shape_and_cell_optimization_matches_fresh_numpy(door):
                        iteration=2, parameterize=parameterize)
     jax.effects_barrier()
     def fresh(values):
-        return float(_legacy_wavebit.rcwa(backend='numpy', **cfg, **parameterize(**values)).solve().T.sum().real)
+        return float(_legacy_wavebit_rcwa(backend='numpy', **cfg, **parameterize(**values)).solve().T.sum().real)
     for value, (point, gradient) in zip(values, observations):
         assert value == pytest.approx(fresh(point), abs=1e-10)
         for key in point:
@@ -460,7 +466,7 @@ def test_joint_shape_and_cell_optimization_matches_fresh_numpy(door):
                                          ('solve', 'solve_field'),
                                          ('solve', 'solve_field_eager')])
 def test_fit_method_detection_tolerates_other_instrumented_entry_points(door, wrapped, monkeypatch):
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     original = getattr(solver, wrapped)
 
     def instrumented(*args, **conditions):
@@ -479,7 +485,7 @@ def test_fit_method_detection_tolerates_other_instrumented_entry_points(door, wr
 
 
 def test_a_wrapped_forward_uses_the_custom_preparation_contract(monkeypatch):
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     original = solver.solve
 
     def instrumented(**conditions):
@@ -495,9 +501,9 @@ def test_a_wrapped_forward_uses_the_custom_preparation_contract(monkeypatch):
 
 @pytest.mark.parametrize('door', ['solve', 'solve_field', 'solve_field_eager', 'wrapper'])
 def test_fit_replaces_a_geometry_captured_as_a_positional_argument(door):
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     params = dict(width=jnp.asarray(1.18, dtype=jnp.float64))
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(**params))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(**params))
     initial = solver.freeze_geometry()
     if door == 'wrapper':
         def method(geometry, **conditions):
@@ -533,7 +539,7 @@ def test_explicit_preparation_and_forward_use_the_same_partial_conditions(mode, 
     raster[0, 1:4, 2:4] = 4.
     cfg = dict(period=(700., 700.), wavelength=900., truncation_order=(1, 1),
                theta=.13, phi=.21, psi=.37, fourier_coefficients='integrated')
-    solver = _legacy_wavebit.rcwa(backend='jax', **cfg, structure=np.ones_like(raster), thickness=(200.,))
+    solver = _legacy_wavebit_rcwa(backend='jax', **cfg, structure=np.ones_like(raster), thickness=(200.,))
     initial = solver.freeze_geometry()
     fixed = dict(structure=raster, factorization=factorization)
     records = []
@@ -543,7 +549,7 @@ def test_explicit_preparation_and_forward_use_the_same_partial_conditions(mode, 
         if mode == 'detached_preparation':
             # A callback need not mutate the fitted solver. Final conditions must still be
             # assigned on that solver, including the fixed part of the forward's scene.
-            return _legacy_wavebit.rcwa(backend='jax', **(cfg | conditions)).freeze_geometry()
+            return _legacy_wavebit_rcwa(backend='jax', **(cfg | conditions)).freeze_geometry()
         return solver.freeze_geometry(**conditions)
 
     def wrapper(geometry, **conditions):
@@ -561,7 +567,7 @@ def test_explicit_preparation_and_forward_use_the_same_partial_conditions(mode, 
     assert len(records) == len(values) == len(observations) == 2
 
     def fresh(t):
-        return float(_legacy_wavebit.rcwa(backend='numpy', **cfg, **fixed, thickness=(t,)).solve().T.sum().real)
+        return float(_legacy_wavebit_rcwa(backend='numpy', **cfg, **fixed, thickness=(t,)).solve().T.sum().real)
 
     expected, momentum = 200., 0.
     for prepared, value, (point, gradient) in zip(records, values, observations):
@@ -583,7 +589,7 @@ def test_explicit_preparation_and_forward_use_the_same_partial_conditions(mode, 
 
 
 def test_custom_preparation_receives_custom_partial_keywords_with_dynamic_overrides():
-    solver = _legacy_wavebit.rcwa(backend='jax', **SHAPE_KW, **_design(1.))
+    solver = _legacy_wavebit_rcwa(backend='jax', **SHAPE_KW, **_design(1.))
     prepared, values, traces, observations = [], [], [], []
 
     def prepare(width, scale):

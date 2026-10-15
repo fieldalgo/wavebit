@@ -4,7 +4,7 @@ Written: 2026-09-09
 
 Targets:
 - `src/wavebit/fdtd/_periodic/scene.py`
-- `src/wavebit/compat/legacy.py`
+- `src/wavebit/fdtd/_periodic/api.py`
 - `tests/fdtd/test_fdtd_source_distance.py`
 - `studies/fdtd/source_clearance/fdtd_source_clearance.py`
 - `studies/fdtd/rayleigh/fdtd_rayleigh.py`

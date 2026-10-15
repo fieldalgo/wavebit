@@ -1,6 +1,8 @@
 """Travelling-wave extraction from discrete Maxwell fields, including returns."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -46,7 +48,7 @@ def test_mixed_discrete_maxwell_modes_separate_at_wrapped_planes(backend):
                 phase = sum(vector[2-a]*(coords[a]+offset[2-a]*spacing[a]) for a in range(3))
                 target[component] += amplitude*np.exp(1j*(phase+omega*time))
     indices = [0, 2, 5]
-    out = _legacy_wavebit.fdtd_grid(np.full(shape, eps), mu=mu, spacing=spacing, dt=dt, steps=steps,
+    out = _legacy_wavebit_fdtd_grid(np.full(shape, eps), mu=mu, spacing=spacing, dt=dt, steps=steps,
                             electric=e, magnetic=h, bloch_phase=(0., k[1]*shape[1]*spacing[1], k[0]*shape[2]*spacing[2]),
                             wavelengths=[2*np.pi/omega], monitor_z=indices, backend=backend)
     spatial = array(np.exp(-1j*(k[1]*coords[1][0]+k[0]*coords[2][0])))
@@ -89,7 +91,7 @@ def test_conical_two_dimensional_window_in_uniform_magnetic_medium(backend):
     elif backend == 'torch':
         pytest.importorskip('torch')
     material = wavebit.Material(1.7, 1.2)
-    results, d = _legacy_wavebit.fdtd(**options(structure=np.full((1, 2, 2), 1.7), mu=np.full((1, 2, 2), 1.2),
+    results, d = _legacy_wavebit_fdtd(**options(structure=np.full((1, 2, 2), 1.7), mu=np.full((1, 2, 2), 1.2),
                                        top=material, bot=material, period=[.4, .6], wavelength=[.51, .55],
                                        theta=.2, tetm=None, phi=.6, polarization=(1., 1j),
                                        truncation_order=[1, 1], backend=backend, pulse_width=1.5, n_periods=70,
@@ -108,8 +110,8 @@ def test_planes_do_not_mix_returning_waves_into_scattering(side):
     kw = options(top=wavebit.Material(1.2, 1.1), bot=wavebit.Material(1.8, 1.2),
                  tetm=None, phi=.4, polarization=(.4j, .7), incidence_side=side, convergence_window=100,
                  record_field=37, record_components=['ex', 'hy'], record_bounds={'z': (-.05, .25)})
-    full, a = _legacy_wavebit.fdtd(**kw)
-    near, b = _legacy_wavebit.fdtd(**kw, diffraction_distance=(.2, .3))
+    full, a = _legacy_wavebit_fdtd(**kw)
+    near, b = _legacy_wavebit_fdtd(**kw, diffraction_distance=(.2, .3))
     for column in ('incident', 's_inc', 'p_inc'):
         for key in ('r_s', 'r_p', 't_s', 't_p'):
             np.testing.assert_allclose(getattr(getattr(full, column), key), getattr(getattr(near, column), key), atol=1e-8)
@@ -131,7 +133,7 @@ def test_directional_slab_refines_to_airy():
     expected = np.array([r*(1-phase**2)/(1-r*r*phase**2), (1-r*r)*phase/(1-r*r*phase**2)])
     errors = []
     for resolution in (40, 80):
-        result, _ = _legacy_wavebit.fdtd(**options(thickness=[.213], resolution=resolution,
+        result, _ = _legacy_wavebit_fdtd(**options(thickness=[.213], resolution=resolution,
                                            n_pml=round(.3*resolution), diffraction_distance=.2))
         errors.append(np.max(abs(np.array([result.incident.r_p.item(), result.incident.t_p.item()])-expected)))
     assert errors[1] < .002 and errors[1] < .4*errors[0]
@@ -140,7 +142,7 @@ def test_directional_slab_refines_to_airy():
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_directional_material_mu_pole_and_incoming_gradients(backend):
     def objective(parameters, which):
-        result, d = _legacy_wavebit.fdtd(**options(structure=parameters[:1].reshape(1, 1, 1),
+        result, d = _legacy_wavebit_fdtd(**options(structure=parameters[:1].reshape(1, 1, 1),
                                            mu=parameters[1:2].reshape(1, 1, 1), dispersion=np.ones((1, 1, 1), int),
                                            poles={1: [(8., .3, parameters[2])]}, backend=which,
                                            resolution=10, n_pml=4, n_periods=40, pulse_width=2.,
@@ -172,7 +174,7 @@ def test_directional_material_mu_pole_and_incoming_gradients(backend):
 
 
 def test_record_carrier_can_have_unrequested_grazing_orders():
-    _, d = _legacy_wavebit.fdtd(**options(period=.8, wavelength=[.79, .81], theta=0., truncation_order=1,
+    _, d = _legacy_wavebit_fdtd(**options(period=.8, wavelength=[.79, .81], theta=0., truncation_order=1,
                                   diffraction_distance=.2, record_field=50, record_components=['ex', 'hy'],
                                   record_bounds={'z': (0., .2)}))
     assert all(np.isfinite(v['values']).all() for v in d['fields'].values())
@@ -183,8 +185,8 @@ def test_directional_tail_matches_an_independent_truncated_solve(stride):
     kw = options(resolution=10, n_pml=4, n_periods=40, pulse_width=2.,
                  dispersion=np.ones((1, 1, 1), int), poles={1: [(8., .02, 5.)]},
                  diffraction_distance=.2, dft_subsample=stride)
-    full, d = _legacy_wavebit.fdtd(**kw, convergence_window=77)
-    prefix, _ = _legacy_wavebit.fdtd(**dict(kw, n_periods=(d['steps']-77-.01)*d['dt']))
+    full, d = _legacy_wavebit_fdtd(**kw, convergence_window=77)
+    prefix, _ = _legacy_wavebit_fdtd(**dict(kw, n_periods=(d['steps']-77-.01)*d['dt']))
     for basis in ('incident', 's_inc', 'p_inc'):
         diagnostics = d['convergence'] if basis == 'incident' else d['convergence'][basis]
         for key in ('r_s', 'r_p', 't_s', 't_p'):
@@ -200,7 +202,7 @@ def test_bad_method_or_nonuniform_plane_refused_before_time_stepping(monkeypatch
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     changes = dict(diffraction_method='unknown') if kind == 'method' else dict(grading=True, resolution=80, diffraction_distance=.05)
     with pytest.raises(ValueError, match='diffraction|Directional'):
-        _legacy_wavebit.fdtd(**options(**changes))
+        _legacy_wavebit_fdtd(**options(**changes))
 
 
 @pytest.mark.parametrize('kind', ['cutoff', 'longitudinal', 'temporal'])

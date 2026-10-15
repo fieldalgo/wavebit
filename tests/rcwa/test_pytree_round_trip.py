@@ -24,7 +24,9 @@ by the test that already exists rather than by the bug that follows it:
   happens to default to the right value proves nothing.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.enums import Nesting as _legacy_wavebit_Nesting
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -80,7 +82,7 @@ def _scene(**over):
               complex_dtype=1, fourier_coefficients='integrated',
               excitation={(0, 0): 1.0, (1, 0): 0.5j})
     kw.update(over)
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     # `formulation` is settable on the instance and on `solve()`, never on `rcwa()`, which is
     # exactly why it went missing from the pytree -- both signature-reading guards below are
     # blind to it. It has to be put on the scene here or "nothing at its default" is false.
@@ -101,7 +103,7 @@ def _one_row(**over):
               truncation_order=[3, 0], thickness=[H], wavelength=WL, top=1.0, bot=1.0,
               li_nesting='symmetric')
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def _same(a, b):
@@ -154,7 +156,7 @@ def test_the_scene_holds_nothing_at_its_default():
     carries has to differ, or the scene is not exercising it.
     """
     rich = _scene()
-    plain = _legacy_wavebit.rcwa(backend='jax', structure=np.ones((1, 8, 8)), period=[P, P],
+    plain = _legacy_wavebit_rcwa(backend='jax', structure=np.ones((1, 8, 8)), period=[P, P],
                          truncation_order=[1, 1], thickness=[H], wavelength=WL,
                          top=1.0, bot=1.0)
     others = (_one_row(polarization=(1.0, -1j), kx=.002, ky=.001),
@@ -346,7 +348,7 @@ _LIT = np.array([[[1., 1., 1., 4., 4., 4., 4., 1., 1., 1., 1., 1.]]])
 
 
 def _lit(excitation):
-    return _legacy_wavebit.rcwa(backend='jax', structure=_LIT, period=[3 * WL, 3 * WL],
+    return _legacy_wavebit_rcwa(backend='jax', structure=_LIT, period=[3 * WL, 3 * WL],
                         truncation_order=[3, 0], thickness=[220.0], wavelength=WL,
                         top=1.0, bot=1.0, excitation=excitation)
 
@@ -463,7 +465,7 @@ def test_the_nesting_survives_the_round_trip_and_splits_the_treedef():
     """
     import jax
     symmetric = _one_row()
-    assert _round_trip(symmetric).li_nesting == _legacy_wavebit.Nesting.SYMMETRIC
+    assert _round_trip(symmetric).li_nesting == _legacy_wavebit_Nesting.SYMMETRIC
     assert _round_trip(_one_row(li_nesting=None))._nesting is None
     assert (jax.tree_util.tree_structure(symmetric)
             != jax.tree_util.tree_structure(_one_row(li_nesting='fixed')))

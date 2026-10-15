@@ -34,7 +34,7 @@ What *this* file arbitrates is whether the published table is still the table th
 produces, which is a different question and the one that was going unasked.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -119,7 +119,7 @@ def _grid(result, case):
 
 
 def _rcwa(case, leg, orders):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', wavelength=case['wavelength'], period=[case['period'][0]],
         truncation_order=dict(x=orders, y=0), top=eps_of(case['n_top']),
         bot=eps_of(case['n_bot']), theta=0.0, phi=0.0, tetm=leg,

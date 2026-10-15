@@ -1,6 +1,6 @@
 """Public first-order SMM: ports, fields, stack composition and stability."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -23,7 +23,7 @@ def make_solver(algorithm='SMM', backend='numpy', side='top', **overrides):
         ], factorization='li', incidence_side=side,
         layer_algorithm=algorithm, answers='field')
     options.update(overrides)
-    return _legacy_wavebit.rcwa(**options)
+    return _legacy_wavebit_rcwa(**options)
 
 
 def compare_results(actual, expected, atol=3e-11):

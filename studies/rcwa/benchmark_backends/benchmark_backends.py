@@ -73,20 +73,40 @@ if Path(_selected_wavebit.__file__).resolve() != _expected_origin:
         f'Selected root {_SELECTED_ROOT} requires {_expected_origin}; '
         f'wavebit was already imported from {_selected_wavebit.__file__}. '
         'Run this study in a fresh Python process.')
-try:
-    _legacy_wavebit = importlib.import_module('wavebit.compat.legacy')
-except ModuleNotFoundError as error:
-    if error.name not in ('wavebit.compat', 'wavebit.compat.legacy'):
-        raise
-    _legacy_wavebit = _selected_wavebit
-# These maintained experiments retain the historical factory/type contract.
-wavebit = _legacy_wavebit
+_CURRENT_LAYOUT = (_PACKAGE_PARENT / 'wavebit/rcwa/_factory.py').is_file()
 
 
 def _study_module(current, historical):
     """Load the matching private implementation in the selected checkout."""
     return importlib.import_module(
-        historical if _legacy_wavebit is _selected_wavebit else current)
+        current if _CURRENT_LAYOUT else historical)
+
+
+
+# Only an explicitly selected historical tree may supply the retired facade.
+_HISTORICAL_API = (None if _CURRENT_LAYOUT else
+    importlib.import_module('wavebit.compat.legacy')
+    if (_PACKAGE_PARENT / 'wavebit/compat/legacy.py').is_file() else _selected_wavebit)
+
+
+def _study_symbol(module, name):
+    if not _CURRENT_LAYOUT:
+        return getattr(_HISTORICAL_API, 'enable_x64' if name == '_enable_x64' else name)
+    owner = importlib.import_module(module)
+    if name == '_enable_x64' and not hasattr(owner, name):
+        # Src-layout snapshots before retirement kept this helper in the facade.
+        # Reproduce its explicit setup without requiring that facade to be installed.
+        def enable():
+            importlib.import_module('jax')
+            owner.lift_jax_x64(required=True)
+            scattering = importlib.import_module('wavebit.rcwa._engine.scattering')
+            scattering._register_pytree_if_jax_loaded()
+        return enable
+    return getattr(owner, name)
+
+_study_enable_x64 = _study_symbol('wavebit._common.backend', '_enable_x64')
+_study_eps_from_refractive_index = _study_symbol('wavebit.materials.response', 'eps_from_refractive_index')
+_study_rcwa = _study_symbol('wavebit.rcwa._factory', 'rcwa')
 
 
 def _backend_arg(name):
@@ -107,9 +127,9 @@ STRATEGIES = {
 # flip and keeping the timings comparable means keeping the same scenes. `eps_from_refractive_index`
 # is `n**2` and nothing else; it is spelled out rather than inlined as a literal because the
 # rounding matters elsewhere in this repository and a tidy decimal is not the same number.
-EPS_HIGH = wavebit.eps_from_refractive_index(3.5)  # 12.25
-EPS_MID = wavebit.eps_from_refractive_index(2.0)   # 4.0
-EPS_LOW = wavebit.eps_from_refractive_index(1.0)   # 1.0
+EPS_HIGH = _study_eps_from_refractive_index(3.5)  # 12.25
+EPS_MID = _study_eps_from_refractive_index(2.0)   # 4.0
+EPS_LOW = _study_eps_from_refractive_index(1.0)   # 1.0
 
 #: TE, as a polarization angle. This was `pol=0`, which additionally declared a solver path;
 #: `psi` says only the angle, which is what these 2D scenes can use.
@@ -157,7 +177,7 @@ def _probe_step():
 
     def step():
         t = torch.tensor(pattern, requires_grad=True)
-        out = _legacy_wavebit.rcwa(backend=_backend_arg('torch'), structure=t, **STRATEGIES['sampled'], **cfg).solve()
+        out = _study_rcwa(backend=_backend_arg('torch'), structure=t, **STRATEGIES['sampled'], **cfg).solve()
         out.incident.T.real.sum().backward()
 
     return step
@@ -275,7 +295,7 @@ def shape_builder(truncation_order, layers):
         structure = [dict(background=EPS_HIGH,
                           shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=55.0,
                                        angle=0.27, material=EPS_MID)])] * layers
-        return _legacy_wavebit.rcwa(backend=_backend_arg(backend), structure=structure, **cfg)
+        return _study_rcwa(backend=_backend_arg(backend), structure=structure, **cfg)
 
     return build
 
@@ -288,7 +308,7 @@ def raster_builder(n, truncation_order, strategy, layers=1):
                top=1.0, bot=1.0, theta=0.15, phi=0.35, psi=0.3, wavelength=900.0)
 
     def build(backend, structure):
-        return _legacy_wavebit.rcwa(backend=_backend_arg(backend), structure=structure, **STRATEGIES[strategy], **cfg)
+        return _study_rcwa(backend=_backend_arg(backend), structure=structure, **STRATEGIES[strategy], **cfg)
 
     return build, pattern
 
@@ -370,11 +390,11 @@ def sweep_recompile(budget, reps):
                                          angle=0.27, material=EPS_MID)])]
 
     def loss(v, geometry):
-        return jnp.sum(_legacy_wavebit.rcwa(backend=_backend_arg('jax'), structure=make(v), **cfg)
+        return jnp.sum(_study_rcwa(backend=_backend_arg('jax'), structure=make(v), **cfg)
                        .solve(geometry=geometry).T).real
 
     g = jax.jit(jax.grad(loss), static_argnums=1)
-    freeze = lambda lx: _legacy_wavebit.rcwa(backend=_backend_arg('jax'), structure=make(jnp.asarray(lx)),
+    freeze = lambda lx: _study_rcwa(backend=_backend_arg('jax'), structure=make(jnp.asarray(lx)),
                                      **cfg).freeze_geometry()
     jax.clear_caches()
     out = []
@@ -401,7 +421,7 @@ def decompose(backend, truncation_order, shape_nvf_grid_size, reps):
                shape_nvf_grid_size=shape_nvf_grid_size)
 
     def build(lx):
-        return _legacy_wavebit.rcwa(backend=_backend_arg(backend), structure=[
+        return _study_rcwa(backend=_backend_arg(backend), structure=[
             dict(background=EPS_HIGH,
                  shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=55.0,
                               angle=0.27, material=EPS_MID)])], **cfg)
@@ -464,11 +484,11 @@ def sweep_recompile_shapes(budget, reps):
 
     def one(make, values, label):
         def loss(v, geometry):
-            return jnp.sum(_legacy_wavebit.rcwa(backend=_backend_arg('jax'), structure=make(v), **cfg)
+            return jnp.sum(_study_rcwa(backend=_backend_arg('jax'), structure=make(v), **cfg)
                            .solve(geometry=geometry).T).real
 
         g = jax.jit(jax.grad(loss), static_argnums=1)
-        freeze = lambda v: _legacy_wavebit.rcwa(backend=_backend_arg('jax'), structure=make(jnp.asarray(v)),
+        freeze = lambda v: _study_rcwa(backend=_backend_arg('jax'), structure=make(jnp.asarray(v)),
                                         **cfg).freeze_geometry()
         jax.clear_caches()
         rows = []
@@ -599,7 +619,7 @@ def main():
     ap.add_argument('--root', help='import wavebit from this checkout (src or flat layout)')
     args = ap.parse_args()
 
-    wavebit.enable_x64()
+    _study_enable_x64()
     _study_module('wavebit.rcwa._backends.torch_backend', 'wavebit.backends.torch_backend')
 
     budget = Budget(args.budget)

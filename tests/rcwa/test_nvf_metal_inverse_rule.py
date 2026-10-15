@@ -34,7 +34,7 @@ which binds only where the hull of ``1/eps`` passes the origin. What these tests
 The metal permittivities are Johnson & Christy gold, interpolated linearly in ``n`` and ``k``.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -82,7 +82,7 @@ def largest_eps(par):
 
 
 def solve_with(par, cfg, M, slots):
-    s = _legacy_wavebit.rcwa(backend='numpy', structure=par, truncation_order=(M, M), **cfg)
+    s = _legacy_wavebit_rcwa(backend='numpy', structure=par, truncation_order=(M, M), **cfg)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         r = s.solve_conv(*(m[None] for m in slots))
@@ -175,7 +175,7 @@ def test_gold_disks_return_less_than_they_receive():
     assert after <= 1.0, after
 
     # ...and the front door takes the same route.
-    res = _legacy_wavebit.rcwa(backend='numpy', structure=par, truncation_order=(5, 5), **cfg).solve()
+    res = _legacy_wavebit_rcwa(backend='numpy', structure=par, truncation_order=(5, 5), **cfg).solve()
     assert float(np.sum(res.R).real + np.sum(res.T).real) == pytest.approx(after, abs=1e-3)
 
 
@@ -258,7 +258,7 @@ def test_every_nvf_builder_floors_its_metal(monkeypatch, scene, route):
     _, cfg = geometry(metal, wavelength)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = _legacy_wavebit.rcwa(backend='numpy', truncation_order=(5, 5), **cfg, **route).solve()
+        res = _legacy_wavebit_rcwa(backend='numpy', truncation_order=(5, 5), **cfg, **route).solve()
     assert len(calls) == 1
     s, floor = calls[0]
     assert floor == pytest.approx(1.0 / (INVERSE_RULE_BOUND * abs(metal)), rel=1e-12)
@@ -323,7 +323,7 @@ def _power(backend, scene):
     """``R + T`` summed over orders: a float on NumPy, the backend's own scalar on JAX / Torch."""
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        r = _legacy_wavebit.rcwa(backend=backend, **scene).solve()
+        r = _legacy_wavebit_rcwa(backend=backend, **scene).solve()
     if backend == 'numpy':
         return float(np.sum(r.R).real + np.sum(r.T).real)
     return (r.R.sum() + r.T.sum()).real
@@ -643,7 +643,7 @@ GOLD, DIELECTRIC = AU_852, 4.0 + 0.3j
 def _conv_solver(backend, material, lx=140.0):
     par, cfg = disks(material, 852.0)
     par[0]['shapes'][0]['lx'] = lx
-    return _legacy_wavebit.rcwa(backend=backend, structure=par, truncation_order=(CONV_ORDER, CONV_ORDER),
+    return _legacy_wavebit_rcwa(backend=backend, structure=par, truncation_order=(CONV_ORDER, CONV_ORDER),
                         **cfg)
 
 

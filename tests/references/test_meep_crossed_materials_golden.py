@@ -4,7 +4,9 @@ The two grids measure finite-discretization sensitivity. RCWA is an additional i
 cross-check, not the source of the golden. No Meep dependency is needed to run this file.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -81,7 +83,7 @@ def comparison(request):
     kw = scene(case)
     results = {}
     for res in (20, 40):
-        result, diag = _legacy_wavebit.fdtd(**kw, dispersion=case['dispersion'], poles=case['poles'],
+        result, diag = _legacy_wavebit_fdtd(**kw, dispersion=case['dispersion'], poles=case['poles'],
                                    resolution=res, n_periods=160, n_pml=12, pad_scale=1.,
                                    courant=.99, subpixel=True, grading=None,
                                    return_diagnostics=True)
@@ -90,13 +92,13 @@ def comparison(request):
     kw['structure'] = epsilon(case, case['wavelength'])
     for order in (7, 11):
         kw['truncation_order'] = dict(x=order, y=order)
-        results[f'rcwa{order}'] = extract(_legacy_wavebit.rcwa(backend='numpy', **kw).solve(), case)
+        results[f'rcwa{order}'] = extract(_legacy_wavebit_rcwa(backend='numpy', **kw).solve(), case)
     # A material omission must be distinguishable from the oracle's grid discrepancy.
     if name == 'magnetic':
         kw['mu'] = np.ones_like(case['mu'])
     else:
         kw['structure'] = case['index']**2
-    results['omitted'] = extract(_legacy_wavebit.rcwa(backend='numpy', **kw).solve(), case)
+    results['omitted'] = extract(_legacy_wavebit_rcwa(backend='numpy', **kw).solve(), case)
     return name, case, results
 
 

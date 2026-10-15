@@ -5,7 +5,11 @@ eig flow correctly on JAX and PyTorch (matching finite differences). Also the in
 the adapter has to keep backend-independent -- see the stride section at the end.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common.backend import set_j1_implementation as _legacy_wavebit_set_j1_implementation
 import numpy as np
 import pytest
 
@@ -140,7 +144,7 @@ def test_j1_single_precision_uses_its_own_crossover(lib):
     its name -- which is the failure a test like this exists to avoid.
     """
     xp = pytest.importorskip(lib)
-    from wavebit.compat.legacy import set_j1_implementation
+    from wavebit._common.backend import set_j1_implementation
     from wavebit._common.backend import j1
     previous = set_j1_implementation('hybrid')
     probe = np.linspace(1e-3, 95.0, 1500)
@@ -158,7 +162,7 @@ def test_j1_single_precision_uses_its_own_crossover(lib):
 @pytest.fixture
 def j1_default():
     """Restore the global setting, which is global exactly because j1 has no other channel."""
-    from wavebit.compat.legacy import set_j1_implementation
+    from wavebit._common.backend import set_j1_implementation
     previous = set_j1_implementation('auto')
     yield
     set_j1_implementation(previous)
@@ -173,7 +177,7 @@ def test_j1_switch_picks_the_accurate_one_for_each_precision(j1_default):
     pins that it really is switching rather than doing one thing and calling it two.
     """
     torch = pytest.importorskip('torch')
-    from wavebit.compat.legacy import set_j1_implementation
+    from wavebit._common.backend import set_j1_implementation
     from wavebit._common.backend import j1
     probe = np.linspace(1e-3, 95.0, 1500)
     ref = _j1_reference(probe)
@@ -207,7 +211,7 @@ def test_j1_switch_leaves_jax_alone(j1_default):
     import jax
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
-    from wavebit.compat.legacy import set_j1_implementation
+    from wavebit._common.backend import set_j1_implementation
     from wavebit._common.backend import j1
     x = jnp.asarray(np.linspace(1e-3, 95.0, 500), dtype=jnp.float64)
     out = {}
@@ -219,7 +223,8 @@ def test_j1_switch_leaves_jax_alone(j1_default):
 
 
 def test_j1_switch_rejects_an_unknown_name(j1_default):
-    from wavebit.compat.legacy import set_j1_implementation, get_j1_implementation
+    from wavebit._common.backend import set_j1_implementation
+    from wavebit._common.backend import get_j1_implementation
     with pytest.raises(ValueError, match='auto'):
         set_j1_implementation('fastest')
     assert get_j1_implementation() == 'auto'      # unchanged by the failed call
@@ -230,7 +235,7 @@ def test_j1_derivative_survives_every_switch_setting(mode, j1_default):
     """The builtin has no backward of its own, so 'native' has to supply one."""
     torch = pytest.importorskip('torch')
     from scipy.special import j0, j1 as scipy_j1
-    from wavebit.compat.legacy import set_j1_implementation
+    from wavebit._common.backend import set_j1_implementation
     from wavebit._common.backend import j1
     set_j1_implementation(mode)
     for x0 in (0.0, 0.7, 12.4, 12.6, 40.0):
@@ -275,7 +280,7 @@ def test_j1_derivative_is_right_including_at_zero(lib):
 def test_hybrid_j1_gradients_at_crossover_and_large_arguments(lib, precision, j1_default):
     from scipy.special import jvp
     from wavebit._common.backend import j1
-    _legacy_wavebit.set_j1_implementation('hybrid')
+    _legacy_wavebit_set_j1_implementation('hybrid')
     crossover = 7. if precision == 'float32' else 12.5
     probe = np.array([0., 1., crossover-1e-4, crossover, crossover+1e-4,
                       32., 48., 64., 80., 100., 200., 1000.], dtype=precision)
@@ -288,7 +293,7 @@ def test_hybrid_j1_gradients_at_crossover_and_large_arguments(lib, precision, j1
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         def response(x):
             values = j1(x)
             return jnp.sum(values), values
@@ -338,8 +343,8 @@ def test_a_reversed_raster_solves_the_same_as_its_copy(backend):
         pytest.importorskip('torch')
     assert any(s < 0 for s in STRIDED_CELL.strides), 'premise: the input is a reversed view'
 
-    strided = _legacy_wavebit.rcwa(backend=backend, structure=STRIDED_CELL, **STRIDED_CFG).solve()
-    copied = _legacy_wavebit.rcwa(backend=backend, structure=np.ascontiguousarray(STRIDED_CELL),
+    strided = _legacy_wavebit_rcwa(backend=backend, structure=STRIDED_CELL, **STRIDED_CFG).solve()
+    copied = _legacy_wavebit_rcwa(backend=backend, structure=np.ascontiguousarray(STRIDED_CELL),
                           **STRIDED_CFG).solve()
     assert _totals(strided) == _totals(copied)
 
@@ -359,9 +364,9 @@ def test_torch_takes_a_reversed_period_and_thickness():
     stack = np.concatenate([1.0 + 0.5 * cell, cell])
     cfg = dict(wavelength=620., truncation_order=(2, 2), theta=0.2, psi=0.3)
 
-    reversed_ = _legacy_wavebit.rcwa(backend='torch', structure=stack, period=np.flip(np.array([800., 500.])),
+    reversed_ = _legacy_wavebit_rcwa(backend='torch', structure=stack, period=np.flip(np.array([800., 500.])),
                              thickness=np.flip(np.array([180., 90.])), **cfg).solve()
-    plain = _legacy_wavebit.rcwa(backend='torch', structure=stack, period=(500., 800.),
+    plain = _legacy_wavebit_rcwa(backend='torch', structure=stack, period=(500., 800.),
                          thickness=(90., 180.), **cfg).solve()
     assert _totals(reversed_) == _totals(plain)
 
@@ -376,7 +381,7 @@ def test_normalising_strides_does_not_detach_the_structure():
     torch = pytest.importorskip('torch')
     uc = torch.tensor(np.ascontiguousarray(STRIDED_CELL), dtype=torch.float64,
                       requires_grad=True)
-    torch.sum(_legacy_wavebit.rcwa(backend='torch', structure=uc, **STRIDED_CFG).solve().T).backward()
+    torch.sum(_legacy_wavebit_rcwa(backend='torch', structure=uc, **STRIDED_CFG).solve().T).backward()
     assert uc.requires_grad, 'the leaf was flipped in place'
     assert int((uc.grad.abs() > 1e-14).sum()) == uc.numel()
 
@@ -465,7 +470,7 @@ def test_a_solver_does_not_share_the_array_it_was_configured_from(backend):
         pytest.importorskip('torch')
     period = np.array([400.0, 500.0])
     thickness = np.array([100.0])
-    solver = _legacy_wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=period,
+    solver = _legacy_wavebit_rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=period,
                           thickness=thickness, truncation_order=(1, 1), wavelength=620.,
                           top=1.0, bot=1.0)
     period[0], thickness[0] = 999.0, 777.0
@@ -483,7 +488,7 @@ def test_a_torch_leaf_is_kept_rather_than_copied():
     """
     torch = pytest.importorskip('torch')
     leaf = torch.tensor([400.0, 500.0], dtype=torch.float64, requires_grad=True)
-    solver = _legacy_wavebit.rcwa(backend='torch', structure=np.ones((1, 4, 4)), period=leaf,
+    solver = _legacy_wavebit_rcwa(backend='torch', structure=np.ones((1, 4, 4)), period=leaf,
                           thickness=[100.0], truncation_order=(1, 1), wavelength=620.,
                           top=1.0, bot=1.0)
     with torch.no_grad():
@@ -517,7 +522,7 @@ def test_every_spelling_of_a_cell_and_a_stack_arrives_as_the_same_array(backend)
     def built(**over):
         kw = dict(base, structure=one, period=[400.0, 400.0], thickness=[150.0])
         kw.update(over)
-        return _legacy_wavebit.rcwa(**kw)
+        return _legacy_wavebit_rcwa(**kw)
 
     for spelling in (400.0, [400.0], (400.0,), [400.0, 400.0], {'x': 400.0, 'y': 400.0},
                      np.array([400.0, 400.0])):
@@ -559,7 +564,7 @@ def test_a_solver_does_not_share_the_raster_it_was_configured_from(backend):
                period=[400.0, 400.0], thickness=[150.0])
     for _ in range(20):
         eps, mu = np.ones((1, 4, 4)) * 2.0, np.ones((1, 4, 4)) * 1.5
-        solver = _legacy_wavebit.rcwa(structure=eps, mu=mu, **cfg)
+        solver = _legacy_wavebit_rcwa(structure=eps, mu=mu, **cfg)
         eps[0, 0, 0], mu[0, 0, 0] = 99.0, 9.0
         assert float(np.asarray(solver.structure)[0, 0, 0]) == 2.0, 'structure followed'
         assert float(np.asarray(solver.mu)[0, 0, 0]) == 1.5, 'mu followed'
@@ -573,7 +578,7 @@ def test_a_torch_raster_leaf_is_kept_rather_than_copied():
     """
     torch = pytest.importorskip('torch')
     leaf = torch.tensor(np.ones((1, 4, 4)) * 2.0, dtype=torch.float64, requires_grad=True)
-    solver = _legacy_wavebit.rcwa(backend='torch', structure=leaf, truncation_order=(1, 1), wavelength=620.,
+    solver = _legacy_wavebit_rcwa(backend='torch', structure=leaf, truncation_order=(1, 1), wavelength=620.,
                           top=1.0, bot=1.0, period=[400.0, 400.0], thickness=[150.0])
     assert solver.structure is leaf
     assert solver.structure.requires_grad
@@ -608,8 +613,8 @@ def test_a_reversed_view_on_a_length_one_axis_crosses_too(backend):
 
     cfg = dict(backend=backend, truncation_order=(2, 2), wavelength=620., top=1.0, bot=1.0,
                period=[400.0, 400.0], thickness=[150.0])
-    got = _legacy_wavebit.rcwa(structure=reversed_, **cfg).solve()
-    want = _legacy_wavebit.rcwa(structure=np.ascontiguousarray(reversed_), **cfg).solve()
+    got = _legacy_wavebit_rcwa(structure=reversed_, **cfg).solve()
+    want = _legacy_wavebit_rcwa(structure=np.ascontiguousarray(reversed_), **cfg).solve()
     assert np.array_equal(np.asarray(got.T), np.asarray(want.T))
 
 
@@ -641,7 +646,7 @@ def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
                period=[400.0, 400.0], thickness=[150.0])
 
     def built(dtype):
-        return _legacy_wavebit.rcwa(structure=np.ones((1, 4, 4), dtype=dtype), **cfg)
+        return _legacy_wavebit_rcwa(structure=np.ones((1, 4, 4), dtype=dtype), **cfg)
 
     for dtype in (np.float64, np.float32, np.int64, np.int32):
         assert np.asarray(built(dtype).structure).dtype == np.float64, dtype
@@ -655,18 +660,18 @@ def test_the_raster_dtype_whitelist_is_a_whitelist(backend):
     if backend == 'jax':
         import jax.numpy as jnp
         with pytest.raises(ValueError, match='unsupported dtype'):
-            _legacy_wavebit.rcwa(structure=jnp.ones((1, 4, 4), dtype=bool), **cfg)
+            _legacy_wavebit_rcwa(structure=jnp.ones((1, 4, 4), dtype=bool), **cfg)
     elif backend == 'torch':
         import torch
         with pytest.raises(ValueError, match='unsupported dtype'):
-            _legacy_wavebit.rcwa(structure=torch.ones((1, 4, 4), dtype=torch.bool), **cfg)
+            _legacy_wavebit_rcwa(structure=torch.ones((1, 4, 4), dtype=torch.bool), **cfg)
 
     # `mu` reaches the same function with nothing in front of it, so its type gate is the only
     # thing standing between a nested list and a cast.
     with pytest.raises(ValueError):
-        _legacy_wavebit.rcwa(structure=np.ones((1, 4, 4)), mu=[[[1.0] * 4] * 4], **cfg)
+        _legacy_wavebit_rcwa(structure=np.ones((1, 4, 4)), mu=[[[1.0] * 4] * 4], **cfg)
     with pytest.raises(ValueError):
-        _legacy_wavebit.rcwa(structure=np.ones((1, 4, 4)),
+        _legacy_wavebit_rcwa(structure=np.ones((1, 4, 4)),
                      mu=np.ones((1, 4, 4), dtype=np.uint8), **cfg)
 
 
@@ -708,21 +713,21 @@ def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
         return float(np.sum(np.asarray(s.solve().T)))
 
     # a shape recipe over a raster carrying a mu
-    solver = _legacy_wavebit.rcwa(structure=np.ones((1, 4, 4)), mu=np.ones((1, 4, 4)) * 1.5, **cfg)
+    solver = _legacy_wavebit_rcwa(structure=np.ones((1, 4, 4)), mu=np.ones((1, 4, 4)) * 1.5, **cfg)
     was, answered = state(solver), totals(solver)
     with pytest.raises(ValueError):
         solver.structure = shapes
     assert state(solver) == was and totals(solver) == answered
 
     # a raster on a different grid from the mu beside it
-    solver = _legacy_wavebit.rcwa(structure=np.ones((1, 2, 4)), mu=np.ones((1, 2, 4)) * 1.5, **cfg)
+    solver = _legacy_wavebit_rcwa(structure=np.ones((1, 2, 4)), mu=np.ones((1, 2, 4)) * 1.5, **cfg)
     was, answered = state(solver), totals(solver)
     with pytest.raises(ValueError):
         solver.structure = np.ones((1, 2, 8))
     assert state(solver) == was and totals(solver) == answered
 
     # a raster the dtype whitelist refuses, over a shape structure
-    solver = _legacy_wavebit.rcwa(structure=shapes, **cfg)
+    solver = _legacy_wavebit_rcwa(structure=shapes, **cfg)
     was = state(solver)
     with pytest.raises(ValueError):
         solver.structure = np.ones((1, 4, 4), dtype=np.uint8)

@@ -18,7 +18,9 @@ better; the truncation error of each dominates their difference from `truncation
 is the solve count.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.sources import OrderExcitation as _legacy_wavebit_OrderExcitation
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -45,7 +47,7 @@ def _structure():
 def _solve(excitation=None, algo='ETM', phi=None, tetm='te', **over):
     kw = dict(COMMON, phi=phi, tetm=tetm, layer_algorithm=algo, excitation=excitation)
     kw.update(over)
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     solver.structure = _structure()
     return solver, solver.solve()
 
@@ -139,10 +141,10 @@ def test_tetm_weights_mean_what_the_coupled_weights_mean(tetm, algo, side):
         y = np.asarray(b.boundary_fields(face, sample_x=9, part='incoming'))
         assert np.abs(x - y).max() < 1e-12, f'incoming at {face}'
     if side == 'top':
-        coherent = _legacy_wavebit.rcwa(
+        coherent = _legacy_wavebit_rcwa(
             backend='numpy', truncation_order=COMMON['truncation_order'], period=COMMON['period'],
             wavelength=WL, thickness=THICK, top=1.0, bot=2.25, structure=_structure(),
-            excitation={'top': _legacy_wavebit.OrderExcitation(
+            excitation={'top': _legacy_wavebit_OrderExcitation(
                 theta=0.25, phi=0.0, polarization=(1, 0) if tetm == 'te' else (0, 1),
                 orders=BEAMS)}).solve()
         got = float(np.asarray(a.incident.R).sum())
@@ -202,9 +204,9 @@ def test_declaring_nothing_leaves_the_solve_byte_for_byte_what_it_was():
     """
     for tetm, phi in (('te', None), ('tm', None), (None, 0.3)):
         for theta in (0.0, 0.3, 1.2):
-            solver = _legacy_wavebit.rcwa(**dict(COMMON, theta=theta, phi=phi, tetm=tetm))
+            solver = _legacy_wavebit_rcwa(**dict(COMMON, theta=theta, phi=phi, tetm=tetm))
             solver.structure = _structure()
-            named = _legacy_wavebit.rcwa(**dict(COMMON, theta=theta, phi=phi, tetm=tetm,
+            named = _legacy_wavebit_rcwa(**dict(COMMON, theta=theta, phi=phi, tetm=tetm,
                                         excitation=None))
             named.structure = _structure()
             a, b = solver.solve(), named.solve()
@@ -300,7 +302,7 @@ def test_an_incident_amplitude_carries_a_gradient():
     jnp = jax.numpy
 
     def reflectance(scale):
-        solver = _legacy_wavebit.rcwa(**dict(COMMON, backend='jax', phi=None, tetm='te',
+        solver = _legacy_wavebit_rcwa(**dict(COMMON, backend='jax', phi=None, tetm='te',
                                      excitation={0: 1.0, 1: scale * (0.6 - 0.8j)}))
         solver.structure = jnp.asarray(_structure())
         return jnp.sum(solver.solve().incident.R)
@@ -319,7 +321,7 @@ def test_a_superposition_survives_a_jit_boundary():
     jnp = jax.numpy
 
     def reflectance(a1):
-        solver = _legacy_wavebit.rcwa(**dict(COMMON, backend='jax', phi=None, tetm='te',
+        solver = _legacy_wavebit_rcwa(**dict(COMMON, backend='jax', phi=None, tetm='te',
                                      excitation={0: 1.0, 1: a1}))
         solver.structure = jnp.asarray(_structure())
         return jnp.sum(solver.solve().incident.R)
@@ -373,7 +375,7 @@ def test_the_jitted_field_path_keeps_the_superposition():
     jax = pytest.importorskip('jax')
 
     kw = dict(COMMON, backend='jax', phi=None, tetm='te', answers='field', excitation=BEAMS)
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     solver.structure = _structure()
 
     sample = dict(sample_x=8, sample_y=1, sample_z=4)

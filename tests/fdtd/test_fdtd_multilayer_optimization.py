@@ -1,6 +1,14 @@
 """Constrained joint FDTD design derivatives and independent multilayer optics."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit._common.periodic import layer_thicknesses as _legacy_wavebit_layer_thicknesses
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -29,7 +37,7 @@ def test_independent_multilayer_matrix_matches_fresnel_recursion_and_rcwa(wavele
     eps, lengths = decode_numpy(INITIAL)
     target = sharp_stack(eps, lengths, [wavelength])
     # The independent matrix traverses top-to-bottom; public layer arrays start below.
-    result = _legacy_wavebit.rcwa(structure=eps[::-1, None, None], thickness=lengths[::-1],
+    result = _legacy_wavebit_rcwa(structure=eps[::-1, None, None], thickness=lengths[::-1],
                           top=1., bot=4., period=.05, wavelength=wavelength,
                           truncation_order=0, backend='numpy').solve()
     for name in ('r', 't'):
@@ -48,7 +56,7 @@ def test_bottom_incidence_matches_the_reversed_independent_multilayer_matrix(wav
     eps, lengths = decode_numpy(INITIAL)
     # Keep the physical stack and half-spaces fixed; reverse the oracle's traversal.
     target = sharp_stack(eps[::-1], lengths[::-1], [wavelength], top=4., bottom=1.)
-    result = _legacy_wavebit.rcwa(structure=eps[::-1, None, None], thickness=lengths[::-1],
+    result = _legacy_wavebit_rcwa(structure=eps[::-1, None, None], thickness=lengths[::-1],
                           top=1., bot=4., period=.05, wavelength=wavelength,
                           incidence_side='bottom', truncation_order=0, backend='numpy').solve()
     for name in ('r', 't'):
@@ -61,18 +69,22 @@ def test_bottom_incidence_matches_the_reversed_independent_multilayer_matrix(wav
 def test_example_places_the_spacer_at_the_bottom_and_matches_its_independent_reference():
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
+    from wavebit import Units, rcwa
     from examples.fdtd.fdtd_multilayer_optimization import INITIAL, BAND, design
     eps, lengths = decode_numpy(INITIAL)
     stack = design(jax.numpy.asarray(INITIAL))
-    np.testing.assert_array_equal(stack.structure, eps[::-1, None, None])
-    np.testing.assert_allclose(stack.thickness, lengths[::-1], atol=2e-16, rtol=0)
-    assert np.asarray(stack.structure)[0].item() == 4.  # spacer touches the substrate
+    structure = np.asarray([layer.epsilon for layer in stack.layers])
+    thickness = np.asarray([layer.thickness for layer in stack.layers])
+    np.testing.assert_array_equal(structure, eps[::-1, None, None])
+    np.testing.assert_allclose(thickness, lengths[::-1], atol=2e-16, rtol=0)
+    assert structure[0].item() == 4.  # spacer touches the substrate
     target = sharp_stack(eps, lengths, BAND)
     for index, wavelength in enumerate(BAND):
-        result = _legacy_wavebit.rcwa(stack=stack, wavelength=wavelength,
-                              truncation_order=0, backend='jax').solve()
-        for name in ('r', 't'):
-            np.testing.assert_allclose(getattr(result.s_inc, name+'_s').item(),
+        problem = rcwa.Problem(units=Units(length='um'), stack=stack.replace(period=2*stack.period),
+            excitation=rcwa.Excitation(wavelength=wavelength, sources=(rcwa.PlaneWave(),)))
+        result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0), algorithm='etm'), backend='jax')
+        for name, port in (('r', 'reflection'), ('t', 'transmission')):
+            np.testing.assert_allclose(getattr(result, port).amplitude_s.item(),
                                        target[name][index], atol=2e-14)
 
 
@@ -80,12 +92,12 @@ def joint_objective(p, backend, *, diagnostics=False):
     runtime = time_loop_backend(backend)
     xp, array = runtime.xp, runtime.array
     weights = xp.concat((p[:3], array([0.])))
-    lengths = _legacy_wavebit.layer_thicknesses(weights, .8, minimum=.04)
+    lengths = _legacy_wavebit_layer_thicknesses(weights, .8, minimum=.04)
     epsilon = xp.concat((p[3:], array([4.])))
-    scene = _legacy_wavebit.Stack.from_structure(epsilon[:, None, None], lengths, top=1., bot=4., period=.05)
-    light = _legacy_wavebit.Incidence(wavelength=[.95, 1.05], theta=.2, phi=.3,
+    scene = _legacy_wavebit_Stack.from_structure(epsilon[:, None, None], lengths, top=1., bot=4., period=.05)
+    light = _legacy_wavebit_Incidence(wavelength=[.95, 1.05], theta=.2, phi=.3,
                               polarization=(1., .6j), incidence_side='bottom')
-    result, out = _legacy_wavebit.fdtd(scene, light, backend=backend, resolution=10, n_pml=6,
+    result, out = _legacy_wavebit_fdtd(scene, light, backend=backend, resolution=10, n_pml=6,
                                mesh_thickness=[.2]*4, layer_smoothing=.06, align_layers=True,
                                n_periods=35, pulse_width=1.5, truncation_order=0,
                                diffraction_method='directional', return_diagnostics=True)

@@ -1,6 +1,10 @@
 """Physical record boxes select native staggered samples in scene coordinates."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -17,8 +21,8 @@ def settings(**changes):
 def test_physical_box_equals_cropped_full_scene(side, grading):
     bounds = dict(x=(-.11, .16), y=(-.21, .12), z=(-.08, .28))
     kw = settings(incidence_side=side, grading=grading)
-    expected, full = _legacy_wavebit.fdtd(**kw)
-    actual, cropped = _legacy_wavebit.fdtd(**kw, record_bounds=bounds)
+    expected, full = _legacy_wavebit_fdtd(**kw)
+    actual, cropped = _legacy_wavebit_fdtd(**kw, record_bounds=bounds)
     np.testing.assert_array_equal(actual.incident.t_s, expected.incident.t_s)
     count, total = 0, 0
     for name, field in cropped['fields'].items():
@@ -42,8 +46,8 @@ def test_physical_box_equals_cropped_full_scene(side, grading):
 def test_typed_bottom_region_gradient_and_invariant_y(backend):
     def objective(value, which):
         structure = np.full((1, 1, 1), value) if which == 'numpy' else value*ones
-        stack = _legacy_wavebit.Stack.from_structure(structure, [.3], top=1., bot=1., period=.4)
-        _, d = _legacy_wavebit.fdtd(stack, _legacy_wavebit.Incidence(wavelength=1., tetm='te', incidence_side='bottom'),
+        stack = _legacy_wavebit_Stack.from_structure(structure, [.3], top=1., bot=1., period=.4)
+        _, d = _legacy_wavebit_fdtd(stack, _legacy_wavebit_Incidence(wavelength=1., tetm='te', incidence_side='bottom'),
                             backend=which, resolution=10, n_periods=25, grading=True,
                             record_field=41, record_components=['ey', 'hx'],
                             record_bounds=dict(x=(-.05, .11), y=(0., 0.), z=(-.11, .41)),
@@ -71,9 +75,9 @@ def test_typed_bottom_region_gradient_and_invariant_y(backend):
                                     {'x': (0.,)}, {'y': (9., 10.)}])
 def test_invalid_or_empty_bounds(bounds):
     with pytest.raises(ValueError, match='record_bounds'):
-        _legacy_wavebit.fdtd(**settings(), record_bounds=bounds)
+        _legacy_wavebit_fdtd(**settings(), record_bounds=bounds)
 
 
 def test_bounds_require_history():
     with pytest.raises(ValueError, match='record_bounds requires record_field'):
-        _legacy_wavebit.fdtd(**settings(record_field=None), record_bounds={'z': (0., .2)})
+        _legacy_wavebit_fdtd(**settings(record_field=None), record_bounds={'z': (0., .2)})

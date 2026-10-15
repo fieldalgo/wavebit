@@ -17,7 +17,9 @@ the accepted set is derived per class, so a copy that drifted on one backend wou
 from another. Every theorem here runs over the product.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import itertools
 
 import numpy as np
@@ -75,7 +77,7 @@ def _scene(backend='numpy', **over):
     kw = dict(backend=backend, structure=GRATING, period=[P, P], truncation_order=[2, 0],
               thickness=[H], wavelength=WL, top=1.0, bot=1.0, answers='field')
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def _backends():
@@ -167,7 +169,7 @@ def _door_scene(backend, **over):
               truncation_order=[2, 2], thickness=[H], wavelength=WL, top=1.0, bot=1.0,
               answers='field', factorization='nvf')
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def _leaves(value):
@@ -214,7 +216,7 @@ def test_a_real_condition_through_every_other_door_answers_as_the_scene_built_wi
     """
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     name, value = MOVES[door]
     solver = _door_scene(backend)
     moved = READOUT[door](DOORS[door](solver, **{name: value}))
@@ -254,7 +256,7 @@ def test_a_condition_that_is_not_an_array_passes_the_field_door_on_every_backend
     """
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     value = NON_ARRAY[name]
     solver = _door_scene(backend)
     built = _door_scene(backend, **{name: value})
@@ -353,7 +355,7 @@ for _bk in ('jax', 'torch'):
 def _guard_solver(backend, cls=None):
     kw = dict(structure=GRATING, period=[P, P], truncation_order=(3, 0), thickness=[H],
               wavelength=WL, theta=0.0)
-    return cls(**kw) if cls is not None else _legacy_wavebit.rcwa(backend=backend, **kw)
+    return cls(**kw) if cls is not None else _legacy_wavebit_rcwa(backend=backend, **kw)
 
 
 @pytest.mark.parametrize('backend', _GUARD_BACKENDS)

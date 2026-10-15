@@ -1,6 +1,6 @@
 """Restored traced values follow concrete precision changes kept by the call."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -14,7 +14,7 @@ def solver(backend='jax', **kwargs):
     cfg = dict(period=(600., 750.), thickness=(170.,), truncation_order=(1, 0),
                wavelength=900., answers='field', tetm='tm',
                structure=np.array([[[1., 4., 4., 1.]]]))
-    return _legacy_wavebit.rcwa(backend=backend, **(cfg | kwargs))
+    return _legacy_wavebit_rcwa(backend=backend, **(cfg | kwargs))
 
 
 @pytest.mark.parametrize('parameter', ['thickness', 'structure'])

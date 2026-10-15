@@ -31,7 +31,15 @@ What each test is there to catch:
   should say so).
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.lattice import Lattice as _legacy_wavebit_Lattice
+
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit.rcwa._engine.scattering import ScatteringMatrix as _legacy_wavebit_ScatteringMatrix
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import enum
 import functools
 import importlib.util
@@ -46,7 +54,6 @@ import numpy as np
 import pytest
 
 import wavebit as _public_wavebit
-wavebit = _legacy_wavebit
 from wavebit._common import backend as B
 
 torch = pytest.importorskip('torch')
@@ -146,7 +153,7 @@ def _reached_types():
             from jax import tree_util
         lift = functools.partial(_lift, backend)
         for algorithm, extra in (('ETM', {}), ('SMM', dict(psi=0.37, phi=0.3))):
-            solver = _legacy_wavebit.rcwa(backend=backend, structure=lift(GRATING),
+            solver = _legacy_wavebit_rcwa(backend=backend, structure=lift(GRATING),
                                   **dict(ONE_D, layer_algorithm=algorithm, **extra))
             result = solver.solve()
             for obj in (solver, result, result.order(1), solver.lattice, solver.freeze_geometry(),
@@ -156,11 +163,11 @@ def _reached_types():
                 walk(solver.scattering, 2)
         piece = dict(type='rectangle', cx=0.02, cy=-0.01, lx=0.385, ly=0.231, angle=0.4,
                      material=12.25 + 0.3j)
-        walk(_legacy_wavebit.rcwa(backend=backend, structure=[dict(background=1.44, shapes=[piece])],
+        walk(_legacy_wavebit_rcwa(backend=backend, structure=[dict(background=1.44, shapes=[piece])],
                           **SHAPES), 2)
-        walk(_legacy_wavebit.rcwa(backend=backend, structure=lift(GRATING), wavelength=900.,
+        walk(_legacy_wavebit_rcwa(backend=backend, structure=lift(GRATING), wavelength=900.,
                           period=[1400.], thickness=[170.], truncation_order=(3, 0), top=1.0,
-                          bot=2.25, excitation={'top': wavebit.PlaneWave(
+                          bot=2.25, excitation={'top': _legacy_wavebit_PlaneWave(
                               theta=0.2, phi=0.6, polarization=(0.6, 0.8j))}).solve(), 2)
     return {t for t in seen if not issubclass(t, (enum.Enum, BaseException))}
 
@@ -181,12 +188,11 @@ def test_every_public_callable_is_a_compile_door():
             elif callable(obj) and not _is_door(obj):
                 missing.append(f'{module.__name__}.{name}')
 
-    # Keep the full legacy reachable-object gate while inspecting real public
-    # modules recursively. A namespace is not a function and is never exempt.
+    # Inspect the actual public modules and all types reached from the private
+    # engine regression cases. New physical formulations remain covered recursively.
     inspect_module(_public_wavebit)
-    inspect_module(_legacy_wavebit)
     assert {_public_wavebit.rcwa, _public_wavebit.fdtd, _public_wavebit.materials,
-            _legacy_wavebit.fd} <= seen_modules
+            _public_wavebit.fdtd.native, _public_wavebit.fdtd.periodic} <= seen_modules
     assert {_public_wavebit.rcwa.Problem, _public_wavebit.fdtd.Problem,
             _public_wavebit.Material, _public_wavebit.DiffractionOrders} <= classes
     from wavebit.observations import DiffractionOrder
@@ -200,16 +206,16 @@ def test_every_public_callable_is_a_compile_door():
 
 
 def test_a_door_keeps_the_signature_and_the_docstring():
-    assert str(inspect.signature(_legacy_wavebit.rcwa)).startswith("(backend='numpy', *args, stack=None")
-    assert wavebit.rcwa.__doc__ and 'decide backend' in wavebit.rcwa.__doc__
-    assert wavebit.Lattice.hexagonal.__func__.__name__ == 'hexagonal'
-    assert inspect.getdoc(wavebit.ScatteringMatrix.cascade) == inspect.getdoc(
-        wavebit.ScatteringMatrix.cascade._wavebit_eager_door)
+    assert str(inspect.signature(_legacy_wavebit_rcwa)).startswith("(backend='numpy', *args, stack=None")
+    assert _legacy_wavebit_rcwa.__doc__ and 'decide backend' in _legacy_wavebit_rcwa.__doc__
+    assert _legacy_wavebit_Lattice.hexagonal.__func__.__name__ == 'hexagonal'
+    assert inspect.getdoc(_legacy_wavebit_ScatteringMatrix.cascade) == inspect.getdoc(
+        _legacy_wavebit_ScatteringMatrix.cascade._wavebit_eager_door)
 
 
 # ---------------------------------------------------------------------------- the tripwire
 def _outside_1d(**over):
-    return _legacy_wavebit.rcwa(backend='torch', structure=_lift('torch', GRATING), **dict(ONE_D, **over))
+    return _legacy_wavebit_rcwa(backend='torch', structure=_lift('torch', GRATING), **dict(ONE_D, **over))
 
 
 CASES = {
@@ -226,7 +232,7 @@ def _theta_setter(p):
     return _read_out('torch', _S_TM.solve(), 'r_p', 3, point=([57.], [0.], [83.]))
 
 
-_S_2D = _legacy_wavebit.rcwa(backend='torch', structure=_lift('torch', RASTER), **TWO_D)
+_S_2D = _legacy_wavebit_rcwa(backend='torch', structure=_lift('torch', RASTER), **TWO_D)
 
 
 def _outside_2d(p):
@@ -358,15 +364,15 @@ def _field_across_an_interface():
     """A solved two-layer grating's field at a traced height: no solve, so ``_concrete`` is
     never reached."""
     two_layers = np.concatenate([GRATING, [[[2.0, 2.0, 1.0, 1.0]]]])
-    result = _legacy_wavebit.rcwa(backend='torch', structure=_lift('torch', two_layers),
+    result = _legacy_wavebit_rcwa(backend='torch', structure=_lift('torch', two_layers),
                           **dict(ONE_D, thickness=(170., 100.), layer_algorithm='SMM',
                                  tetm='te')).solve()
     return lambda z: result.reconstruct_field([57.], [0.], z.reshape(1))[0, 0, 0][1].real
 
 
 def _cell_from_a_traced_length():
-    return lambda a: sum((m * m).sum() for m in wavebit.meshgrid_xy(
-        (3, 4), lattice=wavebit.Lattice.hexagonal(a), backend='torch'))
+    return lambda a: sum((m * m).sum() for m in _legacy_wavebit_meshgrid_xy(
+        (3, 4), lattice=_legacy_wavebit_Lattice.hexagonal(a), backend='torch'))
 
 
 #: name: (the function to trace, built on demand; the example input). Each was silent until
@@ -409,10 +415,10 @@ def test_jit_trace_is_refused_by_name(name):
 def test_an_eager_solve_never_imports_dynamo():
     code = textwrap.dedent("""
         import sys, torch
-        from wavebit.compat import legacy as wavebit
+        from wavebit.rcwa._factory import rcwa
         x = torch.tensor(0.1, dtype=torch.float64, requires_grad=True)
         eps = torch.tensor([[[1.0, 4.0, 4.0, 1.0]]], dtype=torch.complex128) + x
-        r = wavebit.rcwa(backend='torch', structure=eps, period=(1400., 1500.), wavelength=900.,
+        r = rcwa(backend='torch', structure=eps, period=(1400., 1500.), wavelength=900.,
                          thickness=(170.,), truncation_order=(3, 0), theta=0.2, top=1.0, bot=2.25,
                          answers='field').solve()
         (r.R.sum() + r.reconstruct_field([57.], [0.], [83.]).abs().sum()).backward()
@@ -427,9 +433,9 @@ def test_jit_trace_is_refused_while_dynamo_is_not_loaded():
     ``torch.jit.trace`` too: here a solved result's field at a traced height."""
     code = textwrap.dedent("""
         import sys, torch
-        from wavebit.compat import legacy as wavebit
+        from wavebit.rcwa._factory import rcwa
         eps = torch.tensor([[[1.0, 4.0, 4.0, 1.0]], [[2.0, 2.0, 1.0, 1.0]]], dtype=torch.complex128)
-        r = wavebit.rcwa(backend='torch', structure=eps, period=(1400., 1500.), wavelength=900.,
+        r = rcwa(backend='torch', structure=eps, period=(1400., 1500.), wavelength=900.,
                          thickness=(170., 100.), truncation_order=(3, 0), theta=0.2, top=1.0,
                          bot=2.25, layer_algorithm='SMM', answers='field').solve()
         field = lambda z: r.reconstruct_field([57.], [0.], z.reshape(1)).real.sum()

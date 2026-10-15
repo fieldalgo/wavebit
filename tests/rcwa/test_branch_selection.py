@@ -31,7 +31,7 @@ What this file pins:
   legitimate rather than a defect.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -128,7 +128,7 @@ def _amp(n_top, n_bot, n_layer, d, theta, tetm):
     # The cases are written in refractive index because ``theta_cut`` is derived from the
     # half-space *permittivities* below and would read circularly if both were the same
     # spelling. The conversion happens here, where the public API takes over.
-    solver = _legacy_wavebit.rcwa(backend='numpy', tetm=tetm, top=eps_from_refractive_index(n_top),
+    solver = _legacy_wavebit_rcwa(backend='numpy', tetm=tetm, top=eps_from_refractive_index(n_top),
                             bot=eps_from_refractive_index(n_bot), theta=theta + _FORMAL,
                             truncation_order=0, wavelength=WL, period=[WL * 2],
                             structure=eps_from_refractive_index(np.array([[[n_layer, n_layer]]])),
@@ -253,7 +253,7 @@ def _grating_r0(theta):
     """Air over glass with a binary 9/1 grating, eleven orders: the zeroth reflection amplitude."""
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = _legacy_wavebit.rcwa(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=theta, truncation_order=5,
+        res = _legacy_wavebit_rcwa(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=theta, truncation_order=5,
                            wavelength=0.9, period=[0.7], structure=np.array([[[9.0, 1.0]]]),
                            thickness=[0.15], fourier_coefficients='integrated').solve()
     amp = np.asarray(res.incident.r_s).ravel()
@@ -292,7 +292,7 @@ def test_a_gain_substrate_reflects_as_switching_its_gain_on_says(theta_deg, gain
     def solved(eps_bot):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            res = _legacy_wavebit.rcwa(backend='numpy', tetm='te', top=2.25, bot=eps_bot, theta=theta,
+            res = _legacy_wavebit_rcwa(backend='numpy', tetm='te', top=2.25, bot=eps_bot, theta=theta,
                                truncation_order=0, wavelength=WL, period=[WL * 2],
                                structure=np.full((1, 1, 2), 2.25), thickness=[100.0]).solve()
         return float(np.sum(res.R))
@@ -335,7 +335,7 @@ def _grating(tetm, thickness, **kw):
 def _run(cfg):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        res = _legacy_wavebit.rcwa(**cfg).solve().incident
+        res = _legacy_wavebit_rcwa(**cfg).solve().incident
     # `cfg['tetm']` is the word, so it is compared as one: against `0` it was never equal, and
     # the TE half of the test below read `r_p` -- identically zero on a TE solve -- and
     # compared zeros with zeros.
@@ -483,7 +483,7 @@ def test_cut_off_orders_report_exactly_zero_efficiency(backend, tetm):
     The amplitude half is the point: the zero has to come from the ``Re(kz)`` factor, not from
     the channel being empty. Without it this passes on a solver that zeroes them by hand.
     """
-    res = _legacy_wavebit.rcwa(backend=backend, tetm=tetm, **CUT_OFF_SCENE).solve()
+    res = _legacy_wavebit_rcwa(backend=backend, tetm=tetm, **CUT_OFF_SCENE).solve()
     R = np.asarray(res.R, dtype=float).ravel()
 
     cut = np.abs(CUT_OFF_U) > 1.0

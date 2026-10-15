@@ -33,7 +33,7 @@ here imports fmmax. Never regenerate to make this pass: the numbers did not come
 codebase, which is the whole of their worth.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -72,7 +72,7 @@ def _solve(name, factorization='laurent', fourier_coefficients='sampled'):
         kw['period'] = (basis[0, 0], basis[1, 1])
     else:
         kw['lattice'] = basis
-    return _legacy_wavebit.rcwa(**kw).solve()
+    return _legacy_wavebit_rcwa(**kw).solve()
 
 
 def _totals(result):

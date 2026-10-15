@@ -271,7 +271,7 @@ class Lattice:
         """The ``(2, 2)`` as nested lists -- the array form, in plain Python.
 
         Beside :meth:`__array__` because it is the same view of the same numbers, and it earns
-        its place at the *document* boundary: :func:`wavebit.compat._jobs_v1._jsonable` recognises a
+        its place at the *document* boundary: :func:`wavebit._common._jobs_v1._jsonable` recognises a
         value it can write by ``hasattr(value, 'tolist')``, so without this a cell built the
         documented way -- ``Stack.from_structure(..., lattice=wavebit.Lattice.hexagonal(400.))`` --
         was accepted by ``Stack.validate`` and then refused by ``to_json`` as "value of type

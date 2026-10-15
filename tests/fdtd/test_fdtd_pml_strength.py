@@ -1,6 +1,8 @@
 """Static CPML strength, outgoing-pulse removal and backend sensitivities."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -13,10 +15,10 @@ def test_invalid_strength_is_refused_before_scene_time_stepping(monkeypatch, val
         raise AssertionError('invalid strength reached the time loop')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='pml_reflection'):
-        _legacy_wavebit.fdtd(structure=np.ones((1, 1, 1)), thickness=[.2], top=1., bot=1.,
+        _legacy_wavebit_fdtd(structure=np.ones((1, 1, 1)), thickness=[.2], top=1., bot=1.,
                      period=1., wavelength=1., backend='numpy', resolution=10, pml_reflection=value)
     with pytest.raises(ValueError, match='pml_reflection'):
-        _legacy_wavebit.fdtd_grid(np.ones((8, 2, 2)), spacing=(1.,)*3, dt=.1, steps=2,
+        _legacy_wavebit_fdtd_grid(np.ones((8, 2, 2)), spacing=(1.,)*3, dt=.1, steps=2,
                           pml_reflection=value)
 
 
@@ -27,20 +29,20 @@ def test_default_strength_and_explicit_uniform_profiles_preserve_fields(nonunifo
               pulse=np.exp(-((np.arange(100)*.05-1.)/.3)**2), wavelengths=[1.], monitor_z=[15])
     if nonuniform:
         kw['z_spacing'] = np.full(24, .2)
-    omitted = _legacy_wavebit.fdtd_grid(np.ones((24, 2, 2)), **kw)
-    explicit = _legacy_wavebit.fdtd_grid(np.ones((24, 2, 2)), **kw, pml_reflection=1e-8)
+    omitted = _legacy_wavebit_fdtd_grid(np.ones((24, 2, 2)), **kw)
+    explicit = _legacy_wavebit_fdtd_grid(np.ones((24, 2, 2)), **kw, pml_reflection=1e-8)
     other_profile = dict(kw)
     if nonuniform:
         other_profile.pop('z_spacing')
     else:
         other_profile['z_spacing'] = np.full(24, .2)
-    uniform = _legacy_wavebit.fdtd_grid(np.ones((24, 2, 2)), **other_profile, pml_reflection=1e-8)
+    uniform = _legacy_wavebit_fdtd_grid(np.ones((24, 2, 2)), **other_profile, pml_reflection=1e-8)
     for key in ('E', 'H', 'electric_spectrum', 'magnetic_spectrum'):
         np.testing.assert_array_equal(omitted[key], explicit[key])
         np.testing.assert_allclose(omitted[key], uniform[key], atol=1e-14)
     assert explicit['pml_reflection'] == 1e-8
-    strong = _legacy_wavebit.fdtd_grid(np.ones((24, 2, 2)), **kw, pml_reflection=1e-30)
-    strong_uniform = _legacy_wavebit.fdtd_grid(np.ones((24, 2, 2)), **other_profile, pml_reflection=1e-30)
+    strong = _legacy_wavebit_fdtd_grid(np.ones((24, 2, 2)), **kw, pml_reflection=1e-30)
+    strong_uniform = _legacy_wavebit_fdtd_grid(np.ones((24, 2, 2)), **other_profile, pml_reflection=1e-30)
     for key in ('E', 'H', 'electric_spectrum', 'magnetic_spectrum'):
         np.testing.assert_allclose(strong[key], strong_uniform[key], atol=1e-14)
 
@@ -61,9 +63,9 @@ def test_custom_strength_removes_a_pulse_in_a_magnetic_background(nonuniform):
         widths[30:90] += .005*np.sin(np.arange(60)*2*np.pi/60)
         kw['z_spacing'] = widths
     epsilon = np.full(shape, 2.25)
-    periodic = _legacy_wavebit.fdtd_grid(epsilon, **kw)
-    weak = _legacy_wavebit.fdtd_grid(epsilon, **kw, pml_cells=20, pml_reflection=.9)
-    strong = _legacy_wavebit.fdtd_grid(epsilon, **kw, pml_cells=20, pml_reflection=1e-20)
+    periodic = _legacy_wavebit_fdtd_grid(epsilon, **kw)
+    weak = _legacy_wavebit_fdtd_grid(epsilon, **kw, pml_cells=20, pml_reflection=.9)
+    strong = _legacy_wavebit_fdtd_grid(epsilon, **kw, pml_cells=20, pml_reflection=1e-20)
     weights = kw.get('z_spacing', np.full(120, .1))[:, None, None]
     def energy(result):
         return np.sum(weights*(2.25*abs(result['E'])**2+1.44*abs(result['H'])**2))
@@ -81,7 +83,7 @@ def test_z_cpml_does_not_absorb_an_exact_parallel_yee_mode(component):
     e[component] = np.exp(1j*kx*dx*np.arange(4))
     h[3-component] = (3-2*component)*np.exp(1j*(kx*dx*(np.arange(4)+.5)+omega*dt/2))
     for target in (1e-8, 1e-40):
-        out = _legacy_wavebit.fdtd_grid(np.ones(shape), spacing=(dx,)*3, dt=dt, steps=steps,
+        out = _legacy_wavebit_fdtd_grid(np.ones(shape), spacing=(dx,)*3, dt=dt, steps=steps,
                                 electric=e, magnetic=h, bloch_phase=(0., 0., kx*dx*4),
                                 pml_cells=5, pml_reflection=target)
         for key, initial in (('E', e), ('H', h)):
@@ -99,7 +101,7 @@ def test_nonuniform_custom_cpml_preserves_material_and_pole_gradients(backend):
               record_field=17, record_components=['ey'], checkpoint_steps=11)
     def objective(p, which):
         m = mask if which == 'numpy' else native_mask
-        out = _legacy_wavebit.fdtd_grid(1+p[0]*m, mu=1+p[1]*m, poles=[(2., .3, p[2]*m)], backend=which, **kw)
+        out = _legacy_wavebit_fdtd_grid(1+p[0]*m, mu=1+p[1]*m, poles=[(2., .3, p[2]*m)], backend=which, **kw)
         return out['power_z'].sum()+.1*(abs(out['fields']['ey']['values'])**2).sum()
     p = np.array([.3, .1, .5])
     expected = objective(p, 'numpy')
@@ -131,7 +133,7 @@ def test_scene_forwards_strength_to_both_calibration_bases_and_backgrounds(monke
         seen.append((kwargs['pml_reflection'], kwargs['pml_background']))
         return run(*args, **kwargs)
     monkeypatch.setattr(scene, 'fdtd_grid', capture)
-    result, diagnostics = _legacy_wavebit.fdtd(
+    result, diagnostics = _legacy_wavebit_fdtd(
         structure=np.array([[[2.]]]), thickness=[.2], top=1., bot=1.2, period=1., wavelength=1.,
         backend='numpy', resolution=10, n_pml=4, n_periods=25, pml_reflection=1e-24,
         incidence_side=side, diffraction_method='directional', truncation_order=0, return_diagnostics=True)
@@ -167,7 +169,7 @@ def test_legacy_invalid_strength_is_refused_before_a_grid_is_built(monkeypatch, 
         raise AssertionError('invalid strength reached the grid')
     monkeypatch.setattr(legacy, '_Grid', forbidden)
     with pytest.raises(ValueError, match='pml_reflection'):
-        _legacy_wavebit.fdtd(**LEGACY_SCENE, **incidence, pml_reflection=value)
+        _legacy_wavebit_fdtd(**LEGACY_SCENE, **incidence, pml_reflection=value)
 
 
 @pytest.mark.parametrize('incidence', [
@@ -192,7 +194,7 @@ def test_legacy_strength_reaches_both_cpmls_on_every_route(monkeypatch, incidenc
             patch.setattr(legacy, 'cpml_profiles', spy)
             patch.setattr(legacy._Incident1D, '__init__', stop)
             with pytest.raises(_Built):
-                _legacy_wavebit.fdtd(**LEGACY_SCENE, **incidence, n_pml=4,
+                _legacy_wavebit_fdtd(**LEGACY_SCENE, **incidence, n_pml=4,
                              **({} if target is None else dict(pml_reflection=target)))
         return calls
 
@@ -211,9 +213,9 @@ def test_legacy_default_strength_is_the_old_profile_and_is_recorded():
     assert (inspect.signature(legacy.solve_fdtd).parameters['pml_reflection'].default
             == legacy.PML_TARGET_REFLECTION == 1e-8)
     run = dict(LEGACY_SCENE, tetm='te', resolution=20., n_pml=4, return_diagnostics=True)
-    omitted, omitted_diagnostics = _legacy_wavebit.fdtd(**run)
-    explicit, explicit_diagnostics = _legacy_wavebit.fdtd(**run, pml_reflection=1e-8)
-    strong, strong_diagnostics = _legacy_wavebit.fdtd(**run, pml_reflection=1e-16)
+    omitted, omitted_diagnostics = _legacy_wavebit_fdtd(**run)
+    explicit, explicit_diagnostics = _legacy_wavebit_fdtd(**run, pml_reflection=1e-8)
+    strong, strong_diagnostics = _legacy_wavebit_fdtd(**run, pml_reflection=1e-16)
     for name in ('R', 'T', 'r_s', 't_s'):
         np.testing.assert_array_equal(getattr(omitted.incident, name), getattr(explicit.incident, name))
     assert not np.array_equal(omitted.incident.r_s, strong.incident.r_s)
@@ -232,7 +234,7 @@ def test_legacy_absorber_thinner_than_two_cells_is_refused_before_a_grid_is_buil
         raise AssertionError('an invalid absorber depth reached the grid')
     monkeypatch.setattr(legacy, '_Grid', forbidden)
     with pytest.raises(ValueError, match='n_pml'):
-        _legacy_wavebit.fdtd(**LEGACY_SCENE, **incidence, n_pml=value)
+        _legacy_wavebit_fdtd(**LEGACY_SCENE, **incidence, n_pml=value)
 
 
 @pytest.mark.parametrize('value', [2, 12.0, np.int64(24)])
@@ -250,5 +252,5 @@ def test_legacy_absorber_depth_takes_whole_numbers_from_two(monkeypatch, value):
     monkeypatch.setattr(legacy._Incident1D, '__init__', stop)
     monkeypatch.setattr(legacy, '_Grid', capture)
     with pytest.raises(_Built):
-        _legacy_wavebit.fdtd(**LEGACY_SCENE, tetm='te', n_pml=value)
+        _legacy_wavebit_fdtd(**LEGACY_SCENE, tetm='te', n_pml=value)
     assert grids and grids[-1].n_pml == int(value)

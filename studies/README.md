@@ -2,7 +2,8 @@
 
 Open questions, answered once and written down. Each script here exists because somebody did
 not know the answer; the table below links the write-up where the answer was recorded and what
-it decided. Each is standalone and runs from the repo root.
+it decided. Maintained entry points run from the repo root; archived instruments
+have the reproduction boundaries below.
 
 **This is not a performance regression suite.** If you arrived expecting `asv continuous` and a
 dashboard, there is none: these run by hand, they run rarely, and a run that does not end in a
@@ -57,7 +58,7 @@ is still being investigated belongs here until a reference value is established.
 | `rcwa/nvf_derivative_reference/nvf_derivative_reference.py` | Is a tiny finite-difference step a resolved derivative reference? Two Richardson estimates must agree within a bounded window selected without consulting AD; otherwise the check fails. [Roundoff measurements and criterion](../docs/validation/rcwa/nvf-local-flux.md). |
 | `rcwa/nvf_gap_reference/nvf_gap_reference.py` | Can an independently fitted 2D auxiliary field check the mixed gap? Optional NGSolve primal/reciprocal solves give static enclosures with verified Fourier quadrature, including affine physical gradients. This is not a 3D Maxwell reference. [Rectangular comparison](../docs/validation/rcwa/nvf-gap-convergence.md), [affine comparison](../docs/validation/rcwa/nvf-affine-convergence.md). |
 | `rcwa/nvf_affine_convergence/nvf_affine_convergence.py` | Which direction limits the full-metric affine cell and its optical truncation? Independent fitted FEM separates the errors; complete order rectangles expose directional and mixed changes without a convergence verdict. [Measurements and limits](../docs/validation/rcwa/nvf-affine-convergence.md). |
-| `rcwa/nvf_cartesian_cell/nvf_cartesian_cell.py`, `rcwa/nvf_cartesian_cell/records/nvf_cartesian_cell.log` | Can a physical rectangle keep its Cartesian edges and live geometry/material derivatives inside an oblique periodic cell? Compatibility imports expose the qualified package kernel and four-choice frozen plan; the explicit public adapter retains that bounded domain. General geometry and optical accuracy remain open. [Construction and limits](../docs/validation/rcwa/nvf-cartesian-cell.md). |
+| `rcwa/nvf_cartesian_cell/nvf_cartesian_cell.py`, `rcwa/nvf_cartesian_cell/records/nvf_cartesian_cell.log` | Can a physical rectangle keep its Cartesian edges and live geometry/material derivatives inside an oblique periodic cell? Direct private imports expose the qualified package kernel and four-choice frozen plan; the explicit public adapter retains that bounded domain. General geometry and optical accuracy remain open. [Construction and limits](../docs/validation/rcwa/nvf-cartesian-cell.md). |
 | `rcwa/nvf_cartesian_pair/nvf_cartesian_pair.py`, `rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair.log` | Can two physical equal-height rectangles retain separate/contact finite meshes and live derivatives on an oblique lattice? Compatibility imports preserve the independently verified small cells while an explicit public adapter freezes input identity and contact state; ordinary contact JVP excludes gap opening and optical qualification remains open. [Construction and limits](../docs/validation/rcwa/nvf-cartesian-pair.md). |
 | `rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_opening.log` | Does the analytical finite right-opening limit agree with independent nodal operators, moving-triangle integrals and closure derivatives across refinements and physical units? The bounded NumPy response passes fixed controls without widening ordinary contact JVP or optical claims. [Method and scope](../docs/validation/rcwa/nvf-cartesian-pair-opening.md). |
 | `rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_gap.log` | Does the exact rescaled finite gap family agree with original nodal equations and moving Fourier weights at contact and positive gap? The fixed NumPy controls preserve derivative units, exact labels and separate optical scope. [Method and limits](../docs/validation/rcwa/nvf-cartesian-pair-gap.md). |
@@ -222,6 +223,22 @@ figure as not.
 Results stream to `artifacts/studies/backends.json` as they land, so an interrupted run still
 leaves what it finished. The `.log` in `records/` is checked in; the `.json` is not, because
 `artifacts/` is ignored.
+
+
+## Current instruments and historical source
+
+Maintained numerical instruments import the exact private implementation they
+measure. The studies with `--root` select the requested checkout before importing
+it; current private modules, older src-layout trees and historical flat packages
+retain separate source selection. These private imports are not a stable user API.
+Use the [physical examples](../examples/README.md) for new application code.
+
+Source files listed under `immutable` in [the relocation ledger](../tools/relocations.json)
+are preserved evidence. This includes the lifted-metasurface memory instrument:
+its original imports and layout require the experiment's original source tree.
+The ledger's baseline identifies preserved file bytes; it does not certify that
+an old instrument executes against a later solver. Replay records using their own
+source and environment provenance, as described in the [migration guide](../docs/migration/index.md).
 
 ## What a study's `records/` keeps
 

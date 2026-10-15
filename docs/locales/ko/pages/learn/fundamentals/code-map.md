@@ -15,8 +15,8 @@
 
 | 먼저 읽을 곳 | 이해할 질문 |
 | --- | --- |
-| [src/wavebit/__init__.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/__init__.py), [src/wavebit/compat/legacy.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/legacy.py) | 공개 API는 무엇이며 어떤 백엔드를 만드는가 |
-| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/periodic.py), [materials/](https://github.com/fieldalgo/wavebit/tree/develop/src/wavebit/materials/), [compat/_jobs_v1.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/compat/_jobs_v1.py) | 장면·재료·빛·계산 명세를 어떻게 표현하는가 |
+| [src/wavebit/__init__.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/__init__.py), [src/wavebit/rcwa/_factory.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_factory.py) | 공개 API는 무엇이며 어떤 백엔드를 만드는가 |
+| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/periodic.py), [materials/](https://github.com/fieldalgo/wavebit/tree/develop/src/wavebit/materials/), [_common/_jobs_v1.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/_jobs_v1.py) | 장면·재료·빛·계산 명세를 어떻게 표현하는가 |
 | [src/wavebit/lattice.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/lattice.py), [geometry.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/geometry.py) | 셀 좌표와 고정할 기하학 정보는 무엇인가 |
 | [src/wavebit/rcwa/_engine/parametric.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py), [boundary.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/boundary.py) | 도형 Fourier 계수와 겹침 경계를 어떻게 처리하는가 |
 | [src/wavebit/rcwa/_engine/factorization.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py), [normal_methods.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py) | 재료와 장의 곱이 어떤 행렬로 조립되는가 |

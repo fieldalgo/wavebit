@@ -1,6 +1,6 @@
 """Vacuum supplies an analytic phase reference for padding and grid refinement."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 
 
@@ -14,7 +14,7 @@ def test_crossed_vacuum_phase_and_padding_sensitivity_refine():
     measured = {}
     for resolution in (25., 50.):
         for pad in (1., 1.5):
-            result = _legacy_wavebit.fdtd(
+            result = _legacy_wavebit_fdtd(
                 structure=np.ones((1, 2, 2)), thickness=[.2], top=1., bot=1.,
                 period=[.16, .16], wavelength=.8, psi=.4, theta=theta,
                 phi=np.deg2rad(40.), resolution=resolution, n_periods=120,

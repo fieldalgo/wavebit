@@ -1,6 +1,6 @@
 """Mixed Drude/Lorentz scene amplitudes and all material-parameter graphs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -12,7 +12,7 @@ def solve(factors, backend):
     epsilon = 1.5*factors[0]
     poles = [(0., .08*factors[1], 160*factors[2]),
              (10*factors[3], .12*factors[4], 40*factors[5])]
-    result = _legacy_wavebit.fdtd(
+    result = _legacy_wavebit_fdtd(
         structure=epsilon.reshape(1, 1, 1), thickness=[.2], top=1., bot=1.,
         period=.05, wavelength=[.9, 1., 1.1], backend=backend, resolution=10,
         n_periods=30, n_pml=4, truncation_order=0, tetm='te',
@@ -98,7 +98,7 @@ def test_mixed_metal_matches_independent_discrete_ade_boundary_problem():
             field = np.linalg.solve(operator, drive)
             expected.append([(field[0]-np.exp(1j*phase*z[0]/h))*np.exp(1j*phase*z[0]/h),
                              field[-1]*np.exp(-1j*phase*(z[-1]-.2)/h)])
-        results, diagnostic = _legacy_wavebit.fdtd(
+        results, diagnostic = _legacy_wavebit_fdtd(
             structure=np.full((1, 1, 1), 1.5), thickness=[.2], top=1., bot=1.,
             period=.05, wavelength=wavelengths, backend='numpy', resolution=resolution,
             n_periods=160, n_pml=round(.3*resolution), truncation_order=0, tetm='te',

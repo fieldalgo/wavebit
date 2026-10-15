@@ -1,6 +1,6 @@
 """Changing precision recasts all stored polarization coordinates."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -17,14 +17,14 @@ def test_polarization_precision_follows_solver_precision(backend, initial, chart
     cfg = dict(period=(600., 750.), wavelength=900., thickness=(170.,),
                truncation_order=(0, 0), theta=.13, phi=.21, answers='field',
                structure=np.full((1, 2, 2), 4.), **options)
-    s = _legacy_wavebit.rcwa(backend=backend, complex_dtype=initial, **cfg)
+    s = _legacy_wavebit_rcwa(backend=backend, complex_dtype=initial, **cfg)
     # Widen the values actually stored: lost single-precision bits cannot be recovered.
     accepted = getattr(s, chart)
     s.complex_dtype = 1-initial
     resolved = cfg | {chart: accepted, 'theta': s.theta, 'phi': s.phi}
     if chart == 'chi':
         resolved['psi'] = s.psi
-    expected = _legacy_wavebit.rcwa(backend=backend, complex_dtype=1-initial, **resolved)
+    expected = _legacy_wavebit_rcwa(backend=backend, complex_dtype=1-initial, **resolved)
     values = [s.chi] if chart == 'chi' else s.polarization
     for value in values:
         assert value.dtype == (s.float_dtype if chart == 'chi' else s.complex_dtype)
@@ -40,7 +40,7 @@ def test_a_kept_precision_keyword_recasts_the_restored_gradient_parameter(chart)
     cfg = dict(period=(600., 750.), wavelength=900., thickness=(170.,),
                truncation_order=(0, 0), theta=.13, phi=.21, answers='field',
                structure=np.full((1, 2, 2), 4.), **options)
-    s = _legacy_wavebit.rcwa(backend='jax', **cfg)
+    s = _legacy_wavebit_rcwa(backend='jax', **cfg)
     def loss(result):
         regularization = (s.chi**2 if chart == 'chi' else
                           sum(jnp.abs(v)**2 for v in s.polarization))
@@ -53,7 +53,7 @@ def test_a_kept_precision_keyword_recasts_the_restored_gradient_parameter(chart)
     def reference(coords):
         chosen = (float(coords[0]) if chart == 'chi' else
                   (coords[0]+1j*coords[1], coords[2]+1j*coords[3]))
-        r = _legacy_wavebit.rcwa(backend='numpy', **(cfg | {chart: chosen})).solve()
+        r = _legacy_wavebit_rcwa(backend='numpy', **(cfg | {chart: chosen})).solve()
         return float(r.T.sum().real + .1*np.sum(coords**2))
     point = np.array([.21] if chart == 'chi' else [1., .24, .32, -.41])
     expected = []

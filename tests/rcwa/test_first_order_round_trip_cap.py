@@ -23,7 +23,9 @@ and must break a case:
   layer at 20 um + 1.5 um.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -38,7 +40,7 @@ NUDGE = 1 + 1e-14
 
 
 def uniform(d, alg, to=(2, 2), theta=0.5+0.3j):
-    return _legacy_wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=[d],
+    return _legacy_wavebit_rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=[d],
                         truncation_order=to, theta=theta, phi=.19, psi=0.7, factorization='li',
                         top=1., bot=2.25, layer_algorithm=alg,
                         structure=[dict(background=wavebit.Material(E_GYRO, M_GYRO), shapes=[])])
@@ -51,7 +53,7 @@ def amplitudes(solver):
 
 
 def grating(theta, alg, d, structure=S0, formulation='first_order'):
-    s = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, truncation_order=[10],
+    s = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, truncation_order=[10],
                      wavelength=900e-9, period=[2000e-9], structure=structure, thickness=[d],
                      complex_dtype=0, fourier_coefficients='integrated', factorization='li',
                      layer_algorithm=alg, psi=np.pi/2, phi=0.3)
@@ -147,10 +149,10 @@ def test_gain_layer_at_a_real_angle(alg):
 
 def coherent_door(d, structure):
     """``R`` and ``T`` of :func:`grating`'s s-polarized scene through ``excitation=``."""
-    s = _legacy_wavebit.rcwa(top=1.0, bot=25.0, truncation_order=(10, 0), wavelength=900e-9,
+    s = _legacy_wavebit_rcwa(top=1.0, bot=25.0, truncation_order=(10, 0), wavelength=900e-9,
                      period=(2000e-9, 2000e-9), structure=structure, thickness=[d],
                      fourier_coefficients='integrated', factorization='li',
-                     excitation={'top': _legacy_wavebit.PlaneWave(theta=0.5, phi=0.3,
+                     excitation={'top': _legacy_wavebit_PlaneWave(theta=0.5, phi=0.3,
                                                           polarization=(1., 0.))})
     r = s.solve()
     return np.array([float(np.real(r.output_top)), float(np.real(r.output_bottom))])
@@ -166,7 +168,7 @@ def test_the_coherent_source_door_is_capped_too(d, control):
     on its run's thickness, as the ordinary first-order solve is, it is at 2e-15 and 7e-15 in ``R``.
     """
     gain = np.where(S0 > 1, 25-0.5j, 1.0+0j)
-    s = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=0.5, phi=0.3, polarization=(1., 0.),
+    s = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=25.0, theta=0.5, phi=0.3, polarization=(1., 0.),
                      truncation_order=(10, 0), wavelength=900e-9, period=(2000e-9, 2000e-9),
                      structure=gain, thickness=[d], fourier_coefficients='integrated',
                      factorization='li', layer_algorithm='SMM')
@@ -213,7 +215,7 @@ def test_swaps_are_balanced_within_blocks_and_ignore_a_common_shift():
 
 def split_uniform(ds, alg, theta=0.5+0.3j):
     """The gyrotropic layer as adjacent slices of one material, thicknesses ``ds``."""
-    return _legacy_wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=list(ds),
+    return _legacy_wavebit_rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=list(ds),
                         truncation_order=(2, 2), theta=theta, phi=.19, psi=0.7,
                         factorization='li', top=1., bot=2.25, layer_algorithm=alg,
                         structure=[dict(background=wavebit.Material(E_GYRO, M_GYRO), shapes=[])
@@ -251,7 +253,7 @@ def test_a_layer_written_twice_to_rounding_is_one_run(monkeypatch):
     grating = dict(background=1., shapes=[dict(type='rectangle', lx=800., ly=900., material=6.25)])
 
     def solver(materials, thickness, alg):
-        return _legacy_wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=thickness,
+        return _legacy_wavebit_rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=thickness,
                             truncation_order=(2, 2), theta=0.5+0.3j, phi=.19, psi=0.7,
                             factorization='li', top=1., bot=2.25, layer_algorithm=alg,
                             structure=[grating] + [dict(background=m, shapes=[])
@@ -284,7 +286,7 @@ def test_a_slot_zero_in_one_spelling_still_joins_the_run(monkeypatch):
     tilted = wavebit.Material((R @ np.diag([2.4, 2.4, 3.2]) @ R.T).astype(complex))
 
     def solve(materials, thickness, alg):
-        s = _legacy_wavebit.rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=thickness,
+        s = _legacy_wavebit_rcwa(backend='numpy', wavelength=730., period=(2000., 2000.), thickness=thickness,
                          truncation_order=(2, 2), theta=0.5+0.05j, phi=.19, psi=0.7,
                          factorization='li', top=1., bot=2.25, layer_algorithm=alg,
                          structure=[dict(background=m, shapes=[]) for m in materials])
@@ -313,7 +315,7 @@ def test_traced_thickness_matches_eager():
     import jax.numpy as jnp
     frozen = uniform(1e3, 'SMM', (1, 1)).freeze_geometry()
     def loss(b, d):
-        r = _legacy_wavebit.rcwa(backend=b, wavelength=730., period=(2000., 2000.), thickness=[d],
+        r = _legacy_wavebit_rcwa(backend=b, wavelength=730., period=(2000., 2000.), thickness=[d],
                          truncation_order=(1, 1), theta=0.5+0.3j, phi=.19, psi=0.7,
                          factorization='li', top=1., bot=2.25, layer_algorithm='SMM',
                          structure=[dict(background=wavebit.Material(E_GYRO, M_GYRO), shapes=[])]

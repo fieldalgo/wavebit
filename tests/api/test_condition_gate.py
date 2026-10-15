@@ -23,11 +23,19 @@ with itself -- `phi` on a 1D grating, an order count against a cell, whether a s
 overlaps resolve -- is read by the builders and is out of reach here.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import Incidence, JobSpec, Layer, Numerics, Stack
+from wavebit._common.periodic import Incidence
+
+from wavebit._common._jobs_v1 import JobSpec
+
+from wavebit._common.periodic import Layer
+
+from wavebit._common._jobs_v1 import Numerics
+
+from wavebit._common.periodic import Stack
 from wavebit import Material
 
 GOOD = np.ones((1, 4, 4))
@@ -130,7 +138,7 @@ GOOD_KW = dict(structure=GOOD, period=[400.0, 400.0], truncation_order=[3, 3],
 
 def _solver_refuses(**over):
     try:
-        _legacy_wavebit.rcwa(backend='numpy', **dict(GOOD_KW, **over))
+        _legacy_wavebit_rcwa(backend='numpy', **dict(GOOD_KW, **over))
         return False
     except Exception:                          # noqa: BLE001 - refusal is the datum
         return True
@@ -224,12 +232,12 @@ def test_normal_grid_is_refused_where_nothing_reads_it(factorization):
                factorization=factorization)
 
     with pytest.raises(NotImplementedError, match='shape_nvf_grid_size'):
-        _legacy_wavebit.rcwa(structure=raster, shape_nvf_grid_size=256, **cfg).solve()
+        _legacy_wavebit_rcwa(structure=raster, shape_nvf_grid_size=256, **cfg).solve()
 
     # the default is not a request, and a shape layer reads it
-    assert float(np.sum(np.asarray(_legacy_wavebit.rcwa(structure=raster, **cfg).solve().T))) > 0.0
+    assert float(np.sum(np.asarray(_legacy_wavebit_rcwa(structure=raster, **cfg).solve().T))) > 0.0
     shapes = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0, lx=140.0,
                                                 material=4.0)])]
-    assert float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+    assert float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         structure=shapes, shape_nvf_grid_size=256,
         **dict(cfg, factorization='nvf')).solve().T))) > 0.0

@@ -254,7 +254,7 @@ def as_material(value, where='material') -> Material:
     scalar shorthand is defined once and cannot drift between the parametric layer's
     ``background`` and the parametric shape's ``material`` key -- the two spellings that
     :class:`Material` exists to unify. ``where`` names the slot in the error message
-    (``'stack.top'``, ``'shapes[2].material'``), matching how ``src/wavebit/compat/_jobs_v1.py`` reports paths.
+    (``'stack.top'``, ``'shapes[2].material'``), matching how ``src/wavebit/_common/_jobs_v1.py`` reports paths.
 
     ``None`` is the *absent* material and becomes vacuum, ``Material(1.0)`` -- permittivity
     one, and no permeability named, so it is non-magnetic by :attr:`Material.is_magnetic`'s

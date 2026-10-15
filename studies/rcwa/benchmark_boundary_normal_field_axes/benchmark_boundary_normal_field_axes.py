@@ -15,7 +15,7 @@ scan) and the least informative -- a circle's normal is radial and smooth in the
 the one case where the sampled field is known to be right.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import os, itertools, sys
 os.environ.setdefault('JAX_ENABLE_X64', '1')
 sys.path.insert(0, os.path.join(os.getcwd(), 'studies'))
@@ -64,7 +64,7 @@ def geos(na, nb):
 
 
 def scalar(geometry, cx, na, nb, theta, phi, key, backend):
-    s = _legacy_wavebit.rcwa(backend=backend, structure=build(cx, na, nb), truncation_order=[8, 8],
+    s = _legacy_wavebit_rcwa(backend=backend, structure=build(cx, na, nb), truncation_order=[8, 8],
                      shape_nvf_grid_size=NGRID, theta=theta, phi=phi, **BASE)
     r = getattr(s.solve(geometry=geometry), key)
     return jnp.real(jnp.sum(r)) if backend == 'jax' else float(np.real(np.sum(np.asarray(r))))

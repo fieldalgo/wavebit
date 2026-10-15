@@ -4,7 +4,11 @@ References use prescribed phase/decay vectors or a numerical inversion of
 the complex dispersion relation, never the production angle-conversion formula.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -42,11 +46,11 @@ def _beta(epsilon, mu, theta):
 @pytest.mark.parametrize('mu', [1., 1.2 + .02j])
 def test_prescribed_phase_and_decay_vectors(backend, side, theta, phi, mu):
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     phase, decay = 1.7, .12
     em = phase**2 - decay**2 + 2j * phase * np.cos(theta) * decay
     incoming = wavebit.Material(em / mu, mu=mu)
-    solver = _legacy_wavebit.rcwa(backend=backend, top=incoming if side == 'top' else 1.,
+    solver = _legacy_wavebit_rcwa(backend=backend, top=incoming if side == 'top' else 1.,
                           bot=incoming if side == 'bottom' else 1., incidence_side=side,
                           theta=theta, phi=phi, period=[900., 1100.], truncation_order=0)
     kx, ky = map(_numpy, solver.order_kxy())
@@ -61,9 +65,9 @@ def test_prescribed_phase_and_decay_vectors(backend, side, theta, phi, mu):
 @pytest.mark.parametrize('theta', [0., .4, 1.3])
 def test_lossless_limit_is_the_standard_angle_formula(backend, theta):
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     for mu in (1., 1.4):
-        solver = _legacy_wavebit.rcwa(backend=backend, top=wavebit.Material(2.7, mu=mu),
+        solver = _legacy_wavebit_rcwa(backend=backend, top=wavebit.Material(2.7, mu=mu),
                               theta=theta, phi=.6, period=[900., 900.], truncation_order=0)
         actual = np.array([_numpy(k).item() for k in solver.order_kxy()])
         want = np.sqrt(2.7 * mu) * np.sin(theta) * np.array([np.cos(.6), np.sin(.6)])
@@ -95,9 +99,9 @@ def test_interface_power_at_the_requested_phase_angle(route, side, pol, mu):
 @pytest.mark.parametrize('angles', [(.4 + .2j, .3), (.4, .3 + .1j)])
 def test_explicit_complex_angles_keep_the_formal_parameterization(backend, angles):
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     theta, phi = angles
-    solver = _legacy_wavebit.rcwa(backend=backend, top=4. + 3j, theta=theta, phi=phi,
+    solver = _legacy_wavebit_rcwa(backend=backend, top=4. + 3j, theta=theta, phi=phi,
                           period=[1000., 1000.], truncation_order=0)
     want = np.sqrt(4. + 3j) * np.sin(theta) * np.array([np.cos(phi), np.sin(phi)])
     np.testing.assert_allclose([_numpy(k).item() for k in solver.order_kxy()], want,
@@ -107,9 +111,9 @@ def test_explicit_complex_angles_keep_the_formal_parameterization(backend, angle
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_weakly_absorbing_negative_epsilon_keeps_its_phase_direction(backend):
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     eps, theta = -4. + 1e-8j, .4
-    solver = _legacy_wavebit.rcwa(backend=backend, top=eps, theta=theta,
+    solver = _legacy_wavebit_rcwa(backend=backend, top=eps, theta=theta,
                           period=[1000., 1000.], truncation_order=0)
     beta = _numpy(solver.order_kxy()[0]).item()
     q = np.sqrt(eps - beta**2)
@@ -122,8 +126,8 @@ def test_weakly_absorbing_negative_epsilon_keeps_its_phase_direction(backend):
 @pytest.mark.parametrize('theta', [np.pi / 2, -np.pi / 2, 1.7])
 def test_absorbing_grazing_phase_angle_is_refused(backend, theta):
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
-    solver = _legacy_wavebit.rcwa(backend=backend, top=4. + 3j, theta=theta,
+        _legacy_wavebit_enable_x64()
+    solver = _legacy_wavebit_rcwa(backend=backend, top=4. + 3j, theta=theta,
                           period=[1000., 1000.], truncation_order=0)
     with pytest.raises(ValueError, match=r'abs\(theta\).*pi/2'):
         solver.order_kxy()
@@ -135,15 +139,15 @@ def test_a_lossless_lit_medium_that_carries_no_wave_is_refused_by_name(top):
     """A lossless lit half-space with ``Re(eps*mu) <= 0`` carries no wave, so no real angle
     names a direction in it; the refusal names that condition, not only the absorbing medium's
     ``abs(theta) < pi/2``, which such a medium meets."""
-    solver = _legacy_wavebit.rcwa(top=top, theta=0.3, period=[1000., 1000.], truncation_order=0)
+    solver = _legacy_wavebit_rcwa(top=top, theta=0.3, period=[1000., 1000.], truncation_order=0)
     with pytest.raises(ValueError, match=r'lossless lit half-space must carry one'):
         solver.order_kxy()
 
 
 def test_oblique_lattice_and_dispersive_conditions_use_the_same_phase_vector():
-    material = _legacy_wavebit.TabulatedMaterial([500., 700.], [4. + 1j, 6. + 2j])
+    material = _legacy_wavebit_TabulatedMaterial([500., 700.], [4. + 1j, 6. + 2j])
     lattice = wavebit.Lattice.from_columns([[900., 300.], [0., 800.]])
-    solver = _legacy_wavebit.rcwa(top=1., bot=material, incidence_side='bottom', theta=.4, phi=.6,
+    solver = _legacy_wavebit_rcwa(top=1., bot=material, incidence_side='bottom', theta=.4, phi=.6,
                           wavelength=500., lattice=lattice, truncation_order=dict(u=1, v=1))
     reciprocal = 2 * np.pi * np.linalg.inv(np.column_stack(([900., 0.], [300., 800.]))).T
     for wavelength, eps in [(500., 4. + 1j), (700., 6. + 2j)]:
@@ -162,13 +166,13 @@ def test_absorption_gradients_at_fixed_phase_angle(backend, algorithm):
     if backend == 'jax':
         import jax
         import jax.numpy as xp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         import torch as xp
 
     def quantities(v):
         loss, theta = v[0], v[1]
-        solver = _legacy_wavebit.rcwa(
+        solver = _legacy_wavebit_rcwa(
             backend='jax' if backend == 'jax' else 'torch', top=2.25 + 1j * loss, bot=1.,
             theta=theta, phi=.3, polarization=(.6, .8j), wavelength=500.,
             period=[1000., 1000.], truncation_order=0, thickness=[75.],
@@ -205,12 +209,12 @@ def test_lossless_material_gradient_is_continuous(backend):
     if backend == 'jax':
         import jax
         import jax.numpy as xp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         import torch as xp
 
     def component(loss):
-        solver = _legacy_wavebit.rcwa(backend='jax' if backend == 'jax' else 'torch', top=2.25 + 1j*loss,
+        solver = _legacy_wavebit_rcwa(backend='jax' if backend == 'jax' else 'torch', top=2.25 + 1j*loss,
                               theta=.4, period=[1000., 1000.], truncation_order=0)
         return xp.real(solver.order_kxy()[0][0])
 
@@ -253,7 +257,7 @@ def test_reconstructed_field_has_uniform_surface_magnitude_and_normal_decay(rout
 @pytest.mark.parametrize('eps,theta', [(2.25, .4), (4. + 3j, .5),
                                        (-4. + 1e-4j, .4), (4. + 3j, 1.55)])
 def test_single_precision_phase_angle(backend, eps, theta):
-    solver = _legacy_wavebit.rcwa(backend=backend, complex_dtype=np.complex64, top=eps,
+    solver = _legacy_wavebit_rcwa(backend=backend, complex_dtype=np.complex64, top=eps,
                           theta=theta, phi=.3, period=[1000., 1000.], truncation_order=0)
     x, y = [_numpy(k).item() for k in solver.order_kxy()]
     beta = _beta(eps, 1., theta)
@@ -265,10 +269,10 @@ def test_single_precision_phase_angle(backend, eps, theta):
 def test_jit_vmap_and_invalid_traced_phase_angle():
     import jax
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 
     def transverse(loss, theta):
-        solver = _legacy_wavebit.rcwa(backend='jax', top=2.25 + 1j*loss, theta=theta,
+        solver = _legacy_wavebit_rcwa(backend='jax', top=2.25 + 1j*loss, theta=theta,
                               period=[1000., 1000.], truncation_order=0)
         return solver.order_kxy()[0][0]
 

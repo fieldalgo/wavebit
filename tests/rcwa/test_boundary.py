@@ -18,7 +18,9 @@ Two facts these tests exist to pin down, both learned the hard way:
   transforming to the identity, so NVF no longer collapses onto Li's rules).
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -192,7 +194,7 @@ def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
                            material=9.0))
     cfg = dict(backend='numpy', period=PERIOD, thickness=(0.32,), truncation_order=(order, order),
                top=1.0, bot=1.0, wavelength=1.6, psi=np.pi / 2, theta=0.0, phi=0.0)
-    build = lambda ng: _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
+    build = lambda ng: _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)],
                                     shape_nvf_grid_size=ng, **cfg)
 
     with pytest.raises(ValueError, match='aliases'):
@@ -523,7 +525,7 @@ def _solve(structure, truncation_order=6, **over):
     cfg = dict(backend='numpy', truncation_order=(truncation_order, truncation_order), period=PERIOD, thickness=(0.6,), wavelength=1.6,
                top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2)
     cfg.update(over)
-    return _legacy_wavebit.rcwa(structure=structure, **cfg)
+    return _legacy_wavebit_rcwa(structure=structure, **cfg)
 
 
 PAINT_SHAPES = [dict(type='rectangle', cx=-0.10, cy=-0.10, lx=0.34, ly=0.34, angle=0.0,
@@ -958,7 +960,7 @@ _PAINT_CFG = dict(period=(1.0, 1.0), wavelength=0.94, thickness=(0.32,), truncat
 
 
 def _painted_total(backend, w, curved=False, geometry=None):
-    solver = _legacy_wavebit.rcwa(backend=backend, structure=_two_painted(w, curved), **_PAINT_CFG)
+    solver = _legacy_wavebit_rcwa(backend=backend, structure=_two_painted(w, curved), **_PAINT_CFG)
     res = solver.solve() if geometry is None else solver.solve(geometry=geometry)
     t = res.T
     return float(np.sum(np.asarray(t.detach() if hasattr(t, 'detach') else t)).real)
@@ -1044,7 +1046,7 @@ def _ellipse_and_box(w, scene, angle=0.3):
 
 
 def _ellipse_and_box_total(backend, w, scene, angle=0.3):
-    solver = _legacy_wavebit.rcwa(backend=backend, lattice=np.diag([600.0, 600.0]), wavelength=900.0,
+    solver = _legacy_wavebit_rcwa(backend=backend, lattice=np.diag([600.0, 600.0]), wavelength=900.0,
                           thickness=[170.0], truncation_order=(2, 2), factorization='nvf',
                           shape_nvf_grid_size=32, structure=_ellipse_and_box(w, scene, angle))
     return solver.solve(auto_detune=False).T.sum().real
@@ -1146,7 +1148,7 @@ def test_freezing_a_painted_layer_works_on_torch():
     """
     torch = pytest.importorskip('torch')
     structure = _two_painted(lambda v: torch.tensor(v, dtype=torch.float64))
-    solver = _legacy_wavebit.rcwa(backend='torch', structure=structure, **_PAINT_CFG)
+    solver = _legacy_wavebit_rcwa(backend='torch', structure=structure, **_PAINT_CFG)
     frozen = solver.freeze_geometry()
     total = float(np.sum(np.asarray(solver.solve(geometry=frozen).T.detach())).real)
     assert total == pytest.approx(_painted_total('numpy', float), abs=1e-12)
@@ -1189,7 +1191,7 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
             dict(fixed)])]
 
     def total(v, geometry=None):
-        solver = _legacy_wavebit.rcwa(backend='jax', structure=structure(v), **cfg)
+        solver = _legacy_wavebit_rcwa(backend='jax', structure=structure(v), **cfg)
         res = solver.solve() if geometry is None else solver.solve(geometry=geometry)
         return jnp.sum(res.T).real
 
@@ -1205,7 +1207,7 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
 
     # and the documented route works, and agrees with central differences on the *painted*
     # structure rather than on the summed one
-    frozen = _legacy_wavebit.rcwa(backend='numpy', structure=structure(0.34), **cfg).freeze_geometry()
+    frozen = _legacy_wavebit_rcwa(backend='numpy', structure=structure(0.34), **cfg).freeze_geometry()
     analytic = float(jax.grad(lambda v: total(v, frozen))(jnp.asarray(0.34)))
     # Nearest-interface selection is piecewise smooth. At h=1e-4 a grid
     # point switches its nearest segment, so that secant is not the local
@@ -1213,9 +1215,9 @@ def test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad():
     # check, with a tighter tolerance than the former 2e-2 sanity band.
     for h in (1e-5, 1e-6):
         plus = float(np.sum(np.asarray(
-            _legacy_wavebit.rcwa(backend='numpy', structure=structure(0.34 + h), **cfg).solve().T)).real)
+            _legacy_wavebit_rcwa(backend='numpy', structure=structure(0.34 + h), **cfg).solve().T)).real)
         minus = float(np.sum(np.asarray(
-            _legacy_wavebit.rcwa(backend='numpy', structure=structure(0.34 - h), **cfg).solve().T)).real)
+            _legacy_wavebit_rcwa(backend='numpy', structure=structure(0.34 - h), **cfg).solve().T)).real)
         assert analytic == pytest.approx((plus - minus) / (2 * h), rel=2e-5)
 
     # Bit-identical, not merely close: the plan a gradient builds from the primal *is* the plan
@@ -1242,7 +1244,7 @@ def test_a_traced_single_shape_layer_is_not_refused():
         u = [dict(background=1.0, shapes=[
             dict(type='rectangle', cx=-0.04, cy=0.0, lx=v, ly=0.26, angle=0.3,
                  material=12.1104)])]
-        return jnp.sum(_legacy_wavebit.rcwa(backend='jax', structure=u, **cfg).solve().T).real
+        return jnp.sum(_legacy_wavebit_rcwa(backend='jax', structure=u, **cfg).solve().T).real
 
     assert np.isfinite(float(jax.grad(total)(jnp.asarray(0.34))))
 
@@ -1273,18 +1275,18 @@ def test_a_frozen_geometry_answers_the_overlap_question_for_every_layer():
 
     # the rods meet at cx = -0.06: -0.06 + 0.13 == 0.20 - 0.13
     for cx, overlapping in ((-0.08, False), (-0.04, True)):
-        frozen = _legacy_wavebit.rcwa(backend='numpy', structure=structure(cx), **cfg).freeze_geometry()
+        frozen = _legacy_wavebit_rcwa(backend='numpy', structure=structure(cx), **cfg).freeze_geometry()
         assert frozen.boundary_plans is not None, cx
         assert (frozen.boundary_plans[0] is not None) is overlapping, cx
 
         def total(v):
-            return jnp.sum(_legacy_wavebit.rcwa(backend='jax', structure=structure(v), **cfg)
+            return jnp.sum(_legacy_wavebit_rcwa(backend='jax', structure=structure(v), **cfg)
                            .solve(geometry=frozen).T).real
 
         analytic = float(jax.grad(total)(jnp.asarray(cx)))
         h = 1e-4
         step = [float(np.sum(np.asarray(
-            _legacy_wavebit.rcwa(backend='numpy', structure=structure(cx + s * h), **cfg).solve().T)).real)
+            _legacy_wavebit_rcwa(backend='numpy', structure=structure(cx + s * h), **cfg).solve().T)).real)
             for s in (1, -1)]
         assert analytic == pytest.approx((step[0] - step[1]) / (2 * h), rel=3e-2), cx
 
@@ -1323,7 +1325,7 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
                  lx=100.0, ly=90.0, angle=0.0, material=9.0)])]
 
     def dc(shift, slot):
-        m = getattr(_legacy_wavebit.rcwa(structure=layer(shift), **cfg).eps_conv_matrices(), slot)
+        m = getattr(_legacy_wavebit_rcwa(structure=layer(shift), **cfg).eps_conv_matrices(), slot)
         a = np.asarray(m[0])
         return complex(a[a.shape[0] // 2, a.shape[0] // 2]).real
 
@@ -1341,7 +1343,7 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
 
     # a whole period is the same sample points, so it is exact rather than merely close
     total = lambda shift: float(np.sum(np.asarray(
-        _legacy_wavebit.rcwa(structure=layer(shift), **cfg).solve().T)).real)
+        _legacy_wavebit_rcwa(structure=layer(shift), **cfg).solve().T)).real)
     assert total(0.0) == total(P)
 
 
@@ -1373,7 +1375,7 @@ _SPELLING_KW = dict(backend='numpy', wavelength=900.0, top=1.0, bot=2.25, theta=
 
 def _spelled(k, shapes, **over):
     P._PROJECTOR_CACHE.clear()
-    return _legacy_wavebit.rcwa(lattice=_spelling(k), structure=[dict(background=1.0, shapes=shapes)],
+    return _legacy_wavebit_rcwa(lattice=_spelling(k), structure=[dict(background=1.0, shapes=shapes)],
                         **dict(_SPELLING_KW, **over))
 
 
@@ -1486,7 +1488,7 @@ def test_a_painted_layer_on_an_unreduced_basis_replays_under_jit_over_the_lattic
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 
     solver = _spelled(10, _TWO_OVERLAPPING, backend='jax')
     frozen = solver.freeze_geometry()

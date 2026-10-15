@@ -1,6 +1,6 @@
 """Exact translated-polygon moments against independent weighted slice integration."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -151,9 +151,9 @@ def test_full_period_average_reduces_to_the_same_uniform_magnetic_slab():
                    truncation_order=0, align_layers=True, diffraction_method='directional')
     recipe = [dict(background=wavebit.Material(1.2, 1.03), shapes=[
         dict(cx=.13, cy=-.09, lx=.16, ly=.12, angle=.37, material=wavebit.Material(2.4, 1.13))])]
-    actual = _legacy_wavebit.fdtd(structure=recipe, shape_integration='area', shape_smoothing=[.4, .3], **options)
+    actual = _legacy_wavebit_fdtd(structure=recipe, shape_integration='area', shape_smoothing=[.4, .3], **options)
     fill = .16*.12/(.4*.3)
-    expected = _legacy_wavebit.fdtd(structure=np.full((1, 2, 1), 1.2+fill*(2.4-1.2)),
+    expected = _legacy_wavebit_fdtd(structure=np.full((1, 2, 1), 1.2+fill*(2.4-1.2)),
                             mu=np.full((1, 2, 1), 1.03+fill*(1.13-1.03)), **options)
     for column in ('s_inc', 'p_inc', 'incident'):
         for name in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):

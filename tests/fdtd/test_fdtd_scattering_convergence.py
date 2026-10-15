@@ -1,6 +1,6 @@
 """Calibrated incident-basis tails agree with separately truncated scene solves."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 from wavebit.fdtd._periodic.scene import _scattering_change_bound
@@ -20,8 +20,8 @@ def settings(**changes):
 def test_each_calibrated_basis_matches_an_independent_prefix(side, grading, stride):
     kw = settings(incidence_side=side, grading=grading, dft_subsample=stride,
                   record_field=41, record_components=['ex'], record_bounds={'z': (-.05, .25)})
-    full, d = _legacy_wavebit.fdtd(**kw, convergence_window=80)
-    prefix, earlier = _legacy_wavebit.fdtd(**dict(kw, n_periods=(d['steps']-80-.25)*d['dt']))
+    full, d = _legacy_wavebit_fdtd(**kw, convergence_window=80)
+    prefix, earlier = _legacy_wavebit_fdtd(**dict(kw, n_periods=(d['steps']-80-.25)*d['dt']))
     assert earlier['steps'] == d['steps']-80
     c = d['convergence']
     for basis in ('s_inc', 'p_inc'):
@@ -39,7 +39,7 @@ def test_each_calibrated_basis_matches_an_independent_prefix(side, grading, stri
 
 def test_scattering_bound_is_attained_by_a_unit_jones_input():
     kw = settings(n_periods=22)
-    _, d = _legacy_wavebit.fdtd(**kw, convergence_window=120)
+    _, d = _legacy_wavebit_fdtd(**kw, convergence_window=120)
     c = d['convergence']
     # Choose the output row with the largest bound, then the incident Jones
     # vector that makes its two independently measured tail contributions add.
@@ -49,8 +49,8 @@ def test_scattering_bound_is_attained_by_a_unit_jones_input():
     magnitude = np.linalg.norm(row)
     assert magnitude > 1e-8
     jones = np.conj(row)/magnitude
-    selected, selected_d = _legacy_wavebit.fdtd(**dict(kw, polarization=tuple(jones)), convergence_window=120)
-    prefix, _ = _legacy_wavebit.fdtd(**dict(kw, polarization=tuple(jones), n_periods=(d['steps']-120-.25)*d['dt']))
+    selected, selected_d = _legacy_wavebit_fdtd(**dict(kw, polarization=tuple(jones)), convergence_window=120)
+    prefix, _ = _legacy_wavebit_fdtd(**dict(kw, polarization=tuple(jones), n_periods=(d['steps']-120-.25)*d['dt']))
     measured = abs(getattr(selected[index[0]].incident, key)[index[1:]]
                    - getattr(prefix[index[0]].incident, key)[index[1:]])
     np.testing.assert_allclose(measured, c['scattering_change_bound'][key][index], atol=3e-14)
@@ -61,14 +61,14 @@ def test_scattering_bound_is_attained_by_a_unit_jones_input():
     # The bound is independent of the supplied polarization and diagnoses the
     # operator itself. Setting tolerance around its largest value flips the flag.
     for factor, expected in ((.9, False), (1.1, True)):
-        _, flagged = _legacy_wavebit.fdtd(**kw, convergence_window=120, convergence_tol=factor*magnitude)
+        _, flagged = _legacy_wavebit_fdtd(**kw, convergence_window=120, convergence_tol=factor*magnitude)
         assert bool(flagged['convergence']['scattering_settled']) is expected
 
 
 def test_unexcited_prefix_refuses_every_basis_and_operator_bound():
     kw = settings()
-    _, plain = _legacy_wavebit.fdtd(**kw)
-    _, d = _legacy_wavebit.fdtd(**kw, convergence_window=plain['steps']-1)
+    _, plain = _legacy_wavebit_fdtd(**kw)
+    _, d = _legacy_wavebit_fdtd(**kw, convergence_window=plain['steps']-1)
     c = d['convergence']
     assert not c['scattering_settled']
     for basis in ('s_inc', 'p_inc'):

@@ -4,7 +4,7 @@ Compare the same physical rectangular pair using an independent Cartesian Li
 factorization. Smooth contact values do not certify patterned optical accuracy.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -32,7 +32,7 @@ GAPS = (0., .0005, .001, .002, 1e-6, 1e-9)
 
 def solver(order, polarization, **kwargs):
     orders=(order,order) if isinstance(order,(int,np.integer)) else order
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', lattice=GEOMETRY["basis"], truncation_order=orders,
         wavelength=900., thickness=[300.], top=1., bot=2.25, theta=.2,
         phi=0., psi=0. if polarization == "p" else np.pi/2, **kwargs,

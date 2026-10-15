@@ -1,6 +1,6 @@
 """Public-API Meep source physically below an asymmetric stack; no Meep import."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -14,7 +14,7 @@ import numpy as np
 
 def test_bottom_scene_complex_amplitudes_against_meep_in_original_coordinates():
     ref=json.loads((repository_path('tests/references/golden_scene_bottom_meep.json')).read_text())
-    results=_legacy_wavebit.fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),
+    results=_legacy_wavebit_fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),
                          thickness=ref['thickness'][::-1],top=1.,bot=1.,period=.1,
                          wavelength=ref['wavelengths'],backend='numpy',incidence_side='bottom',
                          resolution=ref['resolution'],n_periods=35,truncation_order=0,tetm='te')

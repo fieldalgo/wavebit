@@ -1,4 +1,4 @@
-"""JobSpec is the serialisable form of a run, and ``wavebit.compat.legacy.run`` executes it statelessly.
+"""JobSpec is the serialisable form of a run, and the private historical executor executes it statelessly.
 
 Two properties carry the whole design and are gated here:
 
@@ -12,7 +12,17 @@ Validation is tested for rejection, not just acceptance: a bad spec caught at su
 far cheaper than one caught on a worker.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Layer as _legacy_wavebit_Layer
+
+from wavebit._common._jobs_v1 import Numerics as _legacy_wavebit_Numerics
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import dataclasses
 import json
 import re
@@ -21,7 +31,10 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit.compat.legacy import JobSpec, Sweep, SpecError, Factorization
+from wavebit._common._jobs_v1 import JobSpec
+from wavebit._common._jobs_v1 import Sweep
+from wavebit._common._jobs_v1 import SpecError
+from wavebit.rcwa._engine.enums import Factorization
 from wavebit import Backend, Material
 
 
@@ -44,9 +57,9 @@ BINARY_GRATING = {
 
 def test_run_matches_the_equivalent_rcwa_call():
     """The gate: a spec computes exactly what the legacy keyword call computes."""
-    result = _legacy_wavebit.run(BINARY_GRATING)
+    result = _legacy_wavebit_run(BINARY_GRATING)
 
-    reference = _legacy_wavebit.rcwa(
+    reference = _legacy_wavebit_rcwa(
         backend='numpy', wavelength=900., period=[700.], truncation_order=[10, 0],
         top=1., bot=2.25, theta=0., phi=0., tetm='te',
         structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.],
@@ -60,9 +73,9 @@ def test_run_matches_the_equivalent_rcwa_call():
 def test_run_accepts_spec_object_mapping_and_json():
     """All three input forms are the same run — the caller picks whichever it holds."""
     spec = JobSpec.from_dict(BINARY_GRATING)
-    from_obj = _legacy_wavebit.run(spec)
-    from_map = _legacy_wavebit.run(BINARY_GRATING)
-    from_str = _legacy_wavebit.run(spec.to_json())
+    from_obj = _legacy_wavebit_run(spec)
+    from_map = _legacy_wavebit_run(BINARY_GRATING)
+    from_str = _legacy_wavebit_run(spec.to_json())
 
     for other in (from_map, from_str):
         assert np.array_equal(from_obj.R, other.R)
@@ -165,7 +178,7 @@ def test_linspace_endpoints_are_exact():
 def test_running_a_sweep_spec_is_refused_with_the_way_out():
     spec = JobSpec.from_dict({**BINARY_GRATING, 'sweep': {'wavelength': [500.0, 600.0]}})
     with pytest.raises(SpecError, match=r'expand'):
-        _legacy_wavebit.run(spec)
+        _legacy_wavebit_run(spec)
 
 
 def test_expanded_sweep_points_match_direct_calls():
@@ -176,7 +189,7 @@ def test_expanded_sweep_points_match_direct_calls():
         direct = dict(BINARY_GRATING)
         direct['incidence'] = {**BINARY_GRATING['incidence'],
                                'wavelength': point.incidence.wavelength}
-        assert np.array_equal(_legacy_wavebit.run(point).R, _legacy_wavebit.run(direct).R)
+        assert np.array_equal(_legacy_wavebit_run(point).R, _legacy_wavebit_run(direct).R)
 
 
 # ---------------------------------------------------------------- rejection
@@ -239,7 +252,7 @@ def test_raster_ref_is_refused_by_the_stateless_entry_point():
 
 def test_run_rejects_a_type_it_cannot_interpret():
     with pytest.raises(SpecError, match=r'expected a JobSpec'):
-        _legacy_wavebit.run(42)
+        _legacy_wavebit_run(42)
 
 
 # ---------------------------------------------------------------- the version gate
@@ -270,7 +283,7 @@ def test_a_document_that_states_no_version_is_refused():
     with pytest.raises(SpecError, match=r'version'):
         JobSpec.from_dict(versionless)
     with pytest.raises(SpecError, match=r'version'):
-        _legacy_wavebit.run(versionless)                     # the same gate on the executing path
+        _legacy_wavebit_run(versionless)                     # the same gate on the executing path
     with pytest.raises(SpecError, match=r'version'):
         JobSpec.from_json(json.dumps(versionless))
 
@@ -293,8 +306,8 @@ def test_the_stale_document_only_the_version_can_catch():
 
     # and it is a *different scene*, not a near miss: state the version and it runs, happily,
     # conserving energy and answering a different question
-    stale = _legacy_wavebit.run({**INDEX_NUMBERS, 'version': '10'})
-    current = _legacy_wavebit.run(BINARY_GRATING)
+    stale = _legacy_wavebit_run({**INDEX_NUMBERS, 'version': '10'})
+    current = _legacy_wavebit_run(BINARY_GRATING)
     assert stale.R.sum() + stale.T.sum() == pytest.approx(1.0, abs=1e-13)
     assert current.R.sum() + current.T.sum() == pytest.approx(1.0, abs=1e-13)
     # far apart, so this is a statement about the scene and not about a tolerance -- and the
@@ -313,8 +326,9 @@ def test_the_version_free_path_is_the_python_one():
     the build that assembled it -- and ``to_dict`` always emits the field, so the requirement
     can never break a round trip.
     """
-    from wavebit.compat._jobs_v1 import SPEC_VERSION
-    from wavebit.compat.legacy import Stack, Incidence
+    from wavebit._common._jobs_v1 import SPEC_VERSION
+    from wavebit._common.periodic import Stack
+    from wavebit._common.periodic import Incidence
 
     spec = JobSpec(stack=Stack.from_structure(np.array([[[1.0, 12.25]]]), [300.0],
                                               top=1.0, bot=2.25, period=[700.0]),
@@ -361,7 +375,8 @@ def test_a_material_survives_the_round_trip_at_a_half_space():
     refused even the non-magnetic ``Material(2.25)``. Loudly, but a schema that one of its own
     domain objects cannot be written in is not one schema shared by every caller.
     """
-    from wavebit.compat.legacy import Stack, Incidence
+    from wavebit._common.periodic import Stack
+    from wavebit._common.periodic import Incidence
 
     spec = JobSpec(stack=Stack(layers=[], top=Material(2.25), bot=Material(4.0, mu=1.0),
                                period=[700.0]),
@@ -404,7 +419,7 @@ def test_the_object_form_and_the_scalar_shorthand_are_the_same_physics():
     """
     as_object = {**BINARY_GRATING,
                  'stack': dict(BINARY_GRATING['stack'], bot={'epsilon': 2.25})}
-    assert np.array_equal(_legacy_wavebit.run(as_object).R, _legacy_wavebit.run(BINARY_GRATING).R)
+    assert np.array_equal(_legacy_wavebit_run(as_object).R, _legacy_wavebit_run(BINARY_GRATING).R)
     assert JobSpec.from_dict(BINARY_GRATING).to_dict()['stack']['bot'] == 2.25
     assert JobSpec.from_dict(as_object).key() != JobSpec.from_dict(BINARY_GRATING).key()
 
@@ -440,12 +455,13 @@ def test_a_material_inside_a_shape_recipe_survives_too():
     ``material`` -- so the reader has to meet it at the same depths, or ``to_dict`` would emit
     a document its own ``from_dict`` reads as something else.
     """
-    from wavebit.compat.legacy import Stack, Incidence
+    from wavebit._common.periodic import Stack
+    from wavebit._common.periodic import Incidence
 
     layer = {'background': Material(12.96),
              'shapes': [{'type': 'rectangle', 'cx': 0.0, 'cy': 0.0, 'lx': 0.2, 'ly': 0.2,
                          'material': Material(2.25, mu=1.5)}]}
-    spec = JobSpec(stack=Stack(layers=[_legacy_wavebit.Layer(thickness=0.2, structure=layer)],
+    spec = JobSpec(stack=Stack(layers=[_legacy_wavebit_Layer(thickness=0.2, structure=layer)],
                                period=[1.0, 1.0]),
                    incidence=Incidence(wavelength=0.9))
 
@@ -494,7 +510,7 @@ def test_real_polar_angles_pass():
     assert len(spec) == 4
     # A lossless stack must still conserve energy at a real angle.
     for point in spec.expand():
-        r = _legacy_wavebit.run(point)
+        r = _legacy_wavebit_run(point)
         assert r.R.sum() + r.T.sum() == pytest.approx(1.0, abs=1e-9)
 
 
@@ -511,11 +527,11 @@ def _oblique_spec():
     eps = np.ones((1, 16, 16))
     eps[0, 3:8, 2:7] = 12.25
     return basis, JobSpec(
-        stack=_legacy_wavebit.Stack.from_structure(eps, [300.0], top=1.0, bot=1.0,
+        stack=_legacy_wavebit_Stack.from_structure(eps, [300.0], top=1.0, bot=1.0,
                                           period=(400.0, 400.0),
                                           lattice=basis.tolist()),
-        incidence=_legacy_wavebit.Incidence(wavelength=900.0, theta=0.1, phi=0.3, psi=0.2),
-        numerics=_legacy_wavebit.Numerics(backend='numpy', truncation_order=[4, 4],
+        incidence=_legacy_wavebit_Incidence(wavelength=900.0, theta=0.1, phi=0.3, psi=0.2),
+        numerics=_legacy_wavebit_Numerics(backend='numpy', truncation_order=[4, 4],
                                   factorization=Factorization.NVF))
 
 
@@ -531,8 +547,8 @@ def test_an_oblique_cell_survives_the_round_trip():
     back = JobSpec.from_json(spec.to_json())
     assert np.allclose(np.asarray(back.stack.lattice), basis)
 
-    a = _legacy_wavebit.run(spec)
-    b = _legacy_wavebit.run(back)
+    a = _legacy_wavebit_run(spec)
+    b = _legacy_wavebit_run(back)
     assert np.asarray(a.R).tobytes() == np.asarray(b.R).tobytes()
 
     # And the field, not only the efficiencies. `R` is a sum over orders, so it survives a
@@ -542,7 +558,7 @@ def test_an_oblique_cell_survives_the_round_trip():
     # for a different reason, and it is simply the larger one: 5 axes against 1.
     fields = []
     for one in (spec, back):
-        solver = _legacy_wavebit.rcwa(**one.stack.as_kwargs(), **one.incidence.as_kwargs(),
+        solver = _legacy_wavebit_rcwa(**one.stack.as_kwargs(), **one.incidence.as_kwargs(),
                               **one.numerics.as_kwargs())
         solver.answers = 'field'          # `numerics.as_kwargs()` already carries one
         solver.solve()
@@ -559,13 +575,13 @@ def test_the_round_trip_is_not_merely_carrying_the_edge_lengths():
     round-trip, still solve, and still conserve energy — just a different structure.
     """
     basis, spec = _oblique_spec()
-    oblique = float(np.sum(_legacy_wavebit.run(spec).R))
+    oblique = float(np.sum(_legacy_wavebit_run(spec).R))
 
-    square = JobSpec(stack=_legacy_wavebit.Stack.from_structure(
+    square = JobSpec(stack=_legacy_wavebit_Stack.from_structure(
         spec.stack.structure, spec.stack.thickness, top=1.0, bot=1.0, period=(400.0, 400.0)),
         incidence=spec.incidence, numerics=spec.numerics)
     assert square.stack.lattice is None
-    assert not np.isclose(oblique, float(np.sum(_legacy_wavebit.run(square).R)))
+    assert not np.isclose(oblique, float(np.sum(_legacy_wavebit_run(square).R)))
 
 
 def test_a_spec_without_a_lattice_is_unchanged():
@@ -591,9 +607,9 @@ def _numerics_enum_fields():
     import typing
     from enum import Enum
 
-    hints = typing.get_type_hints(_legacy_wavebit.Numerics)
+    hints = typing.get_type_hints(_legacy_wavebit_Numerics)
     out = {}
-    for f in dataclasses.fields(_legacy_wavebit.Numerics):
+    for f in dataclasses.fields(_legacy_wavebit_Numerics):
         hint = hints[f.name]
         union = typing.get_origin(hint) in (typing.Union, types.UnionType)
         args = typing.get_args(hint) if union else (hint,)
@@ -633,11 +649,11 @@ def test_numerics_built_directly_is_the_numerics_from_dict_builds(name, member):
     not raise wrote ``'FIELD'`` / ``1`` into the document where ``from_dict`` wrote ``'field'``
     / ``'jax'`` -- one run, two cache keys.
     """
-    reference = _legacy_wavebit.Numerics.from_dict({name: member.name.lower()})
+    reference = _legacy_wavebit_Numerics.from_dict({name: member.name.lower()})
     for spelling in _spellings(member):
-        built = _legacy_wavebit.Numerics(**{name: spelling})
+        built = _legacy_wavebit_Numerics(**{name: spelling})
         assert getattr(built, name) is member, spelling
-        assert built == reference == _legacy_wavebit.Numerics.from_dict({name: spelling}), spelling
+        assert built == reference == _legacy_wavebit_Numerics.from_dict({name: spelling}), spelling
 
         # the solver keyword: the plain value, never the member, never dropped
         kwargs = built.as_kwargs()
@@ -648,7 +664,7 @@ def test_numerics_built_directly_is_the_numerics_from_dict_builds(name, member):
         # the document: a plain string, the canonical one, and it reads back as itself
         written = built.to_dict()[name]
         assert type(written) is str and written == member.name.lower(), (spelling, written)
-        assert _legacy_wavebit.Numerics.from_dict(json.loads(json.dumps(built.to_dict()))) == built
+        assert _legacy_wavebit_Numerics.from_dict(json.loads(json.dumps(built.to_dict()))) == built
 
         # and the whole spec: one run, one key, whichever spelling built it
         spec = JobSpec(numerics=built)
@@ -660,9 +676,9 @@ def test_numerics_built_directly_is_the_numerics_from_dict_builds(name, member):
 def test_numerics_refuses_a_name_that_is_no_member_on_both_doors(name):
     """Refused at construction, with the message the JSON door gives -- not stored as typed."""
     with pytest.raises(SpecError) as direct:
-        _legacy_wavebit.Numerics(**{name: 'bogus'})
+        _legacy_wavebit_Numerics(**{name: 'bogus'})
     with pytest.raises(SpecError) as parsed:
-        _legacy_wavebit.Numerics.from_dict({name: 'bogus'})
+        _legacy_wavebit_Numerics.from_dict({name: 'bogus'})
     assert str(direct.value) == str(parsed.value)
     assert str(direct.value).startswith(f'numerics.{name}: ')
 
@@ -672,14 +688,14 @@ def test_numerics_reads_none_as_the_json_door_does(name):
     """``None`` is "unset" where the annotation is ``Optional`` and a refusal where it is not."""
     _, optional = ENUM_FIELDS[name]
     if optional:
-        for numerics in (_legacy_wavebit.Numerics(**{name: None}), _legacy_wavebit.Numerics.from_dict({name: None})):
+        for numerics in (_legacy_wavebit_Numerics(**{name: None}), _legacy_wavebit_Numerics.from_dict({name: None})):
             assert getattr(numerics, name) is None
             assert name not in numerics.as_kwargs()
         return
     with pytest.raises(SpecError) as direct:
-        _legacy_wavebit.Numerics(**{name: None})
+        _legacy_wavebit_Numerics(**{name: None})
     with pytest.raises(SpecError) as parsed:
-        _legacy_wavebit.Numerics.from_dict({name: None})
+        _legacy_wavebit_Numerics.from_dict({name: None})
     assert str(direct.value) == str(parsed.value)
 
 
@@ -700,9 +716,9 @@ def test_numerics_assigned_after_construction_is_the_numerics_construction_build
     two cache keys. Each assignment starts from another member, so
     one that stored nothing fails here rather than matching a default it left behind.
     """
-    built = _legacy_wavebit.Numerics(**{name: member.name.lower()})
+    built = _legacy_wavebit_Numerics(**{name: member.name.lower()})
     for spelling in _spellings(member):
-        assigned = _legacy_wavebit.Numerics(**{name: _other_member(name, member)})
+        assigned = _legacy_wavebit_Numerics(**{name: _other_member(name, member)})
         setattr(assigned, name, spelling)
         assert getattr(assigned, name) is member, spelling
         assert assigned == built, spelling
@@ -720,18 +736,18 @@ def test_numerics_assignment_refuses_what_from_dict_refuses_and_keeps_the_field(
     enum_cls, optional = ENUM_FIELDS[name]
     held = list(enum_cls)[-1]
     for value in ('bogus', 99) + (() if optional else (None,)):
-        numerics = _legacy_wavebit.Numerics(**{name: held})
+        numerics = _legacy_wavebit_Numerics(**{name: held})
         with pytest.raises(SpecError) as assigned:
             setattr(numerics, name, value)
         with pytest.raises(SpecError) as parsed:
-            _legacy_wavebit.Numerics.from_dict({name: value})
+            _legacy_wavebit_Numerics.from_dict({name: value})
         assert str(assigned.value) == str(parsed.value), value
         assert getattr(numerics, name) is held, value
     if optional:                        # and "unset" is assignable where it is constructible
-        numerics = _legacy_wavebit.Numerics(**{name: held})
+        numerics = _legacy_wavebit_Numerics(**{name: held})
         setattr(numerics, name, None)
         assert getattr(numerics, name) is None and name not in numerics.as_kwargs()
-        assert numerics == _legacy_wavebit.Numerics.from_dict({name: None})
+        assert numerics == _legacy_wavebit_Numerics.from_dict({name: None})
 
 
 #: What each field needs beside it for a solver to accept it. A field missing here is built
@@ -759,13 +775,13 @@ def test_a_directly_built_numerics_reaches_the_solver_and_crosses_its_pytree(nam
     eps = np.ones((1, 8, 8))
     eps[0, 2:5, 1:6] = 6.0
     spec = JobSpec(
-        stack=_legacy_wavebit.Stack.from_structure(eps, [120.0], top=1.0, bot=2.25,
+        stack=_legacy_wavebit_Stack.from_structure(eps, [120.0], top=1.0, bot=2.25,
                                            period=(400.0, 400.0)),
-        incidence=_legacy_wavebit.Incidence(wavelength=900.0, theta=0.2, phi=0.1, psi=0.3),
-        numerics=_legacy_wavebit.Numerics(truncation_order=(2, 2),
+        incidence=_legacy_wavebit_Incidence(wavelength=900.0, theta=0.2, phi=0.1, psi=0.3),
+        numerics=_legacy_wavebit_Numerics(truncation_order=(2, 2),
                                   **{'backend': 'jax', **_SOLVER_COMPANIONS.get(name, {}),
                                      name: member.name.lower()}))
-    solver = _legacy_wavebit.rcwa(**spec.numerics.as_kwargs(), **spec.stack.as_kwargs(),
+    solver = _legacy_wavebit_rcwa(**spec.numerics.as_kwargs(), **spec.stack.as_kwargs(),
                           **spec.incidence.as_kwargs())
     assert getattr(solver, name) == member
 
@@ -782,7 +798,7 @@ def _spec_dataclasses():
     Read rather than listed, so a dataclass the module gains is held to the door the day it
     lands; `test_the_spec_dataclass_list_is_not_vacuous` keeps the derivation honest.
     """
-    from wavebit.compat import _jobs_v1 as spec_module
+    from wavebit._common import _jobs_v1 as spec_module
     return {v.__name__: v for v in vars(spec_module).values()
             if isinstance(v, type) and dataclasses.is_dataclass(v)}
 
@@ -796,7 +812,7 @@ MUTABLE_FIELDS = [(name, f.name) for name in MUTABLE
 _FIELD_IDS = [f'{c}.{f}' for c, f in MUTABLE_FIELDS]
 #: What a mutable class needs to be built. A class missing here is built bare; if that raises,
 #: add the row.
-_BUILD = {'Layer': lambda: _legacy_wavebit.Layer(thickness=300.0, structure=np.ones((1, 4)))}
+_BUILD = {'Layer': lambda: _legacy_wavebit_Layer(thickness=300.0, structure=np.ones((1, 4)))}
 
 
 def _build(name):
@@ -829,7 +845,7 @@ def test_a_typo_on_the_incidence_is_refused_and_the_angle_is_not_left_behind():
     2026-08-27, left open on the objects a spec is built from. The same typo through a spec's
     own ``incidence`` and through the document door is refused and pointed at ``theta`` alike.
     """
-    inc = _legacy_wavebit.Incidence(wavelength=900.0, theta=0.0)
+    inc = _legacy_wavebit_Incidence(wavelength=900.0, theta=0.0)
     with pytest.raises(AttributeError, match=r"Incidence has no attribute 'thet' to set\. "
                                              r"Did you mean 'theta'\?"):
         inc.thet = 0.2
@@ -876,14 +892,14 @@ def test_every_declared_field_still_assigns(cls_name, field_name):
 def test_the_retired_nesting_is_pointed_at_li_nesting_on_both_numerics_doors():
     """``nesting`` is no alias (`tests/rcwa/test_li_nesting.py`); on ``Numerics`` it was stored, and
     the spec then asked the solver for the fixed nesting the caller had meant to leave."""
-    numerics = _legacy_wavebit.Numerics(li_nesting='fixed')
+    numerics = _legacy_wavebit_Numerics(li_nesting='fixed')
     with pytest.raises(AttributeError, match=r"Numerics has no attribute 'nesting' to set\. "
                                              r"Did you mean 'li_nesting'\?"):
         numerics.nesting = 'symmetric'
     assert 'nesting' not in vars(numerics)
     assert numerics.as_kwargs()['li_nesting'] == 'fixed'
     with pytest.raises(SpecError, match=r"\['nesting'\]\. Did you mean 'li_nesting'\?"):
-        _legacy_wavebit.Numerics.from_dict({'nesting': 'symmetric'})
+        _legacy_wavebit_Numerics.from_dict({'nesting': 'symmetric'})
 
 
 #: Where the document door parses each class's keys: the mapping that holds them.
@@ -931,11 +947,11 @@ def test_the_retired_nvf_spellings_are_renamed_only_where_the_new_name_lives():
     another class. The document door offered the rename under ``numerics`` only, by checking
     where it was; the shared hint asks the question that matters -- can the owner take it."""
     rename = "Renamed NVF option(s): 'normal_method' -> 'raster_normal_method'."
-    for door in (lambda: setattr(_legacy_wavebit.Numerics(), 'normal_method', 'contour'),
-                 lambda: _legacy_wavebit.Numerics.from_dict({'normal_method': 'contour'})):
+    for door in (lambda: setattr(_legacy_wavebit_Numerics(), 'normal_method', 'contour'),
+                 lambda: _legacy_wavebit_Numerics.from_dict({'normal_method': 'contour'})):
         with pytest.raises((AttributeError, SpecError), match=re.escape(rename)):
             door()
-    for door in (lambda: setattr(_legacy_wavebit.Stack(), 'projector', 'linear'),
+    for door in (lambda: setattr(_legacy_wavebit_Stack(), 'projector', 'linear'),
                  lambda: JobSpec.from_dict({'version': '10', 'stack': {'projector': 'linear'}})):
         with pytest.raises((AttributeError, SpecError)) as refusal:
             door()
@@ -960,10 +976,10 @@ def test_what_the_door_lets_through_besides_the_fields():
                     setattr(obj, attr, None)
     assert {'Stack.thickness', 'Stack.structure', 'Stack.mu', 'Layer.is_raster'} <= set(readonly)
 
-    spec = JobSpec(numerics=_legacy_wavebit.Numerics())
+    spec = JobSpec(numerics=_legacy_wavebit_Numerics())
     spec.numerics.check = lambda: ('stubbed',)
     assert spec.check() == ('[numerics] stubbed',)
-    assert dataclasses.replace(_legacy_wavebit.Incidence(), theta=0.3).theta == 0.3
+    assert dataclasses.replace(_legacy_wavebit_Incidence(), theta=0.3).theta == 0.3
 
 
 def test_a_copied_spec_keeps_the_door_and_its_key():
@@ -1030,7 +1046,7 @@ def test_n_top_and_n_bot_are_told_the_slots_are_permittivity_not_pointed_at_them
     import difflib
     for name, slot in (('n_top', 'top'), ('n_bot', 'bot')):
         assert difflib.get_close_matches(name, _declared('Stack'), n=1, cutoff=0.6) == [slot]
-        stack = _legacy_wavebit.Stack(top=1.0, bot=2.25)
+        stack = _legacy_wavebit_Stack(top=1.0, bot=2.25)
         with pytest.raises(AttributeError) as assigned:
             setattr(stack, name, 1.5)
         with pytest.raises(SpecError) as parsed:
@@ -1168,7 +1184,7 @@ def test_no_settable_name_is_read_as_a_quantity_it_is_not():
     as what it holds: the material slots as permittivity, ``mu`` as permeability, the rest as
     nothing. A field added as ``n_layers`` would fail here before it lost its guesses."""
     from wavebit._common.names import name_quantities
-    solver = _legacy_wavebit.rcwa(structure=np.ones((1, 1, 4)), thickness=[100.0], wavelength=900.0,
+    solver = _legacy_wavebit_rcwa(structure=np.ones((1, 1, 4)), thickness=[100.0], wavelength=900.0,
                           period=[1.0, 1.0])
     names = {f for _, f in MUTABLE_FIELDS} | set(solver._condition_names())
     expected = {'top': {'permittivity'}, 'bot': {'permittivity'},
@@ -1191,8 +1207,8 @@ _GRATING_STACK = BINARY_GRATING['stack']
 
 
 @pytest.mark.parametrize('build', [
-    lambda: _legacy_wavebit.Numerics.from_dict({1: 2}),
-    lambda: _legacy_wavebit.Numerics.from_dict({1: 2, 'backend': 'numpy', 'x': 3}),
+    lambda: _legacy_wavebit_Numerics.from_dict({1: 2}),
+    lambda: _legacy_wavebit_Numerics.from_dict({1: 2, 'backend': 'numpy', 'x': 3}),
     lambda: Sweep.from_dict({0: [1.0]}),
     lambda: Sweep.from_dict({'wavelength': {0: [1.0]}}),
     lambda: JobSpec.from_dict({**BINARY_GRATING, 'incidence': {None: 1}}),

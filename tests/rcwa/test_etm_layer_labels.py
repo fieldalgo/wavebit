@@ -23,7 +23,9 @@ Each half is load-bearing, and the tests below carry the controls that show it:
   near-cutoff modes grew by up to ``e**167`` across it and put ETM 2.7 off SMM.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ComplexIncidenceWarning as _legacy_wavebit_ComplexIncidenceWarning
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -42,14 +44,14 @@ NUDGE = 1 + 1e-14
 
 def _r0(theta, algorithm, thickness=100e-9, phi=0.3):
     """The s-polarised zeroth-order reflection amplitude of the scene above."""
-    solver = _legacy_wavebit.rcwa(backend='numpy', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=phi,
+    solver = _legacy_wavebit_rcwa(backend='numpy', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=phi,
                           truncation_order=[30], wavelength=900e-9, period=[2000e-9],
                           structure=STRUCTURE, thickness=[thickness], complex_dtype=0,
                           fourier_coefficients='integrated', factorization='li',
                           layer_algorithm=algorithm)
     with warnings.catch_warnings():
         # R and T are formal ratios at a complex angle, which is the warning's whole content.
-        warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+        warnings.simplefilter('ignore', _legacy_wavebit_ComplexIncidenceWarning)
         res = solver.solve()
     amp = np.asarray(res.s_inc.r_s).ravel()
     return complex(amp[len(amp) // 2])
@@ -153,13 +155,13 @@ def test_evanescent_incidence_needs_no_override(offset):
 
 def _r0_tetm(theta, algorithm, tetm):
     """The same grating on the pure TE / TM path (``phi = 0``), at its own amplitude."""
-    solver = _legacy_wavebit.rcwa(backend='numpy', tetm=tetm, top=1.0, bot=25.0, theta=theta,
+    solver = _legacy_wavebit_rcwa(backend='numpy', tetm=tetm, top=1.0, bot=25.0, theta=theta,
                           truncation_order=[30], wavelength=900e-9, period=[2000e-9],
                           structure=STRUCTURE, thickness=[100e-9], complex_dtype=0,
                           fourier_coefficients='integrated', factorization='li',
                           layer_algorithm=algorithm)
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+        warnings.simplefilter('ignore', _legacy_wavebit_ComplexIncidenceWarning)
         res = solver.solve().incident
     amp = np.asarray(res.r_s if tetm == 'te' else res.r_p).ravel()
     return complex(amp[len(amp) // 2])
@@ -187,14 +189,14 @@ def _r0_2d(theta, algorithm):
     cell = np.full((6, 6), 25.0)
     cell[0, :] = 1.0
     cell[:, 0] = 1.0
-    solver = _legacy_wavebit.rcwa(backend='numpy', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3,
+    solver = _legacy_wavebit_rcwa(backend='numpy', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3,
                           truncation_order=[6, 6], wavelength=900e-9,
                           period=[2000e-9, 2000e-9], structure=cell[None],
                           thickness=[100e-9], complex_dtype=0,
                           fourier_coefficients='integrated', factorization='li',
                           layer_algorithm=algorithm)
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+        warnings.simplefilter('ignore', _legacy_wavebit_ComplexIncidenceWarning)
         res = solver.solve()
     amp = np.asarray(res.s_inc.r_s)
     return complex(amp[amp.shape[0] // 2, amp.shape[1] // 2])

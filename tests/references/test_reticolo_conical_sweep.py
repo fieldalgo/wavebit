@@ -23,7 +23,9 @@ for where it came from. RETICOLO's amplitude convention is the conjugate of this
 is what the original study compared too.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ComplexIncidenceWarning as _legacy_wavebit_ComplexIncidenceWarning
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -83,7 +85,7 @@ def _solve(g, i, j):
     kx, ky = g['kx'], g['ky']
     theta = np.arcsin(np.sqrt(kx[i] ** 2 + ky[j] ** 2 + 0.0001, dtype=np.complex128))
     phi = np.arctan(ky[j] / (kx[i] + 0.0001), dtype=np.complex128)
-    res = _legacy_wavebit.rcwa(backend='numpy', psi=np.pi / 2, **_scene(g),
+    res = _legacy_wavebit_rcwa(backend='numpy', psi=np.pi / 2, **_scene(g),
                          theta=theta, phi=phi, truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                          period=list(g['period']),
                          thickness=list(g['thickness'])[::-1],
@@ -170,7 +172,7 @@ def test_double_precision_agrees_across_backends_at_a_complex_angle(backend):
     phi = np.arctan(ky / (kx + 0.0001), dtype=np.complex128)
 
     def solve(bk):
-        res = _legacy_wavebit.rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
+        res = _legacy_wavebit_rcwa(backend=bk, psi=np.pi / 2, **_scene(g),
                              theta=theta, phi=phi, truncation_order=[40],
                              wavelength=float(g['wavelength']), period=list(g['period']),
                              thickness=list(g['thickness'])[::-1],
@@ -202,8 +204,8 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     # arbitrary, but it has to be *a permittivity* or the slab is not the one described.
     scene['structure'] = np.full_like(np.asarray(scene['structure'], dtype=float), 6.25)
     # Re(theta) != pi/2 makes kx itself complex, which the solve now says out loud.
-    with pytest.warns(_legacy_wavebit.ComplexIncidenceWarning):
-        res = _legacy_wavebit.rcwa(backend='numpy', psi=np.pi / 2, **scene,
+    with pytest.warns(_legacy_wavebit_ComplexIncidenceWarning):
+        res = _legacy_wavebit_rcwa(backend='numpy', psi=np.pi / 2, **scene,
                              theta=np.complex128(0.5 + 0.3j), phi=np.complex128(0.3),
                              truncation_order=[MAX_ORDER], wavelength=float(g['wavelength']),
                              period=list(g['period']),

@@ -1,6 +1,6 @@
 """Production Cartesian shape Li agrees with independently painted raster integrals."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -17,7 +17,7 @@ def solver(shapes, backend='numpy', background=1., **kwargs):
                    theta=.2, phi=0., psi=0., thickness=(300.,), truncation_order=(2,2),
                    factorization='li', structure=[dict(background=background, shapes=shapes)])
     options.update(kwargs)
-    return _legacy_wavebit.rcwa(**options)
+    return _legacy_wavebit_rcwa(**options)
 
 
 @pytest.mark.parametrize('shapes', [[], [box(350,700)],

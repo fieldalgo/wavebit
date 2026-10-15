@@ -36,7 +36,9 @@ The sibling defect in the *analytic* (non-raster) path is older and pinned elsew
 which pinned the defect under the opposite name until ``c128fd8`` fixed it.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -189,7 +191,7 @@ def test_the_solve_is_covariant_on_a_multi_phase_raster(shift, axis):
     structure[0, 11:14, 2:6] = 1.60
 
     def efficiencies(uc):
-        solver = _legacy_wavebit.rcwa(structure=uc, truncation_order=[5, 3], factorization='nvf', **SOLVE_KW)
+        solver = _legacy_wavebit_rcwa(structure=uc, truncation_order=[5, 3], factorization='nvf', **SOLVE_KW)
         return np.asarray(solver.solve().incident.R, dtype=complex)
 
     moved = np.abs(efficiencies(structure) - efficiencies(np.roll(structure, shift, axis=axis))).max()
@@ -212,7 +214,7 @@ def test_the_defect_did_not_converge_with_max_order_which_is_why_it_was_a_defect
     rolled = np.roll(structure, 7, axis=2)
     for truncation_order in ([3, 2], [5, 3], [8, 5]):
         def efficiencies(uc):
-            solver = _legacy_wavebit.rcwa(structure=uc, truncation_order=truncation_order, factorization='nvf', **SOLVE_KW)
+            solver = _legacy_wavebit_rcwa(structure=uc, truncation_order=truncation_order, factorization='nvf', **SOLVE_KW)
             return np.asarray(solver.solve().incident.R, dtype=complex)
 
         moved = np.abs(efficiencies(structure) - efficiencies(rolled)).max()
@@ -322,7 +324,7 @@ def test_contour_is_periodic_under_a_roll_that_lands_on_the_corner():
                period=[1.0, 1.0], raster_normal_method='contour')
 
     def spread(cell, rolls):
-        got = [float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+        got = [float(np.sum(np.asarray(_legacy_wavebit_rcwa(
             structure=np.roll(np.roll(cell, r[0], axis=0), r[1], axis=1)[None],
             **cfg).solve().T))) for r in rolls]
         return max(got) - min(got), got
@@ -474,7 +476,7 @@ def test_contour_is_periodic_where_the_medial_axis_is_reachable(name, build, rol
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                raster_normal_method='contour')
     cfg['period'] = [1.0, 1.0]
-    got = [float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+    got = [float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         structure=np.roll(np.roll(cell, r[0], axis=0), r[1], axis=1)[None],
         **cfg).solve().T))) for r in rolls]
     assert max(got) - min(got) < 1e-9, f'{name}: sum(T) moved by {max(got) - min(got):.2e}'
@@ -520,8 +522,8 @@ def _translation_defect(cell, shift, method, lattice=None, to=3):
                                                           else [1.0, 1.0])
     n_v, n_u = cell.shape
     rolled = np.roll(np.roll(cell, shift[0], axis=0), shift[1], axis=1)
-    A = _legacy_wavebit.rcwa(structure=cell[None], **kw).eps_conv_matrices()
-    B = _legacy_wavebit.rcwa(structure=rolled[None], **kw).eps_conv_matrices()
+    A = _legacy_wavebit_rcwa(structure=cell[None], **kw).eps_conv_matrices()
+    B = _legacy_wavebit_rcwa(structure=rolled[None], **kw).eps_conv_matrices()
     d = _phase_diagonal(to, shift[0], shift[1], n_v, n_u)
     slots = [(np.asarray(A[k])[0], np.asarray(B[k])[0]) for k in (0, 1, 3)]
     scale = max(max(float(np.abs(a).max()) for a, _ in slots), 1e-30)
@@ -732,7 +734,7 @@ def test_half_fill_contour_translation_is_invariant():
     cfg = dict(backend='numpy', thickness=[0.3], truncation_order=(6, 6), top=1.0, bot=1.0,
                wavelength=0.94, psi=np.pi / 2, theta=0.1, phi=0.2, factorization='nvf',
                raster_normal_method='contour', period=[1.0, 1.0])
-    got = [float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+    got = [float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         structure=np.roll(np.roll(cell, a, axis=0), b, axis=1)[None], **cfg).solve().T)))
         for a in range(0, n, 16) for b in range(0, n, 16)]
     assert max(got) - min(got) < 1e-9, f'sum(T) moved by {max(got) - min(got):.2e}'
@@ -853,7 +855,7 @@ def test_a_round_feature_overlapping_its_own_images_is_periodic(radius, percolat
     n = 64
     t = np.deg2rad(20.0)
     lattice = np.column_stack(([640.0, 0.0], [640.0 * np.cos(t), 640.0 * np.sin(t)]))
-    X, Y = _legacy_wavebit.meshgrid_xy((n, n), lattice=lattice)
+    X, Y = _legacy_wavebit_meshgrid_xy((n, n), lattice=lattice)
     cell = np.where(X ** 2 + Y ** 2 <= float(radius) ** 2, 12.25, 1.0)
 
     from wavebit.rcwa._engine.normal_methods import _contour_polylines, _isotropic_blur, _two_phase_indicator, _metric, _pixel_size, _CONTOUR_SIGMA_COEF

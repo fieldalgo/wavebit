@@ -1,5 +1,11 @@
 # Coupled dielectric geometry in a matched absorber
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 :::{note}
 `Absorber` is not in the current `wavebit.fdtd` yet: its absorbing faces are `Open()` with a `PML` (`Numerics(absorber=...)` takes only `fdtd.PML`), and a finite body may not reach them. This page's example therefore uses the earlier interface, `wavebit.compat.legacy.fd`.
 :::

@@ -1,6 +1,8 @@
 """A vacuum plane wave fixes the derivative of count-based sample positions."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -32,7 +34,7 @@ def analytic(kind,count,door):
 @pytest.mark.parametrize('kind',['x','y','both'])
 @pytest.mark.parametrize('count',[1,3])
 def test_period_tangent_includes_motion_of_count_samples(backend,door,kind,count):
-    s=_legacy_wavebit.rcwa(backend='jax' if backend=='jax' else 'torch',structure=np.ones((1,1,1)),
+    s=_legacy_wavebit_rcwa(backend='jax' if backend=='jax' else 'torch',structure=np.ones((1,1,1)),
                   thickness=[D],period=P,wavelength=WL,theta=THETA,phi=PHI,
                   truncation_order=(0,0),answers='field')
     sx,sy=samples(kind,count)
@@ -50,7 +52,7 @@ def test_period_tangent_includes_motion_of_count_samples(backend,door,kind,count
     if backend=='jax':
         jax=pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         if kind!='both' and door!='legacy':
             with pytest.raises(ValueError,match='skewed or traced lattice'):
                 jax.value_and_grad(lambda p:loss(p,jnp))(jnp.asarray(P))

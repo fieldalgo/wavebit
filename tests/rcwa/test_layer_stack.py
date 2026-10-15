@@ -15,7 +15,7 @@ two conditions and the diagonal is the only part of it that was ever correct. Sp
 mismatch would have checked one of the two directions.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -47,7 +47,7 @@ def _solver(path, layers, thicknesses, backend='numpy', **over):
     if path == 'smooth':
         kw['factorization'] = 'nvf'
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 @pytest.mark.parametrize('thicknesses', COUNTS)

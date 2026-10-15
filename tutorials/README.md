@@ -16,36 +16,66 @@ After those introductions, the current API has three executable worked examples:
 These scripts retain their checks and need no plotting library unless the optional
 FDTD `--plot` output is requested. Only the optimization example needs JAX.
 
-## Advanced compatibility tutorials
+## Current advanced lessons
 
-The ten numbered notebooks below explicitly import `wavebit.compat.legacy`. Their numerical teaching workflow and formulas are preserved; the public root `wavebit.rcwa` and `wavebit.fdtd` are modules, so they cannot be called as the historical factory functions. See the [migration guide](../docs/migration/index.md).
+The topics in the older notebooks have the following current entry points. They
+use physical problems, explicit units and execution settings. The scripts retain
+their own numerical checks; they do not reproduce the old notebook timing tables.
 
-Lessons, read in order, for the earlier solver workflow. The boundary against
-[`../docs/`](../docs) is **audience, not format**: a tutorial is outgrown after one reading,
-while a document in `docs/` is cited — including from code comments — and records what was
-measured or why a default is what it is. A notebook whose purpose is to record a measurement
-belongs there as markdown instead.
-
-Every scene below states its materials as **relative permittivity** — `structure`, `top` and
-`bot`, and the `Material(epsilon, mu=1.0)` a shape names. Where a notebook starts from a
-datasheet refractive index it converts once, visibly, with `wavebit.eps_from_refractive_index(n)`.
-The contract is [`../docs/reference/common/conventions.md`](../docs/reference/common/conventions.md); the retired spellings
-(`ucell`, `n_top`, `n_bot`, `n_base`, `n_index`) are refused by name, because the quantity
-changed with them and a script that only renames its keywords would solve a different
-structure without saying so.
-
-| Entry | Question it answers |
+| Topic | Current API material |
 | --- | --- |
-| [`01-modeling-and-emsolver.ipynb`](rcwa/01-modeling-and-emsolver.ipynb) | How do you describe a structure and get a diffraction efficiency out of it? The starting point: modeling, and the electromagnetic solve (Wavebit uses RCWA). |
-| [`02-autograd-and-optimization-jax.ipynb`](rcwa/02-autograd-and-optimization-jax.ipynb), [`02-autograd-and-optimization-pytorch.ipynb`](rcwa/02-autograd-and-optimization-pytorch.ipynb) | How do you differentiate a solve and optimize a structure with the gradient? Written twice, once per backend, so neither reader has to translate. |
-| [`03-device-and-datatype-jax.ipynb`](rcwa/03-device-and-datatype-jax.ipynb), [`03-device-and-datatype-torch.ipynb`](rcwa/03-device-and-datatype-torch.ipynb) | Where does the solve run (CPU or GPU) and in what precision (64-bit or 32-bit)? Also per backend. |
-| [`04-nvf-fourier-factorization.ipynb`](rcwa/04-nvf-fourier-factorization.ipynb) | Why does a curved, high-contrast boundary converge so slowly under a plain discrete Fourier sum, and what does `factorization='nvf'` do about it? Also shows `freeze_geometry()`, the object that holds the normal field fixed and keeps a solve traceable. |
-| [`05-oblique-lattice.ipynb`](rcwa/05-oblique-lattice.ipynb) | How do you solve a hexagonal or otherwise tilted cell? The `lattice` keyword, and the raster convention that goes with it — a raster is read in *lattice* coordinates, and building it on a Cartesian grid instead describes a different structure with no error and no loss of energy conservation. Ends in a worked metalens phase library and the published benchmark the feature was checked against. |
-| [`06-polarization-pair.ipynb`](rcwa/06-polarization-pair.ipynb) | How do you send in circular or elliptical light, when `psi` can only name a linear state? The `polarization=(a_s, a_p)` pair: what it equals in `psi`, what its magnitude and phase each do, how to read the transmitted state back out, and the four ways it is usually got wrong. |
-| [`07-multimode-incidence.ipynb`](rcwa/07-multimode-incidence.ipynb) | How do you send light in on more than one diffraction order at once? The `excitation` dict: why a *single* non-specular order is only a relabelling of the angle, what a coherent superposition is actually for, the solve it saves against doing it beam by beam, why every lit order has to propagate, and where to go for a different polarization per order. |
-| [`08-fdtd-time-domain.ipynb`](fdtd/08-fdtd-time-domain.ipynb) | When is the time-domain solver the right one, and how do you know its answer is settled and refined? `wavebit.fdtd` against RCWA on the same slab, a whole band from one run, a grating order by order, the two engines behind the one function and what each can do, a derivative of a time-domain solve checked against a finite difference, and shape recipes. Ends with the edges: it is research alpha, and a grazing order measures the absorbing boundary rather than the grid. |
+| Modeling, diffraction and fields | [RCWA lifecycle](../tutorials/rcwa/00-unified-lifecycle.ipynb), [physical field sampling](../examples/rcwa/learning/learn/03_fields.py) |
+| JAX differentiation and optimization | [film optimization](../examples/rcwa/film_optimization.py), [raster derivative](../examples/rcwa/learning/learn/05_jax_gradient.py) |
+| Torch differentiation | [Torch derivative](../examples/rcwa/learning/learn/06_torch_gradient.py) |
+| JAX devices and precision | [explicit execution](../docs/guide/common/backends.md) |
+| Torch devices and precision | [explicit execution](../docs/guide/common/backends.md) |
+| NVF and fixed numerical topology | [shape NVF](../examples/rcwa/learning/nvf/01_shape_nvf.py), [NVF gradient](../examples/rcwa/learning/nvf/04_jax_gradient.py) |
+| Oblique cells and raster coordinates | [cell geometry](../docs/guide/rcwa/scene.md) |
+| Polarization amplitude and phase | [physical illumination](../docs/guide/rcwa/light.md) |
+| Multiple coherent sources | [coherent illumination](../examples/rcwa/coherent_illumination.py), [coherent source guide](../docs/guide/rcwa/coherent-illumination.md) |
+| Periodic time-domain diffraction and derivatives | [film/grating comparison](../examples/cross_solver/film_and_grating.py), [physical periodic FDTD](../docs/guide/fdtd/periodic-problems.md), [backend derivatives](../examples/fdtd/fdtd_backends.py) |
 
-All layer lists and thickness arrays use **bottom-to-top** order. The stack bottom is
-`z=0`, +z points upward, and `incidence_side` chooses illumination without reordering
-the geometry. Notebook outputs were cleared when migrating the coordinate convention;
-run the cells to generate figures and numbers in the current frame.
+## Historical tutorials
+
+The ten numbered notebooks below are archived teaching records of the earlier
+mutable API. **They require the separate source checkout below; installing the
+current package will not make their imports work.** The two `00` notebooks above
+are the current runnable introductions. No old factory is exported by the current
+package, and no substitute compatibility module is needed for new calculations.
+
+The historical notebooks keep their original calculation cells, assertions,
+stored outputs and figures. Their first cell and metadata identify the source
+revision. From an existing clone, create a separate worktree and environment:
+
+```bash
+git worktree add --detach ../wavebit-tutorials-v1 3c8a50f8a6506240169538957e99648a4b18ca3a
+cd ../wavebit-tutorials-v1
+python -m venv .venv
+.venv/bin/python -m pip install '.[jax,pytorch,plot]'
+```
+
+Use that environment as the notebook kernel in your notebook editor, and open the
+notebooks from that checkout. Follow its dependency floors; a recorded experiment's
+own environment and source revision take precedence when reproducing stored numbers.
+The device lessons skip CUDA sections when CUDA is unavailable. These instructions
+preserve access to the historical workflow; they are not a new execution or timing
+claim for all ten notebooks. See the [migration guide](../docs/migration/index.md).
+
+| Archived notebook | Topic |
+| --- | --- |
+| [08-fdtd-time-domain.ipynb](fdtd/08-fdtd-time-domain.ipynb) | Periodic time-domain diffraction and derivatives |
+| [01-modeling-and-emsolver.ipynb](rcwa/01-modeling-and-emsolver.ipynb) | Modeling, diffraction and fields |
+| [02-autograd-and-optimization-jax.ipynb](rcwa/02-autograd-and-optimization-jax.ipynb) | JAX differentiation and optimization |
+| [02-autograd-and-optimization-pytorch.ipynb](rcwa/02-autograd-and-optimization-pytorch.ipynb) | Torch differentiation |
+| [03-device-and-datatype-jax.ipynb](rcwa/03-device-and-datatype-jax.ipynb) | JAX devices and precision |
+| [03-device-and-datatype-torch.ipynb](rcwa/03-device-and-datatype-torch.ipynb) | Torch devices and precision |
+| [04-nvf-fourier-factorization.ipynb](rcwa/04-nvf-fourier-factorization.ipynb) | NVF and fixed numerical topology |
+| [05-oblique-lattice.ipynb](rcwa/05-oblique-lattice.ipynb) | Oblique cells and raster coordinates |
+| [06-polarization-pair.ipynb](rcwa/06-polarization-pair.ipynb) | Polarization amplitude and phase |
+| [07-multimode-incidence.ipynb](rcwa/07-multimode-incidence.ipynb) | Multiple coherent sources |
+
+The historical scenes state relative permittivity and use bottom-to-top layer
+order with the stack bottom at z=0 and +z upward. Their normalized source/field
+conventions and mutable options belong to the pinned API. Current examples use
+explicit physical units, including SI E/H; compare phase references, source
+normalization and units before comparing arrays across the two interfaces.

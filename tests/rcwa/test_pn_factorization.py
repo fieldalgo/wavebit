@@ -14,7 +14,7 @@ uniform-layer gate below is what caught the first version of this code, which fm
 passed within tolerance while being wrong.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -48,7 +48,7 @@ def tensor(eps, gyro=None, ezz=None):
 
 def solve(slots, eps, truncation_order, theta=0.0, phi=0.0, psi=0.0):
     epx, epy, epz_i, epxy, epyx = slots
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta),
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta),
                        phi=np.deg2rad(phi), psi=np.deg2rad(psi), truncation_order=(truncation_order, truncation_order),
                        period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.expand_dims(np.sqrt(eps), axis=0))

@@ -1,6 +1,6 @@
 """Independent Yee-mode dispersion, streaming parity and material sensitivities."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -20,7 +20,7 @@ def initial_mode(nz=16, dt=.2, eps=2., dz=1.):
 
 def test_numpy_grid_propagates_an_exact_discrete_maxwell_eigenmode():
     e,h,w = initial_mode()
-    out = _legacy_wavebit.fdtd_grid(np.full((16,2,2),2.), spacing=(1.,1.,1.),dt=.2,steps=71,
+    out = _legacy_wavebit_fdtd_grid(np.full((16,2,2),2.), spacing=(1.,1.,1.),dt=.2,steps=71,
                            electric=e, magnetic=h, wavelengths=[2*np.pi/w], monitor_z=[3,8])
     np.testing.assert_allclose(out['E'], e*np.exp(-1j*w*71*.2), atol=2e-14)
     np.testing.assert_allclose(out['H'], h*np.exp(-1j*w*71*.2), atol=2e-14)
@@ -34,9 +34,9 @@ def test_jax_compiled_checkpointed_scan_matches_numpy_and_is_differentiable():
     e,h,_=initial_mode()
     common=dict(spacing=(1.,1.,1.),dt=.2,steps=43,electric=e,magnetic=h,
                 wavelengths=[20.,24.], monitor_z=[3], conductivity=.015)
-    reference=_legacy_wavebit.fdtd_grid(np.full((16,2,2),2.), **common)
+    reference=_legacy_wavebit_fdtd_grid(np.full((16,2,2),2.), **common)
     def run(eps, block=7):
-        return _legacy_wavebit.fdtd_grid(eps, **common, backend='jax',checkpoint_steps=block)
+        return _legacy_wavebit_fdtd_grid(eps, **common, backend='jax',checkpoint_steps=block)
     compiled=jax.jit(run)(jnp.full((16,2,2),2.))
     for key in ('E','H','electric_spectrum','magnetic_spectrum','power_z'):
         np.testing.assert_allclose(compiled[key],reference[key],atol=2e-12)
@@ -54,18 +54,18 @@ def test_jax_compiled_checkpointed_scan_matches_numpy_and_is_differentiable():
 def test_passive_conductivity_damps_an_initial_field():
     e,h,_=initial_mode()
     kw=dict(spacing=(1.,1.,1.),dt=.2,steps=80,electric=e,magnetic=h)
-    a=_legacy_wavebit.fdtd_grid(np.full((16,2,2),2.),**kw)
-    b=_legacy_wavebit.fdtd_grid(np.full((16,2,2),2.),conductivity=.3,**kw)
+    a=_legacy_wavebit_fdtd_grid(np.full((16,2,2),2.),**kw)
+    b=_legacy_wavebit_fdtd_grid(np.full((16,2,2),2.),conductivity=.3,**kw)
     assert np.sum(abs(b['E'])**2)+np.sum(abs(b['H'])**2)<.2*(np.sum(abs(a['E'])**2)+np.sum(abs(a['H'])**2))
 
 
 def test_current_pulse_drives_fields_and_invalid_cfl_is_refused():
     source=np.zeros((3,8,2,2));source[1,3]=1
-    result=_legacy_wavebit.fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=.2,steps=12,
+    result=_legacy_wavebit_fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=.2,steps=12,
                             source=source,pulse=np.sin(np.arange(12)*.2))
     assert np.max(abs(result['E']))>.1
     with pytest.raises(ValueError,match='CFL'):
-        _legacy_wavebit.fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=1.,steps=12)
+        _legacy_wavebit_fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=1.,steps=12)
 
 
 def test_absorber_removes_a_pulse_before_periodic_recirculation():
@@ -75,8 +75,8 @@ def test_absorber_removes_a_pulse_before_periodic_recirculation():
     e[1]=np.exp(-((z-40)/6)**2)[:,None,None]
     h[0]=-np.exp(-((z+.5-40+.1)/6)**2)[:,None,None]
     kw=dict(spacing=(1.,1.,1.),dt=.2,steps=400,electric=e,magnetic=h)
-    bare=_legacy_wavebit.fdtd_grid(np.ones((nz,2,2)),**kw)
-    damped=_legacy_wavebit.fdtd_grid(np.ones((nz,2,2)),**kw,absorber_cells=18)
+    bare=_legacy_wavebit_fdtd_grid(np.ones((nz,2,2)),**kw)
+    damped=_legacy_wavebit_fdtd_grid(np.ones((nz,2,2)),**kw,absorber_cells=18)
     def energy(out):
         return np.sum(abs(out['E'])**2)+np.sum(abs(out['H'])**2)
     assert energy(damped)<.03*energy(bare)
@@ -88,13 +88,13 @@ def test_jax_pulse_gradient_and_explicit_cpu_device():
     source=np.zeros((3,8,2,2));source[1,3]=1
     pulse=jnp.sin(jnp.arange(12)*.2)
     def objective(scale):
-        out=_legacy_wavebit.fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=.2,steps=12,
+        out=_legacy_wavebit_fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=.2,steps=12,
                              source=source,pulse=scale*pulse,backend='jax',device='cpu')
         return jnp.sum(abs(out['E'])**2)
     value=objective(1.)
     np.testing.assert_allclose(jax.grad(objective)(1.),2*value,rtol=1e-6)
     with pytest.raises((ValueError, RuntimeError)):
-        _legacy_wavebit.fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=.2,steps=12,
+        _legacy_wavebit_fdtd_grid(np.ones((8,2,2)),spacing=(1.,1.,1.),dt=.2,steps=12,
                          backend='jax',device='nonexistent_device')
 
 
@@ -115,6 +115,6 @@ def test_diagonal_material_and_magnetic_yee_modes_on_each_axis(axis):
     e[ec]=np.exp(1j*k*z)
     h[hc]=np.sqrt(eps_value/mu)*np.exp(1j*k*(z+.5*delta)+1j*omega*dt/2)
     epsilon=np.ones(e.shape);epsilon[ec]=eps_value
-    out=_legacy_wavebit.fdtd_grid(epsilon,mu=mu,spacing=spacing,dt=dt,steps=steps,electric=e,magnetic=h)
+    out=_legacy_wavebit_fdtd_grid(epsilon,mu=mu,spacing=spacing,dt=dt,steps=steps,electric=e,magnetic=h)
     np.testing.assert_allclose(out['E'],e*np.exp(-1j*omega*dt*steps),atol=2e-14)
     np.testing.assert_allclose(out['H'],h*np.exp(-1j*omega*dt*steps),atol=2e-14)

@@ -12,7 +12,11 @@ bit-identical -- and a traced value cannot be branched on. As a child it would k
 jitted solve while staying invisible eagerly.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -35,7 +39,7 @@ def test_failed_structure_assignment_keeps_the_original_drawn_cell(backend, keyw
     pytest.importorskip(backend)
     values = np.ones((1, 4, 4))
     cell = Lattice.rectangular(600., 600.)
-    solver = _legacy_wavebit.rcwa(backend=backend, period=(600., 600.), thickness=(170.,),
+    solver = _legacy_wavebit_rcwa(backend=backend, period=(600., 600.), thickness=(170.,),
                          truncation_order=(1, 1), wavelength=900., theta=.13, phi=.21,
                          structure=cell.drawn(values), mu=values)
     original_structure = solver.structure
@@ -120,7 +124,7 @@ def test_a_basis_handed_in_traced_takes_the_general_path():
 
 
 def _analytic_loss(jnp, M, order=3):
-    s = _legacy_wavebit.rcwa(backend='jax', wavelength=900.0, lattice=M, truncation_order=[order, order],
+    s = _legacy_wavebit_rcwa(backend='jax', wavelength=900.0, lattice=M, truncation_order=[order, order],
                      top=1.0, bot=1.0, theta=0.07, phi=0.31, psi=0.2, thickness=[300.0],
                      structure=[dict(background=1.0, shapes=[
                          dict(type='circle', cx=-50.0, cy=-20.0, lx=140.0, material=5.76)])],
@@ -213,7 +217,7 @@ def test_a_hand_written_basis_can_join_the_type():
 
     # the gap it closes: the method is now reachable, and agrees with the free function
     assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((9, 13))] ==\
-        [np.asarray(c).tobytes() for c in _legacy_wavebit.meshgrid_xy((9, 13),
+        [np.asarray(c).tobytes() for c in _legacy_wavebit_meshgrid_xy((9, 13),
                                                        lattice=np.column_stack((a1, a2)))]
 
 
@@ -225,7 +229,7 @@ def test_an_orthogonal_cell_still_needs_no_lattice_at_all():
     coordinates it produces are bit-identical to the ones the object produces.
     """
     P = [700.0, 1100.0]
-    by_period = [np.asarray(c).tobytes() for c in _legacy_wavebit.meshgrid_xy((17, 23), period=P)]
+    by_period = [np.asarray(c).tobytes() for c in _legacy_wavebit_meshgrid_xy((17, 23), period=P)]
     by_object = [np.asarray(c).tobytes()
                  for c in wavebit.Lattice.rectangular(700.0, 1100.0).meshgrid_xy((17, 23))]
     assert by_period == by_object
@@ -306,7 +310,7 @@ def test_a_traced_length_beside_a_plain_angle_is_a_design_variable(which, backen
     if backend == 'jax':
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         columns = lambda x: jnp.asarray(build(x).columns)
         value, derivative = columns(jnp.asarray(400.0)), jax.jacfwd(columns)(jnp.asarray(400.0))
         reverse = jax.jacrev(columns)(jnp.asarray(400.0))
@@ -336,7 +340,7 @@ def test_a_concrete_length_of_another_framework_is_still_a_number(spelling):
         a = torch.tensor(400.0, dtype=torch.float64)
     else:
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         import jax.numpy as jnp
         a = jnp.asarray(400.0)
     plain = wavebit.Lattice.hexagonal(400.0)
@@ -375,11 +379,11 @@ def test_the_raster_path_differentiates_the_basis_through_its_index_offsets():
     import jax.numpy as jnp
     A = np.asarray(wavebit.Lattice.hexagonal(400.0))
     n = 48
-    X, Y = (np.asarray(c) for c in _legacy_wavebit.meshgrid_xy((n, n), lattice=A))
+    X, Y = (np.asarray(c) for c in _legacy_wavebit_meshgrid_xy((n, n), lattice=A))
     eps = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)
 
     def loss(M):
-        s = _legacy_wavebit.rcwa(backend='jax', wavelength=900.0, lattice=M, truncation_order=[4, 4],
+        s = _legacy_wavebit_rcwa(backend='jax', wavelength=900.0, lattice=M, truncation_order=[4, 4],
                          top=1.0, bot=1.0, theta=0.1, phi=0.3, psi=0.2, thickness=[300.0],
                          structure=eps[None], factorization='nvf')
         return jnp.sum(s.solve().R)
@@ -413,7 +417,7 @@ def _nvf_raster_read_out(backend, case, p, **options):
     else:
         xp = np
     lift = (lambda v: xp.asarray(np.asarray(v))) if backend else np.asarray
-    s = _legacy_wavebit.rcwa(backend=backend, structure=lift(raster), thickness=[0.2], theta=0.2, phi=0.3,
+    s = _legacy_wavebit_rcwa(backend=backend, structure=lift(raster), thickness=[0.2], theta=0.2, phi=0.3,
                      psi=0.4, wavelength=0.777, top=1.0, bot=2.25, truncation_order=truncation,
                      factorization='nvf', layer_algorithm='SMM', **cell(p, lift), **options)
     r = s.solve()
@@ -439,7 +443,7 @@ def test_the_raster_normal_field_carries_the_cell_on_both_backends(case, backend
     if backend == 'jax':
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         torch = pytest.importorskip('torch')
         from torch.autograd import forward_ad
@@ -474,7 +478,7 @@ def test_a_normal_field_built_in_numpy_refuses_a_traced_cell_by_name(method, bac
     if backend == 'jax':
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         run = lambda: jax.grad(lambda p: _nvf_raster_read_out(
             'jax', 'period', p, raster_normal_method=method))(jnp.asarray(0.77))
     elif backend == 'torch':
@@ -501,11 +505,11 @@ def test_a_freeze_takes_its_record_on_the_cell_s_value():
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 
     def replayed(backend, p):
         lift = (lambda v: jnp.asarray(np.asarray(v))) if backend == 'jax' else (lambda v: torch.as_tensor(np.asarray(v)))
-        s = _legacy_wavebit.rcwa(backend=backend, structure=lift(_SQUARE_ROD), period=[p, lift(0.61)],
+        s = _legacy_wavebit_rcwa(backend=backend, structure=lift(_SQUARE_ROD), period=[p, lift(0.61)],
                          thickness=[0.2], theta=0.2, phi=0.3, psi=0.4, wavelength=0.777, top=1.0,
                          bot=2.25, truncation_order=[2, 2], factorization='nvf', layer_algorithm='SMM')
         return s, jnp if backend == 'jax' else torch
@@ -534,7 +538,7 @@ def _cell_at(gamma_deg, length=_L):
 
 
 def _sum_t(basis, eps, truncation=6):
-    s = _legacy_wavebit.rcwa(backend='numpy', wavelength=900.0, lattice=basis, truncation_order=[truncation] * 2,
+    s = _legacy_wavebit_rcwa(backend='numpy', wavelength=900.0, lattice=basis, truncation_order=[truncation] * 2,
                      top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
                      structure=np.asarray(eps)[None], factorization='nvf')
     return float(np.sum(np.asarray(s.solve().T)))
@@ -604,13 +608,13 @@ def test_the_method_and_the_free_function_are_one_call():
     for A in (wavebit.Lattice.hexagonal(400.0), wavebit.Lattice.rectangular(700.0, 1100.0),
               wavebit.Lattice.oblique(400.0, 520.0, np.radians(105.0)), as_lattice(lattice=SHEAR)):
         by_method = [np.asarray(c).tobytes() for c in A.meshgrid_xy((9, 13))]
-        by_function = [np.asarray(c).tobytes() for c in _legacy_wavebit.meshgrid_xy((9, 13), lattice=A)]
+        by_function = [np.asarray(c).tobytes() for c in _legacy_wavebit_meshgrid_xy((9, 13), lattice=A)]
         assert by_method == by_function, A
 
     # the keywords ride through rather than being quietly dropped
     A = wavebit.Lattice.hexagonal(400.0)
     assert [np.asarray(c).tobytes() for c in A.meshgrid_xy((5, 7), dtype=np.float32)] ==\
-        [np.asarray(c).tobytes() for c in _legacy_wavebit.meshgrid_xy((5, 7), lattice=A, dtype=np.float32)]
+        [np.asarray(c).tobytes() for c in _legacy_wavebit_meshgrid_xy((5, 7), lattice=A, dtype=np.float32)]
     with pytest.raises(ValueError, match='backend'):
         A.meshgrid_xy((4, 4), backend=9)
     with pytest.raises(ValueError, match='rows, columns'):
@@ -621,7 +625,7 @@ def test_the_method_and_the_free_function_are_one_call():
     # rows-first, the way an array's shape is; `sample_x` / `sample_y` are the x-first spelling
     # and mean counts per named axis. So the prefix disambiguates rather than the word changing.
     assert [np.asarray(c).tobytes() for c in A.meshgrid_xy(grid_shape=(9, 13))] ==\
-        [np.asarray(c).tobytes() for c in _legacy_wavebit.meshgrid_xy(grid_shape=(9, 13), lattice=A)]
+        [np.asarray(c).tobytes() for c in _legacy_wavebit_meshgrid_xy(grid_shape=(9, 13), lattice=A)]
     with pytest.raises(TypeError):
         A.meshgrid_xy(shape=(9, 13))
 
@@ -644,18 +648,18 @@ def test_naming_both_period_and_lattice_is_refused():
                 truncation_order=[2, 2], factorization='nvf')
 
     with pytest.raises(ValueError, match='period and lattice both given'):
-        _legacy_wavebit.rcwa(**base, period=[700.0, 700.0], lattice=A)
+        _legacy_wavebit_rcwa(**base, period=[700.0, 700.0], lattice=A)
     # ...and not only when they disagree: the values here are exactly `periods_of(A)`
     with pytest.raises(ValueError, match='period and lattice both given'):
-        _legacy_wavebit.rcwa(**base, period=[400.0, 400.0], lattice=A)
-    _legacy_wavebit.rcwa(**base, lattice=A)                       # one or the other is fine
-    _legacy_wavebit.rcwa(**base, period=[400.0, 400.0])
+        _legacy_wavebit_rcwa(**base, period=[400.0, 400.0], lattice=A)
+    _legacy_wavebit_rcwa(**base, lattice=A)                       # one or the other is fine
+    _legacy_wavebit_rcwa(**base, period=[400.0, 400.0])
 
     # 1. the JAX pytree rebuild: `period` is a child, `lattice` is aux data, so `__init__`
     #    sees both on every jitted call. `_tree_unflatten` drops the period, which is a no-op
     #    because assigning the basis overwrites the period slot anyway -- asserted here.
     jax = pytest.importorskip('jax')
-    solver = _legacy_wavebit.rcwa(**{**base, 'backend': 'jax'}, lattice=A)
+    solver = _legacy_wavebit_rcwa(**{**base, 'backend': 'jax'}, lattice=A)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
     assert np.allclose(np.asarray(rebuilt.lattice), np.asarray(A))
@@ -666,13 +670,13 @@ def test_naming_both_period_and_lattice_is_refused():
     stack = Stack.from_structure(eps, [300.0], lattice=A)
     kw = stack.as_kwargs()
     assert 'lattice' in kw and 'period' not in kw
-    _legacy_wavebit.rcwa(**kw, backend='numpy', wavelength=900.0, truncation_order=[2, 2],
+    _legacy_wavebit_rcwa(**kw, backend='numpy', wavelength=900.0, truncation_order=[2, 2],
                  factorization='nvf')
 
     # 3. the document format, which *writes* `period` into every saved stack (`to_dict` emits
     #    it unconditionally), so a skewed document carries both and must still load and run.
-    from wavebit.compat.legacy import Incidence
-    from wavebit.compat._jobs_v1 import JobSpec
+    from wavebit._common.periodic import Incidence
+    from wavebit._common._jobs_v1 import JobSpec
     spec = JobSpec(stack=stack, incidence=Incidence(wavelength=900.0, tetm='te'))
     reloaded = JobSpec.from_json(spec.to_json())
     assert 'period' in spec.to_dict()['stack']            # the writer still emits it
@@ -694,8 +698,9 @@ def test_a_cell_built_the_documented_way_survives_the_document():
     ingest, which is where it is settled anyway -- so the round trip returns a nested list
     rather than a ``Lattice``, exactly as it already did for an ndarray.
     """
-    from wavebit.compat.legacy import Incidence, Stack
-    from wavebit.compat._jobs_v1 import JobSpec
+    from wavebit._common.periodic import Incidence
+    from wavebit._common.periodic import Stack
+    from wavebit._common._jobs_v1 import JobSpec
 
     A = wavebit.Lattice.hexagonal(400.0)
     assert A.tolist() == np.asarray(A).tolist()          # the array form, in plain Python
@@ -713,7 +718,7 @@ def test_a_cell_built_the_documented_way_survives_the_document():
     stack = Stack.from_structure(np.ones((1, 4, 4)) * 2.0, [300.0], lattice=A)
     kw = JobSpec.from_json(JobSpec(
         stack=stack, incidence=Incidence(wavelength=900.0, tetm='te')).to_json()).stack.as_kwargs()
-    solver = _legacy_wavebit.rcwa(**kw, backend='numpy', truncation_order=[2, 2], wavelength=900.0,
+    solver = _legacy_wavebit_rcwa(**kw, backend='numpy', truncation_order=[2, 2], wavelength=900.0,
                           factorization='nvf')
     assert np.allclose(np.asarray(solver.lattice), np.asarray(A))
 
@@ -739,22 +744,22 @@ def test_a_structure_with_no_cell_is_refused_rather_than_solved_on_the_unit_one(
                 top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
 
     with pytest.raises(ValueError, match='no cell was given'):
-        _legacy_wavebit.rcwa(**base, structure=eps)
+        _legacy_wavebit_rcwa(**base, structure=eps)
 
     # the door the constructor cannot watch: a structure assigned afterwards
-    late = _legacy_wavebit.rcwa(**base)
+    late = _legacy_wavebit_rcwa(**base)
     late.structure = eps
     with pytest.raises(ValueError, match='no cell was given'):
         late.solve()
 
     # a solver with no structure still builds on the default -- the 35 sites
-    _legacy_wavebit.rcwa(**base)
+    _legacy_wavebit_rcwa(**base)
     # ...and naming the cell, by either spelling, is all it takes
-    stated = float(np.sum(np.asarray(_legacy_wavebit.rcwa(**base, structure=eps, lattice=A).solve().T)))
+    stated = float(np.sum(np.asarray(_legacy_wavebit_rcwa(**base, structure=eps, lattice=A).solve().T)))
     assert stated == pytest.approx(0.927664, abs=1e-4)
 
     # what the refusal is standing in front of: the unit cell answers, plausibly and wrongly
-    silent = _legacy_wavebit.rcwa(**base, structure=eps, period=[1.0, 1.0])
+    silent = _legacy_wavebit_rcwa(**base, structure=eps, period=[1.0, 1.0])
     got = float(np.sum(np.asarray(silent.solve().T)))
     assert got == pytest.approx(0.989790, abs=1e-4)
     assert abs(got - stated) > 0.05                       # not a rounding difference
@@ -823,7 +828,7 @@ def test_a_declared_structure_is_refused_on_another_cell():
                 theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
 
     def total(cell, structure, backend='numpy'):
-        s = _legacy_wavebit.rcwa(backend=backend, lattice=cell, structure=structure, **base)
+        s = _legacy_wavebit_rcwa(backend=backend, lattice=cell, structure=structure, **base)
         return float(np.sum(np.asarray(s.solve().T)))
 
     assert total(sq, sq.drawn(layer)) == pytest.approx(0.157394, abs=1e-5)
@@ -854,7 +859,7 @@ def test_the_documented_combination_table_is_what_the_code_does():
         {'type': 'circle', 'cx': 0.0, 'cy': 0.0, 'lx': 300.0, 'material': 12.25}]}]
 
     def total(**kw):
-        s = _legacy_wavebit.rcwa(backend='numpy', thickness=[300.0], wavelength=900.0,
+        s = _legacy_wavebit_rcwa(backend='numpy', thickness=[300.0], wavelength=900.0,
                          truncation_order=[6, 6], top=1.0, bot=1.0, theta=0.0, phi=0.0,
                          psi=0.0, factorization='nvf', **kw)
         return float(np.sum(np.asarray(s.solve().T)))
@@ -931,7 +936,7 @@ def test_the_parametric_spelling_has_no_frame_to_declare():
         sq.drawn(shapes)
 
     def total(cell):
-        s = _legacy_wavebit.rcwa(backend='numpy', lattice=cell, structure=shapes, thickness=[300.0],
+        s = _legacy_wavebit_rcwa(backend='numpy', lattice=cell, structure=shapes, thickness=[300.0],
                          wavelength=900.0, truncation_order=[6, 6], top=1.0, bot=1.0,
                          theta=0.0, phi=0.0, psi=0.0)
         return float(np.sum(np.asarray(s.solve().T)))
@@ -944,7 +949,7 @@ def test_the_parametric_spelling_has_no_frame_to_declare():
     two = np.where(((X + 150.0) ** 2 + Y ** 2 < 80.0 ** 2)
                    | ((X - 150.0) ** 2 + Y ** 2 < 80.0 ** 2), 12.25, 1.0)[None]
     with pytest.raises(ValueError, match='drawn on a different cell'):
-        _legacy_wavebit.rcwa(backend='numpy', lattice=hx, structure=sq.drawn(two), thickness=[300.0],
+        _legacy_wavebit_rcwa(backend='numpy', lattice=hx, structure=sq.drawn(two), thickness=[300.0],
                      wavelength=900.0, truncation_order=[6, 6], top=1.0, bot=1.0,
                      theta=0.0, phi=0.0, psi=0.0, factorization='nvf').solve()
 
@@ -972,14 +977,14 @@ def test_the_declaration_survives_every_backend_and_the_jit_boundary():
     for backend, cast in (('numpy', lambda a: a),
                           ('jax', lambda a: pytest.importorskip('jax.numpy').asarray(a)),
                           ('torch', lambda a: pytest.importorskip('torch').as_tensor(a))):
-        _legacy_wavebit.rcwa(backend=backend, lattice=sq, structure=sq.drawn(cast(layer)), **base).solve()
+        _legacy_wavebit_rcwa(backend=backend, lattice=sq, structure=sq.drawn(cast(layer)), **base).solve()
         with pytest.raises(ValueError, match='drawn on a different cell'):
-            _legacy_wavebit.rcwa(backend=backend, lattice=hx,
+            _legacy_wavebit_rcwa(backend=backend, lattice=hx,
                          structure=sq.drawn(cast(layer)), **base).solve()
 
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    solver = _legacy_wavebit.rcwa(backend='jax', lattice=sq, structure=sq.drawn(jnp.asarray(layer)), **base)
+    solver = _legacy_wavebit_rcwa(backend='jax', lattice=sq, structure=sq.drawn(jnp.asarray(layer)), **base)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
     assert rebuilt._structure_drawn_on is not None
@@ -1006,7 +1011,7 @@ def test_a_declared_structure_crosses_the_jitted_door_and_a_moved_cell_is_refuse
     X, Y = (np.asarray(c) for c in sq.meshgrid_xy((12, 12)))
     layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
     cell = dict(period=[640.0, 640.0]) if spelling == 'period' else dict(lattice=sq)
-    solver = _legacy_wavebit.rcwa(backend='jax', structure=sq.drawn(layer), thickness=[300.0],
+    solver = _legacy_wavebit_rcwa(backend='jax', structure=sq.drawn(layer), thickness=[300.0],
                           wavelength=900.0, truncation_order=[2, 2], top=1.0, bot=1.0,
                           theta=0.1, phi=0.2, psi=0.3, factorization='nvf', answers='field',
                           **cell)
@@ -1034,14 +1039,14 @@ def test_a_declared_structure_on_a_traced_cell_is_compared_under_grad_and_refuse
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     sq = wavebit.Lattice.rectangular(640.0, 640.0)
     X, Y = (np.asarray(c) for c in sq.meshgrid_xy((12, 12)))
     layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
     # Li's rule, not NVF: NVF's own record check reads the cell with `np.asarray` too
     # (`factorization._lattice_key`), a separate refusal of a grad-traced cell that this does
     # not reach.
-    solver = _legacy_wavebit.rcwa(backend='jax', lattice=sq, structure=sq.drawn(layer), thickness=[300.0],
+    solver = _legacy_wavebit_rcwa(backend='jax', lattice=sq, structure=sq.drawn(layer), thickness=[300.0],
                           wavelength=900.0, truncation_order=[2, 2], top=1.0, bot=1.0,
                           theta=0.1, phi=0.2, psi=0.3)
     geometry = solver.freeze_geometry()
@@ -1075,11 +1080,11 @@ def test_a_solver_handed_to_jax_jit_whole_still_solves_its_declared_structure():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     hx = wavebit.Lattice.hexagonal(640.0)
     X, Y = (np.asarray(c) for c in hx.meshgrid_xy((12, 12)))
     layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
-    solver = _legacy_wavebit.rcwa(backend='jax', lattice=hx, structure=hx.drawn(layer), thickness=[300.0],
+    solver = _legacy_wavebit_rcwa(backend='jax', lattice=hx, structure=hx.drawn(layer), thickness=[300.0],
                           wavelength=900.0, truncation_order=[2, 2], top=1.0, bot=1.0,
                           theta=0.1, phi=0.2, psi=0.3, factorization='nvf', answers='field')
     geometry = solver.freeze_geometry()
@@ -1116,11 +1121,11 @@ def test_a_structure_redeclared_inside_the_trace_is_not_trusted():
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     sq, hx = wavebit.Lattice.rectangular(640.0, 640.0), wavebit.Lattice.hexagonal(640.0)
     X, Y = (np.asarray(c) for c in hx.meshgrid_xy((8, 8)))
     layer = np.where(X ** 2 + Y ** 2 < 150.0 ** 2, 12.25, 1.0)[None]
-    solver = _legacy_wavebit.rcwa(backend='jax', lattice=hx, structure=hx.drawn(layer), thickness=[300.0],
+    solver = _legacy_wavebit_rcwa(backend='jax', lattice=hx, structure=hx.drawn(layer), thickness=[300.0],
                           wavelength=900.0, truncation_order=[1, 1], top=1.0, bot=1.0,
                           theta=0.1, phi=0.2, psi=0.3, factorization='nvf', answers='field')
     geometry = solver.freeze_geometry()
@@ -1148,18 +1153,19 @@ def test_a_basis_built_before_jax_was_imported_crosses_the_jitted_door():
     import textwrap
     pytest.importorskip('jax')
     child = textwrap.dedent("""
-        import sys
-        import numpy as np
-        from wavebit.compat import legacy as wavebit
-        assert 'jax' not in sys.modules
-        cell = wavebit.Lattice.hexagonal(700.0)
-        eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
-        solver = wavebit.rcwa(backend='jax', lattice=cell, structure=eps, truncation_order=[1, 1],
-                              thickness=[300.0], wavelength=900.0, theta=0.2, phi=0.1, psi=0.3,
-                              answers='field', factorization='nvf')
-        result, _ = solver.solve_field(3, 3, 2, geometry=solver.freeze_geometry())
-        print('OK' if np.isfinite(np.asarray(result.T)).all() else 'not finite')
-    """)
+import sys
+import numpy as np
+from wavebit.lattice import Lattice as wavebit_Lattice
+from wavebit.rcwa._factory import rcwa as wavebit_rcwa
+assert 'jax' not in sys.modules
+cell = wavebit_Lattice.hexagonal(700.0)
+eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
+solver = wavebit_rcwa(backend='jax', lattice=cell, structure=eps, truncation_order=[1, 1],
+                      thickness=[300.0], wavelength=900.0, theta=0.2, phi=0.1, psi=0.3,
+                      answers='field', factorization='nvf')
+result, _ = solver.solve_field(3, 3, 2, geometry=solver.freeze_geometry())
+print('OK' if np.isfinite(np.asarray(result.T)).all() else 'not finite')
+""")
     root = repository_root()
     env = {k: v for k, v in os.environ.items() if not k.startswith('JAX')}
     env['JAX_PLATFORMS'] = 'cpu'
@@ -1220,7 +1226,7 @@ def test_the_raster_basis_gradient_is_the_shear_along_one():
     eps = np.where(X ** 2 + Y ** 2 < _R ** 2, _EPS, 1.0)
 
     def loss(M):
-        s = _legacy_wavebit.rcwa(backend='jax', wavelength=900.0, lattice=M, truncation_order=[6, 6],
+        s = _legacy_wavebit_rcwa(backend='jax', wavelength=900.0, lattice=M, truncation_order=[6, 6],
                          top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
                          structure=jnp.asarray(eps)[None], factorization='nvf')
         return jnp.sum(s.solve().T)
@@ -1238,7 +1244,7 @@ def test_the_raster_basis_gradient_is_the_shear_along_one():
                          angle=float(np.arctan2(U[1, 0], U[0, 0])), material=_EPS)
         else:
             shape = dict(type='circle', cx=0.0, cy=0.0, lx=2 * _R, material=_EPS)
-        s = _legacy_wavebit.rcwa(backend='numpy', wavelength=900.0, lattice=A, truncation_order=[6, 6],
+        s = _legacy_wavebit_rcwa(backend='numpy', wavelength=900.0, lattice=A, truncation_order=[6, 6],
                          top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
                          structure=[dict(background=1.0, shapes=[shape])])
         return float(np.sum(np.asarray(s.solve().T)))
@@ -1315,16 +1321,16 @@ def test_the_solver_always_has_a_basis_to_give():
     kw = dict(backend='numpy', wavelength=900.0, truncation_order=dict(u=4, v=1), top=1.0, bot=1.0,
               theta=0.1, phi=0.3, psi=0.2, structure=eps, thickness=[300.0])
 
-    by_period = _legacy_wavebit.rcwa(period=[700.0, 1100.0], **kw).lattice
+    by_period = _legacy_wavebit_rcwa(period=[700.0, 1100.0], **kw).lattice
     assert isinstance(by_period, Lattice) and by_period.axis_aligned is True
     assert np.allclose(np.asarray(by_period), np.diag([700.0, 1100.0]))
 
-    by_lattice = _legacy_wavebit.rcwa(lattice=HEX, factorization='nvf', **kw).lattice
+    by_lattice = _legacy_wavebit_rcwa(lattice=HEX, factorization='nvf', **kw).lattice
     assert isinstance(by_lattice, Lattice) and by_lattice.axis_aligned is False
     assert np.allclose(np.asarray(by_lattice), HEX)
 
     # a lone period is the square it has always been
-    assert np.allclose(np.asarray(_legacy_wavebit.rcwa(period=[640.0], **kw).lattice),
+    assert np.allclose(np.asarray(_legacy_wavebit_rcwa(period=[640.0], **kw).lattice),
                        np.diag([640.0, 640.0]))
 
 
@@ -1386,7 +1392,7 @@ def test_a_traced_period_is_still_a_cell():
     structure = np.where(((U - 0.5) ** 2 + (V - 0.5) ** 2) < 0.09, 5.76, 1.0)[None, ...]
 
     def loss(period):
-        solver = _legacy_wavebit.rcwa(backend='jax', structure=jnp.asarray(structure),
+        solver = _legacy_wavebit_rcwa(backend='jax', structure=jnp.asarray(structure),
                               truncation_order=[4, 4], thickness=[150.0], wavelength=900.0,
                               top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4,
                               factorization='nvf', period=period)
@@ -1402,7 +1408,7 @@ def test_a_traced_period_is_still_a_cell():
 
 def _rod_on_cell(basis, n=48, radius=150.0):
     """A disc on the lattice grid of ``basis`` -- the same object whatever the spelling."""
-    X, Y = (np.asarray(c) for c in _legacy_wavebit.meshgrid_xy((n, n), lattice=basis))
+    X, Y = (np.asarray(c) for c in _legacy_wavebit_meshgrid_xy((n, n), lattice=basis))
     return np.where(X ** 2 + Y ** 2 < radius ** 2, 12.25, 1.0)
 
 
@@ -1453,7 +1459,7 @@ def test_the_basis_gradient_obeys_the_unimodular_chain_rule(cell, tol):
 
     def grad_of(cell_basis, raster):
         def loss(M):
-            solver = _legacy_wavebit.rcwa(backend='jax', wavelength=900.0, lattice=M,
+            solver = _legacy_wavebit_rcwa(backend='jax', wavelength=900.0, lattice=M,
                                   truncation_order=[4, 4], top=1.0, bot=1.0, theta=0.1,
                                   phi=0.3, psi=0.2, thickness=[300.0],
                                   structure=raster[None], factorization='nvf')
@@ -1498,7 +1504,7 @@ def test_a_traced_scene_attribute_takes_the_live_arm_and_says_nothing():
     structure[0, 2:5, 1:4] = 5.76
 
     def build(period, thickness):
-        return _legacy_wavebit.rcwa(backend='jax', structure=jnp.asarray(structure),
+        return _legacy_wavebit_rcwa(backend='jax', structure=jnp.asarray(structure),
                             truncation_order=[3, 3], thickness=thickness, wavelength=900.0,
                             top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4,
                             factorization='nvf', period=period)
@@ -1554,7 +1560,7 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
                theta=0.2, phi=0.3, psi=0.4)
 
     def reference(p):
-        return float(np.real(np.asarray(_legacy_wavebit.rcwa(
+        return float(np.real(np.asarray(_legacy_wavebit_rcwa(
             backend='numpy', structure=structure, period=[p, 2.0 * p], **cfg).solve().T)).sum())
 
     h = 1e-3
@@ -1565,7 +1571,7 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
         jnp = pytest.importorskip('jax.numpy')
 
         def loss(p):
-            solver = _legacy_wavebit.rcwa(backend='jax', structure=jnp.asarray(structure),
+            solver = _legacy_wavebit_rcwa(backend='jax', structure=jnp.asarray(structure),
                                   period=[p, 2.0 * p], **cfg)
             return jnp.sum(jnp.asarray(solver.solve().T))
 
@@ -1573,12 +1579,12 @@ def test_a_period_written_as_two_separate_leaves_still_carries_gradient(backend)
         grad = float(jax.grad(loss)(p))
         assert grad == pytest.approx(expected, rel=1e-6), (grad, expected)
         # and the pair really was built from both entries, not from the first twice
-        solver = _legacy_wavebit.rcwa(backend='jax', structure=jnp.asarray(structure),
+        solver = _legacy_wavebit_rcwa(backend='jax', structure=jnp.asarray(structure),
                               period=[p, 2.0 * p], **cfg)
     else:
         torch = pytest.importorskip('torch')
         leaf = torch.tensor(400.0, dtype=torch.float64, requires_grad=True)
-        solver = _legacy_wavebit.rcwa(backend='torch', structure=torch.asarray(structure),
+        solver = _legacy_wavebit_rcwa(backend='torch', structure=torch.asarray(structure),
                               period=[leaf, 2.0 * leaf], **cfg)
         torch.real(solver.solve().T).sum().backward()
         assert leaf.grad is not None
@@ -1702,7 +1708,7 @@ def test_a_traced_basis_reduces_from_its_primal_and_the_gradient_is_the_transfor
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 
     def sum_of_reduced_a2(M):
         return jnp.sum(reduced_basis(as_lattice(lattice=M)).v)

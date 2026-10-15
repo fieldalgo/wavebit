@@ -1,6 +1,8 @@
 """Material limits of the painted NVF path, without changing the physical geometry."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -23,7 +25,7 @@ def layer(left=9., right=9.):
 
 
 def total(left=9., right=9., **kwargs):
-    return float(np.sum(_legacy_wavebit.rcwa(backend='numpy', structure=layer(left, right),
+    return float(np.sum(_legacy_wavebit_rcwa(backend='numpy', structure=layer(left, right),
                                      **dict(KW, **kwargs)).solve().T))
 
 
@@ -51,7 +53,7 @@ def test_painted_materials_preserve_reflection_and_rotation(materials):
     values = []
     for shape, kwargs in ((original, {}), (reflected, dict(phi=-KW['phi'])),
                           (rotated, dict(lattice=lattice, phi=KW['phi']+angle))):
-        result = _legacy_wavebit.rcwa(backend='numpy', structure=[dict(background=1., shapes=shape)],
+        result = _legacy_wavebit_rcwa(backend='numpy', structure=[dict(background=1., shapes=shape)],
                               **dict(KW, **kwargs)).solve()
         values.append(float(np.sum(result.T)))
         power = float(np.sum(result.R+result.T))
@@ -109,8 +111,8 @@ def test_weak_and_complex_interfaces_keep_the_exact_normal(right, monkeypatch):
 def test_jit_and_material_gradient_through_painted_equality():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
-    solver = _legacy_wavebit.rcwa(backend='jax', structure=layer(), **KW)
+    _legacy_wavebit_enable_x64()
+    solver = _legacy_wavebit_rcwa(backend='jax', structure=layer(), **KW)
     geometry = solver.freeze_geometry()
     def response(d):
         return jnp.sum(solver.solve(structure=layer(9.+d, 9.), geometry=geometry).T).real
@@ -124,7 +126,7 @@ def test_jit_and_material_gradient_through_painted_equality():
 def test_torch_material_gradient_and_cross_backend_value():
     torch = pytest.importorskip('torch')
     d = torch.tensor(0., dtype=torch.float64, requires_grad=True)
-    result = _legacy_wavebit.rcwa(backend='torch', structure=layer(9.+d, 9.), **KW).solve().T.sum()
+    result = _legacy_wavebit_rcwa(backend='torch', structure=layer(9.+d, 9.), **KW).solve().T.sum()
     result.backward()
     assert float(result.detach()) == pytest.approx(total(), abs=2e-11)
     secant = (total(9.+1e-5)-total(9.-1e-5))/2e-5
@@ -161,7 +163,7 @@ def blend_solver(backend, xp, scene, p, scale, precision):
     shapes = [{k: (v*scale if k in ('lx', 'ly', 'cx', 'cy') else v) for k, v in s.items()}
               for s in BLEND_SCENES[scene](p)]
     dtype = xp.float32 if precision else xp.float64
-    return _legacy_wavebit.rcwa(backend=backend, lattice=xp.asarray(np.diag([600., 600.]), dtype=dtype)*scale,
+    return _legacy_wavebit_rcwa(backend=backend, lattice=xp.asarray(np.diag([600., 600.]), dtype=dtype)*scale,
                         wavelength=900.*scale, thickness=[170.*scale], truncation_order=(1, 1),
                         theta=.17, phi=.3, polarization=(.8, .6j), factorization='nvf',
                         shape_nvf_grid_size=15, complex_dtype=precision,
@@ -180,7 +182,7 @@ def test_float32_blend_gradients_are_finite_in_any_length_unit(scene):
     # place. Design variables are unscaled, so the units must cancel.
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     point = np.array([160., 100.])
     geometry = blend_solver('numpy', np, scene, point, 1., 0).freeze_geometry()
 

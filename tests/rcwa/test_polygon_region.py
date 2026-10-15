@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 
 from wavebit import Material, rcwa
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from wavebit.errors import IncompatibleProblemError, UnsupportedFeatureError, ValidationError
 
 #: Non-convex: the reflex corner at (-0.1, -0.1).
@@ -263,7 +263,7 @@ def _winding(vertices, x, y):
 
 def _mean_epsilon(shapes):
     """``<eps>``: the DC entry of Laurent's ``[[eps]]`` for one painted layer."""
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1., shapes=shapes)], period=(1., 1.),
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1., shapes=shapes)], period=(1., 1.),
                                   wavelength=1.3, thickness=(.4,), truncation_order=(2, 2),
                                   factorization='laurent')
     epx = np.asarray(solver.eps_conv_matrices()[0])[0]
@@ -415,12 +415,12 @@ ENGINE = dict(period=(1., 1.), wavelength=1.3, thickness=(.4,), truncation_order
 
 def test_a_frozen_polygon_plan_goes_stale_when_the_painting_changes():
     from wavebit.rcwa._engine.geometry import StaleGeometryError
-    frozen = _legacy_wavebit.rcwa(structure=_engine_structure(L_TILTED), **ENGINE).freeze_geometry()
+    frozen = _legacy_wavebit_rcwa(structure=_engine_structure(L_TILTED), **ENGINE).freeze_geometry()
     assert frozen.boundary_plans[0] is not None and frozen.gamma_plans[0] is None
     nudged = tuple((x + 1e-3, y) for x, y in L_TILTED)
-    _legacy_wavebit.rcwa(structure=_engine_structure(nudged), **ENGINE).solve(geometry=frozen)
+    _legacy_wavebit_rcwa(structure=_engine_structure(nudged), **ENGINE).solve(geometry=frozen)
     # the circle slides onto the L's arm: the painting the record resolves is gone
-    onto = _legacy_wavebit.rcwa(structure=_engine_structure(L_TILTED, cx=-.2), **ENGINE)
+    onto = _legacy_wavebit_rcwa(structure=_engine_structure(L_TILTED, cx=-.2), **ENGINE)
     with pytest.raises(StaleGeometryError, match='no longer fits'):
         onto.solve(geometry=frozen)
 
@@ -430,15 +430,15 @@ def test_jax_replays_a_frozen_polygon_under_jit_and_needs_the_freeze():
     import jax.numpy as jnp
 
     def total(v, geometry=None):
-        solver = _legacy_wavebit.rcwa(backend='jax', structure=_engine_structure(v), **ENGINE)
+        solver = _legacy_wavebit_rcwa(backend='jax', structure=_engine_structure(v), **ENGINE)
         return jnp.sum((solver.solve() if geometry is None else solver.solve(geometry=geometry)).T).real
 
     with pytest.raises(ValueError, match='freeze_geometry'):
         jax.jit(total)(jnp.asarray(L_TILTED))
-    frozen = _legacy_wavebit.rcwa(structure=_engine_structure(L_TILTED), **ENGINE).freeze_geometry()
+    frozen = _legacy_wavebit_rcwa(structure=_engine_structure(L_TILTED), **ENGINE).freeze_geometry()
     value, grad = jax.jit(jax.value_and_grad(lambda v: total(v, frozen)))(jnp.asarray(L_TILTED))
     eager = float(np.sum(np.asarray(
-        _legacy_wavebit.rcwa(structure=_engine_structure(L_TILTED), **ENGINE).solve().T)).real)
+        _legacy_wavebit_rcwa(structure=_engine_structure(L_TILTED), **ENGINE).solve().T)).real)
     assert abs(float(value) - eager) < 1e-13
     # and the unjitted gradient plans from its primal: the same plan, the same derivative
     np.testing.assert_allclose(np.asarray(jax.grad(total)(jnp.asarray(L_TILTED))), np.asarray(grad),
@@ -564,7 +564,7 @@ def test_the_structure_picture_is_the_painted_outline():
     layers = [dict(background=1., shapes=[dict(type='polygon', vertices=L_SHAPE, material=6.25),
                                           dict(type='polygon', vertices=TRIANGLE[::-1],
                                                material=2.)])]
-    solver = _legacy_wavebit.rcwa(structure=layers, period=(1., 1.), wavelength=1.3,
+    solver = _legacy_wavebit_rcwa(structure=layers, period=(1., 1.), wavelength=1.3,
                                   thickness=(.4,), truncation_order=(2, 2))
     n = 256
     picture = slice_structure(solver, 0, n=n)
@@ -573,7 +573,7 @@ def test_the_structure_picture_is_the_painted_outline():
     expected = np.where(_winding(TRIANGLE, X, Y) != 0, 2.,
                         np.where(_winding(L_SHAPE, X, Y) != 0, 6.25, 1.))
     np.testing.assert_array_equal(picture.real, expected)
-    skewed = _legacy_wavebit.rcwa(structure=layers, lattice=[[1., .3], [0., 1.]], wavelength=1.3,
+    skewed = _legacy_wavebit_rcwa(structure=layers, lattice=[[1., .3], [0., 1.]], wavelength=1.3,
                                   thickness=(.4,), truncation_order=(2, 2))
     with pytest.raises(NotImplementedError, match='or a polygon'):
         slice_structure(skewed, 0, n=32)

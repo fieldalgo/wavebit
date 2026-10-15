@@ -1,6 +1,8 @@
 """Independent variations of both constitutive fields through each 1D formulation."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 from wavebit._common.backend import array_namespace
@@ -20,7 +22,7 @@ def value(backend, t, path, quantity, algorithm):
     else:
         mu = mu+t*xp.asarray(DIR)
     pol = dict(psi=.37) if path == 'conical' else dict(tetm=path)
-    s = _legacy_wavebit.rcwa(backend=backend, **CFG, **pol, structure=eps, mu=mu,
+    s = _legacy_wavebit_rcwa(backend=backend, **CFG, **pol, structure=eps, mu=mu,
                      layer_algorithm=algorithm)
     result = s.solve()
     f = result.reconstruct_field([57.], [0.], [83.])[0, 0, 0]
@@ -40,7 +42,7 @@ def test_one_dimensional_material_and_field_derivatives(mode, path, quantity, al
     else:
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         got = float(jax.grad(lambda t: value('jax', t, path, quantity, algorithm))(jnp.asarray(0.)))
     h = 1e-4
     expected = (value('numpy', np.asarray(h), path, quantity, algorithm)

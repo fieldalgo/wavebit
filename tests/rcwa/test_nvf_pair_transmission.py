@@ -1,11 +1,13 @@
 """Independent transmission laws, spatial differences and whole-cell guards."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import lru_cache
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import CartesianPairOpeningPlan, CartesianPairTransmissionGalerkinGapCell
+from wavebit.rcwa._engine.conforming.cartesian_pair_opening import CartesianPairOpeningPlan
+
+from wavebit.rcwa._engine.conforming.cartesian_pair_transmission_galerkin import CartesianPairTransmissionGalerkinGapCell
 from wavebit.rcwa._engine.conforming.pair_transmission_modes import TransmissionMode
 from wavebit.rcwa._engine.conforming.pair_transmission_fields import PairTransmissionFields
 
@@ -139,8 +141,8 @@ def test_flat_reference_adds_no_noninteger_direction():
     # The explicit public construction feeds the existing optical engine.
     settings = dict(lattice=GEOMETRY['basis'], truncation_order=0,
                     wavelength=2., thickness=(.3,), top=1., bot=2.25, theta=.2)
-    auxiliary = _legacy_wavebit.rcwa(**settings).solve_conv(*value)
-    uniform = _legacy_wavebit.rcwa(**settings, structure=np.full((1, 1, 1), 3.)).solve()
+    auxiliary = _legacy_wavebit_rcwa(**settings).solve_conv(*value)
+    uniform = _legacy_wavebit_rcwa(**settings, structure=np.full((1, 1, 1), 3.)).solve()
     for actual, reference in zip((auxiliary.p_inc, auxiliary.s_inc), (uniform.p_inc, uniform.s_inc)):
         np.testing.assert_allclose(actual.T, reference.T, atol=3e-10, rtol=0)
         np.testing.assert_allclose(actual.R, reference.R, atol=3e-10, rtol=0)

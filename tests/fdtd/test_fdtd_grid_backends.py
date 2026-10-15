@@ -1,6 +1,6 @@
 """Single-source Yee core across the RCWA Array API backends."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -29,7 +29,7 @@ def test_torch_common_core_matches_numpy_and_preserves_all_parameter_gradients()
         else:
             m=mask
             phase=np.array([0.,p[4],p[5]])
-        return _legacy_wavebit.fdtd_grid(1+p[0]*m,poles=[(p[1],p[2],p[3]*m)],
+        return _legacy_wavebit_fdtd_grid(1+p[0]*m,poles=[(p[1],p[2],p[3]*m)],
                                 bloch_phase=phase,backend=backend,checkpoint_steps=block,**kw)
     actual=run(parameters)
     expected=run(parameters.detach().numpy(),'numpy')
@@ -55,7 +55,7 @@ def test_torch_initial_field_and_pulse_gradients_and_input_immutability():
     pulse=torch.linspace(0,1,13,dtype=torch.float64,requires_grad=True)
     saved=initial.detach().clone()
     source=torch.ones_like(initial)
-    result=_legacy_wavebit.fdtd_grid(torch.ones((8,3,4),dtype=torch.float64),spacing=(1.,)*3,
+    result=_legacy_wavebit_fdtd_grid(torch.ones((8,3,4),dtype=torch.float64),spacing=(1.,)*3,
                             dt=.2,steps=13,electric=initial,source=source,pulse=pulse,backend='torch')
     loss=(result['E'].abs()**2).sum()
     de,dp=torch.autograd.grad(loss,(initial,pulse))
@@ -72,7 +72,7 @@ def test_named_backends_and_enums_match_rcwa(backend):
         pytest.importorskip('jax')
     if backend == 'torch':
         pytest.importorskip('torch')
-    out = _legacy_wavebit.fdtd_grid(np.ones((4, 3, 2)), spacing=(1.,)*3, dt=.1, steps=2,
+    out = _legacy_wavebit_fdtd_grid(np.ones((4, 3, 2)), spacing=(1.,)*3, dt=.1, steps=2,
                             backend=backend)
     assert tuple(out['E'].shape) == (3, 4, 3, 2)
 
@@ -80,7 +80,7 @@ def test_named_backends_and_enums_match_rcwa(backend):
 @pytest.mark.parametrize('backend', [0, 1, 2, 'JAX', 'pytorch'])
 def test_retired_backend_spellings_are_refused(backend):
     with pytest.raises(ValueError, match='backend'):
-        _legacy_wavebit.fdtd_grid(np.ones((4, 3, 2)), spacing=(1.,)*3, dt=.1, steps=2,
+        _legacy_wavebit_fdtd_grid(np.ones((4, 3, 2)), spacing=(1.,)*3, dt=.1, steps=2,
                           backend=backend)
 
 
@@ -88,7 +88,7 @@ def test_torch_eager_validation_reads_live_values_without_detaching_inputs():
     torch=pytest.importorskip('torch')
     eps=torch.full((4,3,2),-1.,requires_grad=True)
     with pytest.raises(ValueError):
-        _legacy_wavebit.fdtd_grid(eps,spacing=(1.,)*3,dt=.1,steps=2,backend='torch')
+        _legacy_wavebit_fdtd_grid(eps,spacing=(1.,)*3,dt=.1,steps=2,backend='torch')
     assert eps.requires_grad
 
 
@@ -98,7 +98,7 @@ def test_tensor_phase_sequence_preserves_graph_and_matches_stacked_input():
     source=torch.ones((3,5,3,4),dtype=torch.complex128)
     kw=dict(spacing=(1.,)*3,dt=.2,steps=9,source=source,pulse=torch.ones(9),backend='torch')
     def objective(phase):
-        return _legacy_wavebit.fdtd_grid(torch.ones((5,3,4),dtype=torch.float64),bloch_phase=phase,**kw)['E'].abs().square().sum()
+        return _legacy_wavebit_fdtd_grid(torch.ones((5,3,4),dtype=torch.float64),bloch_phase=phase,**kw)['E'].abs().square().sum()
     a=objective((0.,angle,-angle))
     b=objective(torch.stack((angle*0,angle,-angle)))
     ga=torch.autograd.grad(a,angle)[0]

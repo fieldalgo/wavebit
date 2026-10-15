@@ -1,10 +1,11 @@
 """Measure instantaneous energy flow inside a dielectric film.
 
 Requires wavebit[plot]. The probe interpolates native Yee space/time coordinates.
-The flux is in squared source-field units; positive Sz points upward; top illumination flows toward negative z.
+The instantaneous flux is in W/m²; positive Sz points upward; top illumination flows toward negative z.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit import Units, Material
+from wavebit.fdtd import periodic as fdtd
 import argparse
 from pathlib import Path
 
@@ -15,21 +16,25 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=Path('fdtd-poynting.png'))
     args = parser.parse_args()
-    _, diagnostics = _legacy_wavebit.fdtd(
-        structure=np.full((1, 1, 2), 2.25), thickness=[100.],
-        top=1., bot=1.44, period=[100.], wavelength=900., tetm='te',
-        resolution=.03, n_periods=80, record_field=1,
-        record_components='all', return_diagnostics=True)
-    probe = _legacy_wavebit.fdtd_poynting(diagnostics, x=0., y=0., z=50.)
+    units=Units(length='nm')
+    problem=fdtd.Problem(units=units,
+        stack=fdtd.Stack(period=(100.,),bottom=Material(1.44),
+            layers=(fdtd.Layer(thickness=100.,epsilon=np.full((1,2),2.25)),)),
+        excitation=fdtd.Excitation(wavelength=900.,sources=(fdtd.PlaneWave(),)),
+        outputs=fdtd.Outputs(record=fdtd.Record(every=1)))
+    result=fdtd.run(problem,numerics=fdtd.Numerics(spacing=1/.03,
+        duration_seconds=80*900*units.time_seconds,algorithm='reference'))
+    probe=result.sample(x=0.,y=0.,z=50.)
+    flux=np.cross(probe.values[:,:3].real,probe.values[:,3:].real)
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 4), constrained_layout=True)
-    ax.plot(probe['t']/900., probe['S'][:, 2], color='#297fc1')
-    ax.set(xlabel='Time (optical cycles)', ylabel='Sz (squared source-field units)',
+    ax.plot(probe.time/(900*units.time_seconds), flux[:,2], color='#297fc1')
+    ax.set(xlabel='Time (optical cycles)', ylabel='Sz (W/m²)',
            title='Instantaneous energy flow at z=50 nm inside a dielectric film')
     ax.axhline(0., color='gray', linewidth=.7)
     fig.savefig(args.output, dpi=150)
     plt.close(fig)
-    print(f"Probe region: {probe['region']}; samples: {len(probe['t'])}")
+    print(f"Probe region: {probe.metadata['region']}; samples: {len(probe.time)}")
     print(f'Flux trace: {args.output.resolve()}')
 
 

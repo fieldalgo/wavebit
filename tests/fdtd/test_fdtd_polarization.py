@@ -1,6 +1,14 @@
 """Jones phase, coherent interference and normalization on each FDTD route."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Layer as _legacy_wavebit_Layer
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -24,8 +32,8 @@ def test_circular_planar_amplitudes_match_rcwa(crossed, theta, phi):
     # Opposite handedness changes a relative phase, not simply the two intensities.
     common = scene(crossed, theta, phi)
     for pair in ((1., 1j), (1., -1j)):
-        result = _legacy_wavebit.fdtd(**common, polarization=pair, resolution=30., n_periods=80)
-        reference = _legacy_wavebit.rcwa(**common, polarization=pair, backend='numpy').solve()
+        result = _legacy_wavebit_fdtd(**common, polarization=pair, resolution=30., n_periods=80)
+        reference = _legacy_wavebit_rcwa(**common, polarization=pair, backend='numpy').solve()
         for key in AMPLITUDES:
             np.testing.assert_allclose(getattr(result.incident, key),
                                        getattr(reference.incident, key), atol=.015, rtol=0)
@@ -36,7 +44,7 @@ def test_circular_planar_amplitudes_match_rcwa(crossed, theta, phi):
 def patterned():
     common = scene(True)
     common.update(structure=np.array([[[2.25, 1.], [1., 1.44]]]), period=[.6, .8])
-    result = _legacy_wavebit.fdtd(**common, polarization=(1., 1j), resolution=20., n_periods=80)
+    result = _legacy_wavebit_fdtd(**common, polarization=(1., 1j), resolution=20., n_periods=80)
     return common, result
 
 
@@ -47,8 +55,8 @@ def test_crossed_ellipse_retains_complex_interference_and_overall_phase(patterne
     # Stated independently from the production resolver.
     pair = np.array([np.sin(psi)*np.cos(chi) + 1j*np.cos(psi)*np.sin(chi),
                      np.cos(psi)*np.cos(chi) - 1j*np.sin(psi)*np.sin(chi)])
-    chart = _legacy_wavebit.fdtd(**common, psi=psi, chi=chi, resolution=20., n_periods=80)
-    phased = _legacy_wavebit.fdtd(**common, polarization=3*phase*pair, resolution=20., n_periods=80)
+    chart = _legacy_wavebit_fdtd(**common, psi=psi, chi=chi, resolution=20., n_periods=80)
+    phased = _legacy_wavebit_fdtd(**common, polarization=3*phase*pair, resolution=20., n_periods=80)
     for key in AMPLITUDES:
         expected = pair[0]*getattr(circular.s_inc, key) + pair[1]*getattr(circular.p_inc, key)
         np.testing.assert_allclose(getattr(chart.incident, key), expected, atol=2e-14)
@@ -58,7 +66,7 @@ def test_crossed_ellipse_retains_complex_interference_and_overall_phase(patterne
     # A separate discretization checks the physical amplitudes, not only the
     # algebraic identity of combining this solver's own basis responses.
     reference_kw = dict(common, truncation_order=dict(x=5, y=5))
-    reference = _legacy_wavebit.rcwa(**reference_kw, psi=psi, chi=chi, backend='numpy').solve()
+    reference = _legacy_wavebit_rcwa(**reference_kw, psi=psi, chi=chi, backend='numpy').solve()
     for key in AMPLITUDES:
         np.testing.assert_allclose(getattr(chart.incident, key)[0, 0],
                                    getattr(reference.incident, key)[5, 5], atol=.025, rtol=0)
@@ -67,12 +75,12 @@ def test_crossed_ellipse_retains_complex_interference_and_overall_phase(patterne
 
 
 def test_typed_broadband_ellipse_uses_same_state_at_each_wavelength():
-    stack = _legacy_wavebit.Stack(layers=[_legacy_wavebit.Layer(thickness=.1, structure=np.full((1, 2), 2.25))],
+    stack = _legacy_wavebit_Stack(layers=[_legacy_wavebit_Layer(thickness=.1, structure=np.full((1, 2), 2.25))],
                           top=1., bot=1.44, period=(.1,))
-    incidence = _legacy_wavebit.Incidence(wavelength=[.85, .9, .95], theta=0., phi=.4, chi=.2)
-    results = _legacy_wavebit.fdtd(stack=stack, incidence=incidence, resolution=30., n_periods=80)
+    incidence = _legacy_wavebit_Incidence(wavelength=[.85, .9, .95], theta=0., phi=.4, chi=.2)
+    results = _legacy_wavebit_fdtd(stack=stack, incidence=incidence, resolution=30., n_periods=80)
     for wavelength, result in zip(incidence.wavelength, results):
-        reference = _legacy_wavebit.rcwa(stack=stack, wavelength=wavelength, theta=0., phi=.4,
+        reference = _legacy_wavebit_rcwa(stack=stack, wavelength=wavelength, theta=0., phi=.4,
                                  chi=.2, backend='numpy').solve()
         for key in AMPLITUDES:
             np.testing.assert_allclose(getattr(result.incident, key),
@@ -85,7 +93,7 @@ def test_typed_broadband_ellipse_uses_same_state_at_each_wavelength():
 def test_invalid_jones_vector_never_reaches_time_loop(monkeypatch, pair):
     monkeypatch.setattr(core, '_time_loop', lambda *a, **k: pytest.fail('time loop reached'))
     with pytest.raises(ValueError, match='polarization'):
-        _legacy_wavebit.fdtd(**scene(), polarization=pair)
+        _legacy_wavebit_fdtd(**scene(), polarization=pair)
 
 
 @pytest.mark.parametrize('state', [dict(tetm='te', chi=.2), dict(tetm='tm', polarization=(1, 1j)),
@@ -93,7 +101,7 @@ def test_invalid_jones_vector_never_reaches_time_loop(monkeypatch, pair):
                                    dict(chi=.2, polarization=(1, 1j))])
 def test_conflicting_polarization_spellings_are_refused(state):
     with pytest.raises(ValueError):
-        _legacy_wavebit.fdtd(**scene(), **state)
+        _legacy_wavebit_fdtd(**scene(), **state)
 
 
 @pytest.mark.parametrize('scale', [1e-320, 1e-300, 1e300])
@@ -121,9 +129,9 @@ def test_flux_weight_falls_back_per_order_when_first_basis_has_a_dark_channel():
 def test_real_jones_vector_keeps_recording_contract():
     common = scene(False, theta=.3, phi=0.)
     angle = .37
-    _, chart = _legacy_wavebit.fdtd(**common, psi=angle, resolution=20., n_periods=60,
+    _, chart = _legacy_wavebit_fdtd(**common, psi=angle, resolution=20., n_periods=60,
                             record_field=20, return_diagnostics=True)
-    _, pair = _legacy_wavebit.fdtd(**common, polarization=(np.sin(angle), np.cos(angle)),
+    _, pair = _legacy_wavebit_fdtd(**common, polarization=(np.sin(angle), np.cos(angle)),
                            resolution=20., n_periods=60, record_field=20,
                            return_diagnostics=True)
     for key in ('field_e', 'field_ex'):

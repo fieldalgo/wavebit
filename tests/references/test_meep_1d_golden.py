@@ -64,7 +64,7 @@ order on it** -- so the golden is frozen at two resolutions and
 Slow drift is still the job of the in-process comparisons in ``tests/fdtd/test_fdtd.py``.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -214,7 +214,7 @@ def _propagating(case, name):
 
 
 def _solve_rcwa(case, tetm, orders=RCWA_ORDERS):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', wavelength=case['wavelength'], period=[case['period'][0]],
         truncation_order=dict(x=orders, y=0), top=eps_of(case['n_top']),
         bot=eps_of(case['n_bot']), theta=0.0, phi=0.0, tetm=tetm,
@@ -451,7 +451,7 @@ def test_pure_and_conical_amplitudes_share_the_meep_frame(golden):
         pure = _order_grid(_solve_rcwa(case, leg), case)
         # The conical route at the same scene. `theta` cannot be exactly zero on that path,
         # and 1e-9 rad is nine orders below every tolerance in this file.
-        conical = _legacy_wavebit.rcwa(
+        conical = _legacy_wavebit_rcwa(
             backend='numpy', wavelength=case['wavelength'], period=[case['period'][0]],
             truncation_order=dict(x=RCWA_ORDERS, y=0), top=eps_of(case['n_top']),
             bot=eps_of(case['n_bot']), theta=1e-9, phi=0.0,

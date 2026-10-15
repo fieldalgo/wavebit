@@ -15,7 +15,7 @@ transport can be spelled ``psi -> psi - alpha`` instead. A rotation test that fo
 is blind at normal incidence and wrong at oblique.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -59,7 +59,7 @@ def _box(**geom):
 def _total(lattice, shape, order=6, shape_nvf_grid_size=512, **incidence):
     P._PROJECTOR_CACHE.clear()
     kw = dict(SOLVE_KW, **incidence)
-    res = _legacy_wavebit.rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=[shape])],
+    res = _legacy_wavebit_rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=[shape])],
                        truncation_order=dict(u=order, v=order), shape_nvf_grid_size=shape_nvf_grid_size,
                        **kw).solve()
     return float(np.sum(np.asarray(res.T)))
@@ -76,7 +76,7 @@ def test_the_grating_keeps_the_previous_mechanisms_digits():
     sample -- and a difference in the last digits would mean the field is not that.
     """
     P._PROJECTOR_CACHE.clear()
-    s = _legacy_wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+    s = _legacy_wavebit_rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                      truncation_order=dict(x=5, y=5), top=1, bot=1, wavelength=550.0, psi=0.0)
     s.structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                      lx=350.0, ly=PERIOD, angle=0.0,
@@ -291,7 +291,7 @@ def test_x_orders_cannot_change_an_x_invariant_answer():
     """
     def total(tox, toy):
         P._PROJECTOR_CACHE.clear()
-        s = _legacy_wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+        s = _legacy_wavebit_rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                          truncation_order=dict(x=tox, y=toy), top=1, bot=1, wavelength=550.0,
                          psi=np.pi / 2)
         s.structure = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
@@ -498,7 +498,7 @@ def _the_350_golden():
 def _layer_total(shapes, order=4, shape_nvf_grid_size=128):
     """``sum(T)`` of a multi-shape layer on the square cell, at this file's operating point."""
     P._PROJECTOR_CACHE.clear()
-    res = _legacy_wavebit.rcwa(lattice=SQUARE, structure=[dict(background=1.0, shapes=shapes)],
+    res = _legacy_wavebit_rcwa(lattice=SQUARE, structure=[dict(background=1.0, shapes=shapes)],
                        truncation_order=dict(u=order, v=order), shape_nvf_grid_size=shape_nvf_grid_size,
                        **SOLVE_KW).solve()
     return float(np.sum(np.asarray(res.T)))

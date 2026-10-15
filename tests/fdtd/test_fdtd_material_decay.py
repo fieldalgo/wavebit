@@ -1,6 +1,8 @@
 """ADE diagnostics distinguish residual oscillator motion from field decay."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -16,7 +18,7 @@ def exact_activity(strength, steps=43, dt=.1):
 
 def run(strength=.5, backend='numpy'):
     e = np.zeros((3, 4, 2, 2));e[0] = 1
-    return _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.1, steps=43,
+    return _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.1, steps=43,
                             electric=e, poles=[(1., 0., strength)], backend=backend,
                             convergence_window=6, dft_subsample=2,
                             wavelengths=(2.,), monitor_z=(1,), record_field=7)
@@ -39,7 +41,7 @@ def test_material_activity_matches_closed_form_discrete_oscillator(backend):
 
 def test_weakly_coupled_lorentz_motion_survives_small_electric_field():
     e = np.zeros((3, 4, 2, 2));e[0] = 1
-    c = _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.02, steps=2000,
+    c = _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.02, steps=2000,
                          electric=e, conductivity=10., poles=[(1., .01, .01)],
                          convergence_window=100)['convergence']
     assert c['field_decayed']
@@ -51,7 +53,7 @@ def test_weakly_coupled_lorentz_motion_survives_small_electric_field():
 
 def test_static_drude_polarization_is_not_residual_oscillator_motion():
     e = np.zeros((3, 4, 2, 2));e[0] = 1
-    out = _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.1, steps=400,
+    out = _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.1, steps=400,
                            electric=e, poles=[(0., 2., 1.)], convergence_window=30)
     assert np.max(abs(out['polarization'][0])) > .9
     assert out['convergence']['material_decayed']
@@ -60,7 +62,7 @@ def test_static_drude_polarization_is_not_residual_oscillator_motion():
 
 @pytest.mark.parametrize('poles', [(), [(1., 0., 0.)]])
 def test_absent_or_unexcited_poles_do_not_block_material_flag(poles):
-    out = _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.1, steps=10,
+    out = _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.1, steps=10,
                            poles=poles, convergence_window=3)
     c = out['convergence']
     assert not c['material_signal_present'].any()
@@ -89,7 +91,7 @@ def test_material_decay_gradient_matches_closed_form(backend):
 
 
 def test_scene_reports_material_and_combined_decay_for_all_bases():
-    _, d = _legacy_wavebit.fdtd(structure=np.ones((1, 1, 1))*1.5, thickness=[.2], top=1., bot=1.,
+    _, d = _legacy_wavebit_fdtd(structure=np.ones((1, 1, 1))*1.5, thickness=[.2], top=1., bot=1.,
                         period=.2, wavelength=1., backend='numpy', resolution=10, n_periods=25,
                         tetm='te', truncation_order=0, dispersion=np.ones((1, 1, 1), int),
                         poles={1: [(6., .2, 4.)]}, return_diagnostics=True, convergence_window=40)
@@ -105,7 +107,7 @@ def test_material_activity_uses_nonuniform_native_volumes_and_zero_strength_mask
     widths = np.array([.5, .7, 1.1, 1.3])
     strengths = np.array([0., .2, .5, 1.])
     e = np.zeros((3, 4, 2, 2));e[2] = 1
-    out = _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, z_spacing=widths,
+    out = _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, z_spacing=widths,
                            dt=.1, steps=43, electric=e,
                            poles=[(1., 0., strengths[:, None, None])], convergence_window=6)
     # Longitudinal fields vary only along z, so the four oscillators have zero curl.

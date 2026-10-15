@@ -5,7 +5,7 @@ Written: 2026-09-09
 Targets:
 - `src/wavebit/fdtd/_periodic/scene.py`
 - `src/wavebit/_common/conventions.py`
-- `src/wavebit/compat/legacy.py`
+- `src/wavebit/fdtd/_periodic/api.py`
 - `tests/fdtd/test_fdtd_pulse_notches.py`
 - `tests/references/test_meep_source_notch.py`
 - `tests/references/interface/meep_source_notch.py`

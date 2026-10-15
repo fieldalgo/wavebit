@@ -31,15 +31,19 @@ refusal names, and where both formulations can express the scene it reproduces t
 answer.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import re
 
 import numpy as np
 import pytest
 
 import wavebit
-from wavebit.compat.legacy import Incidence, JobSpec, Layer, Numerics, Stack
-from wavebit.compat.legacy import run
+from wavebit._common.periodic import Incidence
+from wavebit._common._jobs_v1 import JobSpec
+from wavebit._common.periodic import Layer
+from wavebit._common._jobs_v1 import Numerics
+from wavebit._common.periodic import Stack
+from wavebit._common._jobs_v1 import run
 
 # One layer, one row: the structure the pure 1D path is built for. Permittivity.
 ROW = [1., 1., 1., 12.25, 12.25, 12.25, 1., 1., 1., 1.]
@@ -85,7 +89,7 @@ def _assert_same_light(got, want, tetm, tol=1e-12):
                                   'epzy_conv_all'])
 def test_a_z_row_beside_tetm_is_refused_by_name(slot, tetm):
     """Each of the four permittivity slots, as a keyword -- the message names the one given."""
-    solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm=tetm, **KW)
+    solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm=tetm, **KW)
     conv = solver.eps_conv_matrices()
     with pytest.raises(ValueError, match=rf"tetm='{tetm}' and a z row \({slot}\)") as info:
         solver.solve_conv(conv.epx, conv.epy, conv.epz_i, **_z_slots(conv, **{slot: True}))
@@ -94,7 +98,7 @@ def test_a_z_row_beside_tetm_is_refused_by_name(slot, tetm):
 
 def test_a_z_row_given_positionally_and_in_mu_is_named_as_given():
     """The positional spelling, and the permeability's z row (``mu[5:]``) -- both are a z row."""
-    solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
+    solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', **KW)
     conv = solver.eps_conv_matrices()
     z = _z_slots(conv, epxz_conv_all=True, epzy_conv_all=True)
     with pytest.raises(ValueError, match=r'a z row \(epxz_conv_all, epzy_conv_all\)'):
@@ -115,7 +119,7 @@ def test_the_advice_beside_a_z_row_is_the_same_light(tetm):
     reproduce the pure 1D answer, amplitude for amplitude: that is the claim "the light tetm
     describes" makes, and the two solves share no kernel.
     """
-    pure = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm=tetm, **KW)
+    pure = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm=tetm, **KW)
     want = pure.solve()
     conv = pure.eps_conv_matrices()
     zero = np.zeros_like(conv.epx)
@@ -123,7 +127,7 @@ def test_the_advice_beside_a_z_row_is_the_same_light(tetm):
         pure.solve_conv(conv.epx, conv.epy, conv.epz_i, None, None, zero, zero, zero, zero)
 
     pair = (1, 0) if tetm == 'te' else (0, 1)
-    advised = _legacy_wavebit.rcwa(structure=RASTER_1D, polarization=pair, phi=0.0, **KW)
+    advised = _legacy_wavebit_rcwa(structure=RASTER_1D, polarization=pair, phi=0.0, **KW)
     got = advised.solve_conv(conv.epx, conv.epy, conv.epz_i, None, None, zero, zero, zero, zero)
     assert (advised.grating_type, advised.formulation_assigned) == (2, 'first_order')
     _assert_same_light(got, want, tetm)
@@ -132,7 +136,7 @@ def test_the_advice_beside_a_z_row_is_the_same_light(tetm):
 def test_the_z_row_refusal_holds_under_jit_and_grad():
     """A traced z row is still a *given* one: the test reads ``is None``, never a value."""
     jax = pytest.importorskip('jax')
-    solver = _legacy_wavebit.rcwa(backend='jax', structure=RASTER_1D, tetm='te', **KW)
+    solver = _legacy_wavebit_rcwa(backend='jax', structure=RASTER_1D, tetm='te', **KW)
     import jax.numpy as jnp
     conv = solver.eps_conv_matrices()
     z = jnp.asarray(0.1 * np.eye(conv.epx.shape[-1], dtype=complex)[None])
@@ -153,19 +157,19 @@ def test_the_z_row_refusal_holds_under_jit_and_grad():
 def test_formulation_first_order_beside_tetm_is_refused_on_every_door(door):
     """The first-order path without a z row: forced, in either order and through ``solve``."""
     if door == 'attribute':
-        solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='tm', **KW)
+        solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='tm', **KW)
         solver.formulation = 'first_order'
         call = solver.solve
     elif door == 'attribute, tetm last':
-        solver = _legacy_wavebit.rcwa(structure=RASTER_1D, **KW)
+        solver = _legacy_wavebit_rcwa(structure=RASTER_1D, **KW)
         solver.formulation = 'first_order'
         solver.tetm = 'tm'
         call = solver.solve
     elif door == 'solve keyword':
-        solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='tm', **KW)
+        solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='tm', **KW)
         call = lambda: solver.solve(formulation='first_order')
     else:
-        solver = _legacy_wavebit.rcwa(structure=RASTER_1D, **KW)
+        solver = _legacy_wavebit_rcwa(structure=RASTER_1D, **KW)
         solver.formulation = 'first_order'
         call = lambda: solver.solve(tetm='tm')
     with pytest.raises(ValueError,
@@ -185,13 +189,13 @@ def test_first_order_beside_a_structure_off_the_pure_path_names_the_structure(ro
     the structure's own reason is gone, the ``'first_order'`` message is the one left, and it is
     right.
     """
-    raster = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
+    raster = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', **KW)
     conv = raster.eps_conv_matrices()
     if route == 'shape structure':
-        solver = _legacy_wavebit.rcwa(structure=SHAPES, tetm='te', **KW)
+        solver = _legacy_wavebit_rcwa(structure=SHAPES, tetm='te', **KW)
         call, named = solver.solve, 'was given with a shape structure'
     else:
-        solver = _legacy_wavebit.rcwa(tetm='te', **KW)
+        solver = _legacy_wavebit_rcwa(tetm='te', **KW)
         call = lambda: solver.solve_conv(conv.epx, conv.epy, conv.epz_i)
         named = 'holds no structure'
     solver.formulation = 'first_order'
@@ -222,7 +226,7 @@ def test_a_refusal_leaves_the_last_solve_as_it_was(door):
     that solve raised ``IndexError: tuple index out of range``. The field it reconstructs
     afterwards has to be the field it reconstructed before, exactly.
     """
-    solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', answers='field', **KW)
+    solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', answers='field', **KW)
     solver.solve()
     before = solver.reconstruct_field(5, 1, 5)
     conv = solver.eps_conv_matrices()
@@ -248,8 +252,8 @@ def test_a_refusal_leaves_the_last_solve_as_it_was(door):
 @pytest.mark.parametrize('tetm', ['te', 'tm'])
 def test_the_advice_beside_first_order_is_the_cross_check_it_promises(tetm):
     """``formulation='first_order'`` on the named pair reproduces the pure ``tetm`` solve."""
-    want = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm=tetm, **KW).solve()
-    advised = _legacy_wavebit.rcwa(structure=RASTER_1D, polarization=(1, 0) if tetm == 'te' else (0, 1),
+    want = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm=tetm, **KW).solve()
+    advised = _legacy_wavebit_rcwa(structure=RASTER_1D, polarization=(1, 0) if tetm == 'te' else (0, 1),
                            phi=0.0, **KW)
     advised.formulation = 'first_order'
     got = advised.solve()
@@ -277,29 +281,29 @@ _NUMERICS = dict(truncation_order=[3, 0])
 def test_tetm_on_a_shape_structure_is_refused_on_every_door(door):
     """A shape structure never takes the pure path, whichever way the pair was put together."""
     if door == 'constructor':
-        call = _legacy_wavebit.rcwa(structure=SHAPES, tetm='te', **KW).solve
+        call = _legacy_wavebit_rcwa(structure=SHAPES, tetm='te', **KW).solve
     elif door == 'tetm assigned':
-        solver = _legacy_wavebit.rcwa(structure=SHAPES, **KW)
+        solver = _legacy_wavebit_rcwa(structure=SHAPES, **KW)
         solver.tetm = 'te'
         call = solver.solve
     elif door == 'structure assigned':
-        solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
+        solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', **KW)
         solver.solve()                                     # the pure path, as a control
         assert solver.grating_type == 0
         solver.structure = SHAPES
         call = solver.solve
     elif door == 'solve keyword':
-        solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
+        solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', **KW)
         call = lambda: solver.solve(structure=SHAPES)
     elif door == 'typed Stack and Incidence':
-        solver = _legacy_wavebit.rcwa(stack=_stack(SHAPES), incidence=_incidence(), **_NUMERICS)
+        solver = _legacy_wavebit_rcwa(stack=_stack(SHAPES), incidence=_incidence(), **_NUMERICS)
         call = solver.solve
     elif door == 'JobSpec':
         spec = JobSpec(stack=_stack(SHAPES), incidence=_incidence(),
                        numerics=Numerics(**_NUMERICS))
         call = lambda: run(JobSpec.from_json(spec.to_json()))
     else:
-        solver = _legacy_wavebit.rcwa(structure=SHAPES, tetm='te', answers='field', **KW)
+        solver = _legacy_wavebit_rcwa(structure=SHAPES, tetm='te', answers='field', **KW)
         call = solver.solve_field
     with pytest.raises(ValueError, match=r"tetm='te' was given with a shape structure") as info:
         call()
@@ -309,7 +313,7 @@ def test_tetm_on_a_shape_structure_is_refused_on_every_door(door):
 
 def test_the_advice_on_a_shape_structure_solves():
     """The pair the message names runs on the 2D layout the message says shapes take."""
-    solver = _legacy_wavebit.rcwa(structure=SHAPES, polarization=(1, 0), phi=0.0, **KW)
+    solver = _legacy_wavebit_rcwa(structure=SHAPES, polarization=(1, 0), phi=0.0, **KW)
     res = solver.solve()
     assert solver.grating_type == 2
     assert np.isfinite(np.asarray(res.R)).all() and np.asarray(res.R).sum() > 1e-3
@@ -318,7 +322,7 @@ def test_the_advice_on_a_shape_structure_solves():
 def test_the_shape_refusal_holds_under_jit_and_grad():
     """Traced through a frozen geometry and through an un-jitted gradient alike."""
     jax = pytest.importorskip('jax')
-    solver = _legacy_wavebit.rcwa(backend='jax', structure=SHAPES, tetm='te', **KW)
+    solver = _legacy_wavebit_rcwa(backend='jax', structure=SHAPES, tetm='te', **KW)
     geometry = solver.freeze_geometry()
     import jax.numpy as jnp
 
@@ -339,10 +343,10 @@ def test_tetm_on_a_solver_with_no_structure_is_refused():
     The one layout it may keep is the pure one: after a pure solve the same call answers --
     re-checked, as the next test shows.
     """
-    raster = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
+    raster = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', **KW)
     conv = raster.eps_conv_matrices()
     want = raster.solve()
-    bare = _legacy_wavebit.rcwa(tetm='te', **KW)
+    bare = _legacy_wavebit_rcwa(tetm='te', **KW)
     with pytest.raises(ValueError, match=r"tetm='te' was given to a solver that holds no "
                                          r'structure.* here the 2D one') as info:
         bare.solve_conv(conv.epx, conv.epy, conv.epz_i)
@@ -356,7 +360,7 @@ def test_tetm_on_a_solver_with_no_structure_is_refused():
     bare.structure = None
     _assert_same_light(bare.solve_conv(conv.epx, conv.epy, conv.epz_i), want, 'te', tol=0.0)
 
-    conical = _legacy_wavebit.rcwa(structure=RASTER_1D, **KW)
+    conical = _legacy_wavebit_rcwa(structure=RASTER_1D, **KW)
     conical.solve()
     assert conical.grating_type == 1
     conical.structure = None
@@ -387,7 +391,7 @@ def test_a_kept_pure_layout_asks_again_what_its_raster_was_asked(moved):
     moves on the raster itself are refused, so they are refused here, before the routing is
     written -- the layout stays the pure one, and the solve before it stays readable.
     """
-    raster = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW)
+    raster = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', **KW)
     conv = raster.eps_conv_matrices()
     raster.solve()
     raster.structure = None
@@ -399,8 +403,8 @@ def test_a_kept_pure_layout_asks_again_what_its_raster_was_asked(moved):
     assert raster.grating_type == 0
     if moved == 'phi':
         # The premise: phi = 0.4 is another scene, so answering it was wrong, not merely early.
-        pure = float(np.sum(_legacy_wavebit.rcwa(structure=RASTER_1D, tetm='te', **KW).solve().R))
-        tilted = _legacy_wavebit.rcwa(structure=RASTER_1D, polarization=(1, 0), phi=0.4, **KW).solve()
+        pure = float(np.sum(_legacy_wavebit_rcwa(structure=RASTER_1D, tetm='te', **KW).solve().R))
+        tilted = _legacy_wavebit_rcwa(structure=RASTER_1D, polarization=(1, 0), phi=0.4, **KW).solve()
         assert abs(float(np.sum(tilted.R)) - pure) > 1e-2
 
 
@@ -414,14 +418,14 @@ def test_tetm_after_a_tensor_was_built_is_refused_with_the_tensor_sentence():
     film = dict(wavelength=600.0, period=(300.0, 300.0), thickness=[220.0], phi=0.0,
                 structure=[dict(background=Material([2.0, 3.0, 4.0]), shapes=[])],
                 truncation_order=(0, 0))
-    solver = _legacy_wavebit.rcwa(**film)
+    solver = _legacy_wavebit_rcwa(**film)
     conv = solver.eps_conv_matrices()
     solver.tetm = 'te'
     with pytest.raises(ValueError, match=TENSOR):
         solver.solve_conv(*conv)
     # ... and at the build, the precedent this sentence came from -- on the typed and spec doors.
     with pytest.raises(ValueError, match=TENSOR):
-        _legacy_wavebit.rcwa(**film, tetm='te').solve()
+        _legacy_wavebit_rcwa(**film, tetm='te').solve()
     spec = JobSpec(stack=Stack(layers=[Layer(thickness=220.0, structure=film['structure'][0])],
                                period=(300.0, 300.0)),
                    incidence=Incidence(wavelength=600.0, phi=0.0, tetm='te'),
@@ -436,7 +440,7 @@ def test_tetm_after_a_tensor_was_built_is_refused_with_the_tensor_sentence():
 def test_the_pure_path_is_untouched(tetm):
     """``tetm`` on a one-row raster and no z row: the pure path, through ``solve`` and
     ``solve_conv`` both -- the guard costs the ordinary call nothing."""
-    solver = _legacy_wavebit.rcwa(structure=RASTER_1D, tetm=tetm, **KW)
+    solver = _legacy_wavebit_rcwa(structure=RASTER_1D, tetm=tetm, **KW)
     via_solve = solver.solve()
     assert solver.grating_type == 0
     via_conv = solver.solve_conv(*solver.eps_conv_matrices())

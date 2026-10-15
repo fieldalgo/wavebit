@@ -23,7 +23,9 @@ asked -- and resolve it against the modeling path on read. ``'sampled'`` is the 
 default and cannot be refused on a path where nobody chose it; a spelled-out one is.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import numpy as np
 import pytest
 
@@ -56,7 +58,7 @@ UNAVAILABLE = {'smooth': 'sampled'}
 
 
 def solver(path, **strategy):
-    return _legacy_wavebit.rcwa(structure=STRUCTURES[path], **KW, **strategy)
+    return _legacy_wavebit_rcwa(structure=STRUCTURES[path], **KW, **strategy)
 
 
 def totals(path, **strategy):
@@ -172,7 +174,7 @@ def test_the_refusal_holds_on_every_backend(backend, path, series):
     of the three had grown its own copy."""
     pytest.importorskip(backend)
     with pytest.raises(NotImplementedError):
-        _legacy_wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=backend),
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], **dict(KW, backend=backend),
                        fourier_coefficients=series).solve()
 
 
@@ -207,7 +209,7 @@ PAINTED_KW = dict(KW, period=PAINTED_PERIOD, truncation_order=[6, 6], thickness=
 
 
 def _painted(**strategy):
-    return _legacy_wavebit.rcwa(structure=PAINTED, **PAINTED_KW, **strategy)
+    return _legacy_wavebit_rcwa(structure=PAINTED, **PAINTED_KW, **strategy)
 
 
 def test_the_boundary_sub_path_is_covered_by_the_smooth_row():
@@ -272,7 +274,7 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
     inside JAX's tree machinery rather than at the solve being refused, which is pinned below.
     """
     jax = pytest.importorskip('jax')
-    s = _legacy_wavebit.rcwa(structure=SMOOTH, **dict(KW, backend='jax'))
+    s = _legacy_wavebit_rcwa(structure=SMOOTH, **dict(KW, backend='jax'))
     leaves, treedef = jax.tree_util.tree_flatten(s)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
 
@@ -284,7 +286,7 @@ def test_a_pytree_round_trip_does_not_turn_an_unset_option_into_a_request():
 
 def test_a_pytree_round_trip_keeps_a_real_request_and_still_refuses_it_at_the_solve():
     jax = pytest.importorskip('jax')
-    s = _legacy_wavebit.rcwa(structure=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend='jax'))
+    s = _legacy_wavebit_rcwa(structure=SMOOTH, fourier_coefficients='sampled', **dict(KW, backend='jax'))
     leaves, treedef = jax.tree_util.tree_flatten(s)     # must not raise here
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back._fourier_coefficients == 'sampled'
@@ -325,32 +327,32 @@ def test_a_spec_that_does_not_mention_the_coefficients_does_not_request_them():
     and a spec carrying shape-path layers would be refused for asking for a series its author
     never named. Exactly the failure the ``factorization`` half of this already avoids.
     """
-    from wavebit.compat._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     assert Numerics().fourier_coefficients is None
     assert 'fourier_coefficients' not in Numerics().as_kwargs()
     assert Numerics.from_dict(Numerics().to_dict()).fourier_coefficients is None
 
-    result = _legacy_wavebit.run(SPEC)
+    result = _legacy_wavebit_run(SPEC)
     assert float(np.sum(np.asarray(result.T))) == totals('smooth')[1]
 
 
 def test_a_spec_that_does_mention_it_is_refused_like_any_other_request():
     numerics = dict(SPEC['numerics'], fourier_coefficients='sampled')
     with pytest.raises(NotImplementedError, match="fourier_coefficients='sampled'"):
-        _legacy_wavebit.run({**SPEC, 'numerics': numerics})
+        _legacy_wavebit_run({**SPEC, 'numerics': numerics})
 
 
 def test_a_spec_may_still_name_the_series_its_path_does_form():
-    from wavebit.compat._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     assert (Numerics.from_dict({'fourier_coefficients': 'integrated'}).fourier_coefficients
             is FourierCoefficients.INTEGRATED)
     numerics = dict(SPEC['numerics'], fourier_coefficients='integrated')
-    assert (float(np.sum(np.asarray(_legacy_wavebit.run({**SPEC, 'numerics': numerics}).T))) ==
+    assert (float(np.sum(np.asarray(_legacy_wavebit_run({**SPEC, 'numerics': numerics}).T))) ==
             totals('smooth')[1])
 
 
 def test_a_raster_spec_still_carries_the_coefficients_through():
     """Omitting an unset value must not have stopped a set one from reaching the solver."""
-    from wavebit.compat._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     assert (Numerics(fourier_coefficients=FourierCoefficients.INTEGRATED)
             .as_kwargs()['fourier_coefficients'] == 'integrated')

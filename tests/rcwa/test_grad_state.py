@@ -1,6 +1,8 @@
 """A gradient query must preserve declarations and release expired JAX solve state."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import partial
 
 import numpy as np
@@ -18,7 +20,7 @@ RASTER[0, 1:3, 1:3] = 4.
 
 
 def solver(backend='jax', **kwargs):
-    return _legacy_wavebit.rcwa(backend=backend, **(dict(CFG, structure=RASTER) | kwargs))
+    return _legacy_wavebit_rcwa(backend=backend, **(dict(CFG, structure=RASTER) | kwargs))
 
 
 @pytest.mark.parametrize('door', ['solve', 'solve_field_eager', 'solve_field'])
@@ -71,7 +73,7 @@ def test_default_polarization_remains_default_after_its_gradient():
 @pytest.mark.parametrize('slot', ['top', 'bot', 'structure'])
 @pytest.mark.parametrize('fails', [False, True])
 def test_gradient_restores_the_material_definition_beside_its_value(slot, fails):
-    material = _legacy_wavebit.TabulatedMaterial([800., 1000.], [2.25, 4.])
+    material = _legacy_wavebit_TabulatedMaterial([800., 1000.], [2.25, 4.])
     value = [dict(background=material, shapes=[])] if slot == 'structure' else material
     s = solver(**{slot: value})
     g = s.freeze_geometry()

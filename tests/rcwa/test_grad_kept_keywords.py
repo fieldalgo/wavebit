@@ -1,6 +1,8 @@
 """Gradient cleanup preserves explicit concrete keywords without leaking custom writes."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import partial
 
 import numpy as np
@@ -17,7 +19,7 @@ CFG = dict(period=(600., 750.), structure=np.full((1, 2, 2), 4.),
 
 
 def solver(backend='jax', **kwargs):
-    return _legacy_wavebit.rcwa(backend=backend, **(CFG | kwargs))
+    return _legacy_wavebit_rcwa(backend=backend, **(CFG | kwargs))
 
 
 @pytest.mark.parametrize('door', ['solve', 'solve_field', 'solve_field_eager'])
@@ -82,7 +84,7 @@ def test_replayed_keywords_keep_the_accepted_numpy_value_after_caller_mutation()
 
 
 def test_a_keyword_incompatible_with_the_restored_table_rolls_back_the_scene():
-    table = _legacy_wavebit.TabulatedMaterial([800., 1000.], [2.25, 4.])
+    table = _legacy_wavebit_TabulatedMaterial([800., 1000.], [2.25, 4.])
     s = solver(top=table)
     original = s.solve()
     def forward(**values):

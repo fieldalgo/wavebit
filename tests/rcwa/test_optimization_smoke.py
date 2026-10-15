@@ -15,7 +15,7 @@ A single solve agreeing across backends is already covered; a trajectory agreein
 gradients agree too, step after step, which is where a backend-specific defect would show.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -37,7 +37,7 @@ def _jax_losses():
     import jax.numpy as jnp
     import optax
 
-    solver = _legacy_wavebit.rcwa(backend='jax', **CFG)
+    solver = _legacy_wavebit_rcwa(backend='jax', **CFG)
 
     def loss(u):
         return -jnp.sum(solver.solve(structure=u).incident.T)
@@ -59,7 +59,7 @@ def _jax_losses():
 def _torch_losses():
     import torch
 
-    solver = _legacy_wavebit.rcwa(backend='torch', **CFG)
+    solver = _legacy_wavebit_rcwa(backend='torch', **CFG)
 
     u = torch.tensor(UCELL0, dtype=torch.float64, requires_grad=True)
     opt = torch.optim.Adam([u], lr=LR)

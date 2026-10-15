@@ -8,7 +8,7 @@ import warnings
 from wavebit import Material, Units, fdtd
 from wavebit.materials import ConductiveMaterial
 from wavebit.units import C0, EPSILON0, Z0
-from wavebit.compat.legacy import fd as legacy
+from wavebit.fdtd import _legacy as legacy
 from wavebit.errors import IncompatibleProblemError, UnsupportedFeatureError
 from wavebit.fdtd._lower_public import lower_problem
 

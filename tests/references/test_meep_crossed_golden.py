@@ -53,7 +53,7 @@ It is an oracle for *structure*, exactly as the fmmax field row is; slow drift i
 the in-process comparisons in ``tests/fdtd/test_fdtd.py``.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -137,7 +137,7 @@ def _propagating(case, name):
 
 
 def _rcwa(case):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', wavelength=case['wavelength'], period=list(case['period']),
         truncation_order=RCWA_ORDERS, top=eps_of(case['n_top']), bot=eps_of(case['n_bot']),
         theta=np.deg2rad(case['theta_deg']), phi=np.deg2rad(case['phi_deg']),

@@ -1,6 +1,6 @@
 """Diffraction plane placement and continuum/Yee cutoff diagnostics."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 import wavebit
@@ -18,8 +18,8 @@ def test_moving_planes_preserves_mesh_and_dynamics_under_recalibration(side, gra
     kw = options(incidence_side=side, grading=grading, pulse_width=3., n_periods=60,
                  convergence_window=100, record_field=43, record_components=['ex', 'hy'],
                  record_bounds={'z': (-.05, .25)}, field_monitors={'out': -.25})
-    _, a = _legacy_wavebit.fdtd(**kw)
-    _, b = _legacy_wavebit.fdtd(**kw, diffraction_distance=(.18, .27))
+    _, a = _legacy_wavebit_fdtd(**kw)
+    _, b = _legacy_wavebit_fdtd(**kw, diffraction_distance=(.18, .27))
     assert bool(a['convergence']['scattering_settled'])
     assert bool(b['convergence']['scattering_settled'])
     for key in ('z_nodes', 'z_spacing', 'shape', 'dt', 'steps', 'source_z', 'pml_bounds'):
@@ -49,7 +49,7 @@ def test_near_planes_refine_to_fresnel_airy():
     expected = np.array([r*(1-phase**2)/(1-r*r*phase**2), (1-r*r)*phase/(1-r*r*phase**2)])
     errors = []
     for resolution in (40, 80):
-        result, _ = _legacy_wavebit.fdtd(**options(resolution=resolution, n_pml=round(.3*resolution),
+        result, _ = _legacy_wavebit_fdtd(**options(resolution=resolution, n_pml=round(.3*resolution),
                                            diffraction_distance=.2))
         errors.append(np.max(abs(np.array([result.incident.r_p.item(), result.incident.t_p.item()])-expected)))
     assert errors[1] < .002
@@ -59,7 +59,7 @@ def test_near_planes_refine_to_fresnel_airy():
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_near_plane_material_gradient_and_backend_metadata(backend):
     def objective(value, which):
-        result, d = _legacy_wavebit.fdtd(**options(structure=value.reshape(1, 1, 1), backend=which,
+        result, d = _legacy_wavebit_fdtd(**options(structure=value.reshape(1, 1, 1), backend=which,
                                            incidence_side='bottom', grading=True,
                                            diffraction_distance=(.2, .3), convergence_window=50))
         return (result.incident.r_p+.4j*result.incident.t_p).real.sum(), d['diffraction']['reflection']['q']
@@ -84,7 +84,7 @@ def test_near_plane_material_gradient_and_backend_metadata(backend):
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_conical_magnetic_half_space_metadata_is_incidence_relative(side):
-    results, d = _legacy_wavebit.fdtd(**options(top=wavebit.Material(1.2, 1.1), bot=wavebit.Material(1.8, 1.2),
+    results, d = _legacy_wavebit_fdtd(**options(top=wavebit.Material(1.2, 1.1), bot=wavebit.Material(1.8, 1.2),
                                  period=[.4, .6], wavelength=[.51, .55], theta=.2, phi=.6,
                                  tetm=None, polarization=(1., 1j), incidence_side=side,
                                  truncation_order=[1, 1], diffraction_distance=(.2, .3)))
@@ -112,7 +112,7 @@ def test_conical_magnetic_half_space_metadata_is_incidence_relative(side):
 def test_refinement_resolves_a_false_open_channel_without_changing_power_mask():
     band = .96*np.array([.998, 1.002])
     for resolution, resolved in ((20, False), (40, True)):
-        results, d = _legacy_wavebit.fdtd(**options(period=.8, wavelength=band, theta=np.arcsin(.2),
+        results, d = _legacy_wavebit_fdtd(**options(period=.8, wavelength=band, theta=np.arcsin(.2),
                                             resolution=resolution, truncation_order=1, diffraction_distance=.2))
         info = d['diffraction']
         assert bool(info['cutoff_resolved']) is resolved
@@ -134,15 +134,15 @@ def test_grazing_is_rejected_before_time_stepping(monkeypatch, wavelength):
         raise AssertionError('grazing validation ran after the expensive solver')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='grazing'):
-        _legacy_wavebit.fdtd(**options(period=.8, wavelength=wavelength, theta=0., truncation_order=1))
+        _legacy_wavebit_fdtd(**options(period=.8, wavelength=wavelength, theta=0., truncation_order=1))
 
 
 def test_plane_touching_a_mixed_interface_cell_is_refused():
     with pytest.raises(ValueError, match='diffraction_distance'):
-        _legacy_wavebit.fdtd(**options(thickness=[.249], align_layers=False, diffraction_distance=(.2, .004)))
+        _legacy_wavebit_fdtd(**options(thickness=[.249], align_layers=False, diffraction_distance=(.2, .004)))
 
 
 @pytest.mark.parametrize('distance', [0., -1., np.nan, True, [1.], [.1, 0.], [.1, .2, .3], 1e-6, 100.])
 def test_invalid_or_unplaceable_distances_are_refused(distance):
     with pytest.raises(ValueError, match='diffraction_distance'):
-        _legacy_wavebit.fdtd(**options(diffraction_distance=distance))
+        _legacy_wavebit_fdtd(**options(diffraction_distance=distance))

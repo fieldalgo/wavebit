@@ -49,7 +49,7 @@ imports fmmax. Never regenerate to make this pass: the numbers did not come from
 which is the whole of their worth.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -103,7 +103,7 @@ def _solve(name, algo='SMM', door='k', factorization='laurent', top=None, bot=No
         kw.update(theta=case['theta'], phi=case['phi'])
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        return _legacy_wavebit.rcwa(**kw).solve(auto_detune=False)
+        return _legacy_wavebit_rcwa(**kw).solve(auto_detune=False)
 
 
 def _unpolarized(result, name, mirrored=False):

@@ -1,5 +1,11 @@
 # Connecting algorithms — ETM, SMM, and why a plain transfer is not on the list
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Written: 2026-08-11. Measured on an Apple M4, NumPy 2.5.1 against Accelerate, float64, single
 thread as configured. Times are per solve, averaged over 3–8 runs after two warm-up calls; the
 warm-up matters, and leaving it out reported SMM as **twice as fast** as ETM on the smallest case

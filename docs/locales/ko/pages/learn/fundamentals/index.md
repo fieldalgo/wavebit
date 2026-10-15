@@ -1,5 +1,10 @@
 # Wavebit 전체를 이해하는 책
 
+> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
+> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
+> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
+
+
 :::{note}
 다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
 :::
@@ -8,7 +13,7 @@
 
 2026년 9월 21일 · Wavebit 0.1.0 / develop `a1d23fc` 기반의 **API 이름 변경과 분산 재료 개선이 반영된 로컬 작업본**을 설명합니다. 아래 예제는 이 작업본으로 실행했습니다. 당시 작업본에는 FDTD가 아직 통합되지 않았으므로, 이 책의 측정 기록과 실행 예제는 RCWA를 다룹니다. 이 역사적 기록은 공개 릴리스나 현재 전체 회귀검사 완료를 선언하지 않습니다.
 
-현재 저장소는 공개 `wavebit.fdtd` 모듈의 `fdtd.Problem`, `fdtd.prepare`, `fdtd.run`을 제공합니다. 사용법은 [현재 FDTD 가이드](../../guide/fdtd/general-fdtd.md)를 참고하세요. 이전 주기 구조·일반 장면 팩터리는 `wavebit.compat.legacy` 아래에 남아 있으며, [주기 구조용 설명서](../../guide/fdtd/time-domain.md)와 [일반 장면 설명서](../../migration/general-fdtd-v1.md)에서 호환 범위를 구분합니다.
+현재 저장소는 공개 `wavebit.fdtd` 모듈의 `fdtd.Problem`, `fdtd.prepare`, `fdtd.run`을 제공합니다. 사용법은 [현재 FDTD 가이드](../../guide/fdtd/general-fdtd.md)를 참고하세요. 이전 주기 구조·일반 장면 팩터리의 `wavebit.compat.legacy` 경로는 퇴역했으며, [주기 구조용 설명서](../../guide/fdtd/time-domain.md)와 [일반 장면 설명서](../../migration/general-fdtd-v1.md)에서 호환 범위를 구분합니다.
 
 ## 어떻게 읽으면 좋을까
 

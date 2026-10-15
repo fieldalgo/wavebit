@@ -1,6 +1,12 @@
 """Background intervals, representation invariance and live gap closure."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.conforming import ConformingNVF as _legacy_wavebit_ConformingNVF
+
+from wavebit.rcwa._engine.factorization import ConvMatrices as _legacy_wavebit_ConvMatrices
+
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import numpy as np
 from tests.fixtures.common._conv_frame import about_centre
 import pytest
@@ -36,7 +42,7 @@ def scene(p=PARAMETERS, xp=np, axis=0, fill=False):
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_internal_background_matches_independent_analytic_material_integrals(axis, order):
     structure, lattice = scene(axis=axis)
-    builder = _legacy_wavebit.ConformingNVF(order, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(order, **SETTINGS)
     plan = builder.plan(structure, lattice)
     assert plan.axes == (axis,)
     actual = builder.conv_matrices(structure, lattice, plan=plan)
@@ -49,7 +55,7 @@ def test_internal_background_matches_independent_analytic_material_integrals(axi
 @pytest.mark.research
 @pytest.mark.parametrize('axis', [0, 1])
 def test_explicit_background_rectangle_preserves_all_five_matrices(axis):
-    builder = _legacy_wavebit.ConformingNVF((2, 1), **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF((2, 1), **SETTINGS)
     implicit = builder.conv_matrices(*scene(axis=axis))
     explicit = builder.conv_matrices(*scene(axis=axis, fill=True))
     for got, want in zip(implicit, explicit):
@@ -61,7 +67,7 @@ def test_explicit_background_rectangle_preserves_all_five_matrices(axis):
 def test_closing_equal_material_pieces_recovers_a_single_rectangle_with_the_same_plan(axis):
     p = PARAMETERS.copy()
     p[5] = p[4]
-    builder = _legacy_wavebit.ConformingNVF((2, 1), **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF((2, 1), **SETTINGS)
     plan = builder.plan(*scene(p, axis=axis))
     p[3] = 0.
     structure, lattice = scene(p, axis=axis)
@@ -89,7 +95,7 @@ def test_closing_equal_material_pieces_recovers_a_single_rectangle_with_the_same
 def test_separated_contact_stack_matches_independent_inverse_rules_on_all_backends(backend):
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
@@ -97,10 +103,10 @@ def test_separated_contact_stack_matches_independent_inverse_rules_on_all_backen
     horizontal, lattice = scene(p)
     vertical, _ = scene(p, axis=1)
     order = (2, 1)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(horizontal+vertical, lattice)
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(horizontal+vertical, lattice)
     layers = [_contact_reference(horizontal[0], lattice, order, 0),
               _contact_reference(vertical[0], lattice, order, 1)]
-    expected = _legacy_wavebit.ConvMatrices(*(np.stack([layer[i] for layer in layers]) for i in range(5)))
+    expected = _legacy_wavebit_ConvMatrices(*(np.stack([layer[i] for layer in layers]) for i in range(5)))
     for got, want in zip(actual, expected):
         np.testing.assert_allclose(got, want, atol=4e-12, rtol=0)
     np.testing.assert_allclose(solve(actual, lattice, order, scale=.65, backend=backend),
@@ -113,7 +119,7 @@ def test_twelve_live_parameters_match_two_independent_secant_steps(axis):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*scene(axis=axis))
     def objective(p, xp):
         return _objective(builder.conv_matrices(*scene(p, xp, axis), plan=plan, xp=xp), xp)
@@ -137,7 +143,7 @@ def test_gap_opening_derivative_is_live_at_internal_contact(axis, equal):
     p = PARAMETERS.copy()
     if equal:
         p[5] = p[4]
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*scene(p, axis=axis))
     p[3] = 0.
     def objective(internal, xp):
@@ -155,7 +161,7 @@ def test_gap_opening_derivative_is_live_at_internal_contact(axis, equal):
 
 @pytest.mark.parametrize('axis', [0, 1])
 def test_opening_and_closing_are_valid_replays_but_overlap_is_not(axis):
-    builder = _legacy_wavebit.ConformingNVF(0, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(0, **SETTINGS)
     p = PARAMETERS.copy()
     p[3] = 0.
     plan = builder.plan(*scene(p, axis=axis))
@@ -163,7 +169,7 @@ def test_opening_and_closing_are_valid_replays_but_overlap_is_not(axis):
         p[3] = internal
         assert all(np.isfinite(a).all() for a in builder.conv_matrices(*scene(p, axis=axis), plan=plan))
     p[3] = -1.
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         builder.conv_matrices(*scene(p, axis=axis), plan=plan)
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp

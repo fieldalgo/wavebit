@@ -1,6 +1,8 @@
 """Independent current-sheet position, reference phase and material graphs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -22,15 +24,15 @@ def test_bad_source_position_fails_before_time_stepping(monkeypatch, value):
         raise AssertionError('invalid source position reached time stepping')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='source_distance'):
-        _legacy_wavebit.fdtd(**options(source_distance=value))
+        _legacy_wavebit_fdtd(**options(source_distance=value))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_explicit_default_source_is_bit_identical_and_mesh_is_unchanged(side):
-    old, a = _legacy_wavebit.fdtd(**options(incidence_side=side))
+    old, a = _legacy_wavebit_fdtd(**options(incidence_side=side))
     physical = abs(a['source_z']-a['reflection_z'])
-    same, b = _legacy_wavebit.fdtd(**options(incidence_side=side, source_distance=physical))
-    moved, c = _legacy_wavebit.fdtd(**options(incidence_side=side, source_distance=1.))
+    same, b = _legacy_wavebit_fdtd(**options(incidence_side=side, source_distance=physical))
+    moved, c = _legacy_wavebit_fdtd(**options(incidence_side=side, source_distance=1.))
     for before, after in zip(old, same):
         for basis in ('incident', 's_inc', 'p_inc'):
             for key in ('r_s', 'r_p', 't_s', 't_p'):
@@ -49,8 +51,8 @@ def test_explicit_default_source_is_bit_identical_and_mesh_is_unchanged(side):
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_fixed_source_and_monitors_stay_put_when_padding_changes(side):
-    _, a = _legacy_wavebit.fdtd(**options(source_distance=1., incidence_side=side, pad_scale=1.))
-    _, b = _legacy_wavebit.fdtd(**options(source_distance=1., incidence_side=side, pad_scale=2.))
+    _, a = _legacy_wavebit_fdtd(**options(source_distance=1., incidence_side=side, pad_scale=1.))
+    _, b = _legacy_wavebit_fdtd(**options(source_distance=1., incidence_side=side, pad_scale=2.))
     assert a['source_z'] == pytest.approx(b['source_z'], abs=1e-13)
     assert a['shape'] != b['shape']
     assert not np.allclose(a['pml_bounds'], b['pml_bounds'])
@@ -67,7 +69,7 @@ def test_graded_source_uses_nearest_node_and_avoids_user_monitor(monkeypatch):
         calls.append(index)
         return original(*args, **kwargs)
     monkeypatch.setattr(scene, 'fdtd_grid', capture)
-    _, d = _legacy_wavebit.fdtd(**options(source_distance=1.013, grading=True))
+    _, d = _legacy_wavebit_fdtd(**options(source_distance=1.013, grading=True))
     expected = int(np.argmin(abs(np.asarray(d['z_nodes'])-(.213+1.013))))
     assert len(calls) == 4
     # The private time-stepper observes the reflected incident-first grid.
@@ -76,7 +78,7 @@ def test_graded_source_uses_nearest_node_and_avoids_user_monitor(monkeypatch):
         np.testing.assert_array_equal(index, [internal_index])
     assert d['source_z'] == d['z_nodes'][expected]
     with pytest.raises(ValueError, match='current sheet'):
-        _legacy_wavebit.fdtd(**options(source_distance=1.013, grading=True, field_monitors={'source': d['source_z']}))
+        _legacy_wavebit_fdtd(**options(source_distance=1.013, grading=True, field_monitors={'source': d['source_z']}))
 
 
 @pytest.mark.slow
@@ -89,7 +91,7 @@ def test_moved_source_refines_to_independent_oblique_airy():
     expected = np.array([r*(1-phase**2)/(1-r*r*phase**2), (1-r*r)*phase/(1-r*r*phase**2)])
     errors = []
     for resolution in (40, 80):
-        results, _ = _legacy_wavebit.fdtd(**options(source_distance=.75, resolution=resolution,
+        results, _ = _legacy_wavebit_fdtd(**options(source_distance=.75, resolution=resolution,
                                             n_pml=round(.3*resolution), pulse_notches=.8))
         actual = np.array([[getattr(r.incident, key).item() for r in results] for key in ('r_p', 't_p')])
         errors.append(np.max(abs(actual-expected)))
@@ -99,7 +101,7 @@ def test_moved_source_refines_to_independent_oblique_airy():
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_position_control_preserves_bottom_material_and_record_gradients(backend):
     def objective(p, which):
-        result, d = _legacy_wavebit.fdtd(**options(
+        result, d = _legacy_wavebit_fdtd(**options(
             structure=p[:1].reshape(1, 1, 1), mu=p[1:2].reshape(1, 1, 1), wavelength=1.,
             dispersion=np.ones((1, 1, 1), int), poles={1: [(8., .3, p[2])]}, backend=which,
             source_distance=1., pulse_notches=.8, grading=True, incidence_side='bottom',
@@ -135,7 +137,7 @@ def test_source_must_precede_the_default_reflection_plane(monkeypatch, distance)
         raise AssertionError('invalid source crossed the default reflection plane')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='source_distance'):
-        _legacy_wavebit.fdtd(**options(source_distance=distance, diffraction_distance=None))
+        _legacy_wavebit_fdtd(**options(source_distance=distance, diffraction_distance=None))
 
 
 def test_bottom_magnetic_conical_phase_is_independent_of_source_position():
@@ -143,10 +145,10 @@ def test_bottom_magnetic_conical_phase_is_independent_of_source_position():
                   thickness=[.213], top=wavebit.Material(1.2, 1.1), bot=wavebit.Material(2., 1.3),
                   period=.1, wavelength=1., theta=.28, phi=.41, polarization=(1., .6j),
                   incidence_side='bottom', truncation_order=0)
-    reference = _legacy_wavebit.rcwa(backend='numpy', **common).solve().incident
+    reference = _legacy_wavebit_rcwa(backend='numpy', **common).solve().incident
     results = []
     for distance in (1., 1.3):
-        result = _legacy_wavebit.fdtd(backend='numpy', **common, resolution=40, n_pml=12,
+        result = _legacy_wavebit_fdtd(backend='numpy', **common, resolution=40, n_pml=12,
                               pulse_width=3., n_periods=60, align_layers=True,
                               diffraction_method='directional', diffraction_distance=.2,
                               source_distance=distance).incident

@@ -54,7 +54,7 @@ with ``|t| = 1`` to 1e-7 (the 40-period run's settling). At phi 90 (E_s along x,
 Axis1D ``k_y`` is the whole ``K_par``) it was and is exactly 0 -- the control.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import math
 import warnings
 
@@ -307,7 +307,7 @@ def test_the_cfl_line_with_k_max_is_the_stability_line():
 def test_a_traced_k_past_k_max_is_nan_and_unstable_and_inside_it_is_the_numpy_run():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 
     def f(k):
         res = fd.run(_cfl_scene(fd.Axis1D(k=k, k_max=6.30 / CFL_DX), steps=200), backend='jax')

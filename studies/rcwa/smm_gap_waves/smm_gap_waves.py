@@ -78,20 +78,38 @@ if Path(_selected_wavebit.__file__).resolve() != _expected_origin:
         f'Selected root {_SELECTED_ROOT} requires {_expected_origin}; '
         f'wavebit was already imported from {_selected_wavebit.__file__}. '
         'Run this study in a fresh Python process.')
-try:
-    _legacy_wavebit = importlib.import_module('wavebit.compat.legacy')
-except ModuleNotFoundError as error:
-    if error.name not in ('wavebit.compat', 'wavebit.compat.legacy'):
-        raise
-    _legacy_wavebit = _selected_wavebit
-# These maintained experiments retain the historical factory/type contract.
-wavebit = _legacy_wavebit
+_CURRENT_LAYOUT = (_PACKAGE_PARENT / 'wavebit/rcwa/_factory.py').is_file()
 
 
 def _study_module(current, historical):
     """Load the matching private implementation in the selected checkout."""
     return importlib.import_module(
-        historical if _legacy_wavebit is _selected_wavebit else current)
+        current if _CURRENT_LAYOUT else historical)
+
+
+# Only an explicitly selected historical tree may supply the retired facade.
+_HISTORICAL_API = (None if _CURRENT_LAYOUT else
+    importlib.import_module('wavebit.compat.legacy')
+    if (_PACKAGE_PARENT / 'wavebit/compat/legacy.py').is_file() else _selected_wavebit)
+
+
+def _study_symbol(module, name):
+    if not _CURRENT_LAYOUT:
+        return getattr(_HISTORICAL_API, 'enable_x64' if name == '_enable_x64' else name)
+    owner = importlib.import_module(module)
+    if name == '_enable_x64' and not hasattr(owner, name):
+        # Src-layout snapshots before retirement kept this helper in the facade.
+        # Reproduce its explicit setup without requiring that facade to be installed.
+        def enable():
+            importlib.import_module('jax')
+            owner.lift_jax_x64(required=True)
+            scattering = importlib.import_module('wavebit.rcwa._engine.scattering')
+            scattering._register_pytree_if_jax_loaded()
+        return enable
+    return getattr(owner, name)
+
+_study_rcwa = _study_symbol('wavebit.rcwa._factory', 'rcwa')
+
 
 
 import numpy as np                                          # noqa: E402
@@ -187,7 +205,7 @@ def solve(scene, algo, theta=None, **extra):
         kw.update(phi=0.3, psi=0.4, period=(scene['period'], 0.8 * scene['period']))
     if kw['mu'] is None:
         del kw['mu']
-    return amplitudes(_legacy_wavebit.rcwa(**kw).solve(auto_detune=False))
+    return amplitudes(_study_rcwa(**kw).solve(auto_detune=False))
 
 
 def floor(scene, algo, **extra):
@@ -494,7 +512,7 @@ def section_gauge():
         with gap(waves):
             scattering._field_state = capture
             try:
-                solver = _legacy_wavebit.rcwa(layer_algorithm='SMM', answers='field', **kw)
+                solver = _study_rcwa(layer_algorithm='SMM', answers='field', **kw)
                 result = solver.solve(auto_detune=False)
             finally:
                 scattering._field_state = field_state

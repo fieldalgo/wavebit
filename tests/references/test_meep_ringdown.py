@@ -1,6 +1,6 @@
 """Fit frozen public-API Meep records against independently derived time poles."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.probes import fit_fdtd_modes as _legacy_wavebit_fit_fdtd_modes
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -31,7 +31,7 @@ def test_meep_ringdown_recovers_discrete_material_and_maxwell_modes(name):
             roots = np.r_[roots, 1.+0j]
         frequency = -np.angle(roots)/(2*np.pi*dt)
         order = np.argsort(frequency)
-        fitted = _legacy_wavebit.fit_fdtd_modes(data[name+'_t'], data[name+'_signal'], modes=modes)
+        fitted = _legacy_wavebit_fit_fdtd_modes(data[name+'_t'], data[name+'_signal'], modes=modes)
         np.testing.assert_allclose(fitted['frequency'], frequency[order], atol=1e-9)
         np.testing.assert_allclose(fitted['decay_rate'], -np.log(abs(roots[order]))/dt, atol=1e-9)
         assert fitted['relative_residual'] < 1e-9

@@ -1,9 +1,17 @@
 """One FDTD objective, NumPy/JAX/Torch execution and matching derivatives."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit import Units
+from wavebit.fdtd import native
+from wavebit.units import Z0
 import array_api_compat as ac
 import numpy as np
 
+
+
+UNITS = Units(length='um')
+TIME = UNITS.time_seconds
+# Scale the SI Fourier plane power to a dimensionless optimization objective.
+POWER = TIME**2 * UNITS.length_metres**2 / Z0
 
 
 def objective(strength, backend):
@@ -13,17 +21,22 @@ def objective(strength, backend):
     mask=xp.asarray(mask,dtype=strength.dtype,device=ac.device(strength))
     source=np.zeros((3,)+shape);source[0,12]=1
     dt=.05;steps=200;t=(np.arange(steps)+.5)*dt
-    result=_legacy_wavebit.fdtd_grid(1+.2*mask,spacing=(.2,)*3,dt=dt,steps=steps,
-                            source=source,pulse=np.exp(-((t-2)/.5)**2)*np.sin(3*t),
-                            poles=[(3.,.5,strength*mask)],pml_cells=8,pml_wavelength=2.4,
-                            wavelengths=[2.4],monitor_z=[32],backend=backend)
-    return xp.sum(result['power_z'])
+    problem=native.Problem(units=UNITS,
+        medium=native.Medium(epsilon=1+.2*mask, poles=(native.Oscillator(
+            omega_0=3./TIME,gamma=.5/TIME,strength=strength*mask/TIME**2),)),
+        current=native.Current(density=source/(Z0*UNITS.length_metres),
+            samples=np.exp(-((t-2)/.5)**2)*np.sin(3*t)),
+        outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(2.4,),planes=(32,))))
+    result=native.run(problem,backend=backend,numerics=native.Numerics(
+        grid=native.Grid(spacing=(.2,)*3),time_step_seconds=dt*TIME,steps=steps,
+        absorber=native.PML(cells=8,wavelength=2.4)))
+    return xp.sum(result.spectral_power_z)/POWER
 
 
 def main():
     import jax
     import torch
-    _legacy_wavebit.enable_x64()
+    jax.config.update('jax_enable_x64', True)
     value_numpy=objective(np.array(4.),'numpy')
     value_jax,gradient_jax=jax.jit(jax.value_and_grad(lambda p:objective(p,'jax')))(jax.numpy.array(4.))
     parameter=torch.tensor(4.,dtype=torch.float64,requires_grad=True)

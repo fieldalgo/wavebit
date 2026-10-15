@@ -22,7 +22,7 @@ NumPy float64. Run from the repository root; prints the log committed as
 ``studies/rcwa/laurent_convergence/records/laurent_convergence.log``.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import time
 
 import numpy as np
@@ -38,7 +38,7 @@ def one_dimensional():
     kw = dict(SCENE, theta=np.deg2rad(10.0), phi=0.0, period=[700.0], structure=eps)
 
     def T(rule, order, tetm):
-        result = _legacy_wavebit.rcwa(**kw, truncation_order=(order, 0), tetm=tetm,
+        result = _legacy_wavebit_rcwa(**kw, truncation_order=(order, 0), tetm=tetm,
                               factorization=rule).solve()
         return float(np.sum(result.T))
 
@@ -67,7 +67,7 @@ def two_dimensional():
     energy = {}
 
     def T(rule, order):
-        result = _legacy_wavebit.rcwa(**kw, truncation_order=(order, order), factorization=rule).solve()
+        result = _legacy_wavebit_rcwa(**kw, truncation_order=(order, order), factorization=rule).solve()
         for sub in (result.s_inc, result.p_inc):
             miss = abs(float(np.sum(sub.R) + np.sum(sub.T)) - 1.0)
             energy[rule] = max(energy.get(rule, 0.0), miss)
@@ -91,8 +91,8 @@ def circle():
     print('\ncircle, 400 nm, eps 12.25 in air, shape route: T per polarization')
     print('    order       nvf (s, p)              laurent (s, p)          laurent - nvf')
     for order in (4, 6, 8, 10, 12):
-        nvf = _totals(_legacy_wavebit.rcwa(**kw, truncation_order=(order, order)).solve())
-        laurent = _totals(_legacy_wavebit.rcwa(**kw, truncation_order=(order, order),
+        nvf = _totals(_legacy_wavebit_rcwa(**kw, truncation_order=(order, order)).solve())
+        laurent = _totals(_legacy_wavebit_rcwa(**kw, truncation_order=(order, order),
                                        factorization='laurent').solve())
         print(f'    {order:5d}  {nvf[0]:.6f} {nvf[1]:.6f}     {laurent[0]:.6f} {laurent[1]:.6f}'
               f'     {laurent[0] - nvf[0]:+.2e} {laurent[1] - nvf[1]:+.2e}')
@@ -110,7 +110,7 @@ def cost():
             times = []
             for _ in range(3):
                 start = time.perf_counter()
-                _legacy_wavebit.rcwa(**kw, factorization=rule).solve()
+                _legacy_wavebit_rcwa(**kw, factorization=rule).solve()
                 times.append(time.perf_counter() - start)
             print(f'    {name:5s} {rule:8s} {np.median(times):.3f}')
 

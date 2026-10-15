@@ -35,7 +35,9 @@ parameter beside a batched input -- is checked against eager autograd lane by la
 transforms are refused by name, here and there.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import functools
 
 import numpy as np
@@ -97,7 +99,7 @@ def one_d(parameter, algorithm, amplitude, **polarization):
             cfg['mu'] = _lift(b, np.full((1, 1, 4), 1.3 + .02j)) + p * _lift(b, GRATING_DIRECTION)
         else:
             cfg[parameter] = (p,) if parameter == 'thickness' else p
-        solver = _legacy_wavebit.rcwa(backend=b, structure=eps, **cfg)
+        solver = _legacy_wavebit_rcwa(backend=b, structure=eps, **cfg)
         return _read_out(b, solver.solve(), amplitude, 3, point=([57.], [0.], [83.]))
     return f
 
@@ -125,7 +127,7 @@ def raster(parameter, direction=PIXELS, **options):
             cfg['period'] = [p, _lift(b, 0.77)]
         else:
             cfg[parameter] = [p] if parameter == 'thickness' else p
-        solver = _legacy_wavebit.rcwa(backend=b, structure=eps, **cfg)
+        solver = _legacy_wavebit_rcwa(backend=b, structure=eps, **cfg)
         # A counted sample grid spans the cell, so its points move with the period.
         return _read_out(b, solver.solve(), 'r_s', 6, point=([0.1], [-0.05], [0.07]),
                          counted=(3, 2, [0.07]))
@@ -134,7 +136,7 @@ def raster(parameter, direction=PIXELS, **options):
 
 def scattering_matrix(b, p):
     cfg = dict(TWO_D, answers='amplitude')
-    solver = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, RASTER) + p * _lift(b, PIXELS), **cfg)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, RASTER) + p * _lift(b, PIXELS), **cfg)
     solver.solve()
     S = solver.scattering
     blocks = [S.S11[3, 7], S.S21[5, 5], S.S12[0, 9], S.S22[12, 2]]
@@ -161,7 +163,7 @@ def shape(parameter, kind='rectangle', **options):
             piece['material'] = wavebit.Material(12.25 + 0.3j, mu=p)
         else:
             cfg[parameter] = p
-        solver = _legacy_wavebit.rcwa(backend=b, structure=[dict(background=1.44, shapes=[piece])], **cfg)
+        solver = _legacy_wavebit_rcwa(backend=b, structure=[dict(background=1.44, shapes=[piece])], **cfg)
         return _read_out(b, solver.solve(), 't_p', 4, point=([0.12], [0.03], [0.11]))
     return f
 
@@ -171,7 +173,7 @@ OBLIQUE = np.radians(100.0)
 
 def _oblique_solver(b, angle=OBLIQUE, eps=5.76):
     piece = dict(type='circle', cx=-50.0, cy=-20.0, lx=140.0, material=eps)
-    return _legacy_wavebit.rcwa(backend=b, wavelength=900.0, lattice=wavebit.Lattice.oblique(400.0, 400.0, angle),
+    return _legacy_wavebit_rcwa(backend=b, wavelength=900.0, lattice=wavebit.Lattice.oblique(400.0, 400.0, angle),
                         truncation_order=[2, 2], top=1.0, bot=1.0, theta=0.07, phi=0.31, psi=0.2,
                         thickness=[300.0], answers='field', shape_nvf_grid_size=64,
                         structure=[dict(background=1.0, shapes=[piece])])
@@ -194,7 +196,7 @@ def gold_disks(parameter):
     def f(b, p):
         lx, eps = (p, GOLD) if parameter == 'lx' else (140.0, p + 1j * GOLD.imag)
         piece = dict(type='circle', cx=0.0, cy=0.0, lx=lx, material=eps)
-        solver = _legacy_wavebit.rcwa(backend=b, structure=[dict(background=2.25, shapes=[piece])],
+        solver = _legacy_wavebit_rcwa(backend=b, structure=[dict(background=2.25, shapes=[piece])],
                               top=2.25, bot=2.25, theta=0.3, phi=0.4, psi=0.7, wavelength=852.0,
                               period=(450.0, 450.0), thickness=(50.0,), truncation_order=(4, 4))
         return _read_out(b, solver.solve(), 'r_s', 40)
@@ -228,11 +230,11 @@ def tensor(parameter, coupled, formulation=None):
             eps = eps + p * _lift(b, direction)
         else:
             cfg[parameter] = p
-        solver = _legacy_wavebit.rcwa(backend=b, structure=eps, **cfg)
+        solver = _legacy_wavebit_rcwa(backend=b, structure=eps, **cfg)
         if formulation:
             solver.formulation = formulation
         # JAX traces a tensor raster only against a record of its phases.
-        geometry = (_legacy_wavebit.rcwa(backend=b, structure=_lift(b, base), **cfg).freeze_geometry()
+        geometry = (_legacy_wavebit_rcwa(backend=b, structure=_lift(b, base), **cfg).freeze_geometry()
                     if b == 'jax' else None)
         return _read_out(b, solver.solve(geometry=geometry), 'r_s', 4, point=([10.], [20.], [60.]))
     return f
@@ -241,14 +243,14 @@ def tensor(parameter, coupled, formulation=None):
 def excitation(b, p):
     cfg = dict(ONE_D, tetm='tm', layer_algorithm='SMM')
     eps = _lift(b, GRATING) + p * _lift(b, GRATING_DIRECTION)
-    solver = _legacy_wavebit.rcwa(backend=b, structure=eps, excitation={0: 1.0, 1: 0.4j}, **cfg)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=eps, excitation={0: 1.0, 1: 0.4j}, **cfg)
     return _read_out(b, solver.solve(), 'r_p', 3, point=([57.], [0.], [83.]))
 
 
 def field_door(b, p):
     """``solve_field``: on JAX the jitted door, the solver crossing as a pytree."""
     cfg = {k: v for k, v in TWO_D.items() if k != 'answers'}
-    solver = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, RASTER), answers='field', **cfg)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, RASTER), answers='field', **cfg)
     structure = _lift(b, RASTER) + p * _lift(b, PIXELS)
     if b == 'jax':
         result, cell = solver.solve_field(3, 2, 2, geometry=solver.freeze_geometry(),
@@ -264,7 +266,7 @@ def legacy_field(b, p):
     spans the period, and PyTorch's ``linspace`` does not differentiate its endpoints, so the
     sampler scales a constant grid instead wherever the period carries a derivative."""
     cfg = dict(TWO_D, period=[p, _lift(b, 0.77)])
-    solver = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, RASTER), **cfg)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, RASTER), **cfg)
     result = solver.solve()
     cell = solver.reconstruct_field(3, 2, 2)
     values = [cell[0, 1, 1, 2, 1], cell[0, 0, 0, 0, 3], cell[0, 1, 1, 0, 4]]
@@ -285,7 +287,7 @@ def nvf_cell(parameter):
             cfg['period'] = [p, _lift(b, 0.61)]
         else:
             cfg['lattice'] = wavebit.Lattice.oblique(0.77, 0.77, p)
-        solver = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, NVF_ROD), factorization='nvf', **cfg)
+        solver = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, NVF_ROD), factorization='nvf', **cfg)
         return _read_out(b, solver.solve(), 'r_s', 6, point=([0.1], [-0.05], [0.07]))
     return f
 
@@ -322,7 +324,7 @@ def spelled_cell(spelling):
                 lattice = np.array(rows, dtype=float)
             else:
                 lattice = xp.stack([xp.stack(row) for row in rows])
-        solver = _legacy_wavebit.rcwa(backend=b, lattice=lattice, structure=[dict(background=1.2, shapes=[CELL_DISC])],
+        solver = _legacy_wavebit_rcwa(backend=b, lattice=lattice, structure=[dict(background=1.2, shapes=[CELL_DISC])],
                               **CELL_SCENE)
         return _read_out(b, solver.solve(), 'r_s', 2, point=([30.], [10.], [120.]))
     return f
@@ -334,7 +336,7 @@ def two_shapes(b, p):
     a dual read as a plain value there was served the plain solve's build."""
     pieces = [dict(type='circle', cx=-0.15, cy=0.0, lx=0.2, material=p + 0.3j),
               dict(type='rectangle', cx=0.15, cy=0.05, lx=0.2, ly=0.25, angle=0.3, material=4.0)]
-    solver = _legacy_wavebit.rcwa(backend=b, structure=[dict(background=1.44, shapes=pieces)], **SHAPES)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=[dict(background=1.44, shapes=pieces)], **SHAPES)
     return _read_out(b, solver.solve(), 't_p', 4, point=([0.12], [0.03], [0.11]))
 
 
@@ -428,7 +430,7 @@ def test_jax_forward_mode_is_the_reverse_mode_derivative(name):
     """``jax.jvp`` (and on :data:`JACFWD`, ``jax.jacfwd``) against ``jax.grad`` and a central
     difference."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     f, at, _ = PATHS_AND_JAX_ONLY[name]
     value, finite = _difference(name)
@@ -453,7 +455,7 @@ def test_jax_forward_mode_on_an_oblique_cell_under_jit(parameter, at):
     crosses an interface, and a central difference straddling those steps read an order of
     magnitude off both modes here (``docs/guide/common/autodiff.md`` on the NVF steps)."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     geometry = _oblique_solver('jax').freeze_geometry()
     f = jax.jit(lambda p: oblique_cell(parameter)('jax', p, geometry))
@@ -525,7 +527,7 @@ def test_a_sampled_tensor_shape_refuses_a_forward_mode_geometry_derivative():
     with forward_ad.dual_level():
         lx = forward_ad.make_dual(torch.tensor(270.0, dtype=torch.float64),
                                   torch.tensor(1.0, dtype=torch.float64))
-        solver = _legacy_wavebit.rcwa(
+        solver = _legacy_wavebit_rcwa(
             backend='torch', wavelength=700., period=(600., 600.), thickness=[170.],
             structure=[dict(background=1., shapes=[dict(type='circle', lx=lx,
                                                           material=wavebit.Material([2., 3., 4.]))])],
@@ -545,7 +547,7 @@ def _rayleigh(b, eps):
     ``eps = 2.25``, where the solve retries detuned (``auto_detune``)."""
     xp = _xp(b)
     structure = xp.stack([xp.ones((1, 20), dtype=xp.float64) * eps, xp.asarray(RAYLEIGH_PILLAR)])
-    return xp.real(_legacy_wavebit.rcwa(backend=b, structure=structure, **RAYLEIGH).solve().R).sum()
+    return xp.real(_legacy_wavebit_rcwa(backend=b, structure=structure, **RAYLEIGH).solve().R).sum()
 
 
 def test_forward_mode_reaches_the_detuned_retry():
@@ -578,7 +580,7 @@ def test_forward_mode_reaches_the_detuned_retry():
 def _second_order_scene(b, p, geometry=None):
     """A small raster scene for the refusals: one pixel's permittivity moves the modal operator."""
     cfg = dict(TWO_D, truncation_order=[1, 1])
-    solver = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, RASTER), **cfg)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, RASTER), **cfg)
     result = solver.solve(structure=_lift(b, RASTER) + p * _lift(b, PIXELS), geometry=geometry)
     return (result.R.sum() + 0.3 * result.T.sum()).real
 
@@ -612,11 +614,11 @@ def test_jax_forward_mode_stops_at_first_order(route, jit):
     call as dead code, and ``hessian(checkpoint)`` returned 1.0385e-5 here where a difference of
     ``jax.grad`` reads -6.352e-6."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     geometry = None
     if jit:
-        geometry = _legacy_wavebit.rcwa(backend='jax', structure=jnp.asarray(RASTER),
+        geometry = _legacy_wavebit_rcwa(backend='jax', structure=jnp.asarray(RASTER),
                                 **dict(TWO_D, truncation_order=[1, 1])).freeze_geometry()
     scene = lambda p: _second_order_scene('jax', p, geometry)
     first = lambda p: jax.jvp(scene, (p,), (jnp.ones_like(p),))[1]
@@ -662,7 +664,7 @@ def test_a_hessian_that_moves_no_modal_operator_is_exact():
     (its backward reuses non-differentiable LU factors with grad mode off; torch 2.13)."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     f, at, h = JAX_ONLY['2d Li, thickness, ETM']
 
@@ -692,7 +694,7 @@ def test_a_hessian_that_moves_no_modal_operator_is_exact():
 
 def _mixed_scene(b, eps, d, algorithm):
     cfg = dict(TWO_D, truncation_order=[1, 1], thickness=[d], layer_algorithm=algorithm)
-    solver = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, RASTER) + eps * _lift(b, PIXELS), **cfg)
+    solver = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, RASTER) + eps * _lift(b, PIXELS), **cfg)
     result = solver.solve()
     return (result.R.sum() + 0.3 * result.T.sum()).real
 
@@ -715,7 +717,7 @@ def test_a_mixed_second_derivative_differentiates_the_rule_once():
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
     from torch.autograd import forward_ad
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     eps0, d0, h = 0.0, 0.2, 1e-5
 

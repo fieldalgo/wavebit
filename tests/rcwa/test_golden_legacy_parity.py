@@ -75,7 +75,7 @@ opposite of what an oracle should do. Every real defect this file exists to catc
 magnitude larger: the boundary-convention bugs found in 2026-08 ran from 1% to 4900%.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -256,7 +256,7 @@ def _run(name):
     kw = dict(CASES[name])
     kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
     kw['thickness'] = kw['thickness'][::-1]
-    solver = _legacy_wavebit.rcwa(backend='numpy', answers='field', **kw)
+    solver = _legacy_wavebit_rcwa(backend='numpy', answers='field', **kw)
     return solver, solver.solve()
 
 
@@ -346,7 +346,7 @@ def test_jax_and_torch_match_the_same_golden(name, backend):
     kw = dict(CASES[name])
     kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
     kw['thickness'] = kw['thickness'][::-1]
-    result = _legacy_wavebit.rcwa(backend=backend, **kw).solve()
+    result = _legacy_wavebit_rcwa(backend=backend, **kw).solve()
 
     for sub, attr_name in SUBS:
         got_sub = getattr(result, attr_name)

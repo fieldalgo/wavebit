@@ -1,6 +1,8 @@
 """Validate the independent harmonic Yee reference before interpreting its errors."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -105,7 +107,7 @@ def test_reconstructed_fields_obey_native_maxwell_updates_in_the_interior(backen
     dt = result['dt']
     electric = result['electric']
     magnetic = result['magnetic']*np.exp(1j*np.pi*dt/wavelength)
-    out = _legacy_wavebit.fdtd_grid(result['epsilon'], spacing=result['spacing'], dt=dt, steps=1,
+    out = _legacy_wavebit_fdtd_grid(result['epsilon'], spacing=result['spacing'], dt=dt, steps=1,
                             electric=electric, magnetic=magnetic, bloch_phase=result['bloch_phase'],
                             backend=backend)
     phase = np.exp(-2j*np.pi*dt/wavelength)
@@ -135,7 +137,7 @@ def test_discrete_slab_refines_to_continuous_airy(pol):
 def test_settled_uniform_time_domain_amplitudes_match_the_same_grid_reference():
     structure = np.full((1, 1, 1), 2.25)
     grid = capture_grid(40, structure)
-    results, diagnostics = _legacy_wavebit.fdtd(
+    results, diagnostics = _legacy_wavebit_fdtd(
         structure=structure, thickness=[.2], top=1., bot=1., period=PERIOD,
         wavelength=BAND, theta=THETA, tetm='te', truncation_order=1,
         backend='numpy', resolution=40, n_pml=40, n_periods=80, pulse_width=3.,
@@ -187,7 +189,7 @@ def test_cpml_harmonic_fields_obey_the_entire_native_update(monkeypatch, backend
                 return runtime.advance(step, tuple(state), steps, checkpoint_steps)
         return Runtime()
     monkeypatch.setattr(grid_module, 'time_loop_backend', with_memory)
-    out = _legacy_wavebit.fdtd_grid(data['epsilon'], spacing=data['spacing'], z_spacing=widths,
+    out = _legacy_wavebit_fdtd_grid(data['epsilon'], spacing=data['spacing'], z_spacing=widths,
                             dt=dt, steps=1, backend=backend, electric=e, magnetic=h*half_phase,
                             source=result['source'], pulse=np.ones(1), bloch_phase=data['bloch_phase'],
                             pml_cells=cells, pml_wavelength=data['pml_wavelength'],
@@ -201,7 +203,7 @@ def test_finite_cpml_reference_matches_settled_time_domain_scattering():
     from studies.fdtd.lattice_reference.fdtd_lattice_reference import solve_cpml_harmonic
     structure = np.full((1, 1, 1), 2.25)
     data = capture_grid(40, structure, pml_width=1., pml_reflection=1e-12)
-    results = _legacy_wavebit.fdtd(
+    results = _legacy_wavebit_fdtd(
         structure=structure, thickness=[.2], top=1., bot=1., period=PERIOD,
         wavelength=BAND, theta=THETA, tetm='te', truncation_order=1, backend='numpy',
         resolution=40, n_pml=40, n_periods=80, pulse_width=3., align_layers=True,

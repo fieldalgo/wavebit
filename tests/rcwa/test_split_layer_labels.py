@@ -22,14 +22,14 @@ split metal grating's ETM field was 1.5e-11 off the uncut one and now agrees. Th
 both.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
 from wavebit.rcwa._engine import solve_1d
 from wavebit._common.conventions import layer_runs, run_k0_d
 
-pytestmark = pytest.mark.filterwarnings('ignore::wavebit.compat.legacy.ComplexIncidenceWarning')
+pytestmark = pytest.mark.filterwarnings('ignore::wavebit._common.backend.ComplexIncidenceWarning')
 
 #: The class-B scene: a uniform eps = 12.75 layer under a grating of the same material, vacuum on
 #: both sides, lit from below so the thin slice is the one the light meets first.
@@ -53,7 +53,7 @@ def per_layer(monkeypatch):
 
 def _solver(layers, thickness, algorithm, path, theta=THETA, answers='amplitude'):
     kw = dict(tetm=path) if path in ('te', 'tm') else dict(phi=0.4, psi=0.3)
-    return _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, wavelength=1000.0,
+    return _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, wavelength=1000.0,
                         period=[2000.0], truncation_order=[10],
                         structure=np.array(layers, dtype=complex), thickness=thickness,
                         layer_algorithm=algorithm, complex_dtype=0, incidence_side='bottom',
@@ -98,7 +98,7 @@ def test_a_split_layer_answers_as_the_uncut_one(per_layer, path, thick, before):
 
 def _amplitudes_2d(layers, thickness, algorithm):
     """A 2D rod of eps 5 in vacuum, over a uniform eps 5 layer cut in two, lit from above."""
-    s = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.45 + 0.3j, phi=0.4, psi=0.3,
+    s = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.45 + 0.3j, phi=0.4, psi=0.3,
                      wavelength=1000.0, period=(1300.0, 1100.0), truncation_order=(3, 3),
                      structure=np.array(layers), thickness=thickness, layer_algorithm=algorithm,
                      complex_dtype=0, incidence_side='top')
@@ -245,7 +245,7 @@ def test_a_split_stack_traced_under_jit_matches_numpy():
     import jax.numpy as jnp
 
     def r(backend, structure, thickness, algorithm='ETM'):
-        s = _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=THETA, wavelength=1000.0,
+        s = _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=1.0, theta=THETA, wavelength=1000.0,
                          period=[2000.0], truncation_order=[10], structure=structure,
                          thickness=thickness, layer_algorithm=algorithm, complex_dtype=0,
                          incidence_side='bottom', factorization='laurent', tetm='te')
@@ -277,7 +277,7 @@ def test_a_metal_grating_split_at_a_real_angle_keeps_one_label(per_layer):
     rod[3:7, 3:6] = 12.0
 
     def field(layers, thickness, algorithm):
-        s = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.6, psi=0.3,
+        s = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.6, psi=0.3,
                          wavelength=1000.0, period=(575.0, 477.0), truncation_order=(3, 2),
                          structure=np.array(layers), thickness=thickness,
                          layer_algorithm=algorithm, incidence_side='bottom', factorization='li',
@@ -334,7 +334,7 @@ def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch):
     eps = 5.792813684844445
 
     def amplitudes(thickness):
-        s = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=eps, theta=0.43 + 0.067j, wavelength=1000.0,
+        s = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=eps, theta=0.43 + 0.067j, wavelength=1000.0,
                          period=[2000.0], truncation_order=[10],
                          structure=np.full((len(thickness), 1, 8), eps + 0j),
                          thickness=thickness, layer_algorithm='ETM', complex_dtype=0, tetm='te')

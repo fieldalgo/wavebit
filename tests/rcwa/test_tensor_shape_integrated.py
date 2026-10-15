@@ -1,6 +1,6 @@
 """Continuous shape integration, independent series and geometry derivatives."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -20,7 +20,7 @@ def solver(backend='numpy', width=217., shape='circle', n=24, **kw):
                        **({'ly':600.} if shape=='rectangle' else {}),
                        material=wavebit.Material([2.25,4.,2.8]).rotated(.31))])])
     options.update(kw)
-    return _legacy_wavebit.rcwa(backend=backend,**options)
+    return _legacy_wavebit_rcwa(backend=backend,**options)
 
 
 @pytest.mark.parametrize('n',[7,8,17,18])

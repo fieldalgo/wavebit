@@ -17,7 +17,7 @@ purpose -- at normal incidence the continuation is exactly 1 and the comparison 
 and the last assertion pins that resolving power by requiring the transverse phase to vary.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -53,7 +53,7 @@ def _runs(monkeypatch):
 
     monkeypatch.setattr(scene_fdtd, 'fdtd_grid', grid)
     monkeypatch.setattr(scene_fdtd, '_uniform_reference', uniform_reference)
-    _legacy_wavebit.fdtd(**SCENE)
+    _legacy_wavebit_fdtd(**SCENE)
     monkeypatch.undo()
     assert reference and actual, 'the solver made no reference run'
     return reference[0], actual[0]
@@ -99,7 +99,7 @@ def test_a_grid_already_two_cells_wide_is_stepped_as_it_is(monkeypatch):
         return original(epsilon, **keywords)
 
     monkeypatch.setattr(scene_fdtd, 'fdtd_grid', wrapper)
-    _legacy_wavebit.fdtd(**dict(SCENE, structure=np.full((1, 1, 1), 2.25), period=[.12], theta=0.))
+    _legacy_wavebit_fdtd(**dict(SCENE, structure=np.full((1, 1, 1), 2.25), period=[.12], theta=0.))
     monkeypatch.undo()
     assert widths and set(widths) == {(2, 2)}, widths
 
@@ -108,7 +108,7 @@ def test_a_grid_already_two_cells_wide_is_stepped_as_it_is(monkeypatch):
 def test_the_answer_survives_the_column(theta_degrees):
     """An independent check on the physics the reference calibrates: a vacuum scene reflects nothing
     and transmits the free-space phase, whatever the incidence."""
-    vacuum = _legacy_wavebit.fdtd(structure=np.ones((1, 1, 1)), thickness=[.3], top=1., bot=1.,
+    vacuum = _legacy_wavebit_fdtd(structure=np.ones((1, 1, 1)), thickness=[.3], top=1., bot=1.,
                           period=[.5], wavelength=.9, tetm='te',
                           theta=np.deg2rad(theta_degrees), backend='numpy', resolution=16., n_periods=20)
     assert float(np.sum(vacuum.R)) < 1e-6

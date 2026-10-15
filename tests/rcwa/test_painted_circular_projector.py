@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 import array_api_compat.numpy as xp
 import wavebit
-from wavebit.rcwa._engine import boundary as B, parametric as P; from wavebit._common.geometry import clipper
+from wavebit.rcwa._engine import boundary as B, parametric as P
+from wavebit._common.geometry import clipper
 from tests.rcwa.test_shape_circular_projector import solver
 
 CELL=((700.,0.),(0.,700.))

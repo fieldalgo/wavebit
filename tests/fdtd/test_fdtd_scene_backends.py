@@ -1,6 +1,8 @@
 """Typed scenes, physical amplitudes and material graphs through the common core."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -10,7 +12,9 @@ from tools.repository_paths import repository_path
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import Stack, Incidence
+from wavebit._common.periodic import Stack
+
+from wavebit._common.periodic import Incidence
 from wavebit import Material
 
 
@@ -27,7 +31,7 @@ def test_slab_complex_amplitudes_converge_to_airy():
     t = (1-interface**2)*np.exp(1j*phase)/(1-interface**2*np.exp(2j*phase))
     errors = []
     for resolution in (40, 80):
-        result = _legacy_wavebit.fdtd(structure=np.full((1, 1, 1), 2.25), backend='numpy',
+        result = _legacy_wavebit_fdtd(structure=np.full((1, 1, 1), 2.25), backend='numpy',
                               **options(resolution=resolution))
         errors.append(max(abs(result.incident.r_s.item()-r), abs(result.incident.t_s.item()-t)))
         np.testing.assert_allclose(result.incident.R+result.incident.T, 1, atol=.002)
@@ -41,9 +45,9 @@ def test_magnetic_half_spaces_and_conical_jones_against_rcwa():
                  theta=.28, phi=.41, polarization=(1., .6j), resolution=40)
     material = np.full((1, 1, 1), 2.25)
     permeability = np.full_like(material, 1.15)
-    result = _legacy_wavebit.fdtd(structure=material, mu=permeability, backend='numpy', **kw).incident
+    result = _legacy_wavebit_fdtd(structure=material, mu=permeability, backend='numpy', **kw).incident
     reference_kw = {k: v for k, v in kw.items() if k not in ('resolution', 'n_periods')}
-    reference = _legacy_wavebit.rcwa(structure=material, mu=permeability, backend='numpy', **reference_kw).solve().incident
+    reference = _legacy_wavebit_rcwa(structure=material, mu=permeability, backend='numpy', **reference_kw).solve().incident
     for key in ('r_s', 'r_p', 't_s', 't_p'):
         np.testing.assert_allclose(getattr(result, key), getattr(reference, key), atol=.009)
     np.testing.assert_allclose(result.R+result.T, 1, atol=.006)
@@ -57,7 +61,7 @@ def test_typed_material_gradients_match_finite_difference_and_numpy(backend):
     scene_kw = {k: kw.pop(k) for k in ('top', 'bot', 'period')}
     def solve(value, which):
         stack = Stack.from_structure(value.reshape(1, 1, 1), thickness, **scene_kw)
-        return _legacy_wavebit.fdtd(stack, incidence, backend=which, **kw)
+        return _legacy_wavebit_fdtd(stack, incidence, backend=which, **kw)
     expected = solve(np.array(2.25), 'numpy')
     delta = 1e-4
     finite = (solve(np.array(2.25+delta), 'numpy').incident.T.sum()
@@ -87,10 +91,10 @@ def test_asymmetric_diffraction_order_phase_against_rcwa():
     kw = options(period=1.6, thickness=[.2], wavelength=.9, resolution=40,
                  truncation_order=1, theta=.12)
     structure = np.array([[[3., 2., 1., 1.]]])
-    actual = _legacy_wavebit.fdtd(structure=structure, backend='numpy', **kw).incident
+    actual = _legacy_wavebit_fdtd(structure=structure, backend='numpy', **kw).incident
     reference_kw = {k: v for k, v in kw.items() if k not in ('resolution', 'n_periods')}
     reference_kw['truncation_order'] = 8
-    ref = _legacy_wavebit.rcwa(structure=structure, backend='numpy', **reference_kw).solve().incident
+    ref = _legacy_wavebit_rcwa(structure=structure, backend='numpy', **reference_kw).solve().incident
     for key in ('r_s', 't_s'):
         np.testing.assert_allclose(getattr(actual, key), getattr(ref, key)[:, 7:10], atol=.025)
 
@@ -98,14 +102,14 @@ def test_asymmetric_diffraction_order_phase_against_rcwa():
 def test_invalid_scene_features_are_not_silently_routed():
     structure = np.ones((1, 1, 1))
     with pytest.raises(ValueError, match='explicit resolution'):
-        _legacy_wavebit.fdtd(structure=structure, backend='jax', **options(resolution=None))
+        _legacy_wavebit_fdtd(structure=structure, backend='jax', **options(resolution=None))
     with pytest.raises(ValueError, match='too short'):
-        _legacy_wavebit.fdtd(structure=structure, backend='numpy', **options(n_periods=3))
+        _legacy_wavebit_fdtd(structure=structure, backend='numpy', **options(n_periods=3))
     with pytest.raises(ValueError, match='must name'):
-        _legacy_wavebit.fdtd(structure=structure, backend='numpy', dispersion=np.ones((1, 1, 1), int),
+        _legacy_wavebit_fdtd(structure=structure, backend='numpy', dispersion=np.ones((1, 1, 1), int),
                       poles={2: [(1., .1, .2)]}, **options())
     with pytest.raises(ValueError, match='grading'):
-        _legacy_wavebit.fdtd(structure=structure, backend='numpy', grading=.2, **options())
+        _legacy_wavebit_fdtd(structure=structure, backend='numpy', grading=.2, **options())
 
 
 def test_crossed_jones_band_and_dispersive_torch_gradient():
@@ -116,7 +120,7 @@ def test_crossed_jones_band_and_dispersive_torch_gradient():
                  tetm=None, polarization=(1., 1j), theta=.2, phi=.6,
                  resolution=10, n_periods=30, dispersion=labels)
     def run(strength, backend):
-        return _legacy_wavebit.fdtd(structure=structure, backend=backend,
+        return _legacy_wavebit_fdtd(structure=structure, backend=backend,
                             poles={1: [(8., .3, strength)]}, **kw)
     strength = torch.tensor(2., dtype=torch.float64, requires_grad=True)
     actual = run(strength, 'torch')
@@ -136,7 +140,7 @@ def test_scene_transmission_against_frozen_meep_public_api_run():
     with np.load(repository_path('tests/references/golden_native_grid_external.npz')) as ref:
         wavelengths = ref['wavelengths']
         expected = ref['meep-grid-80_power']
-    results = _legacy_wavebit.fdtd(structure=np.full((1, 1, 1), 2.25), backend='numpy',
+    results = _legacy_wavebit_fdtd(structure=np.full((1, 1, 1), 2.25), backend='numpy',
                            **options(thickness=[.5], period=.1, wavelength=wavelengths,
                                      resolution=80, n_periods=40))
     np.testing.assert_allclose([r.incident.T.item() for r in results], expected, atol=.004)
@@ -145,7 +149,7 @@ def test_scene_transmission_against_frozen_meep_public_api_run():
 def test_default_subwavelength_window_and_integer_raster():
     kw = options(period=.1, thickness=[.1])
     kw.pop('truncation_order')
-    result = _legacy_wavebit.fdtd(structure=np.ones((1, 1, 1), int), backend='numpy', **kw)
+    result = _legacy_wavebit_fdtd(structure=np.ones((1, 1, 1), int), backend='numpy', **kw)
     assert result.incident.T.shape == (1, 1)
     np.testing.assert_allclose(result.incident.R, 0, atol=1e-15)
     np.testing.assert_allclose(result.incident.T, 1, atol=.001)

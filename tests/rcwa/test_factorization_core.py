@@ -6,7 +6,9 @@ the *design variable* — the permittivity raster — through to diffraction eff
 stopping at the convolution matrices.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -27,7 +29,7 @@ from wavebit.rcwa._engine.solve_2d import solve_2d
 # came to depend on *another* test module lifting the cap first -- the whole suite passed
 # while `pytest tests/rcwa/test_factorization_core.py` alone failed nine of them.
 try:
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 except ImportError:
     pass
 
@@ -182,7 +184,7 @@ def test_factorization_feeds_solve_bit_exactly():
     # boundary and takes a permittivity, converting once in the `top` / `bot` setters.
     eps_top, eps_bot = n_top ** 2, n_bot ** 2
 
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=eps_top, bot=eps_bot, theta=theta, phi=None,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=eps_top, bot=eps_bot, theta=theta, phi=None,
                           tetm='te',
                           truncation_order=truncation_order, period=period, wavelength=wl, thickness=thickness, structure=structure)
     legacy = solver.solve()
@@ -213,7 +215,7 @@ def test_end_to_end_gradient_wrt_structure_1d():
     direction = np.ones_like(structure)
     truncation_order = [6, 0]
     # top: eps 4.0 is the index 2.0 the `_chain_1d` core call below still takes.
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=4.0, bot=1.0, theta=0.3, phi=None, tetm='te',
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=4.0, bot=1.0, theta=0.3, phi=None, tetm='te',
                           truncation_order=truncation_order, period=[0.77], wavelength=0.777, thickness=[0.15], structure=structure)
     kx, _ = solver.order_kxy()
     theta = complex(solver.theta)
@@ -247,7 +249,7 @@ def test_end_to_end_gradient_wrt_structure_2d():
     direction = np.ones_like(structure)
     truncation_order = [1, 1]
     wl, n_top, n_bot = 0.9, 1.0, 1.0
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           truncation_order=truncation_order, period=[1.0, 1.0], wavelength=wl, thickness=[0.15], structure=structure)
     kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
@@ -333,10 +335,10 @@ def test_nvf_now_works_on_every_backend():
     opts = dict(top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, truncation_order=[2, 2],
                 period=[1.0, 1.0], wavelength=0.9, thickness=[0.2], structure=structure,
                 factorization='nvf')
-    ref = _legacy_wavebit.rcwa(backend='numpy', **opts).solve()
+    ref = _legacy_wavebit_rcwa(backend='numpy', **opts).solve()
     for backend in ('jax', 'torch'):
         pytest.importorskip(backend)
-        got = _legacy_wavebit.rcwa(backend=backend, **opts).solve()
+        got = _legacy_wavebit_rcwa(backend=backend, **opts).solve()
         assert np.allclose(np.asarray(ref.incident.T), np.asarray(got.incident.T),
                            atol=1e-12, rtol=0), backend
 
@@ -357,7 +359,7 @@ def test_nvf_end_to_end_gradient_wrt_structure():
     wl, n_top, n_bot, d = 0.9, 1.0, 1.0, 0.2
     normal_field = normal_field_for_raster(structure, truncation_order[0], truncation_order[1])
 
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=n_top, bot=n_bot, theta=0.2, phi=0.4, psi=0.9,
                           truncation_order=truncation_order, period=[1.0, 1.0], wavelength=wl, thickness=[d], structure=structure)
     kx, ky = solver.order_kxy()
     theta, inc = complex(solver.theta), solver._incidence_pair()
@@ -484,7 +486,7 @@ def test_cfs_end_to_end_gradient_wrt_structure():
     wl, n_top, n_bot, d = 0.777, 2.0, 1.0, 0.15      # indices: `solve_1d` takes them below
     compression = [compression_indices(structure[i]) for i in range(structure.shape[0])]
 
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=0.3, phi=None,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=0.3, phi=None,
                           psi=np.pi / 2,
                           truncation_order=truncation_order, period=[0.77], wavelength=wl, thickness=[d], structure=structure)
     kx, _ = solver.order_kxy()
@@ -522,7 +524,7 @@ def _transpose_symmetric_L(N=48):
 
 
 def _transmission_map(structure, factorization, truncation_order, psi, nesting=None):
-    res = _legacy_wavebit.rcwa(
+    res = _legacy_wavebit_rcwa(
         backend='numpy', factorization=factorization, truncation_order=[truncation_order, truncation_order],
         top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=psi,
         wavelength=1.3, period=[1.0, 1.0], thickness=[0.4], structure=structure,
@@ -637,7 +639,7 @@ _TURN_PSI = np.deg2rad(37.0)
 
 def _turn_scene(structure, period, truncation_order, phi, psi, factorization='nvf', nesting=None):
     """One solve of the turnable scene. Returns ``(R, T, truncation_order)`` -- see :func:`_by_order`."""
-    res = _legacy_wavebit.rcwa(
+    res = _legacy_wavebit_rcwa(
         backend='numpy', factorization=factorization, truncation_order=[int(truncation_order[0]), int(truncation_order[1])],
         top=1.0, bot=1.0, theta=_TURN_THETA, phi=phi, psi=psi,
         wavelength=_TURN_WAVELENGTH, period=[period[0], period[1]], thickness=[120.0],

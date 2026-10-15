@@ -1,5 +1,11 @@
 # 01. What questions does Wavebit answer?
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 :::{note}
 The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
@@ -17,7 +23,7 @@ For example, suppose you want to “place a periodic array of silicon pillars on
 
 ## Scope of this course and the role of FDTD
 
-The solver taught in this course is **RCWA**. It represents temporal oscillation with complex numbers and solves the problem at a specified wavelength. It is suited to layered structures that are periodic in the transverse directions. FDTD is a separate computational method that advances electromagnetic fields on a grid through time. The September 2026 working copy used for this book's measurements did not yet have an integrated FDTD user API. The current repository provides the public `wavebit.fdtd` module with `fdtd.Problem`, `fdtd.prepare` and `fdtd.run`; see the [current FDTD guide](../../guide/fdtd/general-fdtd.md). Earlier periodic-stack and general-scene factories remain under `wavebit.compat.legacy`; their [periodic FDTD manual](../../guide/fdtd/time-domain.md) and [general FDTD manual](../../migration/general-fdtd-v1.md) state the compatibility scope. These APIs are not part of the historical RCWA measurement record reproduced here.
+The solver taught in this course is **RCWA**. It represents temporal oscillation with complex numbers and solves the problem at a specified wavelength. It is suited to layered structures that are periodic in the transverse directions. FDTD is a separate computational method that advances electromagnetic fields on a grid through time. The September 2026 working copy used for this book's measurements did not yet have an integrated FDTD user API. The current repository provides the public `wavebit.fdtd` module with `fdtd.Problem`, `fdtd.prepare` and `fdtd.run`; see the [current FDTD guide](../../guide/fdtd/general-fdtd.md). Earlier periodic-stack and general-scene factories were retired from `wavebit.compat.legacy`; their [periodic FDTD manual](../../guide/fdtd/time-domain.md) and [general FDTD manual](../../migration/general-fdtd-v1.md) state the compatibility scope. These APIs are not part of the historical RCWA measurement record reproduced here.
 
 | Question | Approach |
 | --- | --- |

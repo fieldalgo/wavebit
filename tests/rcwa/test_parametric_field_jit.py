@@ -1,6 +1,6 @@
 """Shape declarations stay static while field solves trace their numeric values."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import os
 os.environ.setdefault('JAX_ENABLE_X64', '1')
 import numpy as np
@@ -19,7 +19,7 @@ def solver(width=230., kind='rectangle', painted=False, skew=False, backend='jax
         shapes.append(dict(type='rectangle', cx=19., cy=-11., lx=110., ly=90.,
                            angle=.31, material=wavebit.Material(6., mu=1.2)))
     cell = dict(lattice=((700., 170.), (0., 700.))) if skew else dict(period=(700., 700.))
-    return _legacy_wavebit.rcwa(backend=backend, **cell, wavelength=850.,
+    return _legacy_wavebit_rcwa(backend=backend, **cell, wavelength=850.,
                        truncation_order=(1, 1), thickness=(150.,), theta=.13,
                        phi=.21, psi=.37, shape_nvf_grid_size=32, answers='field',
                        structure=[dict(background=1., shapes=shapes)])

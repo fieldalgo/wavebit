@@ -32,7 +32,7 @@ these rows validate the layer operator alone — a magnetic ``n_top`` / ``n_bot`
 boundary admittance, which nothing here checks and which is not implemented.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -70,7 +70,7 @@ def _slots(tensor):
 
 def solve(eps, theta_deg, mu=None, algo='ETM'):
     """``[R_s, T_s, R_p, T_p]`` for one uniform slab between vacuum."""
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=np.deg2rad(theta_deg),
                          phi=0.0, psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD),
                          wavelength=WL, thickness=[THICK], layer_algorithm=algo)
     res = mee.solve_conv(*_slots(eps),

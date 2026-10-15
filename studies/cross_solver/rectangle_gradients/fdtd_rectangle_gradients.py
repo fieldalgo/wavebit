@@ -13,7 +13,9 @@ from pathlib import Path
 
 import numpy as np
 
-from wavebit.compat import legacy as wavebit
+from wavebit._common.periodic import Incidence as wavebit_Incidence
+
+from wavebit._common.periodic import Stack as wavebit_Stack
 
 PERIOD = [1.3, .05]
 THICKNESS = [.2]
@@ -23,7 +25,7 @@ from studies._support._fdtd_legacy import legacy_fdtd, legacy_rcwa  # noqa: E402
 
 
 def scene(p):
-    return wavebit.Stack.from_structure([dict(background=1., shapes=[
+    return wavebit_Stack.from_structure([dict(background=1., shapes=[
         dict(type='rectangle', lx=p[0], ly=PERIOD[1], cx=p[1], material=2.25)])],
         THICKNESS, top=1., bot=1.21, period=PERIOD)
 
@@ -36,7 +38,7 @@ def amplitudes(result, xp=np, order=1):
 
 def response(p, resolution=40, cells=1., backend='jax', duration=65):
     from wavebit.fdtd._periodic.runtime import time_loop_backend
-    result = legacy_fdtd(scene(p), wavebit.Incidence(wavelength=1.), backend=backend,
+    result = legacy_fdtd(scene(p), wavebit_Incidence(wavelength=1.), backend=backend,
                           resolution=resolution, n_pml=resolution, n_periods=duration,
                           pulse_width=3., truncation_order=(1, 0), align_layers=True,
                           shape_smoothing=[cells/resolution, 0.], diffraction_method='directional')
@@ -44,7 +46,7 @@ def response(p, resolution=40, cells=1., backend='jax', duration=65):
 
 
 def rcwa_reference(p, order=32):
-    result = legacy_rcwa(stack=scene(p), incidence=wavebit.Incidence(wavelength=1.),
+    result = legacy_rcwa(stack=scene(p), incidence=wavebit_Incidence(wavelength=1.),
                           backend='numpy', truncation_order=(order, 0), shape_nvf_grid_size=256).solve()
     return amplitudes(result, order=order)
 

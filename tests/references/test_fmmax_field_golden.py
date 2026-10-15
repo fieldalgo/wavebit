@@ -47,7 +47,7 @@ three constants is deliberate: a table is satisfied by anything that reproduces 
 whereas a case added at a new angle is genuinely checked by the formula.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -108,7 +108,7 @@ def _reconstruct(name, theta, pol):
     the flip is invisible; the layer is where it is not.
     """
     structure = raster(name)[None, :, :]
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=(PERIOD, PERIOD),
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, period=(PERIOD, PERIOD),
                           truncation_order=(MAX_ORDER, MAX_ORDER), wavelength=WL, thickness=[THICK],
                           structure=structure, theta=np.deg2rad(theta), phi=0.0,
                           psi=np.pi / 2 if pol == 's' else 0.0, answers='field')
@@ -202,7 +202,7 @@ def _reconstruct_2d(name, order, pol, reverse_rows=False, formulation='second_or
     first-order path builds ``Ez`` / ``Hz`` with its own copy of the ``Ky`` terms.
     """
     structure = raster_2d(name)[::-1] if reverse_rows else raster_2d(name)
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0,
                                   period=(PERIOD_2D, PERIOD_2D), truncation_order=(order, order),
                                   wavelength=WL_2D, thickness=[THICK_2D],
                                   structure=structure[None, :, :], theta=np.deg2rad(THETA_2D),

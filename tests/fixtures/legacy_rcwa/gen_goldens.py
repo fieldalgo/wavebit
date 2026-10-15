@@ -29,7 +29,7 @@ reversal is what keeps the pair describing one scene. The loop below, which coul
 anyway, does not reverse them.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -90,7 +90,7 @@ for name, kw in CASES.items():
     kw = dict(kw); kw['structure'] = np.asarray(kw['structure'], dtype=float)
     # `answers='field'` because this generator pins the per-layer state as well as the
     # result surface; without it `solver.T1` is None and the goldens regenerate empty.
-    solver = _legacy_wavebit.rcwa(backend='numpy', answers='field', **kw)
+    solver = _legacy_wavebit_rcwa(backend='numpy', answers='field', **kw)
     r = solver.solve()
     out[f'{name}__grating_type'] = np.array(solver.grating_type)
     # The golden's key component is the legacy attribute name; today's is beside it.

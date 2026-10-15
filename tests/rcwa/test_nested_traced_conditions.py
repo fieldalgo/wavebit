@@ -1,6 +1,6 @@
 """A nested traced condition must restore its declaration before the next solve."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import partial
 import numpy as np
 import pytest
@@ -19,7 +19,7 @@ def design(value):
 
 
 def solver(backend='jax', **kwargs):
-    return _legacy_wavebit.rcwa(backend=backend, **CFG, **kwargs)
+    return _legacy_wavebit_rcwa(backend=backend, **CFG, **kwargs)
 
 
 @pytest.mark.parametrize('door', ['solve', 'solve_field', 'solve_field_eager'])

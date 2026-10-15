@@ -114,20 +114,43 @@ if Path(_selected_wavebit.__file__).resolve() != _expected_origin:
         f'Selected root {_SELECTED_ROOT} requires {_expected_origin}; '
         f'wavebit was already imported from {_selected_wavebit.__file__}. '
         'Run this study in a fresh Python process.')
-try:
-    _legacy_wavebit = importlib.import_module('wavebit.compat.legacy')
-except ModuleNotFoundError as error:
-    if error.name not in ('wavebit.compat', 'wavebit.compat.legacy'):
-        raise
-    _legacy_wavebit = _selected_wavebit
-# These maintained experiments retain the historical factory/type contract.
-wavebit = _legacy_wavebit
+_CURRENT_LAYOUT = (_PACKAGE_PARENT / 'wavebit/rcwa/_factory.py').is_file()
 
 
 def _study_module(current, historical):
     """Load the matching private implementation in the selected checkout."""
     return importlib.import_module(
-        historical if _legacy_wavebit is _selected_wavebit else current)
+        current if _CURRENT_LAYOUT else historical)
+
+
+# Only an explicitly selected historical tree may supply the retired facade.
+_HISTORICAL_API = (None if _CURRENT_LAYOUT else
+    importlib.import_module('wavebit.compat.legacy')
+    if (_PACKAGE_PARENT / 'wavebit/compat/legacy.py').is_file() else _selected_wavebit)
+
+
+def _study_symbol(module, name):
+    if not _CURRENT_LAYOUT:
+        return getattr(_HISTORICAL_API, 'enable_x64' if name == '_enable_x64' else name)
+    owner = importlib.import_module(module)
+    if name == '_enable_x64' and not hasattr(owner, name):
+        # Src-layout snapshots before retirement kept this helper in the facade.
+        # Reproduce its explicit setup without requiring that facade to be installed.
+        def enable():
+            importlib.import_module('jax')
+            owner.lift_jax_x64(required=True)
+            scattering = importlib.import_module('wavebit.rcwa._engine.scattering')
+            scattering._register_pytree_if_jax_loaded()
+        return enable
+    return getattr(owner, name)
+
+_study_GaussianBeam = _study_symbol('wavebit.rcwa._engine.sources', 'GaussianBeam')
+_study_Material = _study_symbol('wavebit.materials.response', 'Material')
+_study_PlaneWave = _study_symbol('wavebit.rcwa._engine.sources', 'PlaneWave')
+_study_enable_x64 = _study_symbol('wavebit._common.backend', '_enable_x64')
+_study_rcwa = _study_symbol('wavebit.rcwa._factory', 'rcwa')
+_study_refractive_index_from_eps = _study_symbol('wavebit.materials.response', 'refractive_index_from_eps')
+
 
 
 import numpy as np                                          # noqa: E402
@@ -269,13 +292,13 @@ def solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', path='2d',
                   theta=theta, wavelength=WL, thickness=list(thickness), layer_algorithm=algo,
                   incidence_side=side, answers=answers, **kw)
     if path in ('te', 'tm'):
-        return _legacy_wavebit.rcwa(**common, tetm=path, truncation_order=0, period=[1000.0],
+        return _study_rcwa(**common, tetm=path, truncation_order=0, period=[1000.0],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
     if path == 'conical':
-        return _legacy_wavebit.rcwa(**common, phi=0.4 if phi is None else phi, truncation_order=0,
+        return _study_rcwa(**common, phi=0.4 if phi is None else phi, truncation_order=0,
                             period=[1000.0],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
-    s = _legacy_wavebit.rcwa(**common, phi=(0.4 if path == 'first_order' else 0.0) if phi is None else phi,
+    s = _study_rcwa(**common, phi=(0.4 if path == 'first_order' else 0.0) if phi is None else phi,
                      truncation_order=(0, 0), period=(1000.0, 1000.0),
                      structure=np.full((1, 2, 2), N_GLASS ** 2, dtype=complex))
     if path == 'first_order':
@@ -297,14 +320,14 @@ def grating(path, algo='SMM', far=PASSIVE, d=None, lit=None, side='top', theta=0
         layer, kw = G2[None], dict(period=(P_G, 0.9 * P_G), truncation_order=(1, 1))
     kw.update(tetm=path) if path in ('te', 'tm') else kw.update(phi=phi, psi=psi)
     if lit is not None:
-        half = wavebit.Material(*lit)
+        half = _study_Material(*lit)
         common.update(top=half, bot=N_GLASS ** 2) if side == 'top' else common.update(bot=half)
-        s = _legacy_wavebit.rcwa(**common, **kw, thickness=[H_G], structure=layer, incidence_side=side)
+        s = _study_rcwa(**common, **kw, thickness=[H_G], structure=layer, incidence_side=side)
     elif d is None:
-        s = _legacy_wavebit.rcwa(**common, **kw, bot=wavebit.Material(eps, mu=mu), thickness=[H_G],
+        s = _study_rcwa(**common, **kw, bot=_study_Material(eps, mu=mu), thickness=[H_G],
                          structure=layer)
     else:
-        s = _legacy_wavebit.rcwa(**common, **kw, bot=N_GLASS ** 2, thickness=[d, H_G],
+        s = _study_rcwa(**common, **kw, bot=N_GLASS ** 2, thickness=[d, H_G],
                          structure=np.concatenate([np.full_like(layer, eps), layer]))
         s.mu = np.concatenate([np.full_like(layer, mu), np.ones_like(layer)])
     if path == 'first_order':
@@ -330,7 +353,7 @@ def poynting(field):
 def check_interface(eps, mu, path, algo, side, thetas, lit):
     """Max deviation of ``r, t, R, T`` (s and p) from the closed form, glass on the far or lit
     side of ``(eps, mu)``; the glass spacer's phase is carried in the closed form."""
-    half = wavebit.Material(eps, mu=mu)
+    half = _study_Material(eps, mu=mu)
     worst = 0.0
     for theta_deg in thetas:
         theta = np.deg2rad(theta_deg)
@@ -392,7 +415,7 @@ def section_roots():
           'the wrong root negates the admittance, so r -> 1/r')
     with _quiet():
         for algo in ('ETM', 'SMM'):
-            result = solver(bot=wavebit.Material(eps, mu=mu), algo=algo).solve()
+            result = solver(bot=_study_Material(eps, mu=mu), algo=algo).solve()
             print(f'  the solver now, {algo}: R = {float(np.sum(result.s_inc.R)):.10f}, '
                   f'T = {float(np.sum(result.s_inc.T)):.10f}')
     # Which root an active medium takes depends on its dispersion, not on eps*mu at one
@@ -554,7 +577,7 @@ def section_mirror():
         print(f'    {name:7s}: kz = {kz.real:+.0f}{kz.imag:+.0f}i, glass onto it R = {R:.6g}')
     with _quiet():
         for algo in ('ETM', 'SMM'):
-            result = solver(bot=wavebit.Material(*TIE), algo=algo).solve()
+            result = solver(bot=_study_Material(*TIE), algo=algo).solve()
             print(f'    the solver, {algo}: R = {float(np.sum(result.s_inc.R)):.12f}')
     # Every other medium: `medium=` given must be Maystre's arithmetic, to the bit.
     k_par = np.sqrt(np.linspace(0, 9, 401)) + 1j * rng.normal(scale=1.5, size=401)
@@ -686,7 +709,7 @@ def section_index():
               f'{e(np.max(np.abs(rows[1] - rows[0])))}; a sign keyed on both real parts '
               f'negative would step by {abs(both_negative[1] - both_negative[0]):.4f}')
     with _quiet():
-        result = solver(bot=wavebit.Material(*MAGNETIC_METAL)).solve()
+        result = solver(bot=_study_Material(*MAGNETIC_METAL)).solve()
     t_s, t_p = complex(np.sum(result.s_inc.t_s)), complex(np.sum(result.p_inc.t_p))
     kz2 = physical(*MAGNETIC_METAL, 0.0)
     phase = np.exp(2j * np.pi / WL * N_GLASS * D_LAYER)
@@ -777,7 +800,7 @@ def section_theta():
     # (2000).
     theta = np.deg2rad(20.0)
     with _quiet():
-        s = _legacy_wavebit.rcwa(top=wavebit.Material(*LOSSLESS), bot=2.25, theta=theta, phi=0.0,
+        s = _study_rcwa(top=_study_Material(*LOSSLESS), bot=2.25, theta=theta, phi=0.0,
                          wavelength=WL, period=[500.0], truncation_order=0, thickness=[0.0],
                          structure=np.full((1, 1, 1), 2.25), polarization=(1.0, 0.0))
         result = s.solve()
@@ -791,7 +814,7 @@ def section_theta():
     with _quiet():
         for side in ('top', 'bottom'):
             far = 'bottom' if side == 'top' else 'top'
-            scene = {('top' if side == 'top' else 'bot'): wavebit.Material(*LOSSLESS)}
+            scene = {('top' if side == 'top' else 'bot'): _study_Material(*LOSSLESS)}
             field = _host(solver(theta=theta, phi=0.6, side=side, answers='field', **scene)
                           .solve().boundary_fields(far, [0.0], [0.0], part='outgoing'))[0, 0]
             S = poynting(field)
@@ -811,8 +834,8 @@ def section_theta():
             for path in ('2d', 'conical', 'first_order'):
                 for side in ('top', 'bottom'):
                     inward = np.array([0.0, 0.0, -1.0 if side == 'top' else 1.0])
-                    scene = dict(top=wavebit.Material(*pair)) if side == 'top' else dict(
-                        bot=wavebit.Material(*pair))
+                    scene = dict(top=_study_Material(*pair)) if side == 'top' else dict(
+                        bot=_study_Material(*pair))
                     for th in (0.1, 0.4, 0.7, 1.0, 1.3):
                         for psi in (0.0, np.pi / 2, 0.7):
                             s = solver(theta=th, phi=0.6, side=side, path=path, answers='field',
@@ -840,7 +863,7 @@ def section_theta():
                            ('(-3+0.1i, -0.5+0.05i) (lossy DNG)', *ASYM),
                            ('(-1+1i, -1+0.5i) (absorbing DNG)', -1 + 1j, -1 + 0.5j),
                            ('(-1+0.2i, 0.5+2i) (magnetic metal)', -1 + 0.2j, 0.5 + 2j)):
-        top = eps if mu is None else wavebit.Material(eps, mu=mu)
+        top = eps if mu is None else _study_Material(eps, mu=mu)
         cells = []
         with _quiet():
             for psi in (0.0, np.pi / 2):
@@ -860,7 +883,7 @@ def section_theta():
     rows = []
     with _quiet():
         for label, pol in (('s', (1.0, 0.0)), ('p', (0.0, 1.0))):
-            s = _legacy_wavebit.rcwa(top=wavebit.Material(*PASSIVE), bot=2.25, theta=theta, phi=0.0,
+            s = _study_rcwa(top=_study_Material(*PASSIVE), bot=2.25, theta=theta, phi=0.0,
                              wavelength=WL, period=[500.0], truncation_order=0, thickness=[0.0],
                              structure=np.full((1, 1, 1), 2.25), polarization=pol,
                              answers='field')
@@ -889,7 +912,7 @@ def section_theta():
         for pol in ((1.0, 0.0), (0.0, 1.0)):
             got = []
             for pair in (LOSSLESS, (2.0 + 0j, 1.0 + 0j)):
-                s = _legacy_wavebit.rcwa(top=wavebit.Material(*pair), bot=2.25, theta=theta, phi=0.0,
+                s = _study_rcwa(top=_study_Material(*pair), bot=2.25, theta=theta, phi=0.0,
                                  wavelength=WL, period=[500.0], truncation_order=0,
                                  thickness=[0.0], structure=np.full((1, 1, 1), 2.25),
                                  polarization=pol, answers='field')
@@ -988,7 +1011,7 @@ def section_theta():
         by_angle = amplitudes(s.solve(auto_detune=False), '2d')
         kx, ky = (complex(_host(k)[len(k) // 2]) for k in s.order_kxy())
         k0 = 2 * np.pi / WL
-        d = _legacy_wavebit.rcwa(top=wavebit.Material(*ASYM), bot=N_GLASS ** 2, wavelength=WL,
+        d = _study_rcwa(top=_study_Material(*ASYM), bot=N_GLASS ** 2, wavelength=WL,
                          layer_algorithm='SMM', kx=k0 * kx.real, ky=k0 * ky.real, psi=0.3,
                          period=(P_G, 0.9 * P_G), truncation_order=(1, 1), thickness=[H_G],
                          structure=G2[None])
@@ -1001,7 +1024,7 @@ def section_theta():
     cells = []
     with _quiet():
         for kw in (dict(theta=0.0, phi=0.0), dict(kx=0.0)):
-            s = _legacy_wavebit.rcwa(top=wavebit.Material(*LOSSLESS), bot=2.25, wavelength=WL,
+            s = _study_rcwa(top=_study_Material(*LOSSLESS), bot=2.25, wavelength=WL,
                              period=[500.0], truncation_order=0, thickness=[0.0],
                              structure=np.full((1, 1, 1), 2.25), polarization=(1.0, 0.0),
                              answers='field', **kw)
@@ -1024,8 +1047,8 @@ def section_amplitudes():
             for path in ('conical', '2d', 'first_order'):
                 for algo in ('ETM', 'SMM'):
                     for lit in (False, True):
-                        scene = dict(top=wavebit.Material(*pair)) if lit else dict(
-                            bot=wavebit.Material(*pair))
+                        scene = dict(top=_study_Material(*pair)) if lit else dict(
+                            bot=_study_Material(*pair))
                         if lit and pair is MAGNETIC_METAL:
                             continue
                         result = solver(path=path, algo=algo, **scene).solve()
@@ -1040,7 +1063,7 @@ def section_amplitudes():
           f'|t_p - t_s| {e(worst_t)}')
     with _quiet():
         for label, pair in (('(-3, -0.5)', ASYM_LOSSLESS), ('(-3+0.1i, -0.5+0.05i)', ASYM)):
-            s = solver(top=wavebit.Material(*pair), theta=0.4, phi=0.6, psi=0.7,
+            s = solver(top=_study_Material(*pair), theta=0.4, phi=0.6, psi=0.7,
                        answers='field')
             field = _host(s.solve().boundary_fields('top', [0.0], [0.0], part='incoming'))[0, 0]
             kx, ky = (complex(np.ravel(_host(k))[0]) for k in s.order_kxy())
@@ -1066,10 +1089,10 @@ def section_amplitudes():
     xs = np.arange(samples) * P_G / samples
     k0 = 2 * np.pi / WL
     for role, face in (('far side, transmitted', 'bottom'), ('lit side, reflected', 'top')):
-        scene = (dict(top=N_GLASS ** 2, bot=wavebit.Material(*LOSSLESS)) if face == 'bottom'
-                 else dict(top=wavebit.Material(*LOSSLESS), bot=N_GLASS ** 2))
+        scene = (dict(top=N_GLASS ** 2, bot=_study_Material(*LOSSLESS)) if face == 'bottom'
+                 else dict(top=_study_Material(*LOSSLESS), bot=N_GLASS ** 2))
         with _quiet():
-            s = _legacy_wavebit.rcwa(**scene, wavelength=WL, period=[P_G], tetm='te',
+            s = _study_rcwa(**scene, wavelength=WL, period=[P_G], tetm='te',
                              truncation_order=3, structure=G1[None, None, :], thickness=[H_G],
                              theta=np.deg2rad(10.0), answers='field')
             field = _host(s.solve(auto_detune=False).boundary_fields(face, xs, [0.0],
@@ -1144,11 +1167,11 @@ def section_layers():
                       thickness=[thickness], layer_algorithm=algo, answers='amplitude',
                       structure=eps_r, mu=mu_r)
         if path in ('te', 'tm'):
-            return _legacy_wavebit.rcwa(**common, tetm=path, period=[period], truncation_order=order)
+            return _study_rcwa(**common, tetm=path, period=[period], truncation_order=order)
         if path == 'conical':
-            return _legacy_wavebit.rcwa(**common, phi=phi, psi=0.3, period=[period],
+            return _study_rcwa(**common, phi=phi, psi=0.3, period=[period],
                                 truncation_order=order)
-        s = _legacy_wavebit.rcwa(**common, phi=phi, psi=0.3, period=(period, 0.9 * period),
+        s = _study_rcwa(**common, phi=phi, psi=0.3, period=(period, 0.9 * period),
                          truncation_order=(1, 1))
         if path == 'first_order':
             s.formulation = 'first_order'
@@ -1189,7 +1212,7 @@ def section_layers():
                             ('conical', 0.3), ('2d', np.deg2rad(17)), ('first_order', 0.3)):
             for top in (1.0, 2.25):
                 uniform.append(lambda algo, p=path, t=theta, e_=eps, m=mu, tp=top: (
-                    p, algo, raster(p, e_), raster(p, m), t, wavebit.Material(e_, mu=m), tp))
+                    p, algo, raster(p, e_), raster(p, m), t, _study_Material(e_, mu=m), tp))
     print(f'  {len(uniform)} scenes: a uniform double-negative layer, 150 nm, on a half-space of '
           f'its own medium -- no interface at all (4 media: (-2, -1), (-2+0.1i, -1+0.1i), '
           f'(-6, -1.5), (-3+0.1i, -0.5+0.05i); 7 path/angle pairs; vacuum or glass above):')
@@ -1206,7 +1229,7 @@ def section_layers():
     for path in ('te', 'tm', 'conical'):
         for theta in (0.5, 0.5 + 0.3j):
             scene = [lambda algo, p=path, t=theta: (p, algo, eps_b, mu_b, t,
-                                                    wavebit.Material(*block), 1.0, 100.0, 2000.0,
+                                                    _study_Material(*block), 1.0, 100.0, 2000.0,
                                                     900.0, 30, 0.3)]
             out = compare(scene)
             print(f'    {path:7s} theta {str(theta):10s} |ETM - SMM|: rules on '
@@ -1225,7 +1248,7 @@ def section_layers():
         if i % 8 >= 4:                              # the reverse: ordinary background
             eps_r, mu_r = (np.where(mask, inc[0], eps_g).astype(complex),
                            np.where(mask, inc[1], mu_g).astype(complex))
-        bot = wavebit.Material(eps_g, mu=mu_g) if i % 2 else 2.25
+        bot = _study_Material(eps_g, mu=mu_g) if i % 2 else 2.25
         theta = (0.3, 0.5 + 0.2j, 0.7)[(i // 16) % 3]
         patterned.append(lambda algo, p=path, er=eps_r, mr=mu_r, t=theta, b=bot: (
             p, algo, er, mr, t, b, 1.0, 200.0))
@@ -1240,7 +1263,7 @@ def section_layers():
     for factorization in ('li', 'laurent', 'nvf'):
         try:
             with _quiet():
-                s = build('2d', 'SMM', eps_r, mu_r, 0.3, wavebit.Material(*LOSSLESS))
+                s = build('2d', 'SMM', eps_r, mu_r, 0.3, _study_Material(*LOSSLESS))
                 s.factorization = factorization
                 s.solve(auto_detune=False)
             cells.append(f'{factorization} solves it')
@@ -1269,12 +1292,12 @@ def section_refusals():
 
     s = solver()
     print('  an active propagating double negative (-2-0.1i, -1-0.1i) as bot:\n    ' +
-          message(lambda: setattr(s, 'bot', wavebit.Material(*ACTIVE))))
+          message(lambda: setattr(s, 'bot', _study_Material(*ACTIVE))))
     print('  gain in mu alone, (-2+0.1i, -1-0.01i), as top:\n    ' +
-          message(lambda: setattr(s, 'top', wavebit.Material(-2 + 0.1j, -1 - 0.01j))))
+          message(lambda: setattr(s, 'top', _study_Material(-2 + 0.1j, -1 - 0.01j))))
     still = (-1 - 1.2j, -1 - 1.2j)
     with _quiet():
-        R = float(np.sum(solver(bot=wavebit.Material(*still)).solve().s_inc.R))
+        R = float(np.sum(solver(bot=_study_Material(*still)).solve().s_inc.R))
     print(f'  an active double negative that does not propagate, (-1-1.2i, -1-1.2i), '
           f'Re(eps*mu) = {(still[0] * still[1]).real:.2f}: accepted, R = {R:.6f} (Maystre\'s '
           f'root, which the mirror cut shares there)')
@@ -1283,18 +1306,18 @@ def section_refusals():
     for label, pair in (('(-2-0.01i, 0.1-0.5i), a magnetic metal with gain', (-2 - 0.01j,
                                                                              0.1 - 0.5j)),
                         ('(-1-1.2i, -1-1.2i), the double negative above', still)):
-        s = solver(top=wavebit.Material(*pair), theta=0.3, phi=0.0)
+        s = solver(top=_study_Material(*pair), theta=0.3, phi=0.0)
         n = complex(s.n_top)
         kx = complex(np.ravel(_host(s.order_kxy()[0]))[0])
         print(f'    {label:50s} n_top = {c(n)}, s = {int(np.sign(n.real)):+d}, '
               f'kx = {kx.real:+.4f}: ' + message(lambda: s.solve()))
-    print('  a GaussianBeam launched from (-3, -0.5):\n    ' + message(lambda: _legacy_wavebit.rcwa(
+    print('  a GaussianBeam launched from (-3, -0.5):\n    ' + message(lambda: _study_rcwa(
         wavelength=WL, period=[P_G], structure=G1[None, None, :], thickness=[H_G],
-        truncation_order=(2, 0), top=wavebit.Material(*ASYM_LOSSLESS), bot=N_GLASS ** 2,
+        truncation_order=(2, 0), top=_study_Material(*ASYM_LOSSLESS), bot=N_GLASS ** 2,
         answers='field', power_region=((-1000.0, 1000.0), (-1000.0, 1000.0)),
-        excitation=[wavebit.GaussianBeam(waist=2000.0, theta=0.2)]).solve()))
+        excitation=[_study_GaussianBeam(waist=2000.0, theta=0.2)]).solve()))
     print('  a real angle from a lossless medium that carries no wave, (-4, 1):\n    ' +
-          message(lambda: solver(top=wavebit.Material(-4.0, mu=1.0), theta=0.3).solve()))
+          message(lambda: solver(top=_study_Material(-4.0, mu=1.0), theta=0.3).solve()))
     rng = np.random.default_rng(5)
     k_par_sq = np.linspace(0.0, 9.0, 901)
     equal = 0
@@ -1374,10 +1397,10 @@ def section_oracles():
             for algo in ('ETM', 'SMM'):
                 for m in (1, -1):
                     def solve(side, excitation, **incidence):
-                        s = _legacy_wavebit.rcwa(wavelength=WL, period=[P_G], structure=G1[None, None, :],
+                        s = _study_rcwa(wavelength=WL, period=[P_G], structure=G1[None, None, :],
                                          thickness=[H_G], truncation_order=3, tetm=tetm,
                                          layer_algorithm=algo,
-                                         top=wavebit.Material(*ASYM_LOSSLESS), bot=N_GLASS ** 2,
+                                         top=_study_Material(*ASYM_LOSSLESS), bot=N_GLASS ** 2,
                                          incidence_side=side, excitation=excitation,
                                          **incidence)
                         T = np.ravel(_host(s.solve(auto_detune=False).T))
@@ -1396,16 +1419,16 @@ def section_oracles():
     with _quiet():
         for pair in (ASYM, ASYM_LOSSLESS):
             for side in ('top', 'bottom'):
-                half = wavebit.Material(*pair)
+                half = _study_Material(*pair)
                 scene = (dict(top=half, bot=N_GLASS ** 2) if side == 'top'
                          else dict(top=N_GLASS ** 2, bot=half))
                 opts = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :],
                             thickness=[H_G], truncation_order=(3, 0), answers='field', **scene)
                 for theta, phi in ((0.35, 0.6), (0.0, 0.6), (0.0, 2.5)):
                     pol = (0.6, 0.8j)
-                    coherent = _legacy_wavebit.rcwa(**opts, excitation={side: wavebit.PlaneWave(
+                    coherent = _study_rcwa(**opts, excitation={side: _study_PlaneWave(
                         theta=theta, phi=phi, polarization=pol)}).solve()
-                    ordinary = _legacy_wavebit.rcwa(**opts, theta=theta, phi=phi, polarization=pol,
+                    ordinary = _study_rcwa(**opts, theta=theta, phi=phi, polarization=pol,
                                             layer_algorithm='SMM',
                                             incidence_side=side).solve(auto_detune=False)
                     back, through = ((coherent.output_top, coherent.output_bottom)
@@ -1477,7 +1500,7 @@ def section_fmmax():
         worst = 0.0
         for algo in ('ETM', 'SMM'):
             for door in ('k', 'theta'):
-                kw = dict(top=wavebit.Material(*case['top']), bot=wavebit.Material(*case['bot']),
+                kw = dict(top=_study_Material(*case['top']), bot=_study_Material(*case['bot']),
                           wavelength=WL, thickness=[THICK], structure=case['eps'][None],
                           factorization='laurent', layer_algorithm=algo,
                           truncation_order=case['order'][0] if one_d else case['order'],
@@ -1490,7 +1513,7 @@ def section_fmmax():
                 else:
                     kw.update(theta=case['theta'], phi=case['phi'])
                 with _quiet():
-                    got = unpolarized(_legacy_wavebit.rcwa(**kw).solve(auto_detune=False), name)
+                    got = unpolarized(_study_rcwa(**kw).solve(auto_detune=False), name)
                 worst = max(worst, np.abs(got - fine).max())
         print(f'    {name:20s} {e(worst)} (bound {e(bound)}; fmmax as shipped, float32 centring '
               f'phase, {e(np.abs(stock - fine).max())} from the corrected run)')
@@ -1523,18 +1546,18 @@ def _mirror_scene(path, algo, side, theta, far, eps=None, mu=None, thickness=(10
     if not layers:
         shape = (1, 1, 4) if one_d else (1, 2, 2)
         eps, mu = np.full(shape, 2.25 + 0j), np.full(shape, 1.0 + 0j)
-    glass, medium = wavebit.Material(2.25 + 0j, mu=1.0 + 0j), wavebit.Material(*far)
+    glass, medium = _study_Material(2.25 + 0j, mu=1.0 + 0j), _study_Material(*far)
     top, bot = (glass, medium) if side == 'top' else (medium, glass)
     common = dict(top=top, bot=bot, theta=theta, wavelength=WL, layer_algorithm=algo,
                   thickness=list(thickness), answers='amplitude', incidence_side=side,
                   structure=eps, mu=mu)
     if path in ('te', 'tm'):
-        s = _legacy_wavebit.rcwa(**common, tetm=path, period=[P_G], truncation_order=truncation_order or 3)
+        s = _study_rcwa(**common, tetm=path, period=[P_G], truncation_order=truncation_order or 3)
     elif path == 'conical':
-        s = _legacy_wavebit.rcwa(**common, phi=0.6, psi=0.3, period=[P_G],
+        s = _study_rcwa(**common, phi=0.6, psi=0.3, period=[P_G],
                          truncation_order=truncation_order or 3)
     else:
-        s = _legacy_wavebit.rcwa(**common, phi=0.6, psi=0.3, period=(P_G, 0.9 * P_G),
+        s = _study_rcwa(**common, phi=0.6, psi=0.3, period=(P_G, 0.9 * P_G),
                          truncation_order=truncation_order or (1, 1))
         if path == 'first_order':
             s.formulation = 'first_order'
@@ -1632,17 +1655,17 @@ def section_pymoosh():
         inner = stack[1:-1][::-1]
         one_d = path == 'tetm'
         shape = (1, 2) if one_d else (2, 2)
-        kw = dict(top=wavebit.Material(*stack[0]), bot=wavebit.Material(*stack[-1]),
+        kw = dict(top=_study_Material(*stack[0]), bot=_study_Material(*stack[-1]),
                   wavelength=WL, thickness=[d for _, d in case['layers']][::-1],
                   layer_algorithm=algo, answers='amplitude',
                   structure=np.stack([np.full(shape, m[0]) for m in inner]),
                   mu=np.stack([np.full(shape, m[1]) for m in inner]),
                   kx=2 * np.pi / WL * pymoosh_kx(name, case['thetas'][index]))
         if one_d:
-            s = _legacy_wavebit.rcwa(**kw, period=[1000.0], truncation_order=0,
+            s = _study_rcwa(**kw, period=[1000.0], truncation_order=0,
                              tetm='te' if pol == 0 else 'tm')
         else:
-            s = _legacy_wavebit.rcwa(**kw, ky=0.0, period=(1000.0, 1000.0), truncation_order=(0, 0),
+            s = _study_rcwa(**kw, ky=0.0, period=(1000.0, 1000.0), truncation_order=(0, 0),
                              polarization=(1.0, 0.0) if pol == 0 else (0.0, 1.0))
             if path == 'first_order':
                 s.formulation = 'first_order'
@@ -1693,7 +1716,7 @@ def section_backends():
     except ImportError as error:                    # pragma: no cover - environment
         print(f'  skipped: {error}')
         return
-    wavebit.enable_x64()
+    _study_enable_x64()
     with _quiet():
         reference = {
             'far': amplitudes(grating('conical').solve(auto_detune=False), 'conical'),
@@ -1821,7 +1844,7 @@ def harness():
     traced. Run here and in REV's tree, by the same code."""
     out = {}
     for name, (eps, mu) in HARNESS_MEDIA.items():
-        half = eps if mu is None else wavebit.Material(eps, mu=mu)
+        half = eps if mu is None else _study_Material(eps, mu=mu)
         lit = (eps,) if mu is None else (eps, mu)
         for path in PATHS:
             for algo in ('ETM', 'SMM'):
@@ -1836,7 +1859,7 @@ def harness():
                 scene = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :],
                              thickness=[H_G], truncation_order=(3, 0), answers='field',
                              top=half, bot=N_GLASS ** 2)
-                result = _legacy_wavebit.rcwa(**scene, excitation={'top': wavebit.PlaneWave(
+                result = _study_rcwa(**scene, excitation={'top': _study_PlaneWave(
                     theta=theta, phi=0.6, polarization=(0.6, 0.8j))}).solve()
                 return dict(top=result.output_top, bottom=result.output_bottom,
                             field=result.reconstruct_field(sample_x=[-123.0, 211.0],
@@ -1848,10 +1871,10 @@ def harness():
         import torch                                # noqa: F401
     except ImportError:                             # pragma: no cover - environment
         return out
-    wavebit.enable_x64()
+    _study_enable_x64()
     for backend in ('jax', 'torch'):
         for name, (eps, mu) in HARNESS_MEDIA.items():
-            half = eps if mu is None else wavebit.Material(eps, mu=mu)
+            half = eps if mu is None else _study_Material(eps, mu=mu)
             lit = (eps,) if mu is None else (eps, mu)
             for path in ('conical', '2d'):
                 for algo in ('ETM', 'SMM'):
@@ -1867,7 +1890,7 @@ def harness():
                 pair = (re_eps + 1j * complex(eps).imag, mu)
                 s = (grating('conical', theta=0.3, phi=0.6, lit=pair, backend='jax')
                      if role == 'lit'
-                     else _far_grating('conical', 'SMM', wavebit.Material(*pair), 0.3,
+                     else _far_grating('conical', 'SMM', _study_Material(*pair), 0.3,
                                        backend='jax'))
                 result = s.solve(auto_detune=False)
                 return {f: getattr(result.incident, f) for f in ('R', 'T', 'r_s', 'r_p',
@@ -1885,7 +1908,7 @@ def _far_grating(path, algo, half, theta, backend='numpy'):
     else:
         layer, kw = G2[None], dict(period=(P_G, 0.9 * P_G), truncation_order=(1, 1))
     kw.update(tetm=path) if path in ('te', 'tm') else kw.update(phi=0.6, psi=0.3)
-    s = _legacy_wavebit.rcwa(**common, **kw, thickness=[H_G], structure=layer)
+    s = _study_rcwa(**common, **kw, thickness=[H_G], structure=layer)
     if path == 'first_order':
         s.formulation = formulation('first_order')
     return s
@@ -1899,7 +1922,7 @@ def double_negative_outcomes():
                             ('far eps = mu = -1+1i', TIE)):
             for algo in ('ETM', 'SMM'):
                 try:
-                    R = float(np.sum(solver(bot=wavebit.Material(*pair), algo=algo).solve(
+                    R = float(np.sum(solver(bot=_study_Material(*pair), algo=algo).solve(
                         auto_detune=False).s_inc.R))
                     out[f'{label}, {algo}'] = np.asarray(R)
                 except Exception as error:
@@ -1907,7 +1930,7 @@ def double_negative_outcomes():
                                                             dtype=np.uint8)
         for algo in ('ETM', 'SMM'):
             try:
-                R = float(np.sum(solver(top=wavebit.Material(*ASYM), theta=0.35, phi=0.6,
+                R = float(np.sum(solver(top=_study_Material(*ASYM), theta=0.35, phi=0.6,
                                         algo=algo).solve(auto_detune=False).s_inc.R))
                 out[f'lit (-3+0.1i, -0.5+0.05i), {algo}'] = np.asarray(R)
             except Exception as error:
@@ -1993,8 +2016,8 @@ def section_usage():
 
     with _quiet():
         # As the substrate.
-        solver = _legacy_wavebit.rcwa(
-            top=2.25, bot=wavebit.Material(-2 + 0.1j, mu=-1 + 0.1j),
+        solver = _study_rcwa(
+            top=2.25, bot=_study_Material(-2 + 0.1j, mu=-1 + 0.1j),
             wavelength=500., period=(1000., 1000.), truncation_order=(0, 0),
             structure=np.full((1, 2, 2), 2.25), thickness=[37.],
         )
@@ -2002,8 +2025,8 @@ def section_usage():
         show('substrate: n_bot, R, T', c(solver.n_bot), f'{float(np.sum(result.R)):.10f}',
              f'{float(np.sum(result.T)):.10f}')
         # Lit from it: negative refraction.
-        solver = _legacy_wavebit.rcwa(
-            top=wavebit.Material(-2.0, mu=-1.0), bot=2.25,
+        solver = _study_rcwa(
+            top=_study_Material(-2.0, mu=-1.0), bot=2.25,
             theta=np.deg2rad(20.), phi=0., polarization=(1., 0.),
             wavelength=500., period=[500.], truncation_order=0,
             structure=np.full((1, 1, 1), 2.25), thickness=[0.],
@@ -2014,7 +2037,7 @@ def section_usage():
              f'{np.degrees(np.arcsin(kx / 1.5)):.4f}', f'{float(np.sum(result.R)):.7f}',
              f'{float(np.sum(result.T)):.7f}')
         # An absorbing lit medium.
-        solver.top = wavebit.Material(-2 + 0.1j, mu=-1 + 0.1j)
+        solver.top = _study_Material(-2 + 0.1j, mu=-1 + 0.1j)
         result = solver.solve()
         show('absorbing lit: R + T, R, T, power_entering',
              f'{float(np.sum(result.R)) + float(np.sum(result.T)):.7f}',
@@ -2022,8 +2045,8 @@ def section_usage():
              f'{float(np.sum(result.power_entering)):.7f}')
         # Direct kx.
         k0 = 2 * np.pi / 500.
-        direct = _legacy_wavebit.rcwa(
-            top=wavebit.Material(-2.0, mu=-1.0), bot=2.25, kx=-0.48369 * k0,
+        direct = _study_rcwa(
+            top=_study_Material(-2.0, mu=-1.0), bot=2.25, kx=-0.48369 * k0,
             polarization=(1., 0.), wavelength=500., period=[500.], truncation_order=0,
             structure=np.full((1, 1, 1), 2.25), thickness=[0.],
         )
@@ -2033,7 +2056,7 @@ def section_usage():
         eps = np.full((1, 4, 4), 2.25, dtype=complex)
         mu = np.ones((1, 4, 4), dtype=complex)
         eps[0, 1:3, 1:3], mu[0, 1:3, 1:3] = -3 + 0.1j, -0.5 + 0.05j
-        solver = _legacy_wavebit.rcwa(
+        solver = _study_rcwa(
             top=1., bot=2.25, structure=eps, mu=mu, thickness=[200.],
             wavelength=500., period=(1000., 900.), truncation_order=(2, 2),
             theta=0.3, phi=0.6,
@@ -2044,8 +2067,8 @@ def section_usage():
         # On a shape path.
         layer = {'background': 2.25,
                  'shapes': [{'type': 'circle', 'cx': 0., 'cy': 0., 'lx': 400.,
-                             'material': wavebit.Material(-3 + 0.1j, mu=-0.5 + 0.05j)}]}
-        solver = _legacy_wavebit.rcwa(
+                             'material': _study_Material(-3 + 0.1j, mu=-0.5 + 0.05j)}]}
+        solver = _study_rcwa(
             top=1., bot=2.25, structure=[layer], thickness=[200.],
             wavelength=500., period=(1000., 900.), truncation_order=(2, 2),
             theta=0.3, phi=0.6,
@@ -2056,12 +2079,12 @@ def section_usage():
         # The coherent door.
         grating = np.full((1, 4, 4), 2.25, dtype=complex)
         grating[0, :2, :3] = 4.0
-        scene = dict(top=wavebit.Material(-3 + 0.1j, mu=-0.5 + 0.05j), bot=2.25,
+        scene = dict(top=_study_Material(-3 + 0.1j, mu=-0.5 + 0.05j), bot=2.25,
                      wavelength=500., period=(1000., 900.), truncation_order=(2, 2),
                      structure=grating, thickness=[120.])
-        coherent = _legacy_wavebit.rcwa(**scene, excitation={'top': wavebit.PlaneWave(
+        coherent = _study_rcwa(**scene, excitation={'top': _study_PlaneWave(
             theta=np.deg2rad(35.), phi=0.6, psi=0.3)}).solve()
-        plain = _legacy_wavebit.rcwa(**scene, theta=np.deg2rad(35.), phi=0.6, psi=0.3).solve()
+        plain = _study_rcwa(**scene, theta=np.deg2rad(35.), phi=0.6, psi=0.3).solve()
         show('coherent door: output_top, output_bottom, their sum, absorption',
              f'{float(coherent.output_top):.8f}', f'{float(coherent.output_bottom):.8f}',
              f'{float(coherent.output_top) + float(coherent.output_bottom):.8f}',
@@ -2072,17 +2095,17 @@ def section_usage():
         nim = (-3 + 0.1j, -0.5 + 0.05j)
         common = dict(top=2.25, wavelength=500., period=(1000., 900.), truncation_order=(2, 2),
                       structure=grating, thickness=[120.], theta=0.3, phi=0.6)
-        scene = _legacy_wavebit.rcwa(**common, bot=nim[0] * nim[1])
+        scene = _study_rcwa(**common, bot=nim[0] * nim[1])
         paired = scene.solve_conv(*scene.eps_conv_matrices(), eps_bot=nim[0], mu_bot=nim[1])
-        magnetic = _legacy_wavebit.rcwa(**common, bot=wavebit.Material(*nim)).solve()
+        magnetic = _study_rcwa(**common, bot=_study_Material(*nim)).solve()
         show('solve_conv pair: t_p equal to the magnetic scene\'s bit for bit, scene.n_bot after',
              str(np.array_equal(paired.t_p, magnetic.t_p)), c(scene.n_bot))
         # Differentiating through it.
-        wavebit.enable_x64()
+        _study_enable_x64()
 
         def reflectance(re_eps):
-            medium = wavebit.Material(re_eps + 0.1j, mu=-1 + 0.1j)
-            s = _legacy_wavebit.rcwa(backend='jax', top=2.25, bot=medium, wavelength=500.,
+            medium = _study_Material(re_eps + 0.1j, mu=-1 + 0.1j)
+            s = _study_rcwa(backend='jax', top=2.25, bot=medium, wavelength=500.,
                              period=(1000., 1000.), truncation_order=(0, 0),
                              structure=np.full((1, 2, 2), 2.25), thickness=[37.])
             return s.solve().R.sum().real
@@ -2095,8 +2118,8 @@ def section_usage():
 
         # Under jax.jit: the gain band is what is left to read.
         def band(re_eps):
-            s = _legacy_wavebit.rcwa(backend='jax', top=2.25,
-                             bot=wavebit.Material(re_eps - 0.1j, mu=-1 - 0.1j),
+            s = _study_rcwa(backend='jax', top=2.25,
+                             bot=_study_Material(re_eps - 0.1j, mu=-1 - 0.1j),
                              theta=np.deg2rad(60.), wavelength=500., period=[700.],
                              truncation_order=3, thickness=[180.],
                              structure=np.array([[[4., 4., 1., 1., 2.25, 2.25]]]))
@@ -2143,8 +2166,8 @@ def _pair_scene(path, algo, bot, layers, side='top', theta=0.2, backend='numpy',
     one_d = path in ('te', 'tm', 'conical')
     shape = (1, 8) if one_d else (4, 4)
     stack = layers or [(PAIR, 10.0)]
-    common = dict(backend=backend_arg(backend), top=wavebit.Material(*PAIR),
-                  bot=wavebit.Material(*bot), theta=theta, wavelength=WL,
+    common = dict(backend=backend_arg(backend), top=_study_Material(*PAIR),
+                  bot=_study_Material(*bot), theta=theta, wavelength=WL,
                   thickness=[d for _, d in stack][::-1],
                   layer_algorithm=algo, answers='amplitude', incidence_side=side,
                   structure=np.stack([np.full(shape, m[0]) for m, _ in stack][::-1]),
@@ -2152,12 +2175,12 @@ def _pair_scene(path, algo, bot, layers, side='top', theta=0.2, backend='numpy',
     one_d = path in ('te', 'tm', 'conical')
     truncation = (3 if one_d else (1, 1)) if truncation is None else truncation
     if path in ('te', 'tm'):
-        s = _legacy_wavebit.rcwa(**common, tetm=path, period=[period], truncation_order=truncation)
+        s = _study_rcwa(**common, tetm=path, period=[period], truncation_order=truncation)
     elif path == 'conical':
-        s = _legacy_wavebit.rcwa(**common, phi=0.6, psi=0.3, period=[period],
+        s = _study_rcwa(**common, phi=0.6, psi=0.3, period=[period],
                          truncation_order=truncation)
     else:
-        s = _legacy_wavebit.rcwa(**common, phi=0.6, psi=0.3, period=(period, 0.9 * period),
+        s = _study_rcwa(**common, phi=0.6, psi=0.3, period=(period, 0.9 * period),
                          truncation_order=truncation)
         if path == 'first_order':
             s.formulation = 'first_order'
@@ -2215,7 +2238,7 @@ def section_negation_pair():
         import jax                                  # noqa: F401
         import torch                                # noqa: F401
         backends = (('numpy', 'NumPy'), ('jax', 'JAX'), ('torch', 'PyTorch'))
-        wavebit.enable_x64()
+        _study_enable_x64()
     except ImportError as error:                    # pragma: no cover - environment
         print(f'  JAX and PyTorch skipped: {error}')
         backends = (('numpy', 'NumPy'),)
@@ -2396,7 +2419,7 @@ def section_literature():
     print(f'    the mirror root     {describe(mirror_kz, mu)}')
     print(f'    Maystre\'s root      {describe(maystre_root(kz2), mu)}')
     try:
-        solver(bot=wavebit.Material(eps, mu=mu))
+        solver(bot=_study_Material(eps, mu=mu))
         verdict = 'accepted'
     except ValueError as error:
         verdict = 'ValueError: ' + str(error)[:62] + '...'
@@ -2426,7 +2449,7 @@ def section_literature():
         pass
     print('  the principal sqrt of complex(-1, -0.0): ' + ', '.join(rows))
     # Wavebit's own index of it, each backend's array (`backend.principal_sqrt`).
-    refractive_index_from_eps = wavebit.refractive_index_from_eps
+    refractive_index_from_eps = _study_refractive_index_from_eps
     rows = [f'Python number {c(refractive_index_from_eps(complex(-1.0, -0.0)), 0)}',
             f'NumPy {c(complex(refractive_index_from_eps(np.asarray(complex(-1.0, -0.0)))), 0)}']
     try:

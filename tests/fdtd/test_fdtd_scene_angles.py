@@ -1,6 +1,10 @@
 """Fixed-grid incidence sensitivities: independent dispersion and full graph checks."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -32,7 +36,7 @@ def test_invalid_angle_is_refused_before_time_stepping(monkeypatch, theta):
         raise AssertionError('invalid angle reached time stepping')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='theta|incidence angles'):
-        _legacy_wavebit.fdtd(**options(theta=theta))
+        _legacy_wavebit_fdtd(**options(theta=theta))
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -44,19 +48,19 @@ def test_array_angle_requires_static_diffraction_window(backend):
         pytest.importorskip('torch')
     theta = time_loop_backend(backend).array(.3)
     with pytest.raises(ValueError, match='explicit truncation_order'):
-        _legacy_wavebit.fdtd(**options(theta=theta, backend=backend, truncation_order=None))
+        _legacy_wavebit_fdtd(**options(theta=theta, backend=backend, truncation_order=None))
 
 
 def test_host_scalar_auto_window_preserves_material_jit():
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     def solve(epsilon):
-        return _legacy_wavebit.fdtd(**options(structure=epsilon.reshape(1, 1, 1), theta=.3,
+        return _legacy_wavebit_fdtd(**options(structure=epsilon.reshape(1, 1, 1), theta=.3,
                                       truncation_order=None, backend='jax')).incident.T.sum()
     value, derivative = jax.jit(jax.value_and_grad(solve))(np.array(2.25))
-    expected = _legacy_wavebit.fdtd(**options(truncation_order=None)).incident.T.sum()
+    expected = _legacy_wavebit_fdtd(**options(truncation_order=None)).incident.T.sum()
     step = 1e-4
-    finite = (_legacy_wavebit.fdtd(**options(structure=np.full((1, 1, 1), 2.25+step))).incident.T.sum()
-              - _legacy_wavebit.fdtd(**options(structure=np.full((1, 1, 1), 2.25-step))).incident.T.sum())/(2*step)
+    finite = (_legacy_wavebit_fdtd(**options(structure=np.full((1, 1, 1), 2.25+step))).incident.T.sum()
+              - _legacy_wavebit_fdtd(**options(structure=np.full((1, 1, 1), 2.25-step))).incident.T.sum())/(2*step)
     np.testing.assert_allclose(value, expected, atol=1e-11)
     np.testing.assert_allclose(derivative, finite, rtol=2e-5, atol=1e-8)
 
@@ -77,12 +81,12 @@ def test_uniform_phase_angle_derivative_matches_independent_yee_dispersion(backe
                  transverse_resolution=(15., 12.), incidence_side=side,
                  diffraction_method='directional', return_diagnostics=True)
     def objective(angle):
-        results, d = _legacy_wavebit.fdtd(**dict(kw, theta=angle))
+        results, d = _legacy_wavebit_fdtd(**dict(kw, theta=angle))
         values = xp.stack([getattr(getattr(r, basis), key).reshape(()) for r in results
                            for basis, key in (('s_inc', 't_s'), ('p_inc', 't_p'))])
         return xp.concat((xp.real(values), xp.imag(values), d['angles']))
     value, derivative = value_and_jacobian(objective, theta, backend)
-    _, d = _legacy_wavebit.fdtd(**dict(kw, theta=theta, backend='numpy'))
+    _, d = _legacy_wavebit_fdtd(**dict(kw, theta=theta, backend='numpy'))
     dz, dy, dx = d['spacing']
     dt, k0 = d['dt'], 2*np.pi/band
     kx, ky = 2*np.pi*np.sin(theta)*np.array([np.cos(phi), np.sin(phi)])
@@ -112,10 +116,10 @@ def test_angle_material_poles_monitors_and_records_share_one_graph(backend, meth
     def objective(p, which):
         runtime = time_loop_backend(which)
         xp, array = runtime.xp, runtime.array
-        stack = _legacy_wavebit.Stack.from_structure(p[1]*array(pattern), [.2], period=[.4, .4], top=1., bot=1.)
-        incidence = _legacy_wavebit.Incidence(wavelength=[.98, 1.02], theta=p[0], phi=.4,
+        stack = _legacy_wavebit_Stack.from_structure(p[1]*array(pattern), [.2], period=[.4, .4], top=1., bot=1.)
+        incidence = _legacy_wavebit_Incidence(wavelength=[.98, 1.02], theta=p[0], phi=.4,
                                      polarization=(1., .6j), incidence_side='bottom')
-        results, d = _legacy_wavebit.fdtd(stack, incidence, backend=which, mu=p[2]*array(np.ones_like(pattern)),
+        results, d = _legacy_wavebit_fdtd(stack, incidence, backend=which, mu=p[2]*array(np.ones_like(pattern)),
                                  dispersion=np.ones_like(pattern, dtype=int), poles={1: [(8., .3, p[3])]},
                                  resolution=10, transverse_resolution=(12., 13.), n_pml=6,
                                  n_periods=30, truncation_order=[1, 1], grading=True, align_layers=True,
@@ -141,7 +145,7 @@ def test_angle_material_poles_monitors_and_records_share_one_graph(backend, meth
 def test_jitted_invalid_angle_masks_results_monitors_and_time_records():
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     def solve(theta):
-        result, d = _legacy_wavebit.fdtd(**options(theta=theta, backend='jax', return_diagnostics=True,
+        result, d = _legacy_wavebit_fdtd(**options(theta=theta, backend='jax', return_diagnostics=True,
                                           field_monitors={'inside': .1}, record_field=103,
                                           record_components=['ey'], record_bounds={'z': (.05, .15)}))
         return result.incident.T, d['stable'], d['monitors']['inside']['fields']['ey'], d['field_e']
@@ -170,7 +174,7 @@ def test_jitted_angle_dependent_singularities_cannot_report_stable(kind):
         kw.update(wavelength=[.8, 1.2], truncation_order=0)
         angle = 1.1  # The incident wave cannot propagate at the longest wavelength.
     def solve(theta):
-        result, d = _legacy_wavebit.fdtd(**dict(kw, theta=theta, backend='jax', return_diagnostics=True))
+        result, d = _legacy_wavebit_fdtd(**dict(kw, theta=theta, backend='jax', return_diagnostics=True))
         result = result if isinstance(result, list) else [result]
         return tuple(r.incident.T for r in result), d['stable']
     compiled = jax.jit(solve)
@@ -180,13 +184,13 @@ def test_jitted_angle_dependent_singularities_cannot_report_stable(kind):
     assert not bool(stable)
     assert all(np.isnan(value).all() for value in values)
     with pytest.raises(ValueError, match='grazing|discrete cutoff|propagate'):
-        _legacy_wavebit.fdtd(**dict(kw, theta=angle))
+        _legacy_wavebit_fdtd(**dict(kw, theta=angle))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_normal_incidence_has_finite_zero_angle_derivative(backend):
     def objective(theta):
-        r = _legacy_wavebit.fdtd(**options(theta=theta, backend=backend, tetm=None, phi=.4)).incident
+        r = _legacy_wavebit_fdtd(**options(theta=theta, backend=backend, tetm=None, phi=.4)).incident
         return r.T.reshape(1)
     value, derivative = value_and_jacobian(objective, 0., backend)
     assert np.isfinite(value).all()
@@ -218,7 +222,7 @@ def test_magnetic_slab_angle_sensitivity_refines_to_differentiated_airy(record_p
     errors = []
     for resolution in (40, 80):
         def objective(angle):
-            results = _legacy_wavebit.fdtd(**options(theta=angle, structure=np.full((1, 1, 1), epsilon),
+            results = _legacy_wavebit_fdtd(**options(theta=angle, structure=np.full((1, 1, 1), epsilon),
                                              mu=np.full((1, 1, 1), mu), wavelength=band, period=.05,
                                              tetm=None, phi=.4, backend='jax', resolution=resolution,
                                              transverse_resolution=(1.5*resolution, .75*resolution),
@@ -241,7 +245,7 @@ def test_magnetic_slab_angle_sensitivity_refines_to_differentiated_airy(record_p
 def test_angle_sweeps_leave_mesh_source_planes_and_run_length_fixed():
     diagnostics = []
     for angle in (.1, .4):
-        _, d = _legacy_wavebit.fdtd(**options(theta=np.array(angle), phi=.4, tetm=None, grading=True,
+        _, d = _legacy_wavebit_fdtd(**options(theta=np.array(angle), phi=.4, tetm=None, grading=True,
                                       transverse_resolution=(15., 12.), return_diagnostics=True))
         diagnostics.append(d)
     first, second = diagnostics
@@ -280,7 +284,7 @@ def test_normal_crossed_diffraction_derivative_matches_one_sided_angle_change(ba
     def objective(theta, which):
         runtime = time_loop_backend(which)
         xp, array = runtime.xp, runtime.array
-        r = _legacy_wavebit.fdtd(**options(structure=np.array([[[1.3, 2.1], [1.8, 1.1]]]), period=[.4, .4],
+        r = _legacy_wavebit_fdtd(**options(structure=np.array([[[1.3, 2.1], [1.8, 1.1]]]), period=[.4, .4],
                                    theta=theta, tetm=None, phi=.4, polarization=(1., .6j),
                                    backend=which, truncation_order=[1, 1], diffraction_method='directional',
                                    diffraction_distance=.3)).incident

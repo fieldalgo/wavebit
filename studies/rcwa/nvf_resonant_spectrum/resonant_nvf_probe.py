@@ -9,7 +9,7 @@ Run: PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/resonant_nvf_prob
 Add --methods circular s4-direct to compare only the new NVF and S4.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import argparse
 import json
 import time
@@ -31,7 +31,7 @@ def fixture_shape():
 
 
 def make_solver(order, grid, method='pieces', shape=None):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', period=(700., 700.), wavelength=900.,
         top=1., bot=2.25, theta=.2, phi=0., psi=0., thickness=(300.,),
         truncation_order=(order, order), shape_nvf_grid_size=grid,

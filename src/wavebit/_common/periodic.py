@@ -139,7 +139,7 @@ class Stack(_DeclaredFieldsOnly):
     second reader of the material convention sitting in front of the real one, so that the
     same ``Stack`` could mean different physics depending on which door it went through; the
     conversion belongs to ingest, which is also where the retired spellings are refused by
-    name. The field names are the ones ``src/wavebit/compat/_jobs_v1.py`` serializes, so they are the ingest
+    name. The field names are the ones ``src/wavebit/_common/_jobs_v1.py`` serializes, so they are the ingest
     layer's to rename.
     """
     layers: list = field(default_factory=list)
@@ -147,7 +147,7 @@ class Stack(_DeclaredFieldsOnly):
     bot: Any = 1.0
     period: Any = (1.0, 1.0)
     #: The cell basis, columns ``a1`` / ``a2``, or ``None`` for the axis-aligned cell
-    #: ``period`` spells. Carried because :class:`~wavebit.compat._jobs_v1.JobSpec` calls itself a
+    #: ``period`` spells. Carried because :class:`~wavebit._common._jobs_v1.JobSpec` calls itself a
     #: *complete* description of a run and could not describe an oblique cell without it --
     #: ``period`` reports ``(|a1|, |a2|)`` there, which does not determine the basis. Kept as
     #: the plain ``(2, 2)`` rather than a :class:`~wavebit.lattice.Lattice` for the same

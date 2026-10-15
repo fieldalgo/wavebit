@@ -1,7 +1,7 @@
 """Differentiable electromagnetic simulation with shared physical materials.
 
 Use rcwa.Problem or fdtd.Problem with the corresponding check/prepare/run
-lifecycle. Transitional old entry points live explicitly in compat.legacy.
+lifecycle. Historical inputs require explicit migration; see wavebit.migration.
 Importing this package never enables a backend or changes global precision.
 """
 __version__ = '0.0.3'

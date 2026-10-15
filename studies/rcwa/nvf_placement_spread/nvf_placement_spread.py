@@ -47,7 +47,7 @@ Usage, from the repo root::
 Rows stream to ``studies/rcwa/nvf_placement_spread/records/nvf_placement_spread.log`` as JSON lines.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import argparse
 import json
 import os
@@ -58,7 +58,9 @@ import traceback
 import numpy as np
 import array_api_compat.numpy as xnp
 
-from wavebit.rcwa._engine import boundary as _b, factorization as F, parametric as P; from wavebit._common.geometry import clipper as _c
+from wavebit.rcwa._engine import boundary as _b, factorization as F, parametric as P
+
+from wavebit._common.geometry import clipper as _c
 from wavebit._common.geometry.interfaces import replay_interfaces
 from wavebit.lattice import as_lattice, reduction_transform, sample_grid
 
@@ -218,7 +220,7 @@ CFG = dict(backend='numpy', period=[PER, PER], thickness=(300.0,), truncation_or
 
 def sum_T(shapes, N):
     P._PROJECTOR_CACHE.clear()
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=N, **CFG)
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=N, **CFG)
     return float(np.sum(np.asarray(solver.solve().T)).real)
 
 
@@ -259,7 +261,7 @@ def coeff_row(log, route, fixture, protocol, N):
 
 def solve_row(log, fixture, N):
     shapes = FIXTURES[fixture]
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=64, **CFG)
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], shape_nvf_grid_size=64, **CFG)
     painted = solver.freeze_geometry().boundary_plans[0] is not None
     px = PER / N
     t0 = time.time()

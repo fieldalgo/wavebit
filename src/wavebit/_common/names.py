@@ -134,7 +134,7 @@ def near_match_hint(names, known):
 
     Shared by the two ways a name can be unknown -- an attribute assigned on an object
     (:func:`wavebit._common.validation._unknown_attribute`, for the solver, the excitation facade and
-    the spec dataclasses) and a key in a parsed document (``src/wavebit/compat/_jobs_v1.py``'s
+    the spec dataclasses) and a key in a parsed document (``src/wavebit/_common/_jobs_v1.py``'s
     ``_reject_unknown``) -- so ``inc.thet = 0.2`` and ``{'incidence': {'thet': 0.2}}`` are
     answered alike. A rename is offered only when its target is in ``known``: the owner must be
     able to take the name it is pointed at, so ``Stack.projector`` is not sent to a slot that

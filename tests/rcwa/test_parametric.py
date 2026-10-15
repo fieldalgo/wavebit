@@ -7,7 +7,11 @@ equivalence with the raster-NVF path, energy conservation, cross-backend agreeme
 differentiability, and the convergence advantage over the staircase path.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import numpy as np
 import pytest
@@ -186,7 +190,7 @@ def test_axis_aligned_matches_raster_nvf():
                                               lx=L * P, ly=L * P, angle=0.0, material=EPS_R)])]
 
     def total(structure, psi, **kw):
-        res = _legacy_wavebit.rcwa(backend='numpy', structure=structure, psi=psi, **cfg, **kw).solve()
+        res = _legacy_wavebit_rcwa(backend='numpy', structure=structure, psi=psi, **cfg, **kw).solve()
         return float(np.sum(np.asarray(res.R)))
 
     for psi in (np.pi / 2, 0.0):                       # TE, then TM
@@ -290,7 +294,7 @@ def test_metal_rod_absorbs_end_to_end(psi):
                                                    lx=L * P, ly=L * P, angle=0.0,
                                                    material=EPS_METAL)])]
 
-    res = _legacy_wavebit.rcwa(backend='numpy', structure=structure, psi=psi, top=1.0, bot=2.25,
+    res = _legacy_wavebit_rcwa(backend='numpy', structure=structure, psi=psi, top=1.0, bot=2.25,
                          theta=0.35, phi=0.4, period=(P, P), wavelength=0.777,
                          thickness=(0.25,), truncation_order=(8, 8)).solve()
 
@@ -322,7 +326,7 @@ def test_parametric_shape_parameters_are_absolute_lengths():
                                               ly=lx, angle=0.0, material=EPS_R)])]
 
     def total(structure, **kw):
-        res = _legacy_wavebit.rcwa(backend='numpy', structure=structure, **cfg, **kw).solve()
+        res = _legacy_wavebit_rcwa(backend='numpy', structure=structure, **cfg, **kw).solve()
         return float(np.sum(np.asarray(res.R)))
 
     # The two readings separate by ~90x, so the threshold is not load-bearing; it is set
@@ -350,7 +354,7 @@ def test_energy_conservation_lossless():
                                       angle=np.deg2rad(40), material=5.76)]),
     ]
     for truncation_order in (5, 8):
-        res = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=(truncation_order, truncation_order), **cfg).solve()
+        res = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=(truncation_order, truncation_order), **cfg).solve()
         tot = np.array(res.R).real.sum() + np.array(res.T).real.sum()
         assert abs(tot - 1.0) < 1e-9
 
@@ -367,7 +371,7 @@ def test_cross_backend_agreement():
                                            material=9.0)])]
 
     def T(bk):
-        return float(np.array(_legacy_wavebit.rcwa(backend=bk, structure=structure, truncation_order=(6, 6), **cfg)
+        return float(np.array(_legacy_wavebit_rcwa(backend=bk, structure=structure, truncation_order=(6, 6), **cfg)
                               .solve().T).real.sum())
 
     tn, tj, tt = T('numpy'), T('jax'), T('torch')
@@ -386,7 +390,7 @@ def _fd_grad_lx(shape_type, lx0=0.5):
         s = dict(type=shape_type, cx=0.0, cy=0.0, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
         uc = [dict(background=1.0, shapes=[s])]
-        return float(np.array(_legacy_wavebit.rcwa(backend='numpy', structure=uc, truncation_order=(6, 6), **cfg)
+        return float(np.array(_legacy_wavebit_rcwa(backend='numpy', structure=uc, truncation_order=(6, 6), **cfg)
                               .solve().T).real.sum())
 
     h = 1e-5
@@ -400,7 +404,7 @@ def test_torch_gradient(shape_type):
     lx = torch.tensor(0.5, dtype=torch.float64, requires_grad=True)
     s = dict(type=shape_type, cx=0.0, cy=0.0, lx=lx, material=6.25,
              **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-    res = _legacy_wavebit.rcwa(backend='torch', structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
+    res = _legacy_wavebit_rcwa(backend='torch', structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
     T = res.T.real.sum()
     T.backward()
     assert np.isfinite(float(lx.grad))
@@ -416,7 +420,7 @@ def test_jax_gradient(shape_type):
     def loss(lx):
         s = dict(type=shape_type, cx=0.0, cy=0.0, lx=lx, material=6.25,
                  **({} if shape_type == 'circle' else dict(ly=0.3, angle=0.4)))
-        r = _legacy_wavebit.rcwa(backend='jax', structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
+        r = _legacy_wavebit_rcwa(backend='jax', structure=[dict(background=1.0, shapes=[s])], truncation_order=(6, 6), **cfg).solve()
         return jnp.real(r.T).sum()
 
     g = float(jax.grad(loss)(jnp.array(0.5)))
@@ -450,9 +454,9 @@ def test_parametric_beats_staircase_tilted():
         d = np.array(res.T).real
         return d[d.shape[0] // 2, d.shape[0] // 2]
 
-    ref = t0(_legacy_wavebit.rcwa(backend='numpy', structure=analytic, truncation_order=(15, 15), **cfg).solve())
-    a11 = t0(_legacy_wavebit.rcwa(backend='numpy', structure=analytic, truncation_order=(11, 11), **cfg).solve())
-    s11 = t0(_legacy_wavebit.rcwa(backend='numpy', structure=stair, truncation_order=(11, 11), **cfg).solve())
+    ref = t0(_legacy_wavebit_rcwa(backend='numpy', structure=analytic, truncation_order=(15, 15), **cfg).solve())
+    a11 = t0(_legacy_wavebit_rcwa(backend='numpy', structure=analytic, truncation_order=(11, 11), **cfg).solve())
+    s11 = t0(_legacy_wavebit_rcwa(backend='numpy', structure=stair, truncation_order=(11, 11), **cfg).solve())
 
     err_analytic = abs(a11 - ref)
     err_stair = abs(s11 - ref)
@@ -487,7 +491,7 @@ def test_a_circle_is_written_with_one_length():
     """
     shape = dict(type='circle', cx=0.0, cy=0.0, lx=0.5 * CIRCLE_P,
                  material=CIRCLE_EPS)
-    got = _legacy_wavebit.rcwa(backend='numpy', structure=[dict(background=1.0, shapes=[shape])],
+    got = _legacy_wavebit_rcwa(backend='numpy', structure=[dict(background=1.0, shapes=[shape])],
                          **CIRCLE_CFG).solve()
     # Only a regression anchor, and it rides on ``shape_nvf_grid_size`` — it read
     # 0.161262158771 while that default was 256, and moved 1.1e-4 when the default rose to 1024.
@@ -512,7 +516,7 @@ def test_a_circle_that_names_a_second_length_is_refused(ly, why):
     shape = dict(type='circle', cx=0.0, cy=0.0, lx=0.5 * CIRCLE_P,
                  ly=ly, material=CIRCLE_EPS)
     with pytest.raises(ValueError, match="'ly' would be dropped"):
-        _legacy_wavebit.rcwa(backend='numpy', structure=[dict(background=1.0, shapes=[shape])],
+        _legacy_wavebit_rcwa(backend='numpy', structure=[dict(background=1.0, shapes=[shape])],
                        **CIRCLE_CFG).solve()
 
 
@@ -583,7 +587,7 @@ def test_an_overlapping_smooth_layer_paints_like_the_raster_of_the_same_recipe()
 
     def total(structure, **extra):
         return float(np.sum(np.asarray(
-            _legacy_wavebit.rcwa(backend='numpy', structure=structure, **extra, **cfg).solve().T)))
+            _legacy_wavebit_rcwa(backend='numpy', structure=structure, **extra, **cfg).solve().T)))
 
     want = total(raster[None], fourier_coefficients='sampled')
     painted = total([dict(background=eps_base,
@@ -610,7 +614,7 @@ def rod(cx, cy=0.0, lx=120.0, ly=120.0, angle=0.0, material=4.0, type='rectangle
 
 
 def solve(shapes, **layer):
-    return _legacy_wavebit.rcwa(backend='numpy', structure=[dict(background=1.0, shapes=shapes, **layer)],
+    return _legacy_wavebit_rcwa(backend='numpy', structure=[dict(background=1.0, shapes=shapes, **layer)],
                           **CHECK_CFG).solve()
 
 
@@ -833,7 +837,7 @@ def test_a_layer_key_that_is_not_a_string_is_refused_before_the_sort(extra):
     name. Refused by what it is, with what a layer takes."""
     layer = dict(background=1.0, shapes=[_circle()]) | extra
     with pytest.raises(ValueError) as refusal:
-        _legacy_wavebit.rcwa(backend='numpy', structure=[layer], **CHECK_CFG).solve()
+        _legacy_wavebit_rcwa(backend='numpy', structure=[layer], **CHECK_CFG).solve()
     message = str(refusal.value)
     odd = ', '.join(repr(k) for k in extra if not isinstance(k, str))
     assert message == (f'Analytic layer 0: layer keys are strings, got {odd}. '
@@ -1013,14 +1017,14 @@ def test_the_check_steps_aside_for_a_traced_solve():
     def layer(cx):
         return [dict(background=1.0, shapes=[rod(cx), rod(190.0, material=9.0)])]
 
-    frozen = _legacy_wavebit.rcwa(backend='jax', structure=layer(60.0), **CHECK_CFG).freeze_geometry()
+    frozen = _legacy_wavebit_rcwa(backend='jax', structure=layer(60.0), **CHECK_CFG).freeze_geometry()
 
     def total(cx):
-        return jnp.sum(_legacy_wavebit.rcwa(backend='jax', structure=layer(cx),
+        return jnp.sum(_legacy_wavebit_rcwa(backend='jax', structure=layer(cx),
                                       **CHECK_CFG).solve(geometry=frozen).T)
 
     assert float(jax.jit(total)(jnp.asarray(130.0))) > 0.0     # overlapping, and traced: allowed
-    with pytest.raises(_legacy_wavebit.StaleGeometryError, match='no longer fits'):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError, match='no longer fits'):
         total(130.0)                                           # same layer, concrete: refused
 
 
@@ -1119,7 +1123,7 @@ def test_the_projector_cache_never_changes_an_answer(build):
     from wavebit.rcwa._engine import parametric as _an
 
     def total(cell):
-        return np.asarray(_legacy_wavebit.rcwa(backend='numpy', structure=cell, **PROJ_KW).solve().T)
+        return np.asarray(_legacy_wavebit_rcwa(backend='numpy', structure=cell, **PROJ_KW).solve().T)
 
     for cx in (-0.20, -0.05, 0.10):
         for eps in (EPS_ROD, EPS_ROD_ALT):
@@ -1139,17 +1143,17 @@ def test_the_cache_holds_no_material_value_so_a_material_sweep_reuses_one_field(
     try:
         _an._PROJECTOR_CACHE.clear()
         for eps in (11.559999999999999, 9.0, 6.760000000000001, 4.840000000000001, 3.24):
-            _legacy_wavebit.rcwa(backend='numpy', structure=_one(-0.10, eps), **PROJ_KW).solve()
+            _legacy_wavebit_rcwa(backend='numpy', structure=_one(-0.10, eps), **PROJ_KW).solve()
         assert len(built) == 1, f'the field was rebuilt {len(built)} times for one geometry'
 
         for cx in (-0.09, -0.08, -0.07):             # and a *single* shape sliding is the same
-            _legacy_wavebit.rcwa(backend='numpy', structure=_one(cx), **PROJ_KW).solve()
+            _legacy_wavebit_rcwa(backend='numpy', structure=_one(cx), **PROJ_KW).solve()
         assert len(built) == 1, 'position enters through the phase, not through the build'
 
-        _legacy_wavebit.rcwa(backend='numpy', structure=_one(-0.10, material=EPS_ROD)                # a real change
+        _legacy_wavebit_rcwa(backend='numpy', structure=_one(-0.10, material=EPS_ROD)                # a real change
                      , **PROJ_KW).solve()
         _an._PROJECTOR_CACHE.clear()
-        _legacy_wavebit.rcwa(backend='numpy', structure=_one(-0.10), **PROJ_KW).solve()
+        _legacy_wavebit_rcwa(backend='numpy', structure=_one(-0.10), **PROJ_KW).solve()
         assert len(built) == 2, 'a cleared cache must rebuild'
     finally:
         _an.normal_vector_field_analytical = original
@@ -1173,7 +1177,7 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     import jax.numpy as jnp
 
     def total(cx):
-        return jnp.sum(_legacy_wavebit.rcwa(backend='jax', structure=_one(cx), **PROJ_KW).solve().T).real
+        return jnp.sum(_legacy_wavebit_rcwa(backend='jax', structure=_one(cx), **PROJ_KW).solve().T).real
 
     ZERO_FORCE = 1e-6          # 1.7e-9 measured, 0.046 for the failure it has to catch
     _an._PROJECTOR_CACHE.clear()
@@ -1182,10 +1186,10 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
 
     # Two shapes and a tracer: which builder the layer takes is a question about the geometry,
     # so it needs the eager pass. See `layer_needs_resolving`.
-    frozen = _legacy_wavebit.rcwa(backend='numpy', structure=_two(-0.10), **PROJ_KW).freeze_geometry()
+    frozen = _legacy_wavebit_rcwa(backend='numpy', structure=_two(-0.10), **PROJ_KW).freeze_geometry()
 
     def pair(cx):
-        return jnp.sum(_legacy_wavebit.rcwa(backend='jax', structure=_two(cx), **PROJ_KW)
+        return jnp.sum(_legacy_wavebit_rcwa(backend='jax', structure=_two(cx), **PROJ_KW)
                        .solve(geometry=frozen).T).real
 
     h = 1e-5
@@ -1198,7 +1202,7 @@ def test_a_traced_or_autograd_value_is_never_served_from_the_cache():
     cell = [dict(background=1.0, shapes=[
         dict(type='rectangle', cx=cx, cy=-0.15, lx=0.30, ly=0.20, angle=0.3,
              material=EPS_ROD)])]
-    torch.sum(_legacy_wavebit.rcwa(backend='torch', structure=cell, **PROJ_KW).solve().T).real.backward()
+    torch.sum(_legacy_wavebit_rcwa(backend='torch', structure=cell, **PROJ_KW).solve().T).real.backward()
     assert abs(float(cx.grad)) < ZERO_FORCE
 
     lx = torch.tensor(0.30, requires_grad=True)      # a length *does* reach the build
@@ -1221,7 +1225,7 @@ def test_the_cache_key_carries_everything_the_build_depends_on():
 
     def total(truncation_order, shape_nvf_grid_size):
         kw = dict(PROJ_KW, truncation_order=(truncation_order, truncation_order), shape_nvf_grid_size=shape_nvf_grid_size)
-        return np.asarray(_legacy_wavebit.rcwa(backend='numpy', structure=_one(0.40), **kw).solve().T)
+        return np.asarray(_legacy_wavebit_rcwa(backend='numpy', structure=_one(0.40), **kw).solve().T)
 
     _an._PROJECTOR_CACHE.clear()
     alone = {(truncation_order, ng): total(truncation_order, ng)                       # each built with nothing cached
@@ -1251,7 +1255,7 @@ def test_one_geometry_solved_on_three_backends_gets_three_entries():
     _an._PROJECTOR_CACHE.clear()
     answers = {}
     for backend in ('numpy', 'jax', 'torch'):
-        out = _legacy_wavebit.rcwa(backend=backend, structure=_one(0.40), **PROJ_KW).solve().T
+        out = _legacy_wavebit_rcwa(backend=backend, structure=_one(0.40), **PROJ_KW).solve().T
         answers[backend] = np.asarray(out.detach() if hasattr(out, 'detach') else out, dtype=float)
 
     assert len(_an._PROJECTOR_CACHE) == 3, 'the backends shared one entry'
@@ -1511,7 +1515,7 @@ def test_omitting_the_centre_solves_what_stating_it_solves(cell_name, A, factori
                   structure=[dict(background=1.0, shapes=[fixed, second])])
         if factorization != 'boundary':
             kw['factorization'] = 'nvf'
-        res = _legacy_wavebit.rcwa(**kw).solve()
+        res = _legacy_wavebit_rcwa(**kw).solve()
         return np.asarray(res.R), np.asarray(res.T)
 
     bare = dict(type='ellipse', lx=130.0, ly=70.0, angle=0.5, material=5.76)
@@ -1534,7 +1538,7 @@ def test_grid_places_samples_on_the_cell_not_a_rectangle(cell_name, A):
     still solves, still conserves energy, and sits half a period from where its recipe says.
     """
     n_v, n_u = 7, 11
-    X, Y = _legacy_wavebit.meshgrid_xy((n_v, n_u), lattice=A)
+    X, Y = _legacy_wavebit_meshgrid_xy((n_v, n_u), lattice=A)
     u = (np.arange(n_u) + 0.5) / n_u - 0.5
     v = (np.arange(n_v) + 0.5) / n_v - 0.5
     U, V = np.meshgrid(u, v)
@@ -1564,12 +1568,12 @@ def test_the_grid_and_a_shape_centre_are_the_same_origin():
     """
     A = np.column_stack([[400.0, 0.0], [200.0, 400.0 * np.sqrt(3) / 2]])
     R, EPS, n = 120.0, 5.76, 512
-    X, Y = (np.asarray(c) for c in _legacy_wavebit.meshgrid_xy((n, n), lattice=A))
+    X, Y = (np.asarray(c) for c in _legacy_wavebit_meshgrid_xy((n, n), lattice=A))
     kw = dict(backend='numpy', wavelength=900.0, lattice=A, truncation_order=[6, 6], top=1.0,
               bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0], factorization='nvf')
 
     def conv(structure):
-        return np.asarray(_legacy_wavebit.rcwa(structure=structure, **kw).eps_conv_matrices().epz_i[0])
+        return np.asarray(_legacy_wavebit_rcwa(structure=structure, **kw).eps_conv_matrices().epz_i[0])
 
     shape = conv([dict(background=1.0, shapes=[
         dict(type='circle', cx=0.0, cy=0.0, lx=2 * R, material=EPS)])])
@@ -1586,27 +1590,27 @@ def test_the_grid_and_a_shape_centre_are_the_same_origin():
 
 def test_grid_period_and_lattice_are_two_spellings_of_one_cell():
     """``period=[Lx, Ly]`` must land exactly where ``diag(Lx, Ly)`` does, and a lone period is square."""
-    a = [np.asarray(v).tobytes() for v in _legacy_wavebit.meshgrid_xy((9, 13), period=[700.0, 1100.0])]
-    b = [np.asarray(v).tobytes() for v in _legacy_wavebit.meshgrid_xy((9, 13), lattice=np.diag([700.0, 1100.0]))]
+    a = [np.asarray(v).tobytes() for v in _legacy_wavebit_meshgrid_xy((9, 13), period=[700.0, 1100.0])]
+    b = [np.asarray(v).tobytes() for v in _legacy_wavebit_meshgrid_xy((9, 13), lattice=np.diag([700.0, 1100.0]))]
     assert a == b
-    c = [np.asarray(v).tobytes() for v in _legacy_wavebit.meshgrid_xy((9, 9), period=[640.0])]
-    d = [np.asarray(v).tobytes() for v in _legacy_wavebit.meshgrid_xy((9, 9), lattice=np.diag([640.0, 640.0]))]
+    c = [np.asarray(v).tobytes() for v in _legacy_wavebit_meshgrid_xy((9, 9), period=[640.0])]
+    d = [np.asarray(v).tobytes() for v in _legacy_wavebit_meshgrid_xy((9, 9), lattice=np.diag([640.0, 640.0]))]
     assert c == d
 
 
 def test_grid_refuses_what_it_cannot_answer():
     with pytest.raises(ValueError, match='rows, columns'):
-        _legacy_wavebit.meshgrid_xy((8,), period=[1.0])
+        _legacy_wavebit_meshgrid_xy((8,), period=[1.0])
     with pytest.raises(ValueError, match='rows, columns'):
-        _legacy_wavebit.meshgrid_xy((8, 8, 8), period=[1.0])
+        _legacy_wavebit_meshgrid_xy((8, 8, 8), period=[1.0])
     with pytest.raises(ValueError, match='positive'):
-        _legacy_wavebit.meshgrid_xy((0, 8), period=[1.0])
+        _legacy_wavebit_meshgrid_xy((0, 8), period=[1.0])
     with pytest.raises(ValueError, match='one of period or lattice'):
-        _legacy_wavebit.meshgrid_xy((8, 8))
+        _legacy_wavebit_meshgrid_xy((8, 8))
     with pytest.raises(ValueError, match='backend'):
-        _legacy_wavebit.meshgrid_xy((8, 8), period=[1.0], backend=9)
+        _legacy_wavebit_meshgrid_xy((8, 8), period=[1.0], backend=9)
     with pytest.raises(ValueError, match='parallel'):
-        _legacy_wavebit.meshgrid_xy((8, 8), lattice=np.column_stack([[1.0, 0.0], [2.0, 0.0]]))
+        _legacy_wavebit_meshgrid_xy((8, 8), lattice=np.column_stack([[1.0, 0.0], [2.0, 0.0]]))
 
 
 def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
@@ -1621,7 +1625,7 @@ def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
 
     # A centred rod is what the helper is for, and stating it takes nothing: the cell is
     # centred on the origin, so there is no cell centre left to compute.
-    X, Y = _legacy_wavebit.meshgrid_xy((n, n), lattice=A)
+    X, Y = _legacy_wavebit_meshgrid_xy((n, n), lattice=A)
     eps_helper = np.where(np.asarray(X) ** 2 + np.asarray(Y) ** 2 < 150.0 ** 2, 5.76, 1.0)
 
     t = (np.arange(n) + 0.5) / n - 0.5
@@ -1632,7 +1636,7 @@ def test_a_structure_built_through_grid_is_the_one_that_gets_solved():
     assert eps_helper.tobytes() == eps_hand.tobytes()
 
     def solve(eps):
-        s = _legacy_wavebit.rcwa(backend='numpy', wavelength=900.0, lattice=A, truncation_order=[6, 6],
+        s = _legacy_wavebit_rcwa(backend='numpy', wavelength=900.0, lattice=A, truncation_order=[6, 6],
                          top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0, thickness=[300.0],
                          structure=eps[None], factorization='nvf')
         return float(np.sum(s.solve().R) + np.sum(s.solve().T))
@@ -1681,7 +1685,7 @@ def test_an_alias_spelling_gets_the_same_normal_field(first, second):
     cfg = dict(backend='numpy', period=[300.0, 300.0], thickness=[205.0], truncation_order=(6, 6),
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
                shape_nvf_grid_size=256)
-    totals = [float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+    totals = [float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         structure=[dict(background=1.0, shapes=[dict(s, angle=0.0)])], **cfg).solve().T)))
         for s in made]
     assert totals[0] == totals[1]
@@ -1727,7 +1731,7 @@ def test_the_projector_cache_keys_on_what_the_field_depends_on(name, make, entri
                top=1.0, bot=1.0, wavelength=900.0, psi=np.pi / 2, theta=0.0, phi=0.0,
                shape_nvf_grid_size=256)
     _an._PROJECTOR_CACHE.clear()
-    totals = [float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+    totals = [float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         structure=[dict(background=1.0, shapes=[make(k)])], **cfg).solve().T)))
         for k in range(5)]
 
@@ -1782,16 +1786,16 @@ def test_longer_than_the_period_is_not_the_same_as_running_into_its_own_image():
 
     for ang in (0.0, 0.3):
         with pytest.raises(ValueError, match='larger than the period'):
-            _legacy_wavebit.rcwa(structure=rod(1.2, ang), **cfg).solve()
+            _legacy_wavebit_rcwa(structure=rod(1.2, ang), **cfg).solve()
 
     for ang in (0.5, np.pi / 4):
         assert 0.0 < float(np.sum(np.asarray(
-            _legacy_wavebit.rcwa(structure=rod(1.2, ang), **cfg).solve().T)).real) < 1.0
+            _legacy_wavebit_rcwa(structure=rod(1.2, ang), **cfg).solve().T)).real) < 1.0
 
     # long enough and the images meet whatever the angle, which is the other end of the same rule
     for ang in (0.0, 0.3, np.pi / 4):
         with pytest.raises(ValueError, match='larger than the period'):
-            _legacy_wavebit.rcwa(structure=rod(277.0, ang), **cfg).solve()
+            _legacy_wavebit_rcwa(structure=rod(277.0, ang), **cfg).solve()
 
 
 def test_a_length_is_a_size_and_the_transform_carries_its_sign():
@@ -1844,12 +1848,12 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
 
     for backend in ('numpy', 'jax', 'torch'):
         with pytest.raises(ValueError, match=r'has lx = -120'):
-            _legacy_wavebit.rcwa(backend=backend, structure=rod(lx=-120.0), **cfg).solve()
+            _legacy_wavebit_rcwa(backend=backend, structure=rod(lx=-120.0), **cfg).solve()
 
     for kw, spelled in ((dict(lx=-120.0), 'lx'), (dict(ly=-150.0), 'ly'),
                         (dict(lx=0.0), 'lx'), (dict(type='ellipse', lx=-120.0), 'lx')):
         with pytest.raises(ValueError, match=rf'has {spelled} = '):
-            _legacy_wavebit.rcwa(backend='numpy', structure=rod(**kw), **cfg).solve()
+            _legacy_wavebit_rcwa(backend='numpy', structure=rod(**kw), **cfg).solve()
 
     # The name in the message is the key that actually supplied the value, following
     # `shape_geometry`'s own fallback -- a dict saying `l` is never told about an `ly` it did
@@ -1859,24 +1863,24 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
         layer = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
                                                    material=4.0, **kw)])]
         with pytest.raises(ValueError, match=rf'\(circle\) has {spelled} = -120'):
-            _legacy_wavebit.rcwa(backend='numpy', structure=layer, **cfg).solve()
+            _legacy_wavebit_rcwa(backend='numpy', structure=layer, **cfg).solve()
     both = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                              lx=120.0, l=-150.0, material=4.0)])]
     with pytest.raises(ValueError, match='has l = -150'):     # `lx` given, `ly` fell back to `l`
-        _legacy_wavebit.rcwa(backend='numpy', structure=both, **cfg).solve()
+        _legacy_wavebit_rcwa(backend='numpy', structure=both, **cfg).solve()
 
     # An omitted length defaults to 0.0 -- the same case, and previously a silent empty layer.
     missing = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                  material=4.0)])]
     with pytest.raises(ValueError, match='has lx = 0'):
-        _legacy_wavebit.rcwa(backend='numpy', structure=missing, **cfg).solve()
+        _legacy_wavebit_rcwa(backend='numpy', structure=missing, **cfg).solve()
 
     # The ordering: -340 is longer than the period *and* negative, and it is the length that
     # gets reported, because a negative half-width is what let it past the period check.
     with pytest.raises(ValueError, match='has lx = -340'):
-        _legacy_wavebit.rcwa(backend='numpy', structure=rod(lx=-340.0), **cfg).solve()
+        _legacy_wavebit_rcwa(backend='numpy', structure=rod(lx=-340.0), **cfg).solve()
     with pytest.raises(ValueError, match='larger than the period'):
-        _legacy_wavebit.rcwa(backend='numpy', structure=rod(lx=340.0), **cfg).solve()
+        _legacy_wavebit_rcwa(backend='numpy', structure=rod(lx=340.0), **cfg).solve()
 
     # And nothing legal moved: a rod exactly filling the period still touches, not overlaps.
     # A rod that fits is a lone box, and every lone box moved by ~2e-4 on 2026-09-06 when the
@@ -1902,7 +1906,7 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     # the fold at every order. Off the interface a normal field is a numerical device, so
     # that is two admissible continuations at an unconverged order, and the price is stated
     # rather than read as a verdict either way.
-    assert float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+    assert float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         backend='numpy', structure=rod(lx=120.0), **cfg).solve().T)).real) == pytest.approx(
             0.980863489, abs=1e-7)
 
@@ -1914,6 +1918,6 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     # reduces to Li's 1-D rule outright, so the same grating rasterized and factorized by 'li'
     # answers 0.9572319151109526 -- 1.7e-13 away, against 7.4e-5 before.
     # See `docs/validation/rcwa/normal-field-known-limits.md` section 2a.
-    assert float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+    assert float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         backend='numpy', structure=rod(lx=300.0), **cfg).solve().T)).real) == pytest.approx(
             0.957231915, abs=1e-7)

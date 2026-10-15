@@ -5,11 +5,15 @@
 give byte-identical results to passing the raw value.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import Factorization, FourierCoefficients, Tetm
+from wavebit.rcwa._engine.enums import Factorization
+
+from wavebit.rcwa._engine.enums import FourierCoefficients
+
+from wavebit._common.enums import Tetm
 from wavebit import Backend
 
 
@@ -26,7 +30,7 @@ def test_str_enums_equal_their_strings():
 
 def _solve(tetm, backend, **strategy):
     structure = np.array([[[9.0, 9.0, 9.0, 1.0, 1.0, 1.0]]])
-    solver = _legacy_wavebit.rcwa(backend=backend, top=4.0, bot=1.0, theta=0.0, phi=None,
+    solver = _legacy_wavebit_rcwa(backend=backend, top=4.0, bot=1.0, theta=0.0, phi=None,
                           tetm=tetm, truncation_order=[6, 0], period=[0.77], wavelength=0.777,
                           thickness=[0.15], structure=structure, **strategy)
     r = solver.solve()

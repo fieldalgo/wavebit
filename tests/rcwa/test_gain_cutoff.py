@@ -11,13 +11,19 @@ The planar scene is glass (``eps = 2.25``) onto ``eps = 1 - 0.05i``, TE: ``kz**2
 ``asin(2/3)`` = 41.81 degrees. Each threshold test names the mutant it kills.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.sources import GaussianBeam as _legacy_wavebit_GaussianBeam
+
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import GainCutoffWarning
+from wavebit._common.backend import GainCutoffWarning
 from wavebit import Material
 
 GAIN = 1 - 0.05j
@@ -25,7 +31,7 @@ CRITICAL = float(np.degrees(np.arcsin(2 / 3)))
 
 
 def _planar(theta_deg, bot=GAIN, tetm='te', backend='numpy', **kw):
-    return _legacy_wavebit.rcwa(backend=backend, tetm=tetm, top=2.25, bot=bot, theta=np.deg2rad(theta_deg),
+    return _legacy_wavebit_rcwa(backend=backend, tetm=tetm, top=2.25, bot=bot, theta=np.deg2rad(theta_deg),
                         truncation_order=0, wavelength=500.0, period=[1000.0],
                         structure=np.full((1, 1, 2), 2.25), thickness=[100.0], **kw)
 
@@ -148,7 +154,7 @@ def _grating(wavelength, **kw):
     scene = dict(backend='numpy', tetm='te', top=1.0, bot=2.25 - 0.05j, theta=0.0,
                  truncation_order=5, period=[1000.0], structure=_GRATING, thickness=[100.0])
     scene.update(kw)
-    return _legacy_wavebit.rcwa(wavelength=wavelength, **scene)
+    return _legacy_wavebit_rcwa(wavelength=wavelength, **scene)
 
 
 @pytest.mark.parametrize('wavelength, fires', [(1400.0, False), (1500.005, True), (1600.0, False)])
@@ -178,7 +184,7 @@ def test_the_mask_names_the_orders():
 
 def test_a_complex_angle_is_left_to_its_own_warning():
     """Formal R and T already carry ComplexIncidenceWarning; the band is about real k_par."""
-    solver = _legacy_wavebit.rcwa(backend='numpy', tetm='te', top=2.25, bot=GAIN, theta=np.deg2rad(44.0) + 0.01j,
+    solver = _legacy_wavebit_rcwa(backend='numpy', tetm='te', top=2.25, bot=GAIN, theta=np.deg2rad(44.0) + 0.01j,
                           truncation_order=0, wavelength=500.0, period=[1000.0],
                           structure=np.full((1, 1, 2), 2.25), thickness=[100.0])
     with warnings.catch_warnings(record=True) as rec:
@@ -234,7 +240,7 @@ def test_a_traced_solve_is_silent_and_the_mask_traces():
     """Under ``jax.jit`` the warning cannot read a value; the mask is the per-point verdict."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     solver = _planar(44.0, backend='jax')
 
     def bottom_mask(theta):
@@ -273,13 +279,13 @@ def test_every_solve_path_checks_once(scene, monkeypatch):
     if scene == 'te':
         solver = _planar(44.0)
     elif scene == 'conical':
-        solver = _legacy_wavebit.rcwa(truncation_order=2, phi=0.3, period=[1000.0],
+        solver = _legacy_wavebit_rcwa(truncation_order=2, phi=0.3, period=[1000.0],
                               structure=np.full((1, 1, 2), 2.25), **common)
     elif scene == '2d':
-        solver = _legacy_wavebit.rcwa(truncation_order=(1, 1), period=(1000.0, 1000.0),
+        solver = _legacy_wavebit_rcwa(truncation_order=(1, 1), period=(1000.0, 1000.0),
                               structure=np.full((1, 2, 2), 2.25), **common)
     else:
-        solver = _legacy_wavebit.rcwa(truncation_order=2, phi=0.3, period=[1000.0], layer_algorithm='SMM',
+        solver = _legacy_wavebit_rcwa(truncation_order=2, phi=0.3, period=[1000.0], layer_algorithm='SMM',
                               structure=np.full((1, 1, 2), 2.25), **common)
     messages, _ = _gain_warnings(solver)
     assert len(calls) == 1 and len(messages) == 1, (scene, len(calls), messages)
@@ -288,7 +294,7 @@ def test_every_solve_path_checks_once(scene, monkeypatch):
 # ------------------------------------------------------------------------- CoherentSolver
 
 def _coherent(source, bot=GAIN, **kw):
-    return _legacy_wavebit.rcwa(backend='numpy', top=2.25, bot=bot, truncation_order=(0, 0), wavelength=500.0,
+    return _legacy_wavebit_rcwa(backend='numpy', top=2.25, bot=bot, truncation_order=(0, 0), wavelength=500.0,
                         period=(1000.0, 1000.0), structure=np.full((1, 2, 2), 2.25),
                         thickness=[100.0], excitation={'top': source}, **kw)
 
@@ -297,7 +303,7 @@ def _coherent(source, bot=GAIN, **kw):
 def test_coherent_plane_wave_checks_the_same_band(theta_deg, fires):
     """``CoherentSolver`` builds its own ports and runs the same test on them, with the same
     text. Kills a facade that skips the check."""
-    source = _legacy_wavebit.PlaneWave(theta=np.deg2rad(theta_deg), polarization=(1., 0.))
+    source = _legacy_wavebit_PlaneWave(theta=np.deg2rad(theta_deg), polarization=(1., 0.))
     messages, _ = _gain_warnings(_coherent(source))
     assert len(messages) == (1 if fires else 0), (theta_deg, messages)
     assert all('gain bottom half-space' in m for m in messages)
@@ -308,7 +314,7 @@ def test_coherent_gaussian_beam_reports_once_across_its_sectors():
 
     Centred at 42 deg with a 20 um waist, its three samples sit within about 1.4 deg of the
     centre, all inside the band and each in its own sector. Kills a warning per sector."""
-    beam = _legacy_wavebit.GaussianBeam(theta=np.deg2rad(42.0), polarization=(1., 0.), waist=20000.,
+    beam = _legacy_wavebit_GaussianBeam(theta=np.deg2rad(42.0), polarization=(1., 0.), waist=20000.,
                                 sampling=(3, 1))
     solver = _coherent(beam, power_region=((-40000., 40000.), (-40000., 40000.)))
     messages, _ = _gain_warnings(solver)

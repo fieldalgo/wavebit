@@ -1,6 +1,8 @@
 """Native scalar design variables have the same length meaning as Python scalars."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -11,7 +13,7 @@ def native(backend, value):
         return np.asarray(value)
     if backend == 'jax':
         jnp = pytest.importorskip('jax.numpy')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         return jnp.asarray(value, dtype=jnp.float64)
     torch = pytest.importorskip('torch')
     return torch.tensor(value, dtype=torch.float64)
@@ -21,7 +23,7 @@ def solver(backend='numpy', **kwargs):
     cfg = dict(period=(600., 750.), thickness=(170.,),
                structure=np.array([[[1., 4., 4., 1.]]]),
                wavelength=900., truncation_order=(1, 0), theta=.13, tetm='tm')
-    return _legacy_wavebit.rcwa(backend=backend, **(cfg | kwargs))
+    return _legacy_wavebit_rcwa(backend=backend, **(cfg | kwargs))
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])

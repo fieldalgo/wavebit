@@ -28,7 +28,7 @@ the frequency dependence a real material has), which are the two ways to say wha
 another solver (``wavebit.rcwa``) wants at one wavelength.
 
 **Relation to the shared physical material API.** These are the normalized internal
-constitutive declarations retained by ``wavebit.compat.legacy.fd``. New calculations use
+constitutive declarations retained by the private FDTD engines. New calculations use
 ``wavebit.materials.Material``, ``ConductiveMaterial`` and ``DispersiveMaterial`` for both
 solvers. ``src/wavebit/materials/_lower.py`` converts their SI rates and conductivity to the
 scene's normalized units and checks the supported time-domain constitutive scope. RCWA

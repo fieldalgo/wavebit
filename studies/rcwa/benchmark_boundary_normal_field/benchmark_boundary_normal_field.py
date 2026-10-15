@@ -40,7 +40,7 @@ Runs in about 20 minutes on a laptop. From the repo root::
     conda run -n wavebit python studies/rcwa/benchmark_boundary_normal_field/benchmark_boundary_normal_field.py
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -132,7 +132,7 @@ def geometries(structure):
 
 
 def total_reflectance(build, geometry, cx, truncation_order, backend='numpy'):
-    solver = _legacy_wavebit.rcwa(backend=backend, structure=build(cx), truncation_order=[truncation_order, truncation_order],
+    solver = _legacy_wavebit_rcwa(backend=backend, structure=build(cx), truncation_order=[truncation_order, truncation_order],
                           shape_nvf_grid_size=NORMAL_GRID, **CFG)
     result = solver.solve(geometry=geometry)
     if backend == 'jax':

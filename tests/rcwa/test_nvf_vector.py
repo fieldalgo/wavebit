@@ -1,5 +1,5 @@
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 from wavebit.lattice import as_lattice
 import array_api_compat.numpy as xnp
@@ -46,7 +46,7 @@ def test_vector_nvf_energy_conservation():
     max_order_val = 2
     Exx, Eyy, Epz_i, Exy, Eyx = to_conv_mat_nvf_2d(eps_matrix, max_order_val, max_order_val, normal_x=nx_vec, normal_y=ny_vec)
 
-    m = _legacy_wavebit.rcwa(
+    m = _legacy_wavebit_rcwa(
         backend='numpy', truncation_order=[max_order_val, max_order_val],
         psi=0.0, top=1.0, bot=2.1025,
         theta=10.0 * np.pi / 180, phi=20.0 * np.pi / 180,

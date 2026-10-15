@@ -10,7 +10,9 @@ The other half of the file pins the refusals. Each unsupported combination runs 
 skewed cell and returns a plausible wrong number; the tests assert it raises instead.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -38,7 +40,7 @@ def raster(basis, n=128, radius=R):
     writing nothing -- the same ``cx = cy = 0`` the shape arms in this file use.
     """
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    X, Y = (np.asarray(c) for c in _legacy_wavebit.meshgrid_xy((n, n), lattice=basis))
+    X, Y = (np.asarray(c) for c in _legacy_wavebit_meshgrid_xy((n, n), lattice=basis))
     inside = np.zeros(X.shape, dtype=bool)
     for i in (-1, 0, 1):                           # minimum image over the lattice
         for j in (-1, 0, 1):
@@ -71,7 +73,7 @@ def _cell(lattice, period=None):
 
 def solver(cell, truncation_order=8, lattice=None, **kw):
     kw.setdefault('factorization', 'nvf')
-    return _legacy_wavebit.rcwa(backend='numpy', structure=cell, truncation_order=[truncation_order, truncation_order],
+    return _legacy_wavebit_rcwa(backend='numpy', structure=cell, truncation_order=[truncation_order, truncation_order],
                           thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                           theta=0.0, phi=0.0, psi=0.0, **_cell(lattice), **kw)
 
@@ -246,7 +248,7 @@ _GROOVE = np.where((np.arange(_GROOVE_N) >= _GROOVE_N // 4)
 def _skewed(deg, rows=1, **kw):
     a2 = P * np.array([np.cos(np.deg2rad(deg)), np.sin(np.deg2rad(deg))])
     basis = np.column_stack((np.array([P, 0.0]), a2))
-    return _legacy_wavebit.rcwa(backend='numpy', structure=np.tile(_GROOVE, (1, rows, 1)), thickness=[H],
+    return _legacy_wavebit_rcwa(backend='numpy', structure=np.tile(_GROOVE, (1, rows, 1)), thickness=[H],
                         wavelength=WL, lattice=basis, factorization='nvf', theta=0.0,
                         truncation_order=(6, 0), **kw)
 
@@ -265,7 +267,7 @@ def _rotated_frame_reference(deg):
     g = np.deg2rad(deg)
     out = {}
     for tetm in ('te', 'tm'):
-        solved = _legacy_wavebit.rcwa(backend='numpy', structure=_GROOVE, thickness=[H], wavelength=WL,
+        solved = _legacy_wavebit_rcwa(backend='numpy', structure=_GROOVE, thickness=[H], wavelength=WL,
                               period=[P * np.sin(g)], theta=0.0, phi=None, tetm=tetm,
                               truncation_order=(6, 0)).solve()
         out[tetm] = (np.asarray(solved.R).ravel(), np.asarray(solved.T).ravel())
@@ -408,7 +410,7 @@ def test_hex_lattice_matches_its_rectangular_supercell():
     sup[0][inside] = EPS_ROD
 
     _, t_hex = totals(hex_cell, truncation_order=8, lattice=HEX)
-    sup_solver = _legacy_wavebit.rcwa(backend='numpy', structure=sup, period=[a, a * sq3], truncation_order=[8, 14],
+    sup_solver = _legacy_wavebit_rcwa(backend='numpy', structure=sup, period=[a, a * sq3], truncation_order=[8, 14],
                                 thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                                 theta=0.0, phi=0.0, psi=0.0, factorization='nvf')
     t_sup = float(np.sum(np.asarray(sup_solver.solve().T)))
@@ -427,7 +429,7 @@ def test_oblique_runs_on_every_backend(backend):
     elif backend == 'torch':
         cell = pytest.importorskip('torch').tensor(cell, dtype=pytest.importorskip(
             'torch').float64)
-    s = _legacy_wavebit.rcwa(backend=backend, structure=cell, truncation_order=[4, 4],
+    s = _legacy_wavebit_rcwa(backend=backend, structure=cell, truncation_order=[4, 4],
                        thickness=[H], wavelength=WL, top=1.0, bot=1.0,
                        theta=0.0, phi=0.0, psi=0.0, factorization='nvf', lattice=HEX)
     res = s.solve()
@@ -467,7 +469,7 @@ def test_a_painted_overlap_survives_a_unimodular_shear():
         # where the default took 793 s. A mutant that samples the sheared cell as a rectangle
         # still fails it here. The default is sized for a rotated rectangle's angle gradient
         # (``engine._NORMAL_GRID_DEFAULT``), and nothing here is differentiated.
-        s = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=[6, 6], thickness=[H],
+        s = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=[6, 6], thickness=[H],
                            wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                            factorization='nvf', shape_nvf_grid_size=128, **_cell(lattice))
         res = s.solve()
@@ -500,7 +502,7 @@ def test_a_painted_overlap_is_not_the_same_as_summing_it():
         # reads the normal field, so the grid cannot move it. Both values are bit-identical at
         # 25, 128 and the default 1024 (measured 2026-10-14); the default spent 408 s building
         # a field nothing here reads.
-        s = _legacy_wavebit.rcwa(backend='numpy', structure=[{'background': 1.0, 'shapes': cell}],
+        s = _legacy_wavebit_rcwa(backend='numpy', structure=[{'background': 1.0, 'shapes': cell}],
                          truncation_order=[6, 6], thickness=[H], wavelength=WL,
                          top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                          factorization='nvf', lattice=SHEAR, shape_nvf_grid_size=25)
@@ -529,7 +531,7 @@ def _analytic_totals(g, lattice=None):
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'circle', 'cx': P / 2 - ox, 'cy': P / 2 - oy, 'lx': 2 * R,
          'material': EPS_ROD}]}]
-    s = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=[g, g], thickness=[H],
+    s = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=[g, g], thickness=[H],
                        wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        factorization='nvf', **_cell(lattice))
     return float(np.sum(np.asarray(s.solve().T)))
@@ -594,7 +596,7 @@ def test_the_reconstructed_field_agrees_across_a_unimodular_shear():
                    'material': EPS_ROD}]
         structure = [{'background': 1.0, 'shapes': shapes},
                      {'background': 1.0, 'shapes': []}]
-        s = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=[8, 8],
+        s = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=[8, 8],
                            thickness=[H, 600.0], wavelength=WL, top=1.0, bot=1.0,
                            theta=0.0, phi=0.0, psi=0.0, factorization='nvf', **_cell(lattice),
                            answers='field')
@@ -635,7 +637,7 @@ def test_the_phase_reference_moves_with_the_centre_across_a_unimodular_shear():
                    'material': EPS_ROD}]
         structure = [{'background': 1.0, 'shapes': shapes},
                      {'background': 1.0, 'shapes': []}]
-        s = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=[8, 8],
+        s = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=[8, 8],
                          thickness=[H, 600.0], wavelength=WL, top=1.0, bot=1.0,
                          theta=theta, phi=phi, psi=0.0, factorization='nvf', **_cell(lattice),
                          answers='field')
@@ -728,7 +730,7 @@ def test_li_1997_checkerboard_matches_the_published_table():
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'rectangle', 'cx': 0.0, 'cy': 0.0,
          'lx': LI_SIDE, 'ly': LI_SIDE, 'material': 2.25}]}]
-    s = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=[12, 12], thickness=[1.0], wavelength=1.0,
+    s = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=[12, 12], thickness=[1.0], wavelength=1.0,
                        top=2.25, bot=1.0, theta=0.0, phi=0.0, psi=np.pi / 2,
                        factorization='nvf', lattice=basis)
     res = s.solve().incident
@@ -752,7 +754,7 @@ SHIFTED = np.column_stack(([2000.0, 0.0], [600.0, 2200.0]))
 def _shifted_solver(excitation, basis=SHIFTED, theta=0.2, phi=0.4):
     cell = np.full((1, 8, 8), EPS_AIR)
     cell[0, 2:5, 1:4] = 12.25
-    return _legacy_wavebit.rcwa(backend='numpy', structure=cell, thickness=[300.0], top=1.0, bot=1.0,
+    return _legacy_wavebit_rcwa(backend='numpy', structure=cell, thickness=[300.0], top=1.0, bot=1.0,
                         lattice=basis.tolist(), wavelength=500.0, theta=theta, phi=phi,
                         truncation_order=[3, 2], factorization='nvf', excitation=excitation)
 
@@ -900,7 +902,7 @@ def test_a_frozen_painting_plan_replays_on_a_skewed_cell(lattice, omit_centre):
             a = dict(a, cx=P / 2 - ox, cy=P / 2 - oy)
         b = {'type': 'circle', 'cx': P / 2 + 40.0 - ox, 'cy': P / 2 - oy, 'lx': 160.0,
              'material': 9.0}
-        return _legacy_wavebit.rcwa(backend='numpy', truncation_order=[3, 3], thickness=[H],
+        return _legacy_wavebit_rcwa(backend='numpy', truncation_order=[3, 3], thickness=[H],
                             structure=[{'background': EPS_AIR, 'shapes': [a, b]}],
                             wavelength=WL, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                             factorization='nvf', **_cell(lattice), shape_nvf_grid_size=64)
@@ -962,8 +964,8 @@ def test_the_answer_rotates_with_the_cell(degrees, theta, phi, psi, chi):
     common = dict(backend='numpy', truncation_order=[5, 5], thickness=[H],
                   wavelength=WL, top=1.0, bot=1.0, theta=theta, psi=psi, chi=chi,
                   factorization='nvf')
-    a = _legacy_wavebit.rcwa(structure=_rod_on(basis), lattice=basis, phi=phi, **common).solve()
-    b = _legacy_wavebit.rcwa(structure=_rod_on(turned), lattice=turned,
+    a = _legacy_wavebit_rcwa(structure=_rod_on(basis), lattice=basis, phi=phi, **common).solve()
+    b = _legacy_wavebit_rcwa(structure=_rod_on(turned), lattice=turned,
                      phi=phi + np.radians(degrees), **common).solve()
     scale = float(np.sum(np.asarray(a.R)) + np.sum(np.asarray(a.T)))
     assert scale == pytest.approx(1.0, abs=1e-12)          # a dead solve would pass the rest
@@ -990,8 +992,8 @@ def _circular_dichroism(basis, truncation, shape_nvf_grid_size=512):
                   truncation_order=[truncation, truncation], wavelength=WL, top=1.0, bot=1.0,
                   theta=0.35, phi=0.0, psi=0.0, factorization='nvf', lattice=basis,
                   shape_nvf_grid_size=shape_nvf_grid_size)
-    lcp = _legacy_wavebit.rcwa(chi=np.pi / 4, **common).solve()
-    rcp = _legacy_wavebit.rcwa(chi=-np.pi / 4, **common).solve()
+    lcp = _legacy_wavebit_rcwa(chi=np.pi / 4, **common).solve()
+    rcp = _legacy_wavebit_rcwa(chi=-np.pi / 4, **common).solve()
     return float(np.sum(np.asarray(lcp.R)) - np.sum(np.asarray(rcp.R)))
 
 
@@ -1049,11 +1051,11 @@ def test_a_skewed_cell_answers_in_the_width_it_was_asked_for(backend):
                   thickness=[H], wavelength=WL, top=1.0, bot=1.0, theta=0.3, phi=0.2, psi=0.1,
                   factorization='nvf')
     for complex_dtype in (0, 1):
-        rect = _legacy_wavebit.rcwa(complex_dtype=complex_dtype, period=[P, P], **common).solve()
-        skew = _legacy_wavebit.rcwa(complex_dtype=complex_dtype, lattice=HEX,
+        rect = _legacy_wavebit_rcwa(complex_dtype=complex_dtype, period=[P, P], **common).solve()
+        skew = _legacy_wavebit_rcwa(complex_dtype=complex_dtype, lattice=HEX,
                             **dict(common, structure=_rod_on(HEX, n=32))).solve()
         assert np.asarray(rect.R).dtype == np.asarray(skew.R).dtype, complex_dtype
-    assert np.asarray(_legacy_wavebit.rcwa(complex_dtype=1, lattice=HEX,
+    assert np.asarray(_legacy_wavebit_rcwa(complex_dtype=1, lattice=HEX,
                                    **dict(common, structure=_rod_on(HEX, n=32))
                                    ).solve().R).dtype == np.float32
 
@@ -1061,7 +1063,7 @@ def test_a_skewed_cell_answers_in_the_width_it_was_asked_for(backend):
 # --------------------------------------------- which Cartesian coordinate names which fraction
 
 def _field_solver(basis, n=24):
-    s = _legacy_wavebit.rcwa(backend='numpy', structure=raster(basis, n=n, radius=110.0),
+    s = _legacy_wavebit_rcwa(backend='numpy', structure=raster(basis, n=n, radius=110.0),
                      lattice=np.asarray(basis).tolist(), truncation_order=[5, 5],
                      thickness=[220.0], wavelength=WL, top=1.0, bot=1.0,
                      theta=0.21, phi=0.58, psi=np.pi / 4, factorization='nvf', answers='field')
@@ -1127,7 +1129,7 @@ def _backside_totals(lattice, side, truncation_order=10):
     structure = [{'background': 1.0, 'shapes': [
         {'type': 'circle', 'cx': _BS_P / 2 - ox, 'cy': _BS_P / 2 - oy, 'lx': 180.0,
          'material': _BS_ROD}]}]
-    s = _legacy_wavebit.rcwa(backend='numpy', structure=structure, **_cell(lattice, [_BS_P, _BS_P]),
+    s = _legacy_wavebit_rcwa(backend='numpy', structure=structure, **_cell(lattice, [_BS_P, _BS_P]),
                      truncation_order=[truncation_order, truncation_order],
                      thickness=[300.0], wavelength=_BS_WL, top=1.0, bot=_BS_SUB,
                      theta=0.5, phi=0.6, psi=np.pi / 4, factorization='nvf',
@@ -1261,7 +1263,7 @@ def _pn_totals(basis, method, lattice_blind=False):
     slots = to_conv_mat_raster_pn_eps(eps33[None], PN_ORDERS[0], PN_ORDERS[1],
                                       normal_field=normal_field, lattice=basis,
                                       raster_normal_method=method)
-    solver = _legacy_wavebit.rcwa(backend='numpy', structure=np.where(inside, PN_EO, 1.0)[None],
+    solver = _legacy_wavebit_rcwa(backend='numpy', structure=np.where(inside, PN_EO, 1.0)[None],
                           lattice=basis, truncation_order=PN_ORDERS, thickness=[H],
                           wavelength=WL, top=1.0, bot=1.0, theta=np.deg2rad(25.0),
                           phi=np.deg2rad(37.0), psi=np.deg2rad(20.0))
@@ -1394,7 +1396,7 @@ def _period_scene(backend, cell, **over):
               top=1.0, bot=1.0, factorization='nvf')
     kw.update(_cell(_PERIOD_CELLS[cell], [1500.0, 1500.0]))
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def _period_cell_is_skewed(cell):
@@ -1506,7 +1508,7 @@ def test_the_geometry_refusals_read_the_lattice_the_way_they_read_the_shapes():
     def by_lattice(structure, P):
         basis = jnp.stack([jnp.stack([P, jnp.asarray(0.0)]),
                            jnp.stack([jnp.asarray(0.0), P])])
-        return jnp.sum(_legacy_wavebit.rcwa(backend='jax', structure=structure, lattice=basis,
+        return jnp.sum(_legacy_wavebit_rcwa(backend='jax', structure=structure, lattice=basis,
                                     **cfg).solve().T).real
 
     with pytest.raises(ValueError, match='larger than the period'):

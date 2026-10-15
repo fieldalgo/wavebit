@@ -5,7 +5,9 @@ The matching valid controls compare complete fields to independently prepared Nu
 solves, so rejecting every shape update cannot satisfy the contract.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -36,7 +38,7 @@ def solver(tensor=False, rule='nvf', backend='jax', width=1.18, **kwargs):
     if rule == 'nvf':
         cfg['shape_nvf_grid_size'] = 16
     cfg.update(kwargs)
-    return _legacy_wavebit.rcwa(backend=backend, **cfg)
+    return _legacy_wavebit_rcwa(backend=backend, **cfg)
 
 
 def no_compiled_solve(*args, **kwargs):
@@ -52,10 +54,10 @@ def test_shape_changes_are_refused_before_compilation(monkeypatch, tensor, rule,
     if change == 'shape_count':
         moved[0]['shapes'].pop()
     # A successful eager refusal is the contract the compiled entry must retain.
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         solver(tensor, rule, structure=moved).solve(geometry=frozen)
     monkeypatch.setattr(type(s), '_solve_field_compiled', no_compiled_solve)
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         s.solve_field(2, 2, 2, geometry=frozen, structure=moved)
 
 
@@ -80,7 +82,7 @@ def test_material_trace_does_not_hide_concrete_shape_topology(monkeypatch, tenso
     def loss(epsilon):
         return s.solve_field(2, 2, 2, geometry=frozen,
                              structure=scene(1.3, tensor, epsilon))[0].T.sum().real
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         jax.grad(loss)(jnp.asarray(9.))
     assert not any(isinstance(v, jax.core.Tracer) for v in jax.tree_util.tree_leaves(s))
 
@@ -121,7 +123,7 @@ def test_tensor_raster_records_are_checked_before_compilation(monkeypatch, chang
     if uniform:
         eps[:] = eps[0, 0, 0]
     mu = eps * .1 + np.eye(3)
-    s = _legacy_wavebit.rcwa(backend='jax', **CFG, structure=eps, mu=mu)
+    s = _legacy_wavebit_rcwa(backend='jax', **CFG, structure=eps, mu=mu)
     frozen = s.freeze_geometry()
     moved = eps.copy()
     moved[0, 1, 1] = np.diag([7., 7.2, 6.8])
@@ -129,7 +131,7 @@ def test_tensor_raster_records_are_checked_before_compilation(monkeypatch, chang
                'lattice': dict(lattice=((300., 30.), (0., 300.))),
                'orders': dict(truncation_order=(2, 1))}[change]
     monkeypatch.setattr(type(s), '_solve_field_compiled', no_compiled_solve)
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         s.solve_field(2, 2, 2, geometry=frozen, **options)
 
 
@@ -137,7 +139,7 @@ def test_tensor_raster_records_are_checked_before_compilation(monkeypatch, chang
 def test_tensor_raster_material_sweep_keeps_interfaces_and_matches_numpy(quantity):
     eps = tensor_raster()
     mu = eps * .1 + np.eye(3)
-    s = _legacy_wavebit.rcwa(backend='jax', **CFG, structure=eps, mu=mu)
+    s = _legacy_wavebit_rcwa(backend='jax', **CFG, structure=eps, mu=mu)
     frozen = s.freeze_geometry()
     # Swapping phase values also swaps np.unique labels, but not the interfaces.
     original = eps if quantity == 'structure' else mu
@@ -145,7 +147,7 @@ def test_tensor_raster_material_sweep_keeps_interfaces_and_matches_numpy(quantit
     cfg = dict(CFG, structure=eps, mu=mu)
     cfg[quantity] = moved
     got, field = s.solve_field(3, 3, 2, geometry=frozen, **{quantity: moved})
-    want, reference = _legacy_wavebit.rcwa(backend='numpy', **cfg).solve_field(3, 3, 2)
+    want, reference = _legacy_wavebit_rcwa(backend='numpy', **cfg).solve_field(3, 3, 2)
     np.testing.assert_allclose(got.T, want.T, rtol=2e-9, atol=2e-11)
     np.testing.assert_allclose(field, reference, rtol=2e-8, atol=2e-9)
 
@@ -165,7 +167,7 @@ def test_a_refused_concrete_change_drops_the_previous_eager_state():
     s = solver()
     frozen = s.freeze_geometry()
     s.solve()
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         s.solve_field(2, 2, 2, geometry=frozen, structure=scene(1.3))
     with pytest.raises(RuntimeError, match='solve'):
         s.reconstruct_field(2, 2, 2)
@@ -195,7 +197,7 @@ def test_a_traced_material_does_not_hide_the_other_concrete_interfaces(
         monkeypatch, tensor, moving, transform):
     eps = tensor_raster() if tensor else tensor_raster()[..., 0, 0]
     mu = eps * .1 + (np.eye(3) if tensor else 1.)
-    s = _legacy_wavebit.rcwa(backend='jax', **CFG, structure=eps, mu=mu, factorization='nvf')
+    s = _legacy_wavebit_rcwa(backend='jax', **CFG, structure=eps, mu=mu, factorization='nvf')
     frozen = s.freeze_geometry()
     base = eps if moving == 'structure' else mu
     moved = base.copy()
@@ -207,7 +209,7 @@ def test_a_traced_material_does_not_hide_the_other_concrete_interfaces(
     def loss(scale):
         result, _ = s.solve_field(2, 2, 2, geometry=frozen, **{differentiated: live*scale})
         return result.T.sum().real
-    with pytest.raises(_legacy_wavebit.StaleGeometryError):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError):
         getattr(jax, transform)(loss)(jnp.asarray(1.))
 
 
@@ -217,14 +219,14 @@ def test_valid_traced_raster_material_updates_still_have_correct_gradients(tenso
     eps = tensor_raster() if tensor else tensor_raster()[..., 0, 0]
     mu = eps * .1 + (np.eye(3) if tensor else 1.)
     cfg = dict(CFG, structure=eps, mu=mu, factorization='nvf')
-    s = _legacy_wavebit.rcwa(backend='jax', **cfg)
+    s = _legacy_wavebit_rcwa(backend='jax', **cfg)
     frozen = s.freeze_geometry()
     live = getattr(s, quantity)
     def loss(scale):
         result, _ = s.solve_field(2, 2, 2, geometry=frozen, **{quantity: live*scale})
         return result.T.sum().real
     def reference(scale):
-        return _legacy_wavebit.rcwa(backend='numpy', **(cfg | {quantity: np.asarray(live)*scale})).solve().T.sum().real
+        return _legacy_wavebit_rcwa(backend='numpy', **(cfg | {quantity: np.asarray(live)*scale})).solve().T.sum().real
     got = jax.jit(jax.grad(loss))(jnp.asarray(1.))
     h = 1e-5
     expected = (reference(1.+h)-reference(1.-h))/(2*h)

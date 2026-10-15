@@ -1,6 +1,10 @@
 """Rotated ellipse cells against independent implicit-conic chord quadrature."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 from scipy.integrate import quad
@@ -118,11 +122,11 @@ def test_axes_tangencies_and_quarter_turn_keep_finite_total_derivatives(backend,
 
 
 def response(p, backend='numpy', diagnostics=False, side='bottom', smoothing=0.):
-    stack = _legacy_wavebit.Stack.from_structure([
+    stack = _legacy_wavebit_Stack.from_structure([
         dict(background=wavebit.Material(1.2, 1.03), shapes=[dict(type='ellipse', cx=p[0], cy=p[1],
             lx=p[2], ly=p[3], angle=p[4], material=wavebit.Material(p[5], p[6]))]),
         dict(background=1.4)], [p[7], .3-p[7]], top=1., bot=1.4, period=[.4, .3])
-    result, out = _legacy_wavebit.fdtd(stack, _legacy_wavebit.Incidence(wavelength=.9, theta=.17, phi=.23,
+    result, out = _legacy_wavebit_fdtd(stack, _legacy_wavebit_Incidence(wavelength=.9, theta=.17, phi=.23,
         polarization=(1., .4j), incidence_side=side), backend=backend, resolution=9,
         transverse_resolution=[12., 15.], n_pml=6, n_periods=38, pulse_width=1.5,
         truncation_order=0, mesh_thickness=[.15, .15], layer_smoothing=.025, align_layers=True,

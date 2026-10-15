@@ -4,7 +4,7 @@ References below use explicit interface integrals and a matrix exponential;
 none calls production Fourier builders, mode solvers, or stack recursions.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 from scipy.linalg import expm
@@ -34,7 +34,7 @@ def solver(backend='numpy', factorization='li', **kw):
     opts.update(kw)
     if factorization == 'nvf': opts.setdefault('shape_nvf_grid_size',24)
     if 'lattice' in opts: opts.pop('period',None)
-    s=_legacy_wavebit.rcwa(**opts)
+    s=_legacy_wavebit_rcwa(**opts)
     if formulation is not None: s.formulation=formulation
     return s
 

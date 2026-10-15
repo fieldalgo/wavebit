@@ -32,7 +32,11 @@ at its faces by forward maps; nothing that maps into a layer is inverted. A mode
 * the state differentiates as the ETM's does, and past the ETM's cap as a finite difference does.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import AutoDetuneWarning as _legacy_wavebit_AutoDetuneWarning
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -41,7 +45,7 @@ import pytest
 import wavebit
 from wavebit.rcwa._engine import scattering
 
-pytestmark = pytest.mark.filterwarnings('ignore::wavebit.compat.legacy.ComplexIncidenceWarning')
+pytestmark = pytest.mark.filterwarnings('ignore::wavebit._common.backend.ComplexIncidenceWarning')
 
 WL, PHI = 900.0, 0.3
 THETA = 0.5 + 0.3j
@@ -115,7 +119,7 @@ def _sampled_cell(kind, form, algo, theta, eps, mu, side, eps_inc, thick, z):
     else:
         kw.update(tetm=kind, truncation_order=[0], period=[2000.])
         grid = (1, 1, 4)
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     solver.structure = np.full(grid, eps, dtype=complex)
     if mu != 1.0:
         solver.mu = np.full(grid, mu, dtype=complex)
@@ -215,7 +219,7 @@ GRATING_CASES = {
 
 
 def _grating(algo, case, theta=THETA, answers='field', thickness=(100., 60.), **extra):
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, wavelength=WL,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, wavelength=WL,
                           thickness=list(thickness), layer_algorithm=algo, answers=answers,
                           **GRATING_CASES[case], **extra)
     return solver, solver.solve()
@@ -251,7 +255,7 @@ def test_a_root_growing_below_another_layer_costs_no_digits():
     """
     def field(algo, kind):
         kw = dict(tetm=kind) if kind in ('te', 'tm') else dict(psi=np.pi / 2, phi=PHI)
-        solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=THETA, wavelength=WL,
+        solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.25, theta=THETA, wavelength=WL,
                               thickness=[8500., 500.], truncation_order=[0], period=[2000.],
                               structure=np.array([[[1.] * 4], [[4.] * 4]], dtype=complex),
                               layer_algorithm=algo, answers='field', **kw)
@@ -264,7 +268,7 @@ def test_a_root_growing_below_another_layer_costs_no_digits():
 
 
 def _chip(algo, form='second_order', nudge=1.0):
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41,
                           psi=0.27, wavelength=1000., period=[1654.489947568981],
                           truncation_order=[7], thickness=[4869.],
                           structure=np.full((1, 1, 8), 2.25 + 0j), layer_algorithm=algo,
@@ -314,12 +318,12 @@ def test_a_layer_light_line_costs_no_digits(kind):
     two = kind == '2d'
 
     def field(algo):
-        solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=4.0, theta=0.0, wavelength=WL,
+        solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=4.0, theta=0.0, wavelength=WL,
                               thickness=[150., 400.], period=[600.] * (2 if two else 1),
                               structure=GRAZE_RASTER if two else GRAZE_GRATING,
                               truncation_order=[2, 2] if two else [4], layer_algorithm=algo,
                               answers='field', **kw)
-        with pytest.warns(_legacy_wavebit.AutoDetuneWarning):
+        with pytest.warns(_legacy_wavebit_AutoDetuneWarning):
             solver.solve()
         incidences = ('incident',) if kind in ('te', 'tm') else ('incident', 's', 'p')
         return np.asarray(solver.reconstruct_field(sample_x=5, sample_y=4 if two else 1,
@@ -366,7 +370,7 @@ def test_the_field_meets_itself_and_its_ports(scene, kind, side):
     for i, (background, block) in enumerate(sc['layers']):
         structure[i] = background
         structure[i, ..., :grid[-1] // 2] = block
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=sc['theta'], wavelength=WL,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.25, theta=sc['theta'], wavelength=WL,
                           thickness=sc['thickness'], layer_algorithm='SMM', answers='field',
                           incidence_side=side, structure=structure,
                           truncation_order=[2, 2] if two else [4],
@@ -401,7 +405,7 @@ def _raster(eps_hi, eps_lo=1.0, n=16):
 
 
 def _metal_field(algo, form, theta, thickness, eps_hi=-15 + 0.8j, factorization='li', to=5):
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=theta, wavelength=600.,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.25, theta=theta, wavelength=600.,
                           psi=np.pi / 3, phi=0.4, structure=_raster(eps_hi),
                           truncation_order=[to, to], period=[400., 400.], thickness=thickness,
                           layer_algorithm=algo, answers='field', factorization=factorization)
@@ -440,7 +444,7 @@ def test_single_precision_at_a_real_angle(kind, theta):
     kw = dict(tetm='tm') if kind == 'tm' else dict(psi=np.pi / 2, phi=PHI)
 
     def field(algo, width):
-        solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, wavelength=WL,
+        solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta, wavelength=WL,
                               thickness=[100., 60.], structure=GRATING, truncation_order=[15],
                               period=[2000.], layer_algorithm=algo, answers='field',
                               complex_dtype=width, **kw)
@@ -465,7 +469,7 @@ def test_an_active_patterned_double_negative_at_a_real_angle():
     eps[RASTER == 25.0], mu[RASTER == 25.0] = -4 - 0.1j, -1 - 0.05j
 
     def field(algo, form):
-        solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.0, theta=0.5, phi=PHI, psi=np.pi / 2,
+        solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.0, theta=0.5, phi=PHI, psi=np.pi / 2,
                               wavelength=WL, thickness=[100., 60.], truncation_order=[3, 3],
                               period=[1200., 1200.], layer_algorithm=algo, answers='field')
         solver.structure, solver.mu = eps, mu
@@ -478,7 +482,7 @@ def test_an_active_patterned_double_negative_at_a_real_angle():
 
 def _double_negative_cell(algo, theta, form='second_order'):
     eps, mu = -4.0, -1.0
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=wavebit.Material(eps, mu=mu), theta=theta,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=wavebit.Material(eps, mu=mu), theta=theta,
                           wavelength=WL, thickness=[100.], layer_algorithm=algo,
                           answers='field', psi=np.pi / 2, phi=PHI, truncation_order=[0, 0],
                           period=[2000., 2000.])
@@ -565,13 +569,13 @@ def test_a_field_solve_past_the_cap_neither_raises_nor_detunes(kind):
     kw = dict(tetm=kind) if kind in ('te', 'tm') else dict(psi=np.pi / 2, phi=PHI)
 
     def solve(answers):
-        solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=THETA, wavelength=WL,
+        solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=THETA, wavelength=WL,
                               thickness=[1e4], truncation_order=[0], period=[2000.],
                               structure=np.ones((1, 1, 4), dtype=complex), layer_algorithm='SMM',
                               answers=answers, **kw)
         return solver.solve()
     with warnings.catch_warnings():
-        warnings.simplefilter('error', _legacy_wavebit.AutoDetuneWarning)
+        warnings.simplefilter('error', _legacy_wavebit_AutoDetuneWarning)
         field = solve('field')
     amplitude = solve('amplitude')
     for f in ('r_s', 'r_p', 't_s', 't_p'):
@@ -590,7 +594,7 @@ def test_the_state_differentiates_as_the_etms_does(case, backend):
     ``q`` is a modal generator whose off-diagonals divide by ``q_i + q_j``.)
     """
     pytest.importorskip(backend)
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     base = GRATING_CASES[case]['structure']
     kw = {k: v for k, v in GRATING_CASES[case].items() if k != 'structure'}
     samples = dict(sample_x=4, sample_y=3, sample_z=3)
@@ -601,14 +605,14 @@ def test_the_state_differentiates_as_the_etms_does(case, backend):
             import jax.numpy as jnp
 
             def loss(s):
-                solver = _legacy_wavebit.rcwa(backend='jax', top=1.0, bot=25.0, theta=THETA, wavelength=WL,
+                solver = _legacy_wavebit_rcwa(backend='jax', top=1.0, bot=25.0, theta=THETA, wavelength=WL,
                                       thickness=[100., 60.], layer_algorithm=algo,
                                       answers='field', structure=jnp.asarray(base) * (1 + s), **kw)
                 return jnp.sum(jnp.abs(solver.solve_field_eager(**samples)[1]) ** 2)
             return float(jax.grad(loss)(0.0))
         import torch
         s = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-        solver = _legacy_wavebit.rcwa(backend='torch', top=1.0, bot=25.0, theta=THETA, wavelength=WL,
+        solver = _legacy_wavebit_rcwa(backend='torch', top=1.0, bot=25.0, theta=THETA, wavelength=WL,
                               thickness=[100., 60.], layer_algorithm=algo, answers='field',
                               structure=torch.as_tensor(base) * (1 + s), **kw)
         torch.sum(torch.abs(solver.solve_field(**samples)[1]) ** 2).backward()
@@ -638,7 +642,7 @@ def test_the_state_differentiates_past_the_cap(case):
     :func:`test_the_state_differentiates_as_the_etms_does` stops below the cap.
     """
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
     kind, theta, eps, thickness, side, medium = PAST_CAP[case]
@@ -647,7 +651,7 @@ def test_the_state_differentiates_past_the_cap(case):
     wavelength = 1000. if case == 'chip-conical' else WL
 
     def loss(s):
-        solver = _legacy_wavebit.rcwa(backend='jax', top=medium, bot=medium, theta=theta,
+        solver = _legacy_wavebit_rcwa(backend='jax', top=medium, bot=medium, theta=theta,
                               wavelength=wavelength, thickness=[thickness], period=period,
                               truncation_order=order, incidence_side=side,
                               structure=jnp.full((1, 1, 8), eps + 0j) * (1 + s),

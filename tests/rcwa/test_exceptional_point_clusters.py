@@ -7,7 +7,9 @@ yet the four span about two dimensions (smallest singular value ~1e-7). Measured
 screen: 2D up to 5.8e-4 and first-order SMM up to 0.55 in amplitudes, the 2D path silent.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ExceptionalPointWarning as _legacy_wavebit_ExceptionalPointWarning
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -57,7 +59,7 @@ def test_coincident_exceptional_points_are_exact_or_loud(name, algo, first_order
     ref = _vector(_solver(scene).solve(auto_detune=False))
     got, warned = _solve_2d(scene, algo, first_order)
     err = np.max(np.abs(got[2:] - ref[2:]))
-    loud = _legacy_wavebit.ExceptionalPointWarning in warned
+    loud = _legacy_wavebit_ExceptionalPointWarning in warned
     assert loud or err < 1e-12, f'{name} {algo} dth {dth:g}: {err:.1e} off, silently'
     if dth >= 3e-4:
         assert not loud and err < 1e-12
@@ -87,7 +89,7 @@ def test_degenerate_clusters_stay_quiet(kind, first_order, algo):
                   wavelength=731.0)
 
     def run():
-        s = _legacy_wavebit.rcwa(layer_algorithm=algo, **kw)
+        s = _legacy_wavebit_rcwa(layer_algorithm=algo, **kw)
         if first_order:
             s.formulation = 'first_order'
         return s.solve(auto_detune=False)
@@ -173,10 +175,10 @@ def test_a_graze_on_the_first_order_path_is_not_an_exceptional_point(algo, rel):
     kw = dict(backend='numpy', structure=np.full((2, 12, 12), 1.0), thickness=[300., 200.],
               period=[800., 800.], wavelength=800. * (1 + rel), theta=0.0, phi=0.0, top=1.0,
               bot=1.5, psi=0.3, truncation_order=[2, 2], layer_algorithm=algo)
-    s = _legacy_wavebit.rcwa(**kw)
+    s = _legacy_wavebit_rcwa(**kw)
     s.formulation = 'first_order'
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         got = s.solve(auto_detune=False)
-    ref = _legacy_wavebit.rcwa(**kw).solve(auto_detune=False)
+    ref = _legacy_wavebit_rcwa(**kw).solve(auto_detune=False)
     assert abs(float(np.sum(np.real(_np(got.R)))) - float(np.sum(np.real(_np(ref.R))))) < 1e-12

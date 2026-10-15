@@ -1,6 +1,8 @@
 """Independent oblique Maxwell boundary problem and parameter gradients."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 from scipy.linalg import expm
@@ -59,7 +61,7 @@ def objective(xp,f):
 
 def make(backend,profile,side,algorithm):
     e,m=base(profile)
-    s=_legacy_wavebit.rcwa(backend=backend,structure=np.stack([E,e])[:,None,None],mu=np.stack([M,m])[:,None,None],
+    s=_legacy_wavebit_rcwa(backend=backend,structure=np.stack([E,e])[:,None,None],mu=np.stack([M,m])[:,None,None],
         thickness=[90.,ROOT[4]],period=(600.,750.),wavelength=ROOT[5],truncation_order=(0,0),theta=ROOT[2],phi=ROOT[3],
         polarization=POL,incidence_side=side,answers='field',factorization='li',layer_algorithm=algorithm)
     s.formulation='first_order';return s
@@ -87,7 +89,7 @@ def test_oblique_field_and_nine_parameter_gradient_match_maxwell_boundary_proble
     if backend in ('jax','jit'):
         import jax
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         geometry=s.freeze_geometry() if backend=='jit' else None
         calculation=jax.value_and_grad(lambda v:objective(jnp,actual(s,jnp,v,profile,geometry)))
         if backend=='jit':calculation=jax.jit(calculation)

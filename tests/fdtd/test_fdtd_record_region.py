@@ -1,6 +1,6 @@
 """Region histories preserve exact modes, coordinates and differentiability."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 from tests.fdtd.test_fdtd_grid import initial_mode
@@ -17,8 +17,8 @@ def test_exact_mode_region_preserves_staggering_and_field_state(backend):
     kw = dict(spacing=(1.,)*3, dt=.2, steps=20, electric=e, magnetic=h,
               record_field=3, record_components=('ey', 'hx'), backend=backend)
     region = (slice(2, 14, 3), -1, slice(None, None, 2))
-    result = _legacy_wavebit.fdtd_grid(np.full((16, 2, 2), 2.), **kw, record_region=region)
-    full = _legacy_wavebit.fdtd_grid(np.full((16, 2, 2), 2.), **kw)
+    result = _legacy_wavebit_fdtd_grid(np.full((16, 2, 2), 2.), **kw, record_region=region)
+    full = _legacy_wavebit_fdtd_grid(np.full((16, 2, 2), 2.), **kw)
     for name, initial in [('ey', e[1]), ('hx', h[0])]:
         field = result['fields'][name]
         assert field['values'].shape == (7, 4, 1, 1)
@@ -33,7 +33,7 @@ def test_exact_mode_region_preserves_staggering_and_field_state(backend):
 
 def test_nonuniform_coordinates_and_storage_count():
     widths = np.linspace(.7, 1.3, 12)
-    out = _legacy_wavebit.fdtd_grid(np.ones((12, 4, 6)), spacing=(1., .5, .25), dt=.1, steps=10,
+    out = _legacy_wavebit_fdtd_grid(np.ones((12, 4, 6)), spacing=(1., .5, .25), dt=.1, steps=10,
                             z_spacing=widths, record_field=2, record_components=('ex', 'hz'),
                             record_region=(slice(-5, None, 2), 2, slice(1, 5, 2)))
     for name, field in out['fields'].items():
@@ -47,7 +47,7 @@ def test_region_material_gradient_matches_full_field_objective(backend):
     e, h, _ = initial_mode()
     def objective(value, which, cropped):
         epsilon = value*np.ones((16, 2, 2)) if which == 'numpy' else value*ones
-        out = _legacy_wavebit.fdtd_grid(epsilon, spacing=(1.,)*3, dt=.2, steps=15,
+        out = _legacy_wavebit_fdtd_grid(epsilon, spacing=(1.,)*3, dt=.2, steps=15,
                                 electric=e, magnetic=h, backend=which, checkpoint_steps=3,
                                 record_field=4, record_components='ey',
                                 record_region=(slice(3, 11, 2), 0, 1) if cropped else None)
@@ -76,11 +76,11 @@ def test_region_material_gradient_matches_full_field_objective(backend):
                                     (slice(None, None, 0), 0, 0), (slice(.5, 3), 0, 0)])
 def test_invalid_regions(region):
     with pytest.raises(ValueError, match='record_region'):
-        _legacy_wavebit.fdtd_grid(np.ones((16, 2, 2)), spacing=(1.,)*3, dt=.2, steps=2,
+        _legacy_wavebit_fdtd_grid(np.ones((16, 2, 2)), spacing=(1.,)*3, dt=.2, steps=2,
                           record_field=1, record_region=region)
 
 
 def test_region_requires_recording():
     with pytest.raises(ValueError, match='record_region requires'):
-        _legacy_wavebit.fdtd_grid(np.ones((16, 2, 2)), spacing=(1.,)*3, dt=.2, steps=2,
+        _legacy_wavebit_fdtd_grid(np.ones((16, 2, 2)), spacing=(1.,)*3, dt=.2, steps=2,
                           record_region=(0, 0, 0))

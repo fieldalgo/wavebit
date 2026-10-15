@@ -1,6 +1,20 @@
 """Public tensor assignments: optical oracles, differentiation and serialization."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common._jobs_v1 import JobSpec as _legacy_wavebit_JobSpec
+
+from wavebit._common.periodic import Layer as _legacy_wavebit_Layer
+
+from wavebit._common._jobs_v1 import SpecError as _legacy_wavebit_SpecError
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import json
 
 import numpy as np
@@ -8,7 +22,7 @@ from tests.fixtures.common._conv_frame import slots_about_centre
 import pytest
 
 from wavebit import Material
-from wavebit.compat.legacy import TabulatedMaterial
+from wavebit.materials.tabulated import TabulatedMaterial
 from wavebit.rcwa._engine.geometry import StaleGeometryError
 from tests.rcwa.test_uniform_anisotropic import slab_s, slab_p
 
@@ -24,7 +38,7 @@ def film(material, backend='numpy', **kwargs):
                    thickness=[220.], structure=[dict(background=material, shapes=[])],
                    truncation_order=(0, 0), phi=0.)
     options.update(kwargs)
-    return _legacy_wavebit.rcwa(**options)
+    return _legacy_wavebit_rcwa(**options)
 
 
 def pattern(material=None, backend='numpy', **kwargs):
@@ -37,7 +51,7 @@ def pattern(material=None, backend='numpy', **kwargs):
     options.update(kwargs)
     if options.get('lattice') is not None:
         options.pop('period', None)
-    return _legacy_wavebit.rcwa(backend=backend, **options)
+    return _legacy_wavebit_rcwa(backend=backend, **options)
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -86,10 +100,10 @@ def test_full_tensor_and_stack_order_against_berreman(side):
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_tensor_shape_equals_raster_and_frozen_replay(backend):
     solver = pattern(backend=backend)
-    X, Y = _legacy_wavebit.meshgrid_xy((24, 24), period=(600.,600.))
+    X, Y = _legacy_wavebit_meshgrid_xy((24, 24), period=(600.,600.))
     mask = (X-20.)**2+(Y+30.)**2 <= 135.**2
     raster = np.where(mask[...,None,None], np.diag([2.25,4.,2.8]), np.eye(3))[None]
-    other = _legacy_wavebit.rcwa(backend=backend, wavelength=700., period=(600.,600.), thickness=[170.],
+    other = _legacy_wavebit_rcwa(backend=backend, wavelength=700., period=(600.,600.), thickness=[170.],
                          structure=raster, truncation_order=(1,1), phi=.1)
     frozen = solver.freeze_geometry()
     for a, b, c in zip(solver.eps_conv_matrices(), other.eps_conv_matrices(),
@@ -104,7 +118,7 @@ def test_all_components_define_boundaries_and_small_grid_is_repeated():
     from wavebit.rcwa._engine.factorization import pn_eps_conv_matrices, normal_vector_field
     a, b = np.diag([2.,4.,3.]), np.diag([4.,2.,3.])  # equal trace, different phases
     tensor = np.stack([a,b])[None, None]
-    solver = _legacy_wavebit.rcwa(structure=tensor, wavelength=700., period=(600.,600.),
+    solver = _legacy_wavebit_rcwa(structure=tensor, wavelength=700., period=(600.,600.),
                          thickness=[170.], truncation_order=(1,1))
     repeated = np.repeat(np.repeat(tensor[0], 6, axis=0), 3, axis=1)
     labels = np.tile([0.,0.,0.,1.,1.,1.], (6,1))
@@ -117,7 +131,7 @@ def test_all_components_define_boundaries_and_small_grid_is_repeated():
 def test_scalar_epsilon_with_tensor_mu_and_reverse():
     for e,m in [(np.ones((1,1,1))*2.25, np.diag([1.2,1.3,1.4])[None,None,None]),
                 (np.diag([2.25,4.,2.8])[None,None,None], np.ones((1,1,1))*1.2)]:
-        solver = _legacy_wavebit.rcwa(structure=e, mu=m, wavelength=600., period=(300.,300.),
+        solver = _legacy_wavebit_rcwa(structure=e, mu=m, wavelength=600., period=(300.,300.),
                              thickness=[220.], truncation_order=(0,0))
         res = solver.solve(auto_detune=False)
         np.testing.assert_allclose(res.s_inc.R.sum()+res.s_inc.T.sum(), 1., atol=2e-12)
@@ -130,11 +144,11 @@ def test_tensor_json_round_trip_constant_table_and_raster():
     structures = [dict(background=v, shapes=[]) for v in values]
     structures.append(np.diag([2.25+.02j,4.+.03j,2.8])[None,None])
     for structure in structures:
-        spec = _legacy_wavebit.JobSpec(stack=_legacy_wavebit.Stack([_legacy_wavebit.Layer(220., structure)], period=(300.,300.)),
-                              incidence=_legacy_wavebit.Incidence(wavelength=600., phi=0.))
-        restored = _legacy_wavebit.JobSpec.from_json(spec.to_json())
+        spec = _legacy_wavebit_JobSpec(stack=_legacy_wavebit_Stack([_legacy_wavebit_Layer(220., structure)], period=(300.,300.)),
+                              incidence=_legacy_wavebit_Incidence(wavelength=600., phi=0.))
+        restored = _legacy_wavebit_JobSpec.from_json(spec.to_json())
         assert restored.key() == spec.key()
-        np.testing.assert_allclose(_legacy_wavebit.run(restored).R, _legacy_wavebit.run(spec).R, atol=2e-12)
+        np.testing.assert_allclose(_legacy_wavebit_run(restored).R, _legacy_wavebit_run(spec).R, atol=2e-12)
 
 
 @pytest.mark.parametrize('backend', ['numpy','jax','torch'])
@@ -207,7 +221,7 @@ def test_tensor_picture_selects_component_and_paints_in_order():
     solver = pattern(a, structure=[dict(background=1., shapes=shapes)])
     xx = solver.slice_structure(n=24, component='xx')
     xy = solver.slice_structure(n=24, component='xy')
-    X,Y = _legacy_wavebit.meshgrid_xy((24,24), period=(600.,600.))
+    X,Y = _legacy_wavebit_meshgrid_xy((24,24), period=(600.,600.))
     rectangle = (abs(X)<=150.) & (abs(Y)<=130.)
     circle = (X-80.)**2+(Y-20.)**2<=110.**2
     np.testing.assert_allclose(xx, np.where(circle,5.,np.where(rectangle,a.epsilon[0,0],1.)))
@@ -240,7 +254,7 @@ def test_uniform_pixel_values_do_not_discard_pixel_gradients():
     x = torch.tensor(2.,dtype=torch.float64,requires_grad=True)
     mask = torch.tensor([[0.,0.],[0.,1.]],dtype=torch.float64)
     eps = (2.+(x-2.)*mask)[None,...,None,None]*torch.eye(3,dtype=torch.float64)
-    solver = _legacy_wavebit.rcwa(backend='torch', structure=eps, period=(600.,600.), thickness=[170.],
+    solver = _legacy_wavebit_rcwa(backend='torch', structure=eps, period=(600.,600.), thickness=[170.],
                          wavelength=700., truncation_order=(0,0))
     yy = solver.eps_conv_matrices().epy.real.sum()
     derivative, = torch.autograd.grad(yy,x)
@@ -248,7 +262,7 @@ def test_uniform_pixel_values_do_not_discard_pixel_gradients():
 
 
 def test_tensor_serialization_rejects_malformed_or_nonfinite_values():
-    spec = _legacy_wavebit.JobSpec(stack=_legacy_wavebit.Stack([_legacy_wavebit.Layer(100.,dict(
+    spec = _legacy_wavebit_JobSpec(stack=_legacy_wavebit_Stack([_legacy_wavebit_Layer(100.,dict(
         background=Material([2.,3.,4.]),shapes=[]))],period=(600.,600.)))
     for content in ({'shape':[3,3],'tensor':[[1.,0.]]},
                     {'shape':[3],'tensor':[[1.,0.],[2.,0.],[float('nan'),0.]]},
@@ -256,8 +270,8 @@ def test_tensor_serialization_rejects_malformed_or_nonfinite_values():
                     {'shape':[3],'tensor':[1.,2.,3.],'ignored':1}):
         obj = json.loads(spec.to_json())
         obj['stack']['layers'][0]['structure']['background']['epsilon'] = content
-        with pytest.raises(_legacy_wavebit.SpecError):
-            _legacy_wavebit.JobSpec.from_dict(obj)
+        with pytest.raises(_legacy_wavebit_SpecError):
+            _legacy_wavebit_JobSpec.from_dict(obj)
     for value in ([2.,3.,float('inf')],np.full((3,3),float('nan'))):
         with pytest.raises(ValueError,match='finite'):
             film(Material(value)).solve()
@@ -309,7 +323,7 @@ def test_periodic_tensor_shapes_on_an_unreduced_cell_match_brute_force_images():
     shapes = [dict(type='circle',cx=260.,cy=0.,lx=300.,material=crystal),
               dict(type='rectangle',cx=-280.,cy=50.,lx=160.,ly=190.,material=Material([5.,6.,7.]))]
     solver = pattern(structure=[dict(background=1.,shapes=shapes)], lattice=basis, period=None)
-    X,Y = _legacy_wavebit.meshgrid_xy((24,24),lattice=basis)
+    X,Y = _legacy_wavebit_meshgrid_xy((24,24),lattice=basis)
     expected = np.ones_like(X)
     for shape, value in zip(shapes,[2.,5.]):
         mask = np.zeros(X.shape,bool)

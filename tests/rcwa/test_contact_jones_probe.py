@@ -1,6 +1,6 @@
 """Gates for the experimental NVF projector, including unresolved regressions."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 from wavebit.rcwa._engine import parametric as P
@@ -16,7 +16,7 @@ def pair(gap=0.,epsilon=9.):
 
 
 def solver(shapes,grid=128,backend='numpy',order=3):
-    return _legacy_wavebit.rcwa(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
+    return _legacy_wavebit_rcwa(backend=backend,period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
         theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(order,order),
         shape_nvf_grid_size=grid,structure=[dict(background=1.,shapes=shapes)])
 

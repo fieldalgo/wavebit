@@ -11,18 +11,23 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from wavebit.compat.legacy import Incidence, Stack; from wavebit.compat.legacy import fdtd
+from wavebit import Units, Material
+from wavebit.fdtd import periodic as fdtd
 
 
 def reflection(d, resolution, smoothing_cells=0.):
     # Public stacks run bottom to top: the spacer touches the substrate.
-    stack = Stack.from_structure(jnp.array([[[2.25]], [[1.5]]]), [.4-d, d],
-                                  top=1., bot=2.25, period=.05)
-    light = Incidence(wavelength=1., polarization=(1., 0.))
-    return fdtd(stack, light, backend='jax', resolution=resolution, mesh_thickness=[.2, .2],
-                 align_layers=True, layer_smoothing=smoothing_cells/resolution,
-                 n_pml=resolution, n_periods=60, pulse_width=3.,
-                 diffraction_method='directional', truncation_order=0).s_inc.R.sum()
+    units=Units(length='um')
+    stack=fdtd.Stack(period=(.05,),bottom=Material(2.25),layers=(
+        fdtd.Layer(thickness=.4-d,epsilon=jnp.array([[2.25]])),
+        fdtd.Layer(thickness=d,epsilon=jnp.array([[1.5]]))))
+    problem=fdtd.Problem(stack=stack,units=units,
+        excitation=fdtd.Excitation(wavelength=1.,sources=(fdtd.PlaneWave(),)),
+        pulse=fdtd.Pulse(width_seconds=3*units.time_seconds))
+    numerics=fdtd.Numerics(spacing=1/resolution,duration_seconds=60*units.time_seconds,
+        nominal_layer_thickness=(.2,.2),align_layers=True,layer_smoothing=smoothing_cells/resolution,
+        pml_cells=resolution,extraction_method='directional',orders=0)
+    return fdtd.run(problem,numerics=numerics,backend='jax').R.sum()
 
 
 def optimize(initial=.12, resolution=40, iterations=20, smoothing_cells=0.):

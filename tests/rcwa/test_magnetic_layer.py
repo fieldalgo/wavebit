@@ -11,7 +11,9 @@ path — nothing about it can be satisfied by a solver that quietly ignores perm
 nothing about it depends on fmmax.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -48,7 +50,7 @@ def slots(t):
 
 
 def solve(eps, mu=None, theta=0.0, algo='ETM', backend='numpy', truncation_order=(0, 0), period=None):
-    mee = _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(theta),
+    mee = _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(theta),
                        phi=0.0, psi=0.0, truncation_order=truncation_order, period=period or (PERIOD, PERIOD),
                        wavelength=WL, thickness=[THICK], layer_algorithm=algo)
     res = mee.solve_conv(*slots(eps), mu=None if mu is None else tuple(slots(mu)))
@@ -134,7 +136,7 @@ def test_the_other_backends_carry_mu_too(backend):
     eps, mu = CASES[3][1], CASES[3][2]                # the gyromagnetic one
     want = solve(eps, mu, theta=39.0)
 
-    mee = _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(39.0), phi=0.0,
+    mee = _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(39.0), phi=0.0,
                        psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL,
                        thickness=[THICK])
     res = mee.solve_conv(*[lift(s) for s in slots(eps)],
@@ -178,7 +180,7 @@ def test_a_diagonal_mu_on_a_one_dimensional_structure_now_solves():
     when the permeability was being dropped on the floor. It is that the answer moves at all:
     a solver still ignoring ``mu`` returns the non-magnetic number, exactly.
     """
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(3, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                        structure=np.ones((1, 1, 8)) * 2.25)
     e = [np.stack([np.eye(7, dtype=complex) * v]) for v in (2.6, 2.6, 1 / 2.6)]
@@ -190,7 +192,7 @@ def test_a_diagonal_mu_on_a_one_dimensional_structure_now_solves():
 
 def test_mu_with_a_z_coupled_permittivity_is_used():
     """The full tensor route must retain permeability as well as epsilon."""
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     e = slots(tensor(2.6, 2.6, 2.6))
     z_row = [np.stack([0.2j * I1])] + [np.stack([0.0 * I1])] * 3
@@ -222,7 +224,7 @@ SHAPE_LAYER = [dict(background=1.0,
                     shapes=[dict(type='rectangle', cx=-PERIOD / 4, cy=-PERIOD / 4,
                                  lx=PERIOD / 4, ly=PERIOD / 4, angle=0.0, material=2.6)])]
 def _raster_solver_with_mu(backend='numpy'):
-    return _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    return _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                         truncation_order=(2, 2), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK],
                         structure=RASTER, mu=MU_RASTER)
 
@@ -403,7 +405,7 @@ def _uniform_cell(eps, mu, thick, eps_bot, mu_bot, theta, z_abs, algo='ETM'):
     # than through the layer slots, and it reaches the interior by changing the s admittance
     # `kz/mu` at the bottom interface -- so the standing wave above it moves.
     bot = eps_bot if mu_bot == 1.0 else wavebit.Material(eps_bot, mu=mu_bot)
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=bot, theta=theta, phi=0.0,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=bot, theta=theta, phi=0.0,
                           truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=FIELD_WL,
                           thickness=list(thick)[::-1], layer_algorithm=algo, answers='field')
     solver.structure = tile(eps[::-1])
@@ -521,7 +523,7 @@ TWO_LAYER_MU = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]],
 
 
 def _two_layer_cell(algo, side):
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=np.deg2rad(31.0),
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.25, theta=np.deg2rad(31.0),
                           phi=np.deg2rad(17.0), truncation_order=(2, 2), period=(PERIOD, PERIOD),
                           wavelength=FIELD_WL, thickness=[120.0, 180.0], answers='field',
                           layer_algorithm=algo, incidence_side=side)
@@ -567,7 +569,7 @@ MU_PATTERN = np.array([[[1.8, 1.0, 1.0, 1.4], [1.0, 1.0, 1.4, 1.4]]])
 
 def _patterned_cell(eps, mu, variant, backend='numpy'):
     """One patterned magnetic cell. Vacuum half-spaces, which are self-dual."""
-    solver = _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(37.0),
+    solver = _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=1.0, theta=np.deg2rad(37.0),
                           phi=np.deg2rad(23.0), truncation_order=(2, 2), period=(PERIOD, PERIOD),
                           wavelength=FIELD_WL, thickness=[THICK], answers='field')
     solver.structure = eps if backend == 'numpy' else _lift(backend, eps)
@@ -646,12 +648,12 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
     being checked, and one abscissa is enough to separate "wrong gradient" from "no gradient".
     """
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
 
     def loss(mu):
-        solver = _legacy_wavebit.rcwa(backend='jax', top=1.0, bot=1.0, theta=np.deg2rad(37.0),
+        solver = _legacy_wavebit_rcwa(backend='jax', top=1.0, bot=1.0, theta=np.deg2rad(37.0),
                               phi=np.deg2rad(23.0), truncation_order=(1, 1), period=(PERIOD, PERIOD),
                               wavelength=FIELD_WL, thickness=[THICK], answers='field')
         solver.structure = jnp.asarray(EPS_PATTERN)
@@ -673,7 +675,7 @@ def test_the_permeability_a_reconstructed_hz_depends_on_is_differentiable():
 
 def test_mu_on_the_forced_first_order_path_matches_second_order():
     """Forcing the first-order path keeps the same magnetic material and half-space conventions."""
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0, psi=0.0,
                        truncation_order=(0, 0), period=(PERIOD, PERIOD), wavelength=WL, thickness=[THICK])
     mee.formulation = 'first_order'
     e = slots(tensor(2.6, 2.6, 2.6))
@@ -734,7 +736,7 @@ def _dual_pair(basis, order=4):
     mu_field = _disc_raster(basis, 0.25, 0.7, 80.0, 2.25, 1.0)
 
     def build(eps, mu, above, below):
-        s = _legacy_wavebit.rcwa(backend='numpy', top=above, bot=below, theta=np.deg2rad(37.0),
+        s = _legacy_wavebit_rcwa(backend='numpy', top=above, bot=below, theta=np.deg2rad(37.0),
                          phi=np.deg2rad(23.0), truncation_order=(order, order),
                          wavelength=WL, thickness=[THICK],
                          factorization='nvf', lattice=basis)

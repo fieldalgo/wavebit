@@ -1,6 +1,6 @@
 """A Bragg cavity must not be certified while resonant transmission is filling."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 
 
@@ -13,7 +13,7 @@ def test_bragg_cavity_rejects_short_transients_against_unit_resonant_transmissio
     errors = []
     transmissions = []
     for periods in (25, 80):
-        result, diag = _legacy_wavebit.fdtd(
+        result, diag = _legacy_wavebit_fdtd(
             structure=(indices**2)[:, None, None], thickness=thickness,
             top=1., bot=1., period=.05, wavelength=1., backend='numpy', resolution=40,
             n_periods=periods, truncation_order=0, tetm='te',
@@ -56,7 +56,7 @@ def test_long_cavity_matches_discrete_outgoing_boundary_problem():
     expected_r = (field[0]-np.exp(1j*phase*z[0]/h))*np.exp(1j*phase*z[0]/h)
     expected_t = field[-1]*np.exp(-1j*phase*(z[-1]-depth)/h)
     np.testing.assert_allclose(abs(expected_r)**2+abs(expected_t)**2, 1., atol=1e-12)
-    result, diagnostic = _legacy_wavebit.fdtd(
+    result, diagnostic = _legacy_wavebit_fdtd(
         structure=(indices**2)[:, None, None], thickness=thickness,
         top=1., bot=1., period=.05, wavelength=1., backend='numpy', resolution=40,
         n_periods=400, truncation_order=0, tetm='te',

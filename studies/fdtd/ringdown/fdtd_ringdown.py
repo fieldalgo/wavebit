@@ -8,7 +8,7 @@ import argparse
 import json
 
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit.fdtd._periodic.probes import fit_fdtd_modes as wavebit_fit_fdtd_modes
 
 from studies.fdtd.rayleigh.fdtd_rayleigh import BAND, STRUCTURE, THETA, PERIOD
 
@@ -54,7 +54,7 @@ def analyze(data):
             t, signal = time[select], values[select]
             fits = []
             for modes in (1, 2, 3):
-                f = wavebit.fit_fdtd_modes(t, signal, modes=modes, pencil=128)
+                f = wavebit_fit_fdtd_modes(t, signal, modes=modes, pencil=128)
                 fits.append(dict(modes=modes, frequency=f['frequency'].tolist(),
                                  decay_rate=f['decay_rate'].tolist(), amplitude_abs=abs(f['amplitude']).tolist(),
                                  relative_residual=f['relative_residual'], basis_condition=f['basis_condition'],

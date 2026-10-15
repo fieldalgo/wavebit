@@ -12,7 +12,7 @@ corner phase and the old pure-1D TE/TM frame at output. Half-space labels stay
 physical. This helper exposes scattering results only, not public field queries.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 
 from wavebit.materials.response import as_material
@@ -98,4 +98,4 @@ def legacy_rcwa(backend='numpy', *, stack=None, incidence=None, **options):
         value = current.get(name)
         if value is not None:
             current[name] = value[::-1]
-    return _LegacyReference(_legacy_wavebit.rcwa(backend=backend, **current), options)
+    return _LegacyReference(_legacy_wavebit_rcwa(backend=backend, **current), options)

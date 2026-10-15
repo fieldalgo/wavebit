@@ -94,7 +94,7 @@ The full table and the full law sweep are marked ``slow``; a three-by-two corner
 the law at one angle, the mutants and the doors run in the default tier.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import math
 import re
 
@@ -593,7 +593,7 @@ def test_a_run_with_a_pml_differentiates_on_jax_and_on_torch():
     jax = pytest.importorskip('jax')
     # Lifted before ``jax.grad`` traces its argument: when this test ran first in its process
     # the argument was float32 and the gradient off by 4e-8 relative (seen under -n 6).
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     from wavebit.fdtd._execution import execute
     from wavebit.fdtd._runtime import runtime
     plan = fd.plan(scene)

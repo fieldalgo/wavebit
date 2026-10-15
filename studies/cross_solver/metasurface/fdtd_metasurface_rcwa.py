@@ -210,7 +210,7 @@ for _name in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
     os.environ.setdefault(_name, '2')
 os.environ.setdefault('JAX_ENABLE_X64', '1')      # before JAX is imported: x64 is a cap
 import numpy as np                                                                # noqa: E402
-from wavebit.compat import legacy as wavebit                                                                    # noqa: E402
+from wavebit.lattice import meshgrid_xy as wavebit_meshgrid_xy                                                                    # noqa: E402
 import wavebit.fdtd._legacy as fd                                                           # noqa: E402
 from wavebit.observations.diffraction import Result                                          # noqa: E402
 
@@ -640,7 +640,7 @@ def box_raster(name, size, cx=0.0, cy=0.0):
         k = (edge - low) / step
         if abs(k - round(k)) > 1e-9:
             raise AssertionError(f'{name}: the box edge {edge} is not a pixel edge')
-    X, Y = wavebit.meshgrid_xy((ny, nx), period=[Px, Py])
+    X, Y = wavebit_meshgrid_xy((ny, nx), period=[Px, Py])
     if X.shape != (ny, nx):
         raise AssertionError(f'meshgrid_xy gave {X.shape}, not (ny, nx) = {(ny, nx)}')
     inside = (np.abs(X - cx) < size[0] / 2) & (np.abs(Y - cy) < size[1] / 2)

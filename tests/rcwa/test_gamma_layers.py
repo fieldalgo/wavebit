@@ -26,7 +26,7 @@ Every rotation transports the incidence frame with the structure (``psi`` stated
 turned), for the reason ``test_gamma_field.py`` gives.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -95,7 +95,7 @@ def _gamma(shapes, lattice=SQUARE, groups=None):
 def _grating_total(shapes, tox, toy, psi):
     """The 550 nm, eps 4 on 1 scene of ``test_y_orders_cannot_change_a_y_invariant_answer``."""
     P._PROJECTOR_CACHE.clear()
-    s = _legacy_wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+    s = _legacy_wavebit_rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                      truncation_order=dict(x=tox, y=toy), top=1, bot=1, wavelength=550.0,
                      psi=psi, shape_nvf_grid_size=256)
     s.structure = [dict(background=1.0, shapes=shapes)]
@@ -104,7 +104,7 @@ def _grating_total(shapes, tox, toy, psi):
 
 def _total(shapes, order=6, lattice=SQUARE, shape_nvf_grid_size=512, **incidence):
     P._PROJECTOR_CACHE.clear()
-    res = _legacy_wavebit.rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=shapes)],
+    res = _legacy_wavebit_rcwa(lattice=lattice, structure=[dict(background=1.0, shapes=shapes)],
                        truncation_order=dict(u=order, v=order), shape_nvf_grid_size=shape_nvf_grid_size,
                        **dict(SOLVE_KW, **incidence)).solve()
     return float(np.sum(np.asarray(res.T)))
@@ -209,7 +209,7 @@ def test_a_seam_between_different_materials_is_an_interface():
     raster = np.tile(np.where(x < 350.0, 4.0, 9.0), (8, 1))[None, :, :]
     for order in (6, 10):
         shaped = _total(K_SPANNING, order=order)
-        li = _legacy_wavebit.rcwa(period=[PERIOD, PERIOD], structure=raster, factorization='li',
+        li = _legacy_wavebit_rcwa(period=[PERIOD, PERIOD], structure=raster, factorization='li',
                           truncation_order=dict(x=order, y=order), **SOLVE_KW).solve()
         assert abs(shaped - float(li.T.sum())) < 1e-11, order
 
@@ -574,7 +574,7 @@ def test_the_seam_is_decided_per_quantity():
         assert np.array_equal(got, want)
 
     # and through the solver, where `_mu_structure` builds that view
-    solver = _legacy_wavebit.rcwa(lattice=SQUARE, structure=[dict(background=1.0, shapes=absent)],
+    solver = _legacy_wavebit_rcwa(lattice=SQUARE, structure=[dict(background=1.0, shapes=absent)],
                           truncation_order=dict(u=3, v=3), **SOLVE_KW)
     assert [s['material'] for s in solver._mu_structure()[0]['shapes']] == [1.0, 1.0]
     assert 0.0 < float(np.sum(np.asarray(solver.solve().T))) < 1.0

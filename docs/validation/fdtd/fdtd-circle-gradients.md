@@ -4,7 +4,7 @@ Written: 2026-09-09
 
 Targets:
 - `src/wavebit/fdtd/_periodic/scene.py`
-- `src/wavebit/compat/legacy.py`
+- `src/wavebit/fdtd/_periodic/api.py`
 - `src/wavebit/manifest.py`
 - `tests/fdtd/test_fdtd_circles.py`
 - `tests/fdtd/test_fdtd_circle_optics.py`

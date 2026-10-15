@@ -1,6 +1,6 @@
 """Frozen public-API Meep differences versus live half-space autodiff."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -26,7 +26,7 @@ def test_halfspace_amplitudes_and_jacobian_against_meep(record_property):
     np.testing.assert_allclose(derivatives[0], derivatives[1], atol=2e-7, rtol=0)
     np.testing.assert_allclose(derivatives[:, 0], derivatives[:, 1], atol=2e-6, rtol=0)
     def objective(p):
-        results = _legacy_wavebit.fdtd(structure=np.full((1, 1, 1), float(ref['epsilon'])),
+        results = _legacy_wavebit_fdtd(structure=np.full((1, 1, 1), float(ref['epsilon'])),
                                mu=np.full((1, 1, 1), float(ref['mu'])), thickness=[float(ref['thickness'])],
                                top=wavebit.Material(p[0], p[1]), bot=wavebit.Material(p[2], p[3]),
                                period=.05, wavelength=ref['wavelengths'], backend='jax',

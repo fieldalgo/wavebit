@@ -4,7 +4,7 @@ Written: 2026-09-09
 
 Targets:
 - `src/wavebit/fdtd/_periodic/scene.py`
-- `src/wavebit/compat/legacy.py`
+- `src/wavebit/fdtd/_periodic/api.py`
 - `tests/fdtd/test_fdtd_transverse_resolution.py`
 - `studies/fdtd/transverse_resolution/fdtd_transverse_resolution.py`
 - `studies/fdtd/lattice_reference/fdtd_lattice_reference.py`

@@ -23,7 +23,7 @@ silently:
   well as powers.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -57,7 +57,7 @@ def solver(truncation_order=(0, 0), backend='numpy', **kw):
     kw.setdefault('theta', np.deg2rad(28.0))
     kw.setdefault('phi', np.deg2rad(37.0))
     kw.setdefault('psi', 0.6)
-    return _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
+    return _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
                           wavelength=WL, **kw)
 
 
@@ -264,9 +264,9 @@ def test_the_two_formulations_agree_across_absorbing_half_spaces(eps_top, eps_bo
     layers = [np.diag([2.4 + 0.05j, 3.1 + 0.05j, 2.7 + 0.05j]).astype(complex), IN_PLANE]
     kw = dict(top=eps_top, bot=eps_bot, thickness=[260.0, 140.0])
 
-    a = _legacy_wavebit.rcwa(backend='numpy', truncation_order=(0, 0), period=PERIOD, wavelength=WL,
+    a = _legacy_wavebit_rcwa(backend='numpy', truncation_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
-    b = _legacy_wavebit.rcwa(backend='numpy', truncation_order=(0, 0), period=PERIOD, wavelength=WL,
+    b = _legacy_wavebit_rcwa(backend='numpy', truncation_order=(0, 0), period=PERIOD, wavelength=WL,
                        theta=np.deg2rad(28.0), phi=np.deg2rad(37.0), psi=0.6, **kw)
     b.formulation = 'first_order'
 
@@ -522,7 +522,7 @@ def test_y_orders_on_a_y_invariant_cell_are_refused_in_plain_words(incidence):
     mistake, and it fired inside the solve rather than at the request.
     """
     with pytest.raises(ValueError, match='asks for y diffraction orders'):
-        _legacy_wavebit.rcwa(structure=_Y_INVARIANT, truncation_order=[2, 1], **incidence, **_1D_KW).solve()
+        _legacy_wavebit_rcwa(structure=_Y_INVARIANT, truncation_order=[2, 1], **incidence, **_1D_KW).solve()
 
 
 def test_the_refused_orders_are_the_ones_that_are_zero():
@@ -532,17 +532,17 @@ def test_the_refused_orders_are_the_ones_that_are_zero():
     the y orders — and returns them empty. So the 1D formulations are not withholding an
     answer, and clamping ``truncation_order[1]`` silently would hand back a different shape than asked for.
     """
-    res = _legacy_wavebit.rcwa(structure=_Y_ROWS, truncation_order=[2, 1], psi=0.4, **_1D_KW).solve()
+    res = _legacy_wavebit_rcwa(structure=_Y_ROWS, truncation_order=[2, 1], psi=0.4, **_1D_KW).solve()
     T = np.asarray(res.incident.T)
     assert T.shape == (3, 5)
     assert T[[0, 2], :].sum() < 1e-25, T                     # every n != 0 order is empty
 
-    flat = np.asarray(_legacy_wavebit.rcwa(structure=_Y_ROWS, truncation_order=[2, 0], psi=0.4,
+    flat = np.asarray(_legacy_wavebit_rcwa(structure=_Y_ROWS, truncation_order=[2, 0], psi=0.4,
                                    **_1D_KW).solve().incident.T).ravel()
     assert np.abs(T[1] - flat).max() < 1e-13                 # and n = 0 is the 1D answer
 
 
 def test_max_order_y_zero_is_untouched():
     """The guard must not cost the ordinary 1D call anything."""
-    res = _legacy_wavebit.rcwa(structure=_Y_INVARIANT, truncation_order=[2, 0], psi=0.4, **_1D_KW).solve()
+    res = _legacy_wavebit_rcwa(structure=_Y_INVARIANT, truncation_order=[2, 0], psi=0.4, **_1D_KW).solve()
     assert np.asarray(res.incident.T).shape == (1, 5)

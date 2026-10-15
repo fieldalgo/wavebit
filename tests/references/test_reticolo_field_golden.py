@@ -49,7 +49,7 @@ sides so it cannot silently grow, and cannot silently vanish without someone upd
 story here.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -115,7 +115,7 @@ def _reconstruct(stack, theta, pol):
     # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
     # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=MAX_ORDER,
                           wavelength=WL, thickness=thickness[::-1], structure=structure[::-1],
                           theta=np.deg2rad(theta), phi=None, tetm=pol,
                           # RETICOLO's texture is analytic piecewise-constant, so the exact

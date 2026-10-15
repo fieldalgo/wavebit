@@ -26,7 +26,9 @@ The electric components are the only ones with poles -- ``pole_state`` is electr
 there is no magnetic dispersion -- so ``E_x``, ``E_y`` and ``E_z`` are the whole set.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -159,7 +161,7 @@ def test_crossed_drude_metal_absorption_matches_rcwa():
     propagates, so it is ``1 - R - T`` on one order each side. The amplitude gap is the
     same comparison ``test_meep_crossed_metal_golden.py`` makes, at half its cost.
     """
-    result, diag = _legacy_wavebit.fdtd(
+    result, diag = _legacy_wavebit_fdtd(
         **scene(METAL), dispersion=METAL['dispersion'], poles=METAL['poles'],
         resolution=30., n_periods=160, n_pml=12, pad_scale=1., courant=.99, subpixel=True,
         grading=None, return_diagnostics=True)
@@ -169,7 +171,7 @@ def test_crossed_drude_metal_absorption_matches_rcwa():
     kw = scene(METAL)
     kw['structure'] = epsilon(METAL, METAL['wavelength'])
     kw['truncation_order'] = dict(x=11, y=11)
-    ref = extract(_legacy_wavebit.rcwa(backend='numpy', **kw).solve(), METAL)
+    ref = extract(_legacy_wavebit_rcwa(backend='numpy', **kw).solve(), METAL)
     amplitude = gap(got, ref, METAL)
     assert amplitude < AMPLITUDE_TOL, f'worst complex-amplitude gap {amplitude:.4f} from RCWA'
     for leg in ('s', 'p'):

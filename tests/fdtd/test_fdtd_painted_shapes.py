@@ -1,6 +1,10 @@
 """Painted rectangle cells against independent Cartesian vertical-strip integrals."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 from scipy.integrate import quad_vec
@@ -151,12 +155,12 @@ def test_mixed_multiple_curves_are_refused_explicitly():
 
 
 def response(p, backend='numpy', diagnostics=False, side='bottom'):
-    stack = _legacy_wavebit.Stack.from_structure([
+    stack = _legacy_wavebit_Stack.from_structure([
         dict(background=1.2, shapes=[
             dict(lx=p[1], ly=.1, cx=-.035, cy=-.012, angle=p[0], material=2.),
             dict(lx=p[4], ly=.12, cx=p[2], cy=.014, angle=p[3], material=wavebit.Material(p[5], p[6]))]),
         dict(background=1.4)], [p[7], .3-p[7]], top=1., bot=1.4, period=[.4, .3])
-    result, out = _legacy_wavebit.fdtd(stack, _legacy_wavebit.Incidence(wavelength=.9, theta=.17, phi=.23,
+    result, out = _legacy_wavebit_fdtd(stack, _legacy_wavebit_Incidence(wavelength=.9, theta=.17, phi=.23,
         polarization=(1., .4j), incidence_side=side), backend=backend, resolution=9,
         transverse_resolution=[10., 10.], n_pml=6, n_periods=35, pulse_width=1.5,
         truncation_order=0, mesh_thickness=[.15, .15], layer_smoothing=.025, align_layers=True,

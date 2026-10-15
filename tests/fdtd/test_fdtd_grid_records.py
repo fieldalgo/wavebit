@@ -1,6 +1,6 @@
 """Sampled histories: independent discrete eigenmode and streaming DFT checks."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 from tests.fdtd.test_fdtd_grid import initial_mode
@@ -15,7 +15,7 @@ def test_records_preserve_exact_modes_staggering_and_final_state(backend, interv
     if backend == 'torch':
         pytest.importorskip('torch')
     e, h, omega = initial_mode()
-    out = _legacy_wavebit.fdtd_grid(np.full((16,2,2),2.), spacing=(1.,)*3, dt=.2, steps=20,
+    out = _legacy_wavebit_fdtd_grid(np.full((16,2,2),2.), spacing=(1.,)*3, dt=.2, steps=20,
                             electric=e, magnetic=h, record_field=interval,
                             checkpoint_steps=4, backend=backend)
     def host(v):
@@ -33,7 +33,7 @@ def test_records_preserve_exact_modes_staggering_and_final_state(backend, interv
 def test_streamed_planes_equal_offline_record_dft():
     e,h,w=initial_mode()
     wl=2*np.pi/w
-    out=_legacy_wavebit.fdtd_grid(np.full((16,2,2),2.),spacing=(1.,)*3,dt=.2,steps=21,
+    out=_legacy_wavebit_fdtd_grid(np.full((16,2,2),2.),spacing=(1.,)*3,dt=.2,steps=21,
                           electric=e,magnetic=h,record_field=1,wavelengths=[wl],monitor_z=[4])
     for name,key,c in [('ey','electric_spectrum',1),('hx','magnetic_spectrum',0)]:
         rec=out['fields'][name]
@@ -48,7 +48,7 @@ def test_streamed_planes_equal_offline_record_dft():
 def test_recorded_material_gradient_matches_finite_difference(backend):
     e,h,_=initial_mode()
     def run(value,which):
-        out=_legacy_wavebit.fdtd_grid(value*np.ones((16,2,2)) if which=='numpy' else value*ones,
+        out=_legacy_wavebit_fdtd_grid(value*np.ones((16,2,2)) if which=='numpy' else value*ones,
                               spacing=(1.,)*3,dt=.2,steps=15,electric=e,magnetic=h,
                               backend=which,checkpoint_steps=3,record_field=4,record_components=['ey'])
         return (abs(out['fields']['ey']['values'])**2).sum()

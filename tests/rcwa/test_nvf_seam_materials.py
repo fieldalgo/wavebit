@@ -4,7 +4,9 @@ These gates cross equal moduli with unequal permittivities; an equality ramp
 between positive real materials alone cannot detect a modulus-ranking switch.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -31,7 +33,7 @@ def structure(right):
 
 def total(right, **kwargs):
     P._PROJECTOR_CACHE.clear()
-    return float(np.sum(_legacy_wavebit.rcwa(backend='numpy', structure=structure(right),
+    return float(np.sum(_legacy_wavebit_rcwa(backend='numpy', structure=structure(right),
                                      **dict(KW, **kwargs)).solve().T))
 
 
@@ -53,7 +55,7 @@ def test_equal_moduli_are_continuous_in_coefficients_and_transmission(right):
 def test_equal_moduli_do_not_choose_the_listing_order(right):
     # The 300-unit anchor offset is 60 whole pixels at N=140, removing sampling jitter.
     kw = dict(KW, shape_nvf_grid_size=140)
-    values = [_legacy_wavebit.rcwa(backend='numpy', structure=[dict(background=1., shapes=shapes)],
+    values = [_legacy_wavebit_rcwa(backend='numpy', structure=[dict(background=1., shapes=shapes)],
                            **kw).solve().T for shapes in (pair(right), pair(right)[::-1])]
     np.testing.assert_allclose(*values, rtol=0., atol=2e-11)
 
@@ -119,9 +121,9 @@ def test_fourier_components_keep_hermitian_symmetry_and_unit_trace():
 def test_jitted_material_gradient_crosses_equal_moduli_and_material_equality():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     for right in (MATERIALS[0], -4., 4., 4.+0j):
-        solver = _legacy_wavebit.rcwa(backend='jax', structure=structure(right), **KW)
+        solver = _legacy_wavebit_rcwa(backend='jax', structure=structure(right), **KW)
         geometry = solver.freeze_geometry()
         def response(scale):
             return jnp.sum(solver.solve(structure=structure(right*scale),
@@ -140,7 +142,7 @@ def test_torch_material_gradient_matches_the_same_secant():
     torch = pytest.importorskip('torch')
     right = MATERIALS[0]
     scale = torch.tensor(1., dtype=torch.float64, requires_grad=True)
-    response = _legacy_wavebit.rcwa(backend='torch', structure=structure(right*scale), **KW).solve().T.sum()
+    response = _legacy_wavebit_rcwa(backend='torch', structure=structure(right*scale), **KW).solve().T.sum()
     response.backward()
     assert float(response.detach()) == pytest.approx(total(right), abs=2e-11)
     secant = (total(right*(1.+1e-6))-total(right*(1.-1e-6)))/2e-6
@@ -155,8 +157,8 @@ def test_complex_electric_and_magnetic_seams_keep_backend_and_precision(backend,
                   left=wavebit.Material(4., mu=1.1+.1j))
     kw = dict(KW, shape_nvf_grid_size=64, truncation_order=(1, 1),
               structure=[dict(background=1., shapes=shapes)])
-    want = _legacy_wavebit.rcwa(backend='numpy', **kw).solve()
-    solver = _legacy_wavebit.rcwa(backend=backend, complex_dtype=precision, **kw)
+    want = _legacy_wavebit_rcwa(backend='numpy', **kw).solve()
+    solver = _legacy_wavebit_rcwa(backend=backend, complex_dtype=precision, **kw)
     got = solver.solve()
     for a, b in ((got.R, want.R), (got.T, want.T)):
         np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=0.,

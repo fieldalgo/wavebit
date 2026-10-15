@@ -1,5 +1,5 @@
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 from wavebit import eps_from_refractive_index
 
@@ -23,7 +23,7 @@ def test_1_si_glass_branch_cut():
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
         try:
-            solver = _legacy_wavebit.rcwa(backend=backend_id, **option)
+            solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
             res = solver.solve()
             assert res.R is not None and res.T is not None
             R = float(res.R.sum())
@@ -54,7 +54,7 @@ def test_2_air_au_raw_n_lossy_substrate():
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
         try:
-            solver = _legacy_wavebit.rcwa(backend=backend_id, **option)
+            solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
             res = solver.solve()
             assert res.R is not None
             R = float(res.R.sum())
@@ -81,7 +81,7 @@ def test_3_same_material_interface():
     )
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
-        solver = _legacy_wavebit.rcwa(backend=backend_id, **option)
+        solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
         res = solver.solve()
         assert res.R is not None
         R = float(res.R.sum())
@@ -106,7 +106,7 @@ def test_4_tm_transmittance_conjugation():
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
         try:
-            solver = _legacy_wavebit.rcwa(backend=backend_id, **option_conical)
+            solver = _legacy_wavebit_rcwa(backend=backend_id, **option_conical)
             res = solver.solve()
             assert res.p_inc is not None and res.p_inc.T_p is not None
             T_p = float(res.p_inc.T_p.sum())
@@ -151,7 +151,7 @@ def test_6_none_structure_grating_type():
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('jax', 'JAX'), ('torch', 'PyTorch')]:
         try:
-            solver = _legacy_wavebit.rcwa(backend=backend_id, **option)
+            solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
             solver._assign_grating_type()
             print(f"[{backend_name}] structure=None assigned grating_type: {solver.grating_type}")
             assert solver.grating_type == 2, f"Expected grating_type == 2 for structure=None, got {solver.grating_type}"
@@ -174,7 +174,7 @@ def test_7_none_theta_handling():
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('jax', 'JAX'), ('torch', 'PyTorch')]:
         try:
-            solver = _legacy_wavebit.rcwa(backend=backend_id, **option)
+            solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
             res = solver.solve()
             assert res.R is not None
             R = float(res.R.sum())
@@ -222,7 +222,7 @@ def test_10_shared_mean_permittivity_keeps_the_interface():
         psi=0.4, wavelength=0.5, period=[0.6, 0.6], theta=0.1, phi=0.0, truncation_order=[2, 2])
 
     for algo in ('ETM', 'SMM'):
-        res = _legacy_wavebit.rcwa(backend='numpy', layer_algorithm=algo, **option).solve()
+        res = _legacy_wavebit_rcwa(backend='numpy', layer_algorithm=algo, **option).solve()
         total = float(np.sum(res.R)) + float(np.sum(res.T))
         print(f"[{algo}] R+T = {total:.12f}")
         assert abs(total - 1.0) < 1e-9, f"{algo} energy conservation failed: {total}"

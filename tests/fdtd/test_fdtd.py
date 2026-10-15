@@ -47,7 +47,7 @@ only a skewed cell is still refused; `test_refusals` is what keeps that last one
 pinning the refusal rather than the behaviour.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
 import numpy as np
 import pytest
 
@@ -65,7 +65,7 @@ def _legacy_rcwa(**kwargs):
     rename.
     """
     from types import SimpleNamespace
-    from wavebit.compat.legacy import rcwa as current_rcwa
+    from wavebit.rcwa._factory import rcwa as current_rcwa
 
     kwargs = dict(kwargs)
     for key in ('structure', 'thickness', 'mu'):
@@ -1969,7 +1969,7 @@ def test_the_record_carries_the_axes_it_is_measured_on():
     assert np.allclose(x, np.arange(diag['nx']) * dx - 0.5 * PERIOD), (
         'field_x must be the Ey node axis in the cell-centre frame')
     assert abs(x.mean() + 0.5 * dx) < 1e-9, 'the node axis straddles the centre, off by dx/2'
-    centres = _legacy_wavebit.meshgrid_xy((1, diag['nx']), period=(PERIOD, PERIOD))[0][0]
+    centres = _legacy_wavebit_meshgrid_xy((1, diag['nx']), period=(PERIOD, PERIOD))[0][0]
     assert np.allclose(x + 0.5 * dx, centres), (
         'shifting Ey by half a cell must land exactly on the pixel centres the RCWA path uses; '
         'if this fails the two solvers are quoting fields on different grids')

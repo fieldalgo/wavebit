@@ -5,7 +5,7 @@ experiment compares finite constitutive closures, not independent Maxwell codes.
 Cartesian Li is a separate factorization on the same exact rectangular geometry.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -51,7 +51,7 @@ def matrices(shapes, order=4, grid=512, closure='passive'):
 
 def response(shapes, order=4, grid=512, closure='passive', spectrum=False):
     slots = matrices(shapes, order, grid, closure)
-    solver = _legacy_wavebit.rcwa(lattice=CELL, truncation_order=(order, order), **SOLVE_KW)
+    solver = _legacy_wavebit_rcwa(lattice=CELL, truncation_order=(order, order), **SOLVE_KW)
     result = solver._solve_conv(*[m[None, :, :] for m in slots])
     row = dict(T=float(np.real(np.sum(result.T))), R=float(np.real(np.sum(result.R))))
     if spectrum:

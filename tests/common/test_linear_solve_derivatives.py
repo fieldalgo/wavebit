@@ -18,7 +18,7 @@ tests hold each site that solves through it to PyTorch's ``create_graph=True``, 
 and is exact (and to ``jax.hessian`` on one scene, which shares no rule with it).
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import ast
 import functools
 import importlib
@@ -28,7 +28,9 @@ import pathlib
 import numpy as np
 import pytest
 
-from wavebit.compat import legacy as wavebit
+from wavebit.rcwa._engine.sources import PlaneWave as wavebit_PlaneWave
+
+from wavebit._common.backend import _enable_x64 as wavebit_enable_x64
 
 torch = pytest.importorskip('torch')
 from torch.autograd import forward_ad as fa  # noqa: E402
@@ -481,7 +483,7 @@ def test_numpy_and_jax_are_their_own_solve():
     B = rng.standard_normal((6, 2)) + 0j
     assert WB.linear_solve(np, A, B).tobytes() == np.linalg.solve(A, B).tobytes()
     pytest.importorskip('jax')
-    wavebit.enable_x64()
+    wavebit_enable_x64()
     import jax.numpy as jnp
     Aj, Bj = jnp.asarray(A), jnp.asarray(B)
     assert np.asarray(WB.linear_solve(jnp, Aj, Bj)).tobytes() == np.asarray(jnp.linalg.solve(Aj, Bj)).tobytes()
@@ -648,7 +650,7 @@ def _first_order_2d(algorithm, parameter='thickness'):
     def f(b, p):
         cfg = dict(TWO_D, layer_algorithm=algorithm)
         cfg[parameter] = [p] if parameter == 'thickness' else p
-        solver = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, RASTER), **cfg)
+        solver = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, RASTER), **cfg)
         solver.formulation = 'first_order'
         return _read_out(b, solver.solve(), 'r_s', 6, point=([0.1], [-0.05], [0.07]))
     return f
@@ -659,14 +661,14 @@ def _efficiency_2d(b, p):
     thickness Hessian of ``R`` and ``T``: the ETM final matching then solves the declared column
     alone, in its own branch, where the amplitude rung adds the pure-TE and pure-TM columns."""
     cfg = dict(TWO_D, layer_algorithm='ETM', answers='efficiency', thickness=[p])
-    r = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, RASTER), **cfg).solve()
+    r = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, RASTER), **cfg).solve()
     return _stack(b, [r.R.sum(), r.T.sum(), r.R.reshape(-1)[4], r.T.reshape(-1)[2]])
 
 
 def _coherent(b, p):
     assert b == 'torch'
-    sources = [wavebit.PlaneWave(), wavebit.PlaneWave(side='bottom', amplitude=.3j)]
-    solver = _legacy_wavebit.rcwa(backend=b, excitation=sources, period=(600., 750.), wavelength=900.,
+    sources = [wavebit_PlaneWave(), wavebit_PlaneWave(side='bottom', amplitude=.3j)]
+    solver = _legacy_wavebit_rcwa(backend=b, excitation=sources, period=(600., 750.), wavelength=900.,
                           thickness=(p,), truncation_order=(1, 1), answers='field',
                           structure=_lift(b, RASTER))
     f = solver.solve().reconstruct_field([23.], [-19.], [83.])[0, 0, 0]
@@ -677,7 +679,7 @@ def _excitation_conical(b, p):
     cfg = dict(period=(1400., 1500.), wavelength=900., thickness=(p,), truncation_order=(3, 0),
                theta=0.2, phi=0.3, psi=0.37, top=1.0, bot=2.25, answers='field', layer_algorithm='ETM',
                excitation={0: 1.0, 1: 0.4j})
-    r = _legacy_wavebit.rcwa(backend=b, structure=_lift(b, GRATING), **cfg).solve()
+    r = _legacy_wavebit_rcwa(backend=b, structure=_lift(b, GRATING), **cfg).solve()
     return torch.stack([r.R.sum().real, r.T.sum().real])
 
 
@@ -760,7 +762,7 @@ def _at_wavelength(algorithm, parameter, **polarization):
     def f(wavelength, p):
         cfg = dict(ONE_D, layer_algorithm=algorithm, wavelength=wavelength, **polarization)
         cfg[parameter] = p
-        solver = _legacy_wavebit.rcwa(backend='torch', structure=_lift('torch', GRATING), **cfg)
+        solver = _legacy_wavebit_rcwa(backend='torch', structure=_lift('torch', GRATING), **cfg)
         return _read_out('torch', solver.solve(), 'r_s', 3, point=([57.], [0.], [83.]))
     return f
 
@@ -839,7 +841,7 @@ def test_jax_agrees_on_the_2d_etm_raster():
     """An oracle that shares no rule with ``linear_solve``: ``jax.hessian`` (``jnp.linalg.solve``'s
     own rules, exact) against PyTorch's ``jvp(jvp)`` through it."""
     jax = pytest.importorskip('jax')
-    wavebit.enable_x64()
+    wavebit_enable_x64()
     import jax.numpy as jnp
     f, at, _ = SCENES['2D Li ETM']
     w = np.random.default_rng(5).standard_normal(f('numpy', at).size)
@@ -932,14 +934,14 @@ def test_every_solve_goes_through_linear_solve():
     the scan sees, so the scan is seen to read the files -- and since every exemption is under
     the common array helpers or RCWA engine, the scan's reach across solver/shared packages
     is asserted by name below so a narrowed inventory cannot silently pass."""
-    package = pathlib.Path(importlib.import_module('wavebit').__file__).parent   # not compat.legacy
+    package = pathlib.Path(importlib.import_module('wavebit').__file__).parent
     found, scanned = [], []
     for path in sorted(package.rglob('*.py')):
         name = path.relative_to(package).as_posix()
         if not name.startswith('rcwa/_engine/conforming/'):
             scanned.append(name)
             found += [(name, func, line) for func, line in _solve_references(path.read_text())]
-    assert {'compat/legacy.py', 'materials/catalog.py', 'rcwa/_backends/torch_backend.py', 'rcwa/_backends/jax_backend.py',
+    assert {'fdtd/native.py', 'fdtd/periodic.py', 'migration.py', 'materials/catalog.py', 'rcwa/_backends/torch_backend.py', 'rcwa/_backends/jax_backend.py',
             'rcwa/_engine/solve_1d.py', 'fdtd/_periodic/adapter.py',
             'materials/models.py', 'observations/contracts.py', 'units.py'} <= set(scanned), scanned
     assert not any(name.startswith('rcwa/_engine/conforming/') for name in scanned), scanned

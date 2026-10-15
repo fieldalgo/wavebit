@@ -1,6 +1,14 @@
 """The same answer ladder for ordinary incidence and every source input."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.sources import ElectricDipole as _legacy_wavebit_ElectricDipole
+
+from wavebit.rcwa._engine.sources import GaussianBeam as _legacy_wavebit_GaussianBeam
+
+from wavebit.rcwa._engine.sources import OrderExcitation as _legacy_wavebit_OrderExcitation
+
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from dataclasses import fields
 import weakref
 
@@ -26,22 +34,22 @@ def solver_for(kind, backend='numpy', **updates):
     elif kind == 'order_map':
         options.update(theta=.17, phi=.2, polarization=(.6, .8j), excitation={0:1., 1:.3j})
     elif kind == 'plane':
-        options['excitation'] = _legacy_wavebit.PlaneWave(theta=.17, phi=.2, polarization=(.6, .8j))
+        options['excitation'] = _legacy_wavebit_PlaneWave(theta=.17, phi=.2, polarization=(.6, .8j))
     elif kind == 'orders':
-        options['excitation'] = _legacy_wavebit.OrderExcitation(kx=.2, orders={0:1., 1:.3j})
+        options['excitation'] = _legacy_wavebit_OrderExcitation(kx=.2, orders={0:1., 1:.3j})
     elif kind in ('two_sided', 'sectors'):
-        options.update(excitation=[_legacy_wavebit.PlaneWave(kx=.2),
-            _legacy_wavebit.PlaneWave(side='bottom', kx=.2 if kind == 'two_sided' else .7, amplitude=.4j)],
+        options.update(excitation=[_legacy_wavebit_PlaneWave(kx=.2),
+            _legacy_wavebit_PlaneWave(side='bottom', kx=.2 if kind == 'two_sided' else .7, amplitude=.4j)],
             power_region='infinite')
         # Include incident/reflected interference in lossy magnetic half-spaces.
         options.update(top=wavebit.Material(1.+.1j, 1.2), bot=wavebit.Material(2.25+.15j, 1.1))
     elif kind == 'gaussian':
-        options.update(excitation=_legacy_wavebit.GaussianBeam(waist=5., sampling=(3, 1)),
+        options.update(excitation=_legacy_wavebit_GaussianBeam(waist=5., sampling=(3, 1)),
                        power_region=((-4., 4.), (-3., 3.)))
     else:
-        options.update(excitation=_legacy_wavebit.ElectricDipole(position=(.1, 0., .17),
+        options.update(excitation=_legacy_wavebit_ElectricDipole(position=(.1, 0., .17),
                        moment=(0., 1e-29, .2e-29j)), length_unit=1e-6)
-    return _legacy_wavebit.rcwa(**(options | updates))
+    return _legacy_wavebit_rcwa(**(options | updates))
 
 
 def power_values(result):

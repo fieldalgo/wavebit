@@ -5,7 +5,7 @@ from pathlib import Path as _RepositoryPath
 if __package__ in (None, ""):
     _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as wavebit_fdtd_grid
 
 
 from studies._support._fdtd_legacy import legacy_fdtd  # noqa: E402
@@ -14,7 +14,7 @@ from studies._support._fdtd_legacy import legacy_fdtd  # noqa: E402
 def hidden_material_motion():
     e = np.zeros((3, 4, 2, 2))
     e[0] = 1
-    c = wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.02, steps=2000,
+    c = wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1.,)*3, dt=.02, steps=2000,
                          electric=e, conductivity=10., poles=[(1., .01, .01)],
                          convergence_window=100)['convergence']
     print({k: np.asarray(c[k]).tolist() for k in

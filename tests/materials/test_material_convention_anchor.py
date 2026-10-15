@@ -34,7 +34,7 @@ and deliberately duplicates a little of it, because the property being pinned is
 unrelated edit to that file could drop.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -77,7 +77,7 @@ def _solve(eps_stack, thickness, eps_top, eps_bot, *, theta=0.0, tetm='te', wave
     """Adapt the unchanged top-down Fresnel case to the bottom-up public API."""
     structure = np.array([[[complex(_api_material(e))]] for e in reversed(eps_stack)]) if eps_stack \
         else np.zeros((0, 1, 1), dtype=complex)
-    solver = _legacy_wavebit.rcwa(
+    solver = _legacy_wavebit_rcwa(
         backend='numpy', wavelength=wavelength, period=[300.], truncation_order=[0, 0],
         top=complex(_api_material(eps_top)), bot=complex(_api_material(eps_bot)),
         theta=theta, phi=0., tetm=tetm,

@@ -5,7 +5,7 @@ Written: 2026-09-09
 Targets:
 - `src/wavebit/fdtd/_periodic/scene.py`
 - `src/wavebit/_common/geometry/polygon.py`
-- `src/wavebit/compat/legacy.py`
+- `src/wavebit/fdtd/_periodic/api.py`
 - `src/wavebit/manifest.py`
 - `tests/fdtd/test_fdtd_rotated_rectangles.py`
 - `studies/cross_solver/rotation_gradients/fdtd_rotation_gradients.py`

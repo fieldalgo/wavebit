@@ -1,6 +1,10 @@
 """Independent area integration and full-graph rotation derivatives on fixed meshes."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -94,14 +98,14 @@ def test_cell_shape_jacobian_matches_independent_area_and_exact_total(backend, a
 
 
 def scene(p):
-    return _legacy_wavebit.Stack.from_structure([
+    return _legacy_wavebit_Stack.from_structure([
         dict(background=wavebit.Material(1.2, 1.03), shapes=[
             dict(cx=p[0], cy=p[1], lx=p[2], ly=p[3], angle=p[4], material=wavebit.Material(p[5], p[6]))]),
         dict(background=1.4, shapes=[])], [p[7], .3-p[7]], top=1., bot=1.4, period=[.4, .3])
 
 
 def response(p, backend='numpy', diagnostics=False, side='bottom', smoothing=0.):
-    result, out = _legacy_wavebit.fdtd(scene(p), _legacy_wavebit.Incidence(wavelength=.9, theta=.17, phi=.23,
+    result, out = _legacy_wavebit_fdtd(scene(p), _legacy_wavebit_Incidence(wavelength=.9, theta=.17, phi=.23,
                              polarization=(1., .4j), incidence_side=side), backend=backend,
                              resolution=9, transverse_resolution=[12., 15.], n_pml=6, n_periods=38,
                              pulse_width=1.5, truncation_order=0, mesh_thickness=[.15, .15],
@@ -162,7 +166,7 @@ def test_area_option_contract_rejects_unsupported_combinations(change):
                    thickness=[.2], top=1., bot=1., period=[.4, .3], wavelength=1., backend='numpy',
                    resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area')
     with pytest.raises(ValueError):
-        _legacy_wavebit.fdtd(**dict(options, **change))
+        _legacy_wavebit_fdtd(**dict(options, **change))
 
 
 def test_area_rejects_projected_self_overlap():

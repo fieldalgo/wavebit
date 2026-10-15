@@ -1,6 +1,16 @@
 """Explicit public rectangle admission and independent energy-closure derivatives."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.conforming.affine_profile import AffineProfileNVF as _legacy_wavebit_AffineProfileNVF
+
+from wavebit.rcwa._engine.conforming.cartesian_rectangle import CartesianRectangleNVF as _legacy_wavebit_CartesianRectangleNVF
+
+from wavebit.rcwa._engine.conforming import ConformingNVF as _legacy_wavebit_ConformingNVF
+
+from wavebit.rcwa._engine.factorization import ConvMatrices as _legacy_wavebit_ConvMatrices
+
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from dataclasses import FrozenInstanceError, replace
 import os
 from pathlib import Path
@@ -47,12 +57,12 @@ def closure_variation(value, derivative):
 @pytest.mark.research
 @pytest.mark.parametrize('order', [(0, 0), (0, 1), (2, 0), (1, 2), (2, 1)])
 def test_exact_physical_mapping_labels_and_independent_material_transform(order):
-    builder = _legacy_wavebit.CartesianRectangleNVF(order, refinement=1)
+    builder = _legacy_wavebit_CartesianRectangleNVF(order, refinement=1)
     structure, basis = scene(wrapped=True)
     structure = [dict(background=wavebit.Material(2.3+.4j)), *structure, {}]
     plan = builder.plan(structure, basis)
     actual = builder.conv_matrices(structure, basis, plan=plan)
-    assert isinstance(actual, _legacy_wavebit.ConvMatrices)
+    assert isinstance(actual, _legacy_wavebit_ConvMatrices)
     assert plan.layers[0] is plan.layers[2] is None
     assert isinstance(plan.layers[1], CartesianRectanglePlan)
     cell = CartesianRectangleCell(order, refinement=1, plan=plan.layers[1])
@@ -77,7 +87,7 @@ def test_exact_physical_mapping_labels_and_independent_material_transform(order)
     (dict(l=190., lx=250., ly=150.), (250., 150.)), (dict(lx=250., ly=150.), (250., 150.))])
 def test_ordinary_rectangle_alias_precedence_and_defaults(lengths, expected):
     basis = np.array([[700., 315.], [0., 490.]])
-    builder = _legacy_wavebit.CartesianRectangleNVF(np.int64(0))
+    builder = _legacy_wavebit_CartesianRectangleNVF(np.int64(0))
     structure = [dict(shapes=[dict(lengths, material=wavebit.Material(4.+.2j))])]
     plan = builder.plan(structure, basis)
     actual = builder.conv_matrices(structure, basis, plan=plan)
@@ -86,13 +96,13 @@ def test_ordinary_rectangle_alias_precedence_and_defaults(lengths, expected):
     for value, reference in zip(actual, direct):
         np.testing.assert_array_equal(value, reference)
     lattice = wavebit.Lattice(basis[:, 0], basis[:, 1], axis_aligned=False)
-    for value, reference in zip(builder.conv_matrices(structure, lattice, plan=plan, xp=_legacy_wavebit.rcwa().xp), actual):
+    for value, reference in zip(builder.conv_matrices(structure, lattice, plan=plan, xp=_legacy_wavebit_rcwa().xp), actual):
         np.testing.assert_array_equal(value, reference)
 
 
 def test_concrete_planning_is_geometry_only_and_replay_does_not_replan(monkeypatch):
     structure, basis = scene()
-    builder = _legacy_wavebit.CartesianRectangleNVF(0)
+    builder = _legacy_wavebit_CartesianRectangleNVF(0)
     with monkeypatch.context() as patch:
         patch.setattr(CartesianRectangleCell, 'coefficients', lambda *a, **k: pytest.fail('planning solved a cell'))
         plan = builder.plan(structure, basis)
@@ -106,7 +116,7 @@ def test_concrete_planning_is_geometry_only_and_replay_does_not_replan(monkeypat
 
 @pytest.mark.research
 def test_phase_joint_rotation_scale_and_equivalent_charts():
-    builder = _legacy_wavebit.CartesianRectangleNVF((1, 1), refinement=1)
+    builder = _legacy_wavebit_CartesianRectangleNVF((1, 1), refinement=1)
     structure, basis = scene()
     plan = builder.plan(structure, basis)
     original = builder.conv_matrices(structure, basis, plan=plan)
@@ -149,18 +159,18 @@ def test_phase_joint_rotation_scale_and_equivalent_charts():
 
 
 def test_structural_and_material_admission_and_mandatory_plan():
-    builder = _legacy_wavebit.CartesianRectangleNVF(0)
+    builder = _legacy_wavebit_CartesianRectangleNVF(0)
     structure, basis = scene()
     plan = builder.plan(structure, basis)
     with pytest.raises(TypeError, match='plan'):
         builder.conv_matrices(structure, basis)
     for bad_plan in (None, plan.layers, replace(plan, layers=list(plan.layers)),
                      replace(plan, layers=(True,)), replace(plan, layers=())):
-        with pytest.raises(_legacy_wavebit.StaleGeometryError):
+        with pytest.raises(_legacy_wavebit_StaleGeometryError):
             builder.conv_matrices(structure, basis, plan=bad_plan)
-    with pytest.raises(_legacy_wavebit.StaleGeometryError, match='shape count'):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError, match='shape count'):
         builder.conv_matrices([{}], basis, plan=plan)
-    with pytest.raises(_legacy_wavebit.StaleGeometryError, match='shape count'):
+    with pytest.raises(_legacy_wavebit_StaleGeometryError, match='shape count'):
         builder.conv_matrices(structure, basis, plan=builder.plan([{}], basis))
     for invalid in ([], {}, [None], [dict(shapes=None)], [dict(shapes=[None])],
                     [dict(profile={})], [dict(shpaes=[])], [dict(shapes=[dict(type='circle', lx=30.)])],
@@ -195,18 +205,18 @@ def test_structural_and_material_admission_and_mandatory_plan():
         builder.conv_matrices(structure, basis, plan=plan, xp=object())
     for order in (True, -1, .5, (1, -1)):
         with pytest.raises(ValueError):
-            _legacy_wavebit.CartesianRectangleNVF(order)
+            _legacy_wavebit_CartesianRectangleNVF(order)
     for refinement in (True, -1, .5, 3):
         with pytest.raises(ValueError):
-            _legacy_wavebit.CartesianRectangleNVF(0, refinement=refinement)
+            _legacy_wavebit_CartesianRectangleNVF(0, refinement=refinement)
 
 
 def test_existing_public_admission_is_unchanged():
     structure, basis = scene()
     with pytest.raises(ValueError, match='orthogonal'):
-        _legacy_wavebit.ConformingNVF(0).plan(structure, basis)
+        _legacy_wavebit_ConformingNVF(0).plan(structure, basis)
     with pytest.raises(ValueError, match='unknown keys'):
-        _legacy_wavebit.AffineProfileNVF(0).conv_matrices(structure, basis)
+        _legacy_wavebit_AffineProfileNVF(0).conv_matrices(structure, basis)
 
 
 def test_installed_package_surface_does_not_depend_on_studies(tmp_path):
@@ -215,11 +225,12 @@ def test_installed_package_surface_does_not_depend_on_studies(tmp_path):
     code = """
 import sys
 import numpy as np
-from wavebit.compat import legacy as wavebit
-assert 'CartesianRectangleNVF' in wavebit.__all__
-builder = wavebit.CartesianRectangleNVF(0)
+from wavebit.rcwa import experimental
+from wavebit import Material
+assert 'CartesianRectangleNVF' in experimental.__all__
+builder = experimental.CartesianRectangleNVF(0)
 basis = np.array([[700.,315.],[0.,490.]])
-structure = [dict(shapes=[dict(l=200., angle=3.45, material=wavebit.Material(4.))])]
+structure = [dict(shapes=[dict(l=200., angle=3.45, material=Material(4.))])]
 plan = builder.plan(structure,basis)
 conv = builder.conv_matrices(structure,basis,plan=plan)
 assert np.isfinite(conv.epx).all()
@@ -238,11 +249,11 @@ def test_engine_uniform_airy_and_patterned_slot_layout_only(order):
     wavelength, thickness, theta = 900., 170., .23
     top, film, bottom = 1., 4., 2.25
     _, basis = scene()
-    builder = _legacy_wavebit.CartesianRectangleNVF(order)
+    builder = _legacy_wavebit_CartesianRectangleNVF(order)
     def solve(structure):
         plan = builder.plan(structure, basis)
         conv = builder.conv_matrices(structure, basis, plan=plan)
-        solver = _legacy_wavebit.rcwa(backend='numpy', lattice=basis, wavelength=wavelength,
+        solver = _legacy_wavebit_rcwa(backend='numpy', lattice=basis, wavelength=wavelength,
                               thickness=[thickness], truncation_order=order,
                               theta=theta, phi=.47, top=top, bot=bottom)
         return solver.solve_conv(*conv)
@@ -275,7 +286,7 @@ def test_jax_all_thirteen_parameters_and_independent_closure_variation(wrapped):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.CartesianRectangleNVF((1, 1), refinement=1)
+    builder = _legacy_wavebit_CartesianRectangleNVF((1, 1), refinement=1)
     plan = builder.plan(*scene(wrapped=wrapped))
     cell = CartesianRectangleCell((1, 1), refinement=1, plan=plan.layers[0])
     evaluate = jax.jit(lambda p, d: jax.jvp(
@@ -305,7 +316,7 @@ def test_jax_invalid_replay_poisoning_uniform_lattice_and_precision():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.CartesianRectangleNVF((1, 0))
+    builder = _legacy_wavebit_CartesianRectangleNVF((1, 0))
     def stack(p, xp):
         patterned, basis = scene(p, xp, wrapped=True)
         return [dict(background=2.3), *patterned, {}], basis

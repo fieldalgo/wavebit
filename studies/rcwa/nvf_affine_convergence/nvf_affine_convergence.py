@@ -10,7 +10,7 @@ from pathlib import Path as _RepositoryPath
 if __package__ in (None, ""):
     _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[3]))
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import argparse
 import json
 import time
@@ -85,7 +85,7 @@ def mean_energy(coefficients):
 
 def power_record(coefficients, order, transform, *, wavelength=900., thickness=300., theta=.2, phi=0.):
     slots = projected_matrices(real_coefficients(coefficients), order)
-    solver = _legacy_wavebit.rcwa(backend='numpy', lattice=700*np.asarray(transform), wavelength=wavelength,
+    solver = _legacy_wavebit_rcwa(backend='numpy', lattice=700*np.asarray(transform), wavelength=wavelength,
                           thickness=[thickness], theta=theta, phi=phi,
                           truncation_order=orders_xy(order), top=1., bot=2.25)
     result = solver._solve_conv(*(slot[None] for slot in slots))

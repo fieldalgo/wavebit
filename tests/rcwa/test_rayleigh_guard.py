@@ -38,7 +38,9 @@ construction plus the warning; see ``solve_2d._rebuild_grazing_cluster``) and an
 traced-and-jitted solve still rely on them.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import functools
 import re
 import warnings
@@ -84,7 +86,7 @@ def _solve(backend, truncation_order, structure=None, wavelength=WL, auto_detune
     # auto_detune off by default *here*: these tests pin the exact-point contracts, and the
     # library default would detune past the very regime under test. The default's own
     # contract has its own tests below.
-    return _legacy_wavebit.rcwa(backend=backend, wavelength=wavelength, truncation_order=[truncation_order, 0],
+    return _legacy_wavebit_rcwa(backend=backend, wavelength=wavelength, truncation_order=[truncation_order, 0],
                         structure=_STACK if structure is None else structure,
                         **{**_KW, **kw}).solve(auto_detune=auto_detune)
 
@@ -193,7 +195,7 @@ def test_exact_rayleigh_point_solves_correctly(backend, truncation_order, algo):
     """
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
 
@@ -224,7 +226,7 @@ def _solve_2d(n_spacer, algo, wavelength=WL, auto_detune=False):
     # `n_spacer` names the index, because that is the quantity the graze condition is about;
     # squaring it here is the only conversion, and it is exact for both 2.0 and 1.5.
     cell = np.concatenate([np.full((1, 2, 20), n_spacer ** 2), pillar], axis=0)
-    return _legacy_wavebit.rcwa(backend='numpy', wavelength=wavelength, truncation_order=[5, 1], structure=cell,
+    return _legacy_wavebit_rcwa(backend='numpy', wavelength=wavelength, truncation_order=[5, 1], structure=cell,
                         period=[PERIOD, PERIOD], top=1.0, bot=2.25, theta=0.0, phi=0.0,
                         psi=np.pi / 2, thickness=[300.0, 200.0],
                         layer_algorithm=algo).solve(auto_detune=auto_detune)
@@ -322,9 +324,9 @@ def test_exact_point_solves_for_tm_and_mixed_polarization(psi, algo):
     kw = dict(_KW)
     kw['psi'] = psi
     exact = _exact_point_or_refusal(
-        lambda: _legacy_wavebit.rcwa(backend='numpy', wavelength=WL, truncation_order=[5, 0], structure=_STACK,
+        lambda: _legacy_wavebit_rcwa(backend='numpy', wavelength=WL, truncation_order=[5, 0], structure=_STACK,
                              layer_algorithm=algo, **kw).solve(auto_detune=False))
-    near = _legacy_wavebit.rcwa(backend='numpy', wavelength=np.nextafter(WL, WL + 1), truncation_order=[5, 0],
+    near = _legacy_wavebit_rcwa(backend='numpy', wavelength=np.nextafter(WL, WL + 1), truncation_order=[5, 0],
                         structure=_STACK, layer_algorithm=algo,
                         **kw).solve(auto_detune=False)
     R, T = _totals(exact)
@@ -342,7 +344,7 @@ def test_exact_point_field_reconstruction_matches_its_neighbour():
     LAPACK builds.
     """
     def field(wl):
-        mee = _legacy_wavebit.rcwa(backend='numpy', wavelength=wl, truncation_order=[5, 0], structure=_STACK,
+        mee = _legacy_wavebit_rcwa(backend='numpy', wavelength=wl, truncation_order=[5, 0], structure=_STACK,
                            answers='field', **_KW)
         mee.solve(auto_detune=False)
         return np.asarray(mee.reconstruct_field(sample_x=16, sample_y=1, sample_z=16))
@@ -438,7 +440,7 @@ def test_auto_detune_retries_under_an_error_filter(case):
     if case == '1D':
         truth = _truth(3)
     elif case == '1D ky':
-        truth, _ = _totals(_legacy_wavebit.rcwa(
+        truth, _ = _totals(_legacy_wavebit_rcwa(
             backend='numpy', wavelength=WL, truncation_order=[3, 1],
             structure=np.repeat(_STACK, 2, axis=1),
             **{**_KW, **tilt, 'period': [PERIOD, 700.0]}).solve(auto_detune=False))
@@ -500,7 +502,7 @@ def test_auto_detune_is_silent_on_an_ordinary_solve():
 def test_auto_detune_accepts_an_explicit_step():
     """A float ``auto_detune`` is the relative step — the complex64 escape hatch."""
     from wavebit._common.backend import AutoDetuneWarning
-    mee = _legacy_wavebit.rcwa(backend='numpy', wavelength=WL, truncation_order=[3, 0], structure=_STACK, **_KW)
+    mee = _legacy_wavebit_rcwa(backend='numpy', wavelength=WL, truncation_order=[3, 0], structure=_STACK, **_KW)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         R, T = _totals(mee.solve(auto_detune=1e-9))
@@ -511,7 +513,7 @@ def test_auto_detune_accepts_an_explicit_step():
 
 def _ordinary_solver():
     """The ordinary 520 nm stack: no degeneracy, so the ladder has nothing to retry."""
-    return _legacy_wavebit.rcwa(backend='numpy', wavelength=520.0, truncation_order=[5, 0], structure=_STACK,
+    return _legacy_wavebit_rcwa(backend='numpy', wavelength=520.0, truncation_order=[5, 0], structure=_STACK,
                         **_KW)
 
 
@@ -644,7 +646,7 @@ def test_auto_detune_theta_rung_clears_a_wavelength_invariant_graze():
         pytest.skip("this platform's libm never lands n_top*sin(theta) on 1.25 exactly")
 
     def solver():
-        return _legacy_wavebit.rcwa(backend='numpy', wavelength=WL, truncation_order=[2, 0],
+        return _legacy_wavebit_rcwa(backend='numpy', wavelength=WL, truncation_order=[2, 0],
                             structure=np.full((1, 1, 16), 1.5625), period=[PERIOD],
                             top=6.25, bot=2.25, theta=theta, phi=0.0, psi=np.pi / 2,
                             thickness=[300.0])
@@ -691,12 +693,12 @@ def test_auto_detune_keeps_gradients_flowing_through_the_retry():
     :mod:`test_rayleigh_gradient_retry`'s.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     from wavebit._common.backend import AutoDetuneWarning
 
     def loss(pillar):
-        r = _legacy_wavebit.rcwa(backend='jax', wavelength=WL, truncation_order=[3, 0], structure=_STACK,
+        r = _legacy_wavebit_rcwa(backend='jax', wavelength=WL, truncation_order=[3, 0], structure=_STACK,
                          **_KW).solve(thickness=[300.0, pillar])
         return jnp.real(jnp.asarray(r.R)).sum()
 
@@ -731,7 +733,7 @@ def test_exact_zero_eigenvalue_is_loud_on_every_backend():
     for backend in ('numpy', 'jax', 'torch'):
         if backend == 'jax':
             pytest.importorskip('jax')
-            _legacy_wavebit.enable_x64()
+            _legacy_wavebit_enable_x64()
         elif backend == 'torch':
             pytest.importorskip('torch')
 
@@ -765,7 +767,7 @@ def test_guards_read_concrete_jax_and_torch_values():
 
 
 def _jax_arrays():
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     return jnp.asarray([np.nan]), jnp.asarray([9.0])
 
@@ -784,7 +786,7 @@ def test_guards_are_skipped_under_jit_and_do_not_break_the_trace():
     traced non-finite result still returns quietly. That gap is real and is the accepted cost.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
 
     def f(x):
@@ -805,7 +807,7 @@ def test_grad_is_guarded_and_still_differentiates():
     checked side of the line. The gradient itself must still be finite and still flow.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
 
     def loss(n):
@@ -813,7 +815,7 @@ def test_grad_is_guarded_and_still_differentiates():
             jnp.stack([jnp.ones((), dtype=jnp.complex128)] * 2
                       + [jnp.astype(n, jnp.complex128)] * 3
                       + [jnp.ones((), dtype=jnp.complex128)] * 3), (1, 1, 8))
-        r = _legacy_wavebit.rcwa(backend='jax', wavelength=550.0, period=[700.0], truncation_order=[10, 0],
+        r = _legacy_wavebit_rcwa(backend='jax', wavelength=550.0, period=[700.0], truncation_order=[10, 0],
                          top=1.0, bot=2.25, theta=0.1, phi=0.0, psi=np.pi / 2,
                          structure=structure, thickness=[220.0]).solve()
         return jnp.real(r.R).sum()

@@ -30,7 +30,7 @@ silent case, where the value would be detached, the run would complete and the g
 would simply be absent (that is what the first version of the doors did, 2026-09-18).
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import pytest
 
 import wavebit.fdtd._legacy as fd
@@ -86,7 +86,7 @@ def _grad(backend, f, x):
         jax = pytest.importorskip('jax')
         # Before the tracer exists: a float traced under the 32-bit cap stays float32, and
         # the runtime's own lift comes after the tracer was made.
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         return float(jax.grad(f)(x))
     torch = pytest.importorskip('torch')
     t = torch.tensor(x, dtype=torch.float64, requires_grad=True)

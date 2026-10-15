@@ -1,6 +1,12 @@
 """Layer fitting preserves geometry and converges to independent planar optics."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -23,7 +29,7 @@ def test_characteristic_matrix_matches_airy_and_rcwa():
     expected = multilayer(BAND, [np.full_like(BAND, 2.25), epsilon(BAND)], THICKNESS)
     for i, wavelength in enumerate(BAND):
         for pol, component in [('te', 's'), ('tm', 'p')]:
-            result = _legacy_wavebit.rcwa(structure=np.array([[[epsilon(wavelength)]], [[2.25]]]),
+            result = _legacy_wavebit_rcwa(structure=np.array([[[epsilon(wavelength)]], [[2.25]]]),
                                   thickness=THICKNESS[::-1], top=1., bot=1., period=.05,
                                   wavelength=wavelength, theta=np.arcsin(np.sin(.45)*wavelength),
                                   tetm=pol, truncation_order=0, backend='numpy').solve()
@@ -32,14 +38,14 @@ def test_characteristic_matrix_matches_airy_and_rcwa():
 
 
 def test_typed_conical_magnetic_layers_against_rcwa():
-    stack = _legacy_wavebit.Stack.from_structure(
+    stack = _legacy_wavebit_Stack.from_structure(
         np.array([[[2.1]], [[3.2]]]), THICKNESS,
         top=wavebit.Material(1.2, 1.1), bot=wavebit.Material(2., 1.3), period=.1)
-    incidence = _legacy_wavebit.Incidence(wavelength=1., theta=.27, phi=.41, polarization=(1., .6j))
+    incidence = _legacy_wavebit_Incidence(wavelength=1., theta=.27, phi=.41, polarization=(1., .6j))
     common = dict(mu=np.array([[[1.1]], [[1.3]]]), truncation_order=0, backend='numpy')
-    result = _legacy_wavebit.fdtd(stack, incidence, **common, resolution=50, n_periods=30,
+    result = _legacy_wavebit_fdtd(stack, incidence, **common, resolution=50, n_periods=30,
                           grading=True, align_layers=True)
-    expected = _legacy_wavebit.rcwa(stack=stack, incidence=incidence, **common).solve()
+    expected = _legacy_wavebit_rcwa(stack=stack, incidence=incidence, **common).solve()
     for key in ('r_s', 'r_p', 't_s', 't_p'):
         np.testing.assert_allclose(getattr(result.incident, key), getattr(expected.incident, key), atol=.012)
 
@@ -50,9 +56,9 @@ def test_typed_conical_magnetic_layers_against_rcwa():
 def test_all_layer_faces_and_staggered_record_bounds(side, grading, subpixel):
     kw = options(incidence_side=side, grading=grading, subpixel=subpixel, record_field=37,
                  record_components=['ey', 'ez', 'hx', 'hz'])
-    result, full = _legacy_wavebit.fdtd(**kw)
+    result, full = _legacy_wavebit_fdtd(**kw)
     bounds = {'z': (-.07, .27), 'x': (-.05, .05)}
-    cropped_result, cropped = _legacy_wavebit.fdtd(**kw, record_bounds=bounds)
+    cropped_result, cropped = _legacy_wavebit_fdtd(**kw, record_bounds=bounds)
     assert full['align_layers']
     np.testing.assert_array_equal(cropped_result.incident.t_s, result.incident.t_s)
     nodes = full['z_nodes']
@@ -80,11 +86,11 @@ def test_all_layer_faces_and_staggered_record_bounds(side, grading, subpixel):
 def test_default_mesh_is_unchanged_and_thin_layers_reduce_time_step():
     kw = options()
     kw.pop('align_layers')
-    implicit, a = _legacy_wavebit.fdtd(**kw)
-    explicit, b = _legacy_wavebit.fdtd(**kw, align_layers=False)
+    implicit, a = _legacy_wavebit_fdtd(**kw)
+    explicit, b = _legacy_wavebit_fdtd(**kw, align_layers=False)
     np.testing.assert_array_equal(implicit.incident.t_s, explicit.incident.t_s)
     np.testing.assert_array_equal(a['z_nodes'], b['z_nodes'])
-    _, thin = _legacy_wavebit.fdtd(**options(thickness=[.013, .213]))
+    _, thin = _legacy_wavebit_fdtd(**options(thickness=[.013, .213]))
     assert thin['dt'] < a['dt']/3
     assert np.min(abs(thin['z_nodes']-.013)) < 1e-14
 
@@ -92,14 +98,14 @@ def test_default_mesh_is_unchanged_and_thin_layers_reduce_time_step():
 @pytest.mark.parametrize('value', [1, None, 'yes', [True]])
 def test_alignment_requires_static_boolean(value):
     with pytest.raises(ValueError, match='align_layers'):
-        _legacy_wavebit.fdtd(**options(align_layers=value))
+        _legacy_wavebit_fdtd(**options(align_layers=value))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('grading', [None, True])
 def test_aligned_bottom_pole_gradient_with_records_and_monitors(backend, grading):
     def objective(value, which):
-        result, d = _legacy_wavebit.fdtd(**options(
+        result, d = _legacy_wavebit_fdtd(**options(
             backend=which, grading=grading, incidence_side='bottom', tetm='tm', theta=.25,
             dispersion=np.array([[[0]], [[1]]]), poles={1: [(0., .3, value)]},
             pulse_width=1.5, n_periods=35, dft_subsample=2,

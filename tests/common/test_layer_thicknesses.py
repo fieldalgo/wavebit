@@ -1,6 +1,12 @@
 """Independent simplex derivatives and shared physical Stack constraints."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit._common.periodic import layer_thicknesses as _legacy_wavebit_layer_thicknesses
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -18,7 +24,7 @@ def test_lengths_and_derivatives_match_analytic_constrained_partition(backend):
     expected = minimum+(.5-minimum.sum())*ratio
     jacobian = (.5-minimum.sum())*(np.diag(ratio)-np.outer(ratio, ratio))
     def objective(weights):
-        return _legacy_wavebit.layer_thicknesses(weights, .5, minimum=minimum)
+        return _legacy_wavebit_layer_thicknesses(weights, .5, minimum=minimum)
     if backend != 'numpy':
         value, derivative = value_and_jacobian(objective, p, backend)
         np.testing.assert_allclose(derivative, jacobian, atol=2e-15)
@@ -38,28 +44,28 @@ def test_additive_gauge_permutation_saturation_and_precision(backend):
     array, xp = runtime.array, runtime.xp
     p = array([.2, -.4, .6])
     minimum = np.array([.02, .04, .03])
-    base = _legacy_wavebit.layer_thicknesses(p, .5, minimum=minimum)
+    base = _legacy_wavebit_layer_thicknesses(p, .5, minimum=minimum)
     for shift in (-1000., 1000.):
-        np.testing.assert_allclose(_legacy_wavebit.layer_thicknesses(p+shift, .5, minimum=minimum), base, atol=1e-14)
-    permuted = _legacy_wavebit.layer_thicknesses(xp.flip(p, axis=0), .5, minimum=minimum[::-1])
+        np.testing.assert_allclose(_legacy_wavebit_layer_thicknesses(p+shift, .5, minimum=minimum), base, atol=1e-14)
+    permuted = _legacy_wavebit_layer_thicknesses(xp.flip(p, axis=0), .5, minimum=minimum[::-1])
     np.testing.assert_allclose(permuted, xp.flip(base, axis=0), atol=2e-15)
-    saturated = _legacy_wavebit.layer_thicknesses(array([1000., -1000.]), .5, minimum=.04)
+    saturated = _legacy_wavebit_layer_thicknesses(array([1000., -1000.]), .5, minimum=.04)
     np.testing.assert_allclose(saturated, [.46, .04], atol=2e-15)
-    narrow = _legacy_wavebit.layer_thicknesses(array([1., 2.], dtype=xp.float32), .5, minimum=.04)
+    narrow = _legacy_wavebit_layer_thicknesses(array([1., 2.], dtype=xp.float32), .5, minimum=.04)
     assert narrow.dtype == xp.float32
     assert getattr(narrow, 'device', None) == getattr(p, 'device', None)
 
 
 def test_plain_lists_integer_weights_and_single_layer():
-    np.testing.assert_allclose(_legacy_wavebit.layer_thicknesses([0, 0, 0], .6, minimum=.1), [.2]*3, atol=1e-15)
-    assert _legacy_wavebit.layer_thicknesses(np.array([1, 2, 3]), .6).dtype == np.float64
-    np.testing.assert_array_equal(_legacy_wavebit.layer_thicknesses([-.7], .6, minimum=.2), [.6])
+    np.testing.assert_allclose(_legacy_wavebit_layer_thicknesses([0, 0, 0], .6, minimum=.1), [.2]*3, atol=1e-15)
+    assert _legacy_wavebit_layer_thicknesses(np.array([1, 2, 3]), .6).dtype == np.float64
+    np.testing.assert_array_equal(_legacy_wavebit_layer_thicknesses([-.7], .6, minimum=.2), [.6])
 
 
 @pytest.mark.parametrize('weights', [[], 1., [[0., 1.]], [True, False], [0., 1j], ['x', 'y'], [0., np.nan], [np.inf, 0.], [1000., -1000.]])
 def test_invalid_weights_raise(weights):
     with pytest.raises(ValueError, match='logits|Thicknesses'):
-        _legacy_wavebit.layer_thicknesses(weights, .5)
+        _legacy_wavebit_layer_thicknesses(weights, .5)
 
 
 @pytest.mark.parametrize('changes', [
@@ -70,7 +76,7 @@ def test_invalid_weights_raise(weights):
 ])
 def test_invalid_or_infeasible_static_constraints_raise(changes):
     with pytest.raises(ValueError, match='total|minimum'):
-        _legacy_wavebit.layer_thicknesses([0., 0.], **dict(dict(total=.5), **changes))
+        _legacy_wavebit_layer_thicknesses([0., 0.], **dict(dict(total=.5), **changes))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -79,7 +85,7 @@ def test_total_and_minima_are_static_host_inputs(backend):
     array = time_loop_backend(backend).array
     for changes in (dict(total=array(.5)), dict(minimum=array(.04)), dict(minimum=[array(.04), array(.04)])):
         with pytest.raises(ValueError, match='static real host'):
-            _legacy_wavebit.layer_thicknesses(array([0., 0.]), **dict(dict(total=.5), **changes))
+            _legacy_wavebit_layer_thicknesses(array([0., 0.]), **dict(dict(total=.5), **changes))
 
 
 def test_jit_masks_nonfinite_weights_and_underflow_on_one_trace():
@@ -87,7 +93,7 @@ def test_jit_masks_nonfinite_weights_and_underflow_on_one_trace():
     traces = []
     def decode(p):
         traces.append(None)
-        return _legacy_wavebit.layer_thicknesses(p, .5)
+        return _legacy_wavebit_layer_thicknesses(p, .5)
     evaluate = jax.jit(decode)
     np.testing.assert_allclose(evaluate(np.array([0., 0.])), [.25, .25], atol=1e-15)
     assert np.isfinite(evaluate(np.array([1., -1.]))).all()
@@ -102,10 +108,10 @@ def test_typed_rcwa_preserves_constrained_multilayer_gradient(backend):
     def objective(p, which):
         runtime = time_loop_backend(which)
         epsilon = runtime.array([1.4, 2.2, 3.1])[:, None, None]
-        lengths = _legacy_wavebit.layer_thicknesses(p, .6, minimum=.04)
-        stack = _legacy_wavebit.Stack.from_structure(epsilon, lengths, top=1., bot=4., period=.05)
-        light = _legacy_wavebit.Incidence(wavelength=1., theta=.2, polarization=(1., .4j))
-        return _legacy_wavebit.rcwa(stack=stack, incidence=light, backend=which, truncation_order=0).solve().incident.R.reshape(1)
+        lengths = _legacy_wavebit_layer_thicknesses(p, .6, minimum=.04)
+        stack = _legacy_wavebit_Stack.from_structure(epsilon, lengths, top=1., bot=4., period=.05)
+        light = _legacy_wavebit_Incidence(wavelength=1., theta=.2, polarization=(1., .4j))
+        return _legacy_wavebit_rcwa(stack=stack, incidence=light, backend=which, truncation_order=0).solve().incident.R.reshape(1)
     p = np.array([-.2, .3, -.1])
     value, gradient = value_and_jacobian(lambda p: objective(p, backend), p, backend)
     np.testing.assert_allclose(value, objective(p, 'numpy'), atol=1e-12)

@@ -1,6 +1,6 @@
 """Native Yee records must carry spatial staggering, time staggering and field signs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -16,7 +16,7 @@ def scene(**extra):
 
 @pytest.mark.parametrize('tetm,nonzero', [('te', ('ey', 'hx')), ('tm', ('ex', 'hy'))])
 def test_scalar_components_share_maxwell_sign_and_native_timestamps(tetm, nonzero):
-    _, diag = _legacy_wavebit.fdtd(**scene(tetm=tetm, record_components='all'))
+    _, diag = _legacy_wavebit_fdtd(**scene(tetm=tetm, record_components='all'))
     fields, grid = diag['fields'], diag['grid']
     assert set(fields) == {'ex', 'ey', 'ez', 'hx', 'hy', 'hz'}
     for name, field in fields.items():
@@ -49,8 +49,8 @@ def test_all_components_preserve_diffraction_axes_and_legacy_records(crossed, th
     kw = scene(structure=np.full((1, 2 if crossed else 1, 2), 2.25),
                period=[.2, .3] if crossed else [.2], psi=.4, chi=.2,
                theta=theta, phi=phi, grading=grading, n_periods=80)
-    got, diag = _legacy_wavebit.fdtd(**kw, record_components='all')
-    plain, legacy = _legacy_wavebit.fdtd(**kw)
+    got, diag = _legacy_wavebit_fdtd(**kw, record_components='all')
+    plain, legacy = _legacy_wavebit_fdtd(**kw)
     for name in ('r_s', 'r_p', 't_s', 't_p'):
         np.testing.assert_array_equal(getattr(got.incident, name), getattr(plain.incident, name))
     assert 'fields' not in legacy
@@ -79,19 +79,19 @@ def test_all_components_preserve_diffraction_axes_and_legacy_records(crossed, th
 @pytest.mark.parametrize('components', [[], ['hx', 'hx'], ['invalid'], 42])
 def test_invalid_component_requests_fail_early(components):
     with pytest.raises(ValueError, match='record_components'):
-        _legacy_wavebit.fdtd(**scene(tetm='te', record_components=components))
+        _legacy_wavebit_fdtd(**scene(tetm='te', record_components=components))
 
 
 def test_component_selection_needs_a_record_and_allocates_only_selected_extras():
     with pytest.raises(ValueError, match='record_field'):
-        _legacy_wavebit.fdtd(**scene(tetm='te', record_field=None, record_components='hx'))
-    _, d = _legacy_wavebit.fdtd(**scene(tetm='te', record_components=['hx', 'hz']))
+        _legacy_wavebit_fdtd(**scene(tetm='te', record_field=None, record_components='hx'))
+    _, d = _legacy_wavebit_fdtd(**scene(tetm='te', record_components=['hx', 'hz']))
     assert set(d['fields']) == {'hx', 'hz'}
 
 
 def test_six_component_vacuum_record_obeys_transversality_and_maxwell_curl():
     theta, phi, wavelength = .3, .4, .9
-    _, diag = _legacy_wavebit.fdtd(**scene(theta=theta, phi=phi, polarization=(1., 1j),
+    _, diag = _legacy_wavebit_fdtd(**scene(theta=theta, phi=phi, polarization=(1., 1j),
                                   resolution=30., n_periods=100, record_components='all'))
     direction = np.array([np.sin(theta)*np.cos(phi), np.sin(theta)*np.sin(phi), -np.cos(theta)])
     amplitudes = []

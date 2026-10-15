@@ -22,7 +22,7 @@ The decisive part is not the size of the error but its behaviour under refinemen
 the *wrong* direction, which is what separates a bug from a discretization residual.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -155,7 +155,7 @@ def test_energy_is_conserved_anyway():
     cfg = dict(backend='numpy', period=[PX, PY], truncation_order=[4, 4], wavelength=300.0, thickness=[220.0],
                top=1.0, bot=1.0, theta=0.2, phi=0.3, psi=0.4, factorization='nvf',
                structure=structure[None, :, :])
-    res = _legacy_wavebit.rcwa(**cfg).solve()
+    res = _legacy_wavebit_rcwa(**cfg).solve()
     total = float(np.sum(np.asarray(res.R)) + np.sum(np.asarray(res.T)))
     assert total == pytest.approx(1.0, abs=1e-12)
 
@@ -172,9 +172,9 @@ def test_a_frozen_normal_field_replays_onto_a_non_square_grid(coefficients):
     cfg = dict(backend='numpy', period=[PX, PY], truncation_order=[3, 3], wavelength=300.0, thickness=[220.0],
                top=1.0, bot=2.25, theta=0.2, factorization='nvf',
                fourier_coefficients=coefficients, structure=structure[None, :, :])
-    solver = _legacy_wavebit.rcwa(**cfg)
+    solver = _legacy_wavebit_rcwa(**cfg)
     replayed = solver.solve(geometry=solver.freeze_geometry()).T
-    eager = _legacy_wavebit.rcwa(**cfg).solve().T
+    eager = _legacy_wavebit_rcwa(**cfg).solve().T
     # Not bit-identity: these are two solves, and `eig` is not bit-reproducible run to run
     # under multithreaded LAPACK. The failure this guards against is not subtle — a basis the
     # replay cannot see either raises StaleGeometryError or moves the answer by ~8e-3.
@@ -205,7 +205,7 @@ def test_the_solver_hands_the_cell_basis_to_the_factorization(coefficients):
     assert np.abs(np.asarray(on_pixel_shape) - np.asarray(on_index_grid)).max() > 1e-6, \
         'the two builds coincide here, so this test could not tell them apart'
 
-    epx = np.asarray(_legacy_wavebit.rcwa(**cfg)._eps_conv_matrices()[0])
+    epx = np.asarray(_legacy_wavebit_rcwa(**cfg)._eps_conv_matrices()[0])
     assert np.abs(epx - np.asarray(on_pixel_shape)).max() == 0.0
     assert np.abs(epx - np.asarray(on_index_grid)).max() > 1e-6
 
@@ -223,14 +223,14 @@ def test_the_frozen_record_carries_the_pixel_shape():
     :func:`~wavebit.rcwa._engine.factorization._lattice_key`).
     """
     _, _, structure = _disc(64, 64)
-    solver = _legacy_wavebit.rcwa(backend='numpy', period=[PX, PY], truncation_order=[3, 3], wavelength=300.0,
+    solver = _legacy_wavebit_rcwa(backend='numpy', period=[PX, PY], truncation_order=[3, 3], wavelength=300.0,
                             thickness=[220.0], top=1.0, bot=2.25, theta=0.2,
                             factorization='nvf', structure=structure[None, :, :])
     recorded = solver.freeze_geometry().normal_field_source[0][2]
     assert recorded == pytest.approx((1.0, 0.0, 0.0, PY / PX))   # (400/64) / (200/64) == 2
 
     # A cell twice the size with the same shape is the same normal field, so the same key.
-    doubled = _legacy_wavebit.rcwa(backend='numpy', period=[2 * PX, 2 * PY], truncation_order=[3, 3], wavelength=300.0,
+    doubled = _legacy_wavebit_rcwa(backend='numpy', period=[2 * PX, 2 * PY], truncation_order=[3, 3], wavelength=300.0,
                              thickness=[220.0], top=1.0, bot=2.25, theta=0.2,
                              factorization='nvf', structure=structure[None, :, :])
     assert doubled.freeze_geometry().normal_field_source[0][2] == pytest.approx(recorded)
@@ -250,10 +250,10 @@ def test_differentiating_period_does_not_read_as_a_cell_change():
     _, _, structure = _disc(48, 48)
     base = dict(backend='jax', truncation_order=[3, 3], wavelength=300.0, thickness=[220.0], top=1.0,
                 bot=2.25, theta=0.2, factorization='nvf', structure=jnp.asarray(structure[None, :, :]))
-    frozen = _legacy_wavebit.rcwa(period=[PX, PY], **base).freeze_geometry()
+    frozen = _legacy_wavebit_rcwa(period=[PX, PY], **base).freeze_geometry()
 
     def objective(py):
-        return _legacy_wavebit.rcwa(period=[PX, py], **base).solve(geometry=frozen).T.sum()
+        return _legacy_wavebit_rcwa(period=[PX, py], **base).solve(geometry=frozen).T.sum()
 
     assert np.isfinite(float(jax.grad(objective)(jnp.float64(PY))))
     assert np.isfinite(float(jax.jit(objective)(jnp.float64(PY))))

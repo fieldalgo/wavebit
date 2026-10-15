@@ -24,7 +24,7 @@ the efficiencies checked here could never see. The three routes now share one fr
 file is where "one answer" includes the phase.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -53,7 +53,7 @@ _QUANTITIES = ('R', 'T', 'r_s', 'r_p', 't_s', 't_p')
 def _solve(tetm, phi, structure):
     """``phi is None`` takes the declaration (the pure path); any azimuth takes the angle."""
     incidence = {'tetm': tetm} if phi is None else {'psi': _PSI_OF[tetm]}
-    solver = _legacy_wavebit.rcwa(**incidence, **CFG)
+    solver = _legacy_wavebit_rcwa(**incidence, **CFG)
     solver.phi = phi
     solver.structure = structure
     res = solver.solve().incident

@@ -38,7 +38,7 @@ check below and tests/rcwa/test_vertical_coordinates.py independently anchor the
 
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -88,7 +88,7 @@ def z_solver(thickness, theta_deg=28.0, backend='numpy'):
     The tensors themselves arrive through :func:`uniform_slots`, not through a ``structure``: a
     z-coupled permittivity is not something the modeler can paint.
     """
-    return _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=(0, 0), period=PERIOD,
+    return _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=(0, 0), period=PERIOD,
                         wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
                         psi=0.6, thickness=thickness, answers='field')
 
@@ -141,7 +141,7 @@ TWINS = {
 
 def twin_cell(formulation, name, theta_deg, side, backend='numpy'):
     structure, truncation_order, thickness = TWINS[name]
-    mee = _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
+    mee = _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
                        wavelength=WL, theta=np.deg2rad(theta_deg), phi=np.deg2rad(37.0),
                        psi=0.6, thickness=thickness[::-1], structure=structure[::-1], incidence_side=side,
                        answers='field')
@@ -206,7 +206,7 @@ def test_the_two_formulations_agree_on_the_variants_taken_one_at_a_time():
     structure, truncation_order, thickness = TWINS['a patterned layer']
     cells = {}
     for formulation in ('second_order', 'first_order'):
-        mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
+        mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.3104, truncation_order=truncation_order, period=PERIOD,
                            wavelength=WL, theta=np.deg2rad(21.0), phi=np.deg2rad(37.0),
                            psi=0.6, thickness=thickness, structure=structure, answers='field')
         mee.formulation = formulation
@@ -333,7 +333,7 @@ def test_a_vacuum_slab_comes_back_as_the_incident_plane_wave(formulation, psi_v,
     them; ``tests/rcwa/test_field_core.py`` makes the same claim for the two 1D layouts and by
     Maxwell rather than by a closed form.
     """
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, truncation_order=(0, 0), period=PERIOD,
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, truncation_order=(0, 0), period=PERIOD,
                        wavelength=WL, theta=0.0, phi=0.0, psi=psi_v,
                        thickness=[WL], structure=np.ones((1, 1, 1)), answers='field')
     mee.formulation = formulation

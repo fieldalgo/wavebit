@@ -50,7 +50,7 @@ expression. That is round-off from a dtype, not a change of answer, and it sits 
 the ``atol=1e-12`` both this file's own diff and ``tests/rcwa/test_field_core.py`` compare at.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -140,7 +140,7 @@ def solved(name, backend='numpy'):
     formulation = kw.pop('formulation', None)
     kw['structure'] = np.asarray(kw['structure'], dtype=float)[::-1]
     kw['thickness'] = kw['thickness'][::-1]
-    solver = _legacy_wavebit.rcwa(backend=backend, answers='field', **kw)
+    solver = _legacy_wavebit_rcwa(backend=backend, answers='field', **kw)
     if formulation:
         solver.formulation = formulation
     solver.solve()

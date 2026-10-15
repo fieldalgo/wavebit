@@ -1,12 +1,13 @@
 """Regression instruments for actual interfaces of a resolved polygon painting."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import os
 os.environ.setdefault('JAX_ENABLE_X64', '1')
 import numpy as np
 import array_api_compat.numpy as xp
 import pytest
-from wavebit.rcwa._engine import boundary as b; from wavebit._common.geometry import clipper
+from wavebit.rcwa._engine import boundary as b
+from wavebit._common.geometry import clipper
 from wavebit._common.geometry.polygon import rect_verts
 
 CELL = ((700., 0.), (0., 700.))
@@ -234,7 +235,7 @@ def test_epsilon_and_mu_build_their_own_actual_interface_sets(monkeypatch):
     monkeypatch.setattr(b, 'normal_projector_coeffs', capture)
     shapes = [dict(type='rectangle', lx=400., ly=400., angle=0., material=Material(4.)),
               dict(type='rectangle', lx=200., ly=200., angle=.3, material=Material(4., mu=2.))]
-    solver = _legacy_wavebit.rcwa(backend='numpy', lattice=CELL, structure=[dict(background=1., shapes=shapes)],
+    solver = _legacy_wavebit_rcwa(backend='numpy', lattice=CELL, structure=[dict(background=1., shapes=shapes)],
                          thickness=[100.], wavelength=900., truncation_order=(1, 1),
                          shape_nvf_grid_size=32)
     result = solver.solve()
@@ -248,7 +249,7 @@ def test_polygon_grating_matches_li_and_has_no_transverse_order_dependence(order
     shapes = _shapes(350.)
     def transmission(orders, structure, **kwargs):
         parametric._PROJECTOR_CACHE.clear()
-        solver = _legacy_wavebit.rcwa(backend='numpy', period=(700., 700.), structure=structure,
+        solver = _legacy_wavebit_rcwa(backend='numpy', period=(700., 700.), structure=structure,
                              thickness=[300.], wavelength=550., psi=.31,
                              truncation_order=orders,
                              **dict(dict(shape_nvf_grid_size=64) if isinstance(structure, list) else {}, **kwargs))

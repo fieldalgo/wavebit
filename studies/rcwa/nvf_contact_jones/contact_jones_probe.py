@@ -7,7 +7,7 @@ of cancelling as vectors. Vanished interfaces remain as extension geometry;
 whether their finite-order effect is acceptable must be tested, not assumed.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import inspect
 import numpy as np
 from wavebit.rcwa._engine import parametric as P
@@ -83,7 +83,7 @@ def main():
                 shapes=([dict(type='rectangle',lx=350.,ly=700.-gap,material=12.25)] if one else
                     [dict(type='rectangle',lx=300.,ly=300.,cx=-150.-gap/2,material=4.),
                      dict(type='rectangle',lx=300.,ly=300.,cx=150.+gap/2,material=4.+delta)])
-                s=_legacy_wavebit.rcwa(backend='numpy',period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
+                s=_legacy_wavebit_rcwa(backend='numpy',period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
                     theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(order,order),
                     shape_nvf_grid_size=grid,structure=[dict(background=1.,shapes=shapes)])
                 with patch.object(P,'to_conv_mat_parametric_nvf',matrices):

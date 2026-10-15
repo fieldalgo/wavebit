@@ -1,6 +1,26 @@
 """Direct physical transverse k: boundary physics, fields, AD and public API."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ComplexIncidenceWarning as _legacy_wavebit_ComplexIncidenceWarning
+
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common._jobs_v1 import JobSpec as _legacy_wavebit_JobSpec
+
+from wavebit._common.periodic import Layer as _legacy_wavebit_Layer
+
+from wavebit._common._jobs_v1 import SpecError as _legacy_wavebit_SpecError
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit._common._jobs_v1 import Sweep as _legacy_wavebit_Sweep
+
+from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import json
 
 import numpy as np
@@ -19,15 +39,15 @@ def _numpy(value):
 @pytest.mark.parametrize('eps', [2.25, 4. + 3j])
 @pytest.mark.parametrize('theta,phi', [(.4, .7), (-.3, 2.4), (0., 0.)])
 def test_angles_and_direct_k_agree_in_fields_and_power(backend, side, eps, theta, phi):
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     common = dict(backend=backend, top=eps, bot=eps, incidence_side=side,
                   wavelength=500., period=[600., 700.], truncation_order=dict(x=1, y=1),
                   structure=np.array([[[1., 2.], [3., 4.]]]), thickness=[80.],
                   polarization=(.6, .8j), answers='field')
-    angled = _legacy_wavebit.rcwa(**common, theta=theta, phi=phi)
+    angled = _legacy_wavebit_rcwa(**common, theta=theta, phi=phi)
     x, y = map(_numpy, angled.order_kxy())
     k0 = 2*np.pi/500.
-    direct = _legacy_wavebit.rcwa(**common, kx=x[1].real*k0, ky=y[1].real*k0)
+    direct = _legacy_wavebit_rcwa(**common, kx=x[1].real*k0, ky=y[1].real*k0)
     a, b = angled.solve(), direct.solve()
     for attr in ('R', 'T', 'power_entering', 'absorption', 'r_s', 'r_p', 't_s', 't_p'):
         np.testing.assert_allclose(_numpy(getattr(a.incident, attr)),
@@ -57,8 +77,8 @@ def test_direct_k_matches_independent_magnetic_lossy_interface(route, side, pol,
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_direct_k_stays_fixed_during_wavelength_and_material_sweep(backend):
-    s = _legacy_wavebit.rcwa(backend=backend, kx=.003, ky=-.002, wavelength=500.,
-                     top=_legacy_wavebit.TabulatedMaterial([500., 700.], [2.25, 4.+3j]),
+    s = _legacy_wavebit_rcwa(backend=backend, kx=.003, ky=-.002, wavelength=500.,
+                     top=_legacy_wavebit_TabulatedMaterial([500., 700.], [2.25, 4.+3j]),
                      lattice=wavebit.Lattice.from_columns([[900., 300.], [0., 800.]]),
                      truncation_order=dict(u=1, v=1))
     A = np.array([[900., 300.], [0., 800.]])
@@ -75,16 +95,16 @@ def test_direct_k_stays_fixed_during_wavelength_and_material_sweep(backend):
                                      dict(kx=.1, theta=.2, phi=.3)])
 def test_direction_inputs_are_exclusive(kwargs):
     with pytest.raises(ValueError, match='alternative incident directions'):
-        _legacy_wavebit.rcwa(**kwargs)
-    assert any('alternative incident directions' in p for p in _legacy_wavebit.Incidence(**kwargs).check())
+        _legacy_wavebit_rcwa(**kwargs)
+    assert any('alternative incident directions' in p for p in _legacy_wavebit_Incidence(**kwargs).check())
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('value', [.01j, float('nan'), float('inf'), [0.], np.array([0.])])
 def test_bad_k_is_not_silently_coerced(backend, value):
     with pytest.raises(ValueError, match='finite real scalar'):
-        _legacy_wavebit.rcwa(backend=backend, kx=value)
-    assert _legacy_wavebit.Incidence(kx=value).check()
+        _legacy_wavebit_rcwa(backend=backend, kx=value)
+    assert _legacy_wavebit_Incidence(kx=value).check()
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -98,11 +118,11 @@ def test_complex_k_refusal_points_to_the_angles(backend, value):
     and a NumPy scalar take the two branches of the validator, so both are here.
     """
     with pytest.raises(ValueError, match='finite real scalar') as refused:
-        _legacy_wavebit.rcwa(backend=backend, kx=value)
+        _legacy_wavebit_rcwa(backend=backend, kx=value)
     assert 'complex theta' in str(refused.value) and 'arcsin' in str(refused.value)
-    assert any('arcsin' in p for p in _legacy_wavebit.Incidence(kx=value).check())
+    assert any('arcsin' in p for p in _legacy_wavebit_Incidence(kx=value).check())
     with pytest.raises(ValueError, match='finite real scalar') as short:
-        _legacy_wavebit.rcwa(backend=backend, kx=float('nan'))
+        _legacy_wavebit_rcwa(backend=backend, kx=float('nan'))
     assert 'arcsin' not in str(short.value), 'a NaN is not a complex wavevector'
 
 
@@ -123,8 +143,8 @@ def test_complex_theta_is_the_only_input_that_warns(backend):
     def caught(**kw):
         with warnings.catch_warnings(record=True) as rec:
             warnings.simplefilter('always')
-            result = _legacy_wavebit.rcwa(**scene, **kw).solve()
-        return result, [r for r in rec if issubclass(r.category, _legacy_wavebit.ComplexIncidenceWarning)]
+            result = _legacy_wavebit_rcwa(**scene, **kw).solve()
+        return result, [r for r in rec if issubclass(r.category, _legacy_wavebit_ComplexIncidenceWarning)]
 
     for kw in (dict(top=4 + 3j, theta=np.pi / 6, phi=0.),
                dict(top=4., theta=np.pi / 2 + .3j, phi=0.),
@@ -146,30 +166,30 @@ def test_zero_power_evanescent_illumination_is_refused(route):
 
 def test_ky_cannot_be_dropped_by_pure_1d():
     with pytest.raises(ValueError, match='tetm requires ky=0'):
-        _legacy_wavebit.rcwa(structure=np.ones((1, 1, 4)), period=700., tetm='te', kx=.001, ky=.001).solve()
-    s = _legacy_wavebit.rcwa(structure=np.ones((1, 1, 4)), period=700., tetm='te', kx=.001)
+        _legacy_wavebit_rcwa(structure=np.ones((1, 1, 4)), period=700., tetm='te', kx=.001, ky=.001).solve()
+    s = _legacy_wavebit_rcwa(structure=np.ones((1, 1, 4)), period=700., tetm='te', kx=.001)
     s.solve()
     assert s.grating_type == 0
 
 
 def test_incidence_spec_roundtrip_and_sweep():
-    spec = _legacy_wavebit.JobSpec(
-        stack=_legacy_wavebit.Stack(layers=[_legacy_wavebit.Layer(100., np.full((2, 2), 2.25))],
+    spec = _legacy_wavebit_JobSpec(
+        stack=_legacy_wavebit_Stack(layers=[_legacy_wavebit_Layer(100., np.full((2, 2), 2.25))],
                             period=[700., 700.]),
-        incidence=_legacy_wavebit.Incidence(wavelength=500., kx=.002, ky=.001),
-        sweep=_legacy_wavebit.Sweep.from_dict({'kx': [.002, .003]}))
+        incidence=_legacy_wavebit_Incidence(wavelength=500., kx=.002, ky=.001),
+        sweep=_legacy_wavebit_Sweep.from_dict({'kx': [.002, .003]}))
     assert spec.check() == ()
-    clone = _legacy_wavebit.JobSpec.from_json(json.dumps(spec.to_dict()))
+    clone = _legacy_wavebit_JobSpec.from_json(json.dumps(spec.to_dict()))
     assert clone.key() == spec.key()
     points = list(clone.expand())
     assert [p.incidence.kx for p in points] == [.002, .003]
-    actual = [float(_legacy_wavebit.run(p).T.sum()) for p in points]
+    actual = [float(_legacy_wavebit_run(p).T.sum()) for p in points]
     assert abs(actual[0]-actual[1]) > 1e-4
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_direct_conditions_recast_and_stale_field(backend):
-    s = _legacy_wavebit.rcwa(backend=backend, kx=.002, ky=.001, wavelength=500.,
+    s = _legacy_wavebit_rcwa(backend=backend, kx=.002, ky=.001, wavelength=500.,
                      period=700., structure=np.full((1, 2, 2), 2.25),
                      thickness=[100.], answers='field')
     s.solve()
@@ -186,12 +206,12 @@ def test_fixed_k_absorption_gradient_matches_independent_heat(backend):
     if backend == 'jax':
         import jax
         import jax.numpy as xp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         import torch as xp
     k0 = 2*np.pi/500.
     def objective(v):
-        s = _legacy_wavebit.rcwa(backend='jax' if backend == 'jax' else 'torch', kx=v[0], ky=v[1],
+        s = _legacy_wavebit_rcwa(backend='jax' if backend == 'jax' else 'torch', kx=v[0], ky=v[1],
                          top=2.25+.7j, bot=1., wavelength=500., period=700.,
                          structure=np.full((1, 2, 2), 4.+.8j), thickness=[75.],
                          polarization=(.6, .8j))
@@ -219,8 +239,8 @@ def test_fixed_k_absorption_gradient_matches_independent_heat(backend):
 def test_jax_pytree_and_traced_condition_restore():
     import jax
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
-    s = _legacy_wavebit.rcwa(backend='jax', kx=.002, ky=.001, wavelength=500.,period=700.,
+    _legacy_wavebit_enable_x64()
+    s = _legacy_wavebit_rcwa(backend='jax', kx=.002, ky=.001, wavelength=500.,period=700.,
                      structure=np.full((1, 2, 2), 2.25), thickness=[100.], answers='field')
     leaves, tree = jax.tree_util.tree_flatten(s)
     clone = jax.tree_util.tree_unflatten(tree, leaves)
@@ -237,7 +257,7 @@ def test_jax_pytree_and_traced_condition_restore():
     np.testing.assert_allclose(s.solve().T, original, atol=1e-14)
     @jax.jit
     def order(k):
-        return _legacy_wavebit.rcwa(backend='jax', kx=k).order_kxy()[0]
+        return _legacy_wavebit_rcwa(backend='jax', kx=k).order_kxy()[0]
     assert np.isnan(order(jnp.asarray(.01j))).all()
 
 
@@ -259,16 +279,16 @@ def test_direct_k_superposition_has_correct_order_powers(route):
 
 @pytest.mark.parametrize('value', [float('nan'), .1j, [0., 1.]])
 def test_spec_and_sweep_reject_invalid_components(value):
-    from wavebit.compat._jobs_v1 import SPEC_VERSION
-    with pytest.raises(_legacy_wavebit.SpecError, match='finite real scalar'):
-        _legacy_wavebit.JobSpec.from_dict({'version': SPEC_VERSION, 'incidence': {'kx': value}})
-    with pytest.raises(_legacy_wavebit.SpecError, match='finite real scalar'):
-        _legacy_wavebit.Sweep.from_dict({'ky': [value]})
+    from wavebit._common._jobs_v1 import SPEC_VERSION
+    with pytest.raises(_legacy_wavebit_SpecError, match='finite real scalar'):
+        _legacy_wavebit_JobSpec.from_dict({'version': SPEC_VERSION, 'incidence': {'kx': value}})
+    with pytest.raises(_legacy_wavebit_SpecError, match='finite real scalar'):
+        _legacy_wavebit_Sweep.from_dict({'ky': [value]})
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_ky_only_and_single_precision(backend):
-    s = _legacy_wavebit.rcwa(backend=backend, ky=.002, wavelength=500.,complex_dtype=1)
+    s = _legacy_wavebit_rcwa(backend=backend, ky=.002, wavelength=500.,complex_dtype=1)
     x, y = map(_numpy, s.order_kxy())
     np.testing.assert_allclose(x, 0.)
     np.testing.assert_allclose(y, .002*500./(2*np.pi), rtol=2e-7)

@@ -1,59 +1,78 @@
-# Migrating to the integrated API
+# Migrating to the physical API
 
-The integrated package uses `src/wavebit`, shared physical material definitions and separate public solver modules. Existing scientific engines and their measured evidence remain available through an explicit compatibility namespace.
+`wavebit.compat` has been removed. Calculations use physical Problem/Numerics declarations,
+explicit execution and `check` → `prepare` → `prepared.run(problem)`. The underlying numerical
+engines and their scientific regression tests remain; no replacement mutable facade is exported.
 
-| Earlier interface | Current interface |
+| Earlier workflow | Current interface |
 | --- | --- |
-| `wavebit.rcwa(...)` mutable factory | `rcwa.Problem`, `rcwa.Numerics`, `rcwa.check/prepare/run` |
-| General `wavebit.fd` scene/plan/run | `fdtd.Problem`, physical `fdtd.Scene`, separate `fdtd.Numerics` |
-| `wavebit.fdtd(...)` periodic factory | Retained as `wavebit.compat.legacy.fdtd(...)` |
-| Scene-specific normalized material parameters | Shared physical `Material`, `ConductiveMaterial`, `DispersiveMaterial` and explicit `Units` |
-| `JobSpec` | `Job(solver=..., problem=..., numerics=..., execution=...)` |
-| Hidden previous-input state | `prepared.run(problem)` requires the complete current input |
-| `solver.slice_structure(...)` for physical material pictures | `rcwa.sample_structure(problem, layer=..., quantity='epsilon')`; use `quantity='mu'` for permeability |
-| Public normalized magnetic fields | Current field observations use H in A/m |
+| Mutable `rcwa(...)` | `rcwa.Problem`, `rcwa.Numerics`, `rcwa.check/prepare/run` |
+| General `fd` scene/plan/run | `fdtd.Problem`, physical `fdtd.Scene`, separate `fdtd.Numerics` |
+| Periodic `fdtd(...)` | [`fdtd.periodic`](../guide/fdtd/periodic-problems.md), explicit `shared` or `reference` algorithm |
+| `fdtd_grid(...)` | [`fdtd.native`](../guide/fdtd/native-grids.md), SI current/conductivity/poles, fields, records and Fourier integrals |
+| `fit_fdtd_modes` | `observations.fit_modes`, with seconds, Hz and decay rates in 1/s |
+| Custom general-FDTD geometry | `fdtd.Shape` static geometry protocol |
+| `solver.slice_structure` | `rcwa.sample_structure(problem, quantity='epsilon' or 'mu')` |
+| Experimental NVF and scattering operators | `rcwa.experimental` and `rcwa.operators` |
+| `JobSpec` v10 | `migration.migrate_legacy_jobs(document, units=Units(...))` → tuple of current `Job` objects |
+| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines |
+| Import-time JAX precision change | Configure `jax.config.update('jax_enable_x64', True)` before constructing arrays |
 
-For a historical script, make its dependency explicit:
+Spatial lengths use `Units`; times, conductivity and material rates use SI. H is A/m.
+Layer stacks remain bottom-to-top; angles are radians. Preserve the declared numerical
+algorithm, cell origin, phase reference, source normalization and integration measure when
+comparing complex fields. A native Fourier field is a time integral, not a calibrated phasor;
+a periodic plane power is W/m for invariant-y geometry and W for a crossed cell.
+
+## Existing work
+
+All maintained examples use the physical API. Internal numerical tests and research instruments
+import the exact implementation they measure; these private paths have no public stability promise.
+Their independent references, tolerances and scientific assertions remain in place.
+
+Changing shapes under JIT uses the supported device guards or explicit
+[`topology_check='host'`](../guide/rcwa/guarded-shape-jit.md). Numerical topology checks remain active.
+General FDTD exposes [stopping/absorbers](../guide/fdtd/stopping-and-absorbers.md) and explicit
+[substrate continuation](../guide/fdtd/fd-differentiation.md). Custom `Shape` methods receive grid
+lengths in the Problem's unit; all declared instance attributes are static for prepared reuse.
+Custom support must stay clear of Open padding, and custom objects are not portable Job tags.
+Unimplemented mode-source/mode-monitor/Gaussian-beam placeholders were never working general-FDTD solvers.
+
+## Job files
 
 ```python
-from wavebit.compat import legacy as wavebit
-from wavebit.compat.legacy import fd
+from wavebit import Job, Units, run
+from wavebit.migration import migrate_legacy_jobs
+
+# old_document is a v10 JSON string or mapping. Supply its actual original length unit.
+jobs = migrate_legacy_jobs(old_document, units=Units(length='nm'))
+for job in jobs:
+    portable = Job.from_json(job.to_json())
+    result = run(portable)
 ```
 
-This preserves the earlier interfaces and their original units. It does **not** convert an old general-FDTD normalized time, angular rate or magnetic amplitude into SI. Rewrite physical declarations deliberately when adopting the current module; start from the [RCWA](../getting-started/rcwa.md) and [FDTD](../getting-started/fdtd.md) examples.
+Conversion expands every sweep point in its original order and preserves numerical choices,
+material tables and polarization. It does not run a solver or overwrite the source document.
+Unsupported fields fail explicitly. Compare converted observations with the original run before
+replacing downstream records. Other historical schema versions retain their original version gate;
+changing a JSON version number is not a migration.
 
-Layered stacks use physical bottom-to-top order. `top` and `bottom` retain their physical meanings, angles are radians in the current API, and explicit `Units` applies to lengths while time and material rates use SI. Keep original phase, coordinates and field normalization in mind when comparing archived complex amplitudes.
+## Historical reproduction
 
-Historical serialized measurements retain their bytes, names and original conventions. Published relocation/provenance maps connect them to the reorganized repository; moving documentation is not a rerun of an experiment.
+The ten older [numbered tutorials](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/README.md#historical-tutorials)
+are historical teaching records and require the pinned source below. Their
+calculation cells and outputs remain unchanged; the tutorial index maps each topic
+to current physical examples and guides. The two `00` lifecycle notebooks run with
+the current package.
 
-## Removing a compatibility dependency
+Frozen measurements keep their original bytes, commit and dependency provenance. Use that
+recorded checkout/environment to replay them. For scripts deliberately using the final compat
+spelling, the pre-retirement baseline is
+[3c8a50f8a6506240169538957e99648a4b18ca3a](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+Create a separate checkout at that revision; do not treat current package installation as an
+implicit historical environment. Earlier measurement commits take precedence over this convenience pin.
 
-Move a caller when its physical inputs and required outputs have current equivalents.
-The [structure inspection guide](../guide/rcwa/scene.md#inspecting-a-structure-without-solving)
-and the plain [1D](../../examples/rcwa/shapes_1d.py) and
-[2D](../../examples/rcwa/shapes_2d.py) shape examples use the current interface.
-The shape examples retain their original geometry, materials, Fourier orders, ETM
-algorithm and backend choices; mixed, s and p illumination are now explicit problems.
-Their individual diffraction efficiencies were compared before and after migration,
-in addition to their lossless-energy checks.
-
-The remaining compatibility namespace is **not deprecated as a whole yet**. Its
-removal depends on these capabilities, rather than the age of an import:
-
-| Retained workflow | Condition before its compatibility entry can retire |
-| --- | --- |
-| JIT/vmap over changing shape geometry | Fixed-cell Cartesian Li rectangle sizes/centres now have an array-valued edge-order guard under JIT/vmap. Other admitted scalar region geometry can select explicit `topology_check='host'` CPU callbacks; default device policy still refuses it. Contact/curved-painting examples retain topology checks and derivative validation. See [checked shape JIT](../guide/rcwa/guarded-shape-jit.md). See [parametric modeling](../guide/rcwa/parametric-modeling.md). |
-| Experimental conforming/auxiliary NVF constructors | The current `rcwa.experimental` builders and `rcwa.operators` support the selection example, with per-order amplitude/power parity checks. Remaining research callers must preserve their own acceptance criteria; ordinary `Numerics` is not a substitute. See [method selection](../guide/rcwa/nvf-method-selection.md). |
-| General-FDTD stopping and absorbing padding | Current `fdtd.Decay(window_seconds=...)` and `fdtd.Absorber` expose the concrete stopping and graded-padding scopes with physical-unit and executed-prefix checks. See [stopping and absorbers](../guide/fdtd/stopping-and-absorbers.md). Historical callers still require migration. |
-| Periodic FDTD, native/graded grids and their derivative workflows | Provide physical declarations and matching fields, phases, units and derivatives in the current FDTD API, or explicitly end support for the individual feature. See the [integration checkpoint](../development/solver-integration.md). |
-| General-FDTD scenes extending smoothed substrates through PML | The fixed, unturned Box subset is now declared by `Structure.continuation`, with fixed `PML.reference_media` when differentiating the continued material. Field, unit and derivative tests preserve its scene/boundary semantics; migrate remaining historical callers deliberately. See [FDTD differentiation](../guide/fdtd/fd-differentiation.md). |
-| Historical JobSpec and capability-manifest consumers | The 15 teaching scripts now use the current API, including explicit `Job` round trips and wavelength expansion. Remaining consumers need deliberate schema migration; current `Job` files are not interchangeable with old serialized inputs. |
-| Published experiments, course records and frozen reference generators | Retain the original source commit, dependency environment and input/output bytes. A replay of the old experiment and validation of the new API must remain separately identifiable. |
-
-Port numerical assertions and external-reference comparisons with each caller;
-deleting a test or changing its expected result is not migration evidence. Shared
-internal engines remain implementation dependencies of the current API, even
-after a compatibility entry point can be removed. Moving those engines under a
-different name does not remove an API dependency or establish feature parity.
-
-Complete earlier manuals remain available for [API declarations](legacy-api.md), [general FDTD](general-fdtd-v1.md), [materials](materials-v1.md), [jobs](jobs-v1.md), [backends](backends-v1.md) and [autodiff](autodiff-v1.md). Advanced compatibility guides state their scope explicitly. The [design document](../design/unified-api.md) records the accepted design and implementation checkpoint; the generated reference and validation report establish implemented behavior.
+The earlier [API](legacy-api.md), [general-FDTD](general-fdtd-v1.md), [material](materials-v1.md),
+[Job](jobs-v1.md), [backend](backends-v1.md) and [autodiff](autodiff-v1.md) records explain old
+conventions. Their historical snippets do not describe currently importable names. Documentation
+relocation and consumer migration are separate from a new scientific measurement.

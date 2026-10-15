@@ -35,7 +35,7 @@ Oracle tier: **physics** (energy on a lossless passive layer), plus a structural
 declaration check. None is a golden -- nothing here compares the code to its own past output.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import numpy as np
 from wavebit.lattice import as_lattice
@@ -131,7 +131,7 @@ def test_a_splatted_builder_conserves_energy(name):
     slots = BUILDERS[name]()
     assert len(slots) == 5, f'{name} returned {len(slots)} slots'
 
-    res = _legacy_wavebit.rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW)._solve_conv(*slots)
+    res = _legacy_wavebit_rcwa(truncation_order=[MAX_ORDER, MAX_ORDER], **KW)._solve_conv(*slots)
 
     total = float(np.asarray(res.incident.R).sum() + np.asarray(res.incident.T).sum())
     assert abs(total - 1.0) < 1e-6, (

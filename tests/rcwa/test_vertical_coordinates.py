@@ -1,6 +1,10 @@
 """Physical checks of the bottom-origin, upward-positive public coordinate system."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common._jobs_v1 import JobSpec as _legacy_wavebit_JobSpec
+
+from wavebit._common._jobs_v1 import SpecError as _legacy_wavebit_SpecError
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -39,7 +43,7 @@ def test_plane_wave_phase_maxwell_and_flux(backend, path, algorithm, side, theta
         kw['tetm'] = path
     else:
         kw.update(phi=phi, polarization=(.6, .8j))
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     if path in ('second_order', 'first_order'):
         solver.formulation = path
     solver.solve()
@@ -97,7 +101,7 @@ def test_every_input_is_a_unit_electric_field_in_its_own_medium(medium, eps, mu,
         kw['tetm'] = path
     else:
         kw.update(phi=phi, polarization=(.6, .8j))
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     if path in ('second_order', 'first_order'):
         solver.formulation = path
     solver.solve()
@@ -122,7 +126,7 @@ def test_every_input_is_a_unit_electric_field_in_its_own_medium(medium, eps, mu,
 @pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
 def test_interface_uses_upper_layer_on_both_incidence_sides(side, algorithm):
     """z=d0 belongs to layer 1, independently of the propagation traversal."""
-    solver = _legacy_wavebit.rcwa(wavelength=1.3, period=(.8, .7), thickness=[.2, .3],
+    solver = _legacy_wavebit_rcwa(wavelength=1.3, period=(.8, .7), thickness=[.2, .3],
                          structure=np.array([[[2.25]], [[4.]]]), tetm='tm', theta=.4,
                          truncation_order=0, incidence_side=side, answers='field',
                          layer_algorithm=algorithm)
@@ -138,7 +142,7 @@ def test_interface_uses_upper_layer_on_both_incidence_sides(side, algorithm):
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_exact_interfaces_survive_cumulative_sum_roundoff(side):
     thickness = [.1, .2, .4, .7]
-    solver = _legacy_wavebit.rcwa(wavelength=2.3, period=(1., 1.), thickness=thickness,
+    solver = _legacy_wavebit_rcwa(wavelength=2.3, period=(1., 1.), thickness=thickness,
                          structure=np.array([[[2.]], [[3.]], [[4.]], [[5.]]]),
                          tetm='tm', theta=.4, truncation_order=0, incidence_side=side,
                          answers='field')
@@ -163,7 +167,7 @@ def test_one_height_sample_is_each_layers_lower_face(backend, path, algorithm, s
         kw['tetm'] = path
     else:
         kw.update(phi=.61, polarization=(.6, .8j))
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     if path in ('second_order', 'first_order'):
         solver.formulation = path
     solver.solve()
@@ -173,8 +177,8 @@ def test_one_height_sample_is_each_layers_lower_face(backend, path, algorithm, s
 
 
 def test_old_serialized_layer_order_requires_explicit_migration():
-    with pytest.raises(_legacy_wavebit.SpecError, match='bottom-to-top.*Reverse the old layer list'):
-        _legacy_wavebit.JobSpec.from_dict({'version': '9'})
+    with pytest.raises(_legacy_wavebit_SpecError, match='bottom-to-top.*Reverse the old layer list'):
+        _legacy_wavebit_JobSpec.from_dict({'version': '9'})
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -185,10 +189,10 @@ def test_single_height_keeps_thickness_derivatives(backend, patterned):
     kwargs = dict(backend=backend, wavelength=1.3, period=(.8, .7),
                   structure=structure,
                   truncation_order=0, theta=.4, tetm='tm', answers='field')
-    geometry = _legacy_wavebit.rcwa(thickness=[.2, .3], **kwargs).freeze_geometry()
+    geometry = _legacy_wavebit_rcwa(thickness=[.2, .3], **kwargs).freeze_geometry()
 
     def field_sum(thickness):
-        solver = _legacy_wavebit.rcwa(thickness=thickness, **kwargs)
+        solver = _legacy_wavebit_rcwa(thickness=thickness, **kwargs)
         _, cell = solver.solve_field(sample_x=1, sample_y=1, sample_z=1, geometry=geometry)
         return cell.real.sum()
 

@@ -11,7 +11,9 @@ legacy transfer-matrix chains before they were replaced. Comparing against ``sol
 in-process would prove nothing now that it dispatches into the core.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -32,7 +34,7 @@ from wavebit.rcwa._engine.solve_1d import solve_1d, solve_1d_conical
 # later cannot silently inherit float32. `test_factorization_core.py` carries the same guard
 # for the same reason, found the same way.
 try:
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 except ImportError:
     pass
 
@@ -41,7 +43,7 @@ def _run_and_inputs(tetm, structure, thickness, n_top, n_bot, wl, period, trunca
     """Solve via the public API and return (its R/T, the same inputs)."""
     # Two quantities, one pair of half-spaces. The constructor takes permittivity; `solve_1d`
     # below takes the index, which is what the amplitude ratios in it actually are.
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=None,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=None,
                           tetm=tetm, truncation_order=truncation_order, period=period, wavelength=wl,
                           thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()
@@ -184,7 +186,7 @@ def test_core_gradient_jax_torch_fd(tetm):
 
 def _run_and_inputs_conical(structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi):
     """Same, forced onto the conical path."""
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, truncation_order=truncation_order, period=period, wavelength=wl,
                           thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()

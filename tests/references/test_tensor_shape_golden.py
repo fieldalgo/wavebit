@@ -4,7 +4,7 @@ The reference raster has grid-aligned straight boundaries, so its geometry
 is exactly the rectangle below. No reference solver or new dependency runs.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -26,7 +26,7 @@ def test_integrated_tensor_pillar_inside_independent_formulation_spread(name):
     index,g = CASES[name]
     e = np.eye(3,dtype=complex)*index**2
     e[0,1],e[1,0] = g,-g
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.,shapes=[dict(
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.,shapes=[dict(
         type='rectangle',cx=-PERIOD/24,lx=PERIOD*5/12,ly=PERIOD/3,
         material=wavebit.Material(e))])],period=(PERIOD,PERIOD),thickness=[THICK],
         wavelength=WL,theta=np.deg2rad(THETA),phi=0.,

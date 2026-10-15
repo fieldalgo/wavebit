@@ -24,7 +24,7 @@ Run from the repo root:
     python studies/rcwa/benchmark_analytic/benchmark_analytic.py
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import os
 import sys
 
@@ -57,7 +57,7 @@ def make_circle_raster(N, R, n_rod, n_bg=1.0):
 
 
 def solve(backend, structure, truncation_order, **cfg):
-    solver = _legacy_wavebit.rcwa(backend=backend, structure=structure, truncation_order=(truncation_order, truncation_order), **cfg)
+    solver = _legacy_wavebit_rcwa(backend=backend, structure=structure, truncation_order=(truncation_order, truncation_order), **cfg)
     return t0_and_energy(solver.solve())
 
 

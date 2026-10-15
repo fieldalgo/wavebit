@@ -1,6 +1,8 @@
 """Source spectral zeros, calibrated optics and shared-backend sensitivities."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -44,7 +46,7 @@ def test_invalid_notches_fail_before_time_stepping(monkeypatch, notches):
         raise AssertionError('invalid notch reached a time-domain run')
     monkeypatch.setattr(scene, 'fdtd_grid', forbidden)
     with pytest.raises(ValueError, match='pulse_notches'):
-        _legacy_wavebit.fdtd(**options(pulse_notches=notches))
+        _legacy_wavebit_fdtd(**options(pulse_notches=notches))
 
 
 @pytest.mark.parametrize('changes', [
@@ -54,7 +56,7 @@ def test_invalid_notches_fail_before_time_stepping(monkeypatch, notches):
 ])
 def test_notches_cannot_remove_required_calibration(changes):
     with pytest.raises(ValueError, match='pulse_notches'):
-        _legacy_wavebit.fdtd(**options(**changes))
+        _legacy_wavebit_fdtd(**options(**changes))
 
 
 def test_weak_excitation_guard_tracks_backend_precision():
@@ -78,8 +80,8 @@ def test_notch_prevents_excitation_of_an_independent_undamped_material_mode():
     source = np.zeros((3, 2, 2, 2)); source[1] = 1
     options = dict(spacing=(.2,)*3, dt=dt, steps=count, source=source,
                    poles=[(omega0, 0., strength)])
-    baseline = _legacy_wavebit.fdtd_grid(np.full((2, 2, 2), eps), pulse=pulse, **options)
-    filtered = _legacy_wavebit.fdtd_grid(np.full((2, 2, 2), eps), pulse=shaped, **options)
+    baseline = _legacy_wavebit_fdtd_grid(np.full((2, 2, 2), eps), pulse=pulse, **options)
+    filtered = _legacy_wavebit_fdtd_grid(np.full((2, 2, 2), eps), pulse=shaped, **options)
     assert np.linalg.norm(baseline['E']) > .1
     assert np.linalg.norm(filtered['E']) < 1e-8*np.linalg.norm(baseline['E'])
     assert np.linalg.norm(filtered['polarization'][0]) < 1e-8*np.linalg.norm(baseline['polarization'][0])
@@ -94,7 +96,7 @@ def test_same_filtered_pulse_reaches_both_bases_and_references(monkeypatch, side
         pulses.append(np.array(kwargs['pulse']))
         return original(*args, **kwargs)
     monkeypatch.setattr(scene, 'fdtd_grid', capture)
-    _, d = _legacy_wavebit.fdtd(**options(pulse_notches=.8, incidence_side=side,
+    _, d = _legacy_wavebit_fdtd(**options(pulse_notches=.8, incidence_side=side,
                                   record_field=101, record_components=['ey'],
                                   record_bounds={'z': (.05, .15)}, grading=True))
     assert len(pulses) == 4
@@ -108,7 +110,7 @@ def test_same_filtered_pulse_reaches_both_bases_and_references(monkeypatch, side
 
 
 def test_unrecorded_carrier_can_be_notched_between_requested_frequencies():
-    results, d = _legacy_wavebit.fdtd(**options(wavelength=[.9, 1.1], pulse_notches=1.))
+    results, d = _legacy_wavebit_fdtd(**options(wavelength=[.9, 1.1], pulse_notches=1.))
     assert d['pulse']['carrier_fraction'] < 1e-12
     assert np.min(d['pulse']['relative_spectrum']) > .1
     for result in results:
@@ -116,8 +118,8 @@ def test_unrecorded_carrier_can_be_notched_between_requested_frequencies():
 
 
 def test_notch_frequency_scales_inversely_with_scene_length():
-    first, a = _legacy_wavebit.fdtd(**options(pulse_notches=.8))
-    second, b = _legacy_wavebit.fdtd(**options(pulse_notches=.4, pulse_width=4., thickness=[.4],
+    first, a = _legacy_wavebit_fdtd(**options(pulse_notches=.8))
+    second, b = _legacy_wavebit_fdtd(**options(pulse_notches=.4, pulse_width=4., thickness=[.4],
                                       period=.2, wavelength=[1.8, 2., 2.2], resolution=5))
     for before, after in zip(first, second):
         for name in ('r_s', 't_s', 'R', 'T'):
@@ -138,7 +140,7 @@ def test_notched_oblique_slab_refines_to_independent_airy_amplitudes():
                                          (1-r*r)*phase/denominator])
     errors = []
     for resolution in (40, 80):
-        results, d = _legacy_wavebit.fdtd(**options(resolution=resolution, n_pml=round(.3*resolution),
+        results, d = _legacy_wavebit_fdtd(**options(resolution=resolution, n_pml=round(.3*resolution),
                                             thickness=[.213], theta=.25, pulse_notches=[.75, 1.25],
                                             align_layers=True, diffraction_method='directional',
                                             diffraction_distance=.2, convergence_window=200))
@@ -155,7 +157,7 @@ def test_notched_oblique_slab_refines_to_independent_airy_amplitudes():
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_notched_source_preserves_material_mu_pole_and_record_gradients(backend):
     def objective(p, which):
-        result, d = _legacy_wavebit.fdtd(**options(
+        result, d = _legacy_wavebit_fdtd(**options(
             structure=p[:1].reshape(1, 1, 1), mu=p[1:2].reshape(1, 1, 1), wavelength=1.,
             dispersion=np.ones((1, 1, 1), int), poles={1: [(8., .3, p[2])]}, backend=which,
             pulse_notches=[.8, 1.3], grading=True, incidence_side='bottom',

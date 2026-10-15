@@ -1,6 +1,6 @@
 """C1 layer fractions: independent integration, derivatives and fixed boundaries."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -114,8 +114,8 @@ def test_interface_averaging_is_independent_of_length_unit(scale):
 def test_single_layer_has_no_internal_interface_to_smooth(side):
     kw = options(structure=np.array([[[2.25]]]), thickness=[.4], mesh_thickness=[.4],
                  incidence_side=side)
-    sharp = _legacy_wavebit.fdtd(**kw)
-    smoothed = _legacy_wavebit.fdtd(**kw, layer_smoothing=.1)
+    sharp = _legacy_wavebit_fdtd(**kw)
+    smoothed = _legacy_wavebit_fdtd(**kw, layer_smoothing=.1)
     for column in ('s_inc', 'p_inc'):
         for component in ('r_s', 'r_p', 't_s', 't_p'):
             np.testing.assert_allclose(getattr(getattr(smoothed, column), component),
@@ -128,7 +128,7 @@ def test_invalid_smoothing_is_rejected_before_stepping(monkeypatch, value, side)
     import wavebit.fdtd._periodic.scene as scene
     monkeypatch.setattr(scene, 'fdtd_grid', lambda *a, **kw: pytest.fail('reached time stepping'))
     with pytest.raises(ValueError, match='layer_smoothing'):
-        _legacy_wavebit.fdtd(**options(layer_smoothing=value, incidence_side=side))
+        _legacy_wavebit_fdtd(**options(layer_smoothing=value, incidence_side=side))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -138,7 +138,7 @@ def test_positive_smoothing_requires_fixed_mesh_and_exterior_clearance(monkeypat
     import wavebit.fdtd._periodic.scene as scene
     monkeypatch.setattr(scene, 'fdtd_grid', lambda *a, **kw: pytest.fail('reached time stepping'))
     with pytest.raises(ValueError, match='layer_smoothing'):
-        _legacy_wavebit.fdtd(**options(layer_smoothing=.1, incidence_side=side, **changes))
+        _legacy_wavebit_fdtd(**options(layer_smoothing=.1, incidence_side=side, **changes))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -146,7 +146,7 @@ def test_smoothing_width_is_a_host_mesh_parameter(backend):
     pytest.importorskip('jax' if backend == 'jax' else 'torch')
     width = time_loop_backend(backend).array(.1)
     with pytest.raises(ValueError, match='static real scalar'):
-        _legacy_wavebit.fdtd(**options(backend=backend, layer_smoothing=width))
+        _legacy_wavebit_fdtd(**options(backend=backend, layer_smoothing=width))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -155,7 +155,7 @@ def test_jit_keeps_mesh_and_masks_smoothing_outside_stack(side):
     traces = []
     def solve(d):
         traces.append(None)
-        r, out = _legacy_wavebit.fdtd(**options(backend='jax', thickness=[d, .4-d], layer_smoothing=.1,
+        r, out = _legacy_wavebit_fdtd(**options(backend='jax', thickness=[d, .4-d], layer_smoothing=.1,
                                        incidence_side=side, align_layers=True, return_diagnostics=True,
                                        field_monitors={'inside': .1}, record_field=151,
                                        record_components=['ey'], record_bounds={'z': (.05, .15)}))
@@ -180,7 +180,7 @@ def test_jit_keeps_mesh_and_masks_smoothing_outside_stack(side):
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_support_can_touch_exterior_faces_despite_reflection_roundoff(side):
     for d in (.1/2, .4-.1/2):
-        result = _legacy_wavebit.fdtd(**options(thickness=[d, .4-d], layer_smoothing=.1, incidence_side=side))
+        result = _legacy_wavebit_fdtd(**options(thickness=[d, .4-d], layer_smoothing=.1, incidence_side=side))
         assert np.isfinite(result.s_inc.T).all()
 
 

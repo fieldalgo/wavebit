@@ -1,6 +1,6 @@
 """Torch executes the shared core against existing independent FDTDX goldens."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 from pathlib import Path
 
 import numpy as np
@@ -23,7 +23,7 @@ def test_torch_fields_and_gradient_against_external_fdtdx(case):
     parameter=torch.tensor(.2,dtype=torch.float64,requires_grad=True)
     epsilon=2+(.2 if case=='ade' else parameter)*pattern
     poles=() if case!='ade' else ((0.,.3,.7*(1+parameter*pattern)),(1.2,.2,.8*(1+parameter*pattern)))
-    out=_legacy_wavebit.fdtd_grid(epsilon,spacing=(1.,)*3,dt=.2,steps=53 if case=='ade' else 37,
+    out=_legacy_wavebit_fdtd_grid(epsilon,spacing=(1.,)*3,dt=.2,steps=53 if case=='ade' else 37,
                          mu=mu,electric=electric,magnetic=magnetic,poles=poles,backend='torch',
                          bloch_phase=(.3,-.2,.4) if case=='bloch' else (0.,0.,0.),checkpoint_steps=8)
     value=(pattern*out['E'].abs()**2).sum()+.3*(out['H'][:,2:5,1:4,1:3].abs()**2).sum()

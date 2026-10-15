@@ -1,12 +1,20 @@
 """The NVF option names describe their scope at every public entry point."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common._jobs_v1 import JobSpec as _legacy_wavebit_JobSpec
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import inspect
 
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import Numerics, NormalMethod, Projector, SpecError
+from wavebit._common._jobs_v1 import Numerics
+
+from wavebit.rcwa._engine.enums import NormalMethod
+
+from wavebit.rcwa._engine.enums import Projector
+
+from wavebit._common._jobs_v1 import SpecError
 from wavebit.manifest import manifest
 
 
@@ -26,7 +34,7 @@ KW = dict(period=(1., 1.), wavelength=1.3, thickness=(.2,),
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_constructor_and_properties_publish_only_the_new_names(backend):
     pytest.importorskip(backend)
-    solver = _legacy_wavebit.rcwa(backend=backend, raster_normal_method='smooth',
+    solver = _legacy_wavebit_rcwa(backend=backend, raster_normal_method='smooth',
                           shape_nvf_grid_size=32, nvf_projector='circular')
     params = {name for cls in type(solver).__mro__ if '__init__' in cls.__dict__
               for name in inspect.signature(cls.__init__).parameters}
@@ -42,14 +50,14 @@ def test_constructor_and_properties_publish_only_the_new_names(backend):
 @pytest.mark.parametrize('old,new,value', RENAMED)
 def test_old_constructor_names_name_the_replacement(old, new, value):
     with pytest.raises(TypeError, match=new):
-        _legacy_wavebit.rcwa(**{old: value})
+        _legacy_wavebit_rcwa(**{old: value})
 
 
 @pytest.mark.parametrize('old,new,value', RENAMED)
 @pytest.mark.parametrize('door', ['solve', 'solve_field', 'freeze_geometry',
                                  'eps_conv_matrices', 'mu_conv_matrices'])
 def test_old_solve_names_fail_before_changing_any_condition(old, new, value, door):
-    solver = _legacy_wavebit.rcwa(structure=RASTER, answers='field', **KW)
+    solver = _legacy_wavebit_rcwa(structure=RASTER, answers='field', **KW)
     call = getattr(solver, door)
     args = (2, 2, 2) if door == 'solve_field' else ()
     with pytest.raises(TypeError, match=new):
@@ -61,20 +69,20 @@ def test_old_solve_names_fail_before_changing_any_condition(old, new, value, doo
 
 def test_each_scoped_name_is_rejected_on_the_other_input_path():
     with pytest.raises(NotImplementedError, match='raster_normal_method'):
-        _legacy_wavebit.rcwa(structure=SHAPE, raster_normal_method='smooth', **KW).solve()
+        _legacy_wavebit_rcwa(structure=SHAPE, raster_normal_method='smooth', **KW).solve()
     with pytest.raises(NotImplementedError, match='shape_nvf_grid_size'):
-        _legacy_wavebit.rcwa(structure=RASTER, shape_nvf_grid_size=32, **KW).solve()
+        _legacy_wavebit_rcwa(structure=RASTER, shape_nvf_grid_size=32, **KW).solve()
     with pytest.raises(NotImplementedError, match='nvf_projector'):
-        _legacy_wavebit.rcwa(structure=RASTER, nvf_projector='linear',
+        _legacy_wavebit_rcwa(structure=RASTER, nvf_projector='linear',
                      **{**KW, 'factorization': 'li'}).solve()
 
 
 def test_new_solve_names_reach_the_raster_and_shape_builders():
-    raster = _legacy_wavebit.rcwa(structure=RASTER, **KW)
+    raster = _legacy_wavebit_rcwa(structure=RASTER, **KW)
     raster.solve(raster_normal_method='smooth', nvf_projector='circular')
     assert raster.raster_normal_method == NormalMethod.SMOOTH
     assert raster.nvf_projector == Projector.CIRCULAR
-    shape = _legacy_wavebit.rcwa(structure=SHAPE, **KW)
+    shape = _legacy_wavebit_rcwa(structure=SHAPE, **KW)
     shape.solve(shape_nvf_grid_size=32, nvf_projector='circular')
     assert shape.shape_nvf_grid_size == 32
     assert shape.nvf_projector == Projector.CIRCULAR
@@ -98,7 +106,7 @@ def test_numerics_serializes_only_canonical_keys():
 
 def test_version_seven_specs_explain_the_key_only_migration():
     with pytest.raises(SpecError, match="version='10'.*shape_nvf_grid_size"):
-        _legacy_wavebit.JobSpec.from_dict({'version': '7'})
+        _legacy_wavebit_JobSpec.from_dict({'version': '7'})
     assert manifest()['results']['jobspec']['spec_version'] == '10'
     assert int(manifest()['manifest_version']) >= 10   # '10' renamed the keys; later bumps keep them
     for path in manifest()['paths']:
@@ -111,7 +119,7 @@ def test_jax_tree_roundtrip_preserves_explicit_and_unset_options(shape):
     jax = pytest.importorskip('jax')
     options = (dict(shape_nvf_grid_size=32) if shape
                else dict(raster_normal_method='smooth'))
-    solver = _legacy_wavebit.rcwa(backend='jax', structure=SHAPE if shape else RASTER,
+    solver = _legacy_wavebit_rcwa(backend='jax', structure=SHAPE if shape else RASTER,
                           nvf_projector='circular', **options, **KW)
     leaves, tree = jax.tree_util.tree_flatten(solver)
     restored = jax.tree_util.tree_unflatten(tree, leaves)

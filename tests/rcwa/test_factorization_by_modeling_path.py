@@ -1,6 +1,8 @@
 """Explicit rules are honored: circles require NVF, Cartesian paintings also support Li."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import numpy as np
 import pytest
 
@@ -37,7 +39,7 @@ UNAVAILABLE = {'smooth': 'li'}
 
 
 def solver(path, **strategy):
-    return _legacy_wavebit.rcwa(structure=STRUCTURES[path], **KW, **strategy)
+    return _legacy_wavebit_rcwa(structure=STRUCTURES[path], **KW, **strategy)
 
 
 def totals(path, **strategy):
@@ -123,7 +125,7 @@ def test_a_request_is_refused_however_it_is_spelled(spelling):
     wrong reason -- or, written straight onto the private attribute, silently substitute.
     """
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        _legacy_wavebit.rcwa(structure=SMOOTH, factorization=spelling, **KW).solve()
+        _legacy_wavebit_rcwa(structure=SMOOTH, factorization=spelling, **KW).solve()
 
 
 #: How each refusal is expected to name the rule the path *does* use. Matched as a phrase
@@ -148,10 +150,10 @@ PAINTED_OVERLAP = [{'background': 1.0, 'shapes': [
 
 
 def test_cartesian_painting_defaults_to_nvf_and_can_explicitly_select_li():
-    default = _legacy_wavebit.rcwa(structure=PAINTED_OVERLAP, **KW)
+    default = _legacy_wavebit_rcwa(structure=PAINTED_OVERLAP, **KW)
     assert default.factorization == 'nvf'
     assert sum(m is not None for m in default._eps_conv_matrices()) == 5
-    li = _legacy_wavebit.rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW)
+    li = _legacy_wavebit_rcwa(structure=PAINTED_OVERLAP, factorization='li', **KW)
     assert li.factorization == 'li'
     assert sum(m is not None for m in li._eps_conv_matrices()) == 3
 
@@ -196,7 +198,7 @@ def test_the_refusal_holds_on_every_backend(backend, path, rule):
     one of the three had grown its own copy."""
     pytest.importorskip(backend)
     with pytest.raises(NotImplementedError):
-        _legacy_wavebit.rcwa(structure=STRUCTURES[path], **dict(KW, backend=backend),
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], **dict(KW, backend=backend),
                        factorization=rule).solve()
 
 
@@ -211,8 +213,8 @@ def test_a_skewed_smooth_cell_no_longer_has_to_spell_out_nvf():
     and every skewed smooth-path run had to pass ``factorization='nvf'`` to talk it down.
     """
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
-    default = _legacy_wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, **KW_NO_CELL)
-    spelled_out = _legacy_wavebit.rcwa(structure=SMOOTH, lattice=hexagonal, factorization='nvf',
+    default = _legacy_wavebit_rcwa(structure=SMOOTH, lattice=hexagonal, **KW_NO_CELL)
+    spelled_out = _legacy_wavebit_rcwa(structure=SMOOTH, lattice=hexagonal, factorization='nvf',
                                **KW_NO_CELL)
     assert default.factorization == 'nvf'
     assert (float(np.sum(default.solve().T)) ==
@@ -223,7 +225,7 @@ def test_a_skewed_raster_cell_still_refuses_li():
     """The neighbouring refusal is untouched: on a raster, ``'li'`` really is the rule asked for."""
     hexagonal = np.array([[1.0, 0.5], [0.0, np.sqrt(3) / 2]])
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        _legacy_wavebit.rcwa(structure=RASTER, lattice=hexagonal, **KW_NO_CELL).solve()
+        _legacy_wavebit_rcwa(structure=RASTER, lattice=hexagonal, **KW_NO_CELL).solve()
 
 
 # --------------------------------------------------------------------------- through the spec
@@ -244,24 +246,24 @@ def test_a_spec_that_does_not_mention_factorization_does_not_request_one():
     would hand every spec an explicit request it never made — and a spec carrying smooth-path
     layers would be refused for asking for a rule its author never named.
     """
-    from wavebit.compat._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     assert Numerics().factorization is None
     assert 'factorization' not in Numerics().as_kwargs()
     assert Numerics.from_dict(Numerics().to_dict()).factorization is None
 
-    result = _legacy_wavebit.run(SPEC)
+    result = _legacy_wavebit_run(SPEC)
     assert float(np.sum(np.asarray(result.T))) == totals('smooth')[1]
 
 
 def test_a_spec_that_does_mention_it_is_refused_like_any_other_request():
     numerics = dict(SPEC['numerics'], factorization='li')
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        _legacy_wavebit.run({**SPEC, 'numerics': numerics})
+        _legacy_wavebit_run({**SPEC, 'numerics': numerics})
 
 
 def test_a_spec_may_still_name_the_rule_its_path_does_implement():
-    from wavebit.compat._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     assert Numerics.from_dict({'factorization': 'nvf'}).factorization is Factorization.NVF
     numerics = dict(SPEC['numerics'], factorization='nvf')
-    assert (float(np.sum(np.asarray(_legacy_wavebit.run({**SPEC, 'numerics': numerics}).T))) ==
+    assert (float(np.sum(np.asarray(_legacy_wavebit_run({**SPEC, 'numerics': numerics}).T))) ==
             totals('smooth')[1])

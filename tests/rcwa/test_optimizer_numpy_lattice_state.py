@@ -1,6 +1,8 @@
 """Temporary cell and ambient edits preserve caller-owned NumPy conditions."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -12,13 +14,13 @@ import wavebit
 @pytest.mark.parametrize('slot',['lattice','drawn-cell','top','bot'])
 def test_numpy_lattice_is_preserved_by_temporary_helper_state(helper,phase,failure,slot):
     jax=pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     cell=np.array([[600.,0.],[0.,750.]])
     before=cell.copy()
     eps_top=np.array(1.);eps_bot=np.array(1.2)
     raw=np.array([[[4.+.07j]]])
     structure=wavebit.Lattice(cell[:,0],cell[:,1],True).drawn(raw) if slot=='drawn-cell' else raw
-    s=_legacy_wavebit.rcwa(backend='jax',lattice=cell,structure=structure,thickness=[170.],
+    s=_legacy_wavebit_rcwa(backend='jax',lattice=cell,structure=structure,thickness=[170.],
                    top=wavebit.Material(eps_top),bot=wavebit.Material(eps_bot),
                    wavelength=900.,truncation_order=(0,0),theta=.17,phi=.29,factorization='li')
     original=s.lattice
@@ -58,10 +60,10 @@ def test_numpy_lattice_is_preserved_by_temporary_helper_state(helper,phase,failu
 def test_jitted_grad_retains_validated_drawn_cell_identity(changed):
     jax=pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     cell=wavebit.Lattice.rectangular(600.,750.)
     raw=np.array([[[4.+.07j]]])
-    s=_legacy_wavebit.rcwa(backend='jax',lattice=cell,structure=cell.drawn(raw),thickness=[170.],
+    s=_legacy_wavebit_rcwa(backend='jax',lattice=cell,structure=cell.drawn(raw),thickness=[170.],
                    wavelength=900.,truncation_order=(0,0),theta=.17,phi=.29,factorization='li')
     def calculation(solver):
         def forward(thickness):
@@ -75,7 +77,7 @@ def test_jitted_grad_retains_validated_drawn_cell_identity(changed):
         else:
             got=float(jax.jit(calculation)(s))
             def reference(t):
-                return float(_legacy_wavebit.rcwa(backend='numpy',lattice=cell,structure=cell.drawn(raw),
+                return float(_legacy_wavebit_rcwa(backend='numpy',lattice=cell,structure=cell.drawn(raw),
                     thickness=[t],wavelength=900.,truncation_order=(0,0),theta=.17,phi=.29,
                     factorization='li').solve().T.sum().real)
             fd=(reference(170.001)-reference(169.999))/.002

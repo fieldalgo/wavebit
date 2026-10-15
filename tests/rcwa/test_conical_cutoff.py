@@ -46,7 +46,11 @@ Sizes stay at ``truncation_order=5``. ``docs/theory/rcwa/rayleigh-points.md`` se
 the measurements behind every tolerance below.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ComplexIncidenceWarning as _legacy_wavebit_ComplexIncidenceWarning
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import contextlib
 import functools
 import warnings
@@ -137,7 +141,7 @@ def _solver(scene, *, algo='ETM', backend='numpy', two_d=False, **over):
         kw.update(period=[sc['period']], truncation_order=[to, 0], structure=structure)
         if mu is not None:
             kw['mu'] = mu
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def _np(a):
@@ -358,7 +362,7 @@ def test_the_gate_under_jit_matches_the_eager_gate(name, engages, case):
     strict comparison at ``ky == 0`` under a trace, where nothing refuses afterwards.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     wA, wB, ky, q1, q2 = case
     wA, wB = np.asarray(wA, dtype=complex), np.asarray(wB, dtype=complex)
@@ -472,7 +476,7 @@ def _quiet_complex(call):
     """Run ``call`` with every warning an error but the complex-incidence notice."""
     with warnings.catch_warnings():
         warnings.simplefilter('error')
-        warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+        warnings.simplefilter('ignore', _legacy_wavebit_ComplexIncidenceWarning)
         return call()
 
 
@@ -538,14 +542,14 @@ def test_a_split_cluster_under_jit_and_vmap(name):
     values 3.9e-13 and 8.4e-13 from eager.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     scene = SPLIT[name]
     wl = scene['wavelength'] * (1 + scene['rel'])
     algo = scene['algos'][-1]
     s = _solver(scene, algo=algo, backend='jax')
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+        warnings.simplefilter('ignore', _legacy_wavebit_ComplexIncidenceWarning)
         eager = _vector(s.solve(wavelength=wl, auto_detune=False))
         jitted = _vector(jax.jit(lambda w: s.solve(wavelength=w, auto_detune=False))(jnp.asarray(wl)))
         lanes = jax.vmap(lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R)))(
@@ -1530,7 +1534,7 @@ def test_the_coupled_exponential_tangent_under_a_trace_is_the_frechet_derivative
     """
     jax = pytest.importorskip('jax')
     scipy_linalg = pytest.importorskip('scipy.linalg')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     q, E = _coupled_q(shape)
     for s in (-5.0, -0.7, 0.0, -12 + 3j):
@@ -1564,7 +1568,7 @@ def test_a_refused_coupling_gives_a_nan_traced_tangent(shape):
     """
     jax = pytest.importorskip('jax')
     scipy_linalg = pytest.importorskip('scipy.linalg')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     assert modal_gradient._COUPLED_CAP == 4
     q, E = _coupled_q(shape)
     value, tangent = _coupled_tangent(q, E, -5.0, jit=True)

@@ -9,7 +9,9 @@ import json
 
 import numpy as np
 
-from wavebit.compat.legacy import Incidence, Stack, layer_thicknesses; from wavebit.compat.legacy import fdtd
+from wavebit import Units, Material
+from wavebit.fdtd import periodic as fdtd
+from wavebit.rcwa import layer_thicknesses
 
 DEPTH = .8
 MINIMUM = .04
@@ -25,18 +27,20 @@ def design(parameters):
     epsilon = jnp.concatenate((parameters[3:], jnp.array([4.])))
     # Parameters and the independent references list the coatings before the spacer.
     # The public layer axis starts at the substrate, so reverse both arrays here.
-    return Stack.from_structure(epsilon[::-1, None, None], thickness[::-1],
-                                top=1., bot=4., period=.05)
+    return fdtd.Stack(period=(.05,),bottom=Material(4.),layers=tuple(
+        fdtd.Layer(thickness=d,epsilon=e[None,None]) for d,e in zip(thickness[::-1],epsilon[::-1])))
 
 
 def spectrum(parameters, resolution=40, smoothing_cells=1., band=BAND, duration=65):
-    import jax.numpy as jnp
-    light = Incidence(wavelength=band, polarization=(1., 0.))
-    results = fdtd(design(parameters), light, backend='jax', resolution=resolution,
-                   mesh_thickness=[DEPTH/4]*4, layer_smoothing=smoothing_cells/resolution,
-                   align_layers=True, n_pml=resolution, n_periods=duration, pulse_width=3.,
-                   diffraction_method='directional', truncation_order=0)
-    return jnp.stack([result.s_inc.R.sum() for result in results])
+    units=Units(length='um')
+    problem=fdtd.Problem(stack=design(parameters),units=units,
+        excitation=fdtd.Excitation(wavelength=band,sources=(fdtd.PlaneWave(),)),
+        pulse=fdtd.Pulse(width_seconds=3*units.time_seconds))
+    numerics=fdtd.Numerics(spacing=1/resolution,
+        duration_seconds=duration*.5*(float(np.min(band))+float(np.max(band)))*units.time_seconds,
+        nominal_layer_thickness=(DEPTH/4,)*4,layer_smoothing=smoothing_cells/resolution,
+        align_layers=True,pml_cells=resolution,extraction_method='directional',orders=0)
+    return fdtd.run(problem,numerics=numerics,backend='jax').R.sum(axis=(-2,-1))
 
 
 def sharp_reflection(epsilon, thickness, band):
@@ -78,13 +82,13 @@ def optimize(iterations=30, resolution=40):
     dense_band = np.linspace(BAND.min(), BAND.max(), 81)
     initial_stack = design(jnp.asarray(INITIAL))
     # The oracle is incident-first; Stack arrays and the exported design are bottom-to-top.
-    initial_exact = sharp_reflection(np.asarray(initial_stack.structure).ravel()[::-1],
-                                     np.asarray(initial_stack.thickness)[::-1], dense_band)
-    exact = sharp_reflection(np.asarray(stack.structure).ravel()[::-1],
-                             np.asarray(stack.thickness)[::-1], dense_band)
+    initial_exact = sharp_reflection(np.asarray([l.epsilon for l in initial_stack.layers]).ravel()[::-1],
+                                     np.asarray([l.thickness for l in initial_stack.layers])[::-1], dense_band)
+    exact = sharp_reflection(np.asarray([l.epsilon for l in stack.layers]).ravel()[::-1],
+                             np.asarray([l.thickness for l in stack.layers])[::-1], dense_band)
     return dict(parameters=p.tolist(), layer_order='bottom_to_top',
-                thickness=[float(d) for d in stack.thickness],
-                epsilon=np.asarray(stack.structure).ravel().tolist(), wavelengths=BAND.tolist(),
+                thickness=[float(l.thickness) for l in stack.layers],
+                epsilon=np.asarray([l.epsilon for l in stack.layers]).ravel().tolist(), wavelengths=BAND.tolist(),
                 resolution=resolution, training_reflection=training.tolist(),
                 refined_resolution=2*resolution, refined_reflection=refined.tolist(),
                 sharp_refined_reflection=sharp.tolist(), history=history,

@@ -24,7 +24,7 @@ import warnings
 import numpy as np
 import pytest
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from wavebit import refractive_index_from_eps
 from tests.rcwa.test_lossy_media import analytic_r, analytic_t
 
@@ -37,7 +37,7 @@ BETAS = (0.0, 0.5)                              # kx / k0 in the air: 0 and 30 d
 
 def _solve(eps, beta, tetm, formulation, algo='ETM', side='top', answers='amplitude'):
     """One air / film / air solve, s or p at ``phi = 0``, with the formulation forced."""
-    solver = _legacy_wavebit.rcwa(
+    solver = _legacy_wavebit_rcwa(
         backend='numpy', top=1.0, bot=1.0, theta=np.arcsin(beta), phi=0.0,
         polarization=(1, 0) if tetm == 'te' else (0, 1), truncation_order=[0, 0],
         period=[2 * WL, 2 * WL], wavelength=WL, thickness=[D],

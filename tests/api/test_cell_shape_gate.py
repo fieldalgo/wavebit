@@ -24,7 +24,7 @@ shape to get wrong. What this refuses is a *pair* used as though it described a 
 anywhere the cell might not be one.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import ast
 import pathlib
 
@@ -387,7 +387,7 @@ def test_periodic_fdtd_rejects_a_skewed_lattice_before_result_conversion(monkeyp
     if backend is not None:
         settings['backend'] = backend
     with pytest.raises(ValueError, match='lattice|rectangular period'):
-        _legacy_wavebit.fdtd(**settings)
+        _legacy_wavebit_fdtd(**settings)
 
 
 @pytest.mark.parametrize('basis', _NON_DIAGONAL_BASES)

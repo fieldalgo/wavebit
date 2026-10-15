@@ -1,5 +1,11 @@
 # Research: symmetric interface stencils
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 This is the material operator that passes C3 (2026-09-26; see "C3: the high-index sphere,
 and the verdict"). Public `fd.run` reaches it only when a structure asks for it
 (`fd.Structure(..., discretisation='stencil')`, since 2026-09-24); the default is unchanged

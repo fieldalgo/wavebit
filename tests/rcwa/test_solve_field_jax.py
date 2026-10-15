@@ -12,7 +12,9 @@ it. Unflattening applied ``psi`` last, whose setter recomputes ``tetm``, so the 
 key silently became a tracer and every caller of this method died on the first ``if tetm == 'te'``.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -38,7 +40,7 @@ CASES = {
 def _solver(backend, case, **extra):
     kwargs, _ = CASES[case]
     extra.setdefault('answers', 'field')      # every solver in this file is reconstructed from
-    return _legacy_wavebit.rcwa(backend=backend, **BASE, **kwargs, **extra)
+    return _legacy_wavebit_rcwa(backend=backend, **BASE, **kwargs, **extra)
 
 
 def _res(case):
@@ -134,7 +136,7 @@ def test_no_traced_condition_outlives_a_field_call(door, transform):
     """
     import jax
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 
     solver = _solver('jax', '2d')
     geometry = solver.freeze_geometry()
@@ -146,7 +148,7 @@ def test_no_traced_condition_outlives_a_field_call(door, transform):
         return jnp.sum(result.T).real
 
     def built_at(w):
-        built = _legacy_wavebit.rcwa(backend='jax', **{**BASE, 'wavelength': w}, **CASES['2d'][0],
+        built = _legacy_wavebit_rcwa(backend='jax', **{**BASE, 'wavelength': w}, **CASES['2d'][0],
                              answers='field')
         result, _ = built.solve_field_eager(sample_x=4, sample_y=4, sample_z=4,
                                             geometry=geometry)
@@ -305,14 +307,14 @@ SQUARE = np.diag([700.0, 700.0])
 def _cell_solver(basis):
     """A raster on ``basis``, declared with ``lattice=`` -- the spelling a basis rides under."""
     eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
-    return _legacy_wavebit.rcwa(backend='jax', lattice=basis, structure=eps, truncation_order=[1, 1],
+    return _legacy_wavebit_rcwa(backend='jax', lattice=basis, structure=eps, truncation_order=[1, 1],
                         thickness=[300.0], wavelength=900.0, theta=0.2, phi=0.1, psi=0.3,
                         answers='field', factorization='nvf')
 
 
 def _scene_2d(**over):
     """The '2d' case with any of its conditions -- `top` and `structure` included -- moved."""
-    return _legacy_wavebit.rcwa(backend='jax', **{**BASE, **CASES['2d'][0], 'answers': 'field', **over})
+    return _legacy_wavebit_rcwa(backend='jax', **{**BASE, **CASES['2d'][0], 'answers': 'field', **over})
 
 
 @pytest.mark.parametrize('name, basis, value', [('lattice', SHEAR, SHEAR),
@@ -386,7 +388,7 @@ def _li_raster_on(cell, radius=None):
 
 
 def _li_solver(**cell):
-    return _legacy_wavebit.rcwa(backend='jax', truncation_order=[1, 1], thickness=[300.0],
+    return _legacy_wavebit_rcwa(backend='jax', truncation_order=[1, 1], thickness=[300.0],
                         wavelength=900.0, theta=0.2, phi=0.1, psi=0.3, answers='field', **cell)
 
 
@@ -548,7 +550,7 @@ def test_a_declaration_named_at_the_jitted_door_answers_as_one_built_with_it():
     """
     kwargs = dict(CASES['1d_tetm'][0])
     del kwargs['tetm']
-    solver = _legacy_wavebit.rcwa(backend='jax', **BASE, **kwargs, answers='field')
+    solver = _legacy_wavebit_rcwa(backend='jax', **BASE, **kwargs, answers='field')
     built = _solver('jax', '1d_tetm')
     geometry = built.freeze_geometry()
     got = solver.solve_field(*_res('1d_tetm'), geometry=geometry, tetm='te')
@@ -588,14 +590,14 @@ def test_parametric_structures_cross_the_compiled_door_and_keyword_assignment():
     """Shape strings are static declarations; the retained keyword door keeps that support."""
     kw = dict(backend='jax', lattice=SQUARE, thickness=[300.0], wavelength=900.0,
               truncation_order=[2, 2], answers='field')
-    parametric = _legacy_wavebit.rcwa(structure=BOX_LAYER, **kw)
+    parametric = _legacy_wavebit_rcwa(structure=BOX_LAYER, **kw)
     geometry = parametric.freeze_geometry()
     compiled, field = parametric.solve_field(3, 3, 2, geometry=geometry)
     eager, eager_field = parametric.solve_field_eager(3, 3, 2)
     np.testing.assert_allclose(np.asarray(compiled.T), np.asarray(eager.T), atol=1e-11)
     np.testing.assert_allclose(np.asarray(field), np.asarray(eager_field), atol=1e-11)
 
-    solver = _legacy_wavebit.rcwa(structure=np.ones((1, 3, 3)), **kw)
+    solver = _legacy_wavebit_rcwa(structure=np.ones((1, 3, 3)), **kw)
     assigned, assigned_field = solver.solve_field(3, 3, 2, geometry=geometry,
                                                  structure=BOX_LAYER)
     np.testing.assert_allclose(np.asarray(assigned.T), np.asarray(compiled.T), atol=1e-11)

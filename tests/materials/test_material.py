@@ -21,7 +21,9 @@ silent:
   ``Im(eps) >= 0``, and the negative lip of the cut is where that stops being true.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import subprocess
 import sys
 from dataclasses import FrozenInstanceError
@@ -36,7 +38,7 @@ from wavebit.materials.response import as_material
 try:
     import jax
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 except ImportError:                             # pragma: no cover - jax is an extra
     jax = jnp = None
 
@@ -302,7 +304,7 @@ def test_a_signed_zero_names_the_same_root_on_every_backend(backend):
         convert, back, solver_backend = np.asarray, np.asarray, 'numpy'
     elif backend == 'jax':
         jax = pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         convert, back, solver_backend = jax.numpy.asarray, np.asarray, 'jax'
     else:
         torch = pytest.importorskip('torch')
@@ -322,7 +324,7 @@ def test_a_signed_zero_names_the_same_root_on_every_backend(backend):
     assert complex(back(signed_index(convert(complex(-4, -0.0)), convert(1 + 0j)))) == -2j
     outcome = {}
     for tetm in ('te', 'tm'):
-        solver = _legacy_wavebit.rcwa(
+        solver = _legacy_wavebit_rcwa(
             backend=solver_backend, top=Material(1 + 0j, mu=1 + 0j),
             bot=Material(convert(complex(-4, -0.0)), mu=convert(1 + 0j)), theta=0.0,
             wavelength=500.0, period=[300.0], truncation_order=0, thickness=[50.0],
@@ -575,7 +577,7 @@ def test_a_refused_half_space_leaves_neither_the_material_nor_the_index(backend,
         pytest.importorskip('jax')
     elif backend == 'torch':
         pytest.importorskip('torch')
-    solver = _legacy_wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)) * 2.0,
+    solver = _legacy_wavebit_rcwa(backend=backend, structure=np.ones((1, 4, 4)) * 2.0,
                           period=[400.0, 500.0], truncation_order=(2, 2), wavelength=620.,
                           thickness=[150.0], top=2.25, bot=1.5)
     index = f'n_{where}'

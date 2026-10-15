@@ -1,6 +1,7 @@
 """Six coating variables checked against Meep and independent continuum optics."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit import Units
+from wavebit.fdtd import periodic as fdtd
 from pathlib import Path
 
 import numpy as np
@@ -34,13 +35,17 @@ def test_constrained_coating_gradients_against_meep_and_continuum(record_propert
     np.testing.assert_allclose(lengths, ref['thickness'], atol=1e-15)
 
     def response(p, resolution):
-        results = _legacy_wavebit.fdtd(design(p), _legacy_wavebit.Incidence(wavelength=band, polarization=(1., 0.)),
-                               backend='jax', resolution=resolution, n_pml=resolution,
-                               mesh_thickness=[.2]*4, layer_smoothing=1/resolution, align_layers=True,
-                               n_periods=65, pulse_width=3., truncation_order=0,
-                               diffraction_method='directional')
-        return jnp.stack((jnp.stack([r.s_inc.r_s.reshape(()) for r in results]),
-                          jnp.stack([r.s_inc.t_s.reshape(()) for r in results])))
+        units = Units(length='um')
+        problem = fdtd.Problem(units=units, stack=design(p),
+            excitation=fdtd.Excitation(wavelength=band, sources=(fdtd.PlaneWave(polarization=(1., 0.)),)),
+            pulse=fdtd.Pulse(width_seconds=3.*units.time_seconds))
+        result = fdtd.run(problem, backend='jax', numerics=fdtd.Numerics(
+            spacing=1/resolution, pml_cells=resolution,
+            nominal_layer_thickness=(.2,)*4, layer_smoothing=1/resolution, align_layers=True,
+            duration_seconds=65*.5*(float(np.min(band))+float(np.max(band)))*units.time_seconds,
+            orders=0, extraction_method='directional'))
+        return jnp.stack((result.reflection.amplitude_s.reshape(-1),
+                          result.transmission.amplitude_s.reshape(-1)))
     def evaluate(resolution):
         f = lambda p: response(p, resolution)
         return tuple(map(np.asarray, jax.jit(lambda p: (f(p), jax.jacfwd(f)(p)))(p)))

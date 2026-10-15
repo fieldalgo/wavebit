@@ -35,7 +35,9 @@ and still leaves 46.9% of Li's checkerboard cell wrong. It also found the tie th
 equal distance sum to the zero vector, until the surviving axis is substituted there.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -105,7 +107,7 @@ def _field_at(lattice, n, **geom):
 def _solve(lattice, truncation_order=8, **geom):
     P._PROJECTOR_CACHE.clear()
     layer = [dict(background=1.0, shapes=[dict(type='rectangle', material=EPS_HI, **geom)])]
-    return _legacy_wavebit.rcwa(lattice=lattice, structure=layer,
+    return _legacy_wavebit_rcwa(lattice=lattice, structure=layer,
                         truncation_order=dict(u=truncation_order, v=truncation_order),
                         shape_nvf_grid_size=512, **SOLVE_KW).solve()
 
@@ -197,7 +199,7 @@ def test_the_grating_solves_as_the_same_grating_under_lis_rule():
 
     for order in (6, 10):
         shaped = _solve(SQUARE, truncation_order=order, cx=0.0, cy=0.0, lx=350.0, ly=PERIOD)
-        li = _legacy_wavebit.rcwa(period=[PERIOD, PERIOD], structure=raster, factorization='li',
+        li = _legacy_wavebit_rcwa(period=[PERIOD, PERIOD], structure=raster, factorization='li',
                           truncation_order=dict(x=order, y=order), **SOLVE_KW).solve()
         assert abs(float(shaped.T.sum()) - float(li.T.sum())) < 1e-11
 
@@ -417,7 +419,7 @@ def test_the_onset_thresholds_themselves_are_built(name, lattice, geom):
     if name.startswith('a disc'):
         layer = [dict(background=1.0, shapes=[dict(type='circle', cx=0.0, cy=0.0,
                                                    lx=geom['lx'], material=EPS_HI)])]
-        res = _legacy_wavebit.rcwa(lattice=lattice, structure=layer, shape_nvf_grid_size=512,
+        res = _legacy_wavebit_rcwa(lattice=lattice, structure=layer, shape_nvf_grid_size=512,
                            truncation_order=dict(u=6, v=6), **SOLVE_KW).solve()
     else:
         res = _solve(lattice, truncation_order=6, cx=0.0, cy=0.0, **geom)
@@ -461,13 +463,13 @@ def test_the_drop_survives_jit_and_grad():
     """
     jax = pytest.importorskip('jax')
     jnp = pytest.importorskip('jax.numpy')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 
     def layer(lx):
         return [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                   lx=lx, ly=PERIOD, material=EPS_HI)])]
 
-    solver = _legacy_wavebit.rcwa(backend='jax', period=[PERIOD, PERIOD], structure=layer(350.0),
+    solver = _legacy_wavebit_rcwa(backend='jax', period=[PERIOD, PERIOD], structure=layer(350.0),
                           truncation_order=dict(x=4, y=4), shape_nvf_grid_size=128,
                           **{k: v for k, v in SOLVE_KW.items() if k != 'backend'})
     frozen = solver.freeze_geometry()

@@ -160,11 +160,11 @@ def pair(z):
     return [z.real, z.imag]
 
 
-def solve(wavebit, **kw):
+def solve(rcwa, **kw):
     """One numpy-backend solve; returns the result and the warning categories it raised."""
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
-        res = wavebit.rcwa(backend='numpy', **kw).solve()
+        res = rcwa(backend='numpy', **kw).solve()
     return res, sorted({w.category.__name__ for w in caught})
 
 
@@ -182,8 +182,8 @@ def import_wavebit(checkout):
     found = Path(wavebit.__file__).resolve()
     if checkout not in found.parents:
         raise SystemExit(f'imported wavebit from {found}, not from --wavebit {checkout}')
-    from wavebit.compat import legacy
-    return legacy
+    from wavebit.rcwa._factory import rcwa
+    return wavebit, rcwa
 
 
 # ---------------------------------------------------------------- the measurements
@@ -229,7 +229,7 @@ def rule_match():
     }
 
 
-def theta_to_kx(wavebit):
+def theta_to_kx(rcwa):
     """Appendix B: the incident kx/k0 Wavebit builds from theta, before any solve.
 
     A real theta is read as the phase angle (real kx); a complex theta as the formal n sin(theta).
@@ -238,7 +238,7 @@ def theta_to_kx(wavebit):
     for top in ([4.0, 3.0], [4.0, 0.0]):
         for theta_imag in (0.0, 1e-12, -1e-12):
             theta = 0.4 + 1j * theta_imag if theta_imag else 0.4
-            solver = wavebit.rcwa(backend='numpy', tetm='te', top=complex(*top), bot=1.0, theta=theta,
+            solver = rcwa(backend='numpy', tetm='te', top=complex(*top), bot=1.0, theta=theta,
                                   truncation_order=0, wavelength=1000.0, period=[2000.0], thickness=[100.0],
                                   structure=np.array([[[1.0, 1.0]]], dtype=complex))
             rows.append({'top_eps': top, 'theta': [0.4, theta_imag],
@@ -262,12 +262,12 @@ def grating_record_setup(kw):
             'fourier_coefficients': 'integrated', 'backend': 'numpy'}
 
 
-def grating_wavebit(wavebit, kw):
+def grating_wavebit(rcwa, kw):
     """Appendix A (lab note 1, section 11), Wavebit side: zeroth-order reflection amplitude and efficiency."""
     rows = []
     for d in THETA_IMAG:
         th = 0.2 + 1j * d if d else 0.2
-        res, caught = solve(wavebit, fourier_coefficients='integrated', theta=th, **kw)
+        res, caught = solve(rcwa, fourier_coefficients='integrated', theta=th, **kw)
         zero = int(np.flatnonzero(np.asarray(res.orders_u) == 0)[0])
         rows.append({'theta_imag': d,
                      'r0': pair(np.asarray(res.incident.r_s).ravel()[zero]),
@@ -314,10 +314,10 @@ def grating_reticolo(checkout, reticolo_path, kw):
             'pol_argument': 0, 'rows': rows}
 
 
-def gain(wavebit):
+def gain(rcwa):
     """Appendix B (lab note 2, sections 3-4): glass over a gain half-space, and a 2 um gain layer under glass, TE."""
     def R(deg, bot, layer=GLASS, d_nm=100.0):
-        res, caught = solve(wavebit, tetm='te', top=GLASS, bot=bot, theta=np.radians(deg), truncation_order=0,
+        res, caught = solve(rcwa, tetm='te', top=GLASS, bot=bot, theta=np.radians(deg), truncation_order=0,
                             wavelength=1000.0, period=[2000.0],
                             structure=np.array([[[layer, layer]]], dtype=complex), thickness=[d_nm])
         return float(np.sum(res.R).real), float(np.sum(res.T).real), caught
@@ -408,7 +408,7 @@ def main():
         if not (reticolo_path / 'res2.m').is_file():
             parser.error(f'RETICOLO_PATH has no res2.m: {reticolo_path}')
 
-    wavebit = import_wavebit(checkout)
+    wavebit, rcwa = import_wavebit(checkout)
     dirty = git(checkout, 'status', '--porcelain', '--untracked-files=no')
     kw = grating_setup()
     setup = grating_record_setup(kw)
@@ -429,10 +429,10 @@ def main():
             'order_kx': [{'order': m, 'kx': float(np.sin(0.2) + m * kw['wavelength'] / kw['period'][0])}
                          for m in (-1, 0, 1)],
             'theta_imag': list(THETA_IMAG),
-            'wavebit': {'rows': grating_wavebit(wavebit, kw)},
+            'wavebit': {'rows': grating_wavebit(rcwa, kw)},
         },
-        'gain': gain(wavebit),
-        'theta_to_kx': theta_to_kx(wavebit),
+        'gain': gain(rcwa),
+        'theta_to_kx': theta_to_kx(rcwa),
     }
     reticolo = (grating_reticolo(checkout, reticolo_path, kw) if args.reticolo
                 else carried_reticolo(args.output, setup))

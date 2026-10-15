@@ -39,7 +39,9 @@ What this file pins:
 Sizes stay at ``truncation_order=(5, 1)`` (``(5, 2)`` for the 2D EPs).
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -120,7 +122,7 @@ def _genuine_solver(fy, wavelength, theta=0.3, algo='ETM', backend='numpy', firs
     ``Kx epz_i Kx`` to 4e-16, and its eigenvalues square to ``-q**2`` of the product's ``q`` to
     2e-14 relative to ``max(1, |q**2|)``, 1e-2 off the point), so the same wavelengths are its EPs
     -- one Jordan pair in each direction."""
-    s = _legacy_wavebit.rcwa(**{**dict(
+    s = _legacy_wavebit_rcwa(**{**dict(
         backend=backend, wavelength=wavelength, period=[1000., 700.], truncation_order=[5, 2],
         structure=_cut_pillar(fy), thickness=[300.], top=1.0, bot=2.1025, theta=theta,
         phi=np.pi / 2, psi=np.pi / 2, layer_algorithm=algo), **over})
@@ -428,7 +430,7 @@ def test_derivatives_at_a_2d_ep_are_the_1d_rebuild_s(name, algo):
     inverse's coupling terms dropped, and the pair Sylvester's coupling passes dropped.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     torch = pytest.importorskip('torch')
     from torch.autograd import forward_ad
     jnp = jax.numpy
@@ -527,7 +529,7 @@ def test_genuinely_2d_ep_derivatives_match_cauchy_oracles(first_order, algo, gen
     <= 3.2e-12. With the rebuilds closed, 1.4e-6 (first-order ETM, ``d``) .. 44 (theta).
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     torch = pytest.importorskip('torch')
     jnp = jax.numpy
     fy, wl = _ORACLE_EP
@@ -578,7 +580,7 @@ def test_a_2d_ep_under_an_abstract_trace(algo, rebuilt):
     Measured <= 1e-14 (values) and <= 8e-14 (derivatives); before 2e-8 .. 3e-3.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     torch = pytest.importorskip('torch')
     jnp = jax.numpy
     scene = PATTERNED['PA616']
@@ -626,7 +628,7 @@ def test_more_pairs_than_the_trace_holds_is_loud(monkeypatch):
     """Under ``jax.jit`` the pairs are rebuilt up to a static count; the y-invariant raster has
     three at once, so a count of one must give NaN, never the two left silently (2e-7)."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     original = solve_2d.layer_modes_2d
     monkeypatch.setattr(solve_2d, 'layer_modes_2d',
@@ -652,7 +654,7 @@ def test_a_2d_ep_field_and_its_gradient_are_the_1d_rebuild_s(name, algo):
     ``a`` row off the bottom face) and field reconstruction ignoring the record's tenth slot.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     scene = PATTERNED[name]
     ref = _np(_solver(scene).solve(auto_detune=False, answers='field').reconstruct_field(
@@ -690,13 +692,13 @@ def test_a_genuinely_2d_ep_field_gradient_agrees_across_algorithms():
     tangent ``d_ba`` is generic here -- not tied to its gap, as on a y-invariant raster -- so this
     is the scene that catches a pair read with only its ``a`` row off the bottom face."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     st0 = _cut_pillar(0.8)
     xs, zs = jnp.asarray([-200., 0., 130.]), jnp.asarray([40., 150., 260.])
     grads = {}
     for algo in ('ETM', 'SMM'):
-        s = _legacy_wavebit.rcwa(backend='jax', wavelength=620.391376855451, period=[1000., 700.],
+        s = _legacy_wavebit_rcwa(backend='jax', wavelength=620.391376855451, period=[1000., 700.],
                          truncation_order=[5, 2], structure=st0, thickness=[300.], top=1.0,
                          bot=2.1025, theta=0.3, phi=np.pi / 2, psi=np.pi / 2, layer_algorithm=algo)
 
@@ -749,7 +751,7 @@ def test_a_genuinely_2d_ep_field_matches_cauchy_oracles(first_order, algo, genui
     0.88 (first-order SMM) off.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     fy, wl = _ORACLE_EP
     value, dtheta, dwl = genuine_fields
@@ -806,10 +808,10 @@ def test_off_the_band_nothing_moves(algo, rebuilt, monkeypatch):
     rng = np.random.default_rng(12)
     for _ in range(12):
         kw = _random_2d(rng)
-        on = _legacy_wavebit.rcwa(backend='numpy', layer_algorithm=algo, **kw).solve(auto_detune=False)
+        on = _legacy_wavebit_rcwa(backend='numpy', layer_algorithm=algo, **kw).solve(auto_detune=False)
         with monkeypatch.context() as m:
             m.setattr(solve_2d, '_EP_SINE', 0.0)
-            off = _legacy_wavebit.rcwa(backend='numpy', layer_algorithm=algo, **kw).solve(auto_detune=False)
+            off = _legacy_wavebit_rcwa(backend='numpy', layer_algorithm=algo, **kw).solve(auto_detune=False)
         for key in ('R', 'T', 'r_xyz', 't_xyz'):
             assert np.array_equal(_np(getattr(on, key)), _np(getattr(off, key)))
     assert not rebuilt

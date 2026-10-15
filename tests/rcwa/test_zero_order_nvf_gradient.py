@@ -1,6 +1,8 @@
 """The DC normal-field coefficient is its mean, including under compiled gradients."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -16,7 +18,7 @@ def test_dc_values_and_precision_agree_with_the_full_transform(backend, bits, co
     elif backend == 'jax':
         pytest.importorskip('jax')
         import jax.numpy as xp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         pytest.importorskip('torch')
         import array_api_compat.torch as xp
@@ -36,7 +38,7 @@ def test_dc_values_and_precision_agree_with_the_full_transform(backend, bits, co
 def test_compiled_dc_derivative_matches_the_analytic_mean(complex_field):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     a = np.arange(35, dtype=float).reshape(5, 7)/35+.1
     b = a[::-1, ::-1]+.2
     def loss(w):
@@ -58,14 +60,14 @@ def test_compiled_dc_derivative_matches_the_analytic_mean(complex_field):
 @pytest.mark.parametrize('transform', ['grad', 'jit_grad', 'grad_jit'])
 def test_zero_order_shape_gradient_matches_fresh_numpy(kind, transform):
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     def structure(width):
         return [dict(background=1., shapes=[dict(type=kind, cx=0., cy=0., lx=width,
                                                ly=100., angle=0., material=4.)])]
     cfg = dict(period=(600., 750.), wavelength=900., thickness=(170.,),
                truncation_order=(0, 0), theta=.13, phi=.21,
                shape_nvf_grid_size=32, factorization='nvf')
-    s = _legacy_wavebit.rcwa(backend='jax', **cfg, structure=structure(100.))
+    s = _legacy_wavebit_rcwa(backend='jax', **cfg, structure=structure(100.))
     geometry = s.freeze_geometry()
     def loss(width):
         return s.solve(structure=structure(width), geometry=geometry).T.sum().real
@@ -74,7 +76,7 @@ def test_zero_order_shape_gradient_matches_fresh_numpy(kind, transform):
         derivative = jax.jit(derivative)
     got = float(derivative(100.))
     def reference(width):
-        return _legacy_wavebit.rcwa(backend='numpy', **cfg, structure=structure(width)).solve().T.sum().real
+        return _legacy_wavebit_rcwa(backend='numpy', **cfg, structure=structure(width)).solve().T.sum().real
     h = 1e-3
     expected = (reference(100.+h)-reference(100.-h))/(2*h)
     assert abs(expected) > 1e-8

@@ -25,7 +25,15 @@ What this file pins:
   at the structure rather than at the arithmetic.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import PrecisionLossWarning as _legacy_wavebit_PrecisionLossWarning
+
+from wavebit._common.backend import UnresolvedBranchWarning as _legacy_wavebit_UnresolvedBranchWarning
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -58,7 +66,7 @@ def _run(**kwargs):
     """Solve, returning ``(result, fp_warning_messages)``."""
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = _legacy_wavebit.rcwa(backend='numpy', wavelength=WL, **kwargs).solve()
+        res = _legacy_wavebit_rcwa(backend='numpy', wavelength=WL, **kwargs).solve()
     return res, _fp_warnings(rec)
 
 
@@ -142,7 +150,7 @@ def test_parametric_path_is_silent():
                                               material=9.0)])]
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        res = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=(6, 6), top=1.0, bot=1.0,
+        res = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=(6, 6), top=1.0, bot=1.0,
                              theta=np.deg2rad(5), phi=np.deg2rad(20), period=(1.0, 1.2),
                              wavelength=1.5, thickness=(0.3,), psi=0.35 * np.pi).solve()
     assert _fp_warnings(rec) == []
@@ -151,7 +159,7 @@ def test_parametric_path_is_silent():
 
 def test_field_reconstruction_is_silent_and_finite():
     """Reconstruction re-walks the same modal exponentials the solve cascaded."""
-    sim = _legacy_wavebit.rcwa(backend='numpy', structure=_structure_2d(), thickness=[600], period=[700, 700],
+    sim = _legacy_wavebit_rcwa(backend='numpy', structure=_structure_2d(), thickness=[600], period=[700, 700],
                          wavelength=WL, truncation_order=[6, 6], psi=0.0, bot=EPS_SI, answers='field')
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
@@ -287,7 +295,7 @@ _BRANCH_STRUCTURE = np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1
 
 
 def _branch_solve(complex_dtype, top=1.0, theta=0.4, phi=0.3, backend='numpy', layer_algorithm='ETM'):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend=backend, psi=np.pi / 2, top=top, bot=25.0, theta=theta, phi=phi, truncation_order=[30],
         wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
         complex_dtype=complex_dtype, fourier_coefficients='integrated',
@@ -404,14 +412,14 @@ def test_a_traced_single_precision_solve_says_it_could_not_be_checked():
     traced double-precision one stays silent, which is what keeps the message meaningful.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
 
     theta = np.arcsin(np.sqrt(1.6 ** 2 + 1.2 ** 2 + 1e-4, dtype=np.complex128))
     phi = np.arctan(1.2 / 1.6001, dtype=np.complex128)
 
     def amplitude(complex_dtype, t):
-        res = _legacy_wavebit.rcwa(
+        res = _legacy_wavebit_rcwa(
             backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=t, phi=phi, truncation_order=[10],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=complex_dtype, fourier_coefficients='sampled',
@@ -441,7 +449,7 @@ def test_the_check_does_not_break_tracing():
     import jax.numpy as jnp
 
     def R(theta):
-        res = _legacy_wavebit.rcwa(
+        res = _legacy_wavebit_rcwa(
             backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[6],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=0, fourier_coefficients='sampled',
@@ -459,7 +467,7 @@ def test_branch_warning_message_carries_no_numbers():
 
 
 def test_branch_warning_category_is_exported():
-    assert _legacy_wavebit.UnresolvedBranchWarning is UnresolvedBranchWarning
+    assert _legacy_wavebit_UnresolvedBranchWarning is UnresolvedBranchWarning
 
 
 def _branch_error(algorithm, **kw):
@@ -467,7 +475,7 @@ def _branch_error(algorithm, **kw):
     def r_s(complex_dtype):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            res = _legacy_wavebit.rcwa(
+            res = _legacy_wavebit_rcwa(
                 backend='numpy', psi=np.pi / 2, bot=25.0, truncation_order=[30], wavelength=900e-9,
                 period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
                 complex_dtype=complex_dtype, fourier_coefficients='integrated',
@@ -510,7 +518,7 @@ def test_a_weak_absorber_at_a_complex_angle_holds_at_single_precision(algorithm)
 def _precision_warnings(theta, backend='numpy', complex_dtype=0):
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
-        _legacy_wavebit.rcwa(
+        _legacy_wavebit_rcwa(
             backend=backend, psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
             wavelength=900e-9, period=[2000e-9], structure=_BRANCH_STRUCTURE, thickness=[100e-9],
             complex_dtype=complex_dtype, fourier_coefficients='sampled', factorization='li')
@@ -552,22 +560,20 @@ def _in_subprocess(body):
     return out.stdout
 
 
-def test_importing_wavebit_lifts_the_x64_cap_when_jax_is_already_loaded():
-    """The explicit compatibility import retains the historical precision policy.
-
-    With x64 off JAX cannot be *asked* for float64 — it is a cap, not a default — and the legacy solver
-    flips it either way, just later. Deferring therefore does not spare the caller the
-    process-wide change; it only makes the moment depend on import order, and an array built in
-    the gap is silently complex64. The explicit ``wavebit.compat.legacy`` import preserves this behavior when JAX is
-    already present. Importing the new public root leaves the cap unchanged.
-    """
+def test_importing_wavebit_keeps_the_precision_policy_explicit():
+    """Root import preserves the cap; configure JAX before constructing inputs."""
     pytest.importorskip('jax')
     assert 'OK' in _in_subprocess("""
-        import jax.numpy as jnp
-        from wavebit.compat import legacy as wavebit
-        assert jnp.asarray(0.4 + 0.3j).dtype == jnp.complex128, 'the cap was not lifted'
-        print('OK')
-    """)
+import jax.numpy as jnp
+import jax
+jax.config.update('jax_enable_x64', False)
+import wavebit
+assert not jax.config.jax_enable_x64
+assert jnp.asarray(0.4 + 0.3j).dtype == jnp.complex64
+jax.config.update('jax_enable_x64', True)
+assert jnp.asarray(0.4 + 0.3j).dtype == jnp.complex128, 'the cap was not lifted'
+print('OK')
+""")
 
 
 def test_importing_wavebit_does_not_drag_jax_in():
@@ -591,29 +597,29 @@ def test_the_remaining_x64_ordering_gap_is_reported():
     """
     pytest.importorskip('jax')
     assert 'OK' in _in_subprocess("""
-        import warnings
-        from wavebit.compat import legacy as wavebit
-        import jax.numpy as jnp
-        import numpy as np
-        from wavebit._common.backend import PrecisionLossWarning
+import warnings
+from wavebit.rcwa._factory import rcwa as wavebit_rcwa
+import jax.numpy as jnp
+import numpy as np
+from wavebit._common.backend import PrecisionLossWarning
 
-        theta = jnp.asarray(0.4 + 0.3j)
-        assert theta.dtype == jnp.complex64, theta.dtype        # the trap is armed
-        with warnings.catch_warnings(record=True) as rec:
-            warnings.simplefilter('always')
-            wavebit.rcwa(
-                backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
-                wavelength=900e-9, period=[2000e-9],
-                structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
-                complex_dtype=0, fourier_coefficients='sampled', factorization='li')
-        assert any(issubclass(r.category, PrecisionLossWarning) for r in rec), \\
-            'the remaining ordering gap went unreported'
-        print('OK')
-    """)
+theta = jnp.asarray(0.4 + 0.3j)
+assert theta.dtype == jnp.complex64, theta.dtype        # the trap is armed
+with warnings.catch_warnings(record=True) as rec:
+    warnings.simplefilter('always')
+    wavebit_rcwa(
+        backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
+        wavelength=900e-9, period=[2000e-9],
+        structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
+        complex_dtype=0, fourier_coefficients='sampled', factorization='li')
+assert any(issubclass(r.category, PrecisionLossWarning) for r in rec), \\
+    'the remaining ordering gap went unreported'
+print('OK')
+""")
 
 
 def test_the_remedy_the_warning_names_actually_removes_it():
-    """The message tells the caller to run `wavebit.enable_x64()`. This is that, run.
+    """The message tells the caller to configure JAX x64 before arrays; follow it.
 
     The test above asserts the *category* of the warning and nothing about what it says to do,
     which is the half that can rot: the message used to say "Import wavebit.on_jax first" -- a
@@ -626,26 +632,28 @@ def test_the_remedy_the_warning_names_actually_removes_it():
     """
     pytest.importorskip('jax')
     assert 'OK' in _in_subprocess("""
-        import warnings
-        from wavebit.compat import legacy as wavebit
-        wavebit.enable_x64()                                    # the remedy, before the array
-        import jax.numpy as jnp
-        import numpy as np
-        from wavebit._common.backend import PrecisionLossWarning
+import warnings
+from wavebit._common.backend import _enable_x64 as wavebit_enable_x64
+from wavebit.rcwa._factory import rcwa as wavebit_rcwa
+import jax
+jax.config.update('jax_enable_x64', True)                  # the remedy, before the array
+import jax.numpy as jnp
+import numpy as np
+from wavebit._common.backend import PrecisionLossWarning
 
-        theta = jnp.asarray(0.4 + 0.3j)
-        assert theta.dtype == jnp.complex128, theta.dtype       # the trap is disarmed
-        with warnings.catch_warnings(record=True) as rec:
-            warnings.simplefilter('always')
-            wavebit.rcwa(
-                backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
-                wavelength=900e-9, period=[2000e-9],
-                structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
-                complex_dtype=0, fourier_coefficients='sampled', factorization='li')
-        assert not [r for r in rec if issubclass(r.category, PrecisionLossWarning)], \\
-            'the documented remedy did not remove the warning it is documented against'
-        print('OK')
-    """)
+theta = jnp.asarray(0.4 + 0.3j)
+assert theta.dtype == jnp.complex128, theta.dtype       # the trap is disarmed
+with warnings.catch_warnings(record=True) as rec:
+    warnings.simplefilter('always')
+    wavebit_rcwa(
+        backend='jax', psi=np.pi / 2, top=1.0, bot=25.0, theta=theta, phi=0.3, truncation_order=[5],
+        wavelength=900e-9, period=[2000e-9],
+        structure=np.array([[[0, 1, 0, 1, 1, 1]]]) * 24 + 1, thickness=[100e-9],
+        complex_dtype=0, fourier_coefficients='sampled', factorization='li')
+assert not [r for r in rec if issubclass(r.category, PrecisionLossWarning)], \\
+    'the documented remedy did not remove the warning it is documented against'
+print('OK')
+""")
 
 
 def test_enable_x64_does_not_import_jax_to_find_out_whether_it_can():
@@ -657,12 +665,12 @@ def test_enable_x64_does_not_import_jax_to_find_out_whether_it_can():
     are inside the function, and `find_spec` answers "is JAX installed" without loading it.
     """
     assert 'OK' in _in_subprocess("""
-        import sys
-        from wavebit.compat import legacy as wavebit
-        assert 'jax' not in sys.modules, 'importing wavebit imported jax'
-        assert callable(wavebit.enable_x64)
-        print('OK')
-    """)
+import sys
+from wavebit._common.backend import _enable_x64 as wavebit_enable_x64
+assert 'jax' not in sys.modules, 'importing wavebit imported jax'
+assert callable(wavebit_enable_x64)
+print('OK')
+""")
 
 
 @pytest.fixture(scope='module')
@@ -689,34 +697,34 @@ def fresh_fdtd_jax_runs():
     """
     pytest.importorskip('jax')
     out = _in_subprocess("""
-        import json
-        import numpy as np
-        from wavebit.compat import legacy as wavebit
-        from wavebit.fdtd._periodic.runtime import JaxTimeLoop
+import json
+import numpy as np
+from wavebit.fdtd._periodic.api import fdtd as wavebit_fdtd
+from wavebit.fdtd._periodic.runtime import JaxTimeLoop
 
-        # Small on purpose: seconds, and it still separated the two precisions by 9e-07.
-        scene = dict(structure=np.full((1, 1, 1), 2.25), thickness=[.2], top=1., bot=1.,
-                     period=.1, wavelength=[.9, 1., 1.1], resolution=8, n_periods=30,
-                     n_pml=4, truncation_order=0, tetm='te')
+# Small on purpose: seconds, and it still separated the two precisions by 9e-07.
+scene = dict(structure=np.full((1, 1, 1), 2.25), thickness=[.2], top=1., bot=1.,
+             period=.1, wavelength=[.9, 1., 1.1], resolution=8, n_periods=30,
+             n_pml=4, truncation_order=0, tetm='te')
 
-        carried = []
-        advance = JaxTimeLoop.advance
-        def spy(self, step, state, steps, checkpoint_steps):
-            import jax
-            carried.extend(str(getattr(v, 'dtype', '')) for v in jax.tree.leaves(state))
-            return advance(self, step, state, steps, checkpoint_steps)
-        JaxTimeLoop.advance = spy
+carried = []
+advance = JaxTimeLoop.advance
+def spy(self, step, state, steps, checkpoint_steps):
+    import jax
+    carried.extend(str(getattr(v, 'dtype', '')) for v in jax.tree.leaves(state))
+    return advance(self, step, state, steps, checkpoint_steps)
+JaxTimeLoop.advance = spy
 
-        def efficiencies(backend):
-            given = wavebit.fdtd(**scene, backend=backend)[0].incident
-            return [np.asarray(given.R).tolist(), np.asarray(given.T).tolist()]
+def efficiencies(backend):
+    given = wavebit_fdtd(**scene, backend=backend)[0].incident
+    return [np.asarray(given.R).tolist(), np.asarray(given.T).tolist()]
 
-        reference = efficiencies('numpy')         # NumPy: no cap, so this is the double answer
-        first = efficiencies('jax')             # the call that used to run at complex64
-        second = efficiencies('jax')
-        print(json.dumps(dict(reference=reference, first=first, second=second,
-                              carried=sorted(set(carried)))))
-    """)
+reference = efficiencies('numpy')         # NumPy: no cap, so this is the double answer
+first = efficiencies('jax')             # the call that used to run at complex64
+second = efficiencies('jax')
+print(json.dumps(dict(reference=reference, first=first, second=second,
+                      carried=sorted(set(carried)))))
+""")
     return json.loads(out.strip().splitlines()[-1])
 
 
@@ -760,22 +768,22 @@ def test_a_bare_fdtd_grid_run_is_double_precision_in_a_fresh_process():
     """
     pytest.importorskip('jax')
     out = _in_subprocess("""
-        import json
-        import numpy as np
-        from wavebit.compat import legacy as wavebit
+import json
+import numpy as np
+from wavebit.fdtd._periodic.grid import fdtd_grid as wavebit_fdtd_grid
 
-        def run(backend):
-            eps = np.ones((16, 3, 3)); eps[6:10] = 2.25
-            src = np.zeros((3, 16, 3, 3), complex); src[0, 7] = 1
-            return np.asarray(wavebit.fdtd_grid(
-                eps, spacing=(1.,)*3, dt=.2, steps=60, pml_cells=3, source=src,
-                pulse=np.sin(np.arange(60)*.2), wavelengths=[4., 5.], monitor_z=[9, 12],
-                backend=backend)['electric_spectrum'])
+def run(backend):
+    eps = np.ones((16, 3, 3)); eps[6:10] = 2.25
+    src = np.zeros((3, 16, 3, 3), complex); src[0, 7] = 1
+    return np.asarray(wavebit_fdtd_grid(
+        eps, spacing=(1.,)*3, dt=.2, steps=60, pml_cells=3, source=src,
+        pulse=np.sin(np.arange(60)*.2), wavelengths=[4., 5.], monitor_z=[9, 12],
+        backend=backend)['electric_spectrum'])
 
-        reference = run('numpy')                  # NumPy: no cap, so this is the double answer
-        jax_run = run('jax')
-        print(json.dumps(float(np.max(abs(jax_run - reference))/np.max(abs(reference)))))
-    """)
+reference = run('numpy')                  # NumPy: no cap, so this is the double answer
+jax_run = run('jax')
+print(json.dumps(float(np.max(abs(jax_run - reference))/np.max(abs(reference)))))
+""")
     assert json.loads(out.strip().splitlines()[-1]) < 1e-12
 
 
@@ -790,22 +798,22 @@ def test_a_jax_rcwa_solve_is_double_precision_in_a_fresh_process():
     """
     pytest.importorskip('jax')
     out = _in_subprocess("""
-        import json
-        import numpy as np
-        from wavebit.compat import legacy as wavebit
+import json
+import numpy as np
+from wavebit.rcwa._factory import rcwa as wavebit_rcwa
 
-        kw = dict(psi=np.pi/2, top=1.0, bot=2.25, theta=0.3, phi=0.2, truncation_order=[5],
-                  wavelength=900e-9, period=[2000e-9],
-                  structure=np.array([[[0, 1, 0, 1, 1, 1]]])*1.25 + 1, thickness=[300e-9],
-                  fourier_coefficients='sampled', factorization='li')
+kw = dict(psi=np.pi/2, top=1.0, bot=2.25, theta=0.3, phi=0.2, truncation_order=[5],
+          wavelength=900e-9, period=[2000e-9],
+          structure=np.array([[[0, 1, 0, 1, 1, 1]]])*1.25 + 1, thickness=[300e-9],
+          fourier_coefficients='sampled', factorization='li')
 
-        def efficiencies(backend):
-            given = wavebit.rcwa(backend=backend, **kw).solve().incident
-            return np.r_[np.ravel(np.asarray(given.R)), np.ravel(np.asarray(given.T))]
+def efficiencies(backend):
+    given = wavebit_rcwa(backend=backend, **kw).solve().incident
+    return np.r_[np.ravel(np.asarray(given.R)), np.ravel(np.asarray(given.T))]
 
-        reference = efficiencies('numpy')
-        print(json.dumps(float(np.max(abs(efficiencies('jax') - reference)))))
-    """)
+reference = efficiencies('numpy')
+print(json.dumps(float(np.max(abs(efficiencies('jax') - reference)))))
+""")
     assert json.loads(out.strip().splitlines()[-1]) < 1e-12
 
 
@@ -818,15 +826,15 @@ def test_meshgrid_xy_on_jax_is_double_precision_in_a_fresh_process():
     """
     pytest.importorskip('jax')
     out = _in_subprocess("""
-        import json
-        import numpy as np
-        from wavebit.compat import legacy as wavebit
+import json
+import numpy as np
+from wavebit.lattice import meshgrid_xy as wavebit_meshgrid_xy
 
-        on_jax = [np.asarray(c) for c in wavebit.meshgrid_xy((4, 5), period=(.1, .3), backend='jax')]
-        on_numpy = wavebit.meshgrid_xy((4, 5), period=(.1, .3), backend='numpy')
-        print(json.dumps(max(float(np.max(abs(a - b)/np.max(abs(b))))
-                             for a, b in zip(on_jax, on_numpy))))
-    """)
+on_jax = [np.asarray(c) for c in wavebit_meshgrid_xy((4, 5), period=(.1, .3), backend='jax')]
+on_numpy = wavebit_meshgrid_xy((4, 5), period=(.1, .3), backend='numpy')
+print(json.dumps(max(float(np.max(abs(a - b)/np.max(abs(b))))
+                     for a, b in zip(on_jax, on_numpy))))
+""")
     assert json.loads(out.strip().splitlines()[-1]) < 1e-14
 
 
@@ -853,11 +861,11 @@ def test_a_jax_door_raises_rather_than_run_under_a_cap_it_could_not_lift(monkeyp
 
         assert lift_jax_x64() is False                  # the tolerant caller: a no-op, said so
         with pytest.raises(RuntimeError, match='single precision'):
-            _legacy_wavebit.enable_x64()
+            _legacy_wavebit_enable_x64()
         with pytest.raises(RuntimeError, match='single precision'):
             JaxTimeLoop()
         with pytest.raises(RuntimeError, match='single precision'):
-            _legacy_wavebit.meshgrid_xy((2, 2), period=(1., 1.), backend='jax')
+            _legacy_wavebit_meshgrid_xy((2, 2), period=(1., 1.), backend='jax')
     finally:
         monkeypatch.undo()
         jax.config.update('jax_enable_x64', previous)
@@ -889,4 +897,4 @@ def test_the_x64_cap_is_lifted_by_one_body():
 
 
 def test_precision_warning_category_is_exported():
-    assert _legacy_wavebit.PrecisionLossWarning is PrecisionLossWarning
+    assert _legacy_wavebit_PrecisionLossWarning is PrecisionLossWarning

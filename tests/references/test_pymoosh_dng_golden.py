@@ -41,7 +41,7 @@ Values are frozen by ``gen_goldens_pymoosh_dng.py`` in an environment of its own
 imports PyMoosh. Never regenerate to make this pass.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -107,10 +107,10 @@ def _solve(name, index, path, algo, pol, door='k', stack=None):
         lit_negative = _signed_index(*stack[0]).real < 0
         kw.update(theta=-theta if lit_negative else theta, phi=0.0)
     if one_d:
-        solver = _legacy_wavebit.rcwa(**kw, period=[1000.0], truncation_order=0,
+        solver = _legacy_wavebit_rcwa(**kw, period=[1000.0], truncation_order=0,
                               tetm='te' if pol == 0 else 'tm')
     else:
-        solver = _legacy_wavebit.rcwa(**kw, period=(1000.0, 1000.0), truncation_order=(0, 0),
+        solver = _legacy_wavebit_rcwa(**kw, period=(1000.0, 1000.0), truncation_order=(0, 0),
                               polarization=(1.0, 0.0) if pol == 0 else (0.0, 1.0))
         if path == 'first_order':
             solver.formulation = 'first_order'

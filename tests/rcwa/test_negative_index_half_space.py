@@ -17,7 +17,19 @@ medium (``|mu| != 1``) and an oblique azimuth where it has one, so a sign-blind 
 twin substituted for the medium cannot pass.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ComplexIncidenceWarning as _legacy_wavebit_ComplexIncidenceWarning
+
+from wavebit._common.backend import GainCutoffWarning as _legacy_wavebit_GainCutoffWarning
+
+from wavebit.rcwa._engine.sources import GaussianBeam as _legacy_wavebit_GaussianBeam
+
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit._common.backend import UnresolvedBranchWarning as _legacy_wavebit_UnresolvedBranchWarning
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -48,13 +60,13 @@ def _solver(top=N_GLASS ** 2, bot=N_GLASS ** 2, theta=0.0, algo='SMM', backend='
                   thickness=kw.pop('thickness', [D_LAYER]), layer_algorithm=algo,
                   incidence_side=side, **kw)
     if path in ('te', 'tm'):
-        return _legacy_wavebit.rcwa(**common, tetm=path, truncation_order=0, period=[PERIOD],
+        return _legacy_wavebit_rcwa(**common, tetm=path, truncation_order=0, period=[PERIOD],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
     if path == 'conical':
-        return _legacy_wavebit.rcwa(**common, phi=0.4 if phi is None else phi, psi=0.0,
+        return _legacy_wavebit_rcwa(**common, phi=0.4 if phi is None else phi, psi=0.0,
                             truncation_order=0, period=[PERIOD],
                             structure=np.full((1, 1, 2), N_GLASS ** 2, dtype=complex))
-    solver = _legacy_wavebit.rcwa(**common,
+    solver = _legacy_wavebit_rcwa(**common,
                           phi=(0.4 if path == 'first_order' else 0.0) if phi is None else phi,
                           psi=0.0, truncation_order=(0, 0), period=(PERIOD, PERIOD))
     solver.structure = np.full((1, 2, 2), N_GLASS ** 2, dtype=complex)
@@ -199,7 +211,7 @@ def test_a_passive_far_side_says_nothing():
                 warnings.simplefilter('always')
                 solver.solve()
             assert not [w for w in caught if issubclass(
-                w.category, (_legacy_wavebit.GainCutoffWarning, _legacy_wavebit.UnresolvedBranchWarning))]
+                w.category, (_legacy_wavebit_GainCutoffWarning, _legacy_wavebit_UnresolvedBranchWarning))]
             assert not np.asarray(solver.gain_cutoff_band()['bottom']).any()
 
 
@@ -342,7 +354,7 @@ def test_each_factors_root_is_maystres():
     for backend in ('jax', 'torch'):
         lib = pytest.importorskip(backend)
         if backend == 'jax':
-            _legacy_wavebit.enable_x64()
+            _legacy_wavebit_enable_x64()
             got = np.asarray(signed_index(lib.numpy.asarray(eps), lib.numpy.asarray(mu)))
         else:
             got = signed_index(lib.tensor(eps), lib.tensor(mu)).numpy()
@@ -370,7 +382,7 @@ def test_a_factor_on_maystres_cut_keeps_its_root_whatever_the_round_off():
         for backend in ('jax', 'torch'):
             lib = pytest.importorskip(backend)
             if backend == 'jax':
-                _legacy_wavebit.enable_x64()
+                _legacy_wavebit_enable_x64()
                 got[backend] = np.asarray(signed_index(lib.numpy.asarray(eps),
                                                        lib.numpy.asarray(mu)))
             else:
@@ -561,13 +573,13 @@ def _grating(path, algo, nim=PASSIVE, d=None, backend='numpy', answers='amplitud
         half = wavebit.Material(*lit)
         common.update(top=half, bot=N_GLASS ** 2) if side == 'top' else common.update(
             bot=half)
-        solver = _legacy_wavebit.rcwa(**common, **kw, thickness=[H], structure=grating,
+        solver = _legacy_wavebit_rcwa(**common, **kw, thickness=[H], structure=grating,
                               incidence_side=side)
     elif d is None:
-        solver = _legacy_wavebit.rcwa(**common, **kw, bot=wavebit.Material(eps, mu=mu),
+        solver = _legacy_wavebit_rcwa(**common, **kw, bot=wavebit.Material(eps, mu=mu),
                               thickness=[H], structure=grating)
     else:
-        solver = _legacy_wavebit.rcwa(**common, **kw, bot=N_GLASS ** 2, thickness=[d, H],
+        solver = _legacy_wavebit_rcwa(**common, **kw, bot=N_GLASS ** 2, thickness=[d, H],
                               structure=np.concatenate([np.full_like(grating, eps), grating]))
         solver.mu = np.concatenate([np.full_like(grating, mu), np.ones_like(grating)])
     if path == 'first_order':
@@ -661,9 +673,9 @@ def test_the_coherent_door_agrees_with_the_ordinary_solve():
     opts = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :], thickness=[H],
                 truncation_order=(3, 0), top=N_GLASS ** 2, answers='field',
                 bot=wavebit.Material(*PASSIVE))
-    coherent = _legacy_wavebit.rcwa(**opts, excitation={'top': _legacy_wavebit.PlaneWave(
+    coherent = _legacy_wavebit_rcwa(**opts, excitation={'top': _legacy_wavebit_PlaneWave(
         theta=0.3, phi=0.4, polarization=pol)}).solve()
-    ordinary = _legacy_wavebit.rcwa(**opts, theta=0.3, phi=0.4, polarization=pol,
+    ordinary = _legacy_wavebit_rcwa(**opts, theta=0.3, phi=0.4, polarization=pol,
                             layer_algorithm='SMM').solve(auto_detune=False)
     assert abs(float(coherent.output_top) - float(np.sum(ordinary.R))) < 1e-12
     assert abs(float(coherent.output_bottom) - float(np.sum(ordinary.T))) < 1e-12
@@ -709,13 +721,13 @@ def _mirror_scene(path, algo, side, theta, far, eps=None, mu=None, thickness=(10
                   thickness=list(thickness), answers='amplitude', incidence_side=side,
                   structure=eps, mu=mu)
     if path in ('te', 'tm'):
-        solver = _legacy_wavebit.rcwa(**common, tetm=path, period=[700.0],
+        solver = _legacy_wavebit_rcwa(**common, tetm=path, period=[700.0],
                               truncation_order=truncation_order or 3)
     elif path == 'conical':
-        solver = _legacy_wavebit.rcwa(**common, phi=0.6, psi=0.3, period=[700.0],
+        solver = _legacy_wavebit_rcwa(**common, phi=0.6, psi=0.3, period=[700.0],
                               truncation_order=truncation_order or 3)
     else:
-        solver = _legacy_wavebit.rcwa(**common, phi=0.6, psi=0.3, period=(700.0, 630.0),
+        solver = _legacy_wavebit_rcwa(**common, phi=0.6, psi=0.3, period=(700.0, 630.0),
                               truncation_order=truncation_order or (1, 1))
         if path == 'first_order':
             solver.formulation = 'first_order'
@@ -886,7 +898,7 @@ def test_a_grating_lit_from_a_negative_index_side_is_reciprocal(tetm, algo):
     root rule, index sign or angle semantics of the double negative enters it except as the
     far side the slab test pins."""
     def solve(side, excitation, **incidence):
-        solver = _legacy_wavebit.rcwa(backend='numpy', wavelength=WL, period=[P_G], structure=G1[None, None, :],
+        solver = _legacy_wavebit_rcwa(backend='numpy', wavelength=WL, period=[P_G], structure=G1[None, None, :],
                               thickness=[H], truncation_order=3, tetm=tetm, layer_algorithm=algo,
                               top=wavebit.Material(*ASYM_LOSSLESS), bot=N_GLASS ** 2,
                               incidence_side=side, excitation=excitation, **incidence)
@@ -944,7 +956,7 @@ def test_a_complex_angle_meets_the_real_one(path):
                 np.concatenate([np.ravel(_host(getattr(result.incident, f)))
                                 for f in ('R', 'r_s', 'r_p', 't_s', 't_p')]))
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+        warnings.simplefilter('ignore', _legacy_wavebit_ComplexIncidenceWarning)
         kx_real, real = solved(ASYM_LOSSLESS, 0.35)
         kx_complex, formal = solved(ASYM_LOSSLESS, 0.35 + 1e-9j)
         assert np.max(np.abs(kx_complex - kx_real)) < 1e-8
@@ -969,9 +981,9 @@ def test_the_coherent_door_lights_a_negative_index_side_as_the_ordinary_solve(si
     opts = dict(wavelength=WL, period=[P_G], structure=G1[None, None, :], thickness=[H],
                 truncation_order=(3, 0), answers='field', **scene)
     for theta, phi in ((0.35, 0.6), (0.0, 0.6), (0.0, 2.5)):
-        coherent = _legacy_wavebit.rcwa(**opts, excitation={side: _legacy_wavebit.PlaneWave(
+        coherent = _legacy_wavebit_rcwa(**opts, excitation={side: _legacy_wavebit_PlaneWave(
             theta=theta, phi=phi, polarization=pol)}).solve()
-        ordinary = _legacy_wavebit.rcwa(**opts, theta=theta, phi=phi, polarization=pol,
+        ordinary = _legacy_wavebit_rcwa(**opts, theta=theta, phi=phi, polarization=pol,
                                 layer_algorithm='SMM', incidence_side=side).solve(
             auto_detune=False)
         back, through = ((coherent.output_top, coherent.output_bottom) if side == 'top' else
@@ -990,9 +1002,9 @@ def test_a_gaussian_beam_from_a_negative_index_side_is_refused():
                 truncation_order=(2, 0), top=wavebit.Material(*ASYM_LOSSLESS),
                 bot=N_GLASS ** 2, answers='field',
                 power_region=((-1000.0, 1000.0), (-1000.0, 1000.0)))
-    beam = _legacy_wavebit.GaussianBeam(waist=2000.0, theta=0.2)
+    beam = _legacy_wavebit_GaussianBeam(waist=2000.0, theta=0.2)
     with pytest.raises(ValueError, match='negative-index'):
-        _legacy_wavebit.rcwa(**opts, excitation=[beam]).solve()
+        _legacy_wavebit_rcwa(**opts, excitation=[beam]).solve()
 
 
 @pytest.mark.parametrize('pair', [GAIN, GAIN_IN_MU], ids=['gain', 'gain_in_mu'])
@@ -1038,7 +1050,7 @@ def test_the_gain_band_flags_an_active_double_negative_under_jit():
     orders near grazing: glass lit at 60 degrees onto ``eps = -2-0.1i``, ``mu = -1-0.1i`` puts
     the specular order at ``kz**2 = 0.30+0.30i``. Eagerly the same medium is refused."""
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
 
@@ -1083,7 +1095,7 @@ def test_a_solve_conv_pair_signs_the_index_it_is_solved_with(where):
     def scene(material, theta):
         sides = (dict(top=material, bot=N_GLASS ** 2) if where == 'top' else
                  dict(top=N_GLASS ** 2, bot=material))
-        return _legacy_wavebit.rcwa(backend='numpy', wavelength=WL, period=(P_G, 0.9 * P_G),
+        return _legacy_wavebit_rcwa(backend='numpy', wavelength=WL, period=(P_G, 0.9 * P_G),
                             truncation_order=(1, 1), structure=G2[None], thickness=[H],
                             theta=theta, phi=0.6, psi=0.3, answers='field', **sides)
     points = ([0.0, 100.0], [0.0, 50.0], [10.0, 90.0])
@@ -1113,7 +1125,7 @@ def test_a_solve_conv_pair_signs_the_index_it_is_solved_with(where):
 def test_the_backends_agree(backend):
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
 
     def flat(result):
         return np.concatenate([np.ravel(_host(getattr(v, f))) for v in _variants(result, 'conical')
@@ -1147,7 +1159,7 @@ def test_jit_through_a_lit_negative_index_superstrate():
     from a branch: ``R`` and every amplitude match NumPy at 35 degrees and at normal incidence
     with ``phi = 0.6``."""
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
 
@@ -1171,7 +1183,7 @@ def test_jit_and_grad_through_a_negative_index_substrate():
     sign-reading ``t_p`` match NumPy, and ``jax.grad`` with respect to the medium's ``Re(eps)``
     matches a central difference (measured 2e-10)."""
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
 
@@ -1208,7 +1220,7 @@ def test_under_jit_the_scenes_own_pairs_sign_nothing():
     side, and a foreign pair marks only its own side, so the lit sign of a non-magnetic lit side
     stays ``None`` (no ``where`` at all) while the far side is traced."""
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
 

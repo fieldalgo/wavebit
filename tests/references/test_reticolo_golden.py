@@ -28,7 +28,9 @@ reported and the comparison selects those; that the two agree on **which** order
 is itself part of the assertion.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -93,7 +95,7 @@ CASES = {
 
 def _solve(name, backend='numpy'):
     kw = dict(CASES[name])
-    return _legacy_wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
+    return _legacy_wavebit_rcwa(backend=backend, fourier_coefficients='integrated',
                           **kw).solve()
 
 
@@ -145,7 +147,7 @@ def test_reticolo_agreement_holds_on_every_backend(backend):
     """The oracle is about the physics, so it cannot be a NumPy-only result."""
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
 
     g = _golden()
     name = 'te_oblique'
@@ -199,7 +201,7 @@ def _solve_bottom(name, backend='numpy'):
     n_top = wavebit.refractive_index_from_eps(kw['top']).real
     n_bot = wavebit.refractive_index_from_eps(kw['bot']).real
     kw['theta'] = float(np.arcsin(n_top * np.sin(kw['theta']) / n_bot))
-    return _legacy_wavebit.rcwa(backend=backend, fourier_coefficients='integrated',
+    return _legacy_wavebit_rcwa(backend=backend, fourier_coefficients='integrated',
                           incidence_side='bottom', **kw).solve()
 
 
@@ -260,7 +262,7 @@ function, and the exact
     """
     g = _golden()
     kw = dict(CASES[name])
-    res = _legacy_wavebit.rcwa(backend='numpy', fourier_coefficients='sampled', **kw).solve()
+    res = _legacy_wavebit_rcwa(backend='numpy', fourier_coefficients='sampled', **kw).solve()
     for side, arr in (('ri', res.R), ('ti', res.T)):
         got = np.real(np.asarray(arr)).ravel()[g[f'{name}__idx_{side}']]
         assert np.abs(got - g[f'{name}__de_{side}']).max() < 1e-11, (name, side)

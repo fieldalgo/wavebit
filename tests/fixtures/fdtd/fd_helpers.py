@@ -47,7 +47,7 @@ its intensity), and a conical 1-D grating whose invariant axis is an ``fd.Axis1D
 ``wavebit.rcwa`` twin (:func:`conical_grating`). Each docstring carries what was measured on it.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import math
 
 import numpy as np
@@ -1036,7 +1036,7 @@ def bloch_stack(theta=25.0, phi=0.0, polarization='s', layers=((2.25, 0.3),), su
     def rcwa(index, theta_deg=None, truncation_order=0):
         th = theta if theta_deg is None else float(theta_deg)
         structure, thickness = _rcwa_layers(snapped)
-        return _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0 if substrate is None else substrate,
+        return _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0 if substrate is None else substrate,
                             theta=math.radians(th), phi=math.radians(phi),
                             psi=_psi(polarization),
                             truncation_order=[truncation_order, truncation_order],
@@ -1116,7 +1116,7 @@ def box_grating(kind='lamellar', theta=0.0, phi=0.0, polarization='s', cells_per
         else:
             shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=width, ly=width, material=eps)
             order = [truncation_order, truncation_order]
-        return _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=math.radians(th),
+        return _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=math.radians(th),
                             phi=math.radians(phi), psi=_psi(polarization),
                             truncation_order=order, period=[period, period],
                             wavelength=wavelengths[index],
@@ -1255,7 +1255,7 @@ def conical_grating(theta=15.0, phi=60.0, polarization='s', cells_per_wavelength
     def rcwa(index, theta_deg=None, truncation_order=12):
         th = theta if theta_deg is None else float(theta_deg)
         shape = dict(type='rectangle', cx=0.0, cy=0.0, lx=width, ly=period, material=eps)
-        return _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=math.radians(th),
+        return _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=math.radians(th),
                             phi=math.radians(phi), psi=_psi(polarization),
                             truncation_order=[truncation_order, 0], period=[period, period],
                             wavelength=wavelengths[index],

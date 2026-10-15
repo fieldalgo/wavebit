@@ -6,7 +6,7 @@ lowercase is amplitude; the Fresnel amplitudes are validated against closed form
 indexing, and that the arrays and the accessor agree with each other.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -22,14 +22,14 @@ def _solve_1d(**kw):
     args = dict(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=0.3, truncation_order=2, wavelength=WL,
                 period=[900.0], structure=CELL_1D, thickness=[300.0])
     args.update(kw)
-    return _legacy_wavebit.rcwa(**args).solve()
+    return _legacy_wavebit_rcwa(**args).solve()
 
 
 def _solve_2d(**kw):
     args = dict(backend='numpy', top=1.0, bot=2.25, theta=0.3, phi=0.0, psi=0.0, truncation_order=[2, 1],
                 wavelength=WL, period=[900.0, 900.0], structure=CELL_2D, thickness=[300.0])
     args.update(kw)
-    return _legacy_wavebit.rcwa(**args).solve()
+    return _legacy_wavebit_rcwa(**args).solve()
 
 
 def test_efficiency_arrays_are_the_power_surface():

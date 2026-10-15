@@ -30,7 +30,11 @@ pointwise transform by round-off (a few ulps, never on a one-pixel or single-row
 NumPy and PyTorch stayed bit-identical.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.enums import Nesting as _legacy_wavebit_Nesting
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 from tests.fixtures.common._conv_frame import about_centre, slots_about_centre
 import pytest
@@ -41,7 +45,7 @@ import wavebit
 from wavebit.rcwa._engine import factorization as F
 
 try:
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 except ImportError:
     pass
 
@@ -441,7 +445,7 @@ def _crossed(N=24):
 
 
 def _totals(**kw):
-    res = _legacy_wavebit.rcwa(**{**_SCENE, **kw}).solve()
+    res = _legacy_wavebit_rcwa(**{**_SCENE, **kw}).solve()
     return np.asarray(res.R), np.asarray(res.T)
 
 
@@ -451,7 +455,7 @@ def test_the_default_is_fixed_and_naming_it_changes_nothing():
         base = _totals(structure=_crossed(), fourier_coefficients=coefficients)
         named = _totals(structure=_crossed(), fourier_coefficients=coefficients, li_nesting='fixed')
         assert all(np.array_equal(a, b) for a, b in zip(base, named)), coefficients
-    assert _legacy_wavebit.rcwa(**_SCENE, structure=_crossed()).li_nesting == _legacy_wavebit.Nesting.FIXED
+    assert _legacy_wavebit_rcwa(**_SCENE, structure=_crossed()).li_nesting == _legacy_wavebit_Nesting.FIXED
 
 
 def test_the_symmetric_nesting_moves_a_crossed_grating_and_conserves_energy():
@@ -521,7 +525,7 @@ def test_a_nesting_nothing_honours_is_refused_not_ignored(where):
     scenes skip the scalar refusals and go through ``anisotropy.validate_options`` -- builds the
     fixed nesting only. Before these doors a tensor scene built ``'fixed'`` in silence."""
     kw, match = _UNREAD[where]
-    solver = _legacy_wavebit.rcwa(**_SCENE, **kw, li_nesting='symmetric')
+    solver = _legacy_wavebit_rcwa(**_SCENE, **kw, li_nesting='symmetric')
     with pytest.raises(NotImplementedError, match=match) as excinfo:
         solver.solve()
     assert "li_nesting='symmetric'" in str(excinfo.value)
@@ -533,8 +537,8 @@ def test_tensor_li_takes_the_fixed_nesting_it_builds():
     """The refusal is for what tensor Li cannot build: naming the one it does is honoured, to
     the bit, on a raster and on rectangles."""
     for structure in (_tensor(_crossed()), _TENSOR_RECTANGLE):
-        base = _legacy_wavebit.rcwa(**_SCENE, structure=structure, factorization='li').solve()
-        named = _legacy_wavebit.rcwa(**_SCENE, structure=structure, factorization='li',
+        base = _legacy_wavebit_rcwa(**_SCENE, structure=structure, factorization='li').solve()
+        named = _legacy_wavebit_rcwa(**_SCENE, structure=structure, factorization='li',
                              li_nesting='fixed').solve()
         assert np.array_equal(np.asarray(base.T), np.asarray(named.T))
 
@@ -543,8 +547,8 @@ def test_tensor_li_takes_the_fixed_nesting_it_builds():
 def test_rectangles_under_li_read_the_nesting_as_the_raster_does(nesting):
     """The parametric path's Cartesian Li runs the raster path's integrated builder on exact
     edges, so it is a reader too: nesting for nesting, its matrices are the painted raster's."""
-    shape = _legacy_wavebit.rcwa(**_SCENE, structure=_RECTANGLE, factorization='li', li_nesting=nesting)
-    raster = _legacy_wavebit.rcwa(**_SCENE, structure=_painted_rectangle(),
+    shape = _legacy_wavebit_rcwa(**_SCENE, structure=_RECTANGLE, factorization='li', li_nesting=nesting)
+    raster = _legacy_wavebit_rcwa(**_SCENE, structure=_painted_rectangle(),
                           fourier_coefficients='integrated', li_nesting=nesting)
     got, want = shape.eps_conv_matrices(), raster.eps_conv_matrices()
     for a, b in zip(got[:3], want[:3]):
@@ -555,12 +559,12 @@ def test_rectangles_under_li_read_the_nesting_as_the_raster_does(nesting):
 def test_the_nesting_moves_rectangles_and_one_frozen_plan_serves_both():
     """``'symmetric'`` changes the shape build (so it is read, not dropped), and the frozen
     plan -- edge order and ownership only -- replays under either nesting."""
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_RECTANGLE, factorization='li')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_RECTANGLE, factorization='li')
     plan = solver.freeze_geometry()
     fixed = np.asarray(solver.solve().T)
     solver.li_nesting = 'symmetric'
     replayed = np.asarray(solver.solve(geometry=plan).T)
-    rebuilt = np.asarray(_legacy_wavebit.rcwa(**_SCENE, structure=_RECTANGLE, factorization='li',
+    rebuilt = np.asarray(_legacy_wavebit_rcwa(**_SCENE, structure=_RECTANGLE, factorization='li',
                                       li_nesting='symmetric').solve().T)
     assert np.array_equal(replayed, rebuilt)
     assert np.abs(rebuilt - fixed).max() > 1e-5
@@ -568,21 +572,21 @@ def test_the_nesting_moves_rectangles_and_one_frozen_plan_serves_both():
 
 def test_an_unknown_nesting_is_refused_at_the_keyword():
     with pytest.raises(ValueError, match=r"li_nesting='inner'.*'fixed', 'symmetric'"):
-        _legacy_wavebit.rcwa(**_SCENE, structure=_crossed(), li_nesting='inner')
+        _legacy_wavebit_rcwa(**_SCENE, structure=_crossed(), li_nesting='inner')
 
 
 def test_the_nesting_is_a_solve_condition():
     """``solve(li_nesting=...)`` reaches the build, like every other settable condition."""
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed())
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed())
     via_solve = np.asarray(solver.solve(li_nesting='symmetric').T)
     direct = _totals(structure=_crossed(), li_nesting='symmetric')[1]
     assert np.array_equal(via_solve, direct)
-    assert solver.li_nesting == _legacy_wavebit.Nesting.SYMMETRIC
+    assert solver.li_nesting == _legacy_wavebit_Nesting.SYMMETRIC
 
 
 def test_one_frozen_geometry_serves_both_nestings():
     """The integrated path's compression says where the blocks are, not how they combine."""
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed(), fourier_coefficients='integrated')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed(), fourier_coefficients='integrated')
     record = solver.freeze_geometry()
     solver.li_nesting = 'symmetric'
     replayed = np.asarray(solver.solve(geometry=record).T)
@@ -596,7 +600,7 @@ def test_the_permeability_is_nested_the_same_way():
     eps = _crossed()
     mu = np.ones_like(eps)
     mu[0, 3:9, 2:17] = 2.5
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=eps, mu=mu, li_nesting='symmetric')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=eps, mu=mu, li_nesting='symmetric')
     Mu, Mv = _SCENE['truncation_order']
     want = slots_about_centre(F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric'), (Mu, Mv))
     got = solver.mu_conv_matrices()
@@ -612,14 +616,14 @@ def test_the_per_call_doors_reach_the_build():
     mu = np.ones_like(eps)
     mu[0, 3:9, 2:17] = 2.5
     Mu, Mv = _SCENE['truncation_order']
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=eps, mu=mu)
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=eps, mu=mu)
     got = solver.eps_conv_matrices(li_nesting='symmetric')
     assert _rel(np.asarray(got.epx)[0],
                 about_centre(F.li_conv_matrices(xnp, eps[0], Mu, Mv, nesting='symmetric').epx, (Mu, Mv))) < 1e-14
     got = solver.mu_conv_matrices(li_nesting='symmetric')
     assert _rel(np.asarray(got.epx)[0],
                 about_centre(F.li_conv_matrices(xnp, mu[0], Mu, Mv, nesting='symmetric').epx, (Mu, Mv))) < 1e-14
-    nvf = _legacy_wavebit.rcwa(**_SCENE, structure=eps, factorization='nvf')
+    nvf = _legacy_wavebit_rcwa(**_SCENE, structure=eps, factorization='nvf')
     with pytest.raises(NotImplementedError, match="li_nesting='symmetric' has no reader"):
         nvf.freeze_geometry(li_nesting='symmetric')
 
@@ -629,21 +633,21 @@ def test_a_jitted_replay_keeps_the_nesting():
     nesting the solver holds -- not the default."""
     jax = pytest.importorskip('jax')
     kw = dict(_SCENE, backend='jax', structure=_crossed(), fourier_coefficients='integrated')
-    solver = _legacy_wavebit.rcwa(**kw, li_nesting='symmetric')
+    solver = _legacy_wavebit_rcwa(**kw, li_nesting='symmetric')
     geometry = solver.freeze_geometry()
     direct = np.asarray(solver.solve().T)
     compiled = np.asarray(jax.jit(lambda s: s.solve(geometry=geometry).T)(solver))
     np.testing.assert_allclose(compiled, direct, atol=1e-12, rtol=1e-12)
-    fixed = np.asarray(_legacy_wavebit.rcwa(**kw).solve().T)
+    fixed = np.asarray(_legacy_wavebit_rcwa(**kw).solve().T)
     assert np.abs(compiled - fixed).max() > 1e-5
 
 
 def test_the_spec_carries_the_nesting():
-    from wavebit.compat.legacy import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     numerics = Numerics.from_dict(dict(truncation_order=[2, 2], li_nesting='symmetric'))
-    assert numerics.li_nesting == _legacy_wavebit.Nesting.SYMMETRIC
+    assert numerics.li_nesting == _legacy_wavebit_Nesting.SYMMETRIC
     assert numerics.as_kwargs()['li_nesting'] == 'symmetric'
-    assert Numerics.from_dict(numerics.to_dict()).li_nesting == _legacy_wavebit.Nesting.SYMMETRIC
+    assert Numerics.from_dict(numerics.to_dict()).li_nesting == _legacy_wavebit_Nesting.SYMMETRIC
     assert 'li_nesting' not in Numerics.from_dict(dict(truncation_order=[2, 2])).as_kwargs()
 
 
@@ -652,15 +656,16 @@ def test_the_unscoped_spelling_is_refused_like_any_unknown_option():
     and ``raster_normal_method`` do. Nothing has been released, so the bare ``nesting`` is no
     alias -- the constructor, the attribute, the spec and the manifest treat it as a name they
     have never heard of."""
-    from wavebit.compat.legacy import Numerics, SpecError
+    from wavebit._common._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import SpecError
     from wavebit.manifest import manifest
     with pytest.raises(TypeError, match=r"unexpected keyword argument.*'nesting'"):
-        _legacy_wavebit.rcwa(**_SCENE, structure=_crossed(), nesting='symmetric')
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed())
+        _legacy_wavebit_rcwa(**_SCENE, structure=_crossed(), nesting='symmetric')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed())
     with pytest.raises(AttributeError, match=r"no attribute 'nesting' to set"):
         solver.nesting = 'symmetric'
     assert not hasattr(solver, 'nesting')
-    assert solver.li_nesting == _legacy_wavebit.Nesting.FIXED
+    assert solver.li_nesting == _legacy_wavebit_Nesting.FIXED
     with pytest.raises(SpecError, match=r"unknown field\(s\) \['nesting'\]"):
         Numerics.from_dict(dict(truncation_order=[2, 2], nesting='symmetric'))
     numerics = Numerics()          # the spec's attribute door stored it until 2026-09-27
@@ -675,8 +680,8 @@ def test_the_unscoped_spelling_is_refused_like_any_unknown_option():
                                   'mu_conv_matrices'])
 def test_the_unscoped_spelling_is_refused_at_every_call_door(door):
     """The per-call doors refuse it by name too, before any condition moves."""
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed())
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed())
     with pytest.raises(TypeError, match=r"unexpected keyword argument.*'nesting'"):
         getattr(solver, door)(wavelength=1.3, nesting='symmetric')
     assert float(solver.wavelength) == _SCENE['wavelength']
-    assert solver.li_nesting == _legacy_wavebit.Nesting.FIXED
+    assert solver.li_nesting == _legacy_wavebit_Nesting.FIXED

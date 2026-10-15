@@ -26,7 +26,9 @@ whatever the normal field says, so ``R + T == 1`` to 1e-15 while the cell is bei
 it is asserted only as a liveness check, to catch a scene that stopped solving at all.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -96,7 +98,7 @@ IDS = ['-'.join(c[k] for k in AXES) for c in CASES]
 def _rod_mask(basis, n=32, radius=ROD):
     """A disc, stated in the cell's own coordinates so a change of basis carries the same object."""
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    X, Y = (np.asarray(c) for c in _legacy_wavebit.meshgrid_xy((n, n), lattice=basis))
+    X, Y = (np.asarray(c) for c in _legacy_wavebit_meshgrid_xy((n, n), lattice=basis))
     inside = np.zeros(X.shape, bool)
     for i in (-1, 0, 1):                              # minimum image over the lattice
         for j in (-1, 0, 1):
@@ -120,7 +122,7 @@ def scene(case, basis=None, **over):
     if 'mu' in medium:
         kw['mu'] = np.where(mask, medium['mu'], 1.0)[None, ...]
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def totals(result):
@@ -167,7 +169,7 @@ def shape_scene(case, basis=None, **over):
                                       'lx': 2 * ROD, 'material': material}]}],
               **INCIDENCE[case['incidence']])
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 @pytest.mark.parametrize('case', CASES, ids=IDS)
@@ -291,8 +293,8 @@ def test_reassigning_the_width_gives_the_solver_it_would_have_been_born_as(backe
     cfg = dict(backend=backend, structure=np.ones((1, 4, 4)) * 2.0, truncation_order=(2, 2),
                wavelength=620., top=1.0, bot=1.0, period=[400.0, 500.0], thickness=[150.0],
                theta=0.3, phi=0.4, psi=0.2)
-    born = _legacy_wavebit.rcwa(complex_dtype=1, **cfg)
-    moved = _legacy_wavebit.rcwa(complex_dtype=0, **cfg)
+    born = _legacy_wavebit_rcwa(complex_dtype=1, **cfg)
+    moved = _legacy_wavebit_rcwa(complex_dtype=0, **cfg)
     moved.complex_dtype = 1
 
     def dtype_of(v):
@@ -326,7 +328,7 @@ def test_a_dtype_instance_and_a_dtype_class_choose_the_same_three_widths(backend
                wavelength=620., top=1.0, bot=1.0, period=[400.0, 400.0], thickness=[150.0])
     for narrow, spellings in ((True, (1, np.complex64, np.dtype('complex64'))),
                               (False, (0, np.complex128, np.dtype('complex128')))):
-        ref = _legacy_wavebit.rcwa(complex_dtype=(1 if narrow else 0), **cfg)
+        ref = _legacy_wavebit_rcwa(complex_dtype=(1 if narrow else 0), **cfg)
         # The namespace's own spelling too -- what the solver reports has to be accepted back.
         # It is the only term that is load-bearing on Torch alone: `jnp.complex64` compares
         # equal to `np.complex64` and `torch.complex64` does not, so dropping `xp.complex64`
@@ -334,7 +336,7 @@ def test_a_dtype_instance_and_a_dtype_class_choose_the_same_three_widths(backend
         # on the third. Measured; it is why this loop reads `ref.complex_dtype` rather than
         # listing three literals.
         for spelling in (*spellings, ref.complex_dtype):
-            got = _legacy_wavebit.rcwa(complex_dtype=spelling, **cfg)
+            got = _legacy_wavebit_rcwa(complex_dtype=spelling, **cfg)
             assert got.complex_dtype is ref.complex_dtype, spelling
             assert got.float_dtype is ref.float_dtype, spelling
             assert got.int_dtype is ref.int_dtype, spelling
@@ -347,7 +349,7 @@ def test_a_dtype_instance_and_a_dtype_class_choose_the_same_three_widths(backend
 def test_an_unrecognised_width_is_refused_by_name():
     """One message for all three, where there were three (and one of them was empty)."""
     with pytest.raises(ValueError, match=r'complex_dtype'):
-        _legacy_wavebit.rcwa(backend='numpy', structure=np.ones((1, 4, 4)), truncation_order=(1, 1),
+        _legacy_wavebit_rcwa(backend='numpy', structure=np.ones((1, 4, 4)), truncation_order=(1, 1),
                      wavelength=620., top=1.0, bot=1.0, period=[400.0, 400.0],
                      thickness=[150.0], complex_dtype=np.float64)
 
@@ -387,7 +389,7 @@ def test_the_three_backends_clamp_a_grazing_theta_the_same_way(theta):
     """
     reference = None
     for backend in ('numpy', 'jax', 'torch'):
-        solver = _legacy_wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
+        solver = _legacy_wavebit_rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.7, bot=1.0, theta=theta, phi=0.4, psi=0.1)
         got = tuple(complex(np.asarray(v)) for v in solver._incident_kxy(WL))
@@ -428,7 +430,7 @@ def test_a_theta_past_grazing_saturates(imag):
     reference = None
     for backend in ('numpy', 'jax', 'torch'):
         for real in (threshold, 1.9, 2.6, 3.0):
-            solver = _legacy_wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
+            solver = _legacy_wavebit_rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
                                   truncation_order=[1, 1], thickness=[H], wavelength=WL,
                                   top=1.7, bot=1.0, theta=real + 1j * imag, phi=0.4, psi=0.1)
             got = tuple(complex(np.asarray(v)) for v in solver._incident_kxy(WL))
@@ -445,7 +447,7 @@ def test_a_theta_past_grazing_saturates(imag):
     # imaginary part gone, all four real parts still agree, so the check still passes.
     grazing = float(np.float32(np.pi / 2))
     def _at(imag_part):
-        solver = _legacy_wavebit.rcwa(backend='numpy', structure=np.ones((1, 4, 4)), period=[P, P],
+        solver = _legacy_wavebit_rcwa(backend='numpy', structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.7, bot=1.0, theta=grazing + 1j * imag_part,
                               phi=0.4, psi=0.1)
@@ -485,7 +487,7 @@ def test_every_backend_declares_where_its_arrays_are_placed():
               'freeze_geometry', 'order_kxy', 'grad', 'fit')
 
     for backend in ('numpy', 'jax', 'torch'):
-        solver = _legacy_wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
+        solver = _legacy_wavebit_rcwa(backend=backend, structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.0, bot=1.0)
         scope = solver._device_scope()
@@ -493,7 +495,7 @@ def test_every_backend_declares_where_its_arrays_are_placed():
         with scope:                                    # it has to be usable, not merely typed
             pass
 
-    jax_solver = _legacy_wavebit.rcwa(backend='jax', structure=np.ones((1, 4, 4)), period=[P, P],
+    jax_solver = _legacy_wavebit_rcwa(backend='jax', structure=np.ones((1, 4, 4)), period=[P, P],
                               truncation_order=[1, 1], thickness=[H], wavelength=WL,
                               top=1.0, bot=1.0)
     assert not isinstance(jax_solver._device_scope(), contextlib.nullcontext), (
@@ -526,7 +528,7 @@ def test_a_device_this_backend_does_not_have_is_refused_rather_than_printed_abou
     import io
     import contextlib
 
-    solver = _legacy_wavebit.rcwa(backend='numpy', **SCENE)
+    solver = _legacy_wavebit_rcwa(backend='numpy', **SCENE)
 
     for asked in (1, 'gpu', 'cuda'):
         with pytest.raises(ValueError, match='one device'):
@@ -557,7 +559,7 @@ def test_the_three_backends_take_one_device_vocabulary_and_answer_in_their_own(b
     every caller something none of the three frameworks accepts.
     """
     for spelling in (0, 'cpu'):
-        solver = _legacy_wavebit.rcwa(backend=backend, device=spelling, **SCENE)
+        solver = _legacy_wavebit_rcwa(backend=backend, device=spelling, **SCENE)
         assert solver.device is not None
 
         # The getter's answer is a legal argument to the setter -- otherwise `solver.device =
@@ -567,8 +569,8 @@ def test_the_three_backends_take_one_device_vocabulary_and_answer_in_their_own(b
         solver.device = solver.device
         assert solver.device == before, (backend, before, solver.device)
 
-    assert _legacy_wavebit.rcwa(backend=backend, device=0, **SCENE).device\
-        == _legacy_wavebit.rcwa(backend=backend, device='cpu', **SCENE).device
+    assert _legacy_wavebit_rcwa(backend=backend, device=0, **SCENE).device\
+        == _legacy_wavebit_rcwa(backend=backend, device='cpu', **SCENE).device
 
 
 def test_the_same_positional_argument_means_the_same_thing_on_all_three_backends():
@@ -587,7 +589,7 @@ def test_the_same_positional_argument_means_the_same_thing_on_all_three_backends
     kw = dict(structure=np.ones((1, 4, 4)), period=[P, P], truncation_order=[1, 1],
               thickness=[H], wavelength=WL)
 
-    built = [_legacy_wavebit.rcwa(backend, 1.5, 2.25, **kw) for backend in ('numpy', 'jax', 'torch')]
+    built = [_legacy_wavebit_rcwa(backend, 1.5, 2.25, **kw) for backend in ('numpy', 'jax', 'torch')]
     for backend, solver in enumerate(built):
         assert float(np.asarray(solver.top.epsilon)) == pytest.approx(1.5), backend
         assert float(np.asarray(solver.bot.epsilon)) == pytest.approx(2.25), backend
@@ -707,8 +709,8 @@ def test_importing_a_backend_does_not_import_the_other_two():
     for backend, absent in (('numpy', ('jax', 'torch')), ('jax', ('torch',)), ('torch', ('jax',))):
         pytest.importorskip(backend)
         code = (
-            'import sys, numpy as np\nfrom wavebit.compat import legacy as wavebit\n'
-            f'wavebit.rcwa(backend={backend!r}, structure=np.ones((1, 4, 4)), period=[400., 400.],\n'
+            'import sys, numpy as np\nfrom wavebit.rcwa._factory import rcwa\n'
+            f'rcwa(backend={backend!r}, structure=np.ones((1, 4, 4)), period=[400., 400.],\n'
             '             truncation_order=[1, 1], thickness=[150.], wavelength=900.).solve()\n'
             f'print([m for m in {absent!r} if m in sys.modules])\n')
         got = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,

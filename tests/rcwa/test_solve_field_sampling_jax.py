@@ -1,6 +1,6 @@
 """Concrete sampling containers share the compiled field API's static meaning."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -13,7 +13,7 @@ POINTS = (-211., 11., 129.)
 
 def solver(backend='jax', basis=False):
     cell = dict(lattice=np.diag([600., 750.])) if basis else dict(period=(600., 750.))
-    return _legacy_wavebit.rcwa(backend=backend, **cell, structure=np.full((1, 2, 2), 4.),
+    return _legacy_wavebit_rcwa(backend=backend, **cell, structure=np.full((1, 2, 2), 4.),
                         wavelength=900., thickness=(170.,), truncation_order=(0, 0),
                         answers='field', theta=.13, phi=.21)
 

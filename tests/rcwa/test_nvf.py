@@ -1,5 +1,5 @@
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -29,7 +29,7 @@ def test_nvf_circular_grating():
         structure=structure_2d, thickness=[200], factorization='nvf'
     )
 
-    mee_nvf = _legacy_wavebit.rcwa(backend='numpy', **option_nvf)
+    mee_nvf = _legacy_wavebit_rcwa(backend='numpy', **option_nvf)
     res_nvf = mee_nvf.solve()
 
     assert res_nvf.R is not None and res_nvf.T is not None
@@ -63,7 +63,7 @@ def test_nvf_energy_convergence():
 
     errs = {}
     for truncation_order in (3, 5, 7):
-        res = _legacy_wavebit.rcwa(backend='numpy', structure=structure, truncation_order=[truncation_order, truncation_order],
+        res = _legacy_wavebit_rcwa(backend='numpy', structure=structure, truncation_order=[truncation_order, truncation_order],
                               factorization='nvf', **cfg).solve()
         R = float(np.array(res.R).real.sum())
         T = float(np.array(res.T).real.sum())
@@ -99,7 +99,7 @@ def test_nvf_on_a_one_cell_axis_reduces_to_li(kind):
     cfg |= dict(phi=0.3, psi=0.4) if kind == 'conical' else dict(psi=np.pi / 2 if kind == 'te' else 1)
 
     def total(**kw):
-        res = _legacy_wavebit.rcwa(**kw, **cfg).solve()
+        res = _legacy_wavebit_rcwa(**kw, **cfg).solve()
         return float(np.sum(np.asarray(res.R)))
 
     assert total(factorization='nvf') == pytest.approx(total(factorization='li'), abs=1e-12)

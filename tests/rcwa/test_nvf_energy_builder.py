@@ -1,10 +1,12 @@
 """Energy closure: constitutive recovery, basis invariance and actual engine use."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import ConvMatrices
+from wavebit.rcwa._engine.factorization import ConvMatrices
 
 
 @pytest.fixture(params=['numpy', 'jax', 'torch'])
@@ -126,7 +128,7 @@ def _airy(epsilon, wavelength, thickness, theta, polarization):
 
 @pytest.mark.parametrize('epsilon,wavelength,thickness', [(4., 830., 177.), (3.+.2j, 910., 243.)])
 def test_real_engine_matches_independent_lossless_and_absorbing_slab(epsilon, wavelength, thickness):
-    solver = _legacy_wavebit.rcwa(period=(700., 700.), wavelength=wavelength, theta=.23, phi=.37,
+    solver = _legacy_wavebit_rcwa(period=(700., 700.), wavelength=wavelength, theta=.23, phi=.37,
                           thickness=[thickness], top=1., bot=1.44, truncation_order=(1, 1))
     result = solver.solve_conv(*_uniform_energy(epsilon, 1))
     for polarization in ('p', 's'):
@@ -138,7 +140,7 @@ def test_real_engine_matches_independent_lossless_and_absorbing_slab(epsilon, wa
 def test_conforming_nvf_export_runs_in_the_real_engine_for_both_polarizations(backend):
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
     from studies.rcwa.nvf_polynomial_body.nvf_polynomial_body import PolynomialBodyGapModel
@@ -146,7 +148,7 @@ def test_conforming_nvf_export_runs_in_the_real_engine_for_both_polarizations(ba
     model = PolynomialBodyGapModel(1, rows=2, body_degree=2, gap_degree=2)
     conv = model.conv_matrices(17., dict(seams=[31.], values=[4., 9.]))
     reference = doubling_powers(1, tuple(a[0] for a in conv), theta=.2, azimuth=.37)
-    solver = _legacy_wavebit.rcwa(backend=backend, period=(700., 700.), wavelength=900.,
+    solver = _legacy_wavebit_rcwa(backend=backend, period=(700., 700.), wavelength=900.,
                           thickness=[300.], theta=.2, phi=.37, top=1., bot=2.25,
                           truncation_order=(1, 1))
     slots = ConvMatrices(*(solver.xp.asarray(a, dtype=solver.xp.complex128) for a in conv))
@@ -164,8 +166,8 @@ def test_splitting_a_conforming_layer_preserves_the_engine_scattering_result():
     conv = PolynomialBodyGapModel(1, rows=2, gap_degree=2).conv_matrices(17.)
     common = dict(period=(700., 700.), wavelength=875., theta=.19, phi=.31,
                   top=1., bot=1.7, truncation_order=(1, 1))
-    single = _legacy_wavebit.rcwa(thickness=[300.], **common).solve_conv(*conv)
-    split = _legacy_wavebit.rcwa(thickness=[110., 190.], **common).solve_conv(
+    single = _legacy_wavebit_rcwa(thickness=[300.], **common).solve_conv(*conv)
+    split = _legacy_wavebit_rcwa(thickness=[110., 190.], **common).solve_conv(
         *(np.concatenate([slot, slot], axis=0) for slot in conv))
     for polarization in ('p_inc', 's_inc'):
         for key in ('T', 'R'):

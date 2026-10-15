@@ -1,6 +1,6 @@
 """Scene pulse width controls the spectrum without changing its calibration contract."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -14,8 +14,8 @@ def options(**changes):
 
 
 def test_default_pulse_is_unchanged_and_metadata_uses_requested_band():
-    implicit, a = _legacy_wavebit.fdtd(**options(record_field=11))
-    explicit, b = _legacy_wavebit.fdtd(**options(pulse_width=1., record_field=11))
+    implicit, a = _legacy_wavebit_fdtd(**options(record_field=11))
+    explicit, b = _legacy_wavebit_fdtd(**options(pulse_width=1., record_field=11))
     for first, second in zip(implicit, explicit):
         for name in ('r_s', 't_s', 'R', 'T'):
             np.testing.assert_array_equal(getattr(first.incident, name), getattr(second.incident, name))
@@ -28,8 +28,8 @@ def test_default_pulse_is_unchanged_and_metadata_uses_requested_band():
 
 
 def test_pulse_width_uses_physical_c1_time_and_preserves_scale_invariance():
-    first, a = _legacy_wavebit.fdtd(**options(pulse_width=2.))
-    second, b = _legacy_wavebit.fdtd(**options(pulse_width=4., thickness=[.4], period=.2,
+    first, a = _legacy_wavebit_fdtd(**options(pulse_width=2.))
+    second, b = _legacy_wavebit_fdtd(**options(pulse_width=4., thickness=[.4], period=.2,
                                       wavelength=[1.8, 2., 2.2], resolution=5))
     for before, after in zip(first, second):
         for name in ('r_s', 't_s', 'R', 'T'):
@@ -42,7 +42,7 @@ def test_pulse_width_uses_physical_c1_time_and_preserves_scale_invariance():
 @pytest.mark.parametrize('value', [0., -1., np.nan, np.inf, True, 1j, [1.], '1'])
 def test_invalid_static_width_is_rejected(value):
     with pytest.raises(ValueError, match='pulse_width'):
-        _legacy_wavebit.fdtd(**options(pulse_width=value))
+        _legacy_wavebit_fdtd(**options(pulse_width=value))
 
 
 @pytest.mark.parametrize('changes,match', [
@@ -53,7 +53,7 @@ def test_invalid_static_width_is_rejected(value):
 ])
 def test_unresolved_source_or_incomplete_run_is_rejected(changes, match):
     with pytest.raises(ValueError, match=match):
-        _legacy_wavebit.fdtd(**options(**changes))
+        _legacy_wavebit_fdtd(**options(**changes))
 
 
 def test_source_tail_guard_refuses_past_the_double_precision_limit(monkeypatch):
@@ -96,11 +96,11 @@ def test_source_tail_guard_refuses_past_the_double_precision_limit(monkeypatch):
     try:
         jax.config.update('jax_enable_x64', False)
         with pytest.raises(ValueError, match='numerical source tail'):
-            _legacy_wavebit.fdtd(**options(backend='jax', pulse_width=1.01*limit, n_periods=180))
+            _legacy_wavebit_fdtd(**options(backend='jax', pulse_width=1.01*limit, n_periods=180))
         assert jax.config.jax_enable_x64, 'the run must lift the cap before its first array'
         jax.config.update('jax_enable_x64', False)
         with pytest.raises(Stepped):
-            _legacy_wavebit.fdtd(**options(backend='jax', pulse_width=.99*limit, n_periods=180))
+            _legacy_wavebit_fdtd(**options(backend='jax', pulse_width=.99*limit, n_periods=180))
         assert jax.config.jax_enable_x64, 'the run must lift the cap before its first array'
     finally:
         jax.config.update('jax_enable_x64', previous)
@@ -109,7 +109,7 @@ def test_source_tail_guard_refuses_past_the_double_precision_limit(monkeypatch):
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 def test_narrow_pulse_preserves_bottom_graded_band_material_gradient(backend):
     def run(value, which):
-        results, _ = _legacy_wavebit.fdtd(**options(
+        results, _ = _legacy_wavebit_fdtd(**options(
             structure=value.reshape(1, 1, 1), backend=which, pulse_width=2., grading=True,
             incidence_side='bottom', dft_subsample=2, convergence_window=30))
         return sum((v.incident.r_s+.4j*v.incident.t_s).real.sum() for v in results)
@@ -148,7 +148,7 @@ def test_narrow_oblique_metal_pulse_settles_and_refines_to_fresnel_airy():
                                         (1-interface**2)*phase/denominator])
     errors = []
     for resolution, width in [(40, 1.), (40, 3.), (80, 3.)]:
-        result, diagnostic = _legacy_wavebit.fdtd(**options(
+        result, diagnostic = _legacy_wavebit_fdtd(**options(
             structure=np.full((1, 1, 1), 1.5), period=.05, theta=.45,
             resolution=resolution, pulse_width=width, n_periods=80,
             n_pml=round(.3*resolution), convergence_window=200,

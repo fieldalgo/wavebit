@@ -1,6 +1,6 @@
 """The retry policy must inspect current conditions, not a previous graph."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 import numpy as np
 import pytest
@@ -14,13 +14,13 @@ CFG=dict(backend='torch',period=[1000.],truncation_order=(3,0),top=1.21,bot=1.69
 @pytest.mark.parametrize('algorithm',['ETM','SMM'])
 def test_previous_torch_runtime_does_not_select_an_autodiff_retry_for_a_concrete_scene(algorithm):
     torch=pytest.importorskip('torch')
-    s=_legacy_wavebit.rcwa(**CFG,layer_algorithm=algorithm,wavelength=520.,
+    s=_legacy_wavebit_rcwa(**CFG,layer_algorithm=algorithm,wavelength=520.,
                    thickness=torch.tensor([300.,200.],dtype=torch.float64,requires_grad=True))
     s.solve()
     assert s.T1.requires_grad
     s.thickness=[300.,200.]
     s.wavelength=500.
-    fresh=_legacy_wavebit.rcwa(**CFG,layer_algorithm=algorithm,wavelength=500.,thickness=[300.,200.])
+    fresh=_legacy_wavebit_rcwa(**CFG,layer_algorithm=algorithm,wavelength=500.,thickness=[300.,200.])
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         got=s.solve()

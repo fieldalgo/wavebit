@@ -1,6 +1,6 @@
 """Unsupported incidence must be refused before polarization dispatch loses information."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -28,12 +28,12 @@ def test_incidence_refused_before_time_loop(monkeypatch, crossed, incidence, ove
     kw.update(incidence)
     kw.update(override)
     with pytest.raises(ValueError, match=message):
-        _legacy_wavebit.fdtd(**kw)
+        _legacy_wavebit_fdtd(**kw)
 
 
 @pytest.mark.parametrize('psi', [.4+.1j, np.nan, np.inf])
 def test_psi_must_be_a_finite_real_angle(psi):
     with pytest.raises(ValueError, match='psi.*(complex|finite)'):
-        _legacy_wavebit.fdtd(structure=np.ones((1, 1, 2)), thickness=[100.], top=1., bot=1.,
+        _legacy_wavebit_fdtd(structure=np.ones((1, 1, 2)), thickness=[100.], top=1., bot=1.,
                      period=[300.], wavelength=900., theta=.3, phi=.4, psi=psi,
                      resolution=.015, n_periods=60)

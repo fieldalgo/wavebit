@@ -1,6 +1,6 @@
 """Nonuniform Yee meshes: independent eigenproblem, CPML parity and sensitivities."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -27,7 +27,7 @@ def test_nonuniform_grid_matches_independent_discrete_eigenproblem(backend):
     if backend=='torch':
         pytest.importorskip('torch')
     widths,e,h,dt,omega=eigenmode()
-    result=_legacy_wavebit.fdtd_grid(np.full((14,2,2),2.),spacing=(1.,)*3,z_spacing=widths,
+    result=_legacy_wavebit_fdtd_grid(np.full((14,2,2),2.),spacing=(1.,)*3,z_spacing=widths,
                              dt=dt,steps=41,electric=e,magnetic=h,backend=backend,
                              record_field=7,wavelengths=[2*np.pi/omega],monitor_z=[3])
     host=lambda x:x.detach().numpy() if backend=='torch' else np.asarray(x)
@@ -55,13 +55,13 @@ def case():
 
 def test_explicit_uniform_mesh_matches_existing_cpml_and_cfl_uses_smallest_cell():
     mask,kw=case();kw.pop('z_spacing')
-    a=_legacy_wavebit.fdtd_grid(1+mask,**kw)
-    b=_legacy_wavebit.fdtd_grid(1+mask,z_spacing=np.full(16,.4),**kw)
+    a=_legacy_wavebit_fdtd_grid(1+mask,**kw)
+    b=_legacy_wavebit_fdtd_grid(1+mask,z_spacing=np.full(16,.4),**kw)
     for key in ('E','H','electric_spectrum','power_z'):
         np.testing.assert_allclose(a[key],b[key],atol=1e-13)
     widths=np.full(16,.4);widths[7]=.01
     with pytest.raises(ValueError,match='CFL'):
-        _legacy_wavebit.fdtd_grid(1+mask,z_spacing=widths,**kw)
+        _legacy_wavebit_fdtd_grid(1+mask,z_spacing=widths,**kw)
 
 
 @pytest.mark.parametrize('backend',['jax','torch'])
@@ -69,7 +69,7 @@ def test_nonuniform_cpml_ade_material_gradients(backend):
     mask,kw=case()
     def run(v,which):
         m=mask if which=='numpy' else native_mask
-        result=_legacy_wavebit.fdtd_grid(1+v*m,poles=[(2.,.2,.3*m)],backend=which,**kw)
+        result=_legacy_wavebit_fdtd_grid(1+v*m,poles=[(2.,.2,.3*m)],backend=which,**kw)
         return result['E'],(abs(result['fields']['ey']['values'])**2).sum()
     if backend=='jax':
         jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
@@ -100,8 +100,8 @@ def test_nonuniform_absorber_removes_outgoing_pulse():
     e[1]=np.exp(-((z-centre)/3.)**2)[:,None,None]
     h[0]=-np.exp(-((z+widths/2-centre+.1)/3.)**2)[:,None,None]
     kw=dict(spacing=(1.,)*3,z_spacing=widths,dt=.2,steps=400,electric=e,magnetic=h)
-    bare=_legacy_wavebit.fdtd_grid(np.ones((48,2,2)),**kw)
-    absorbed=_legacy_wavebit.fdtd_grid(np.ones((48,2,2)),absorber_cells=8,**kw)
+    bare=_legacy_wavebit_fdtd_grid(np.ones((48,2,2)),**kw)
+    absorbed=_legacy_wavebit_fdtd_grid(np.ones((48,2,2)),absorber_cells=8,**kw)
     energy=lambda r:np.sum(abs(r['E'])**2+abs(r['H'])**2)
     assert energy(absorbed)<.03*energy(bare)
 
@@ -109,14 +109,14 @@ def test_nonuniform_absorber_removes_outgoing_pulse():
 @pytest.mark.parametrize('widths',[np.ones(3),np.zeros(14),np.full(14,np.nan),np.full(14,1.+1j)])
 def test_invalid_nonuniform_geometry(widths):
     with pytest.raises(ValueError,match='z_spacing'):
-        _legacy_wavebit.fdtd_grid(np.ones((14,2,2)),spacing=(1.,)*3,z_spacing=widths,dt=.1,steps=2)
+        _legacy_wavebit_fdtd_grid(np.ones((14,2,2)),spacing=(1.,)*3,z_spacing=widths,dt=.1,steps=2)
 
 
 def test_unequal_physical_absorber_widths_do_not_use_domain_midpoint():
     # Left absorber reaches z=16, beyond the domain midpoint at z=12.
     widths=np.array([8.,8.]+[1.]*8)
     fields=np.ones((3,10,2,2))
-    result=_legacy_wavebit.fdtd_grid(np.ones((10,2,2)),spacing=(1.,)*3,z_spacing=widths,
+    result=_legacy_wavebit_fdtd_grid(np.ones((10,2,2)),spacing=(1.,)*3,z_spacing=widths,
                             dt=.1,steps=1,electric=fields,magnetic=fields,absorber_cells=2)
     rate=6*(1-12/16)**3/16
     np.testing.assert_allclose(result['H'][0,1],(1-.05*rate)/(1+.05*rate),atol=1e-15)

@@ -1,5 +1,11 @@
 # Rayleigh points — the exact graze, which paths solve it, and what `auto_detune` does
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Written: 2026-08-16; §6 (the 2D coupled-cluster rebuild) added later the same day; §7 (the
 1D conical x-cutoff at `ky != 0`, which is not a Rayleigh point) added 2026-10-10; §§8–9 record
 the 2D and first-order exceptional-point design and judge measurements from 2026-10-12.

@@ -24,7 +24,9 @@ centre phase read live. An `excitation` that moves the window's centre keeps its
 shape mismatch caught that one either: `None -> {1: 1.0}` came back 1.87 and 1.76 away.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -54,7 +56,7 @@ def _scene(backend='numpy', **over):
               thickness=[H], wavelength=WL, top=1.0, bot=1.0, answers='field',
               theta=0.1, phi=0.0)
     kw.update(over)
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def _field(solver):
@@ -152,7 +154,7 @@ def test_a_jitted_reconstruction_is_not_refused_on_its_traced_conditions():
     than an exception out of the middle of a trace.
     """
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     solver = _scene('jax')
     geometry = solver.freeze_geometry()
     _, cell = solver.solve_field(4, 4, 4, geometry=geometry)

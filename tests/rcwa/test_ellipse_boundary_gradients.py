@@ -1,6 +1,8 @@
 """An NVF sample on a smooth ellipse boundary must not poison shape gradients."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -23,7 +25,7 @@ def structure(parameters, magnetic=False):
 
 
 def solver(backend, magnetic):
-    return _legacy_wavebit.rcwa(backend=backend, lattice=BASIS, wavelength=900.,
+    return _legacy_wavebit_rcwa(backend=backend, lattice=BASIS, wavelength=900.,
                        thickness=[170.], truncation_order=(1, 1), theta=.17, phi=.3,
                        polarization=(.8, .6j), factorization='nvf',
                        shape_nvf_grid_size=16, answers='field',
@@ -40,7 +42,7 @@ def value_and_gradient(backend, function, value):
     if backend in ('jax', 'jit'):
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         calculate = jax.value_and_grad(lambda p: function(jnp, p))
         if backend == 'jit':
             calculate = jax.jit(calculate)
@@ -74,7 +76,7 @@ def test_fourth_power_of_boundary_distance_has_its_exact_smooth_derivative(backe
 def test_public_shape_gradient_is_finite_and_correct_at_an_ellipse_grid_hit(backend, magnetic):
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     s = solver('torch' if backend == 'torch' else 'jax', magnetic)
     geometry = s.freeze_geometry() if backend == 'jit' else None
     plan = plan_gamma(structure(POINT, magnetic)[0]['shapes'], as_lattice(lattice=BASIS))
@@ -101,7 +103,7 @@ def test_public_shape_gradient_is_finite_and_correct_at_an_ellipse_grid_hit(back
 def test_one_compiled_gradient_handles_repeated_boundary_crossings():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     s = solver('jax', False)
     geometry = s.freeze_geometry()
     calculate = jax.jit(jax.value_and_grad(

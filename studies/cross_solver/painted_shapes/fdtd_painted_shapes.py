@@ -49,7 +49,7 @@ def density(p, smoothing=.05, grid=256, clip=True):
 
 
 def scene(p, backend='numpy'):
-    from wavebit.compat import legacy as wavebit
+    from wavebit._common.periodic import Stack as wavebit_Stack
     from wavebit.fdtd._periodic.runtime import time_loop_backend
     xp = time_loop_backend(backend).xp
     angle = time_loop_backend(backend).array(p[0])
@@ -58,15 +58,15 @@ def scene(p, backend='numpy'):
     for (cx, cy, width, height), epsilon in zip(local_rectangles(p), [1.8, 2.25]):
         shapes.append(dict(lx=width, ly=height, cx=.025+co*cx-si*cy, cy=-.025+si*cx+co*cy,
                            angle=angle, material=epsilon))
-    return wavebit.Stack.from_structure([dict(background=1., shapes=shapes)],
+    return wavebit_Stack.from_structure([dict(background=1., shapes=shapes)],
         [.2], top=1., bot=1.21, period=[.6, .6])
 
 
 def response(p, resolution=20, backend='jax', duration=60, smoothing=.05):
-    from wavebit.compat import legacy as wavebit
+    from wavebit._common.periodic import Incidence as wavebit_Incidence
     from studies.cross_solver.rotation_gradients.fdtd_rotation_gradients import amplitudes
     from wavebit.fdtd._periodic.runtime import time_loop_backend
-    result = legacy_fdtd(scene(p, backend), wavebit.Incidence(wavelength=1.), backend=backend,
+    result = legacy_fdtd(scene(p, backend), wavebit_Incidence(wavelength=1.), backend=backend,
         resolution=resolution, n_pml=resolution, n_periods=duration, pulse_width=2.5,
         truncation_order=0, align_layers=True, shape_integration='area', shape_smoothing=smoothing,
         diffraction_method='directional')
@@ -74,11 +74,12 @@ def response(p, resolution=20, backend='jax', duration=60, smoothing=.05):
 
 
 def reference(p, smoothing=.05, grid=256, order=8):
-    from wavebit.compat import legacy as wavebit
+    from wavebit._common.periodic import Incidence as wavebit_Incidence
+    from wavebit._common.periodic import Stack as wavebit_Stack
     from studies.cross_solver.rotation_gradients.fdtd_rotation_gradients import amplitudes
-    stack = wavebit.Stack.from_structure((1+1.25*density(p, smoothing, grid))[None, ...],
+    stack = wavebit_Stack.from_structure((1+1.25*density(p, smoothing, grid))[None, ...],
         [.2], top=1., bot=1.21, period=[.6, .6])
-    result = legacy_rcwa(stack=stack, incidence=wavebit.Incidence(wavelength=1.), backend='numpy',
+    result = legacy_rcwa(stack=stack, incidence=wavebit_Incidence(wavelength=1.), backend='numpy',
         truncation_order=(order, order), factorization='li').solve()
     return amplitudes(result, order=order)
 

@@ -44,15 +44,15 @@ The dispersive example labels Fourier fields in V·s/m and A·s/m, keeping them
 separate from monochromatic amplitudes. Add `--plot /path/pulse.png` to save the
 physical time trace; no script opens a plotting window during the default run.
 
-## Earlier solver workflows
+## Advanced physical workflows
 
-The advanced examples below explicitly use the compatibility API. Their original
-scientific workflows remain useful, but copy the current examples above when
-starting a new physical problem. See the [migration guide](../docs/migration/index.md).
+The advanced examples also use the current physical API. Periodic stacks use
+`fdtd.periodic`; explicit Yee arrays use `fdtd.native`. Length units and SI currents,
+fields and time integrals are declared at the boundary. See the
+[migration guide](../docs/migration/index.md) for the old-to-current mapping.
 
 | Entry | Question it answers |
 | --- | --- |
-
 | [`fdtd_multilayer_optimization.py`](fdtd/fdtd_multilayer_optimization.py) | How can three coating thicknesses and permittivities be optimized together while maintaining minimum lengths and checking the final spectrum independently? |
 | [`fdtd_backends.py`](fdtd/fdtd_backends.py) | Evaluate one FDTD objective on NumPy/JAX/Torch and compare automatic derivatives with finite differences. |
 | [`fdtd_bloch_gradient.py`](fdtd/fdtd_bloch_gradient.py) | Differentiate oblique plane power through both the source phase and the transverse Bloch boundary. |
@@ -62,7 +62,7 @@ starting a new physical problem. See the [migration guide](../docs/migration/ind
 | [`fdtd_grid_gradient.py`](fdtd/fdtd_grid_gradient.py) | Differentiate spectral transmission through a native Yee grid with JAX; uses a graded absorber, not CPML. |
 | [`fdtd_poynting.py`](fdtd/fdtd_poynting.py) | How do you measure instantaneous energy flow at a point with staggered E/H records? Saves a Sz time trace inside a film; requires the plot extra. |
 | [`fdtd_record.py`](fdtd/fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/guide/fdtd/fdtd-alpha.md). |
-| [`shapes_1d_verification.py`](rcwa/shapes_1d_verification.py), [`shapes_2d_verification.py`](rcwa/shapes_2d_verification.py) | Historical shape/raster comparisons through the compatibility interface; the plain shape examples above use the current API. |
+| [`shapes_1d_verification.py`](rcwa/shapes_1d_verification.py), [`shapes_2d_verification.py`](rcwa/shapes_2d_verification.py) | Shape/raster comparisons through physical Problems, preserving the original convergence sweeps. |
 
 ## Shape derivative examples using the current API
 

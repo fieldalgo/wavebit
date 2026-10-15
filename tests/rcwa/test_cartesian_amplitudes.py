@@ -22,7 +22,11 @@ plus the plumbing a new result field needs: the ``answers`` rung, ``jit`` and gr
 the traced backends, and ``order()`` on a widened, off-centre window.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -43,7 +47,7 @@ _HEX = np.column_stack(([_HEX_P, 0.0], [_HEX_P / 2, _HEX_P * np.sqrt(3) / 2]))
 
 def _hex_rod(n=24, radius=0.45):
     """A rod at the centre of the 60-degree cell, on the parallelogram ``meshgrid_xy`` samples."""
-    X, Y = (np.asarray(c) for c in _legacy_wavebit.meshgrid_xy((n, n), lattice=_HEX))
+    X, Y = (np.asarray(c) for c in _legacy_wavebit_meshgrid_xy((n, n), lattice=_HEX))
     a1, a2 = _HEX[:, 0], _HEX[:, 1]
     inside = np.zeros(X.shape, dtype=bool)
     for i in (-1, 0, 1):
@@ -72,7 +76,7 @@ def _scene(path, side='top', theta=0.3, answers='field', backend='numpy', **over
         raise ValueError(path)
     kw.update(common)
     kw.update(over)
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     if path == 'first_order':
         solver.formulation = 'first_order'
     return solver, solver.solve()
@@ -275,7 +279,7 @@ def test_the_vector_is_continuous_where_the_amplitude_turns_over(path):
     else:
         kw = dict(_1D, wavelength=wavelength, tetm=path)
     name = 'r_s' if path in ('te', 'conical_s') else 'r_p'
-    steps = [_legacy_wavebit.rcwa(backend='numpy', theta=theta_c + dt, answers='amplitude', **kw).solve().incident
+    steps = [_legacy_wavebit_rcwa(backend='numpy', theta=theta_c + dt, answers='amplitude', **kw).solve().incident
              for dt in (-3e-5, -1e-5, 1e-5, 3e-5)]
     at = (0, _1D['truncation_order'][0] - 1)
     a = [complex(_host(getattr(s, name))[at]) for s in steps]
@@ -299,14 +303,14 @@ def test_an_order_at_exact_kx_zero_reads_one_vector_on_every_backend(tetm):
     """
     pytest.importorskip('jax')
     pytest.importorskip('torch')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     backends = ('numpy', 'jax', 'torch')
     name = 'r_s' if tetm == 'te' else 'r_p'
     kw = dict(_1D, kx=2 * np.pi / _1D['period'][0], tetm=tetm, answers='amplitude')
     at = (0, _1D['truncation_order'][0] - 1)
     seen = {}
     for backend in backends:
-        solver = _legacy_wavebit.rcwa(backend=backend, **kw)
+        solver = _legacy_wavebit_rcwa(backend=backend, **kw)
         res = solver.solve().incident
         kx = complex(_host(solver.order_kxy()[0]).ravel()[at[1]])
         assert abs(kx) < 1e-15, kx
@@ -332,10 +336,10 @@ def test_one_grating_three_paths_one_vector(tetm, side):
     wave -- so one vector, to 1e-12.
     """
     kw = dict(_1D, backend='numpy', theta=0.3, incidence_side=side, answers='amplitude')
-    pure = _legacy_wavebit.rcwa(tetm=tetm, **kw).solve().incident
+    pure = _legacy_wavebit_rcwa(tetm=tetm, **kw).solve().incident
     pol = (1, 0) if tetm == 'te' else (0, 1)
-    conical = _legacy_wavebit.rcwa(phi=0.0, polarization=pol, **kw).solve().incident
-    two_d = _legacy_wavebit.rcwa(phi=0.0, polarization=pol,
+    conical = _legacy_wavebit_rcwa(phi=0.0, polarization=pol, **kw).solve().incident
+    two_d = _legacy_wavebit_rcwa(phi=0.0, polarization=pol,
                          **dict(kw, structure=np.repeat(_1D['structure'], 2, axis=1),
                                 period=[1.6, 1.6])).solve().incident
     for name in ('r_xyz', 't_xyz'):
@@ -442,7 +446,7 @@ def test_jax_carries_the_vector_through_jit_and_grad():
     (that would never flatten a ``ResultSub`` at all, and could not see the loss).
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
 
     solver, eager = _scene('conical', answers='amplitude', backend='jax')

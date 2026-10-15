@@ -32,7 +32,11 @@ What this file pins, and why each pin is the one that matters:
   that a skewed basis raises.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.enums import NormalMethod as _legacy_wavebit_NormalMethod
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from importlib.util import find_spec
 
 import numpy as np
@@ -93,8 +97,8 @@ SOLVE_KW = dict(backend='numpy', period=[1., 1.], wavelength=.55, thickness=[.3]
 def test_explicit_distance_is_bit_identical_to_the_untouched_default():
     """The option must be opt-in: naming the default changes nothing, to the bit."""
     structure = circle_raster(32)[None]
-    base = _legacy_wavebit.rcwa(structure=structure, truncation_order=[4, 4], factorization='nvf', **SOLVE_KW).solve()
-    named = _legacy_wavebit.rcwa(structure=structure, truncation_order=[4, 4], factorization='nvf',
+    base = _legacy_wavebit_rcwa(structure=structure, truncation_order=[4, 4], factorization='nvf', **SOLVE_KW).solve()
+    named = _legacy_wavebit_rcwa(structure=structure, truncation_order=[4, 4], factorization='nvf',
                          raster_normal_method='distance', **SOLVE_KW).solve()
     assert np.array_equal(np.asarray(base.R), np.asarray(named.R))
     assert np.array_equal(np.asarray(base.T), np.asarray(named.T))
@@ -102,7 +106,7 @@ def test_explicit_distance_is_bit_identical_to_the_untouched_default():
 
 def test_an_invalid_method_is_refused_by_name():
     with pytest.raises(ValueError, match='raster_normal_method'):
-        _legacy_wavebit.rcwa(structure=circle_raster(16)[None], truncation_order=[2, 2],
+        _legacy_wavebit_rcwa(structure=circle_raster(16)[None], truncation_order=[2, 2],
                      factorization='nvf', raster_normal_method='sobel', **SOLVE_KW)
 
 
@@ -111,7 +115,7 @@ def test_an_invalid_method_is_refused_by_name():
     dict(),                     # untouched default resolves to Li on a raster
 ])
 def test_a_method_nothing_reads_is_refused_not_ignored(cfg):
-    s = _legacy_wavebit.rcwa(structure=circle_raster(16)[None], truncation_order=[2, 2],
+    s = _legacy_wavebit_rcwa(structure=circle_raster(16)[None], truncation_order=[2, 2],
                      raster_normal_method='contour', **SOLVE_KW, **cfg)
     with pytest.raises(NotImplementedError, match='no reader'):
         s.solve()
@@ -121,7 +125,7 @@ def test_a_method_on_the_smooth_shape_path_is_refused():
     """The shape paths build their normal fields from the geometry itself."""
     smooth = [{'background': 1.0, 'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                               'lx': 0.6, 'material': 5.76}]}]
-    s = _legacy_wavebit.rcwa(structure=smooth, truncation_order=[2, 2], raster_normal_method='contour', **SOLVE_KW)
+    s = _legacy_wavebit_rcwa(structure=smooth, truncation_order=[2, 2], raster_normal_method='contour', **SOLVE_KW)
     with pytest.raises(NotImplementedError, match='no reader'):
         s.solve()
 
@@ -130,22 +134,22 @@ def test_a_method_on_the_smooth_shape_path_is_refused():
 def test_freeze_replay_is_bit_identical_and_method_mismatch_is_stale(method):
     """The record carries the construction; replaying it under another is refused."""
     structure = circle_raster(32)[None]
-    s = _legacy_wavebit.rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf',
+    s = _legacy_wavebit_rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf',
                      raster_normal_method=method, **SOLVE_KW)
     geo = s.freeze_geometry()
     replayed = s.solve(geometry=geo)
-    rebuilt = _legacy_wavebit.rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf',
+    rebuilt = _legacy_wavebit_rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf',
                            raster_normal_method=method, **SOLVE_KW).solve()
     assert np.array_equal(np.asarray(replayed.R), np.asarray(rebuilt.R))
 
-    other = _legacy_wavebit.rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf', **SOLVE_KW)
+    other = _legacy_wavebit_rcwa(structure=structure, truncation_order=[3, 3], factorization='nvf', **SOLVE_KW)
     with pytest.raises(StaleGeometryError, match='different construction'):
         other.solve(geometry=geo)
 
 
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_energy_is_conserved_by_every_construction(method):
-    res = _legacy_wavebit.rcwa(structure=circle_raster(48)[None], truncation_order=[5, 5], factorization='nvf',
+    res = _legacy_wavebit_rcwa(structure=circle_raster(48)[None], truncation_order=[5, 5], factorization='nvf',
                        raster_normal_method=method, **SOLVE_KW).solve()
     total = float(np.sum(res.R) + np.sum(res.T))
     assert abs(total - 1.0) < 1e-10
@@ -221,8 +225,8 @@ def test_mirror_asymmetry_of_the_solve_is_bounded(method, limit):
     eps = circle_raster(48, cx=0.4, cy=0.55)
     cfg = dict(backend='numpy', period=[1., 1.], wavelength=.55, thickness=[.3], theta=0.,
                phi=0., psi=0., top=1., bot=1., truncation_order=[5, 5], factorization='nvf')
-    r1 = _legacy_wavebit.rcwa(structure=eps[None], raster_normal_method=method, **cfg).solve()
-    r2 = _legacy_wavebit.rcwa(structure=eps[:, ::-1].copy()[None], raster_normal_method=method,
+    r1 = _legacy_wavebit_rcwa(structure=eps[None], raster_normal_method=method, **cfg).solve()
+    r2 = _legacy_wavebit_rcwa(structure=eps[:, ::-1].copy()[None], raster_normal_method=method,
                       **cfg).solve()
     gap = float(np.abs(np.asarray(r1.R) - np.asarray(r2.R)[:, ::-1]).max())
     assert gap < limit
@@ -328,7 +332,7 @@ def skewed_disc(N, gamma_deg, P=400.0, r=60.0, eps_in=5.76):
     a2 = P * np.array([np.cos(np.deg2rad(gamma_deg)), np.sin(np.deg2rad(gamma_deg))])
     A = np.column_stack((a1, a2))
     # `wavebit.meshgrid_xy` centres the cell on the origin, so these displacements are its output
-    X, Y = (np.asarray(c) for c in _legacy_wavebit.meshgrid_xy((N, N), lattice=A))
+    X, Y = (np.asarray(c) for c in _legacy_wavebit_meshgrid_xy((N, N), lattice=A))
     d = np.stack([X, Y], axis=-1)
     rho, disp = None, None
     for i in (-1, 0, 1):
@@ -508,7 +512,7 @@ def test_the_floor_lift_keeps_the_base_grids_smoothing_scale(method, base_n):
 
 @pytest.mark.parametrize('method', NEW_METHODS)
 def test_the_lifted_solve_runs_and_conserves_energy(method):
-    res = _legacy_wavebit.rcwa(structure=circle_raster(16)[None], truncation_order=[10, 10],
+    res = _legacy_wavebit_rcwa(structure=circle_raster(16)[None], truncation_order=[10, 10],
                        factorization='nvf', raster_normal_method=method, **SOLVE_KW).solve()
     assert abs(float(np.sum(res.R) + np.sum(res.T)) - 1.0) < 1e-10
 
@@ -532,7 +536,7 @@ def test_a_tracer_is_told_to_freeze_instead_of_failing_inside_scipy():
     structure = circle_raster(24)[None]
 
     def loss(u):
-        res = _legacy_wavebit.rcwa(backend='jax', structure=u, truncation_order=[2, 2], factorization='nvf',
+        res = _legacy_wavebit_rcwa(backend='jax', structure=u, truncation_order=[2, 2], factorization='nvf',
                            raster_normal_method='contour', **{k: v for k, v in SOLVE_KW.items()
                                                        if k != 'backend'}).solve()
         return jax.numpy.sum(res.R)
@@ -554,10 +558,10 @@ def test_merging_two_non_adjacent_phases_is_stale_not_silently_replayed():
     merged = np.where(eps == 3.0, 2.0, eps)
     assert np.array_equal(_interface_mask(eps), _interface_mask(merged))
 
-    s = _legacy_wavebit.rcwa(structure=eps[None], truncation_order=[3, 3], factorization='nvf',
+    s = _legacy_wavebit_rcwa(structure=eps[None], truncation_order=[3, 3], factorization='nvf',
                      raster_normal_method='spectral', **SOLVE_KW)
     geo = s.freeze_geometry()
-    other = _legacy_wavebit.rcwa(structure=merged[None], truncation_order=[3, 3], factorization='nvf',
+    other = _legacy_wavebit_rcwa(structure=merged[None], truncation_order=[3, 3], factorization='nvf',
                          raster_normal_method='spectral', **SOLVE_KW)
     with pytest.raises(StaleGeometryError, match='distinct phases'):
         other.solve(geometry=geo)
@@ -567,14 +571,14 @@ def test_merging_two_non_adjacent_phases_is_stale_not_silently_replayed():
 
 def test_the_enum_is_exported_at_the_top_level():
     """Every other option enum is; the fourth axis must not need a private import."""
-    assert _legacy_wavebit.NormalMethod.CONTOUR.value == 'contour'
+    assert _legacy_wavebit_NormalMethod.CONTOUR.value == 'contour'
 
 
 def test_the_jobspec_surface_can_spell_the_option():
     """The declarative contract the manifest advertises must round-trip the option, and
     an unset field must stay unset (omitted from kwargs) so the spec never asks for
     anything the caller did not."""
-    from wavebit.compat._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     n = Numerics.from_dict({'raster_normal_method': 'contour', 'factorization': 'nvf'})
     assert n.raster_normal_method == NormalMethod.CONTOUR
     assert n.to_dict()['raster_normal_method'] == 'contour'

@@ -48,17 +48,17 @@ def density(parameters, smoothing=.05, grid=256, clip=True, return_jacobian=Fals
 
 
 def scene(p):
-    from wavebit.compat import legacy as wavebit
-    return wavebit.Stack.from_structure([dict(background=1., shapes=[
+    from wavebit._common.periodic import Stack as wavebit_Stack
+    return wavebit_Stack.from_structure([dict(background=1., shapes=[
         dict(type='ellipse', angle=p[0], lx=p[1], ly=p[2], cx=.071, cy=-.047, material=2.25)])],
         [.2], top=1., bot=1.21, period=[.6, .6])
 
 
 def response(p, resolution=30, backend='jax', duration=60, smoothing=.05):
-    from wavebit.compat import legacy as wavebit
+    from wavebit._common.periodic import Incidence as wavebit_Incidence
     from studies.cross_solver.rotation_gradients.fdtd_rotation_gradients import amplitudes
     from wavebit.fdtd._periodic.runtime import time_loop_backend
-    result = legacy_fdtd(scene(p), wavebit.Incidence(wavelength=1.), backend=backend,
+    result = legacy_fdtd(scene(p), wavebit_Incidence(wavelength=1.), backend=backend,
         resolution=resolution, n_pml=resolution, n_periods=duration, pulse_width=2.5,
         truncation_order=0, align_layers=True, shape_integration='area', shape_smoothing=smoothing,
         diffraction_method='directional')
@@ -66,15 +66,16 @@ def response(p, resolution=30, backend='jax', duration=60, smoothing=.05):
 
 
 def reference(p, smoothing=.05, grid=256, order=8):
-    from wavebit.compat import legacy as wavebit
+    from wavebit._common.periodic import Incidence as wavebit_Incidence
+    from wavebit._common.periodic import Stack as wavebit_Stack
     from studies.cross_solver.rotation_gradients.fdtd_rotation_gradients import amplitudes
     if smoothing:
-        stack = wavebit.Stack.from_structure((1+1.25*density(p, smoothing, grid))[None, ...],
+        stack = wavebit_Stack.from_structure((1+1.25*density(p, smoothing, grid))[None, ...],
             [.2], top=1., bot=1.21, period=[.6, .6])
         options = dict(factorization='li')
     else:
         stack, options = scene(p), dict(shape_nvf_grid_size=grid)
-    result = legacy_rcwa(stack=stack, incidence=wavebit.Incidence(wavelength=1.), backend='numpy',
+    result = legacy_rcwa(stack=stack, incidence=wavebit_Incidence(wavelength=1.), backend='numpy',
         truncation_order=(order, order), **options).solve()
     return amplitudes(result, order=order)
 

@@ -13,7 +13,7 @@ What this file pins:
   reconstruction of an asymmetric layer does not converge on anything.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import os
 
 import numpy as np
@@ -56,7 +56,7 @@ def test_the_raster_path_is_the_raster():
     cell = np.ones((2, N, N))
     cell[1, :N // 4, :] = 9.0             # a stripe at small y, in the top layer only
     cell[0] = 4.0
-    solver = _legacy_wavebit.rcwa(structure=cell, **COMMON)
+    solver = _legacy_wavebit_rcwa(structure=cell, **COMMON)
 
     got = solver.slice_structure(layer=1, n=999)
     assert got.shape == (N, N)
@@ -77,7 +77,7 @@ def test_layer_is_indexed_the_way_the_structure_is(side):
     """
     shapes = [dict(type='circle', cx=0.0, cy=0.0, lx=200.0, material=9.0)]
     layers = [dict(background=1.0, shapes=shapes), dict(background=1.0, shapes=[])]
-    solver = _legacy_wavebit.rcwa(structure=layers, incidence_side=side, **COMMON)
+    solver = _legacy_wavebit_rcwa(structure=layers, incidence_side=side, **COMMON)
 
     assert solver.slice_structure(layer=0, n=128).real.mean() > 1.2
     assert solver.slice_structure(layer=1, n=128).real.mean() == pytest.approx(1.0)
@@ -101,7 +101,7 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
     # this case is parametrized over `lattice=None` too, so the cell is named whichever way it
     # was given -- naming both is refused.
     cell = {'lattice': lattice} if lattice is not None else {'period': COMMON['period']}
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **cell,
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], **cell,
                           **COMMON_NO_CELL)
     fx, fy = int(solver.truncation_order[0]), int(solver.truncation_order[1])
     dc = assemble_eps_coeffs(xnp, shapes, 1.0, fx, fy, solver.lattice,
@@ -117,7 +117,7 @@ def test_a_circle_is_read_through_shape_geometry():
     ``lx`` for a circle rather than to 0 or to 500. A second reader gets that wrong quietly --
     which is the defect that function was written to end.
     """
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[
         dict(type='circle', cx=0.0, cy=0.0, lx=400.0, material=9.0)])], **COMMON)
     area = np.pi * 200.0 ** 2 / (P * P)
     assert solver.slice_structure(n=1024).real.mean() == pytest.approx(
@@ -154,7 +154,7 @@ def test_the_paint_renderer_matches_the_boundary_path_loops():
     n = 128 / 1024 / 2048 -- and that is what says the scanline fill lands on the loops rather
     than merely averaging to them.
     """
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=OVERLAP)], **COMMON)
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=OVERLAP)], **COMMON)
     want = loop_mean_eps(OVERLAP)
 
     assert solver.slice_structure(n=64, band_limited=True).real.mean() == pytest.approx(
@@ -174,7 +174,7 @@ def test_an_overlap_is_drawn_painted_and_not_summed():
     The summed number stays as a literal because it is the failure's signature, not a second
     structure: a renderer that lost the painting lands on 1.9134 exactly.
     """
-    paint = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=OVERLAP)], **COMMON)
+    paint = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=OVERLAP)], **COMMON)
 
     e_paint = paint.slice_structure(n=2048).real.mean()
     e_summed = 1.9134                                  # eps_a + eps_b - eps_base in the overlap
@@ -193,7 +193,7 @@ def test_a_hole_is_drawn_as_a_hole():
     """
     shapes = [dict(type='rectangle', cx=0.0, cy=0.0, lx=600.0, ly=600.0, material=4.0),
               dict(type='circle', cx=0.0, cy=0.0, lx=200.0, material=9.0)]
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
 
     hole_area = np.pi * 100.0 ** 2
     geometry = 1.0 + 3.0 * (360000.0 - hole_area) / (P * P) + 8.0 * hole_area / (P * P)
@@ -223,12 +223,12 @@ def test_band_limited_converges_on_the_geometry():
               dict(type='rectangle', cx=240.0, cy=150.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
     cfg = {k: v for k, v in COMMON.items() if k != 'truncation_order'}
-    geometry = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], truncation_order=(3, 3),
+    geometry = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], truncation_order=(3, 3),
                             **cfg).slice_structure(n=512).real
 
     errors = []
     for truncation_order in (3, 9, 25):
-        solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], truncation_order=(truncation_order, truncation_order), **cfg)
+        solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], truncation_order=(truncation_order, truncation_order), **cfg)
         band = solver.slice_structure(n=512, band_limited=True).real
         errors.append(np.linalg.norm(band - geometry) / np.linalg.norm(geometry))
         # `<eps>` is converged from the start; the picture is not. That gap is the warning.
@@ -256,7 +256,7 @@ def test_band_limited_reads_a_raster_through_its_own_series():
 
     errors = []
     for order in (3, 9, 25):
-        solver = _legacy_wavebit.rcwa(structure=cell, **dict(COMMON, truncation_order=(order, order)))
+        solver = _legacy_wavebit_rcwa(structure=cell, **dict(COMMON, truncation_order=(order, order)))
         band = solver.slice_structure(n=64, band_limited=True)
         assert band.shape == (64, 64)
         assert band.real.mean() == pytest.approx(cell.mean(), abs=1e-12)
@@ -277,7 +277,7 @@ def test_the_truncated_series_leaves_the_material_range():
     shapes = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25),
               dict(type='rectangle', cx=240.0, cy=150.0, lx=300.0, ly=180.0,
                    angle=0.45, material=4.840000000000001)]
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
     band = solver.slice_structure(n=512, band_limited=True).real
 
     assert band.min() == pytest.approx(-0.186, abs=5e-3)
@@ -288,7 +288,7 @@ def test_the_truncated_series_leaves_the_material_range():
 
 def test_an_absorbing_layer_keeps_its_imaginary_part():
     """`slice_structure` returns complex; taking the real part is the *plot*'s decision."""
-    solver = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[
+    solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[
         # (3.5 + 0.4j)**2 -- the same absorbing medium, as permittivity.
         dict(type='circle', cx=0.0, cy=0.0, lx=300.0,
              material=12.09 + 2.8000000000000003j)])], **COMMON)
@@ -300,7 +300,7 @@ def test_an_absorbing_layer_keeps_its_imaginary_part():
 
 
 def test_show_takes_one_of_two_words():
-    solver = _legacy_wavebit.rcwa(structure=np.ones((1, 8, 8)) * 4.0, **COMMON)   # eps 4 is n 2
+    solver = _legacy_wavebit_rcwa(structure=np.ones((1, 8, 8)) * 4.0, **COMMON)   # eps 4 is n 2
     np.testing.assert_allclose(solver.slice_structure(show='eps').real, 4.0)
     np.testing.assert_allclose(solver.slice_structure(show='n').real, 2.0)
     with pytest.raises(ValueError, match="'eps' or 'n'"):
@@ -313,11 +313,11 @@ def test_it_draws():
     plt.switch_backend('Agg')
     shapes = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25)]
 
-    axis_aligned = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
+    axis_aligned = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)], **COMMON)
     ax = axis_aligned.plot_structure(n=64)
     assert ax.images and not ax.collections          # imshow on an axis-aligned cell
 
-    skewed = _legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=shapes)],
+    skewed = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)],
                           lattice=[[P, P * 0.5], [0.0, P * 0.866]], **COMMON_NO_CELL)
     ax = skewed.plot_structure(n=64)
     assert ax.collections and not ax.images          # pcolormesh on the parallelogram
@@ -349,7 +349,7 @@ def test_a_traced_structure_is_refused_by_name_rather_than_by_numpy():
                  material=9.0)])]
 
     def drawn(lx):
-        return jnp.sum(jnp.asarray(_legacy_wavebit.rcwa(
+        return jnp.sum(jnp.asarray(_legacy_wavebit_rcwa(
             structure=layer(lx), **dict(COMMON, backend='jax')).slice_structure(n=32)).real)
 
     with pytest.raises(ValueError, match='traced structure cannot be drawn'):

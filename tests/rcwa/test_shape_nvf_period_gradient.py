@@ -1,12 +1,12 @@
 """A readable Torch period still owns the shape NVF geometry derivative."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
 
 def solver(backend,shape,period=(600.,750.)):
-    return _legacy_wavebit.rcwa(backend=backend,period=period,wavelength=900.,thickness=[170.],
+    return _legacy_wavebit_rcwa(backend=backend,period=period,wavelength=900.,thickness=[170.],
         truncation_order=(1,1),theta=.17,phi=.29,polarization=(.8,.6j),answers='field',
         factorization='nvf',shape_nvf_grid_size=16,structure=[dict(background=1.,shapes=[
         dict(type=shape,lx=130.,ly=180.,cx=23.,cy=-17.,material=4.+.07j)])])

@@ -16,7 +16,7 @@ precise one, and a reference is only useful if it holds up exactly where the fas
 expected to fail.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -31,7 +31,7 @@ def _grating(eps_hi=16.0, cells=8):
 # eps 16 is the index 4; eps 2.25 the index 1.5.
 def _solve(*, truncation_order, thickness, eps_hi=16.0, algo='ETM', complex_dtype=np.complex128,
            period=3000.0, wavelength=400.0, eps_bot=2.25):
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', wavelength=wavelength, period=[period], truncation_order=[truncation_order, 0],
         top=1.0, bot=eps_bot, theta=0.0, phi=0.0, psi=np.pi / 2,
         structure=_grating(eps_hi), thickness=[thickness],
@@ -115,7 +115,7 @@ def test_tmm_and_smm_fields_agree_through_a_thick_layer(thickness):
     """
     cells = []
     for algo in ('ETM', 'SMM'):
-        solver = _legacy_wavebit.rcwa(
+        solver = _legacy_wavebit_rcwa(
             backend='numpy', wavelength=400.0, period=[3000.0], truncation_order=[40, 0],
             top=1.0, bot=2.25, theta=0.0, phi=0.0, psi=np.pi / 2,
             structure=_grating(), thickness=[thickness], layer_algorithm=algo,

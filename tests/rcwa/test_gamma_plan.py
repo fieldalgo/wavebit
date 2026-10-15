@@ -15,7 +15,7 @@ until 2026-09-06), the **L** box that leaves its Wigner-Seitz cell without touch
 two boxes that touch nothing, and an ellipse -- which can never be a pair member.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -650,8 +650,8 @@ def test_an_empty_plan_is_a_uniform_layer():
 
     kw = dict(backend='numpy', lattice=lattice, thickness=[0.3], wavelength=0.94,
               truncation_order=dict(u=4, v=4), top=1.0, bot=1.0, theta=0.1, phi=0.2, psi=0.3)
-    bar_t = float(np.sum(_legacy_wavebit.rcwa(structure=[dict(background=1.0, shapes=[shape])],
+    bar_t = float(np.sum(_legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=[shape])],
                                       **kw).solve().T))
-    slab_t = float(np.sum(_legacy_wavebit.rcwa(structure=[dict(background=12.25, shapes=[])],
+    slab_t = float(np.sum(_legacy_wavebit_rcwa(structure=[dict(background=12.25, shapes=[])],
                                        **kw).solve().T))
     assert bar_t == pytest.approx(slab_t, abs=1e-12)

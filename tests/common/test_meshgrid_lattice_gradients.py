@@ -1,6 +1,8 @@
 """Nested basis containers preserve derivatives and their declared matrix shape."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
 import numpy as np
 import pytest
 
@@ -37,9 +39,9 @@ def expected_derivative(spelling):
 def test_jax_nested_lattice_derivative(spelling, transform):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     def loss(p):
-        x, y = _legacy_wavebit.meshgrid_xy((3, 5), lattice=basis_value(p, spelling, jnp.stack), backend='jax')
+        x, y = _legacy_wavebit_meshgrid_xy((3, 5), lattice=basis_value(p, spelling, jnp.stack), backend='jax')
         return jnp.sum(x*x+y*y)
     derivative = jax.grad(jax.jit(loss) if transform == 'grad_jit' else loss)
     if transform == 'jit_grad':
@@ -51,7 +53,7 @@ def test_jax_nested_lattice_derivative(spelling, transform):
 def test_torch_nested_lattice_derivative(spelling):
     torch = pytest.importorskip('torch')
     p = torch.tensor(600., dtype=torch.float64, requires_grad=True)
-    x, y = _legacy_wavebit.meshgrid_xy((3, 5), lattice=basis_value(p, spelling, torch.stack), backend='torch')
+    x, y = _legacy_wavebit_meshgrid_xy((3, 5), lattice=basis_value(p, spelling, torch.stack), backend='torch')
     (x*x+y*y).sum().backward()
     assert float(p.grad) == pytest.approx(expected_derivative(spelling), rel=1e-12)
 
@@ -61,12 +63,12 @@ def test_torch_nested_lattice_derivative(spelling):
 def test_tracing_cannot_hide_a_malformed_basis(shape, nested):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     @jax.jit
     def grid(p):
         basis = jnp.ones(shape)*p
         if nested:
             basis = [list(row) if row.ndim else row for row in basis]
-        return _legacy_wavebit.meshgrid_xy((3, 5), lattice=basis, backend='jax')
+        return _legacy_wavebit_meshgrid_xy((3, 5), lattice=basis, backend='jax')
     with pytest.raises(ValueError, match='lattice.*2x2'):
         grid(600.)

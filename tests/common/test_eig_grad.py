@@ -19,7 +19,9 @@ Two things are pinned here, and they pull in opposite directions:
 * where they are not, this one must return the limit rather than NaN.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -28,7 +30,7 @@ from wavebit._common.backend import eig
 pytest.importorskip('jax')
 import jax                                                    # noqa: E402
 import jax.numpy as jnp                                       # noqa: E402
-_legacy_wavebit.enable_x64()
+_legacy_wavebit_enable_x64()
 
 
 def _rand(rng, n):
@@ -199,14 +201,14 @@ def _ucell_grad(theta, backend):
     """d(sum T) / d(structure) — a derivative that has to cross the eigendecomposition."""
     if backend == 'jax':
         def loss(u):
-            s = _legacy_wavebit.rcwa(backend='jax', structure=u, theta=theta,
+            s = _legacy_wavebit_rcwa(backend='jax', structure=u, theta=theta,
                                fourier_coefficients='sampled', factorization='li', **STACK)
             return jnp.real(jnp.sum(s.solve().T))
         return np.asarray(jax.grad(loss)(jnp.asarray(UNIFORM)))
 
     torch = pytest.importorskip('torch')
     u = torch.tensor(UNIFORM, dtype=torch.float64, requires_grad=True)
-    s = _legacy_wavebit.rcwa(backend='torch', structure=u, theta=theta,
+    s = _legacy_wavebit_rcwa(backend='torch', structure=u, theta=theta,
                        fourier_coefficients='sampled', factorization='li', **STACK)
     s.solve().T.real.sum().backward()
     return u.grad.numpy()

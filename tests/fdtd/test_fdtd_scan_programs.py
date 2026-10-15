@@ -9,7 +9,9 @@ body jaxpr, which hashes by identity, and ``fdtd_grid`` builds a new ``step`` cl
 (``_program_key``) and the scan's length.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import gc
 import warnings
 import weakref
@@ -50,9 +52,9 @@ def scene(**extra):
 
 def test_a_repeated_scene_solve_runs_no_compiler():
     """The measured case: nothing about the second solve is new except the permittivity."""
-    _legacy_wavebit.fdtd(**scene())
+    _legacy_wavebit_fdtd(**scene())
     with CompileLog() as log:
-        _legacy_wavebit.fdtd(**scene(structure=np.full((1, 1, 2), 2.25)))
+        _legacy_wavebit_fdtd(**scene(structure=np.full((1, 1, 2), 2.25)))
     assert log.names == [], log.names
 
 
@@ -65,7 +67,7 @@ def test_one_solve_compiles_each_distinct_program_once():
     rest on no other test in the session choosing resolution 23."""
     time_domain._SCAN_PROGRAMS.clear()
     with CompileLog() as log:
-        _legacy_wavebit.fdtd(**scene(resolution=23.))
+        _legacy_wavebit_fdtd(**scene(resolution=23.))
     assert log.names.count('jit(scan_program)') == 4, log.names
 
 
@@ -74,7 +76,7 @@ E0[1] = np.exp(-((np.arange(16)-8)/2.)**2)[:, None, None]
 
 
 def grid(dt, eps):
-    out = _legacy_wavebit.fdtd_grid(np.full((16, 2, 2), eps), spacing=(1., 1., 1.), dt=dt, steps=43,
+    out = _legacy_wavebit_fdtd_grid(np.full((16, 2, 2), eps), spacing=(1., 1., 1.), dt=dt, steps=43,
                             electric=E0, wavelengths=[20., 24.], monitor_z=[3],
                             conductivity=.015, checkpoint_steps=7, backend='jax')
     return [np.asarray(out[key]) for key in ('E', 'H', 'electric_spectrum')]

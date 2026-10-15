@@ -12,7 +12,7 @@ wave negates every order with ``m + n`` odd -- an exact sign bit, so the compari
 bytes.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -25,7 +25,7 @@ FIELDS = AMPLITUDES + ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 
 def _setup(**kw):
-    solver = _legacy_wavebit.rcwa(backend='numpy', **kw)
+    solver = _legacy_wavebit_rcwa(backend='numpy', **kw)
     legacy = solver.solve()
     epx, epy, epz, *_ = to_conv_mat_raster_sampled(
         solver.structure, solver.truncation_order[0], solver.truncation_order[1])

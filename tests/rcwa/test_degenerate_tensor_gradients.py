@@ -1,6 +1,6 @@
 """Tensor coupling sensitivities at and approaching an isotropic material."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -20,7 +20,7 @@ def value(backend, coupling, split, formulation):
     else:
         xp = jnp if backend == 'jax' else np
     eps = xp.asarray(np.diag([4.+split, 4., 4.])) + coupling*xp.asarray(MIX)
-    s = _legacy_wavebit.rcwa(backend=backend, **CFG, structure=eps[None, None, None, ...])
+    s = _legacy_wavebit_rcwa(backend=backend, **CFG, structure=eps[None, None, None, ...])
     s.formulation = formulation
     result = s.solve()
     field = result.reconstruct_field([0.], [0.], [85.])

@@ -1,6 +1,12 @@
 """Artificial layer faces must not halve the spatial derivative of a plane wave."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.sources import ElectricDipole as _legacy_wavebit_ElectricDipole
+
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -23,7 +29,7 @@ def vacuum(backend, kind, side, algorithm):
         options.update(phi=.31, polarization=(.6, .8j))
     if kind in ('second_order', 'first_order'):
         options.update(structure=np.ones((2, 2, 2)), truncation_order=(1, 1))
-    solver = _legacy_wavebit.rcwa(**options)
+    solver = _legacy_wavebit_rcwa(**options)
     if kind == 'first_order':
         solver.formulation = 'first_order'
     return solver
@@ -49,7 +55,7 @@ def differentiate(backend, loss, points):
     if backend in ('jax', 'jit'):
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         calculate = jax.value_and_grad(lambda z: loss(jnp, z))
         if backend == 'jit':
             calculate = jax.jit(calculate)
@@ -69,7 +75,7 @@ def differentiate(backend, loss, points):
 def test_saved_field_coordinate_gradient_matches_vacuum_maxwell_wave(backend, kind, side, algorithm):
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     solver = vacuum('torch' if backend == 'torch' else 'jax', kind, side, algorithm)
     result = solver.solve(auto_detune=False)
     expected, derivative = plane_wave(kind, side, Z)
@@ -93,7 +99,7 @@ def test_saved_field_coordinate_gradient_matches_vacuum_maxwell_wave(backend, ki
 def test_moving_an_artificial_interface_cannot_change_a_fixed_field(backend, kind, side):
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     solver = vacuum('torch' if backend == 'torch' else 'jax', kind, side, 'SMM')
     geometry = solver.freeze_geometry() if backend == 'jit' else None
     expected, _ = plane_wave(kind, side, np.array([.4]))
@@ -115,9 +121,9 @@ def test_moving_an_artificial_interface_cannot_change_a_fixed_field(backend, kin
 def test_eager_source_snapshot_has_the_correct_observation_height_derivative(backend, source_kind):
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     if source_kind == 'dipole':
-        source = _legacy_wavebit.ElectricDipole(position=(.12, -.08, .25),
+        source = _legacy_wavebit_ElectricDipole(position=(.12, -.08, .25),
             moment=(1e-29, .3e-29j, .2e-29), bloch_k=(.21, .13))
         # Independent homogeneous dyadic Green spectrum for the sole Fourier order.
         k0 = 2*np.pi/WAVELENGTH
@@ -134,10 +140,10 @@ def test_eager_source_snapshot_has_the_correct_observation_height_derivative(bac
         expected = np.concatenate([electric, magnetic], axis=1)*phase[:, None]
         derivative = 1j*k[:, 2, None]*expected
     else:
-        source = _legacy_wavebit.PlaneWave(side=source_kind, theta=THETA, phi=.31,
+        source = _legacy_wavebit_PlaneWave(side=source_kind, theta=THETA, phi=.31,
                                   polarization=(.6, .8j))
         expected, derivative = plane_wave('first_order', source_kind, Z)
-    solver = _legacy_wavebit.rcwa(backend='torch' if backend == 'torch' else 'jax', excitation=source,
+    solver = _legacy_wavebit_rcwa(backend='torch' if backend == 'torch' else 'jax', excitation=source,
                          length_unit=1e-6, wavelength=WAVELENGTH, period=(1.7, 1.9),
                          structure=np.ones((2, 1, 1)), thickness=(.4, .6),
                          truncation_order=0, answers='field')
@@ -162,7 +168,7 @@ def test_eager_source_snapshot_has_the_correct_observation_height_derivative(bac
 def test_unused_evanescent_layers_still_cannot_poison_the_field_gradient(backend, kind, side):
     pytest.importorskip('torch' if backend == 'torch' else 'jax')
     if backend != 'torch':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     solver = vacuum('torch' if backend == 'torch' else 'jax', kind, side, 'SMM')
     solver.period = (.17, .19)
     solver.thickness = (400., 600.)

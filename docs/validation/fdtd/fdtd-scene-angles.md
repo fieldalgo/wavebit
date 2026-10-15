@@ -5,7 +5,7 @@ Written: 2026-09-09
 Targets:
 - `src/wavebit/fdtd/_periodic/scene.py`
 - `src/wavebit/_common/conventions.py`
-- `src/wavebit/compat/legacy.py`
+- `src/wavebit/fdtd/_periodic/api.py`
 - `tests/fdtd/test_fdtd_scene_angles.py`
 
 TL;DR: the explicit-backend scene adapter now differentiates its scalar `theta`

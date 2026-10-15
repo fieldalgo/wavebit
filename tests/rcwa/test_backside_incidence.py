@@ -44,7 +44,9 @@ shipped two defects. Closing it is a scene, not a new instrument: one magnetic s
 both sides, checked against the duality this file already uses.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -100,12 +102,12 @@ def _solver(ns, ds, theta, tetm, path, algo, side):
                   bot=eps_from_refractive_index(ns[-1]), theta=theta,
                   wavelength=WL, thickness=ds[::-1], incidence_side=side)
     if path == '1d':
-        return _legacy_wavebit.rcwa(tetm=tetm, truncation_order=0, period=[WL * 2],
+        return _legacy_wavebit_rcwa(tetm=tetm, truncation_order=0, period=[WL * 2],
                               structure=eps_from_refractive_index(
                                   np.array([[[n, n]] for n in layers])), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
-    return _legacy_wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
+    return _legacy_wavebit_rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0),
                           truncation_order=[0, 0] if path == '2d' else 0,
                           period=[WL * 2, WL * 2],
                           structure=eps_from_refractive_index(np.array(cell)), **common)
@@ -198,7 +200,7 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     truncation_order = kw['truncation_order']
 
     def T00(side, theta):
-        res = _legacy_wavebit.rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).solve()
+        res = _legacy_wavebit_rcwa(tetm=tetm, theta=theta, incidence_side=side, **kw).solve()
         return float(np.asarray(res.T).ravel()[truncation_order])
 
     assert T00('top', 0.0) == pytest.approx(T00('bottom', 0.0), abs=1e-12)
@@ -207,8 +209,8 @@ def test_grating_transmittance_is_reciprocal_per_order(tetm):
     th_b = float(np.arcsin(np.sin(th) * 1.0 / N_SUB))     # Snell, in indices
     assert T00('top', th) == pytest.approx(T00('bottom', -th_b), abs=1e-12)
 
-    res_t = _legacy_wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).solve()
-    res_b = _legacy_wavebit.rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).solve()
+    res_t = _legacy_wavebit_rcwa(tetm=tetm, theta=0.0, incidence_side='top', **kw).solve()
+    res_b = _legacy_wavebit_rcwa(tetm=tetm, theta=0.0, incidence_side='bottom', **kw).solve()
     dR00 = abs(float(np.asarray(res_t.R).ravel()[truncation_order])
                - float(np.asarray(res_b.R).ravel()[truncation_order]))
     assert dR00 > 1e-2, 'an asymmetric grating must reflect differently per side'
@@ -232,9 +234,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
     this now compares the two algorithms lit from the bottom on that branch; the mirrored
     recursion and the backwards read are reached by top incidence.
     """
-    a = _legacy_wavebit.rcwa(layer_algorithm='ETM', tetm=tetm, theta=0.3,
+    a = _legacy_wavebit_rcwa(layer_algorithm='ETM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).solve()
-    b = _legacy_wavebit.rcwa(layer_algorithm='SMM', tetm=tetm, theta=0.3,
+    b = _legacy_wavebit_rcwa(layer_algorithm='SMM', tetm=tetm, theta=0.3,
                        incidence_side='bottom', **GRATING_KW).solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
@@ -243,9 +245,9 @@ def test_backside_etm_and_smm_agree_per_order(tetm):
 
 
 def test_backside_etm_and_smm_agree_on_the_conical_path():
-    a = _legacy_wavebit.rcwa(layer_algorithm='ETM', psi=0.7, phi=0.3, theta=0.25,
+    a = _legacy_wavebit_rcwa(layer_algorithm='ETM', psi=0.7, phi=0.3, theta=0.25,
                        incidence_side='bottom', **GRATING_KW).solve()
-    b = _legacy_wavebit.rcwa(layer_algorithm='SMM', psi=0.7, phi=0.3, theta=0.25,
+    b = _legacy_wavebit_rcwa(layer_algorithm='SMM', psi=0.7, phi=0.3, theta=0.25,
                        incidence_side='bottom', **GRATING_KW).solve()
     assert np.abs(np.asarray(a.R) - np.asarray(b.R)).max() < 1e-12
     assert np.abs(np.asarray(a.T) - np.asarray(b.T)).max() < 1e-12
@@ -287,8 +289,8 @@ def test_field_cell_comes_back_in_scene_coordinates(algo, tetm):
     error is invisible to the ETM/SMM comparison beneath, which is sign-blind.
     """
     kw = dict(GRATING_KW, layer_algorithm=algo, tetm=tetm, theta=0.3, answers='field')
-    _, cell_b = _legacy_wavebit.rcwa(incidence_side='bottom', **kw).solve_field(sample_x=16, sample_z=8)
-    _, cell_t = _legacy_wavebit.rcwa(**_reversed_scene_kw(kw)).solve_field(sample_x=16, sample_z=8)
+    _, cell_b = _legacy_wavebit_rcwa(incidence_side='bottom', **kw).solve_field(sample_x=16, sample_z=8)
+    _, cell_t = _legacy_wavebit_rcwa(**_reversed_scene_kw(kw)).solve_field(sample_x=16, sample_z=8)
 
     mirrored = MIRROR_1D[tetm] * np.asarray(cell_t)[::-1]
     assert np.abs(np.asarray(cell_b) - mirrored).max() < 1e-12
@@ -311,7 +313,7 @@ def test_net_power_flows_away_from_the_lit_face(side, sign, tetm):
     in sign.
     """
     kw = dict(GRATING_KW, tetm=tetm, theta=0.3, answers='field')
-    _, cell = _legacy_wavebit.rcwa(incidence_side=side, **kw).solve_field(sample_x=64, sample_z=16)
+    _, cell = _legacy_wavebit_rcwa(incidence_side=side, **kw).solve_field(sample_x=64, sample_z=16)
     c = np.asarray(cell)
     # TE fills the three slots as (Ey, Hx, Hz) and TM as (Hy, Ex, Ez)
     Sz = (0.5 * np.real(-c[..., 0] * np.conj(c[..., 1])) if tetm == 'te'
@@ -348,7 +350,7 @@ def test_explicit_z_on_a_backside_solve_is_read_in_scene_coordinates(tetm):
         'the samples no longer straddle the internal interface')
 
     def cell(solver_kw, zs):
-        s = _legacy_wavebit.rcwa(**solver_kw)
+        s = _legacy_wavebit_rcwa(**solver_kw)
         s.solve()
         return np.asarray(s.reconstruct_field(sample_x=8, sample_y=1, sample_z=zs))
 
@@ -362,9 +364,9 @@ def test_explicit_z_on_a_backside_solve_is_read_in_scene_coordinates(tetm):
 
 def test_backside_field_cells_agree_between_algorithms():
     kw = dict(GRATING_KW, tetm='tm', theta=0.3, answers='field')
-    _, c1 = _legacy_wavebit.rcwa(layer_algorithm='ETM', incidence_side='bottom',
+    _, c1 = _legacy_wavebit_rcwa(layer_algorithm='ETM', incidence_side='bottom',
                            **kw).solve_field(sample_x=16, sample_z=8)
-    _, c2 = _legacy_wavebit.rcwa(layer_algorithm='SMM', incidence_side='bottom',
+    _, c2 = _legacy_wavebit_rcwa(layer_algorithm='SMM', incidence_side='bottom',
                            **kw).solve_field(sample_x=16, sample_z=8)
     assert np.abs(np.asarray(c1) - np.asarray(c2)).max() < 1e-12
 
@@ -376,11 +378,11 @@ def test_backside_holds_on_every_backend(backend):
     """Same physics through the same single-source core, so the backends may not diverge."""
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
 
-    ref = _legacy_wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
+    ref = _legacy_wavebit_rcwa(tetm='te', theta=0.3, incidence_side='bottom',
                          **GRATING_KW).solve()
-    got = _legacy_wavebit.rcwa(tetm='te', theta=0.3, incidence_side='bottom',
+    got = _legacy_wavebit_rcwa(tetm='te', theta=0.3, incidence_side='bottom',
                          **{**GRATING_KW, 'backend': backend}).solve()
     assert np.abs(np.asarray(ref.R) - np.asarray(got.R)).max() < 1e-12
     assert np.abs(np.asarray(ref.T) - np.asarray(got.T)).max() < 1e-12
@@ -393,9 +395,9 @@ def test_an_unknown_side_is_refused_by_name():
     plausible and wrong for exactly the structures where the side matters.
     """
     with pytest.raises(ValueError, match="'top' or 'bottom'"):
-        _legacy_wavebit.rcwa(incidence_side='back', **GRATING_KW)
+        _legacy_wavebit_rcwa(incidence_side='back', **GRATING_KW)
 
-    solver = _legacy_wavebit.rcwa(**GRATING_KW)
+    solver = _legacy_wavebit_rcwa(**GRATING_KW)
     with pytest.raises(ValueError, match="'top' or 'bottom'"):
         solver.incidence_side = 'up'
 

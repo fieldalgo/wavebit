@@ -37,7 +37,7 @@ The cases are **imported** from the generator rather than restated here. A copy 
 "stay identical" to another file is the same failure mode one level down.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -273,7 +273,7 @@ def _frame_cell(path, sample_z, formulation=None):
     kw = dict(backend='numpy', top=1.0, bot=1.0, wavelength=FRAME_WL, thickness=FRAME_D,
               theta=np.deg2rad(33.0), structure=two if path == '2d' else one,
               answers='field', **FRAME_PATHS[path])
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     if formulation:
         solver.formulation = formulation
     solver.solve()

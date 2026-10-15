@@ -66,13 +66,13 @@ root: ``python studies/rcwa/gain_cutoff_band/gain_cutoff_band.py``. It prints th
 ``studies/rcwa/gain_cutoff_band/records/gain_cutoff_band.log``, in about ten seconds.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import textwrap
 import warnings
 
 import numpy as np
 
-from wavebit.compat import legacy as wavebit
+from wavebit._common.backend import GainCutoffWarning as wavebit_GainCutoffWarning
 
 WCS = (0.8, 0.9, 1.0, 1.1, 1.2)
 GAMS = (0.02, 0.1, 0.3)
@@ -891,13 +891,13 @@ def _solve_glass_onto(eps, thetas):
     for theta in thetas:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            result = _legacy_wavebit.rcwa(backend='numpy', top=N_INC**2, bot=eps, wavelength=900.0,
+            result = _legacy_wavebit_rcwa(backend='numpy', top=N_INC**2, bot=eps, wavelength=900.0,
                                   thickness=[100.0], period=[500.0],
                                   structure=np.full((1, 1, 4), N_INC**2 + 0j),
                                   theta=np.radians(theta), phi=0.0, truncation_order=(0, 0),
                                   tetm='te').solve()
         R[theta] = float(np.sum(result.R))
-        fired[theta] = any(issubclass(w.category, wavebit.GainCutoffWarning) for w in caught)
+        fired[theta] = any(issubclass(w.category, wavebit_GainCutoffWarning) for w in caught)
     return R, fired
 
 

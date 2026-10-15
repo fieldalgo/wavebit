@@ -4,7 +4,7 @@ No reference software runs here. The tolerance is the existing spread between
 fmmax's FFT and JONES_DIRECT formulations at the stored Fourier order.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -26,7 +26,7 @@ def test_tensor_li_inside_independent_reference_spread(name):
     index, gyro = CASES[name]
     epsilon = np.eye(3, dtype=complex) * index**2
     epsilon[0,1], epsilon[1,0] = gyro, -gyro
-    solver = _legacy_wavebit.rcwa(
+    solver = _legacy_wavebit_rcwa(
         wavelength=WL, period=(PERIOD,PERIOD), thickness=[THICK],
         theta=np.deg2rad(THETA), phi=0.,
         truncation_order=(MAX_ORDER,MAX_ORDER), factorization='li',

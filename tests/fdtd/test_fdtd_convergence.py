@@ -1,6 +1,8 @@
 """Pulse diagnostics against an exactly solvable homogeneous conductive field."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -8,7 +10,7 @@ import pytest
 def run(backend='numpy', **kwargs):
     e = np.zeros((3, 4, 2, 2), complex)
     e[0] = 1
-    return _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
+    return _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
                             dt=.2, steps=60, electric=e, conductivity=2.,
                             backend=backend, convergence_window=10,
                             wavelengths=(1.3,), monitor_z=(1,), **kwargs)
@@ -35,7 +37,7 @@ def test_conductive_uniform_field_has_exact_decay_and_dft(backend):
 
 
 def test_zero_field_is_not_evidence_of_decay():
-    result = _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
+    result = _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
                               dt=.2, steps=10, convergence_window=3,
                               wavelengths=(1.,), monitor_z=(1,))
     c = result['convergence']
@@ -48,7 +50,7 @@ def test_zero_field_is_not_evidence_of_decay():
 def test_lossless_persistent_field_and_active_source_do_not_pass():
     e = np.ones((3, 4, 2, 2), complex)
     for sigma, source, pulse in [(0., None, None), (2., e, np.ones(60))]:
-        c = _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
+        c = _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
                              dt=.2, steps=60, electric=e, conductivity=sigma,
                              source=source, pulse=pulse, convergence_window=10)['convergence']
         assert not c['field_decayed']
@@ -61,7 +63,7 @@ def test_lossless_persistent_field_and_active_source_do_not_pass():
 @pytest.mark.parametrize('window', [True, 0, -1, 10, 1.5])
 def test_invalid_windows(window):
     with pytest.raises(ValueError, match='convergence_window'):
-        _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.), dt=.2,
+        _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.), dt=.2,
                           steps=10, convergence_window=window)
 
 
@@ -70,7 +72,7 @@ def test_diagnostic_gradient_matches_exact_geometric_decay(backend):
     e = np.zeros((3, 4, 2, 2), complex)
     e[0] = 1
     def objective(sigma):
-        return _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
+        return _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
                                  dt=.2, steps=12, electric=e, conductivity=sigma,
                                  backend=backend, convergence_window=4)['convergence']['field_decay']
     gain = (1-.1*2)/(1+.1*2)
@@ -91,8 +93,8 @@ def test_scene_reports_both_actual_and_reference_bases_without_changing_result()
                     period=.4, wavelength=1., backend='numpy', resolution=10,
                     n_periods=30, truncation_order=0, tetm='te', incidence_side='bottom',
                     grading=True, return_diagnostics=True)
-    plain, _ = _legacy_wavebit.fdtd(**settings)
-    checked, diagnostic = _legacy_wavebit.fdtd(**settings, convergence_window=25)
+    plain, _ = _legacy_wavebit_fdtd(**settings)
+    checked, diagnostic = _legacy_wavebit_fdtd(**settings, convergence_window=25)
     np.testing.assert_array_equal(plain.incident.t_s, checked.incident.t_s)
     for basis in diagnostic['convergence']['bases']:
         for kind in ('reference', 'actual'):
@@ -107,7 +109,7 @@ def test_nonuniform_field_norm_uses_native_control_volumes():
     widths = np.array([.5, 1., 1.5, 2.])
     e = np.zeros((3, 4, 2, 2), complex)
     e[0, 0] = 1
-    result = _legacy_wavebit.fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
+    result = _legacy_wavebit_fdtd_grid(np.ones((4, 2, 2)), spacing=(1., 1., 1.),
                               z_spacing=widths, dt=.1, steps=8, electric=e,
                               conductivity=1., record_field=1, convergence_window=3)
     dual = (widths+np.roll(widths, 1))/2
@@ -125,10 +127,10 @@ def test_calibrated_amplitude_change_matches_independently_truncated_scene(side)
                     period=.2, wavelength=[.95, 1.05], backend='numpy', resolution=10,
                     n_periods=30, truncation_order=0, tetm='te', incidence_side=side,
                     grading=True, return_diagnostics=True)
-    result, diagnostic = _legacy_wavebit.fdtd(**settings, convergence_window=75)
+    result, diagnostic = _legacy_wavebit_fdtd(**settings, convergence_window=75)
     # ceil() gives exactly the prefix step count; the centre wavelength is 1.
     settings['n_periods'] = (diagnostic['steps']-75-.25)*diagnostic['dt']
-    prefix, earlier = _legacy_wavebit.fdtd(**settings)
+    prefix, earlier = _legacy_wavebit_fdtd(**settings)
     assert earlier['steps'] == diagnostic['steps']-75
     for key in ('r_s', 'r_p', 't_s', 't_p'):
         expected = np.stack([getattr(full.incident, key)-getattr(short.incident, key)
@@ -142,8 +144,8 @@ def test_prefix_before_pulse_arrival_cannot_certify_amplitudes():
     settings = dict(structure=np.array([[[2.]]]), thickness=[.2], top=1., bot=1.,
                     period=.2, wavelength=1., backend='numpy', resolution=10,
                     n_periods=25, truncation_order=0, tetm='te', return_diagnostics=True)
-    _, plain = _legacy_wavebit.fdtd(**settings)
-    _, diagnostic = _legacy_wavebit.fdtd(**settings, convergence_window=plain['steps']-1)
+    _, plain = _legacy_wavebit_fdtd(**settings)
+    _, diagnostic = _legacy_wavebit_fdtd(**settings, convergence_window=plain['steps']-1)
     assert not diagnostic['convergence']['calibration_valid'].any()
     assert not diagnostic['convergence']['amplitudes_settled']
     assert np.isnan(diagnostic['convergence']['amplitude_change']['t_s']).all()
@@ -153,7 +155,7 @@ def test_prefix_before_pulse_arrival_cannot_certify_amplitudes():
 def test_calibrated_change_retains_material_gradient(backend):
     def objective(value, which):
         structure = np.ones((1, 1, 1))*value if which == 'numpy' else value*ones
-        _, diag = _legacy_wavebit.fdtd(structure=structure, thickness=[.25], top=1., bot=1.,
+        _, diag = _legacy_wavebit_fdtd(structure=structure, thickness=[.25], top=1., bot=1.,
                               period=.2, wavelength=1., backend=which, resolution=10,
                               n_periods=25, truncation_order=0, tetm='te',
                               return_diagnostics=True, convergence_window=60)

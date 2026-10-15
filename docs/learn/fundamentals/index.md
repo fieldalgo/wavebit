@@ -1,12 +1,18 @@
 # A book about the whole of Wavebit
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 :::{note}
 The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
 **From drawing a structure to calculating its optical response and changing its design.** Rather than list Wavebit's features one by one, this book follows a calculation through its stages. If you have already studied NVF, you can now see where it fits into the complete solver.
 
-The examples and recorded measurements in this book were prepared on September 21, 2026, using a **local working copy with API renaming and dispersive-material improvements**, based on Wavebit 0.1.0 / develop `a1d23fc`. The examples below were run with that working copy. FDTD had not yet been integrated into that snapshot, so the worked examples in this course cover RCWA. The current repository provides the public `wavebit.fdtd` module with `fdtd.Problem`, `fdtd.prepare` and `fdtd.run`; see the [current FDTD guide](../../guide/fdtd/general-fdtd.md). Earlier periodic-stack and general-scene factories remain under `wavebit.compat.legacy`; their [periodic FDTD manual](../../guide/fdtd/time-domain.md) and [general FDTD manual](../../migration/general-fdtd-v1.md) state the compatibility scope. These historical execution records are not a declaration of a public release or of completion of the full regression suite.
+The examples and recorded measurements in this book were prepared on September 21, 2026, using a **local working copy with API renaming and dispersive-material improvements**, based on Wavebit 0.1.0 / develop `a1d23fc`. The examples below were run with that working copy. FDTD had not yet been integrated into that snapshot, so the worked examples in this course cover RCWA. The current repository provides the public `wavebit.fdtd` module with `fdtd.Problem`, `fdtd.prepare` and `fdtd.run`; see the [current FDTD guide](../../guide/fdtd/general-fdtd.md). Earlier periodic-stack and general-scene factories were retired from `wavebit.compat.legacy`; their [periodic FDTD manual](../../guide/fdtd/time-domain.md) and [general FDTD manual](../../migration/general-fdtd-v1.md) state the compatibility scope. These historical execution records are not a declaration of a public release or of completion of the full regression suite.
 
 ## How to read this book
 

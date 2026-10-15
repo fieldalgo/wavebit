@@ -21,7 +21,9 @@ autodiff path. Both partials are measured separately, because the whole defect o
 the sign of the imaginary one.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import functools
 
 import numpy as np
@@ -40,7 +42,7 @@ def _loss_at(value):
     """`sum(T)` with one pixel's permittivity replaced -- the finite-difference oracle."""
     eps = LOSSY.copy()
     eps[PIXEL] = value
-    return float(np.asarray(_legacy_wavebit.rcwa(backend='numpy', structure=eps, **SCENE).solve().T).sum())
+    return float(np.asarray(_legacy_wavebit_rcwa(backend='numpy', structure=eps, **SCENE).solve().T).sum())
 
 
 def _true_gradient(step=1e-6):
@@ -53,13 +55,13 @@ def _true_gradient(step=1e-6):
 def _solver_and_gradient(backend):
     if backend == 'jax':
         jnp = pytest.importorskip('jax.numpy')
-        _legacy_wavebit.enable_x64()
-        solver = _legacy_wavebit.rcwa(backend='jax', structure=LOSSY, **SCENE)
+        _legacy_wavebit_enable_x64()
+        solver = _legacy_wavebit_rcwa(backend='jax', structure=LOSSY, **SCENE)
         solver.structure = jnp.asarray(LOSSY)
         loss_fn = (lambda result: jnp.sum(result.T).real)
     else:
         torch = pytest.importorskip('torch')
-        solver = _legacy_wavebit.rcwa(backend='torch', structure=LOSSY, **SCENE)
+        solver = _legacy_wavebit_rcwa(backend='torch', structure=LOSSY, **SCENE)
         solver.structure = torch.tensor(LOSSY, dtype=torch.complex128)
         loss_fn = (lambda result: torch.sum(result.T).real)
     grads = solver.grad(['structure'], functools.partial(solver.solve), loss_fn)
@@ -149,8 +151,8 @@ def test_fit_lowers_the_loss(backend):
         jnp = pytest.importorskip('jax.numpy')
         pytest.importorskip('optax')
         import optax
-        _legacy_wavebit.enable_x64()
-        solver = _legacy_wavebit.rcwa(backend='jax', structure=LOSSY, **SCENE)
+        _legacy_wavebit_enable_x64()
+        solver = _legacy_wavebit_rcwa(backend='jax', structure=LOSSY, **SCENE)
         solver.structure = jnp.asarray(LOSSY)
         loss_fn = (lambda result: jnp.sum(result.T).real)
         before = float(loss_fn(solver.solve()))
@@ -158,7 +160,7 @@ def test_fit_lowers_the_loss(backend):
                    optax.sgd(1e-2), iteration=5)
     else:
         torch = pytest.importorskip('torch')
-        solver = _legacy_wavebit.rcwa(backend='torch', structure=LOSSY, **SCENE)
+        solver = _legacy_wavebit_rcwa(backend='torch', structure=LOSSY, **SCENE)
         solver.structure = torch.tensor(LOSSY, dtype=torch.complex128)
         loss_fn = (lambda result: torch.sum(result.T).real)
         before = float(loss_fn(solver.solve()))

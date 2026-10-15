@@ -1,6 +1,19 @@
 # The capability manifest — what the solver says about itself, and where the line is
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Written: 2026-08-11.
+
+Current version **22** retires the compatibility entry points. `current_lifecycle.solvers`
+indexes `rcwa`, `fdtd`, `fdtd.native` and `fdtd.periodic`; `current_lifecycle.job.migration`
+names the explicit converter. `scope` distinguishes that public physical contract from the
+remaining internal numerical tables. `solvers` now resolves exact private engine functions
+for scientific diagnostics, not application construction. Consumers expecting v21 must
+recognize this version change. The dated entries below are history.
 
 Updated 2026-10-14 (latest): manifest version **21** publishes the renamed index conversions,
 `eps_from_refractive_index` and `refractive_index_from_eps` in `material_quantity.conversions`

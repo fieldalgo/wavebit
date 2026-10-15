@@ -4,7 +4,9 @@ The transverse wavevector is real. All powers refer to the finite boundary
 with the structure, normalized by the incident wave alone at that boundary.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -46,7 +48,7 @@ def _solver(route, medium, beta, pol, side='top', *, excitation=None,
         opts['phi'] = 0.
         opts['polarization'] = {'te': (1., 0.), 'tm': (0., 1.),
                                 'mixed': (1., 1j)}[pol]
-    solver = _legacy_wavebit.rcwa(**opts)
+    solver = _legacy_wavebit_rcwa(**opts)
     if path == 'first_order':
         solver.formulation = 'first_order'
     return solver
@@ -242,13 +244,13 @@ def test_public_absorption_result_and_gradient(backend, algorithm):
     if backend == 'jax':
         import jax
         import jax.numpy as xp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         import torch as xp
 
     def solve(loss):
         n = 1.5 + 1j * loss
-        solver = _legacy_wavebit.rcwa(
+        solver = _legacy_wavebit_rcwa(
             backend='jax' if backend == 'jax' else 'torch',
             top=n**2, bot=1., theta=xp.arcsin(.5 / n), phi=0.,
             polarization=(.6, .8j), wavelength=500., period=[1000., 1000.],
@@ -290,7 +292,7 @@ def test_absorbing_incident_power_gradient(backend, route):
     if backend == 'jax':
         import jax
         import jax.numpy as xp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         import torch as xp
 

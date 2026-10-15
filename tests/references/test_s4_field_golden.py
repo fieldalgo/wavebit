@@ -13,7 +13,7 @@ route — because they are five different assemblies of the same physics and the
 costs nothing extra per path.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -93,7 +93,7 @@ def _reconstruct(path, stack_name, theta, phi, pol):
         kw.update(psi=np.pi / 2 if pol == 's' else 0.0, phi=np.deg2rad(phi),
                   truncation_order=(0, 0), period=PERIOD,
                   structure=np.repeat(np.repeat(eps, 2, axis=1), 2, axis=2))
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     if path == 'first_order':
         solver.formulation = 'first_order'
     solver.solve()

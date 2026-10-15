@@ -1,11 +1,17 @@
 # FDTD — the time-domain solve beside the RCWA one
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 :::{note}
 This dated document records the periodic entry point, now `wavebit.compat.legacy.fdtd`. Its §8h examples use that earlier interface, imported as `wavebit`, because the current `wavebit.fdtd` has no time record of the field, point probes or Jones-vector incidence yet; §8's one-run spectrum is shown in the current spelling.
 :::
 
 Written: 2026-08-31, extended through 2026-09-04.
-Targets: `src/wavebit/fdtd/_periodic/legacy.py`, `src/wavebit/compat/legacy.py`, `tests/fdtd/test_fdtd.py`
+Targets: `src/wavebit/fdtd/_periodic/legacy.py`, `src/wavebit/fdtd/_periodic/api.py`, `tests/fdtd/test_fdtd.py`
 
 A second method reading the same `Stack` and `Incidence`, so that one structure can be solved
 two ways and the answers compared without a translation layer.

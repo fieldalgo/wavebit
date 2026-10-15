@@ -1,5 +1,11 @@
 # What a solve answers — and why the field state is off by default
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 :::{note}
 The `answers` keyword belongs to the retained `wavebit.compat.legacy` solver. The current
 `rcwa` lifecycle declares it for you: `rcwa.Outputs(fields=True)` keeps `'field'`, and otherwise

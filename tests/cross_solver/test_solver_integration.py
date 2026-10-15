@@ -1,6 +1,16 @@
 """One public Stack and phase/coordinate convention across RCWA and periodic FDTD."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit._common.enums import Tetm as _legacy_wavebit_Tetm
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.probes import fdtd_poynting as _legacy_wavebit_fdtd_poynting
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -12,11 +22,11 @@ import wavebit
 @pytest.mark.parametrize('tetm', ['te', 'tm'])
 def test_asymmetric_typed_stack_has_the_same_complex_response(backend, side, tetm):
     # Unequal layers and bounding media make a reversed stack a different problem.
-    stack = _legacy_wavebit.Stack.from_structure(np.array([[[2.1]], [[3.2]]]), [.13, .21],
+    stack = _legacy_wavebit_Stack.from_structure(np.array([[[2.1]], [[3.2]]]), [.13, .21],
                                          top=1., bot=2.25, period=.4)
-    incidence = _legacy_wavebit.Incidence(wavelength=1., theta=.27, tetm=tetm, incidence_side=side)
-    reference = _legacy_wavebit.rcwa(stack=stack, incidence=incidence, truncation_order=0).solve()
-    actual = _legacy_wavebit.fdtd(stack=stack, incidence=incidence, backend=backend,
+    incidence = _legacy_wavebit_Incidence(wavelength=1., theta=.27, tetm=tetm, incidence_side=side)
+    reference = _legacy_wavebit_rcwa(stack=stack, incidence=incidence, truncation_order=0).solve()
+    actual = _legacy_wavebit_fdtd(stack=stack, incidence=incidence, backend=backend,
                           resolution=40, n_periods=80 if backend is None else 35,
                           truncation_order=0)
     for name in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
@@ -33,8 +43,8 @@ def test_nonzero_orders_have_the_same_complex_phase_and_sp_frame(backend, tetm):
     structure[..., 15:43] = 2.25
     scene = dict(structure=structure, thickness=[.23], top=1., bot=1., period=1.6,
                  wavelength=1., theta=.13, tetm=tetm)
-    reference = _legacy_wavebit.rcwa(**scene, truncation_order=15).solve()
-    actual = _legacy_wavebit.fdtd(**scene, backend=backend, resolution=40,
+    reference = _legacy_wavebit_rcwa(**scene, truncation_order=15).solve()
+    actual = _legacy_wavebit_fdtd(**scene, backend=backend, resolution=40,
                           n_periods=80 if backend is None else 40, truncation_order=1)
     channel = 's' if tetm == 'te' else 'p'
     assert abs(getattr(reference.order(-1), 't_'+channel)) > .05
@@ -47,13 +57,13 @@ def test_nonzero_orders_have_the_same_complex_phase_and_sp_frame(backend, tetm):
 @pytest.mark.parametrize('backend', [None, 'numpy'])
 @pytest.mark.parametrize('side, direction', [('top', -1), ('bottom', 1)])
 def test_recorded_fields_and_monitors_use_upward_z(backend, side, direction):
-    _, data = _legacy_wavebit.fdtd(structure=np.ones((1, 1, 1)), thickness=[.3], top=1., bot=1.,
+    _, data = _legacy_wavebit_fdtd(structure=np.ones((1, 1, 1)), thickness=[.3], top=1., bot=1.,
                            period=.4, wavelength=1., tetm='te', backend=backend,
                            incidence_side=side, resolution=12,
                            n_periods=80 if backend is None else 30, truncation_order=0,
                            record_field=3, record_components='all', return_diagnostics=True,
                            field_monitors={'inside': .15})
-    sample = _legacy_wavebit.fdtd_poynting(data, z=.15)
+    sample = _legacy_wavebit_fdtd_poynting(data, z=.15)
     assert direction*sample['S'][:, 2].sum() > 0
     assert direction*data['monitors']['inside']['power_z'].item() > 0
     assert sample['region'] == 'total'
@@ -68,7 +78,7 @@ def test_recorded_fields_and_monitors_use_upward_z(backend, side, direction):
 @pytest.mark.parametrize('name', ['kx', 'ky'])
 def test_unsupported_cartesian_incidence_has_an_explicit_error(name):
     with pytest.raises(ValueError, match='Cartesian kx/ky.*theta/phi'):
-        _legacy_wavebit.fdtd(incidence=_legacy_wavebit.Incidence(wavelength=1., **{name: .2}))
+        _legacy_wavebit_fdtd(incidence=_legacy_wavebit_Incidence(wavelength=1., **{name: .2}))
 
 
 def test_jax_typed_stack_preserves_live_material_derivative():
@@ -78,10 +88,10 @@ def test_jax_typed_stack_preserves_live_material_derivative():
 
     def run(value, backend):
         xp = jnp if backend == 'jax' else np
-        stack = _legacy_wavebit.Stack.from_structure(value*xp.array([[[1.]], [[1.3]]]), [.13, .21],
+        stack = _legacy_wavebit_Stack.from_structure(value*xp.array([[[1.]], [[1.3]]]), [.13, .21],
                                              top=1., bot=2.25, period=.4)
-        incidence = _legacy_wavebit.Incidence(wavelength=1., tetm='tm', incidence_side='top')
-        return _legacy_wavebit.fdtd(stack, incidence, backend=backend, resolution=8,
+        incidence = _legacy_wavebit_Incidence(wavelength=1., tetm='tm', incidence_side='top')
+        return _legacy_wavebit_fdtd(stack, incidence, backend=backend, resolution=8,
                              n_periods=30, truncation_order=0).T.sum()
 
     value, derivative = jax.jit(jax.value_and_grad(lambda v: run(v, 'jax')))(2.)
@@ -94,17 +104,17 @@ def test_jax_typed_stack_preserves_live_material_derivative():
 
 def test_missing_required_scene_is_a_named_argument_error():
     with pytest.raises(TypeError, match='missing required scene arguments.*structure.*top.*bot'):
-        _legacy_wavebit.fdtd()
+        _legacy_wavebit_fdtd()
     with pytest.raises(TypeError, match='missing required scene arguments.*top.*bot'):
-        _legacy_wavebit.fdtd(structure=np.ones((1, 1, 1)), thickness=[.1], wavelength=1., period=.3)
+        _legacy_wavebit_fdtd(structure=np.ones((1, 1, 1)), thickness=[.1], wavelength=1., period=.3)
 
 
 @pytest.mark.parametrize('backend', [None, 'numpy'])
 def test_default_incidence_is_the_same_pure_s_state_as_rcwa(backend):
     scene = dict(structure=np.array([[[2.25]]]), thickness=[.2], top=1., bot=1.,
                  period=.4, wavelength=1.)
-    reference = _legacy_wavebit.rcwa(**scene, truncation_order=0).solve()
-    actual = _legacy_wavebit.fdtd(**scene, backend=backend, resolution=30,
+    reference = _legacy_wavebit_rcwa(**scene, truncation_order=0).solve()
+    actual = _legacy_wavebit_fdtd(**scene, backend=backend, resolution=30,
                           n_periods=80 if backend is None else 35, truncation_order=0)
     np.testing.assert_allclose(actual.r_s, reference.r_s, atol=.02)
     np.testing.assert_allclose(actual.t_s, reference.t_s, atol=.02)
@@ -118,7 +128,7 @@ def test_invariant_y_fields_do_not_pick_up_an_unused_period_phase(backend):
     # of this structure does not depend on the arbitrary second cell length.
     records = []
     for period_y in (.8, 1.2):
-        _, data = _legacy_wavebit.fdtd(
+        _, data = _legacy_wavebit_fdtd(
             structure=np.ones((1, 1, 1)), thickness=[.3], top=1., bot=1.,
             period=[.4, period_y], wavelength=1., theta=.3, phi=.5,
             polarization=(1., .4j), backend=backend, resolution=10,
@@ -143,7 +153,7 @@ def test_invariant_y_fields_do_not_pick_up_an_unused_period_phase(backend):
 @pytest.mark.parametrize('side, direction', [('top', -1), ('bottom', 1)])
 def test_crossed_mixed_jones_fields_have_the_analytic_centre_phase(side, direction):
     theta, phi, depth, height = .3, .5, .3, .15
-    _, data = _legacy_wavebit.fdtd(
+    _, data = _legacy_wavebit_fdtd(
         structure=np.ones((1, 2, 2)), thickness=[depth], top=1., bot=1.,
         period=[.4, .8], wavelength=1., theta=theta, phi=phi,
         polarization=(1., .4j), backend='numpy', incidence_side=side,
@@ -173,8 +183,8 @@ def test_legacy_negative_tilt_jones_amplitudes_use_the_public_incident_frame(phi
     structure[..., 7:22] = 2.25
     scene = dict(structure=structure, thickness=[.23], top=1., bot=1., period=1.6,
                  wavelength=1., theta=-.13, phi=phi, polarization=(1., .4j))
-    reference = _legacy_wavebit.rcwa(**scene, truncation_order=10).solve()
-    actual = _legacy_wavebit.fdtd(**scene, resolution=30, n_periods=80, truncation_order=1)
+    reference = _legacy_wavebit_rcwa(**scene, truncation_order=10).solve()
+    actual = _legacy_wavebit_fdtd(**scene, resolution=30, n_periods=80, truncation_order=1)
     for leg in ('incident', 's_inc', 'p_inc'):
         for name in ('r_s', 'r_p', 't_s', 't_p'):
             np.testing.assert_allclose(getattr(getattr(actual, leg), name),
@@ -185,7 +195,7 @@ def test_legacy_pure_tm_and_jones_p_describe_the_same_fields():
     records = []
     medium = wavebit.Material(1., mu=1.21)
     for polarization in ({'tetm': 'tm'}, {'polarization': (0., 1.)}):
-        _, data = _legacy_wavebit.fdtd(
+        _, data = _legacy_wavebit_fdtd(
             structure=np.ones((1, 1, 1)), mu=np.full((1, 1, 1), 1.21),
             thickness=[.3], top=medium, bot=medium, period=.4,
             wavelength=1., theta=-.3, resolution=12, n_periods=80,
@@ -205,12 +215,12 @@ def test_legacy_pure_tm_and_jones_p_describe_the_same_fields():
 
 
 @pytest.mark.parametrize('backend', [None, 'numpy'])
-@pytest.mark.parametrize('tetm', ['TM', _legacy_wavebit.Tetm.TM])
+@pytest.mark.parametrize('tetm', ['TM', _legacy_wavebit_Tetm.TM])
 def test_periodic_fdtd_accepts_shared_typed_polarization_declarations(backend, tetm):
-    stack = _legacy_wavebit.Stack.from_structure(np.array([[[2.25]]]), [.2], top=1., bot=1., period=.4)
-    incidence = _legacy_wavebit.Incidence(wavelength=1., tetm=tetm)
-    reference = _legacy_wavebit.rcwa(stack=stack, incidence=incidence, truncation_order=0).solve()
-    actual = _legacy_wavebit.fdtd(stack, incidence, backend=backend, resolution=30,
+    stack = _legacy_wavebit_Stack.from_structure(np.array([[[2.25]]]), [.2], top=1., bot=1., period=.4)
+    incidence = _legacy_wavebit_Incidence(wavelength=1., tetm=tetm)
+    reference = _legacy_wavebit_rcwa(stack=stack, incidence=incidence, truncation_order=0).solve()
+    actual = _legacy_wavebit_fdtd(stack, incidence, backend=backend, resolution=30,
                           n_periods=80 if backend is None else 35, truncation_order=0)
     np.testing.assert_allclose(actual.r_p, reference.r_p, atol=.02)
     np.testing.assert_allclose(actual.t_p, reference.t_p, atol=.02)
@@ -234,7 +244,7 @@ def test_legacy_coupled_magnetic_transmission_matches_fresnel(shape, side):
     t_s = 1+r_s
     t_p = (q_i/n_i)/(q_t/n_t)*(1-r_p)
     admittance = (q_t/mu_t)/(q_i/mu_i)
-    actual = _legacy_wavebit.fdtd(
+    actual = _legacy_wavebit_fdtd(
         structure=np.full(shape, 2.25), mu=np.full(shape, 1.6),
         thickness=[.2], top=1., bot=wavebit.Material(2.25, mu=1.6),
         period=[.2, .2], wavelength=1., theta=theta, phi=.3,

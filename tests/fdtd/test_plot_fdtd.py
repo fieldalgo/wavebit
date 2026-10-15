@@ -1,6 +1,8 @@
 """A moving picture must keep coordinates, field signs and its color scale fixed."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.plotting import animate_fdtd_field as _legacy_wavebit_animate_fdtd_field
+
+from wavebit.fdtd._periodic.plotting import plot_fdtd_field as _legacy_wavebit_plot_fdtd_field
 from types import SimpleNamespace
 import subprocess
 import sys
@@ -32,7 +34,7 @@ def close_figures():
 
 
 def test_component_staggering_and_nonuniform_z_are_drawn_at_the_recorded_positions(record):
-    fig, ax, mesh = _legacy_wavebit.plot_fdtd_field(record, frame=1, component='ex', y=0.)
+    fig, ax, mesh = _legacy_wavebit_plot_fdtd_field(record, frame=1, component='ex', y=0.)
     coords = mesh.get_coordinates()
     np.testing.assert_allclose(coords[0, :, 0], [-2., 0., 2., 4.])
     np.testing.assert_allclose(coords[:, 0, 1], [-10., -6., -3., -1., 1.5, 5., 9.5, 14.5])
@@ -45,14 +47,14 @@ def test_component_staggering_and_nonuniform_z_are_drawn_at_the_recorded_positio
 
 
 def test_real_field_keeps_its_sign_and_all_frames_share_a_color_scale(record):
-    _, _, first = _legacy_wavebit.plot_fdtd_field(record, frame=0, component='ex', y=0.)
-    _, _, last = _legacy_wavebit.plot_fdtd_field(record, frame=-1, component='ex', y=0.)
+    _, _, first = _legacy_wavebit_plot_fdtd_field(record, frame=0, component='ex', y=0.)
+    _, _, last = _legacy_wavebit_plot_fdtd_field(record, frame=-1, component='ex', y=0.)
     assert np.min(first.get_array()) < 0
     assert first.get_clim() == last.get_clim() == (-125., 125.)
 
 
 def test_animation_updates_values_and_time_without_rescaling(record):
-    animation = _legacy_wavebit.animate_fdtd_field(record, component='ex', y=0., interval=20)
+    animation = _legacy_wavebit_animate_fdtd_field(record, component='ex', y=0., interval=20)
     # Drive the update directly; saving is checked separately by the visual smoke run.
     mesh, title = animation._func(2)
     np.testing.assert_array_equal(mesh.get_array(), record['field_ex'][2, :, 1, :].real)
@@ -64,16 +66,16 @@ def test_animation_updates_values_and_time_without_rescaling(record):
 def test_aliasing_is_reported_instead_of_hidden_by_playback_speed(record):
     record['field_t'] = np.array([0., 6., 12.])
     with pytest.warns(UserWarning, match='undersamples'):
-        _legacy_wavebit.plot_fdtd_field(record)
+        _legacy_wavebit_plot_fdtd_field(record)
 
 
 def test_missing_record_and_unrecorded_component_are_explained(record):
     with pytest.raises(ValueError, match='record_field'):
-        _legacy_wavebit.plot_fdtd_field({})
+        _legacy_wavebit_plot_fdtd_field({})
     with pytest.raises(ValueError, match='not recorded'):
-        _legacy_wavebit.plot_fdtd_field(record, component='ez')
+        _legacy_wavebit_plot_fdtd_field(record, component='ez')
     with pytest.raises(IndexError, match='snapshots'):
-        _legacy_wavebit.plot_fdtd_field(record, frame=3)
+        _legacy_wavebit_plot_fdtd_field(record, frame=3)
 
 
 def test_importing_wavebit_does_not_import_matplotlib():
@@ -86,7 +88,7 @@ def test_magnetic_plot_uses_native_time_and_z_but_physical_boundary_planes(recor
     record['fields'] = {'hx': dict(values=record['field_e'][:, :-1],
                                   t=record['field_t']-.5, z=(z[:-1]+z[1:])/2,
                                   x=record['field_x'], y=record['field_y'])}
-    fig, ax, mesh = _legacy_wavebit.plot_fdtd_field(record, component='hx', frame=1)
+    fig, ax, mesh = _legacy_wavebit_plot_fdtd_field(record, component='hx', frame=1)
     coords = mesh.get_coordinates()
     # On a nonuniform mesh pcolormesh's cell-edge midpoints need not recover
     # sample centres. Compare its inferred edges instead.

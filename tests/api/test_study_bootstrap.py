@@ -1,4 +1,4 @@
-"""Maintained studies select their checkout before importing legacy solver APIs."""
+"""Maintained studies select the exact current or historical implementation before import."""
 import json
 import os
 from pathlib import Path
@@ -19,7 +19,12 @@ def _study(name):
 def _stub_tree(root, *, layout='flat', compatibility=False):
     package = root / ('src' if layout == 'src' else '') / 'wavebit'
     package.mkdir(parents=True)
-    (package / '__init__.py').write_text('MARKER = "selected package"\neps_from_refractive_index = lambda n: n**2\n')
+    exports = ('eps_from_refractive_index = lambda n: n**2\n'
+               'def rcwa(*args, **kwargs): return None\n'
+               'def enable_x64(): pass\n'
+               'def helper(*args, **kwargs): return None\n'
+               'GaussianBeam = Material = PlaneWave = meshgrid_xy = refractive_index_from_eps = helper\n')
+    (package / '__init__.py').write_text('MARKER = "selected package"\n' + exports)
     enums = ('from enum import IntEnum\nclass Backend(IntEnum):\n'
              '    NUMPY=0\n    JAX=1\n    TORCH=2\n'
              'class Formulation:\n    pass\n')
@@ -31,7 +36,7 @@ def _stub_tree(root, *, layout='flat', compatibility=False):
         compat = package / 'compat'
         compat.mkdir()
         (compat / '__init__.py').write_text('')
-        (compat / 'legacy.py').write_text('MARKER = "compatibility API"\neps_from_refractive_index = lambda n: n**2\n')
+        (compat / 'legacy.py').write_text('MARKER = "compatibility API"\n' + exports)
     return package
 
 
@@ -48,9 +53,10 @@ ns = runpy.run_path(script, run_name="_study_bootstrap_test")
 exec(inspect, ns)
 print(json.dumps({
     "origin": str(pathlib.Path(ns["_selected_wavebit"].__file__).resolve()),
-    "legacy": ns["wavebit"] is ns["_legacy_wavebit"],
-    "same_package": ns["_legacy_wavebit"] is ns["_selected_wavebit"],
-    "marker": getattr(ns["_legacy_wavebit"], "MARKER", None),
+    "current": ns["_CURRENT_LAYOUT"],
+    "same_package": ns["_HISTORICAL_API"] is ns["_selected_wavebit"],
+    "marker": getattr(ns["_HISTORICAL_API"], "MARKER", None),
+    "factory_origin": str(pathlib.Path(sys.modules[ns["_study_rcwa"].__module__].__file__).resolve()),
     "results": ns.get("RESULTS"),
 }))
 '''
@@ -72,7 +78,8 @@ def test_default_checkout_wins_over_another_package_on_pythonpath(name, tmp_path
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert report['origin'] == str(ROOT / 'src/wavebit/__init__.py')
-    assert report['legacy'] and not report['same_package']
+    assert report['current'] and not report['same_package']
+    assert report['factory_origin'] == str(ROOT / 'src/wavebit/rcwa/_factory.py')
     if name == 'benchmark_backends':
         assert report['results'] == str(ROOT / 'artifacts/studies/backends.json')
 
@@ -95,7 +102,8 @@ def test_root_selects_archived_or_current_api_before_import(name, layout, compat
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert report['origin'] == str(package / '__init__.py')
-    assert report['legacy']
+    assert not report['current']
+    assert report['factory_origin'] == str(package / ('compat/legacy.py' if compatibility else '__init__.py'))
     assert report['same_package'] is not compatibility
     assert report['marker'] == ('compatibility API' if compatibility else 'selected package')
 
@@ -199,7 +207,7 @@ def test_field_state_keeps_the_historical_defect_visible(historical_package, tmp
     inspect = """
 rows = section_below_axis()
 assert np.isfinite(list(rows.values())).all(), rows
-if _legacy_wavebit is _selected_wavebit:
+if not _CURRENT_LAYOUT:
     assert rows['SMM vs ETM'] > 1
 else:
     assert rows['SMM vs ETM'] < 1e-12

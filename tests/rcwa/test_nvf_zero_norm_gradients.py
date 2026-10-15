@@ -33,7 +33,9 @@ large — 9e9 on the two-circle case below, against 1e-3 half a grid cell away. 
 sampling problem those tests already measure, not this one.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -42,7 +44,7 @@ from wavebit.lattice import as_lattice
 pytest.importorskip('jax')
 import jax                                                     # noqa: E402
 import jax.numpy as jnp                                        # noqa: E402
-_legacy_wavebit.enable_x64()
+_legacy_wavebit_enable_x64()
 
 from wavebit.rcwa._engine.parametric import assemble_eps_coeffs, normal_vector_field_analytical
 
@@ -124,11 +126,11 @@ def test_symmetric_two_shape_layer_has_a_finite_position_gradient():
     cannot answer that -- so ``freeze_geometry`` is how any two-shape gradient is taken. These
     circles stay disjoint across the window, so one freeze covers it.
     """
-    frozen = _legacy_wavebit.rcwa(backend='numpy', structure=[dict(background=1.0, shapes=_twin_circles(0.0))],
+    frozen = _legacy_wavebit_rcwa(backend='numpy', structure=[dict(background=1.0, shapes=_twin_circles(0.0))],
                           **BASE).freeze_geometry()
 
     def objective(d):
-        res = _legacy_wavebit.rcwa(backend='jax', structure=[dict(background=1.0, shapes=_twin_circles(d))],
+        res = _legacy_wavebit_rcwa(backend='jax', structure=[dict(background=1.0, shapes=_twin_circles(d))],
                              **BASE).solve(geometry=frozen)
         return jnp.real(jnp.sum(res.R))
 

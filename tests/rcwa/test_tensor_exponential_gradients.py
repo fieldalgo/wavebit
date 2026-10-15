@@ -1,6 +1,8 @@
 """Independent Maxwell boundary-value oracle for material and local-field tangents."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 from scipy.linalg import expm
@@ -57,7 +59,7 @@ def solver(backend, profile, multilayer):
     eps=np.stack([FIXED_E,e] if multilayer else [e])[:,None,None,...]
     mu=np.stack([FIXED_M,m] if multilayer else [m])[:,None,None,...]
     d=[90.,170.] if multilayer else [170.]
-    s=_legacy_wavebit.rcwa(backend=backend, structure=eps, mu=mu, thickness=d,
+    s=_legacy_wavebit_rcwa(backend=backend, structure=eps, mu=mu, thickness=d,
                    period=(600.,750.), wavelength=900., truncation_order=(0,0),
                    theta=0., phi=0., answers='field', factorization='li')
     s.formulation='first_order'
@@ -84,7 +86,7 @@ def test_field_and_joint_constitutive_derivative_match_independent_maxwell_expon
     if backend in ('jax','jit'):
         jax=pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         geometry=s.freeze_geometry() if backend=='jit' else None
         calculation=jax.value_and_grad(lambda t: objective(jnp,actual(s,jnp,t,profile,multilayer,geometry)))
         if backend=='jit': calculation=jax.jit(calculation)

@@ -1,6 +1,8 @@
 """The material catalog selects sources, preserves units and returns models."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 
@@ -8,7 +10,8 @@ import numpy as np
 import pytest
 
 import wavebit
-from wavebit.materials import catalog as materials; from wavebit import TabulatedMaterial
+from wavebit.materials import catalog as materials
+from wavebit import TabulatedMaterial
 
 
 def test_catalog_discovery_is_io_free_and_loading_is_selective(monkeypatch):
@@ -59,7 +62,7 @@ def test_converted_wavelengths_preserve_optical_values_and_endpoints(unit, scale
 
 def test_length_unit_change_preserves_film_optics():
     def solve(unit, scale):
-        return _legacy_wavebit.rcwa(wavelength=900.*scale, period=600.*scale,
+        return _legacy_wavebit_rcwa(wavelength=900.*scale, period=600.*scale,
                             thickness=[120.*scale], truncation_order=0,
                             structure=[dict(background=materials.load('Si', wavelength_unit=unit), shapes=[])],
                             polarization=(1., 0.), factorization='li').solve()
@@ -129,7 +132,7 @@ def test_vector_evaluation_preserves_shape_backend_and_wavelength_derivatives(ba
         actual = m.at(w)
     elif backend == 'jax':
         jax = pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         w = jax.numpy.array(values)
         actual = jax.jit(m.at)(w)
         gradient = jax.grad(lambda x: m.at(x).epsilon.real.sum())(w)

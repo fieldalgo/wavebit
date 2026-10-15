@@ -5,7 +5,9 @@ import numpy as np
 from tests.fixtures.common._conv_frame import slots_about_centre
 import pytest
 
-from wavebit.compat.legacy import AffineProfileNVF, ConformingNVF
+from wavebit.rcwa._engine.conforming.affine_profile import AffineProfileNVF
+
+from wavebit.rcwa._engine.conforming import ConformingNVF
 from wavebit.materials.response import Material
 from wavebit.lattice import Lattice
 

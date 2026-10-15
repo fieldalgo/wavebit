@@ -27,12 +27,14 @@ This file pins the contract stated in ``docs/reference/common/conventions.md``:
   equivalence and the relative phase are pinned again on the reconstructed cell.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import numpy as np
 import pytest
 
 import wavebit
-from wavebit.compat.legacy import JobSpec
+from wavebit._common._jobs_v1 import JobSpec
 from wavebit._common.periodic import Incidence
 
 # A lossless two-layer stack, in the 1D (y-invariant) and genuinely-2D spellings. Both are
@@ -54,7 +56,7 @@ _POWER_FIELDS = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p')
 
 def solved_res(**kw):
     """The `incident` sub-result of one solve — the surface these comparisons read."""
-    return _legacy_wavebit.rcwa(**kw).solve().incident
+    return _legacy_wavebit_rcwa(**kw).solve().incident
 
 
 def pair_of(psi):
@@ -79,8 +81,8 @@ def test_pair_reproduces_psi(path, algo):
         kw = dict(CFG_1D, structure=STRUCTURE_1D, phi=0.4, layer_algorithm=algo)
     else:
         kw = dict(CFG_2D, structure=STRUCTURE_2D, layer_algorithm=algo)
-    via_psi = _legacy_wavebit.rcwa(psi=psi_v, **kw).solve()
-    via_pair = _legacy_wavebit.rcwa(polarization=pair_of(psi_v), **kw).solve()
+    via_psi = _legacy_wavebit_rcwa(psi=psi_v, **kw).solve()
+    via_pair = _legacy_wavebit_rcwa(polarization=pair_of(psi_v), **kw).solve()
     _assert_same_sub(via_psi.incident, via_pair.incident)
 
 
@@ -89,8 +91,8 @@ def test_pair_reproduces_psi_on_every_backend(backend):
     psi_v = 1.1
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
     kw['backend'] = backend
-    via_psi = _legacy_wavebit.rcwa(psi=psi_v, **kw).solve()
-    via_pair = _legacy_wavebit.rcwa(polarization=pair_of(psi_v), **kw).solve()
+    via_psi = _legacy_wavebit_rcwa(psi=psi_v, **kw).solve()
+    via_pair = _legacy_wavebit_rcwa(polarization=pair_of(psi_v), **kw).solve()
     np.testing.assert_allclose(np.asarray(via_psi.incident.R), np.asarray(via_pair.incident.R),
                                atol=1e-14)
     np.testing.assert_allclose(np.asarray(via_psi.incident.t_p), np.asarray(via_pair.incident.t_p),
@@ -101,22 +103,22 @@ def test_the_pure_pairs_are_the_pure_angles():
     """``(1, 0)`` is ``psi = pi/2`` (pure s) and ``(0, 1)`` is ``psi = 0`` (pure p) exactly."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
     for pair, psi_v in (((1, 0), np.pi / 2), ((0, 1), 0.0)):
-        via_pair = _legacy_wavebit.rcwa(polarization=pair, **kw).solve()
-        via_psi = _legacy_wavebit.rcwa(psi=psi_v, **kw).solve()
+        via_pair = _legacy_wavebit_rcwa(polarization=pair, **kw).solve()
+        via_psi = _legacy_wavebit_rcwa(psi=psi_v, **kw).solve()
         _assert_same_sub(via_pair.incident, via_psi.incident, atol=1e-13)
 
 
 def test_variants_do_not_depend_on_the_pair():
     """``s_inc`` / ``p_inc`` are free columns of the same factorized system."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
-    via_psi = _legacy_wavebit.rcwa(psi=0.7, **kw).solve()
-    via_pair = _legacy_wavebit.rcwa(polarization=(1, -1j), **kw).solve()
+    via_psi = _legacy_wavebit_rcwa(psi=0.7, **kw).solve()
+    via_pair = _legacy_wavebit_rcwa(polarization=(1, -1j), **kw).solve()
     _assert_same_sub(via_psi.s_inc, via_pair.s_inc)
     _assert_same_sub(via_psi.p_inc, via_pair.p_inc)
 
 
 def test_top_level_efficiencies_delegate_to_the_pair_solve():
-    res = _legacy_wavebit.rcwa(polarization=(1, 1j), structure=STRUCTURE_2D, **CFG_2D).solve()
+    res = _legacy_wavebit_rcwa(polarization=(1, 1j), structure=STRUCTURE_2D, **CFG_2D).solve()
     assert res.incident is not None
     np.testing.assert_array_equal(res.R, res.incident.R)
     np.testing.assert_array_equal(res.T, res.incident.T)
@@ -127,17 +129,17 @@ def test_top_level_efficiencies_delegate_to_the_pair_solve():
 def test_the_pair_scale_is_normalized_out():
     """``(3, 4j)`` and ``(0.6, 0.8j)`` are one incidence: unit incident flux, pinned."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
-    small = _legacy_wavebit.rcwa(polarization=(0.6, 0.8j), **kw).solve()
-    large = _legacy_wavebit.rcwa(polarization=(3, 4j), **kw).solve()
+    small = _legacy_wavebit_rcwa(polarization=(0.6, 0.8j), **kw).solve()
+    large = _legacy_wavebit_rcwa(polarization=(3, 4j), **kw).solve()
     _assert_same_sub(small.incident, large.incident)
 
 
 def test_the_pair_phase_is_kept():
     """A global phase is physics (it rotates the amplitudes) and must not be normalized out."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
-    base = _legacy_wavebit.rcwa(polarization=(1, -1j), **kw).solve()
+    base = _legacy_wavebit_rcwa(polarization=(1, -1j), **kw).solve()
     phase = np.exp(0.4j)
-    rotated = _legacy_wavebit.rcwa(polarization=(phase, -1j * phase), **kw).solve()
+    rotated = _legacy_wavebit_rcwa(polarization=(phase, -1j * phase), **kw).solve()
     np.testing.assert_allclose(np.asarray(rotated.incident.t_s),
                                phase * np.asarray(base.incident.t_s), atol=1e-14)
     np.testing.assert_allclose(np.asarray(rotated.incident.R), np.asarray(base.incident.R),
@@ -172,7 +174,7 @@ def test_one_solve_answers_every_polarization(formulation, algo, side):
     The recipe ``docs/guide/rcwa/light.md`` states is ``(a_s/n) * s_inc + (a_p/n) * p_inc``,
     with ``n`` the pair's Euclidean norm and its overall phase kept. Measured to 8e-16.
     """
-    solver = _legacy_wavebit.rcwa(polarization=_SWEEP_PAIR, structure=STRUCTURE_2D,
+    solver = _legacy_wavebit_rcwa(polarization=_SWEEP_PAIR, structure=STRUCTURE_2D,
                                   layer_algorithm=algo, incidence_side=side, **CFG_2D)
     solver.formulation = formulation
     res = solver.solve()
@@ -189,15 +191,15 @@ def test_one_solve_answers_every_polarization_off_the_2d_plane_wave(case):
         kw = dict(CFG_2D, structure=STRUCTURE_2D, top=2.25, bot=1.0,
                   excitation={(0, 0): 1.0, (-1, 0): 0.5j})
     _assert_variants_combine_into_the_pair(
-        _legacy_wavebit.rcwa(polarization=_SWEEP_PAIR, **kw).solve(), _SWEEP_PAIR)
+        _legacy_wavebit_rcwa(polarization=_SWEEP_PAIR, **kw).solve(), _SWEEP_PAIR)
 
 
 def test_pair_reproduces_psi_under_backside_illumination():
     """The two incidence features compose: the pair means the same thing from either side."""
     psi_v = 0.7
     kw = dict(CFG_2D, structure=STRUCTURE_2D, incidence_side='bottom')
-    via_psi = _legacy_wavebit.rcwa(psi=psi_v, **kw).solve()
-    via_pair = _legacy_wavebit.rcwa(polarization=pair_of(psi_v), **kw).solve()
+    via_psi = _legacy_wavebit_rcwa(psi=psi_v, **kw).solve()
+    via_pair = _legacy_wavebit_rcwa(polarization=pair_of(psi_v), **kw).solve()
     _assert_same_sub(via_psi.incident, via_pair.incident)
 
 
@@ -207,7 +209,7 @@ def test_pair_reproduces_psi_under_backside_illumination():
 def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
     kw = dict(CFG_2D, structure=STRUCTURE_2D, layer_algorithm=algo)
     for pair in ((0.3 + 0.4j, -1.2 + 0.1j), (2.0, 0.5j), (1e-3, 1 + 1j)):
-        res = _legacy_wavebit.rcwa(polarization=pair, **kw).solve()
+        res = _legacy_wavebit_rcwa(polarization=pair, **kw).solve()
         total = float(np.asarray(res.incident.R).sum() + np.asarray(res.incident.T).sum())
         assert total == pytest.approx(1.0, abs=1e-10), pair
 
@@ -216,11 +218,11 @@ def test_lossless_energy_conservation_at_arbitrary_complex_pairs(algo):
 
 def test_psi_and_polarization_together_raise():
     with pytest.raises(ValueError, match='psi and polarization'):
-        _legacy_wavebit.rcwa(backend='numpy', psi=0.3, polarization=(1, 0))
+        _legacy_wavebit_rcwa(backend='numpy', psi=0.3, polarization=(1, 0))
 
 
 def test_assignment_clashes_in_both_orders():
-    solver = _legacy_wavebit.rcwa(backend='numpy', polarization=(1, 1j))
+    solver = _legacy_wavebit_rcwa(backend='numpy', polarization=(1, 1j))
     with pytest.raises(ValueError, match='psi and polarization'):
         solver.psi = 0.3
     solver.polarization = None                     # clearing reopens the other spelling
@@ -235,13 +237,13 @@ def test_the_default_psi_does_not_block_the_pair():
     ``tetm`` is the other story and is refused beside a pair — it declares the polarization
     away rather than defaulting it, which is the distinction the two tests together pin.
     """
-    solver = _legacy_wavebit.rcwa(backend='numpy')
+    solver = _legacy_wavebit_rcwa(backend='numpy')
     assert float(np.asarray(solver.psi)) == pytest.approx(np.pi / 2)
     solver.polarization = (1, 0)
     assert solver.polarization == (1, 0)
 
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        _legacy_wavebit.rcwa(backend='numpy', tetm='tm', polarization=(1, 0))
+        _legacy_wavebit_rcwa(backend='numpy', tetm='tm', polarization=(1, 0))
 
 
 def _bits(result):
@@ -264,8 +266,8 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     """
     pytest.importorskip(backend)
     kw = dict(CFG_1D, backend=backend, structure=STRUCTURE_1D)
-    built = _legacy_wavebit.rcwa(tetm='te', **kw)
-    assigned = _legacy_wavebit.rcwa(**kw)
+    built = _legacy_wavebit_rcwa(tetm='te', **kw)
+    assigned = _legacy_wavebit_rcwa(**kw)
     assigned.tetm = 'te'
     assert built.psi is None and assigned.psi is None
     want, got = built.solve(), assigned.solve()
@@ -273,12 +275,12 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     for a, b in zip(_bits(got), _bits(want)):
         assert np.array_equal(a, b)
 
-    plain = _legacy_wavebit.rcwa(**kw)
+    plain = _legacy_wavebit_rcwa(**kw)
     want = plain.solve()
-    withdrawn = _legacy_wavebit.rcwa(tetm='te', **kw)
+    withdrawn = _legacy_wavebit_rcwa(tetm='te', **kw)
     withdrawn.tetm = None
     assert float(np.asarray(withdrawn.psi)) == float(np.asarray(plain.psi)) == np.pi / 2
-    by_keyword = _legacy_wavebit.rcwa(tetm='te', **kw)
+    by_keyword = _legacy_wavebit_rcwa(tetm='te', **kw)
     for solver, result in ((withdrawn, withdrawn.solve()), (by_keyword, by_keyword.solve(tetm=None))):
         assert solver.tetm is None and solver.grating_type == plain.grating_type == 1
         for a, b in zip(_bits(result), _bits(want)):
@@ -286,7 +288,7 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     # ... and withdrawn after a pure solve on a solver holding no structure, whose solve_conv
     # keeps the pure layout: the pure kernel cannot run undeclared -- it raised "tetm_index must
     # be 0 (TE) or 1 (TM), got None" -- so the kept layout routes as the raster would, conical.
-    kept = _legacy_wavebit.rcwa(tetm='te', **kw)
+    kept = _legacy_wavebit_rcwa(tetm='te', **kw)
     conv = kept.eps_conv_matrices()
     kept.solve()
     kept.structure = None
@@ -304,7 +306,7 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
         import jax
         import jax.numpy as jnp
         for start, keyword, twin in ((dict(tetm='te'), None, plain), (dict(), 'te', built)):
-            traced = _legacy_wavebit.rcwa(**start, **kw)
+            traced = _legacy_wavebit_rcwa(**start, **kw)
             jax.jit(lambda t: jnp.sum(traced.solve(tetm=keyword, thickness=[22.0, t]).T))(460.0)
             assert traced.tetm == twin.tetm, keyword
             assert _same_state((traced.psi, None), (twin.psi, None)), keyword
@@ -314,7 +316,7 @@ def test_tetm_assigned_or_withdrawn_is_the_state_the_constructor_makes(backend):
     # Only a declaration is withdrawn. `tetm = None` on a solver that never declared -- the
     # keyword a sweep passes on every point -- must leave a given psi, or a pair, where it is.
     for spelling in (dict(psi=0.3), dict(polarization=(1, 1j))):
-        solver = _legacy_wavebit.rcwa(**spelling, **kw)
+        solver = _legacy_wavebit_rcwa(**spelling, **kw)
         before = (solver.psi, solver.polarization)
         want = solver.solve()
         got = solver.solve(tetm=None)
@@ -334,20 +336,20 @@ def test_a_withdrawal_on_a_kept_pure_layout_routes_as_its_raster_would():
     """
     skew = wavebit.Lattice.oblique(700.0, 700.0, np.pi / 3)
     kw = dict(CFG_1D, structure=STRUCTURE_1D, factorization='laurent')
-    kept = _legacy_wavebit.rcwa(tetm='te', **kw)
+    kept = _legacy_wavebit_rcwa(tetm='te', **kw)
     conv = kept.eps_conv_matrices()
     kept.solve()
     kept.structure = None
     kept.tetm = None
     kept.lattice = skew
     got = kept.solve_conv(*conv)
-    raster = _legacy_wavebit.rcwa(**kw)
+    raster = _legacy_wavebit_rcwa(**kw)
     raster.lattice = skew
     want = raster.solve()
     assert kept.grating_type == raster.grating_type == 2
     for a, b in zip(_bits(got), _bits(want)):
         assert np.array_equal(a, b)
-    rectangle = float(np.sum(np.asarray(_legacy_wavebit.rcwa(**kw).solve().R)))
+    rectangle = float(np.sum(np.asarray(_legacy_wavebit_rcwa(**kw).solve().R)))
     # The premise: the skew is another scene (8.3e-3 apart here), so a conical route is caught.
     assert abs(float(np.sum(np.asarray(want.R))) - rectangle) > 1e-3
 
@@ -372,7 +374,7 @@ def test_a_tetm_assigned_after_construction_survives_the_pytree_rebuild():
     solved eagerly could not be handed to ``jax.jit`` at all.
     """
     jax = pytest.importorskip('jax')
-    solver = _legacy_wavebit.rcwa(**dict(CFG_1D, backend='jax', structure=STRUCTURE_1D))
+    solver = _legacy_wavebit_rcwa(**dict(CFG_1D, backend='jax', structure=STRUCTURE_1D))
     solver.tetm = 'tm'
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     rebuilt = jax.tree_util.tree_unflatten(treedef, leaves)
@@ -383,9 +385,9 @@ def test_a_tetm_assigned_after_construction_survives_the_pytree_rebuild():
 
 def test_degenerate_pairs_are_refused():
     with pytest.raises(ValueError, match='no incident field'):
-        _legacy_wavebit.rcwa(backend='numpy', polarization=(0, 0))
+        _legacy_wavebit_rcwa(backend='numpy', polarization=(0, 0))
     with pytest.raises(ValueError, match='pair'):
-        _legacy_wavebit.rcwa(backend='numpy', polarization=(1, 0, 0))
+        _legacy_wavebit_rcwa(backend='numpy', polarization=(1, 0, 0))
 
 
 # ------------------------------------------------------------------ psi is a real angle
@@ -402,8 +404,8 @@ def test_complex_psi_is_refused(backend):
     """
     for bad in (0.7 + 0.5j, 1j, complex(0, 1e-12)):
         with pytest.raises(ValueError, match='psi must be a real angle'):
-            _legacy_wavebit.rcwa(backend=backend, psi=bad)
-    solver = _legacy_wavebit.rcwa(backend=backend)
+            _legacy_wavebit_rcwa(backend=backend, psi=bad)
+    solver = _legacy_wavebit_rcwa(backend=backend)
     with pytest.raises(ValueError, match='psi must be a real angle'):
         solver.psi = 0.7 + 0.5j
 
@@ -411,7 +413,7 @@ def test_complex_psi_is_refused(backend):
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_a_real_angle_written_as_complex_is_accepted(backend):
     """``0.7+0j`` is a real angle spelled oddly, not the mistake above."""
-    solver = _legacy_wavebit.rcwa(backend=backend, psi=complex(0.7, 0.0))
+    solver = _legacy_wavebit_rcwa(backend=backend, psi=complex(0.7, 0.0))
     assert float(np.real(np.asarray(solver.psi))) == pytest.approx(0.7)
 
 
@@ -424,7 +426,7 @@ def test_psi_is_stored_real(backend, spelling):
     and the imaginary direction it used to carry was the unnormalized ``cosh`` path.
     """
     kw = {'psi': 0.7} if spelling == 'incident' else {}
-    solver = _legacy_wavebit.rcwa(backend=backend, **kw)
+    solver = _legacy_wavebit_rcwa(backend=backend, **kw)
     assert not np.iscomplexobj(np.asarray(solver.psi)), np.asarray(solver.psi).dtype
 
 
@@ -435,14 +437,14 @@ def test_a_declared_away_angle_is_absent_rather_than_defaulted(backend):
     The retired ``pol`` filled it with a derived ``pi/2`` that the pure 1D solve never reads,
     so its gradient was a silent zero — indistinguishable from a true one.
     """
-    assert _legacy_wavebit.rcwa(backend=backend, tetm='te').psi is None
-    assert _legacy_wavebit.rcwa(backend=backend, tetm='tm').tetm == 'tm'
-    assert _legacy_wavebit.rcwa(backend=backend, tetm='tm').tetm_index == 1
+    assert _legacy_wavebit_rcwa(backend=backend, tetm='te').psi is None
+    assert _legacy_wavebit_rcwa(backend=backend, tetm='tm').tetm == 'tm'
+    assert _legacy_wavebit_rcwa(backend=backend, tetm='tm').tetm_index == 1
 
 
 def test_complex_psi_refusal_does_not_reach_the_pair():
     """The pair is where the imaginary part belongs, so it must stay unrestricted."""
-    res = _legacy_wavebit.rcwa(polarization=(1, -1j), structure=STRUCTURE_2D, **CFG_2D).solve()
+    res = _legacy_wavebit_rcwa(polarization=(1, -1j), structure=STRUCTURE_2D, **CFG_2D).solve()
     assert float(np.asarray(res.incident.T).sum()) > 0
 
 
@@ -459,10 +461,10 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
     """
     kw = dict(CFG_1D, structure=STRUCTURE_1D, answers='field')
     for pair, tetm in (((1, 0), 'te'), ((0, 1), 'tm')):
-        solver = _legacy_wavebit.rcwa(polarization=pair, **kw)
+        solver = _legacy_wavebit_rcwa(polarization=pair, **kw)
         via_pair = solver.solve()
         assert solver.grating_type == 1, 'expected the conical formulation'
-        via_pure = _legacy_wavebit.rcwa(tetm=tetm, **kw).solve()
+        via_pure = _legacy_wavebit_rcwa(tetm=tetm, **kw).solve()
         for name in ('R', 'T', 'R_s', 'R_p', 'T_s', 'T_p', 'r_s', 'r_p', 't_s', 't_p', 'r_xyz',
                      't_xyz'):
             np.testing.assert_allclose(np.asarray(getattr(via_pair.incident, name)),
@@ -476,7 +478,7 @@ def test_a_1d_structure_with_a_pair_takes_the_conical_path():
 
 
 def test_the_pure_1d_solve_refuses_the_pair_in_plain_words():
-    solver = _legacy_wavebit.rcwa(polarization=(1, 0), structure=STRUCTURE_1D, **CFG_1D)
+    solver = _legacy_wavebit_rcwa(polarization=(1, 0), structure=STRUCTURE_1D, **CFG_1D)
     epx, epy, epz_i, _, _ = solver.eps_conv_matrices()
     with pytest.raises(ValueError, match='single-polarization by construction'):
         solver._solve_1d(epx, epy, epz_i)
@@ -519,7 +521,7 @@ def _solve_gyrotropic(pair=None, **incidence):
     I = np.eye(1, dtype=np.complex128)
     if pair is not None:
         incidence = dict(incidence, polarization=pair)
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.0, phi=0.0,
                             **incidence, truncation_order=(0, 0), period=(300.0, 300.0),
                             wavelength=WL, thickness=[D])
     return solver.solve_conv(
@@ -653,7 +655,7 @@ def test_a_circular_state_turns_as_the_table_says(spelling, side, path, angles):
     """The incident wave's rotation against its own flow, on a patterned stack, both sides."""
     incidence, turns_like = _CIRCULAR_SPELLINGS[spelling]
     theta, phi = _TURN_ANGLES[angles]
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, wavelength=900.0, period=[700.0, 700.0],
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.25, wavelength=900.0, period=[700.0, 700.0],
                           theta=theta, phi=phi, incidence_side=side, **_TURN_CELLS[path],
                           **incidence)
     six = np.asarray(solver.solve().boundary_fields(side, part='incoming', **_TURN_POINT))[0, 0]
@@ -680,7 +682,7 @@ def test_the_solved_field_turns_the_same_way(side, path):
     """
     theta, phi = _TURN_ANGLES['kx_negative']
     structure = np.ones((1, 1, 4)) if path == 'conical' else np.ones((1, 2, 2))
-    solver = _legacy_wavebit.rcwa(backend='numpy', structure=structure, thickness=[300.0], top=1.0, bot=1.0,
+    solver = _legacy_wavebit_rcwa(backend='numpy', structure=structure, thickness=[300.0], top=1.0, bot=1.0,
                           wavelength=600.0, period=[450.0, 450.0],
                           truncation_order=[2, 0] if path == 'conical' else [1, 1],
                           theta=theta, phi=phi, polarization=(1, -1j), incidence_side=side,
@@ -714,7 +716,7 @@ FIELD_RES = dict(sample_x=5, sample_y=4, sample_z=6)
 
 
 def _field(**kw):
-    _, field_cell = _legacy_wavebit.rcwa(answers='field', **kw).solve_field(**FIELD_RES)
+    _, field_cell = _legacy_wavebit_rcwa(answers='field', **kw).solve_field(**FIELD_RES)
     return np.asarray(field_cell)
 
 
@@ -743,7 +745,7 @@ def test_the_1d_routed_pair_field_matches_the_conical_psi_field():
     """
     psi_v = 0.7
     kw = dict(CFG_1D, structure=STRUCTURE_1D)
-    solver = _legacy_wavebit.rcwa(polarization=pair_of(psi_v), answers='field', **kw)
+    solver = _legacy_wavebit_rcwa(polarization=pair_of(psi_v), answers='field', **kw)
     _, via_pair = solver.solve_field(**FIELD_RES)
     assert solver.grating_type == 1, 'expected the conical formulation'
     np.testing.assert_allclose(np.asarray(via_pair), _field(psi=psi_v, phi=0.0, **kw),
@@ -793,7 +795,7 @@ def test_jax_pytree_round_trip_keeps_the_pair():
     """
     import jax
 
-    solver = _legacy_wavebit.rcwa(backend='jax', polarization=(1, -1j))
+    solver = _legacy_wavebit_rcwa(backend='jax', polarization=(1, -1j))
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.polarization == (1, -1j)
@@ -821,14 +823,14 @@ def test_the_pair_carries_a_gradient_through_the_pytree():
     def total(solver):
         return solver.solve().T.sum()
 
-    grad = jax.grad(total)(_legacy_wavebit.rcwa(polarization=pair_of(0.7), **kw))
+    grad = jax.grad(total)(_legacy_wavebit_rcwa(polarization=pair_of(0.7), **kw))
     assert grad.polarization is not None
     assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization
 
     v = 0.7
-    via_pair = jax.grad(lambda p: total(_legacy_wavebit.rcwa(
+    via_pair = jax.grad(lambda p: total(_legacy_wavebit_rcwa(
         polarization=(jnp.sin(p), jnp.cos(p)), **kw)))(v)
-    via_psi = jax.grad(lambda p: total(_legacy_wavebit.rcwa(psi=p, **kw)))(v)
+    via_psi = jax.grad(lambda p: total(_legacy_wavebit_rcwa(psi=p, **kw)))(v)
     assert float(via_pair) == pytest.approx(float(via_psi), rel=1e-6)
 
 
@@ -836,7 +838,7 @@ def test_a_psi_solver_flattens_with_an_empty_pair_slot():
     """``None`` is an empty subtree, so nothing about a psi solver's flattening moved."""
     import jax
 
-    solver = _legacy_wavebit.rcwa(backend='jax', psi=0.7)
+    solver = _legacy_wavebit_rcwa(backend='jax', psi=0.7)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert back.polarization is None
@@ -849,8 +851,8 @@ def test_incidence_carries_the_pair():
     inc = Incidence(wavelength=CFG_2D['wavelength'], theta=CFG_2D['theta'],
                     phi=CFG_2D['phi'], polarization=(1, -1j))
     kw = {k: v for k, v in CFG_2D.items() if k not in ('wavelength', 'theta', 'phi')}
-    via_incidence = _legacy_wavebit.rcwa(incidence=inc, structure=STRUCTURE_2D, **kw).solve()
-    via_kwarg = _legacy_wavebit.rcwa(polarization=(1, -1j), structure=STRUCTURE_2D,
+    via_incidence = _legacy_wavebit_rcwa(incidence=inc, structure=STRUCTURE_2D, **kw).solve()
+    via_kwarg = _legacy_wavebit_rcwa(polarization=(1, -1j), structure=STRUCTURE_2D,
                                **CFG_2D).solve()
     _assert_same_sub(via_incidence.incident, via_kwarg.incident)
 
@@ -885,8 +887,8 @@ def test_spec_round_trips_the_pair():
 
 
 def test_run_executes_the_pair_spec():
-    result = _legacy_wavebit.run(_SPEC)
-    reference = _legacy_wavebit.rcwa(
+    result = _legacy_wavebit_run(_SPEC)
+    reference = _legacy_wavebit_rcwa(
         backend='numpy', wavelength=900.0, period=[700.0], truncation_order=[10, 0],
         top=1.0, bot=2.25, theta=0.0, phi=0.0, polarization=(1, -1j),
         structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]), thickness=[300.0],
@@ -909,8 +911,8 @@ def test_a_spec_without_the_pair_hashes_as_before():
 def test_chi_zero_is_the_psi_spelling(psi_v):
     """``chi = 0`` is the linear state at ``psi`` — the chart contains the angle it extends."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
-    _assert_same_sub(_legacy_wavebit.rcwa(psi=psi_v, **kw).solve().incident,
-                     _legacy_wavebit.rcwa(psi=psi_v, chi=0.0, **kw).solve().incident, atol=1e-13)
+    _assert_same_sub(_legacy_wavebit_rcwa(psi=psi_v, **kw).solve().incident,
+                     _legacy_wavebit_rcwa(psi=psi_v, chi=0.0, **kw).solve().incident, atol=1e-13)
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -926,8 +928,8 @@ def test_the_chart_is_the_pair_it_names(backend):
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
     kw['backend'] = backend
 
-    chart = _legacy_wavebit.rcwa(psi=psi_v, chi=chi_v, **kw).solve()
-    raw = _legacy_wavebit.rcwa(polarization=pair, **kw).solve()
+    chart = _legacy_wavebit_rcwa(psi=psi_v, chi=chi_v, **kw).solve()
+    raw = _legacy_wavebit_rcwa(polarization=pair, **kw).solve()
     np.testing.assert_allclose(np.asarray(chart.incident.T), np.asarray(raw.incident.T), atol=1e-12)
     np.testing.assert_allclose(np.asarray(chart.incident.t_s), np.asarray(raw.incident.t_s), atol=1e-12)
 
@@ -935,7 +937,7 @@ def test_the_chart_is_the_pair_it_names(backend):
 def test_the_chart_covers_the_states_the_angle_cannot():
     """The point of the second coordinate: ``chi`` sweeps linear to circular and back."""
     kw = dict(CFG_2D, structure=STRUCTURE_2D)
-    totals = [float(np.asarray(_legacy_wavebit.rcwa(psi=0.3, chi=c, **kw).solve().incident.T).sum())
+    totals = [float(np.asarray(_legacy_wavebit_rcwa(psi=0.3, chi=c, **kw).solve().incident.T).sum())
               for c in np.linspace(-np.pi / 4, np.pi / 4, 9)]
     assert max(totals) - min(totals) > 1e-3, totals          # not a constant in disguise
     assert totals == sorted(totals) or totals == sorted(totals, reverse=True) or True
@@ -944,21 +946,21 @@ def test_the_chart_covers_the_states_the_angle_cannot():
 def test_chi_is_exclusive_with_the_other_two_spellings():
     """One slot, three spellings: the chart, the raw pair, and the declaration."""
     with pytest.raises(ValueError, match='chi and polarization'):
-        _legacy_wavebit.rcwa(backend='numpy', chi=0.3, polarization=(1, 0))
+        _legacy_wavebit_rcwa(backend='numpy', chi=0.3, polarization=(1, 0))
     with pytest.raises(ValueError, match='chi and polarization'):
-        _legacy_wavebit.rcwa(backend='numpy', polarization=(1, 0)).chi = 0.3
+        _legacy_wavebit_rcwa(backend='numpy', polarization=(1, 0)).chi = 0.3
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        _legacy_wavebit.rcwa(backend='numpy', chi=0.3, tetm='te')
+        _legacy_wavebit_rcwa(backend='numpy', chi=0.3, tetm='te')
     with pytest.raises(ValueError, match='tetm and an incidence polarization'):
-        _legacy_wavebit.rcwa(backend='numpy', tetm='te').chi = 0.3
+        _legacy_wavebit_rcwa(backend='numpy', tetm='te').chi = 0.3
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 def test_complex_chi_is_refused(backend):
     """``chi`` is an angle for the same reason ``psi`` is: every state has real coordinates."""
     with pytest.raises(ValueError, match='chi must be a real angle'):
-        _legacy_wavebit.rcwa(backend=backend, chi=0.3 + 0.1j)
-    assert _legacy_wavebit.rcwa(backend=backend, chi=complex(0.3, 0.0)).chi is not None
+        _legacy_wavebit_rcwa(backend=backend, chi=0.3 + 0.1j)
+    assert _legacy_wavebit_rcwa(backend=backend, chi=complex(0.3, 0.0)).chi is not None
 
 
 def test_both_chart_coordinates_carry_a_gradient():
@@ -976,7 +978,7 @@ def test_both_chart_coordinates_carry_a_gradient():
     kw['backend'] = 'jax'
 
     def total(**inc):
-        return _legacy_wavebit.rcwa(**inc, **kw).solve().T.sum()
+        return _legacy_wavebit_rcwa(**inc, **kw).solve().T.sum()
 
     d_psi = jax.grad(lambda v: total(psi=v, chi=-0.2))(0.4)
     d_chi = jax.grad(lambda v: total(psi=0.4, chi=v))(-0.2)
@@ -995,12 +997,12 @@ def test_the_chart_survives_the_jax_pytree():
     """``chi`` is a child, not aux data — the same rule the pair now follows."""
     import jax
 
-    solver = _legacy_wavebit.rcwa(backend='jax', psi=0.4, chi=-0.2)
+    solver = _legacy_wavebit_rcwa(backend='jax', psi=0.4, chi=-0.2)
     leaves, treedef = jax.tree_util.tree_flatten(solver)
     back = jax.tree_util.tree_unflatten(treedef, leaves)
     assert float(np.asarray(back.chi)) == pytest.approx(-0.2)
     assert float(np.asarray(back.psi)) == pytest.approx(0.4)
-    assert _legacy_wavebit.rcwa(backend='jax', psi=0.4).chi is None
+    assert _legacy_wavebit_rcwa(backend='jax', psi=0.4).chi is None
 
 
 # ------------------------------------------------------------------ one resolved incidence
@@ -1050,7 +1052,7 @@ def test_an_integer_pair_still_carries_a_gradient():
     import jax
     import jax.numpy as jnp
 
-    solver = _legacy_wavebit.rcwa(backend='jax', structure=jnp.asarray(STRUCTURE_2D), polarization=(1, -1j),
+    solver = _legacy_wavebit_rcwa(backend='jax', structure=jnp.asarray(STRUCTURE_2D), polarization=(1, -1j),
                             **{k: v for k, v in CFG_2D.items() if k != 'backend'})
     grad = jax.grad(lambda s: s.solve().T.sum())(solver)
     assert all(abs(complex(np.asarray(g))) > 1e-6 for g in grad.polarization), grad.polarization
@@ -1079,7 +1081,7 @@ def test_a_refused_psi_does_not_claim_the_spelling_it_refused(backend):
     elif backend == 'torch':
         pytest.importorskip('torch')
     cfg = dict(CFG_2D, backend=backend)
-    solver = _legacy_wavebit.rcwa(structure=np.ones((2, 4, 4)) * 2.0, **cfg)   # CFG_2D names 2 layers
+    solver = _legacy_wavebit_rcwa(structure=np.ones((2, 4, 4)) * 2.0, **cfg)   # CFG_2D names 2 layers
     assert solver._psi_given is False, 'premise: psi came from the default, not from a caller'
     was = float(np.asarray(solver.psi))
 

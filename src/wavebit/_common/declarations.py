@@ -273,7 +273,7 @@ class _DeclaredFieldsOnly:
     *not* changed, with nothing to notice. The solver has refused that since 2026-08-27
     (``CoreFactorizationMixin.__setattr__``) and the excitation facade since its own door was
     closed; these six (``Layer``, ``Stack``, ``Incidence`` here, ``Numerics``, ``Sweep``,
-    ``JobSpec`` in ``src/wavebit/compat/_jobs_v1.py``) were the objects a spec is built from and kept the hole.
+    ``JobSpec`` in ``src/wavebit/_common/_jobs_v1.py``) were the objects a spec is built from and kept the hole.
     ``Material`` and ``TabulatedMaterial`` are frozen and refuse every assignment already.
 
     The rule is the solver's, so all three doors predict alike: a declared field, a leading

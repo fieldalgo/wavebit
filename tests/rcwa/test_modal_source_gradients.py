@@ -1,6 +1,10 @@
 """Modal tangents survive public solve keywords and source field snapshots."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.sources import PlaneWave as _legacy_wavebit_PlaneWave
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -14,10 +18,10 @@ CFG = dict(period=(600., 750.), wavelength=900., thickness=(170.,),
 def solver(backend, source):
     cfg = CFG.copy()
     if source:
-        cfg['excitation'] = [_legacy_wavebit.PlaneWave(), _legacy_wavebit.PlaneWave(side='bottom', amplitude=.3j)]
+        cfg['excitation'] = [_legacy_wavebit_PlaneWave(), _legacy_wavebit_PlaneWave(side='bottom', amplitude=.3j)]
     else:
         cfg.update(theta=0., phi=0.)
-    s = _legacy_wavebit.rcwa(backend=backend, **cfg, structure=BASE.copy())
+    s = _legacy_wavebit_rcwa(backend=backend, **cfg, structure=BASE.copy())
     s.formulation = 'first_order'
     return s
 
@@ -39,7 +43,7 @@ def test_retained_tensor_field_sensitivity(backend, source):
     if backend in ('jax', 'jit'):
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         geometry = s.freeze_geometry() if backend == 'jit' and not source else None
         calculation = jax.grad(lambda t: loss(s, jnp, t, geometry))
         if backend == 'jit':
@@ -65,7 +69,7 @@ def test_retained_tensor_field_sensitivity(backend, source):
 def test_compiled_modal_gradient_recomputes_the_basis_on_each_call_and_under_vmap():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     s = solver('jax', False)
     geometry = s.freeze_geometry()
     calculate = jax.jit(jax.value_and_grad(lambda t: loss(s, jnp, t, geometry)))

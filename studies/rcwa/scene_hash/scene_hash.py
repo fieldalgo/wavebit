@@ -83,20 +83,39 @@ if Path(_selected_wavebit.__file__).resolve() != _expected_origin:
         f'Selected root {_SELECTED_ROOT} requires {_expected_origin}; '
         f'wavebit was already imported from {_selected_wavebit.__file__}. '
         'Run this study in a fresh Python process.')
-try:
-    _legacy_wavebit = importlib.import_module('wavebit.compat.legacy')
-except ModuleNotFoundError as error:
-    if error.name not in ('wavebit.compat', 'wavebit.compat.legacy'):
-        raise
-    _legacy_wavebit = _selected_wavebit
-# These maintained experiments retain the historical factory/type contract.
-wavebit = _legacy_wavebit
+_CURRENT_LAYOUT = (_PACKAGE_PARENT / 'wavebit/rcwa/_factory.py').is_file()
 
 
 def _study_module(current, historical):
     """Load the matching private implementation in the selected checkout."""
     return importlib.import_module(
-        historical if _legacy_wavebit is _selected_wavebit else current)
+        current if _CURRENT_LAYOUT else historical)
+
+
+# Only an explicitly selected historical tree may supply the retired facade.
+_HISTORICAL_API = (None if _CURRENT_LAYOUT else
+    importlib.import_module('wavebit.compat.legacy')
+    if (_PACKAGE_PARENT / 'wavebit/compat/legacy.py').is_file() else _selected_wavebit)
+
+
+def _study_symbol(module, name):
+    if not _CURRENT_LAYOUT:
+        return getattr(_HISTORICAL_API, 'enable_x64' if name == '_enable_x64' else name)
+    owner = importlib.import_module(module)
+    if name == '_enable_x64' and not hasattr(owner, name):
+        # Src-layout snapshots before retirement kept this helper in the facade.
+        # Reproduce its explicit setup without requiring that facade to be installed.
+        def enable():
+            importlib.import_module('jax')
+            owner.lift_jax_x64(required=True)
+            scattering = importlib.import_module('wavebit.rcwa._engine.scattering')
+            scattering._register_pytree_if_jax_loaded()
+        return enable
+    return getattr(owner, name)
+
+_study_meshgrid_xy = _study_symbol('wavebit.lattice', 'meshgrid_xy')
+_study_rcwa = _study_symbol('wavebit.rcwa._factory', 'rcwa')
+
 
 
 def _backend_arg(name):
@@ -124,7 +143,7 @@ def _rod(basis, n=40, radius=ROD):
     below state theirs with ``cx = cy = 0``.
     """
     a1, a2 = np.asarray(basis)[:, 0], np.asarray(basis)[:, 1]
-    X, Y = (np.asarray(c) for c in wavebit.meshgrid_xy((n, n), lattice=basis))
+    X, Y = (np.asarray(c) for c in _study_meshgrid_xy((n, n), lattice=basis))
     inside = np.zeros(X.shape, dtype=bool)
     for i in (-1, 0, 1):                               # minimum image over the lattice
         for j in (-1, 0, 1):
@@ -179,7 +198,7 @@ def digest_one(cell, kind, side, backend):
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            solver = _legacy_wavebit.rcwa(
+            solver = _study_rcwa(
                 backend=_backend_arg(backend), structure=_structure(kind, basis),
                 lattice=np.asarray(basis).tolist(), truncation_order=[4, 4], thickness=[H],
                 wavelength=WL, top=1.0, bot=2.25, theta=0.3, phi=0.4, psi=0.2,

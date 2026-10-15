@@ -40,7 +40,7 @@ All three separate cleanly. The field comparison is out by the full 1.0 before t
 1.1e-5 and 1e-5 before, and machine precision after.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -61,7 +61,7 @@ def _bar(**kw):
 
 
 def _solver(tox, toy, backend='numpy'):
-    return _legacy_wavebit.rcwa(backend=backend, thickness=[300.0],
+    return _legacy_wavebit_rcwa(backend=backend, thickness=[300.0],
                         period=dict(x=PERIOD, y=PERIOD),
                         truncation_order=dict(x=tox, y=toy),
                         top=1, bot=1, wavelength=550.0, psi=0.0)
@@ -434,7 +434,7 @@ def test_the_x_fold_carries_its_own_weight():
     ``test_a_shape_filling_the_cell_gets_the_no_interface_constant`` does not cover.
     """
     def total(lx, ly, psi):
-        s = _legacy_wavebit.rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
+        s = _legacy_wavebit_rcwa(backend='numpy', thickness=[300.0], period=dict(x=PERIOD, y=PERIOD),
                          truncation_order=dict(x=5, y=5), top=1, bot=1,
                          wavelength=550.0, psi=psi)
         s.structure = [dict(background=1.0, shapes=[_bar(lx=lx, ly=ly, angle=0.0)])]

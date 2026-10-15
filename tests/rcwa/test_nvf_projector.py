@@ -39,7 +39,7 @@ control that pins the convention whatever the field does. See
   limit is never reached. Roughly one order, and no more.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -208,11 +208,11 @@ def test_a_1d_grating_reached_through_the_2d_path_costs_accuracy():
     kw = dict(structure=row, **{k: v for k, v in SOLVE_KW.items()
                                 if k not in ('factorization', 'truncation_order')},
               truncation_order=(8, 8))
-    exact = float(np.sum(np.asarray(_legacy_wavebit.rcwa(**kw, factorization='li').solve().T)))
+    exact = float(np.sum(np.asarray(_legacy_wavebit_rcwa(**kw, factorization='li').solve().T)))
     linear = float(np.sum(np.asarray(
-        _legacy_wavebit.rcwa(**kw, factorization='nvf').solve().T)))
+        _legacy_wavebit_rcwa(**kw, factorization='nvf').solve().T)))
     circular = float(np.sum(np.asarray(
-        _legacy_wavebit.rcwa(**kw, factorization='nvf', nvf_projector='circular').solve().T)))
+        _legacy_wavebit_rcwa(**kw, factorization='nvf', nvf_projector='circular').solve().T)))
 
     assert abs(linear - exact) < 1e-3, (
         f'the linear projector should be near Li on a 1D grating: {linear:.10f} against '
@@ -321,7 +321,7 @@ def test_a_circular_solve_conserves_energy(scene, name):
     stays Hermitian under an arbitrary projector, so a *wrong* one conserves energy just as
     exactly. This is a guard against a broken build, not evidence the projector is right.
     """
-    res = _legacy_wavebit.rcwa(structure=scene[None], **SOLVE_KW, nvf_projector='circular').solve()
+    res = _legacy_wavebit_rcwa(structure=scene[None], **SOLVE_KW, nvf_projector='circular').solve()
     total = float(np.sum(np.asarray(res.R)) + np.sum(np.asarray(res.T)))
     assert abs(total - 1.0) < 1e-11, f'{name}: R + T = {total:.12f}'
 
@@ -365,7 +365,7 @@ def test_both_projectors_converge_to_the_same_physics():
               theta=np.deg2rad(12), phi=np.deg2rad(30), psi=np.deg2rad(40), top=1., bot=1.)
 
     def total(structure, to, **over):
-        return float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+        return float(np.sum(np.asarray(_legacy_wavebit_rcwa(
             structure=structure, truncation_order=[to, to], **kw, **over).solve().T)))
 
     ref = total(shapes, 12)
@@ -421,8 +421,8 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
                factorization='nvf', raster_normal_method='distance')
 
     def mirror_gap(**over):
-        a = _legacy_wavebit.rcwa(structure=eps[None], **cfg, **over).solve()
-        b = _legacy_wavebit.rcwa(structure=eps[:, ::-1].copy()[None], **cfg, **over).solve()
+        a = _legacy_wavebit_rcwa(structure=eps[None], **cfg, **over).solve()
+        b = _legacy_wavebit_rcwa(structure=eps[:, ::-1].copy()[None], **cfg, **over).solve()
         return float(np.abs(np.asarray(a.R) - np.asarray(b.R)[:, ::-1]).max())
 
     assert mirror_gap() < 1e-12, "'distance' must mirror exactly under the linear projector"
@@ -439,10 +439,10 @@ def test_the_basis_is_chiral_and_that_is_where_the_cost_is():
         p_xx, p_xy, p_yx, p_yy = original(n_x, n_y, magnitude)
         return p_xx, np.conj(p_xy), np.conj(p_yx), p_yy
 
-    left = _legacy_wavebit.rcwa(structure=eps[None], **cfg, nvf_projector='circular').solve()
+    left = _legacy_wavebit_rcwa(structure=eps[None], **cfg, nvf_projector='circular').solve()
     _fac.jones_projector_fields = conjugated
     try:
-        right = _legacy_wavebit.rcwa(structure=eps[:, ::-1].copy()[None], **cfg,
+        right = _legacy_wavebit_rcwa(structure=eps[:, ::-1].copy()[None], **cfg,
                              nvf_projector='circular').solve()
     finally:
         _fac.jones_projector_fields = original
@@ -462,12 +462,12 @@ def test_it_is_refused_where_nothing_would_read_it():
     instead of silently choosing another field.
     """
     with pytest.raises(NotImplementedError, match="factorization='li' builds no normal field"):
-        _legacy_wavebit.rcwa(structure=DISC[None], **{**SOLVE_KW, 'factorization': 'li'},
+        _legacy_wavebit_rcwa(structure=DISC[None], **{**SOLVE_KW, 'factorization': 'li'},
                      nvf_projector='circular').solve()
 
 def test_an_unknown_value_names_the_ones_that_exist():
     with pytest.raises(ValueError, match=r"nvf_projector='bogus'.*'linear', 'circular'"):
-        _legacy_wavebit.rcwa(structure=DISC[None], **SOLVE_KW, nvf_projector='bogus')
+        _legacy_wavebit_rcwa(structure=DISC[None], **SOLVE_KW, nvf_projector='bogus')
 
 
 def test_the_axis_is_not_a_normal_method_value():
@@ -477,17 +477,18 @@ def test_the_axis_is_not_a_normal_method_value():
     is *built*, so folding it in would make one keyword of eight values where the two are
     genuinely independent — and every `raster_normal_method` would then need a circular twin.
     """
-    from wavebit.compat.legacy import NormalMethod, Projector
+    from wavebit.rcwa._engine.enums import NormalMethod
+    from wavebit.rcwa._engine.enums import Projector
     assert {m.value for m in NormalMethod}.isdisjoint({m.value for m in Projector})
     with pytest.raises(ValueError, match='raster_normal_method'):
-        _legacy_wavebit.rcwa(structure=DISC[None], **SOLVE_KW, raster_normal_method='circular')
+        _legacy_wavebit_rcwa(structure=DISC[None], **SOLVE_KW, raster_normal_method='circular')
 
 
 # ------------------------------------------------------------------ frozen geometry
 
 def test_a_frozen_field_carries_the_magnitude_it_was_frozen_for():
     """The record is the field, and under `'circular'` the field includes a magnitude."""
-    solver = _legacy_wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
+    solver = _legacy_wavebit_rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
     record = solver.freeze_geometry()
     assert len(record.normal_field[0]) == 3, 'the frozen field carried no magnitude'
     replayed = float(np.sum(np.asarray(solver.solve(geometry=record).T)))
@@ -503,7 +504,7 @@ def test_a_linear_record_is_refused_under_the_circular_projector():
     Serving it under `'circular'` would answer with `n n^T` while the solver reported
     `nvf_projector='circular'` — the unread knob again, one level down.
     """
-    solver = _legacy_wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW)
+    solver = _legacy_wavebit_rcwa(structure=ANNULUS[None], **SOLVE_KW)
     record = solver.freeze_geometry()
     solver.nvf_projector = 'circular'
     with pytest.raises(StaleGeometryError, match="frozen under nvf_projector='linear'"):
@@ -516,11 +517,11 @@ def test_a_circular_record_replays_under_the_linear_projector():
     Worth pinning rather than leaving to chance — the natural way to write the arity check is
     an equality, which would refuse this and force a re-freeze for nothing.
     """
-    solver = _legacy_wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
+    solver = _legacy_wavebit_rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
     record = solver.freeze_geometry()
     solver.nvf_projector = 'linear'
     replayed = float(np.sum(np.asarray(solver.solve(geometry=record).T)))
-    direct = float(np.sum(np.asarray(_legacy_wavebit.rcwa(structure=ANNULUS[None],
+    direct = float(np.sum(np.asarray(_legacy_wavebit_rcwa(structure=ANNULUS[None],
                                                   **SOLVE_KW).solve().T)))
     assert abs(replayed - direct) < 1e-12
 
@@ -548,7 +549,7 @@ def test_it_crosses_a_jit_boundary_and_carries_a_gradient():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
 
-    solver = _legacy_wavebit.rcwa(structure=ANNULUS[None], **{**SOLVE_KW, 'backend': 'jax'},
+    solver = _legacy_wavebit_rcwa(structure=ANNULUS[None], **{**SOLVE_KW, 'backend': 'jax'},
                           nvf_projector='circular')
     frozen = solver.freeze_geometry()
     eager = float(np.sum(np.asarray(solver.solve(geometry=frozen).T)))
@@ -561,7 +562,7 @@ def test_it_crosses_a_jit_boundary_and_carries_a_gradient():
     grad = np.asarray(grad)
     assert np.isfinite(grad).all(), 'the circular projector put a NaN in the gradient'
 
-    reference = _legacy_wavebit.rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
+    reference = _legacy_wavebit_rcwa(structure=ANNULUS[None], **SOLVE_KW, nvf_projector='circular')
     record = reference.freeze_geometry()
 
     def total(e):
@@ -583,7 +584,7 @@ def test_every_backend_builds_the_same_circular_projector(backend):
     """
     pytest.importorskip(backend)
     def total(which):
-        return float(np.sum(np.asarray(_legacy_wavebit.rcwa(
+        return float(np.sum(np.asarray(_legacy_wavebit_rcwa(
             structure=ANNULUS[None], **{**SOLVE_KW, 'backend': which},
             nvf_projector='circular').solve().T)))
 

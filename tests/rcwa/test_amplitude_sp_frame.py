@@ -28,7 +28,9 @@ conical path at ``phi = 0`` amplitude for amplitude and field for field, and the
 frame is *meant* to step -- an order's own ``kx = 0`` on the ``ky == 0`` row.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -48,7 +50,7 @@ _THICK = [120.0]
 
 
 def _solve(structure, period, truncation_order, phi, psi, theta=_THETA, backend='numpy', **kw):
-    return _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=1.0, thickness=_THICK,
+    return _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=1.0, thickness=_THICK,
                         wavelength=_WL, theta=theta, phi=phi, psi=psi, factorization='nvf',
                         structure=structure, period=list(period), truncation_order=list(truncation_order),
                         **kw).solve().incident
@@ -146,7 +148,7 @@ def _field_scene(grating, side, backend='numpy', theta=_THETA):
         phi, fx, fy, kw = _PHI1D, _FX1D, 0, dict(structure=_UC1D, psi=_PSI)
     else:
         phi, fx, fy, kw = 0.0, _FX1D, 0, dict(structure=_UC1D, tetm=grating)
-    solver = _legacy_wavebit.rcwa(backend=backend, top=1.0, bot=_N_BOT ** 2, thickness=_THICK,
+    solver = _legacy_wavebit_rcwa(backend=backend, top=1.0, bot=_N_BOT ** 2, thickness=_THICK,
                           wavelength=_WL, theta=theta, phi=phi, incidence_side=side,
                           period=[_PX, _PY], truncation_order=[fx, fy], answers='field', **kw)
     return solver, solver.solve(), _order_kxy(phi, theta=theta, fx=fx, fy=fy,
@@ -322,7 +324,7 @@ def test_the_traced_backends_reconstruct_in_the_same_frame(backend, side):
     """
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     _, result, (KX, KY) = _field_scene('2d', side, backend=backend)
     _assert_amplitudes_are_the_field(result, _incident_pair('2d'), KX, KY, side, tol=1e-11,
                                      min_negative_kx=10)
@@ -381,7 +383,7 @@ def test_the_traced_backends_quote_the_same_frame(backend):
     """
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
 
     a = _solve(_UC, (_PX, _PY), (_FX, _FY), np.pi / 2, _PSI, backend=backend)
     b = _solve(np.transpose(_UC, (0, 2, 1)), (_PY, _PX), (_FY, _FX), 0.0, -_PSI,
@@ -430,9 +432,9 @@ def _pure_and_coupled(tetm, side, theta, algorithm='ETM', backend='numpy', spell
     """The same light three ways: ``tetm``, and ``phi = 0`` with ``psi`` or with the pair."""
     kw = dict(_1D, backend=backend, theta=theta, incidence_side=side,
               layer_algorithm=algorithm, answers='field')
-    pure = _legacy_wavebit.rcwa(tetm=tetm, **kw)
+    pure = _legacy_wavebit_rcwa(tetm=tetm, **kw)
     incidence = {'psi': _PSI_OF[tetm]} if spelling == 'psi' else {'polarization': _PAIR[tetm]}
-    coupled = _legacy_wavebit.rcwa(phi=0.0, **incidence, **kw)
+    coupled = _legacy_wavebit_rcwa(phi=0.0, **incidence, **kw)
     return pure, pure.solve(), coupled, coupled.solve()
 
 
@@ -483,7 +485,7 @@ def test_the_traced_backends_put_the_pure_1d_path_in_the_same_frame(backend, tet
     """The sign is a real ``where`` multiplied into complex arrays, on every backend."""
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     _, a, _, b = _pure_and_coupled(tetm, side, theta, backend=backend)
     for field in _EVERY:
         x = _host(getattr(a.incident, field)).astype(np.complex128)
@@ -524,9 +526,9 @@ def test_an_order_at_exactly_kx_zero_takes_the_origin_frame():
     between the paths, not the sign itself.
     """
     kw = dict(_1D, kx=2 * np.pi / _1D['period'][0], answers='amplitude')
-    pure = _legacy_wavebit.rcwa(tetm='te', **kw)
+    pure = _legacy_wavebit_rcwa(tetm='te', **kw)
     a = pure.solve()
-    coupled = _legacy_wavebit.rcwa(polarization=(1, 0), **kw)     # a direct kx has no phi to give
+    coupled = _legacy_wavebit_rcwa(polarization=(1, 0), **kw)     # a direct kx has no phi to give
     b = coupled.solve()
     assert coupled.grating_type == 1, 'the pair was meant to take the conical path'
     kx = _kx(pure)
@@ -550,9 +552,9 @@ def test_a_complex_angle_keys_the_frame_on_the_real_part(tetm):
     kw = dict(structure=np.array([[[4.0, 4.0, 1.0, 1.0, 1.0, 1.0]]]), thickness=[0.3],
               period=[0.7], wavelength=0.9, top=4.0, bot=2.25, truncation_order=[5, 0],
               theta=np.pi / 6 + 0.2j, answers='amplitude')
-    pure = _legacy_wavebit.rcwa(tetm=tetm, **kw)
+    pure = _legacy_wavebit_rcwa(tetm=tetm, **kw)
     a = pure.solve()
-    b = _legacy_wavebit.rcwa(polarization=_PAIR[tetm], phi=0.0, **kw).solve()
+    b = _legacy_wavebit_rcwa(polarization=_PAIR[tetm], phi=0.0, **kw).solve()
     kx = _host(pure.order_kxy()[0]).astype(np.complex128).ravel()
     assert np.all(np.imag(kx) != 0) and (np.real(kx) < 0).sum() >= 3, kx
     for name in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
@@ -576,7 +578,7 @@ def test_on_the_ky_zero_row_an_amplitude_turns_over_where_its_own_kx_crosses_zer
     Order ``-1`` has ``kx = sin(theta) - 0.375``, zero at ``theta = asin(0.375)``.
     """
     theta_c = float(np.arcsin(0.375))
-    steps = [_legacy_wavebit.rcwa(tetm=tetm, theta=theta_c + d, backend='numpy', answers='amplitude',
+    steps = [_legacy_wavebit_rcwa(tetm=tetm, theta=theta_c + d, backend='numpy', answers='amplitude',
                           **_1D).solve().incident for d in (-3e-5, -1e-5, 1e-5, 3e-5)]
     at = (0, _1D['truncation_order'][0] - 1)
     name = 'r_s' if tetm == 'te' else 'r_p'

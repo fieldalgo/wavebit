@@ -13,7 +13,8 @@ import time
 import numpy as np
 
 from wavebit.rcwa._engine.conforming import periodic_seam_galerkin, periodic_seam_trace, periodic_rectangle_galerkin, cartesian_pair_galerkin, cartesian_pair_quadratic, cartesian_pair_opening, cartesian_pair, triangle_moments, material_sector
-from studies.rcwa.nvf_periodic_galerkin import nvf_periodic_galerkin; from studies.rcwa.nvf_pair_material_sector import nvf_pair_material_sector
+from studies.rcwa.nvf_periodic_galerkin import nvf_periodic_galerkin
+from studies.rcwa.nvf_pair_material_sector import nvf_pair_material_sector
 
 
 GAPS = (0., .001, 1e-5, 1e-9)

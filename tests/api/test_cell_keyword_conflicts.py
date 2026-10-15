@@ -1,6 +1,6 @@
 """One call cannot choose two cell spellings and silently discard one."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -11,7 +11,7 @@ CFG = dict(structure=np.full((1, 2, 2), 4.), thickness=(100.,),
 
 
 def solver(backend='numpy', **kwargs):
-    return _legacy_wavebit.rcwa(backend=backend, **CFG, **(dict(period=(600., 750.)) | kwargs))
+    return _legacy_wavebit_rcwa(backend=backend, **CFG, **(dict(period=(600., 750.)) | kwargs))
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -27,7 +27,7 @@ def test_every_keyword_door_refuses_two_cell_spellings_before_assignment(backend
     if reverse:
         cell = dict(reversed(list(cell.items())))
     with pytest.raises(ValueError, match='period and lattice both given'):
-        _legacy_wavebit.rcwa(backend=backend, **CFG, **cell)
+        _legacy_wavebit_rcwa(backend=backend, **CFG, **cell)
     before = s.period
     kwargs = dict(thickness=(200.,), **cell)
     with pytest.raises(ValueError, match='period and lattice both given'):

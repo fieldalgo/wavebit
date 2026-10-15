@@ -1,10 +1,9 @@
-"""Compatibility facade for general FDTD on a uniform Yee grid.
+"""Internal normalized general-scene engine on a uniform Yee grid.
 
-Use ``from wavebit.compat.legacy import fd`` for the normalized Scene/Run API documented
-here. Its numerical kernels also serve the current physical API in ``wavebit.fdtd``, whose
-Problem/Numerics and check/prepare/run lifecycle convert declared units, time in seconds,
-and physical H fields at the public boundary. The periodic compatibility factory is
-``wavebit.compat.legacy.fdtd``. Importing this facade does not load JAX or PyTorch.
+The physical API in ``wavebit.fdtd`` lowers Problem/Numerics declarations into
+this implementation, converting time, material rates and H fields at its boundary.
+Numerical regression instruments may use these private declarations directly.
+Importing this module does not load JAX or PyTorch.
 
 The following conventions describe this normalized compatibility API and its kernels:
 

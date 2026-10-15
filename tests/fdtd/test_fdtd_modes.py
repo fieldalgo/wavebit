@@ -1,6 +1,8 @@
 """Ringdown inversion against exponentials and independent discrete ADE poles."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
+
+from wavebit.fdtd._periodic.probes import fit_fdtd_modes as _legacy_wavebit_fit_fdtd_modes
 import numpy as np
 import pytest
 
@@ -16,7 +18,7 @@ def test_complex_modes_preserve_frequency_sign_decay_and_time_origin(pencil):
     frequency, decay = np.array([-.31, .27, .41]), np.array([.04, .03, -.02])
     amplitude = np.array([1+.2j, -.3+.6j, .2j])
     signal = trace(t-t[0], frequency, decay, amplitude)
-    out = _legacy_wavebit.fit_fdtd_modes(t, signal, modes=3, pencil=pencil)
+    out = _legacy_wavebit_fit_fdtd_modes(t, signal, modes=3, pencil=pencil)
     np.testing.assert_allclose(out['frequency'], frequency, atol=2e-11)
     np.testing.assert_allclose(out['decay_rate'], decay, atol=2e-11)
     np.testing.assert_allclose(out['amplitude'], amplitude, atol=2e-10)
@@ -32,7 +34,7 @@ def test_real_cosine_keeps_both_conjugate_modes_and_selected_sample_origin():
     t = np.arange(400)*.05
     signal = 2*np.exp(-.06*t)*np.cos(2*np.pi*.7*t+.3)
     saved = signal.copy()
-    out = _legacy_wavebit.fit_fdtd_modes(t, signal, modes=2, start=2.02, stop=17.04)
+    out = _legacy_wavebit_fit_fdtd_modes(t, signal, modes=2, start=2.02, stop=17.04)
     start = t[t >= 2.02][0]
     amplitudes = np.exp(-.06*start)*np.exp(1j*np.array([1., -1.])*(2*np.pi*.7*start+.3))
     np.testing.assert_allclose(out['frequency'], [-.7, .7], atol=1e-12)
@@ -46,7 +48,7 @@ def test_real_cosine_keeps_both_conjugate_modes_and_selected_sample_origin():
 def test_signal_scaling_does_not_overflow_or_change_poles(scale):
     t = np.arange(300)*.1
     unit = trace(t, [-.2, .3], [.08, -.03], [1+.4j, .2-.3j])
-    out = _legacy_wavebit.fit_fdtd_modes(t, scale*unit, modes=2)
+    out = _legacy_wavebit_fit_fdtd_modes(t, scale*unit, modes=2)
     np.testing.assert_allclose(out['frequency'], [-.2, .3], atol=1e-12)
     np.testing.assert_allclose(out['decay_rate'], [.08, -.03], atol=1e-12)
     np.testing.assert_allclose(out['amplitude']/scale, [1+.4j, .2-.3j], atol=2e-12)
@@ -59,17 +61,17 @@ def test_noisy_close_modes_and_underfitting_report_different_residuals():
     signal = trace(t, [1., 1.007], [.005, .009], [1., .6j])
     rng = np.random.default_rng(31)
     signal += 1e-6*(rng.normal(size=len(t))+1j*rng.normal(size=len(t)))
-    out = _legacy_wavebit.fit_fdtd_modes(t, signal, modes=2, pencil=200)
+    out = _legacy_wavebit_fit_fdtd_modes(t, signal, modes=2, pencil=200)
     np.testing.assert_allclose(out['frequency'], [1., 1.007], atol=2e-5)
     np.testing.assert_allclose(out['decay_rate'], [.005, .009], atol=2e-5)
     assert out['relative_residual'] < 1e-5
-    underfit = _legacy_wavebit.fit_fdtd_modes(t, signal, modes=1, pencil=200)
+    underfit = _legacy_wavebit_fit_fdtd_modes(t, signal, modes=1, pencil=200)
     assert underfit['relative_residual'] > .01
 
 
 def test_sampling_alias_is_reported_on_the_signed_nyquist_branch():
     t = np.arange(100)*.5
-    out = _legacy_wavebit.fit_fdtd_modes(t, np.exp((-0.03-2j*np.pi*1.2)*t))
+    out = _legacy_wavebit_fit_fdtd_modes(t, np.exp((-0.03-2j*np.pi*1.2)*t))
     np.testing.assert_allclose(out['frequency'], [-.8], atol=1e-12)
     np.testing.assert_allclose(out['decay_rate'], [.03], atol=1e-12)
 
@@ -77,8 +79,8 @@ def test_sampling_alias_is_reported_on_the_signed_nyquist_branch():
 def test_an_algebraic_tail_does_not_produce_a_window_independent_lifetime():
     t = np.arange(801)*.1
     signal = (t+10)**-1.5*np.exp(-2j*np.pi*.3*t)
-    early = _legacy_wavebit.fit_fdtd_modes(t, signal, stop=40.)
-    late = _legacy_wavebit.fit_fdtd_modes(t, signal, start=40.)
+    early = _legacy_wavebit_fit_fdtd_modes(t, signal, stop=40.)
+    late = _legacy_wavebit_fit_fdtd_modes(t, signal, start=40.)
     np.testing.assert_allclose(early['frequency'], [.3], atol=1e-12)
     np.testing.assert_allclose(late['frequency'], [.3], atol=1e-12)
     assert early['decay_rate'][0] > 2*late['decay_rate'][0]
@@ -89,7 +91,7 @@ def material_record(dt, backend='numpy'):
     # Constant displacement epsilon*E+P makes the source-free Lorentz medium
     # a scalar oscillator at omega^2=omega0^2+strength/epsilon, plus a DC term.
     e = np.zeros((3, 4, 2, 2)); e[1] = 1
-    result = _legacy_wavebit.fdtd_grid(np.full((4, 2, 2), 2.), spacing=(1.,)*3, dt=dt,
+    result = _legacy_wavebit_fdtd_grid(np.full((4, 2, 2), 2.), spacing=(1.,)*3, dt=dt,
                                 steps=round(16/dt), electric=e, poles=[(3., .1, 2.)],
                                 backend=backend, record_field=1, record_components=['ey'],
                                 record_region=(1, 0, 0))
@@ -106,7 +108,7 @@ def test_actual_yee_ade_records_recover_independent_discrete_poles(backend):
         pytest.importorskip('torch')
     dt = .05
     t, signal = material_record(dt, backend)
-    out = _legacy_wavebit.fit_fdtd_modes(t, signal, modes=3, start=1.)
+    out = _legacy_wavebit_fit_fdtd_modes(t, signal, modes=3, start=1.)
     hold = (1-.1*dt/2)/(1+.1*dt/2)
     gain = (2-(3.**2+2./2.)*dt**2)/(1+.1*dt/2)
     roots = np.linalg.eigvals([[gain, -hold], [1., 0.]])
@@ -124,7 +126,7 @@ def test_damped_medium_modes_converge_to_the_continuous_oscillator():
     errors = []
     for dt in (.08, .04, .02):
         t, signal = material_record(dt)
-        out = _legacy_wavebit.fit_fdtd_modes(t, signal, modes=3)
+        out = _legacy_wavebit_fit_fdtd_modes(t, signal, modes=3)
         errors.append(abs(out['frequency'][-1]-frequency))
         np.testing.assert_allclose(out['decay_rate'][-1], .05, rtol=1e-5)
     assert errors[-1] < 1e-4
@@ -140,7 +142,7 @@ def test_damped_medium_modes_converge_to_the_continuous_oscillator():
 def test_invalid_fit_options_are_refused(changes):
     t = np.arange(21, dtype=float)
     with pytest.raises(ValueError):
-        _legacy_wavebit.fit_fdtd_modes(t, np.exp(-.02*t), **changes)
+        _legacy_wavebit_fit_fdtd_modes(t, np.exp(-.02*t), **changes)
 
 
 @pytest.mark.parametrize('kind', ['irregular', 'repeated', 'complex_time', 'short', 'nan',
@@ -168,4 +170,4 @@ def test_bad_records_and_unresolved_models_are_refused(kind):
     else:
         signal = np.array(['a']*21)
     with pytest.raises(ValueError):
-        _legacy_wavebit.fit_fdtd_modes(t, signal, modes=modes)
+        _legacy_wavebit_fit_fdtd_modes(t, signal, modes=modes)

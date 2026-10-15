@@ -3,7 +3,11 @@
 36 planar cases against RCWA; not evidence for patterned magnetic/dispersive 3D.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.legacy import permittivity_at as _legacy_wavebit_permittivity_at
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import importlib.metadata
 import json
 import sys
@@ -32,11 +36,11 @@ def main():
                         omega = 2*np.pi/900.
                         poles = [(0., .2*omega, .4*omega**2)]
                         extra = dict(dispersion=np.ones(shape, dtype=int), poles={1: poles})
-                        ref_kw['structure'] = np.full(shape, _legacy_wavebit.permittivity_at(
+                        ref_kw['structure'] = np.full(shape, _legacy_wavebit_permittivity_at(
                             poles, 900., eps_infinity=2.25))
-                    result, diag = _legacy_wavebit.fdtd(**common, **extra, resolution=.04,
+                    result, diag = _legacy_wavebit_fdtd(**common, **extra, resolution=.04,
                                                n_periods=80, return_diagnostics=True)
-                    ref = _legacy_wavebit.rcwa(backend='numpy', **ref_kw).solve()
+                    ref = _legacy_wavebit_rcwa(backend='numpy', **ref_kw).solve()
                     gap = max(float(np.max(np.abs(getattr(result.incident, key)
                                                   - getattr(ref.incident, key))))
                               for key in ('r_s', 'r_p', 't_s', 't_p'))

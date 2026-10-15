@@ -1,6 +1,20 @@
 """Tensor Li: scalar reduction, independent laminate relations and live gradients."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common._jobs_v1 import JobSpec as _legacy_wavebit_JobSpec
+
+from wavebit._common.periodic import Layer as _legacy_wavebit_Layer
+
+from wavebit._common._jobs_v1 import Numerics as _legacy_wavebit_Numerics
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.lattice import meshgrid_xy as _legacy_wavebit_meshgrid_xy
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import numpy as np
 import pytest
 
@@ -28,7 +42,7 @@ def scene(backend='numpy', width=240., mat=None, **kw):
     options.update(kw)
     if options.get('lattice') is not None:
         options.pop('period', None)
-    return _legacy_wavebit.rcwa(**options)
+    return _legacy_wavebit_rcwa(**options)
 
 
 @pytest.mark.parametrize('coefficients', ['sampled', 'integrated'])
@@ -95,7 +109,7 @@ def test_magnetic_painting_matches_raster_and_conserves_passivity(backend,loss):
     shapes = [dict(type='rectangle',lx=300.,ly=300.,material=a),
               dict(type='rectangle',lx=150.,ly=150.,cx=75.,cy=75.,material=b)]
     s = scene(backend,structure=[dict(background=1.,shapes=shapes)])
-    X,Y = _legacy_wavebit.meshgrid_xy((8,8),period=(600.,600.))
+    X,Y = _legacy_wavebit_meshgrid_xy((8,8),period=(600.,600.))
     eps = np.broadcast_to(np.eye(3),(8,8,3,3)).copy().astype(complex)
     mu = eps.copy()
     for shape in shapes:
@@ -234,13 +248,13 @@ def test_fixed_rotation_keeps_nested_torch_material_components_live():
 
 def test_li_tensor_spec_round_trip_keeps_the_selected_rule():
     s = scene()
-    spec = _legacy_wavebit.JobSpec(
-        stack=_legacy_wavebit.Stack([_legacy_wavebit.Layer(173.,s.structure[0])],period=(600.,600.),top=1.,bot=2.25),
-        incidence=_legacy_wavebit.Incidence(wavelength=730.,theta=.23,phi=.19),
-        numerics=_legacy_wavebit.Numerics(factorization='li',truncation_order=(2,1)),
+    spec = _legacy_wavebit_JobSpec(
+        stack=_legacy_wavebit_Stack([_legacy_wavebit_Layer(173.,s.structure[0])],period=(600.,600.),top=1.,bot=2.25),
+        incidence=_legacy_wavebit_Incidence(wavelength=730.,theta=.23,phi=.19),
+        numerics=_legacy_wavebit_Numerics(factorization='li',truncation_order=(2,1)),
     )
-    restored = _legacy_wavebit.JobSpec.from_json(spec.to_json())
-    np.testing.assert_allclose(_legacy_wavebit.run(restored).T,s.solve().T,atol=2e-12,rtol=0)
+    restored = _legacy_wavebit_JobSpec.from_json(spec.to_json())
+    np.testing.assert_allclose(_legacy_wavebit_run(restored).T,s.solve().T,atol=2e-12,rtol=0)
 
 
 def test_jitted_tensor_li_field_reuses_the_geometry_plan():

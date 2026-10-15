@@ -1,6 +1,12 @@
 """Exact point-lattice rebasing, original Fourier sets and live physical data."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.conforming import ConformingNVF as _legacy_wavebit_ConformingNVF
+
+from wavebit.rcwa._engine.factorization import ConvMatrices as _legacy_wavebit_ConvMatrices
+
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import numpy as np
 from tests.fixtures.common._conv_frame import about_centre, slots_about_centre
 import pytest
@@ -41,7 +47,7 @@ def contact_reference(layer, lattice, order, axis, angle):
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_original_cell_origin_and_retained_orders_match_analytic_material_integrals(transform, axis, order):
     structure, lattice = rebased_scene(transform=transform, axis=axis, preserve_positions=False)
-    builder = _legacy_wavebit.ConformingNVF(order, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(order, **SETTINGS)
     plan = builder.plan(structure, lattice)
     t = np.asarray(plan.reduction)
     assert round(np.linalg.det(t)) == 1
@@ -65,7 +71,7 @@ def test_rebased_contact_matches_independent_inverse_rules(transform, axis):
     p[1] = 0.
     structure, lattice = rebased_scene(p, transform, axis=axis, preserve_positions=False)
     order = (2, 1)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     expected = contact_reference(structure[0], lattice, order, axis, p[9])
     for got, want in zip(actual, expected):
         np.testing.assert_allclose(got[0], want, atol=4e-12, rtol=0)
@@ -77,7 +83,7 @@ def test_rebased_contact_matches_independent_inverse_rules(transform, axis):
 def test_nonrectangular_retained_set_is_selected_before_energy_closure(monkeypatch, axis, transform):
     structure, lattice = rebased_scene(transform=transform, axis=axis)
     order = (2, 1)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     reference_structure, reference_lattice = complex_scene(axis=axis)
     n, m = np.meshgrid(np.arange(-order[1], order[1]+1), np.arange(-order[0], order[0]+1), indexing='ij')
     # Match physical reciprocal vectors; this does not use the implementation's
@@ -89,12 +95,12 @@ def test_nonrectangular_retained_set_is_selected_before_energy_closure(monkeypat
     envelope = tuple(np.max(np.abs(labels), axis=1))
     index = (labels[1]+envelope[1])*(2*envelope[0]+1)+labels[0]+envelope[0]
     captured = []
-    close = _legacy_wavebit.ConvMatrices.from_energy
+    close = _legacy_wavebit_ConvMatrices.from_energy
     def capture(cls, change, gram, longitudinal):
         captured.append((change, gram, longitudinal))
         return close(change, gram, longitudinal)
-    monkeypatch.setattr(_legacy_wavebit.ConvMatrices, 'from_energy', classmethod(capture))
-    _legacy_wavebit.ConformingNVF(envelope, **SETTINGS).conv_matrices(reference_structure, reference_lattice)
+    monkeypatch.setattr(_legacy_wavebit_ConvMatrices, 'from_energy', classmethod(capture))
+    _legacy_wavebit_ConformingNVF(envelope, **SETTINGS).conv_matrices(reference_structure, reference_lattice)
     q, g, z = captured[0]
     both = np.r_[index, index+len(z)]
     expected = slots_about_centre(
@@ -109,7 +115,7 @@ def test_nonrectangular_retained_set_is_selected_before_energy_closure(monkeypat
 def test_identical_physical_mode_sets_preserve_positive_gap_engine_results(axis, transform, order):
     structure, lattice = rebased_scene(transform=transform, axis=axis)
     reference_structure, reference_lattice = complex_scene(axis=axis)
-    builder = _legacy_wavebit.ConformingNVF(order, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(order, **SETTINGS)
     actual = builder.conv_matrices(structure, lattice)
     reference = builder.conv_matrices(reference_structure, reference_lattice)
     for got, want in zip(actual, reference):
@@ -123,7 +129,7 @@ def test_identical_physical_mode_sets_preserve_positive_gap_engine_results(axis,
 def test_rebased_mixed_axis_contact_stack_matches_analytic_controls_on_three_engines(backend):
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
@@ -132,13 +138,13 @@ def test_rebased_mixed_axis_contact_stack_matches_analytic_controls_on_three_eng
     vertical, _ = rebased_scene(p, losses=(.9, 0., .3), axis=1)
     uniform = 2.3+.7j
     order = (2, 1)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(
         horizontal+[dict(background=uniform)]+vertical, lattice)
     identity = np.eye(15, dtype=complex)
     layers = [contact_reference(horizontal[0], lattice, order, 0, p[9]),
               (uniform*identity, uniform*identity, identity/uniform, 0*identity, 0*identity),
               contact_reference(vertical[0], lattice, order, 1, p[9])]
-    expected = _legacy_wavebit.ConvMatrices(*(np.stack([layer[i] for layer in layers]) for i in range(5)))
+    expected = _legacy_wavebit_ConvMatrices(*(np.stack([layer[i] for layer in layers]) for i in range(5)))
     np.testing.assert_allclose(solve(actual, lattice, order, scale=.65, backend=backend),
                                solve(expected, lattice, order, scale=.65), atol=2e-10, rtol=0)
 
@@ -149,7 +155,7 @@ def test_rebased_geometry_storage_loss_and_period_derivatives_remain_live(axis, 
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*rebased_scene(transform=transform, axis=axis))
     parameters = np.r_[PARAMETERS, .3, .8, 2.1]
     def objective(p, xp):
@@ -174,7 +180,7 @@ def test_rebasing_preserves_contact_opening_derivatives_for_identical_physical_m
     jax.config.update('jax_enable_x64', True)
     p = PARAMETERS.copy()
     p[[1, 3]] = 0.
-    builder = _legacy_wavebit.ConformingNVF(order, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(order, **SETTINGS)
     original_plan = builder.plan(*complex_scene(p, axis=axis))
     rebased_plan = builder.plan(*rebased_scene(p, transform, axis=axis))
     directions = jnp.asarray(np.eye(12)[[1, 3]])
@@ -194,11 +200,11 @@ def test_replay_rejects_a_changed_reduction_or_genuinely_nonorthogonal_lattice()
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(0, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(0, **SETTINGS)
     structure, lattice = rebased_scene()
     plan = builder.plan(structure, lattice)
     for reduction in (((2, 0), (0, 1)), ((0, 1), (1, 0)), ((1., 0), (0, 1)), ((1, 0),), None):
-        with pytest.raises(_legacy_wavebit.StaleGeometryError, match='reduction'):
+        with pytest.raises(_legacy_wavebit_StaleGeometryError, match='reduction'):
             builder.conv_matrices(structure, lattice, plan=plan._replace(reduction=reduction))
     with pytest.raises(ValueError, match='orthogonal'):
         builder.conv_matrices(structure, lattice, plan=plan._replace(reduction=((1, 0), (0, 1))))

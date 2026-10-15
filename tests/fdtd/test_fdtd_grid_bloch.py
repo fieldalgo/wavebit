@@ -1,6 +1,6 @@
 """Bloch wrapping and native Yee phasing verified against discrete Maxwell modes."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -24,7 +24,7 @@ def test_arbitrary_three_axis_bloch_eigenmode_and_boundary_monitor():
             exponent=sum(k[2-a]*(coords[a]+offset[2-a]*spacing[a]) for a in range(3))
             value[component]=amp*np.exp(1j*exponent+1j*omega*time)
     phase=k[::-1]*spacing*np.array(shape)
-    out=_legacy_wavebit.fdtd_grid(np.full(shape,2.),spacing=spacing,dt=dt,steps=steps,
+    out=_legacy_wavebit_fdtd_grid(np.full(shape,2.),spacing=spacing,dt=dt,steps=steps,
                          electric=e,magnetic=h,bloch_phase=phase,
                          wavelengths=[2*np.pi/omega],monitor_z=[0,3])
     np.testing.assert_allclose(out['E'],e*np.exp(-1j*omega*dt*steps),atol=2e-14)
@@ -45,7 +45,7 @@ def test_bloch_phase_gradient_and_numpy_jax_parity():
     kw=dict(spacing=(1.,)*3,dt=.2,steps=23,electric=electric,wavelengths=[4.],monitor_z=[0])
     phase=jnp.array([.3,-.2,.4])
     def run(p,backend='jax'):
-        return _legacy_wavebit.fdtd_grid(np.ones((7,5,4)),bloch_phase=p,backend=backend,**kw)
+        return _legacy_wavebit_fdtd_grid(np.ones((7,5,4)),bloch_phase=p,backend=backend,**kw)
     a=jax.jit(run)(phase);b=run(np.asarray(phase),'numpy')
     for key in ('E','H','electric_spectrum','magnetic_spectrum'):
         np.testing.assert_allclose(a[key],b[key],atol=2e-13)
@@ -60,7 +60,7 @@ def test_bloch_phase_gradient_and_numpy_jax_parity():
 
 def test_cpml_requires_zero_longitudinal_bloch_phase():
     with pytest.raises(ValueError):
-        _legacy_wavebit.fdtd_grid(np.ones((12,3,3)),spacing=(1.,)*3,dt=.2,steps=10,
+        _legacy_wavebit_fdtd_grid(np.ones((12,3,3)),spacing=(1.,)*3,dt=.2,steps=10,
                          pml_cells=2,bloch_phase=(.1,0.,0.))
 
 
@@ -70,7 +70,7 @@ def test_explicit_single_precision_scan_with_x64_enabled_and_cpml_monitor():
     jax.config.update('jax_enable_x64',True)
     source=jnp.zeros((3,16,3,3),dtype=jnp.complex64).at[0,7].set(1)
     def run(eps):
-        return _legacy_wavebit.fdtd_grid(eps,mu=jnp.float32(1),conductivity=jnp.float32(0),
+        return _legacy_wavebit_fdtd_grid(eps,mu=jnp.float32(1),conductivity=jnp.float32(0),
                                 bloch_phase=jnp.zeros(3,dtype=jnp.float32),
                                 spacing=(1.,)*3,dt=.2,steps=20,pml_cells=3,
                                 source=source,pulse=jnp.sin(jnp.arange(20)*.2),

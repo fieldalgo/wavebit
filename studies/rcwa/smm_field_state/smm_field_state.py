@@ -85,20 +85,39 @@ if Path(_selected_wavebit.__file__).resolve() != _expected_origin:
         f'Selected root {_SELECTED_ROOT} requires {_expected_origin}; '
         f'wavebit was already imported from {_selected_wavebit.__file__}. '
         'Run this study in a fresh Python process.')
-try:
-    _legacy_wavebit = importlib.import_module('wavebit.compat.legacy')
-except ModuleNotFoundError as error:
-    if error.name not in ('wavebit.compat', 'wavebit.compat.legacy'):
-        raise
-    _legacy_wavebit = _selected_wavebit
-# These maintained experiments retain the historical factory/type contract.
-wavebit = _legacy_wavebit
+_CURRENT_LAYOUT = (_PACKAGE_PARENT / 'wavebit/rcwa/_factory.py').is_file()
 
 
 def _study_module(current, historical):
     """Load the matching private implementation in the selected checkout."""
     return importlib.import_module(
-        historical if _legacy_wavebit is _selected_wavebit else current)
+        current if _CURRENT_LAYOUT else historical)
+
+
+# Only an explicitly selected historical tree may supply the retired facade.
+_HISTORICAL_API = (None if _CURRENT_LAYOUT else
+    importlib.import_module('wavebit.compat.legacy')
+    if (_PACKAGE_PARENT / 'wavebit/compat/legacy.py').is_file() else _selected_wavebit)
+
+
+def _study_symbol(module, name):
+    if not _CURRENT_LAYOUT:
+        return getattr(_HISTORICAL_API, 'enable_x64' if name == '_enable_x64' else name)
+    owner = importlib.import_module(module)
+    if name == '_enable_x64' and not hasattr(owner, name):
+        # Src-layout snapshots before retirement kept this helper in the facade.
+        # Reproduce its explicit setup without requiring that facade to be installed.
+        def enable():
+            importlib.import_module('jax')
+            owner.lift_jax_x64(required=True)
+            scattering = importlib.import_module('wavebit.rcwa._engine.scattering')
+            scattering._register_pytree_if_jax_loaded()
+        return enable
+    return getattr(owner, name)
+
+_study_Material = _study_symbol('wavebit.materials.response', 'Material')
+_study_rcwa = _study_symbol('wavebit.rcwa._factory', 'rcwa')
+
 
 
 import mpmath as mp                                        # noqa: E402
@@ -159,7 +178,7 @@ PATHS = [('conical', 'second_order'), ('2d', 'second_order'), ('te', None), ('tm
 
 def plane_wave_worst(scene, kind, form, algo):
     _, theta, eps, mu, side, eps_inc, thick = scene
-    layer = eps if mu == 1.0 else wavebit.Material(eps, mu=mu)
+    layer = eps if mu == 1.0 else _study_Material(eps, mu=mu)
     top, bot = (eps_inc, layer) if side == 'top' else (layer, layer)
     kw = dict(top=top, bot=bot, theta=theta, wavelength=WL, thickness=[thick],
               layer_algorithm=algo, answers='field', incidence_side=side)
@@ -170,7 +189,7 @@ def plane_wave_worst(scene, kind, form, algo):
         kw.update(psi=np.pi / 2, phi=PHI, truncation_order=[0], period=[2000.])
     else:
         kw.update(tetm=kind, truncation_order=[0], period=[2000.])
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _study_rcwa(**kw)
     solver.structure = np.full(grid, eps, dtype=complex)
     if mu != 1.0:
         solver.mu = np.full(grid, mu, dtype=complex)
@@ -250,7 +269,7 @@ CASES = {
 
 
 def grating_field(algo, case, thickness, theta=THETA, answers='field', width=0):
-    solver = _legacy_wavebit.rcwa(top=1.0, bot=25.0, theta=theta, wavelength=WL,
+    solver = _study_rcwa(top=1.0, bot=25.0, theta=theta, wavelength=WL,
                           thickness=list(thickness), layer_algorithm=algo, answers=answers,
                           complex_dtype=width, **CASES[case])
     res = solver.solve(auto_detune=False)
@@ -314,7 +333,7 @@ def section_grows_below():
     rows = {}
     for algo in ('ETM', 'SMM'):
         def te():
-            s = _legacy_wavebit.rcwa(top=1.0, bot=2.25, theta=THETA, wavelength=WL, tetm='te',
+            s = _study_rcwa(top=1.0, bot=2.25, theta=THETA, wavelength=WL, tetm='te',
                              thickness=[d for _, d in layers], truncation_order=[0], period=[2000.],
                              structure=np.array([[[e] * 4] for e, _ in layers], dtype=complex),
                              layer_algorithm=algo, answers='field')
@@ -329,7 +348,7 @@ def section_grows_below():
 # --------------------------------------------------------------------------- 4 own medium
 
 def chip(algo, form='second_order', nudge=1.0):
-    s = _legacy_wavebit.rcwa(top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41, psi=0.27,
+    s = _study_rcwa(top=2.25, bot=2.25, theta=CHIP_THETA * nudge, phi=0.41, psi=0.27,
                      wavelength=1000., period=[1654.489947568981], truncation_order=[7],
                      thickness=[4869.], structure=np.full((1, 1, 8), 2.25 + 0j),
                      layer_algorithm=algo, answers='field', incidence_side='bottom')
@@ -358,7 +377,7 @@ def raster(eps_hi, eps_lo=1.0, n=16):
 
 
 def metal_field(algo, form, theta, thickness):
-    s = _legacy_wavebit.rcwa(top=1.0, bot=2.25, theta=theta, wavelength=600., psi=np.pi / 3,
+    s = _study_rcwa(top=1.0, bot=2.25, theta=theta, wavelength=600., psi=np.pi / 3,
                      phi=0.4, structure=raster(-15 + 0.8j), truncation_order=[5, 5],
                      period=[400., 400.], thickness=thickness, layer_algorithm=algo,
                      answers='field', factorization='li')
@@ -371,7 +390,7 @@ def metal_field(algo, form, theta, thickness):
 def dng_field(algo, form):
     eps, mu = RASTER.astype(complex), np.ones(RASTER.shape, dtype=complex)
     eps[RASTER == 25.0], mu[RASTER == 25.0] = -4 - 0.1j, -1 - 0.05j
-    s = _legacy_wavebit.rcwa(top=1.0, bot=2.0, theta=0.5, phi=PHI, psi=np.pi / 2,
+    s = _study_rcwa(top=1.0, bot=2.0, theta=0.5, phi=PHI, psi=np.pi / 2,
                      wavelength=WL, thickness=[100., 60.], truncation_order=[3, 3],
                      period=[1200., 1200.], layer_algorithm=algo, answers='field')
     s.structure, s.mu = eps, mu
@@ -385,7 +404,7 @@ def single_precision(kind, theta, algo):
     kw = dict(tetm='tm') if kind == 'tm' else dict(psi=np.pi / 2, phi=PHI)
     out = {}
     for width in (0, 1):
-        s = _legacy_wavebit.rcwa(top=1.0, bot=25.0, theta=theta, wavelength=WL,
+        s = _study_rcwa(top=1.0, bot=25.0, theta=theta, wavelength=WL,
                          thickness=[100., 60.], structure=GRATING, truncation_order=[15],
                          period=[2000.], layer_algorithm=algo if width else 'ETM',
                          answers='field', complex_dtype=width, **kw)
@@ -412,7 +431,7 @@ def section_real_angle():
 # ---------------------------------------------------------------------------- 6 below axis
 
 def uniform_dng(algo, form='second_order'):
-    s = _legacy_wavebit.rcwa(top=1.0, bot=wavebit.Material(-4.0, mu=-1.0), theta=0.5 - 0.3j,
+    s = _study_rcwa(top=1.0, bot=_study_Material(-4.0, mu=-1.0), theta=0.5 - 0.3j,
                      wavelength=WL, thickness=[100.], layer_algorithm=algo, answers='field',
                      psi=np.pi / 2, phi=PHI, truncation_order=[0, 0], period=[2000., 2000.])
     s.structure = np.full((1, 2, 2), -4.0 + 0j)
@@ -436,7 +455,7 @@ def section_rungs():
     moved = []
     for case in CASES:
         def amplitudes(answers):
-            solver = _legacy_wavebit.rcwa(top=1.0, bot=25.0, theta=THETA, wavelength=WL,
+            solver = _study_rcwa(top=1.0, bot=25.0, theta=THETA, wavelength=WL,
                                   thickness=[100., 60.], layer_algorithm='SMM', answers=answers,
                                   **CASES[case])
             return solver.solve(auto_detune=False).incident
@@ -447,7 +466,7 @@ def section_rungs():
     rows['gratings at 0.5+0.3j: largest amplitude change, field vs amplitude rung'] = max(moved)
 
     def vacuum():
-        s = _legacy_wavebit.rcwa(top=1.0, bot=1.0, theta=THETA, wavelength=WL, thickness=[1e4],
+        s = _study_rcwa(top=1.0, bot=1.0, theta=THETA, wavelength=WL, thickness=[1e4],
                          truncation_order=[0], period=[2000.], structure=np.ones((1, 1, 4)),
                          layer_algorithm='SMM', answers='field', tetm='te')
         s.solve(auto_detune=False)
@@ -469,7 +488,7 @@ GRAZE_RASTER[1] = 2.25
 def graze_field(algo, kind):
     kw = dict(tetm=kind) if kind in ('te', 'tm') else dict(psi=0.7, phi=0.0)
     two = kind == '2d'
-    s = _legacy_wavebit.rcwa(top=1.0, bot=4.0, theta=0.0, wavelength=WL, thickness=[150., 400.],
+    s = _study_rcwa(top=1.0, bot=4.0, theta=0.0, wavelength=WL, thickness=[150., 400.],
                      period=[600.] * (2 if two else 1),
                      structure=GRAZE_RASTER if two else GRAZE_GRATING,
                      truncation_order=[2, 2] if two else [4], layer_algorithm=algo, answers='field',
@@ -509,7 +528,7 @@ def port_gap(algo, scene, kind, side):
     for i, (background, block) in enumerate(layers):
         structure[i] = background
         structure[i, ..., :grid[-1] // 2] = block
-    s = _legacy_wavebit.rcwa(top=1.0, bot=bot, theta=theta, wavelength=WL, thickness=thick,
+    s = _study_rcwa(top=1.0, bot=bot, theta=theta, wavelength=WL, thickness=thick,
                      layer_algorithm=algo, answers='field', incidence_side=side,
                      structure=structure, truncation_order=[2, 2] if two else [4],
                      period=[700., 600.] if two else [700.], **kw)
@@ -571,7 +590,7 @@ def section_cost(timed):
     for label, theta in (('real 0.5', 0.5), ('0.5+0.3j', THETA)):
         times = {}
         for algo in ('ETM', 'SMM'):
-            s = _legacy_wavebit.rcwa(top=1.0, bot=2.25, theta=theta, phi=0.3, psi=0.4,
+            s = _study_rcwa(top=1.0, bot=2.25, theta=theta, phi=0.3, psi=0.4,
                              wavelength=WL, thickness=[100., 60.], truncation_order=[6, 6],
                              period=[1200., 1200.], structure=big, layer_algorithm=algo,
                              answers='field')

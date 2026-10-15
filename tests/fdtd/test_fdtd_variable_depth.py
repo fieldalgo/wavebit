@@ -1,6 +1,6 @@
 """Live total depth: fixed laboratory coordinates and moving reference phases."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
@@ -24,7 +24,7 @@ def test_variable_depth_is_an_explicit_static_boolean(monkeypatch, side, value):
     import wavebit.fdtd._periodic.scene as scene
     monkeypatch.setattr(scene, 'fdtd_grid', lambda *a, **kw: pytest.fail('reached time stepping'))
     with pytest.raises(ValueError, match='variable_depth'):
-        _legacy_wavebit.fdtd(**options(incidence_side=side, variable_depth=value))
+        _legacy_wavebit_fdtd(**options(incidence_side=side, variable_depth=value))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -34,7 +34,7 @@ def test_invalid_geometry_and_exterior_clearance_are_checked_before_stepping(mon
     import wavebit.fdtd._periodic.scene as scene
     monkeypatch.setattr(scene, 'fdtd_grid', lambda *a, **kw: pytest.fail('reached time stepping'))
     with pytest.raises(ValueError, match='variable_depth|layer_smoothing'):
-        _legacy_wavebit.fdtd(**options(incidence_side=side, **changes))
+        _legacy_wavebit_fdtd(**options(incidence_side=side, **changes))
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -125,7 +125,7 @@ def test_joint_depth_material_and_angle_graph_matches_two_finite_differences(bac
     pytest.importorskip('jax' if backend == 'jax' else 'torch')
     def evaluate(p, engine):
         runtime = time_loop_backend(engine); xp, array = runtime.xp, runtime.array
-        result = _legacy_wavebit.fdtd(**options(backend=engine, thickness=p[:2],
+        result = _legacy_wavebit_fdtd(**options(backend=engine, thickness=p[:2],
             structure=xp.reshape(xp.stack((p[2], array(1.6))), (2, 1, 1)), theta=p[3],
             mesh_thickness=[.17, .23], incidence_side=side, grading=grading,
             align_layers=True, diffraction_method=method))
@@ -146,7 +146,7 @@ def test_jit_keeps_laboratory_mesh_sources_monitors_and_records_fixed(side):
     traces = []
     def solve(p):
         traces.append(None)
-        r, out = _legacy_wavebit.fdtd(**options(backend='jax', thickness=p, incidence_side=side, align_layers=True,
+        r, out = _legacy_wavebit_fdtd(**options(backend='jax', thickness=p, incidence_side=side, align_layers=True,
             return_diagnostics=True, field_monitors={'probe': .11}, record_field=173,
             record_components=['ey', 'hz'], record_bounds={'z': (.05, .15)}))
         return dict(T=r.incident.T,
@@ -189,12 +189,12 @@ def test_uniform_medium_depth_gradient_is_the_independent_yee_phase(backend, sid
                   backend=backend, incidence_side=side, resolution=12, n_pml=10,
                   n_periods=55, pulse_width=2., diffraction_method='directional')
     def transmission(p):
-        results = _legacy_wavebit.fdtd(**dict(kw, thickness=p))
+        results = _legacy_wavebit_fdtd(**dict(kw, thickness=p))
         v = xp.stack([getattr(getattr(r, column), field).reshape(()) for r in results
                       for column, field in (('s_inc', 't_s'), ('p_inc', 't_p'))])
         return xp.concat((xp.real(v), xp.imag(v)))
     value, derivative = value_and_jacobian(transmission, np.array([depth]), backend)
-    _, diagnostic = _legacy_wavebit.fdtd(**dict(kw, backend='numpy', thickness=[depth], return_diagnostics=True))
+    _, diagnostic = _legacy_wavebit_fdtd(**dict(kw, backend='numpy', thickness=[depth], return_diagnostics=True))
     dz, dy, dx = diagnostic['spacing']; dt = diagnostic['dt']
     omega = 2*np.sin(np.pi*dt/band)/dt
     kx, ky = 2*np.pi*np.sqrt(1.32)*np.sin(.3)*np.array([np.cos(.4), np.sin(.4)])
@@ -212,7 +212,7 @@ def test_rotated_recipe_keeps_shape_and_total_depth_gradients_together(backend):
         xp = time_loop_backend(engine).xp
         structure = [dict(background=1.4, shapes=[dict(type='rectangle', lx=p[2], ly=.13,
             cx=.021, cy=-.017, angle=p[3], material=2.25)]), dict(background=1.6, shapes=[])]
-        result = _legacy_wavebit.fdtd(**options(backend=engine, structure=structure, thickness=p[:2],
+        result = _legacy_wavebit_fdtd(**options(backend=engine, structure=structure, thickness=p[:2],
             period=[.2, .2], incidence_side='bottom', shape_integration='area', shape_smoothing=.04))
         v = xp.stack([getattr(getattr(result, c), k).reshape(())
                       for c in ('s_inc', 'p_inc') for k in ('r_s', 'r_p', 't_s', 't_p')])

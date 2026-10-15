@@ -1,6 +1,7 @@
 """Concrete material sampling for the physical Problem API."""
 import numpy as np
 
+from .._common.backend import eager_under_torch_compile
 from .._common.execution import Execution
 from ..errors import ValidationError, UnsupportedFeatureError
 from ..materials import Material
@@ -10,6 +11,7 @@ from .numerics import Numerics
 from .sources import PlaneWave
 
 
+@eager_under_torch_compile
 def sample_structure(problem, *, layer=0, n=512, wavelength_index=0,
                      quantity='epsilon', component=None):
     """Sample one layer's relative permittivity or permeability without a solve.

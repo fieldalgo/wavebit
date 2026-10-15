@@ -1,7 +1,13 @@
 # RCWA and FDTD compatibility integration checkpoint
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Written: 2026-10-13.
-Targets: `src/wavebit/compat/legacy.py`, `src/wavebit/fdtd/_periodic/adapter.py`, `src/wavebit/fdtd/_periodic/scene.py`, `src/wavebit/fdtd/_periodic/legacy.py`, `tests/cross_solver/test_solver_integration.py`, `studies/_support/_fdtd_legacy.py`
+Targets: `src/wavebit/fdtd/_periodic/api.py`, `src/wavebit/fdtd/_periodic/adapter.py`, `src/wavebit/fdtd/_periodic/scene.py`, `src/wavebit/fdtd/_periodic/legacy.py`, `tests/cross_solver/test_solver_integration.py`, `studies/_support/_fdtd_legacy.py`
 
 This checkpoint combines the RCWA implementation from develop commit
 `db37dbb8722b8993c2486c6af4f491e3b1b8bc13` with the FDTD implementation from

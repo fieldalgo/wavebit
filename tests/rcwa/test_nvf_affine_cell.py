@@ -1,6 +1,8 @@
 """Affine cell controls: lamination, physical covariance and live derivatives."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.factorization import ConvMatrices as _legacy_wavebit_ConvMatrices
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import numpy as np
 import pytest
 from numpy.polynomial.legendre import leggauss
@@ -95,7 +97,7 @@ def test_physical_rotation_common_scale_and_passive_energy(gap, grade_y):
 def test_affine_matrices_feed_the_engine_with_contact_inverse_rule(backend, gap, loss):
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
     model = AffineCellGapModel(1, **SETTINGS)
@@ -119,7 +121,7 @@ def test_affine_matrices_feed_the_engine_with_contact_inverse_rule(backend, gap,
         eps = identity+(epsilon-1)*shape
         harmonic = np.linalg.inv(identity+(1/epsilon-1)*shape)
         transverse = [[nn[i, j]*harmonic+((i == j)-nn[i, j])*eps for j in range(2)] for i in range(2)]
-        expected = _legacy_wavebit.ConvMatrices(*(a[None] for a in (transverse[0][0], transverse[1][1],
+        expected = _legacy_wavebit_ConvMatrices(*(a[None] for a in (transverse[0][0], transverse[1][1],
                                                             np.linalg.inv(eps), -transverse[0][1], -transverse[1][0])))
         for got, want in zip(actual, expected):
             np.testing.assert_allclose(got, want, atol=3e-11, rtol=0)

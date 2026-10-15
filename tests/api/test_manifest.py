@@ -13,7 +13,15 @@ the path claimed, then ask for each option the manifest says is unavailable and 
 build refuses it. That closes the loop the tables sit in the middle of.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -27,7 +35,8 @@ import pytest
 
 import wavebit
 from wavebit.manifest import LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS, cited_sources, manifest
-from wavebit._common.enums import Backend, Tetm; from wavebit.rcwa._engine.enums import Factorization, FourierCoefficients, ModelingPath, Nesting, NormalMethod, Projector
+from wavebit._common.enums import Backend, Tetm
+from wavebit.rcwa._engine.enums import Factorization, FourierCoefficients, ModelingPath, Nesting, NormalMethod, Projector
 
 
 REPO = repository_root()
@@ -83,13 +92,13 @@ def test_each_spelling_selects_the_modeling_path_it_claims(spelling):
     a keyword's would not be: get it wrong and a consumer sends users down a different path
     than the one whose trade-offs it just explained.
     """
-    solver = _legacy_wavebit.rcwa(structure=STRUCTURES[spelling['path']], **KW)
+    solver = _legacy_wavebit_rcwa(structure=STRUCTURES[spelling['path']], **KW)
     assert solver.modeling_path == ModelingPath(spelling['path'])
 
 
 def test_the_manifest_covers_every_spelling_the_setter_accepts():
     """A path the solver can assign but the manifest omits is a path nobody is told about."""
-    assigned = {_legacy_wavebit.rcwa(structure=u, **KW).modeling_path for u in STRUCTURES.values()}
+    assigned = {_legacy_wavebit_rcwa(structure=u, **KW).modeling_path for u in STRUCTURES.values()}
     assert assigned == {ModelingPath(s['path']) for s in SPELLINGS}
 
 
@@ -103,8 +112,8 @@ def test_an_overlap_selects_the_same_path_rather_than_another_one():
     path. What differs is what a layer does about an overlap, which is why `overlap` is a key
     on this entry rather than an entry of its own.
     """
-    disjoint = _legacy_wavebit.rcwa(structure=STRUCTURES['parametric'], **KW)
-    overlapping = _legacy_wavebit.rcwa(structure=_OVERLAPPING, **KW)
+    disjoint = _legacy_wavebit_rcwa(structure=STRUCTURES['parametric'], **KW)
+    overlapping = _legacy_wavebit_rcwa(structure=_OVERLAPPING, **KW)
     assert disjoint.modeling_path == overlapping.modeling_path == ModelingPath.PARAMETRIC
 
 
@@ -120,7 +129,7 @@ def test_the_published_overlap_property_is_the_one_the_solver_takes():
     assert 'per layer' in published['decided']
 
     mixed = [_OVERLAPPING[0], STRUCTURES['parametric'][0]]
-    solver = _legacy_wavebit.rcwa(structure=mixed, **dict(KW, thickness=[0.3, 0.3]))
+    solver = _legacy_wavebit_rcwa(structure=mixed, **dict(KW, thickness=[0.3, 0.3]))
     solver.solve()
     plans = solver.freeze_geometry().boundary_plans
     assert [plan is not None for plan in plans] == [True, False], (
@@ -148,7 +157,7 @@ def _unavailable(path, axis, enum_cls):
 def test_a_factorization_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'factorization', Factorization):
         with pytest.raises(Exception) as excinfo:
-            _legacy_wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).solve()
+            _legacy_wavebit_rcwa(structure=STRUCTURES[path], factorization=value, **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused factorization={value!r} without naming it')
 
@@ -157,7 +166,7 @@ def test_a_factorization_the_manifest_withholds_is_refused(path):
 def test_a_series_the_manifest_withholds_is_refused(path):
     for value in _unavailable(path, 'fourier_coefficients', FourierCoefficients):
         with pytest.raises(Exception) as excinfo:
-            _legacy_wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value,
+            _legacy_wavebit_rcwa(structure=STRUCTURES[path], fourier_coefficients=value,
                            **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused fourier_coefficients={value!r} without naming it')
@@ -168,7 +177,7 @@ def test_a_normal_method_the_manifest_withholds_is_refused(path):
     """The shape paths list no raster construction; naming one there must refuse."""
     for value in _unavailable(path, 'raster_normal_method', NormalMethod):
         with pytest.raises(Exception) as excinfo:
-            _legacy_wavebit.rcwa(structure=STRUCTURES[path], raster_normal_method=value, **KW).solve()
+            _legacy_wavebit_rcwa(structure=STRUCTURES[path], raster_normal_method=value, **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused raster_normal_method={value!r} without naming it')
 
@@ -181,7 +190,7 @@ def test_a_projector_the_manifest_withholds_is_refused(path):
     """
     for value in _unavailable(path, 'nvf_projector', Projector):
         with pytest.raises(Exception) as excinfo:
-            _legacy_wavebit.rcwa(structure=STRUCTURES[path], nvf_projector=value, **KW).solve()
+            _legacy_wavebit_rcwa(structure=STRUCTURES[path], nvf_projector=value, **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused nvf_projector={value!r} without naming it')
 
@@ -193,7 +202,7 @@ def test_a_nesting_the_manifest_withholds_is_refused(path):
     naming one on the circle must refuse rather than be ignored."""
     for value in _unavailable(path, 'li_nesting', Nesting):
         with pytest.raises(Exception) as excinfo:
-            _legacy_wavebit.rcwa(structure=STRUCTURES[path], li_nesting=value, **KW).solve()
+            _legacy_wavebit_rcwa(structure=STRUCTURES[path], li_nesting=value, **KW).solve()
         assert value in str(excinfo.value), (
             f'{path}: refused li_nesting={value!r} without naming it')
 
@@ -215,7 +224,7 @@ def test_a_conditional_option_builds_where_its_condition_holds():
         kw = {entry['option']: entry['value']}
         if entry['option'] == 'li_nesting':
             kw['factorization'] = 'li'
-        _legacy_wavebit.rcwa(structure=_RECTANGLE, **kw, **KW).solve()
+        _legacy_wavebit_rcwa(structure=_RECTANGLE, **kw, **KW).solve()
 
 
 def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
@@ -228,18 +237,18 @@ def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
     """
     entry = PATHS['parametric']
     for value in entry['factorization']:
-        _legacy_wavebit.rcwa(structure=_OVERLAPPING, factorization=value, **KW).solve()
+        _legacy_wavebit_rcwa(structure=_OVERLAPPING, factorization=value, **KW).solve()
     for value in entry['fourier_coefficients']:
-        _legacy_wavebit.rcwa(structure=_OVERLAPPING, fourier_coefficients=value, **KW).solve()
+        _legacy_wavebit_rcwa(structure=_OVERLAPPING, fourier_coefficients=value, **KW).solve()
     for value in entry['nvf_projector']:
-        _legacy_wavebit.rcwa(structure=_OVERLAPPING, nvf_projector=value, **KW).solve()
+        _legacy_wavebit_rcwa(structure=_OVERLAPPING, nvf_projector=value, **KW).solve()
     for axis, enum_cls in (('factorization', Factorization),
                            ('fourier_coefficients', FourierCoefficients),
                            ('raster_normal_method', NormalMethod), ('nvf_projector', Projector),
                            ('li_nesting', Nesting)):
         for value in _unavailable('parametric', axis, enum_cls):
             with pytest.raises(Exception) as excinfo:
-                _legacy_wavebit.rcwa(structure=_OVERLAPPING, **{axis: value}, **KW).solve()
+                _legacy_wavebit_rcwa(structure=_OVERLAPPING, **{axis: value}, **KW).solve()
             assert value in str(excinfo.value), (
                 f'overlapping layer: refused {axis}={value!r} without naming it')
 
@@ -248,20 +257,20 @@ def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
 def test_an_option_the_manifest_offers_actually_builds(path):
     """The other half — a path must not be described as implementing what it refuses."""
     for value in PATHS[path]['factorization']:
-        _legacy_wavebit.rcwa(structure=STRUCTURES[path], factorization=value, **KW).solve()
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], factorization=value, **KW).solve()
     for value in PATHS[path]['fourier_coefficients']:
-        _legacy_wavebit.rcwa(structure=STRUCTURES[path], fourier_coefficients=value, **KW).solve()
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], fourier_coefficients=value, **KW).solve()
     for value in PATHS[path]['raster_normal_method']:
         # The manifest's own caveat: the axis is read only under factorization='nvf'.
-        _legacy_wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], factorization='nvf',
                        raster_normal_method=value, **KW).solve()
     for value in PATHS[path]['nvf_projector']:
         # Same caveat, same reader -- the two axes are published side by side.
-        _legacy_wavebit.rcwa(structure=STRUCTURES[path], factorization='nvf',
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], factorization='nvf',
                        nvf_projector=value, **KW).solve()
     for value in PATHS[path]['li_nesting']:
         # The other rule's axis, and the other caveat: read only under 'li'.
-        _legacy_wavebit.rcwa(structure=STRUCTURES[path], factorization='li',
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], factorization='li',
                        li_nesting=value, **KW).solve()
 
 
@@ -277,7 +286,7 @@ def test_a_factorization_tensor_materials_refuse_is_refused_by_name():
     refused = manifest()['tensor_materials']['factorizations_refused']
     assert set(refused) <= {m.value for m in Factorization}
     for value in (m.value for m in Factorization):
-        solver = _legacy_wavebit.rcwa(structure=_TENSOR_RASTER, factorization=value, **KW)
+        solver = _legacy_wavebit_rcwa(structure=_TENSOR_RASTER, factorization=value, **KW)
         if value in refused:
             with pytest.raises(NotImplementedError) as excinfo:
                 solver.solve()
@@ -290,7 +299,7 @@ def test_a_factorization_tensor_materials_refuse_is_refused_by_name():
 
 def test_li_is_refused_on_a_skewed_cell():
     with pytest.raises(NotImplementedError, match="factorization='nvf'"):
-        _legacy_wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='li',
+        _legacy_wavebit_rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='li',
                        **KW_NO_CELL).solve()
 
 
@@ -355,14 +364,14 @@ def test_a_smoothing_normal_method_builds_on_a_skewed_cell(method):
         pytest.importorskip('contourpy',
                             reason="raster_normal_method='contour' needs the optional dependency")
     assert method not in LATTICE['normal_methods_refused_on_oblique']
-    result = _legacy_wavebit.rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
+    result = _legacy_wavebit_rcwa(structure=STRUCTURES['raster'], lattice=HEX, factorization='nvf',
                           raster_normal_method=method, **KW_NO_CELL).solve()
     assert np.isfinite(np.asarray(result.T)).all()
 
 
 def test_a_skewed_cell_still_builds_on_the_paths_the_manifest_leaves_open():
     for structure in (*STRUCTURES.values(), _OVERLAPPING):
-        _legacy_wavebit.rcwa(structure=structure, lattice=HEX, factorization='nvf',
+        _legacy_wavebit_rcwa(structure=structure, lattice=HEX, factorization='nvf',
                        **KW_NO_CELL).solve()
 
 
@@ -424,7 +433,7 @@ def test_the_published_material_quantity_is_the_one_the_solver_takes():
     kw = dict(backend='numpy', top=1.0, bot=eps_sub, theta=0.0, phi=0.0, tetm='te',
               truncation_order=[0, 0], period=[1.0], wavelength=0.5, thickness=[0.0],
               structure=np.ones((1, 1, 1)))
-    got = float(np.sum(np.asarray(_legacy_wavebit.rcwa(**kw).solve().R)))
+    got = float(np.sum(np.asarray(_legacy_wavebit_rcwa(**kw).solve().R)))
 
     kz_top, kz_bot = np.sqrt(1.0), np.sqrt(eps_sub)
     want = abs((kz_top - kz_bot) / (kz_top + kz_bot)) ** 2
@@ -453,13 +462,13 @@ def test_results_section_matches_a_real_result():
     and hold each published name to the object: uppercase fields must exist and be real
     (power), lowercase must exist and be complex (amplitude), the incidence variants must be
     present, the accessor must work and agree with the arrays at the claimed layout, and the
-    JobSpec facts must match ``wavebit.compat._jobs_v1``. A future rename that misses the
+    JobSpec facts must match ``wavebit._common._jobs_v1``. A future rename that misses the
     manifest fails here rather than in a consumer's UI.
     """
-    from wavebit.compat._jobs_v1 import SPEC_VERSION, JobSpec
+    from wavebit._common._jobs_v1 import SPEC_VERSION, JobSpec
 
     m = manifest()['results']
-    res = _legacy_wavebit.rcwa(structure=_RASTER, **KW).solve()
+    res = _legacy_wavebit_rcwa(structure=_RASTER, **KW).solve()
     sub = res.incident if res.incident is not None else res.s_inc
 
     for name in list(m['efficiencies']['total']) + list(m['efficiencies']['by_outgoing_polarization']):
@@ -510,16 +519,16 @@ def test_incidence_side_claims_match_the_solver():
 
     got = {}
     for side in m['values']:
-        res = _legacy_wavebit.rcwa(incidence_side=side, **kw).solve()
+        res = _legacy_wavebit_rcwa(incidence_side=side, **kw).solve()
         got[side] = float(np.sum(np.asarray(res.R)))
     assert abs(got['top'] - got['bottom']) > 1e-3,\
         'the published sides must select genuinely different solves'
 
-    solver = _legacy_wavebit.rcwa(**kw)
+    solver = _legacy_wavebit_rcwa(**kw)
     assert solver.incidence_side == m['default']
 
     with pytest.raises(ValueError) as excinfo:
-        _legacy_wavebit.rcwa(incidence_side='sideways', **kw)
+        _legacy_wavebit_rcwa(incidence_side='sideways', **kw)
     for side in m['values']:
         assert side in str(excinfo.value), (
             f'the refusal must name {side!r} so a consumer can relay the legal values')
@@ -535,19 +544,19 @@ def test_polarization_claims_match_runtime():
     """
     kw = {k: v for k, v in KW.items() if k != 'psi'}
 
-    via_pair = _legacy_wavebit.rcwa(structure=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
+    via_pair = _legacy_wavebit_rcwa(structure=_RASTER, polarization=(np.sin(0.4), np.cos(0.4)),
                               **kw).solve()
     assert via_pair.incident is not None, 'the pair must fill the specified-incidence slot'
 
-    via_psi = _legacy_wavebit.rcwa(structure=_RASTER, psi=0.4, **kw).solve()
+    via_psi = _legacy_wavebit_rcwa(structure=_RASTER, psi=0.4, **kw).solve()
     np.testing.assert_allclose(via_pair.incident.R, via_psi.incident.R, atol=1e-14)
 
-    scaled = _legacy_wavebit.rcwa(structure=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
+    scaled = _legacy_wavebit_rcwa(structure=_RASTER, polarization=(5 * np.sin(0.4), 5 * np.cos(0.4)),
                             **kw).solve()
     np.testing.assert_allclose(scaled.incident.R, via_pair.incident.R, atol=1e-14)
 
     with pytest.raises(ValueError, match='psi and polarization'):
-        _legacy_wavebit.rcwa(structure=_RASTER, psi=0.4, polarization=(1, 0), **kw)
+        _legacy_wavebit_rcwa(structure=_RASTER, psi=0.4, polarization=(1, 0), **kw)
 
 # ------------------------------------------------- the material flags, against the solver
 
@@ -587,7 +596,7 @@ def _z_row(t):
 
 
 def _run_uniform(eps, mu=None):
-    mee = _legacy_wavebit.rcwa(truncation_order=[0, 0], **_MAT_KW)
+    mee = _legacy_wavebit_rcwa(truncation_order=[0, 0], **_MAT_KW)
     z = _z_row(eps) if np.any(eps[2, :2]) or np.any(eps[:2, 2]) else []
     return mee._solve_conv(*_in_plane(eps), *z,
                           mu=None if mu is None else tuple(_in_plane(mu)))
@@ -613,7 +622,7 @@ def _run_patterned():
         eps[..., i, i] = 1.0
     eps[0, 14:34, 18:30] = _tensor(2.25, 2.25, 2.89)
     epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_pn_eps(eps, truncation_order, truncation_order)
-    mee = _legacy_wavebit.rcwa(truncation_order=[truncation_order, truncation_order], **_MAT_KW)
+    mee = _legacy_wavebit_rcwa(truncation_order=[truncation_order, truncation_order], **_MAT_KW)
     return mee._solve_conv(epx, epy, epz_i, epxy, epyx)
 
 
@@ -623,7 +632,7 @@ MATERIAL_RUNS = {
     'magnetic': lambda: _run_uniform(_tensor(2.6, 2.6, 2.6), mu=_tensor(1.4, 1.4, 2.2)),
     'z_coupled': lambda: _run_uniform(_tensor(2.6, 2.6, 2.6, xz=0.4, zx=0.4)),
     'patterned_anisotropic': _run_patterned,
-    'patterned_z_coupled': lambda: _legacy_wavebit.rcwa(
+    'patterned_z_coupled': lambda: _legacy_wavebit_rcwa(
         truncation_order=(2,1), factorization='li',
         structure=[dict(background=1.,shapes=[dict(type='rectangle',lx=.4,ly=.5,
             material=wavebit.Material(_tensor(2.6,3.,2.4,xz=.3,zx=.3)))])],
@@ -713,7 +722,7 @@ def test_differentiability_claims_match_the_solver():
             continue
         pytest.importorskip(backend)
 
-        solver = _legacy_wavebit.rcwa(backend=backend, structure=np.ones((1, 4, 4)) * 2.0,
+        solver = _legacy_wavebit_rcwa(backend=backend, structure=np.ones((1, 4, 4)) * 2.0,
                               period=[400.0, 400.0], truncation_order=[1, 1],
                               thickness=[150.0], wavelength=900.0, top=1.0, bot=1.0)
         assert type(solver)._DIFFERENTIABLE is claim['differentiable'], backend
@@ -740,7 +749,7 @@ def _gradient_of_a_transmittance(solver, backend):
 
     if backend == 'jax':
         import jax.numpy as jnp
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
         solver.structure = jnp.asarray(np.asarray(solver.structure))
         loss = (lambda result: jnp.sum(result.T).real)
     else:
@@ -759,7 +768,7 @@ def test_a_backend_that_does_not_differentiate_says_so_rather_than_missing_the_m
     needs no change to move. The refusal names all three, and names the declaration a caller can
     read *before* building a solver it cannot optimize.
     """
-    solver = _legacy_wavebit.rcwa(backend='numpy', structure=np.ones((1, 4, 4)), period=[400.0, 400.0],
+    solver = _legacy_wavebit_rcwa(backend='numpy', structure=np.ones((1, 4, 4)), period=[400.0, 400.0],
                           truncation_order=[1, 1], thickness=[150.0], wavelength=900.0,
                           top=1.0, bot=1.0)
     for name in ('grad', 'fit'):
@@ -799,7 +808,7 @@ def test_the_published_fourier_origin_matches_a_centred_stripe():
     assert claim['fourier_origin'] == 'cell_centre'
     assert claim['fourier_origin_expression'] == '0.5*(a1 + a2)'
     row = np.ones((1, 1, 100));row[..., 30:70] = 3.
-    solver = _legacy_wavebit.rcwa(structure=row, period=(1., 1.), thickness=[.2],
+    solver = _legacy_wavebit_rcwa(structure=row, period=(1., 1.), thickness=[.2],
                          truncation_order=(1, 0), tetm='te')
     coefficient = solver.eps_conv_matrices().epy[0, 2, 1]
     np.testing.assert_allclose(coefficient, 2*.4*np.sinc(.4), atol=2e-14, rtol=0)
@@ -812,7 +821,8 @@ def test_both_published_entry_points_exist_and_are_what_they_claim():
 
     from wavebit.manifest import SOLVERS
     for door, entry in SOLVERS.items():
-        assert entry['entry_point'] == f'wavebit.compat.legacy.{door}'
+        assert entry['entry_point'] == {'rcwa': 'wavebit.rcwa._factory.rcwa',
+                                        'fdtd': 'wavebit.fdtd._periodic.api.fdtd'}[door]
         module, _, name = entry['entry_point'].rpartition('.')
         assert callable(getattr(importlib.import_module(module), name)), entry['entry_point']
     assert SOLVERS['fdtd']['differentiable'] is True
@@ -860,7 +870,7 @@ def test_every_published_refusal_is_one_the_door_performs():
 def test_a_refusal_the_manifest_publishes_is_refused(name, backend):
     """Each raises before any time stepping, so the whole battery costs milliseconds."""
     with pytest.raises((ValueError, TypeError)):
-        _legacy_wavebit.fdtd(**dict(FDTD_KW, backend=backend, **FDTD_REFUSALS[name]))
+        _legacy_wavebit_fdtd(**dict(FDTD_KW, backend=backend, **FDTD_REFUSALS[name]))
 
 
 FDTD_COMMON_KW = dict(structure=np.full((1, 1, 1), 2.), thickness=[.2], top=1., bot=1.,
@@ -886,11 +896,11 @@ def test_published_fdtd_rectangles_use_common_route(backend, integration):
     settings = dict(FDTD_COMMON_KW, period=[.2, .2], structure=[dict(background=2., shapes=[
         dict(type='square', l=.08, angle=.23 if integration == 'area' else 0., material=2.)])],
         backend=backend, shape_integration=integration, shape_smoothing=.02)
-    result = _legacy_wavebit.fdtd(**settings)
-    target = _legacy_wavebit.fdtd(**dict(settings, structure=np.full((1, 2, 2), 2.), shape_smoothing=0., shape_integration='separable'))
+    result = _legacy_wavebit_fdtd(**settings)
+    target = _legacy_wavebit_fdtd(**dict(settings, structure=np.full((1, 2, 2), 2.), shape_smoothing=0., shape_integration='separable'))
     np.testing.assert_allclose(result.s_inc.R, target.s_inc.R, atol=1e-13)
     with pytest.raises((TypeError, ValueError)):
-        _legacy_wavebit.fdtd(**dict(settings, backend=None))
+        _legacy_wavebit_fdtd(**dict(settings, backend=None))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -907,7 +917,7 @@ def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backe
     assert common['positive_layer_smoothing_requires'] == ('mesh_thickness', 'subpixel=True')
     which = backend
     def objective(d, backend=backend):
-        return _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, structure=np.array([[[2.]], [[1.]]]),
+        return _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, structure=np.array([[[2.]], [[1.]]]),
                                    thickness=[d, .4-d], mesh_thickness=[.2, .2], layer_smoothing=smoothing,
                                    backend=backend)).s_inc.T.reshape(1)
     value, derivative = value_and_jacobian(objective, .173, which)
@@ -917,9 +927,9 @@ def test_published_fdtd_thickness_capability_requires_fixed_mesh_and_total(backe
     np.testing.assert_allclose(derivative, finite, atol=2e-8, rtol=3e-5)
     assert abs(finite).item() > .01
     with pytest.raises(ValueError, match='fixed total depth'):
-        _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, mesh_thickness=[.3]))
+        _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, backend=backend, mesh_thickness=[.3]))
     with pytest.raises(ValueError, match='explicit mesh_thickness'):
-        _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend,
+        _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, backend=backend,
                             thickness=time_loop_backend(which).array([.2])))
 
 
@@ -931,12 +941,12 @@ def test_published_variable_depth_uses_live_faces_on_a_fixed_mesh(backend):
     assert 'independent layer thickness (variable_depth)' in common['differentiable_parameters']
     assert 'variable_depth' in common['static_parameters']
     assert common['variable_depth_requires'][:2] == ('mesh_thickness', 'subpixel=True')
-    result, out = _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273],
+    result, out = _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273],
                                      mesh_thickness=[.2], variable_depth=True, return_diagnostics=True))
     assert np.isfinite(np.asarray(result.s_inc.T)).all() and out['variable_depth']
     np.testing.assert_allclose(out['transmission_z'], 0., atol=1e-15)
     with pytest.raises(ValueError, match='fixed total depth'):
-        _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273], mesh_thickness=[.2]))
+        _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, backend=backend, thickness=[.273], mesh_thickness=[.2]))
 
 
 def test_fdtd_manifest_scopes_backend_omission_to_legacy_numpy():
@@ -967,10 +977,10 @@ def test_the_default_fdtd_route_answers_the_bottom_incidence_it_lists(tetm):
     scene = dict(structure=np.array([[[2.1]], [[3.2]]]), thickness=[.13, .21], top=1., bot=2.25,
                  period=.4, wavelength=1., theta=.27, tetm=tetm, incidence_side='bottom',
                  truncation_order=0)
-    reference = _legacy_wavebit.rcwa(backend='numpy', **scene).solve()
+    reference = _legacy_wavebit_rcwa(backend='numpy', **scene).solve()
     gaps = []
     for resolution in (20, 40):
-        result = _legacy_wavebit.fdtd(**scene, resolution=resolution, n_periods=60)
+        result = _legacy_wavebit_fdtd(**scene, resolution=resolution, n_periods=60)
         gaps.append(max(np.abs(np.asarray(getattr(result.incident, name))
                                - np.asarray(getattr(reference.incident, name))).max()
                         for name in ('r_s', 'r_p', 't_s', 't_p')))
@@ -987,7 +997,7 @@ def test_published_common_fdtd_backends_accept_bottom_jones_and_all_columns(back
     common = SOLVERS['fdtd']['routes']['common']
     assert backend in common['backends']
     assert 'bottom' in common['incidence_sides']
-    result = _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, incidence_side='bottom',
+    result = _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, backend=backend, incidence_side='bottom',
                                  polarization=(1., .6j)))
     assert isinstance(result, Result)
     for column in common['results_incidences']:
@@ -1000,7 +1010,7 @@ def test_published_common_fdtd_backends_accept_bottom_jones_and_all_columns(back
 @pytest.mark.parametrize('polarization', [dict(polarization=(1., .6j)), dict(psi=.6, chi=.2)])
 def test_legacy_fdtd_also_accepts_the_published_polarization_family(polarization):
     # The legacy source has a longer envelope than the common engine's pulse.
-    result = _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, n_periods=60, **polarization))
+    result = _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, n_periods=60, **polarization))
     assert np.isfinite(result.incident.T).all()
 
 
@@ -1013,12 +1023,12 @@ def test_published_common_fdtd_gradient_and_halfspace_requirements(backend):
     assert backend in common['differentiable_backends']
     which = backend
     def objective(epsilon):
-        return _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, backend=backend, top=epsilon,
+        return _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, backend=backend, top=epsilon,
                                    mesh_indices=(1., 1.))).s_inc.T.reshape(1)
     value, gradient = value_and_jacobian(objective, 1.2, which)
     step = 1e-4
     def numpy(epsilon):
-        return _legacy_wavebit.fdtd(**dict(FDTD_COMMON_KW, backend='numpy', top=epsilon,
+        return _legacy_wavebit_fdtd(**dict(FDTD_COMMON_KW, backend='numpy', top=epsilon,
                                    mesh_indices=(1., 1.))).s_inc.T.reshape(1)
     finite = (numpy(1.2+step)-numpy(1.2-step))/(2*step)
     np.testing.assert_allclose(value, numpy(1.2), atol=1e-10)
@@ -1030,7 +1040,7 @@ def test_published_common_fdtd_gradient_and_halfspace_requirements(backend):
         options = dict(FDTD_COMMON_KW, backend=backend, top=epsilon, mesh_indices=(1., 1.))
         options[missing] = None
         with pytest.raises(ValueError, match='explicit mesh_indices and explicit truncation_order'):
-            _legacy_wavebit.fdtd(**options)
+            _legacy_wavebit_fdtd(**options)
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -1044,9 +1054,9 @@ def test_published_fdtd_disk_contract_uses_common_area_route(backend, kind):
     assert 'circle diameter (area)' in common['differentiable_parameters']
     assert 'fixed 16-point Gaussian' in common['area_smoothing']
     assert 'no ly' in common['circle_convention']
-    stack = _legacy_wavebit.Stack.from_structure([dict(shapes=[dict(type=kind, l=.08, material=2.)])],
+    stack = _legacy_wavebit_Stack.from_structure([dict(shapes=[dict(type=kind, l=.08, material=2.)])],
         [.1], top=1., bot=1., period=[.2, .2])
-    result, diagnostics = _legacy_wavebit.fdtd(stack, _legacy_wavebit.Incidence(wavelength=1.), backend=backend,
+    result, diagnostics = _legacy_wavebit_fdtd(stack, _legacy_wavebit_Incidence(wavelength=1.), backend=backend,
         resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
         return_diagnostics=True)
     assert np.isfinite(np.asarray(result.incident.r_s)).all()
@@ -1063,10 +1073,10 @@ def test_published_fdtd_ellipse_is_rotated_and_uses_full_axis_lengths(backend):
     assert 'ellipse' in common['parametric_shapes']
     assert 'ellipse centre/axes/angle (area)' in common['differentiable_parameters']
     assert 'full principal-axis lengths' in common['ellipse_convention']
-    stack = _legacy_wavebit.Stack.from_structure([dict(shapes=[
+    stack = _legacy_wavebit_Stack.from_structure([dict(shapes=[
         dict(type='ellipse', lx=.15, ly=.07, angle=.41, material=2.)])],
         [.1], top=1., bot=1., period=[.2, .2])
-    result, out = _legacy_wavebit.fdtd(stack, _legacy_wavebit.Incidence(wavelength=1.), backend=backend,
+    result, out = _legacy_wavebit_fdtd(stack, _legacy_wavebit_Incidence(wavelength=1.), backend=backend,
         resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
         shape_smoothing=.02, return_diagnostics=True)
     assert np.isfinite(np.asarray(result.incident.r_s)).all()
@@ -1082,11 +1092,11 @@ def test_published_fdtd_multiple_area_rectangles_use_last_shape_painting(backend
     common = manifest()['solvers']['fdtd']['routes']['common']
     assert 'multiple rectangle/square' in common['area_requires']
     assert 'later rectangles overwrite' in common['area_painting']
-    stack = _legacy_wavebit.Stack.from_structure([dict(shapes=[
+    stack = _legacy_wavebit_Stack.from_structure([dict(shapes=[
         dict(lx=.13, ly=.07, cx=-.02, angle=.31, material=1.8),
         dict(lx=.09, ly=.11, cx=.025, angle=-.2, material=2.3)])],
         [.1], top=1., bot=1., period=[.2, .2])
-    result, out = _legacy_wavebit.fdtd(stack, _legacy_wavebit.Incidence(wavelength=1.), backend=backend,
+    result, out = _legacy_wavebit_fdtd(stack, _legacy_wavebit_Incidence(wavelength=1.), backend=backend,
         resolution=10, n_pml=5, n_periods=30, truncation_order=0, shape_integration='area',
         shape_smoothing=.02, return_diagnostics=True)
     assert np.isfinite(np.asarray(result.incident.r_s)).all()
@@ -1120,7 +1130,10 @@ def test_current_lifecycle_names_real_physical_interfaces_and_serialization():
         prepared = resolve(entry['prepared'])
         assert inspect.signature(prepared.run).parameters['problem'].default is inspect.Parameter.empty
         assert callable(prepared.validate)
-        assert manifest()['solvers'][name]['entry_point'] != entry['module']
+        assert entry['module'].startswith('wavebit.')
+    assert set(current['solvers']) == {'rcwa', 'fdtd', 'fdtd.native', 'fdtd.periodic'}
+    assert 'private' in manifest()['scope']['other_tables']
+    assert callable(resolve(current['job']['migration']))
 
     report = resolve(current['check_report']['type'])()
     assert report.ok is True

@@ -1,6 +1,8 @@
 """Lattice container spelling preserves physical solve and field derivatives."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -31,7 +33,7 @@ def matrix(p, xp, spelling):
 
 
 def solver(backend, family, p):
-    return _legacy_wavebit.rcwa(backend=backend, **CFG, lattice=np.array([[p[0], p[1]], [0., 750.]]),
+    return _legacy_wavebit_rcwa(backend=backend, **CFG, lattice=np.array([[p[0], p[1]], [0., 750.]]),
                        structure=structure(family), factorization='laurent' if family == 'raster' else 'nvf',
                        shape_nvf_grid_size=16 if family == 'shape' else None)
 
@@ -46,7 +48,7 @@ def score(result, field=None):
 @pytest.mark.parametrize('spelling', ['list', 'mixed', 'rows', 'array'])
 @pytest.mark.parametrize('door', ['solve', 'solve_field'])
 def test_nested_lattice_jit_derivative_matches_numpy(family, spelling, door):
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     point = np.array([600., 40.])
     s = solver('jax', family, point)
     original = np.asarray(s.lattice).copy()

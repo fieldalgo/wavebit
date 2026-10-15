@@ -27,7 +27,13 @@ The comparison with another solver is ``tests/references/test_fmmax_laurent_gold
 fmmax's ``Formulation.FFT`` assembles the same operator, and agrees to round-off.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.enums import Formulation as _legacy_wavebit_Formulation
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
+
+from wavebit._common._jobs_v1 import run as _legacy_wavebit_run
 import numpy as np
 from tests.fixtures.common._conv_frame import slots_about_centre
 import pytest
@@ -35,12 +41,12 @@ import pytest
 import array_api_compat.numpy as xnp
 
 import wavebit
-from wavebit.compat.legacy import Factorization
+from wavebit.rcwa._engine.enums import Factorization
 from wavebit.rcwa._engine import factorization as F
 from wavebit.rcwa._engine.geometry import StaleGeometryError, StaticGeometry
 
 try:
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 except ImportError:
     pass
 
@@ -92,7 +98,7 @@ _HEX_SCENE = {k: v for k, v in _SCENE.items() if k != 'period'}
 
 
 def _solve(**kw):
-    return _legacy_wavebit.rcwa(**{**_SCENE, **kw}).solve()
+    return _legacy_wavebit_rcwa(**{**_SCENE, **kw}).solve()
 
 
 def _both(result):
@@ -170,7 +176,7 @@ def test_the_z_slot_is_lis_and_not_the_transform_of_the_reciprocal():
 def test_a_uniform_layer_is_the_same_under_every_rule(coefficients):
     """``eps * I`` exactly in both in-plane slots, and the solve Li's and NVF's to round-off."""
     uniform = np.full((1, 12, 12), 5.0 + 0.2j)
-    conv = _legacy_wavebit.rcwa(**_SCENE, structure=uniform, factorization='laurent',
+    conv = _legacy_wavebit_rcwa(**_SCENE, structure=uniform, factorization='laurent',
                         fourier_coefficients=coefficients).eps_conv_matrices()
     n = conv.epx.shape[-1]
     assert np.array_equal(np.asarray(conv.epx)[0], (5.0 + 0.2j) * np.eye(n))
@@ -194,7 +200,7 @@ def _grating():
 
 
 def _1d_T(rule, order, tetm):
-    result = _legacy_wavebit.rcwa(**_1D, structure=_grating(), truncation_order=(order, 0), tetm=tetm,
+    result = _legacy_wavebit_rcwa(**_1D, structure=_grating(), truncation_order=(order, 0), tetm=tetm,
                           factorization=rule).solve()
     return result, float(np.sum(result.T))
 
@@ -228,8 +234,8 @@ def test_tm_converges_first_order_where_li_converges_faster():
 def test_the_conical_path_builds_it_and_conserves_energy():
     """The coupled 1D solve reads all three slots; Laurent moves it off Li and keeps it lossless."""
     kw = dict(_1D, phi=0.4, psi=0.3)
-    li = _legacy_wavebit.rcwa(**kw, structure=_grating(), truncation_order=(10, 0)).solve()
-    laurent = _legacy_wavebit.rcwa(**kw, structure=_grating(), truncation_order=(10, 0),
+    li = _legacy_wavebit_rcwa(**kw, structure=_grating(), truncation_order=(10, 0)).solve()
+    laurent = _legacy_wavebit_rcwa(**kw, structure=_grating(), truncation_order=(10, 0),
                            factorization='laurent').solve()
     assert abs(_energy(laurent) - 1.0) < 1e-12
     assert _gap(li, laurent) > 1e-3
@@ -292,9 +298,9 @@ def test_the_shape_builders_refuse_a_normal_field_option_under_laurent():
 def test_a_curved_shape_is_built_from_its_closed_form_transform():
     """No normal field, so no grid: ``shape_nvf_grid_size`` is not read, and the circle's
     ``[[eps]]`` is the one NVF starts from."""
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_CIRCLE, factorization='laurent')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_CIRCLE, factorization='laurent')
     laurent = solver.eps_conv_matrices()
-    nvf = _legacy_wavebit.rcwa(**_SCENE, structure=_CIRCLE).eps_conv_matrices()
+    nvf = _legacy_wavebit_rcwa(**_SCENE, structure=_CIRCLE).eps_conv_matrices()
     assert np.abs(np.linalg.inv(np.asarray(laurent.epz_i)) - np.linalg.inv(np.asarray(nvf.epz_i))
                   ).max() < 1e-12
     assert np.array_equal(np.asarray(laurent.epx), np.asarray(laurent.epy))
@@ -309,14 +315,14 @@ def test_a_skewed_cell_takes_it_because_the_rule_names_no_axis(structure):
     uniform layer there is NVF's answer to round-off."""
     struct = _crossed() if structure == 'raster' else _CIRCLE
     with pytest.raises(NotImplementedError, match="factorization='li'"):
-        _legacy_wavebit.rcwa(**_HEX_SCENE, lattice=_HEX, structure=struct, factorization='li').solve()
-    result = _legacy_wavebit.rcwa(**_HEX_SCENE, lattice=_HEX, structure=struct,
+        _legacy_wavebit_rcwa(**_HEX_SCENE, lattice=_HEX, structure=struct, factorization='li').solve()
+    result = _legacy_wavebit_rcwa(**_HEX_SCENE, lattice=_HEX, structure=struct,
                           factorization='laurent').solve()
     assert abs(_energy(result) - 1.0) < 1e-12
     uniform = (np.full((1, 8, 8), 3.0) if structure == 'raster'
                else [dict(background=3.0, shapes=[])])
-    a = _legacy_wavebit.rcwa(**_HEX_SCENE, lattice=_HEX, structure=uniform, factorization='laurent').solve()
-    b = _legacy_wavebit.rcwa(**_HEX_SCENE, lattice=_HEX, structure=uniform, factorization='nvf').solve()
+    a = _legacy_wavebit_rcwa(**_HEX_SCENE, lattice=_HEX, structure=uniform, factorization='laurent').solve()
+    b = _legacy_wavebit_rcwa(**_HEX_SCENE, lattice=_HEX, structure=uniform, factorization='nvf').solve()
     assert _gap(a, b) < 1e-13
 
 
@@ -326,11 +332,11 @@ def test_the_first_order_formulation_reads_the_same_slots(structure):
     same five slots, so under Laurent's rule they agree to round-off -- and the field is
     reconstructed from them either way."""
     struct = _crossed() if structure == 'raster' else _CIRCLE
-    second = _legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent')
-    first = _legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent', answers='field')
+    second = _legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization='laurent')
+    first = _legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization='laurent', answers='field')
     first.formulation = 'first_order'
     assert _gap(second.solve(), first.solve()) < 1e-13
-    assert first.formulation_assigned == _legacy_wavebit.Formulation.FIRST_ORDER
+    assert first.formulation_assigned == _legacy_wavebit_Formulation.FIRST_ORDER
     field = np.asarray(first.reconstruct_field(sample_x=4, sample_y=4, sample_z=3))
     assert np.isfinite(field).all() and np.abs(field).max() > 0
 
@@ -340,7 +346,7 @@ def test_the_permeability_takes_the_same_rule():
     eps = _crossed()
     mu = np.ones_like(eps)
     mu[0, 2:9, 5:18] = 2.5
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=eps, mu=mu, factorization='laurent')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=eps, mu=mu, factorization='laurent')
     Mu, Mv = _SCENE['truncation_order']
     want = slots_about_centre(F.laurent_conv_matrices(xnp, mu[0].astype(complex), Mu, Mv), (Mu, Mv))
     got = solver.mu_conv_matrices()
@@ -351,8 +357,8 @@ def test_the_permeability_takes_the_same_rule():
 
 def test_nothing_resolves_to_it():
     """Opt-in: the raster default is still Li and the shape default still NVF, to the bit."""
-    assert _legacy_wavebit.rcwa(**_SCENE, structure=_crossed()).factorization == Factorization.LI
-    assert _legacy_wavebit.rcwa(**_SCENE, structure=_CIRCLE).factorization == Factorization.NVF
+    assert _legacy_wavebit_rcwa(**_SCENE, structure=_crossed()).factorization == Factorization.LI
+    assert _legacy_wavebit_rcwa(**_SCENE, structure=_CIRCLE).factorization == Factorization.NVF
     assert _gap(_solve(structure=_crossed()), _solve(structure=_crossed(), factorization='li')) == 0
     assert _gap(_solve(structure=_CIRCLE), _solve(structure=_CIRCLE, factorization='nvf')) == 0
 
@@ -370,7 +376,7 @@ def test_an_option_only_another_rule_reads_is_refused_by_name(option, structure,
     struct = _crossed() if structure == 'raster' else _CIRCLE
     if structure == 'shapes' and 'raster_normal_method' in option:
         option = dict(shape_nvf_grid_size=64)
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent', **option)
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization='laurent', **option)
     (name, value), = option.items()
     with pytest.raises(NotImplementedError, match=rf"{name}={value!r} has no reader here: "
                                                    rf"factorization='laurent'"):
@@ -394,7 +400,7 @@ def test_tensor_materials_refuse_it_by_name(structure):
     for door in ('solve', 'freeze_geometry', 'eps_conv_matrices'):
         with pytest.raises(NotImplementedError, match="factorization='laurent' is not built for "
                                                       "tensor materials.*uniform"):
-            getattr(_legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent'), door)()
+            getattr(_legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization='laurent'), door)()
 
 
 # ------------------------------------------------------------------------------ the doors
@@ -403,21 +409,21 @@ def test_every_way_of_asking_builds_the_same_thing():
     direct = _solve(structure=_crossed(), factorization='laurent')
     by_enum = _solve(structure=_crossed(), factorization=Factorization.LAURENT)
     by_case = _solve(structure=_crossed(), factorization='Laurent')
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed())
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed())
     solver.factorization = 'laurent'
     assigned = solver.solve()
-    per_call = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed()).solve(factorization='laurent')
+    per_call = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed()).solve(factorization='laurent')
     for other in (by_enum, by_case, assigned, per_call):
         assert _gap(direct, other) == 0
-    conv = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed()).eps_conv_matrices(factorization='laurent')
+    conv = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed()).eps_conv_matrices(factorization='laurent')
     assert np.array_equal(np.asarray(conv.epx), np.asarray(conv.epy))
     assert Factorization.LAURENT == 'laurent'
 
 
 def test_a_misspelling_is_refused_at_every_door():
     with pytest.raises(ValueError, match=r"factorization='laurant' is not valid.*'laurent'"):
-        _legacy_wavebit.rcwa(**_SCENE, structure=_crossed(), factorization='laurant')
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed())
+        _legacy_wavebit_rcwa(**_SCENE, structure=_crossed(), factorization='laurant')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed())
     with pytest.raises(ValueError, match=r"factorization='laurant'"):
         solver.factorization = 'laurant'
     with pytest.raises(ValueError, match=r"factorization='laurant'"):
@@ -425,13 +431,15 @@ def test_a_misspelling_is_refused_at_every_door():
     with pytest.raises(AttributeError, match=r"no attribute 'factorisation'.*'factorization'"):
         solver.factorisation = 'laurent'
     assert solver.factorization == Factorization.LI
-    from wavebit.compat.legacy import Numerics, SpecError
+    from wavebit._common._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import SpecError
     with pytest.raises(SpecError, match='numerics.factorization'):
         Numerics.from_dict(dict(truncation_order=[2, 2], factorization='laurant'))
 
 
 def test_the_spec_carries_it():
-    from wavebit.compat.legacy import JobSpec, Numerics
+    from wavebit._common._jobs_v1 import JobSpec
+    from wavebit._common._jobs_v1 import Numerics
     numerics = Numerics.from_dict(dict(truncation_order=[4, 3], factorization='laurent'))
     assert numerics.factorization == Factorization.LAURENT
     assert numerics.as_kwargs()['factorization'] == 'laurent'
@@ -443,8 +451,8 @@ def test_the_spec_carries_it():
                   'layers': [{'thickness': 300.0, 'structure': [[1.0, 1.0, 12.25, 12.25]]}]},
         'incidence': {'wavelength': 900.0, 'theta': 0.2, 'phi': 0.0, 'tetm': 'tm'},
     })
-    ran = _legacy_wavebit.run(JobSpec.from_json(spec.to_json()))
-    direct = _legacy_wavebit.rcwa(backend='numpy', wavelength=900., period=[700.], truncation_order=[10, 0],
+    ran = _legacy_wavebit_run(JobSpec.from_json(spec.to_json()))
+    direct = _legacy_wavebit_rcwa(backend='numpy', wavelength=900., period=[700.], truncation_order=[10, 0],
                           top=1., bot=2.25, theta=0.2, phi=0., tetm='tm', thickness=[300.],
                           structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]),
                           factorization='laurent').solve()
@@ -466,16 +474,16 @@ def test_the_manifest_publishes_it_and_where_it_is_refused():
 # -------------------------------------------------------------------- frozen geometry
 
 def test_a_record_carries_the_rule_it_was_frozen_under():
-    raster = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed(), fourier_coefficients='integrated',
+    raster = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed(), fourier_coefficients='integrated',
                           factorization='laurent').freeze_geometry()
     assert raster.factorization == 'laurent' and raster.compression is not None
     assert raster.normal_field is None
-    shapes = _legacy_wavebit.rcwa(**_SCENE, structure=_PAINTED_SHAPES,
+    shapes = _legacy_wavebit_rcwa(**_SCENE, structure=_PAINTED_SHAPES,
                           factorization='laurent').freeze_geometry()
     # The painting is planned, the interface set is not: Laurent reads no normal field.
     assert shapes.factorization == 'laurent'
     assert shapes.boundary_plans[0] is not None and shapes.gamma_plans is None
-    nvf = _legacy_wavebit.rcwa(**_SCENE, structure=_PAINTED_SHAPES).freeze_geometry()
+    nvf = _legacy_wavebit_rcwa(**_SCENE, structure=_PAINTED_SHAPES).freeze_geometry()
     assert nvf.factorization == 'nvf' and nvf.gamma_plans is not None
     # The stamp is part of the content key a jitted call caches on: the same plans under two
     # rules are two records.
@@ -489,7 +497,7 @@ def test_a_record_carries_the_rule_it_was_frozen_under():
 def test_a_record_replays_under_its_own_rule(structure):
     struct, extra = {'raster': (_crossed(), dict(fourier_coefficients='integrated')),
                      'painted': (_PAINTED_SHAPES, {}), 'circle': (_CIRCLE, {})}[structure]
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization='laurent', **extra)
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization='laurent', **extra)
     record = solver.freeze_geometry()
     assert _gap(solver.solve(geometry=record), solver.solve()) == 0
 
@@ -506,14 +514,14 @@ def test_a_record_frozen_under_another_rule_is_refused(held, now, structure):
         struct, extra = _crossed(), dict(fourier_coefficients='integrated')
     else:
         struct, extra = [dict(background=1.0, shapes=[_box(2, 10, 3, 12, 4.0)])], {}
-    record = _legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization=held,
+    record = _legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization=held,
                           **extra).freeze_geometry()
-    replay = _legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization=now, **extra)
+    replay = _legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization=now, **extra)
     with pytest.raises(StaleGeometryError, match=rf"taken under factorization='{held}' and is "
                                                  rf"being replayed under factorization='{now}'"):
         replay.solve(geometry=record)
     # The per-call door: a solver configured under the record's rule, asked for another.
-    same = _legacy_wavebit.rcwa(**_SCENE, structure=struct, factorization=held, **extra)
+    same = _legacy_wavebit_rcwa(**_SCENE, structure=struct, factorization=held, **extra)
     with pytest.raises(StaleGeometryError, match=f"replayed under factorization='{now}'"):
         same.solve(geometry=record, factorization=now)
     with pytest.raises(StaleGeometryError, match=f"replayed under factorization='{now}'"):
@@ -522,14 +530,14 @@ def test_a_record_frozen_under_another_rule_is_refused(held, now, structure):
 
 def test_a_hand_built_record_is_replayed_on_trust_as_before():
     """No stamp, no comparison: a record written by hand says nothing about its rule."""
-    solver = _legacy_wavebit.rcwa(**_SCENE, structure=_crossed(), factorization='laurent')
+    solver = _legacy_wavebit_rcwa(**_SCENE, structure=_crossed(), factorization='laurent')
     assert _gap(solver.solve(geometry=StaticGeometry()), solver.solve()) == 0
 
 
 # ------------------------------------------------------------------ backends and gradients
 
 def _backend_result(backend, structure, **kw):
-    return _legacy_wavebit.rcwa(**{**_SCENE, 'backend': backend}, structure=structure,
+    return _legacy_wavebit_rcwa(**{**_SCENE, 'backend': backend}, structure=structure,
                         factorization='laurent', **kw).solve()
 
 
@@ -564,7 +572,7 @@ def test_jax_and_torch_differentiate_the_raster_and_agree_with_a_difference():
     rest, mask = _split_block()
 
     def total(backend, eps):
-        return _legacy_wavebit.rcwa(**{**_SCENE, 'backend': backend}, structure=eps,
+        return _legacy_wavebit_rcwa(**{**_SCENE, 'backend': backend}, structure=eps,
                             factorization='laurent').solve().T.sum()
 
     g_jax = float(jax.grad(lambda v: jnp.real(total('jax', jnp.asarray(rest) + v * jnp.asarray(mask))))(
@@ -589,7 +597,7 @@ def test_jax_and_torch_differentiate_a_shape_parameter():
     def total(backend, lx):
         layers = [dict(background=1.0, shapes=[dict(type='rectangle', cx=0.04, cy=-0.02, lx=lx,
                                                      ly=0.3, angle=0.2, material=6.25)])]
-        return _legacy_wavebit.rcwa(**{**_SCENE, 'backend': backend}, structure=layers,
+        return _legacy_wavebit_rcwa(**{**_SCENE, 'backend': backend}, structure=layers,
                             factorization='laurent').solve().T.sum()
 
     import jax.numpy as jnp
@@ -607,7 +615,7 @@ def test_a_jitted_solve_and_a_jitted_replay_keep_the_rule():
     -- not the path's default -- and a frozen Laurent record replays under ``jax.jit``."""
     jax = pytest.importorskip('jax')
     from jax import tree_util
-    solver = _legacy_wavebit.rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_crossed(),
+    solver = _legacy_wavebit_rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_crossed(),
                           fourier_coefficients='integrated', factorization='laurent')
     leaves, treedef = tree_util.tree_flatten(solver)
     assert tree_util.tree_unflatten(treedef, leaves).factorization == Factorization.LAURENT
@@ -615,10 +623,10 @@ def test_a_jitted_solve_and_a_jitted_replay_keep_the_rule():
     eager = np.asarray(solver.solve().T)
     compiled = np.asarray(jax.jit(lambda s: s.solve(geometry=record).T)(solver))
     np.testing.assert_allclose(compiled, eager, atol=1e-12, rtol=1e-12)
-    li = np.asarray(_legacy_wavebit.rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_crossed(),
+    li = np.asarray(_legacy_wavebit_rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_crossed(),
                                  fourier_coefficients='integrated').solve().T)
     assert np.abs(compiled - li).max() > 1e-3
-    shapes = _legacy_wavebit.rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_PAINTED_SHAPES,
+    shapes = _legacy_wavebit_rcwa(**{**_SCENE, 'backend': 'jax'}, structure=_PAINTED_SHAPES,
                           factorization='laurent')
     record = shapes.freeze_geometry()
     compiled = np.asarray(jax.jit(lambda s: s.solve(geometry=record).T)(shapes))

@@ -1,6 +1,12 @@
 """Live exterior materials: closed-form CPML, fixed geometry and optical graphs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -25,7 +31,7 @@ def test_invalid_mesh_indices_are_refused_before_stepping(monkeypatch, value, si
     import wavebit.fdtd._periodic.scene as scene
     monkeypatch.setattr(scene, 'fdtd_grid', lambda *a, **kw: pytest.fail('reached time stepping'))
     with pytest.raises(ValueError, match='mesh_indices'):
-        _legacy_wavebit.fdtd(**options(mesh_indices=value, incidence_side=side))
+        _legacy_wavebit_fdtd(**options(mesh_indices=value, incidence_side=side))
 
 
 @pytest.mark.parametrize('value', [0., -1., np.nan, np.inf, .1j, [1.], True])
@@ -33,7 +39,7 @@ def test_invalid_live_material_is_refused_before_stepping(monkeypatch, value):
     import wavebit.fdtd._periodic.scene as scene
     monkeypatch.setattr(scene, 'fdtd_grid', lambda *a, **kw: pytest.fail('reached time stepping'))
     with pytest.raises(ValueError, match='Half spaces'):
-        _legacy_wavebit.fdtd(**options(top=wavebit.Material(np.asarray(value), 1.)))
+        _legacy_wavebit_fdtd(**options(top=wavebit.Material(np.asarray(value), 1.)))
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -43,13 +49,13 @@ def test_array_half_spaces_require_both_static_mesh_and_order_window(backend):
     runtime = time_loop_backend(backend)
     for missing in ('mesh_indices', 'truncation_order'):
         with pytest.raises(ValueError, match='explicit mesh_indices and explicit truncation_order'):
-            _legacy_wavebit.fdtd(**options(top=runtime.array(1.2), backend=backend, **{missing: None}))
+            _legacy_wavebit_fdtd(**options(top=runtime.array(1.2), backend=backend, **{missing: None}))
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_fixed_indices_preserve_geometry_and_default_scalar_results(side):
     kw = options(incidence_side=side, grading=True, return_diagnostics=True)
-    runs = [_legacy_wavebit.fdtd(**dict(kw, top=wavebit.Material(np.array(e), np.array(m))))
+    runs = [_legacy_wavebit_fdtd(**dict(kw, top=wavebit.Material(np.array(e), np.array(m))))
             for e, m in ((1.2, 1.1), (2., 1.3))]
     first, second = (d for _, d in runs)
     for key in ('shape', 'spacing', 'dt', 'steps', 'z_nodes', 'z_spacing', 'source_z', 'pml_bounds', 'mesh_indices'):
@@ -58,8 +64,8 @@ def test_fixed_indices_preserve_geometry_and_default_scalar_results(side):
         np.testing.assert_array_equal(first['diffraction'][key], second['diffraction'][key])
     assert first['mesh_indices'] == (1.1, 1.4)
     np.testing.assert_allclose(second['background'], [[2., 1.3], [1.6, 1.15]])
-    default, d = _legacy_wavebit.fdtd(**dict(kw, mesh_indices=None))
-    explicit, _ = _legacy_wavebit.fdtd(**dict(kw, mesh_indices=d['mesh_indices']))
+    default, d = _legacy_wavebit_fdtd(**dict(kw, mesh_indices=None))
+    explicit, _ = _legacy_wavebit_fdtd(**dict(kw, mesh_indices=d['mesh_indices']))
     for basis in ('incident', 's_inc', 'p_inc'):
         for key in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
             np.testing.assert_array_equal(getattr(getattr(default, basis), key),
@@ -128,7 +134,7 @@ def test_native_exterior_gradients_include_cpml_and_recorded_fields(backend, non
         runtime = time_loop_backend(which)
         xp, array = runtime.xp, runtime.array
         mask = array(low)
-        out = _legacy_wavebit.fdtd_grid(p[0]*mask+p[2]*(1-mask), mu=p[1]*mask+p[3]*(1-mask),
+        out = _legacy_wavebit_fdtd_grid(p[0]*mask+p[2]*(1-mask), mu=p[1]*mask+p[3]*(1-mask),
                                 pml_background=((p[0], p[1]), (p[2], p[3])), backend=which, **kw)
         return xp.stack((out['power_z'].sum(), .1*xp.sum(xp.abs(out['fields']['ey']['values'])**2)
                           +.2*xp.sum(xp.abs(out['H'])**2)))
@@ -149,12 +155,12 @@ def test_joint_halfspace_angle_pole_graphs_through_bottom_scene(backend, method)
     def objective(p, which):
         runtime = time_loop_backend(which)
         xp, array = runtime.xp, runtime.array
-        stack = _legacy_wavebit.Stack.from_structure(array(pattern), [.2],
+        stack = _legacy_wavebit_Stack.from_structure(array(pattern), [.2],
                                              top=wavebit.Material(p[0], p[1]),
                                              bot=wavebit.Material(p[2], p[3]), period=[.3, .4])
-        incidence = _legacy_wavebit.Incidence(wavelength=[.98, 1.02], theta=p[4], phi=.4,
+        incidence = _legacy_wavebit_Incidence(wavelength=[.98, 1.02], theta=p[4], phi=.4,
                                      polarization=(1., .6j), incidence_side='bottom')
-        results, d = _legacy_wavebit.fdtd(stack, incidence, backend=which, mesh_indices=(1.1, 1.4),
+        results, d = _legacy_wavebit_fdtd(stack, incidence, backend=which, mesh_indices=(1.1, 1.4),
                                  resolution=10, transverse_resolution=(12., 13.),
                                  n_pml=6, n_periods=35, grading=True, align_layers=True,
                                  pulse_width=1.5, pulse_notches=.7, source_distance=1., diffraction_distance=.3,
@@ -185,7 +191,7 @@ def test_jit_keeps_one_mesh_and_masks_invalid_background_and_duration():
     traced = []
     def solve(e):
         traced.append(None)
-        r, d = _legacy_wavebit.fdtd(**options(top=e, backend='jax', return_diagnostics=True,
+        r, d = _legacy_wavebit_fdtd(**options(top=e, backend='jax', return_diagnostics=True,
                                       field_monitors={'inside': .1}, record_field=151, record_components=['ey']))
         return r.incident.T, d['stable'], d['z_nodes'], d['dt'], d['field_e'], d['monitors']['inside']['fields']['ey']
     compiled = jax.jit(solve)
@@ -201,7 +207,7 @@ def test_jit_keeps_one_mesh_and_masks_invalid_background_and_duration():
             assert np.isnan(result[i]).all()
     assert len(traced) == 1
     with pytest.raises(ValueError, match='n_periods is too short'):
-        _legacy_wavebit.fdtd(**options(top=np.array(100.)))
+        _legacy_wavebit_fdtd(**options(top=np.array(100.)))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -212,7 +218,7 @@ def test_native_background_validation_remains_active(backend):
     kw = dict(spacing=(.2,)*3, dt=.05, steps=2, pml_cells=3, backend=backend)
     for background in ([[1., 1.], [-1., 1.]], [[1., 1.], [np.nan, 1.]], [[1., 1.], [2., 1.]]):
         with pytest.raises(ValueError, match='pml_background|PML background'):
-            _legacy_wavebit.fdtd_grid(array(np.ones((16, 2, 2))), pml_background=array(background), **kw)
+            _legacy_wavebit_fdtd_grid(array(np.ones((16, 2, 2))), pml_background=array(background), **kw)
 
 
 def test_halfspace_cutoff_can_change_on_one_trace_but_exact_grazing_is_masked():
@@ -221,7 +227,7 @@ def test_halfspace_cutoff_can_change_on_one_trace_but_exact_grazing_is_masked():
     critical = 4*np.sin(.5)**2
     def solve(epsilon):
         traces.append(None)
-        r, d = _legacy_wavebit.fdtd(**options(top=4., bot=epsilon, theta=.5, phi=0., courant=.5,
+        r, d = _legacy_wavebit_fdtd(**options(top=4., bot=epsilon, theta=.5, phi=0., courant=.5,
                                       mesh_indices=(2., 1.), backend='jax', return_diagnostics=True))
         channel = d['diffraction']['transmission']
         return r.incident.T, d['stable'], channel['q'], channel['propagating'], d['z_nodes']
@@ -238,7 +244,7 @@ def test_halfspace_cutoff_can_change_on_one_trace_but_exact_grazing_is_masked():
     assert np.isnan(grazing[0]).all()
     assert len(traces) == 1
     with pytest.raises(ValueError, match='exactly grazing'):
-        _legacy_wavebit.fdtd(**options(top=4., bot=np.array(critical), theta=.5, phi=0., courant=.5,
+        _legacy_wavebit_fdtd(**options(top=4., bot=np.array(critical), theta=.5, phi=0., courant=.5,
                                mesh_indices=(2., 1.)))
 
 
@@ -262,7 +268,7 @@ def test_magnetic_halfspace_sensitivities_refine_to_independent_airy(record_prop
     errors = []
     for resolution in (40, 80):
         def objective(v):
-            results = _legacy_wavebit.fdtd(**options(top=wavebit.Material(v[0], v[1]),
+            results = _legacy_wavebit_fdtd(**options(top=wavebit.Material(v[0], v[1]),
                                              bot=wavebit.Material(v[2], v[3]), theta=0., phi=0.,
                                              mu=np.full((1, 1, 1), mu), backend='jax', wavelength=band,
                                              period=.05, resolution=resolution, n_pml=resolution,

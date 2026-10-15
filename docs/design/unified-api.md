@@ -1,5 +1,11 @@
 # Unified RCWA and FDTD API: design and implementation checkpoint
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Status (updated 2026-10-15): implemented. The shared public lifecycle, materials,
 source layout and bilingual learning-site migration landed on develop in `4272c7ce`
 (2026-10-13): `wavebit.Job` / `wavebit.run`, `wavebit.rcwa` and `wavebit.fdtd`.
@@ -1188,6 +1194,19 @@ not extend that scope.
 | Shared error families with a stable code and input path (§9) | implemented | `src/wavebit/errors.py` |
 | `wavebit.job/v1`, `Job.to_json` / `from_json` / `key`, and `wavebit.run(job)` for a `Job` only (§9) | implemented; saved run records added beside it (`wavebit.records`, 2026-10-13) | `src/wavebit/jobs.py`, `src/wavebit/records.py` |
 | Package layout (§10) | implemented as drawn, plus private modules not listed there | `src/wavebit/` |
-| The old periodic FDTD route kept behind an explicit compatibility entry point (§11) | implemented: `wavebit.compat.legacy.fdtd`, beside `legacy.rcwa` and `legacy.fd` | `src/wavebit/compat/legacy.py` |
+| The old periodic FDTD route kept behind an explicit compatibility entry point (§11) | implemented: `wavebit.compat.legacy.fdtd`, beside `legacy.rcwa` and `legacy.fd` | `src/wavebit/fdtd/_periodic/api.py` |
 | Whole-repository layout (§12) | implemented for `src/`, the test categories, the documentation sections, `examples/`, `tutorials/` and `studies/`. Not created: `benchmarks/`, a cross-solver tutorials folder, the guide's how-to and troubleshooting folders, release notes, and a glossary page | the repository root |
 | Study records as a README, a run script and `records/<record-id>/manifest.json` (§12) | not adopted: a study is a script with an optional committed `records/` log, and the raw study records left the repository on 2026-10-14 (`0f2bb088`) | `studies/` |
+
+
+## Compatibility retirement checkpoint
+
+The historical implementation checkpoints above describe their dated revisions. The current
+package removes `wavebit.compat`: native sampled grids and periodic stacks have physical
+`fdtd.native` and `fdtd.periodic` lifecycles, including SI observations, prepared reuse and Jobs.
+General custom shapes use `fdtd.Shape`, and offline SI ringdown fitting uses `observations.fit_modes`.
+`migration.migrate_legacy_jobs` converts v10 inputs with explicit length units. Manifest v22
+separates the public lifecycle index from private normalized engine diagnostics. Maintained
+examples use the physical API; numerical instruments name exact private implementations.
+Historical data retain their bytes and source/environment provenance. See the
+[migration guide](../migration/index.md) for current contracts and the pinned historical tree.

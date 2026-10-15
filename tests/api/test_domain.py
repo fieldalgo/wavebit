@@ -5,12 +5,16 @@ driving :func:`wavebit.rcwa` through ``stack=`` / ``incidence=`` must give byte-
 results to passing the equivalent raw keyword arguments (the Phase 2 "API parity" gate).
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import numpy as np
 import pytest
 
-from wavebit.compat.legacy import Stack, Incidence, Tetm
+from wavebit._common.periodic import Stack
+
+from wavebit._common.periodic import Incidence
+
+from wavebit._common.enums import Tetm
 from wavebit import Material
 
 
@@ -58,13 +62,13 @@ def test_raster_1d_parity():
     structure = np.array([[[9.0, 9.0, 9.0, 1.0, 1.0, 1.0]]])
     thickness, period = [0.15], [0.77]
 
-    legacy = _legacy_wavebit.rcwa(backend='numpy', top=4.0, bot=1.0, theta=0.0, phi=None,
+    legacy = _legacy_wavebit_rcwa(backend='numpy', top=4.0, bot=1.0, theta=0.0, phi=None,
                              tetm=Tetm.TE, truncation_order=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, structure=structure).solve()
 
     stack = Stack.from_structure(structure, thickness, top=4.0, bot=1.0, period=period)
     incidence = Incidence(wavelength=0.777, theta=0.0, phi=None, tetm=Tetm.TE)
-    typed = _legacy_wavebit.rcwa(backend='numpy', truncation_order=[6, 0], stack=stack, incidence=incidence).solve()
+    typed = _legacy_wavebit_rcwa(backend='numpy', truncation_order=[6, 0], stack=stack, incidence=incidence).solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -74,13 +78,13 @@ def test_raster_2d_parity():
     structure = (rng.uniform(1.0, 4.0, size=(2, 8, 8))).astype(np.float64)
     thickness, period = [0.2, 0.3], [1.0, 1.0]
 
-    legacy = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=0.1, phi=0.2,
+    legacy = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.25, theta=0.1, phi=0.2,
                              psi=np.pi / 4, truncation_order=[3, 3], period=period, wavelength=0.9,
                              thickness=thickness, structure=structure).solve()
 
     stack = Stack.from_structure(structure, thickness, top=1.0, bot=2.25, period=period)
     incidence = Incidence(wavelength=0.9, theta=0.1, phi=0.2, psi=np.pi / 4)
-    typed = _legacy_wavebit.rcwa(backend='numpy', truncation_order=[3, 3], stack=stack, incidence=incidence).solve()
+    typed = _legacy_wavebit_rcwa(backend='numpy', truncation_order=[3, 3], stack=stack, incidence=incidence).solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -89,13 +93,13 @@ def test_conical_psi_parity():
     structure = np.array([[[9.0, 9.0, 9.0, 1.0, 1.0, 1.0]]])
     thickness, period = [0.15], [0.77]
 
-    legacy = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, phi=0.0,
+    legacy = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, phi=0.0,
                              psi=0.4, truncation_order=[6, 0], period=period, wavelength=0.777,
                              thickness=thickness, structure=structure).solve()
 
     stack = Stack.from_structure(structure, thickness, period=period)
     incidence = Incidence(wavelength=0.777, theta=0.3, phi=0.0, psi=0.4)
-    typed = _legacy_wavebit.rcwa(backend='numpy', truncation_order=[6, 0], stack=stack, incidence=incidence).solve()
+    typed = _legacy_wavebit_rcwa(backend='numpy', truncation_order=[6, 0], stack=stack, incidence=incidence).solve()
 
     assert _de(typed) == _de(legacy)
 
@@ -114,15 +118,15 @@ def test_material_half_spaces_are_the_same_physics_as_the_shorthand():
     kw = dict(backend='numpy', truncation_order=[6, 0], period=[0.77], wavelength=0.777,
               thickness=[0.15], structure=structure, theta=0.0, phi=None, tetm=Tetm.TE)
 
-    plain = _legacy_wavebit.rcwa(top=4.0, bot=1.0, **kw).solve()
-    typed = _legacy_wavebit.rcwa(top=Material(4.0), bot=Material(1.0), **kw).solve()
+    plain = _legacy_wavebit_rcwa(top=4.0, bot=1.0, **kw).solve()
+    typed = _legacy_wavebit_rcwa(top=Material(4.0), bot=Material(1.0), **kw).solve()
     assert _de(typed) == _de(plain)
 
     # and through a Stack, which passes the value on unread rather than coercing it
     stack = Stack.from_structure(structure, [0.15], top=Material(4.0), bot=Material(1.0),
                                  period=[0.77])
     assert stack.as_kwargs()['top'] == Material(4.0)
-    through = _legacy_wavebit.rcwa(backend='numpy', truncation_order=[6, 0], stack=stack,
+    through = _legacy_wavebit_rcwa(backend='numpy', truncation_order=[6, 0], stack=stack,
                            incidence=Incidence(wavelength=0.777, theta=0.0, phi=None,
                                                tetm=Tetm.TE)).solve()
     assert _de(through) == _de(plain)
@@ -151,7 +155,7 @@ def test_a_half_space_that_is_not_one_material_is_refused(slot, name, value):
               theta=0.0, phi=None, tetm=Tetm.TE, **{slot: value})
     kw.setdefault('top' if slot == 'bot' else 'bot', 1.0)
     with pytest.raises(ValueError) as excinfo:
-        _legacy_wavebit.rcwa(**kw)
+        _legacy_wavebit_rcwa(**kw)
     message = str(excinfo.value)
     assert f'`{slot}`' in message and 'half-space' in message
     assert 'layer' in message and '`structure`' in message      # says where it does belong
@@ -167,7 +171,7 @@ def test_one_value_in_any_spelling_is_still_one_value(value):
     scalar reading ``()`` inside the trace. ``test_backend_jax.py`` runs the traced solves
     that would fail if this had been a value comparison.
     """
-    _legacy_wavebit.rcwa(backend='numpy', truncation_order=[2, 0], period=[0.77], wavelength=0.777,
+    _legacy_wavebit_rcwa(backend='numpy', truncation_order=[2, 0], period=[0.77], wavelength=0.777,
                  thickness=[0.15], theta=0.0, phi=None, tetm=Tetm.TE, top=value, bot=1.0)
 
 
@@ -196,7 +200,7 @@ def test_a_pre_rename_constructor_keyword_is_refused_as_unknown(keyword):
     had no audience yet.
     """
     with pytest.raises(TypeError, match=r'unexpected keyword argument'):
-        _legacy_wavebit.rcwa(backend='numpy', truncation_order=[2, 0], thickness=[0.1],
+        _legacy_wavebit_rcwa(backend='numpy', truncation_order=[2, 0], thickness=[0.1],
                      structure=np.array([[[9.0, 1.0]]]), **keyword)
 
 
@@ -208,7 +212,7 @@ def test_a_typo_in_a_live_keyword_is_not_swallowed_by_the_catch_all():
     keyword, which is worse than the Python error it replaced.
     """
     with pytest.raises(TypeError, match=r"unexpected keyword argument\(s\) \['wavelenght'\]"):
-        _legacy_wavebit.rcwa(backend='numpy', truncation_order=[2, 0], thickness=[0.1],
+        _legacy_wavebit_rcwa(backend='numpy', truncation_order=[2, 0], thickness=[0.1],
                      structure=np.array([[[9.0, 1.0]]]), wavelenght=700.0)
 
 
@@ -225,7 +229,7 @@ def test_the_derived_index_accessors_survived_the_deletion():
     # `period` named rather than defaulted: this scene is in normalized units, where the
     # (1, 1) cell is the right one -- but since 2026-09-01 a structure has to say so, because
     # a raster carries no length that would let anything downstream notice the omission.
-    solver = _legacy_wavebit.rcwa(backend='numpy', truncation_order=[2, 0], thickness=[0.1], period=[1.0, 1.0],
+    solver = _legacy_wavebit_rcwa(backend='numpy', truncation_order=[2, 0], thickness=[0.1], period=[1.0, 1.0],
                           structure=np.array([[[9.0, 1.0]]]), top=Material(4.0), bot=2.25)
     assert complex(solver.n_top) == pytest.approx(2.0)      # sqrt(4.0)
     assert complex(solver.n_bot) == pytest.approx(1.5)      # sqrt(2.25)
@@ -240,6 +244,6 @@ def test_double_specify_raises():
     structure = np.array([[[9.0, 1.0]]])
     stack = Stack.from_structure(structure, [0.1])
     with pytest.raises(ValueError, match='stack'):
-        _legacy_wavebit.rcwa(backend='numpy', stack=stack, structure=structure, truncation_order=[2, 0])
+        _legacy_wavebit_rcwa(backend='numpy', stack=stack, structure=structure, truncation_order=[2, 0])
     with pytest.raises(ValueError, match='incidence'):
-        _legacy_wavebit.rcwa(backend='numpy', incidence=Incidence(theta=0.1), theta=0.2, truncation_order=[2, 0])
+        _legacy_wavebit_rcwa(backend='numpy', incidence=Incidence(theta=0.1), theta=0.2, truncation_order=[2, 0])

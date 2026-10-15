@@ -25,7 +25,9 @@ against Pendry's closed form, and the same scene with the double negative's loss
 Every test below has a control: the rule it pins, reverted, must break it.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -73,12 +75,12 @@ def _solver(path, algo, eps, mu, *, theta, top=1.0, bot, thickness, side='top', 
                   thickness=thickness, layer_algorithm=algo, answers='amplitude',
                   incidence_side=side, structure=raster(eps), mu=raster(mu))
     if path in ('te', 'tm'):
-        return _legacy_wavebit.rcwa(**common, tetm=path, period=[period],
+        return _legacy_wavebit_rcwa(**common, tetm=path, period=[period],
                             truncation_order=5 if truncation_order is None else truncation_order)
     if path == 'conical':
-        return _legacy_wavebit.rcwa(**common, phi=phi, psi=0.3, period=[period],
+        return _legacy_wavebit_rcwa(**common, phi=phi, psi=0.3, period=[period],
                             truncation_order=5 if truncation_order is None else truncation_order)
-    return _legacy_wavebit.rcwa(**common, phi=phi, psi=0.3, period=(period, 0.9 * period),
+    return _legacy_wavebit_rcwa(**common, phi=phi, psi=0.3, period=(period, 0.9 * period),
                         truncation_order=(1, 1) if truncation_order is None else truncation_order)
 
 
@@ -143,7 +145,7 @@ def test_a_double_negative_layer_on_its_own_medium_is_that_medium(path, name, th
         assert abs(R[specular] - expected) < 1e-13, (pol, R[specular], expected)
 
 
-@pytest.mark.filterwarnings('ignore::wavebit.compat.legacy.ComplexIncidenceWarning')
+@pytest.mark.filterwarnings('ignore::wavebit._common.backend.ComplexIncidenceWarning')
 def test_a_complex_angle_takes_the_mirror_too():
     """The mirror is the half-space's own rule, so it holds at a complex ``theta`` as well.
 
@@ -279,7 +281,7 @@ BLOCK_CASES = [('te', 0.5, (-25 + 0.5j, -1 + 0.02j)), ('tm', 0.5 + 0.3j, (-25 + 
                ('conical', 0.5, (-25 + 0j, -1 + 0j)), ('conical', 0.5 + 0.3j, (-25 + 0j, -1 + 0j))]
 
 
-@pytest.mark.filterwarnings('ignore::wavebit.compat.legacy.ComplexIncidenceWarning')
+@pytest.mark.filterwarnings('ignore::wavebit._common.backend.ComplexIncidenceWarning')
 @pytest.mark.parametrize('path, theta, block', BLOCK_CASES,
                          ids=[f'{p}-{t}-{b[0].imag:g}' for p, t, b in BLOCK_CASES])
 def test_a_high_contrast_double_negative_block_on_its_own_medium(path, theta, block):
@@ -436,7 +438,7 @@ def test_a_shape_layer_is_read_from_its_materials():
                          'material': Material(2.25, mu=1.0)}]}
     out = {}
     for algo in ('ETM', 'SMM'):
-        s = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=Material(*ASYM), theta=0.5, phi=0.6, psi=0.3,
+        s = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=Material(*ASYM), theta=0.5, phi=0.6, psi=0.3,
                          wavelength=WL, period=(P, P), thickness=[40.0], truncation_order=(2, 2),
                          layer_algorithm=algo, answers='amplitude', structure=[layer])
         out[algo] = _amplitudes(s.solve(auto_detune=False))
@@ -464,12 +466,12 @@ def test_the_engine_reads_each_layer_from_its_materials():
     # A 3x3 *scalar* raster: a 3x3 cell, not a tensor per pixel.
     grid = np.full((1, 3, 3), -2.0, complex)
     grid[0, 0, 0] = 1.0
-    s3 = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
+    s3 = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
                       thickness=[10.0], truncation_order=(1, 1), structure=grid,
                       mu=np.full((1, 3, 3), -1.0, complex))
     assert s3._layer_double_negative() == (DoubleNegativeLayer(True, False),)
     # Non-magnetic: no word at all.
-    plain = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=[P],
+    plain = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=[P],
                          thickness=[10.0], truncation_order=2, tetm='te',
                          structure=np.full((1, 1, 8), -2.0, complex))
     assert plain._layer_double_negative() is None
@@ -478,7 +480,7 @@ def test_the_engine_reads_each_layer_from_its_materials():
               {'background': Material(*ASYM), 'shapes': [{'type': 'circle', 'cx': 0.0, 'cy': 0.0,
                                                           'lx': 100.0, 'material': 2.25}]},
               {'background': Material(2.0, mu=1.5)}]
-    shapes = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
+    shapes = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.3, wavelength=WL, period=(P, P),
                           thickness=[10.0] * 3, truncation_order=(1, 1), structure=layers)
     assert shapes._layer_double_negative() == (DoubleNegativeLayer(True, True),
                                                DoubleNegativeLayer(True, False),
@@ -514,7 +516,7 @@ def test_three_principal_values_are_one_flag_and_solve_as_their_tensor(name):
         layer = ({'background': 1.0, 'shapes': [{'type': 'rectangle', 'lx': 150.0, 'ly': 150.0,
                                                  'material': material}]}
                  if shape else {'background': material})
-        return _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=2.25, theta=0.2, phi=0.1,
+        return _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=2.25, theta=0.2, phi=0.1,
                             polarization=(1.0, 0.0), wavelength=600.0, period=(400.0, 400.0),
                             truncation_order=(1, 1), thickness=[100.0], structure=[layer],
                             layer_algorithm=algo, answers='amplitude')
@@ -544,7 +546,7 @@ def test_the_first_order_split_reads_flux_at_the_working_precision(backend):
     The single-precision answer is held to the double-precision one."""
     pytest.importorskip(backend)
     if backend == 'jax':
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     mask = np.zeros((6, 6))
     mask[1:4, 2:5] = 1
     glass = np.zeros((6, 6))
@@ -553,7 +555,7 @@ def test_the_first_order_split_reads_flux_at_the_working_precision(backend):
     mu = (mask * -1.5 + (1 - mask))[None].astype(complex)
 
     def reflected(backend, complex_dtype):
-        s = _legacy_wavebit.rcwa(backend=backend, top=2.25, bot=2.25, wavelength=500.0, theta=0.35,
+        s = _legacy_wavebit_rcwa(backend=backend, top=2.25, bot=2.25, wavelength=500.0, theta=0.35,
                          phi=0.6, psi=0.3, period=(700.0, 630.0), truncation_order=(1, 1),
                          thickness=[120.0], structure=eps, complex_dtype=complex_dtype,
                          layer_algorithm='SMM')
@@ -591,7 +593,7 @@ def test_a_traced_double_negative_layer_is_selected_not_branched_on():
     the trace matches NumPy on a uniform layer on its own medium (whose ETM was singular under
     Maystre's labels) and on the patterned 2D scene."""
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
 
@@ -676,7 +678,7 @@ def test_etm_names_the_perfect_lens_pair_where_it_cannot_write_it(backend):
     which pair it is and that SMM solves it, rather than retrying the wavelength for nothing."""
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     if backend == 'torch':
         pytest.importorskip('torch')
     with pytest.raises(ValueError, match='perfect-lens pair') as caught:
@@ -718,7 +720,7 @@ def test_etm_names_the_pair_when_the_double_negative_is_the_substrate(backend):
     ``(-2, -1)`` on ``(2, 1)``, reflects as vacuum onto ``(2, 1)``, the same ``R``."""
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     if backend == 'torch':
         pytest.importorskip('torch')
     with pytest.raises(ValueError, match='perfect-lens pair') as caught:
@@ -863,14 +865,14 @@ def test_the_negation_pair_is_refused_on_every_backend(backend):
     ``n**2/mu``."""
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     if backend == 'torch':
         pytest.importorskip('torch')
     for path, stack in (('te', 'none'), ('2d', 'three'), ('conical', 'own')):
         with pytest.raises(ValueError, match="each other's exact negation"):
             _negation_scene(path, 'SMM', stack, backend=backend,
                             truncation_order=EVANESCENT_KEPT[path])[1]()
-    glass = _legacy_wavebit.rcwa(backend=backend, top=2.25, bot=Material(-2.25 + 0j, mu=-1.0 + 0j),
+    glass = _legacy_wavebit_rcwa(backend=backend, top=2.25, bot=Material(-2.25 + 0j, mu=-1.0 + 0j),
                          theta=0.3, wavelength=WL, period=[P], truncation_order=5, tetm='te',
                          thickness=[70.0], structure=_uniform('te', 2.25))
     with pytest.raises(ValueError, match="each other's exact negation"):

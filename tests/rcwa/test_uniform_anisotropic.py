@@ -28,7 +28,7 @@ The first two cases would pass with the off-diagonal slots ignored entirely, whi
 rotated-axis tests are the ones that carry weight.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -47,7 +47,7 @@ def solve_uniform(exx, eyy, ezz, exy=0.0, eyx=0.0, *, theta=0.0, d=D, wl=WL):
     ``_assign_grating_type`` to the 2D path, which is the only one with off-diagonal slots.
     """
     I = np.eye(1, dtype=np.complex128)
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          truncation_order=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=[d])
     return mee.solve_conv(
         np.stack([exx * I]),

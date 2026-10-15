@@ -1,6 +1,6 @@
 """A material seam's moving endpoint must not create a jump off the interface."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 from wavebit.rcwa._engine import parametric as P
@@ -57,7 +57,7 @@ def test_solve_derivative_matches_the_endpoint_crossing_secant():
     rows = (np.arange(grid)+.5)*700/grid-350
     center = 2*rows[rows<150].max()
     def solver(height, backend):
-        return _legacy_wavebit.rcwa(backend=backend, period=(700.,700.), wavelength=900.,
+        return _legacy_wavebit_rcwa(backend=backend, period=(700.,700.), wavelength=900.,
                            top=1., bot=2.25, theta=.2, phi=.13, psi=.2, thickness=(300.,),
                            truncation_order=(2,2), shape_nvf_grid_size=grid,
                            structure=[dict(background=1., shapes=shapes(height))])

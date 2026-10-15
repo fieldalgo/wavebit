@@ -1,6 +1,11 @@
 """Moving layer interfaces: physical overlaps, fixed meshes and full AD graphs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.periodic import Incidence as _legacy_wavebit_Incidence
+
+from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
+
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
 import numpy as np
 import pytest
 
@@ -53,7 +58,7 @@ def test_invalid_layer_geometry_never_reaches_time_steps(monkeypatch, side, name
     import wavebit.fdtd._periodic.scene as scene
     monkeypatch.setattr(scene, 'fdtd_grid', lambda *a, **kw: pytest.fail('reached time stepping'))
     with pytest.raises(ValueError, match='thickness|mesh_thickness'):
-        _legacy_wavebit.fdtd(**options(incidence_side=side, **{name: value}))
+        _legacy_wavebit_fdtd(**options(incidence_side=side, **{name: value}))
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -63,7 +68,7 @@ def test_eager_backend_thickness_is_never_silently_detached(backend, side):
     array = time_loop_backend(backend).array
     for thickness in (array([.173, .227]), [array(.173), array(.227)]):
         with pytest.raises(ValueError, match='explicit mesh_thickness'):
-            _legacy_wavebit.fdtd(**options(backend=backend, thickness=thickness, mesh_thickness=None,
+            _legacy_wavebit_fdtd(**options(backend=backend, thickness=thickness, mesh_thickness=None,
                                   incidence_side=side))
 
 
@@ -71,7 +76,7 @@ def test_eager_backend_thickness_is_never_silently_detached(backend, side):
 def test_bottom_integer_lengths_with_explicit_mesh(backend):
     if backend != 'numpy':
         pytest.importorskip('jax' if backend == 'jax' else 'torch')
-    result, d = _legacy_wavebit.fdtd(**options(backend=backend, incidence_side='bottom',
+    result, d = _legacy_wavebit_fdtd(**options(backend=backend, incidence_side='bottom',
                                        thickness=[1, 1], mesh_thickness=[1, 1],
                                        period=1., wavelength=10., resolution=2,
                                        return_diagnostics=True))
@@ -88,7 +93,7 @@ def test_fixed_mesh_crossings_and_nominal_forward_compatibility(side, fitted):
                  align_layers=fitted, mesh_thickness=[.13, .27], return_diagnostics=True)
     ds = []
     for depth in (.173, .2, .281):
-        _, d = _legacy_wavebit.fdtd(**dict(kw, thickness=[depth, .4-depth]))
+        _, d = _legacy_wavebit_fdtd(**dict(kw, thickness=[depth, .4-depth]))
         assert d['stable']
         np.testing.assert_allclose(d['layer_planes'], [0., depth, .4], atol=1e-15)
         ds.append(d)
@@ -99,8 +104,8 @@ def test_fixed_mesh_crossings_and_nominal_forward_compatibility(side, fitted):
     for key in ('reflection_monitor_z', 'transmission_monitor_z'):
         for d in ds[1:]:
             np.testing.assert_array_equal(ds[0]['diffraction'][key], d['diffraction'][key])
-    legacy, _ = _legacy_wavebit.fdtd(**dict(kw, thickness=[.13, .27], mesh_thickness=None))
-    live, _ = _legacy_wavebit.fdtd(**dict(kw, thickness=[.13, .27]))
+    legacy, _ = _legacy_wavebit_fdtd(**dict(kw, thickness=[.13, .27], mesh_thickness=None))
+    live, _ = _legacy_wavebit_fdtd(**dict(kw, thickness=[.13, .27]))
     for basis in ('incident', 's_inc', 'p_inc'):
         for key in ('r_s', 'r_p', 't_s', 't_p', 'R', 'T'):
             np.testing.assert_allclose(getattr(getattr(legacy, basis), key),
@@ -116,13 +121,13 @@ def test_joint_layer_material_pole_gradients_in_typed_stack(backend, side, metho
     def objective(p, which):
         runtime = time_loop_backend(which)
         xp, array = runtime.xp, runtime.array
-        stack = _legacy_wavebit.Stack.from_structure(array(pattern)*p[1], [p[0], .4-p[0]],
+        stack = _legacy_wavebit_Stack.from_structure(array(pattern)*p[1], [p[0], .4-p[0]],
                                              mu=array(pattern)*.2+.8,
                                              top=wavebit.Material(p[3], 1.1), bot=1.3,
                                              period=[.3, .4])
-        light = _legacy_wavebit.Incidence(wavelength=[.98, 1.02], theta=.3, phi=.4,
+        light = _legacy_wavebit_Incidence(wavelength=[.98, 1.02], theta=.3, phi=.4,
                                   polarization=(1., .6j), incidence_side=side)
-        results, d = _legacy_wavebit.fdtd(stack, light, backend=which, resolution=10,
+        results, d = _legacy_wavebit_fdtd(stack, light, backend=which, resolution=10,
                                  mesh_indices=(1.1, 1.2), mesh_thickness=[.13, .27],
                                  layer_smoothing=smoothing,
                                  transverse_resolution=(12., 13.), n_pml=6, n_periods=35,
@@ -157,7 +162,7 @@ def test_jit_moves_interfaces_without_retracing_and_masks_invalid_depth(side):
     traces = []
     def solve(thickness):
         traces.append(None)
-        r, d = _legacy_wavebit.fdtd(**options(backend='jax', thickness=thickness, incidence_side=side,
+        r, d = _legacy_wavebit_fdtd(**options(backend='jax', thickness=thickness, incidence_side=side,
                                      align_layers=True, return_diagnostics=True,
                                      field_monitors={'inside': .1}, record_field=151,
                                      record_components=['ey'], record_bounds={'z': (.05, .15)}))
@@ -204,14 +209,18 @@ def test_coating_example_matches_airy_through_public_rcwa(monkeypatch, depth):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     from examples.fdtd import fdtd_layer_optimization as example
 
-    def continuum(stack, incidence, **time_options):
+    def continuum(problem, **time_options):
         # Evaluate the actual example's Stack with independent frequency-domain
         # optics. Merely checking that its optimizer runs missed a spacer above
         # the coating, which is a different physical stack despite the same d.
-        return _legacy_wavebit.rcwa(stack=stack, incidence=incidence, backend='jax',
-                              truncation_order=0).solve()
+        from wavebit import rcwa
+        frequency_problem = rcwa.Problem(units=problem.units,
+            stack=problem.stack.replace(period=2*problem.stack.period),
+            excitation=problem.excitation)
+        return rcwa.run(frequency_problem, backend='jax',
+                        numerics=rcwa.Numerics(orders=(0, 0), algorithm='etm'))
 
-    monkeypatch.setattr(example, 'fdtd', continuum)
+    monkeypatch.setattr(example.fdtd, 'run', continuum)
     n = np.sqrt(1.5)
     r_air_coating = (1-n)/(1+n)
     r_coating_substrate = (n-1.5)/(n+1.5)

@@ -21,7 +21,9 @@ Two instruments, because each reaches what the other cannot:
   put on the card, listed or not. A CPU solve must leave it where it was.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 
 import sys as _repository_sys
 from pathlib import Path as _RepositoryPath
@@ -49,7 +51,7 @@ def _foreign():
     handed a Python float, which is how `test_analytic_shape_gradients[background-jax]` crashed
     once the solver's own arrays were placed and a caller's GPU background was not.
     """
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     return dict(top=jnp.asarray(1.0), background=jnp.asarray(1.0), lx=jnp.asarray(250.0),
                 wavelength=jnp.asarray(WL))
@@ -74,18 +76,18 @@ def _solvers(device_kw, foreign):
              material=5.76),
         dict(type='circle', cx=-200.0, cy=-250.0, lx=80.0, material=9.0)])]
     return {
-        '1d': _legacy_wavebit.rcwa(backend='jax', structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]),
+        '1d': _legacy_wavebit_rcwa(backend='jax', structure=np.array([[[1.0, 1.0, 12.25, 12.25]]]),
                            period=[P], truncation_order=dict(x=6, y=0),
                            wavelength=foreign['wavelength'],
                            top=1.0, bot=2.25, theta=0.2, phi=0.0, tetm='te', thickness=[H],
                            **device_kw),
-        'magnetic': _legacy_wavebit.rcwa(backend='jax', structure=eps[::-1], mu=mu[::-1], period=[P, 0.9 * P],
+        'magnetic': _legacy_wavebit_rcwa(backend='jax', structure=eps[::-1], mu=mu[::-1], period=[P, 0.9 * P],
                                  truncation_order=[2, 2], thickness=[0.5 * H, H],
                                  wavelength=WL, top=wavebit.Material(2.25, mu=1.4),
                                  bot=wavebit.Material(4.0), theta=0.31, phi=0.47, psi=0.29,
                                  layer_algorithm='SMM', answers='field',
                                  excitation={(0, 0): 1.0, (-1, 0): 0.5j}, **device_kw),
-        'shapes': _legacy_wavebit.rcwa(backend='jax', structure=shapes, period=[P, 1.2 * P],
+        'shapes': _legacy_wavebit_rcwa(backend='jax', structure=shapes, period=[P, 1.2 * P],
                                truncation_order=[3, 3], thickness=[H], wavelength=WL,
                                top=foreign['top'], bot=2.25, theta=0.1, phi=0.3, psi=0.4,
                                **device_kw),
@@ -165,7 +167,7 @@ def poisoned(first, second):
     they were. Whether that solve itself answers is :func:`moved`'s question. What is asked
     here is only that a fresh solver on ``second`` is not handed ``first``'s arrays.
     """
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
     from wavebit.rcwa._engine import parametric
@@ -174,7 +176,7 @@ def poisoned(first, second):
         shapes = [dict(background=1.0, shapes=[
             dict(type='ellipse', cx=0.0, cy=0.0, lx=lx, ly=150.0, angle=0.7, material=5.76),
             dict(type='circle', cx=-200.0, cy=-250.0, lx=80.0, material=9.0)])]
-        return _legacy_wavebit.rcwa(backend='jax', structure=shapes, period=[P, 1.2 * P],
+        return _legacy_wavebit_rcwa(backend='jax', structure=shapes, period=[P, 1.2 * P],
                             truncation_order=[2, 2], thickness=[H], wavelength=WL, top=1.0,
                             bot=2.25, theta=0.1, phi=0.3, psi=0.4, shape_nvf_grid_size=64,
                             device=device)
@@ -305,7 +307,7 @@ def moved(first, second):
         rng = np.random.default_rng(1)
         eps = np.where(rng.random((1, 8, 8)) < 0.4, 5.76, 1.0)
         basis = wavebit.Lattice(jnp.asarray([P, 0.0]), jnp.asarray([0.2 * P, 0.9 * P]), False)
-        return _legacy_wavebit.rcwa(backend='jax', structure=eps, lattice=basis, truncation_order=[2, 2],
+        return _legacy_wavebit_rcwa(backend='jax', structure=eps, lattice=basis, truncation_order=[2, 2],
                             thickness=[H], wavelength=WL, factorization='nvf', device=device)
 
     try:
@@ -417,32 +419,33 @@ _MOVE_CHILD = """
 
 
 _FIELD_DOOR_CHILD = """
-    import jax
-    import numpy as np
-    from wavebit.compat import legacy as wavebit
-    wavebit.enable_x64()
-    cpus = jax.devices('cpu')
-    assert len(cpus) == 2, f'the forced second host device did not appear: {{cpus}}'
-    eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
-    kw = dict(structure=eps, period=[700.0, 700.0], truncation_order=[1, 1], thickness=[300.0],
-              wavelength=900.0, theta=0.2, phi=0.1, psi=0.3, answers='field')
-    bad = []
-    for first, second in ((cpus[0], cpus[1]), (cpus[1], cpus[0])):
-        solver = wavebit.rcwa(backend='jax', device=first, **kw)
-        built = wavebit.rcwa(backend='jax', device=second, **kw)
-        geometry = built.freeze_geometry()
-        got = solver.solve_field(3, 3, 2, geometry=geometry, device=second)
-        want = built.solve_field(3, 3, 2, geometry=geometry)
-        if solver.device != [second]:
-            bad.append(f'{{first}}->{{second}}: solver.device reads {{solver.device}}')
-        if not all(np.array_equal(np.asarray(a), np.asarray(b)) for a, b in
-                   zip(jax.tree_util.tree_leaves(got), jax.tree_util.tree_leaves(want))):
-            bad.append(f'{{first}}->{{second}}: answer differs from a solver built there')
-        on = {{str(d) for x in jax.tree_util.tree_leaves((got, solver))
-              if isinstance(x, jax.Array) for d in x.devices()}}
-        if on != {{str(second)}}:
-            bad.append(f'{{first}}->{{second}}: arrays on {{sorted(on)}}')
-    print('; '.join(bad) if bad else 'OK')
+import jax
+import numpy as np
+from wavebit._common.backend import _enable_x64 as wavebit_enable_x64
+from wavebit.rcwa._factory import rcwa as wavebit_rcwa
+wavebit_enable_x64()
+cpus = jax.devices('cpu')
+assert len(cpus) == 2, f'the forced second host device did not appear: {{cpus}}'
+eps = np.where(np.random.default_rng(0).random((1, 6, 6)) < 0.4, 5.76, 1.0)
+kw = dict(structure=eps, period=[700.0, 700.0], truncation_order=[1, 1], thickness=[300.0],
+          wavelength=900.0, theta=0.2, phi=0.1, psi=0.3, answers='field')
+bad = []
+for first, second in ((cpus[0], cpus[1]), (cpus[1], cpus[0])):
+    solver = wavebit_rcwa(backend='jax', device=first, **kw)
+    built = wavebit_rcwa(backend='jax', device=second, **kw)
+    geometry = built.freeze_geometry()
+    got = solver.solve_field(3, 3, 2, geometry=geometry, device=second)
+    want = built.solve_field(3, 3, 2, geometry=geometry)
+    if solver.device != [second]:
+        bad.append(f'{{first}}->{{second}}: solver.device reads {{solver.device}}')
+    if not all(np.array_equal(np.asarray(a), np.asarray(b)) for a, b in
+               zip(jax.tree_util.tree_leaves(got), jax.tree_util.tree_leaves(want))):
+        bad.append(f'{{first}}->{{second}}: answer differs from a solver built there')
+    on = {{str(d) for x in jax.tree_util.tree_leaves((got, solver))
+          if isinstance(x, jax.Array) for d in x.devices()}}
+    if on != {{str(second)}}:
+        bad.append(f'{{first}}->{{second}}: arrays on {{sorted(on)}}')
+print('; '.join(bad) if bad else 'OK')
 """
 
 

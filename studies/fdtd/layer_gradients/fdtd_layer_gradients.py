@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from wavebit.compat import legacy as wavebit
+from wavebit.materials.response import Material as wavebit_Material
 from wavebit.fdtd._periodic.runtime import time_loop_backend
 
 
@@ -48,8 +48,8 @@ def scene_vector(d, resolution, *, backend='jax', band=BAND, depth=DEPTH,
     epsilon, mu = film
     results = legacy_fdtd(structure=np.array([[[epsilon]], [[eb]]]),
                            mu=np.array([[[mu]], [[mb]]]), thickness=[d, depth-d],
-                           mesh_thickness=[depth/2, depth/2], top=wavebit.Material(et, mt),
-                           bot=wavebit.Material(eb, mb), mesh_indices=(np.sqrt(et*mt), np.sqrt(eb*mb)),
+                           mesh_thickness=[depth/2, depth/2], top=wavebit_Material(et, mt),
+                           bot=wavebit_Material(eb, mb), mesh_indices=(np.sqrt(et*mt), np.sqrt(eb*mb)),
                            period=.05, wavelength=band, backend=backend, resolution=resolution,
                            n_pml=resolution, n_periods=65, pulse_width=3., align_layers=True,
                            layer_smoothing=smoothing,

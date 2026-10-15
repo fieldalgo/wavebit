@@ -1,6 +1,6 @@
 """Concrete autograd conditions must not disable stale-field detection."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -16,7 +16,7 @@ def solver(backend,name,value,algorithm):
         kw.pop('period')
         kw['factorization']='laurent'
     kw[name]=value
-    return _legacy_wavebit.rcwa(**kw)
+    return _legacy_wavebit_rcwa(**kw)
 
 
 def field(s):

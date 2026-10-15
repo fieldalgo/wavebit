@@ -1,6 +1,18 @@
 """Public shape construction, physical frame covariance, and live JAX replay."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.conforming.affine_profile import AffineProfileNVF as _legacy_wavebit_AffineProfileNVF
+
+from wavebit.rcwa._engine.conforming.cartesian_rectangle import CartesianRectangleNVF as _legacy_wavebit_CartesianRectangleNVF
+
+from wavebit.rcwa._engine.conforming.cartesian_pair import CartesianRectanglePairNVF as _legacy_wavebit_CartesianRectanglePairNVF
+
+from wavebit.rcwa._engine.conforming import ConformingNVF as _legacy_wavebit_ConformingNVF
+
+from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import os
 from pathlib import Path
 import shutil
@@ -33,7 +45,7 @@ def scene(p=PARAMETERS, xp=np):
 
 
 def solve(conv, lattice, order, *, scale=1., angle=.31, backend='numpy', kernel_frame=False):
-    solver = _legacy_wavebit.rcwa(backend=backend, lattice=lattice, wavelength=900.*scale,
+    solver = _legacy_wavebit_rcwa(backend=backend, lattice=lattice, wavelength=900.*scale,
                           theta=.23, phi=.47+angle, thickness=[173.*scale]*len(conv.epx),
                           truncation_order=order, top=1., bot=2.25)
     # Public builders and private study models deliberately use different doors.
@@ -50,7 +62,7 @@ def test_public_shapes_preserve_the_existing_cell_and_sort_only_at_plan_time():
     p = PARAMETERS.copy()
     p[5], p[7], p[8], p[9] = 1., 0., 0., 0.
     structure, lattice = scene(p)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(structure, lattice)
     assert plan.layers == ((1, 0),)
     actual = builder.conv_matrices(structure, lattice, plan=plan)
@@ -68,7 +80,7 @@ def test_longitudinal_material_matches_independent_analytic_shape_integration(or
     p[6] *= .7
     p[8:] = [421., -530.]
     structure, lattice = scene(p)
-    conv = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
+    conv = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     layer = structure[0]
     c, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'], *order, lattice, np.complex128)
     expected = about_centre(conv_matrix_2d(np, c, *order), order)
@@ -81,7 +93,7 @@ def test_longitudinal_material_matches_independent_analytic_shape_integration(or
 @pytest.mark.research
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1), (0, 0)])
 def test_rigid_rotation_and_translation_preserve_every_engine_diffraction_power(order):
-    builder = _legacy_wavebit.ConformingNVF(order, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(order, **SETTINGS)
     structure, lattice = scene()
     baseline = solve(builder.conv_matrices(structure, lattice), lattice, order)
     p = PARAMETERS.copy()
@@ -95,7 +107,7 @@ def test_rigid_rotation_and_translation_preserve_every_engine_diffraction_power(
 
 @pytest.mark.research
 def test_uniform_physical_scaling_and_uniform_layers_reach_the_engine():
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     structure, lattice = scene()
     structure.insert(0, dict(background=2.3))
     baseline = builder.conv_matrices(structure, lattice)
@@ -117,11 +129,11 @@ def test_uniform_physical_scaling_and_uniform_layers_reach_the_engine():
 def test_public_export_runs_in_jax_and_torch_engines(backend):
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     else:
         pytest.importorskip('torch')
     structure, lattice = scene()
-    conv = _legacy_wavebit.ConformingNVF(1, **SETTINGS).conv_matrices(structure, lattice)
+    conv = _legacy_wavebit_ConformingNVF(1, **SETTINGS).conv_matrices(structure, lattice)
     np.testing.assert_allclose(solve(conv, lattice, (1, 1), backend=backend),
                                solve(conv, lattice, (1, 1)), atol=2e-10, rtol=0)
 
@@ -131,7 +143,7 @@ def test_equal_material_subdivision_does_not_add_an_interface_constraint():
     p = PARAMETERS.copy()
     p[4] = p[3]
     structure, lattice = scene(p)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     actual = builder.conv_matrices(structure, lattice)
     rectangle = dict(structure[0]['shapes'][0], lx=p[0])
     rectangle['cx'], rectangle['cy'] = lattice@p[8:]/p[6]
@@ -155,7 +167,7 @@ def test_frozen_plan_keeps_geometry_material_background_period_and_pose_live_und
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*scene())
     def objective(p, xp):
         return _objective(builder.conv_matrices(*scene(p, xp), plan=plan, xp=xp), xp)
@@ -174,7 +186,7 @@ def test_contact_has_a_full_one_sided_derivative_and_does_not_snap_positive_gaps
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     p = PARAMETERS.copy()
     p[1], p[7] = 0., 0.
     plan = builder.plan(*scene(p))
@@ -199,23 +211,23 @@ def test_contact_has_a_full_one_sided_derivative_and_does_not_snap_positive_gaps
 @pytest.mark.parametrize('order', [-1, True, 1.5, (1,), (1, -1), (1, 2.5)])
 def test_invalid_order_is_refused(order):
     with pytest.raises(ValueError, match='truncation_order'):
-        _legacy_wavebit.ConformingNVF(order)
+        _legacy_wavebit_ConformingNVF(order)
 
 
 def test_numpy_integer_order_and_lattice_object_are_accepted():
-    builder = _legacy_wavebit.ConformingNVF(np.int64(0), **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(np.int64(0), **SETTINGS)
     basis = np.eye(2)*2
     lattice = wavebit.Lattice(u=basis[:, 0], v=basis[:, 1], axis_aligned=True)
     assert builder.conv_matrices([dict(background=3.)], lattice).epx.item() == 3.
     assert builder.conv_matrices([dict(background=3.)], lattice,
-                                 xp=_legacy_wavebit.rcwa().xp).epx.item() == 3.
+                                 xp=_legacy_wavebit_rcwa().xp).epx.item() == 3.
 
 
 def test_jit_requires_a_concrete_plan_and_x64_precision():
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(0, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(0, **SETTINGS)
     with pytest.raises(ValueError, match='concrete geometry before JIT'):
         jax.jit(lambda p: builder.conv_matrices(*scene(p, jnp), xp=jnp))(jnp.asarray(PARAMETERS))
     plan = builder.plan(*scene())
@@ -233,7 +245,7 @@ def test_full_height_contact_matches_independent_rotated_cartesian_inverse_rule(
     p[1] = 0.
     structure, lattice = scene(p)
     order = (2, 1)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     layer = structure[0]
     eps, inverse = assemble_eps_coeffs(np, layer['shapes'], layer['background'],
                                        *order, lattice, np.complex128)
@@ -251,7 +263,7 @@ def test_full_height_contact_matches_independent_rotated_cartesian_inverse_rule(
                                     np.array([[np.inf, 0.], [0., 700.]]), [700., 700.]])
 def test_unsupported_lattice_is_refused(lattice):
     with pytest.raises(ValueError, match='lattice'):
-        _legacy_wavebit.ConformingNVF(0, **SETTINGS).conv_matrices([dict(background=1.)], lattice)
+        _legacy_wavebit_ConformingNVF(0, **SETTINGS).conv_matrices([dict(background=1.)], lattice)
 
 
 @pytest.mark.parametrize('change', [dict(lx=-3.), dict(ly=701.), dict(ly=0.), dict(cx=900.),
@@ -263,18 +275,18 @@ def test_unsupported_or_invalid_shape_is_refused(change):
     structure, lattice = scene()
     structure[0]['shapes'][0].update(change)
     with pytest.raises((ValueError, NotImplementedError)):
-        _legacy_wavebit.ConformingNVF(0, **SETTINGS).conv_matrices(structure, lattice)
+        _legacy_wavebit_ConformingNVF(0, **SETTINGS).conv_matrices(structure, lattice)
 
 
 @pytest.mark.parametrize('structure', [[], [None], [dict(shapes=None)], [dict(shapes=[None])],
                                       [dict(shapes=[dict(type='circle', lx=30., material=4.)])]])
 def test_invalid_structure_or_unsupported_shape_kind_is_refused(structure):
     with pytest.raises((ValueError, NotImplementedError)):
-        _legacy_wavebit.ConformingNVF(0, **SETTINGS).conv_matrices(structure, np.eye(2)*700)
+        _legacy_wavebit_ConformingNVF(0, **SETTINGS).conv_matrices(structure, np.eye(2)*700)
 
 
 def test_stale_shape_count_order_tiling_and_layer_count_are_refused():
-    builder = _legacy_wavebit.ConformingNVF(0, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(0, **SETTINGS)
     plan = builder.plan(*scene())
     for change in ('count', 'order', 'overlap', 'layers'):
         structure, lattice = scene()
@@ -286,7 +298,7 @@ def test_stale_shape_count_order_tiling_and_layer_count_are_refused():
             structure[0]['shapes'][0]['lx'] += 1.
         else:
             structure.append(dict(background=1.))
-        with pytest.raises(_legacy_wavebit.StaleGeometryError):
+        with pytest.raises(_legacy_wavebit_StaleGeometryError):
             builder.conv_matrices(structure, lattice, plan=plan)
 
 
@@ -294,7 +306,7 @@ def test_invalid_traced_geometry_and_material_poison_all_slots_including_uniform
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(0, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(0, **SETTINGS)
     plan = builder.plan(*scene())
     build = jax.jit(lambda p: builder.conv_matrices(*scene(p, jnp), plan=plan, xp=jnp))
     for index, value in ((0, -1.), (1, -1.), (2, 500.), (3, -2.), (5, 0.), (6, 0.), (7, np.nan)):
@@ -317,8 +329,8 @@ def test_public_construction_does_not_need_a_studies_checkout(tmp_path):
     code = """
 import sys
 import numpy as np
-from wavebit.compat import legacy as wavebit
-conv = wavebit.ConformingNVF(0, rows=2, grade_y=False, gap_degree=2).conv_matrices(
+from wavebit.rcwa._engine.conforming import ConformingNVF as wavebit_ConformingNVF
+conv = wavebit_ConformingNVF(0, rows=2, grade_y=False, gap_degree=2).conv_matrices(
     [dict(shapes=[dict(lx=1., ly=1.9, material=4.)])], np.eye(2)*2)
 assert np.isfinite(conv.epx).all()
 assert not any(name == 'studies' or name.startswith('studies.') for name in sys.modules)
@@ -337,7 +349,7 @@ def test_each_public_nvf_door_publishes_the_accessor_frame(door):
     if door in ('conforming', 'rebased'):
         structure, lattice = scene()
         if door == 'rebased': lattice = lattice @ np.array([[1., 1.], [0., 1.]])
-        builder = _legacy_wavebit.ConformingNVF(order, **SETTINGS)
+        builder = _legacy_wavebit_ConformingNVF(order, **SETTINGS)
         conv = builder.conv_matrices(structure, lattice)
     elif door == 'affine':
         from tests.rcwa.test_conforming_affine_profile import layer
@@ -348,18 +360,18 @@ def test_each_public_nvf_door_publishes_the_accessor_frame(door):
                        cx=p['offset'][0]+500*(a+b)/2, cy=p['offset'][1], material=e)
                   for a, b, e in zip(edges, edges[1:], p['values'])]
         structure = [dict(background=profile['background'], shapes=shapes)]
-        conv = _legacy_wavebit.AffineProfileNVF(order, **SETTINGS).conv_matrices([profile], lattice)
+        conv = _legacy_wavebit_AffineProfileNVF(order, **SETTINGS).conv_matrices([profile], lattice)
     elif door == 'rectangle':
         from tests.rcwa.test_nvf_cartesian_rectangle_api import scene as rectangle_scene
         structure, lattice = rectangle_scene()
-        builder = _legacy_wavebit.CartesianRectangleNVF(order, refinement=1)
+        builder = _legacy_wavebit_CartesianRectangleNVF(order, refinement=1)
         conv = builder.conv_matrices(structure, lattice, plan=builder.plan(structure, lattice))
     else:
         from tests.rcwa.test_nvf_cartesian_rectangle_pair_api import scene as pair_scene, native_parameters, case_cell
         structure, lattice = pair_scene(native_parameters(case_cell('gap-r1')[1]))
-        builder = _legacy_wavebit.CartesianRectanglePairNVF(order, refinement=1)
+        builder = _legacy_wavebit_CartesianRectanglePairNVF(order, refinement=1)
         conv = builder.conv_matrices(structure, lattice, plan=builder.plan(structure, lattice))
-    s = _legacy_wavebit.rcwa(structure=structure, lattice=lattice, truncation_order=order,
+    s = _legacy_wavebit_rcwa(structure=structure, lattice=lattice, truncation_order=order,
                     thickness=[100.], factorization='laurent')
     np.testing.assert_allclose(np.linalg.inv(conv.epz_i[0]), s.eps_conv_matrices().epx[0],
                                atol=5e-12, rtol=0)

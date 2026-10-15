@@ -34,7 +34,9 @@ Differentiating the raster instead never touches this code, and an earlier versi
 tests did exactly that and proved nothing.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -61,7 +63,7 @@ def _solve(backend='numpy', structure=None, truncation_order=(6, 0), theta=0.0, 
                 structure=_UC_1D if structure is None else structure, thickness=[220.0], truncation_order=list(truncation_order))
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        return _legacy_wavebit.rcwa(**{**base, **kw}).solve()
+        return _legacy_wavebit_rcwa(**{**base, **kw}).solve()
 
 
 def _total_r(result):
@@ -229,7 +231,7 @@ def test_normal_incidence_solves_without_a_nudge(backend, case, phi):
     """
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
 
@@ -258,7 +260,7 @@ def test_the_first_order_path_gets_the_azimuth_too():
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            solver = _legacy_wavebit.rcwa(backend='numpy', wavelength=500.0, period=[700.0, 700.0],
+            solver = _legacy_wavebit_rcwa(backend='numpy', wavelength=500.0, period=[700.0, 700.0],
                                   top=1.0, bot=2.25, theta=0.0, phi=phi, psi=0.7,
                                   structure=_UC_2D, thickness=[220.0], truncation_order=[4, 4])
             solver.formulation = 'first_order'
@@ -342,7 +344,7 @@ def test_phi_plus_pi_negates_the_reconstructed_field():
     def cell(**kw):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            solver = _legacy_wavebit.rcwa(backend='numpy', wavelength=500.0, period=[700.0, 700.0],
+            solver = _legacy_wavebit_rcwa(backend='numpy', wavelength=500.0, period=[700.0, 700.0],
                                   top=1.0, bot=2.25, theta=0.0,
                                   structure=_UC_2D, thickness=[220.0], truncation_order=[4, 4],
                                   answers='field', **kw)
@@ -425,13 +427,13 @@ def test_gradient_flows_through_the_azimuth():
     which is why it cannot stand in for this test.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
 
     def loss(period, structure, truncation_order, phi):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            r = _legacy_wavebit.rcwa(backend='jax', wavelength=500.0, period=[period, period],
+            r = _legacy_wavebit_rcwa(backend='jax', wavelength=500.0, period=[period, period],
                              top=1.0, bot=2.25, theta=0.0, phi=phi, psi=np.pi / 2,
                              structure=jnp.asarray(structure), thickness=[220.0],
                              truncation_order=list(truncation_order)).solve()
@@ -456,14 +458,14 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
     """
     torch = pytest.importorskip('torch')
     pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax
     import jax.numpy as jnp
 
     def jax_loss(period):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            r = _legacy_wavebit.rcwa(backend='jax', wavelength=500.0, period=[period, period], top=1.0,
+            r = _legacy_wavebit_rcwa(backend='jax', wavelength=500.0, period=[period, period], top=1.0,
                              bot=2.25, theta=0.0, phi=0.7, psi=np.pi / 2,
                              structure=jnp.asarray(_UC_2D), thickness=[220.0],
                              truncation_order=[4, 4]).solve()
@@ -472,7 +474,7 @@ def test_torch_agrees_with_jax_on_the_gradient_through_the_azimuth():
     p = torch.tensor(700.0, dtype=torch.float64, requires_grad=True)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        r = _legacy_wavebit.rcwa(backend='torch', wavelength=500.0, period=[p, p], top=1.0, bot=2.25,
+        r = _legacy_wavebit_rcwa(backend='torch', wavelength=500.0, period=[p, p], top=1.0, bot=2.25,
                          theta=0.0, phi=0.7, psi=np.pi / 2,
                          structure=torch.asarray(_UC_2D), thickness=[220.0],
                          truncation_order=[4, 4]).solve()
@@ -492,7 +494,7 @@ def test_the_denominator_clamp_is_what_saves_the_gradient():
     reading only the forward result.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
 
     ky = jnp.asarray([0.0, 0.2, 0.3], dtype=jnp.complex128)
@@ -520,7 +522,7 @@ def test_the_column_carries_its_derivative_along_kx():
     same value to the bit (the term is a signed zero there), and its gradient is pinned against
     the analytic one, for real and complex ``ky`` of either sign."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
 
     ky = jnp.asarray([0.4, -0.7, 0.3 + 0.2j, -0.5 + 0.1j], dtype=jnp.complex128)
@@ -546,14 +548,14 @@ def test_the_theta_derivative_at_normal_incidence_on_a_2d_grating(formulation):
     agree on, for every polarization, while ``theta = 1e-4`` was right. Pinned against the
     central difference, which ``R``'s smoothness through ``theta = 0`` makes the reference."""
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     grating = np.ones((6, 6), dtype=complex)
     grating[1:4, 2:5] = 4.0
     grating[4, 0:2] = 2.25
 
     def reflected(theta, backend):
-        s = _legacy_wavebit.rcwa(backend=backend, top=2.25, bot=2.25, wavelength=500.0, theta=theta,
+        s = _legacy_wavebit_rcwa(backend=backend, top=2.25, bot=2.25, wavelength=500.0, theta=theta,
                          phi=0.6, psi=0.3, period=(700.0, 630.0), truncation_order=(1, 1),
                          thickness=[180.0], structure=grating[None])
         if formulation:
@@ -612,7 +614,7 @@ def test_the_1d_frame_sign_is_exactly_the_azimuths_cosine(backend, dtype):
     from wavebit._common.conventions import order_frame_sign
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
     kx = _row(backend, dtype)
@@ -646,7 +648,7 @@ def test_the_1d_frame_sign_takes_its_origin_azimuth(backend, dtype):
     from wavebit._common.conventions import order_frame_sign
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
     kx = _row(backend, dtype)
@@ -674,7 +676,7 @@ def test_the_1d_frame_sign_traces_and_differentiates_to_zero():
     which ``where`` on a comparison with constant branches cannot produce.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     import jax.numpy as jnp
     from wavebit._common.conventions import order_frame_sign
 

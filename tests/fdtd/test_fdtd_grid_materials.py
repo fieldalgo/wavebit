@@ -1,6 +1,6 @@
 """Dispersive displacement conservation, CPML and differentiable pole parameters."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import numpy as np
 import pytest
 
@@ -9,7 +9,7 @@ import pytest
 def test_uniform_ade_conserves_displacement_without_free_current():
     shape=(3,4,3,2)
     electric=np.ones(shape)
-    out=_legacy_wavebit.fdtd_grid(np.full(shape,2.),spacing=(1.,)*3,dt=.1,steps=121,
+    out=_legacy_wavebit_fdtd_grid(np.full(shape,2.),spacing=(1.,)*3,dt=.1,steps=121,
                          electric=electric,poles=((0.,.5,2.),(2.,.3,3.)))
     np.testing.assert_allclose(2*out['E']+sum(out['polarization']),2*electric,atol=2e-14)
     assert np.max(abs(out['H']))<1e-14
@@ -25,9 +25,9 @@ def test_cpml_reduces_late_pulse_energy_and_numpy_jax_agree():
     t=(np.arange(steps)+.5)*dt
     pulse=np.exp(-((t-2)/.5)**2)*np.sin(2*np.pi*t)
     common=dict(spacing=(.1,)*3,dt=dt,steps=steps,source=source,pulse=pulse)
-    periodic=_legacy_wavebit.fdtd_grid(np.ones(shape),**common)
-    pml=_legacy_wavebit.fdtd_grid(np.ones(shape),**common,pml_cells=15)
-    compiled=_legacy_wavebit.fdtd_grid(np.ones(shape),**common,pml_cells=15,backend='jax')
+    periodic=_legacy_wavebit_fdtd_grid(np.ones(shape),**common)
+    pml=_legacy_wavebit_fdtd_grid(np.ones(shape),**common,pml_cells=15)
+    compiled=_legacy_wavebit_fdtd_grid(np.ones(shape),**common,pml_cells=15,backend='jax')
     for key in ('E','H'):
         np.testing.assert_allclose(compiled[key],pml[key],atol=1e-13)
     def energy(out):
@@ -47,7 +47,7 @@ def test_cpml_dispersive_spectrum_and_pole_gradients_match_finite_differences():
             pulse=np.exp(-((t-2)/.5)**2)*np.sin(3*t),
             pml_cells=8,pml_wavelength=2.4,wavelengths=[2.4],monitor_z=[32])
     def run(parameters,backend='jax',block=13):
-        return _legacy_wavebit.fdtd_grid(np.ones(shape),poles=[(parameters[0],parameters[1],parameters[2]*mask)],
+        return _legacy_wavebit_fdtd_grid(np.ones(shape),poles=[(parameters[0],parameters[1],parameters[2]*mask)],
                                 backend=backend,checkpoint_steps=block,**kw)
     def objective(parameters,block=13):
         return run(parameters,block=block)['power_z'].sum()
@@ -73,7 +73,7 @@ def test_cpml_dispersive_spectrum_and_pole_gradients_match_finite_differences():
 ])
 def test_invalid_poles_and_cpml_combinations_are_refused(extra):
     with pytest.raises(ValueError):
-        _legacy_wavebit.fdtd_grid(np.ones((8,2,2)),spacing=(1.,)*3,dt=.2,steps=10,**extra)
+        _legacy_wavebit_fdtd_grid(np.ones((8,2,2)),spacing=(1.,)*3,dt=.2,steps=10,**extra)
 
 
 def test_cpml_absorbs_oblique_transverse_fourier_mode():
@@ -85,8 +85,8 @@ def test_cpml_absorbs_oblique_transverse_fourier_mode():
     dt=.04;steps=900;t=(np.arange(steps)+.5)*dt
     pulse=np.exp(-((t-6)/1.5)**2)*np.exp(-2j*np.pi*t)
     common=dict(spacing=(.1,)*3,dt=dt,steps=steps,source=source,pulse=pulse,backend='jax')
-    periodic=_legacy_wavebit.fdtd_grid(np.ones(shape),**common)
-    pml=_legacy_wavebit.fdtd_grid(np.ones(shape),**common,pml_cells=15)
+    periodic=_legacy_wavebit_fdtd_grid(np.ones(shape),**common)
+    pml=_legacy_wavebit_fdtd_grid(np.ones(shape),**common,pml_cells=15)
     def energy(out):
         return np.sum(abs(np.asarray(out['E']))**2)+np.sum(abs(np.asarray(out['H']))**2)
     assert energy(pml)<1e-4*energy(periodic)

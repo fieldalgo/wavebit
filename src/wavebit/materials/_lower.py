@@ -13,7 +13,7 @@ def lower_material(model, *, units):
     """Convert SI rates/conductivity exactly once for a declared geometry length unit."""
     units = require_units(units)
     if isinstance(model, td.MaterialBase):
-        raise UnsupportedFeatureError('normalized legacy materials belong to compat.legacy.fd; use a common physical material model', code='legacy_material', path='material')
+        raise UnsupportedFeatureError('normalized engine materials are not physical declarations; use a common physical material model', code='legacy_material', path='material')
     if isinstance(model, (TabulatedMaterial, MaterialResponse)):
         raise UnsupportedFeatureError('time-domain execution requires a supported causal material model, not a table or an evaluated response', code='causal_model_required', path='material')
     if not isinstance(model, (Material, ConductiveMaterial, DispersiveMaterial)):

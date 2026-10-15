@@ -1,6 +1,10 @@
 """Independent material loss, complex contact rules, passivity and live replay."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._engine.conforming import ConformingNVF as _legacy_wavebit_ConformingNVF
+
+from wavebit.rcwa._engine.factorization import ConvMatrices as _legacy_wavebit_ConvMatrices
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import numpy as np
 from tests.fixtures.common._conv_frame import about_centre
 import pytest
@@ -29,7 +33,7 @@ def complex_scene(p=PARAMETERS, losses=(0., .8, 2.1), xp=np, axis=0):
 @pytest.mark.parametrize('order', [(2, 1), (1, 0), (0, 1)])
 def test_independent_loss_has_analytic_longitudinal_material_and_passive_transverse_form(axis, losses, order):
     structure, lattice = complex_scene(losses=losses, axis=axis)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     layer = structure[0]
     eps, _ = assemble_eps_coeffs(np, layer['shapes'], layer['background'], *order, lattice, np.complex128)
     np.testing.assert_allclose(np.linalg.inv(actual.epz_i[0]), about_centre(conv_matrix_2d(np, eps, *order), order),
@@ -46,7 +50,7 @@ def test_independent_loss_has_analytic_longitudinal_material_and_passive_transve
 def test_independent_loss_mixed_contact_stack_matches_analytic_inverse_rules(backend):
     if backend == 'jax':
         pytest.importorskip('jax')
-        _legacy_wavebit.enable_x64()
+        _legacy_wavebit_enable_x64()
     elif backend == 'torch':
         pytest.importorskip('torch')
     p = PARAMETERS.copy()
@@ -56,12 +60,12 @@ def test_independent_loss_mixed_contact_stack_matches_analytic_inverse_rules(bac
     uniform = 2.3+.7j
     structure = horizontal+[dict(background=uniform)]+vertical
     order = (2, 1)
-    actual = _legacy_wavebit.ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
+    actual = _legacy_wavebit_ConformingNVF(order, **SETTINGS).conv_matrices(structure, lattice)
     identity = np.eye(15, dtype=complex)
     reference = [_contact_reference(horizontal[0], lattice, order, 0),
                  (uniform*identity, uniform*identity, identity/uniform, 0*identity, 0*identity),
                  _contact_reference(vertical[0], lattice, order, 1)]
-    expected = _legacy_wavebit.ConvMatrices(*(np.stack([layer[i] for layer in reference]) for i in range(5)))
+    expected = _legacy_wavebit_ConvMatrices(*(np.stack([layer[i] for layer in reference]) for i in range(5)))
     for got, want in zip(actual, expected):
         np.testing.assert_allclose(got, want, atol=4e-12, rtol=0)
     np.testing.assert_allclose(solve(actual, lattice, order, scale=.65, backend=backend),
@@ -73,7 +77,7 @@ def test_fifteen_independent_geometry_storage_and_loss_derivatives(axis):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*scene(axis=axis))
     parameters = np.r_[PARAMETERS, .3, .8, 2.1]
     def objective(p, xp):
@@ -94,7 +98,7 @@ def test_contact_and_independent_lossless_boundary_derivatives(axis):
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
-    builder = _legacy_wavebit.ConformingNVF(1, **SETTINGS)
+    builder = _legacy_wavebit_ConformingNVF(1, **SETTINGS)
     plan = builder.plan(*scene(axis=axis))
     p = PARAMETERS.copy()
     p[[1, 3]] = 0.
@@ -153,7 +157,7 @@ def test_complex_polynomial_variants_preserve_periodic_fields_and_contact_rules(
     coefficients, metadata = model.coefficients(29., dict(seams=[31.], values=[4.+.8j, 9.+2.1j]))
     np.testing.assert_allclose(coefficients[:4, 2, 2].reshape(2, 2), np.eye(2), atol=3e-12, rtol=0)
     assert metadata['cell_residual'] < 1e-8
-    builder = _legacy_wavebit.ConformingNVF((2, 1), **settings)
+    builder = _legacy_wavebit_ConformingNVF((2, 1), **settings)
     p = PARAMETERS.copy()
     plan = builder.plan(*complex_scene(p, axis=axis))
     for gap in (29., 0.):

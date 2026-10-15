@@ -23,7 +23,7 @@ condition number 1. The singularity was gone and the workaround was not, so the 
 what these tests now assert the absence of.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -53,12 +53,12 @@ def _solver(ns, ds, *, tetm='te', theta=0.2, path='1d', truncation_order=0, answ
                   bot=eps_from_refractive_index(ns[-1]),
                   theta=theta, wavelength=WL, thickness=list(reversed(ds)), answers=answers)
     if path == '1d':
-        return _legacy_wavebit.rcwa(tetm=tetm, truncation_order=truncation_order, period=[WL * 2],
+        return _legacy_wavebit_rcwa(tetm=tetm, truncation_order=truncation_order, period=[WL * 2],
                               structure=eps_from_refractive_index(
                                   np.array([[[n, n]] for n in layers])), **common)
     cell = ([[[n, n]] for n in layers] if path == 'conical'
             else [[[n, n], [n, n]] for n in layers])
-    return _legacy_wavebit.rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=[truncation_order, truncation_order],
+    return _legacy_wavebit_rcwa(phi=0.0, psi=(np.pi / 2 if tetm == 'te' else 0.0), truncation_order=[truncation_order, truncation_order],
                           period=[WL * 2, WL * 2],
                           structure=eps_from_refractive_index(np.array(cell)), **common)
 

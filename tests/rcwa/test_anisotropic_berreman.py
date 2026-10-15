@@ -68,7 +68,7 @@ And the oracle is an algorithm implemented below, not a third-party solver — s
 ``docs/theory/rcwa/off-diagonal-slot-convention.md`` §8 for why S4 was tried for that role and set aside.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 from scipy.linalg import expm
@@ -220,7 +220,7 @@ def solve_tensor_stack(layers, theta, wl=WL, layer_algorithm='ETM', formulation=
             slot.append(np.linalg.inv(e[2, 2] * I) if value is None else value * I)
         thick.append(d)
     conv = [np.stack(s) for s in slots]
-    mee = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
+    mee = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=theta, phi=0.0, psi=0.0,
                          truncation_order=(0, 0), period=(300.0, 300.0), wavelength=wl, thickness=thick,
                          layer_algorithm=layer_algorithm, incidence_side=incidence_side)
     if formulation is not None:

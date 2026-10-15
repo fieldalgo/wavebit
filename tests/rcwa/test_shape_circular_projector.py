@@ -1,6 +1,6 @@
 """Production complex NVF for rectangles: contact continuity and live gradients."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -22,7 +22,7 @@ def solver(shapes,backend='numpy',grid=128,**kwargs):
     options.update(kwargs)
     if 'lattice' in kwargs:
         options.pop('period',None)
-    return _legacy_wavebit.rcwa(**options)
+    return _legacy_wavebit_rcwa(**options)
 
 
 @pytest.mark.parametrize('grid',[127,128,256])
@@ -191,7 +191,7 @@ def test_torch_width_and_permeability_gradients_stay_live():
 def test_uniform_layer_agrees_with_uniform_raster(shapes,background):
     s=solver(shapes,grid=32,truncation_order=(1,1),
              structure=[dict(background=background,shapes=shapes)])
-    want=_legacy_wavebit.rcwa(backend='numpy',period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
+    want=_legacy_wavebit_rcwa(backend='numpy',period=(700.,700.),wavelength=900.,top=1.,bot=2.25,
         theta=.2,phi=0.,psi=0.,thickness=(300.,),truncation_order=(1,1),
         structure=np.full((1,2,2),4.)).solve()
     got=s.solve(geometry=s.freeze_geometry())

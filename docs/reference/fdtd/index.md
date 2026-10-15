@@ -130,3 +130,19 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
    :members:
 
 ```
+
+## Native-grid and periodic-stack formulations
+
+See [native-grid units and observations](../../guide/fdtd/native-grids.md) and
+[periodic-stack units and observations](../../guide/fdtd/periodic-problems.md).
+
+```{eval-rst}
+.. automodule:: wavebit.fdtd.native
+   :members:
+
+.. automodule:: wavebit.fdtd.periodic
+   :members: Problem, RasterDispersion, Pulse, Outputs, Record, Numerics, Prepared, Result, check, prepare, run
+
+.. automodule:: wavebit.observations.modes
+   :members:
+```

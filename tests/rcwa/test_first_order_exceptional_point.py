@@ -12,7 +12,9 @@ y) on this path -- values, the rebuilt split, derivatives and fields against Cau
 are pinned in ``tests/rcwa/test_2d_exceptional_point.py`` beside the product path's.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import ExceptionalPointWarning as _legacy_wavebit_ExceptionalPointWarning
+
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 import warnings
 
 import numpy as np
@@ -203,7 +205,7 @@ def test_a_pair_beside_a_coincident_root_is_refused_loudly():
         M[2 * k:2 * k + 2, 2 * k:2 * k + 2] = block
     rng = np.random.default_rng(0)
     Q, _ = np.linalg.qr(rng.normal(size=(8, 8)) + 1j * rng.normal(size=(8, 8)))
-    with pytest.warns(_legacy_wavebit.ExceptionalPointWarning):
+    with pytest.warns(_legacy_wavebit_ExceptionalPointWarning):
         fo._layer_split(np, Q @ M @ Q.conj().T, 2)
 
 
@@ -232,7 +234,7 @@ def test_a_pair_beside_a_root_it_nearly_shares_is_refused_loudly(offset):
     The third mode is not parallel to the pair, so only the separation test sees it. Without
     the refusal the rebuilt pair's residual was 6.0e-11 at ``offset = 1e-5`` and worse nearer.
     """
-    with pytest.warns(_legacy_wavebit.ExceptionalPointWarning):
+    with pytest.warns(_legacy_wavebit_ExceptionalPointWarning):
         fo._layer_split(np, _jordan_beside(offset), 3)
 
 
@@ -433,7 +435,7 @@ def test_more_pairs_than_the_trace_holds_is_loud(slots):
     failure cannot satisfy the overflow assertion.
     """
     jax = pytest.importorskip('jax')
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
     count = slots + 1
     size = 4 * count
     M = np.zeros((size, size), complex)

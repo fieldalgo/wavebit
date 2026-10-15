@@ -15,7 +15,7 @@ check three separable things:
   ``jit`` does not recompile, so the flag reads *inverted* rather than merely stale.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -36,7 +36,7 @@ def _solver(backend='numpy', n_layers=1, **kw):
     if backend == 'jax':
         import jax.numpy as jnp
         grid = jnp.asarray(grid)
-    return _legacy_wavebit.rcwa(backend=backend, truncation_order=(3, 3), period=(300., 300.), wavelength=500.,
+    return _legacy_wavebit_rcwa(backend=backend, truncation_order=(3, 3), period=(300., 300.), wavelength=500.,
                         thickness=(120.,) * n_layers, top=1., bot=2.1025, structure=grid,
                         psi=0.3, theta=0.2, phi=0.1, **kw)
 
@@ -266,7 +266,7 @@ def test_the_declaration_holds_across_a_jit_boundary():
 # ----------------------------------------------------------------- spec and manifest
 
 def test_the_spec_carries_the_declaration_and_round_trips():
-    from wavebit.compat._jobs_v1 import Numerics
+    from wavebit._common._jobs_v1 import Numerics
     n = Numerics.from_dict({'answers': 'field'})
     assert n.answers is Answers.FIELD
     assert n.as_kwargs()['answers'] == 'field'

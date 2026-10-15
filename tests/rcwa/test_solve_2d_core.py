@@ -5,7 +5,9 @@ through ``solve`` matches calling it directly. The physics oracle is the frozen 
 reference in test_golden_legacy_parity.py.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
@@ -27,7 +29,7 @@ from wavebit.rcwa._engine.solve_2d import layer_modes_2d, solve_2d
 # later cannot silently inherit float32. `test_factorization_core.py` carries the same guard
 # for the same reason, found the same way.
 try:
-    _legacy_wavebit.enable_x64()
+    _legacy_wavebit_enable_x64()
 except ImportError:
     pass
 
@@ -35,7 +37,7 @@ except ImportError:
 def _run_and_inputs(structure, thickness, n_top, n_bot, wl, period, truncation_order, theta, phi, psi):
     # The constructor takes permittivity, `solve_2d` the index -- one pair of half-spaces
     # spelled in the quantity each side actually works in.
-    solver = _legacy_wavebit.rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=n_top ** 2, bot=n_bot ** 2, theta=theta, phi=phi,
                           psi=psi, truncation_order=truncation_order, period=period, wavelength=wl,
                           thickness=thickness[::-1], structure=structure[::-1])
     via_api = solver.solve()

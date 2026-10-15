@@ -1,6 +1,12 @@
 """Bottom incidence: physical Fresnel frames, original-coordinate fields and graphs."""
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
+
+from wavebit.fdtd._periodic.probes import fdtd_poynting as _legacy_wavebit_fdtd_poynting
+
+from wavebit.fdtd._periodic.plotting import plot_fdtd_field as _legacy_wavebit_plot_fdtd_field
+
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 import wavebit
@@ -20,8 +26,8 @@ def test_bottom_complex_magnetic_stack_against_rcwa(polarization):
     else:
         kw['tetm']=polarization
     structure=np.array([[[2.1]],[[3.2]]]);mu=np.array([[[1.1]],[[1.3]]])
-    actual=_legacy_wavebit.fdtd(structure=structure,mu=mu,backend='numpy',**kw)
-    reference=_legacy_wavebit.rcwa(structure=structure,mu=mu,backend='numpy',
+    actual=_legacy_wavebit_fdtd(structure=structure,mu=mu,backend='numpy',**kw)
+    reference=_legacy_wavebit_rcwa(structure=structure,mu=mu,backend='numpy',
                            **{k:v for k,v in kw.items() if k not in ('resolution','n_periods')}).solve()
     for key in ('r_s','r_p','t_s','t_p'):
         np.testing.assert_allclose(getattr(actual.incident,key),getattr(reference.incident,key),atol=.015)
@@ -35,11 +41,11 @@ def test_bottom_crossed_dispersive_scene_is_exact_mirror_without_mutating_input(
     kw=settings(period=[.4,.4],resolution=10,tetm=None,theta=.18,phi=.53,polarization=(1.,1j),
                 dispersion=labels,poles={1:[(8.,.4,2.)]},return_diagnostics=True,
                 record_field=15,field_monitors={'exit':.54})
-    actual,d=_legacy_wavebit.fdtd(structure=structure,backend='numpy',incidence_side='bottom',**kw)
+    actual,d=_legacy_wavebit_fdtd(structure=structure,backend='numpy',incidence_side='bottom',**kw)
     depth=sum(kw['thickness'])
     mirror=dict(kw,thickness=kw['thickness'][::-1],top=kw['bot'],bot=kw['top'],
                 dispersion=labels[::-1],field_monitors={'exit':-.2})
-    expected,e=_legacy_wavebit.fdtd(structure=structure[::-1],backend='numpy',**mirror)
+    expected,e=_legacy_wavebit_fdtd(structure=structure[::-1],backend='numpy',**mirror)
     np.testing.assert_array_equal(structure,original)
     for key in ('r_s','r_p','t_s','t_p','R','T'):
         np.testing.assert_array_equal(getattr(actual.incident,key),getattr(expected.incident,key))
@@ -59,11 +65,12 @@ def test_bottom_crossed_dispersive_scene_is_exact_mirror_without_mutating_input(
 
 @pytest.mark.parametrize('backend',['jax','torch'])
 def test_typed_bottom_material_gradient_matches_numpy(backend):
-    from wavebit.compat.legacy import Stack, Incidence
+    from wavebit._common.periodic import Stack
+    from wavebit._common.periodic import Incidence
     def run(value,which):
         structure=value*ones if which != 'numpy' else value*np.array([[[1.3]],[[1.]]])
         stack=Stack.from_structure(structure,[.21,.13],top=1.,bot=2.25,period=.4)
-        result=_legacy_wavebit.fdtd(stack,Incidence(wavelength=1.,tetm='tm',incidence_side='bottom'),
+        result=_legacy_wavebit_fdtd(stack,Incidence(wavelength=1.,tetm='tm',incidence_side='bottom'),
                             backend=which,resolution=10,n_periods=30,truncation_order=0)
         return result.T.sum()
     if backend=='jax':
@@ -86,15 +93,15 @@ def test_typed_bottom_material_gradient_matches_numpy(backend):
 
 
 def test_bottom_vacuum_records_have_upward_poynting_and_original_plot_coordinates():
-    _,d=_legacy_wavebit.fdtd(structure=np.ones((2,1,1)),backend='numpy',incidence_side='bottom',
+    _,d=_legacy_wavebit_fdtd(structure=np.ones((2,1,1)),backend='numpy',incidence_side='bottom',
                      **settings(bot=1.,resolution=10,record_field=2,return_diagnostics=True))
-    sample=_legacy_wavebit.fdtd_poynting(d,z=.1)
+    sample=_legacy_wavebit_fdtd_poynting(d,z=.1)
     assert sample['S'][:,2].sum()>0
     assert sample['region']=='total'
     pytest.importorskip('matplotlib')
     import matplotlib
     matplotlib.use('Agg')
-    fig,ax,_=_legacy_wavebit.plot_fdtd_field(d,component='hy',frame=-1)
+    fig,ax,_=_legacy_wavebit_plot_fdtd_field(d,component='hy',frame=-1)
     source=[line for line in ax.lines if 'Current sheet' in line.get_label()][0]
     np.testing.assert_allclose(source.get_ydata(),d['source_z'])
     import matplotlib.pyplot as plt
@@ -106,8 +113,8 @@ def test_lossy_stack_transmission_reciprocity_at_matched_transverse_wavevector()
     gaps=[]
     for resolution in (40,80):
         kw=settings(period=.1,resolution=resolution,dispersion=labels,poles={1:[(8.,.8,6.)]},theta=.25)
-        top=_legacy_wavebit.fdtd(structure=structure,backend='numpy',**kw)
-        bottom=_legacy_wavebit.fdtd(structure=structure,backend='numpy',incidence_side='bottom',
+        top=_legacy_wavebit_fdtd(structure=structure,backend='numpy',**kw)
+        bottom=_legacy_wavebit_fdtd(structure=structure,backend='numpy',incidence_side='bottom',
                             **dict(kw,theta=np.arcsin(np.sin(.25)/1.5)))
         gaps.append(abs(top.T.item()-bottom.T.item()))
         assert abs(top.R.item()-bottom.R.item())>.001
@@ -125,4 +132,4 @@ def test_bottom_input_validation(changes,match):
     kw=dict(settings(),structure=np.ones((2,1,1)),incidence_side='bottom',backend='numpy')
     kw.update(changes)
     with pytest.raises(ValueError,match=match):
-        _legacy_wavebit.fdtd(**kw)
+        _legacy_wavebit_fdtd(**kw)
