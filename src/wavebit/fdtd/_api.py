@@ -114,12 +114,14 @@ def _report(problem,numerics,execution,scene,plan,metadata):
     resolved=dict(metadata,grid_shape=(plan.nx,plan.ny,plan.nz),spacing=plan.dx,
                   dt_seconds=plan.dt*problem.units.time_seconds,steps=plan.steps,
                   duration_seconds=plan.steps*plan.dt*problem.units.time_seconds,dtype=plan.dtype,
+                  duration_policy='fixed' if numerics.decay is None else 'hard cap with concrete state-decay stopping',
                   monitor_samples=tuple((o.name,getattr(o,'indices',None)) for o in plan.observers))
     return CheckReport(issues=_snapped(problem,scene,plan),
                        estimates={'state_bytes':r.bytes_per_state,'parameter_bytes':r.bytes_per_params,
         'scope':'main E/H, CPML and material arrays; excludes runtime, temporary, source and observation storage'},
         capabilities={'backend':execution.backend,'precision':execution.precision,'device':execution.device,
                       'warnings':tuple(to_public(w) for w in r.warnings),
+                      'automatic_stopping':numerics.decay is not None,
                       'geometry_ranges':tuple(numerics.geometry_ranges)},resolved=resolved)
 
 
@@ -214,7 +216,8 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
     contract=frozen_mapping({'static':tuple(signature),'live':('material coefficients subject to constitutive guards',
         'source amplitude/phase/delay and band subject to fixed plan dependencies','initial amplitude',
         'ranged geometry subject to reserved-support guards'),
-        'differentiation':'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity',
+        'differentiation':('concrete forward only; Decay refuses AD and external transforms' if numerics.decay is not None
+                          else 'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity'),
         'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_seconds})
     return Prepared(numerics,execution,report,contract,plan,frozen_mapping(signature))
 

@@ -185,6 +185,12 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             metadata={'length_unit':units.length,'E_time':raw.plan.steps*raw.plan.dt*ts,
                       'H_time':(raw.plan.steps-.5)*raw.plan.dt*ts,'allocated_domain':metadata['allocated_domain']})
     diagnostics=dict(raw.diagnostics)
+    if 'stopping' in diagnostics:
+        stopping = dict(diagnostics['stopping'])
+        stopping['window_seconds'] = stopping.pop('window') * ts
+        stopping['eligible_time_seconds'] = stopping.pop('eligible_time') * ts
+        stopping['state_amplitude_units'] = 'internal normalized Yee state per group; ratios are dimensionless'
+        diagnostics['stopping'] = stopping
     validity=Validity(checks={'admitted':True,'runtime_stability':diagnostics.get('stable'),'source_reference':source_usable},
                       convergence={'continuum_convergence':'not assessed','decay':diagnostics.get('decay')})
     provenance=dict(solver='fdtd',backend=execution.backend,device=execution.device,precision=execution.precision,

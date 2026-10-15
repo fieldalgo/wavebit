@@ -32,7 +32,7 @@ _CLASS_MODULES = {
                      'Cylinder', 'Prism', 'Plane', 'Region', 'Boundaries', 'Periodic', 'Bloch',
                      'Open', 'PEC', 'PMC', 'Symmetry', 'Axis1D', 'PlaneWave', 'Dipole', 'TFSF', 'InitialField',
                      'GaussianPulse', 'Outputs', 'Record', 'Field', 'Flux',
-                     'Diffraction', 'FarField', 'Numerics', 'UniformGrid', 'Duration', 'PML'),
+                     'Diffraction', 'FarField', 'Numerics', 'UniformGrid', 'Duration', 'PML', 'Absorber', 'Decay'),
     'wavebit._common.execution': ('Execution',),
 }
 

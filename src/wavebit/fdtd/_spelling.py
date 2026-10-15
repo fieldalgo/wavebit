@@ -4,7 +4,7 @@
 refusals and warnings name what to do in that namespace: ``fd.Bloch.from_source(pw)``,
 ``fd.plan(scene)``, ``fd.Material(eps=...)``. Right for a compat caller, and wrong for a public
 one, who has ``fdtd.Bloch.from_source(source, units=...)``, ``fdtd.prepare(problem,
-numerics=...)`` and ``Material(epsilon=...)`` instead -- or, for an absorber or a custom shape,
+numerics=...)`` and ``Material(epsilon=...)`` instead -- or, for a custom shape,
 nothing at all outside the compat namespace.
 
 So the public entry points (``check``, ``prepare``, ``Prepared.validate``/``run``, ``run`` and
@@ -29,13 +29,17 @@ _FD = r'(?<![\w.])fd\.'
 _SHARED = ('Slab', 'Region', 'Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'PlaneWave',
            'Dipole', 'TFSF', 'Record', 'Flux', 'Field', 'FarField', 'Diffraction', 'Bloch',
            'Boundaries', 'Periodic', 'PEC', 'PMC', 'Symmetry', 'Axis1D', 'InitialField',
-           'Domain', 'Structure', 'PML')
+           'Domain', 'Structure', 'PML', 'Absorber', 'Decay')
 
-#: Compat names with no public counterpart: an absorber that is not a PML, the decay stop, the
-#: shape protocol, and the stage-7 stubs. Named in full, so the reader knows where they live.
-_COMPAT_ONLY = ('Absorber', 'Decay', 'Shape', 'ModeSource', 'ModeMonitor', 'GaussianBeam')
+#: The shape protocol and stage-7 stubs still have no public counterpart.
+_COMPAT_ONLY = ('Shape', 'ModeSource', 'ModeMonitor', 'GaussianBeam')
 
 PHRASES = (
+    (r'Run\(decay=Decay\(threshold=\.\.\., window=\.\.\.\)\)',
+     'Numerics(decay=fdtd.Decay(threshold=..., window_seconds=...))'),
+    (r'(?<![\w.])(?:fd\.)?Decay\(threshold=\.\.\., window=\.\.\.\)',
+     'fdtd.Decay(threshold=..., window_seconds=...)'),
+    (r'(?<![\w.])Decay\(window=', 'fdtd.Decay(window_seconds='),
     # Bloch faces from a plane wave: the public call takes the source and the units.
     (_FD + r'Bloch\.from_source\(pw', 'fdtd.Bloch.from_source(source, units=problem.units'),
     # Absorbing faces: the public face is Open, its absorber a PML in Numerics.

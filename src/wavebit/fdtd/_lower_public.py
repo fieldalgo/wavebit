@@ -13,7 +13,7 @@ from . import _legacy_sources as old_sources
 from . import _legacy_monitors as old_monitors
 from . import geometry, boundaries, sources, monitors
 from .problem import Problem
-from .numerics import Numerics, UniformGrid, Duration, PML
+from .numerics import Numerics, UniformGrid, Duration, PML, Absorber, Decay
 from ._kernel.grid import cell_count
 
 
@@ -145,8 +145,8 @@ def lower_problem(problem, numerics):
         raise ValidationError('expected fdtd.Problem and fdtd.Numerics', path='problem')
     if not isinstance(numerics.grid, UniformGrid) or not isinstance(numerics.duration, Duration):
         raise ValidationError('expected UniformGrid and Duration', path='numerics')
-    if not isinstance(numerics.absorber, PML):
-        raise UnsupportedFeatureError('the supported absorber implementation is PML', path='numerics.absorber')
+    if not isinstance(numerics.absorber, (PML, Absorber)):
+        raise UnsupportedFeatureError('choose PML or Absorber numerical padding', path='numerics.absorber')
     scene, units = problem.scene, problem.units
     dx = _number(numerics.grid.spacing, 'numerics.grid.spacing')
     old_scene.Resolution(dx=dx)
@@ -158,8 +158,11 @@ def lower_problem(problem, numerics):
     for axis in 'xyz':
         for sign in '-+':
             pad[axis+sign] = numerics.absorber.cells if isinstance(scene.boundaries.face(axis+sign), boundaries.Open) else 0
-    # Legacy PML validates integral cells and explicit thin-layer opt-in.
-    old_boundaries.PML(cells=numerics.absorber.cells, allow_thin=numerics.absorber.allow_thin)
+    # Validate integral cells and the chosen implementation's admission rules.
+    if isinstance(numerics.absorber, PML):
+        old_boundaries.PML(cells=numerics.absorber.cells, allow_thin=numerics.absorber.allow_thin)
+    else:
+        old_boundaries.Absorber(cells=numerics.absorber.cells)
     size = tuple(s+(pad[a+'-']+pad[a+'+'])*dx for a,s in zip('xyz', physical_size))
     center = tuple(c+(pad[a+'+']-pad[a+'-'])*dx/2 for a,c in zip('xyz', scene.domain.center))
     allocated_low = tuple(c-s/2 for c,s in zip(center,size))
@@ -210,7 +213,8 @@ def lower_problem(problem, numerics):
         structures.append(old_geometry.Structure(shape, material,
                           discretisation=numerics.discretisation, junction=numerics.junction))
     converted = {}
-    invalid_references = set(numerics.absorber.reference_media)-{f for f,n in pad.items() if n}
+    references = numerics.absorber.reference_media if isinstance(numerics.absorber, PML) else {}
+    invalid_references = set(references)-{f for f,n in pad.items() if n}
     if invalid_references:
         raise ValidationError('PML reference_media must name Open faces with padding',
                               path='numerics.absorber.reference_media', actual=sorted(invalid_references))
@@ -218,7 +222,9 @@ def lower_problem(problem, numerics):
         pair=[]
         for sign in '-+':
             face=scene.boundaries.face(axis+sign)
-            if isinstance(face,boundaries.Open):
+            if isinstance(face,boundaries.Open) and isinstance(numerics.absorber, Absorber):
+                pair.append(old_boundaries.Absorber(cells=numerics.absorber.cells))
+            elif isinstance(face,boundaries.Open):
                 opts={f.name:getattr(numerics.absorber,f.name) for f in dataclasses.fields(numerics.absorber)
                       if f.name != 'reference_media'}
                 reference = numerics.absorber.reference_media.get(axis+sign)
@@ -242,6 +248,12 @@ def lower_problem(problem, numerics):
     elif duration.seconds is not None:
         run=old_scene.Run(time=units.time_to_internal(duration.seconds),courant=numerics.courant)
     else:run=old_scene.Run(steps=duration.steps,courant=numerics.courant)
+    if numerics.decay is not None:
+        if not isinstance(numerics.decay, Decay):
+            raise ValidationError('expected Decay or None', path='numerics.decay')
+        run=run.replace(decay=old_monitors.Decay(threshold=numerics.decay.threshold,
+            window=units.time_to_internal(_number(numerics.decay.window_seconds,
+                                                  'numerics.decay.window_seconds'))))
     initial=None
     if problem.initial is not None:
         if not isinstance(problem.initial,sources.InitialField):

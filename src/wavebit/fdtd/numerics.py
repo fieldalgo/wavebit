@@ -5,7 +5,7 @@ from wavebit._common.declarations import Declaration
 from wavebit._common.execution import frozen_mapping
 from wavebit.errors import ValidationError
 
-__all__ = ['UniformGrid', 'Duration', 'PML', 'Numerics']
+__all__ = ['UniformGrid', 'Duration', 'PML', 'Absorber', 'Decay', 'Numerics']
 
 @eager_under_torch_compile
 @dataclass(frozen=True, kw_only=True)
@@ -45,16 +45,44 @@ class PML(Declaration):
     def __post_init__(self):
         object.__setattr__(self, 'reference_media', frozen_mapping(self.reference_media))
 
+
+@eager_under_torch_compile
+@dataclass(frozen=True, kw_only=True)
+class Absorber(Declaration):
+    """Graded matched conductivity outside Open faces, for media PML cannot admit.
+
+    This is an explicit fallback, not a PML. Its fixed cubic profile has a
+    normal-incidence round-trip amplitude near exp(-3); more cells do not remove
+    that attenuation floor. Check absorber and spatial convergence separately.
+    """
+    cells: int = 12
+
+
+@eager_under_torch_compile
+@dataclass(frozen=True, kw_only=True)
+class Decay(Declaration):
+    """Optional state-amplitude stopping inside the Duration hard cap.
+
+    ``window_seconds`` is an SI duration, independent of geometry units. Complete
+    windows must pass for fields and every supported memory group after source
+    decay. This concrete forward CPU policy is not differentiable or a bound on
+    spectral error; fixed-duration execution remains the default.
+    """
+    threshold: float
+    window_seconds: float
+
+
 @eager_under_torch_compile
 @dataclass(frozen=True, kw_only=True)
 class Numerics(Declaration):
     grid: UniformGrid
     duration: Duration
     courant: float = .5
-    absorber: PML = field(default_factory=PML)
+    absorber: PML | Absorber = field(default_factory=PML)
     geometry_ranges: object = field(default_factory=dict)
     discretisation: str = 'voxel'
     junction: str = 'split'
+    decay: object = None
 
     def __post_init__(self):
         object.__setattr__(self, 'geometry_ranges', frozen_mapping(self.geometry_ranges))
