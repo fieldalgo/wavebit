@@ -1,0 +1,98 @@
+The painting route averages its switches -- studies/rcwa/painted_switch_average/painted_switch_average.py
+numpy 2.5.1, torch 2.13.0; forward solves NumPy complex128, derivatives PyTorch autograd; before: a git archive of 3d20221b
+
+1. windows -- (integral of the derivative - change) / change: sum(T) across four pixels of the 128 grid, or T00 across 4 nm for the L on glass
+                                      grid  orders   this tree      before      change
+  tilted L, reflex vertex x             64  (3, 3)   -2.17e-03   -1.61e-01  1.4508e-03
+  tilted L, reflex vertex x            128  (3, 3)   -1.51e-03   -1.10e-01  1.4569e-03
+  tilted L, reflex vertex x            256  (3, 3)   -2.38e-03   -8.97e-02  1.4508e-03
+  tilted L, reflex vertex x            512  (3, 3)   +1.09e-03   -9.65e-02  1.4483e-03
+  tilted L, reflex vertex x            128  (6, 6)   +5.53e-04   -6.87e-02  1.2284e-03
+  tilted L, reflex vertex x            128  (9, 9)   -7.77e-04   -3.46e-02  1.2410e-03
+  rectangle as corners, corner 3 x      64  (3, 3)   +1.39e-04   +1.66e-01  1.0113e-03
+  rectangle as corners, corner 3 x     128  (3, 3)   +1.20e-05   +1.31e-01  1.0028e-03
+  rectangle as corners, corner 3 x     256  (3, 3)   +6.97e-05   +1.35e-01  1.0003e-03
+  painted pair, cx                      64  (3, 3)   -4.46e-04   +1.78e-01  5.5092e-04
+  painted pair, cx                     128  (3, 3)   -1.20e-03   +1.92e-01  5.4910e-04
+  painted pair, cx                     256  (3, 3)   -2.19e-03   +1.95e-01  5.4581e-04
+  L on glass, T00, reflex vertex x     256  (3, 3)   +2.49e-03   -8.91e-01 -1.2191e-04
+  L on glass, T00, reflex vertex x     256  (6, 6)   -2.35e-03   -3.47e-01 -3.8354e-04
+
+2. limits -- sum(T) against shape_nvf_grid_size; the default grid is 1024
+  axis-aligned painted pair (6.25 under 3), normal incidence, grid 1024, against Li on the exact 20 x 20 raster at the same orders (Li at (16, 16): 0.97969329)
+    orders ( 4,  4)  Li 0.98581259  this tree - Li -2.87e-04   before - Li -1.67e-04   this tree - before -1.20e-04
+    orders ( 6,  6)  Li 0.98100658  this tree - Li -2.57e-04   before - Li -2.87e-04   this tree - before +3.02e-05
+    orders ( 8,  8)  Li 0.98034673  this tree - Li -2.09e-04   before - Li -2.03e-04   this tree - before -6.18e-06
+    orders (10, 10)  Li 0.98017286  this tree - Li +7.66e-05   before - Li +1.04e-04   this tree - before -2.76e-05
+    orders (12, 12)  Li 0.97985906  this tree - Li -2.29e-05   before - Li -6.66e-06   this tree - before -1.62e-05
+  axis-aligned L, normal incidence, orders (4, 4)
+    grid   512  this tree 0.4514497285   before 0.4514322827   difference +1.74e-05
+    grid  1024  this tree 0.4513898339   before 0.4513059940   difference +8.38e-05
+    grid  2048  this tree 0.4513681493   before 0.4512488755   difference +1.19e-04
+    grid  4096  this tree 0.4513575159   before 0.4513197956   difference +3.77e-05
+  axis-aligned L, normal incidence, orders (8, 8)
+    grid   512  this tree 0.4509134448   before 0.4509464399   difference -3.30e-05
+    grid  1024  this tree 0.4509167417   before 0.4509167626   difference -2.08e-08
+    grid  2048  this tree 0.4509231089   before 0.4509076264   difference +1.55e-05
+    grid  4096  this tree 0.4509253130   before 0.4509221078   difference +3.21e-06
+  tilted L, orders (4, 4)
+    grid   512  this tree 0.9931124250   before 0.9931151627   difference -2.74e-06
+    grid  1024  this tree 0.9931126802   before 0.9931126436   difference +3.66e-08
+    grid  2048  this tree 0.9931126597   before 0.9931123717   difference +2.88e-07
+  tilted L, orders (8, 8)
+    grid   512  this tree 0.9925745693   before 0.9925749281   difference -3.59e-07
+    grid  1024  this tree 0.9925755381   before 0.9925763323   difference -7.94e-07
+    grid  2048  this tree 0.9925758802   before 0.9925760431   difference -1.63e-07
+  painted pair, orders (4, 4)
+    grid   512  this tree 0.9859004387   before 0.9859497415   difference -4.93e-05
+    grid  1024  this tree 0.9859004857   before 0.9859493748   difference -4.89e-05
+    grid  2048  this tree 0.9859004729   before 0.9859491977   difference -4.87e-05
+  painted pair, orders (8, 8)
+    grid   512  this tree 0.9856824778   before 0.9856680075   difference +1.45e-05
+    grid  1024  this tree 0.9856825322   before 0.9856675806   difference +1.50e-05
+    grid  2048  this tree 0.9856825379   before 0.9856673966   difference +1.51e-05
+  overlapping boxes 4 | 4.84, orders (4, 4)
+    grid   512  this tree 0.9842867933   before 0.9842862077   difference +5.86e-07
+    grid  1024  this tree 0.9842874306   before 0.9842867515   difference +6.79e-07
+    grid  2048  this tree 0.9842876392   before 0.9842867334   difference +9.06e-07
+  overlapping boxes 4 | 4.84, orders (8, 8)
+    grid   512  this tree 0.9841666135   before 0.9841639033   difference +2.71e-06
+    grid  1024  this tree 0.9841671430   before 0.9841640387   difference +3.10e-06
+    grid  2048  this tree 0.9841672880   before 0.9841640153   difference +3.27e-06
+
+3. bands -- the averaged projector of the painted pair (section 1)
+  grid    64: |trace - 1| 6.7e-16, min eigenvalue -1.1e-16, rank two (det > 1e-9) on 0.9028 of the samples
+  grid   128: |trace - 1| 8.9e-16, min eigenvalue -1.1e-16, rank two (det > 1e-9) on 0.7314 of the samples, 1.23x fewer than at half the grid
+  grid   256: |trace - 1| 8.9e-16, min eigenvalue -2.2e-16, rank two (det > 1e-9) on 0.5058 of the samples, 1.45x fewer than at half the grid
+  grid   512: |trace - 1| 8.9e-16, min eigenvalue -2.2e-16, rank two (det > 1e-9) on 0.3633 of the samples, 1.39x fewer than at half the grid
+  grid  1024: |trace - 1| 8.9e-16, min eigenvalue -3.3e-16, rank two (det > 1e-9) on 0.2847 of the samples, 1.28x fewer than at half the grid
+  on the 11 interval midpoints: the exact normal dyad to 1.4e-16
+  two overlapping boxes of one material against the box they make, orders (2, 2), grid   64: matrices 1.3e-03
+  two overlapping boxes of one material against the box they make, orders (2, 2), grid  256: matrices 1.2e-04
+  two overlapping boxes of one material against the box they make, orders (2, 2), grid 1024: matrices 8.1e-06
+
+4. symmetric -- a 0.5 square at the cell centre, its diagonals through the samples of the 128 grid: (T(a+h) - T(a-h)) / 2h in its half-width a, orders (4, 4)
+  h 1e-03: this tree +1.476053e-01   before +1.441667e-01
+  h 1e-04: this tree +1.478124e-01   before +2.610004e-01
+  h 1e-05: this tree +1.477283e-01   before +1.463331e-01
+  h 1e-06: this tree +1.477312e-01   before +1.461181e-01
+  h 1e-07: this tree +1.477287e-01   before +1.463861e-01
+
+5. variants -- the two averages rejected on the way, on the painted pair window (grid 128) and the axis-aligned L at orders (4, 4)
+  signed vectors, bisector distance        pair window -6.79e-03;  L sum(T) at grids 512 / 1024 / 2048: 0.4519970 / 0.4517012 / 0.4515209
+  projectors, plain distance gap           pair window -1.04e-03;  L sum(T) at grids 512 / 1024 / 2048: 0.4516365 / 0.4514686 / 0.4514006
+  projectors, bisector distance (shipped)  pair window -1.20e-03;  L sum(T) at grids 512 / 1024 / 2048: 0.4514497 / 0.4513898 / 0.4513681
+
+The painting route averages its switches -- studies/rcwa/painted_switch_average/painted_switch_average.py
+numpy 2.5.1, torch 2.13.0; forward solves NumPy complex128, derivatives PyTorch autograd; before: a git archive of 3d20221b
+
+6. cost -- seconds, NumPy, this machine (ratios carry; absolute times move between runs)
+  field at grid 1024, tilted L (96 interval images)            this tree   6.555   before   3.660    1.79x
+  field at grid 1024, painted pair (176 interval images)       this tree  13.972   before   6.552    2.13x
+  field at grid 1024, disc over a rectangle (5920 interval images) this tree 483.836   before 214.574    2.25x
+  whole solve, tilted L, orders (4, 4)                         this tree   7.500   before   4.713    1.59x
+  whole solve, tilted L, orders (8, 8)                         this tree   8.491   before   5.391    1.57x
+  whole solve, tilted L, orders (12, 12)                       this tree  13.895   before  10.990    1.26x
+  whole solve, painted pair, orders (4, 4)                     this tree  14.959   before   8.995    1.66x
+  whole solve, painted pair, orders (8, 8)                     this tree  15.176   before   9.705    1.56x
+  whole solve, painted pair, orders (12, 12)                   this tree  21.075   before  15.790    1.33x

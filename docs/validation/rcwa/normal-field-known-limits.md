@@ -156,7 +156,9 @@ maximum, are the weights of the nearest-point normal vectors. An equivalent
 description is averaging the nearest candidate over all influence thresholds.
 Distances are scaled by their minimum before taking powers, avoiding poles in
 the actual arithmetic; on an interface only coincident candidates contribute.
-Normalize the resulting real vector and form its rank-one projector.
+Normalize the resulting real vector and form its rank-one projector. (Since 2026-10-15 the
+candidates' projectors are averaged rather than their vectors, and every nearest choice is
+averaged over half a sample step: §1b.)
 
 Equal nonzero contrasts recover the existing nearest-point projector. An invisible
 interval contributes zero throughout the cell, so equal-material partitions and
@@ -181,17 +183,126 @@ They overlap. Other settings match section 8e, with order 4. The table gives
 The 64 and 256 grids show the same removal of a fixed material-equality step.
 The before/after runs are recorded with source hashes in the existing result log.
 `test_painted_material_continuity.py` checks the material ramps, exact interface
-normals, projector rank, rotation/reflection, passivity, chunking and JAX/Torch
-derivatives. Existing tests retain independent union contours, 1D Li invariants,
+normals, the projector's trace and eigenvalues (its rank, one, until §1b), rotation/reflection,
+passivity, chunking and JAX/Torch derivatives. Existing tests retain independent union contours, 1D Li invariants,
 painted geometry gradients and periodic-basis mutation controls. The close-mode
 derivative exposed by this extension also required the separate
 [eigenvalue reciprocal correction](nvf-scattering-doubling.md).
 
 This fixes the recorded equality step, not every regularity or accuracy problem.
-Nearest-point switches at medial axes and a zero-vector tie remain. At a sample
+Nearest-point switches at medial axes and a zero-vector tie remained, until §1b. At a sample
 exactly on an interface that disappears, the normal field itself need not have a
 pointwise material limit. Complex or metallic optical convergence is not inferred
 from these material ramps, energy balance or representation invariants.
+
+### 1b. Medial-axis switches averaged at the sample spacing — FIXED (2026-10-15)
+
+**Status: fixed** for the painted scalar route; the tensor shapes keep §1a's field
+(`average=False`, below). §1a chose its candidates hard: within each pair of region labels the
+nearest interval, and across pairs the nearest of the influential ones. Both choices switch across
+a medial axis, where the direction turns by up to a right angle, and a shape parameter moves the
+switch. Every normal-grid sample a switch crossed therefore stepped, and autodiff of the sampled
+field saw none of the steps -- only the smooth part of the field around them. Pointwise, autodiff
+and a sub-pixel central difference agree on such a field by construction; integrated across a
+window several pixels wide, the derivative fell short of the change by the steps' share. Every
+painted layer and every `rcwa.Polygon` had it.
+
+**The construction** (`boundary.material_projector_fields`). Every hard choice is a soft minimum
+over half the longer sample step `w`, read on the reduced basis (`_SWITCH_WIDTH`,
+`_sample_spacing`). A candidate weighs `exp(-b / w)`, where `b` is its distance to its bisector with
+the nearest candidate, to first order: the gap between their distances over the norm of the
+difference of their directions. The nearest weighs one. What is averaged is the projector `u u^T`,
+never the vector, and the threshold average of §1a becomes `sum_j (I_j - I_{j+1}) S_j / I_1`, with
+`S_j` the averaged projector of the `j` most influential pairs. Strengths, ordering, the
+on-interface pole, the parallel-interface line normal and the zero-strength rule are §1a's.
+
+**What it bought.** `studies/rcwa/painted_switch_average/painted_switch_average.py` section 1: the
+derivative integrated across a window against the change of the observable across it, as
+`(integral - change) / change`, against a `git archive` of the solver before the change: release
+0.0.3 (`v0.0.3`; the record's run archived `3d20221b`, whose `src/` differs from it only in the
+version string).
+Total transmission across four pixels of the 128 grid at eight samples a pixel (s, theta 0.35, phi
+0.6), or, for the second L -- 250 x 200 nm with 90 nm arms, turned by 0.3 rad, permittivity 5.76,
+600 nm thick, on glass and lit from it at 633 nm with polarization (1, i) -- its zeroth transmitted
+order across 4 nm at 61 samples:
+
+| window | grid | orders | before | now |
+| --- | ---: | ---: | ---: | ---: |
+| tilted L, reflex vertex x | 64 / 128 / 256 / 512 | (3, 3) | -16% / -11% / -9.0% / -9.7% | -0.22% / -0.15% / -0.24% / +0.11% |
+| tilted L, reflex vertex x | 128 | (6, 6) / (9, 9) | -6.9% / -3.5% | +0.055% / -0.078% |
+| rectangle as corners, corner 3 x | 64 / 128 / 256 | (3, 3) | +17% / +13% / +13.5% | +0.014% / +0.001% / +0.007% |
+| rotated rectangle painted under a second one, cx | 64 / 128 / 256 | (3, 3) | +18% / +19% / +19.5% | -0.045% / -0.12% / -0.22% |
+| L on glass, zeroth order, reflex vertex x | 256 | (3, 3) / (6, 6) | -89% / -35% | +0.25% / -0.24% |
+
+Section 4: a square sitting on its own medial axis (its diagonals through the samples of a 128
+grid) read a central difference of 0.144 / 0.261 / 0.146 / 0.146 / 0.146 at `h` = 1e-3 to 1e-7 --
+a step straddled at 1e-4 -- and reads 0.1476 / 0.1478 / 0.1477 / 0.1477 / 0.1477.
+
+**Two rejected averages** (section 5, at the shipped half step):
+
+- *Signed vectors.* The direction from an interface toward the sample turns over as the sample
+  crosses the interface. Averaged as vectors, a corner's two directions sum differently on the two
+  sides of the interface wherever both carry weight, and the sample steps as the edge sweeps across
+  it. The painted pair's window then misses 0.68% (0.12% averaged as projectors), and the
+  axis-aligned L below reads 0.451701 at grid 1024, 3.5e-4 above its limit.
+- *The plain distance gap.* Beside a corner the corner point and the edge next to it are almost
+  equidistant over a strip `sqrt(d w)` wide, where the field is continuous and needs no average.
+  Averaged on the gap, the corner leaks into that strip on one side, a first-order bias in `w`: the
+  same L reads 0.451469 at grid 1024, three times the bisector distance's distance from the limit.
+  The bisector distance over that strip is half the distance along the edge, so the strip is a
+  sample wide.
+
+**What it cost.**
+
+- *Rank.* Inside a switch, and wherever two pairs of unequal contrast both carry influence, the
+  projector is a convex combination of dyads: real, symmetric, of unit trace and rank two (section
+  3: trace to 9e-16, both eigenvalues in [0, 1]) -- the average a pixel straddling the switch would
+  see. On the painted pair the rank-two share falls from 0.90 of the samples at grid 64 to 0.28 at
+  1024, toward the mixing regions' own share. The factorization reads the three components
+  linearly.
+- *One pair, or pairs of equal contrast: the same limit, approached smoothly* (section 2). On the
+  axis-aligned L at normal incidence near a resonance -- the scene
+  `test_the_default_solve_lands_on_an_exact_pixel_li_reference` holds -- total transmission at
+  orders (4, 4) reads 0.4514497 / 0.4513898 / 0.4513681 / 0.4513575 at grids 512 / 1024 / 2048 /
+  4096, monotone, where the hard field read 0.4514323 / 0.4513060 / 0.4512489 / 0.4513198; at
+  orders (8, 8), 0.4509134 / 0.4509167 / 0.4509231 / 0.4509253 against 0.4509464 / 0.4509168 /
+  0.4509076 / 0.4509221. The two meet within the hard field's own scatter between grids, and the
+  test's exact-pixel Li reference still holds.
+- *Unequal pairs: a different extension where they mix.* The hard field summed the pairs' signed
+  vectors and formed one projector; the projectors are averaged now. They differ only where a
+  weaker pair is nearer than a stronger one, by a grid-independent amount that falls with the
+  truncation order: the painted pair reads -4.9e-5 against the hard field at orders (4, 4) and
+  +1.5e-5 at (8, 8) at every grid; two overlapping boxes of 4 and 4.84, +6.8e-7 and +3.1e-6 at grid
+  1024. Against Li's rule on a raster that draws an axis-aligned painted pair (6.25 under 3)
+  exactly, at the same orders, neither field is the nearer one: the averaged field reads -2.9e-4,
+  -2.6e-4, -2.1e-4, +7.7e-5 and -2.3e-5 from Li at orders 4 to 12, the hard one -1.7e-4, -2.9e-4,
+  -2.0e-4, +1.0e-4 and -6.7e-6.
+- *The clipper's splits are visible at second order.* The hard field could not see where the clipper
+  split a straight interface; the average sees it within a sample of the split point. Two
+  overlapping boxes of one material and the box they make no longer read the same matrices to
+  rounding: 1.3e-3, 1.2e-4 and 8.1e-6 at grids 64, 256 and 1024 (section 3).
+- *A third candidate* is weighed against the nearest, which itself switches: within about a sample
+  of a point where three candidates meet, that weight can still step. The windows above include it.
+- *Time and memory.* The field at the default grid 1024 costs 1.8 to 2.3 times the hard one
+  (section 6, NumPy: 6.6 s against 3.7 s on the tilted L's 96 interval images, 14.0 s against
+  6.6 s on the painted pair's 176, 484 s against 215 s on a disc painted over a rectangle, whose
+  256-gon makes 5920), and a whole solve 1.6 times at orders (4, 4) and (8, 8), 1.3 times at
+  (12, 12). Under PyTorch's reverse mode each chunk of samples now runs under
+  `torch.utils.checkpoint` (`boundary._chunked`): autograd otherwise keeps every chunk's
+  (samples x intervals) temporaries at once. Measured once, outside the study, on one backward
+  pass through the scene of `test_the_lifecycle_replays_moved_vertices_and_refuses_a_changed_painting`
+  (the tilted L beside a circle, which this route draws as a 256-gon; orders (3, 3), grid 128): the
+  averaged field unchecked passed 10 GB before the process was stopped; checkpointed it peaks at
+  0.73 GB, against 3.1 GB for the hard field, which was never checkpointed, and takes 3.3 times as
+  long (23 s against 7.1 s). At grid 64 the checkpointed gradient is the unchecked one, bit for
+  bit.
+
+**The tensor shapes keep the hard field.** `tensor_shapes._projector` passes `average=False`, which
+is §1a's field bit for bit (`boundary._nearest_projector_fields`). Their curves are exact candidates,
+one each, while the same curve drawn as a polygon is many intervals, and the average blurs a
+polygon where its facets meet: averaged, the polygon route stopped converging onto the exact
+curve, which `tests/rcwa/test_tensor_curve_normals.py` holds it to. Their derivatives keep the
+steps on their polygonal pieces.
 
 ## 2. A face the fold cannot merge is refused, not built — FIXED (2026-09-06)
 
