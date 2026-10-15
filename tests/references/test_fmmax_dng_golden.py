@@ -239,5 +239,8 @@ def test_energy_is_accounted_for(solved, name):
 def test_the_golden_holds_the_scenes_the_cases_state(golden):
     for name in CASES:
         assert [tuple(int(v) for v in row) for row in golden[f'{name}__orders']] == orders(name)
-        np.testing.assert_array_equal(golden[f'{name}__kxy'], np.asarray(incident_kxy(name)))
+        # The golden's kxy was written on macOS; Linux libm's sin and cos put it one ulp away
+        # (1.1e-16 on CI run 38738075697, shard 6). Four ulp is still the same wavevector.
+        np.testing.assert_allclose(golden[f'{name}__kxy'], np.asarray(incident_kxy(name)),
+                                   rtol=0, atol=4 * np.finfo(float).eps)
     assert tuple(golden['__levels']) == LEVELS
