@@ -101,3 +101,14 @@ When a pattern moves every step under jit, use `('sampled', 'li')` or prepare ea
 ### Backend speed
 
 The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the solver interface now kept as `wavebit.compat.legacy` (`freeze_geometry()` and `solve(geometry=...)`). They are not measurements of this lifecycle or its Cartesian Li runtime guard or host callback policy. Backend speed through `prepared.run` has not been measured.
+
+Through `prepared.run`, one derivative step -- the run and the gradient of its summed transmission -- took the following on one CPU (Apple M4, 2026-10-16), for a circle in a 600 nm cell under NVF with `shape_nvf_grid_size=256`:
+
+| `orders` | radius, PyTorch | radius, eager `jax.grad` | thickness, PyTorch | thickness, eager `jax.grad` | thickness, `jax.jit(jax.grad)` |
+| --- | --- | --- | --- | --- | --- |
+| `(3, 3)` | 0.071 s | 0.27 s | 0.032 s | 0.15 s | 0.024 s |
+| `(5, 5)` | 0.39 s | 0.48 s | 0.33 s | 0.37 s | 0.18 s |
+| `(7, 7)` | 1.7 s | 1.7 s | 1.4 s | 1.3 s | 0.84 s |
+| `(9, 9)` | 6.4 s | 4.6 s | 4.1 s | 3.6 s | 2.4 s |
+
+Each entry is the median of five calls after a first one, each configuration in a fresh process, on a machine shared with other work; the fastest call was up to 1.7 times quicker than the median. Eager `jax.grad` also pays 13 to 22 s on its first call in a process, compiling each operation it meets, where `jax.jit(jax.grad)` compiled in 2 to 5 s. So for a shape derivative PyTorch is the faster choice at low orders, and the two are level within that spread from `orders=(7, 7)`. For an input `jax.jit` admits, the jitted step was the fastest at every order measured, 1.3 times PyTorch at `(3, 3)` and 1.7 to 1.8 times from `(5, 5)`. The script and its record are in [`studies/rcwa/lifecycle_backend_speed/`](https://github.com/fieldalgo/wavebit/tree/develop/studies/rcwa/lifecycle_backend_speed).

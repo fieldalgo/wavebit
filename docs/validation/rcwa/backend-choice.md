@@ -18,7 +18,8 @@ refuses a shape dimension traced under `jax.jit` with `prepared.host_topology`, 
 one under eager `jax.grad` by checking its topology on the tracer's primal. So the "jax jit on
 shapes" rows and recommendations apply to the compatibility interface and do not carry over to
 that lifecycle, where a shape derivative is a PyTorch or an eager `jax.grad` derivative. Backend speed through `prepared.run`
-has not been measured. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
+was measured separately on 2026-10-16 and is in the differentiation guide's
+[backend speed](../../guide/common/autodiff.md#backend-speed) section. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
 lists which inputs differentiate on which backend there.
 
 Targets:
