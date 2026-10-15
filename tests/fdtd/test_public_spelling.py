@@ -187,7 +187,11 @@ def test_a_compat_caller_still_reads_the_compat_spelling():
 
 
 def test_a_planning_warning_is_spelled_for_the_public_caller():
-    """A Region past a PEC wall warns; the remedy is an Open face, not a compat absorber."""
+    """A Region past a PEC wall warns; the remedy is an Open face, not a compat absorber.
+
+    With no source and no Open face the scene has no wavelength for the mesh check, which said
+    so naming ``Resolution(wavelength=)``, a call with no public counterpart.
+    """
     problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.4, .4, .4)),
         boundaries=fdtd.Boundaries(x=fdtd.PEC(), y=fdtd.PEC(), z=fdtd.PEC()),
@@ -201,6 +205,9 @@ def test_a_planning_warning_is_spelled_for_the_public_caller():
         fdtd.run(problem, numerics=numerics)
     clipped = [str(w.message) for w in caught if type(w.message).__name__ == 'GeometryClippedWarning']
     assert clipped and all('fdtd.Open()' in m and not COMPAT.search(m) for m in clipped), clipped
+    coarse = [str(w.message) for w in caught if type(w.message).__name__ == 'CoarseMeshWarning']
+    assert coarse and all('no source, and no fdtd.PML(wavelength=...)' in m
+                          and not UNPREFIXED.search(m) for m in coarse), coarse
     report = fdtd.check(problem, numerics=numerics)
     notes = [w for w in report.capabilities['warnings'] if 'loses' in w]
     assert notes and not any(COMPAT.search(w) for w in notes), notes
@@ -342,3 +349,67 @@ def test_the_public_reference_speaks_the_public_vocabulary():
     left = [f'{where}: {VOCABULARY.findall(doc)}' for where, doc in rendered
             if doc and VOCABULARY.search(doc)]
     assert len(rendered) > 60 and not left, '\n'.join(left)
+
+
+#: The engine's calls written without the prefix, where the public module spells them otherwise.
+UNPREFIXED = re.compile(r'(?<![\w.])(?:(?:Run|Resolution|Band|Decay|Absorber)\('
+                        r'|Structure\((?:junction|discretisation|memory_bound)='
+                        r'|(?:Sphere|Cylinder|Box|Prism)\(range=|plan=)')
+
+
+def test_every_unprefixed_compat_call_an_engine_message_holds_has_a_public_spelling():
+    """``Run(steps=)`` is ``Duration(steps=)``, ``Structure(junction=)`` is ``Numerics(junction=)``.
+
+    The ``fd.`` scan reads past a call the engine writes bare, and 47 strings do: a public caller
+    with ``Duration(steps=0)`` was told "Run(steps=0): steps is a positive integer".
+    """
+    read, left = 0, []
+    for where, text in engine_strings():
+        if UNPREFIXED.search(text):
+            read += 1
+            out = to_public(text)
+            if UNPREFIXED.search(out):
+                left.append(f'{where}: {UNPREFIXED.findall(out)}')
+    assert read > 40, read
+    assert not left, 'unprefixed compat calls with no public spelling:\n  ' + '\n  '.join(left)
+
+
+def _film(pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=4e13)):
+    """A plane wave onto a glass film in a periodic cell."""
+    return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.1, .1, 1.6)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+        structures=(fdtd.Structure('film', fdtd.Slab(z=(-.4, -.2)), Material(epsilon=2.25)),)),
+        sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5), pulse=pulse),),
+        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+
+
+@pytest.mark.parametrize('pulse, changes, said', [
+    (None, dict(duration=fdtd.Duration(steps=0)), 'Duration(steps=0): steps is a positive integer.'),
+    (None, dict(duration=fdtd.Duration(seconds=-1e-15)),
+     'Duration(seconds=...) or Duration(periods=..., source=...): a positive length of time.'),
+    (None, dict(courant=1.5), 'Numerics(courant=1.5): dt = courant'),
+    (None, dict(junction='blend'), "Numerics(junction='blend'): choose split"),
+    (None, dict(discretisation='bogus'), "Numerics(discretisation='bogus'): the two spellings"),
+    (None, dict(grid=fdtd.UniformGrid(spacing=0.)),
+     'UniformGrid(spacing=0.0): the spacing is a positive length.'),
+    (fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=1e15), {},
+     'GaussianPulse(wavelength=0.8, frequency_sigma_hz=...): the spectrum reaches zero frequency'),
+    (fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=-1.), {},
+     'GaussianPulse(frequency_sigma_hz=...): a positive number is needed.'),
+], ids=['steps', 'seconds', 'courant', 'junction', 'discretisation', 'spacing', 'wide pulse',
+        'negative width'])
+def test_a_refusal_the_engine_spells_bare_reaches_the_public_caller_in_its_spelling(pulse, changes,
+                                                                                    said):
+    """Each is raised by an engine constructor the lowering calls, and reported by ``check``.
+
+    A bandwidth and an end time are held in the engine's units, so their public spelling says
+    which keyword without the engine's number.
+    """
+    numerics = dict(grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(steps=20),
+                    absorber=fdtd.PML(cells=12))
+    numerics.update(changes)
+    report = fdtd.check(_film(*([pulse] if pulse else [])), numerics=fdtd.Numerics(**numerics))
+    (issue,) = report.issues
+    assert said in issue.message, issue.message
+    assert not UNPREFIXED.search(issue.message) and not VOCABULARY.search(issue.message), issue.message
