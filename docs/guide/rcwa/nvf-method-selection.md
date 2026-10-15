@@ -77,7 +77,7 @@ python examples/rcwa/nvf_method_selection.py --method auxiliary --degree 3
 ```
 
 These are example-script options, not new keywords on `rcwa.Numerics`;
-the script itself still uses the earlier `wavebit.compat.legacy` interface.
+the script uses the current physical Problem API and explicit `rcwa.operators` for the auxiliary matrices.
 The script defaults to ordinary circular NVF. Degree and mesh-refinement
 arguments are accepted only for the auxiliary choice; it refuses ignored
 settings or unknown methods. All three runs use the same physical pair and

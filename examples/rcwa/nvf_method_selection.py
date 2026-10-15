@@ -4,7 +4,8 @@ This small example demonstrates selection, not optical convergence or a
 fair performance comparison. The auxiliary path is never selected implicitly.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit import Material, Units, rcwa
+from wavebit.rcwa import experimental, operators
 import argparse
 import json
 import time
@@ -23,31 +24,37 @@ def solve_pair(method='nvf', *, order=1, gap=0., auxiliary_options=None):
     epsilon = (12.25, -10.+1j)
     basis = np.diag([700., 700.])
     orders = (order, order) if isinstance(order, (int, np.integer)) else order
-    common = dict(backend='numpy', lattice=basis, wavelength=900., thickness=(300.,),
-                  top=1., bot=2.25, theta=.2, phi=0., truncation_order=orders)
+    regions = tuple(rcwa.Region(geometry=rcwa.Rectangle(size=(300.,300.),
+        center=(sign*(150.+gap/2),0.)), material=Material(material))
+        for sign,material in zip((-1.,1.),epsilon))
+    problem = rcwa.Problem(units=Units(length='nm'),
+        stack=rcwa.Stack(lattice=basis, bottom=Material(2.25),
+            layers=(rcwa.Layer(thickness=300.,background=Material(1.),regions=regions),)),
+        excitation=rcwa.Excitation(wavelength=900.,sources=(rcwa.PlaneWave(theta=.2,phi=0.,polarization=(1.,0.)),)))
     started = time.perf_counter()
     if method == 'auxiliary':
         options = dict(degree=3, quadrature=80, angular_quadrature=48,
                        coercivity_angle=1.53)
         options.update(auxiliary_options or {})
         refinement = options.pop('refinement', 0)
-        cell = _legacy_wavebit.CartesianPairTransmissionGalerkinGapCell(
-            _legacy_wavebit.CartesianPairOpeningPlan(0, refinement), orders,
+        cell = experimental.CartesianPairTransmissionGalerkinGapCell(
+            experimental.CartesianPairOpeningPlan(0, refinement), orders,
             reference=(*epsilon, 1.), **options)
         matrices, tangent, metadata = cell.closure(
             gap=gap, basis=basis, widths=(300., 300.), height=300.,
             epsilon=epsilon, background=1., gap_tangent=1.)
-        answer = _legacy_wavebit.rcwa(**common).solve_conv(*matrices)
+        assembled = operators.assemble(problem, numerics=rcwa.Numerics(orders=orders,factorization='li'))
+        assembled = assembled.replace(epsilon=(operators.ConvMatrices(*matrices),))
+        answers = {pol: operators.solve(problem.replace(excitation=problem.excitation.replace(
+            sources=(problem.excitation.sources[0].replace(polarization=(0.,1.) if pol=='p' else (1.,0.)),))), assembled) for pol in ('p','s')}
     else:
-        shapes = [dict(type='rectangle', lx=300., ly=300.,
-                       cx=sign*(150.+gap/2), cy=0., material=material)
-                  for sign, material in zip((-1., 1.), epsilon)]
         options = dict(nvf_projector='circular', shape_nvf_grid_size=64) if method == 'nvf' else {}
-        answer = _legacy_wavebit.rcwa(
-            **common, structure=[dict(background=1., shapes=shapes)],
-            factorization=method, **options).solve()
+        numerics = rcwa.Numerics(orders=orders,factorization=method,**options)
+        prepared = rcwa.prepare(problem,numerics=numerics)
+        answers = {pol: prepared.run(problem.replace(excitation=problem.excitation.replace(
+            sources=(problem.excitation.sources[0].replace(polarization=(0.,1.) if pol=='p' else (1.,0.)),)))) for pol in ('p','s')}
         tangent, metadata = None, dict(factorization=method)
-    return answer, tangent, metadata, time.perf_counter()-started
+    return answers, tangent, metadata, time.perf_counter()-started
 
 
 def main():
@@ -71,8 +78,8 @@ def main():
         args.method, order=args.order, gap=args.gap,
         auxiliary_options=options if args.method == 'auxiliary' else None)
     output = dict(method=args.method, seconds=seconds, polarizations=['p', 's'],
-                  T=[float(result.T.sum()) for result in (answer.p_inc, answer.s_inc)],
-                  R=[float(result.R.sum()) for result in (answer.p_inc, answer.s_inc)],
+                  T=[float(answer[pol].T.sum()) for pol in ('p','s')],
+                  R=[float(answer[pol].R.sum()) for pol in ('p','s')],
                   constitutive_gap_jvp_available=tangent is not None)
     if args.method == 'auxiliary':
         output.update(closure=metadata['closure'], degree=metadata['degree'],

@@ -148,14 +148,14 @@ def test_flat_reference_adds_no_noninteger_direction():
 
 @pytest.mark.parametrize('method', ('li', 'nvf'))
 def test_expert_example_leaves_auxiliary_off_and_refuses_unread_options(method, monkeypatch):
-    from wavebit.compat import legacy as wavebit
+    from wavebit.rcwa import experimental
     from examples.rcwa.nvf_method_selection import solve_pair
     def forbidden(*args, **kwargs):
         raise AssertionError('ordinary selection must not construct the auxiliary cell')
-    monkeypatch.setattr(wavebit, 'CartesianPairTransmissionGalerkinGapCell', forbidden)
+    monkeypatch.setattr(experimental, 'CartesianPairTransmissionGalerkinGapCell', forbidden)
     answer, tangent, metadata, _ = solve_pair(method, order=1)
     assert tangent is None and metadata['factorization'] == method
-    for result in (answer.p_inc, answer.s_inc):
+    for result in answer.values():
         assert result.T.size == 9
         assert 0 <= result.T.sum() <= 1 and 0 <= result.R.sum() <= 1
         assert result.T.sum()+result.R.sum() <= 1+1e-9
@@ -164,11 +164,11 @@ def test_expert_example_leaves_auxiliary_off_and_refuses_unread_options(method, 
 
 
 def test_expert_example_propagates_auxiliary_failure_without_fallback(monkeypatch):
-    from wavebit.compat import legacy as wavebit
+    from wavebit.rcwa import experimental
     from examples.rcwa.nvf_method_selection import solve_pair
     def rejected(*args, **kwargs):
         raise ArithmeticError('auxiliary qualification rejected this case')
-    monkeypatch.setattr(wavebit, 'CartesianPairTransmissionGalerkinGapCell', rejected)
+    monkeypatch.setattr(experimental, 'CartesianPairTransmissionGalerkinGapCell', rejected)
     with pytest.raises(ArithmeticError, match='qualification rejected'):
         solve_pair('auxiliary')
     with pytest.raises(ValueError, match='method must'):

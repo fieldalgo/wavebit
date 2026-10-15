@@ -17,6 +17,10 @@ All checks live alongside the example so a copied script retains its verificatio
 | [`record_run.py`](common/record_run.py) | Save inputs, measured arrays, units and source; verify exact round trips without repeating the solver. Use `--output` to retain a record. | Base install |
 | [`basic_grating.py`](rcwa/basic_grating.py) | A binary grating and its lossless power balance. | Base install |
 | [`shapes_1d.py`](rcwa/shapes_1d.py), [`shapes_2d.py`](rcwa/shapes_2d.py) | Typed regions with explicit mixed/s/p illumination and lossless power checks. | PyTorch / JAX respectively |
+| [`rectilinear_contact.py`](rcwa/rectilinear_contact.py) | Cartesian Li gap/material derivatives under JIT with checked topology and NaN for overlap. | JAX |
+| [`anisotropic_material.py`](rcwa/anisotropic_material.py), [`coherent_illumination.py`](rcwa/coherent_illumination.py) | Physical tensor spectra and two-source boundary power. | Base install |
+| [`nvf_method_selection.py`](rcwa/nvf_method_selection.py) | Explicit ordinary NVF/Li and experimental auxiliary operators for the same pair. | Base install |
+| [`pillar_gradient.py`](fdtd/pillar_gradient.py) | Physical pillar gradients with smoothed substrate continuation through outside PML. | PyTorch or JAX |
 | [`pulse_slab.py`](fdtd/pulse_slab.py) | A physical pulse, outside PML padding and a named time record. | Base install |
 | [`film_optimization.py`](rcwa/film_optimization.py) | Reuse a prepared RCWA calculation, differentiate film thickness with JAX and minimize reflectance; check the derivative against an independent Airy formula and the design against the quarter-wave thickness. | `wavebit[jax]` |
 | [`dispersive_fields.py`](fdtd/dispersive_fields.py) | A Lorentz film with SI rates, time-domain E and raw Fourier E/H; check passive power balance and linear field scaling under prepared reuse. | Base install; `wavebit[plot]` only for `--plot` |
@@ -46,7 +50,6 @@ starting a new physical problem. See the [migration guide](../docs/migration/ind
 
 | Entry | Question it answers |
 | --- | --- |
-| [`nvf_method_selection.py`](rcwa/nvf_method_selection.py) | How do I choose ordinary NVF, explicit Cartesian Li, or the experimental auxiliary pair solver for the same structure? |
 
 | [`fdtd_multilayer_optimization.py`](fdtd/fdtd_multilayer_optimization.py) | How can three coating thicknesses and permittivities be optimized together while maintaining minimum lengths and checking the final spectrum independently? |
 | [`fdtd_backends.py`](fdtd/fdtd_backends.py) | Evaluate one FDTD objective on NumPy/JAX/Torch and compare automatic derivatives with finite differences. |
@@ -60,7 +63,7 @@ starting a new physical problem. See the [migration guide](../docs/migration/ind
 | [`shapes_1d_verification.py`](rcwa/shapes_1d_verification.py), [`shapes_2d_verification.py`](rcwa/shapes_2d_verification.py) | Historical shape/raster comparisons through the compatibility interface; the plain shape examples above use the current API. |
 
 [`rectilinear_contact.py`](rcwa/rectilinear_contact.py) selects exact Cartesian shape Li
-and prints JIT transmission, gap derivatives, and material derivatives through contact.
+and prints JIT transmission, gap derivatives, and material derivatives through contact, using the current physical API and a runtime edge-order guard.
 It requires the JAX extra. Unlike the default NVF examples, it uses fixed zero-angle
 rectangles wholly inside the cell.
 

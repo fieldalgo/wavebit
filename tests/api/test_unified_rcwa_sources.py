@@ -23,6 +23,7 @@ def test_two_bloch_sectors_match_the_analytic_finite_aperture_power(unit, scale)
         outputs=rcwa.Outputs(diffraction=False, fields=True,
             power_region=((-0.2*scale, .35*scale), (-.4*scale, .4*scale))))
     result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(1, 0)))
+    assert result.diagnostics['source_groups'] == (2,)
     kx_per_m = 2*np.pi/(.8e-6)*np.sin(theta)
     width_m, centre_m, height_m = .55e-6, .075e-6, .8e-6
     mean_electric_squared = 2 - 2*np.sin(2*kx_per_m*centre_m)*np.sinc(kx_per_m*width_m/np.pi)

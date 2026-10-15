@@ -285,6 +285,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                   validity=Validity(checks={**checks, 'numerical_finite': finite},
                                     convergence={'status': 'not assessed', 'requires': 'independent refinement study'}),
                   diagnostics={'report': report, 'effective_wavelengths': tuple(actual_wavelengths),
+                               'source_groups': tuple(getattr(r, 'group_count', 1) for _, r in solves),
                                'effective_theta': tuple(actual_directions),
                                'port_power_defined': xp.stack(power_defined) if power_defined else None,
                                'detuning_relative_step': numerics.detuning},
