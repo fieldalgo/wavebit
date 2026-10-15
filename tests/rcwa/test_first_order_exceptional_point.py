@@ -405,7 +405,10 @@ def test_a_traced_y_invariant_raster_gradient_matches_eager():
     """MU614's SMM wavelength gradient uses every row's regular pair under jit.
 
     One slot left a relative derivative error of 2.4e2; three slots measured
-    9.6e-13 against the 1D reference in the design experiment.
+    9.6e-13 against the 1D reference in the design experiment. Traced against eager:
+    below 1e-12 on macOS (Accelerate), 2.6e-12 on the Linux runner (OpenBLAS) -- an absolute
+    1.1e-15 on a gradient of 4.3e-4 that is small by cancellation -- so the bound is 1e-10, the
+    one this file's other traced gradients take.
     """
     jax = pytest.importorskip('jax')
     s = _first_order(PATTERNED['MU614'], 'SMM', 'jax', two_d=True)
@@ -418,7 +421,7 @@ def test_a_traced_y_invariant_raster_gradient_matches_eager():
     derivative = jax.grad(reflected)
     eager = float(derivative(w))
     traced = float(jax.jit(derivative)(w))
-    assert abs(traced - eager) < 1e-12 * abs(eager)
+    assert abs(traced - eager) < 1e-10 * abs(eager)
 
 
 @pytest.mark.parametrize('slots', [1, 2])
