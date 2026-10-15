@@ -1,6 +1,6 @@
 # Wavebit 문서
 
-**버전:** 0.1.0 (미출시)
+**버전:** {sub-ref}`release`
 
 **바로가기:** [소스 저장소](https://github.com/fieldalgo/wavebit) |
 [문제 제보](https://github.com/fieldalgo/wavebit/issues) |

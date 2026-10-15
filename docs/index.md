@@ -1,6 +1,6 @@
 # Wavebit documentation
 
-**Version:** 0.1.0 (unreleased)
+**Version:** {sub-ref}`release`
 
 **Useful links:** [Source repository](https://github.com/fieldalgo/wavebit) |
 [Issue tracker](https://github.com/fieldalgo/wavebit/issues) |

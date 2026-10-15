@@ -40,7 +40,9 @@ if pathlib.Path(wavebit.__file__).resolve() != expected_package:
 project = 'Wavebit'
 author = 'FieldAlgo'
 copyright = '2026, FieldAlgo'
-release = '0.1.0'
+# The version the site shows is the version the package it imports declares; nothing to update at a release.
+release = wavebit.__version__
+version = release
 language = 'en'
 locale_dirs = ['locales/']
 gettext_compact = False

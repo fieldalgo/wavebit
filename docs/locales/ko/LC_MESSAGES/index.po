@@ -79,8 +79,8 @@ msgid "Where the rest lives"
 msgstr "다른 자료의 위치"
 
 #: docs/index.md:3
-msgid "**Version:** 0.1.0 (unreleased)"
-msgstr "**버전:** 0.1.0 (미출시)"
+msgid "**Version:** {sub-ref}`release`"
+msgstr "**버전:** {sub-ref}`release`"
 
 #: docs/index.md:5
 msgid ""

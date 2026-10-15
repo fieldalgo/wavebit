@@ -1,20 +1,12 @@
-# Publishes the Sphinx site to GitHub Pages. **Dormant on purpose** -- it has no automatic
-# trigger, and a guard below refuses to deploy from a private repository.
+# Publishes the Sphinx site to GitHub Pages on every push to `develop`, and on demand from the
+# Actions tab. The website proxies `wavebit.fieldalgo.com/docs/*` to the Pages site.
 #
-# Why dormant. `fieldalgo/wavebit` is private deliberately, and GitHub Pages does not inherit
-# that: a site published from a private repository is public on every plan that allows it at
-# all. Deploying today would announce an unreleased project and, until the repository itself is
-# public, would ship a site whose `repo_url` and whose links into `tests/` and `tutorials/`
-# all 404 for the reader.
+# `develop` rather than `main`: documentation lands on `develop`, and `main` only moves at a
+# release, so a documentation fix would otherwise wait for one. The version the site shows is
+# whatever `develop`'s package declares (`docs/conf.py` reads `wavebit.__version__`).
 #
-# Two things to do on the day the public repository exists, and neither is this file's job to
-# decide:
-#
-#   1. Settings -> Pages -> Source: "GitHub Actions".
-#   2. Uncomment the `push` trigger below.
-#
-# Until then the workflow can still be run by hand from the Actions tab, which is how you check
-# it works before either of those. It will build and then skip the deploy, because of the guard.
+# Pages must be set to deploy from GitHub Actions (Settings -> Pages -> Source) for the deploy
+# step to succeed; until then the build runs and the deploy fails, which is harmless.
 #
 # A custom domain (`docs.fieldalgo.com`, say) is a `CNAME` file listed in `html_extra_path`
 # plus the DNS record; nothing here changes for it.
@@ -22,10 +14,8 @@ name: docs deploy
 
 on:
   workflow_dispatch:
-  # Uncomment on publication day. `develop` rather than `main` because that is where this
-  # project's history is linear and where documentation lands.
-  # push:
-  #   branches: [develop]
+  push:
+    branches: [develop]
 
 # The Pages deployment needs these three and nothing else. `id-token` is what lets
 # `deploy-pages` prove to Pages that this run is the one that built the artifact.
@@ -46,10 +36,10 @@ jobs:
     name: build and deploy
     runs-on: ubuntu-latest
 
-    # The second belt, and the one that does not depend on anybody remembering. Even a manual
-    # run from the Actions tab will not publish while the repository is private. If the field
-    # is ever missing from the event payload the expression is falsy and the job is skipped,
-    # which is the direction a guard should fail in.
+    # Never publish a site from a private repository (Pages would make it public anyway). The
+    # repository is public since 2026-10-15; the guard stays for any private fork of it. If the
+    # field is ever missing from the event payload the expression is falsy and the job is
+    # skipped, which is the direction a guard should fail in.
     if: github.event.repository.private == false
 
     environment:
