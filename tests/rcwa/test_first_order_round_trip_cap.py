@@ -323,8 +323,11 @@ def test_traced_thickness_matches_eager():
         xp = jnp if b == 'jax' else np
         return xp.sum(xp.abs(r.s_inc.r_s) ** 2)
     compiled = jax.jit(lambda d: loss('jax', d))
+    # 1e-10, not 1e-12: XLA's CPU fusion on Linux put the jitted loss 2.3e-12 off NumPy's
+    # (291.137056476267 against 291.137056476931, CI run 38738075697, shard 3); a swapped
+    # label moves it by orders of magnitude more, which is what the four thicknesses test.
     for d in (3e3, 8e3, 1.2e4, 5e4):                 # none, some, more and all labels swapped
-        assert float(compiled(jnp.asarray(d))) == pytest.approx(loss('numpy', d), rel=1e-12)
+        assert float(compiled(jnp.asarray(d))) == pytest.approx(loss('numpy', d), rel=1e-10)
 
 
 def test_unsettled_coupling_graph_is_one_block():

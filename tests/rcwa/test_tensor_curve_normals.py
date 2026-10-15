@@ -1096,7 +1096,14 @@ def test_an_ellipse_shrinking_into_its_wigner_seitz_cell_replays_as_a_fresh_solv
         geometry=geometry, auto_detune=False)
     fresh = stale_solver(backend, growing_ellipse(709.), ELLIPSE_CELL).solve(auto_detune=False)
     for a, b in ((replay.R, fresh.R), (replay.T, fresh.T)):
-        np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+        if backend == 'jax':
+            # The same arithmetic per instance, but XLA compiles the replay and the fresh solve
+            # as different programs and fuses them differently: on Linux (CI run 38738075697,
+            # shard 5) R came out 2.4e-14 relative apart, where macOS happened to agree to the
+            # bit. NumPy and PyTorch run the instances eagerly and stay bit-equal.
+            np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-12, atol=0)
+        else:
+            np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'torch'])
