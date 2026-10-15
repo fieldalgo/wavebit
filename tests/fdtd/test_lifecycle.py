@@ -367,3 +367,63 @@ def test_prepared_rejects_a_wrong_problem_type_before_execution(invalid, monkeyp
     assert report.issues[0].code == 'problem.type'
     with pytest.raises(ValidationError, match='expected fdtd.Problem'):
         prepared.run(invalid)
+
+
+def _traced_resolution_case(kind):
+    """A traced permittivity no seed covers, the reference value and one the door refuses.
+
+    A cell-snapped Slab and an unturned ranged Box have no cross terms, so host planning
+    holds no seed for their material: the eager resolution door cannot count a traced value
+    and skips it, and only the runtime guard is left to hold the 8-cells floor.
+    """
+    if kind == 'slab':
+        film = fdtd.Structure('film', fdtd.Slab(z=(-.2, 0.)), Material(epsilon=2.25))
+        p = plane_problem().replace(scene=plane_problem().scene.replace(structures=(film,)))
+        n = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(steps=200),
+                          absorber=fdtd.PML(cells=12))
+        return p, n, 400.          # 1.15 cells per wavelength
+    box = fdtd.Structure('box', fdtd.Box(size=(.44, .44, .44)), Material(epsilon=2.25))
+    p = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(domain=fdtd.Domain(size=(1.6,)*3),
+        boundaries=fdtd.Boundaries(x=fdtd.PEC(), y=fdtd.PEC(), z=fdtd.PEC()), structures=(box,)),
+        sources=(fdtd.Dipole('d', center=(-.55, .03, -.02), current_moment=1e-16,
+            pulse=fdtd.GaussianPulse(wavelength=1.6, frequency_sigma_hz=.03*C0/1e-6), delay=-18e-6/C0),),
+        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(.3, 0., 0.), component='Ey'),)))
+    n = small_numerics(24).replace(geometry_ranges={'box': ((-.36, .36),)*3})
+    return p, n, 12.25             # 3.88 cells per wavelength
+
+
+def _with_epsilon(problem, eps):
+    s = problem.scene.structures[0]
+    return problem.replace(scene=problem.scene.replace(structures=(s.replace(material=Material(epsilon=eps)),)))
+
+
+@pytest.mark.parametrize('kind', ['slab', 'unturned ranged box'])
+def test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity(kind):
+    import jax
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    problem, numerics, refused = _traced_resolution_case(kind.split()[0])
+    with pytest.raises(ValueError, match='cells per wavelength'):
+        fdtd.prepare(_with_epsilon(problem, refused), numerics=numerics)
+    prepared = fdtd.prepare(problem, numerics=numerics, backend='jax')
+
+    def run(eps):
+        r = prepared.run(_with_epsilon(problem, eps))
+        return r['e'].values.sum(), r.validity.checks['runtime_stability']
+    compiled = jax.jit(run)
+    value, valid = compiled(jnp.asarray(2.25))
+    assert bool(valid)
+    assert float(value) == pytest.approx(float(prepared.run(problem)['e'].values.sum()), rel=1e-12)
+    value, valid = compiled(jnp.asarray(refused))
+    assert not bool(valid) and np.isnan(float(value))
+    assert np.isnan(float(jax.grad(lambda eps: run(eps)[0])(jnp.asarray(refused))))
+
+
+def test_a_torch_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity():
+    import torch
+    problem, numerics, refused = _traced_resolution_case('slab')
+    prepared = fdtd.prepare(problem, numerics=numerics, backend='torch')
+    eps = torch.tensor(refused, dtype=torch.float64, requires_grad=True)
+    r = prepared.run(_with_epsilon(problem, eps))
+    assert not bool(r.validity.checks['runtime_stability'])
+    assert torch.isnan(r['e'].values).all()

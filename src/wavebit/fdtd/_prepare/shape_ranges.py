@@ -782,13 +782,21 @@ def resolution_guard(scene, plan, rt, previous):
 
     ``checks.check_wavelength_resolution`` refuses a material sampled below 8 cells per
     wavelength at the sources' ``band.shortest_wavelength`` and at each ``Diffraction``
-    wavelength: there not even the first digit of an order survives. Host planning read a
-    traced value at the plan's seed (:func:`_seeded_materials`), so the live value is held
-    to the same floor here: ``max_c eps_c mu_c <= (w / 8 dx)^2`` at the shortest such
-    concrete wavelength ``w``, or the run's coefficients are ``nan``. Built only for a
-    seeded scene with a traced material, so every other run's ``stable`` is unchanged.
+    wavelength: there not even the first digit of an order survives. That door reads
+    concrete values only. A seeded scene's host planning read a traced value at the plan's
+    seed (:func:`_seeded_materials`), and an unseeded one's could not read it at all -- the
+    door skips a value it cannot count -- so in either case the live value is held to the
+    same floor here: ``max_c eps_c mu_c <= (w / 8 dx)^2`` at the shortest such concrete
+    wavelength ``w``, or the run's coefficients are ``nan``. Built for every scene with a
+    traced material, so a concrete run's ``stable`` is unchanged.
+
+    It was built for seeded scenes only until 2026-10-15, which left the common case open: a
+    traced permittivity on a cell-snapped ``Slab``, or on an unturned ranged ``Box`` (no
+    cross terms, so nothing seeds it), ran at ``eps = 400`` and ``12.25`` under ``jax.jit`` --
+    1.15 and 3.88 cells per wavelength, both refused eagerly -- and returned finite fields,
+    ``stable`` true and a finite ``jax.grad``.
     """
-    if not (materials_traced(scene) and seeded(scene, plan)):
+    if not materials_traced(scene):
         return previous
     from wavebit.materials.time_domain import Material
     from wavebit.materials.time_domain import as_material
