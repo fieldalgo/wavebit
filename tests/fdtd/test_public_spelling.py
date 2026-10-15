@@ -204,3 +204,141 @@ def test_a_planning_warning_is_spelled_for_the_public_caller():
     report = fdtd.check(problem, numerics=numerics)
     notes = [w for w in report.capabilities['warnings'] if 'loses' in w]
     assert notes and not any(COMPAT.search(w) for w in notes), notes
+
+
+#: The engine's vocabulary where the public module has its own: a compat name, a compat-only
+#: constructor, the old source tree, the compat result's variable.
+VOCABULARY = re.compile(r'(?<![\w.])fd\.\w|(?<![\w.])(?:Run|Resolution|Band|Decay|Absorber)\('
+                        r'|src/wavebit/fd/|(?<![\w.])res\.diagnostics')
+
+
+@pytest.mark.parametrize('build', [
+    lambda: fdtd.Slab(x=(0., 1.), z=(0., 1.)),
+    lambda: fdtd.Slab(size=1.),
+    lambda: fdtd.Slab(radius=1.),
+], ids=['two axes', 'size', 'radius'])
+def test_a_shared_constructor_refuses_a_public_caller_in_the_public_vocabulary(build):
+    """``fdtd.Slab`` refuses before any entry point runs, so the public name translates itself.
+
+    It said "a rectangular rod or block is fd.Structure(fd.Region(size=..., center=...),
+    material)", a call with another signature, from a namespace the caller never imported.
+    """
+    with pytest.raises(NotImplementedError) as error:
+        build()
+    message = str(error.value)
+    assert 'fdtd.Region(size=..., center=...)' in message and 'fdtd.Box(' in message, message
+    assert not VOCABULARY.search(message), message
+
+
+def test_a_compat_shape_still_refuses_in_the_compat_vocabulary():
+    with pytest.raises(NotImplementedError, match=re.escape(
+            'fd.Structure(fd.Region(size=..., center=...), material)')):
+        fd.Slab(x=(0., 1.), z=(0., 1.))
+    with pytest.raises(NotImplementedError, match=re.escape('fd.Region(size=..., center=...)')):
+        fd.Slab(size=1.)
+
+
+@pytest.mark.parametrize('build', [
+    lambda v: fdtd.Slab(z=(v, 1.)),
+    lambda v: fdtd.Region(size=(v, 1., 1.)),
+    lambda v: fdtd.Plane(z=v),
+    lambda v: fdtd.Domain(size=(v, 1., 1.)),
+    lambda v: fdtd.Record('probe', at=(v, 0., 0.)),
+], ids=['Slab', 'Region', 'Plane', 'Domain', 'Record'])
+def test_a_traced_length_is_refused_with_the_public_leaves(build):
+    """The engine's list named a Dipole's ``range=``, the Bloch phase and ``Band(df=...)``.
+
+    A public ``Prepared`` holds the boundaries, a Dipole's centre and the initial fields static,
+    so its leaves are the contract's ``live`` ones, spelled in its own vocabulary.
+    """
+    jax = pytest.importorskip('jax')
+    with pytest.raises(ValueError) as error:
+        jax.grad(lambda v: (build(v), v)[1])(0.3)
+    message = str(error.value)
+    assert 'is static' in message and 'Numerics(geometry_ranges=...)' in message, message
+    assert 'GaussianPulse(' in message and not VOCABULARY.search(message), message
+    assert 'Bloch' not in message and 'range=' not in message, message
+
+
+def test_the_public_leaves_are_reviewed_when_the_engine_gains_one():
+    """``PUBLIC_LEAVES`` is written, not derived: a twelfth compat leaf was the last reviewed."""
+    from wavebit._common.declarations import TRACED_LEAVES
+    assert len(TRACED_LEAVES) == 12, ('the engine has a new traced leaf; say whether the public '
+                                      'module has it in wavebit.fdtd._spelling.PUBLIC_LEAVES')
+
+
+def _snapped():
+    """A cell-snapped film and rod in a cell closed by PEC across z."""
+    return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.4, .4, .4)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.PEC()),
+        structures=(fdtd.Structure('film', fdtd.Slab(z=(-.1, .05)), Material(epsilon=2.25)),
+                    fdtd.Structure('rod', fdtd.Region(size=(.1, .1, .1), center=(0., 0., .1)),
+                                   Material(epsilon=4.)))),
+        initial=fdtd.InitialField(E=(None, lambda x, y, z: np.cos(np.pi * z / .4), None)),
+        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+
+
+def _flush():
+    """A pillar standing flush on a smoothed substrate -- a junction -- under a cell-snapped film."""
+    glass = Material(epsilon=2.25)
+    return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.8, .8, 1.2)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.PEC()),
+        structures=(
+            fdtd.Structure('substrate', fdtd.Box(size=(2., 2., 1.2125), center=(0., 0., -.59375)),
+                           glass),
+            fdtd.Structure('pillar', fdtd.Cylinder(radius=.15, height=.4,
+                                                   center=(.017, -.013, .2125)), Material(epsilon=4.)),
+            fdtd.Structure('film', fdtd.Slab(z=(.5, .55)), glass))),
+        sources=(fdtd.Dipole('d', center=(.3, .3, .3),
+                             pulse=fdtd.GaussianPulse(wavelength=1.6, frequency_sigma_hz=2e13)),),
+        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+
+
+@pytest.mark.parametrize('problem, junctions', [(_snapped, 0), (_flush, 1)],
+                         ids=['snapped', 'junction'])
+def test_a_public_name_changes_no_plan(problem, junctions):
+    """The public names add no field: a scene lowered from them plans as its compat twin does.
+
+    A flush pair's record hashes every structure's class, and named the public one's module
+    until ``junction._signature`` read the engine's.
+    """
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=2))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        scene, _ = lower_problem(problem(), numerics)
+        compat = {fdtd.Slab: fd.Slab, fdtd.Region: fd.Region, fdtd.Record: fd.Record}
+        twin = scene.replace(
+            structures=tuple(s.replace(shape=compat[type(s.shape)](**vars(s.shape)))
+                             if type(s.shape) in compat else s for s in scene.structures),
+            monitors=tuple(compat[type(m)](**vars(m)) for m in scene.monitors))
+        assert not any(type(s.shape) in compat for s in twin.structures)
+        plan = fd.plan(scene)
+        assert len(plan.junctions) == junctions
+        assert plan.skeleton == fd.plan(twin).skeleton
+
+
+def test_the_public_reference_speaks_the_public_vocabulary():
+    """``docs/reference/fdtd`` renders each public name with ``:members:``; none names a compat call.
+
+    ``fdtd.Region`` was documented as ``fd.Region(size=..., center=...)``, "a structure,
+    ``fd.Structure(fd.Region(...), material)``", and ``fdtd.Axis1D`` as
+    ``fd.Boundaries(x=fd.Bloch(k=kx), ..., z=fd.PML(...))`` read off ``res.diagnostics``: the
+    engine's own docstrings, rendered for a public reader. The warnings the public guide says
+    come from ``wavebit.fdtd.diagnostics`` are held to it too: they cited ``fd._assemble``,
+    ``fd.check`` and ``fd.PML``.
+    """
+    import inspect
+    from wavebit.fdtd import diagnostics
+    rendered = []
+    for module, name in ([(fdtd, n) for n in fdtd.__all__]
+                         + [(diagnostics, n) for n in diagnostics.__all__]):
+        obj = getattr(module, name)
+        rendered.append((name, inspect.getdoc(obj)))
+        if isinstance(obj, type):
+            rendered += [(f'{name}.{member}', inspect.getdoc(getattr(obj, member)))
+                         for member in vars(obj) if not member.startswith('_')]
+    left = [f'{where}: {VOCABULARY.findall(doc)}' for where, doc in rendered
+            if doc and VOCABULARY.search(doc)]
+    assert len(rendered) > 60 and not left, '\n'.join(left)

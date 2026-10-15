@@ -2,12 +2,34 @@
 
 Public check/prepare/run calls scope this translation with a context variable;
 internal numerical instruments retain the engine's original diagnostic text.
+
+Five public names are the engine's own classes -- ``Domain``, ``Slab``, ``Region``, ``Plane``
+and ``Record`` -- and their constructors refuse before any entry point runs, so each public
+name is a :class:`Spoken` subclass that translates its own refusals.
 """
 import contextlib
 import contextvars
 import re
 
+from wavebit._common.backend import eager_under_torch_compile
+from wavebit._common.declarations import TRACED_LEAVES
+
 _PUBLIC = contextvars.ContextVar('wavebit_fdtd_public_spelling', default=False)
+
+#: The engine's list of traced leaves, as every static refusal ends.
+_COMPAT_LEAVES = 'The traced leaves are ' + '; '.join(TRACED_LEAVES) + '.'
+
+#: The public module's own, which is not a respelling of the engine's: a ``Prepared`` holds the
+#: boundaries, a Dipole's centre and the initial fields static (``_api._signature``), and its
+#: contract's ``live`` entries are what remains.
+PUBLIC_LEAVES = (
+    'The traced leaves of a public problem are material values (a permittivity, a '
+    "conductivity, a pole strength); each source's amplitude (a Dipole's current_moment), "
+    'phase and delay, and its GaussianPulse(wavelength=..., frequency_sigma_hz=...); '
+    'InitialField.amplitude; and the geometry of a Sphere, Cylinder, Box or Prism that '
+    'Numerics(geometry_ranges=...) names -- radius, size, height, vertices and center within '
+    'that range, orientation and vertex count static, one body or several whose full '
+    'interpolation halos are disjoint -- prepared from concrete values.')
 
 #: An engine shorthand, not a qualified path or ``fdtd.``.
 _FD = r'(?<![\w.])fd\.'
@@ -22,6 +44,8 @@ _SHARED = ('Slab', 'Region', 'Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'Pla
 _UNIMPLEMENTED = ('ModeSource', 'ModeMonitor', 'GaussianBeam')
 
 PHRASES = (
+    # A static refusal ends with the engine's leaves; the public module has its own.
+    (re.escape(_COMPAT_LEAVES), PUBLIC_LEAVES),
     (r'Run\(decay=Decay\(threshold=\.\.\., window=\.\.\.\)\)',
      'Numerics(decay=fdtd.Decay(threshold=..., window_seconds=...))'),
     (r'(?<![\w.])(?:fd\.)?Decay\(threshold=\.\.\., window=\.\.\.\)',
@@ -123,3 +147,25 @@ def public_error(exc):
         message = to_public(str(exc))
         return exc if message == str(exc) else type(exc)(message)
     return exc
+
+
+@eager_under_torch_compile
+class Spoken:
+    """The public name of one of the engine's own declarations, refusing in the public vocabulary.
+
+    ``fdtd.Slab(x=..., z=...)`` was refused, before any entry point ran, with "a rectangular
+    rod or block is fd.Structure(fd.Region(size=..., center=...), material)", and a traced
+    length on any of the five listed the engine's leaves, a Dipole's centre and the Bloch phase
+    among them. A subclass adds no field and no behaviour -- a plan encodes a declaration by
+    its class name and fields, and a job by its public name, so neither changes -- and
+    translates what the constructor raises, as the entry points translate what leaves them.
+    """
+
+    def __init__(self, *args, **kwargs):
+        try:
+            super().__init__(*args, **kwargs)
+        except (TypeError, ValueError, NotImplementedError) as exc:
+            translated = public_error(exc)
+            if translated is exc:
+                raise
+            raise translated from exc

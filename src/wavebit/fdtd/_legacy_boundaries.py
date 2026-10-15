@@ -228,8 +228,8 @@ class Bloch(FaceType):
 class Axis1D(FaceType):
     """A one-cell axis whose derivative is ``i k`` exactly: the invariant axis of a 2-D problem.
 
-    ``fd.Boundaries(x=fd.Bloch(k=kx), y=fd.Axis1D(k=ky, k_max=...), z=fd.PML(...))`` is a
-    conical 1-D grating: the structure is uniform along y, the field is ``F(x, z) exp(i ky
+    ``Boundaries(x=Bloch(k=kx), y=Axis1D(k=ky, k_max=...), z=...)`` with absorbing z faces is
+    a conical 1-D grating: the structure is uniform along y, the field is ``F(x, z) exp(i ky
     y)``, and the grid holds one cell of it along y. **Stage 3.**
 
     **Why it is not a one-cell Bloch face.** A ``Bloch(k=k)`` axis differences a field
@@ -248,8 +248,10 @@ class Axis1D(FaceType):
     faces; they are untouched).
 
     ``k``
-        The wavevector along the axis, a real scalar, concrete or traced (a gradient may flow
-        through it). ``k = 0`` is allowed: a 2-D problem with no dependence along the axis.
+        The wavevector along the axis, a real scalar. ``k = 0`` is allowed: a 2-D problem with
+        no dependence along the axis. The face takes a traced ``k`` too (a gradient may flow
+        through it), but a public :class:`~wavebit.fdtd.Prepared` holds the boundaries static,
+        so there ``k`` is concrete.
     ``k_max``
         The largest ``|k|`` the plan is made for (static). The derivative is ``i k`` and not a
         bounded difference, so the CFL bound depends on it: the sum ``sum_a max K_a^2 / 4``
@@ -257,7 +259,7 @@ class Axis1D(FaceType):
         axis and ``k_max^2 / 4`` for this one (``src/wavebit/fdtd/_prepare/checks.py::cfl_bound``).
         Default ``|k|`` when ``k`` is concrete; required when it is traced. A concrete ``|k| >
         k_max`` is refused here; a traced one is checked at run time and makes the run
-        ``nan`` with ``res.diagnostics['stable'] = False``.
+        ``nan``, with ``diagnostics['stable']`` False on the result.
     ``algebraic``
         Must be ``True``: the derivative is the algebraic ``i k``. There is no other kind --
         the one-cell difference is exactly what is being replaced -- so ``False`` is refused
@@ -265,7 +267,7 @@ class Axis1D(FaceType):
 
     A run with an ``Axis1D`` face is always complex (``k = 0`` included: one dtype per plan,
     and a traced ``k`` could become nonzero). The domain must be one cell along the axis
-    (``Domain(size=...)`` equal to ``dx`` there); sources whose support spans cells along it
+    (``Domain(size=...)`` equal to the cell size there); sources whose support spans cells along it
     (a ``Dipole``'s stamp, a ``TFSF`` box) are refused, and a ``Diffraction`` monitor has the
     single order ``0`` along it.
     """

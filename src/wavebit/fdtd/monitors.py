@@ -2,10 +2,21 @@
 from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass
 from wavebit._common.declarations import Declaration
-from ._legacy_monitors import Record
+from . import _legacy_monitors
+from ._spelling import Spoken
 from ._structure import tuples
 
 __all__ = ['Record', 'Field', 'Flux', 'Diffraction', 'FarField', 'Outputs']
+
+
+@eager_under_torch_compile
+class Record(Spoken, _legacy_monitors.Record):
+    """A point time series of one component, at the nearest Yee point of that component.
+
+    ``fdtd.Record('probe', at=(x, y, z), component='Ey')`` is read back as
+    ``result['probe']``. ``at`` is a static point in ``Problem.units`` inside the physical
+    domain; ``component`` is one of ``'Ex'``, ``'Ey'``, ``'Ez'``, ``'Hx'``, ``'Hy'``, ``'Hz'``.
+    """
 
 @eager_under_torch_compile
 @dataclass(frozen=True)

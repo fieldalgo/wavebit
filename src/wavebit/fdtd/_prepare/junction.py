@@ -175,8 +175,19 @@ def _roles(scene, grid, ia, ib):
     return face, standing, axis, side, plane
 
 
+def _engine_class(shape):
+    """``shape``'s engine class: ``wavebit.fdtd.Slab`` is a public name for the engine's ``Slab``.
+
+    The public name is a :class:`~wavebit.fdtd._spelling.Spoken` subclass that adds nothing, so
+    a signature naming it would move the skeleton of every public scene with a junction and a
+    cell-snapped shape, and no geometry would have changed.
+    """
+    from wavebit.fdtd._spelling import Spoken
+    return next(c for c in type(shape).__mro__ if not issubclass(c, Spoken))
+
+
 def _signature(scene, grid):
-    geometry = [(type(s.shape).__module__, type(s.shape).__qualname__,
+    geometry = [(_engine_class(s.shape).__module__, _engine_class(s.shape).__qualname__,
                  s.shape.describe(), getattr(s.shape, 'axis', None),
                  s.shape.support(grid), s.junction, s.discretisation)
                 for s in scene.structures]

@@ -75,8 +75,8 @@ class UnsettledFieldWarning(UserWarning):
     compared with its peak over the run (``src/wavebit/fdtd/_assemble.py::decay_report``). A DFT of a
     signal cut off before it decayed is not the spectrum of the physics, so every flux, order
     and normalisation built on it carries the truncation. The message names the monitor and
-    the ratio; the line is ``fd._assemble.UNSETTLED_THRESHOLD``, measured. Its advice is to
-    run longer, which is right for a field that decays; a field that **grows** after its
+    the ratio; the line is ``wavebit.fdtd._assemble.UNSETTLED_THRESHOLD``, measured. Its advice
+    is to run longer, which is right for a field that decays; a field that **grows** after its
     sources have ended warns :class:`GrowingFieldWarning` instead.
     """
 
@@ -84,15 +84,15 @@ class UnsettledFieldWarning(UserWarning):
 class GrowingFieldWarning(UnsettledFieldWarning):
     """The field still **rises** after every source has ended: a longer run makes it worse.
 
-    Stage 3's growth diagnostic (``src/wavebit/fdtd/_assemble.py::decay_report``,
-    ``res.diagnostics['interior_growth']``): once every source has ended -- a Dipole's envelope
+    Stage 3's growth diagnostic (``src/wavebit/fdtd/_assemble.py::decay_report``, the result's
+    ``diagnostics['interior_growth']``): once every source has ended -- a Dipole's envelope
     back below its cutoff, a PlaneWave's or TFSF's column no longer changing on its faces -- the
     total energy of a passive scene's interior -- every cell but the PML layers', an
     ``Absorber``'s included, a dispersive structure's stored energy too -- can only hold or
     fall, so when it averages higher over the last quarter of that span than over the quarter
-    before, by more than ``fd._assemble.GROWTH_THRESHOLD`` (measured), and rises as an
-    exponential does (``fd._assemble.GROWTH_STEADY``: energy a PML hands back arrives as a
-    pulse), something is feeding it. An interior energy that overflows to ``inf`` or ``nan``
+    before, by more than ``wavebit.fdtd._assemble.GROWTH_THRESHOLD`` (measured), and rises as
+    an exponential does (``wavebit.fdtd._assemble.GROWTH_STEADY``: energy a PML hands back
+    arrives as a pulse), something is feeding it. An interior energy that overflows to ``inf`` or ``nan``
     warns this too, once, saying so. The scene is
     judged and not a monitor: a monitor's own region energy, or a Record's ``|v|^2``, can rise
     in a passive scene when an echo or a slow beat moves energy through it. In this package the
@@ -118,7 +118,7 @@ class BoundedVoxelWarning(UserWarning):
     One warning covers the static scene's component voxels and names the count, widest
     interval and responsible node. Union and Difference take an upper bound; Intersection
     takes a lower bound. The warning reports geometric uncertainty, not a bound on the
-    resulting electromagnetic error. ``fd.check`` includes the same note with or without
+    resulting electromagnetic error. A ``check`` report includes the same note with or without
     prebuilt params. Lowering emits no warning inside JIT; cached calls use the geometry
     that was checked at plan time. See ``_shapes.Approximations`` for the collector.
     """
@@ -128,9 +128,9 @@ class GeometryClippedWarning(UserWarning):
     """A structure reaches past a PEC or PMC face of the box, and the part past it is not run.
 
     The warning names the share of the declared volume lost and the faces that took it (stage
-    4, C5). A structure meant to run on out of the box -- a substrate, a waveguide -- is spelled
-    with ``fd.PML`` or ``fd.Absorber`` on that face, and one meant to fill a periodic axis spans
-    it; neither warns. A cell-snapped shape across one periodic seam without spanning the period
+    4, C5). A structure meant to run on out of the box -- a substrate, a waveguide -- needs an
+    absorbing face there (``fdtd.Open()``; a ``PML`` or ``Absorber`` face in the compat
+    namespace), and one meant to fill a periodic axis spans it; neither warns. A cell-snapped shape across one periodic seam without spanning the period
     is refused instead (``src/wavebit/fdtd/_prepare/checks.py::check_seams``), because its
     periodic image is missing, and a smoothed body that is not uniform across a face never gets
     this far (``src/wavebit/fdtd/_prepare/checks.py::check_smoothed``).
