@@ -111,12 +111,17 @@ class FieldState:
     it rides in the aux data beside ``kind``, and the leaves are the numbers alone.
     """
 
-    def __init__(self, data, kind, mirrored=False, names=('incident',), window=None):
+    def __init__(self, data, kind, mirrored=False, names=('incident',), window=None,
+                 merged=None):
         self.data, self.kind, self.mirrored, self.names = data, kind, mirrored, tuple(names)
         self.window = window
+        #: ``(bottom, top, lit side)`` of a solve that merged layers into its half-spaces
+        #: (:mod:`~wavebit.rcwa._engine.half_space_merge`), else ``None``. Static, like
+        #: ``window``: it fixes which heights the kernels' records answer.
+        self.merged = merged
 
     def tree_flatten(self):
-        return (self.data,), (self.kind, self.mirrored, self.names, self.window)
+        return (self.data,), (self.kind, self.mirrored, self.names, self.window, self.merged)
 
     @classmethod
     def tree_unflatten(cls, meta, children):
@@ -144,12 +149,19 @@ class FieldState:
         return expand_spectrum(xp, kxy, coefficients, grid)
 
     def reconstruct(self, sample_x, sample_y, sample_z, incidence):
+        xp = array_namespace(self.data['lattice'])
+        grid = xy_grid(xp, self.data['lattice'], sample_x, sample_y)
+        return self.reconstruct_on(grid, sample_z, incidence)
+
+    def reconstruct_on(self, grid, sample_z, incidence):
+        """:meth:`reconstruct` on centre-origin Cartesian points ``grid = (x, y)`` already laid
+        out, for a door whose lateral sampling rules are its own."""
         index = self._incidence(incidence)
         data = self.data
-        if not data['groups'] or any(g['layers'] is None for g in data['groups']):
+        if (not data['groups'] and self.merged is None) or any(
+                g['layers'] is None for g in data['groups']):
             raise RuntimeError("Internal fields require solve(answers='field') and at least one layer.")
         xp = array_namespace(data['lattice'])
-        grid = xy_grid(xp, data['lattice'], sample_x, sample_y)
         ds = xp.real(data['thickness'])
         if not ds.shape[0]:
             raise ValueError('There are no finite layers to sample')
@@ -178,18 +190,27 @@ class FieldState:
                 coefficient = self._ordinary_coefficients(xp, g, z, owner, edges, index)
             field = expand_spectrum(xp, g['kxy'], coefficient, grid)
             result = field if result is None else result + field
+        if self.merged is not None:
+            from wavebit.rcwa._engine.half_space_merge import zone_coefficients
+            coefficient = zone_coefficients(xp, z, owner, edges, self.merged, data['merge'],
+                                            self.names[index], ds.shape[0])
+            field = expand_spectrum(xp, data['boundary_kxy'], coefficient, grid)
+            result = field if result is None else result + field
         return result
 
     def _ordinary_coefficients(self, xp, g, z, owner, edges, index):
         layers = g['layers']
-        nlayer = len(layers)
+        # The kernels' records cover the layers they solved: all of them, or those left
+        # between the merged ones (`half_space_merge`), which start at public layer `first`.
+        first = 0 if self.merged is None else self.merged[0]
+        held = range(first, first + len(layers))
         # Work at every requested height in each layer, clipping unused samples so
         # an unselected evanescent solution cannot overflow and poison a gradient.
-        masks = [owner == j for j in range(nlayer)]
-        local = [_local_height(xp, z, edges[j], edges[j+1]-edges[j], masks[j])
-                 for j in range(nlayer)]
+        masks = [owner == j for j in held]
+        local = [_local_height(xp, z, edges[j], edges[j+1]-edges[j], mask)
+                 for j, mask in zip(held, masks)]
         if self.mirrored:
-            local = [edges[j+1]-edges[j]-local[j] for j in range(nlayer-1, -1, -1)]
+            local = [edges[j+1]-edges[j]-local[j-first] for j in reversed(held)]
             masks.reverse()
         kwargs = dict(sample_z=LayerSamples(local), incidences=(self.names[index],),
                       _coefficients=True)
@@ -211,7 +232,12 @@ class FieldState:
         from wavebit._common.conventions import centre_parity
         odd = as_array(xp, centre_parity(*self.window).reshape(-1),
                        device=getattr(coefficients, 'device', None))
-        return xp.where(odd[None, :, None], -coefficients, coefficients)
+        coefficients = xp.where(odd[None, :, None], -coefficients, coefficients)
+        if self.merged is not None:
+            # The remaining stack was lit at its own face, where the incident wave arrives
+            # with the phase it gathered crossing the merged layers.
+            coefficients = coefficients * xp.exp(self.data['merge']['incident'])
+        return coefficients
 
     def _source_coefficients(self, xp, g, z, owner, edges):
         ge = g['edges']
@@ -381,12 +407,14 @@ def cartesian_amplitudes(spectra, name, shape):
             't_xyz': xp.reshape(transmitted[:, :3], tuple(shape) + (3,))}
 
 
-def ordinary_state(solver, spectra):
+def ordinary_state(solver, spectra, merged=None):
     """Adapt one ordinary solve without retaining a reference to the solver.
 
     ``spectra`` is :func:`ordinary_spectra`'s answer -- ``None`` below ``answers='amplitude'``,
     which has no field state -- and the boundary waves are those spectra as they are: they are
-    referenced at the public centre origin already.
+    referenced at the public centre origin already. ``merged`` is a merged field solve's
+    ``{'plan': (bottom, top, lit side), 'data': ...}`` (``CoreSolveMixin._finish_merge``):
+    the plan rides in the aux data, the numbers under ``data['merge']``.
     """
     if spectra is None:
         return None
@@ -404,8 +432,11 @@ def ordinary_state(solver, spectra):
     data = dict(lattice=spectra['lattice'], wavelength=solver.wavelength,
                 thickness=solver.thickness, boundary_kxy=spectra['kxy'], boundary=boundary,
                 groups=groups)
+    if merged is not None:
+        data['merge'] = merged['data']
     return FieldState(_copy(data), spectra['kind'], solver._kernel_incidence_side == 'bottom',
-                      spectra['names'], solver.order_window)
+                      spectra['names'], solver.order_window,
+                      None if merged is None else merged['plan'])
 
 
 def source_state(spectra, groups, lattice, wavelength, thickness):

@@ -42,7 +42,7 @@ P, WL, H = 400.0, 900.0, 150.0
 CARRIED = (
     'backend', 'tetm', 'truncation_order', 'layer_algorithm', 'complex_dtype',
     'fourier_coefficients', 'factorization', 'raster_normal_method', 'nvf_projector', 'li_nesting',
-    'incidence_side',
+    'half_space_merge_tolerance', 'incidence_side',
     'answers',
     'shape_nvf_grid_size', 'theta', 'phi', 'psi', 'chi', 'polarization', 'period', 'wavelength',
     'thickness', 'structure', 'mu', 'top', 'bot', 'lattice', 'excitation', 'formulation',
@@ -77,7 +77,7 @@ def _scene(**over):
               top=wavebit.Material(2.25, mu=1.4), bot=wavebit.Material(4.0),
               theta=0.31, phi=0.47, psi=0.29, chi=np.pi / 9,
               factorization='nvf', raster_normal_method='contour', nvf_projector='circular',
-              shape_nvf_grid_size=512,
+              shape_nvf_grid_size=512, half_space_merge_tolerance=1e-9,
               incidence_side='bottom', layer_algorithm='SMM', answers='field',
               complex_dtype=1, fourier_coefficients='integrated',
               excitation={(0, 0): 1.0, (1, 0): 0.5j})

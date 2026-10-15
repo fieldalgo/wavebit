@@ -24,6 +24,8 @@ Explicit `'host'` admits supported scalar region geometry through a JAX CPU call
 checks execute sequentially under vmap and can limit throughput. See [checked shape
 JIT](guarded-shape-jit.md) for validity masking, supported shapes and examples.
 
+A layer whose material is the half-space's beside it is merged into that half-space at a complex angle: the remaining stack is solved and the reflected, transmitted and internal waves are carried across the merged thickness analytically. That is the exact answer, and the one a layer-by-layer solve can miss by O(1) there. `half_space_merge_tolerance` (default `0.0`, bit-identical materials only) widens what counts as the same material: a positive relative tolerance takes a nearby material to be the half-space's at every angle, which changes the problem. `result.diagnostics["half_space_merge"]` records, per wavelength, how many layers went into each half-space and which of them the tolerance snapped.
+
 Increase orders and geometric/NVF resolution independently and compare the output you actually need. Energy balance alone does not establish optical or gradient convergence. The measurements quoted below were taken through the earlier `wavebit.compat.legacy` interface, which runs the same engine.
 
 ## What each setting changes

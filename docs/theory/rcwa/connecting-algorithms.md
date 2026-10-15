@@ -21,6 +21,8 @@ Targets:
   double-negative layer is labelled (§11)
 - `src/wavebit/rcwa/_engine/maxvol_labels.py` — ETM's labels at a complex in-plane wavevector,
   chosen from the state below the layer (§10)
+- `src/wavebit/rcwa/_engine/half_space_merge.py` — a layer of a half-space's own medium, merged
+  into it (§10)
 
 **The keyword is `layer_algorithm`** (it was `connecting_algo` until 2026-08-20; the values
 `'ETM'` / `'SMM'` / `'TMM'` did not move). "Connecting algorithm" stays the name of the *idea*
@@ -70,11 +72,11 @@ which does have gratings, rather than assumed.
    complex one that took ETM labelling its layers' modes by the half-space's rule (§10); before
    2026-10-02 it lost up to 12 digits there. Since 2026-10-15 ETM chooses those labels from the
    state below each layer (an etched grating on its own slab had left it O(1) off where SMM was
-   right). One case is still open, at a complex `k_par` (or in a gain medium) and ETM's: a thick
-   layer of the far half-space's own material makes ETM raise `LinAlgError` where SMM can be
-   right (§10, "What is left"). A double-negative layer is labelled by where its modes' power
-   goes (§11); before 2026-10-04 ETM raised `LinAlgError` on a quarter of the stacks that rest
-   one on its own medium. The one stack ETM cannot write is Pendry's perfect-lens pair, which
+   right), and a layer of a half-space's own medium is merged into that half-space, which is the
+   exact answer where both algorithms had returned one side of a knife edge or raised (§10). A
+   knife edge no merge reaches is still open (§10, "What is left"). A double-negative layer is
+   labelled by where its modes' power goes (§11); before 2026-10-04 ETM raised `LinAlgError` on a
+   quarter of the stacks that rest one on its own medium. The one stack ETM cannot write is Pendry's perfect-lens pair, which
    it names (§11). Where a layer sets negative permittivity beside positive, SMM lost up to
    4.5e-10 to rounding at its gap until 2026-10-09, when the gap's waves changed (§11).
 2. ETM is cheaper everywhere measured, so it is the earlier interface's default on both paths
@@ -760,22 +762,67 @@ inverses reused for the layer): TE +29%, conical +77% (its decision builds the `
 `maxvol_labels.MODE = 'off'`: at a complex angle the new labels need neither, so with them no
 control could break.
 
+**A layer of a half-space's own medium is that half-space.** Added 2026-10-15. The second bullet of
+"What is left" until this date: a thick layer of a half-space's material, where the wave the
+half-space receives grows across the layer past the cap and `a` is singular. Labels cannot fix it,
+because the exact answer itself is a knife edge: against exact-arithmetic oracles (`mpmath`), 219
+of 813 random such uniform stacks (those whose exact answer fits in double precision) and 349 of
+600 TE gratings on such a layer move by more than 1e-6 when the layer's permittivity moves by 4
+ulps -- Maystre's root is continuous there, but carries a
+sensitivity near `1e64`. Every algorithm returned one side of it or raised. But the plane between
+such a layer and its half-space reflects nothing, so the stack with the layer **is** the stack
+without it, the reference planes moved back to the faces, and that is the theory value. The solver
+now computes exactly that (`half_space_merge.py`). A layer whose every value -- permittivity and
+permeability, every pixel or region, read from the scene's materials and never from a convolution
+matrix, which carries Fourier round-off -- is the adjacent half-space's joins it at a complex
+`k_par`; the kernels solve the rest; the incident wave reaches the remaining stack `d_in` deeper,
+each reflected order climbs back `d_in` and each transmitted order runs `d_out` further, each with
+its half-space's own root (the mirror root in a double negative). The efficiencies, the scattering
+matrix (`S11' = Dl S11 Dl` and so on, `Dl` and `Df` the per-order phases of the lit and far
+sides) and the field go with them; inside a merged layer the field is the half-space's plane waves,
+written from the face each family is referenced at. Against the theory on every knife edge above
+(TE, TM and conical, lit from either side; the TE gratings against a 60-digit solve of the stack
+with the layer deleted, carried to the faces in the same precision):
+
+| 568 knife edges | SMM | ETM, the rule | ETM, maximum volume |
+|---|---|---|---|
+| unmerged: over 1e-6 off, and raised | 516, 38 | 327, 229 | 405, 94 |
+| merged, every amplitude: worst | 7.2e-13 | 7.6e-13 | 7.2e-13 |
+| merged, field at 5 heights per layer: worst | 9.2e-13 | 9.2e-13 | 9.2e-13 |
+
+The field there is checked against the stack with the layer deleted, solved as it is and carried
+into the full stack by plane waves written separately from the solver's. At a real `k_par` an exact
+layer is solved as one, so real angles keep their bits; the efficiency, amplitude and field rungs
+answer with one set of bits; a merged layer's thickness differentiates (PyTorch and JAX eager against
+central differences, 1e-9). A layer that equals a half-space only to rounding is a different material
+and stays a layer. `half_space_merge_tolerance` widens that on request: a material within the
+relative tolerance is taken **to be** the half-space's, at every angle, and the answer is that
+snapped scene's (`result.diagnostics["half_space_merge"]` says which layers); a lossy medium
+merged at a real angle absorbs between the faces, so the lit face's power is read again there.
+Materials are compared at the solve's own precision, so `9` is `9.0`, and a float32 `2.2` is the
+half-space's `2.2` in a single-precision solve and not in a double one. The tolerance is refused
+where no merge can read it -- an `excitation`, `solve_conv`'s matrices, a coherent source solve, a
+traced or differentiated material (below). `tests/rcwa/test_half_space_merge.py` pins it:
+closed forms on knife edges where the unmerged solve is 0.4 to 1.0 off (each test running that
+control), deletion on every path, the rungs, the ports and the continuity at the merged faces,
+magnetic and double-negative half-spaces, the tolerance, and a mutant of every factor it caught.
+
 **What is left.** Each limit below was measured; none is fixed.
 
-- *A thick layer of a half-space's own material, the far one or the one the light comes from.*
-  The wave the half-space receives grows across the layer past the cap, and the decaying root the
-  cap keeps is the one wave it does not receive: `a` is singular. ETM raises `LinAlgError`: a uniform `eps = 9` layer on `eps = 9`
-  under vacuum (period 2000 nm, wavelength 1000 nm, `truncation_order = 10`,
-  `theta = 0.43+0.067j`, TE) raised from 20 um to 100 um, where SMM stayed within 1.1e-15 to
-  5.7e-12 of the same layer at 1 nm -- its growing order carries no light. The incident side
-  raises the same way (that layer on an `eps = 9` incident medium, vacuum beyond). Cut into slices
-  thin enough to escape the cap alone, such a layer now raises as the uncut one does (12 um +
-  12 um: 1.0e-15 before); of 2,370 random split stacks at complex angles, 31 that were answered
-  before now raise, every one with an uncut layer that raises too. Where that order is lit, the exact answer is a knife edge: past 30-50 um one ulp of
-  the layer's permittivity moves it by O(1) to 30, and every algorithm returns one side of it.
-- *1 mm.* The scene that opened this section moved `r0` by 7.3e-2 (SMM) and 9.3e-2 (ETM) under
-  the nudge at 1 mm and `theta = 0.5+0.3j`. That is the same knife edge: its `eps = 25` block
-  rests on the `eps = 25` substrate, one combination of its confined modes crosses with a
+- *Where the materials are traced, and with an `excitation`, nothing merges.* The merge changes
+  the number of layers solved, which is the program's shape, so it is decided from concrete
+  materials. A traced angle is fine -- `jit` or `vmap` over `theta` merges, taking the angle as
+  complex -- but a traced material keeps every layer, and so keeps the knife edge an eager solve
+  removes: a gradient with respect to a material, and every door that traces the scene itself --
+  JAX's `solve_field`, a `jax.jit` of a prepared run -- so that on one JAX solver `solve()` and
+  `solve_field()` can differ by O(1) on a knife edge. A positive `half_space_merge_tolerance` is
+  refused there rather than ignored. Deciding the merge before the trace and carrying it as static
+  data, as frozen geometry is, would close it. An `excitation` lights several orders and the face
+  shift carries one, so it solves every layer too.
+- *1 mm, and any knife edge in a patterned layer.* The scene that opened this section moved `r0` by
+  7.3e-2 (SMM) and 9.3e-2 (ETM) under the nudge at 1 mm and `theta = 0.5+0.3j`. That is the same
+  knife edge, in a layer the merge cannot take, since a grating is not its substrate: its
+  `eps = 25` block rests on the `eps = 25` substrate, one combination of its confined modes crosses with a
   reflection of 4e-15 (exact arithmetic), and their round trips reach 1e14 and more. One ulp of
   the substrate's permittivity moves the exact `r0` by 1.2e-2; ETM is 2.8e-2 off the exact `r0`
   and SMM 7.5e-2, within 2.3 and 6.3 times of that (on SMM's gap before 9a92bf0, 3.9e-2 under

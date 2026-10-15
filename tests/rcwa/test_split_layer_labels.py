@@ -30,6 +30,7 @@ from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
+from wavebit.rcwa._engine import engine
 from wavebit.rcwa._engine import maxvol_labels
 from wavebit.rcwa._engine import solve_1d
 from wavebit._common.conventions import layer_runs, run_k0_d
@@ -359,6 +360,10 @@ def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch, rule)
     the next slice's ``a`` came out with an exact zero on its diagonal and raised, where the
     uncut layer is right to 2.4e-13. The exact step (``a = I``, ``b = Y``) is the control's
     absence: with it taken away the split must break.
+
+    A solve merges such a run into its half-space (``tests/rcwa/test_half_space_merge.py``), so
+    split and uncut are then one medium; the run's step is held with the merge off, on the rule
+    alone, where a jitted solve or an ``excitation`` still meets it.
     """
     eps = 5.792813684844445
 
@@ -370,6 +375,10 @@ def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch, rule)
         res = s.solve(auto_detune=False).incident
         return np.concatenate([np.ravel(np.asarray(res.r_s)), np.ravel(np.asarray(res.t_s))])
 
+    merged = amplitudes([60500.0])
+    assert _relative(amplitudes([500.0, 60000.0]), merged) < 1e-12
+
+    monkeypatch.setattr(engine.CoreFactorizationMixin, '_half_space_merge_plan', lambda self: None)
     rule()
     uncut = amplitudes([60500.0])
     assert _relative(amplitudes([500.0, 60000.0]), uncut) < 1e-12

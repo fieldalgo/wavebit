@@ -43,6 +43,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit.rcwa._engine import engine
 from wavebit.rcwa._engine import scattering
 
 pytestmark = pytest.mark.filterwarnings('ignore::wavebit._common.backend.ComplexIncidenceWarning')
@@ -62,6 +63,18 @@ def _maystre(x):
 
 def _relative(a, b):
     return float(np.max(np.abs(np.asarray(a) - np.asarray(b))) / np.max(np.abs(np.asarray(b))))
+
+
+@pytest.fixture(params=['merged', 'unmerged'])
+def merge(request, monkeypatch):
+    """A layer of a half-space's own medium, both ways: merged into it, which a solve does at a
+    complex angle (``tests/rcwa/test_half_space_merge.py``), and solved as a layer -- the
+    kernels' own field state, which a jitted solve or an ``excitation`` still takes.
+    """
+    if request.param == 'unmerged':
+        monkeypatch.setattr(engine.CoreFactorizationMixin, '_half_space_merge_plan',
+                            lambda self: None)
+    return request.param
 
 
 # ------------------------------------------------------------------- the closed-form field
@@ -161,7 +174,7 @@ def _plane_wave_residuals(pol, fields, kx, ky, kz, eps, mu, lead):
 @pytest.mark.parametrize('kind,form,algo', PATHS, ids=PATH_IDS)
 @pytest.mark.parametrize('name,theta,eps,mu,side,eps_inc,thick,bound', SCENES, ids=SCENE_IDS)
 def test_a_reflectionless_uniform_scene_reconstructs_its_plane_wave(
-        name, theta, eps, mu, side, eps_inc, thick, bound, kind, form, algo):
+        name, theta, eps, mu, side, eps_inc, thick, bound, kind, form, algo, merge):
     """Inside the layer the field is one plane wave, absolutely: amplitude, phase and polarization.
 
     Lit from above, it is the wave transmitted at the top interface, ``t exp(i k0 kz (h - z))``,
@@ -279,7 +292,7 @@ def _chip(algo, form='second_order', nudge=1.0):
                                                incidences=('s', 'p')))
 
 
-def test_a_capped_layer_on_its_own_medium_is_the_etms_and_steady():
+def test_a_capped_layer_on_its_own_medium_is_the_etms_and_steady(merge):
     """4869 nm of ``eps = 2.25`` inside ``eps = 2.25``, lit from below at a complex angle.
 
     The ETM's cap turns a growing root back to the decaying one there, and the interface below
@@ -494,7 +507,7 @@ def _double_negative_cell(algo, theta, form='second_order'):
                                                incidences=('s', 'p')))
 
 
-def test_a_uniform_double_negative_on_itself_below_the_real_axis():
+def test_a_uniform_double_negative_on_itself_below_the_real_axis(merge):
     """A uniform double negative on its own medium at ``theta = 0.5-0.3j``: SMM's field is the ETM's.
 
     The mirror label (:func:`~wavebit._common.conventions.etm_mode_q`) and the decaying one part
@@ -557,7 +570,7 @@ def test_declaring_the_field_does_not_move_an_amplitude(case):
 
 
 @pytest.mark.parametrize('kind', ['te', 'tm'])
-def test_a_field_solve_past_the_cap_neither_raises_nor_detunes(kind):
+def test_a_field_solve_past_the_cap_neither_raises_nor_detunes(kind, merge):
     """10 um of vacuum on vacuum at ``theta = 0.5+0.3j``: the field rung solves at the angle asked.
 
     There ``M`` is singular in exact arithmetic on any gap, and with the gap's waves of 9a92bf0 it

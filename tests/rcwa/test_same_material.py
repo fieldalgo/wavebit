@@ -21,6 +21,11 @@ the day (its own comment: "V_i @ G ~= -I, making A ~= 0"), so inverting it blew 
 2026-08 convention merge flipped the sign of ``G``; the same quantity is now ``a = I``, with
 condition number 1. The singularity was gone and the workaround was not, so the workaround is
 what these tests now assert the absence of.
+
+Every scene here is at a real angle. At a complex one a layer of a half-space's own medium is
+merged into that half-space (``tests/rcwa/test_half_space_merge.py``): not a short-circuit of the
+matching but the stack without the layer, with its thickness carried to the faces analytically,
+the field inside it included -- the opposite of the defect above, which dropped the thickness.
 """
 
 from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa

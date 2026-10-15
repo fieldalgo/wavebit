@@ -38,7 +38,7 @@ properties every one of them carries.
 ```{eval-rst}
 .. autoclass:: wavebit.rcwa._engine.engine.CoreFactorizationMixin
    :no-index:
-   :members: solve, reconstruct_field, freeze_geometry, solve_conv, eps_conv_matrices, mu_conv_matrices, gain_cutoff_band, factorization, fourier_coefficients, raster_normal_method, nvf_projector, li_nesting, shape_nvf_grid_size
+   :members: solve, reconstruct_field, freeze_geometry, solve_conv, eps_conv_matrices, mu_conv_matrices, gain_cutoff_band, factorization, fourier_coefficients, raster_normal_method, nvf_projector, li_nesting, half_space_merge_tolerance, shape_nvf_grid_size
 
 
 .. autoclass:: wavebit.rcwa._engine.engine.CoreSolveMixin

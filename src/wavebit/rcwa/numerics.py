@@ -22,6 +22,10 @@ class Numerics:
     li_nesting: str | None = None
     detuning: object = None
     topology_check: str = 'device'
+    half_space_merge_tolerance: float = 0.0
+    #: Fields added after ``wavebit.job/v1`` was fixed, written to a job only off their default
+    #: (``jobs._encode``), so a job that does not use them keeps its key.
+    _FIELDS_ADDED_IN_V1 = ('half_space_merge_tolerance',)
 
     def __post_init__(self):
         object.__setattr__(self, 'orders', tuple(self.orders))
@@ -48,6 +52,13 @@ class Numerics:
             if type(self.detuning) not in (float, int) or not math.isfinite(self.detuning) or self.detuning <= 0:
                 raise ValidationError('detuning is None (exact requested problem) or a positive relative step.',
                                       code='numerics.detuning', path='numerics.detuning')
+        import math
+        tolerance = self.half_space_merge_tolerance
+        if type(tolerance) not in (float, int) or not math.isfinite(tolerance) or not 0 <= tolerance < 1:
+            raise ValidationError('half_space_merge_tolerance is a relative tolerance in [0, 1); '
+                                  '0 merges only layers bit-identical to their half-space.',
+                                  code='numerics.half_space_merge_tolerance',
+                                  path='numerics.half_space_merge_tolerance')
 
     def _engine_kwargs(self):
         out = dict(truncation_order=self.orders, layer_algorithm=self.algorithm.upper())
@@ -55,4 +66,6 @@ class Numerics:
                      'nvf_projector', 'shape_nvf_grid_size', 'li_nesting'):
             if getattr(self, name) is not None:
                 out[name] = getattr(self, name)
+        if self.half_space_merge_tolerance:
+            out['half_space_merge_tolerance'] = float(self.half_space_merge_tolerance)
         return out

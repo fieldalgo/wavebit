@@ -57,6 +57,9 @@ def _resolve(problem, numerics, execution):
         if numerics.detuning is not None:
             raise UnsupportedFeatureError('Detuning is not implemented for coherent-source runs.',
                                           code='rcwa.coherent_detuning', path='numerics.detuning')
+        if numerics.half_space_merge_tolerance:
+            raise UnsupportedFeatureError('half_space_merge_tolerance is not implemented for coherent-source runs: their cascade solves every layer as given.',
+                                          code='rcwa.coherent_half_space_merge', path='numerics.half_space_merge_tolerance')
         if _adapt.has_tracer(problem):
             raise UnsupportedFeatureError('The coherent-source assembly is an eager capability. Its host grouping does not support external JAX transforms.',
                                           code='rcwa.coherent_transform', path='excitation.sources')
@@ -87,8 +90,11 @@ def _report(problem, numerics, execution, solvers):
                    'one_dense_material_matrix_bytes': modes*modes*cbytes,
                    'one_first_order_matrix_bytes': (4*modes)**2*cbytes,
                    'scope': 'individual dense matrix storage only; excludes temporaries, layer copies, source groups, and backend runtime; not a peak-memory bound'},
-        capabilities={'eager': True, 'material_gradients': execution.backend != 'numpy' and single,
-                      'jit': execution.backend == 'jax' and single,
+        # A merge tolerance is decided from concrete materials: a run that traces them -- any
+        # jit of a prepared run, any material gradient -- refuses it.
+        capabilities={'eager': True, 'material_gradients': (execution.backend != 'numpy' and single
+                                                            and not numerics.half_space_merge_tolerance),
+                      'jit': execution.backend == 'jax' and single and not numerics.half_space_merge_tolerance,
                       'vmap': execution.backend == 'jax' and single,
                       'geometry_reuse': 'concrete topology validation, including eager JAX gradients; Cartesian Li edge-order device guard or explicitly selected scalar-shape host callback under JIT/vmap',
                       'topology_check': numerics.topology_check,
@@ -98,6 +104,7 @@ def _report(problem, numerics, execution, solvers):
                   'layer_count': len(problem.stack.layers), 'fourier_coefficients': scene.fourier_coefficients.value,
                   'factorization': scene.factorization.value,
                   'algorithm': numerics.algorithm, 'formulation': numerics.formulation,
+                  'half_space_merge_tolerance': numerics.half_space_merge_tolerance,
                   'shape_nvf_grid_size': scene.shape_nvf_grid_size if scene.factorization.value == 'nvf' else None,
                   'backend': execution.backend, 'device': execution.device, 'precision': execution.precision,
                   'retained_fields': problem.outputs.fields, 'retained_scattering': problem.outputs.scattering,

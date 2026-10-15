@@ -487,6 +487,13 @@ class CoherentSolver:
     def _solve(self, geometry, *, keep_traced=False):
         import copy
         scene = self._scene
+        if scene.half_space_merge_tolerance:
+            # Forwarded like every condition, and read by nothing here: this cascade solves
+            # every layer, so a snapped scene asked for would be answered unsnapped.
+            raise NotImplementedError(
+                f'half_space_merge_tolerance={scene.half_space_merge_tolerance!r} has no reader '
+                'on a source solve: its cascade solves every layer as given, and the merge is a '
+                'plane-wave solve\'s. Leave it at 0 here.')
         xp, C = scene.xp, scene.complex_dtype
         k0 = 2*np.pi/scene.wavelength
         lattice = as_array(xp, scene.lattice.columns, dtype=C, device=scene._array_device)

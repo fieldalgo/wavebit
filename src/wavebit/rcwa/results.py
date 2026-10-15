@@ -154,6 +154,7 @@ def pack(problem, numerics, execution, solves, checks, report):
     actual_wavelengths = []
     actual_directions = []
     power_defined = []
+    merges = []
     if single_plane(problem):
         source = problem.excitation.sources[0]
         side, other = source.side, 'bottom' if source.side == 'top' else 'top'
@@ -163,6 +164,11 @@ def pack(problem, numerics, execution, solves, checks, report):
         for solver, result in solves:
             actual_wavelengths.append(_array(xp, solver.wavelength, execution))
             actual_directions.append(solver.theta)
+            # Which layers this wavelength's solve merged into a half-space, and which of them
+            # a tolerance snapped: a snapped scene is a changed problem, recorded as detuning is.
+            plan = solver._half_space_merged
+            merges.append(None if plan is None else
+                          {'bottom': plan.bottom, 'top': plan.top, 'snapped': plan.snapped})
             state = result._field_state
             lattice = state.data['lattice']
             area = xp.abs(xp.linalg.det(lattice)) * problem.units.length_metres**2
@@ -288,7 +294,8 @@ def pack(problem, numerics, execution, solves, checks, report):
                                'source_groups': tuple(getattr(r, 'group_count', 1) for _, r in solves),
                                'effective_theta': tuple(actual_directions),
                                'port_power_defined': xp.stack(power_defined) if power_defined else None,
-                               'detuning_relative_step': numerics.detuning},
+                               'detuning_relative_step': numerics.detuning,
+                               'half_space_merge': tuple(merges) if merges else None},
                   provenance={'solver': 'rcwa', 'code_version': '0.1.0', 'length_unit': problem.units.length,
                               'units': problem.units, 'execution': execution, 'numerics': numerics,
                               'coordinate_frame': '+z up; bottom interface z=0; layers bottom-to-top',

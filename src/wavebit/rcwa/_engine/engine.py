@@ -29,6 +29,7 @@ from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
 from wavebit._common.backend import check_input_precision
 from wavebit._common.backend import checked_float
+from wavebit._common.declarations import static_float
 from wavebit._common.conventions import DoubleNegativeLayer
 from wavebit._common.conventions import _CHI_POLARIZATION_CLASH
 from wavebit._common.conventions import _COMPLEX_CHI
@@ -276,6 +277,42 @@ def _holds_tracer(value):
         elif isinstance(v, Material):
             stack.extend((v.epsilon, v.mu))
     return False
+
+
+class _UnreadableMaterial(Exception):
+    """A material value with no single host value to compare: batched under ``vmap``."""
+
+
+def _host_material(value):
+    """A concrete material value as a host NumPy array.
+
+    PyTorch's lazy conjugate and negative views are resolved first: ``.numpy()`` refuses them,
+    and ``torch.conj`` of a permittivity is a material like any other. Inside a ``torch.func``
+    transform an undifferentiated tensor may arrive wrapped, or with its data pointer out of
+    reach; a grad level's wrapper holds the same values and is read through (the walk
+    :func:`~wavebit._common.backend.torch_autodiff` takes), the values are read by ``tolist``
+    where ``numpy`` cannot reach them, and a ``vmap`` batch, which has no one value, raises
+    :class:`_UnreadableMaterial`. Only called on values
+    :meth:`CoreFactorizationMixin._materials_are_live` found neither traced nor differentiated.
+    """
+    if hasattr(value, 'resolve_conj'):
+        import torch
+        from wavebit._common.backend import _functorch
+        from wavebit._common.backend import _functorch_active
+        if _functorch_active(torch):
+            functorch = _functorch(torch)
+            while functorch.is_functorch_wrapped_tensor(value):
+                if functorch.is_batchedtensor(value):
+                    raise _UnreadableMaterial
+                value = functorch.get_unwrapped(value)
+        value = value.resolve_conj().resolve_neg().detach().cpu()
+        try:
+            return value.numpy()
+        except RuntimeError:
+            # Inside a transform a tensor's data pointer may be out of reach while its values
+            # are not; `tolist` reads them exactly, and the dtype puts the width back.
+            return _np.asarray(value.tolist()).astype(str(value.dtype).replace('torch.', ''))
+    return _np.asarray(value)
 
 
 def _holds_autodiff(value):
@@ -689,6 +726,10 @@ def _centred(a, odd):
     return xp.where(mask, -a, a)
 
 
+#: The attributes a solve leaves behind for reconstruction, as opposed to the scene's conditions.
+_SOLVE_STATE = ('layer_info_list', 'T1', '_scattering', '_merged_field_state')
+
+
 def _efficiency_only(de_ri, de_ti, power_entering):
     """The ``ResultSub`` payload of a solve declared ``answers='efficiency'``.
 
@@ -872,6 +913,8 @@ class CoreSolveMixin:
         self.T1 = None
         # SMM only, from `answers='amplitude'` up; see `CoreSolveMixin._finish`.
         self._scattering = None
+        # A merged field solve's state; see `_finish_merge`.
+        self._merged_field_state = None
 
     @device_scoped
     def _separable_kxy(self, wavelength):
@@ -1216,6 +1259,60 @@ class CoreSolveMixin:
         if self._tetm is not None:
             raise ValueError(_TETM_INCIDENCE_CLASH)
         self._psi_given = True
+
+    #: While a solve runs with layers merged into its half-spaces: the remaining stack's
+    #: ``thickness`` and the rung the kernels are asked for. Set and cleared by
+    #: :meth:`_solve_conv_signed` alone; see :mod:`~wavebit.rcwa._engine.half_space_merge`.
+    _merge_scope = None
+
+    def _kernel_thickness(self):
+        """The thicknesses the kernels solve: :attr:`thickness`, less any merged layer."""
+        return self.thickness if self._merge_scope is None else self._merge_scope['thickness']
+
+    def _kernel_answers(self):
+        """The rung the kernels are asked for: :attr:`answers`, or ``'amplitude'`` under a merge.
+
+        A merged solve on the efficiency rung still needs the amplitudes once: the lit face's
+        power is recomputed from them where the merged medium absorbs, and the efficiencies are
+        then exactly the amplitude rung's (:meth:`_solve_conv_signed` drops the rest).
+        """
+        if self._merge_scope is None:
+            return self._answers
+        return self._merge_scope['answers']
+
+    def _merge_factors(self, merge, n_layers, eps_top, mu_top, eps_bot, mu_bot):
+        """The face phases' exponents and half-space roots of a merged solve, in the solve's
+        namespace (:func:`~wavebit.rcwa._engine.half_space_merge.face_exponents`).
+
+        ``kz`` is each half-space's root as the kernels take it -- ``n**2`` with that side's
+        ``(eps, mu)`` pair, so a double negative takes its mirror root -- on every retained order
+        flattened as the amplitudes are. The thicknesses are summed from the live
+        :attr:`thickness`, so a derivative with respect to a merged layer's thickness survives.
+        """
+        from wavebit._common.conventions import boundary_kz
+        from wavebit._common.conventions import half_space_medium
+        from wavebit.rcwa._engine.half_space_merge import face_exponents
+        from wavebit.rcwa._engine.solve_2d import order_grid_kxy
+        xp = self.xp
+        kx, ky = self.order_kxy()
+        gx, gy = order_grid_kxy(xp, kx, ky)
+        gx, gy = xp.reshape(gx, (-1,)), xp.reshape(gy, (-1,))
+        k_par_sq = gx*gx + gy*gy
+        # The kernels' numeric default for an unnamed permeability, applied where they apply it.
+        kz = {'top': boundary_kz(xp, self.n_top**2, k_par_sq, half_space_medium(
+                  eps_top, 1.0 if mu_top is None else mu_top)),
+              'bottom': boundary_kz(xp, self.n_bot**2, k_par_sq, half_space_medium(
+                  eps_bot, 1.0 if mu_bot is None else mu_bot))}
+        thickness = self.thickness
+        merged = {'bottom': xp.sum(thickness[:merge.bottom]),
+                  'top': xp.sum(thickness[n_layers - merge.top:])}
+        lit = self.incidence_side
+        far = 'bottom' if lit == 'top' else 'top'
+        (cx, hx), (cy, hy) = self.order_window
+        specular = (hy - cy)*(2*hx + 1) + hx - cx
+        k0 = 2*_np.pi/self.wavelength
+        exponents = face_exponents(xp, k0, kz[lit], kz[far], specular, merged[lit], merged[far])
+        return dict(exponents, k0=k0, kz_top=kz['top'], kz_bottom=kz['bottom'], lit_side=lit)
 
     def _solve_fn(self, grating_type):
         """The core solve for this instance's ``layer_algorithm`` and the given grating type."""
@@ -2736,6 +2833,7 @@ class CoreSolveMixin:
             out = {'incident': _efficiency_only(*out)}
         self.layer_info_list = out.pop('layer_info_list', [])
         self.T1 = out.pop('T1', None)
+        self._merged_field_state = None
         #: The scene this solve was posed with, so `reconstruct_field` can tell whether it is
         #: still being asked about the same one. See `_reconstruction_scene`.
         self._solved_scene = self._reconstruction_scene()
@@ -2992,10 +3090,10 @@ class CoreSolveMixin:
         # place that divides by it, so absence resolves to `1.0` exactly once, here.
         return self._finish(solve(
             self.tetm_index, wavelength, kx, self.n_bot, self.n_top, self.theta,
-            self.thickness,
+            self._kernel_thickness(),
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             phi=self._frame_azimuth(),
-            incidence_side=self._kernel_incidence_side, answers=self._answers,
+            incidence_side=self._kernel_incidence_side, answers=self._kernel_answers(),
             lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
@@ -3009,10 +3107,11 @@ class CoreSolveMixin:
         wavelength = self.wavelength
         kx, ky = self._separable_kxy(wavelength)   # 1-D pair; see :meth:`_solve_1d`
         return self._finish(solve(
-            wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(), self.thickness,
+            wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(),
+            self._kernel_thickness(),
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
-            answers=self._answers, lit=self._kernel_lit(), mu=self._mu_1d(mu),
+            answers=self._kernel_answers(), lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
             eps_top=eps_bot, eps_bot=eps_top, dng=dng))
@@ -3031,23 +3130,24 @@ class CoreSolveMixin:
         if self._formulation_assigned == Formulation.FIRST_ORDER:
             return self._finish(_solve_2d_first_order(
                 wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(),
-                self.thickness, epx_conv_all, epy_conv_all, epz_conv_i_all,
+                self._kernel_thickness(), epx_conv_all, epy_conv_all, epz_conv_i_all,
                 epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
                 epxz_conv_all=epxz_conv_all, epyz_conv_all=epyz_conv_all,
                 epzx_conv_all=epzx_conv_all, epzy_conv_all=epzy_conv_all,
                 phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
-                answers=self._answers, layer_algorithm=self.layer_algorithm,
+                answers=self._kernel_answers(), layer_algorithm=self.layer_algorithm,
                 lit=self._kernel_lit(), mu=mu,
                 mu_top=1.0 if mu_bot is None else mu_bot,
                 mu_bot=1.0 if mu_top is None else mu_top,
                 eps_top=eps_bot, eps_bot=eps_top))
         solve = self._solve_fn('2d')
         return self._finish(solve(
-            wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(), self.thickness,
+            wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(),
+            self._kernel_thickness(),
             epx_conv_all, epy_conv_all, epz_conv_i_all,
             epxy_conv_all=epxy_conv_all, epyx_conv_all=epyx_conv_all,
             phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
-            answers=self._answers, lit=self._kernel_lit(), mu=mu,
+            answers=self._kernel_answers(), lit=self._kernel_lit(), mu=mu,
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
             eps_top=eps_bot, eps_bot=eps_top, dng=dng))
@@ -3213,6 +3313,11 @@ class CoreFactorizationMixin:
                  # no reader it is refused rather than ignored -- under 'nvf' or 'laurent', and
                  # 'symmetric' on tensor materials, whose Li build is the fixed nesting only. See
                  # docs/theory/rcwa/factorization-terms.md section 6.
+                 half_space_merge_tolerance=0.,  # how near a layer's material must be to the
+                 # half-space beside it to be merged into it: 0 (default) is bit for bit, which
+                 # merges only at a complex k_par and moves no other answer; a positive value
+                 # takes a material within it to BE the half-space's, at every angle. Relative,
+                 # on one scale per layer and medium. See half_space_merge.py.
                  **unknown,                  # collected rather than left to Python, so the
                  # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
                  # swallowed by the catch-all itself.
@@ -3257,6 +3362,7 @@ class CoreFactorizationMixin:
         self.raster_normal_method = raster_normal_method
         self.nvf_projector = nvf_projector
         self.li_nesting = li_nesting
+        self.half_space_merge_tolerance = half_space_merge_tolerance
         self._normal_grid = shape_nvf_grid_size
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
@@ -3295,6 +3401,10 @@ class CoreFactorizationMixin:
     #: and the keyword is read where scalar Li's rules are built (a raster, or axis-aligned
     #: rectangles). :meth:`_reject_unread_nesting` refuses an explicit value it cannot honour.
     _nesting = None
+    #: :attr:`half_space_merge_tolerance` as a Python float; 0 merges only bit-identical layers.
+    _half_space_merge_tolerance = 0.
+    #: The last solve's :class:`~wavebit.rcwa._engine.half_space_merge.MergePlan`, or ``None``.
+    _half_space_merged = None
 
     def _set_fourier_options(self, fourier_coefficients, factorization):
         """Settle ``fourier_coefficients`` / ``factorization`` from a constructor's arguments."""
@@ -3824,6 +3934,12 @@ class CoreFactorizationMixin:
         have answered one problem while the rest of the object described another.
         """
 
+        if self._half_space_merge_tolerance:
+            raise NotImplementedError(
+                f'half_space_merge_tolerance={self._half_space_merge_tolerance!r} has no reader '
+                'through solve_conv: a merge is decided from the scene\'s materials, and these '
+                'matrices need not be the scene\'s. Leave it at 0 here (the matrices are then '
+                'solved as given), or solve() the scene.')
         # Reject a retained one-row layout's invalid order request before the
         # centre conversion checks the dimensions of matrices built earlier.
         if self.structure is None and self._grating_type == 0:
@@ -3843,10 +3959,14 @@ class CoreFactorizationMixin:
                    epxy_conv_all=None, epyx_conv_all=None,
                    epxz_conv_all=None, epyz_conv_all=None,
                    epzx_conv_all=None, epzy_conv_all=None, mu=None,
-                   mu_top=None, mu_bot=None, eps_top=None, eps_bot=None, layer_dng=None):
+                   mu_top=None, mu_bot=None, eps_top=None, eps_bot=None, layer_dng=None,
+                   _merge=None):
         """Solve kernel-frame matrices, as returned by the private Fourier builders.
 
         ``layer_dng`` is :meth:`_layer_double_negative`, which only labels modes; see there.
+        ``_merge`` is :meth:`_half_space_merge_plan`'s answer for the scene these matrices were
+        built from, and only :meth:`_solve_built` passes one: a merge is decided from the
+        scene's materials, so matrices handed in from outside are solved as they are.
         """
         # Half-space terms handed in here need not be the scene's materials, which the setters
         # already checked; a magnetic pair is held to the same refusal of an active, propagating
@@ -3865,7 +3985,7 @@ class CoreFactorizationMixin:
                 epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
                 epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all, mu=mu,
                 mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
-                layer_dng=layer_dng)
+                layer_dng=layer_dng, merge=_merge)
 
     #: The sides (``'top'`` / ``'bot'``) whose half-space index a ``solve_conv`` pair signed, for
     #: as long as :meth:`_indices_signed_by_pairs` holds them, so that
@@ -3930,7 +4050,7 @@ class CoreFactorizationMixin:
                            epxz_conv_all=None, epyz_conv_all=None,
                            epzx_conv_all=None, epzy_conv_all=None, mu=None,
                            mu_top=None, mu_bot=None, eps_top=None, eps_bot=None,
-                           layer_dng=None):
+                           layer_dng=None, merge=None):
         """:meth:`_solve_conv` once the half-space indices carry the pairs' signs."""
         before = self._grating_type
         self._assign_grating_type()
@@ -3975,6 +4095,25 @@ class CoreFactorizationMixin:
                 'routes to.')
 
         from numpy.linalg import LinAlgError
+        # Layers of a half-space's own medium leave the kernels' stack; their effect is put back
+        # analytically below (`half_space_merge`).
+        n_layers = int(self.thickness.shape[0])
+        if merge is not None:
+            keep = merge.kept(n_layers)
+
+            def cut(a):
+                return None if a is None else a[keep]
+            epx_conv_all, epy_conv_all, epz_conv_i_all = (cut(epx_conv_all), cut(epy_conv_all),
+                                                          cut(epz_conv_i_all))
+            epxy_conv_all, epyx_conv_all = cut(epxy_conv_all), cut(epyx_conv_all)
+            z_row = tuple(cut(a) for a in z_row)
+            if mu is not None:
+                mu = tuple(cut(a) for a in mu)
+            if layer_dng is not None:
+                layer_dng = layer_dng[keep]
+            self._merge_scope = dict(
+                thickness=self.thickness[keep],
+                answers=Answers.AMPLITUDE if self._answers == Answers.EFFICIENCY else self._answers)
         try:
             if self._grating_type == 0:
                 result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -4003,6 +4142,17 @@ class CoreFactorizationMixin:
                 if message is not None:
                     raise ValueError(message) from exc
             raise
+        finally:
+            # Popped rather than set to None: an unmerged solve writes nothing on the instance.
+            self.__dict__.pop('_merge_scope', None)
+        factors = unshifted = None
+        if merge is not None:
+            from wavebit.rcwa._engine.half_space_merge import shift_result
+            from wavebit.rcwa._engine.half_space_merge import shift_scattering
+            factors = self._merge_factors(merge, n_layers, eps_top, mu_top, eps_bot, mu_bot)
+            unshifted = result_dict
+            result_dict = shift_result(result_dict, factors)
+            self._scattering = shift_scattering(self._scattering, factors)
 
         # The boundary spectra and the per-order Cartesian vectors are one arithmetic
         # (`ordinary_spectra`), read off the packed amplitudes before any `ResultSub` exists, so
@@ -4014,6 +4164,11 @@ class CoreFactorizationMixin:
         spectra = ordinary_spectra(
             self, {name: result_dict.get(key) for name, key in keys.items()},
             eps_top=eps_top, eps_bot=eps_bot, mu_top=mu_top, mu_bot=mu_bot)
+        merged_field = None
+        if merge is not None:
+            result_dict, spectra, merged_field = self._finish_merge(
+                merge, factors, result_dict, unshifted, spectra, keys,
+                eps_top=eps_top, eps_bot=eps_bot, mu_top=mu_top, mu_bot=mu_bot)
         if spectra is not None:
             for name, key in keys.items():
                 if key in result_dict:
@@ -4025,11 +4180,64 @@ class CoreFactorizationMixin:
         p_inc = self._RESULT_SUB(**result_dict['p_inc']) if 'p_inc' in result_dict else None
 
         result = self._RESULT(incident, s_inc, p_inc, order_window=self.order_window)
-        result._field_state = ordinary_state(self, spectra)
+        result._field_state = ordinary_state(self, spectra, merged=merged_field)
+        self._half_space_merged = merge
+        if merged_field is not None:
+            # The solver's own `reconstruct_field` answers a merged solve through this state:
+            # the kernels' records cover the remaining stack alone.
+            self._merged_field_state = result._field_state
         self._warn_complex_incidence()
         self._warn_gain_cutoff(eps_top=eps_top, eps_bot=eps_bot, mu_top=mu_top, mu_bot=mu_bot)
 
         return result
+
+    def _finish_merge(self, merge, factors, result_dict, unshifted, spectra, keys, **pairs):
+        """The rest of a merged solve once its amplitudes stand at the full stack's faces.
+
+        Three things the face shift alone does not settle:
+
+        * ``power_entering`` -- the kernels' is the remaining stack's lit face. At a complex
+          ``k_par`` it is NaN either way; at a real one (a layer merged by the tolerance) the
+          merged medium absorbs between the two faces when it is lossy, so the power is read
+          again on the full stack's lit face from the shifted spectra (interference included).
+        * the efficiency rung -- the kernels ran the amplitude rung (:meth:`_kernel_answers`);
+          its ``R`` / ``T`` and power are kept, and the rest is dropped as that rung drops it.
+        * the field rung -- the merged layers' field is the half-spaces' plane waves, written from
+          the remaining stack's own reflected and transmitted spectra (``unshifted``) and the
+          incident factor (:func:`~wavebit.rcwa._engine.half_space_merge.zone_coefficients`).
+        """
+        from wavebit.observations.power import power_for_real_k
+        from wavebit.observations.power import transverse_k_is_real
+        from wavebit.rcwa._engine.field_result import ordinary_spectra
+        from wavebit.rcwa._engine.half_space_merge import entering_power
+        xp = self.xp
+        kx, ky = self.order_kxy()
+        lit = factors['lit_side']
+        lit_merged = (merge.top if lit == 'top' else merge.bottom) > 0
+        if (spectra is not None and lit_merged
+                and _concrete(transverse_k_is_real(xp, kx, ky)) is not False):
+            for name, key in keys.items():
+                if key in result_dict and spectra['spectra'].get(name) is not None:
+                    incoming, reflected, _ = spectra['spectra'][name]
+                    power = power_for_real_k(xp, entering_power(incoming, reflected), kx, ky)
+                    result_dict[key] = dict(result_dict[key], power_entering=power)
+        if self._answers == Answers.EFFICIENCY:
+            sub = result_dict['incident']
+            self._scattering = None
+            payload = _efficiency_only(sub['R'], sub['T'], sub['power_entering'])
+            return {'incident': payload}, None, None
+        if spectra is None or not self._answers.covers(Answers.FIELD):
+            return result_dict, spectra, None
+        inner = ordinary_spectra(self, {name: unshifted.get(key) for name, key in keys.items()},
+                                 **pairs)
+        names = tuple(spectra['spectra'])
+        merged = dict(
+            plan=(merge.bottom, merge.top, lit),
+            data=dict(k0=factors['k0'], kz_top=factors['kz_top'],
+                      kz_bottom=factors['kz_bottom'], incident=factors['incident'],
+                      incoming={name: spectra['spectra'][name][0] for name in names},
+                      inner={name: inner['spectra'][name][1:] for name in names}))
+        return result_dict, spectra, merged
 
     def _refuse_half_space_negation_pair(self, diagonal, off_diagonal, mu,
                                          eps_top, mu_top, eps_bot, mu_bot):
@@ -4289,7 +4497,7 @@ class CoreFactorizationMixin:
         # that trace (including the copy reconstructed by a jitted pytree call).
         # Its legacy field/scattering access remains usable within that scope.
         traced_scene = any(_holds_tracer(value) for name, value in self.__dict__.items()
-                           if name not in ('layer_info_list', 'T1', '_scattering'))
+                           if name not in _SOLVE_STATE)
         self.__dict__['_solve_state_depth'] = depth + 1
         try:
             yield
@@ -4298,8 +4506,10 @@ class CoreFactorizationMixin:
                 self.__dict__['_solve_state_depth'] = depth
             else:
                 self.__dict__.pop('_solve_state_depth', None)
-                if not traced_scene and any(_holds_tracer(value) for value in
-                                             (self.layer_info_list, self.T1, self._scattering)):
+                merged = self._merged_field_state
+                if not traced_scene and any(_holds_tracer(value) for value in (
+                        self.layer_info_list, self.T1, self._scattering,
+                        None if merged is None else merged.data)):
                     self._forget_the_solve()
 
     def _forget_the_solve(self):
@@ -4320,6 +4530,7 @@ class CoreFactorizationMixin:
         self.layer_info_list = []
         self.T1 = None
         self._scattering = None
+        self._merged_field_state = None
         self._solved_scene = self._SOLVED_ELSEWHERE
 
     def _reconstruction_scene(self):
@@ -4503,6 +4714,8 @@ class CoreFactorizationMixin:
         """
         self._require_field_declaration()
         self._reject_stale_field_scene()
+        if self._merged_field_state is not None:
+            return self._merged_field_cell(sample_x, sample_y, sample_z, incidences)
         # Top illumination walks downward, so restate public heights in that propagation
         # frame before assigning samples to layers. `backside` is the kernels' word -- their
         # 'bottom' port -- and since 2026-09-21 it means public TOP incidence; public bottom
@@ -4558,6 +4771,83 @@ class CoreFactorizationMixin:
                                         tetm_index=self.tetm_index, flip_z=counted_z)
 
         return field_cell
+
+    def _merged_field_cell(self, sample_x, sample_y, sample_z, incidences):
+        """:meth:`reconstruct_field` after a solve that merged layers into its half-spaces.
+
+        The kernels' records cover the remaining stack alone, so the cell comes from the solve's
+        field state (:class:`~wavebit.rcwa._engine.field_result.FieldState`), which answers the
+        merged layers as the half-spaces' plane waves; it is already in the public frame, mirror
+        and centre phase included. Laid out as this door lays out a cell: the pure 1D path's
+        three components and no incidence axis, the coupled paths' six behind one.
+        """
+        from wavebit.rcwa._engine.fields import incidence_indices
+        from wavebit.rcwa._engine.fields import refuse_extra_incidences
+        state = self._merged_field_state
+        if self._grating_type == 0:
+            refuse_extra_incidences(incidences)
+            sample_y = 1
+        else:
+            incidence_indices(incidences)
+        grid = self._door_grid(state.data['lattice'], sample_x, sample_y)
+        sample_z = self._door_heights(sample_z)
+        if self._grating_type == 0:
+            cell = state.reconstruct_on(grid, sample_z, 'incident')
+            return cell[..., [1, 3, 5] if self.tetm_index == 0 else [4, 0, 2]]
+        return self.xp.stack([state.reconstruct_on(grid, sample_z, name) for name in incidences],
+                             axis=0)
+
+    def _door_grid(self, lattice, sample_x, sample_y):
+        """This door's lateral samples as centre-origin Cartesian points.
+
+        Its rules are :func:`~wavebit.rcwa._engine.fields._inv_fourier`'s: a count spans the
+        cell along its lattice vector, and an explicit coordinate names a fraction of one where
+        the other vector has no component along it -- so on a skewed cell a count may meet an
+        explicit coordinate on the other axis, which the result door's grid does not take.
+        """
+        from wavebit.rcwa._engine.fields import is_count
+        from wavebit.rcwa._engine.field_result import _host_value
+        from wavebit.rcwa._engine.field_result import xy_grid
+        xp = array_namespace(lattice)
+        host = _host_value(lattice)
+        mixed = is_count(sample_x) != is_count(sample_y)
+        if not mixed or host is None or not (host[0, 1] or host[1, 0]):
+            return xy_grid(xp, lattice, sample_x, sample_y)
+
+        def fraction(spec, along, across, axis):
+            if is_count(spec):
+                return xp.linspace(-.5, .5, int(spec), dtype=lattice.dtype,
+                                   device=getattr(lattice, 'device', None))
+            if abs(across) > 1e-12 * max(abs(along), 1.0):
+                raise NotImplementedError(
+                    f'explicit {axis} coordinates need an axis-aligned cell: on a sheared '
+                    'lattice an (x, y) does not determine the (u, v) this path samples in. '
+                    'Pass a count instead, or describe the cell as a rectangular supercell.')
+            return as_array(xp, spec, dtype=lattice.dtype,
+                            device=getattr(lattice, 'device', None)) / along
+        u = fraction(sample_x, host[0, 0], host[0, 1], 'sample_x')
+        v = fraction(sample_y, host[1, 1], host[1, 0], 'sample_y')
+        return (u[None, :]*lattice[0, 0] + v[:, None]*lattice[0, 1],
+                u[None, :]*lattice[1, 0] + v[:, None]*lattice[1, 1])
+
+    def _door_heights(self, sample_z):
+        """Explicit heights held to this door's range, ``[0, sum(thickness)]`` within 1e-9, and
+        those within it clipped onto the stack -- what :func:`~wavebit.rcwa._engine.fields._z_plan`
+        accepts. A count, or a traced stack, passes as it is."""
+        from wavebit.rcwa._engine.fields import is_count
+        from wavebit.rcwa._engine.field_result import _host_value
+        if is_count(sample_z):
+            return sample_z
+        total = _host_value(self.xp.sum(self.xp.real(self.thickness)))
+        if total is None or any(_holds_autodiff(v) for v in (sample_z, self.thickness)):
+            return sample_z
+        z = _np.asarray(sample_z, dtype=float)
+        total = float(total)
+        if z.size and (_np.min(z) < -1e-9 or _np.max(z) > total + 1e-9):
+            raise ValueError(
+                f'z coordinates must lie inside the stack, 0 to {total:g} measured upward '
+                f'from its bottom; got {_np.min(z):g} to {_np.max(z):g}.')
+        return _np.clip(z, 0., total)
 
     @_scoped_solve
     def _solve_and_field(self, sample_x, sample_y, sample_z, incidences, geometry, **kwargs):
@@ -4834,6 +5124,45 @@ class CoreFactorizationMixin:
     def li_nesting(self, value):
         self._nesting = None if value is None else nesting_of(value)
 
+    @property
+    def half_space_merge_tolerance(self):
+        """How near a layer's material must be to a half-space's for the layer to merge into it.
+
+        A layer of the half-space's own medium is that half-space: the plane between them
+        reflects nothing. Solved as a layer at a complex ``k_par`` it can carry a wave that grows
+        across it, and then the last bit of rounding moves the answer by O(1) -- a knife edge
+        (``docs/theory/rcwa/connecting-algorithms.md`` section 10). Merged, the remaining stack
+        is solved and the amplitudes, efficiencies, scattering matrix and field are carried to
+        the full stack's faces analytically (:mod:`~wavebit.rcwa._engine.half_space_merge`),
+        which is the theory value: the stack with the layer deleted.
+
+        ``0`` (the default) merges a layer only when every value it holds -- permittivity and
+        permeability, every pixel or region -- is the half-space's bit for bit, and only at a
+        complex ``k_par``; at a real one the layer is solved as one and keeps its bits.
+
+        A positive value is a different problem, asked for: a layer whose values all lie within
+        ``tolerance * max|entry|`` of the half-space's (one scale over both media, permittivity
+        and permeability together) is **taken to be** the half-space's medium and merged, at
+        every angle -- the answer is that of the snapped scene. Refused where it cannot be
+        applied: on an ``excitation`` (the face shift takes one incident order), on a traced or
+        differentiated material (the decision must be read, and a merge would drop the layer's
+        derivative) -- JAX's jitted ``solve_field`` traces the scene's materials itself, so there
+        too -- through :meth:`solve_conv` and on a coherent source solve, which read no scene
+        materials to merge by. A traced angle is no obstacle: the runs merge, ``k_par`` taken as
+        complex.
+        """
+        return self._half_space_merge_tolerance
+
+    @half_space_merge_tolerance.setter
+    def half_space_merge_tolerance(self, value):
+        value = static_float('rcwa', 'half_space_merge_tolerance', value)
+        if not _np.isfinite(value) or not 0. <= value < 1.:
+            raise ValueError(
+                f'rcwa(half_space_merge_tolerance={value!r}): a relative tolerance in [0, 1) is '
+                'needed -- 0 merges only a layer bit-identical to its half-space, and a value of '
+                '1 or more would take a material twice the half-space\'s to be it.')
+        self._half_space_merge_tolerance = value
+
     #: What `shape_nvf_grid_size=None` means, before the `4*truncation_order+1` floor lifts it.
     #:
     #: **1024, and it survived an attempt to drop it to 256.** On the forward value 1024 is
@@ -5084,6 +5413,7 @@ class CoreFactorizationMixin:
         self._reject_unread_projector(factorization)
         self._reject_unread_nesting(factorization)
         self._reject_unread_normal_grid()
+        self._reject_unread_merge_tolerance()
         # The *window's* half-width, not the declared `truncation_order`: an excitation can
         # widen the retained set, and a convolution matrix has to be as wide as the
         # `kx` it will meet. Its entries do not otherwise care where the window sits
@@ -5393,7 +5723,7 @@ class CoreFactorizationMixin:
             original = exc
 
         current_conditions = {name: value for name, value in self.__dict__.items()
-                              if name not in ('layer_info_list', 'T1', '_scattering')}
+                              if name not in _SOLVE_STATE}
         if auto_detune is True and _holds_autodiff(current_conditions):
             step = max(_AUTO_DETUNE_GRAD_REL, 64*self.xp.finfo(self.float_dtype).eps)
 
@@ -5737,6 +6067,7 @@ class CoreFactorizationMixin:
         self._reject_unread_projector(factorization)
         self._reject_unread_nesting(factorization)
         self._reject_unread_normal_grid()
+        self._reject_unread_merge_tolerance()
         self._reject_layer_count_mismatch()
 
     def _reject_layer_count_mismatch(self):
@@ -6119,6 +6450,130 @@ class CoreFactorizationMixin:
         return _anisotropy.scene_is_tensor(getattr(self, '_structure', None),
                                           getattr(self, '_mu', None))
 
+    def _materials_are_live(self):
+        """Whether a layer or half-space material is traced or carries a derivative."""
+        return any(_holds_tracer(v) or _holds_autodiff(v)
+                   for v in (self._structure, self._mu, self._top, self._bot))
+
+    def _reject_unread_merge_tolerance(self):
+        """Refuse a positive :attr:`half_space_merge_tolerance` where no merge can read it.
+
+        The default is exempt, as everywhere: an untouched keyword is not a request. A positive
+        one asks for a different scene -- a near material taken to be the half-space's -- so
+        answering the unsnapped scene instead would be a silent wrong answer.
+        """
+        tolerance = self._half_space_merge_tolerance
+        if tolerance == 0:
+            return
+        if self._excitation is not None:
+            raise NotImplementedError(
+                f'half_space_merge_tolerance={tolerance!r} has no reader with an excitation: the '
+                'merge carries one incident order across the merged layers, and an excitation '
+                'lights several. Leave it at 0 (bit-identical layers then stay layers here), or '
+                'pose one order as a plane wave.')
+        if self._materials_are_live():
+            raise NotImplementedError(
+                f'half_space_merge_tolerance={tolerance!r} needs materials it can read and does '
+                'not differentiate: whether a layer is within the tolerance of a half-space is '
+                'a fixed decision that changes the number of layers solved, which a traced value '
+                'cannot make, and a merged layer\'s permittivity drops out of the solve, so its '
+                'derivative would be silently zero. Leave it at 0 under jit or grad, or decide '
+                'the snapped scene eagerly and differentiate that.')
+
+    def _layer_regions(self, i):
+        """Layer ``i``'s materials as host ``(epsilon, mu)`` arrays, one pair per region.
+
+        A raster is one region of many pixels, flattened -- ``(-1,)`` per scalar pixel,
+        ``(-1, 3, 3)`` per tensor one -- so a 3x3 scalar raster is never read as a tensor; a
+        shape layer is its background and each shape's material, ``mu`` ``None`` where the
+        material names none. What :func:`~wavebit.rcwa._engine.half_space_merge.material_match`
+        reads; the scene's own values, never a convolution matrix.
+        """
+        def host(value, tensor):
+            # The whole raster, then the layer: under `jit` even indexing a concrete array is
+            # staged, and a staged slice cannot be read.
+            return _host_material(value)[i].reshape((-1, 3, 3) if tensor else (-1,))
+        if self._modeling_path == ModelingPath.RASTER:
+            structure = self._structure
+            eps = host(structure, structure.ndim == 5)
+            mu = None if self._mu is None else host(self._mu, self._mu.ndim == 5)
+            return [(eps, mu)]
+        layer = self._structure[i]
+        materials = [as_material(layer.get('background', 1.0))] + [
+            as_material(shape.get('material', 1.0)) for shape in layer.get('shapes', [])]
+        return [(_host_material(m.epsilon), None if m.mu is None else _host_material(m.mu))
+                for m in materials]
+
+    def _half_space_merge_plan(self):
+        """Which layers this solve merges into its half-spaces: a :class:`MergePlan` or ``None``.
+
+        Scanned from each face inward, a layer joins its half-space while every value it holds is
+        that medium's (:func:`~wavebit.rcwa._engine.half_space_merge.material_match`), bit for
+        bit or, with :attr:`half_space_merge_tolerance`, within it. At a complex ``k_par`` every
+        such run merges: there the layer is where a knife edge lives, and the merged answer is
+        the theory value. At a real one the answer of an exact run is the same either way, so
+        the layers stay layers and keep their bits; a run that holds a layer within the
+        tolerance but not equal merges, because the tolerance says to take that material as the
+        half-space's.
+
+        An angle (or wavelength) that is traced -- ``jax.jit`` or ``vmap`` over it, with the
+        materials concrete -- cannot say whether ``k_par`` is real, and is taken as complex: the
+        runs merge, which is the theory value at any angle and costs a real one its last bits
+        only, where solving the layer would leave a complex one on a knife edge.
+
+        ``None`` -- solve every layer -- for an ``excitation`` (the face shift takes one
+        incident order; a direct ``kx`` / ``ky`` lights the specular order alone, as an angle
+        does, and merges), and wherever the decision cannot be a fixed, honest one: a traced
+        material, whose value cannot be read, and a differentiated one, whose derivative a merge
+        would drop. A tolerance the scene cannot apply is refused before this
+        (:meth:`_reject_unread_merge_tolerance`).
+        """
+        from wavebit.observations.power import transverse_k_is_real
+        from wavebit.rcwa._engine.half_space_merge import MergePlan
+        from wavebit.rcwa._engine.half_space_merge import material_match
+        self._reject_unread_merge_tolerance()
+        structure = self._structure
+        if structure is None or self._excitation is not None or self._materials_are_live():
+            return None
+        tolerance = self._half_space_merge_tolerance
+        real_k = _concrete(transverse_k_is_real(self.xp, *self.order_kxy()))
+        if real_k is None:
+            real_k = False
+        if real_k and tolerance == 0:
+            return None
+        n = len(structure)
+        dtype = _np.complex64 if self.xp.finfo(self.float_dtype).bits == 32 else _np.complex128
+
+        def medium(material):
+            return _host_material(material.epsilon), _host_material(material.mu_value)
+
+        def run(indices, material):
+            verdicts = []
+            for i in indices:
+                verdict = material_match(self._layer_regions(i), medium(material), tolerance,
+                                         dtype)
+                if verdict is None:
+                    break
+                verdicts.append((i, verdict))
+            if real_k and all(v == 'equal' for _, v in verdicts):
+                return []
+            return verdicts
+
+        try:
+            bottom = run(range(n), self._bot)
+            top = run(range(n - 1, len(bottom) - 1, -1), self._top)
+        except _UnreadableMaterial:
+            if tolerance:
+                raise NotImplementedError(
+                    f'half_space_merge_tolerance={tolerance!r} needs one value per material, and '
+                    'under this vmap a material is a batch. Leave it at 0 here (every layer is '
+                    'then solved as one), or map over the snapped scenes.') from None
+            return None
+        if not bottom and not top:
+            return None
+        return MergePlan(len(bottom), len(top),
+                         tuple(sorted(i for i, v in bottom + top if v == 'near')))
+
     def _mu_structure(self):
         """The current structure with every material's ``mu`` where its ``epsilon`` was.
 
@@ -6204,10 +6659,12 @@ class CoreFactorizationMixin:
         so the order is what puts the two quantities on one grid.
         """
         eps = self._eps_conv_matrices(geometry)
+        merge = self._half_space_merge_plan()
         if not self._is_magnetic():
-            return self._solve_conv(*eps)
+            return self._solve_conv(*eps, _merge=merge)
         mu = self._mu_conv_matrices(geometry)
         return self._solve_conv(*eps, mu=mu,
                                mu_top=self._top.mu, mu_bot=self._bot.mu,
                                eps_top=self._top.epsilon, eps_bot=self._bot.epsilon,
-                               layer_dng=None if mu is None else self._layer_double_negative())
+                               layer_dng=None if mu is None else self._layer_double_negative(),
+                               _merge=merge)
