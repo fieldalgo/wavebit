@@ -1,7 +1,7 @@
 # FDTD — the time-domain solve beside the RCWA one
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+This dated document records the periodic entry point, now `wavebit.compat.legacy.fdtd`. Its §8h examples use that earlier interface, imported as `wavebit`, because the current `wavebit.fdtd` has no time record of the field, point probes or Jones-vector incidence yet; §8's one-run spectrum is shown in the current spelling.
 :::
 
 Written: 2026-08-31, extended through 2026-09-04.
@@ -10,10 +10,10 @@ Targets: `src/wavebit/fdtd/_periodic/legacy.py`, `src/wavebit/compat/legacy.py`,
 A second method reading the same `Stack` and `Incidence`, so that one structure can be solved
 two ways and the answers compared without a translation layer.
 
-**Current public contract.** `wavebit.fdtd()` uses bottom-to-top layers, bottom
-interface `z=0`, +z upward and both incidence sides. Backend names are `'numpy'`,
-`'jax'`, `'torch'` or `wavebit.Backend` members; omitting the selector chooses the
-legacy NumPy kernel. The requested result is `result.incident`. Complex order
+**Periodic entry-point contract.** `wavebit.compat.legacy.fdtd()` uses bottom-to-top
+layers, bottom interface `z=0`, +z upward and both incidence sides. Backend names are
+`'numpy'`, `'jax'`, `'torch'` or `wavebit.Backend` members; omitting the selector chooses
+the legacy NumPy kernel. The requested result is `result.incident`. Complex order
 amplitudes use the cell centre and each order's own s/p frame, including TE/TM.
 Cartesian `r_xyz`/`t_xyz`, direct Cartesian `kx`/`ky` incidence and RCWA field
 reconstruction are unavailable. See the [current guide](time-domain.md#shared-periodic-conventions)
@@ -569,8 +569,8 @@ of correct results is why `R + T = 2.0042` (§10) went unheard. Energy is assert
 ## 7. Why NumPy only
 
 This section records the original kernel design. It still describes the
-backend-omitted stepping loop, but public `wavebit.fdtd(backend=...)` now selects
-a shared NumPy/JAX/Torch engine; see the [common scene adapter](time-domain.md#common-scene-adapter).
+backend-omitted stepping loop, but `wavebit.compat.legacy.fdtd(backend=...)` now
+selects a shared NumPy/JAX/Torch engine; see the [common scene adapter](time-domain.md#common-scene-adapter).
 
 The time loop is a Python `for` over ~10⁴ steps. Under `jax.jit` it unrolls to a trace of that
 length; under `jax.grad` or torch autograd it materialises a tape of O(steps × grid). Crossing
@@ -591,10 +591,12 @@ refused `backend`. The later shared engine supplies separate time-loop policies.
 This is the thing a time-domain solve does that a frequency-domain one cannot, and with the
 module read as a solver rather than a harness it is the main reason to choose it. The pulse
 already carries every frequency in its band; a second wavelength costs one more running sum
-over a monitor plane — O(nx) a step — against a whole new RCWA solve. `wavelength=` takes a
-sequence and returns one `Result` per entry:
+over a monitor plane — O(nx) a step — against a whole new RCWA solve. On the periodic route
+`wavelength=` took a sequence and returned one `Result` per entry; in the current module a
+monitor's `wavelengths=` takes it, and its result carries a wavelength axis:
 
-    results = wavebit.fdtd(stack=..., incidence=..., wavelength=[860., 900., 940.])
+    fdtd.Diffraction('t', plane=fdtd.Plane(z=-300.), wavelengths=(860., 900., 940.),
+                     source='light', side='transmit')       # with Units(length='nm')
 
 It is an identity, not an approximation: the band run and three separate single-wavelength
 runs agree to 3e-3, which is the gap between two source *bandwidths* rather than between two
@@ -604,6 +606,9 @@ what makes the band edge safe: every amplitude is divided by the incident spectr
 fixed pulse width an incident spectrum 2.4e-7 of its peak returned `R = 105` on a scene whose
 true `R` is 0.04. Sizing the source keeps the weakest wavelength above 0.2 of the peak, and
 `tests/fdtd/test_fdtd.py` pins that invariant rather than the unreachable guard behind it.
+The current module does not size the pulse: `fdtd.GaussianPulse(frequency_sigma_hz=...)` is
+declared, and a wavelength outside its usable band comes back NaN, with
+`validity.checks['source_reference']` false there.
 
 **At oblique incidence a band is a fixed-`kx` sweep, not a fixed-angle one.** The grid holds
 one in-plane wavevector and `kx = k0·n·sin θ` carries `k0`, so the polar angle drifts across
@@ -1024,10 +1029,10 @@ cell corner for as long as the feature existed, and the document above had alrea
 about the origin move and concluded the module was unaffected — which was true when written,
 four commits before this axis was added.
 
-`wavebit.plot_fdtd_field` and `wavebit.animate_fdtd_field` read this record directly. They
-use each component's measured axes and nonuniform z coordinates, mark PML and the TFSF
-boundary (scattered field on the incident side, total field toward the stack),
-and keep the color scale fixed across
+`wavebit.compat.legacy.plot_fdtd_field` and `wavebit.compat.legacy.animate_fdtd_field` read
+this record directly. They use each component's measured axes and nonuniform z coordinates,
+mark PML and the TFSF boundary (scattered field on the incident side, total field toward the
+stack), and keep the color scale fixed across
 frames. The default is signed real E; magnitude is available but is not intensity. A record
 that undersamples the shortest requested optical period warns rather than depicting an
 aliased oscillation without comment. Matplotlib is optional and imported only on use.
@@ -1050,6 +1055,10 @@ those additional outputs. Omitting the option retains the original transverse
 record and memory cost. The legacy `field_e`/`field_ex` outputs remain available.
 
 ```python
+# Earlier interface: the current wavebit.fdtd has no time record of the field yet.
+import numpy as np
+from wavebit.compat import legacy as wavebit
+
 result, diag = wavebit.fdtd(
     structure=np.full((1, 1, 2), 2.25), thickness=[100.], top=1., bot=1.,
     period=[200.], wavelength=900., theta=.3, phi=.4, polarization=(1., 1j),
@@ -1091,6 +1100,7 @@ and time vector. `fdtd_poynting` adds the instantaneous vector
 `S = cross(E.real, H.real)`. Use either with `record_components='all'`:
 
 ```python
+# Earlier interface: the current wavebit.fdtd has no point probes of a time record yet.
 probe = wavebit.fdtd_poynting(diag, x=0., y=0., z=50.)
 time, flux = probe['t'], probe['S']
 # E/H/S have shape (number of times, 3), with x/y/z columns.
@@ -1140,6 +1150,7 @@ state. The same Jones vector applies to each wavelength of a broadband solve; th
 existing fixed-in-plane-wavevector rule still applies at oblique incidence.
 
 ```python
+# Earlier interface: fdtd.PlaneWave takes only polarization='s' or 'p' so far.
 result = wavebit.fdtd(
     structure=np.full((1, 1, 2), 2.25), thickness=[100.],
     top=1., bot=1.44, period=[100.], wavelength=900.,
@@ -1175,6 +1186,7 @@ the recorded waveform exactly; finite Gaussian envelopes are not strictly analyt
 signals, so far spectral tails need not have an exact constant quadrature ratio.
 
 ```python
+# Earlier interface: no Jones-vector incidence or time record in wavebit.fdtd yet.
 result, diag = wavebit.fdtd(
     structure=np.ones((1, 1, 2)), thickness=[100.], top=1., bot=1.,
     period=[100.], wavelength=900., polarization=(1., 1j),
@@ -1292,9 +1304,9 @@ ey, ex, time = diag['field_e'].real, diag['field_ex'].real, diag['field_t']
 ## Streaming fields and compiled native grids
 
 The scene solver now accepts `field_monitors` for six-component online Fourier
-planes and integrated spectral power. The separate `wavebit.fdtd_grid` provides
-NumPy/JAX/Torch uniform Yee updates and checkpointed automatic differentiation.
-Explicit `backend` selection on `wavebit.fdtd` connects Stack/Incidence to that
+planes and integrated spectral power. The separate `wavebit.compat.legacy.fdtd_grid`
+provides NumPy/JAX/Torch uniform Yee updates and checkpointed automatic differentiation.
+Explicit `backend` selection on `wavebit.compat.legacy.fdtd` connects Stack/Incidence to that
 core; see the [common scene adapter](time-domain.md#common-scene-adapter).
 See the [time-domain guide](time-domain.md) for normalization, examples
 and the boundaries of the two interfaces. The native-grid engine is not a JAX port

@@ -1,14 +1,14 @@
 # Periodic metasurfaces with the general FDTD engine
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+The grating cell on this page stands a smoothed pillar on a substrate that runs through the bottom PML, which the current `wavebit.fdtd` cannot declare yet, so its FDTD example uses the earlier interface, `wavebit.compat.legacy.fd`; the RCWA comparison uses the current `wavebit.rcwa`.
 :::
 
-`wavebit.fd` solves one cell of a periodic array under a plane wave at any angle and reads the
+`fd` solves one cell of a periodic array under a plane wave at any angle and reads the
 light that leaves it as diffraction orders: each order's complex amplitude in its own s/p frame
-and its efficiency, in the same `Result` layout `wavebit.rcwa` returns. This page builds such a
-cell, says how to choose its period and angle, how to read the orders, and how to compare them
-with RCWA. The measurements behind it are in
+and its efficiency, in the same `Result` layout the earlier `wavebit.compat.legacy.rcwa`
+returns. This page builds such a cell, says how to choose its period and angle, how to read the
+orders, and how to compare them with RCWA. The measurements behind it are in
 [`fd-metasurface-validation.md`](../../validation/fdtd/fd-metasurface-validation.md).
 
 ## A grating cell
@@ -18,6 +18,7 @@ through it leaves in two orders, `(0, 0)` and `(-1, 0)`, and the share of the se
 across the band (60% of the incident s power at 0.95, 21% at 1.0, 13% at 1.05).
 
 ```python
+# Earlier interface: wavebit.fdtd cannot yet run a smoothed substrate through the PML.
 from wavebit.compat.legacy import fd
 
 N = 25                                    # cells per vacuum wavelength
@@ -69,7 +70,7 @@ What each part is doing:
 
 ## Choosing the period and the angle
 
-A plane wave in `wavebit.fd` keeps its transverse wavevector fixed across its band: the angle
+A plane wave in `fd` keeps its transverse wavevector fixed across its band: the angle
 you give is exact at the band's centre wavelength, and every other wavelength gets its own
 (`res['r'].theta_at`). An order `(m, n)` then has the transverse wavevector
 
@@ -126,6 +127,11 @@ trouble is.
 * `polarizations='both'` on a monitor runs the scene a second time with the other polarisation
   and fills `.s_inc` and `.p_inc` beside `.incident`.
 
+A current `fdtd.Diffraction` monitor returns the same selection as a `DiffractionOrders`:
+`.order(m, n)` gives `efficiency`, `amplitude_s` and `amplitude_p` over its wavelengths, the
+whole arrays have the same `(wavelengths, n_v, n_u)` shape, and each wavelength's angle is
+`metadata['theta_radians']`. It has no `polarizations='both'` yet.
+
 ## Comparing with RCWA
 
 Solve the same cell with `wavebit.rcwa` at each wavelength's own angle:
@@ -133,34 +139,38 @@ Solve the same cell with `wavebit.rcwa` at each wavelength's own angle:
 ```python
 import math
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
 theta_at = np.asarray(res['r'].theta_at)
 for i, lam in enumerate(wavelengths):
-    ref = wavebit.rcwa(backend='numpy', top=1.0, bot=2.13, theta=math.radians(theta_at[i]),
-                       phi=0.0, psi=math.pi / 2, truncation_order=[15, 15],
-                       period=[0.6, 0.6], wavelength=lam,
-                       structure=[dict(background=1.0, shapes=[dict(
-                           type='circle', cx=0.0, cy=0.0, lx=0.3, material=5.8)])],
-                       thickness=[H]).solve()
-    print(lam, t.order(-1, 0).t_s[i], complex(np.asarray(ref.order(-1, 0).t_s)))
+    problem = rcwa.Problem(
+        units=Units(length='um'),
+        stack=rcwa.Stack(
+            period=(0.6, 0.6), top=Material(epsilon=1.0), bottom=Material(epsilon=2.13),
+            layers=(rcwa.Layer(thickness=H, background=Material(epsilon=1.0), regions=(
+                rcwa.Region(geometry=rcwa.Circle(radius=0.15), material=Material(epsilon=5.8)),)),)),
+        excitation=rcwa.Excitation(wavelength=lam, sources=(rcwa.PlaneWave(
+            side='top', polarization='s', theta=math.radians(theta_at[i]), phi=0.0),)))
+    ref = rcwa.run(problem, numerics=rcwa.Numerics(orders=(15, 15)))
+    print(lam, t.order(-1, 0).t_s[i], complex(ref.transmission.order(-1, 0).amplitude_s[0]))
 ```
 
-`psi=math.pi / 2` is s incidence and `psi=0` is p; one RCWA solve also carries both, as
-`ref.s_inc` and `ref.p_inc`.
+`polarization='s'` is s incidence and `'p'` is p; a complex `(a_s, a_p)` pair is any mixture
+of the two.
 
 **Where the pillar is matters for the phases.** Both engines quote an order's amplitude at the
-cell's centre, and RCWA places its shape from there, but `wavebit.fd` places the pillar
+cell's centre, and RCWA places its shape from there, but `fd` places the pillar
 wherever its `center=` says. If the pillar sits at `(xc, yc)` from the centre and the RCWA
 shape at `(0, 0)`, order `(m, n)`'s amplitude differs by `exp(-2 pi i (m xc / Px + n yc / Py))`. The
-efficiencies and the zeroth order do not care. Either give RCWA the same `cx`, `cy`, or
-multiply the FDTD amplitudes by `exp(+2 pi i (m xc / Px + n yc / Py))` before comparing.
+efficiencies and the zeroth order do not care. Either give the RCWA circle the same
+`center=(xc, yc)`, or multiply the FDTD amplitudes by `exp(+2 pi i (m xc / Px + n yc / Py))`
+before comparing.
 
-**RCWA has an error too.** Raise its `truncation_order` until the numbers you compare stop
+**RCWA has an error too.** Raise its `Numerics(orders=...)` until the numbers you compare stop
 moving by much less than the difference you are judging. A high-index rectangle converges
-slowly on RCWA's shape path; on a raster whose pixel edges are the rectangle's edges, with
-`fourier_coefficients='integrated', factorization='li'`, it converges faster, and its narrow
-side needs as many orders as its long one.
+slowly on RCWA's shape path; on a raster (`rcwa.Layer(epsilon=...)`) whose pixel edges are the
+rectangle's edges, with `Numerics(fourier_coefficients='integrated', factorization='li')`, it
+converges faster, and its narrow side needs as many orders as its long one.
 
 ## How fine a grid
 

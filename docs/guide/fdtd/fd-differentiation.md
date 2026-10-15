@@ -1,14 +1,14 @@
 # Differentiating the general FDTD engine
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+The pillar cell on this page stands on a smoothed substrate that runs through the bottom PML, which the current `wavebit.fdtd` cannot declare yet (a finite body may not touch an `Open()` face, and a smoothed pillar may not stand on a cell-snapped `Slab`), so its examples use the earlier interface, `wavebit.compat.legacy.fd`. The current module runs the same engine and checks; [In the current module](#in-the-current-module) gives its spelling.
 :::
 
-`wavebit.fd` runs on NumPy, JAX and PyTorch, and on the last two a run is differentiable:
-material values, a body's shape and position, a source's amplitude, phase, delay and band,
-and the Bloch phase can all be leaves of `jax.grad` or Torch autograd. This page says how to
-set that up, what may be traced, and what the run does when a traced value leaves the
-region it can certify. The measurements behind it are the C6 sections at the end of
+`wavebit.compat.legacy.fd` runs on NumPy, JAX and PyTorch, and on the last two a run is
+differentiable: material values, a body's shape and position, a source's amplitude, phase,
+delay and band, and the Bloch phase can all be leaves of `jax.grad` or Torch autograd. This
+page says how to set that up, what may be traced, and what the run does when a traced value
+leaves the region it can certify. The measurements behind it are the C6 sections at the end of
 [`fd-subpixel-occupancy.md`](../../validation/fdtd/fd-subpixel-occupancy.md), the last of them "Traced
 material values beside traced geometry".
 
@@ -26,6 +26,18 @@ ones that can move at run time (see [When the result is NaN](#when-the-result-is
 JAX the plan is also what makes the compiled stepping program reusable: one compile per
 plan, however many values you try.
 
+### In the current module
+
+`wavebit.fdtd` keeps the rule under its own names. The plan is
+`prepared = fdtd.prepare(problem, numerics=numerics, backend='torch')` (or `'jax'`), built
+from plain numbers, and the traced run is `prepared.run(traced_problem)`, through which the
+gradient flows. A body's reserved cells are `fdtd.Numerics(geometry_ranges={'pillar': RANGE})`,
+keyed by the structure's name, instead of `range=`; a material leaf is `Material(epsilon=...)`;
+the transmitted zero order is `result['T'].efficiency[0, 0, 0]`; and a run a runtime check
+rejected has `result.validity.checks['runtime_stability']` false. A traced `Bloch` phase or
+`Axis1D` `k` is not live in a prepared calculation yet: `prepared.run` refuses it as a static
+field.
+
 ## A pillar's radius, height and index together
 
 A metasurface cell: a glass substrate (a smoothed `fd.Box` running through the bottom PML)
@@ -34,6 +46,7 @@ radius, height and permittivity are the design variables; the objective is the t
 zero order. The scene and its plan, on any backend:
 
 ```python
+# Earlier interface: wavebit.fdtd cannot yet run a smoothed substrate through the PML.
 from wavebit.compat.legacy import fd
 
 PLANE = -0.2375                                   # the substrate's top face
@@ -64,7 +77,7 @@ plan = fd.plan(cell(.12, .3, 2.25))
 With PyTorch:
 
 ```python
-import torch
+import torch                                      # earlier interface, as above
 
 leaves = [torch.tensor(v, dtype=torch.float64, requires_grad=True) for v in (.12, .3, 2.25)]
 result = fd.run(cell(*leaves), 'torch', plan=plan)
@@ -76,7 +89,7 @@ print(float(T), [float(v.grad) for v in leaves])
 With JAX; enable 64-bit numbers before making any array:
 
 ```python
-import jax
+import jax                                        # earlier interface, as above
 jax.config.update('jax_enable_x64', True)
 import jax.numpy as jnp
 
@@ -110,7 +123,9 @@ including at its undamped resonance. `fd.eps_at` inherits this convention when i
 sums the poles: an exactly inactive oscillator contributes no susceptibility, so
 its otherwise indeterminate `0 / 0` is removed before evaluating the denominator.
 This shortcut requires a concrete, exactly zero strength; it is not a tolerance
-that removes small nonzero strengths.
+that removes small nonzero strengths. The current `wavebit.materials.Lorentz` does not
+apply it yet: its `epsilon_term(omega)` with `strength=0` and `gamma=0` is `nan` at
+`omega_0`.
 
 A strength being differentiated may have a value of zero without being inactive.
 Away from resonance, for `D = omega_0**2 - omega**2 - 1j*gamma*omega`, its derivative

@@ -255,6 +255,7 @@ frequency-domain monitor accumulates its transforms during the run at the wavele
 | `FarField(name, wavelengths, box, propagation="continuum")` | the radiation of an open scene: a closed box around everything, transformed to infinity. `intensity(theta, phi)` takes radians. Periodic cells are refused; their far field is the diffraction orders. `propagation="yee"` uses the lattice's own dispersion. |
 | `Outputs(final_fields=True)` | the E and H arrays at the end of the run, with each component's coordinates |
 
+(fdtd-model-accuracy-rules)=
 ## Accuracy rules enforced before a run
 
 `check`, `prepare` and `run` share these doors; a refusal names the setting to change.
@@ -309,6 +310,7 @@ rejected a traced value, see below) and, per `Diffraction` monitor, `source_refe
 `result.provenance` records the backend, the units, `dt_seconds`, the actual step count and every
 domain.
 
+(fdtd-model-differentiating)=
 ## Differentiating a run
 
 With `backend="jax"` or `backend="torch"`, a prepared run is differentiable in its live inputs:

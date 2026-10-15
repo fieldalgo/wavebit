@@ -1,15 +1,15 @@
 # FDTD research-alpha scope
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+This page records the measured scope of the earlier periodic factory, kept as `wavebit.compat.legacy.fdtd`, and of its native grid `fdtd_grid`; the evidence was measured there and its limits are unchanged. In the current `wavebit.fdtd` module a periodic stack is an `fdtd.Problem` with `Periodic` or `Bloch` faces, a `PlaneWave` and `Diffraction` monitors (see [the time-domain guide](time-domain.md)), and its scope and admission rules are in [how the solver models a problem](model.md).
 :::
 
-The periodic `wavebit.fdtd` path is experimental. Its intended use is research on
-periodic isotropic stacks, with diffraction results comparable to RCWA. The
-separate [general FDTD API](../../migration/general-fdtd-v1.md) uses `wavebit.fd.Scene`; this
-page covers the periodic Stack/Incidence routes.
-It is not yet a general-purpose replacement for an established FDTD package. This page
-states what has evidence, what remains uncertain, and how to reproduce the checks.
+The earlier periodic factory, `wavebit.compat.legacy.fdtd` (formerly `wavebit.fdtd(...)`), is
+experimental. Its intended use is research on periodic isotropic stacks, with diffraction
+results comparable to RCWA. The separate [general FDTD API](../../migration/general-fdtd-v1.md)
+uses `wavebit.compat.legacy.fd.Scene`; this page covers the periodic Stack/Incidence routes. It
+is not yet a general-purpose replacement for an established FDTD package. This page states what
+has evidence, what remains uncertain, and how to reproduce the checks.
 
 ## Supported interface versus validation coverage
 
@@ -61,7 +61,7 @@ notes](fdtd.md) and [API reference](../../reference/api.md).
 
 ## Shared native-grid engine
 
-The separate `wavebit.fdtd_grid` interface provides NumPy, compiled JAX and checkpointed Torch Yee
+The separate `wavebit.compat.legacy.fdtd_grid` interface provides NumPy, compiled JAX and checkpointed Torch Yee
 updates, streaming field/power planes, and differentiable material/source inputs.
 It accepts native grids with uniform x/y and optional nonuniform z widths, diagonal real coefficients, periodic
 boundaries, optional graded z damping, homogeneous-end z CPML, and electric
@@ -223,9 +223,9 @@ comparison. Transverse phases may coexist with z CPML; longitudinal phase must
 be zero. The native core now follows RCWA's Array API architecture: one physics
 implementation, common graph-preserving conversion, and separate NumPy/JAX/Torch
 time-loop policies. Torch additionally passes the existing FDTDX field/gradient
-goldens for non-dispersive, ADE and Bloch cases. Omitting backend preserves legacy
-Stack/Incidence dispatch; explicitly selecting one invokes the common scene adapter. Actual GPU execution is unverified on
-the current CPU-only machine. See the [native-grid guide](time-domain.md).
+goldens for non-dispersive, ADE and Bloch cases. Omitting backend in `wavebit.compat.legacy.fdtd`
+preserves legacy Stack/Incidence dispatch; explicitly selecting one invokes the common scene
+adapter. Actual GPU execution is unverified on the current CPU-only machine. See the [native-grid guide](time-domain.md).
 
 ## Reproduce the installation check
 
@@ -251,11 +251,12 @@ gate. The output directory retains both distributions, `fdtd-install.json` and
 The underlying `tests/distribution/fdtd_install_smoke.py` can also run directly with an installed
 package's Python from outside the checkout.
 
-The script uses public APIs and does not add the checkout to the import path. Its JSON
-prints the imported package path, dependency versions, and every measured case. It checks
-36 planar combinations: two raster paths, three materials, three incidence directions,
-and two linear polarizations. It compares complex amplitudes with RCWA, requires a settled
-field, and checks that JAX, PyTorch and Matplotlib were not imported by the base calculation.
+The script calls the installed package's compatibility API, `wavebit.compat.legacy`, and does
+not add the checkout to the import path. Its JSON prints the imported package path, dependency
+versions, and every measured case. It checks 36 planar combinations: two raster paths, three
+materials, three incidence directions, and two linear polarizations. It compares complex
+amplitudes with RCWA, requires a settled field, and checks that JAX, PyTorch and Matplotlib
+were not imported by the base calculation.
 On 2026-09-07, Python 3.12 with NumPy 2.5.3, SciPy 1.18.1 and array-api-compat
 1.15.0 passed all 36 cases: maximum amplitude difference 0.006079 and maximum residual
 4.35e-9. The per-case measurements are in the run record `fdtd_alpha_install.json`

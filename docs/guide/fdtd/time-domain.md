@@ -1,33 +1,53 @@
 # A solve in the time domain
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+Four examples use the current `wavebit.fdtd` module: the first two, the material derivative under
+[the common scene adapter](#common-scene-adapter) and [source placement](#source-position-independent-of-padding).
+The others still call the earlier periodic factory `wavebit.compat.legacy.fdtd`, or its native grid `fdtd_grid`,
+because raster layers, whole-field time records, plotting, mode fitting, graded or layer-fitted meshes, angle,
+shape, thickness and half-space derivatives, Jones polarization and that route's source, extraction and
+convergence controls are not in the current module yet; each such example says so in its first line.
 :::
 
-`wavebit.fdtd()` is the second solver. It reads the same `Stack` and `Incidence` the RCWA path
-reads and hands back a `Result`. Within the supported periodic scope, both use the same
-layer, incidence and complex diffraction-amplitude conventions.
+`wavebit.fdtd` is the second solver. A periodic stack lit by a plane wave is an `fdtd.Problem`
+like any other: `Periodic()` x and y faces (or the `Bloch` faces `Bloch.from_source` writes for
+an oblique wave), `Open()` z faces with a PML added outside them, the layers as structures, one
+`PlaneWave`, and a `Diffraction` monitor on each side. Each monitor returns the per-order
+complex s/p amplitudes and efficiencies RCWA returns, normalized by the plane wave's own
+measured incident field. [How the solver models a problem](model.md) describes each piece.
 
-This page covers the periodic-stack API. For `from wavebit.compat.legacy import fd` and its
+The earlier periodic factory, `wavebit.fdtd(stack=..., incidence=...)`, read the same `Stack`
+and `Incidence` as the earlier RCWA factory and returned the same `Result` container. It is
+retained as `wavebit.compat.legacy.fdtd(...)`. With no `backend` argument it runs the legacy
+NumPy solver, including time records and graded meshes; an explicit `backend="numpy"`, `"jax"`
+or `"torch"` selects the shared Yee engine and supports material automatic differentiation.
+See [the common scene adapter](#common-scene-adapter) for its supported inputs, and
+[route parity](../../validation/fdtd/fdtd-route-parity.md) for how the two compare on the same scenes.
+
+This page covers periodic stacks. For `from wavebit.compat.legacy import fd` and its
 explicit `fd.Scene` domain, sources, boundaries and named monitors, see the
 [general FDTD guide](../../migration/general-fdtd-v1.md). The scene types and conventions are
 separate.
 
-This path is a **research alpha**. Read the [supported scope and validation evidence](fdtd-alpha.md)
+Both are a **research alpha**. Read the [supported scope and validation evidence](fdtd-alpha.md)
 before using a new combination of geometry, incidence and material.
-
-It returns the answer directly, in the same `Result` container as RCWA. With no
-`backend` argument, it preserves the legacy NumPy solver, including time records
-and graded meshes. Explicit `backend="numpy"`, `"jax"` or `"torch"` selects the
-shared Yee engine and supports material automatic differentiation.
-See [the common scene adapter](#common-scene-adapter) for its supported inputs, and
-[route parity](../../validation/fdtd/fdtd-route-parity.md) for how the two compare on the same scenes.
 
 ## Shared periodic conventions
 
-`wavebit.rcwa(...)` returns a solver whose `.solve()` returns a result;
-`wavebit.fdtd(...)` returns the result directly. The general `wavebit.fd` scene API
-and the native-grid `wavebit.fdtd_grid` API have their own input contracts.
+In the current module both solvers take lengths in the problem's `Units` and angles in
+radians, with +z upward. In FDTD a layer is a cell-snapped `Slab(z=(lo, hi))` or a smoothed
+`Box`; a half-space is a `Slab` that reaches an `Open()` face and continues into that face's
+PML, and the scene's `background` fills every cell no structure claims. A `PlaneWave` with
+`direction='-z'` (the default) lights the stack from above and `'+z'` from below; its
+`polarization` is `'s'` or `'p'`. A `Diffraction` monitor's `amplitude_s` and `amplitude_p`
+use each outgoing order's own s/p frame with the cell centre as lateral phase origin, its
+`efficiency` is a power fraction, and `reference_plane` and `incident_plane` name the planes
+its phases refer to (the monitor's own plane by default). Fields are E in V/m and H in A/m.
+
+The earlier factories differ: `wavebit.compat.legacy.rcwa(...)` returns a solver whose
+`.solve()` returns a result, and `wavebit.compat.legacy.fdtd(...)` returns the result directly.
+The general `fd` scene API and the native-grid `fdtd_grid` API have their own input contracts.
+On the two earlier periodic routes:
 
 - Layers are **bottom-to-top**. The bottom interface is `z=0`, the top is
   `z=sum(thickness)`, and +z points upward. `top` and `bot` always name the
@@ -38,7 +58,7 @@ and the native-grid `wavebit.fdtd_grid` API have their own input contracts.
   `0 <= theta < pi/2`. On the explicit route, use azimuth `phi` to select the
   transverse direction. Cartesian `kx`/`ky` incidence is refused.
 - `result.incident` is the requested polarization state. TE/TM declarations
-  accept `'te'`, `'tm'` or `wavebit.Tetm` members, with case-insensitive strings.
+  accept `'te'`, `'tm'` or `wavebit.compat.legacy.Tetm` members, with case-insensitive strings.
   Complex `r_s`, `r_p`, `t_s`, `t_p` use each outgoing order's own s/p frame,
   including pure TE/TM, and the cell centre as their lateral phase origin.
   Reflection is referenced to the illuminated face and transmission to the
@@ -75,43 +95,72 @@ For migration details and the exact integration scope, see the
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
-from wavebit.compat.legacy import Stack, Layer, Incidence
+from wavebit import Material, Units, fdtd, rcwa
 
-eps_hi = wavebit.eps_from_refractive_index(3.5)            # 12.25
-scene = Stack(layers=[Layer(thickness=300.,
-                            structure=np.array([[1., 1., eps_hi, eps_hi]]))],
-              top=1., bot=wavebit.eps_from_refractive_index(1.5), period=(700.,))
-light = Incidence(wavelength=900., theta=0., phi=0., tetm='te')
+units = Units(length='nm')
+air, glass, silicon = Material(epsilon=1.), Material(epsilon=1.5**2), Material(epsilon=3.5**2)
 
-harmonic = wavebit.rcwa(backend='numpy', stack=scene, incidence=light,
-                        truncation_order=dict(x=40, y=0)).solve()
-time_domain = wavebit.fdtd(stack=scene, incidence=light, resolution=0.1)   # 10 nm cells
+# A 700 nm cell centred on x = 0, lit from above at 900 nm; a 300 nm ridge fills x = 0..350 nm.
+harmonic = rcwa.run(rcwa.Problem(
+    units=units,
+    stack=rcwa.Stack(period=(700., 700.), top=air, bottom=glass, layers=(rcwa.Layer(
+        thickness=300., background=air, regions=(rcwa.Region(
+            geometry=rcwa.Rectangle(size=(350., 700.), center=(175., 0.)), material=silicon),)),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(polarization='s'),))),
+    numerics=rcwa.Numerics(orders=(40, 0)))
 
+# The same cell, one cell deep in y; the substrate continues into the bottom PML.
+problem = fdtd.Problem(
+    units=units,
+    scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(700., 10., 1200.), center=(0., 0., 150.)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+        structures=(
+            fdtd.Structure('substrate', fdtd.Slab(z=(-450., 0.)), glass),
+            fdtd.Structure('ridge', fdtd.Region(size=(350., 700., 300.), center=(175., 0., 150.)),
+                           silicon))),
+    sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=650.), polarization='s',
+                            pulse=fdtd.GaussianPulse(wavelength=900., frequency_sigma_hz=2e13)),),
+    outputs=fdtd.Outputs(monitors=(
+        fdtd.Diffraction('r', plane=fdtd.Plane(z=500.), wavelengths=(900.,), source='light',
+                         side='reflect', orders=(1, 0), reference_plane=300., incident_plane=300.),
+        fdtd.Diffraction('t', plane=fdtd.Plane(z=-300.), wavelengths=(900.,), source='light',
+                         side='transmit', orders=(1, 0), reference_plane=0., incident_plane=300.))))
+time_domain = fdtd.run(problem, numerics=fdtd.Numerics(
+    grid=fdtd.UniformGrid(spacing=10.),                                  # 10 nm cells
+    duration=fdtd.Duration(periods=80, source='light')))
+
+reflected, transmitted = time_domain['r'], time_domain['t']
 for m in (-1, 0, 1):
-    a, b = harmonic.order(m, 0).T, time_domain.order(m, 0).T
+    a, b = harmonic.transmission.order(m).efficiency[0], transmitted.order(m).efficiency[0]
     print(f'T[{m:+d}]   rcwa {a:.6f}   fdtd {b:.6f}   gap {abs(a - b):.1e}')
 print(f'R + T    rcwa {harmonic.R.sum() + harmonic.T.sum():.6f}   '
-      f'fdtd {time_domain.R.sum() + time_domain.T.sum():.6f}')
-print(f'T[+1] - T[-1] = {abs(time_domain.order(1, 0).T - time_domain.order(-1, 0).T):.1e}')
+      f'fdtd {reflected.efficiency.sum() + transmitted.efficiency.sum():.6f}')
+print(f'T[+1] - T[-1] = '
+      f'{abs(transmitted.order(1).efficiency[0] - transmitted.order(-1).efficiency[0]):.1e}')
 ```
 
 ```
-T[-1]   rcwa 0.221306   fdtd 0.219304   gap 2.0e-03
-T[+0]   rcwa 0.352483   fdtd 0.353580   gap 1.1e-03
-T[+1]   rcwa 0.221306   fdtd 0.219304   gap 2.0e-03
-R + T    rcwa 1.000000   fdtd 0.999840
-T[+1] - T[-1] = 2.5e-16
+T[-1]   rcwa 0.221306   fdtd 0.218569   gap 2.7e-03
+T[+0]   rcwa 0.352483   fdtd 0.350980   gap 1.5e-03
+T[+1]   rcwa 0.221306   fdtd 0.218569   gap 2.7e-03
+R + T    rcwa 1.000000   fdtd 1.000014
+T[+1] - T[-1] = 2.8e-17
 ```
 
-Nothing was converted. The `Stack` is the one [`scene.md`](../rcwa/scene.md) describes, the `Incidence`
-is [`light.md`](../rcwa/light.md)'s, and the `Result` is the one [`quickstart.md`](../../getting-started/rcwa.md) reads
-— `R`, `T`, `order(m, n)` and the complex amplitudes, in the same conventions. The gap is the
-grid's: it is second order, so a 5 nm cell brings it to ~7e-4 and 2.5 nm to ~1.9e-4.
+The two problems share their `Material` and `Units` objects, not a scene: RCWA reads a
+[`Stack`](../rcwa/scene.md) of layers, FDTD a domain of structures. Every face here lies on a
+cell boundary, so `fdtd.check` reports no snapped face. Each `Diffraction` monitor returns what
+RCWA's `result.transmission` and `result.reflection` return — `order(m).efficiency` and the
+complex `amplitude_s` and `amplitude_p` with a leading wavelength axis — with the phases moved
+to the faces named by `reference_plane` and `incident_plane`, as RCWA's are. The FDTD numbers
+were regenerated with the current module on 2026-10-15; the earlier factory printed a 2.0e-3
+gap on the same 10 nm grid. The gap is the grid's: it is second order, so a 5 nm cell brings
+the largest to 7.0e-4 (the earlier route measured ~7e-4 at 5 nm and ~1.9e-4 at 2.5 nm).
 
 **`R + T` is not exactly 1, and that is the method rather than a defect.** A Yee grid conserves
 energy to `O(dz^2)`, the same order it computes everything else to, so a lossless scene comes
-back a little short; the RCWA row above is 1 to a few times 1e-15 for contrast. There is
+back a little off 1; the RCWA row above is 1 to a few times 1e-15 for contrast. There is
 deliberately no generic guard on it here — one existed and fired on 85 of 243 ordinary
 time-domain solves, which is why it was removed ([`result-guards.md`](../../reference/common/result-guards.md)).
 
@@ -123,7 +172,8 @@ error in either efficiency. Use grid and runtime refinement to assess accuracy.
 
 RCWA answers a single wavelength between 112 and 2850 times faster at matched accuracy, so the
 question is only ever how many wavelengths you want. Matched on accuracy rather than on settings
-— the coarsest cell and the cheapest `truncation_order` that reach the same worst per-order
+— the coarsest cell and the cheapest truncation (`rcwa.Numerics(orders=...)`; `truncation_order`
+on the earlier interface this table was measured with) that reach the same worst per-order
 error — the break-even is:
 
 | scene | one FDTD run | the cheapest RCWA that matches it | wavelengths to break even |
@@ -138,20 +188,24 @@ expensive** — a metal, many layers, a high truncation order — and for two th
 state at all: a record of the field arriving, and a material given as a pole model rather than
 as one complex number per wavelength.
 
-Reach for `rcwa()` for harmonic fields through `reconstruct_field`, a skewed
-`lattice`, curved shapes beyond one circle or ellipse per layer (the explicit route's
-[area recipes](#rotated-rectangle-area-integration)) and evanescent (complex-angle)
-incidence. Explicit FDTD backends support JAX/PyTorch material gradients through the
-common scene adapter described below. Elliptical diffraction is available using
-`psi` with `chi`, or `polarization=(a_s, a_p)`; for example `(1, 1j)` is a circular
-state in the s/p frame. The pair is normalized while preserving its overall phase.
+Reach for `rcwa` for harmonic fields (`rcwa.Outputs(fields=True)` and `result.field(...)`), a
+skewed `lattice`, elliptical regions (the current FDTD module has `Cylinder` and `Prism` bodies
+but no ellipse; the earlier explicit route's [area recipes](#rotated-rectangle-area-integration)
+take one circle or ellipse per layer) and evanescent (complex-angle) incidence. The current
+FDTD module differentiates material values, source parameters and the geometry of ranged
+smoothed bodies on JAX and PyTorch ({ref}`differentiating a run <fdtd-model-differentiating>`);
+the earlier explicit-backend route adds the angle, shape and thickness derivatives described
+below. The current `PlaneWave` takes `'s'` or `'p'`. Elliptical diffraction is available on
+the earlier factory using `psi` with `chi`, or `polarization=(a_s, a_p)`; for example `(1, 1j)`
+is a circular state in the s/p frame. The pair is normalized while preserving its overall phase.
 Time recording also supports complex coefficients through additional quadrature-source
 runs; see [polarization details](fdtd.md#elliptical-and-circular-incidence).
 
 ## The keywords a time-domain run adds
 
-The scene keywords are unchanged — `structure`, `thickness`, `top`, `bot`, `period`, `mu`,
-`wavelength`, `theta`, `phi`, `tetm`, `psi`. **Angles are radians**, as everywhere in wavebit.
+On the earlier factory the scene keywords are those of the earlier RCWA factory — `structure`,
+`thickness`, `top`, `bot`, `period`, `mu`, `wavelength`, `theta`, `phi`, `tetm`, `psi`.
+**Angles are radians**, as everywhere in wavebit.
 The table below gives defaults for the **backend-omitted NumPy route**. Explicit-backend
 defaults are listed under [the common scene adapter](#common-scene-adapter). These defaults were measured, and
 [`fdtd.md`](fdtd.md) is the measurement.
@@ -174,6 +228,31 @@ defaults are listed under [the common scene adapter](#common-scene-adapter). The
 `wavelength` takes a **sequence** as well as a number, and that is the one keyword whose meaning
 grows here: a band comes out of one run, one `Result` per entry.
 
+The current module has no defaults of this kind: the grid and the duration are always
+declared, and `check` admits or refuses the declared scene by the
+{ref}`accuracy rules <fdtd-model-accuracy-rules>`. Where each keyword went, and
+what differs:
+
+| Earlier keyword | Current module | Default and rule there |
+| --- | --- | --- |
+| `resolution` | `fdtd.UniformGrid(spacing=dx)`, one cubic spacing on every axis | none; `check` refuses fewer than 8 cells per wavelength in any material and warns below 12 |
+| `n_periods` | `fdtd.Duration(periods=N, source=name)`, or `seconds=` or `steps=` | none; no minimum, and `UnsettledFieldWarning` when a monitored region still holds field at the end |
+| `n_pml` | `fdtd.PML(cells=12)` in `Numerics(absorber=...)` | 12; fewer is refused unless `allow_thin=True` |
+| `pml_reflection` | `fdtd.PML(reflection=1e-8)` | the same default value |
+| `courant` | `fdtd.Numerics(courant=0.5)` | 0.5 of the three-dimensional vacuum bound `dx / (c√3)` |
+| `subpixel` | the shape decides: `Slab` and `Region` are cell-snapped, `Box`, `Sphere`, `Cylinder` and `Prism` smoothed | — |
+| `grading` | not available; the grid is uniform | — |
+| `dispersion`, `poles` | `DispersiveMaterial(epsilon_inf, poles=(Drude(...), Lorentz(...), Debye(...)))`, rates in SI | — |
+| `record_field` | `fdtd.Record(name, at, component)`: one component at one Yee point | — |
+| `pad_scale` | the `Domain` size; each PML is added outside it | `AbsorberProximityWarning` closer than half a wavelength in the structure's own medium |
+| `truncation_order` | `fdtd.Diffraction(orders=...)` | every propagating order |
+| `return_diagnostics` | `result.validity`, `result.diagnostics` and `result.provenance`, always present | — |
+| `wavelength` (a band) | each frequency-domain monitor's `wavelengths` | — |
+
+The current module also refuses a diffraction order that leaves through a PML at a grazing
+angle the default absorber cannot hold, and names the deeper `PML` and longer `Duration` that
+admit it; the next example meets that rule.
+
 ## Dispersion, and a band out of one run
 
 A time-domain solve cannot take a complex permittivity — one complex number describes a material
@@ -184,49 +263,90 @@ RCWA solve per wavelength each handed a different `eps`.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
-from wavebit.compat.legacy import Stack, Layer, Incidence
+from wavebit import DispersiveMaterial, Drude, Material, Units, fdtd, rcwa
+from wavebit.units import C0
 
-# Gold-ish Drude, one pole: `(omega0, gamma, strength)` per material id. `omega0 = 0` is
-# Drude and `strength` is the plasma frequency squared; frequencies are the reciprocal of
-# `wavelength`'s unit, since c = 1 here.
-gold = [(0.0, 2 * np.pi / 17000., (2 * np.pi / 136.) ** 2)]
-band = [820., 900., 980.]
+units = Units(length='nm')
+# Gold-ish Drude, one pole, with SI rates: omega_p = 2 pi c / 136 nm, gamma = 2 pi c / 17 um.
+gold = DispersiveMaterial(epsilon_inf=1., poles=(
+    Drude(omega_p=2 * np.pi * C0 / 136e-9, gamma=2 * np.pi * C0 / 17e-6),))
+air, glass = Material(epsilon=1.), Material(epsilon=1.5**2)
+band = (820., 900., 980.)
 
-scene = Stack(layers=[Layer(thickness=60., structure=np.ones((1, 2)))],
-              top=1., bot=wavebit.eps_from_refractive_index(1.5), period=(700.,))
-light = Incidence(wavelength=band, theta=0., phi=0., tetm='te')
+# A 60 nm gold strip over x = -350..0 nm of a 700 nm cell, on glass, lit from above.
+problem = fdtd.Problem(
+    units=units,
+    scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(700., 10., 1050.), center=(0., 0., 75.)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+        structures=(
+            fdtd.Structure('substrate', fdtd.Slab(z=(-450., 0.)), glass),
+            fdtd.Structure('strip', fdtd.Region(size=(350., 700., 60.), center=(-175., 0., 30.)),
+                           gold))),
+    sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=500.),
+                            pulse=fdtd.GaussianPulse(wavelength=900., frequency_sigma_hz=2e13)),),
+    outputs=fdtd.Outputs(monitors=(
+        fdtd.Diffraction('r', plane=fdtd.Plane(z=350.), wavelengths=band, source='light',
+                         side='reflect'),
+        fdtd.Diffraction('t', plane=fdtd.Plane(z=-300.), wavelengths=band, source='light',
+                         side='transmit'))))
+# The -1 and +1 orders leave the glass at cos(theta) = 0.36 at 980 nm, a grazing exit the
+# default PML refuses; the refusal asks for this deeper absorber and at least 160 periods.
+spectrum = fdtd.run(problem, numerics=fdtd.Numerics(                      # one run
+    grid=fdtd.UniformGrid(spacing=10.), duration=fdtd.Duration(periods=160, source='light'),
+    absorber=fdtd.PML(cells=24, reflection=6e-10)))
 
-spectrum = wavebit.fdtd(stack=scene, incidence=light, resolution=0.1, n_periods=100,
-                        dispersion=np.array([[1, 0]]), poles={1: gold})   # one run
+reference = rcwa.run(rcwa.Problem(                                        # one solve per wavelength
+    units=units,
+    stack=rcwa.Stack(period=(700., 700.), top=air, bottom=glass, layers=(rcwa.Layer(
+        thickness=60., background=air, regions=(rcwa.Region(
+            geometry=rcwa.Rectangle(size=(350., 700.), center=(-175., 0.)), material=gold),)),)),
+    excitation=rcwa.Excitation(wavelength=np.array(band),
+                               sources=(rcwa.PlaneWave(polarization='s'),))),
+    numerics=rcwa.Numerics(orders=(60, 0)))
 
-for wl, r in zip(band, spectrum):
-    eps = wavebit.permittivity_at(gold, wl)     # the closed form the stepping discretises
-    ref = wavebit.rcwa(backend='numpy', wavelength=wl, period=[700.], theta=0., phi=0., tetm='te',
-                       truncation_order=dict(x=60, y=0), top=1.,
-                       bot=wavebit.eps_from_refractive_index(1.5),
-                       structure=np.array([[[eps, 1.]]]), thickness=[60.]).solve()
-    print(f'{wl:.0f} nm  eps {eps.real:8.3f}{eps.imag:+.3f}j   '
-          f'T0 fdtd {r.order(0, 0).T:.4f} rcwa {ref.order(0, 0).T:.4f}   '
-          f'absorbed fdtd {1 - r.R.sum() - r.T.sum():.4f} rcwa '
-          f'{1 - ref.R.sum() - ref.T.sum():.4f}')
+eps = gold.at(np.array(band), units=units).epsilon   # the closed form the stepping discretises
+R = spectrum['r'].efficiency.sum(axis=(1, 2))
+T = spectrum['t'].efficiency.sum(axis=(1, 2))
+for i, wl in enumerate(band):
+    print(f'{wl:.0f} nm  eps {eps[i].real:8.3f}{eps[i].imag:+.3f}j   '
+          f"T0 fdtd {spectrum['t'].order(0).efficiency[i]:.4f} "
+          f'rcwa {reference.transmission.order(0).efficiency[i]:.4f}   '
+          f'absorbed fdtd {1 - R[i] - T[i]:.4f} '
+          f'rcwa {1 - reference.R[i].sum() - reference.T[i].sum():.4f}')
 ```
 
 ```
-820 nm  eps  -35.269+1.749j   T0 fdtd 0.4036 rcwa 0.4049   absorbed fdtd 0.0112 rcwa 0.0111
-900 nm  eps  -42.671+2.312j   T0 fdtd 0.4039 rcwa 0.4060   absorbed fdtd 0.0135 rcwa 0.0131
-980 nm  eps  -50.753+2.983j   T0 fdtd 0.4144 rcwa 0.4172   absorbed fdtd 0.0162 rcwa 0.0154
+820 nm  eps  -35.269+1.749j   T0 fdtd 0.4073 rcwa 0.4049   absorbed fdtd 0.0107 rcwa 0.0111
+900 nm  eps  -42.671+2.312j   T0 fdtd 0.4090 rcwa 0.4060   absorbed fdtd 0.0126 rcwa 0.0131
+980 nm  eps  -50.753+2.983j   T0 fdtd 0.4206 rcwa 0.4172   absorbed fdtd 0.0149 rcwa 0.0154
 ```
 
-The band is an identity rather than an approximation: three separate single-wavelength runs
-agree with it to 3e-3, which is the gap between two source *bandwidths* rather than between two
-answers. The pulse is sized from the requested span, which is what keeps the band edge safe —
-every amplitude is divided by the incident spectrum, and with a fixed pulse width an incident
-spectrum 2.4e-7 of its peak once returned `R = 105` on a scene whose true `R` is 0.04.
+The FDTD columns were regenerated with the current module on 2026-10-15 (the RCWA columns are
+unchanged to 1e-12); the earlier factory, at 100 periods and its own 12-cell absorber, printed
+T0 0.4036, 0.4039, 0.4144 and absorbed 0.0112, 0.0135, 0.0162. The cell-snapped strip also draws
+an `AbsorberProximityWarning`: that rule sizes its half-wavelength clearance with the real part
+of the metal's index, which is small, so it asks for micrometres; the 450 nm and 540 nm gaps
+here are at least the half wavelength the earlier route padded with in the glass (300 nm) and
+the air (450 nm).
+
+The band is an identity rather than an approximation: each wavelength is its own Fourier
+transform of the one run, and a run asking for 900 nm alone, with the same pulse, returns the
+same efficiencies to 1e-14. The earlier factory sized its pulse from the requested span, and
+three separate single-wavelength runs there agreed with its band to 3e-3, the gap between two
+source *bandwidths* rather than between two answers. Here the pulse is declared: its
+`frequency_sigma_hz` sets the band, every amplitude is divided by the measured incident
+spectrum, and a wavelength where the pulse has fallen below its `cutoff` comes back NaN with
+`result.validity.checks['source_reference']` false. That is the guard against what the earlier
+route once measured with a fixed pulse width: an incident spectrum 2.4e-7 of its peak returned
+`R = 105` on a scene whose true `R` is 0.04.
 
 **At oblique incidence a band holds the physical transverse `(kx, ky)` fixed.**
 The polar angle therefore varies with wavelength: about 28.5 degrees at 860 nm
-and 31.5 at 940 nm for a 30-degree centre at 900 nm. `diagnostics['angles']`
+and 31.5 at 940 nm for a 30-degree centre at 900 nm. In the current module the
+`Bloch` faces from `Bloch.from_source` fix it at the pulse's centre wavelength, and
+each `Diffraction` result reports the polar angles in radians in
+`metadata['theta_radians']`. On the earlier factory `diagnostics['angles']`
 reports the polar angles in radians and `azimuth` reports phi. The backend-omitted
 route also retains `angles_deg` as the degree-valued compatibility view of `angles`.
 Normal incidence is unaffected,
@@ -242,7 +362,14 @@ abscissae** — a reader who rebuilds them is wrong three ways: a graded mesh ha
 in-plane coordinates are measured from the centre of the cell, and `Ey` sits on the x nodes
 rather than at the pixel centres.
 
+The current module keeps the time series of one component at its nearest Yee point,
+`fdtd.Record(name, at, component)` (times in seconds, fields in V/m or A/m), and the final E
+and H, `fdtd.Outputs(final_fields=True)`, each with the coordinates it was sampled at. It does
+not record the whole domain over time yet, so this example and the plotting below keep the
+earlier factory.
+
 ```python
+# Earlier interface: whole-domain time records are not in the current API yet.
 import numpy as np
 from wavebit.compat import legacy as wavebit
 from wavebit.compat.legacy import Stack, Layer, Incidence
@@ -281,13 +408,14 @@ not sit in the same place: the Yee grid stages `Ey` on the x nodes and `Ex` on t
 Rebuilding an axis instead of reading it is wrong three ways, each silently: `field_z` is not
 `arange(nz) * dz` once the mesh is graded, `field_x` does not start at zero because every
 in-plane coordinate in this library is measured from the centre of the cell, and the pixel
-centres `wavebit.meshgrid_xy` returns are half a cell from where `Ey` lives. The measurements
+centres `wavebit.compat.legacy.meshgrid_xy` returns are half a cell from where `Ey` lives. The measurements
 behind all three are in [`fdtd.md`](fdtd.md) §8h.
 
 The same record can be plotted or animated with optional Matplotlib
 (`pip install 'wavebit[plot]'`):
 
 ```python
+# Earlier interface: plot_fdtd_field and animate_fdtd_field are not in the current API yet.
 # Use record_field=10 in the solve above to resolve the optical oscillation.
 fig, ax, mesh = wavebit.plot_fdtd_field(diagnostics, frame=len(diagnostics['field_t']) // 2)
 animation = wavebit.animate_fdtd_field(diagnostics, interval=50)
@@ -321,6 +449,8 @@ residual of the two basis runs. Recording is still off by default.
 the full list of refusals and what each one protects, and the two questions a time-domain
 solver can state that a harmonic one cannot. [`result-guards.md`](../../reference/common/result-guards.md) says
 what a solve checks about its own answer, and why there is no generic energy warning.
+[How the solver models a problem](model.md) covers the current module: its grid, structures,
+boundaries, sources, monitors and the accuracy rules a run must pass.
 
 
 To record every electric and magnetic component, add `record_components='all'`.
@@ -330,7 +460,7 @@ from E by half a time step. See [the component layout](fdtd.md#recording-all-six
 before combining staggered fields.
 
 
-`wavebit.fdtd_poynting(diag, z=50., x=0., y=0.)` returns a point's instantaneous
+`wavebit.compat.legacy.fdtd_poynting(diag, z=50., x=0., y=0.)` returns a point's instantaneous
 energy flow in `S[:, 0:3]`, after interpolating all six fields to common Yee positions
 and times. `sample_fdtd_fields` returns the interpolated E/H directly. Both require
 `record_components='all'`; see [point probes](fdtd.md#point-probes-and-instantaneous-energy-flow)
@@ -339,8 +469,13 @@ for units, sampling limits and the distinction between total and scattered flux.
 
 ## Streaming frequency planes
 
+In the current module, an `fdtd.Field(name, wavelengths, plane=fdtd.Plane(z=...))` monitor
+returns the raw Fourier phasors of the six components on their own Yee points (V·s/m and
+A·s/m), and `fdtd.Flux` the net spectral energy through a plane (J/Hz); neither is divided by
+the source spectrum. The rest of this section describes the earlier factory.
+
 Pass `field_monitors={'near': z_near, 'transmitted': z_out}` together with
-`return_diagnostics=True` to `wavebit.fdtd`. No `record_field` is needed. Each entry
+`return_diagnostics=True` to `wavebit.compat.legacy.fdtd`. No `record_field` is needed. Each entry
 of `diag['monitors']` contains six complex `fields` arrays `(wavelength, y, x)`,
 `x`/`y` coordinates, `flux_density` `(wavelength, y, x, 3)` and `power_z`
 `(wavelength,)`. Spatial interpolation collocates native Yee components, including
@@ -367,7 +502,7 @@ not a whole-volume harmonic field reconstruction.
 
 ## Shared NumPy, JAX and Torch native grids
 
-`wavebit.fdtd_grid` is a Cartesian Yee interface sharing one Array API calculation
+`wavebit.compat.legacy.fdtd_grid` is a Cartesian Yee interface sharing one Array API calculation
 core across NumPy, JAX and Torch. The `backend` selector accepts `'numpy'`, `'jax'`,
 `'torch'` or a `wavebit.Backend` member, as RCWA does; integers are refused.
 Its native grid coordinates do not pass through the periodic Stack adapter.
@@ -379,6 +514,7 @@ electric conductivity are supported. Coefficients belong on each component's
 native Yee location; the function does not rasterize or average interfaces.
 
 ```python
+# Earlier interface: a native grid of per-cell coefficients is not in the current API yet.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -491,9 +627,11 @@ with CPML enabled. Actual GPU execution remains unverified.
 
 ### CPML strength
 
-`wavebit.fdtd_grid`, `wavebit.fdtd(..., backend=...)` and `wavebit.fdtd` with
-`backend` omitted all accept `pml_reflection=1e-8`. It must be a finite real
-static scalar strictly between zero and one; booleans, complex values and arrays
+In the current module the strength is `fdtd.PML(reflection=1e-8)` and the depth
+`fdtd.PML(cells=12)`, both set once for every `Open()` face through `Numerics(absorber=...)`.
+On the earlier interface, `fdtd_grid`, `wavebit.compat.legacy.fdtd(..., backend=...)` and
+`wavebit.compat.legacy.fdtd` with `backend` omitted all accept `pml_reflection=1e-8`. It must
+be a finite real static scalar strictly between zero and one; booleans, complex values and arrays
 with dimensions are refused. The same setting applies at both ends, including
 bottom incidence, and to all four scene calibration/structure runs; with
 `backend` omitted it also grades the absorbers of the one-dimensional grid that
@@ -517,6 +655,10 @@ comparison and its remaining limits.
 
 
 ## Native Bloch phases and incidence gradients
+
+In the current module a `Bloch(phase=...)` or `Bloch(k=...)` face pair uses the same
+convention and makes the run complex, and `Bloch.from_source` writes the pair an oblique
+`PlaneWave` needs. The rest of this section describes the earlier native grid, `fdtd_grid`.
 
 `bloch_phase=(phase_z, phase_y, phase_x)` specifies real phase advances in radians
 across each simulation period: `F(r+L_axis)=exp(1j*phase_axis)*F(r)`. It follows
@@ -561,7 +703,7 @@ FDTDX non-dispersive, two-pole and complex-Bloch goldens are checked through Tor
 as well as JAX; they remain frozen references, not a fresh external execution
 on each test run. Use explicit double-precision input tensors for precision checks.
 
-This unifies native-grid **calculation backends**. The `wavebit.fdtd`
+This unifies native-grid **calculation backends**. The `wavebit.compat.legacy.fdtd`
 Stack/Incidence adapter selects this engine when `backend` is explicitly supplied.
 Its static rasterization, current-sheet reference calibration and modal Result
 extraction are described below. Existing native `fdtd_grid` calls remain compatible.
@@ -569,21 +711,43 @@ extraction are described below. Existing native `fdtd_grid` calls remain compati
 
 ## Common scene adapter
 
+The current module differentiates live material values on the JAX and PyTorch backends, here a
+slab's permittivity through the whole run and the `Diffraction` normalization:
+
 ```python
 import torch
-from wavebit.compat import legacy as wavebit
-from wavebit.compat.legacy import Stack, Incidence
+from wavebit import Material, Units, fdtd
 
 value = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
-scene = Stack.from_structure(value.reshape(1, 1, 1), [.3],
-                             top=1., bot=1., period=.4)
-result = wavebit.fdtd(scene, Incidence(wavelength=1., tetm='te'),
-                     backend='torch', resolution=20, n_periods=30,
-                     truncation_order=0)
-derivative, = torch.autograd.grad(result.T.sum(), value)
+problem = fdtd.Problem(
+    units=Units(length='um'),
+    scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.4, .05, 2.), center=(0., 0., .15)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+        structures=(fdtd.Structure('slab', fdtd.Slab(z=(0., .3)), Material(epsilon=value)),)),
+    sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=.9),
+                            pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=2e13)),),
+    outputs=fdtd.Outputs(monitors=(
+        fdtd.Diffraction('t', plane=fdtd.Plane(z=-.5), wavelengths=(1.,), source='light',
+                         side='transmit', orders=(0, 0)),)))
+result = fdtd.run(problem, backend='torch', numerics=fdtd.Numerics(
+    grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(periods=30, source='light')))
+derivative, = torch.autograd.grad(result['t'].efficiency.sum(), value)
 ```
 
-The same adapter runs on NumPy, JAX and Torch. JAX results are
+Here `T` is 0.9849 and its derivative 0.0470 per unit permittivity, against 0.9837 and 0.0435
+from the closed form (current module, 2026-10-15; the earlier adapter gave 0.9866 and 0.0405 on
+its own grid). On JAX, prepare once with concrete values and differentiate
+`prepared.run(problem)` with the traced value placed in the problem; the two backends agree to
+1e-15 here. A material that reaches an `Open()` face is the exception: its PML is built once
+from concrete values, so a half-space is not differentiable in the current module (see
+[half-space material derivatives](#half-space-material-derivatives)).
+{ref}`Differentiating a run <fdtd-model-differentiating>` lists what is live.
+
+The rest of this section describes the earlier adapter, `wavebit.compat.legacy.fdtd(...)` with
+an explicit `backend`, which most examples below still use.
+
+That adapter runs on NumPy, JAX and Torch. JAX results are
 registered pytrees, so a function returning the complete `Result` can be jitted.
 Incidence `theta`/`phi`, raster epsilon, raster mu, electric Drude/Lorentz parameters and Jones amplitudes
 retain their backend graphs. Raster cell boundaries are static; harmonic averaging
@@ -646,6 +810,12 @@ the native-core Meep/FDTDX field and derivative references.
 
 ### Transverse rectangle shape derivatives
 
+The current module differentiates the geometry of a smoothed body given a reserved
+`Numerics(geometry_ranges=...)` box, but not a `Box` angle, not a smoothed body standing flush
+on a half-space `Slab` or near a `Periodic()` face, and not two smoothed surfaces in one cell;
+it has no ellipse. Each example in this and the next four sections meets one of those limits,
+so they keep the earlier explicit-backend route.
+
 Explicit backends accept the same layer dictionaries and `Material` objects
 as RCWA for rectangles and squares. The default `shape_integration='separable'`
 accepts axis-aligned shapes; opt-in area integration supports rotation. A centre is measured from
@@ -654,6 +824,7 @@ Later shapes paint over earlier shapes, including periodic images. Coordinates,
 sizes and scalar positive real epsilon/mu can be NumPy, JAX or Torch values.
 
 ```python
+# Earlier interface: a differentiable rectangle on a half-space substrate is not in the current API yet.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -722,6 +893,7 @@ rectangle's `angle` in radians along with its centre, size and scalar material.
 The same shared RCWA recipe is used:
 
 ```python
+# Earlier interface: a rotation-angle derivative is not in the current API yet.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -792,6 +964,7 @@ periodic cell edge. A completely hidden shape has no material or geometry
 sensitivity until its boundary becomes exposed.
 
 ```python
+# Earlier interface: overlapping painted rectangles are not in the current API yet.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -848,6 +1021,7 @@ to the period centre. Centres wrap periodically. A finite `angle` has no effect
 on a circle, and its derivative is zero.
 
 ```python
+# Earlier interface: a differentiable disk on a half-space substrate is not in the current API yet.
 import jax
 from wavebit.compat import legacy as wavebit
 
@@ -902,6 +1076,7 @@ in radians; it may be live even when its current value is zero. Centres keep
 the common period-centred convention and wrap periodically.
 
 ```python
+# Earlier interface: an elliptical body is not in the current API yet.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -951,6 +1126,9 @@ separate integration accuracy, complete graphs and graded optical refinement.
 
 ### Incidence-angle derivatives
 
+In the current module a `PlaneWave`'s `theta` and `phi` are static: they fix the grid and the
+time loop, and a traced value is refused. These examples keep the earlier route.
+
 With an explicit `backend`, `theta` and `phi` may be real scalar NumPy, JAX or
 Torch arrays. Supply an explicit `truncation_order` whenever either is an array,
 including a constant zero-dimensional array. This keeps the output shape fixed
@@ -958,6 +1136,7 @@ while an angle changes. Python or NumPy scalar numbers continue to support
 automatic order selection.
 
 ```python
+# Earlier interface: an incidence-angle derivative is not in the current API yet.
 import torch
 from wavebit.compat import legacy as wavebit
 
@@ -986,6 +1165,7 @@ the scalar TE/TM convention fixes the x-z plane and cannot follow a changing
 azimuth. Pure s and p are `polarization=(1., 0.)` and `(0., 1.)` respectively.
 
 ```python
+# Earlier interface: angle derivatives and Jones polarization are not in the current API yet.
 import torch
 from wavebit.compat import legacy as wavebit
 
@@ -1050,6 +1230,9 @@ order. Material and pole gradients retain their usual meaning; mesh sizes and
 these resolution controls are not differentiable.
 
 ```python
+# Earlier interface: per-axis cell sizes are not in the current API yet (one cubic spacing).
+from wavebit.compat import legacy as wavebit
+
 result, diagnostic = wavebit.fdtd(
     structure=[[[2.25, 1.]]], thickness=[.2], top=1., bot=1., period=.8,
     wavelength=1., tetm='te', backend='numpy', resolution=40,
@@ -1085,25 +1268,60 @@ harmonic lattice accuracy from finite-time and finite-boundary differences.
 
 ### Source position independent of padding
 
-`source_distance` optionally places the incident electric-current sheet a
+In the current module the incident sheet sits where the problem puts it.
+`PlaneWave(plane=fdtd.Plane(z=...))` places it on the node plane nearest that coordinate, each
+`Diffraction(plane=...)` places a measurement plane, and the `Domain` sets the padding, so none
+of the three moves another. A film 0.213 µm thick, with the sheet 1 µm above its top face:
+
+```python
+from wavebit import Material, Units, fdtd
+
+thickness, distance = .213, 1.                     # um; the sheet 1 um above the top face
+problem = fdtd.Problem(
+    units=Units(length='um'),
+    scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.1, .1, 2.), center=(0., 0., .5)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+        # A smoothed Box keeps both faces where they are declared; a Slab would snap them.
+        structures=(fdtd.Structure('film', fdtd.Box(size=(.2, .2, thickness),
+                                                    center=(0., 0., thickness / 2)),
+                                   Material(epsilon=2.25)),)),
+    sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=thickness + distance),
+                            pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=2.25e13)),),
+    outputs=fdtd.Outputs(monitors=(
+        fdtd.Diffraction('r', plane=fdtd.Plane(z=thickness + .2), wavelengths=(1.,),
+                         source='light', side='reflect',
+                         reference_plane=thickness, incident_plane=thickness),
+        fdtd.Diffraction('t', plane=fdtd.Plane(z=-.2), wavelengths=(1.,),
+                         source='light', side='transmit',
+                         reference_plane=0., incident_plane=thickness))))
+result = fdtd.run(problem, numerics=fdtd.Numerics(
+    grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(periods=50, source='light')))
+print(f"{problem.sources[0].plane.position:.4f}")     # requested sheet position
+print(f"{result.sources['light']['plane']:.4f}")      # the node plane it sits on
+```
+
+```
+1.2130
+1.2250
+```
+
+The values come from the current module (2026-10-15). `frequency_sigma_hz=2.25e13` is the
+earlier `pulse_width=3.` (see [Gaussian source width](#gaussian-source-width)), and the film's
+`T` is 0.8759 against 0.8771 on the earlier route and 0.8752 from the closed form. The Box
+keeps the 0.213 µm faces that the earlier route's `align_layers=True` put on nodes; the Box
+draws the `SubpixelAccuracyWarning` every smoothed body draws.
+
+The earlier explicit-backend route spells the same placement as distances from the stack's
+faces. `source_distance` optionally places the incident electric-current sheet a
 positive static distance from the incident interface, in length units. `None`
 keeps the original source position. The nearest z node is selected without
 changing the mesh, PML, layer boundaries or extraction planes. With top
 incidence its target is `z=total_thickness+source_distance`; with bottom incidence
 the target is `z=-source_distance`. With `variable_depth=True`, use the nominal
 mesh depth for this placement; the source stays fixed as the physical face moves.
-
-```python
-result, diag = wavebit.fdtd(
-    structure=np.full((1, 1, 1), 2.25), thickness=[.213],
-    top=1., bot=1., period=.1, wavelength=1., backend='numpy',
-    resolution=40, n_pml=12, pulse_width=3., n_periods=50,
-    source_distance=1., diffraction_distance=.2,
-    align_layers=True, return_diagnostics=True,
-)
-print(diag['source_distance'])   # requested interface distance
-print(diag['source_z'])          # realized node in original scene coordinates
-```
+`source_distance=1., diffraction_distance=.2` with `align_layers=True` placed the earlier
+route's sheet on the node at 1.213 for the film above.
 
 The selected node must lie in the incident half space, at least two cells past
 the PML's inner face, and at least three cell intervals before the reflection
@@ -1131,6 +1349,11 @@ to be distinguished.
 
 ### Diffraction planes and cutoff diagnostics
 
+In the current module each measurement plane is the `Diffraction(plane=...)` the problem
+declares, and `reference_plane` and `incident_plane` move its phase references (as in the
+example above); each result carries the Yee `kz` and `k_parallel` of every order. It has no
+cutoff classification yet, so the example below keeps the earlier route.
+
 `diffraction_distance` controls the extraction-plane distances from the reflection
 and transmission reference interfaces. It accepts a positive static scalar for
 both legs, or a `(reflection, transmission)` pair in length units. The default
@@ -1141,6 +1364,10 @@ plane must precede the PML. Neither plane may touch a mixed interface cell.
 An unplaceable request raises instead of silently expanding the simulation.
 
 ```python
+# Earlier interface: the cutoff classification diagnostics are not in the current API yet.
+import numpy as np
+from wavebit.compat import legacy as wavebit
+
 result, diag = wavebit.fdtd(
     structure=np.full((1, 1, 1), 2.25), thickness=[.213],
     top=1., bot=1., period=.1, wavelength=1., tetm='tm', theta=.25,
@@ -1199,6 +1426,10 @@ With an explicit backend, `diffraction_method='directional'` uses both E and H
 to separate propagation toward and away from the stack at each measurement plane:
 
 ```python
+# Earlier interface: directional E/H extraction is not in the current API yet.
+import numpy as np
+from wavebit.compat import legacy as wavebit
+
 result, diag = wavebit.fdtd(
     structure=np.full((1, 1, 1), 2.25), thickness=[.2],
     top=1., bot=1., period=.1, wavelength=1., tetm='tm',
@@ -1253,6 +1484,13 @@ and a near-Rayleigh example that still fails temporal convergence.
 
 ### Gaussian source width
 
+In the current module every source carries a declared `GaussianPulse(wavelength,
+frequency_sigma_hz)`, the standard deviation of its amplitude spectrum in Hz. The earlier
+`pulse_width=w` below corresponds to `frequency_sigma_hz = c / (sqrt(2) * pi * w)` with `w` a
+length: 2.25e13 Hz for `w = 3` µm. The usable band ends where that spectrum falls to the
+pulse's `cutoff` (1e-3 by default), and a `Diffraction` wavelength outside it comes back NaN.
+The rest of this section describes the earlier route's `pulse_width`.
+
 The explicit-backend scene adapter accepts `pulse_width`, a positive static scalar
 in c=1 time units (the same numerical units as length). It is the Gaussian
 envelope's 1/e **amplitude half-width**, not a frequency bandwidth or a FWHM.
@@ -1270,6 +1508,10 @@ glancing waves at oblique incidence, but also weakens the source at wavelengths
 away from its center. Use a longer total run when increasing the width:
 
 ```python
+# Earlier interface: the pulse and convergence-window diagnostics are not in the current API yet.
+import numpy as np
+from wavebit.compat import legacy as wavebit
+
 result, diag = wavebit.fdtd(
     structure=np.full((1, 1, 1), 2.25), thickness=[.2],
     top=1., bot=1., period=.1, wavelength=[.9, 1., 1.1],
@@ -1313,6 +1555,10 @@ For example, to weaken an unwanted oscillation at frequency 0.8 while measuring
 wavelengths 0.9, 1.0 and 1.1:
 
 ```python
+# Earlier interface: source spectral zeros are not in the current API yet.
+import numpy as np
+from wavebit.compat import legacy as wavebit
+
 result, diag = wavebit.fdtd(
     structure=np.full((1, 1, 1), 2.25), thickness=[.2],
     top=1., bot=1., period=.1, wavelength=[.9, 1., 1.1],
@@ -1371,6 +1617,13 @@ diffraction threshold.
 ### Shared-backend time records and user monitors
 
 ```python
+# Earlier interface: whole-domain records and calibrated user planes are not in the current API yet.
+import torch
+from wavebit.compat import legacy as wavebit
+from wavebit.compat.legacy import Stack, Incidence
+
+value = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
+scene = Stack.from_structure(value.reshape(1, 1, 1), [.3], top=1., bot=1., period=.4)
 result, diag = wavebit.fdtd(
     scene, Incidence(wavelength=1., tetm='te'), backend='torch',
     resolution=20, n_periods=30, truncation_order=0,
@@ -1429,6 +1682,11 @@ diffraction result unchanged.
 
 ### Half-space material derivatives
 
+The current module refuses this derivative: a half-space reaches an `Open()` face, and the
+PML there is built once from the material's concrete values, so a traced permittivity or
+permeability in it raises `ValueError` before any time step. These examples keep the earlier
+route.
+
 With an explicit backend, `top` and `bot` accept positive real scalar
 permittivities, or `Material(epsilon, mu)` with positive real scalar
 coefficients. Array coefficients retain their graphs when both
@@ -1442,6 +1700,7 @@ evaluation. Recomputing the nominal pair from each perturbation changes the
 experiment being compared.
 
 ```python
+# Earlier interface: half-space material derivatives are not in the current API yet.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -1494,6 +1753,10 @@ agreement.
 
 ### Internal layer thickness derivatives
 
+In the current module a `Slab`'s span is static, so a traced `z` is refused, and a ranged,
+differentiable `Box` layer cannot stand flush on a half-space `Slab` or another cell-snapped
+face. The examples in this and the next section keep the earlier route.
+
 Pass static `mesh_thickness` to choose the z mesh while backend `thickness`
 values move the internal interfaces. The actual lengths must stay positive,
 and their sum must equal the nominal total depth. This keeps both exterior
@@ -1501,6 +1764,7 @@ reference planes, sources, monitors, PML, record coordinates and time step
 fixed. The spelling is shared with RCWA and typed `Stack` objects:
 
 ```python
+# Earlier interface: layer-thickness derivatives are not in the current API yet.
 import jax
 import jax.numpy as jnp
 from wavebit.compat.legacy import Stack, Incidence, fdtd
@@ -1565,6 +1829,7 @@ amplitudes are referenced to those physical faces, using the same convention as 
 retain JAX/Torch derivatives.
 
 ```python
+# Earlier interface: a moving outer face is not in the current API yet.
 import jax
 import numpy as np
 from wavebit.compat.legacy import fdtd
@@ -1654,8 +1919,12 @@ backtracking optimization followed by both smoothed and sharp finer-grid checks.
 
 ### Bottom illumination in the common engine
 
-Set `Incidence(..., incidence_side='bottom')` or pass `incidence_side='bottom'`.
-Both public periodic routes support this; this section details the explicit engine. The structure, top/bottom materials and layer ordering
+In the current module, light from below is a `PlaneWave(direction='+z')` placed below the
+stack, with the `side='reflect'` monitor below it and the `side='transmit'` monitor above the
+stack; the scene itself does not change.
+
+On the earlier factory, set `Incidence(..., incidence_side='bottom')` or pass `incidence_side='bottom'`.
+Both of its periodic routes support this; this section details the explicit engine. The structure, top/bottom materials and layer ordering
 remain in the original scene. Angles are measured relative to the incidence
 medium's inward normal, matching RCWA. R is reflected power into that medium;
 T leaves through the opposite side. Complex r is referenced to the bottom
@@ -1693,6 +1962,9 @@ in `tests/references/golden_scene_bottom_meep.json`.
 
 ### Static nonuniform z meshes
 
+The current module's grid is uniform and cubic; this section and the next describe the
+earlier engine.
+
 The shared engine now accepts `z_spacing`, a static positive vector with one
 cell width per z index. It overrides `spacing[0]`; x and y stay uniform.
 The last width is the closing periodic cell, so the complete z period is the
@@ -1711,6 +1983,7 @@ is static and is not a differentiable design variable.
 For `Stack` scenes, pass `grading=True` (ratio 1.06) or a ratio between 1 and 2:
 
 ```python
+# Earlier interface: a graded z mesh is not in the current API yet (its grid is uniform).
 import numpy as np
 from wavebit.compat import legacy as wavebit
 from wavebit.compat.legacy import Stack, Incidence
@@ -1763,6 +2036,10 @@ thickness; every boundary lies on a z node. Cell widths inside the structure are
 at most `1/resolution`, and x/y sampling is unchanged. The default is `False`.
 
 ```python
+# Earlier interface: layer-fitted z cells are not in the current API yet.
+import numpy as np
+from wavebit.compat import legacy as wavebit
+
 result, diag = wavebit.fdtd(
     structure=np.array([[[2.25]], [[1.5]]]), thickness=[.113, .213],
     top=1., bot=1., period=.1, wavelength=1., tetm='tm', theta=.45,
@@ -1872,6 +2149,7 @@ independent of the supplied Jones vector. Existing top-level `amplitude_change`
 and `amplitudes_settled` retain their supplied-polarization meaning.
 
 ```python
+# Earlier interface: convergence-window diagnostics are not in the current API yet.
 c = diagnostic['convergence']
 print(c['s_inc']['amplitudes_settled'], c['p_inc']['amplitudes_settled'])
 print(c['scattering_settled'])
@@ -1914,6 +2192,7 @@ using it on broadband pulses, rapidly changing fields, or resonant materials.
 There is no automatic stride selection.
 
 ```python
+# Earlier interface: DFT subsampling is not in the current API yet.
 result, diagnostic = wavebit.fdtd(
     stack, incidence, backend='numpy', resolution=40,
     dft_subsample=2, return_diagnostics=True)
@@ -1943,6 +2222,7 @@ out-of-range integer indices and noninteger entries are refused. The region is
 static and requires `record_field`; it is available on the native grid API.
 
 ```python
+# Earlier interface: the native grid and its record regions are not in the current API yet.
 out = wavebit.fdtd_grid(
     epsilon, spacing=(dz, dy, dx), dt=dt, steps=steps,
     record_field=10, record_components=('ey', 'hx'),
@@ -1972,6 +2252,7 @@ from any of `x`, `y`, `z` to `(lower, upper)` physical coordinates. It requires
 with `lower <= upper`; unspecified axes keep their entire extent.
 
 ```python
+# Earlier interface: whole-field records within physical bounds are not in the current API yet.
 result, diagnostic = wavebit.fdtd(
     stack, incidence, backend='jax', resolution=40,
     record_field=10, record_components=('ey', 'hx'),
@@ -2003,10 +2284,14 @@ optimization parameters. For direct grid-index selection on `fdtd_grid`, use
 
 ### Fitting frequencies and decay rates from a time trace
 
-`wavebit.fit_fdtd_modes(t, signal, modes=...)` analyzes a single point/component
-after the source becomes negligible. Select a trace from the recorded fields:
+`wavebit.compat.legacy.fit_fdtd_modes(t, signal, modes=...)` analyzes a single point/component
+after the source becomes negligible. It has no current equivalent yet. It is NumPy
+post-processing of any uniformly sampled trace, so the series of a current `fdtd.Record`
+(`result[name].time` in seconds, `.values`) also works; frequencies and decay rates then come
+out in Hz and 1/s. Select a trace from the recorded fields:
 
 ```python
+# Earlier interface: fit_fdtd_modes and whole-field records are not in the current API yet.
 field = diagnostics['fields']['ey']
 signal = np.asarray(field['values'])[:, 0, 0, 0]
 fit = wavebit.fit_fdtd_modes(

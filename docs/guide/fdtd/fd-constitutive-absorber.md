@@ -1,12 +1,12 @@
 # Coupled dielectric geometry in a matched absorber
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+`Absorber` is not in the current `wavebit.fdtd` yet: its absorbing faces are `Open()` with a `PML` (`Numerics(absorber=...)` takes only `fdtd.PML`), and a finite body may not reach them. This page's example therefore uses the earlier interface, `wavebit.compat.legacy.fd`.
 :::
 
-This page describes the implemented bounded `wavebit.fd` route for a dielectric
-extrusion that continues into `Absorber`. Its algebra, targeted tests, fixed
-physical measurements and completed full/slow regressions are recorded, with
+This page describes the implemented bounded `wavebit.compat.legacy.fd` route for
+a dielectric extrusion that continues into `Absorber`. Its algebra, targeted tests,
+fixed physical measurements and completed full/slow regressions are recorded, with
 bit-exact freezer comparisons. The measured finite-domain differences remain
 substantial, so this route is not a validated low-reflection termination for
 arbitrary waveguides.
@@ -34,6 +34,7 @@ components and a DFT plane. The band and geometry
 are explicit so that the example does not depend on an inferred wavelength:
 
 ```python
+# Earlier interface: Absorber is not in the current wavebit.fdtd yet.
 from wavebit.compat.legacy import fd
 
 center = (.015, .0075, 0.)

@@ -246,6 +246,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 | `FarField(name, wavelengths, box, propagation="continuum")` | 열린 장면의 복사: 모든 것을 감싸는 닫힌 상자를 무한원으로 변환합니다. `intensity(theta, phi)`는 라디안을 받습니다. 주기 셀은 거절됩니다(주기 셀의 원거리장은 회절 차수입니다). `propagation="yee"`는 격자 자체의 분산을 씁니다. |
 | `Outputs(final_fields=True)` | 실행 끝의 E, H 배열과 각 성분의 좌표 |
 
+(fdtd-model-accuracy-rules)=
 ## 실행 전에 강제되는 정확도 규칙
 
 `check`, `prepare`, `run`이 같은 관문을 공유합니다. 거절 메시지는 바꿔야 할 설정을 알려
@@ -299,6 +300,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 거절하면 거짓, 아래 참고), 그리고 `Diffraction` 모니터별 `source_reference`입니다.
 `result.provenance`는 백엔드, 단위, `dt_seconds`, 실제 스텝 수, 모든 도메인을 기록합니다.
 
+(fdtd-model-differentiating)=
 ## 실행 미분
 
 `backend="jax"`나 `backend="torch"`로 준비한 실행은 살아 있는 입력에 대해 미분할 수 있습니다.
