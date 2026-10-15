@@ -743,6 +743,48 @@ def test_paths_cited_anywhere_are_in_the_repository():
         'substance instead of the address; see the contract in docs/README.md.')
 
 
+# The licence files name this tree's files in plain text, not in backticks, so CITED_PATH never
+# read them: LICENSE kept citing four `wavebit/_core/` files after 4272c7ce moved them under
+# `src/wavebit/`, in the one file the public mirror must ship correct. A path into this package
+# or its tests has to resolve. The other projects' files a notice names -- meent's
+# `meent/integ/smm_util.py`, fmmax's `src/fmmax/utils.py` -- carry neither prefix.
+LICENCE_PATH = re.compile(r'(?<![\w./-])((?:src/)?wavebit/[\w./-]*\w|tests/[\w./-]*\w)')
+
+
+def missing_licence_paths(root=ROOT):
+    """Each path into this tree that a top-level licence file names and a clone lacks."""
+    bad = []
+    for rel in sorted(tree(root)):
+        if '/' in rel or not rel.startswith('LICENSE'):
+            continue
+        for m in LICENCE_PATH.finditer((root / rel).read_text(encoding='utf-8')):
+            if not in_tree(m.group(1), root):
+                bad.append(f'{rel}: {m.group(1)}')
+    return bad
+
+
+def test_every_path_a_licence_names_is_in_the_repository():
+    bad = missing_licence_paths()
+    assert not bad, ('the licence names files that are not in the repository:\n  '
+                     + '\n  '.join(bad) + '\n\nA notice that points at a moved file attributes '
+                     'nothing; name where the code lives now.')
+
+
+@pytest.mark.parametrize('text,found', [
+    ('gradient in wavebit/_core/backend.py is a port', 'wavebit/_core/backend.py'),
+    ('the Cartesian shape path (src/wavebit/rcwa/_engine/rectilinear.py) through',
+     'src/wavebit/rcwa/_engine/rectilinear.py'),
+    ('the comparisons in tests/references/ call a copy', 'tests/references'),
+    ('script, tests/references/interface/reti_aniso.m, lays', 'tests/references/interface/reti_aniso.m'),
+    ('https://github.com/fieldalgo/wavebit/blob/develop/README.md', None),
+    ("from that project's src/fmmax/utils.py.", None),
+    ('meent/integ/smm_util.py and fieldwave/on_numpy/', None),
+])
+def test_the_licence_path_pattern_reads_this_tree_only(text, found):
+    m = LICENCE_PATH.search(text)
+    assert (m.group(1) if m else None) == found
+
+
 def missing_targets(text, root=ROOT):
     """Each `wavebit/...py` a document's text names that is not in the tree."""
     missing = []
