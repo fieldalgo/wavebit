@@ -1,0 +1,50 @@
+ETM labels from the state below; a layer of a half-space's medium -- studies/rcwa/etm_maxvol_labels/etm_maxvol_labels.py
+numpy 2.5.1, mpmath 1.3.0; every solve NumPy complex128
+
+== 1 table -- section 10's scenes: |ETM - SMM| in r0, and each one's move under a 1e-14 nudge of theta
+  scene                                              rule             new labels  SMM nudge
+  1D TE 0.5+0.3j                    8.1e-16 (nudge 1e-15)  5.8e-16 (nudge 8e-16)      7e-16
+  1D TM 0.5+0.3j                    6.3e-15 (nudge 2e-15)  6.3e-15 (nudge 2e-15)      3e-15
+  conical 0.5+0.3j                  8.5e-16 (nudge 8e-16)  1.1e-15 (nudge 7e-16)      8e-16
+  conical 0.5+0.03j                 1.1e-16 (nudge 6e-16)  1.1e-16 (nudge 6e-16)      6e-16
+  conical 1.2+0.5j                  2.0e-15 (nudge 1e-14)  2.0e-15 (nudge 1e-14)      1e-14
+  conical 0.5+0.3j, 50 um           2.1e-13 (nudge 1e-12)  2.2e-13 (nudge 1e-12)      1e-12
+  cap: conical 1.2+0.5j, 200 um     6.3e-13 (nudge 6e-12)  1.0e-12 (nudge 6e-12)      5e-12
+  2D 6x6, (6, 6)                    2.0e-14 (nudge 6e-15)  2.0e-14 (nudge 6e-15)      5e-14
+  evanescent pi/2-7.5e-08           1.8e-15 (nudge 1e-14)  1.8e-15 (nudge 1e-14)      1e-14
+  evanescent pi/2-0.0001            1.4e-15 (nudge 5e-15)  7.3e-16 (nudge 6e-15)      4e-15
+  evanescent pi/2-0.01              3.4e-15 (nudge 9e-15)  3.1e-15 (nudge 9e-15)      8e-15
+  1 mm, conical 0.5+0.3j            8.2e-02 (nudge 9e-02)  8.2e-02 (nudge 9e-02)      7e-02
+
+== 2 etched -- 4000 etched gratings on their own slab, ETM against SMM
+  etched the rule  :   184 over 1e-06 above SMM's nudge, 0 raised; worst finite 9.1e+00
+  etched new labels:     0 over 1e-06 above SMM's nudge, 0 raised; worst finite 4.9e-10
+  three scenes built to section 10's description (seeds 100000 on, each the first whose rule is 0.2 off, or the worst of 400):
+    tm      X = 108, orders 24, seed 100143: thicknesses ['6.63e-05', '2.64e-07'], theta 0.053+0.552j: rule 2.09e-01, new labels 4.54e-13, SMM nudge 2.4e-12
+    conical X = 58, orders 21, seed 100155: thicknesses ['9.27e-05', '6.89e-07'], theta 0.805+0.443j: rule 1.55e+00, new labels 1.80e-12, SMM nudge 2.8e-12
+    conical X = 78, orders 24, seed 100041: thicknesses ['8.33e-05', '1.85e-07'], theta 0.163+0.378j: rule 2.66e+00, new labels 2.42e-13, SMM nudge 6.7e-13
+
+== 3 random -- 13000 general and 13000 thick-layer complex-angle scenes
+  general the rule  :     4 over 1e-10 above SMM's nudge, 0 raised; worst finite 2.6e-08
+  general new labels:     1 over 1e-10 above SMM's nudge, 0 raised; worst finite 2.0e-10
+  general new labels over 3x worse than the rule (and over 1e-12 and 3x SMM's nudge): 0
+  thick   the rule  :     4 over 1e-10 above SMM's nudge, 0 raised; worst finite 6.5e-09
+  thick   new labels:     0 over 1e-10 above SMM's nudge, 0 raised; worst finite 6.3e-12
+  thick   new labels over 3x worse than the rule (and over 1e-12 and 3x SMM's nudge): 0
+
+== 4 knives -- a thick layer of a half-space's medium against exact theory
+  uniform, seeds 0-1535: 813 scenes, 23 skipped, 219 knife edges with a finite theory
+    SMM              unmerged:  216 over 1e-6 off the theory,   0 raised; merged: worst 7.2e-13
+    ETM, the rule    unmerged:  121 over 1e-6 off the theory,  95 raised; merged: worst 7.2e-13
+    ETM, new labels  unmerged:  131 over 1e-6 off the theory,  61 raised; merged: worst 7.2e-13
+  TE gratings, seeds 0-599: 600 scenes, 0 skipped, 349 knife edges with a finite theory
+    SMM              unmerged:  300 over 1e-6 off the theory,  38 raised; merged: worst 6.6e-13
+    ETM, the rule    unmerged:  206 over 1e-6 off the theory, 134 raised; merged: worst 7.6e-13
+    ETM, new labels  unmerged:  274 over 1e-6 off the theory,  33 raised; merged: worst 6.6e-13
+
+== 5 fields -- the merged field on the knife edges, against the deleted stack carried by plane waves
+  uniform: 219 fields (0 skipped: theory beyond double range or not merged); worst relative to the largest field: SMM 9.2e-13, ETM rule 9.2e-13, ETM new labels 9.2e-13
+  grating: 349 fields (0 skipped: theory beyond double range or not merged); worst relative to the largest field: SMM 7.1e-13, ETM rule 8.1e-13, ETM new labels 7.1e-13
+
+== 6 develop -- real-angle digests against c9ff4630
+  3120 of 3120 digests byte-identical (2400 amplitude sets, 720 field-rung sets of amplitudes and two field cells; class A, general and etched scenes at a real angle, ETM and SMM)
