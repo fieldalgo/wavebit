@@ -274,7 +274,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 | --- | --- |
 | `CoarseMeshWarning` | 매질 안에서 파장당 8~12셀, 또는 폭이 4~8셀인 스무딩 바디 |
 | `SubpixelAccuracyWarning` | 장면에 스무딩 바디가 있습니다. 기본 규칙의 정확도 관문은 아직 완료되지 않았습니다 |
-| `AbsorberProximityWarning` | 구조물이 흡수 면에서 (그 매질 안의) 반 파장 이내에 있습니다. 기판처럼 흡수층 안으로 이어지는 층에도 나오는데, 공개 모듈은 그 PML을 그 층에 맞춰 둡니다. |
+| `AbsorberProximityWarning` | 구조물이 흡수 면에서 (그 매질 안의) 반 파장 이내에 있습니다. 그 면의 PML은 구조물의 근접장이 아니라 그 면에 닿는 매질에 맞춰져 있습니다. 기판처럼 흡수층 안으로 이어지는 `Slab`에는 나오지 않습니다. 그 PML이 그 층에 맞춰지기 때문입니다. |
 | `GeometryClippedWarning` | 구조물이 `PEC`나 `PMC` 벽 너머로 뻗어 그 부분을 잃습니다 |
 | `UnsettledFieldWarning` | 모니터 영역에 실행 끝까지 장이 남아 있었습니다. 그 스펙트럼에는 잘림이 섞여 있습니다. 더 오래 실행하세요 |
 | `GrowingFieldWarning` | 모든 소스가 끝난 뒤에도 장이 자랍니다. 더 오래 실행하면 더 나빠집니다. 대개 PML 옆의 속박 모드이니, 메시지가 알려 주는 값으로 `PML(stabilize=...)`를 정하세요 |
