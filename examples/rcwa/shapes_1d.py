@@ -1,74 +1,44 @@
-
-from wavebit.compat import legacy as _legacy_wavebit
+"""Typed shape declarations, mixed/s/p illumination and lossless power balance."""
 import numpy as np
 
-import wavebit
+from wavebit import Material, Units, eps_from_refractive_index, rcwa
+
+
+def make_problem():
+    # Datasheet indices are converted explicitly to relative permittivity.
+    si = Material(epsilon=eps_from_refractive_index(3.638751670074983))
+    si3n4 = Material(epsilon=eps_from_refractive_index(2.0056))
+    return rcwa.Problem(
+        units=Units(length="nm"),
+        stack=rcwa.Stack(period=(300., 300.), bottom=si, layers=(
+            rcwa.Layer(thickness=205., background=si3n4, regions=(
+                rcwa.Region(geometry=rcwa.Rectangle(size=(31., 300.), center=(-100., 0.)), material=si),
+                rcwa.Region(geometry=rcwa.Rectangle(size=(49.5, 300.), center=(50., 0.)), material=si),
+            )),
+        )),
+        excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(polarization=(1., 1.)),)),
+    )
 
 
 def run():
-    # A material carries permittivity and permeability together, and permittivity is the
-    # quantity the API takes. These three are non-magnetic, so `Material(eps)` is enough --
-    # and `eps_from_refractive_index` is here because every nk datasheet hands you the other
-    # quantity. Writing the conversion out is the point: 3.638... reread as a permittivity is a
-    # legal, energy-conserving, different silicon, and nothing downstream can flag it.
-    #
-    # Absorbing Si would be eps_from_refractive_index(3.638751670074983+0.007498295841854125j).
-    # Im(eps) > 0 is loss here, which is the same convention the bundled nk tables use
-    # (n + 1j*k) -- eps_from_refractive_index carries it over, since the principal square of the
-    # upper half plane stays in it.
-    si = wavebit.Material(wavebit.eps_from_refractive_index(3.638751670074983))
-    sio2 = wavebit.Material(wavebit.eps_from_refractive_index(1.4518))
-    si3n4 = wavebit.Material(wavebit.eps_from_refractive_index(2.0056))
-
-    # The silicon underneath is the substrate, so it goes in `bot`. Both half-spaces take a
-    # Material too -- `top=1` is the scalar shorthand for Material(epsilon=1), i.e. vacuum.
-    rcwa_options = dict(backend='torch', thickness=[205], period=dict(x=300, y=300),
-                        truncation_order=dict(x=3, y=0),
-                        top=1, bot=si,
-                        wavelength=900,
-                        psi=np.pi / 4,
-                        )
-
-    # One dict per layer: a background material, and the shapes drawn on it. `lx` and `ly` are
-    # absolute lengths in the units of `period` -- not fractions of it -- so these rods are 31
-    # and 49.5 wide on a 300 period and run the full height of the cell. `cx` / `cy` are the
-    # centre, measured from the centre of the cell: 0 is centred, +-150 is an edge here.
-    #
-    # Each shape's Fourier transform is taken in closed form, so a tilted or curved edge carries
-    # no staircase error. Shapes paint, later over earlier, where they overlap; these two do not,
-    # and a layer with nothing overlapping stays on the closed-form builder.
-    structure = [
-        # layer 1
-        dict(background=si3n4, shapes=[
-            # obj 1
-            dict(type='rectangle', cx=-100, cy=0, lx=31, ly=300, angle=0, material=si),
-            # obj 2
-            dict(type='rectangle', cx=50, cy=0, lx=49.5, ly=300, angle=0, material=si),
-        ]),
-    ]
-
-    solver = _legacy_wavebit.rcwa(**rcwa_options)
-    solver.structure = structure
-
-    result = solver.solve()
-
-    result_given_pol = result.incident
-    result_te_incidence = result.s_inc
-    result_tm_incidence = result.p_inc
-
-    R, T = result_given_pol.R, result_given_pol.T
-    de_ri1, de_ti1 = result_te_incidence.R, result_te_incidence.T
-    de_ri2, de_ti2 = result_tm_incidence.R, result_tm_incidence.T
-
-    print(R.sum(), T.sum())
-    print(de_ri1.sum(), de_ti1.sum())
-    print(de_ri2.sum(), de_ti2.sum())
-
-    return
+    problem = make_problem()
+    numerics = rcwa.Numerics(orders=(3, 0), algorithm="etm")
+    prepared = rcwa.prepare(problem, numerics=numerics, backend="torch")
+    results = {}
+    # Each physical illumination is explicit; no hidden result.incident/s_inc/p_inc state.
+    for label, polarization in (("mixed", (1., 1.)), ("s", "s"), ("p", "p")):
+        source = rcwa.PlaneWave(polarization=polarization)
+        live = problem.replace(excitation=problem.excitation.replace(sources=(source,)))
+        # Changing the polarization declaration's layout requires its own preparation.
+        result = (prepared.run(live) if label == "mixed"
+                  else rcwa.run(live, numerics=numerics, backend="torch"))
+        r, t = float(result.R.sum()), float(result.T.sum())
+        assert np.isfinite([r, t]).all()
+        np.testing.assert_allclose(r+t, 1., atol=2e-11, rtol=0)
+        print(label, r, t)
+        results[label] = result
+    return results
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     run()
-
-    print(0)

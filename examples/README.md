@@ -16,6 +16,7 @@ All checks live alongside the example so a copied script retains its verificatio
 | --- | --- | --- |
 | [`record_run.py`](common/record_run.py) | Save inputs, measured arrays, units and source; verify exact round trips without repeating the solver. Use `--output` to retain a record. | Base install |
 | [`basic_grating.py`](rcwa/basic_grating.py) | A binary grating and its lossless power balance. | Base install |
+| [`shapes_1d.py`](rcwa/shapes_1d.py), [`shapes_2d.py`](rcwa/shapes_2d.py) | Typed regions with explicit mixed/s/p illumination and lossless power checks. | PyTorch / JAX respectively |
 | [`pulse_slab.py`](fdtd/pulse_slab.py) | A physical pulse, outside PML padding and a named time record. | Base install |
 | [`film_optimization.py`](rcwa/film_optimization.py) | Reuse a prepared RCWA calculation, differentiate film thickness with JAX and minimize reflectance; check the derivative against an independent Airy formula and the design against the quarter-wave thickness. | `wavebit[jax]` |
 | [`dispersive_fields.py`](fdtd/dispersive_fields.py) | A Lorentz film with SI rates, time-domain E and raw Fourier E/H; check passive power balance and linear field scaling under prepared reuse. | Base install; `wavebit[plot]` only for `--plot` |
@@ -56,7 +57,7 @@ starting a new physical problem. See the [migration guide](../docs/migration/ind
 | [`fdtd_grid_gradient.py`](fdtd/fdtd_grid_gradient.py) | Differentiate spectral transmission through a native Yee grid with JAX; uses a graded absorber, not CPML. |
 | [`fdtd_poynting.py`](fdtd/fdtd_poynting.py) | How do you measure instantaneous energy flow at a point with staggered E/H records? Saves a Sz time trace inside a film; requires the plot extra. |
 | [`fdtd_record.py`](fdtd/fdtd_record.py) | How do you define a typed FDTD scene, record a conical pulse and save an Ex slice? Run `python fdtd_record.py --output /path/to/field.png`; add `--chi 0.7853981633974483` for circular incidence and `--component hy` to view the magnetic field. FDTD is experimental; see the [research-alpha scope](../docs/guide/fdtd/fdtd-alpha.md). |
-| [`shapes_1d.py`](rcwa/shapes_1d.py), [`shapes_2d.py`](rcwa/shapes_2d.py) | How do you describe a structure as drawn shapes instead of a raster? The `_verification.py` file beside each answers the follow-up: does that path agree with the raster it replaces? |
+| [`shapes_1d_verification.py`](rcwa/shapes_1d_verification.py), [`shapes_2d_verification.py`](rcwa/shapes_2d_verification.py) | Historical shape/raster comparisons through the compatibility interface; the plain shape examples above use the current API. |
 
 [`rectilinear_contact.py`](rcwa/rectilinear_contact.py) selects exact Cartesian shape Li
 and prints JIT transmission, gap derivatives, and material derivatives through contact.
