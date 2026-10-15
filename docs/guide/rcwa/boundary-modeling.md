@@ -1,7 +1,10 @@
 # Boundary modeling — painting an overlap without staircasing the edges
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+The examples use the current `rcwa.Problem` / `rcwa.Numerics` lifecycle, except the one under
+[Differentiability](#differentiability), which keeps the earlier `wavebit.compat.legacy`
+interface because a JAX-traced shape (a frozen geometry under `jax.jit`) is not in the current
+API yet.
 :::
 
 Written: 2026-08. Targets `src/wavebit/rcwa/_engine/boundary.py`, `src/wavebit/_common/geometry/clipper.py`, `src/wavebit/_common/geometry/polygon.py`,
@@ -119,23 +122,26 @@ make either of the latter two exact.
 ## Using it
 
 ```python
-structure = [dict(background=1.0, shapes=[
-    dict(type='rectangle', cx=-0.10, cy=-0.10, lx=0.34, ly=0.34, angle=0.0, material=4.0),
-    dict(type='rectangle', cx=0.06, cy=0.06, lx=0.34, ly=0.34, angle=0.3, material=9.0),
-])]
+from wavebit import Material, rcwa
+
+layer = rcwa.Layer(thickness=.3, background=Material(epsilon=1.0), regions=(
+    rcwa.Region(geometry=rcwa.Rectangle(size=(.34, .34), center=(-.10, -.10), angle=0.),
+                material=Material(epsilon=4.0)),
+    rcwa.Region(geometry=rcwa.Rectangle(size=(.34, .34), center=(.06, .06), angle=.3),
+                material=Material(epsilon=9.0))))
 ```
 
-Every material slot is a **relative permittivity** (`4.0` and `9.0` are the `n = 2` and
-`n = 3` rods this example used to spell as `n_index`), or a `wavebit.Material` when the region
-is magnetic as well; the retired `n_base` / `n_index` keys are refused by name, since keeping
-their numbers under the new keys would paint a different structure. See
-[`conventions.md`](../../reference/common/conventions.md).
+Every material is a `wavebit.Material` holding a **relative permittivity** (`4.0` and `9.0` are
+the `n = 2` and `n = 3` rods this example used to spell as `n_index`), and a permeability as well
+when the region is magnetic; the earlier interface's retired `n_base` / `n_index` keys are
+refused by name, since keeping their numbers under the new keys would paint a different
+structure. See [`conventions.md`](../../reference/common/conventions.md).
 
-Shapes are in painting order — a later shape covers an earlier one. `rectangle`, `square`,
-`circle`, `disk` and `ellipse` are accepted; the curved ones are polygonised at
-`boundary.POLYGON_VERTICES` (256), which converges on the true shape at `O(1/n^2)` and puts that
-error far below the normal field's. So is a `polygon`, given by its vertices -- see
-[Polygon regions](#polygon-regions).
+Regions are in painting order — a later shape covers an earlier one. `Rectangle`, `Circle` and
+`Ellipse` are accepted (the earlier interface's `square` and `disk` too); the curved ones are
+polygonised at `boundary.POLYGON_VERTICES` (256), which converges on the true shape at
+`O(1/n^2)` and puts that error far below the normal field's. So is a `Polygon`, given by its
+vertices -- see [Polygon regions](#polygon-regions).
 
 **Routing is on the overlap, and nothing else says it.** While no two shapes intersect,
 painting and adding describe the same structure, so the layer stays on the closed-form parametric
@@ -148,21 +154,24 @@ and `'paint'` stopped being a choice.
 ### Which route a layer took
 
 **There is no modeling path of its own for this route**, and the omission is deliberate rather
-than pending. `modeling_path` is a property of the whole solver, decided from the *type* of
-`structure` alone — `raster` or `parametric`. The choice between resolving and the closed form
-is taken **per layer**, by the loop in `to_conv_mat_parametric_layers`, from the shapes' actual
-coordinates. One parametric `structure` can have its first layer resolved into polygons and its
-second transformed in closed form; a solver-wide value cannot say that. Both layers report
-`modeling_path == 'parametric'`.
+than pending. The modeling path is a property of the whole stack, decided from what its layers
+declare alone — sampled `epsilon` (`raster`) or `regions` (`parametric`). The choice between
+resolving and the closed form is taken **per layer**, by the loop in
+`to_conv_mat_parametric_layers`, from the shapes' actual coordinates. One parametric stack can
+have its first layer resolved into polygons and its second transformed in closed form; a
+stack-wide value cannot say that. Both layers are on the `parametric` path (on the earlier
+interface both report `modeling_path == 'parametric'`).
 
 Two consequences worth keeping straight:
 
 - The rows of the table above are not settings to pick between. The first two are `structure`
   types (and the third, marked removed, was one); the last is what the parametric one
   *becomes*, layer by layer, where it has to.
-- What records the choice is `geometry.boundary_plans`: a layer's slot holds a plan if that layer
-  resolved, and `None` if it stayed on the closed form. That is what to read when you want to
-  know which happened.
+- What records the choice is the geometry record's `boundary_plans`: a layer's slot holds a plan
+  if that layer resolved, and `None` if it stayed on the closed form. On the earlier interface
+  that is `solver.freeze_geometry().boundary_plans`, what to read when you want to know which
+  happened; `rcwa.prepare` keeps the record private and its report does not say which route a
+  layer took yet.
 
 Nothing else about such a layer changes, which is the other half of why the path was not split.
 The two routes share one option contract — `factorization='nvf'` and
@@ -192,12 +201,20 @@ not changed hits the JAX compilation cache — take the freeze again every step 
 on stale geometry).
 
 ```python
+# Earlier interface: a JAX-traced shape is not in the current API yet (prepared.host_topology).
+from wavebit.compat import legacy as wavebit
+
+structure = [dict(background=1.0, shapes=[
+    dict(type='rectangle', cx=-0.10, cy=-0.10, lx=0.34, ly=0.34, angle=0.0, material=4.0),
+    dict(type='rectangle', cx=0.06, cy=0.06, lx=0.34, ly=0.34, angle=0.3, material=9.0)])]
 solver = wavebit.rcwa(backend='jax', structure=structure, ...)
 res = solver.solve(geometry=solver.freeze_geometry())
 ```
 
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
-normal field to the convolution matrices, and matches finite differences to 2.3e-08.
+normal field to the convolution matrices, and matches finite differences to 2.3e-08. Through the
+current lifecycle `rcwa.prepare` takes the freeze and the same derivative is PyTorch's: prepare
+with `backend='torch'` and pass shape values that require grad to `prepared.run`.
 
 **That agreement is pointwise, and pointwise is the one comparison that cannot fail here.** The
 normal field is sampled, and the nearest-interface direction jumps across the medial axis, so as
@@ -427,6 +444,10 @@ above cannot run at all — including the staleness checks. That is the argument
 the freeze every step rather than holding one; it costs 0–1 ms and its record compares by
 content.
 
+The table is the earlier interface's. Through `rcwa.prepare` and `prepared.run` the eager and
+PyTorch rows hold as written, and every JAX trace of a shape, `jax.grad` included, is refused
+before it reaches the geometry (code `prepared.host_topology`).
+
 ### What a frozen plan does and does not survive
 
 A plan holds no coordinates, only combinatorics — which loop holds which vertex, which edges
@@ -439,7 +460,8 @@ do that, and they overlap as descriptions rather than partitioning the space:
 - a shape that was completely covered by a later one comes out from under it;
 - the resolved loops get re-cut, so a vertex ends up on a different loop.
 
-Eagerly all three now raise `StaleGeometryError`. Before they did, the replay took them. On a
+Eagerly all three now raise `StaleGeometryError` (`IncompatibleProblemError`, code
+`prepared.topology`, through `prepared.run`). Before they did, the replay took them. On a
 two-rectangle layer it stayed bit-identical while the overlap held and then read 3.9e-4, 2.3e-2,
 3.3e-2 wrong as the first rectangle crossed the second, with no step in between to notice. The
 covered case is starker: a small circle painted under a larger one has *no loops at all*, so
@@ -459,8 +481,8 @@ The earlier clipper-only measurements (0.2% for two rectangles and 1.2% for ten 
 do not measure this expanded check. Image pruning rounds segment extents outward to whole
 cells so harmless length changes do not invalidate an unchanged overlap. Crossing an extent
 bound, changing periodic contact, or changing the recorded reduced basis still requires a new
-freeze. Under JIT there is no concrete geometry to check, so callers must recheck eagerly
-between traced steps.
+freeze (a new `rcwa.prepare`). Under JIT on the earlier interface there is no concrete geometry
+to check, so callers must recheck eagerly between traced steps.
 
 ## Polygon regions
 
@@ -544,7 +566,8 @@ Finite differences there diverge like `1/h` (a constant jump of 0.42 straddled a
 1e-3 to 1e-6) while the analytic gradient is the correct one-sided value. An optimizer started
 from a perfectly symmetric shape can see that step on its first move.
 
-**The sampled normal field needs `4*truncation_order+1` points per axis.** Below it, `k % n` folds distinct
+**The sampled normal field needs `4*m+1` points per axis**, `m` being that axis's entry of
+`rcwa.Numerics(orders=...)`. Below it, `k % n` folds distinct
 orders onto one bin, and the damage is structural rather than gradual — a constant normal field
 stops transforming to the identity, so NVF no longer collapses onto Li's rules and picks up
 off-diagonals at `±n` instead. `factorization.check_normal_grid` raises instead of quietly

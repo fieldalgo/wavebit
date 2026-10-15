@@ -1,11 +1,8 @@
 # Conforming NVF from rectangle layers
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
-`wavebit.ConformingNVF` constructs a material-dependent conforming cell and
-exports its energy closure as `ConvMatrices` for `solve_conv()`. It accepts
+`rcwa.experimental.ConformingNVF` constructs a material-dependent conforming
+cell and exports its energy closure as `ConvMatrices`, which
+`rcwa.operators.solve` consumes in place of assembled operators. It accepts
 ordinary `background` / `shapes` dictionaries. An installed Wavebit package
 is sufficient; research scripts are not runtime dependencies.
 
@@ -17,7 +14,8 @@ background material; they can open and close during JAX replay.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
+from wavebit.rcwa import experimental, operators
 
 lattice = np.diag([700., 430.])
 # Layers are listed from the bottom to the top.
@@ -32,16 +30,30 @@ structure = [
         dict(type='rectangle', lx=124., ly=401., cx=113., material=9.),
     ]),
             ]
-builder = wavebit.ConformingNVF((2, 1), rows=4, body_degree=2, gap_degree=4)
+builder = experimental.ConformingNVF((2, 1), rows=4, body_degree=2, gap_degree=4)
 conv = builder.conv_matrices(structure, lattice)
-solver = wavebit.rcwa(
-    lattice=lattice, truncation_order=builder.truncation_order,
-    wavelength=900., thickness=[150., 60., 150.], theta=.2, phi=.37,
-    top=1., bot=2.25,
-)
-result = solver.solve_conv(*conv)
-print(result.p_inc.T.sum(), result.s_inc.T.sum())
+numerics = rcwa.Numerics(orders=builder.truncation_order)
+transmitted = []
+for polarization in ('p', 's'):
+    problem = rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(
+            lattice=lattice, top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+            # Background-only layers fix the thicknesses; conv carries the patterns.
+            layers=tuple(rcwa.Layer(thickness=t, background=Material(epsilon=layer['background']))
+                         for t, layer in zip((150., 60., 150.), structure))),
+        excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(
+            side='top', polarization=polarization, theta=.2, phi=.37),)))
+    assembled = operators.assemble(problem, numerics=numerics).replace(epsilon=(conv,))
+    transmitted.append(operators.solve(problem, assembled).T.sum())
+print(*transmitted)  # p, then s
 ```
+
+`operators.assemble` fixes the physical stack, the wavelength and the
+numerics; its `epsilon` holds one five-slot tuple per wavelength. Replacing
+that tuple with the builder's matrices and calling `operators.solve` solves
+the declared stack with them. The polarization string is part of the
+problem's declared layout, so each polarization is assembled separately.
 
 This is a finite-model example, not an accuracy prescription. Cell
 resolution and retained Fourier orders require separate refinement for the
@@ -53,7 +65,7 @@ explain the distinction.
 
 | Input | Contract |
 | --- | --- |
-| `truncation_order` | Nonnegative integer or `(u, v)` integer pair, matching the consuming solver. Projection uses this order set before closing the energy matrices. |
+| `truncation_order` | Nonnegative integer or `(u, v)` integer pair, matching the consuming `rcwa.Numerics(orders=...)`. Projection uses this order set before closing the energy matrices. |
 | `lattice` | A `wavebit.Lattice` or 2-by-2 array with basis vectors in columns. A right-handed basis that reduces to an orthogonal basis by an integer unimodular change is supported. The two reduced periods are positive and may vary independently. |
 | `structure` | Nonempty list or tuple of layer dictionaries, each with `background` and/or `shapes`. A layer with no shapes is uniform. |
 | `cx`, `cy` | Cartesian offsets from the original supplied cell center, in the lattice's length units. Default zero. Periodic translation is unrestricted; coordinates must describe one ordered profile with span below one period, rather than separately wrapped pieces. |
@@ -65,15 +77,15 @@ The shape list can arrive in any order; planning sorts along the chosen
 tiling axis. Shared boundaries between different materials remain live.
 Subdividing a rectangle
 into equal-material neighbors does not add an interface constraint.
-Uniform and patterned layers may share one stack, in the same order as the
-solver's thickness list.
+Uniform and patterned layers may share one stack, in the same bottom-to-top
+order as `rcwa.Stack.layers`.
 
 Curves, overlaps, unequal perpendicular extents or centers,
 edges not aligned with the reduced lattice, genuinely nonorthogonal point
 lattices, tensors, gain and nonpositive real permittivity are refused.
 This builder does not select a different NVF or
 Li factorization for unsupported input. The existing circular shape NVF
-remains available through the ordinary solver API.
+remains available through the ordinary `rcwa.Problem` lifecycle.
 
 For explicit affine images of fractional profiles on nonorthogonal lattices,
 use [`AffineProfileNVF`](affine-profile-nvf.md). That builder takes fractional
@@ -90,20 +102,20 @@ meaning; the adapter does not turn them into parallelograms.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit.rcwa import experimental
 
 lattice = np.array([[700., 2100.], [0., 430.]])
 structure = [dict(background=1.7, shapes=[
     dict(type='rectangle', lx=350., ly=401., material=4.+.4j),
 ])]
-builder = wavebit.ConformingNVF((2, 1), rows=2, body_degree=2, gap_degree=2)
+builder = experimental.ConformingNVF((2, 1), rows=2, body_degree=2, gap_degree=2)
 plan = builder.plan(structure, lattice)
 conv = builder.conv_matrices(structure, lattice, plan=plan)
 print(plan.reduction, conv.epx.shape)
 ```
 
-The consuming solver still receives the original `lattice` and
-`truncation_order`. Those define its physical wavevectors. The adapter
+The consuming problem still declares the original `lattice` and the same
+orders. Those define its physical wavevectors. The adapter
 selects the transformed version of that exact mode set before energy
 closure; the output matrix dimensions do not grow. Computing the required
 Fourier coefficients can cost more for large integer shears.
@@ -170,14 +182,15 @@ stretching square-cell coefficients alone would give a different result.
 For a second-axis tiling, the cell uses the reduced right-handed frame `(a2, -a1)`
 and the reciprocal aspect ratio. Each layer is exported in the original
 solver's common Cartesian frame and Fourier order layout. Its returned matrices are
-about the cell centre, the frame `solve_conv()` reads; do not add a phase. The
+about the cell centre, the frame `rcwa.operators` uses; do not add a phase. The
 [layer-axis construction](../../validation/rcwa/nvf-layer-axes.md) describes this mapping.
 
 ## JAX planning and replay
 
 NumPy and JAX with x64 construct the cell; output is complex128. The returned
-matrices can also be transferred to a Torch solver, but the cell builder
-does not supply Torch geometry derivatives. JAX derivatives concern cell
+matrices can also be converted to Torch tensors for operators assembled with
+`backend='torch'`, but the cell builder does not supply Torch geometry
+derivatives. JAX derivatives concern cell
 construction and the energy closure. The consuming eigensolver retains its
 own [autodiff behavior](../common/autodiff.md).
 
@@ -192,13 +205,13 @@ supported family and is refused eagerly or produces NaNs under tracing.
 
 ```python
 import jax
+jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit.rcwa import experimental
 
-wavebit.enable_x64()
 lattice = np.eye(2)*700.
-builder = wavebit.ConformingNVF(1, rows=2, body_degree=2, gap_degree=2)
+builder = experimental.ConformingNVF(1, rows=2, body_degree=2, gap_degree=2)
 
 def layers(gap, epsilon, loss):
     return [dict(background=1., shapes=[
@@ -233,10 +246,11 @@ error from a lattice norm or extent subtraction. This keeps contact
 derivatives live; a larger extent overrun is refused. This allowance is a
 floating-point geometry tolerance, not an optical accuracy criterion.
 
-Use a solver with the same lattice and orders. A fresh solver without a
-raster structure selects the 2D operator even for `(u, 0)`, `(0, v)`, or
-`(0, 0)`. If reusing a solver previously routed to a 1D raster calculation,
-set `solver.formulation = 'first_order'` to retain all in-plane coupling.
+Assemble a problem with the same lattice and orders. A stack of uniform or
+region layers selects the 2D operator even for `(u, 0)`, `(0, v)`, or
+`(0, 0)`. A stack of one-row sampled `epsilon` layers routes to a 1D
+calculation; there, set `rcwa.Numerics(formulation='first_order')` to retain
+all in-plane coupling.
 
 The [integration record](../../validation/rcwa/nvf-energy-engine.md) identifies the independent
 controls and remaining geometry and accuracy limits.

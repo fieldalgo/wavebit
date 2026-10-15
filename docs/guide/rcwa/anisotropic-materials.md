@@ -1,15 +1,14 @@
 # Anisotropic and magnetic materials — what the solver already takes, and what each gap costs
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 **Current input API (2026-09-22):** assign `Material(epsilon=[exx, eyy, ezz])`
-or a 3×3 tensor directly to a layer background or shape and call `solve()`.
+or a 3×3 tensor directly to a `rcwa.Layer` background or a `rcwa.Region` material and run the
+problem (`rcwa.run`, or `rcwa.prepare` then `prepared.run`).
 Tensor shapes now default to [continuous geometry integration](tensor-shape-integration.md),
 with analytic primitive indicators and a sampled normal extension.
-Material-axis rotation, tensor tables and tensor rasters are described in the
-[material guide](../../migration/materials-v1.md#anisotropic-materials). The discussion below
+Material axes rotate with `Material.rotated(angle, axis)`, and a tensor raster is an
+`rcwa.Layer(epsilon=...)` array of shape `(Ny, Nx, 3, 3)`; the
+[earlier material manual](../../migration/materials-v1.md#anisotropic-materials) has the
+tensor-table and tensor-raster demonstrations. The discussion below
 is the historical derivation and development record, not the current input guide.
 
 
@@ -94,12 +93,17 @@ correctly**; see §6.1. The `ezz` entry enters only as its
 inverse because `E_z` is eliminated algebraically as `E_z = ezz⁻¹ D_z`, which is also why field
 reconstruction reads nothing but `epz_conv_i` (`fields.py::_field_coupled`).
 
-The slots reach the user through `solve_conv`, on every backend. Patterned hand-built
-slots use Fourier coordinates measured from the cell centre, like `eps_conv_matrices()`:
+The slots reach the user through `rcwa.operators`, on every backend: `assemble` returns them,
+and `solve` takes them back and hands them to the engine's `solve_conv`. Patterned hand-built
+slots use Fourier coordinates measured from the cell centre, like the assembled ones:
 
 ```python
-res = mee.solve_conv(epx_conv_all, epy_conv_all, epz_conv_i_all,
-                     epxy_conv_all, epyx_conv_all)
+from wavebit.rcwa import operators
+
+ops = operators.assemble(problem, numerics=numerics)
+conv = operators.ConvMatrices(epx_conv_all, epy_conv_all, epz_conv_i_all,
+                              epxy_conv_all, epyx_conv_all)
+res = operators.solve(problem, ops.replace(epsilon=(conv,)))   # one tuple per wavelength
 ```
 
 The 1D and 1D-conical paths take three, not five (`engine.py::_solve_1d`, `::_solve_1d_conical`), so
@@ -180,11 +184,20 @@ convolution matrix is a scaled identity. The code states this itself —
 
 So a birefringent film, a uniaxial substrate or an LC layer can be solved on `develop` right now by
 filling the five slots directly. This is checked, not asserted:
-`tests/rcwa/test_uniform_anisotropic.py` drives the call below against an analytic Airy
+`tests/rcwa/test_uniform_anisotropic.py` drives the engine's `solve_conv`, which
+`operators.solve` below hands the slots to, against an analytic Airy
 slab per eigen-polarisation and a Jones waveplate, and matches to ~1e-16.
 
 ```python
 import numpy as np
+from wavebit import Units, rcwa
+from wavebit.rcwa import operators
+
+# One unpatterned layer; its assembled slots are replaced below.
+problem = rcwa.Problem(units=Units(length='nm'),
+                       stack=rcwa.Stack(period=(500., 500.), layers=(rcwa.Layer(thickness=220.),)),
+                       excitation=rcwa.Excitation(wavelength=700., sources=(rcwa.PlaneWave(),)))
+ops = operators.assemble(problem, numerics=rcwa.Numerics(orders=(half_width_u, half_width_v)))
 
 n_orders = (2 * half_width_u + 1) * (2 * half_width_v + 1)
 I = np.eye(n_orders, dtype=np.complex128)
@@ -196,7 +209,8 @@ epxy  = np.stack([-exy * I])      # slot convention is (-exy, -eyx); see _nvf_as
 epyx  = np.stack([-eyx * I])
 epz_i = np.stack([np.linalg.inv(ezz * I)])
 
-res = mee.solve_conv(epx, epy, epz_i, epxy, epyx)
+conv = operators.ConvMatrices(epx, epy, epz_i, epxy, epyx)
+res = operators.solve(problem, ops.replace(epsilon=(conv,)))
 ```
 
 A full tensor adds four more, under the **same** sign rule — one rule for every off-diagonal
@@ -206,9 +220,14 @@ slot, rather than two rules split down the middle of one call:
 epxz, epyz = np.stack([-exz * I]), np.stack([-eyz * I])
 epzx, epzy = np.stack([-ezx * I]), np.stack([-ezy * I])
 
-res = mee.solve_conv(epx, epy, epz_i, epxy, epyx,
-                     epxz, epyz, epzx, epzy)   # -> formulation_assigned == 'first_order'
+conv = operators.TensorConvMatrices(epx, epy, epz_i, epxy, epyx,
+                                    epxz, epyz, epzx, epzy)   # nine slots: first-order formulation
+res = operators.solve(problem, ops.replace(epsilon=(conv,)))
 ```
+
+Neither is needed for a uniform layer any longer: the same tensor as a `Material` on the layer
+background, `rcwa.Layer(thickness=220., background=Material(epsilon=[[exx, exy, exz], ...]))`,
+builds these slots itself, and its efficiencies are bit-identical to the hand-filled ones.
 
 Two things to watch:
 
@@ -223,7 +242,10 @@ Two things to watch:
 - The **2D path must be selected**. `engine.py::_assign_grating_type` picks the path from the `structure` shape, so
   a pure multilayer stack with `exy != 0` has to be routed to the 2D solve — the 1D and conical
   paths have no off-diagonal slots to fill. A z row does this for itself (§8); the in-plane pair
-  does not, which is the asymmetry to remember.
+  does not, which is the asymmetry to remember. Through the current lifecycle a layer declared
+  by a `background` (with or without `regions`) is always on the 2D path, as is any layer
+  holding a tensor `Material`; a one-row `epsilon` raster on a rectangular cell is the case that
+  routes to the 1D conical path.
 
 ## 5. Magnetic materials: `mu` on the layers and the half-spaces
 
@@ -360,7 +382,8 @@ measurements and the reasoning are in `tests/references/README.md`.
 
 Nothing dispatched to it when this was written; since 2026-08-13 the solver does (§8). It is
 stable for any thickness: layers are joined by an enhanced-transmittance recursion
-(`layer_algorithm='ETM'`, the same string and the same technique as the second-order path) or by scattering matrices (`'SMM'`), and both hold ~1e-13
+(`rcwa.Numerics(algorithm='etm')`, the same string and the same technique as the second-order
+path) or by scattering matrices (`'smm'`, the default), and both hold ~1e-13
 relative accuracy out to a modal exponent of 2500, where they reproduce the closed-form
 single-interface Fresnel reflectance to 4e-16. An unstabilised transfer is kept as `'TMM'` for
 cross-checking and refuses past the point where it is accurate — which on a 220 nm layer means from
@@ -497,7 +520,9 @@ construction surfaced as a `TypeError` from deep in the solve, and one assigned 
 answered for s light whichever of the two it named. The message names the pair that describes
 the same light, `polarization=(1, 0)` / `(0, 1)` at `phi = 0`, and
 `tests/rcwa/test_tetm_off_the_pure_path.py` checks that it does: beside an all-zero z row, and under
-a forced `'first_order'`, the pair reproduces the pure `tetm` solve.
+a forced `'first_order'`, the pair reproduces the pure `tetm` solve. `tetm` belongs to the
+earlier interface only: `rcwa.PlaneWave` always names the polarization (`'s'`, `'p'` or a Jones
+pair), so the current lifecycle never meets this refusal.
 
 ### Why it has to be automatic
 
@@ -525,7 +550,8 @@ class Formulation(str, Enum):
     FIRST_ORDER  = 'first_order'    # force first-order; always possible, ~8x
 ```
 
-That is `wavebit.rcwa._engine.enums.Formulation`, and it is reached as `solver.formulation` — an
+That is `wavebit.rcwa._engine.enums.Formulation`, reached as
+`rcwa.Numerics(formulation=...)`. On the earlier interface it is `solver.formulation` — an
 attribute rather than a constructor keyword, because the JAX solver passes its pytree children
 positionally and a new keyword shifts them.
 
@@ -549,7 +575,9 @@ which is where this paragraph said it belonged once the solver could be handed a
 exactly this reason. A silent 8x is indistinguishable from a slow machine, and a benchmark that
 cannot say which formulation it measured is not a benchmark. The attribute is
 `solver.formulation_assigned`, `'second_order'` or `'first_order'`, set by every 2D solve and `None`
-before the first one.
+before the first one. Both are attributes of the earlier interface's solver. The current
+`rcwa.Result` does not report the formulation or the path that ran yet, and the check report's
+`resolved['formulation']` is the requested value (`'auto'` by default), not the one assigned.
 
 ## References
 

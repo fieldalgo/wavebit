@@ -1,9 +1,5 @@
 # A finite right-opening response for two rectangles
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 The experimental `CartesianPairOpeningPlan` and `CartesianPairOpeningCell`
 provide a separate NumPy-only contact value and analytical right derivative
 as a physical gap opens between two horizontal equal-height rectangles.

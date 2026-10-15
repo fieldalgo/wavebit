@@ -1,9 +1,5 @@
 # A finite pair across contact and positive gaps
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 The experimental NumPy-only `CartesianPairGapCell` evaluates one finite pair
 at an explicit nonnegative physical gap, including exact contact. It returns
 coefficients or a selected energy closure together with their analytical gap
@@ -114,14 +110,14 @@ remains available as an independently qualified reference.
 NumPy family with the complete tensor and its analytical gap/material JVP.
 It requires a shift-zero plan on the symmetric Cartesian pair mesh.
 Its `closure` returns `(value, tangent, metadata)`. Both matrix sets are about the cell
-centre, the frame `solve_conv()` reads; `offset` places the pair relative to that public
+centre, the frame `rcwa.operators` uses; `offset` places the pair relative to that public
 origin. The private construction described above keeps its existing chart.
-Both the cell and opening plan are available from `wavebit.rcwa.experimental` and, as below,
-from `wavebit.compat.legacy`. The [selection guide](nvf-method-selection.md)
+Both the cell and opening plan are available from `wavebit.rcwa.experimental`, as
+below. The [selection guide](nvf-method-selection.md)
 shows how to choose this construction or leave it off.
 
 ```python
-from wavebit.compat.legacy import (
+from wavebit.rcwa.experimental import (
     CartesianPairOpeningPlan, CartesianPairTransmissionGalerkinGapCell,
 )
 

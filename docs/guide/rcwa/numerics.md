@@ -13,16 +13,12 @@ numerics = rcwa.Numerics(
 
 Rayleigh detuning is opt-in: `detuning=None` requests the exact physical input. A positive `detuning` declares a relative step and the result records the changed coordinates. Never interpret a detuned result as the unmodified requested wavelength without reading that metadata.
 
-Increase orders and geometric/NVF resolution independently and compare the output you actually need. Energy balance alone does not establish optical or gradient convergence. The numerical derivations and historical comparisons below retain the earlier interface through `wavebit.compat.legacy`.
+Increase orders and geometric/NVF resolution independently and compare the output you actually need. Energy balance alone does not establish optical or gradient convergence. The measurements quoted below were taken through the earlier `wavebit.compat.legacy` interface, which runs the same engine.
 
-## Earlier-interface details
-
-:::{note}
-The sections below document `wavebit.compat.legacy` and preserve their earlier coordinate, output and validation contracts. Use the current declarations above for new code.
-:::
+## What each setting changes
 
 A handful of keywords decide how the permittivity becomes convolution matrices and how the layers are
-joined. They change how fast the result converges with `truncation_order`, and how much each
+joined. They change how fast the result converges with `orders`, and how much each
 step costs -- not what it converges to. Defaults, and the values each accepts, are in
 [Keyword reference](../../reference/keywords.md#the-numerics).
 
@@ -48,8 +44,8 @@ the structure and material:
 | `'nvf'` | normal vector field -- factorizes along the material interfaces. Made for curved and tilted boundaries, where a staircase converges slowly |
 | `'laurent'` | the direct rule for every product -- `[[eps]]` for both in-plane field components, its inverse for `E_z`. Opt-in and never a default: it converges slowly wherever a field component jumps with the permittivity, and is here to compare with solvers that use it, such as fmmax's `Formulation.FFT` |
 
-**`fourier_coefficients` and `factorization` resolve per modeling path**, and reading them back
-reports the *effective* value rather than what you asked.
+**`fourier_coefficients` and `factorization` resolve per modeling path**, and
+`rcwa.check(...).resolved` reports the *effective* value rather than what you asked.
 
 | Input | Default `fourier_coefficients` | Default `factorization` |
 | --- | --- | --- |
@@ -66,7 +62,8 @@ the supplied piecewise-constant pixels, not a reconstructed smooth boundary.
 
 Explicit scalar or tensor shape
 `factorization='li'` supports axis-aligned rectangles wholly inside a positive
-axis-aligned rectangular cell. General shapes use NVF. Naming a value the path does not implement raises `NotImplementedError`
+axis-aligned rectangular cell. General shapes use NVF. Naming a value the path does not implement is refused
+(`UnsupportedFeatureError`, code `rcwa.unsupported`; `rcwa.check` reports it as an issue)
 rather than quietly running the one it does.
 `factorization='laurent'` is built on scalar rasters (either series), on any scalar shape
 including painted overlaps, and on skewed cells, where Li is refused -- the rule names no axis.
@@ -103,10 +100,10 @@ one-dimensional rules can only be applied one inside the other. `'fixed'`, the d
 `v` inside `u` for both in-plane components -- what every `'li'` result so far was computed
 with, raster, rectangle and tensor alike. `'symmetric'` puts each component's own inverse-rule
 axis inside (Li 1997), so the build treats x and y alike. Both converge to the same answer and
-differ at finite `truncation_order`; the operators are in the `Nesting` docstring.
+differ at finite `orders`; the operators are in the `Nesting` docstring.
 
 What the fixed nesting costs is a polarization split on structures that have none. On a
-C4-symmetric Au nanohole array at `truncation_order=5` it transmits 0.0172 for x-polarized light
+C4-symmetric Au nanohole array at order 5 it transmits 0.0172 for x-polarized light
 and 0.0728 for y; the symmetric nesting gives 0.0725 for both. On a transpose-symmetric
 dielectric L the split is 1.5e-3 to 4.2e-3, against 1e-13 or less. Each nesting agrees with
 RETICOLO's own run of it to 4.2e-11 (`tests/references/test_reticolo_li_nesting.py`). The
@@ -123,18 +120,18 @@ at order 80, where Li is at 4.9e-7 -- and on a 350 x 245 nm rod it is still 4.1e
 order 14, where Li is at 2.7e-5. TE on a one-dimensional grating is Li's answer to round-off,
 because both rules build the same matrix there. It builds no normal field and nests no rules,
 so `raster_normal_method`, `nvf_projector`, `shape_nvf_grid_size` and `li_nesting` are refused
-beside it, and a frozen geometry taken under another rule is refused under it. The measurements
-and the choice of slots are in [`../factorization-terms.md`](../../theory/rcwa/factorization-terms.md) §9.
+beside it. The measurements and the choice of slots are in
+[`../factorization-terms.md`](../../theory/rcwa/factorization-terms.md) §9.
 
 Both connecting algorithms share the same eigenmodes and boundary conventions and agree to
 ~1e-14. SMM costs ~1.1-1.4x, cascades layer responses that can be reused independently, and is
-the only one that forms a `solver.scattering` matrix. See
+the only one that returns `result.scattering`, requested with `rcwa.Outputs(scattering=True)`. See
 [`../connecting-algorithms.md`](../../theory/rcwa/connecting-algorithms.md).
 
 ## Sampling the normal field
 
 `shape_nvf_grid_size` is the grid the normal field is read off, per axis, and it is the one number here
-that can dominate a differentiated step: at `truncation_order=3` the default spends more per
+that can dominate a differentiated step: at order 3 the default spends more per
 step building the field than the solve itself costs. It defaults to
 `max(1024, 4*half_width+1)`, and 1024 is not over-specification -- 256 was tried and reverted,
 because it is a rectangle's *angle* that sets the grid and 256 sits 9.7% from the converged
@@ -145,14 +142,15 @@ Lowering it is bounded by accuracy rather than by taste. See
 
 ## Supplying an NVF energy closure
 
-`wavebit.ConvMatrices.from_energy(change, gram, longitudinal)` converts a
-supplied field basis and material integrals into the five matrices consumed
-by `solve_conv()`. With H retained Fourier orders, supply Q = C(B) and
+`rcwa.operators.ConvMatrices.from_energy(change, gram, longitudinal)` converts a
+supplied field basis and material integrals into the five matrices that
+`rcwa.operators.solve` consumes in place of assembled operators. With H retained
+Fourier orders, supply Q = C(B) and
 G = C(B.H epsilon B) with shape `(layers, 2*H, 2*H)`, and C(epsilon_zz)
 with shape `(layers, H, H)`. All inputs must use the solver's Cartesian
 frame and Fourier order layout, with all x-component orders followed by all
 y-component orders in Q and G. Unbatched inputs are also accepted, but
-`solve_conv()` expects a layer axis. Supply Fourier coefficients about the cell centre:
+`operators.solve` requires a layer axis. Supply Fourier coefficients about the cell centre:
 `from_energy()` preserves its inputs' origin and applies no additional translation.
 This five-slot closure assumes no xz, yz, zx or zy material coupling.
 
@@ -166,24 +164,32 @@ This complete example uses a uniform dielectric layer with B equal to the identi
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
+from wavebit.rcwa import operators
 
 order = 1
 count = (2*order+1)**2
 change = np.eye(2*count, dtype=complex)[None]
 gram = 4.0*change
 longitudinal = 4.0*np.eye(count, dtype=complex)[None]
-conv = wavebit.ConvMatrices.from_energy(change, gram, longitudinal)
-solver = wavebit.rcwa(
-    period=(700., 700.), wavelength=830., thickness=[177.],
-    theta=.23, phi=.37, top=1., bot=1.44,
-    truncation_order=(order, order),
-)
-result = solver.solve_conv(*conv)
-print(result.p_inc.T.sum(), result.s_inc.T.sum())
+conv = operators.ConvMatrices.from_energy(change, gram, longitudinal)
+numerics = rcwa.Numerics(orders=(order, order))
+transmitted = []
+for polarization in ('p', 's'):
+    problem = rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(
+            period=(700., 700.), top=Material(epsilon=1.), bottom=Material(epsilon=1.44),
+            layers=(rcwa.Layer(thickness=177., background=Material(epsilon=4.)),)),
+        excitation=rcwa.Excitation(wavelength=830., sources=(rcwa.PlaneWave(
+            side='top', polarization=polarization, theta=.23, phi=.37),)))
+    # The supplied closure replaces the assembled layer operators.
+    assembled = operators.assemble(problem, numerics=numerics).replace(epsilon=(conv,))
+    transmitted.append(operators.solve(problem, assembled).T.sum())
+print(*transmitted)  # p, then s
 ```
 
-[`wavebit.ConformingNVF`](conforming-nvf.md) constructs this standard layer
+[`rcwa.experimental.ConformingNVF`](conforming-nvf.md) constructs this standard layer
 stack directly from ordinary rectangle layer dictionaries. It supports
 nonoverlapping rectangle sequences along either axis of an orthogonal cell, with
 different directions allowed per layer, live materials, translations, both

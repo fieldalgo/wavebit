@@ -1,9 +1,5 @@
 # Analytic (staircase-free) modeling — approach and results
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 Written: 2026-08. Paths updated after the single-source rewrite folded the three per-backend
 copies into `_core`.
 
@@ -53,23 +49,37 @@ Choose the path by the boundary, not on a general expectation that the parametri
 
 ## Complex NVF projection for rectangular contacts
 
-Rectangular shapes can now use `factorization='nvf', nvf_projector='circular'`.
+Rectangular shapes can now use `rcwa.Numerics(factorization='nvf', nvf_projector='circular')`.
 This remains normal-vector Fourier factorization with exact material transforms;
 it changes the normal projector, not the factorization to Li. Rotations, skew
 cells, overlapping paintings, and magnetic materials use the same construction.
 Disjoint circles and ellipses also support circular projection, as described below.
 
 ```python
-solver = wavebit.rcwa(
-    backend='jax', period=(700., 700.), wavelength=900., thickness=(300.,),
-    truncation_order=(3, 3), shape_nvf_grid_size=128,
-    factorization='nvf', nvf_projector='circular',
-    structure=[dict(background=1., shapes=[
-        dict(type='rectangle', cx=-150., lx=300., ly=300., material=4.),
-        dict(type='rectangle', cx=150., lx=300., ly=300., material=9.)])])
-geometry = solver.freeze_geometry()
-result = solver.solve(geometry=geometry)
+import jax
+jax.config.update('jax_enable_x64', True)   # JAX double precision, before any array
+from wavebit import Material, Units, rcwa
+
+problem = rcwa.Problem(
+    units=Units(length='nm'),
+    stack=rcwa.Stack(period=(700., 700.), layers=(rcwa.Layer(
+        thickness=300., background=Material(epsilon=1.), regions=(
+            rcwa.Region(geometry=rcwa.Rectangle(size=(300., 300.), center=(-150., 0.)),
+                        material=Material(epsilon=4.)),
+            rcwa.Region(geometry=rcwa.Rectangle(size=(300., 300.), center=(150., 0.)),
+                        material=Material(epsilon=9.)))),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(),)))
+numerics = rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=128,
+                         factorization='nvf', nvf_projector='circular')
+prepared = rcwa.prepare(problem, numerics=numerics, backend='jax')
+result = prepared.run(problem)
 ```
+
+`rcwa.prepare` takes the geometry record the earlier interface's `freeze_geometry()` took, and
+`prepared.run` replays it on concrete values. A JAX-traced shape is not in the current API yet
+(code `prepared.host_topology`): the JIT derivatives and traced replay described in this section,
+and the examples linked from it, use the earlier interface, while through `prepared.run` a shape
+derivative is PyTorch's.
 
 The construction sums positive normal dyads into `M`, forms the complex vector
 `J = M @ (1, i)`, and uses `P = J J^H / |J|^2`. Opposite normals reinforce as
@@ -81,13 +91,13 @@ passed to the existing NVF assembly; they are not assumed equal.
 The tested rectangular period gap, unequal-material contact, and material-equality
 limits have no sampled value step, on both odd and even grids. Frozen JIT geometry
 and material derivatives agree with finite differences. A circular NVF geometry
-record can be frozen at contact and replayed while the gap opens: it reads image
+record can be prepared at contact and replayed while the gap opens: it reads image
 bounds, not the linear field's signed pair cancellation records. A new overlap,
-changed shape count, or enlarged image set still requires refreezing. Traced calls
+changed shape count, or enlarged image set still requires a new preparation. Traced calls
 cannot enforce those checks, so keep those constraints when optimizing.
 
 See [the runnable NVF contact example](../../../examples/rcwa/nvf_contact.py), which evaluates
-both contact and the one-sided opening derivative through the public JAX API.
+both contact and the one-sided opening derivative through the earlier interface's JAX solver.
 `shape_nvf_grid_size` remains an integration-resolution control; it is not a smoothing
 parameter for a gap. The default projector remains `linear` to preserve existing
 results. Select `circular` explicitly for this NVF construction.
@@ -126,7 +136,8 @@ Frozen-contact JIT derivatives match one-sided finite differences. Its exact
 boundary normals, periodicity, rotation covariance, image-ring independence,
 centre regularity, and NumPy/JAX/Torch agreement are tested separately.
 
-See [the curved-contact example](../../../examples/rcwa/nvf_curved_contact.py). This extension
+See [the curved-contact example](../../../examples/rcwa/nvf_curved_contact.py) (earlier
+interface, for the traced contact derivative). This extension
 does not settle the rectangular split/merged accuracy target or the tilted
 resonant-convergence investigation.
 
@@ -147,10 +158,11 @@ coefficients, including complex permittivity and permeability. Both complex
 off-diagonal projector components reach the NVF assembly. NumPy, JAX and Torch
 use the same construction.
 
-Use `freeze_geometry()` before JIT and stay within its recorded intersections
-and periodic image bounds. Re-freeze when painting topology changes. See
+Prepare on concrete values (`rcwa.prepare`; `freeze_geometry()` before JIT on the earlier
+interface) and stay within its recorded intersections and periodic image bounds. Prepare again
+when painting topology changes. See
 [the curved painting example](../../../examples/rcwa/nvf_curved_painting.py), which evaluates
-geometry and material derivatives through the public solver.
+geometry and material derivatives through the earlier interface's JAX solver.
 
 **Polygon approximation is still an accuracy limit.** Crossing between analytic
 disjoint curves and polygon-resolved overlaps changes the material approximation.
@@ -164,42 +176,40 @@ approximation comparison, not an external Maxwell convergence guarantee.
 
 ## Cartesian rectangles with explicit Li factorization
 
-For axis-aligned rectangular paintings, `factorization='li'` now integrates the
+For axis-aligned rectangular paintings, `rcwa.Numerics(factorization='li')` now integrates the
 nonuniform Cartesian intervals at every shape edge exactly. This uses the shape
 coordinates directly, including gaps far smaller than a pixel. Later shapes paint
 over earlier shapes. Shape modeling still defaults to NVF; selecting Li is explicit.
 
 ```python
-solver = wavebit.rcwa(
-    backend='jax', period=(700., 700.), wavelength=900., thickness=(300.,),
-    truncation_order=(3, 3), factorization='li',
-    structure=[dict(background=1., shapes=[
-        dict(type='rectangle', cx=-150., lx=300., ly=300., material=4.),
-        dict(type='rectangle', cx=150., lx=300., ly=300., material=9.)])])
-geometry = solver.freeze_geometry()
-result = solver.solve(geometry=geometry)
+# The two-rectangle `problem` of the previous section.
+numerics = rcwa.Numerics(orders=(3, 3), factorization='li')
+prepared = rcwa.prepare(problem, numerics=numerics, backend='jax')
+result = prepared.run(problem)
 ```
 
 Supported cells are positive, axis-aligned rectangles. Shapes must fit inside the
 cell, including its edges; a rectangle may span a full period. Rotated/curved shapes,
-skew cells, and rectangles crossing a cell edge are refused. Omit `angle` when
-tracing a shape dictionary: this route has a fixed zero angle, not an angle derivative.
+skew cells, and rectangles crossing a cell edge are refused. Leave a `Rectangle`'s `angle`
+at its default when differentiating: this route has a fixed zero angle, not an angle derivative.
 `shape_nvf_grid_size`, `raster_normal_method`, and `nvf_projector` are refused because no normal field
 is sampled. Coefficients are integrated; requesting sampled coefficients is refused.
 `li_nesting` is read here as on a raster (`'fixed'` by default, or `'symmetric'`): the build is the
 raster path's integrated Li builder on exact edges, so both nestings agree with an
 independently painted commensurate raster, and one frozen plan serves both.
 
-`freeze_geometry()` stores edge order and painting ownership. Lengths, centers,
-permittivity, and permeability remain live. It retains zero-width intervals at
+`rcwa.prepare` (the earlier `freeze_geometry()`) stores edge order and painting ownership.
+Lengths, centers, permittivity, and permeability remain live. It retains zero-width intervals at
 contact, so a gap can open continuously using the same plan. Eager replay refuses
-crossed edges or a changed shape count. JIT cannot check those values: keep the
+crossed edges (code `prepared.topology`) or a changed shape count (`prepared.structure`). Under
+JIT on the earlier
+interface those values cannot be checked: keep the
 edge order fixed within a traced optimization step and refreeze on concrete
 geometry when the ordering changes. At contact, the plan defines the one-sided
 opening-gap derivative, not a claim that overlap has the same derivative.
 
 See [the runnable contact example](../../../examples/rcwa/rectilinear_contact.py) for JIT
-transmission and gap/material gradients. Tests compare convolution matrices with
+transmission and gap/material gradients on the earlier interface. Tests compare convolution matrices with
 independently painted commensurate rasters, including overlaps, complex materials,
 and magnetic layers, and compare derivatives with two finite-difference steps.
 Exact geometry integration does not remove Fourier truncation error; still check
@@ -217,15 +227,16 @@ c(ky, kx) = 1/(Px Py) ∫∫_cell f(x,y) exp(-i 2π (ky y/Py + kx x/Px)) dx dy
 With `u = 2π kx/Px`, `v = 2π ky/Py` this is the continuous FT of the shape indicator
 evaluated on the reciprocal lattice. For rotation angle `θ` and center `(cx,cy)` we use the
 rotated frequency coordinate `κ = Rot(θ)^T k` and the center phase `e^{-i k·c}`.
-Here `c` is `(cx, cy)` as written in the public shape. Since 2026-09-28 this is the
-coefficient published by `eps_conv_matrices()`. The private builders rebase shape centres
+Here `c` is the shape's `center` as written in the public declaration. Since 2026-09-28 this is
+the coefficient published by `eps_conv_matrices()`, which `rcwa.operators.assemble` returns.
+The private builders rebase shape centres
 by `(a1+a2)/2` for their corner-frame integration; the public door restates their operators.
 
 | primitive | `Ŝ(k) / (Px Py)` |
 |---|---|
-| rotated rectangle `lx,ly` | `e^{-i k·c} · lx·sinc(κx lx/2) · ly·sinc(κy ly/2)` |
-| circle/disk diameter `lx` | `e^{-i k·c} · (π R²)·jinc(R ρ)`,  `R=lx/2`, `ρ=√(u²+v²)` |
-| ellipse semi-axes `a=lx/2,b=ly/2` | `e^{-i k·c} · (π a b)·jinc(√((a κx)²+(b κy)²))` |
+| rotated rectangle, `size=(lx, ly)` | `e^{-i k·c} · lx·sinc(κx lx/2) · ly·sinc(κy ly/2)` |
+| circle/disk, `radius=R` | `e^{-i k·c} · (π R²)·jinc(R ρ)`,  `ρ=√(u²+v²)` |
+| ellipse, `radii=(a, b)` | `e^{-i k·c} · (π a b)·jinc(√((a κx)²+(b κy)²))` |
 
 Here `sinc(z)=sin z/z`, `jinc(z)=2 J1(z)/z` (both removable at 0, value 1). The circle is the
 `a=b=R` special case of the ellipse. All three formulas are verified against a fine
@@ -367,34 +378,44 @@ energy-conservation violation on curved boundaries — is written out in the
 
 ## 3. Usage (new modeling type)
 
-Passing `structure` as a **list of layer dicts** dispatches to the parametric path (modeling type
-2, grating type 2). The raster (ndarray) path keeps working; the other list spelling, a
+A layer declared by a `background` and `regions` takes the parametric path (modeling type 2,
+grating type 2); a layer declared by sampled `epsilon` takes the raster path. On the earlier
+interface these were a list of layer dicts and an ndarray `structure`; a third spelling there, a
 per-layer `[background, [[shape, ...], ...]]`, was the block modeller and is refused by name
 since 2026-08-26.
 
 ```python
-structure = [dict(background=1.0, shapes=[
-                 dict(type='circle', cx=0.0, cy=0.0, lx=0.6, material=12.25)]),
-             dict(background=2.25, shapes=[
-                 dict(type='rectangle', cx=-0.1, cy=0.0, lx=0.4, ly=0.5,
-                      angle=np.deg2rad(25), material=1.0),
-                 dict(type='ellipse', cx=0.3, cy=0.4, lx=0.3, ly=0.2,
-                      angle=0.6, material=9.0)])]
-solver = wavebit.rcwa(backend='numpy', structure=structure, truncation_order=dict(x=11, y=11), ...)  # shape_nvf_grid_size=1024 (default)
-res = solver.solve()
+import numpy as np
+from wavebit import Material, Units, rcwa
+
+layers = (
+    rcwa.Layer(thickness=.3, background=Material(epsilon=1.0), regions=(
+        rcwa.Region(geometry=rcwa.Circle(radius=.3), material=Material(epsilon=12.25)),)),
+    rcwa.Layer(thickness=.2, background=Material(epsilon=2.25), regions=(
+        rcwa.Region(geometry=rcwa.Rectangle(size=(.4, .5), center=(-.1, 0.),
+                                            angle=np.deg2rad(25)),
+                    material=Material(epsilon=1.0)),
+        rcwa.Region(geometry=rcwa.Ellipse(radii=(.15, .1), center=(.3, .4), angle=.6),
+                    material=Material(epsilon=9.0)))))
+problem = rcwa.Problem(units=Units(length='um'),
+                       stack=rcwa.Stack(period=(1., 1.), layers=layers),
+                       excitation=rcwa.Excitation(wavelength=1.5, sources=(rcwa.PlaneWave(),)))
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(11, 11)))  # shape_nvf_grid_size=1024 (default)
 ```
 
-Both material slots are **relative permittivity** — `12.25` is the `n = 3.5` this example used
-to spell, `2.25` the `n = 1.5` background, `9.0` the `n = 3` ellipse. A bare number is the
-shorthand for `wavebit.Material(epsilon=x)`; write the object out to give a region a
-permeability as well (`material=wavebit.Material(12.25, mu=2.0)`), and
-`wavebit.eps_from_refractive_index(3.5)` if what you hold is a datasheet index. The retired keys
+Every material is **relative permittivity** — `12.25` is the `n = 3.5` this example used
+to spell, `2.25` the `n = 1.5` background, `9.0` the `n = 3` ellipse. Each is a
+`wavebit.Material`, which gives a region a permeability as well
+(`material=Material(12.25, mu=2.0)`), and `wavebit.eps_from_refractive_index(3.5)` converts a
+datasheet index. The earlier interface's retired shape keys
 `n_base` and `n_index` are refused by name, because renaming them and keeping the number
 builds a different structure that solves and conserves energy — see
 [`conventions.md`](../../reference/common/conventions.md).
 
-`lx/ly/angle/cx/cy/material` may be tensors (torch/jax) and are differentiable w.r.t. them;
-`Material` is a registered JAX pytree for exactly that reason.
+Sizes, centres, angles and materials may be backend tensors and are differentiable through
+`prepared.run`: materials on JAX and PyTorch, geometry on PyTorch, since a JAX-traced shape is
+refused (code `prepared.host_topology`). `Material` is a registered JAX pytree for exactly that
+reason.
 
 ## 4. Results (`studies/rcwa/benchmark_analytic/benchmark_analytic.py`)
 
@@ -586,6 +607,10 @@ Under `jax.jit` this is unchecked, like every other value check on this path —
 carries no number to read. Five of the six doors are closed (NumPy, JAX eager, `jax.grad`,
 `freeze_geometry`, and both PyTorch modes); the sixth is the standing trace limitation recorded
 in [`boundary-modeling.md`](boundary-modeling.md) and [`backend-choice.md`](../../validation/rcwa/backend-choice.md).
+Those are the earlier interface's doors. Through the current lifecycle a non-positive `size`,
+`radius` or `radii` entry is refused by `rcwa.prepare` (code `rcwa.invalid`) and by
+`prepared.run` (code `prepared.topology`), and a JAX trace never reaches the check, since a
+traced shape is refused first; `rcwa.check` does not run it yet.
 
 ## Overlapping shapes
 

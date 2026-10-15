@@ -1,17 +1,14 @@
 # Conforming NVF from affine profiles
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
-`wavebit.AffineProfileNVF` builds energy matrices for an explicit affine
-image of a fractional strip profile. The lattice vectors may be genuinely
-nonorthogonal. It returns `ConvMatrices` for `solve_conv()`, using the
-same lattice and retained Fourier orders as the consuming solver.
+`rcwa.experimental.AffineProfileNVF` builds energy matrices for an explicit
+affine image of a fractional strip profile. The lattice vectors may be
+genuinely nonorthogonal. It returns `ConvMatrices` for `rcwa.operators.solve`,
+using the same lattice and retained Fourier orders as the consuming problem.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
+from wavebit.rcwa import experimental, operators
 
 lattice = np.array([[700., 315.], [0., 490.]])
 structure = [dict(background=1., profile=dict(
@@ -21,18 +18,29 @@ structure = [dict(background=1., profile=dict(
     values=[4., 9.],
     offset=(0., 0.),
 ))]
-builder = wavebit.AffineProfileNVF(
+builder = experimental.AffineProfileNVF(
     (2, 1), rows=2, body_degree=2, gap_degree=2, grade_y=False,
 )
 conv = builder.conv_matrices(structure, lattice)
-solver = wavebit.rcwa(
-    lattice=lattice, truncation_order=builder.truncation_order,
-    wavelength=900., thickness=[300.], theta=.2, phi=0.,
-    top=1., bot=2.25,
-)
-answer = solver.solve_conv(*conv)
-print(answer.p_inc.T.sum(), answer.s_inc.T.sum())
+numerics = rcwa.Numerics(orders=builder.truncation_order)
+transmitted = []
+for polarization in ('p', 's'):
+    problem = rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(
+            lattice=lattice, top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+            # A background-only layer fixes the thickness; conv carries the profile.
+            layers=(rcwa.Layer(thickness=300., background=Material(epsilon=1.)),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(
+            side='top', polarization=polarization, theta=.2, phi=0.),)))
+    assembled = operators.assemble(problem, numerics=numerics).replace(epsilon=(conv,))
+    transmitted.append(operators.solve(problem, assembled).T.sum())
+print(*transmitted)  # p, then s
 ```
+
+The builder's matrices replace the assembled layer operators, as described
+for [`ConformingNVF`](conforming-nvf.md); each polarization is assembled
+separately.
 
 The example specifies a finite model. Its auxiliary cell resolution and
 optical Fourier orders are illustrative; each needs refinement for the
@@ -45,7 +53,7 @@ remaining accuracy limits.
 Write the supplied lattice as A, with vectors in columns. A point with
 centered fractional coordinates `(u, v)` has public Cartesian position
 `A @ [u, v] + offset`, measured from the cell center. Returned matrices
-also use that centre, the frame `solve_conv()` reads. Do not add a half-cell
+also use that centre, the frame `rcwa.operators` uses. Do not add a half-cell
 phase to them or a half-cell shift to public field-sample coordinates. The profile occupies
 `-width/2 < u < width/2` and `-height/2 < v < height/2`.
 Its material intervals run in increasing u, separated by `seams`.
@@ -54,7 +62,7 @@ The rest of the periodic cell contains the layer background.
 | Input | Contract |
 | --- | --- |
 | `truncation_order` | Nonnegative integer or `(u, v)` integer pair. The exact requested modes are selected before matrix closure, including zero order along either axis. |
-| `lattice` | A `Lattice` or finite real 2-by-2 array with positive determinant. Its vectors and `offset` use the consuming solver's length units. No integer basis reduction is performed. |
+| `lattice` | A `Lattice` or finite real 2-by-2 array with positive determinant. Its vectors and `offset` use the consuming problem's length unit. No integer basis reduction is performed. |
 | `structure` | Nonempty sequence of layer dictionaries with `background` and `profile`. An absent or `None` profile is uniform. Background defaults to 1. |
 | `width` | Required positive fractional span strictly less than 1. |
 | `height` | Required positive fractional span at most 1. Height 1 is exact contact across the periodic boundary. Only the existing contact roundoff allowance is accepted beyond it. |
@@ -82,7 +90,7 @@ The explicit ordered intervals need no sorting plan. Keep layer counts
 and profile array shapes fixed within a compiled call. Invalid eager
 geometry raises; invalid traced numerical values produce NaN matrices.
 NumPy construction also uses 64-bit precision. Exported matrices can be
-converted to a Torch solver's array type for `solve_conv()`.
+converted to Torch tensors for operators assembled with `backend='torch'`.
 
 Returned Fourier matrices use the cell-centre origin, including the physical offset.
 The cell already returns fields in the laboratory frame. The adapter

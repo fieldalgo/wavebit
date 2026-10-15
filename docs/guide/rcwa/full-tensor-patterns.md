@@ -1,9 +1,5 @@
 # Full tensor materials in patterned layers
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 Wavebit accepts all nine components of relative permittivity and permeability
 in a layer background, shape material, or tensor raster. This includes
 `xz`, `yz`, `zx` and `zy` coupling, which occurs when a material's principal
@@ -11,24 +7,25 @@ axes tilt out of the xy plane. Components are expressed in the public xyz
 frame. Rotating a material changes its response, not the shape geometry.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material(
+crystal = Material(
     epsilon=[2.4, 3.2, 4.1],
     mu=[1.1, 1.3, 1.4],       # omit for relative permeability one
 ).rotated(0.4, axis='y')
 
-solver = wavebit.rcwa(
-    wavelength=730., period=(600., 600.), thickness=[100.],
-    structure=[dict(background=1., shapes=[
-        dict(type='rectangle', lx=240., ly=310., material=crystal),
-    ])],
-    factorization='li', truncation_order=dict(x=3, y=3),
-    incidence_side='top',
-)
-result = solver.solve()
-print(solver.formulation_assigned)  # Formulation.FIRST_ORDER, equal to 'first_order'
+problem = rcwa.Problem(
+    units=Units(length='nm'),
+    stack=rcwa.Stack(period=(600., 600.), layers=(rcwa.Layer(
+        thickness=100., background=Material(epsilon=1.), regions=(
+            rcwa.Region(geometry=rcwa.Rectangle(size=(240., 310.)), material=crystal),)),)),
+    excitation=rcwa.Excitation(wavelength=730., sources=(rcwa.PlaneWave(side='top'),)))
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(3, 3), factorization='li'))
 ```
+
+The tilted axes give this layer a z coupling, so it is solved by the first-order formulation.
+The current `rcwa.Result` does not report which formulation ran yet; on the earlier interface
+`solver.formulation_assigned` reads `'first_order'` for this layer.
 
 ## Geometry and numerical choices
 
@@ -41,13 +38,13 @@ print(solver.formulation_assigned)  # Formulation.FIRST_ORDER, equal to 'first_o
 
 The existing [shape integration restrictions](tensor-shape-integration.md)
 remain applicable to periodic self-overlap and painted contours. The tensor
-projector is `linear`. Anisotropic `top`/`bot` half-spaces remain unsupported;
+projector is `linear`. Anisotropic `Stack(top=..., bottom=...)` half-spaces remain unsupported;
 scalar epsilon and mu are accepted there. The public full-tensor stack solver
-supports `layer_algorithm='ETM'` (default) and `'SMM'`. Both support incidence
+supports `rcwa.Numerics(algorithm='smm')` (default) and `'etm'`. Both support incidence
 from either side, complex amplitudes, power and six-component fields. With
-SMM and `answers='amplitude'` or `'field'`, `solver.scattering` also exposes
-the scattering matrix in the same scalar half-space port basis as the second-order
-solver, so compatible stacks can be joined with `.cascade()`.
+SMM and `rcwa.Outputs(scattering=True)`, `result.scattering` also exposes
+the scattering matrix, one per wavelength, in the same scalar half-space port basis as the
+second-order solver, so compatible stacks can be joined with `.cascade()`.
 
 ## Constitutive operators and the solver
 
@@ -88,8 +85,8 @@ Concrete tensors without z coupling retain the smaller five-slot, second-order p
 A traced full tensor or one carrying derivatives keeps all components, even
 when a coupling is zero at the evaluation point: its derivative may be nonzero.
 Consequently a full-tensor differentiated or jitted solve can cost more than
-an eager solve at a z-decoupled value. Explicit `formulation='second_order'` rejects
-nine-slot input instead of discarding its components.
+an eager solve at a z-decoupled value. An explicit `rcwa.Numerics(formulation='second_order')`
+rejects nine-slot input instead of discarding its components.
 
 ## Validation and convergence
 

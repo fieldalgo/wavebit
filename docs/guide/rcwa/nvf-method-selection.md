@@ -1,9 +1,5 @@
 # Selecting NVF and the auxiliary solver
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 Select the matrix construction explicitly. Ordinary NVF does not call the
 experimental transmission cell, and a failed auxiliary calculation does not
 fall back to another construction. The auxiliary cell supplies a different
@@ -11,9 +7,9 @@ constitutive matrix; it is not a correction appended to an ordinary NVF solve.
 
 | Choice | How to select it | Scope |
 | --- | --- | --- |
-| Ordinary NVF; auxiliary off | `wavebit.rcwa(..., factorization='nvf').solve()` | The existing raster or supported shape NVF path and its selected projector. |
-| NVF off; explicit Cartesian Li | `wavebit.rcwa(..., factorization='li').solve()` | Existing raster support or admitted axis-aligned rectangle shapes. This is a user choice, never an automatic NVF fallback. |
-| Experimental auxiliary construction | Build a `wavebit.CartesianPairTransmissionGalerkinGapCell`, then use `solver.solve_conv(*matrices)` | A NumPy finite cell for one horizontal, equal-height rectangle pair, with an analytical gap/material JVP. |
+| Ordinary NVF; auxiliary off | `rcwa.run(problem, numerics=rcwa.Numerics(factorization='nvf'))` | The existing raster or supported shape NVF path and its selected projector. |
+| NVF off; explicit Cartesian Li | `rcwa.run(problem, numerics=rcwa.Numerics(factorization='li'))` | Existing raster support or admitted axis-aligned rectangle shapes. This is a user choice, never an automatic NVF fallback. |
+| Experimental auxiliary construction | Build a `rcwa.experimental.CartesianPairTransmissionGalerkinGapCell`, put its matrices in place of the operators from `rcwa.operators.assemble`, then call `rcwa.operators.solve` | A NumPy finite cell for one horizontal, equal-height rectangle pair, with an analytical gap/material JVP. |
 
 The third choice is experimental. It retains all internal physical checks,
 but optical convergence and practical runtime remain unresolved. Its supported
@@ -25,12 +21,13 @@ degree or mesh does not certify accuracy; see the
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
+from wavebit.rcwa import experimental, operators
 
 basis = np.diag([700., 700.])
 order = (1, 1)
-cell = wavebit.CartesianPairTransmissionGalerkinGapCell(
-    wavebit.CartesianPairOpeningPlan(0, refinement=0), order,
+cell = experimental.CartesianPairTransmissionGalerkinGapCell(
+    experimental.CartesianPairOpeningPlan(0, refinement=0), order,
     reference=(12.25, -10.+1j, 1.), degree=3, branches=2,
     quadrature=80, angular_quadrature=48, coercivity_angle=1.53,
 )
@@ -38,20 +35,26 @@ matrices, gap_jvp, diagnostics = cell.closure(
     gap=0., basis=basis, widths=(300., 300.), height=300.,
     epsilon=(12.25, -10.+1j), background=1., gap_tangent=1.,
 )
-solver = wavebit.rcwa(
-    backend='numpy', lattice=basis, truncation_order=order,
-    wavelength=900., thickness=(300.,), top=1., bot=2.25,
-    theta=.2, phi=0.,
-)
-answer = solver.solve_conv(*matrices)
+problem = rcwa.Problem(
+    units=Units(length='nm'),
+    stack=rcwa.Stack(
+        lattice=basis, top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        # A background-only layer fixes the thickness; the matrices carry the pair.
+        layers=(rcwa.Layer(thickness=300., background=Material(epsilon=1.)),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(
+        side='top', polarization='s', theta=.2, phi=0.),)))
+assembled = operators.assemble(problem, numerics=rcwa.Numerics(orders=order),
+                               backend='numpy').replace(epsilon=(matrices,))
+answer = operators.solve(problem, assembled)
 ```
 
 The example's low Fourier and polynomial orders demonstrate the call, not
 converged optics. `gap_jvp` is the derivative of the constitutive matrices,
-not a transmission or reflection derivative. `solve_conv` consumes the
-supplied matrices directly: its factorization setting does not rebuild or
-disable them. To turn the auxiliary construction off, call the ordinary
-solver's `solve()` with its structure and explicit factorization instead.
+not a transmission or reflection derivative. `operators.solve` consumes the
+supplied matrices directly: the factorization in the assembly's
+`rcwa.Numerics` does not rebuild or disable them. To turn the auxiliary
+construction off, declare the pair as layer regions and run the problem with
+`rcwa.run` and an explicit factorization instead.
 
 The cell accepts a positive diagonal lattice, strictly contained equal-height
 horizontal rectangles, nonnegative gap and admitted passive scalar materials.
@@ -73,7 +76,8 @@ python examples/rcwa/nvf_method_selection.py --method li
 python examples/rcwa/nvf_method_selection.py --method auxiliary --degree 3
 ```
 
-These are example-script options, not new keywords on `wavebit.rcwa`.
+These are example-script options, not new keywords on `rcwa.Numerics`;
+the script itself still uses the earlier `wavebit.compat.legacy` interface.
 The script defaults to ordinary circular NVF. Degree and mesh-refinement
 arguments are accepted only for the auxiliary choice; it refuses ignored
 settings or unknown methods. All three runs use the same physical pair and

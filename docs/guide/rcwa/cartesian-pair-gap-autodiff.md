@@ -1,9 +1,5 @@
 # Differentiating the finite pair gap
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 The experimental `CartesianPairGapEvaluator` evaluates the exact finite pair
 family using NumPy or JAX x64. It computes values only; ordinary JAX
 operations provide the gap derivative, including the physical right derivative

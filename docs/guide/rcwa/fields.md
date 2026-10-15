@@ -12,92 +12,78 @@ The components are `(Ex,Ey,Ez,Hx,Hy,Hz)`. Public E is in V/m and H is in A/m; co
 
 `result.reflection` and `result.transmission` are diffraction observations with wavelength and order metadata. Select an order with `.order(m,n)` and a wavelength with `.at_wavelength(i)`. Raw amplitudes, normalized efficiencies and entering power are distinct quantities; inspect their validity and reference metadata. A later run cannot change an earlier result's retained field.
 
-The earlier reconstruction and normalized-H interface below is a compatibility manual. Its `Z0*H` convention applies to that interface only; do not divide the current public H a second time.
-
-## Earlier-interface details
+The sections below give the sampling rules, the retained state and the differentiation scope of
+these two methods. Public H is already in A/m: do not divide it by Z0.
 
 :::{note}
-The sections below document `wavebit.compat.legacy` and preserve their earlier coordinate, output and validation contracts. Use the current declarations above for new code.
+The pure s/p field variants (`incidence='s'`/`'p'`) are not in the current API yet; that passage
+names the earlier `wavebit.compat.legacy` call that has them.
 :::
 
-Read fields from the result of a solve. Ordinary incidence, order excitations,
-`PlaneWave`, `GaussianBeam` and `ElectricDipole` results share these methods:
+## Reading fields from a result
+
+Read fields from the result of a run. Single plane waves, order excitations,
+`PlaneWave` lists, `GaussianBeam` and `ElectricDipole` results share these methods:
 
 ```python
-result = solver.solve(answers='field')
-cell = result.reconstruct_field(sample_x=64, sample_y=64, sample_z=32)
-boundary = result.boundary_fields('top', sample_x=64, sample_y=64, part='total')
+result = rcwa.run(problem.replace(outputs=problem.outputs.replace(fields=True)),
+                  numerics=numerics)
+cell = result.field(x=64, y=64, z=32)
+boundary = result.boundary_fields(side='top', x=64, y=64, part='total')
 ```
 
-The result owns its field state. Changing the solver's conditions or solving another
-scene does not change fields read from this result. Resample a solved result without
-solving again; solve again when the physical problem changes.
+The result owns its field state. Running another problem, or the same preparation again,
+does not change fields read from this result. Resample a result without
+running again; run again when the physical problem changes.
 
-For ordinary incidence, the legacy `solver.reconstruct_field()` method reads the
-live solver. It refuses
-when a condition used by reconstruction has changed since the solve, including
-concrete PyTorch autograd tensors and in-place condition updates. Re-solve after
-changing the design, or use the saved result to inspect its original scene.
+The current API keeps no live solver, so nothing can make a result's fields stale. The earlier
+interface's `solver.reconstruct_field()` method read the live solver and refused once a
+condition used by reconstruction had changed since the solve.
 
 ## What to retain
 
-| `answers` | Retained results |
+| `Outputs` | Retained results |
 | --- | --- |
-| `'efficiency'` | Computed power results |
-| `'amplitude'` (default) | Also complex amplitudes and boundary fields |
-| `'field'` | Also the per-layer state for internal fields |
+| `Outputs()` (default) | Computed power results: diffraction efficiencies, complex amplitudes and powers for a single plane wave, boundary power for other sources |
+| `Outputs(fields=True)` | Also the per-layer state for boundary and internal fields |
 
-This rule applies to every input type. Boundary fields require `'amplitude'` or
-`'field'`; internal fields require `'field'`. Missing retained state raises an
-error naming the answer level needed for a new solve. The default is `'amplitude'`.
-`answers` must be static under JAX `jit`.
+This rule applies to every source type. `boundary_fields` and `field` both require
+`Outputs(fields=True)`; without it they raise `UnsupportedFeatureError` (code
+`output.unavailable`) naming the request. `Outputs` is part of the prepared contract, so it is
+static under JAX `jit`.
 
-A source-based result's `power` stores the power evaluated over the solve's
-`power_region`, including at `'efficiency'`. Calling `boundary_power(region)`
-again integrates the retained complex fields and requires `'amplitude'` or
-`'field'`. An efficiency-only solve uses those fields to compute power, then
+A source-based result's `outputs['top']` and `outputs['bottom']` store the power evaluated
+over the problem's `Outputs(power_region=...)`, with or without fields. The current result has
+no method that integrates the retained fields over another region; run the problem again with
+that region. A run without fields uses the boundary fields to compute power, then
 releases them instead of keeping a hidden reconstruction state.
 
-## The jitted solver method
+## Under `jax.jit`
 
-On JAX, `solver.solve_field(..., geometry=g)` returns the result and field from a
-compiled copy of the solver. It does not install that copy's solve state on the
-live solver. Concrete keyword conditions stay on the live solver, following
-`solve()`; when they change its scene, its earlier solve state is dropped and
-`solver.reconstruct_field()` refuses until another `solve()`. Use the returned
-field or result instead. Keywords that are only traced are restored afterwards.
-A saved result continues to own its field state independently of the live solver.
-
-Before compiling, `solve_field` checks the frozen geometry against the concrete
-scene, including scalar and tensor shape topology and raster interfaces. A changed
-topology requires a new `freeze_geometry()`; material sweeps and shape changes
-that still fit the frozen plan remain valid. Under an outer `jax.jit` or
-`jax.grad`, traced geometry cannot be checked in Python. Prepare the geometry
-from the current concrete scene before differentiating; `fit()` does this for
-each optimization step.
-
-Sampling is static in this compiled method. Concrete coordinate lists, tuples,
-NumPy arrays and JAX arrays are normalized to the same immutable cache key; the
-existing cell-shape restrictions on explicit x/y coordinates still apply. Use an
-integer count for `sample_z`: explicit heights require concrete layer thicknesses,
-so reconstruct those through the eager or result-owned API. To differentiate x/y
-sample positions, use `solve_field_eager` or `result.reconstruct_field`.
+On JAX, prepare outside the transform and pass the live problem inside it, for example
+`jax.jit(lambda p: prepared.run(p).field(x=..., y=..., z=...).values)`. This holds for a single
+plane wave; other sources refuse a JAX-traced input. Explicit coordinate arrays and integer
+counts both work inside, and so does a traced layer thickness with explicit heights. A traced
+region geometry or cell is refused when the trace is built (code `prepared.host_topology`); see
+[automatic differentiation](../common/autodiff.md). The earlier interface's compiled
+`solver.solve_field(..., geometry=g)` and its static-sampling rules belong to that interface
+only.
 
 ## Coordinates
 
 Each sampling argument accepts a positive integer count or a nonempty 1-D array of
-finite real coordinates. `reconstruct_field` defaults to 20 on each axis;
-`boundary_fields` defaults to the cell centre, `sample_x=[0.]`, `sample_y=[0.]` -- the point
-where an ordinary incidence is unit, so `boundary_fields(side, part='incoming')` there is the
-incident polarization itself at any real angle.
+finite real coordinates. Both methods require `x` and `y`, and `field` requires `z`; there are
+no defaults. At the cell centre, `x=[0.]`, `y=[0.]`, a single plane wave is unit, so
+`boundary_fields(side=..., x=[0.], y=[0.], part='incoming')` there is the incident polarization
+itself, times the source `amplitude`, at any real angle.
 
 ```python
-cell = result.reconstruct_field(
-    sample_x=[-100., 0., 100.], sample_y=[0.], sample_z=[0., 40., 120.],
+cell = result.field(
+    x=[-100., 0., 100.], y=[0.], z=[0., 40., 120.],
 )
 ```
 
-Lengths use the same unit as wavelength and thickness. x/y are measured from the
+Lengths use the problem's length unit. x/y are measured from the
 cell centre. z is height from the bottom of the stack, with +z upward, and must lie
 between 0 and `sum(thickness)`. Explicit coordinates retain the requested order.
 
@@ -115,31 +101,29 @@ between 0 and `sum(thickness)`. Explicit coordinates retain the requested order.
 
 ## Components and shape
 
-Every result returns complex fields in one Cartesian layout:
+Every result returns complex fields in one Cartesian layout, in `.values`:
 
 | Method | Shape | Last axis |
 | --- | --- | --- |
-| `reconstruct_field` | `(nz, ny, nx, 6)` | `(Ex, Ey, Ez, Z0Hx, Z0Hy, Z0Hz)` |
-| `boundary_fields` | `(ny, nx, 6)` | Same |
+| `field` | `(n_wavelengths, nz, ny, nx, 6)` | `(Ex, Ey, Ez, Hx, Hy, Hz)` |
+| `boundary_fields` | `(n_wavelengths, ny, nx, 6)` | Same |
 
-Pure TE/TM includes zero-valued components in the same six slots. y-invariant fields
-are repeated at all requested y coordinates. `nz` is the number of layers times
-the z count, or the length of an explicit z array.
+y-invariant fields are repeated at all requested y coordinates. `nz` is the number of layers
+times the z count, or the length of an explicit z array.
 
 ```python
-E = cell[..., :3]
-H_normalized = cell[..., 3:]
-H = H_normalized / 376.730313668
+E = cell.values[..., :3]  # V/m
+H = cell.values[..., 3:]  # A/m
 ```
 
-If the electric field scale is V/m, `H` is in A/m. Wavebit solves for `Z0*H` from
-the outset; the returned magnetic components are not SI H until converted.
+With the source amplitude in V/m, `H` is in A/m. Wavebit solves for `Z0*H` from
+the outset and divides by Z0 before returning; the earlier interface returned `Z0*H`.
 The time convention is `e^{-iωt}`: the instantaneous real field is
 `real(E * exp(-1j*omega*t))`. `abs(E)` and `angle(E)` give each component's magnitude
 and phase. See [conventions](../../reference/common/conventions.md) for the source phase reference.
 
-Every ordinary input is an electric amplitude: coupled s/p, `PlaneWave`, and the pure 1D
-TM solve included. (Until 2026-09-27 the pure 1D TM solve was lit by a unit magnetic
+Every input is an electric amplitude: coupled s/p, `PlaneWave`, and the earlier interface's
+pure 1D TM solve included. (Until 2026-09-27 the pure 1D TM solve was lit by a unit magnetic
 input, so its field was `mu_inc/n_inc` of the conical p field for the same light.) The
 result API preserves the solved input's scale; it does not rescale the field by incident
 power.
@@ -155,15 +139,15 @@ sources; normal components can jump.
 Multiple sources are summed as complex fields. The observation region used for
 power averaging does not change these pointwise fields.
 
-Ordinary coupled solves also retain pure s/p responses. Select one with
-`incidence='s'` or `'p'`; the default `'incident'` returns the specified excitation.
-There is no leading incidence axis. Pure TE/TM and source-based results only accept
-`'incident'`. A missing variant raises an error rather than substituting another.
+The earlier interface's coupled solves also retain pure s/p responses, selected with
+`incidence='s'` or `'p'` on its result methods. The current `field` and `boundary_fields` take
+no `incidence` argument and return the declared excitation; run the `'s'` and `'p'`
+polarizations as two problems for the pure responses.
 
 ## Differentiating internal fields
 
-Ordinary result fields support JAX and PyTorch differentiation through the solve and
-reconstruction. A z count follows the relative position in each layer when thickness
+Single-plane-wave result fields support JAX and PyTorch differentiation through `prepared.run`
+and `field`. A z count follows the relative position in each layer when thickness
 changes. Explicit z arrays hold physical heights fixed and support thickness
 derivatives while each point stays in the same layer. A moving interface crossing a
 point can change its material and normal field discontinuously. Keep sample points
@@ -174,12 +158,13 @@ field (the upper layer at an internal interface). They retain the full spatial
 derivative, including at an artificial seam between identical materials. This
 does not define a unique two-sided derivative across a material discontinuity.
 
-The source-based solver still uses concrete source grouping and layer segmentation;
-this ordinary-solve differentiation guarantee does not extend to those operations.
+Runs with other sources still use concrete source grouping and layer segmentation, and refuse
+a JAX-traced input; this differentiation guarantee does not extend to them.
 
-## Solver convenience calls
+## Earlier-interface field calls
 
-`solver.reconstruct_field` and `solver.solve_field` remain available with their
-existing layout and sampling contracts. Ordinary solver calls use three slots for
-pure TE/TM and an incidence axis for coupled fields. Code using those layouts can
-continue to run; use the result methods above for the common six-component API.
+The earlier `wavebit.compat.legacy` interface keeps `solver.reconstruct_field` and
+`solver.solve_field` with their existing layout and sampling contracts: three slots for pure
+TE/TM, an incidence axis for coupled fields, and magnetic components in `Z0*H`. Code using
+those layouts can continue to run there; compare it with the current result only after
+dividing its magnetic components by Z0.

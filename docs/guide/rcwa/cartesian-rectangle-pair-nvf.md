@@ -1,40 +1,47 @@
 # Two Cartesian rectangles on an oblique lattice
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
-`wavebit.CartesianRectanglePairNVF` builds finite NVF energy matrices for two
-horizontal, equal-height physical rectangles per patterned layer. It supports
-a positive gap or exact full-height contact on a required frozen plan. The
-rectangles retain their Cartesian edges on an oblique lattice. This explicit
-experimental builder supplies `ConvMatrices`; it does not certify optical
-convergence or change the other geometry builders.
+`rcwa.experimental.CartesianRectanglePairNVF` builds finite NVF energy
+matrices for two horizontal, equal-height physical rectangles per patterned
+layer. It supports a positive gap or exact full-height contact on a required
+frozen plan. The rectangles retain their Cartesian edges on an oblique
+lattice. This explicit experimental builder supplies `ConvMatrices` for
+`rcwa.operators.solve`; it does not certify optical convergence or change
+the other geometry builders.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
+from wavebit.rcwa import experimental, operators
 
 lattice = np.array([[700., 315.], [0., 490.]])
 structure = [dict(background=1., shapes=[
     dict(lx=140., ly=210., cx=-56., cy=-21., material=4.),
     dict(lx=193., ly=210., cx=127.5, cy=-21., material=9.),
 ])]
-builder = wavebit.CartesianRectanglePairNVF((1, 2), refinement=1)
+builder = experimental.CartesianRectanglePairNVF((1, 2), refinement=1)
 plan = builder.plan(structure, lattice)
 conv = builder.conv_matrices(structure, lattice, plan=plan)
-solver = wavebit.rcwa(
-    lattice=lattice, truncation_order=builder.truncation_order,
-    wavelength=900., thickness=[300.], theta=.2, phi=0.,
-    top=1., bot=2.25,
-)
-answer = solver.solve_conv(*conv)
-print(answer.p_inc.T.sum(), answer.s_inc.T.sum())
+numerics = rcwa.Numerics(orders=builder.truncation_order)
+transmitted = []
+for polarization in ('p', 's'):
+    problem = rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(
+            lattice=lattice, top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+            # A background-only layer fixes the thickness; conv carries the pair.
+            layers=(rcwa.Layer(thickness=300., background=Material(epsilon=1.)),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(
+            side='top', polarization=polarization, theta=.2, phi=0.),)))
+    assembled = operators.assemble(problem, numerics=numerics).replace(epsilon=(conv,))
+    transmitted.append(operators.solve(problem, assembled).T.sum())
+print(*transmitted)  # p, then s
 ```
 
 The example has a 17-unit gap and bounding-box offset `(49, -21)`. All
-lengths, wavelength and thickness must use the same units. Pass the original
-lattice and the same Fourier orders to the consuming solver. Auxiliary mesh
+lengths, wavelength and thickness must use the same units. Declare the
+original lattice and the same Fourier orders in the consuming problem; its
+assembled layer operators are replaced by the builder's matrices, as described
+for [`ConformingNVF`](conforming-nvf.md). Auxiliary mesh
 refinement and optical Fourier order are distinct resolutions; the
 [finite-cell controls](../../validation/rcwa/nvf-cartesian-pair.md) describe their present limits.
 
@@ -65,7 +72,7 @@ The bounding rectangle must fit strictly inside a fundamental cell centered
 on that pair, with positive finite triangles on the chosen chart. The whole
 cell translates with the pair offset, which can cross the caller's cell
 boundary without changing the containment test. Returned matrices are about the
-cell centre, the frame `solve_conv()` reads; the offset is the pair's public centre.
+cell centre, the frame `rcwa.operators` uses; the offset is the pair's public centre.
 Do not add another
 phase, material normalization or rotation to the returned matrices.
 

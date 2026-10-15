@@ -12,17 +12,17 @@ excitation = rcwa.Excitation(
 
 Plane-wave amplitude is in V/m. Polarization is `"s"`, `"p"`, or a complex `(s,p)` Jones pair normalized to unit electric magnitude; its relative phase is retained. The outgoing amplitudes are linear in that normalized pair: `amplitude_s`, `amplitude_p` and `cartesian` for `(a_s, a_p)` are `a_s/n` times those for `"s"` plus `a_p/n` times those for `"p"`, with `n = sqrt(|a_s|**2 + |a_p|**2)`, and the source `amplitude` does not change them. Two runs therefore give the amplitudes of every polarization at one direction and wavelength. Combine amplitudes, never `R`, `T` or `power`: those are squared magnitudes, and adding them drops the cross term between the two states. `OrderExcitation` names coherent incident diffraction orders. `GaussianBeam` describes an angular spectrum. `ElectricDipole(position=..., moment=...)` specifies a physical electric dipole moment in C·m. These source families have different support and normalization requirements; `check` validates the requested combination.
 
-The [reference](../../reference/rcwa/index.md) lists their constructors. The following earlier-interface derivations remain useful for polarization, phase and complex transverse wavevectors, with compatibility calls identified explicitly.
-
-## Earlier-interface details
+The [reference](../../reference/rcwa/index.md) lists their constructors. The sections below give the details of direction, polarization and incidence side.
 
 :::{note}
-The sections below document `wavebit.compat.legacy` and preserve their earlier coordinate, output and validation contracts. Use the current declarations above for new code.
+Three features below are not in the current API yet, so their passages use the earlier
+`wavebit.compat.legacy` interface and say so: the pure 1D `tetm` declaration, the `psi`/`chi`
+polarization coordinates, and the one-solve s/p responses `s_inc`/`p_inc`.
 :::
 
-Specify the incident direction with either angles or transverse wavevector components.
-Polarization, illuminated diffraction orders and incidence side are separate settings.
-See [Keyword reference](../../reference/keywords.md#the-light) for defaults.
+Specify the incident direction of each source with either angles or transverse wavevector
+components. Polarization, illuminated diffraction orders and incidence side are separate settings.
+See the [RCWA reference](../../reference/rcwa/index.md) for defaults.
 
 ## Two ways to specify direction
 
@@ -31,9 +31,9 @@ See [Keyword reference](../../reference/keywords.md#the-light) for defaults.
 | `theta`, `phi` | the direction the incident light travels, polar angle and azimuth, in radians | angles; k changes with wavelength and incident material dispersion |
 | `kx`, `ky` | real Cartesian transverse angular wavenumbers | physical kx and ky; the angle may change |
 
-`kx` and `ky` have inverse length units: nm**-1 when `wavelength`, `period` and
-`thickness` use nm. They are **not divided by k0** and are not reciprocal-lattice
-order numbers. An omitted component is zero. Giving either component together
+`kx` and `ky` have inverse length units: nm**-1 under `Units(length='nm')`. They
+are **not divided by k0** and are not reciprocal-lattice order numbers. An omitted
+component is zero. Giving either component together
 with a non-`None` `theta` or `phi` raises an error, even if an angle is zero.
 With neither form supplied, the default is normal incidence with azimuth zero.
 
@@ -42,54 +42,63 @@ and mu=1 (n=1.5):
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-scene = dict(
-    top=2.25, bot=1., wavelength=500., period=[700., 700.],
-    structure=np.full((1, 2, 2), 4.), thickness=[100.],
-    truncation_order=0, polarization=(1., 0.),
-)
-by_angle = wavebit.rcwa(**scene, theta=np.pi/6, phi=0.)
-k0 = 2*np.pi/scene['wavelength']
-by_k = wavebit.rcwa(**scene, kx=0.75*k0, ky=0.)
-a, b = by_angle.solve(), by_k.solve()
-np.testing.assert_allclose(a.T, b.T, atol=1e-12)
+def problem(source):
+    return rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(
+            period=(700., 700.), top=Material(epsilon=2.25), bottom=Material(epsilon=1.),
+            layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4.)),)),
+        excitation=rcwa.Excitation(wavelength=500., sources=(source,)))
+
+numerics = rcwa.Numerics(orders=(0, 0))
+by_angle = rcwa.run(problem(rcwa.PlaneWave(polarization='s', theta=np.pi/6, phi=0.)),
+                    numerics=numerics)
+k0 = 2*np.pi/500.
+by_k = rcwa.run(problem(rcwa.PlaneWave(polarization='s', kx=0.75*k0, ky=0.)),
+                numerics=numerics)
+np.testing.assert_allclose(by_angle.T, by_k.T, atol=1e-12)
 ```
 
-Both forms still require the actual `top`/`bot` materials: epsilon and mu determine
-the normal wavevector, the electric/magnetic field relation and incident power.
+Both forms still require the actual `Stack.top`/`Stack.bottom` materials: epsilon and mu
+determine the normal wavevector, the electric/magnetic field relation and incident power.
 Direct k also works in absorbing half-spaces. It specifies the wave inside that
 half-space, without assuming an additional medium above it.
 
 The components use the fixed physical x/y axes for either incidence side and for
 oblique lattices. The solver adds reciprocal-lattice offsets for each diffraction
-order. `order_kxy()` reports those **per-order components divided by k0**; multiply
-by `2*pi/wavelength` to recover inverse length units.
+order. `result.reflection.k_parallel` and `result.transmission.k_parallel` report those
+**per-order components in inverse length units**, not divided by k0, on a trailing
+`(kx, ky)` axis.
 
 Direct components must be finite real scalars. This sets uniform single-wave
 intensity along the surface; a zero-power evanescent incident wave cannot define
 normalized diffraction efficiencies and is refused. A complex component is refused
 too, in absorbing media as well: there a real `theta` is the input, and a real
 angle keeps `kx` real. A complex transverse wavevector is reachable only through a
-complex `theta`/`phi`, whose `R` and `T` are formal (see
-[Real-angle incidence](../../reference/common/conventions.md#real-angle-incidence)). Direct components carry no
+complex `theta`/`phi`. Its amplitudes are returned, but `R`, `T` and the port powers are NaN
+and `result.reflection.metadata['power_defined']` is false, because the uniform-intensity power
+normalization does not hold there (see
+[Real-angle incidence](../../reference/common/conventions.md#real-angle-incidence)); the earlier
+interface returned formal `R` and `T` instead. Direct components carry no
 angle, so they are taken as given in any medium, a negative-index one included. With
 `kx=ky=0`, the s/p basis uses azimuth zero (s along y, p in xz); choose `polarization` to
 orient the field.
-For pure 1D `tetm` input, omit `ky` (it is zero); use `polarization` for conical incidence.
+For the earlier interface's pure 1D `tetm` input, omit `ky` (it is zero); use `polarization`
+for conical incidence.
 
-`wavebit.Incidence(kx=..., ky=...)`, `JobSpec` serialization, `kx`/`ky` sweeps and
-JAX/PyTorch differentiation use the same inputs. To switch an existing solver
-from angles to direct k, clear `theta` and `phi` with `None` before assigning k.
-To switch back, clear both k components first. Changing k requires another solve
-before reconstructing fields.
+`Job` serialization and JAX/PyTorch differentiation use the same inputs. To switch a source
+from angles to direct k, clear `theta` and `phi` in the same replacement,
+`source.replace(theta=None, phi=None, kx=..., ky=...)`; to switch back, clear both k
+components. A new k is a new problem to run; an earlier result keeps its own fields.
 
 ## What `theta` and `phi` mean
 
 `theta` and `phi` are **the direction the incident light comes in**: the polar angle from the
 inward normal of the lit half-space and the azimuth from `+x` toward `+y`, in the fixed x/y
-axes. They refer to the selected `top` or `bot` half-space itself; no additional air layer is
-assumed. Real angles specify uniform incident intensity along the surface.
+axes. They refer to the selected half-space, `Stack.top` or `Stack.bottom`, itself; no
+additional air layer is assumed. Real angles specify uniform incident intensity along the surface.
 
 What that fixes is the in-plane wavevector:
 
@@ -120,35 +129,30 @@ k_par / k0 = s * N * sin(theta) * (cos(phi), sin(phi))
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    top=4. + 3j, bot=2.25,
-    wavelength=1000., period=[1200., 1200.],
-    theta=np.deg2rad(30.), phi=0.,
-    structure=np.full((1, 2, 2), 2.25), thickness=[100.],
-    truncation_order=0,
-)
-kx_over_k0, ky_over_k0 = solver.order_kxy()
-kx = (2 * np.pi / solver.wavelength) * kx_over_k0
-ky = (2 * np.pi / solver.wavelength) * ky_over_k0
-# With lengths in nm: kx ≈ [0.00677139] nm^-1, ky = [0.] nm^-1.
-result = solver.solve()
+def lit_from(top):
+    return rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(
+            period=(1200., 1200.), top=top, bottom=Material(epsilon=2.25),
+            layers=(rcwa.Layer(thickness=100., background=Material(epsilon=2.25)),)),
+        excitation=rcwa.Excitation(wavelength=1000., sources=(
+            rcwa.PlaneWave(theta=np.deg2rad(30.), phi=0.),)))
+
+numerics = rcwa.Numerics(orders=(0, 0))
+result = rcwa.run(lit_from(Material(epsilon=4. + 3j)), numerics=numerics)
+kx, ky = result.reflection.k_parallel[0, 0, 0]   # wavelength, order_v, order_u
+# With lengths in nm: kx ≈ 0.00677139 nm^-1, ky = 0 nm^-1.
 ```
 
 Here 30 degrees is the angle **inside the absorbing incident half-space**. Lit from a
 negative-index medium the same script runs unchanged; only the sign of `kx` differs:
 
 ```python
-nim = wavebit.Material(-3 + 0.1j, mu=-0.5 + 0.05j)      # n_top = -1.2254+0.0816j
-solver = wavebit.rcwa(
-    top=nim, bot=2.25,
-    wavelength=1000., period=[1200., 1200.],
-    theta=np.deg2rad(30.), phi=0.,
-    structure=np.full((1, 2, 2), 2.25), thickness=[100.],
-    truncation_order=0,
-)
-solver.order_kxy()[0]           # negative: the light travels along +x, its phase along -x
+nim = Material(epsilon=-3 + 0.1j, mu=-0.5 + 0.05j)      # n_top = -1.2254+0.0816j
+result = rcwa.run(lit_from(nim), numerics=numerics)
+result.reflection.k_parallel[0, 0, 0, 0]  # negative: the light travels along +x, its phase along -x
 ```
 
 At exactly `theta = 0` the s/p frame takes the direction `k_par` approaches as `theta -> 0+`:
@@ -158,11 +162,14 @@ convention](../../reference/common/conventions.md#real-angle-incidence) state th
 [negative-index media](../../theory/rcwa/negative-index-media.md) everything about double negatives.
 
 Power is referenced to the incident wave at its interface with the finite stack.
-`result.power_entering` includes incident/reflected interference;
-`result.absorption = result.power_entering - result.T.sum()` is the absorption
-in all finite layers. It excludes absorption in either half-space.
+`result.outputs['power_entering']` includes incident/reflected interference;
+`result.absorption`, equal to `result.outputs['power_entering'] - result.T.sum(axis=(1, 2))`,
+is the absorption in all finite layers. It excludes absorption in either half-space.
 
 ## The polarization comes in three kinds
+
+The current `PlaneWave` takes the third kind, `polarization='s'`, `'p'` or `(a_s, a_p)`. The
+first two are earlier-interface declarations that the current API does not have yet.
 
 | | write | what it is |
 | --- | --- | --- |
@@ -171,11 +178,22 @@ in all finite layers. It excludes absorption in either half-space.
 | **amplitudes** | `polarization=(a_s, a_p)` | the Jones pair itself, in the same (s, p) basis the results come back in. The only form that carries an overall phase; its magnitude is normalized away, so `(3, 4j)` and `(0.6, 0.8j)` are one incidence |
 
 ```python
+rcwa.PlaneWave(polarization=(1, -1j))           # the pair, straight from another code
+```
+
+```python
+# Earlier interface: the current API has no tetm or psi/chi declaration yet.
+import numpy as np
+from wavebit.compat import legacy as wavebit
+
 wavebit.rcwa(tetm='te', ...)                    # fast 1D path; psi reads back as None
 wavebit.rcwa(psi=0.4, ...)                      # linear, at an angle
 wavebit.rcwa(psi=0.4, chi=np.pi / 4, ...)       # circular
-wavebit.rcwa(polarization=(1, -1j), ...)        # the pair, straight from another code
 ```
+
+The current `polarization='s'` / `'p'` at `phi=0` runs the conical formulation: on a one-row
+raster grating its amplitudes and efficiencies match `tetm='te'` / `'tm'` to 5e-15 (measured
+2026-10-15), without the pure path's speed.
 
 `tetm`, `psi`/`chi` and `polarization` are three *kinds* of thing, not three spellings of one.
 Naming `tetm` with either of the others raises, and so does `psi` with `polarization`. Which to
@@ -183,49 +201,55 @@ reach for is usually decided by what you are doing: `(psi, chi)` is two real num
 nothing redundant in them, so a gradient over the polarization state is an ordinary 2D problem,
 where the pair spends two of its four real numbers on directions that cannot change any power.
 
-**A polarization sweep needs one solve.** Every solve at `answers='amplitude'` or above also
-returns `result.s_inc` and `result.p_inc`, the responses to pure s and pure p from the same
-factorization. For any pair `(a_s, a_p)`, the amplitudes `r_s`, `r_p`, `t_s`, `t_p`, `r_xyz` and
+**On the earlier interface, a polarization sweep needs one solve.** Every solve there at
+`answers='amplitude'` or above also returns `result.s_inc` and `result.p_inc`, the responses
+to pure s and pure p from the same factorization. For any pair `(a_s, a_p)`, the amplitudes `r_s`, `r_p`, `t_s`, `t_p`, `r_xyz` and
 `t_xyz` equal `a_s/n` times the `s_inc` array plus `a_p/n` times the `p_inc` one, with
 `n = sqrt(|a_s|**2 + |a_p|**2)` and the pair's overall phase kept. This holds on both
 formulations, under ETM and SMM, from either side and under `excitation=`. Combine the
 amplitudes, not `R` and `T`: an efficiency is a squared magnitude, so adding the two variants'
 efficiencies drops their cross term. `s_inc` and `p_inc` are `None` under `tetm=` and at
-`answers='efficiency'`.
+`answers='efficiency'`. The current `Result` does not return them yet: run `'s'` and `'p'` once
+each and combine their `amplitude_s`, `amplitude_p` and `cartesian` the same way. The two runs
+reproduce `s_inc` and `p_inc` to 5e-15.
 
-Every order named in `excitation` has to propagate in the incidence medium. One past the light
-line would drive the structure while contributing nothing to the incident flux every efficiency
-is divided by, so `R + T` would exceed one on a passive stack; asking for one is refused by
-name. That also caps how many beams can be combined, at roughly `2 * period / wavelength`.
+Every order named in an `OrderExcitation` has to propagate in the incidence medium. One past
+the light line would drive the structure while contributing nothing to the incident flux every
+efficiency is divided by, so `R + T` would exceed one on a passive stack; asking for one is
+refused. That also caps how many beams can be combined, at roughly `2 * period / wavelength`.
 
-An `excitation` weight multiplies *its own order's* `s_hat` or `p_hat`, on every path. On a
-1D solve at `phi = 0` that is `sign(kx) * y_hat` for TE, so a lit order with `kx < 0` arrives
+An `OrderExcitation` weight multiplies *its own order's* `s_hat` or `p_hat`. On a
+1D grating at `phi = 0` that is `sign(kx) * y_hat` for TE, so a lit order with `kx < 0` arrives
 polarized along `-y`; see [`../conventions.md`](../../reference/common/conventions.md). A weight is its beam's
-amplitude at `x = y = 0` on the lit face, the cell centre: the same weights
-`OrderExcitation(orders=...)` takes, and the same light.
+amplitude at `x = y = 0` on the lit face, the cell centre: the same weights the earlier
+interface's `excitation=` takes, and the same light.
 
 See [`../conventions.md`](../../reference/common/conventions.md) for the normative statement,
-[`../multimode-incidence.md`](multimode-incidence.md) for `excitation`, and tutorials
+[`../multimode-incidence.md`](multimode-incidence.md) for lit orders, and tutorials
 [`06`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/06-polarization-pair.ipynb) and
-[`07`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/07-multimode-incidence.ipynb).
+[`07`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/07-multimode-incidence.ipynb),
+which use the earlier interface.
 
 ## Which side the light arrives from
 
-`incidence_side='bottom'` illuminates through the substrate. **The scene labels never move**:
-`top` is still the superstrate, `bot` still the substrate, and `structure[0]` is still the layer
-adjacent to `bot`. What changes is that results are incidence-relative and `theta` / `phi` are
+`PlaneWave(side='bottom')` illuminates through the substrate. **The scene labels never move**:
+`Stack.top` is still the superstrate, `Stack.bottom` still the substrate, and `Stack.layers[0]`
+is still the layer adjacent to `bottom`. What changes is that results are incidence-relative
+(`result.R` is the light returned into the substrate) and `theta` / `phi` are
 measured in the incidence medium -- so a cross-solver comparison needs the angle converted into
 that medium before the numbers line up.
 
-`incidence_side='top'` propagates toward `-z`; `'bottom'` propagates toward `+z`.
+`side='top'` propagates toward `-z`; `'bottom'` propagates toward `+z`.
 `theta` is the angle from the inward normal of the selected face. Layer order is always
 bottom-to-top, and `phi` uses the same fixed x/y axes on either side.
 
 ## Beams from both sides or with independent directions
 
-Use `excitation={"top": wavebit.PlaneWave(...), "bottom": wavebit.PlaneWave(...)}`.
-Each PlaneWave can specify its own direction, polarization and complex amplitude.
-The calculation combines complex boundary fields before evaluating power and
-returns `output_top` and `output_bottom`. See
+Put one `PlaneWave` per side in the source tuple: `rcwa.PlaneWave(side='top', ...)` and
+`rcwa.PlaneWave(side='bottom', ...)`. Each PlaneWave can specify its own direction,
+polarization and complex amplitude. The calculation combines complex boundary fields before
+evaluating power and returns the incoming and outgoing power at each port,
+`result.outputs['top']` and `result.outputs['bottom']`; such a run needs
+`Outputs(diffraction=False)`. See
 [coherent illumination](coherent-illumination.md) for examples, the calculation
 flowchart, phase references and the required averaging region for different Bloch sectors.

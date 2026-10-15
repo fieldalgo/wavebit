@@ -1,38 +1,44 @@
 # Cartesian rectangle NVF on an oblique lattice
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
-`wavebit.CartesianRectangleNVF` builds finite NVF energy matrices for one
-separated physical rectangle per patterned layer. Rectangle edges retain
-their physical lengths and angle on an oblique lattice. This experimental
-builder returns `ConvMatrices` for `solve_conv()`; its finite auxiliary
-resolution does not certify optical convergence.
+`rcwa.experimental.CartesianRectangleNVF` builds finite NVF energy matrices
+for one separated physical rectangle per patterned layer. Rectangle edges
+retain their physical lengths and angle on an oblique lattice. This
+experimental builder returns `ConvMatrices` for `rcwa.operators.solve`; its
+finite auxiliary resolution does not certify optical convergence.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
+from wavebit.rcwa import experimental, operators
 
 lattice = np.array([[700., 315.], [0., 490.]])
 structure = [dict(background=1., shapes=[dict(
     type='rectangle', lx=350., ly=300., angle=3.45,
     cx=49., cy=-21., material=4.,
 )])]
-builder = wavebit.CartesianRectangleNVF((1, 2), refinement=1)
+builder = experimental.CartesianRectangleNVF((1, 2), refinement=1)
 plan = builder.plan(structure, lattice)
 conv = builder.conv_matrices(structure, lattice, plan=plan)
-solver = wavebit.rcwa(
-    lattice=lattice, truncation_order=builder.truncation_order,
-    wavelength=900., thickness=[300.], theta=.2, phi=0.,
-    top=1., bot=2.25,
-)
-answer = solver.solve_conv(*conv)
-print(answer.p_inc.T.sum(), answer.s_inc.T.sum())
+numerics = rcwa.Numerics(orders=builder.truncation_order)
+transmitted = []
+for polarization in ('p', 's'):
+    problem = rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(
+            lattice=lattice, top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+            # A background-only layer fixes the thickness; conv carries the rectangle.
+            layers=(rcwa.Layer(thickness=300., background=Material(epsilon=1.)),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(
+            side='top', polarization=polarization, theta=.2, phi=0.),)))
+    assembled = operators.assemble(problem, numerics=numerics).replace(epsilon=(conv,))
+    transmitted.append(operators.solve(problem, assembled).T.sum())
+print(*transmitted)  # p, then s
 ```
 
 Use the same original lattice and Fourier orders in the builder and the
-consuming solver. The example illustrates matrix use. Refine both the
+consuming problem; its assembled layer operators are replaced by the
+builder's matrices, as described for [`ConformingNVF`](conforming-nvf.md).
+The example illustrates matrix use. Refine both the
 auxiliary cell and the optical Fourier orders for the quantity being
 calculated; the [finite-cell controls](../../validation/rcwa/nvf-cartesian-cell.md) describe
 what has been verified.
@@ -56,7 +62,7 @@ its offset. It must fit strictly inside that rectangle-centered cell and
 have positive finite triangles on the selected mesh. Offsets may translate
 the whole periodic structure freely: crossing the caller's chosen cell
 edge by translation does not enlarge the admitted rectangle dimensions.
-The returned matrices are about the cell centre, the frame `solve_conv()` reads;
+The returned matrices are about the cell centre, the frame `rcwa.operators` uses;
 the offset is the rectangle's public centre.
 Do not add another phase, material scaling or Cartesian rotation to the
 returned matrices.

@@ -1,30 +1,43 @@
 # Multimode incidence — several orders lit at once
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+The current API lights several orders with `rcwa.OrderExcitation`, whose run reports boundary
+power and fields but not per-order efficiencies. The per-order `R`, `T` and amplitudes this page
+measures come from the earlier `wavebit.compat.legacy` interface's `excitation=` keyword, so the
+blocks that need them use that interface and say so.
 :::
 
-**Code**: `src/wavebit/_common/conventions.py` — `lit_orders`, `incident_column`;
+**Code**: `src/wavebit/rcwa/sources.py` — `OrderExcitation`;
+`src/wavebit/_common/conventions.py` — `lit_orders`, `incident_column`;
 `src/wavebit/rcwa/_engine/solve_1d.py` — the two matchings; `src/wavebit/observations/power.py` —
 `incident_power`; `src/wavebit/rcwa/_engine/scattering.py` — the SMM twins;
 `src/wavebit/rcwa/_engine/engine.py` — `excitation`.
 **Tests**: `tests/rcwa/test_excitation.py`.
 
 ```python
+from wavebit import rcwa
+
+source = rcwa.OrderExcitation(orders=(((0, 0), 1.0), ((1, 0), 0.6 - 0.8j)))  # by the (x, y) pair
+```
+
+```python
+# Earlier interface: per-order R/T for lit orders are not in the current API yet.
+from wavebit.compat import legacy as wavebit
+
 solver = wavebit.rcwa(..., excitation={0: 1.0, 1: 0.6 - 0.8j})     # 1D: by the x order
 solver = wavebit.rcwa(..., excitation={(0, 0): 1.0, (1, 0): 0.5j})  # 2D: by the pair
 ```
 
 The illumination arrives on more than one diffraction order, coherently, in one solve. The
-weights are *spatial*: `psi` / `polarization` / `tetm` still say which polarization arrives,
-and every lit order carries that same polarization, **each in its own s/p frame**: a weight
-multiplies its order's `s_hat` / `p_hat`. On a 1D solve at `phi = 0` that is
-`sign(kx) * y_hat` for s, so a TE beam on an order with `kx < 0` is polarized along `-y`. The
-pure 1D `tetm` path has meant the same since 2026-09-27 (before, it multiplied `+y` into every
-lit order, which is different light once the lit set straddles `kx = 0`: `sum(R)` 0.4933
-against 0.3701 on `tests/rcwa/test_excitation.py`'s scene). Each weight is its beam's amplitude at
-`x = y = 0` on the lit face, the cell centre -- the same weights `OrderExcitation(orders=...)`
-takes, and the same light. That too dates from 2026-09-27: until then the weights were
+weights are *spatial*: `polarization` (on the earlier interface also `psi` / `tetm`) still says
+which polarization arrives, and every lit order carries that same polarization, **each in its
+own s/p frame**: a weight multiplies its order's `s_hat` / `p_hat`. On a 1D solve at
+`phi = 0` that is `sign(kx) * y_hat` for s, so a TE beam on an order with `kx < 0` is polarized
+along `-y`. The earlier interface's pure 1D `tetm` path has meant the same since 2026-09-27
+(before, it multiplied `+y` into every lit order, which is different light once the lit set
+straddles `kx = 0`: `sum(R)` 0.4933 against 0.3701 on `tests/rcwa/test_excitation.py`'s scene).
+Each weight is its beam's amplitude at `x = y = 0` on the lit face, the cell centre -- the
+same weights `OrderExcitation(orders=...)` takes, and the same light. That too dates from 2026-09-27: until then the weights were
 referenced at the cell corner, which lit every order with `m + n` odd negated relative to the
 rest, and the same scene's `sum(R)` moved a second time, 0.3701 -> 0.1953 (§6).
 
@@ -71,13 +84,16 @@ error from `truncation_order` 8 up. The widening is what turns the tie into a wi
 
 ## 3. Every lit order must propagate
 
-An order past the light line carries no time-averaged z-flux. Lighting one is refused, by name
-and one order at a time:
+An order past the light line carries no time-averaged z-flux. Lighting one is refused. The
+earlier interface's `excitation=` refuses by name and one order at a time:
 
 ```
 the excitation lights order 5, which is evanescent or carries no positive incident power in
 this medium; a zero-power near-field excitation cannot be normalized as an incident plane wave.
 ```
+
+An `OrderExcitation` lighting such an order raises `ValidationError` (code `rcwa.invalid`):
+`top input carries no positive incident normal power (evanescent or grazing).`
 
 This is not fussiness. Every efficiency is `outgoing power / incident power`, and an evanescent
 input drives the structure while paying nothing into the denominator — so `R + T` exceeds one
@@ -93,11 +109,14 @@ limit of this code.
 
 ## 4. The retained window widens around the lit orders
 
-Every lit order needs `truncation_order` neighbours on each side, or a beam sitting off-centre is
-worse resolved than it would be solved alone. So the retained set spans
-`[m_min - truncation_order, m_max + truncation_order]` rather than staying centred on the specular order.
+Every lit order needs `Numerics(orders=...)` neighbours on each side, or a beam sitting
+off-centre is worse resolved than it would be solved alone. So the retained set spans
+`[m_min - N, m_max + N]`, with `N` the declared half-width, rather than staying centred on the
+specular order.
 
-That set is carried as `(centre, half_width)` — `solver.order_window` — rather than as a range,
+That set is carried as `(centre, half_width)` — the earlier interface's `solver.order_window`;
+the current `rcwa.check` report's `resolved['order_window']` shows the declared window, not this
+widened one — rather than as a range,
 because `n_orders = 2*half_width + 1` then stays true and every size computation downstream is
 untouched. The cost is that a symmetric window cannot straddle a half-integer centre, so an
 odd span buys one order more than the union strictly needs.
@@ -121,10 +140,11 @@ tie, which is what an earlier draft of this feature had.
 The extra orders are cheap and get cheaper: `m_max - m_min` of them, a **fixed** number, against
 an `n_orders` that grows. Measured **3.6–9.1%**, falling with N.
 
-**The lit orders themselves must stay inside the declared `truncation_order`.** Without that rule the
-widening would be unbounded — `{0: 1.0, 9: 0.5}` at `truncation_order=6` would quietly retain 22
-orders — and `truncation_order` would stop meaning the orders being modelled. With it the widening is
-capped at twice the declared half-width, and lighting an order outside is refused by name.
+**The lit orders themselves must stay inside the declared `Numerics(orders=...)`.** Without that
+rule the widening would be unbounded — lit orders `(0, 0)` and `(9, 0)` at `orders=(6, 0)` would
+quietly retain 22 orders — and `orders` would stop meaning the orders being modelled. With it the
+widening is capped at twice the declared half-width, and lighting an order outside is refused by
+name.
 
 Everything the widening touches is a *size* or an *offset*: the four `kx` builders, the two
 factorization entry points, and `lit_orders`'s mapping. **The factorization does not care where
@@ -155,21 +175,21 @@ value; the amplitudes beside them are ordinary design variables and carry a grad
 
 ## 6. Per-order polarization: through the matrix, not through this keyword
 
-`excitation` carries an amplitude per order and **one polarization for all of them** — whatever
-`psi` / `polarization` / `tetm` says, each order in its own s/p frame. That is a scope
-decision, not a limitation of the formulation, and the capability is already reachable another
-way.
+`OrderExcitation`, like the earlier `excitation=`, carries an amplitude per order and **one
+polarization for all of them** — whatever `polarization` says, each order in its own s/p frame.
+That is a scope decision, not a limitation of the formulation, and the capability is already
+reachable another way.
 
-**Through `solver.scattering`.** On the coupled paths the incident column is
+**Through `result.scattering`.** On the coupled paths the incident column is
 `[s-block ; p-block]`, each of length `n_orders`, so filling both halves independently *is*
 per-order polarization. The s half is the s amplitude itself; the p half is a **port
 variable**, the p wave's magnetic field `-1j * (n/mu) * a_p` in the lit medium, and the p half
 that comes back is the reflected magnetic field, which turns over for the up-going wave:
 
 ```python
-solver = wavebit.rcwa(layer_algorithm='SMM', answers='amplitude', ...)
-solver.solve()
-S = solver.scattering
+result = rcwa.run(problem.replace(outputs=rcwa.Outputs(scattering=True)),
+                  numerics=rcwa.Numerics(orders=..., algorithm='smm'))
+S = result.scattering[0]                      # one matrix per wavelength
 h = n_lit / mu_lit                            # the lit medium's admittance, Z0 units
 
 column = np.zeros((2 * n_orders, 1), dtype=complex)
@@ -184,9 +204,11 @@ Checked: with a *common* polarization this route and `excitation` agree to 6e-17
 half, and to 4e-17 on the p half once it is read as above (`S11 @ delta_p` is `-r_p` per unit
 of the column's own p variable, `S21 @ delta_p` is `t_p` times `(n/mu)_exit / (n/mu)_lit`;
 `docs/reference/common/conventions.md` states it once for every path). What the matrix route does not give is
-efficiencies — it hands back amplitudes and the caller normalizes — and it is SMM-only. The pure
-1D path's matrix is the s-s (TE) or p-p (TM) block of this, in the same variables, and its ports
-say which (`S.entry_port.channel` is `'te'` / `'tm'` there, `'sp'` here).
+efficiencies — it hands back amplitudes and the caller normalizes — and it is SMM-only:
+`Outputs(scattering=True)` with `Numerics(algorithm='etm')` is refused (code
+`rcwa.scattering_algorithm`). The earlier interface's pure 1D path's matrix is the s-s (TE) or
+p-p (TM) block of this, in the same variables, and its ports say which (`S.entry_port.channel`
+is `'te'` / `'tm'` there, `'sp'` here).
 
 **The two doors agree (since 2026-09-27).** `excitation`'s weights and `OrderExcitation`'s on
 the coherent-source path are both referenced at `x = y = 0`, the cell **centre** the public API
@@ -198,8 +220,11 @@ which lit order `(m, n)` with an extra `(-1)**(m + n)` relative to the rest -- d
 once two orders of opposite parity are lit, not a global phase: the same dict gave 0.452653
 there. Pinned in `tests/rcwa/test_centre_reference.py` (and, as the reciprocal-shift identity, in
 `tests/rcwa/test_coherent_illumination.py`); the record is `docs/theory/rcwa/amplitude-sp-frame.md` §7.
+The current `rcwa.OrderExcitation` is that coherent-source door: on the same scene its top
+outgoing over incoming power is the same 0.151782, 4.6e-15 from the earlier `excitation=`
+door's `sum(R)` (0.241294 lit from the glass, 8.9e-15; measured 2026-10-15).
 
-**Why not in the keyword.** The s/p basis is *per order*: `order_azimuth` gives each retained
+**Why not in the source.** The s/p basis is *per order*: `order_azimuth` gives each retained
 order its own azimuth, and `s_hat = z_hat x k_hat_par` is built from **that order's**
 wavevector. So "s" for order 0 and "s" for order +1 point in different directions in space, and
 `(a_s, a_p)` per order would mean each beam specified in its own frame rather than a common
@@ -220,17 +245,18 @@ Surveyed against local copies of RETICOLO V10, S4 and fmmax.
 | **fmmax** | yes | yes | no incidence concept at all — it ships the S matrix and the caller fills a `(2n, k)` amplitude array. `amplitude_poynting_flux` computes flux *from the supplied amplitudes*, so the normalization question never arises |
 | **S4** | yes | yes (`'x'` / `'y'`) | `SetExcitationExterior{{G-index, pol, {re, im}}, ...}`, documented as a **"low level"** escape hatch beside `SetExcitationPlanewave`. One list covers front-forward and back-backward, so it spans both sides |
 | **RETICOLO** | no | no | enumerates fixed incidences (TE/TM x top/bottom) and reports each; `einc = [a_TE, a_TM]` is one wave's polarization |
-| **wavebit** | yes, `excitation=` | through `solver.scattering` | a keyword for the common case, the matrix for the rest |
+| **wavebit** | yes, `OrderExcitation` | through `result.scattering` | a source for the common case, the matrix for the rest |
 
 Three things follow.
 
 **Both peers that support it reached it through the matrix**, and one of them has no incidence
 concept at all. That is the same conclusion this repo arrived at from the other direction: the
-scattering matrix is the general answer, and `excitation` is the convenience on top of it for
-the case where efficiencies are wanted back.
+scattering matrix is the general answer, and `OrderExcitation` is the convenience on top of it
+for the case where power is wanted back (per-order efficiencies through the earlier
+`excitation=`).
 
 **S4 calls its version low level and keeps a plane-wave call beside it.** The split here is the
-same shape — `excitation` is the high-level door and returns efficiencies; the matrix is the low
+same shape — `OrderExcitation` is the high-level door and returns power; the matrix is the low
 one and returns amplitudes.
 
 **RETICOLO cannot be the oracle for any of this**, which matters because it is the oracle this
@@ -248,9 +274,10 @@ not its normal wavevector.
 Each illuminated order is weighted by its own real power admittance: `Re(kz/mu)`
 for electric s amplitudes and `Re(kz/epsilon)` for magnetic p amplitudes, with the
 electric-to-magnetic p scale included. The incident power is the sum of these
-weights times the squared amplitude magnitudes. With no explicit `excitation`,
-the single central order is illuminated.
+weights times the squared amplitude magnitudes. A single `PlaneWave` illuminates
+the single central order.
 
-For real transverse wavevectors, finite-stack absorption is
-`power_entering - T.sum()`. Incident/reflected interference is included in
-`power_entering`, so replacing it by `1-R.sum()` requires a lossless incident medium.
+For real transverse wavevectors, finite-stack absorption is `result.absorption`,
+`result.outputs['power_entering'] - result.T.sum(axis=(1, 2))`. Incident/reflected interference
+is included in `power_entering`, so replacing it by `1-R.sum()` requires a lossless incident
+medium.

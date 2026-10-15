@@ -1,27 +1,23 @@
 # Integrated anisotropic shapes
 
-:::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
-:::
-
 Tensor `Material` assignments to shape backgrounds and inclusions default to
 `fourier_coefficients='integrated'`. All nine tensor components are supported.
 The construction applies separately to epsilon and mu, with each quantity's
 own material contrasts. See [full tensor patterns](full-tensor-patterns.md).
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material([2.25, 4., 2.8]).rotated(0.31)
-solver = wavebit.rcwa(
-    wavelength=730., period=(600., 600.), thickness=[173.],
-    structure=[dict(background=1., shapes=[
-        dict(type='circle', lx=217., material=crystal),
-    ])],
-    truncation_order=(3, 3), shape_nvf_grid_size=128,
-    fourier_coefficients='integrated',  # the default for tensor shapes
-)
-result = solver.solve()
+crystal = Material([2.25, 4., 2.8]).rotated(0.31)
+problem = rcwa.Problem(
+    units=Units(length='nm'),
+    stack=rcwa.Stack(period=(600., 600.), layers=(rcwa.Layer(
+        thickness=173., background=Material(epsilon=1.), regions=(
+            rcwa.Region(geometry=rcwa.Circle(radius=108.5), material=crystal),)),)),
+    excitation=rcwa.Excitation(wavelength=730., sources=(rcwa.PlaneWave(),)))
+numerics = rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=128,
+                         fourier_coefficients='integrated')  # the default for tensor shapes
+result = rcwa.run(problem, numerics=numerics)
 ```
 
 ## What is integrated
@@ -80,7 +76,8 @@ components close together, and the resulting zz operator is inverted.
   curve toward the sample on both sides, oriented as the polygon segments'
   vectors are, and the outward normal on the curve itself. At an ellipse's
   centre, where the gradient vanishes, it carries the minor axis. A circle's
-  direction is radial, and its `angle`, which describes nothing, is ignored.
+  direction is radial, and `rcwa.Circle` takes no `angle`, which would describe nothing (the
+  earlier interface's circle dictionary ignored one).
   Rectangles, rectilinear contacts and painted overlaps keep their resolved
   polygon interfaces.
 - For a circle the level-set direction is the nearest-point vector, from the
@@ -162,22 +159,27 @@ and contact topology are additional limits, not errors removed by a finer grid.
 
 ## Derivatives and frozen geometry
 
-NumPy, JAX and PyTorch use the same integral. JAX JIT requires a concrete
-`freeze_geometry()` record before tracing. The record stores intersection and
+NumPy, JAX and PyTorch use the same integral. `rcwa.prepare` takes a concrete
+geometry record (on the earlier interface, JAX JIT requires a concrete
+`freeze_geometry()` record before tracing). The record stores intersection and
 interface topology, while material values and shape coordinates remain live.
 Position, size, angle and lattice derivatives therefore include the continuous
 boundary contribution rather than a zero derivative through a Boolean mask.
+Through `prepared.run` those are PyTorch derivatives, since a JAX-traced shape or
+cell is refused (code `prepared.host_topology`); material derivatives run on JAX
+and PyTorch.
 
-Eager replay rejects stale topology. For the curves of a disjoint layer the
+Eager replay rejects stale topology (code `prepared.topology` through
+`prepared.run`). For the curves of a disjoint layer the
 record holds which periodic instances each curve is searched over, and only
 that, and a replay is refused only when a fresh plan would search an instance
 the record does not: a curve growing out of the Wigner-Seitz cell of its centre
 into a ring wider than the neighbouring cells is refused by name, while a curve
 shrinking back into it -- the recorded ring holds the neighbours a fresh plan
 searches -- and a rectangle crossing its own image-ring bound replay as fresh
-solves. Under JIT those discrete decisions cannot be rechecked; re-freeze
-outside the trace when moving through contacts or overlap changes, or when a
-curve leaves its cell. Where the sampled normal extension switches -- ties
+solves. Under JIT on the earlier interface those discrete decisions cannot be
+rechecked; re-freeze outside the trace when moving through contacts or overlap
+changes, or when a curve leaves its cell. Where the sampled normal extension switches -- ties
 between periodic instances of a curve, between shapes in the blend, and at
 corners -- it biases derivatives taken across the switch, by an amount grid
 refinement does not reliably remove; check a gradient against the loss over a

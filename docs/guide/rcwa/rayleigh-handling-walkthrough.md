@@ -1,7 +1,10 @@
 # How a solve handles a Rayleigh point — the end-to-end walkthrough
 
 :::{note}
-This detailed guide documents the retained `wavebit.compat.legacy` interface and its measured scope. For the current problem/numerics lifecycle, start with [the common guide](../common/lifecycle.md). Advanced capabilities are preserved here with explicit compatibility calls; their limits are unchanged.
+The same engine runs this process under both interfaces; only the default differs. The current API
+offers the retry ladder as `rcwa.Numerics(detuning=...)`, off by default, and solves the exact
+requested point otherwise. The earlier `wavebit.compat.legacy` interface runs the ladder by
+default, as `solve(auto_detune=True)`.
 :::
 
 Written: 2026-08-16. Companion to `rayleigh-points.md`: that document carries the
@@ -26,7 +29,7 @@ side and the problem is ordinary: the singularity is in the coordinates, not the
 | `solve_2d._rebuild_grazing_cluster` | re-derives the grazing modes from the coupled first-order problem — the fix |
 | `backend.check_mode_cutoff` / `RayleighPointWarning` | the fallback announcer, when the rebuild cannot run |
 | `backend.check_finite` | the last-resort tripwire for non-finite results |
-| `engine.solve(auto_detune=True)` | the default retry ladder — the "engineering mode" |
+| `rcwa.Numerics(detuning=1e-12)` -> `engine.solve(auto_detune=...)` | the opt-in retry ladder — the "engineering mode" (the earlier interface's default) |
 
 ## The decision flow
 
@@ -44,7 +47,10 @@ Every 2D layer, every solve:
     +-- unreadable ......... traced (jax.jit) or grad-carrying values: the rebuild cannot
     |                        materialize them, so the old detect-and-warn contract stands —
     |                        `check_mode_cutoff` warns below 1e-13 where it can read, and
-    |                        the ladder (which runs eagerly around the trace) picks it up.
+    |                        the ladder (which runs eagerly around the trace) picks it up:
+    |                        through the current API only when `detuning` is set, and
+    |                        never under a JAX transform, where `detuning` is refused
+    |                        (code `prepared.detuning_transform`).
     |
     +-- yes ................ rebuild the grazing cluster:
                              restrict Omega_L / Omega_R to the cluster's invariant subspace
@@ -56,16 +62,17 @@ Every 2D layer, every solve:
                              (b) coupled rates split below 1e-10 of the modal scale
                                  [_DEFECTIVE_REL] -> no exponential basis exists at working
                                  precision (the {1, z} regime). Raise FloatingPointError
-                                 with the detune advice. LOUD, never quiet.
+                                 (public: NumericalError, code rcwa.singular) with the
+                                 detune advice. LOUD, never quiet.
                              (c) E/H cluster sizes disagree (structure not understood)
                                  -> keep the ordinary construction + RayleighPointWarning.
                                  Detected, not guessed.
 
-    solve, auto_detune=True (the default), catches (b) and (c):
+    Numerics(detuning=1e-12) (opt-in; the earlier default auto_detune=True) catches (b), (c):
         retry at wavelength * (1 + 1e-12)   [then theta * (1 + 1e-12) if needed]
         -> the retried solve has ratio ~1e-11, which is INSIDE the 1e-9 gate,
            so the rebuild solves the nearby point exactly -> AutoDetuneWarning
-           names the knob and the value actually used; the solver keeps it.
+           names the knob and the value actually used; result.wavelengths keeps it.
 
 ## Three worked scenarios
 
@@ -75,12 +82,13 @@ well clear of the defective line — and the rebuild returns modes satisfying bo
 first-order relations to eps. Result at exactly 500 nm: R = 0.272004739 against the
 extrapolated truth 0.27200474, R+T-1 ~ 1e-10, no warning of any kind. The ordinary
 construction returned R = 0.281 with R+T = 0.989 here — plausible-looking absorption on a
-lossless stack. `auto_detune` never wakes up; this class has *graduated* from the ladder.
+lossless stack. The `detuning` ladder never wakes up; this class has *graduated* from it.
 
 **2. Defective graze (spacer n = 1.5 on this platform).** The same geometry, but the
 round-off happens to leave the coupled rates at |mu| ~ 5e-16 — the two exponentials of a
 mode pair are numerically the same function, and no mode basis exists (measured: every
-construction tried leaves 1e-4..1e-3). The rebuild refuses loudly; the ladder catches the
+construction tried leaves 1e-4..1e-3). The rebuild refuses loudly, under the current default as
+a `NumericalError` (code `rcwa.singular`). With `Numerics(detuning=1e-12)` the ladder catches the
 refusal, moves the wavelength by 1e-12 relative, and the retried point — now representable
 — solves through the rebuild: R = 0.196001919 vs truth 0.19600190, with an
 `AutoDetuneWarning` naming the wavelength used. Which stack falls in class 1 vs class 2 is
@@ -107,17 +115,25 @@ The dependency to respect: **ladder step -> landing ratio -> must be inside the 
 gate**. Shrink the gate or grow the step independently and rescued solves quietly lose
 five digits.
 
+Through the current API the step is the value given to `Numerics(detuning=...)`, used as given;
+`1e-12` is the step this composition is sized for. The earlier default also widened the step to
+1e-8 when the inputs carried an autodiff graph, for a stable derivative; under PyTorch autodiff,
+pass `1e-8` for the same behaviour.
+
 ## What this means for a user
 
-- **Default (`auto_detune=True`)**: every point returns a correct answer. Exact Rayleigh
-  points either solve exactly (silently) or come back as the 1e-12-detuned neighbour with
-  an `AutoDetuneWarning` saying so. Nothing is ever moved silently.
-- **`auto_detune=False`**: the requested point is solved exactly — and the outcome is
-  *correct or loud*. A refusal means the exponential mode basis provably does not exist at
-  that exact float; the message prescribes the one-ULP detune.
-- **Measurement scripts probing this regime must pass `auto_detune=False`** — otherwise
-  the library moves the exact point you meant to sample, and "exact vs detuned"
-  comparisons come back identical (see `rayleigh-points.md` §4).
+- **`Numerics(detuning=1e-12)`** (the earlier interface's default, `auto_detune=True`):
+  every point returns a correct answer. Exact Rayleigh points either solve exactly (silently)
+  or come back as the 1e-12-detuned neighbour with an `AutoDetuneWarning` saying so;
+  `result.wavelengths` holds the wavelength actually used. Nothing is ever moved silently.
+- **Default (`detuning=None`; the earlier `auto_detune=False`)**: the requested point is
+  solved exactly — and the outcome is *correct or loud*. A refusal (`NumericalError`, code
+  `rcwa.singular`) means the exponential mode basis provably does not exist at that exact
+  float; the message prescribes the one-ULP detune.
+- **Measurement scripts probing this regime must leave `detuning` at `None`** (on the earlier
+  interface, pass `auto_detune=False`) — otherwise the library moves the exact point you meant
+  to sample, and "exact vs detuned" comparisons come back identical (see `rayleigh-points.md`
+  §4).
 - **Oracles near the condition**: R(lambda(1+-h)) varies as R0 +- a*sqrt(h) (a Wood
   anomaly). Linear extrapolation misconverges, and the one-ULP neighbour computed with the
   *old* construction is itself inside the broken band. Use the two-sided sqrt
@@ -129,8 +145,8 @@ On the 1D conical path with `ky != 0`, an order with `kx_m**2 = eps*mu` in some 
 a Rayleigh point: its `kz` is `abs(ky)`, nothing grazes, and none of the machinery above is
 involved. What breaks there is the conical path's two mode families, which collapse onto one
 field; the layer is rebuilt in a regular basis inside the 1D builder
-(`solve_1d.py::_regular_conical_modes`), exactly, with no warning and no detune, so the default
-solve and `auto_detune=False` return the same answer — and under every trace the same:
+(`solve_1d.py::_regular_conical_modes`), exactly, with no warning and no detune, so a solve
+with or without `detuning` returns the same answer — and under every trace the same:
 `jax.jit`, `jax.vmap` (so a wavelength sweep written as a `vmap`), a `jax.lax.map` or `scan`
 body, `jax.checkpoint` and `torch.func.vmap` rebuild the layer too, the gate's masks carried as
 data. `rayleigh-points.md` §7 has the construction, the gate, how traces are handled and the
