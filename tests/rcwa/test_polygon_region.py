@@ -1,6 +1,6 @@
 """``rcwa.Polygon``: a region whose outline is a list of vertices, solved on the painting route.
 
-It was declared and refused until the region could be built (develop 9117370a). What these
+It was declared and refused until the region could be built (develop 0cd24a45). What these
 tests hold it to, beside the S4 identity in ``tests/references/test_s4_polygon_golden.py``:
 
 * the outline is checked where its values are -- at the declaration when they are concrete,

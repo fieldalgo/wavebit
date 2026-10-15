@@ -510,7 +510,7 @@ def test_every_exported_region_geometry_is_listed_here():
 
 
 #: Exported geometries refused at their declaration, with the ``(code, path)`` they raise. Empty:
-#: ``rcwa.Polygon`` was the one entry, refused from 9117370a until a polygon region was built.
+#: ``rcwa.Polygon`` was the one entry, refused from 0cd24a45 until a polygon region was built.
 REFUSED_AT_DECLARATION = {}
 
 
