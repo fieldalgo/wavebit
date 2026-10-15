@@ -5,8 +5,8 @@ subtrees:
     title: Getting started
     subtrees:
     - entries:
-      - file: getting-started/installation
       - file: getting-started/overview
+      - file: getting-started/installation
       - file: getting-started/rcwa
       - file: getting-started/fdtd
   - file: learn/index
