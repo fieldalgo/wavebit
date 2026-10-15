@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wavebit"
-version = "0.0.2"
+version = "0.0.3"
 description = "Differentiable electromagnetic simulation with RCWA and FDTD"
 readme = "README.md"
 license = "Apache-2.0 AND MIT"

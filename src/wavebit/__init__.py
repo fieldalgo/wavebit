@@ -4,7 +4,7 @@ Use rcwa.Problem or fdtd.Problem with the corresponding check/prepare/run
 lifecycle. Transitional old entry points live explicitly in compat.legacy.
 Importing this package never enables a backend or changes global precision.
 """
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 
 from . import materials, rcwa, fdtd
 from .materials import (Material, MaterialResponse, ConductiveMaterial, DispersiveMaterial,

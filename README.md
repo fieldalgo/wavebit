@@ -27,7 +27,7 @@ response is the model that optimizes it.
 * **Checked against the outside world.** RETICOLO, fmmax and S4 for RCWA; Meep for FDTD; the Li (1997)
   crossed-grating benchmark. The numbers and how they were taken: [validation](docs/validation/index.md).
 
-**Status: 0.0.2, alpha.** RCWA is the mature path. FDTD runs on CPU in double precision; its geometry,
+**Status: 0.0.3, alpha.** RCWA is the mature path. FDTD runs on CPU in double precision; its geometry,
 material and derivative support is reported by `check` for each problem. The API may change before
 1.0. An experimental RCWA solver for metal contacts is opt-in and has its own, narrower scope; read
 [method selection](docs/guide/rcwa/nvf-method-selection.md) before enabling it.
