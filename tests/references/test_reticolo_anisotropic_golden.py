@@ -16,13 +16,14 @@ Berreman and this solver to ~1e-15 as they stand, which is what licenses reading
 asymmetric ones as physics rather than as a bookkeeping difference. S4 was tried for this role
 first and failed exactly that gate — see ``docs/theory/rcwa/off-diagonal-slot-convention.md`` §8.
 
-The asymmetric cases are ``xfail(strict)``: ``layer_modes_2d`` carries the off-diagonal pair in
-one order inside ``Omega2_LR`` and the other inside ``Omega_R``, so a tensor with
-``eps_xy != eps_yx`` takes its modes from one medium and its H-field from that medium's
-transpose. RETICOLO puts the shipped operator 4e-2 to 6e-2 out; exchanging the pair inside
-``Omega_R`` alone lands every case at ~1e-15. No shipped path can produce an asymmetric tensor
-— every producer emits ``-eps_xy`` twice — so this is a latent defect, not a wrong released
-number.
+The asymmetric cases are asserted at 1e-12 like the symmetric ones. They were
+``xfail(strict)`` until 60801164 (2026-08-10): ``layer_modes_2d`` carried the off-diagonal pair
+in one order inside ``Omega2_LR`` and the other inside ``Omega_R``, so a tensor with
+``eps_xy != eps_yx`` took its modes from one medium and its H-field from that medium's
+transpose, and RETICOLO put the operator 4.2e-2 to 5.5e-2 out; exchanging the pair inside
+``Omega_R`` alone landed every case at ~1e-15. No shipped path can produce an asymmetric tensor
+— every producer emits ``-eps_xy`` twice — so the defect was latent, not a wrong released
+number, and these cases are what keeps it fixed for a hand-filled tensor.
 
 The golden also holds a ``Z_COUPLED_CASES`` block that **this file deliberately does not
 consume**: those tensors have a populated z row, which the second-order path has no slot for. They
@@ -165,8 +166,8 @@ def test_golden_conserves_energy_on_the_hermitian_cases(golden):
     """Guards the golden itself.
 
     A Hermitian tensor is lossless, so RETICOLO's own numbers must sum to one. A golden that
-    failed this would mean the generator wired something wrong, and the xfail above would be
-    measuring that instead of the defect.
+    failed this would mean the generator wired something wrong, and the comparisons above would
+    be measuring that instead of the solver.
 
     The real antisymmetric cases are deliberately excluded: they are *not* Hermitian, so they
     are active media and R + T above one is correct for them. Asserting otherwise is a mistake

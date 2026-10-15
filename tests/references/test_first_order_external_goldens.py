@@ -7,7 +7,7 @@ definition — is shared by all three and survives every one of those tests.
 
 This file is the outside check, and it costs nothing new: ``golden_reticolo_anisotropic.npz``
 and ``golden_fmmax.npz`` were frozen for the second-order path and happen to cover exactly the
-first-order domain, uniform layers between vacuum. Nine RETICOLO cases and twelve fmmax ones,
+first-order domain, uniform layers between vacuum. Twelve RETICOLO cases and twelve fmmax ones,
 sharing no wavelength, thickness, tensor or angle between the two sets.
 
 Three of the RETICOLO cases have a **populated z row** — the Voigt geometry, which is the whole
@@ -210,6 +210,20 @@ def test_the_external_coverage_of_z_coupling_is_what_the_docs_claim():
 
     for name, (eps, _) in FMMAX_CASES.items():
         assert not z_coupled(eps), f'{name}: fmmax has no z row to give'
+
+
+def test_the_module_counts_the_cases_it_runs():
+    """The docstring's case counts, read back. It said nine RETICOLO cases while twelve ran."""
+    import re
+    words = {w: n for n, w in enumerate('zero one two three four five six seven eight nine ten '
+                                        'eleven twelve thirteen fourteen fifteen'.split())}
+    doc = ' '.join(__doc__.split())
+    reticolo, fmmax = re.search(r'(\w+) RETICOLO cases and (\w+) fmmax ones', doc).groups()
+    assert (words[reticolo.lower()], words[fmmax.lower()]) == (len(RETICOLO_CASES), len(FMMAX_CASES))
+    z_row = re.search(r'(\w+) of the RETICOLO cases have a \*\*populated z row\*\*', doc).group(1)
+    assert words[z_row.lower()] == sum(
+        1 for eps, _ in RETICOLO_CASES.values()
+        if np.abs(np.asarray(eps)[[0, 1, 2, 2], [2, 2, 0, 1]]).max() > 0)
 
 
 @pytest.mark.parametrize('name', list(RETICOLO_CASES), ids=list(RETICOLO_CASES))

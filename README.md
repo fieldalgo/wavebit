@@ -170,8 +170,10 @@ optical convergence or opening derivative:
 
 * **Three outside RCWA solvers** — RETICOLO through an Octave bridge, plus fmmax and S4. Their
   numbers are committed as goldens and checked in CI, so the half that needs software this
-  project does not ship runs once, by hand. RETICOLO agrees to ~1e-13 and is the only reference
-  here that validates individual diffraction *orders* rather than totals.
+  project does not ship runs once, by hand. Two of them validate individual diffraction
+  *orders*, not only totals: RETICOLO agrees to ~1e-13, and fmmax's `FFT` formulation, which
+  assembles the operator `factorization='laurent'` does, agrees on every order of both
+  polarisations to ~3e-11 ([`test_fmmax_laurent_golden.py`](tests/references/test_fmmax_laurent_golden.py)).
 * **A different method entirely** — Wavebit's own FDTD ([`docs/guide/fdtd/fdtd.md`](docs/guide/fdtd/fdtd.md)) solves
   the same scene in the time domain, and Meep is the outside reference for it. RCWA truncates a
   Fourier series and FDTD discretises space and time, so a defect surviving both belongs to
@@ -191,10 +193,11 @@ optical convergence or opening derivative:
   because until 2026-09-07 they were the phrase "at the shipped defaults" and one column had
   quietly gone stale behind it. Meep is GPL and this project is Apache-2.0, so it is run as a
   black-box oracle and is not a dependency of anything here.
-* **Published benchmark tables** — Li's 1997 crossed-grating checkerboard as tabulated by
+* **A published benchmark table** — Li's 1997 crossed-grating checkerboard as tabulated by
   Demésy et al. (2012). All nine transmitted orders agree to a worst 2.06e-4, on the oblique
   primitive cell, which puts that path against numbers from outside this project.
-* **Energy conservation** for lossless structures, at machine precision (|R+T−1| ~ 1e-15).
+* **Energy conservation** for lossless structures: the tests hold |R+T−1| below 1e-12 to
+  1e-10 on most scenes, and below 1e-6 to 1e-4 beside a Rayleigh point.
 * **Cross-backend agreement** — NumPy, JAX and PyTorch on the same input.
 * **Analytic gradients against finite differences**, for the parameters an optimizer moves.
 
