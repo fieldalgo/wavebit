@@ -19,6 +19,8 @@ Targets:
 - `src/wavebit/_common/conventions.py` — `etm_mode_q` / `layer_root`, the one place the two algorithms
   label a layer's modes differently (§10), and `layer_label_rule` / `power_down_labels`, how a
   double-negative layer is labelled (§11)
+- `src/wavebit/rcwa/_engine/maxvol_labels.py` — ETM's labels at a complex in-plane wavevector,
+  chosen from the state below the layer (§10)
 
 **The keyword is `layer_algorithm`** (it was `connecting_algo` until 2026-08-20; the values
 `'ETM'` / `'SMM'` / `'TMM'` did not move). "Connecting algorithm" stays the name of the *idea*
@@ -66,11 +68,11 @@ which does have gratings, rather than assumed.
 1. ETM and SMM are **the same answer**, to 8e-16 on a real grating. Choosing between them is a
    cost and structure decision, never an accuracy one -- at a real in-plane wavevector. At a
    complex one that took ETM labelling its layers' modes by the half-space's rule (§10); before
-   2026-10-02 it lost up to 12 digits there. Two cases are still open, both at a complex `k_par`
-   (or in a gain medium) and both ETM's: a thick, high-contrast layer whose material recurs beside it, such as an
-   etched grating on its own slab, can leave ETM O(1) off where SMM is right; and a thick layer
-   of the far half-space's own material makes ETM raise `LinAlgError` where SMM can be right
-   (§10, "What is left"). A double-negative layer is labelled by where its modes' power
+   2026-10-02 it lost up to 12 digits there. Since 2026-10-15 ETM chooses those labels from the
+   state below each layer (an etched grating on its own slab had left it O(1) off where SMM was
+   right). One case is still open, at a complex `k_par` (or in a gain medium) and ETM's: a thick
+   layer of the far half-space's own material makes ETM raise `LinAlgError` where SMM can be
+   right (§10, "What is left"). A double-negative layer is labelled by where its modes' power
    goes (§11); before 2026-10-04 ETM raised `LinAlgError` on a quarter of the stacks that rest
    one on its own medium. The one stack ETM cannot write is Pendry's perfect-lens pair, which
    it names (§11). Where a layer sets negative permittivity beside positive, SMM lost up to
@@ -715,27 +717,51 @@ agree to 6.6e-13 and the uncapped ones were 4.8e-9 apart. The cap costs 2-5% of 
 `tests/rcwa/test_first_order_round_trip_cap.py`, with controls that remove the cap, rank over the whole
 layer, rank by label growth, or let each slice decide alone.
 
+**Labels from the state below.** Added 2026-10-15. The rule above decides from the layer alone,
+and an etched grating whose teeth are the material of a thick slab beside it showed that it cannot
+(the first bullet of "What is left" until this date): the wave the layer below hands up is the one
+the cap's decaying label describes, not the half-space's root, and the pivot the runs remove for
+identical layers came back. At a complex `k_par` the labels are now chosen from that state
+(`maxvol_labels.py`). A layer's ETM state at its top face is the subspace `C = [X^-1 a; X b]` its
+`+` and `-` amplitudes span, in the decaying labels; the labels say which rows of `C` ETM inverts,
+and flipping one swaps a pair of rows. The labels taken are a locally maximum-volume pivot set under
+single and 2x2 principal swaps (Mehrmann and Poloni, References), on `C~ = [a; X**2 b]` -- each pair
+scaled by its own exponential, which keeps every volume ratio and forms no growing factor --
+started from each pair's larger leverage in one QR, swapping while a swap gains more than 1.5,
+at most 12 times (6 was the most any of 3,000 decisions took). At such a set Mehrmann and Poloni
+bound every entry of a symmetric state by `sqrt(2)`, whatever the round trip; the state ETM carries
+up is not symmetric, and over the 4,000 etched gratings below its diagonal stayed within 1.49 (the
+1.5 threshold) and its largest entry was 1.4e3, where the rule's passed 1e15. The decision
+reads stopped values, falls back to the rule where its start block is singular, leaves a
+double-negative layer its own rules (§11), and is taken once per run, by the run's bottom slice.
+Under `jit` the gate is traced and the swaps are `where` selections over all 12, so the program
+does not depend on the angle.
+
+Against SMM's response to a 1e-14 nudge of `theta`, on scenes built as that bullet described them:
+
+| | the rule (with the cap) | maximum volume |
+|---|---|---|
+| 4,000 random etched gratings (teeth `eps` 2 to 120, slabs 0.3-200 um, `Im(theta)` 0.02-0.6): over 1e-6 above SMM's nudge | 184 (worst 9.1) | 0 (worst 4.9e-10) |
+| three scenes built to the bullet's description (TM, teeth of `eps = 108`; conical, 58 and 78) | 0.21, 1.55, 2.66 | 4.5e-13, 1.8e-12, 2.4e-13 |
+| 26,000 random complex-angle scenes, general and thick-layer: over 1e-10 above SMM's nudge | 8 (worst 2.6e-8) | 1 (2.0e-10) |
+| the same 26,000: over 3x worse than the rule, SMM's nudge and 1e-14 all | -- | 0 |
+
+This section's first table and the cap table read as they did within 1.6x (the 200 um cap row
+1.0e-12 against 6.3e-13). Every real-angle solve keeps its bits -- 3,120 amplitude and field digests
+over TE, TM, conical and 2D, metals, ETM and SMM, are develop's to the byte -- and the gate is
+`transverse_k_is_real`'s, so a real angle in an absorbing medium (`imag(kx)` at round-off) keeps the
+rule too. The derivative is the modes' and not the choice's: on three etched gratings JAX eager,
+`jit(grad)` and PyTorch gradients of `r0` with respect to a thickness are SMM's and a central
+difference's to 1e-8..6e-7, where the rule's were 5x to 1e15 off, and a traced `theta` under `jit`
+is the eager solve to 2.4e-12. The cost is at a complex `k_par` only (eager NumPy, the decision's
+inverses reused for the layer): TE +29%, conical +77% (its decision builds the `V` blocks twice),
+2D +34-40%. The controls of `tests/rcwa/test_etm_layer_labels.py` and
+`tests/rcwa/test_split_layer_labels.py` -- put the old rule back, let each slice decide -- run with
+`maxvol_labels.MODE = 'off'`: at a complex angle the new labels need neither, so with them no
+control could break.
+
 **What is left.** Each limit below was measured; none is fixed.
 
-- *The label depends on what lies below, and the cap sees one layer.* The cap assumes the mode's
-  reflection is not at rounding level. Where a different layer whose modes nearly coincide with
-  this one's lies below it, the wave it hands up is the wave the cap's decaying label describes,
-  not the half-space's root, and the pivot the runs remove for identical layers comes back. An
-  etched grating whose teeth are the material of a thick slab beside it is that case: at a
-  complex `theta`, with high contrast, ETM was 0.24, 2.3 and 0.31 off SMM in three such scenes
-  (TM at `truncation_order = 24` with teeth of `eps = 108`; conical with 58 and 78), where SMM
-  moved by 1.5e-12 or less under the nudge. Among 800 random such gratings (teeth `eps` 2 to
-  120, slabs 0.3-200 um, `Im(theta)` 0.02-0.6) ETM was over 1e-6 above SMM's nudge in 17, 14 of
-  them with `eps > 30`. The decaying labels everywhere -- the rule before 2026-10-02, which the
-  grating on its own substrate above refuted -- were over it in 1. And the cap's own worst case,
-  `sqrt(eps)`, is approached: of 13,000 random complex-angle scenes, 66 lost more than 1e-10 in
-  a way their round trips account for, and ETM was the worse algorithm in 18 of them, by 1.1e-10
-  to 7.7e-9 where SMM's nudge moved 3e-14 to 1.3e-10. A rule decided from the recursion's own `a`
-  and `b` (keep the label under which the mode's reflection state stays a contraction) fixed
-  those 18 and the split slices, and left 1.8e-6 to 0.22 on the etched gratings, where a block of
-  coupled modes has no per-mode cost; it also cost 30-40% at a complex `theta`. It was not
-  landed. At a complex `k_par` through thick, high-contrast layers whose material recurs next to
-  them, use SMM; its field state takes no labels either (above).
 - *A thick layer of a half-space's own material, the far one or the one the light comes from.*
   The wave the half-space receives grows across the layer past the cap, and the decaying root the
   cap keeps is the one wave it does not receive: `a` is singular. ETM raises `LinAlgError`: a uniform `eps = 9` layer on `eps = 9`
@@ -1141,5 +1167,7 @@ control that restores develop's gap and must break it.
   *C. R. Physique* **13**, 786 (2012).
 - Y. Shiloach and U. Vishkin, "An O(log n) parallel connectivity algorithm", *J. Algorithms*
   **3**, 57 (1982).
+- V. Mehrmann and F. Poloni, "Doubling algorithms with permuted Lagrangian graph bases",
+  *SIAM J. Matrix Anal. Appl.* **33**(3), 780 (2012), doi:10.1137/110850773.
 - M. Cassier and P. Joly, "An operator approach to the analysis of electromagnetic wave
   propagation in dispersive media. Part 2: transmission problems", arXiv:2504.00235 (2025).

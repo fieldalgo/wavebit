@@ -35,6 +35,7 @@ from wavebit.rcwa._engine.enums import Answers
 from wavebit.rcwa._engine.enums import answers_of
 from wavebit.rcwa._engine.solve_1d import _block
 from wavebit.rcwa._engine.solve_1d import _diag
+from wavebit.rcwa._engine.solve_1d import _env_decides
 from wavebit.rcwa._engine.solve_1d import _is_backside
 from wavebit.rcwa._engine.solve_1d import _keep_below
 from wavebit.rcwa._engine.solve_1d import _mirrored_scene
@@ -595,7 +596,7 @@ def _pair_inverse(xp, Q, a, b, mask):
 
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
-                   mu=None, k0_d=None, dng=None, pair_cap=None, with_coupling=False):
+                   mu=None, k0_d=None, dng=None, pair_cap=None, with_coupling=False, env=None):
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
     ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; without ``k0_d``
@@ -719,7 +720,16 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         del Omega2_LR
     if Omega_R is None:
         Omega_R = right_factor()
-    q = layer_root(xp, xp.astype(w, C), k0_d, mirrored)
+    if _env_decides(env, mirrored, patterned):
+        W_s, R_s = _stop(W), _stop(Omega_R)
+        RW_s = R_s @ W_s
+
+        def boundary(q_):
+            with division_at_a_cutoff():
+                return env.frame(W_s, RW_s / q_)
+        q = env.choose(xp, _stop(w), C, boundary)
+    else:
+        q = layer_root(xp, xp.astype(w, C), k0_d, mirrored)
     V = Omega_R @ W
     with division_at_a_cutoff():                 # q == 0 on a light line; rebuilt or refused below
         V = V / q
@@ -753,6 +763,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             # auto_detune ladder then re-solves off the point with the graph intact.
             rebuilt = None
         if rebuilt is not None:
+            if env is not None:
+                env.Wi = None
             W, V, q = (xp.astype(xp.asarray(a), C) for a in rebuilt)
             if patterned is not None:
                 # The rebuilt cluster took `layer_root`'s labels; the per-mode rule reads them.
@@ -790,6 +802,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             B, D, Cc, E = left_blocks()
             A = _block(xp, [[-Cc, B], [-D, E]]) @ Omega_R
             del B, D, Cc, E
+        if env is not None:
+            env.Wi = None
         W, V, Q, a, b, mask = _rebuild_defective_pairs(xp, A, _stop(Omega_R), W, V, q, w, pairs)
         del A
         _screen(W)
@@ -954,6 +968,9 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                                      (epx_conv_all, epy_conv_all, epz_conv_i_all,
                                       epxy_conv_all, epyx_conv_all, *mu_all), dng)
     below = None
+    from wavebit.rcwa._engine import maxvol_labels
+    use_maxvol = maxvol_labels.enabled(xp, kx, ky)
+    flips_below = None
     for layer_index in range(n_layers)[::-1]:
         epx_conv = epx_conv_all[layer_index]
         epy_conv = epy_conv_all[layer_index]
@@ -974,11 +991,21 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # inverts a transmission into the medium below, so a layer's `+` modes have to be
         # the waves that medium receives. Decided on the run's thickness
         # (:func:`~wavebit.rcwa._engine.solve_1d._run_k0_d`).
+        env = None
+        if use_maxvol is not False:
+            from wavebit.rcwa._engine.modal_gradient import _stop
+            if big_F is None:
+                big_F, big_G, big_T = substrate_state()
+            env = maxvol_labels.Environment(_stop(big_F), _stop(big_G), run_k0_ds[layer_index],
+                                            flips_below, _run_join(run_links, layer_index, below),
+                                            use_maxvol)
+            env.frame = lambda W_, V_: sp_modes_2d(xp, W_, V_, F_c, F_s, n_orders)
         W, V, q, coupled = layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i,
                                           epxy_conv, epyx_conv, C, mu=layer_mu,
                                           k0_d=run_k0_ds[layer_index],
                                           dng=None if dng is None else dng[layer_index],
-                                          pair_cap=pair_cap, with_coupling=True)
+                                          pair_cap=pair_cap, with_coupling=True, env=env)
+        flips_below = None if env is None else env.flips
 
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         if not keep_field:
@@ -987,8 +1014,15 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             big_F, big_G, big_T = substrate_state()
 
         big_I = xp.astype(xp.eye(2 * n_orders), C)
-        big_W_i = xp.linalg.inv(big_W)
-        big_V_i = xp.linalg.inv(big_V)
+        reused = None
+        if (env is not None and not coupled and not carries_autodiff(big_W)
+                and not carries_autodiff(big_V)):
+            reused = env.inverses(xp)
+        if reused is None:
+            big_W_i = xp.linalg.inv(big_W)
+            big_V_i = xp.linalg.inv(big_V)
+        else:
+            big_W_i, big_V_i = reused
         # Exact inside a run, the plain form elsewhere
         # (:func:`~wavebit.rcwa._engine.solve_1d._run_ab`).
         big_A, big_B = _run_ab(xp, big_I, big_W_i, big_V_i, big_W, big_V, big_F, big_G, below,

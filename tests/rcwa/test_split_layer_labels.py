@@ -15,7 +15,11 @@ state, which walks the gap amplitude and reads no labels.
 equal to ``sqrt(eps)``, :func:`~wavebit._common.conventions.layer_runs` -- the run's ``k0*d``, and
 the ETM steps across a run's planes exactly (:func:`~wavebit.rcwa._engine.solve_1d._run_ab`), so a cut
 layer is the uncut layer. The controls below give each slice its own decision again, or take the
-exact step away, and must break each case.
+exact step away, and must break each case. Since 2026-10-15 a complex ``k_par`` takes
+:mod:`~wavebit.rcwa._engine.maxvol_labels`' labels, decided once per run from the state below it,
+and they keep a split layer the uncut one without the cap's thickness at all; so each case is held
+on the labels a solve takes and on the rule alone (``maxvol_labels.MODE = 'off'``), and the
+controls take the runs away from the rule alone, which is where the runs are load-bearing.
 At a real ``k_par`` in a passive layer no cap fires, whatever thickness it is handed -- with one
 exception, the spurious root a truncated metal operator can hold above the real axis, where a
 split metal grating's ETM field was 1.5e-11 off the uncut one and now agrees. The last tests pin
@@ -26,6 +30,7 @@ from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import numpy as np
 import pytest
 
+from wavebit.rcwa._engine import maxvol_labels
 from wavebit.rcwa._engine import solve_1d
 from wavebit._common.conventions import layer_runs, run_k0_d
 
@@ -45,9 +50,27 @@ def _no_runs(xp, slots, rules=None):
 
 
 @pytest.fixture
-def per_layer(monkeypatch):
+def rule(monkeypatch):
+    """The cap's rule alone: no maximum-volume labels at a complex angle."""
+    def install():
+        monkeypatch.setattr(maxvol_labels, 'MODE', 'off')
+    return install
+
+
+@pytest.fixture
+def no_runs(monkeypatch):
+    """Every slice deciding and stepping on its own, whichever labels decide."""
     def install():
         monkeypatch.setattr(solve_1d, 'layer_runs', _no_runs)
+    return install
+
+
+@pytest.fixture
+def per_layer(rule, no_runs):
+    """The control: the rule alone, and every slice deciding on its own thickness."""
+    def install():
+        rule()
+        no_runs()
     return install
 
 
@@ -79,7 +102,7 @@ SPLITS = [('te', 8e3, 3.0e-1), ('te', 6e3, 1.2e-3), ('tm', 4.3e3, 1.9e-7),
 
 @pytest.mark.parametrize('path,thick,before', SPLITS,
                          ids=[f'{p}-1+{t / 1e3:g}um' for p, t, _ in SPLITS])
-def test_a_split_layer_answers_as_the_uncut_one(per_layer, path, thick, before):
+def test_a_split_layer_answers_as_the_uncut_one(rule, per_layer, path, thick, before):
     """Split ETM against the uncut stack's SMM: within the uncut stack's own ETM level, 1e-12.
 
     The control (each slice on its own thickness) must leave it at least a decade above, at
@@ -90,6 +113,8 @@ def test_a_split_layer_answers_as_the_uncut_one(per_layer, path, thick, before):
     reference = _amplitudes(*merged, 'SMM', path)
     assert _relative(_amplitudes(*split, 'ETM', path), reference) < 1e-12
     assert _relative(_amplitudes(*split, 'SMM', path), reference) < 1e-12
+    rule()
+    assert _relative(_amplitudes(*split, 'ETM', path), reference) < 1e-12
 
     per_layer()
     broken = _relative(_amplitudes(*split, 'ETM', path), reference)
@@ -107,7 +132,7 @@ def _amplitudes_2d(layers, thickness, algorithm):
                            for n in ('s_inc', 'p_inc') for f in ('r_s', 'r_p', 't_s', 't_p')])
 
 
-def test_the_2d_path_splits_the_same(per_layer):
+def test_the_2d_path_splits_the_same(rule, per_layer):
     """``solve_2d``'s loop reads the same runs: 4.8e-8 off before, 6e-13 now."""
     rod = np.full((6, 6), 1.0 + 0j)
     rod[1:4, 1:5] = 5.0
@@ -115,13 +140,15 @@ def test_the_2d_path_splits_the_same(per_layer):
     reference = _amplitudes_2d([rod, uniform], [600.0, 4500.0], 'SMM')
     split = ([rod, uniform, uniform], [600.0, 4000.0, 500.0])
     assert _relative(_amplitudes_2d(*split, 'ETM'), reference) < 5e-12
+    rule()
+    assert _relative(_amplitudes_2d(*split, 'ETM'), reference) < 5e-12
 
     per_layer()
     assert _relative(_amplitudes_2d(*split, 'ETM'), reference) > 1e-9
 
 
 @pytest.mark.parametrize('path', ['te', 'tm', 'conical'])
-def test_the_field_of_a_split_layer_is_the_uncut_field(per_layer, path):
+def test_the_field_of_a_split_layer_is_the_uncut_field(rule, per_layer, path):
     """The field inside a split stack is the uncut stack's field, on both algorithms.
 
     The ETM's field state walks each layer's ``+`` amplitude on the ETM's labels, so it needs the
@@ -147,6 +174,8 @@ def test_the_field_of_a_split_layer_is_the_uncut_field(per_layer, path):
     bound = max(20 * level, 1e-9)
     for algorithm in ('ETM', 'SMM'):
         assert _relative(field(*split, algorithm), reference) < bound
+    rule()
+    assert _relative(field(*split, 'ETM'), reference) < bound
 
     per_layer()
     assert _relative(field(*split, 'ETM'), reference) > bound
@@ -298,11 +327,11 @@ def test_a_metal_grating_split_at_a_real_angle_keeps_one_label(per_layer):
 
 
 @pytest.mark.parametrize('path', ['te', 'tm', 'conical'])
-def test_a_real_angle_stack_without_runs_is_untouched_to_the_bit(per_layer, path):
+def test_a_real_angle_stack_without_runs_is_untouched_to_the_bit(no_runs, path):
     """No two adjacent layers alike: the runs change nothing, at a real angle or a complex one."""
     stack = ([UNIFORM, GRATING, UNIFORM], [1000.0, 4800.0, 3000.0])
     runs = {t: _amplitudes(*stack, 'ETM', path, theta=t) for t in (0.66, THETA)}
-    per_layer()
+    no_runs()
     for t in (0.66, THETA):
         assert np.array_equal(runs[t], _amplitudes(*stack, 'ETM', path, theta=t))
 
@@ -322,7 +351,7 @@ def test_a_real_angle_split_layer_steps_as_the_uncut_one(per_layer, path):
     assert _relative(_amplitudes(*split, 'ETM', path, theta=0.66), uncut) < 2e-13
 
 
-def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch):
+def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch, rule):
     """A run of the far half-space's own material, its thin slice touching the half-space.
 
     The run's capped label pivots on 1.7e-18 against the half-space, which only the whole run's
@@ -341,6 +370,7 @@ def test_a_run_on_its_own_half_space_steps_as_the_uncut_layer(monkeypatch):
         res = s.solve(auto_detune=False).incident
         return np.concatenate([np.ravel(np.asarray(res.r_s)), np.ravel(np.asarray(res.t_s))])
 
+    rule()
     uncut = amplitudes([60500.0])
     assert _relative(amplitudes([500.0, 60000.0]), uncut) < 1e-12
 

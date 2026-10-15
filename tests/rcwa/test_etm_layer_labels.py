@@ -21,6 +21,12 @@ Each half is load-bearing, and the tests below carry the controls that show it:
 * on the decaying root everywhere (the rule before this file) every case fails;
 * on the half-space root everywhere, uncapped, the 50 um layer at ``theta = 0.5+0.3j`` fails:
   near-cutoff modes grew by up to ``e**167`` across it and put ETM 2.7 off SMM.
+
+Since 2026-10-15 a complex ``k_par`` takes :mod:`~wavebit.rcwa._engine.maxvol_labels`' labels,
+chosen from the state below the layer, and the rule above is what they fall back to and what every
+real angle keeps. So each case is held twice -- with the labels a solve takes, and with the rule
+alone (``maxvol_labels.MODE = 'off'``) -- and the controls swap the rule with the new labels off:
+with them on, no swap of the rule could break anything.
 """
 
 from wavebit._common.backend import ComplexIncidenceWarning as _legacy_wavebit_ComplexIncidenceWarning
@@ -33,6 +39,7 @@ import pytest
 
 from wavebit._common import conventions
 from wavebit._common.conventions import boundary_kz, etm_mode_q, mode_q
+from wavebit.rcwa._engine import maxvol_labels
 
 #: The 1/5 index grating of ``tests/rcwa/test_fp_warnings.py``, as permittivities: 1 and 25. Its
 #: wide ``eps = 25`` block rests on the ``eps = 25`` substrate below, which is what lets a
@@ -75,13 +82,14 @@ def _uncapped(xp, eigenvalue, k0_d):
 
 
 def _with_etm_rule(rule, fn, *args, **kw):
-    """Run ``fn`` with :func:`etm_mode_q` swapped for ``rule`` (the control)."""
-    original = conventions.etm_mode_q
-    conventions.etm_mode_q = rule
+    """Run ``fn`` on the rule alone, :func:`etm_mode_q` swapped for ``rule`` unless it is ``None``."""
+    original, mode = conventions.etm_mode_q, maxvol_labels.MODE
+    conventions.etm_mode_q = original if rule is None else rule
+    maxvol_labels.MODE = 'off'
     try:
         return fn(*args, **kw)
     finally:
-        conventions.etm_mode_q = original
+        conventions.etm_mode_q, maxvol_labels.MODE = original, mode
 
 
 # ------------------------------------------------------------------- the reported symptom
@@ -107,6 +115,7 @@ def test_a_nudged_complex_angle_moves_etm_no_more_than_smm(theta, thickness):
     assert etm_move <= 2 * smm_move + 1e-14, (etm_move, smm_move)
     assert abs(etm - smm) < 1e-12, abs(etm - smm)
 
+    assert abs(_with_etm_rule(None, _r0, theta, 'ETM', thickness=thickness) - smm) < 1e-12
     broken = _with_etm_rule(_decaying, _r0, theta, 'ETM', thickness=thickness)
     assert abs(broken - smm) > 1e-7, abs(broken - smm)
 
@@ -122,6 +131,7 @@ def test_the_cap_is_what_keeps_a_thick_layer():
     theta, thickness = 0.5 + 0.3j, 50e-6
     smm = _r0(theta, 'SMM', thickness=thickness)
     assert abs(_r0(theta, 'ETM', thickness=thickness) - smm) < 1e-12
+    assert abs(_with_etm_rule(None, _r0, theta, 'ETM', thickness=thickness) - smm) < 1e-12
     broken = _with_etm_rule(_uncapped, _r0, theta, 'ETM', thickness=thickness)
     assert abs(broken - smm) > 1e-2, abs(broken - smm)
 
@@ -149,6 +159,7 @@ def test_evanescent_incidence_needs_no_override(offset):
     assert etm_move <= 2 * smm_move + 1e-14, (etm_move, smm_move)
     assert abs(etm - smm) < 1e-12, abs(etm - smm)
 
+    assert abs(_with_etm_rule(None, _r0, theta, 'ETM', phi=phi) - smm) < 1e-12
     broken = _with_etm_rule(_decaying, _r0, theta, 'ETM', phi=phi)
     assert abs(broken - smm) > 1e-7, abs(broken - smm)
 
@@ -180,6 +191,7 @@ def test_the_pure_tetm_path_takes_the_same_labels(tetm):
     assert etm_move <= 2 * smm_move + 1e-14, (etm_move, smm_move)
     assert abs(etm - smm) < 1e-12, abs(etm - smm)
 
+    assert abs(_with_etm_rule(None, _r0_tetm, theta, 'ETM', tetm) - smm) < 1e-12
     broken = _with_etm_rule(_decaying, _r0_tetm, theta, 'ETM', tetm)
     assert abs(broken - smm) > 1e-11, abs(broken - smm)
 
@@ -214,8 +226,58 @@ def test_the_2d_path_takes_the_same_labels():
     assert etm_move <= 2 * smm_move + 1e-14, (etm_move, smm_move)
     assert abs(etm - smm) < 1e-12, abs(etm - smm)
 
+    assert abs(_with_etm_rule(None, _r0_2d, theta, 'ETM') - smm) < 1e-12
     broken = _with_etm_rule(_decaying, _r0_2d, theta, 'ETM')
     assert abs(broken - smm) > 1e-8, abs(broken - smm)
+
+
+#: Etched gratings whose teeth are the material of a thick slab beside them (from a population of
+#: 4,000, as ``docs/theory/rcwa/connecting-algorithms.md`` section 10 describes it): the wave the
+#: slab hands up is the cap's decaying label, not the half-space's root, and the rule pivots on
+#: it. (path, theta, substrate eps, slab and teeth eps X, groove eps, groove pixels of 20, period,
+#: slab and grating thickness in nm, truncation_order, what the rule alone left ETM at; the
+#: conical scene at ``psi = 0.4798``, ``phi = 1.1207``.)
+ETCHED = [
+    ('te', 0.11530011393969601 + 0.5266304238183759j, 2.25, 117.37021603324249,
+     1.2429071156146414, (9, 14), 2177.406533518858, 72253.68286480316, 350.4547980580837, 12,
+     8.2e-2),
+    ('conical', 0.6828870358926622 + 0.592266794435599j, 11.417975089566646, 119.08998420555984,
+     1.0, (6, 10), 2694.2041398489115, 181039.02185723794, 231.5141461598798, 7, 3.2e-1),
+]
+
+
+@pytest.mark.parametrize('path,theta,bot,X,groove,cut,period,slab,teeth,orders,before', ETCHED,
+                         ids=[e[0] for e in ETCHED])
+def test_an_etched_grating_on_its_own_slab_takes_the_state_below(path, theta, bot, X, groove, cut,
+                                                                period, slab, teeth, orders, before):
+    """The labels decided from the state below the layer match SMM where the rule is O(1) off.
+
+    The control is the rule alone: it must leave ETM within a decade of what it was.
+    """
+    grating = np.full(20, X, dtype=complex)
+    grating[cut[0]:cut[1]] = groove
+
+    def r(algorithm):
+        kw = (dict(tetm='te') if path == 'te'
+              else dict(psi=0.4798290669051883, phi=1.120655317939452))
+        solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=bot, theta=theta,
+                                      truncation_order=[orders], wavelength=1000.0,
+                                      period=[period], thickness=[slab, teeth],
+                                      structure=np.stack([np.full((1, 20), X, dtype=complex),
+                                                          grating[None]]),
+                                      complex_dtype=0, fourier_coefficients='integrated',
+                                      factorization='li', layer_algorithm=algorithm, **kw)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+            res = solver.solve(auto_detune=False)
+        subs = (res.incident,) if path == 'te' else (res.s_inc, res.p_inc)
+        return np.concatenate([np.ravel(np.asarray(getattr(sub, f))) for sub in subs
+                               for f in ('r_s', 'r_p', 't_s', 't_p')])
+    smm = r('SMM')
+    scale = np.max(np.abs(smm))
+    assert np.max(np.abs(r('ETM') - smm)) / scale < 1e-12
+    broken = np.max(np.abs(_with_etm_rule(None, r, 'ETM') - smm)) / scale
+    assert broken > before / 10, broken
 
 
 # ------------------------------------------------------------------------- the rule itself

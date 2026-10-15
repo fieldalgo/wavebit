@@ -29,6 +29,7 @@ from wavebit._common.backend import _readable
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
 from wavebit._common.backend import check_finite
+from wavebit._common.backend import carries_autodiff
 from wavebit._common.backend import division_at_a_cutoff
 from wavebit._common.backend import eig
 from wavebit._common.backend import linear_solve
@@ -38,6 +39,7 @@ from wavebit._common.conventions import incident_column
 from wavebit._common.conventions import incident_kz
 from wavebit._common.conventions import layer_label_rule
 from wavebit._common.conventions import layer_root
+from wavebit._common.conventions import mode_q
 from wavebit._common.conventions import order_azimuth
 from wavebit._common.conventions import order_frame_sign
 from wavebit._common.conventions import layer_runs
@@ -119,13 +121,27 @@ def mode_flux(xp, X, Y):
     return flux, energy
 
 
-def _labels(xp, w, C, k0_d, mirrored, patterned, flux_of):
+def _env_decides(env, mirrored, patterned):
+    """Whether :mod:`~wavebit.rcwa._engine.maxvol_labels` labels this layer: there is an
+    environment, and the layer holds no double negative (whose rules stay its own). Structural:
+    ``mirrored`` / ``patterned`` are ``None``, ``False`` or a flag, never compared by value.
+    """
+    return (env is not None and (mirrored is None or mirrored is False)
+            and (patterned is None or patterned is False))
+
+
+def _labels(xp, w, C, k0_d, mirrored, patterned, flux_of, env=None, boundary=None):
     """A layer's roots: :func:`~wavebit._common.conventions.layer_root`, then, where the layer holds
-    a double-negative region, :func:`~wavebit._common.conventions.power_down_labels`.
+    a double-negative region, :func:`~wavebit._common.conventions.power_down_labels`; with an
+    ``env`` (:class:`~wavebit.rcwa._engine.maxvol_labels.Environment`), its maximum-volume labels,
+    ``boundary(q)`` giving the layer's stopped ``(W, V)`` under labels ``q``.
 
     ``flux_of(q)`` returns ``(flux, energy)`` of the modes under the labels ``q``. Values only:
     the labels are decided before :func:`~wavebit.rcwa._engine.modal_gradient.generator` sees them.
     """
+    if _env_decides(env, mirrored, patterned):
+        from wavebit.rcwa._engine.modal_gradient import _stop
+        return env.choose(xp, _stop(w), C, boundary)
     q = layer_root(xp, xp.astype(w, C), k0_d, mirrored)
     if patterned is not None:
         q, _ = power_down_labels(xp, q, *flux_of(q), k0_d, patterned)
@@ -133,7 +149,7 @@ def _labels(xp, w, C, k0_d, mirrored, patterned, flux_of):
 
 
 def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=None, k0_d=None,
-                   dng=None):
+                   dng=None, env=None):
     """Eigenmodes ``(W, V, q)`` of one 1D TE / TM layer.
 
     ``W`` expands the continuous primary field (``E_y`` for TE, ``H_y`` for TM), ``V`` its
@@ -203,7 +219,8 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
         base = W if mu is None else xp.linalg.inv(mux_conv) @ W
         q = generator(xp, A, w, W,
                       _labels(xp, w, C, k0_d, mirrored, patterned,
-                              lambda q: mode_flux(xp, base * q, W)),
+                              lambda q: mode_flux(xp, base * q, W), env,
+                              lambda q: (_stop(W), _stop(base) * q)),
                       square_root=True)
         V = base @ q if q.ndim == 2 else base * q
     elif tetm_index == 1:  # TM
@@ -219,7 +236,8 @@ def layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C, mu=
         # partner leads, as it does for TE's `H_s`.
         q = generator(xp, operator, w, W,
                       _labels(xp, w, C, k0_d, mirrored, patterned,
-                              lambda q: mode_flux(xp, base * q, W)),
+                              lambda q: mode_flux(xp, base * q, W), env,
+                              lambda q: (_stop(W), _stop(base) * q)),
                       square_root=True)
         V = base @ q if q.ndim == 2 else base * q
     else:
@@ -551,7 +569,7 @@ def sp_modes_1d_general(xp, F_c, F_s, E, U):
 
 
 def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C,
-                           mu=None, k0_d=None, dng=None):
+                           mu=None, k0_d=None, dng=None, env=None):
     """Raw (unrotated) eigenmodes of one conical 1D layer.
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
@@ -658,12 +676,14 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
             return mode_flux(xp, W_f, other)
         return of
 
-    q1 = generator(xp, operator1, w1, W1,
-                   _labels(xp, w1, C, k0_d, mirrored, patterned, family_flux(W1, w1, mux_conv)),
-                   square_root=True)
-    q2 = generator(xp, operator2, w2, W2,
-                   _labels(xp, w2, C, k0_d, mirrored, patterned, family_flux(W2, w2, epx_conv)),
-                   square_root=True)
+    if _env_decides(env, mirrored, patterned):
+        lab1, lab2 = _conical_env_labels(xp, env, C, w1, w2, W1, W2, Kx, Ky, Ky2, epx_conv,
+                                         epz_conv_i, mux_conv, muz_conv_i, mu is not None)
+    else:
+        lab1 = _labels(xp, w1, C, k0_d, mirrored, patterned, family_flux(W1, w1, mux_conv))
+        lab2 = _labels(xp, w2, C, k0_d, mirrored, patterned, family_flux(W2, w2, epx_conv))
+    q1 = generator(xp, operator1, w1, W1, lab1, square_root=True)
+    q2 = generator(xp, operator2, w2, W2, lab2, square_root=True)
 
     ky = Ky[0, 0]                    # Ky == ky * I on this path (single y order)
     ky_sq = Ky2[0, 0]
@@ -727,6 +747,42 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
             V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
             V_22 = epx_conv @ W2 * (q2 / wB)
     return W1, W2, q1, q2, V_11, V_12, V_21, V_22
+
+
+def _conical_env_labels(xp, env, C, w1, w2, W1, W2, Kx, Ky, Ky2, epx_conv, epz_conv_i,
+                        mux_conv, muz_conv_i, magnetic):
+    """Both families' labels, decided jointly by :mod:`~wavebit.rcwa._engine.maxvol_labels`:
+    one subspace holds both, so neither family's flips can be chosen without the other's rows.
+    """
+    from wavebit.rcwa._engine.modal_gradient import _stop
+    w1, w2, W1, W2 = _stop(w1), _stop(w2), _stop(W1), _stop(W2)
+    epx_conv, epz_conv_i = _stop(epx_conv), _stop(epz_conv_i)
+    mux_conv = _stop(mux_conv)
+    muz_conv_i = None if muz_conv_i is None else _stop(muz_conv_i)
+    n = w1.shape[0]
+    q1d = mode_q(xp, xp.astype(w1, C))
+    q2d = mode_q(xp, xp.astype(w2, C))
+    ky = Ky[0, 0]
+    wA = w1 - Ky2[0, 0]
+    wB = w2 - Ky2[0, 0]
+
+    def boundary(q):
+        q1_, q2_ = q[:n], q[n:]
+        W1_i = xp.linalg.inv(W1)
+        W2_i = xp.linalg.inv(W2)
+        with division_at_a_cutoff():
+            V_11 = W1 * (q1_ / wA)
+            V_12 = W1 @ ((ky / wA)[:, None] * (W1_i @ Kx @ W2 if muz_conv_i is None
+                                               else W1_i @ Kx @ muz_conv_i @ W2))
+            if magnetic:
+                V_11 = mux_conv @ V_11
+                V_12 = mux_conv @ V_12
+            V_21 = epx_conv @ (W2 * (ky / wB)) @ (W2_i @ Kx @ epz_conv_i @ W1)
+            V_22 = epx_conv @ W2 * (q2_ / wB)
+        return env.frame(W1, W2, V_11, V_12, V_21, V_22)
+
+    labels = env.choose(xp, xp.concat([w1, w2]), C, boundary)
+    return labels[:n], labels[n:]
 
 
 def sp_modes_1d_conical(xp, F_c, F_s, W1, W2, V_11, V_12, V_21, V_22):
@@ -975,6 +1031,9 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
                                      (epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all),
                                      dng)
     below = None
+    from wavebit.rcwa._engine import maxvol_labels
+    use_maxvol = maxvol_labels.enabled(xp, kx)
+    flips_below = None
     for layer_index in range(n_layers)[::-1]:
         epx_conv = epx_conv_all[layer_index]
         epy_conv = epy_conv_all[layer_index]
@@ -986,14 +1045,27 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         # this recursion inverts a transmission into the medium below, so a layer's `+`
         # modes have to be the waves that medium receives. It is the run's `k0*d`, which is
         # the layer's own unless an identical layer touches it (:func:`_run_k0_d`).
+        env = None
+        if use_maxvol is not False:
+            from wavebit.rcwa._engine.modal_gradient import _stop
+            env = maxvol_labels.Environment(_stop(F), _stop(G), run_k0_ds[layer_index],
+                                            flips_below, _run_join(run_links, layer_index, below),
+                                            use_maxvol)
         W, V, q = layer_modes_1d(xp, tetm_index, kx, I, epx_conv, epy_conv, epz_conv_i, C,
                                  mu=layer_mu, k0_d=run_k0_ds[layer_index],
-                                 dng=None if dng is None else dng[layer_index])
+                                 dng=None if dng is None else dng[layer_index], env=env)
+        flips_below = None if env is None else env.flips
 
         from wavebit.rcwa._engine.modal_gradient import exponential
         X = exponential(xp, q, -k0*d)
-        W_i = xp.linalg.inv(W)
-        V_i = xp.linalg.inv(V)
+        reused = None
+        if env is not None and not carries_autodiff(W) and not carries_autodiff(V):
+            reused = env.inverses(xp)
+        if reused is None:
+            W_i = xp.linalg.inv(W)
+            V_i = xp.linalg.inv(V)
+        else:
+            W_i, V_i = reused
         # Inside a run the factors are taken from the difference of the slices' modes, which
         # is zero: `a = I`, `b = Y` exactly (:func:`_run_ab`). Elsewhere the plain form, and a
         # layer of the same material as the half-space below still inverts its `a`, which is
@@ -1062,7 +1134,6 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
         inc = (-1j * delta * kz_inc / eps_top if lit is None
                else -1j * (Kz_scaled @ delta))
         T1 = xp.linalg.inv(G - 1j * Kz_scaled @ F) @ (-1j * Kz_scaled @ delta + inc)
-
     R = (F @ T1 - delta)[None, :]
     Tt = (T @ T1)[None, :]
 
@@ -1210,6 +1281,9 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
                                      (epx_conv_all, epy_conv_all, epz_conv_i_all, *mu_all),
                                      dng)
     below = None
+    from wavebit.rcwa._engine import maxvol_labels
+    use_maxvol = maxvol_labels.enabled(xp, kx, ky)
+    flips_below = None
     for layer_index in range(n_layers)[::-1]:
         epx_conv = epx_conv_all[layer_index]
         epy_conv = epy_conv_all[layer_index]
@@ -1217,10 +1291,18 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         d = thickness[layer_index]
         layer_mu = _layer_mu(I, mu_all, layer_index)
 
+        env = None
+        if use_maxvol is not False:
+            from wavebit.rcwa._engine.modal_gradient import _stop
+            env = maxvol_labels.Environment(_stop(big_F), _stop(big_G), run_k0_ds[layer_index],
+                                            flips_below, _run_join(run_links, layer_index, below),
+                                            use_maxvol)
+            env.frame = lambda *blocks: sp_modes_1d_conical(xp, F_c, F_s, *blocks)
         # The ETM's labels, on its run's thickness, for the reason :func:`solve_1d` gives.
         modes = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu,
-            k0_d=run_k0_ds[layer_index], dng=None if dng is None else dng[layer_index])
+            k0_d=run_k0_ds[layer_index], dng=None if dng is None else dng[layer_index], env=env)
+        flips_below = None if env is None else env.flips
 
         from wavebit.rcwa._engine.modal_gradient import exponential
         from wavebit.rcwa._engine.modal_gradient import combine
@@ -1246,8 +1328,16 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
             big_W, big_V = sp_modes_1d_conical(xp, F_c, F_s, W1, W2,
                                                V_11, V_12, V_21, V_22)
 
-        big_W_i = xp.linalg.inv(big_W)
-        big_V_i = xp.linalg.inv(big_V)
+        reused = None
+        if (env is not None and len(modes) != 3 and not carries_autodiff(big_W)
+                and not carries_autodiff(big_V)):
+            family1 = xp.arange(2 * n_orders) < n_orders
+            reused = env.inverses(xp, family1)
+        if reused is None:
+            big_W_i = xp.linalg.inv(big_W)
+            big_V_i = xp.linalg.inv(big_V)
+        else:
+            big_W_i, big_V_i = reused
         # Exact inside a run, the plain form elsewhere (:func:`_run_ab`).
         big_A, big_B = _run_ab(xp, big_I, big_W_i, big_V_i, big_W, big_V, big_F, big_G, below,
                                _run_join(run_links, layer_index, below))
