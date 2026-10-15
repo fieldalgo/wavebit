@@ -15,7 +15,7 @@ optical convergence or opening derivative:
   *orders*, not only totals: RETICOLO agrees to ~1e-13, and fmmax's `FFT` formulation, which
   assembles the operator `factorization='laurent'` does, agrees on every order of both
   polarisations to ~3e-11 ([`test_fmmax_laurent_golden.py`](../../tests/references/test_fmmax_laurent_golden.py)).
-* **A different method entirely** — Wavebit's own FDTD ([`docs/guide/fdtd/fdtd.md`](../../docs/guide/fdtd/fdtd.md)) solves
+* **A different method entirely** — Wavebit's own FDTD ([`docs/guide/fdtd/fdtd.md`](../guide/fdtd/fdtd.md)) solves
   the same scene in the time domain, and Meep is the outside reference for it. RCWA truncates a
   Fourier series and FDTD discretises space and time, so a defect surviving both belongs to
   neither. Meep's answers are committed as
@@ -42,7 +42,7 @@ optical convergence or opening derivative:
 * **Cross-backend agreement** — NumPy, JAX and PyTorch on the same input.
 * **Analytic gradients against finite differences**, for the parameters an optimizer moves.
 
-The suite is [`tests/`](tests); everything with a statable criterion lives there, including the
+The suite is [`tests/`](https://github.com/fieldalgo/wavebit/tree/develop/tests); everything with a statable criterion lives there, including the
 slower cross-backend and optimizer checks. CI runs its default set on every push. The tests of
 the experimental conforming NVF module and its study instruments form a
 [research tier](../../tests/README.md#the-research-tier) that CI does not run; it is run while that
@@ -54,6 +54,6 @@ There is deliberately no generic "R+T above 1" warning. It cannot tell a broken 
 structure that legitimately amplifies: gain is `Im(eps) < 0` here, and `R + T > 1`, or a
 negative order under total internal reflection, is then the right answer. Energy is asserted
 per scene in the suite, where the expected number is known; see
-[`docs/reference/common/result-guards.md`](../../docs/reference/common/result-guards.md).
+[`docs/reference/common/result-guards.md`](../reference/common/result-guards.md).
 
 [Imported teaching records](../development/learning-provenance.md) retain their original source revision and toolchain. They are historical evidence, not a claim that the present checkout has rerun them.
