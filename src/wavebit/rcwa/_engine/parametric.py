@@ -418,6 +418,27 @@ def check_layer_shapes(layer, lattice, layer_index=0):
                 f'would cancel where they should add -- and a degenerate one has no inside to '
                 f'fill. Give the vertices in order around the boundary, each once.')
 
+    # A non-finite number first, for the same reason as the lengths below: the sweep reads each
+    # shape's reach in cells, and a NaN or an infinity has no cell to sit in. Until the sweep
+    # enumerated a window (2026-10-15) it read one as an overlap and called the shape larger
+    # than the period; since then it cannot count the window at all. Before the length loop, so
+    # a NaN length is told it is not a number rather than that its sign subtracts.
+    for i, prim in enumerate(prims):
+        if prim is None:
+            continue                                   # a polygon: `polygon_defect` above
+        first, second = _length_keys_of(shapes[i])
+        for key, values in (('cx', prim[1:2]), ('cy', prim[2:3]), (first, prim[3:4]),
+                            (second, prim[4:5]), ('angle', prim[5:7])):
+            if all(math.isfinite(v) for v in values):
+                continue
+            raise ValueError(
+                f'Analytic layer {layer_index}: shape {_shape_name(shapes, i)} has a '
+                f'non-finite {key}. A shape is placed, sized and turned by finite numbers; a NaN '
+                f'or an infinity puts it in no cell, so neither its transform nor its periodic '
+                f'images can be read.\n'
+                f'  Give it a finite value. If an optimiser produced it, the step before '
+                f'diverged.')
+
     # Before the sweep, not after -- not because the message would differ (a negative
     # half-width makes the sweep find nothing, so the length is reported either way; moving
     # this loop below changes no test), but because the sweep cannot answer over one. It reads

@@ -2021,3 +2021,21 @@ def test_a_length_is_a_size_and_the_transform_carries_its_sign():
     assert float(np.sum(np.asarray(_legacy_wavebit_rcwa(
         backend='numpy', structure=rod(lx=300.0), **cfg).solve().T)).real) == pytest.approx(
             0.957231915, abs=1e-7)
+
+
+@pytest.mark.parametrize('spelled', [dict(cx=np.nan), dict(cy=np.inf), dict(lx=np.nan),
+                                     dict(lx=np.inf), dict(ly=-np.inf), dict(angle=np.nan)],
+                         ids=['cx-nan', 'cy-inf', 'lx-nan', 'lx-inf', 'ly-minus-inf', 'angle-nan'])
+def test_a_shape_number_that_is_not_finite_is_refused_by_name(spelled):
+    """A NaN or an infinity in a shape's centre, size or angle is refused before the image sweep.
+
+    The sweep counts the periodic images to test from each shape's extent in cells, and a
+    non-finite number has no cell to sit in. Before that window it read such a shape as an
+    overlap -- a NaN centre was refused as *larger than the period* -- and since, it would
+    have no window to count, so the funnel names the number first. A NaN length is told the
+    same, not that its sign subtracts. An infinite angle is not reached here: ``math.cos``
+    refuses it inside the primitive reader, which reads any refusal as a traced value.
+    """
+    (key, _), = spelled.items()
+    with pytest.raises(ValueError, match=rf'shape 0 \(rectangle\) has a non-finite {key}\.'):
+        solve([rod(**dict(dict(cx=0.0), **spelled))])

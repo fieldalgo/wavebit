@@ -388,6 +388,12 @@ def overlapping_pairs(prims, tol, lattice, *, self_only=False, image_only=False)
     found = []
     radii = [None if p is None else _bounding_radius(p) for p in prims]
     extents = [None if p is None else _fractional_extent(p, w1, w2) for p in prims]
+    for i, extent in enumerate(extents):
+        # A ValueError, as a tracer's refusal is: a caller that cannot read a value steps aside
+        # on one, and `check_layer_shapes` refuses the value by name before it gets here.
+        if extent is not None and not all(math.isfinite(v) for v in extent):
+            raise ValueError(f'shape {i} has a non-finite position, size or angle, so there is '
+                             f'no window of its periodic images to sweep')
     for i, p in enumerate(prims):
         if p is None:
             continue
