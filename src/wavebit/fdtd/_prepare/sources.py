@@ -61,6 +61,7 @@ from wavebit.fdtd._kernel.sources import Correction
 from wavebit.fdtd._kernel.sources import DipoleTerm
 from wavebit.fdtd._kernel.sources import box_corrections
 from wavebit.fdtd._kernel.sources import stamp
+from wavebit.fdtd._spelling import angle
 
 __all__ = ['source_terms', 'lower_sources', 'source_wavelength', 'run_steps',
            'shortest_wavelength', 'column_scene', 'column_pads', 'dipole_indices']
@@ -237,16 +238,17 @@ def _plane_wave_term(scene, plan, src, row):
         wavelength = src.band.concrete_wavelength
         index = as_material(scene.background, 'Scene(background=)').index_bound()
         if wavelength is None or index is None:
-            raise ValueError(f'PlaneWave({src.name!r}) at theta = {src.theta:g}: the transverse '
-                             f'wavevector the Bloch faces must carry is fixed at the band '
-                             f'centre in the background, and one of the two is traced here.')
+            raise ValueError(f'PlaneWave({src.name!r}) at theta = {angle(src.theta)}: the '
+                             f'transverse wavevector the Bloch faces must carry is fixed at the '
+                             f'band centre in the background, and one of the two is traced here.')
         k0 = index * 2.0 * math.pi / wavelength
         for a in transverse:
             face, expected = faces[a], k0 * k[a]
             if isinstance(face, Periodic):
                 if abs(k[a]) >= 1e-12:
                     raise ValueError(
-                        f'PlaneWave({src.name!r}, theta={src.theta:g}, phi={src.phi:g}) has a '
+                        f'PlaneWave({src.name!r}, theta={angle(src.theta)}, '
+                        f'phi={angle(src.phi)}) has a '
                         f'transverse wavevector {expected:.6g} along {AXES[a]}, but that axis '
                         f'is Periodic, which carries only k = 0 (mod 2 pi/L). Say '
                         f'fd.Boundaries(**fd.Bloch.from_source(pw, background=...), ...).')
@@ -259,7 +261,7 @@ def _plane_wave_term(scene, plan, src, row):
                         f'PlaneWave({src.name!r}): the Axis1D face on {AXES[a]} carries k = '
                         f"{given:.9g} but the wave's transverse wavevector at the band centre is "
                         f'{expected:.9g} (n = {index:g}, wavelength {wavelength:g}, theta '
-                        f'{src.theta:g}, phi {src.phi:g}). Use fd.Bloch.from_source(pw, '
+                        f'{angle(src.theta)}, phi {angle(src.phi)}). Use fd.Bloch.from_source(pw, '
                         f'axis1d={AXES[a]!r}, background=...).')
                 continue
             if abs(k[a]) < 1e-12:
@@ -277,8 +279,8 @@ def _plane_wave_term(scene, plan, src, row):
                     f'PlaneWave({src.name!r}): the Bloch face on {AXES[a]} carries k = '
                     f'{given:.9g} but the wave\'s transverse wavevector at the band centre is '
                     f'{expected:.9g} (n = {index:g}, wavelength {wavelength:g}, theta '
-                    f'{src.theta:g}, phi {src.phi:g}). A sheet launched with one k into a cell '
-                    f'that imposes another is not a plane wave of either. Use '
+                    f'{angle(src.theta)}, phi {angle(src.phi)}). A sheet launched with one k '
+                    f'into a cell that imposes another is not a plane wave of either. Use '
                     f'fd.Bloch.from_source(pw, background=...).')
     n = grid.n
     k0i = _node_index(grid, P, src.position)

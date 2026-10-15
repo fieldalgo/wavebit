@@ -471,8 +471,10 @@ class PlaneWave:
         theta = static_float('PlaneWave', 'theta', self.theta)
         phi = static_float('PlaneWave', 'phi', self.phi)
         if not 0.0 <= theta < 90.0:
-            raise ValueError(f'PlaneWave(theta={self.theta!r}): the polar angle from the '
-                             f'propagation axis, in degrees, in [0, 90).')
+            from wavebit.fdtd._spelling import angle, angle_unit
+            raise ValueError(f'PlaneWave(theta={angle(theta, repr(self.theta))}): the polar '
+                             f'angle from the propagation axis, in {angle_unit()}, in '
+                             f'[0, {angle(90.0)}).')
         object.__setattr__(self, 'theta', theta)
         object.__setattr__(self, 'phi', phi)
         if self.polarization not in ('s', 'p'):

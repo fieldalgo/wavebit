@@ -13,6 +13,7 @@ name is a :class:`Spoken` subclass that translates its own refusals.
 """
 import contextlib
 import contextvars
+import math
 import re
 
 from wavebit._common.backend import eager_under_torch_compile
@@ -172,6 +173,24 @@ def to_public(text):
 def spoken(text):
     """``text`` in the public vocabulary inside a public call, unchanged anywhere else."""
     return to_public(text) if _PUBLIC.get() else text
+
+
+def angle(degrees, compat=None):
+    """An angle the engine holds in degrees, as its caller gave it.
+
+    A public ``PlaneWave`` takes ``theta`` and ``phi`` in radians and the lowering turns them
+    into the engine's degrees, so a refusal quoting the engine's number told a caller who gave
+    0.3 about 17.1887. Inside a public call this is the radians; elsewhere ``compat`` -- the
+    compat caller's own spelling -- or the degrees as ``:g`` prints them.
+    """
+    if _PUBLIC.get():
+        return f'{math.radians(degrees):g}'
+    return f'{degrees:g}' if compat is None else compat
+
+
+def angle_unit():
+    """``'radians'`` inside a public call, ``'degrees'`` elsewhere: the unit :func:`angle` prints."""
+    return 'radians' if _PUBLIC.get() else 'degrees'
 
 
 @contextlib.contextmanager

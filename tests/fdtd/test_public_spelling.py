@@ -413,3 +413,31 @@ def test_a_refusal_the_engine_spells_bare_reaches_the_public_caller_in_its_spell
     (issue,) = report.issues
     assert said in issue.message, issue.message
     assert not UNPREFIXED.search(issue.message) and not VOCABULARY.search(issue.message), issue.message
+
+
+def _oblique(theta, **faces):
+    """A plane wave at ``theta`` and phi 0.2 rad across the transverse ``faces``."""
+    return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.1, .1, 1.6)), boundaries=fdtd.Boundaries(**faces, z=fdtd.Open())),
+        sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5), theta=theta, phi=.2,
+                                pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=4e13)),),
+        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+
+
+@pytest.mark.parametrize('theta, faces, said', [
+    (.3, dict(x=fdtd.Periodic(), y=fdtd.Periodic()), "PlaneWave('pw', theta=0.3, phi=0.2) has"),
+    (.3, dict(x=fdtd.Bloch(k=1.), y=fdtd.Bloch(k=1.)), 'wavelength 0.8, theta 0.3, phi 0.2)'),
+    (2., dict(x=fdtd.Periodic(), y=fdtd.Periodic()),
+     'PlaneWave(theta=2): the polar angle from the propagation axis, in radians, in [0, 1.5708).'),
+], ids=['periodic', 'bloch', 'range'])
+def test_a_plane_wave_angle_is_quoted_in_the_radians_the_caller_gave(theta, faces, said):
+    """The lowering hands the engine degrees, and its refusals quoted them: 0.3 read 17.1887."""
+    (issue,) = fdtd.check(_oblique(theta, **faces), numerics=NUMERICS).issues
+    assert said in issue.message, issue.message
+
+
+def test_a_compat_plane_wave_angle_is_still_quoted_in_degrees():
+    with pytest.raises(ValueError, match=re.escape(
+            'PlaneWave(theta=95): the polar angle from the propagation axis, in degrees, '
+            'in [0, 90).')):
+        fd.PlaneWave('pw', band=fd.Band(wavelength=.8, df=.1), z=.5, theta=95)
