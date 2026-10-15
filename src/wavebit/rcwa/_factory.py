@@ -11,8 +11,9 @@ def rcwa(backend='numpy', *args, stack=None, incidence=None, **kwargs):
     or a per-layer list of shape recipes naming a :class:`wavebit.Material` per region, and
     ``top`` / ``bot`` are the two half-space materials. ``mu`` is the raster path's
     permeability field; on the shape paths a permeability lives inside each ``Material``. The
-    retired spellings (``ucell``, ``n_top``, ``n_bot``) are refused by name, because the
-    *quantity* changed with them -- see ``docs/reference/common/conventions.md``.
+    retired spellings (``ucell``, ``n_top``, ``n_bot``) are refused as unknown keywords, which
+    matters because the *quantity* changed with them -- see
+    ``docs/reference/common/conventions.md``.
 
     Args:
         backend: ``'numpy'`` (the default), ``'jax'`` or ``'torch'``, or the

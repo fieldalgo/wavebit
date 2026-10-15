@@ -774,15 +774,15 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
     at ``ezx = ezy = 0`` — the same line with ``U = i H`` substituted — so the second-order spelling
     is a special case of this one, not a shared one.
 
-    ``H_z = Kx Ey - Ky Ex`` is Faraday's z row at ``mu = 1``, and ``mu = 1`` is the only thing
-    this path can be handed: :meth:`wavebit.rcwa._engine.engine.CoreSolveMixin.solve_2d` refuses a
-    permeability before routing here, by name. That refusal is what makes this line correct,
-    so it is not an assumption to be checked here — it is a precondition held elsewhere, and
-    the two move together. The second-order twin carries the general form,
-    ``H_z = muz_conv_i (Kx Ey - Ky Ex)``; should ``mu`` ever land on this path it needs that
-    factor *and* the two z-row terms
-    ``mu_zx H_x`` / ``mu_zy H_y`` this formulation would then be the one able to express,
-    exactly as ``E_z`` above keeps ``ezx`` / ``ezy``.
+    ``H_z`` is Faraday's z row, eliminated the same way. A non-magnetic layer's record carries
+    no ``mu_blocks`` and the row is ``H_z = Kx Ey - Ky Ex``. A magnetic one -- this path has
+    taken a permeability since 2026-09-24 -- carries them under the permittivity's slot
+    names, and the row keeps the same two z-row terms ``E_z`` does::
+
+        Hz = muzz^-1 [ (Kx Ey - Ky Ex) - muzx Hx - muzy Hy ]
+
+    The second-order twin's ``H_z = muz_conv_i (Kx Ey - Ky Ex)`` is that line at
+    ``muzx = muzy = 0``.
 
     The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d`. This
     path needs **no** parity at the output, and it is the only one that does not:

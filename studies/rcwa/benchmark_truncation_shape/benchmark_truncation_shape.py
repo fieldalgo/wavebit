@@ -174,7 +174,7 @@ def solve_flat(mm, nn, epx, epy, epz_i, epxy, epyx, wavelength, period, thicknes
                n_top, n_bot, theta, phi, psi):
     """2D RCWA (TMM) for an arbitrary flat set of Fourier orders.
 
-    Same chain as ``_core.solve_2d.solve_2d`` -- and reusing its ``layer_modes_2d`` /
+    Same chain as ``rcwa._engine.solve_2d.solve_2d`` -- and reusing its ``layer_modes_2d`` /
     ``sp_modes_2d`` / ``final_matching`` verbatim -- with the (n_orders_v, n_orders_u) tensor-product
     layout replaced by an explicit order list so non-rectangular sets work.  Single layer.
 
@@ -285,7 +285,7 @@ def make_cell(kind, ngrid=512, n_ridge=3.48, n_bg=1.0, fill=0.4, rotation=0.):
 # ------------------------------------------------------------------ driver
 
 # `n_top` / `n_bot` are refractive indices: they are the arguments of the solver-core entry
-# points this script calls directly (`solve_flat` below, and `_core.solve_2d.solve_2d`), which
+# points this script calls directly (`solve_flat` below, and `rcwa._engine.solve_2d.solve_2d`), which
 # the permittivity flip left alone.  The *materials* -- the raster -- are permittivity.
 CASE = dict(
     wavelength=900.,
@@ -367,17 +367,17 @@ def selftest():
     # flat solver vs the production NVF path, on a rectangular set
     structure = eps[None, :, :]
     epx, epy, epz_i, epxy, epyx = to_conv_mat_raster_nvf(structure, truncation_order, truncation_order)
-    de_ri_ref, de_ti_ref, _ = _core_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx)
+    de_ri_ref, de_ti_ref, _ = _engine_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx)
 
     nf = normal_vector_field(eps)
     r = run_one(eps, nf, mm, nn, np.ones(mm.shape, bool), (truncation_order, truncation_order), 'nvf')
     err = max(np.abs(r['R'] - de_ri_ref.flatten()).max(),
               np.abs(r['T'] - de_ti_ref.flatten()).max())
-    print(f'selftest solver (flat vs _core.solve_2d): {err:.3e}')
+    print(f'selftest solver (flat vs rcwa._engine.solve_2d): {err:.3e}')
     assert err < 1e-12, err
 
 
-def _core_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx):
+def _engine_solve_2d(truncation_order, epx, epy, epz_i, epxy, epyx):
     from wavebit.rcwa._engine.solve_2d import solve_2d
 
     C = CASE
