@@ -156,8 +156,20 @@ class Lorentz(Declaration):
         _register(type(self), ('omega_0', 'gamma', 'strength'))
 
     def epsilon_term(self, omega):
-        """strength has SI units s^-2, not a dimensionless oscillator weight."""
-        value = self.strength / (self.omega_0 ** 2 - omega ** 2 - 1j * self.gamma * omega)
+        """SI susceptibility; a concrete zero strength contributes exactly zero.
+
+        A differentiated strength at zero retains its susceptibility derivative.
+        Active undamped resonances remain singular; no broadening is introduced.
+        """
+        from wavebit._common.declarations import is_jax_typed, torch_carried
+        from .time_domain import concrete
+        if (not torch_carried(self.strength) and concrete(self.strength) == 0
+                and (is_jax_typed(self.strength) or self.strength == 0)):
+            # Avoid forming a singular denominator or overflowing finite rates.
+            # Keep zero tangents in frequency, resonance, and damping attached.
+            value = 0j * omega + 0j * self.omega_0 + 0j * self.gamma + 0j * self.strength
+        else:
+            value = self.strength / (self.omega_0 ** 2 - omega ** 2 - 1j * self.gamma * omega)
         return _guard_response(value, _scalar(self.omega_0, 'material.poles.omega_0', nonnegative=True),
                                _scalar(self.gamma, 'material.poles.gamma', nonnegative=True),
                                _scalar(self.strength, 'material.poles.strength'))
