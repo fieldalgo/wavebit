@@ -1,7 +1,9 @@
+{#- One toggle naming the other language, as the product site's header does ("KO" on an
+    English page, "EN" on a Korean one); the full language name is its label. -#}
 {% if wavebit_language_links %}
-<nav class="d-flex gap-2 align-items-center text-nowrap small" aria-label="Language">
-  {% for item in wavebit_language_links %}
-  <a href="{{ item.href }}" lang="{{ item.code }}" hreflang="{{ item.code }}"{% if item.active %} aria-current="page"{% endif %}>{{ item.label }}</a>
+<nav class="d-flex align-items-center text-nowrap" aria-label="Language">
+  {% for item in wavebit_language_links if not item.active %}
+  <a class="wb-lang" href="{{ item.href }}" lang="{{ item.code }}" hreflang="{{ item.code }}" title="{{ item.label }}" aria-label="{{ item.label }}">{{ item.code | upper }}</a>
   {% endfor %}
 </nav>
 {% endif %}

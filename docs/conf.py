@@ -104,12 +104,23 @@ templates_path = ['_templates']
 
 html_theme = 'pydata_sphinx_theme'
 html_title = 'Wavebit'
-html_static_path = ['_static']
-html_css_files = ['learning/learning.css']
+# `../assets/branding` puts the Wavebit logo files at _static/ for the navbar logo below.
+html_static_path = ['_static', '../assets/branding']
+# wavebit-site.css last: it aligns the docs with wavebit.fieldalgo.com (colours, faces, header,
+# footer) and overrides learning.css where both speak.
+html_css_files = ['learning/learning.css', 'wavebit-site.css']
 html_js_files = [(f'learning/{name}', {'defer': 'defer'}) for name in (
     'learn-interactions.js', 'nvf-interactions.js', 'reader.js', 'light-section-links.js')]
 
 html_theme_options = {
+    # The product site's logo, linking to the product site, as its header does; the docs'
+    # own home stays one click away in the breadcrumbs.
+    'logo': {
+        'image_light': '_static/wavebit_logo.svg',
+        'image_dark': '_static/wavebit_logo_dark.svg',
+        'alt_text': 'Wavebit',
+        'link': 'https://wavebit.fieldalgo.com/',
+    },
     'github_url': 'https://github.com/fieldalgo/wavebit',
     'show_prev_next': True,
     'navbar_align': 'left',

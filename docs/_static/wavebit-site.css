@@ -1,0 +1,131 @@
+/*
+ * The documentation as part of wavebit.fieldalgo.com: the same colours, faces, header and
+ * footer as the product site, which is built in the docs' own theme to begin with (the
+ * website's src/site/site.css takes pydata-sphinx-theme's values). This file closes the
+ * gap the other way. Loaded after learning.css, so it wins where both speak.
+ *
+ * The theme sets its colours on html[data-theme=...], which outranks :root -- so a colour
+ * set on :root (as learning.css does for the primary) never takes effect. Set them here.
+ */
+
+html {
+  --pst-font-family-base: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic",
+    system-ui, sans-serif;
+  --pst-font-family-heading: var(--pst-font-family-base);
+  --pst-font-family-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --pst-header-height: 4rem;
+}
+
+html[data-theme="light"] {
+  --pst-color-primary: #137c76;
+  --pst-color-primary-bg: rgba(19, 124, 118, 0.08);
+  --pst-color-secondary: #0d5e59;
+  --pst-color-secondary-bg: rgba(19, 124, 118, 0.12);
+  --pst-color-link: #137c76;
+  --pst-color-link-hover: #0d5e59;
+  --pst-color-text-base: #222832;
+  --pst-color-text-muted: #48566b;
+  --pst-color-border: #d1d5da;
+  --pst-color-surface: #f3f4f5;
+  --wb-band: #0d3b39;
+  --wb-band-ink: #e8f1f0;
+  --wb-band-ink-2: #a9c3c0;
+}
+
+html[data-theme="dark"] {
+  --pst-color-primary: #4fc4b9;
+  --pst-color-primary-bg: rgba(79, 196, 185, 0.12);
+  --pst-color-secondary: #7fd8cf;
+  --pst-color-secondary-bg: rgba(79, 196, 185, 0.16);
+  --pst-color-link: #4fc4b9;
+  --pst-color-link-hover: #7fd8cf;
+  --pst-color-background: #14181e;
+  --pst-color-on-background: #14181e;
+  --pst-color-surface: #222832;
+  --pst-color-border: #333b47;
+  --pst-color-text-base: #ced6dd;
+  --pst-color-text-muted: #9ca4af;
+  --wb-band: #0b2826;
+  --wb-band-ink: #e8f1f0;
+  --wb-band-ink-2: #9fbab7;
+}
+
+/* ---- header: the site's navbar ---------------------------------------------------- */
+
+.bd-header {
+  min-height: var(--pst-header-height);
+  border-bottom: 1px solid var(--pst-color-border);
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.04);
+}
+/* The theme pads the inner row by 0.5rem top and bottom, which made the header 80px. */
+.bd-header .bd-header__inner { min-height: var(--pst-header-height); padding-top: 0; padding-bottom: 0; }
+
+.bd-header .navbar-brand { padding: 0; }
+.bd-header .navbar-brand img.logo__image { height: 22px; width: auto; }
+
+/* Menu items: 15px, medium, muted; the current section in the primary colour with a 2px
+   rule on the header's bottom edge, as on the site. */
+.bd-header ul.navbar-nav > li.nav-item > .nav-link {
+  position: relative;
+  padding: 0 0.75rem;
+  line-height: var(--pst-header-height);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pst-color-text-muted);
+  text-decoration: none;
+}
+.bd-header ul.navbar-nav > li.nav-item > .nav-link:hover,
+.bd-header ul.navbar-nav > li.nav-item.current > .nav-link {
+  color: var(--pst-color-primary);
+  text-decoration: none;
+}
+.bd-header ul.navbar-nav > li.nav-item > .nav-link::before { display: none; }
+.bd-header ul.navbar-nav > li.nav-item.current > .nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0;
+  height: 2px;
+  background: var(--pst-color-primary);
+}
+
+/* Icons and the language toggle: muted until hovered, like the site's. */
+.bd-header .navbar-header-items__end .nav-link,
+.bd-header .navbar-header-items__end .btn,
+.bd-header .navbar-persistent--container .btn {
+  color: var(--pst-color-text-muted);
+}
+.bd-header .navbar-header-items__end .nav-link:hover,
+.bd-header .navbar-header-items__end .btn:hover,
+.bd-header .navbar-persistent--container .btn:hover {
+  color: var(--pst-color-primary);
+}
+.wb-lang {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pst-color-text-muted);
+  text-decoration: none;
+  padding: 0 0.5rem;
+}
+.wb-lang:hover { color: var(--pst-color-primary); text-decoration: none; }
+
+/* ---- footer: the site's dark band ---------------------------------------------------- */
+
+.bd-footer {
+  background: var(--wb-band);
+  color: var(--wb-band-ink-2);
+  border-top: 0;
+}
+.bd-footer a { color: var(--wb-band-ink); }
+.bd-footer a:hover { color: #ffffff; }
+
+/* ---- cards: the site's feature cards (hairline, soft shadow, 6px) ---------------------- */
+
+.bd-article .sd-card {
+  border: 1px solid var(--pst-color-border);
+  border-radius: 6px;
+  box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.05), 0 0 0.0625rem rgba(0, 0, 0, 0.1) !important;
+}
+.bd-article .sd-card:hover { border-color: var(--pst-color-primary); }
+html[data-theme="dark"] .bd-article .sd-card { box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.3) !important; }
