@@ -50,10 +50,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # A newer push to a branch or pull request supersedes its running check. Not on main: a run
-  # there is the record of a landed state, and a second landing an hour later must not erase
-  # the first one's (every run on main was cancelled this way on 2026-10-15 and 16).
+  # Each main run records a landed state independently: do not serialize main runs
+  # or replace a pending one when another commit lands. Runner capacity still applies.
+  # Other refs keep one group so newer PR updates supersede their older checks.
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
