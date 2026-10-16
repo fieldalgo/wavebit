@@ -557,8 +557,12 @@ def _second_order(dt, omega0, gamma, strength):
         # Test the declaration's magnitude bits, preserving +/-0 as inactive.
         from jax import lax
         import jax.numpy as jnp
-        bits = lax.optimization_barrier(lax.bitcast_convert_type(st, jnp.uint64))
-        zero = (bits & jnp.uint64(0x7fffffffffffffff)) == 0
+        bits = lax.bitcast_convert_type(st, jnp.uint64) & jnp.uint64(0x7fffffffffffffff)
+        # Fold the magnitude's words before testing zero. A direct uint64 zero
+        # comparison can be rewritten as a floating comparison when combined
+        # with the drive bound, flushing a nonzero subnormal on ARM CPU.
+        folded = (bits >> jnp.uint64(32)) | (bits & jnp.uint64(0xffffffff))
+        zero = lax.optimization_barrier(folded) == 0
     valid = zero | (xp.abs(st * dt) >= tiny * xp.abs(1.0 / dt + .5 * ga))
     for v in result:
         valid = valid & xp.isfinite(as_array(xp, v, dtype=xp.float64, device=device))

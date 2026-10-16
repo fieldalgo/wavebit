@@ -181,12 +181,15 @@ def test_traced_damping_cannot_flush_an_active_drive_to_zero(backend):
 
 
 @pytest.mark.parametrize('backend',['jax','torch'])
-def test_nonzero_subnormal_strength_is_not_an_inactive_zero(backend):
+@pytest.mark.parametrize('strength', [np.nextafter(0., 1.), 1e-320,
+                                      np.finfo(float).tiny/2])
+def test_nonzero_subnormal_strength_is_not_an_inactive_zero(backend, strength):
     rt=runtime(backend)
     evaluate=backend_call(backend,lambda s: rt.xp.stack(tuple(
         rt.array(v,'float64') for v in _second_order(.01,1.,1.,s))))
     assert np.isfinite(evaluate(0.)).all()
-    assert np.isnan(evaluate(1e-320)).all()
+    assert np.isfinite(evaluate(-0.)).all()
+    assert np.isnan(evaluate(strength)).all()
 
 
 @pytest.mark.parametrize('backend',['jax','torch'])

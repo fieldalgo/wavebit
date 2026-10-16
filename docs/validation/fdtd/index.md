@@ -17,6 +17,7 @@ usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 "relative to `src/wavebit/fd`" describe how those runs hashed the tree before it moved to
 `src/wavebit/fdtd/`.
 
+- [Mixed material parameters and pole arithmetic refusals](fd-pole-arithmetic.md)
 - [C8: one conductive film in a dielectric](fd-conductive-film.md)
 - [C8: separated parallel conductive films](fd-conductive-stack.md)
 - [Matched absorption of commuting coupled dielectrics](fd-constitutive-absorber.md)
