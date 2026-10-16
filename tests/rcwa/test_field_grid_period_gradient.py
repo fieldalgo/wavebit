@@ -54,9 +54,10 @@ def test_period_tangent_includes_motion_of_count_samples(backend,door,kind,count
         import jax.numpy as jnp
         _legacy_wavebit_enable_x64()
         if kind!='both' and door!='legacy':
+            # Counts on one axis and coordinates on the other need the cell's skew. Eager
+            # jax.grad reads it from the primal, as PyTorch does; under jit there is no value.
             with pytest.raises(ValueError,match='skewed or traced lattice'):
-                jax.value_and_grad(lambda p:loss(p,jnp))(jnp.asarray(P))
-            return
+                jax.jit(jax.value_and_grad(lambda p:loss(p,jnp)))(jnp.asarray(P))
         value,grad=jax.value_and_grad(lambda p:loss(p,jnp))(jnp.asarray(P))
         value,grad=float(value),np.asarray(grad)
     else:
