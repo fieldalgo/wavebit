@@ -96,3 +96,16 @@ numpy 2.5.1, torch 2.13.0; forward solves NumPy complex128, derivatives PyTorch 
   whole solve, painted pair, orders (4, 4)                     this tree  14.959   before   8.995    1.66x
   whole solve, painted pair, orders (8, 8)                     this tree  15.176   before   9.705    1.56x
   whole solve, painted pair, orders (12, 12)                   this tree  21.075   before  15.790    1.33x
+
+
+== Addendum 2026-10-16: section 3 alone (--only 3), after boundary._continued_endpoints stopped counting a split within one pair as a corner. numpy 2.5.4, torch 2.14.1, macOS arm64. Sections 1, 2 and 4-6 were not rerun.
+3. bands -- the averaged projector of the painted pair (section 1)
+  grid    64: |trace - 1| 6.7e-16, min eigenvalue -1.1e-16, rank two (det > 1e-9) on 0.9028 of the samples
+  grid   128: |trace - 1| 8.9e-16, min eigenvalue -1.1e-16, rank two (det > 1e-9) on 0.7314 of the samples, 1.23x fewer than at half the grid
+  grid   256: |trace - 1| 8.9e-16, min eigenvalue -2.2e-16, rank two (det > 1e-9) on 0.5058 of the samples, 1.45x fewer than at half the grid
+  grid   512: |trace - 1| 8.9e-16, min eigenvalue -2.2e-16, rank two (det > 1e-9) on 0.3633 of the samples, 1.39x fewer than at half the grid
+  grid  1024: |trace - 1| 8.9e-16, min eigenvalue -3.3e-16, rank two (det > 1e-9) on 0.2847 of the samples, 1.28x fewer than at half the grid
+  on the 11 interval midpoints: the exact normal dyad to 2.8e-16
+  two overlapping boxes of one material against the box they make, orders (2, 2), grid   64: matrices 4.3e-04
+  two overlapping boxes of one material against the box they make, orders (2, 2), grid  256: matrices 4.3e-05
+  two overlapping boxes of one material against the box they make, orders (2, 2), grid 1024: matrices 3.0e-06

@@ -347,14 +347,16 @@ def test_zero_area_backtracking_spur_cannot_hide_a_real_exterior_interval():
     np.testing.assert_allclose(nvf_projector(field(regs)), nvf_projector(field([(4., [union])])),
                                atol=2e-12, rtol=0)
     # The solver's field averages its switches over half a sample step, so it also reads where
-    # the outline passes from one box's material pair to the other's: at second order in the
-    # step, where a hidden interval would cost an edge's worth of field at every grid. Measured
-    # 1.3e-3 at grid 64 and 1.2e-4 at 256 (the hard field this test was written on: 6e-16).
+    # the outline passes from one box's region label to the other's: within a sample of that
+    # point, falling about tenfold per fourfold grid, where a hidden interval would cost an
+    # edge's worth of field at every grid. Measured 4.3e-4 at grid 64 and 4.3e-5 at 256 (the
+    # hard field this test was written on: 6e-16; the average as first written, which also
+    # counted the clipper's splits *within* a pair as corners, 1.3e-3 and 1.2e-4).
     gaps = [max(float(np.abs(np.asarray(got) - np.asarray(want)).max()) for got, want in zip(
         b.conv_mats(xp, regs, 1., 2, 2, CELL, grid, xp.float64, xp.complex128),
         b.conv_mats(xp, [(4., [union])], 1., 2, 2, CELL, grid, xp.float64, xp.complex128)))
         for grid in (64, 256)]
-    assert gaps[1] < gaps[0] / 8 and gaps[1] < 2e-4, gaps
+    assert gaps[1] < gaps[0] / 8 and gaps[1] < 1e-4, gaps
 
 
 def test_two_periodic_images_can_jointly_cover_a_face():

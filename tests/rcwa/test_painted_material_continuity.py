@@ -93,6 +93,44 @@ def test_complex_painted_projector_is_a_real_unit_trace_average_and_chunk_indepe
     assert smaller.min() > -1e-14 and (xx*yy - xy*xy).max() <= .25 + 1e-14
 
 
+def test_a_split_within_one_pairs_straight_interface_is_no_corner():
+    """The clipper's splits of one straight interface leave the averaged field alone.
+
+    Three axis-aligned rectangles, the middle one painted 0.5 nm over each neighbour: the
+    clipper hands the middle rectangle's bottom edge in pieces -- the 0.5 nm sliver three
+    times, once reversed, then the rest from the hidden edge on -- and its top edge whole. The
+    structure is mirror-symmetric in y, so the field must be. As first written
+    (2026-10-15) ``boundary.material_projector_fields`` weighed every piece's endpoint as a
+    corner candidate, ``exp(-s / 2w)`` at overhang ``s``, tripled by the repeats: 3 nm inside
+    the bottom edge and 13 nm past the split the projector read ``xx`` 0.57 against 0.10 at the
+    mirrored sample, and ``sum(T)`` at orders (1, 1) swung between 0.11 and 0.68 over a 7%
+    change of the width (``tests/rcwa/test_fit_geometry.py``'s design). An endpoint that
+    another interval of the pair runs straight through, and a repeat, are no candidates now
+    (``boundary._continued_endpoints``). What remains asymmetric is 6e-9 at the samples
+    farthest from the shapes, where the planned image rings of the two edges differ in which
+    far copies they carry, at weights of ``exp(-18)``.
+    """
+    cell = ((300., 0.), (0., 300.))
+    rectangles = [dict(type='rectangle', cx=-90., cy=0., lx=60., ly=100., angle=0., material=4.),
+                  dict(type='rectangle', cx=0., cy=0., lx=121., ly=100., angle=0., material=9.),
+                  dict(type='rectangle', cx=90., cy=0., lx=60., ly=100., angle=0., material=6.25)]
+    vertices = [B.shape_vertices(np, s, cell, 256) for s in rectangles]
+    recs, regions, transform, plan = B.plan_layer(rectangles, cell)
+    vals = B._clipper.eval_table(np, recs, vertices)
+    regs = [(s['material'], [B._clipper.loop_verts(np, loop, vals) for loop in reg])
+            for s, reg in zip(rectangles, regions)]
+    data = B.replay_interfaces(np, regs, 12.25, cell, transform, plan)
+    contrasts = B.interface_contrasts(np, regs, 12.25, plan, np.float64)
+    xx, xy, yy = B.material_projector_fields(np, (16, 16), cell, np.float64, data, contrasts,
+                                             plan, transform)
+    np.testing.assert_allclose(xx, xx[::-1], atol=1e-7, rtol=0)
+    np.testing.assert_allclose(yy, yy[::-1], atol=1e-7, rtol=0)
+    np.testing.assert_allclose(xy, -xy[::-1], atol=1e-7, rtol=0)
+    # Rows 5 and 10 sit 3.1 nm inside the bottom and top edges; column 5 is 13 nm past the
+    # split at x = 90 (cell frame). The interface there is the horizontal edge and nothing else.
+    assert xx[5, 5] < .2 and xx[10, 5] < .2, (xx[5, 5], xx[10, 5])
+
+
 @pytest.mark.parametrize('right', [4.+1e-3, 4.+1e-8, 4.+.5j, -4.+1j])
 def test_weak_and_complex_interfaces_keep_the_exact_normal(right, monkeypatch):
     shape = shapes(4., right)
