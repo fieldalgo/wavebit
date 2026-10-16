@@ -50,10 +50,9 @@ on:
   workflow_dispatch:
 
 concurrency:
+  # Preserve main runs in one queue per workflow/ref; supersede older non-main runs.
   group: ${{ github.workflow }}-${{ github.ref }}
-  # A newer push to a branch or pull request supersedes its running check. Not on main: a run
-  # there is the record of a landed state, and a second landing an hour later must not erase
-  # the first one's (every run on main was cancelled this way on 2026-10-15 and 16).
+  queue: ${{ github.ref == 'refs/heads/main' && 'max' || 'single' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
