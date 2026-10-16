@@ -68,3 +68,25 @@ usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 - [Independent source position and boundary clearance](fdtd-source-clearance.md)
 - [Independent transverse meshes and axis-consistent material averaging](fdtd-transverse-resolution.md)
 - [Total-depth derivatives with moving exterior reference planes](fdtd-variable-depth.md)
+
+## Public input and preparation controls
+
+`tests/fdtd/test_public_input_followup.py` exercises the current public API;
+it does not depend on the historical namespace used by the studies above.
+Run it from a source checkout with that checkout's `src` on `PYTHONPATH`:
+
+```sh
+python -m pytest tests/fdtd/test_public_input_followup.py -q
+```
+
+The tests cover non-Plane input to `PlaneWave` through `check`, `prepare` and
+`run`, a valid plane and a plane outside the physical domain, stencil memory
+limits and invalid/unused settings, and the public remedy for multiple
+structures. `Numerics(memory_bound=...)` passes a limit in bytes to the existing
+host prediction guard. The memory routing test stops at entry to sparse geometry
+assembly; it verifies the admission boundary and the unchanged default source,
+not an assembled operator or scattering accuracy. The multi-structure remedy
+is also applied through `check` to confirm that `Numerics(discretisation="voxel")`
+removes that refusal.
+
+See the [current input and memory contract](../../guide/fdtd/model.md).

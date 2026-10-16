@@ -84,6 +84,11 @@ class Numerics(Declaration):
     flush pair's standing body. Substrates and unrelated structures retain their
     ordinary rule. A non-default policy without a supported flush pair is an
     error at ``numerics.junction``. Traced junction geometry remains split-only.
+
+    ``memory_bound`` optionally sets the stencil's predicted host preparation
+    limit in bytes. It requires ``discretisation='stencil'`` with a Sphere and
+    a positive finite real number (not a bool). ``None`` keeps the engine's
+    default limit. This prediction is not a cap on total process memory.
     """
     grid: UniformGrid
     duration: Duration
@@ -93,6 +98,7 @@ class Numerics(Declaration):
     discretisation: str = 'voxel'
     junction: str = 'split'
     decay: object = None
+    memory_bound: object = None
 
     def __post_init__(self):
         object.__setattr__(self, 'geometry_ranges', frozen_mapping(self.geometry_ranges))

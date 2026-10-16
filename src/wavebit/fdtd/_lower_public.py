@@ -1,6 +1,7 @@
 """Translate physical declarations to the existing normalized Yee implementation."""
 import dataclasses
 import math
+from numbers import Real
 
 from wavebit.errors import ValidationError, UnsupportedFeatureError
 from wavebit.units import Z0
@@ -172,6 +173,26 @@ def _monitor_plane_bounds(monitor, low, high):
                                   expected=(low[a], high[a]), actual=span)
 
 
+def _stencil_memory_bound(problem, numerics):
+    """Reject unused or malformed public limits before preparation allocates."""
+    bound = numerics.memory_bound
+    if bound is None:
+        return
+    path = 'numerics.memory_bound'
+    if numerics.discretisation != 'stencil' or not any(
+            type(item.shape) is geometry.Sphere for item in problem.scene.structures):
+        raise ValidationError("memory_bound requires discretisation='stencil' with a Sphere",
+                              path=path, actual=bound)
+    try:
+        valid = (not isinstance(bound, bool) and isinstance(bound, Real)
+                 and math.isfinite(bound) and bound > 0)
+    except OverflowError:
+        valid = False
+    if not valid:
+        raise ValidationError('memory_bound must be a positive, finite number of bytes',
+                              path=path, actual=bound)
+
+
 def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
         raise ValidationError('expected fdtd.Problem and fdtd.Numerics', path='problem')
@@ -180,6 +201,7 @@ def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(numerics.absorber, (PML, Absorber)):
         raise UnsupportedFeatureError('choose PML or Absorber numerical padding', path='numerics.absorber')
     scene, units = problem.scene, problem.units
+    _stencil_memory_bound(problem, numerics)
     rule = numerics.discretisation
     if rule not in ('voxel', 'stencil'):
         raise ValidationError(
@@ -270,6 +292,9 @@ def lower_problem(problem, numerics, *, plan=None):
                     raise UnsupportedFeatureError('a finite body touches an Open face; its continuation into padding is unspecified', code='padding_continuation', path='scene.structures.'+item.name)
         structures.append(old_geometry.Structure(shape, material,
                           discretisation=rule if type(shape) is old_geometry.Sphere else 'voxel'))
+    if numerics.memory_bound is not None:
+        structures = [s.replace(memory_bound=numerics.memory_bound)
+                      if s.discretisation == 'stencil' else s for s in structures]
     converted = {}
     references = numerics.absorber.reference_media if isinstance(numerics.absorber, PML) else {}
     invalid_references = set(references)-{f for f,n in pad.items() if n}
@@ -327,6 +352,8 @@ def lower_problem(problem, numerics, *, plan=None):
         else:old_scene._monitor_inside(m,physical_low,physical_high)
     for source in problem.sources:
         if isinstance(source,sources.PlaneWave):
+            if not isinstance(source.plane, geometry.Plane):
+                raise ValidationError('expected Plane', path='sources.'+source.name+'.plane')
             axis=source.plane.axis
             if not physical_low[axis]<=source.plane.position<=physical_high[axis]:
                 raise ValidationError('source is outside the physical domain',path='sources.'+source.name+'.plane')
