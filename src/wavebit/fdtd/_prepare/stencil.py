@@ -1155,6 +1155,18 @@ def refuse_discretisation(scene, plan):
                 f'plan from this scene with fd.plan(scene), or lower the scene the plan was '
                 f'prepared from.')
 
+    if held:
+        # arguments() reads the held plan's grid. Its source digest therefore
+        # cannot notice a different grid requested by the scene at lowering.
+        # Compare snapped grids before params.lower allocates any coefficients.
+        from wavebit.fdtd._kernel.grid import Grid
+        requested = Grid.from_domain(scene.domain.size, scene.domain.center, scene.resolution.dx)
+        if requested != plan.grid:
+            raise ValueError(
+                'StencilMismatchRefused: the scene grid (spacing, snapped cell counts or '
+                'low corner) differs from the grid the stencil operator was prepared for. '
+                'Build the plan from this scene with fd.plan(scene).')
+
 
 def _refuse_lowering(scene, plan, term):
     """The doors again, at lowering, where every traced path passes.
