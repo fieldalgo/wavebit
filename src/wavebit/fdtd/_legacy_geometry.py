@@ -250,7 +250,7 @@ class Shape:
         The smallest feature the grid has to resolve. Only the axes :meth:`bounded_axes` names
         are measured, and each is measured as it reaches into the box: a shape that runs out
         through a face has no feature size along that axis, and a refusal quoting one would be
-        about a side that is not in the grid. ``fd.Region(size=(0.3, 0.3, 1.0))`` in a box 0.2
+        about a side that is not in the grid. ``Region(size=(0.3, 0.3, 1.0))`` in a box 0.2
         wide across x and y bounds z alone, and its answer is 1.0, not 0.3.
 
         That is why it takes ``grid``: "bounded" is a question about the grid, so a signature
