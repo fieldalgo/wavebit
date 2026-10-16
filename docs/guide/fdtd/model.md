@@ -415,6 +415,14 @@ With `backend="jax"` or `backend="torch"`, a prepared run is differentiable in i
 material values, source amplitude, phase, delay and pulse, and the initial-field amplitude. JAX
 needs `jax.config.update("jax_enable_x64", True)` before arrays are built.
 
+Float64 Drude susceptibility rescales large damping to preserve the tested frequency
+values and tangents in both the public SI model and the normalized FDTD model.
+Public calls carrying float32 retain their previous arithmetic and dtype; this
+adds no extreme-value support for float32 or mixed precision. It does not change
+Lorentz response or ADE coefficients, or certify every extreme finite input and
+objective. See [the differentiation guide](fd-differentiation.md) for a normalized
+example, SI/unit-conversion scope and intermediate-underflow limitations.
+
 Geometry is differentiable only for smoothed bodies given a reserved support,
 `Numerics(geometry_ranges={"name": ((x0, x1), (y0, y1), (z0, z1))})`: the whole body must stay
 inside that box for every value it takes, the box must stay inside the domain and clear of
