@@ -312,3 +312,9 @@ outside the dtype's representable range are not certified.
 with independent Decimal arithmetic, checks finite optical susceptibility, compares a
 small physical `check`/`prepare`/live-run scene, and exercises both sides of the drive
 representability door and admitted value/strength derivatives.
+
+A carried optical frequency uses backend scalar operands for the damping threshold.
+The inactive ordinary response keeps nonzero damping so an unselected Lorentz
+resonance cannot contaminate the selected response's frequency derivative with NaN.
+`tests/fdtd/test_damping_response_review.py` checks concrete/carried agreement
+and the analytic frequency tangent at a large-damping resonance.

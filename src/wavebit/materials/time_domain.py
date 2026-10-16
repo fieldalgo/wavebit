@@ -483,7 +483,7 @@ def _response_damping_limit(omega):
         return sys.float_info.max / max(1., abs(c))
     from wavebit._common.backend import array_namespace
     xp = array_namespace(omega)
-    return sys.float_info.max / xp.maximum(xp.abs(omega), 1.)
+    return sys.float_info.max / xp.maximum(xp.abs(omega), xp.ones_like(omega))
 
 
 def _damping_eval(gamma, limit, ordinary, rescaled):
@@ -500,7 +500,8 @@ def _damping_eval(gamma, limit, ordinary, rescaled):
     xp = array_namespace(*arrays)
     g = as_array(xp, gamma, dtype=xp.float64, device=getattr(arrays[0], 'device', None))
     large = xp.abs(g) > limit
-    a = ordinary(xp.where(large, 0., g))
+    # Keep the inactive optical denominator damped at a Lorentz resonance.
+    a = ordinary(xp.where(large, 1., g))
     b = rescaled(xp.where(large, g, 1.))
     if isinstance(a, tuple):
         return tuple(xp.where(large, y, x) for x, y in zip(a, b))
