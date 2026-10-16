@@ -22,10 +22,13 @@ counts: a landing is finished when it is pushed.
 
 1. `git fetch origin` and `git rebase origin/main` in the branch's own worktree. Squash
    WIP/fixup commits here.
-2. Push the branch and open a pull request against `main`. The Linux suite runs on it (free on
-   this public repository; about seventy minutes). Fix what fails, rebase again if `main`
-   moved, and wait for green. A docs-only change goes the same way; there are no exceptions
-   by size.
+2. Push the branch and open a **draft** pull request against `main` (`gh pr create --draft`).
+   A draft runs no CI, so push as often as you like while the work is in progress. Run the
+   tests the change touches locally; when they pass, mark the pull request ready
+   (`gh pr ready <number>`). That starts the Linux suite (free on this public repository, about
+   seventy minutes, and the account runs only one such suite at a time, so every run you do
+   not need delays everyone's). Fix what fails, rebase again if `main` moved, and wait for
+   green. A docs-only change goes the same way; there are no exceptions by size.
 3. Land through the pull request: **Rebase and merge** on GitHub, or
    `gh pr merge <number> --rebase --delete-branch`. GitHub replays the commits onto the tip of
    `main` (same content and messages, new hashes) and nothing is run again; the branch ruleset

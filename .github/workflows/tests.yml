@@ -43,6 +43,10 @@ on:
     # release is a tag on one of its commits (owner, 2026-10-16).
     branches: [main]
   pull_request:
+    # `ready_for_review` is not in the default set, and it is the event that matters: a draft
+    # pull request runs nothing here (see the `if:` on every job), so the run that gates the
+    # landing starts when the author marks it ready, after the local tests (owner, 2026-10-16).
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 concurrency:
@@ -54,6 +58,7 @@ concurrency:
 
 jobs:
   lint:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: lint
     runs-on: ubuntu-latest
     steps:
@@ -80,6 +85,7 @@ jobs:
         run: ruff check .
 
   test:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: full backends (${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
     # Six shards, each its own runner, since 2026-10-15. Not for speed first: for memory.
@@ -317,7 +323,7 @@ jobs:
     name: full backends complete
     runs-on: ubuntu-latest
     needs: test
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -332,6 +338,7 @@ jobs:
         run: python tools/verify_shards.py --count 6 shards/verification-default-*/
 
   slow:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: slow tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     # Two shards for the same reason `test` has six: the runner's memory, not the clock.
@@ -402,7 +409,7 @@ jobs:
     name: slow tests complete
     runs-on: ubuntu-latest
     needs: slow
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -417,6 +424,7 @@ jobs:
         run: python tools/verify_shards.py --count 2 shards/verification-slow-*/
 
   examples:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: examples smoke
     runs-on: ubuntu-latest
     steps:
@@ -452,6 +460,7 @@ jobs:
         run: python tools/run_tutorials_smoke.py
 
   minimal:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: distribution (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -472,6 +481,7 @@ jobs:
         run: python tools/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
 
   docs:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: docs
     runs-on: ubuntu-latest
     steps:
