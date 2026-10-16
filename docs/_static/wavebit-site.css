@@ -61,7 +61,7 @@ html[data-theme="dark"] {
 .bd-header .bd-header__inner { min-height: var(--pst-header-height); padding-top: 0; padding-bottom: 0; }
 
 .bd-header .navbar-brand { padding: 0; }
-.bd-header .navbar-brand img.logo__image { height: 22px; width: auto; }
+.bd-header .navbar-brand img.logo__image { height: 32px; width: auto; }
 
 /* Menu items: 15px, medium, muted; the current section in the primary colour with a 2px
    rule on the header's bottom edge, as on the site. */
@@ -234,4 +234,13 @@ html[data-theme="dark"] .wb-company-dark { display: block; }
 @media (min-width: 992px) and (max-width: 1199.98px) {
   .bd-header .navbar-header-items__end { gap: 6px; }
   .bd-header ul.navbar-nav > li.nav-item > .nav-link { font-size: 12px; padding-inline: 4px; }
+}
+
+@media (max-width: 639.98px) {
+  .bd-header .navbar-brand img.logo__image { height: 28px; }
+}
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .bd-header .bd-header__inner { padding-inline: 12px; }
+  .bd-header .navbar-header-items__start { margin-right: 8px; }
+  .bd-header ul.navbar-nav > li.nav-item > .nav-link { padding-inline: 2px; }
 }
