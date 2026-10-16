@@ -175,6 +175,11 @@ def to_public(text):
     return text
 
 
+def is_public():
+    """Whether diagnostics currently address a caller of the physical public API."""
+    return _PUBLIC.get()
+
+
 def spoken(text):
     """``text`` in the public vocabulary inside a public call, unchanged anywhere else."""
     return to_public(text) if _PUBLIC.get() else text

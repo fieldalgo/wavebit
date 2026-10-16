@@ -90,3 +90,23 @@ is also applied through `check` to confirm that `Numerics(discretisation="voxel"
 removes that refusal.
 
 See the [current input and memory contract](../../guide/fdtd/model.md).
+
+### Public grazing guidance
+
+`tests/fdtd/test_public_grazing_guidance.py` checks the actual messages from
+`check`, `prepare` and `run` on narrow-band oblique columns. It executes each
+printed public candidate and rechecks the same physical problem, including
+stronger existing controls, a quoted source name, the pure and stabilized
+refusals, different fixed reference media, the measured floor, and unchanged
+private engine guidance after the public call. It verifies that extra absorber
+cells grow external padding and preserve the other absorber options.
+
+```sh
+python -m pytest tests/fdtd/test_public_grazing_guidance.py -q
+```
+
+This validates diagnostics and preparation, without time stepping or new
+scattering-accuracy claims. The existing grazing return and PML stability
+measurements remain the evidence for the numerical rule. Function-level product
+mutations and exact source restoration are recorded in
+`tests/fdtd/public_grazing_mutation_evidence.json`.

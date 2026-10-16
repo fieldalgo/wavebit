@@ -286,6 +286,27 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 파장), 그리고 면 옆의 속박 모드가 자라지 않게 막는 추가 손실인 `stabilize`입니다(아래
 `GrowingFieldWarning` 참고).
 
+### Grazing 거절 뒤 설정 바꾸기
+
+`check`, `prepare`, `run`은 가장 심하게 거절된 입사파 또는 회절 차수의 면·파장·반사 기준을
+설명하고, 함께 거절된 나머지 항목도 나열합니다. 공개 설정 위치는 `Numerics.absorber`입니다.
+수치 설정은 **모든 Open 면에 공통으로** 적용되며, 각 면의 물리 매질 또는 고정 기준 매질은
+유지됩니다.
+
+메시지에 `updated = numerics.replace(...)` 후보가 나오면 기존 `numerics` 값에 적용하세요.
+안쪽의 `absorber.replace(...)`는 `wavelength`, `reference_media`, `allow_thin`을 보존합니다.
+실행 시간을 바꿔야 할 때는 실제 소스 이름을 넣은 `fdtd.Duration(periods=..., source=...)`를
+제시합니다. 이미 더 강한 반사 목표·더 깊은 층·충분히 긴 시간은 유지합니다. 흡수층을 깊게
+하면 물리 영역 **바깥**의 패딩이 자동으로 늘어나므로 `problem.scene.domain`은 그대로 두세요.
+셀과 주기 수가 늘면 메모리와 시간이 더 듭니다.
+
+후보 하나를 적용한 뒤 `fdtd.check(problem, numerics=updated)`로 다시 검사하세요. 한 면의
+후보가 모든 면·차수·매질·파장의 통과를 보장하지는 않습니다. 거절된 면들의 기준 매질이
+서로 다르면 구체적인 수치 조합을 제안하지 않고 공통 흡수층 설정 변경과 전체 재검사를
+안내합니다. `stabilize`를 줄이면 구속 모드가 다시 성장할 수 있으므로 감쇠도 확인하세요.
+측정된 grazing 한계 아래에서는 흡수층이나 시간 변경으로 통과시킬 수 없으며 주기·각도·파장을
+바꿔야 합니다. 오류 안내는 반사 허용오차나 검증된 지원 범위를 완화하지 않습니다.
+
 ## 소스
 
 모든 소스는 `GaussianPulse(wavelength, frequency_sigma_hz, cutoff=1e-3)`를 가집니다. 중심 진동수

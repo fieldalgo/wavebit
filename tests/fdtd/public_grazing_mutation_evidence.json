@@ -1,0 +1,123 @@
+{
+  "base_commit": "fb3d9fd5c0fbf893786bb2264ce86953dc2da664",
+  "scope": "Public grazing diagnostics and preparation; existing numerical criteria unchanged.",
+  "environment": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.9",
+    "packages": {
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "jax": "0.11.0",
+      "torch": "2.14.1",
+      "pytest": "9.1.1"
+    },
+    "internal_threads": 1,
+    "XLA_FLAGS": null
+  },
+  "baseline": {
+    "cases": 11,
+    "failed": 10,
+    "passed": 1,
+    "exit": 1,
+    "unchanged_floor_case_passed": true
+  },
+  "mutations": [
+    {
+      "name": "pure_public_route",
+      "exit": 1,
+      "count": 4,
+      "failed": [
+        "test_pure_grazing_offers_a_public_edit_preserving_stronger_controls[12-1e-08-40]",
+        "test_pure_grazing_offers_a_public_edit_preserving_stronger_controls[12-1e-12-40]",
+        "test_pure_grazing_offers_a_public_edit_preserving_stronger_controls[32-1e-08-200]",
+        "test_pure_grazing_offers_a_public_edit_preserving_stronger_controls[12-1e-12-200]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.8191165000025649,
+      "log_sha256": "90e9fd2b050ebf1674003840423e6220f117da99328a19ef7334e2fbffb6732c",
+      "function": "test_pure_grazing_offers_a_public_edit_preserving_stronger_controls",
+      "product_file": "src/wavebit/fdtd/_prepare/grazing.py",
+      "mutant_sha256": "a3355f884018f934ac21ed91d0b9310daa788b83089ec802ba42b1d991831f7d",
+      "restored_sha256": "43c2e6b05e11657219748d1b6d36155ea321e36434e31e4c8d056300985e77f5",
+      "source_restored": true
+    },
+    {
+      "name": "lossy_public_route",
+      "exit": 1,
+      "count": 3,
+      "failed": [
+        "test_lossy_candidates_pass_with_external_padding_and_preserved_controls[0.6-1e-08-0.003-160]",
+        "test_lossy_candidates_pass_with_external_padding_and_preserved_controls[0.38-1e-12-0.0005-40]",
+        "test_lossy_candidates_pass_with_external_padding_and_preserved_controls[0.6-1e-08-0.003-200]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.7576872500067111,
+      "log_sha256": "d98f205d0de0d3c9977e450bddfa469d785090aa67a0c77639ca73bc3c17871f",
+      "function": "test_lossy_candidates_pass_with_external_padding_and_preserved_controls",
+      "product_file": "src/wavebit/fdtd/_prepare/grazing.py",
+      "mutant_sha256": "37aac904065857d938ee609fe4b7ecb26779faa489cb47766003397688e70e48",
+      "restored_sha256": "43c2e6b05e11657219748d1b6d36155ea321e36434e31e4c8d056300985e77f5",
+      "source_restored": true
+    },
+    {
+      "name": "common_face_scope",
+      "exit": 1,
+      "count": 2,
+      "failed": [
+        "test_different_reference_media_require_a_common_edit_and_full_recheck[z-]",
+        "test_different_reference_media_require_a_common_edit_and_full_recheck[z+]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.6267717910232022,
+      "log_sha256": "a8e636f145c223323c7f7b9ee0578fa19ebf9ff2cf79fdbebd13c1e516423e75",
+      "function": "test_different_reference_media_require_a_common_edit_and_full_recheck",
+      "product_file": "src/wavebit/fdtd/_prepare/grazing.py",
+      "mutant_sha256": "ebb4f5a888b1aa89357969cb0a61bbf5640b7279810209a6657477e60540ee60",
+      "restored_sha256": "43c2e6b05e11657219748d1b6d36155ea321e36434e31e4c8d056300985e77f5",
+      "source_restored": true
+    },
+    {
+      "name": "floor_guidance",
+      "exit": 1,
+      "count": 1,
+      "failed": [
+        "test_floor_refusal_keeps_the_measured_limit_and_requires_geometry_change"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.6024593330221251,
+      "log_sha256": "b392099d892a2c367e67085e43916bac70fdc632fd1f79daa973e29efa983d2d",
+      "function": "test_floor_refusal_keeps_the_measured_limit_and_requires_geometry_change",
+      "product_file": "src/wavebit/fdtd/_prepare/grazing.py",
+      "mutant_sha256": "a7ab15cc6031fb871d5044f531aad4b15ff94b13f0ae4f227b036633c415ab3b",
+      "restored_sha256": "43c2e6b05e11657219748d1b6d36155ea321e36434e31e4c8d056300985e77f5",
+      "source_restored": true
+    },
+    {
+      "name": "public_context_leak",
+      "exit": 1,
+      "count": 1,
+      "failed": [
+        "test_public_context_does_not_change_private_engine_guidance"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.7050028329831548,
+      "log_sha256": "20d51c8d6c598ff97b91ca5923d163a1aa40b26f616eb76fb789597e8f2289d3",
+      "function": "test_public_context_does_not_change_private_engine_guidance",
+      "product_file": "src/wavebit/fdtd/_spelling.py",
+      "mutant_sha256": "6d64b16f0a8a8973ee25d08049689575666dc2f12df33afa48ee971aa1e896eb",
+      "restored_sha256": "da3cfc1c58b6381dae8a9cad301088ae9a2830a0cac9a86d518df17a11b55e71",
+      "source_restored": true
+    }
+  ],
+  "restored": {
+    "cases": 11,
+    "passed": 11,
+    "exit": 0,
+    "all_source_bytes_restored": true
+  },
+  "restored_source_sha256": {
+    "src/wavebit/fdtd/_spelling.py": "da3cfc1c58b6381dae8a9cad301088ae9a2830a0cac9a86d518df17a11b55e71",
+    "src/wavebit/fdtd/_prepare/grazing.py": "43c2e6b05e11657219748d1b6d36155ea321e36434e31e4c8d056300985e77f5",
+    "tests/fdtd/test_public_grazing_guidance.py": "835ccc7e9f55006340939cbb61680a1e0a1c4afa9e9ab8963190b6f5a2b4c817"
+  }
+}
