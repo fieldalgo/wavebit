@@ -418,7 +418,7 @@ efficiency, a field cell, or a scattering matrix against one geometry parameter.
 The modal operator's rule is linear in the change of the operator, `V^-1 dA V`
 with the modal basis `V` held fixed, so it serves both modes: forward mode
 carries it as written, reverse mode its transpose.
-[`tests/rcwa/test_forward_mode.py`](https://github.com/fieldalgo/wavebit/blob/develop/tests/rcwa/test_forward_mode.py)
+[`tests/rcwa/test_forward_mode.py`](https://github.com/fieldalgo/wavebit/blob/main/tests/rcwa/test_forward_mode.py)
 checks the forward tangent of `R`, `T`, amplitudes and fields against reverse
 mode, to 1e-11, and against central differences, to their step-limited accuracy.
 It does so in geometry, material, incidence and the cell itself, on these
@@ -605,6 +605,6 @@ interface; the current lifecycle refuses a shape traced under `jax.jit` and diff
 under eager `jax.grad` (see the
 [differentiation guide](../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)).
 
-Tutorials [`02-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/02-autograd-and-optimization-jax.ipynb) and
-[`02-pytorch`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/02-autograd-and-optimization-pytorch.ipynb) run a full
+Tutorials [`02-jax`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/02-autograd-and-optimization-jax.ipynb) and
+[`02-pytorch`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/02-autograd-and-optimization-pytorch.ipynb) run a full
 optimization on each backend.

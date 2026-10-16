@@ -63,7 +63,7 @@ A raster does not directly contain the mathematical boundary of a circle or rect
 
 Next, `nvf_projector` uses this information to construct a linear or circular projector. **The four raster_normal_method choices and the two nvf_projector choices are independent.** Shape constructs its own direction field from geometry, so it does not take the raster-specific raster_normal_method.
 
-In the reference implementation, contour/spectral/smooth are paths designed for two-material patterns. Patterns with three or more values, or grayscale patterns, are delegated to distance. Do not infer from the requested name alone that the same method always runs internally. Portions of this geometry-preparation process also run in NumPy/SciPy even when JAX or PyTorch is selected. See [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py) for the implementation details.
+In the reference implementation, contour/spectral/smooth are paths designed for two-material patterns. Patterns with three or more values, or grayscale patterns, are delegated to distance. Do not infer from the requested name alone that the same method always runs internally. Portions of this geometry-preparation process also run in NumPy/SciPy even when JAX or PyTorch is selected. See [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/normal_methods.py) for the implementation details.
 
 ## Shape projector-field sampling: shape_nvf_grid_size
 

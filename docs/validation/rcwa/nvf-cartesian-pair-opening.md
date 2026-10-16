@@ -153,7 +153,7 @@ The frozen NumPy audit took 1.08183 s on an Apple M4 host with 16 GiB, Python
 abstract syntax after class renames, relative imports, module wording and
 formatting. The dedicated repository suite passes 37 tests in 1.25 s.
 Source-pinned measurements are retained in the
-[result log](https://github.com/fieldalgo/wavebit/blob/develop/studies/rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_opening.log);
+[result log](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_opening.log);
 private raw arrays are not required to run the independent tests.
 
 This finite response does not admit arbitrary orientations, unequal heights,

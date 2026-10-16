@@ -4,7 +4,7 @@
 
 **Useful links:** [Source repository](https://github.com/fieldalgo/wavebit) |
 [Issue tracker](https://github.com/fieldalgo/wavebit/issues) |
-[Contributing](https://github.com/fieldalgo/wavebit/blob/develop/CONTRIBUTING.md) |
+[Contributing](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md) |
 [FieldAlgo](https://fieldalgo.com)
 
 Wavebit simulates electromagnetic waves with RCWA and FDTD, and supports differentiating supported calculations with JAX and PyTorch. Shared physical materials, explicit units and an immutable problem lifecycle connect the two solver modules. Each method has its own numerical approximation and validated feature scope.
@@ -76,4 +76,4 @@ The [common conventions](reference/common/conventions.md) and [current lifecycle
 
 The [fundamentals course](learn/fundamentals/index.md) develops geometry, materials, light, diffraction, power, fields and differentiation in order. The [NVF course](learn/nvf/index.md) covers Fourier products and material interfaces. The [FDTD course](learn/fdtd/index.md) connects sources, absorbers, observations and refinement to published validation.
 
-Runnable [teaching examples](learn/examples.md), solver examples and [notebooks](https://github.com/fieldalgo/wavebit/tree/develop/tutorials) accompany the text. Historical courses state when they use compatibility interfaces; their numerical records were preserved rather than rerun.
+Runnable [teaching examples](learn/examples.md), solver examples and [notebooks](https://github.com/fieldalgo/wavebit/tree/main/tutorials) accompany the text. Historical courses state when they use compatibility interfaces; their numerical records were preserved rather than rerun.

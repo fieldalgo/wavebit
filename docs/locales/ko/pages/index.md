@@ -4,7 +4,7 @@
 
 **바로가기:** [소스 저장소](https://github.com/fieldalgo/wavebit) |
 [문제 제보](https://github.com/fieldalgo/wavebit/issues) |
-[기여 안내](https://github.com/fieldalgo/wavebit/blob/develop/CONTRIBUTING.md) |
+[기여 안내](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md) |
 [FieldAlgo](https://fieldalgo.com)
 
 Wavebit은 RCWA와 FDTD로 전자기파를 계산하고, 지원되는 계산 경로에서는 JAX와 PyTorch를 이용한 자동미분을 제공합니다. 두 솔버는 물리적 재료 정의, 명시적인 단위, 변경 불가능한 문제 선언과 실행 절차를 공유합니다. 각 방법의 수치 근사와 검증된 기능 범위는 서로 다릅니다.
@@ -76,4 +76,4 @@ Wavebit은 RCWA와 FDTD로 전자기파를 계산하고, 지원되는 계산 경
 
 [기초 교재](learn/fundamentals/index.md)는 형상, 재료, 빛, 회절, 전력, 필드와 자동미분을 차례로 다룹니다. [NVF 교재](learn/nvf/index.md)는 Fourier 곱과 재료 경계면을 설명합니다. [FDTD 교재](learn/fdtd/index.md)는 소스, 흡수층, 관측값과 해상도 검증을 공개된 검증 자료에 연결합니다.
 
-본문과 함께 실행할 수 있는 [학습 예제](learn/examples.md), 솔버별 예제와 [노트북](https://github.com/fieldalgo/wavebit/tree/develop/tutorials)을 제공합니다. 기존 교재는 호환 인터페이스를 사용하는 부분을 명시하며, 당시의 수치 기록은 다시 계산하지 않고 보존했습니다.
+본문과 함께 실행할 수 있는 [학습 예제](learn/examples.md), 솔버별 예제와 [노트북](https://github.com/fieldalgo/wavebit/tree/main/tutorials)을 제공합니다. 기존 교재는 호환 인터페이스를 사용하는 부분을 명시하며, 당시의 수치 기록은 다시 계산하지 않고 보존했습니다.

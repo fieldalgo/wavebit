@@ -36,7 +36,7 @@ print(transmission, field["units"], loaded.manifest["source"]["identity"])
 
 저장 대상은 새 경로여야 합니다. 이미 있는 파일, 디렉터리와 심볼릭 링크는 거부합니다.
 실행마다 별도 디렉터리를 사용하세요. 실행 가능한
-[`record_run.py`](https://github.com/fieldalgo/wavebit/blob/develop/examples/common/record_run.py)
+[`record_run.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/common/record_run.py)
 예제는 저장·복원한 배열이 정확히 일치하는지 검사합니다.
 `--output artifacts/runs/film-001`을 지정하면 기록을 남깁니다. 기본 실행은
 간단한 확인을 위해 임시 디렉터리를 사용합니다.

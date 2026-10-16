@@ -34,10 +34,10 @@ See [the FDTD guide](../guide/fdtd/general-fdtd.md) for units, supported observa
 
 ## Continue with dispersion and calibrated observations
 
-The [dispersive field example](https://github.com/fieldalgo/wavebit/blob/develop/examples/fdtd/dispersive_fields.py)
+The [dispersive field example](https://github.com/fieldalgo/wavebit/blob/main/examples/fdtd/dispersive_fields.py)
 adds a physical Lorentz material, a time record, spectral E/H and a separate reference run.
 It keeps raw Fourier field units distinct from source-normalized fields and checks live
-source-amplitude reuse. Plotting is optional. The [film and grating comparison](https://github.com/fieldalgo/wavebit/blob/develop/examples/cross_solver/film_and_grating.py)
+source-amplitude reuse. Plotting is optional. The [film and grating comparison](https://github.com/fieldalgo/wavebit/blob/main/examples/cross_solver/film_and_grating.py)
 then aligns RCWA and FDTD reference planes and compares complex nonzero diffraction orders
 under spatial and time-window refinement. Agreement in these declared cases does not
 establish convergence for a different material, geometry or pulse.

@@ -8,11 +8,11 @@
 
 | 궁금한 내용 | 읽을 위치 | 연결되는 장 |
 | --- | --- | --- |
-| 기본값·지원 조합·읽히지 않는 설정 거부 | [`engine.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/engine.py), `_resolve_normal_grid`, `_reject_unread_*` | 6장 |
-| raster 법선 추정 | [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py), [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py)의 `normal_vector_field` | 4·6장 |
-| shape 방향장과 투영 계수 | [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py), `normal_vector_field_analytical`, `normal_projector_coeffs` | 4장 |
-| NVF 대칭화 조립 | [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py)의 `_nvf_assemble`, [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py)의 `nvf_from_coeffs` | 5장 |
-| 슬롯 이름과 반환 규약 | [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py)의 `ConvMatrices` | 5장 |
+| 기본값·지원 조합·읽히지 않는 설정 거부 | [`engine.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/engine.py), `_resolve_normal_grid`, `_reject_unread_*` | 6장 |
+| raster 법선 추정 | [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/normal_methods.py), [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py)의 `normal_vector_field` | 4·6장 |
+| shape 방향장과 투영 계수 | [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/parametric.py), `normal_vector_field_analytical`, `normal_projector_coeffs` | 4장 |
+| NVF 대칭화 조립 | [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py)의 `_nvf_assemble`, [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/parametric.py)의 `nvf_from_coeffs` | 5장 |
+| 슬롯 이름과 반환 규약 | [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py)의 `ConvMatrices` | 5장 |
 | 입력·단위·편광·결과 축 | [키워드](../../reference/keywords.md), [규약](../../reference/common/conventions.md) | 7·8장 |
 
 ## 직접 해볼 연습

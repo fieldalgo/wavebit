@@ -149,7 +149,7 @@ conductor's lower step count also did not produce a wall-time speedup in
 these executions: compilation, solve order and detector overhead prevent a
 fair performance comparison.
 
-The [post-disclosure acceptance](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_calibration_acceptance.json)
+The [post-disclosure acceptance](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/decay_stop/records/fdtd_decay_stop_calibration_acceptance.json)
 sets prefix and analytic allowances to 128*eps64 = 2.842170943040401e-14 and
 the temporal DFT comparison allowance to 1e-6. These are empirical checks for
 the fixed cases, not public accuracy guarantees. The unit tests' separate
@@ -233,7 +233,7 @@ rounded ratios, dropped memory groups, incorrect sample clocks and DFT
 endpoints, AD conversion, unsupported execution, and the fixed-run cadence.
 Every original source byte was restored; the combined restored selection
 passed all 185 cases. A separate
-[failure review](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/decay_stop/records/fdtd_decay_stop_mutation_review.json)
+[failure review](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/decay_stop/records/fdtd_decay_stop_mutation_review.json)
 records the actual first failure from each log.
 
 The first full regression then found one additional stale fixture in the

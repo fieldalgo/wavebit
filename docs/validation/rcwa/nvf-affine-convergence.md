@@ -751,6 +751,6 @@ fitted projections must each receive the `(24,32)` closure; padding
 the old cap-48 coefficients with zeros does not extend the field.
 
 The measurements and validation details are retained in
-[the study log](https://github.com/fieldalgo/wavebit/blob/develop/studies/rcwa/nvf_affine_convergence/records/nvf_affine_convergence.log).
+[the study log](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_affine_convergence/records/nvf_affine_convergence.log).
 Independent optical accuracy, complete oblique contact-opening derivative
 qualification, and a public general-geometry adapter remain open.

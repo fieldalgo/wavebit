@@ -4,7 +4,7 @@
 The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
 :::
 
-We now connect the principles to the code. The equations in this chapter are readable restatements of [`_nvf_assemble`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py) and [`nvf_from_coeffs`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py) in the reference implementation. Every matrix uses the same ordering of retained modes.
+We now connect the principles to the code. The equations in this chapter are readable restatements of [`_nvf_assemble`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py) and [`nvf_from_coeffs`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/parametric.py) in the reference implementation. Every matrix uses the same ordering of retained modes.
 
 ```{figure} ../../figures/learn/nvf/06-assembly.svg
 :alt: Combining permittivity and projector coefficients produces five slots

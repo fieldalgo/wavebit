@@ -63,7 +63,7 @@ shape 경로는 단순한 원·타원·회전 사각형의 재료 계수를 해�
 
 그 다음 `nvf_projector`가 이 정보를 이용해 linear 또는 circular 투영을 만듭니다. **네 가지 raster_normal_method와 두 가지 nvf_projector는 별개의 선택입니다.** shape는 도형의 기하에서 자체 방향장을 구성하므로 raster용 raster_normal_method를 지정하지 않습니다.
 
-기준 구현의 contour/spectral/smooth는 두 재료의 패턴에 맞춘 경로입니다. 세 값 이상 또는 회색조 패턴은 distance 경로로 위임됩니다. 요청한 이름만 보고 내부에서 항상 같은 방식이 실행된다고 가정하면 안 됩니다. 또한 이 방향장 구성은 JAX/PyTorch를 골라도 기하 준비 단계에서 NumPy/SciPy로 수행되는 부분이 있습니다. 자세한 근거는 [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py)에 있습니다.
+기준 구현의 contour/spectral/smooth는 두 재료의 패턴에 맞춘 경로입니다. 세 값 이상 또는 회색조 패턴은 distance 경로로 위임됩니다. 요청한 이름만 보고 내부에서 항상 같은 방식이 실행된다고 가정하면 안 됩니다. 또한 이 방향장 구성은 JAX/PyTorch를 골라도 기하 준비 단계에서 NumPy/SciPy로 수행되는 부분이 있습니다. 자세한 근거는 [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/normal_methods.py)에 있습니다.
 
 ## 쉐입 투영장 샘플 수: shape_nvf_grid_size
 

@@ -305,12 +305,12 @@ The largest middle-grid sensitivity proxy is 5.13136627e-06.
 
 ## Preserved evidence
 
-- [Disclosed calibration and raw backend rows](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_attempt1.json).
-- [Accepted known-case ceilings and preserved test transition](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_acceptance.json).
-- [Exact new and related test rosters](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_targeted.json).
+- [Disclosed calibration and raw backend rows](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_attempt1.json).
+- [Accepted known-case ceilings and preserved test transition](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_calibration_acceptance.json).
+- [Exact new and related test rosters](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_targeted.json).
 - Actual source witnesses and exact restored baseline: `fdtd_oscillator_stack_mutations.json`, archived outside the repository.
 - Registered protocol, source identities and prior exposures: `fdtd_oscillator_stack_registration.json`, archived outside the repository.
-- [Every physical cell, verdict and selected duration](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_report.json).
+- [Every physical cell, verdict and selected duration](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/oscillator_stack/records/fdtd_oscillator_stack_report.json).
 - Full/slow regressions and all four frozen-reference comparisons: `fdtd_oscillator_stack_validation.json`, archived outside the repository.
 
 The final auditor separately verifies saved source, raw process and numerical

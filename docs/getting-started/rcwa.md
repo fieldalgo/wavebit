@@ -60,10 +60,10 @@ Continue with [materials](../guide/common/materials.md), [RCWA problem declarati
 
 ## Continue with a complete experiment
 
-The [film optimization example](https://github.com/fieldalgo/wavebit/blob/develop/examples/rcwa/film_optimization.py)
+The [film optimization example](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/film_optimization.py)
 uses the current API for a thickness derivative and a bounded optimization. It checks the
 JAX derivative against an independent Airy calculation and the optimum against the
-quarter-wave thickness. The [shared film and grating comparison](https://github.com/fieldalgo/wavebit/blob/develop/examples/cross_solver/film_and_grating.py)
+quarter-wave thickness. The [shared film and grating comparison](https://github.com/fieldalgo/wavebit/blob/main/examples/cross_solver/film_and_grating.py)
 builds both solver problems from the same physical materials and geometry, aligns amplitude
 reference planes, and compares complex diffraction orders under FDTD grid/time refinement.
 These are bounded examples with explicit checks, not convergence settings for every device.

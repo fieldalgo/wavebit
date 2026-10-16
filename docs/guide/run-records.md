@@ -36,7 +36,7 @@ print(transmission, field["units"], loaded.manifest["source"]["identity"])
 
 The destination must be new. Existing files, directories and symlinks are refused.
 Use a distinct directory for each run. The executable
-[`record_run.py`](https://github.com/fieldalgo/wavebit/blob/develop/examples/common/record_run.py) example checks exact array
+[`record_run.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/common/record_run.py) example checks exact array
 round trips; pass `--output artifacts/runs/film-001` to keep its record. Its default
 execution uses a temporary directory for smoke checks.
 

@@ -63,7 +63,7 @@ provides explicit full/research profiles with safe resumption. For direct pytest
 cases. `python -m pytest -m research tests/ -q` selects research alone, and
 `python -m pytest -m "research or not research" tests/ -q` selects both tiers, including
 slow cases. A named test file opts in to its research and slow cases. See the
-[test guide](https://github.com/fieldalgo/wavebit/blob/develop/tests/README.md) before starting
+[test guide](https://github.com/fieldalgo/wavebit/blob/main/tests/README.md) before starting
 a larger validation run and the [source guide](../development/source-checkout.md) for debugging.
 
 `environment.yml` builds the full development environment, including the tools the studies need:
@@ -84,7 +84,7 @@ strict. Two of them also sit above a known defect — NumPy 2.2.5 through 2.3.0 
 floating-point status of a complex `matmul`, printing hundreds of `RuntimeWarning: ...
 encountered in matmul` while returning correct efficiencies, and torch below 2.13 cannot compile
 the solver at all. Every floor is commented in
-[`pyproject.toml`](https://github.com/fieldalgo/wavebit/blob/develop/pyproject.toml) with the
+[`pyproject.toml`](https://github.com/fieldalgo/wavebit/blob/main/pyproject.toml) with the
 reason it sits where it does. If you need an older one, verify it and the floor can come down.
 
 `contourpy` is optional because only `raster_normal_method='contour'` reads it; it ships with

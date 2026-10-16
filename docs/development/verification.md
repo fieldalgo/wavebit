@@ -60,7 +60,7 @@ returns a nonzero exit status; it does not claim that unreported nodes passed.
 
 ## CI runs the two partitions in shards
 
-The [test workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)
+The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
 uses the runner for both non-research partitions, each split across runners with
 `--shard INDEX/COUNT`: six shards for the ordinary partition, two for the slow one.
 

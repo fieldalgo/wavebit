@@ -4,11 +4,11 @@
 # It passes when `tests.yml` has already finished successfully on the exact commit being
 # released (`github.sha`: the commit the release tag points to, or the ref picked for a manual
 # docs rebuild). It does not run the suite again. The `test` and `slow` jobs take two to three
-# hours on these runners, the release commit is a `develop` commit whose push already ran them,
+# hours on these runners, the release commit is a `main` commit whose push already ran them,
 # and re-running would check the same commit twice (owner decision, 2026-10-15: tests block
 # releases automatically; 0.0.3 had gone to PyPI while its tests were still running).
 #
-# So the release order is: push to develop, wait for `tests` to go green on that commit, then
+# So the release order is: land on main, wait for `tests` to go green on that commit, then
 # publish the release. A release published too early fails here and publishes nothing; once
 # the tests pass, re-run the failed workflow runs from the Actions tab. `tests.yml` cancels a
 # run superseded by a newer push, so a commit that was not the tip long enough to finish needs

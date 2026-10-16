@@ -15,16 +15,16 @@
 
 | 먼저 읽을 곳 | 이해할 질문 |
 | --- | --- |
-| [src/wavebit/__init__.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/__init__.py), [src/wavebit/rcwa/_factory.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_factory.py) | 공개 API는 무엇이며 어떤 백엔드를 만드는가 |
-| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/periodic.py), [materials/](https://github.com/fieldalgo/wavebit/tree/develop/src/wavebit/materials/), [_common/_jobs_v1.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/_common/_jobs_v1.py) | 장면·재료·빛·계산 명세를 어떻게 표현하는가 |
-| [src/wavebit/lattice.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/lattice.py), [geometry.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/geometry.py) | 셀 좌표와 고정할 기하학 정보는 무엇인가 |
-| [src/wavebit/rcwa/_engine/parametric.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py), [boundary.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/boundary.py) | 도형 Fourier 계수와 겹침 경계를 어떻게 처리하는가 |
-| [src/wavebit/rcwa/_engine/factorization.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py), [normal_methods.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py) | 재료와 장의 곱이 어떤 행렬로 조립되는가 |
-| [src/wavebit/rcwa/_engine/engine.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/engine.py) | 입력에서 실제 계산 경로·상태를 어떻게 연결하는가 |
-| [src/wavebit/rcwa/_engine/solve_1d.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/solve_1d.py), [solve_2d.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/solve_2d.py), [solve_2d_first_order.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/solve_2d_first_order.py) | 모드 방정식과 층 계산은 무엇인가 |
-| [src/wavebit/rcwa/_engine/scattering.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/scattering.py), [fields.py](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/fields.py) | 산란행렬과 공간 장을 어떻게 얻는가 |
-| [src/wavebit/rcwa/_backends/](https://github.com/fieldalgo/wavebit/tree/develop/src/wavebit/rcwa/_backends/) | NumPy/JAX/PyTorch가 공통 물리에 어떤 계산 도구를 제공하는가 |
-| [src/wavebit/rcwa/_engine/conforming/](https://github.com/fieldalgo/wavebit/tree/develop/src/wavebit/rcwa/_engine/conforming/) | 별도 NVF 구성·보조 계열은 일반 solve와 어떻게 구분되는가 |
+| [src/wavebit/__init__.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/__init__.py), [src/wavebit/rcwa/_factory.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_factory.py) | 공개 API는 무엇이며 어떤 백엔드를 만드는가 |
+| [src/wavebit/_common/periodic.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/_common/periodic.py), [materials/](https://github.com/fieldalgo/wavebit/tree/main/src/wavebit/materials/), [_common/_jobs_v1.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/_common/_jobs_v1.py) | 장면·재료·빛·계산 명세를 어떻게 표현하는가 |
+| [src/wavebit/lattice.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/lattice.py), [geometry.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/geometry.py) | 셀 좌표와 고정할 기하학 정보는 무엇인가 |
+| [src/wavebit/rcwa/_engine/parametric.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/parametric.py), [boundary.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/boundary.py) | 도형 Fourier 계수와 겹침 경계를 어떻게 처리하는가 |
+| [src/wavebit/rcwa/_engine/factorization.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py), [normal_methods.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/normal_methods.py) | 재료와 장의 곱이 어떤 행렬로 조립되는가 |
+| [src/wavebit/rcwa/_engine/engine.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/engine.py) | 입력에서 실제 계산 경로·상태를 어떻게 연결하는가 |
+| [src/wavebit/rcwa/_engine/solve_1d.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/solve_1d.py), [solve_2d.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/solve_2d.py), [solve_2d_first_order.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/solve_2d_first_order.py) | 모드 방정식과 층 계산은 무엇인가 |
+| [src/wavebit/rcwa/_engine/scattering.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/scattering.py), [fields.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/fields.py) | 산란행렬과 공간 장을 어떻게 얻는가 |
+| [src/wavebit/rcwa/_backends/](https://github.com/fieldalgo/wavebit/tree/main/src/wavebit/rcwa/_backends/) | NumPy/JAX/PyTorch가 공통 물리에 어떤 계산 도구를 제공하는가 |
+| [src/wavebit/rcwa/_engine/conforming/](https://github.com/fieldalgo/wavebit/tree/main/src/wavebit/rcwa/_engine/conforming/) | 별도 NVF 구성·보조 계열은 일반 solve와 어떻게 구분되는가 |
 
 모든 `_core` 파일을 사용자가 직접 import할 필요는 없습니다. 일반 프로그램은 공개 `wavebit` API로 작성하고, 내부를 이해할 때 이 지도를 사용합니다. 예전 `on_numpy`, `on_jax`, `on_torch`는 현재 소스 어댑터 폴더명이 아닙니다.
 
@@ -72,4 +72,4 @@
 
 [빌드 기준과 출처](../../development/learning-provenance.md), {download}`실행 결과 <../../validation/learning-records/learn-measurements.json>`, [검토 범위](../../development/learning-provenance.md)를 함께 보관합니다. 이번 작업은 교재의 9개 짧은 예제를 확인한 것이며, 중단한 전체 회귀·설치 검사를 재개하지 않았습니다. FDTD 통합, 새로운 전체 폴더 구조 평가, 공개 릴리스 검증은 이 교재가 대신하지 않습니다.
 
-Wavebit 코드의 라이선스와 고지사항은 저장소의 [LICENSE](https://github.com/fieldalgo/wavebit/blob/develop/LICENSE), [LICENSE.meent](https://github.com/fieldalgo/wavebit/blob/develop/LICENSE.meent), [LICENSE.fmmax](https://github.com/fieldalgo/wavebit/blob/develop/LICENSE.fmmax)와 관련 고지를 확인합니다. 이 교재의 도식과 설명은 새로 작성했고 외부 라이브러리 소스를 옮겨 넣지 않았습니다. 외부 프로그램의 결과·표·소스를 재사용할 때에는 각각의 출처와 이용 조건을 별도로 확인해야 합니다.
+Wavebit 코드의 라이선스와 고지사항은 저장소의 [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE), [LICENSE.meent](https://github.com/fieldalgo/wavebit/blob/main/LICENSE.meent), [LICENSE.fmmax](https://github.com/fieldalgo/wavebit/blob/main/LICENSE.fmmax)와 관련 고지를 확인합니다. 이 교재의 도식과 설명은 새로 작성했고 외부 라이브러리 소스를 옮겨 넣지 않았습니다. 외부 프로그램의 결과·표·소스를 재사용할 때에는 각각의 출처와 이용 조건을 별도로 확인해야 합니다.

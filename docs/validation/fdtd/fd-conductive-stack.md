@@ -136,7 +136,7 @@ errors. Maximum reported decay was `1.329755298531103e-8`. The greatest
 backend difference, scaled by `max(1, abs(NumPy value))`, was
 `2.036633330088357e-15`, below the fixed `128*float64 epsilon` budget
 (`2.842170943040401e-14`). The
-[calibration record](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_calibration_attempt1.json)
+[calibration record](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_calibration_attempt1.json)
 links all six raw responses and logs, their hashes, the pre-response
 production archive and analytic controls. Its outer receipt, the calibration
 launch's `exit.json` (archived outside the repository), records the actual
@@ -146,7 +146,7 @@ After disclosure, shared optical regression ceilings of `.007` for `r` and
 `.014` for `t` were selected as `1.2` times each measured maximum, rounded
 upward to the next `.001`. The resulting margins above the observed maxima
 are about 26.1% and 29.1%. This
-[acceptance record](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_calibration_acceptance.json)
+[acceptance record](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_calibration_acceptance.json)
 preserves the test before and after that change. The limits apply only to
 these six known coarse-grid configurations; they are neither universal
 accuracy bounds nor a campaign absolute-error gate. The campaign's order,
@@ -162,7 +162,7 @@ allocated state memory, local storage and the closed-Yee loss identity,
 optical regressions on three backends, scope refusals, prepared identity,
 tracing refusals and every-member CFL and spectral guards. These results
 are recorded in the
-[targeted manifest](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_targeted.json),
+[targeted manifest](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_targeted.json),
 with separate raw logs for the new tests (`new_stack.log`) and the targeted
 suite (`targeted.log`); both raw logs are archived outside the repository.
 
@@ -176,7 +176,7 @@ bytes, and the restored new-test suite passed all 136 cases again. The
 mutation manifest, `fdtd_conductive_stack_mutations.json` (archived outside
 the repository), links each exact original and mutant snapshot, one-case
 failure log and restoration hash; the
-[restored baseline log](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/restored_targeted_baseline.log)
+[restored baseline log](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_mutations_attempt1/restored_targeted_baseline.log)
 stays in the repository. The targeted and mutation exit receipts (each
 launch's `exit.json`, archived with the raw records) both record exit zero.
 Mutation detection checks the stated failure
@@ -259,7 +259,7 @@ reproduces all per-cell records from the raw responses. The ledger,
 `fdtd_conductive_stack_campaign.jsonl` (archived outside the repository with
 the raw responses), links each of the 40 response JSON files and raw logs by
 hash; the
-[complete report](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_report.json)
+[complete report](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/conductive_stack/records/fdtd_conductive_stack_report.json)
 retains all 48 cells. Both known NumPy calibration payloads repeat exactly;
 that agreement is a provenance check, not an additional independent result.
 
@@ -369,9 +369,9 @@ Fresnel reference differs from the recorded characteristic-matrix answer by
 at most `3.608224830031759e-16`. This checks the stored reference independently;
 it does not turn the known calibration repeats into independent field runs.
 
-The [documentation runner](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/fdtd_conductive_stack_documentation.py)
+The [documentation runner](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/conductive_stack/fdtd_conductive_stack_documentation.py)
 checks the final document sources with the documentation contract and a
-warning-as-error Sphinx build. The [final evidence auditor](https://github.com/fieldalgo/wavebit/blob/develop/studies/fdtd/conductive_stack/fdtd_conductive_stack_audit.py)
+warning-as-error Sphinx build. The [final evidence auditor](https://github.com/fieldalgo/wavebit/blob/main/studies/fdtd/conductive_stack/fdtd_conductive_stack_audit.py)
 verifies exact source and raw-log hashes, actual process exits, collected and
 reported test nodes, the unchanged skip identities, mutation restoration,
 preserved prior evidence and scalar continuum/per-cell arithmetic. These

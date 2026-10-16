@@ -96,8 +96,8 @@ measured point is 1.9e-6 off double precision on ETM and 3.4e-6 on SMM, where it
 on ETM. The solver warns `UnresolvedBranchWarning` when a branch was still read from
 round-off, which takes a root sitting on its cut. See [`../branch-cuts.md`](../theory/rcwa/branch-cuts.md).
 
-Tutorials [`03-jax`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/03-device-and-datatype-jax.ipynb) and
-[`03-torch`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/03-device-and-datatype-torch.ipynb) work through both keywords.
+Tutorials [`03-jax`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/03-device-and-datatype-jax.ipynb) and
+[`03-torch`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/03-device-and-datatype-torch.ipynb) work through both keywords.
 
 ## The JAX 64-bit cap, and import order
 

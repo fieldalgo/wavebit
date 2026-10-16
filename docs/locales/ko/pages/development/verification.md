@@ -60,7 +60,7 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 
 ## CI는 두 실행 범위를 shard로 나눠 실행
 
-[테스트 workflow](https://github.com/fieldalgo/wavebit/blob/develop/.github/workflows/tests.yml)는
+[테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)는
 research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
 `--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 6개, slow 범위는 2개입니다.
 

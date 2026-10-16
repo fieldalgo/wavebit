@@ -215,7 +215,7 @@ diagonal-metric kernel with both local and global x bases. JAX value and
 directional-derivative controls exercise both one and multiple batches.
 Existing tolerances are retained. Raw timings and allocation scope are
 recorded in the
-[projection measurement log](https://github.com/fieldalgo/wavebit/blob/develop/studies/rcwa/nvf_affine_cells/records/nvf_affine_projection_memory.log).
+[projection measurement log](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_affine_cells/records/nvf_affine_projection_memory.log).
 
 ## Independent controls
 
@@ -428,7 +428,7 @@ The full contact regression, including the compensated-residual
 cancellation check, passes all five tests in 35.56 s.
 
 Run details are recorded in
-[the validation log](https://github.com/fieldalgo/wavebit/blob/develop/studies/rcwa/nvf_affine_cells/records/nvf_affine_cell_validation.log).
+[the validation log](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_affine_cells/records/nvf_affine_cell_validation.log).
 The explicit fractional-profile public contract is implemented separately
 from ordinary rectangle input. Its NumPy/JAX acceptance checks cover
 physical material Fourier integrals, the analytic reciprocal-normal

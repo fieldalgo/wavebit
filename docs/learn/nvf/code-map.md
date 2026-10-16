@@ -8,11 +8,11 @@ This course recommends starting with the public API. If you read internal functi
 
 | Question | Where to read | Related chapter |
 | --- | --- | --- |
-| Defaults, supported combinations, and rejection of unused settings | [`engine.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/engine.py), `_resolve_normal_grid`, `_reject_unread_*` | 6 |
-| Raster normal estimation | [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/normal_methods.py), `normal_vector_field` in [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py) | 4, 6 |
-| Shape direction fields and projector coefficients | [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py), `normal_vector_field_analytical`, `normal_projector_coeffs` | 4 |
-| Symmetrized NVF assembly | `_nvf_assemble` in [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py), `nvf_from_coeffs` in [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/parametric.py) | 5 |
-| Slot names and return conventions | `ConvMatrices` in [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/develop/src/wavebit/rcwa/_engine/factorization.py) | 5 |
+| Defaults, supported combinations, and rejection of unused settings | [`engine.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/engine.py), `_resolve_normal_grid`, `_reject_unread_*` | 6 |
+| Raster normal estimation | [`normal_methods.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/normal_methods.py), `normal_vector_field` in [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py) | 4, 6 |
+| Shape direction fields and projector coefficients | [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/parametric.py), `normal_vector_field_analytical`, `normal_projector_coeffs` | 4 |
+| Symmetrized NVF assembly | `_nvf_assemble` in [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py), `nvf_from_coeffs` in [`parametric.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/parametric.py) | 5 |
+| Slot names and return conventions | `ConvMatrices` in [`factorization.py`](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_engine/factorization.py) | 5 |
 | Inputs, units, polarization, and result axes | [Keywords](../../reference/keywords.md), [Conventions](../../reference/common/conventions.md) | 7, 8 |
 
 ## Exercises

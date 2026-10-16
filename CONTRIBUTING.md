@@ -80,16 +80,16 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 
 ### Branches and preserved solver ancestry
 
-Ordinary feature work is rebased onto `develop` and lands with `git merge --ff-only`.
+Ordinary feature work is rebased onto `main` and lands by fast-forward after its pull request's CI is green (see `CLAUDE.md`).
 If another session lands first, rebase the ordinary feature branch again and retry.
 Keep its commits focused, with messages explaining what changed and why; squash WIP and
 fixup commits before landing.
 
 The repository owner's RCWA/FDTD integration is an explicit exception. Preserve the
 independently developed `fdtd-general` ancestry with a true merge; do not squash or
-plain-rebase that integration. If `develop` advances before landing, merge it into the
+plain-rebase that integration. If `main` advances before landing, merge it into the
 integration branch and resolve there. Intentional merge commits, including `--no-ff`, are
-allowed for that integration and later FDTD syncs. Land the resulting branch onto `develop`
+allowed for that integration and later FDTD syncs. Land the resulting branch onto `main`
 with `git merge --ff-only`, retaining both histories.
 
 The initial solver merge is `04b449754e6b226bdcd4374b2897732054468ce7`, with develop parent

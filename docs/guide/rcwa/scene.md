@@ -168,7 +168,7 @@ axes, which are `a1` / `a2` once skewed. Li is the raster default, so a skewed r
 `rcwa.Numerics(factorization='nvf')`.
 
 See [`../oblique-lattice.md`](../../theory/rcwa/oblique-lattice.md) and
-[`tutorial 05`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/05-oblique-lattice.ipynb).
+[`tutorial 05`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/05-oblique-lattice.ipynb).
 
 ## Inspecting a structure without solving
 

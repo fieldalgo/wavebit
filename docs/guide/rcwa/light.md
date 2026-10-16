@@ -232,8 +232,8 @@ interface's `excitation=` takes, and the same light.
 
 See [`../conventions.md`](../../reference/common/conventions.md) for the normative statement,
 [`../multimode-incidence.md`](multimode-incidence.md) for lit orders, and tutorials
-[`06`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/06-polarization-pair.ipynb) and
-[`07`](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/rcwa/07-multimode-incidence.ipynb),
+[`06`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/06-polarization-pair.ipynb) and
+[`07`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/07-multimode-incidence.ipynb),
 which use the earlier interface.
 
 ## Which side the light arrives from

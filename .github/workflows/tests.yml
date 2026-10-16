@@ -38,15 +38,19 @@ name: tests
 
 on:
   push:
-    # develop only: main is fast-forwarded from develop at releases, so its commits are already
-    # tested, and feature branches are tested locally before they land.
-    branches: [develop]
+    # main is the only long-lived branch since 2026-10-16: every change reaches it by a pull
+    # request whose run was green, so a push here is a record of the landed state, and a
+    # release is a tag on one of its commits (owner, 2026-10-16).
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a branch or pull request supersedes its running check. Not on main: a run
+  # there is the record of a landed state, and a second landing an hour later must not erase
+  # the first one's (every run on main was cancelled this way on 2026-10-15 and 16).
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   lint:
@@ -277,7 +281,7 @@ jobs:
         # `-m "not slow and not research"`: the tests marked slow run in their own job, `slow` below, and
         # the two jobs together are the whole suite. Measured 2026-09-15 on the desktop under
         # `-n 5`, the FDTD line's full suite was 97 minutes of wall clock and 484
-        # worker-minutes, and 74 cases took 281 of those. develop's own runs take 27 minutes
+        # worker-minutes, and 74 cases took 281 of those. the trunk's own runs take 27 minutes
         # there and 65 to 78 here, and by that ratio this job was headed for about 260 minutes
         # against the 180 above. Split, this half took 42 minutes on the desktop, which is
         # roughly 100 to 120 here by the same ratio.

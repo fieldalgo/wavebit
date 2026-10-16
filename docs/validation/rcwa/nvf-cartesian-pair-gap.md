@@ -164,7 +164,7 @@ passes 79 tests in 3.14 s, recomputing the independent references without privat
 arrays. A fresh copied-package guide example also passes with tests, studies,
 JAX and PyTorch imports blocked. Full-precision
 measurements and source pins are in the
-[result log](https://github.com/fieldalgo/wavebit/blob/develop/studies/rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_gap.log).
+[result log](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_cartesian_pair/records/nvf_cartesian_pair_gap.log).
 This finite family does not establish continuum, arbitrary-contrast or patterned
 optical accuracy, and introduces no ordinary contact-geometry JVP guarantee.
 

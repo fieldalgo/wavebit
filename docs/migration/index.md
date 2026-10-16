@@ -59,7 +59,7 @@ changing a JSON version number is not a migration.
 
 ## Historical reproduction
 
-The ten older [numbered tutorials](https://github.com/fieldalgo/wavebit/blob/develop/tutorials/README.md#historical-tutorials)
+The ten older [numbered tutorials](https://github.com/fieldalgo/wavebit/blob/main/tutorials/README.md#historical-tutorials)
 are historical teaching records and require the pinned source below. Their
 calculation cells and outputs remain unchanged; the tutorial index maps each topic
 to current physical examples and guides. The two `00` lifecycle notebooks run with
