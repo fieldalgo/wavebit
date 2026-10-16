@@ -22,6 +22,6 @@ modes, desktop and mobile navigation, and a page containing a code block.
 
 `version-switcher.html` displays the build release in the header and links to the
 current documentation home. Add older versions only when their documentation is
-published. `wavebit-site.js` uses the theme’s existing light/dark actions for a
-one-click toggle. Include this script when previewing these controls in an older
+published. `wavebit-site.js` uses the theme’s existing light/dark/system actions for a
+one-click cycle. System is the default when no mode has been saved. Include this script when previewing these controls in an older
 HTML build.

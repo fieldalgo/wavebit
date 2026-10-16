@@ -1,4 +1,4 @@
-/* Use PyData's own theme actions, with a one-click light/dark control. */
+/* Use PyData's own theme actions, with a one-click light/dark/system control. */
 function setupThemeToggle() {
   if (location.hostname.endsWith('.localhost') || location.hostname === 'localhost') {
     const company = new URL(location.origin);
@@ -13,21 +13,24 @@ function setupThemeToggle() {
     toggle.classList.remove('dropdown-toggle');
     menu.hidden = true;
     const updateLabel = () => {
-      const dark = document.documentElement.dataset.theme === 'dark';
+      const mode = document.documentElement.dataset.mode || 'auto';
+      const next = { light: 'dark', dark: 'auto', auto: 'light' }[mode];
       const korean = document.documentElement.lang === 'ko';
+      const names = korean ? { light: '라이트', dark: '다크', auto: '시스템' } : { light: 'Light', dark: 'Dark', auto: 'System' };
       const label = korean
-        ? (dark ? '라이트 모드로 전환' : '다크 모드로 전환')
-        : (dark ? 'Switch to light mode' : 'Switch to dark mode');
+        ? `현재 ${names[mode]} 모드 · ${names[next]} 모드로 전환`
+        : `Current: ${names[mode]} · Switch to ${names[next]}`;
       toggle.setAttribute('aria-label', label);
       toggle.title = label;
     };
     toggle.addEventListener('click', () => {
-      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      const mode = document.documentElement.dataset.mode || 'auto';
+      const next = { light: 'dark', dark: 'auto', auto: 'light' }[mode];
       menu.querySelector(`[data-mode="${next}"]`).click();
       updateLabel();
     });
     new MutationObserver(updateLabel).observe(document.documentElement, {
-      attributes: true, attributeFilter: ['data-theme'],
+      attributes: true, attributeFilter: ['data-theme', 'data-mode'],
     });
     updateLabel();
   });
