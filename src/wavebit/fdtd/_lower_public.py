@@ -156,7 +156,7 @@ def _monitor(m, problem):
     raise UnsupportedFeatureError('unsupported monitor', path='outputs.monitors', actual=type(m).__name__)
 
 
-def lower_problem(problem, numerics):
+def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
         raise ValidationError('expected fdtd.Problem and fdtd.Numerics', path='problem')
     if not isinstance(numerics.grid, UniformGrid) or not isinstance(numerics.duration, Duration):
@@ -234,7 +234,7 @@ def lower_problem(problem, numerics):
                      and _number(hi[a], 'scene.structures.'+item.name) >= physical_high[a])):
                     raise UnsupportedFeatureError('a finite body touches an Open face; its continuation into padding is unspecified', code='padding_continuation', path='scene.structures.'+item.name)
         structures.append(old_geometry.Structure(shape, material,
-                          discretisation=numerics.discretisation, junction=numerics.junction))
+                          discretisation=numerics.discretisation))
     converted = {}
     references = numerics.absorber.reference_media if isinstance(numerics.absorber, PML) else {}
     invalid_references = set(references)-{f for f,n in pad.items() if n}
@@ -304,6 +304,52 @@ def lower_problem(problem, numerics):
         boundaries=old_boundaries.Boundaries(**converted),resolution=old_scene.Resolution(dx=dx),run=run,
         background=background,structures=tuple(structures),sources=tuple(_source(s,units) for s in problem.sources),
         monitors=outputs,initial=initial)
+    # The engine reads a junction rule only on the standing member of a flush
+    # pair. In particular, a continued substrate and unrelated bodies retain
+    # their ordinary discretisation. Keep the default path free of host geometry
+    # comparisons: prepared split junctions support traced geometry.
+    from ._prepare.junction import DEFAULT, RULES, _roles
+    if not isinstance(numerics.junction, str) or numerics.junction not in RULES:
+        raise ValidationError('choose split, staircase, or refuse',
+                              path='numerics.junction', actual=numerics.junction)
+    if numerics.junction != DEFAULT:
+        from ._prepare.shape_ranges import traced
+        if plan is not None:
+            # Reuse the engine's concrete role choice without reading live lengths.
+            # Its normal mismatch/range certificates still validate this scene later.
+            standing = {r.standing for r in plan.junctions}
+            if any(traced(legacy.replace(structures=(structures[i],))) for i in standing):
+                raise UnsupportedFeatureError(
+                    "a traced standing body supports junction='split' only; "
+                    'staircase and refuse cannot be differentiated', path='numerics.junction')
+        else:
+            if traced(legacy):
+                raise UnsupportedFeatureError(
+                    'non-default junction policy requires preparation from concrete geometry',
+                    path='numerics.junction')
+            from ._kernel.grid import Grid
+            from ._prepare.checks import _shared_surface_voxels
+            grid = Grid.from_domain(size=size, center=center, dx=dx)
+            standing = set()
+            for i in range(len(structures)):
+                for j in range(i):
+                    roles = _roles(legacy, grid, i, j)
+                    if isinstance(roles, str):
+                        continue
+                    a, b = structures[i].shape, structures[j].shape
+                    shared = tuple((max(u[0], v[0]), min(u[1], v[1]))
+                                   for u, v in zip(a.support(grid), b.support(grid)))
+                    if all(lo < hi for lo, hi in shared):
+                        count, _ = _shared_surface_voxels(a.body(), b.body(), grid,
+                                                          shared, include_common=True)
+                        if count:
+                            standing.add(roles[1])
+        if not standing:
+            raise ValidationError('no supported flush pair reads this non-default policy',
+                                  path='numerics.junction', actual=numerics.junction)
+        legacy = legacy.replace(structures=tuple(
+            s.replace(junction=numerics.junction) if i in standing else s
+            for i, s in enumerate(structures)))
     metadata=dict(requested_domain=dict(size=scene.domain.size,center=scene.domain.center),
                   physical_domain=dict(size=physical_size,center=scene.domain.center,low=physical_low),
                   allocated_domain=dict(size=size,center=center,low=allocated_low),padding_cells=pad,

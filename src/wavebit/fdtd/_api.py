@@ -191,7 +191,7 @@ class Prepared:
         for key,value in signature.items():
             if value!=self._signature[key]:
                 raise IncompatibleProblemError('changed prepared structure; prepare this problem again',code='prepared_structure',path=key)
-        scene,metadata=lower_problem(problem,self.numerics)
+        scene,metadata=lower_problem(problem,self.numerics,plan=self._plan)
         plan,_=_planned(scene,reuse=self._plan)
         if plan.skeleton!=self._plan.skeleton:
             path='numerics.duration' if (plan.steps,plan.dt)!=(self._plan.steps,self._plan.dt) else 'problem'
