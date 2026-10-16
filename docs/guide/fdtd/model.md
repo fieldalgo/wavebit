@@ -254,6 +254,24 @@ fill protocol and are refused. This does not extend the stencil's scope:
 it still requires one lone sphere in vacuum and concrete, non-differentiated values;
 adding a slab or region does not make a multi-structure stencil scene supported.
 
+### Stencil preparation memory
+
+`Numerics(discretisation="stencil", memory_bound=2 * 1024**3, ...)` sets the
+host preparation prediction limit in bytes (2 GiB in this example). Omit
+`memory_bound`, or use `None`, to retain the engine's default of 6 GiB. A positive
+finite real number is required; booleans, zero, negative and non-finite values
+are refused at `numerics.memory_bound`. A value without `discretisation="stencil"`
+and an applicable `Sphere` is also refused, because no preparation would read it.
+
+The guard compares the existing prediction with the limit **before** the sparse
+assembly and solve. It is an estimate, not a cap on total process memory or a
+guarantee against exhausting memory. Coarsen `UniformGrid(spacing=...)`, shrink
+the sphere, or explicitly adjust the bound to the available resources. Raising
+it does not extend the stencil's physical scope: the current operator requires
+one sphere in vacuum. For multiple structures, use
+`Numerics(discretisation="voxel")` or reduce the scene to the supported single
+sphere. Numerical policy belongs to `Numerics`, not `Structure`.
+
 ## Materials
 
 | Model | Use |
@@ -309,6 +327,12 @@ one matching the cell boundaries, is unsupported and produces a structured
 | `Dipole(name, center, pulse, component="Ey", kind="electric", current_moment=1)` | a point **current** (A·m), or with `kind="magnetic"` its magnetic equivalent (V·m), spread over a smooth stamp (`"bspline"`, the default, or `"tent"`, each with a half-width of two cells) that keeps the moment and its centroid exact wherever the centre sits. It is not a dipole moment in C·m. |
 | `TFSF(name, box, pulse, direction="-z", polarization="x")` | a plane wave inside a `Region` box only (total field inside, scattered field outside), for a finite scatterer. Axis directions only; the two faces along its axis must be `Open()`. |
 | `InitialField(E, H, amplitude=1)` | the field the run starts from: E at `t = 0` and H at `t = -dt/2`, given as arrays or as callables evaluated at each component's own Yee points. |
+
+`PlaneWave.plane` must be an `fdtd.Plane`, for example `fdtd.Plane(z=.5)`;
+a scalar `.5` does not specify an axis. `check` reports invalid types at
+`sources.<name>.plane`, and `prepare` and `run` raise `ValidationError` at the
+same path before reading any plane coordinates. A valid Plane must still lie
+inside the physical domain.
 
 ## Outputs
 

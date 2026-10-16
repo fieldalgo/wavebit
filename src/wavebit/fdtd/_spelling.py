@@ -88,7 +88,12 @@ PHRASES = (
     (_FD + r'Material\b', 'Material'),
     (_FD + r'Conductor\b', 'ConductiveMaterial'),
     (_FD + r'Dispersive\b', 'DispersiveMaterial'),
-    # A public structure is named, and the stencil's memory bound is a compat keyword.
+    # Stencil preparation is a scene-wide public numerical policy.
+    (r'bound this structure declared', 'bound declared in Numerics'),
+    (r'raise the bound for this structure with', 'raise the preparation bound with'),
+    (r"use discretisation='voxel' on structures\[\d+\] \(.*?\); for the stencil,",
+     "use Numerics(discretisation='voxel'); for the stencil,"),
+    # A public structure is named; its numerical options live in Numerics.
     (_FD + r'Structure\(\.\.\., discretisation=', 'fdtd.Numerics(discretisation='),
     (_FD + r'Structure\(fd\.', 'fdtd.Structure(name, fd.'),
     (_FD + r'Structure\(shape, ', 'fdtd.Structure(name, shape, '),
@@ -152,7 +157,7 @@ PHRASES = (
     (_U + r'(Decay|Absorber)\(', r'fdtd.\1('),
     # A structure's junction rule and discretisation are the scene-wide Numerics ones.
     (_U + r'Structure\((junction|discretisation)=', r'Numerics(\1='),
-    (_U + r'Structure\(memory_bound=', 'fdtd.Structure(memory_bound='),
+    (_U + r'Structure\(memory_bound=', 'Numerics(memory_bound='),
     # A body's range is its entry in Numerics(geometry_ranges=...).
     (r'Sphere/Cylinder/Box/Prism\(range=\) declarations differ from the plan',
      "Numerics(geometry_ranges=...) entries differ from the preparation's"),

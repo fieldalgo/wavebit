@@ -238,6 +238,23 @@ Result의 정책 기록을 변경하지 않습니다.
 stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분하지 않는
 구체적인 수치만 지원하며, slab이나 region을 추가한 다중 구조물 장면은 지원하지 않습니다.
 
+### Stencil 준비 메모리
+
+`Numerics(discretisation="stencil", memory_bound=2 * 1024**3, ...)`는 호스트
+준비 과정의 예상 메모리 한도를 바이트로 정합니다(이 예에서는 2 GiB).
+`memory_bound`를 생략하거나 `None`을 쓰면 엔진 기본값 6 GiB를 유지합니다.
+양의 유한 실수만 허용하며, 불리언·0·음수·비유한 값은 `numerics.memory_bound`에서
+거절합니다. `discretisation="stencil"`과 적용 가능한 `Sphere`가 없으면 설정을
+읽는 준비 과정도 없으므로 거절합니다.
+
+기존 예측값을 한도와 비교하는 검사는 희소 행렬 조립과 풀이 **이전**에 실행됩니다.
+이는 예상치이며 프로세스 전체 메모리의 상한이나 메모리 부족 방지 보장이 아닙니다.
+`UniformGrid(spacing=...)`의 격자를 굵게 하거나 구를 줄이거나, 사용 가능한 자원을
+확인해 한도를 명시적으로 조절하세요. 한도를 올려도 stencil의 물리적 지원 범위는
+넓어지지 않습니다. 현재 연산자는 진공 속 구 하나를 요구합니다. 구조물이 여러 개면
+`Numerics(discretisation="voxel")`을 쓰거나 지원되는 구 하나의 장면으로 줄이세요.
+수치 정책은 `Structure`가 아니라 `Numerics`에서 정합니다.
+
 ## 재료
 
 | 모델 | 용도 |
@@ -291,6 +308,11 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 | `Dipole(name, center, pulse, component="Ey", kind="electric", current_moment=1)` | 점 **전류**(A·m), 또는 `kind="magnetic"`이면 그 자기 등가물(V·m)입니다. 매끄러운 스탬프(기본 `"bspline"` 또는 `"tent"`, 둘 다 반폭 두 셀)에 퍼뜨려, 중심이 어디에 있든 모멘트와 무게중심이 정확합니다. C·m 단위의 쌍극자 모멘트가 아닙니다. |
 | `TFSF(name, box, pulse, direction="-z", polarization="x")` | `Region` 상자 안에만 있는 평면파(안은 전체장, 밖은 산란장)로, 유한한 산란체용입니다. 축 방향만 되고, 그 축의 두 면은 `Open()`이어야 합니다. |
 | `InitialField(E, H, amplitude=1)` | 실행이 시작하는 장: `t = 0`의 E와 `t = -dt/2`의 H를 배열로, 또는 각 성분의 Yee 점에서 평가되는 호출 가능 객체로 줍니다. |
+
+`PlaneWave.plane`에는 `fdtd.Plane(z=.5)`처럼 `fdtd.Plane`을 넣어야 합니다.
+스칼라 `.5`만으로는 축을 정할 수 없습니다. 잘못된 형식이면 `check`는
+`sources.<name>.plane` 경로에 오류를 보고하고, `prepare`와 `run`은 좌표를 읽기 전에
+같은 경로의 `ValidationError`를 냅니다. 올바른 Plane도 물리 영역 안에 있어야 합니다.
 
 ## 출력
 

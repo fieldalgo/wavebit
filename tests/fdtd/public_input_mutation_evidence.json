@@ -1,0 +1,127 @@
+{
+  "base_commit": "ee9a6476fcf84a35058b72cc39772e0f21767456",
+  "scope": "Public input admission and diagnostic spelling; no sparse solve or accuracy claims.",
+  "environment": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.9",
+    "packages": {
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "jax": "0.11.0",
+      "torch": "2.14.1",
+      "pytest": "9.1.1"
+    },
+    "internal_threads": 1,
+    "XLA_FLAGS": null
+  },
+  "baseline": {
+    "cases": 16,
+    "failed": 16,
+    "exit": 1
+  },
+  "mutations": [
+    {
+      "name": "plane_order",
+      "exit": 1,
+      "count": 5,
+      "failed": [
+        "test_plane_wave_rejects_non_plane_before_reading_coordinates[0.5]",
+        "test_plane_wave_rejects_non_plane_before_reading_coordinates[None]",
+        "test_plane_wave_rejects_non_plane_before_reading_coordinates[z=.5]",
+        "test_plane_wave_rejects_non_plane_before_reading_coordinates[plane3]",
+        "test_plane_wave_rejects_non_plane_before_reading_coordinates[plane4]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.9334126249887049,
+      "log_sha256": "2359cecfe52d03dcfa3a762a493c3e4c8f80c70d037d757d66ebbe76f6b05e41",
+      "function": "test_plane_wave_rejects_non_plane_before_reading_coordinates",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "150e3f88adaadcaa251d8683b616965457cfb78b040fd9f09f7819c0d6891ba1",
+      "restored_sha256": "6e9c48cce94d11401c101ab26452e74f287dffbc6d249bae4d8e8659b6b6fc11",
+      "source_restored": true
+    },
+    {
+      "name": "memory_forwarding",
+      "exit": 1,
+      "count": 1,
+      "failed": [
+        "test_stencil_memory_bound_controls_public_preparation"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.691754208994098,
+      "log_sha256": "3aea6403f2ac5c8b26bc1acb19c038b51da275422e996090254ce0d025029959",
+      "function": "test_stencil_memory_bound_controls_public_preparation",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "b0ae9afd16cfce13de1e045271c273dd1cc9d15feb23f66bee114adc0e66fb1e",
+      "restored_sha256": "6e9c48cce94d11401c101ab26452e74f287dffbc6d249bae4d8e8659b6b6fc11",
+      "source_restored": true
+    },
+    {
+      "name": "memory_value_guard",
+      "exit": 1,
+      "count": 7,
+      "failed": [
+        "test_stencil_memory_bound_rejects_invalid_values[0]",
+        "test_stencil_memory_bound_rejects_invalid_values[-1.0]",
+        "test_stencil_memory_bound_rejects_invalid_values[inf]",
+        "test_stencil_memory_bound_rejects_invalid_values[nan]",
+        "test_stencil_memory_bound_rejects_invalid_values[True]",
+        "test_stencil_memory_bound_rejects_invalid_values[1GB]",
+        "test_stencil_memory_bound_rejects_invalid_values[bound6]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.7191300420090556,
+      "log_sha256": "b7dda59abcb242a48b6ba2b279330702aa5f3b614b0f0fa184ca858d43503767",
+      "function": "test_stencil_memory_bound_rejects_invalid_values",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "bc433c4edceff69db4118ec69c08b869bbb04758f03cb99873c458e8252c6592",
+      "restored_sha256": "6e9c48cce94d11401c101ab26452e74f287dffbc6d249bae4d8e8659b6b6fc11",
+      "source_restored": true
+    },
+    {
+      "name": "memory_scope_guard",
+      "exit": 1,
+      "count": 2,
+      "failed": [
+        "test_stencil_memory_bound_rejects_unused_settings[voxel-1]",
+        "test_stencil_memory_bound_rejects_unused_settings[stencil-0]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.7325364169955719,
+      "log_sha256": "7377ce4e4623e66aeb9c374ab36395d2c0c417be5c52347fd1ff619b69229cf0",
+      "function": "test_stencil_memory_bound_rejects_unused_settings",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "9fa55b5a87fa93cd78b9508b18e7633dee128dfab3ed16daa72442647363a68e",
+      "restored_sha256": "6e9c48cce94d11401c101ab26452e74f287dffbc6d249bae4d8e8659b6b6fc11",
+      "source_restored": true
+    },
+    {
+      "name": "structure_remedy",
+      "exit": 1,
+      "count": 1,
+      "failed": [
+        "test_stencil_multiple_structure_remedy_uses_public_numerics"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.6116721659782343,
+      "log_sha256": "ac595af24c3319ec09a77cfa13d764ff2837055eb74a9ce8ddd46c094b6e75df",
+      "function": "test_stencil_multiple_structure_remedy_uses_public_numerics",
+      "product_file": "src/wavebit/fdtd/_spelling.py",
+      "mutant_sha256": "dfa1def38df3dd35cfb324480854fb6e21e0c5d360879cfa73265db803b0bb06",
+      "restored_sha256": "72f0291fe42a3038eb58602278bea9b137fc5e37a39e93d961b5784053a51476",
+      "source_restored": true
+    }
+  ],
+  "restored": {
+    "cases": 16,
+    "passed": 16,
+    "exit": 0,
+    "all_source_bytes_restored": true
+  },
+  "restored_source_sha256": {
+    "src/wavebit/fdtd/_lower_public.py": "6e9c48cce94d11401c101ab26452e74f287dffbc6d249bae4d8e8659b6b6fc11",
+    "src/wavebit/fdtd/numerics.py": "c1f367459f89cbef5585348395f92c7a58d245d8ff6dc3d4cf372c61570e6989",
+    "src/wavebit/fdtd/_spelling.py": "72f0291fe42a3038eb58602278bea9b137fc5e37a39e93d961b5784053a51476",
+    "tests/fdtd/test_public_input_followup.py": "daa868d2cf23488e13c20dc8979e42994a63456f0c58dfa284eb04618fcecf22"
+  }
+}
