@@ -16,13 +16,20 @@ held is on `develop`.
 
 ### Landing a feature branch
 
-Branch from `develop`. `develop` keeps its history linear:
+Branch from `develop`. `develop` keeps its history linear, and `origin/develop` is the only
+`develop` that counts: a landing is finished when it is pushed.
 
-1. In the branch's own worktree: `git rebase develop`. Squash WIP/fixup commits here.
-2. In the main checkout, which holds `develop`: `git merge --ff-only <branch>`.
+1. `git fetch origin` and, in the main checkout, `git merge --ff-only origin/develop`, so the
+   local `develop` is origin's.
+2. In the branch's own worktree: `git rebase develop`. Squash WIP/fixup commits here.
+3. In the main checkout, which holds `develop`: `git merge --ff-only <branch>`.
+4. At once: `git push origin develop`.
 
-If step 2 fails, another session landed first — go back to step 1 and retry. This retry
-loop is the concurrency control between sessions; do not work around it.
+If step 3 or 4 is refused, another session landed first — go back to step 1 and retry. This
+retry loop is the concurrency control between sessions; do not work around it. A landing that
+stops before step 4 is not a landing: on 2026-10-15 twenty commits were fast-forwarded onto
+one machine's `develop` and never pushed while another clone pushed eleven to origin, and the
+two lines had to be rebased together by hand, conflicts and all.
 
 `merge.ff=only` is set in the repo config as a guard (`git config merge.ff only` on a fresh
 clone), so a plain `git merge` that would create a merge commit refuses. Do not override it.
