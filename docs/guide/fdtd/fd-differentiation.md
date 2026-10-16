@@ -183,15 +183,25 @@ gradients, and `result.diagnostics['stable']` reads `False`. The runtime checks:
 | Positivity | a traced `eps` or `mu` is not positive (or is `nan`) | `Material(eps=...)` |
 | Time step | the smallest index puts `dt` past the stability bound | "stability bound" |
 | Lifted operator | a star of the smoothed operator is not positive definite at its lift | constitutive certificate |
-| Resolution | a traced medium falls below 8 cells per wavelength (`eps * mu` above `(w / 8 dx)**2`) at the band's shortest wavelength or any shorter `Diffraction` wavelength `w` | "cells per wavelength" |
+| Resolution | a traced medium falls below 8 cells per wavelength at the band's shortest or any `Diffraction` wavelength; the report wavelength also refuses a metal with less than one cell per skin depth | "cells per wavelength" or "skin depth" |
 | Grazing order | a traced medium filling a PML layer along a PlaneWave's axis lets an order a `Diffraction` monitor asks for leave at an exit angle the layer does not accept | "Grazing order refused" |
 
 The grazing check runs for every traced plain material in a judged PML layer, including
 cell-snapped Slabs and scenes without smoothed bodies. A fixed PML reference medium fixes
-the stretch profile, not the physical index used to judge outgoing orders. The resolution
-check runs for every traced plain `fd.Material`: since 2026-10-15 that
-includes a traced `eps` on a Slab, a Region or an unturned Box with concrete geometry, where
-the plan can only warn that it could not count the cells. At `dx = 0.05` and the band above
+the stretch profile, not the physical index used to judge outgoing orders. The resolution check runs for every traced material, including conductor and pole
+parameters on the admitted concrete geometry. It reads the same complex index as the eager
+check: choose the axis with largest `abs(eps(w) * mu)`, then the passive square root.
+Dispersion is evaluated at the wavelength, rather than using `eps_inf` as the index.
+Conductivity contributes only in the existing eager conductive-film scope; this does not
+expand which conductor geometries may be differentiated. Metal-like media (`Re(n) < abs(Im(n))`)
+use skin depth at the report wavelength instead of the eight-cell rule. With no sources,
+that wavelength comes from `Resolution(wavelength=)` or the first planned PML wavelength;
+with neither, eager and runtime checks both have no wavelength to judge. The report also
+keeps the eager exemption for a source-free homogeneous vacuum; a Diffraction wavelength
+still has its separate eight-cell check.
+
+For a plain `fd.Material`, the check includes a traced `eps` on a Slab, a Region or an
+unturned Box with concrete geometry, where the plan can only warn that it could not count the cells. At `dx = 0.05` and the band above
 (shortest wavelength 0.642), the floor admits `eps * mu` up to
 `(0.642 / (8 * 0.05))**2 = 2.58`: a pillar index past 1.6 needs a finer grid. In the same
 cell (period 0.6, 8-cell PMLs) the substrate's first diffracted orders begin to propagate
@@ -248,3 +258,19 @@ is then fast to repeat; Torch runs eagerly (about 7 s for the same two-output Ja
 suits a few evaluations. NumPy is not differentiable, but a concrete NumPy run is the
 reference to compare a gradient against: plan each perturbed scene on its own, since a
 pillar's junction layout belongs to its geometry.
+
+The focused regression is `python -m pytest tests/fdtd/test_material_resolution_guard.py`.
+It straddles the eager thresholds for plain, conductive, Debye and Drude materials in
+source-free scenes (including a concrete inactive Lorentz pole at resonance), compares
+admitted lowering coefficients and their derivatives with
+concrete finite differences, and checks JAX jit, Torch, rule wavelengths and the PML
+fallback. The guard is constant to autodiff; it does not alter admitted coefficients.
+
+The guard regressions also compare eager decisions at the inclusive boundaries and their
+nearest representable neighbours. They cover a homogeneous vacuum with a Diffraction
+wavelength equal to, shorter than, or longer than the report wavelength; anisotropic
+absolute-index selection and first-component ties; inactive concrete versus carried zero
+Lorentz strengths at resonance; and active Lorentz coefficient derivatives away from
+resonance. Fallback tests retain the first planned PML wavelength (not the shortest),
+Resolution precedence over PML, source-band precedence over both, and multiplication by
+an existing zero, finite or NaN guard. These checks do not change the physical thresholds.

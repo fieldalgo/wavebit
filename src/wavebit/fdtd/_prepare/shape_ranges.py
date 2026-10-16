@@ -792,43 +792,91 @@ def grazing_guard(scene, plan, rt, previous):
     return value if previous is None else previous * value
 
 
+def _resolution_index(material, wavelength, rt, *, conductive=False):
+    """Backend twin of checks._index_at; the certificate carries no derivative.
+
+    Pick the component with largest |eps*mu| (first on ties), then the passive
+    square root. In particular eps_inf is not a dispersive medium's index.
+    """
+    import math
+    from wavebit.materials.time_domain import Conductor
+    from wavebit.materials.time_domain import Lorentz
+    from wavebit.materials.time_domain import concrete
+    xp = rt.xp
+    values = []
+    for e, m, sigma in zip(material.eps, material.mu_value, material.sigma):
+        eps = rt.constant(rt.array(e, 'complex128'))
+        for pole in material.poles:
+            if type(pole) is Lorentz and concrete(pole.strength) == 0 and not _carries(pole.strength):
+                continue
+            eps = eps + rt.constant(rt.array(pole.eps_term(2 * math.pi / wavelength), 'complex128'))
+        if conductive and isinstance(material, Conductor):
+            eps = eps + 1j * rt.constant(rt.array(sigma, 'float64')) * wavelength / (2 * math.pi)
+        values.append(eps * rt.constant(rt.array(m, 'float64')))
+    worst = values[0]
+    for value in values[1:]:
+        worst = xp.where(xp.abs(value) > xp.abs(worst), value, worst)
+    n = xp.sqrt(worst)
+    n = xp.where(xp.imag(n) < 0, -n, n)
+    return xp.real(n), xp.imag(n)
+
+
 def resolution_guard(scene, plan, rt, previous):
-    """The plan's resolution door, asked of every traced medium at run time.
+    """Hold traced media to the eager wavelength and skin-depth refusals.
 
-    ``checks.check_wavelength_resolution`` refuses a material sampled below 8 cells per
-    wavelength at the sources' ``band.shortest_wavelength`` and at each ``Diffraction``
-    wavelength: there not even the first digit of an order survives. That door reads
-    concrete values only. A seeded scene's host planning read a traced value at the plan's
-    seed (:func:`_seeded_materials`), and an unseeded one's could not read it at all -- the
-    door skips a value it cannot count -- so in either case the live value is held to the
-    same floor here: ``max_c eps_c mu_c <= (w / 8 dx)^2`` at the shortest such concrete
-    wavelength ``w``, or the run's coefficients are ``nan``. Built for every scene with a
-    traced material, so a concrete run's ``stable`` is unchanged.
-
-    It was built for seeded scenes only until 2026-10-15, which left the common case open: a
-    traced permittivity on a cell-snapped ``Slab``, or on an unturned ranged ``Box`` (no
-    cross terms, so nothing seeds it), ran at ``eps = 400`` and ``12.25`` under ``jax.jit`` --
-    1.15 and 3.88 cells per wavelength, both refused eagerly -- and returned finite fields,
-    ``stable`` true and a finite ``jax.grad``.
+    Rule wavelengths (source band and Diffraction) require eight cells unless
+    metal-like. The report's wavelength, including Resolution/PML fallback with
+    no source, additionally requires one cell per skin depth for a metal.
+    Conductivity is read only in the same conductive-film scope as eager checks.
+    Invalid live values poison coefficients; admitted physical derivatives remain
+    untouched because this certificate is constant to autodiff.
     """
     if not materials_traced(scene):
         return previous
-    from wavebit.materials.time_domain import Material
+    import math
     from wavebit.materials.time_domain import as_material
-    floor = _floor_index(scene, plan)
-    if floor is None:
-        return previous
-    limit = rt.array(floor ** 2, 'float64')
+    from wavebit.fdtd._legacy_monitors import Diffraction
+    from wavebit.fdtd._prepare.checks import _wavelength
+    from wavebit.fdtd._prepare.sources import shortest_wavelength
+    from wavebit.fdtd._prepare.conductive_film import descriptor
+    wavelengths = {w: False for m in scene.monitors if isinstance(m, Diffraction)
+                   for w in m.wavelengths}
+    band = shortest_wavelength(scene)
+    if band is not None:
+        wavelengths[band] = False
+    report = _wavelength(scene, plan)
+    if report is not None:
+        wavelengths[report] = True
+    conductive = descriptor(scene, plan.grid) is not None
     valid = None
-    for _, material in _materials(scene):
+    for key, material in _materials(scene):
         material = as_material(material)
-        if type(material) is not Material or not _carries(material):
-            continue                    # a medium with poles or loss has its own index
-        for e, m in zip(material.eps, material.mu_value):
-            ok = rt.array(e, 'float64') * rt.array(m, 'float64') <= limit
+        if not _carries(material):
+            continue
+        vacuum = None
+        if key < 0 and not scene.sources and not scene.structures and not material.poles:
+            # _resolution_notes exempts a source-free homogeneous vacuum report.
+            # Diffraction's separate rule-wavelength door still applies.
+            vacuum, _ = _resolution_index(material, 1., rt)
+        for wavelength, skin_check in wavelengths.items():
+            n, k = _resolution_index(material, wavelength, rt, conductive=conductive)
+            metal = n < rt.xp.abs(k)
+            # Keep the eager arithmetic order at the inclusive thresholds too.
+            wave_ok = wavelength / (n * plan.dx) >= 8.0
+            skin = 1.0 / ((2.0 * math.pi / wavelength) * rt.xp.where(metal, k, 1.))
+            skin_ok = skin / plan.dx >= 1.0
+            ok = rt.xp.where(metal, skin_ok if skin_check else True, wave_ok)
+            ok = ok & rt.xp.isfinite(n) & rt.xp.isfinite(k)
+            if vacuum is not None and skin_check:
+                # The same wavelength may also belong to a Diffraction monitor.
+                rule_read = (wavelength == band or any(
+                    isinstance(m, Diffraction) and wavelength in m.wavelengths
+                    for m in scene.monitors))
+                if not rule_read:
+                    ok = ok | (vacuum == 1.)
             valid = ok if valid is None else valid & ok
     if valid is None:
-        return previous                 # only a conductivity or a pole parameter is traced
+        return previous
     value = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'),
                                     rt.array(float('nan'), 'float64')))
     return value if previous is None else previous * value
