@@ -100,7 +100,7 @@ When a pattern moves every step under jit, use `('sampled', 'li')` or prepare ea
 
 ### Backend speed
 
-The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the solver interface now kept as `wavebit.compat.legacy` (`freeze_geometry()` and `solve(geometry=...)`). They are not measurements of this lifecycle or its Cartesian Li runtime guard or host callback policy. Backend speed through `prepared.run` has not been measured.
+The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the earlier solver interface (`freeze_geometry()` and `solve(geometry=...)`, retired with `wavebit.compat` on 2026-10-15; a historical checkout runs them). They are not measurements of this lifecycle or its Cartesian Li runtime guard or host callback policy. Backend speed through `prepared.run` is measured below.
 
 Through `prepared.run`, one derivative step -- the run and the gradient of its summed transmission -- took the following on one CPU (Apple M4, 2026-10-16), for a circle in a 600 nm cell under NVF with `shape_nvf_grid_size=256`:
 

@@ -11,15 +11,17 @@ the first table is the *shape* path where a block one used to be. Measured on CP
 silicon, single process, float64).
 **Every number here is from one CPU host; see the caveats before carrying any of it elsewhere.**
 
-**Interface scope (added 2026-10-15).** Every mode below was measured through the solver
-interface now kept as `wavebit.compat.legacy`: `solver.freeze_geometry()` and
-`solver.solve(geometry=...)`. The public lifecycle, `rcwa.prepare(...)` then `prepared.run(problem)`,
-refuses a shape dimension traced under `jax.jit` with `prepared.host_topology`, and differentiates
-one under eager `jax.grad` by checking its topology on the tracer's primal. So the "jax jit on
-shapes" rows and recommendations apply to the compatibility interface and do not carry over to
-that lifecycle, where a shape derivative is a PyTorch or an eager `jax.grad` derivative. Backend speed through `prepared.run`
-was measured separately on 2026-10-16 and is in the differentiation guide's
-[backend speed](../../guide/common/autodiff.md#backend-speed) section. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
+**Interface scope (added 2026-10-15, updated 2026-10-16).** Every mode below was measured
+through the earlier solver interface, `solver.freeze_geometry()` and `solver.solve(geometry=...)`,
+which was retired with `wavebit.compat` on 2026-10-15; reproducing these rows needs a historical
+checkout. The public lifecycle, `rcwa.prepare(...)` then `prepared.run(problem)`, differentiates
+a shape dimension under eager `jax.grad` by checking its topology on the tracer's primal, and
+under `jax.jit` or `jax.vmap` for the shapes `Numerics(topology_check=...)` admits: fixed-cell
+Cartesian Li rectangles by default (`'device'`), the other scalar shapes with `'host'`, the rest
+refused by name ([checked shape JIT](../../guide/rcwa/guarded-shape-jit.md)). So the "jax jit on
+shapes" rows and recommendations apply to the retired interface and do not carry over to that
+lifecycle. Backend speed through `prepared.run` was measured separately on 2026-10-16 and is in
+the differentiation guide's [backend speed](../../guide/common/autodiff.md#backend-speed) section. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
 lists which inputs differentiate on which backend there.
 
 Targets:

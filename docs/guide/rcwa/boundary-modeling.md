@@ -8,9 +8,10 @@
 
 :::{note}
 The examples use the current `rcwa.Problem` / `rcwa.Numerics` lifecycle, except the one under
-[Differentiability](#differentiability), which keeps the earlier `wavebit.compat.legacy`
-interface because a shape traced under `jax.jit` (a frozen geometry) is not in the current API
-yet; eager `jax.grad` through `prepared.run` is.
+[Differentiability](#differentiability), which is kept in the earlier `wavebit.compat.legacy`
+spelling it was measured in (retired 2026-10-15; a historical checkout runs it). In the current
+lifecycle the same derivative runs on PyTorch, under eager `jax.grad`, and under `jax.jit` for
+the shapes `Numerics(topology_check=...)` admits ([checked shape JIT](guarded-shape-jit.md)).
 :::
 
 Written: 2026-08. Targets `src/wavebit/rcwa/_engine/boundary.py`, `src/wavebit/_common/geometry/clipper.py`, `src/wavebit/_common/geometry/polygon.py`,
@@ -207,7 +208,8 @@ not changed hits the JAX compilation cache — take the freeze again every step 
 on stale geometry).
 
 ```python
-# Earlier interface: a shape traced under jax.jit is not in the current API yet (prepared.host_topology).
+# Historical API: the earlier interface, retired with wavebit.compat on 2026-10-15; a historical
+# checkout runs this snippet as measured.
 from wavebit.compat import legacy as wavebit
 
 structure = [dict(background=1.0, shapes=[
@@ -219,8 +221,11 @@ res = solver.solve(geometry=solver.freeze_geometry())
 
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
 normal field to the convolution matrices, and matches finite differences to 2.3e-08. Through the
-current lifecycle `rcwa.prepare` takes the freeze and the same derivative is PyTorch's: prepare
-with `backend='torch'` and pass shape values that require grad to `prepared.run`.
+current lifecycle `rcwa.prepare` takes the freeze and the same derivative runs on PyTorch (prepare
+with `backend='torch'` and pass shape values that require grad to `prepared.run`), under eager
+`jax.grad`, and under `jax.jit` or `jax.vmap` for the shapes `Numerics(topology_check=...)`
+admits: fixed-cell Cartesian Li rectangles by default, the other scalar shapes with `'host'`
+([checked shape JIT](guarded-shape-jit.md)).
 
 **That agreement is pointwise, and pointwise is the one comparison that cannot fail here.** The
 normal field is sampled, and the nearest-interface direction jumps across the medial axis, so as
