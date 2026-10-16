@@ -1,0 +1,25 @@
+{
+  "base": "1f5b5daf76a5382b94bd96b84600bc0d8aa9e09f",
+  "mutation": "omit zero lower-sentinel handling",
+  "failed_nodes": [
+    "test_zero_lower_sentinel_keeps_eager_positive_float_endpoints[0.5]",
+    "test_zero_lower_sentinel_keeps_eager_positive_float_endpoints[1.0]",
+    "test_zero_lower_sentinel_keeps_eager_positive_float_endpoints[2.0]",
+    "test_explicit_tiny_axis1d_keeps_admitted_public_traced_run[torch]",
+    "test_explicit_tiny_axis1d_keeps_admitted_public_traced_run[jax]"
+  ],
+  "restored_sha256": "e02ec98140009c3cb78286a1694f2b5dd31f8680e44aca754c15827e5e7183c6",
+  "final_target_result": "12 passed, 0 failed, 0 skipped",
+  "command": "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 MAX_JOBS=1 PYTHONPATH=src python -m pytest -q tests/fdtd/test_grazing_subnormal_band.py tests/fdtd/test_grazing_cos_boundary.py::test_high_threshold_has_bounded_eager_exact_interval tests/fdtd/test_grazing_cos_boundary.py::test_subunit_endpoints_keep_the_existing_eager_rounding",
+  "public_reproduction": {
+    "Axis1D_k": 1.257382227762103e-161,
+    "rounded_initial_low": 5e-324,
+    "eager_check": true,
+    "before_traced_run": "ZeroDivisionError at s2(0)",
+    "grid": "1 x 1 x 124, 2 steps",
+    "backends": [
+      "torch",
+      "jax"
+    ]
+  }
+}
