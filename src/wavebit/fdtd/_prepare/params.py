@@ -183,14 +183,17 @@ def lower(scene, plan, rt='numpy', device=None):
     # asks eagerly. Read the actual recurrence, not an upper bound on gamma.
     from wavebit.fdtd._prepare.shape_ranges import materials_traced
     if materials_traced(scene):
-        for structure in scene.structures:
-            for pole in structure.material.poles:
-                valid = rt.array(1., 'float64') > 0
-                for coefficient in pole.coefficients(plan.dt):
-                    valid = valid & rt.xp.isfinite(rt.array(coefficient, 'float64'))
-                held = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'),
-                                              rt.array(float('nan'), 'float64')))
-                guard = held if guard is None else guard * held
+        from wavebit.fdtd._kernel.poles import PoleTerm
+        for term in plan.terms:
+            if type(term) is not PoleTerm:
+                continue
+            valid = rt.array(1., 'float64') > 0
+            for kind in ('step_gain', 'hold', 'drive'):
+                for coefficient in params['poles'][term.name][kind]:
+                    valid = valid & rt.xp.isfinite(coefficient)
+            held = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'),
+                                          rt.array(float('nan'), 'float64')))
+            guard = held if guard is None else guard * held
     guard = resolution_guard(scene, plan, rt, guard)
     guard = grazing_guard(scene, plan, rt, guard)
     guard = shape_guard(scene, plan, rt, guard)

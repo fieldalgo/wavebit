@@ -1979,13 +1979,21 @@ def cfl_bound(scene, plan):
 
 def check_stability(scene, plan):
     """Refuse a concretely unstable ``dt``; return whether the bound could be read at all."""
-    # ADE arithmetic must be representable too, not just CFL-admissible.
-    for material in [_background(scene)] + [s.material for s in scene.structures]:
-        for pole in material.poles:
+    # Check the scalar recurrence only when the plan actually uses it. Spatial
+    # film subclasses own different coefficients and concrete inactive-slot rules.
+    from wavebit.fdtd._kernel.poles import PoleTerm
+    for term in plan.terms:
+        if type(term) is not PoleTerm:
+            continue
+        index = int(term.name[len('poles['):-1])
+        for pole in scene.structures[index].material.poles:
             if any(concrete(getattr(pole, f)) is None for f in pole.__dataclass_fields__):
                 continue
-            coefficients = pole.coefficients(plan.dt)
-            if any(not math.isfinite(concrete(v)) for v in coefficients):
+            try:
+                finite = all(math.isfinite(concrete(v)) for v in pole.coefficients(plan.dt))
+            except (OverflowError, ZeroDivisionError):
+                finite = False
+            if not finite:
                 raise ValueError('PoleArithmeticRefused: nonfinite ADE coefficient or nonzero '
                                  'subnormal second-order drive; change the material/time discretization. '
                                  'No pole is clipped or silently removed.')

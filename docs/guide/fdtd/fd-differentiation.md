@@ -308,6 +308,19 @@ convergence tolerance. A concrete zero strength remains allowed, and its analyti
 tangent is retained. As with any float64 calculation, derivatives that themselves fall
 outside the dtype's representable range are not certified.
 
+The arithmetic check follows the recurrence selected by the plan. Spatial film
+terms use their own coefficient and CFL checks; they do not evaluate the unused
+scalar pole recurrence. In particular, a concrete inactive hybrid-film slot may
+have an extreme finite resonance or relaxation time without forming its unused
+square or inverse. The slot remains allocated, and active slots in the same film
+still undergo the existing representability and stability checks. This does not
+remove the ordinary single-pole Lorentz resonance contribution to the CFL bound,
+or classify a carried zero strength or a nonzero subnormal as an inactive slot.
+Finite/sign declaration checks remain in force for every parameter.
+`tests/fdtd/test_selected_pole_arithmetic.py` covers public preparation, inactive
+slots beside active families, active extreme refusals, and the ordinary live
+strength tangent at both signed zeros.
+
 `tests/fdtd/test_large_damping.py` compares branch neighbours and zero/nonzero strengths
 with independent Decimal arithmetic, checks finite optical susceptibility, compares a
 small physical `check`/`prepare`/live-run scene, and exercises both sides of the drive
