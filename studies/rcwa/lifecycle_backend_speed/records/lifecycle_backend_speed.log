@@ -1,23 +1,38 @@
-# load average 8.2 9.6 8.5 on 10 cores just after the run; the machine was shared with other work
-# wavebit b680ed98 · python 3.12.9 jax 0.11.0 torch 2.13.0 numpy 2.5.1 · Apple M4 · run 2026-10-16 01:30 +0900
-torch         radius    orders=(3,3)  first   0.085 s  median   0.071 s  min   0.062 s  derivative +7.3517206264e-03  maxrss 0.36 GB
-jax-grad      radius    orders=(3,3)  first  18.756 s  median   0.270 s  min   0.247 s  derivative +7.3517206264e-03  maxrss 0.93 GB
-torch         thickness orders=(3,3)  first   0.053 s  median   0.032 s  min   0.031 s  derivative +4.8150851156e-04  maxrss 0.33 GB
-jax-grad      thickness orders=(3,3)  first  12.691 s  median   0.148 s  min   0.143 s  derivative +4.8150851156e-04  maxrss 1.00 GB
-jax-jit-grad  thickness orders=(3,3)  first   2.161 s  median   0.024 s  min   0.022 s  derivative +4.8150851156e-04  maxrss 0.61 GB
-torch         radius    orders=(5,5)  first   0.360 s  median   0.394 s  min   0.308 s  derivative +3.5602860979e-03  maxrss 0.50 GB
-jax-grad      radius    orders=(5,5)  first  19.582 s  median   0.475 s  min   0.460 s  derivative +3.5602860979e-03  maxrss 0.97 GB
-torch         thickness orders=(5,5)  first   0.324 s  median   0.325 s  min   0.313 s  derivative +3.3082660902e-04  maxrss 0.47 GB
-jax-grad      thickness orders=(5,5)  first  13.467 s  median   0.374 s  min   0.338 s  derivative +3.3082660902e-04  maxrss 0.87 GB
-jax-jit-grad  thickness orders=(5,5)  first   2.364 s  median   0.182 s  min   0.161 s  derivative +3.3082660902e-04  maxrss 0.61 GB
-torch         radius    orders=(7,7)  first   1.354 s  median   1.684 s  min   1.329 s  derivative +4.1114116395e-03  maxrss 0.65 GB
-jax-grad      radius    orders=(7,7)  first  19.176 s  median   1.657 s  min   1.529 s  derivative +4.1114116395e-03  maxrss 1.40 GB
-torch         thickness orders=(7,7)  first   1.392 s  median   1.421 s  min   1.283 s  derivative +3.3508185907e-04  maxrss 0.60 GB
-jax-grad      thickness orders=(7,7)  first  14.071 s  median   1.315 s  min   1.239 s  derivative +3.3508185907e-04  maxrss 1.22 GB
-jax-jit-grad  thickness orders=(7,7)  first   3.164 s  median   0.843 s  min   0.798 s  derivative +3.3508185907e-04  maxrss 0.75 GB
-torch         radius    orders=(9,9)  first   4.871 s  median   6.354 s  min   3.708 s  derivative +3.7806109440e-03  maxrss 1.17 GB
-jax-grad      radius    orders=(9,9)  first  22.276 s  median   4.557 s  min   3.923 s  derivative +3.7806109440e-03  maxrss 1.96 GB
-torch         thickness orders=(9,9)  first   2.754 s  median   4.052 s  min   3.864 s  derivative +3.2571783996e-04  maxrss 0.97 GB
-jax-grad      thickness orders=(9,9)  first  16.485 s  median   3.562 s  min   3.179 s  derivative +3.2571783996e-04  maxrss 1.47 GB
-jax-jit-grad  thickness orders=(9,9)  first   4.537 s  median   2.417 s  min   2.114 s  derivative +3.2571783996e-04  maxrss 0.89 GB
-# done
+# wavebit main 99aedad4 (src) · python 3.12.9 jax 0.11.0 torch 2.14.1 numpy 2.5.1 · Apple M4 · run 2026-10-16 16:58 +0900 · load average at start { 4.10 4.16 4.12 }
+torch         radius    orders=(3,3)  first   0.076 s  median   0.036 s  min   0.035 s  derivative +7.3517206264e-03  maxrss 0.34 GB
+jax-grad      radius    orders=(3,3)  first  13.248 s  median   0.169 s  min   0.168 s  derivative +7.3517206264e-03  maxrss 1.38 GB
+jax-jit-grad  radius    orders=(3,3)  first   2.325 s  median   0.023 s  min   0.021 s  derivative +7.3517206264e-03  maxrss 0.65 GB
+torch         width     orders=(3,3)  first   0.044 s  median   0.027 s  min   0.027 s  derivative +4.6697819082e-04  maxrss 0.33 GB
+jax-grad      width     orders=(3,3)  first  11.678 s  median   0.156 s  min   0.144 s  derivative +4.6697819082e-04  maxrss 1.10 GB
+jax-jit-grad  width     orders=(3,3)  first   2.039 s  median   0.019 s  min   0.018 s  derivative +4.6697819082e-04  maxrss 0.62 GB
+torch         thickness orders=(3,3)  first   0.041 s  median   0.025 s  min   0.025 s  derivative +4.8150851156e-04  maxrss 0.33 GB
+jax-grad      thickness orders=(3,3)  first  10.698 s  median   0.124 s  min   0.118 s  derivative +4.8150851156e-04  maxrss 1.09 GB
+jax-jit-grad  thickness orders=(3,3)  first   1.443 s  median   0.018 s  min   0.018 s  derivative +4.8150851156e-04  maxrss 0.59 GB
+torch         radius    orders=(5,5)  first   0.218 s  median   0.203 s  min   0.198 s  derivative +3.5602860979e-03  maxrss 0.45 GB
+jax-grad      radius    orders=(5,5)  first  13.197 s  median   0.283 s  min   0.278 s  derivative +3.5602860979e-03  maxrss 1.46 GB
+jax-jit-grad  radius    orders=(5,5)  first   2.263 s  median   0.106 s  min   0.104 s  derivative +3.5602860979e-03  maxrss 0.70 GB
+torch         width     orders=(5,5)  first   0.195 s  median   0.188 s  min   0.183 s  derivative +3.2904923176e-04  maxrss 0.47 GB
+jax-grad      width     orders=(5,5)  first  10.682 s  median   0.249 s  min   0.247 s  derivative +3.2904923176e-04  maxrss 1.20 GB
+jax-jit-grad  width     orders=(5,5)  first   2.186 s  median   0.102 s  min   0.101 s  derivative +3.2904923176e-04  maxrss 0.76 GB
+torch         thickness orders=(5,5)  first   0.176 s  median   0.166 s  min   0.159 s  derivative +3.3082660902e-04  maxrss 0.41 GB
+jax-grad      thickness orders=(5,5)  first   9.569 s  median   0.213 s  min   0.212 s  derivative +3.3082660902e-04  maxrss 1.48 GB
+jax-jit-grad  thickness orders=(5,5)  first   1.507 s  median   0.089 s  min   0.088 s  derivative +3.3082660902e-04  maxrss 0.67 GB
+torch         radius    orders=(7,7)  first   0.796 s  median   0.810 s  min   0.790 s  derivative +4.1114116395e-03  maxrss 0.65 GB
+jax-grad      radius    orders=(7,7)  first  13.549 s  median   0.806 s  min   0.783 s  derivative +4.1114116395e-03  maxrss 1.66 GB
+jax-jit-grad  radius    orders=(7,7)  first   2.692 s  median   0.489 s  min   0.474 s  derivative +4.1114116395e-03  maxrss 0.96 GB
+torch         width     orders=(7,7)  first   0.756 s  median   0.744 s  min   0.735 s  derivative +3.3815832409e-04  maxrss 0.74 GB
+jax-grad      width     orders=(7,7)  first  10.950 s  median   0.753 s  min   0.735 s  derivative +3.3815832408e-04  maxrss 1.51 GB
+jax-jit-grad  width     orders=(7,7)  first   2.557 s  median   0.488 s  min   0.463 s  derivative +3.3815832409e-04  maxrss 0.93 GB
+torch         thickness orders=(7,7)  first   0.682 s  median   0.682 s  min   0.675 s  derivative +3.3508185907e-04  maxrss 0.57 GB
+jax-grad      thickness orders=(7,7)  first  10.096 s  median   0.628 s  min   0.625 s  derivative +3.3508185907e-04  maxrss 1.28 GB
+jax-jit-grad  thickness orders=(7,7)  first   1.893 s  median   0.399 s  min   0.398 s  derivative +3.3508185907e-04  maxrss 0.84 GB
+torch         radius    orders=(9,9)  first   2.778 s  median   2.649 s  min   2.642 s  derivative +3.7806109440e-03  maxrss 1.23 GB
+jax-grad      radius    orders=(9,9)  first  15.860 s  median   2.652 s  min   2.582 s  derivative +3.7806109440e-03  maxrss 2.03 GB
+jax-jit-grad  radius    orders=(9,9)  first   4.309 s  median   1.928 s  min   1.873 s  derivative +3.7806109440e-03  maxrss 1.32 GB
+torch         width     orders=(9,9)  first   2.978 s  median   2.779 s  min   2.604 s  derivative +3.7007486828e-04  maxrss 1.60 GB
+jax-grad      width     orders=(9,9)  first  15.110 s  median   2.564 s  min   2.468 s  derivative +3.7007486827e-04  maxrss 1.83 GB
+jax-jit-grad  width     orders=(9,9)  first   4.496 s  median   1.898 s  min   1.849 s  derivative +3.7007486825e-04  maxrss 1.17 GB
+torch         thickness orders=(9,9)  first   2.420 s  median   2.390 s  min   2.348 s  derivative +3.2571783996e-04  maxrss 1.08 GB
+jax-grad      thickness orders=(9,9)  first  13.558 s  median   2.260 s  min   2.126 s  derivative +3.2571783996e-04  maxrss 1.50 GB
+jax-jit-grad  thickness orders=(9,9)  first   3.430 s  median   1.677 s  min   1.626 s  derivative +3.2571783996e-04  maxrss 0.94 GB
+# load average at end { 8.83 5.93 4.82 }

@@ -2,25 +2,33 @@
 lifecycle_backend_speed.py -- the wall time of one derivative step through the public lifecycle.
 
 One step is ``prepared.run(problem)`` and the derivative of its summed transmission, the unit an
-optimizer repeats. Three ways of taking it, against two design variables:
+optimizer repeats. Three ways of taking it:
 
-    torch          eager PyTorch autograd                     radius, thickness
-    jax-grad       eager jax.grad, no jit                     radius, thickness
-    jax-jit-grad   jax.jit(jax.grad(...))                     thickness only: the lifecycle
-                                                              refuses geometry under jit
+    torch          eager PyTorch autograd
+    jax-grad       eager jax.grad, no jit
+    jax-jit-grad   jax.jit(jax.grad(...))
 
-The problem is a circle of radius 160 nm in a 600 nm square cell, 200 nm thick, eps 12.25 in
-air on eps 2.25, lit at 850 nm, NVF on a 256-point normal-field grid -- the problem of
-tests/api/test_unified_rcwa.py's ``patterned()``. The first call (compilation and caches) is
-reported apart from the median and minimum of the next five.
+against three design variables, each with one ``rcwa.Numerics`` that all three modes share:
+
+    radius      a circle's radius under NVF on a 256-point normal-field grid, with
+                ``topology_check='host'``, the policy that admits it under jit
+    width       a zero-angle rectangle's width under Cartesian Li (``factorization='li'``),
+                which the default ``topology_check='device'`` guards under jit
+    thickness   the layer thickness of the circle problem, default numerics
+
+The cell is 600 nm square, the layer 200 nm thick, eps 12.25 in air on eps 2.25, lit at 850 nm
+-- the problem of tests/api/test_unified_rcwa.py's ``patterned()``: a circle of radius 160 nm,
+or a 260 x 200 nm rectangle. The first call (compilation and caches) is reported apart from
+the median and minimum of the next five.
 
 Run each configuration in its own process: JAX compilations, torch graphs and allocator pools
 are only reliably freed when a process exits. The record in records/ came from
 
     for n in 3 5 7 9; do
-      for cfg in "torch radius" "jax-grad radius" "torch thickness" "jax-grad thickness" \
-                 "jax-jit-grad thickness"; do
-        python studies/rcwa/lifecycle_backend_speed/lifecycle_backend_speed.py $cfg $n
+      for v in radius width thickness; do
+        for m in torch jax-grad jax-jit-grad; do
+          python studies/rcwa/lifecycle_backend_speed/lifecycle_backend_speed.py $m $v $n
+        done
       done
     done
 
@@ -34,16 +42,21 @@ from wavebit import Material, Units, rcwa
 mode, variable, n = sys.argv[1], sys.argv[2], int(sys.argv[3])
 REPEATS = 5
 
-def problem(radius, thickness):
+def problem(geometry, thickness=200.):
     return rcwa.Problem(units=Units(length='nm'),
         stack=rcwa.Stack(period=(600., 600.), bottom=Material(2.25),
             layers=(rcwa.Layer(thickness=thickness, background=Material(1.),
-                regions=(rcwa.Region(geometry=rcwa.Circle(radius=radius), material=Material(12.25)),)),)),
+                regions=(rcwa.Region(geometry=geometry, material=Material(12.25)),)),)),
         excitation=rcwa.Excitation(wavelength=850., sources=(rcwa.PlaneWave(polarization='s'),)))
 
-numerics = rcwa.Numerics(orders=(n, n), shape_nvf_grid_size=256)
-build = (lambda v: problem(v, 200.)) if variable == 'radius' else (lambda v: problem(160., v))
-x0 = 160. if variable == 'radius' else 200.
+build, x0, numerics = {
+    'radius': (lambda v: problem(rcwa.Circle(radius=v)), 160.,
+               rcwa.Numerics(orders=(n, n), shape_nvf_grid_size=256, topology_check='host')),
+    'width': (lambda v: problem(rcwa.Rectangle(size=(v, 200.))), 260.,
+              rcwa.Numerics(orders=(n, n), factorization='li')),
+    'thickness': (lambda v: problem(rcwa.Circle(radius=160.), v), 200.,
+                  rcwa.Numerics(orders=(n, n), shape_nvf_grid_size=256)),
+}[variable]
 
 if mode == 'torch':
     prepared = rcwa.prepare(build(torch.tensor(x0, dtype=torch.float64)), numerics=numerics, backend='torch')
