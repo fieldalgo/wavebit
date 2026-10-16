@@ -137,7 +137,14 @@ class Drude(Declaration):
         _register(type(self), ('omega_p', 'gamma'))
 
     def epsilon_term(self, omega):
-        value = -(self.omega_p ** 2) / (omega ** 2 + 1j * self.gamma * omega)
+        from .time_domain import _drude_response
+        # The normalized evaluator is float64. Keep the public single-precision
+        # arithmetic and dtype; the large finite damping repair is a float64 path.
+        if any(str(getattr(v, 'dtype', '')) in ('float32', 'torch.float32')
+               for v in (omega, self.omega_p, self.gamma)):
+            value = -(self.omega_p ** 2) / (omega ** 2 + 1j * self.gamma * omega)
+        else:
+            value = _drude_response(omega, self.omega_p, self.gamma)
         return _guard_response(value, _scalar(self.omega_p, 'material.poles.omega_p', nonnegative=True),
                                _scalar(self.gamma, 'material.poles.gamma', nonnegative=True))
 
