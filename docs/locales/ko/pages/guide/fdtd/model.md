@@ -172,6 +172,17 @@ Kottke, Farjadpour, Johnson(*Phys. Rev. E* **77**, 036611, 2008)의 비등방 �
 않은 스무딩 `Box`의 면 위에 딱 붙어 선 `Cylinder`나 회전하지 않은 `Box`는
 `Numerics(junction="split")`(기본값)이 처리합니다(다른 선택지는 `"staircase"`와 `"refuse"`).
 
+전역 `Numerics.junction` 설정은 기판 continuation을 적용한 뒤 엔진이 판별한 각 지원
+flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없는 구조는 나열 순서와
+무관하게 기존 규칙을 유지합니다. `"staircase"`는 접합 점의 소유 매질을 선택하고,
+`"refuse"`는 실제 공유 계면을 거부합니다. 잘못된 값이나 지원 flush 접합 없이 지정한
+비기본 설정은 `numerics.junction` 오류입니다. 기본 `"split"`은 접합이 없어도 사용할
+수 있으며, 준비된 traced 접합 형상은 기존처럼 `"split"`만 지원합니다. 준비된 계산을
+재사용해도 설정은 유지됩니다. traced standing body의 `"staircase"`는
+`numerics.junction`에서 명시적으로 거부하며, 관계없는 traced body는 정적 staircase
+접합을 바꾸지 않습니다. `"refuse"`는 준비 단계에서 접합을 거부하므로 split으로
+대체된 계산을 준비할 수 없습니다.
+
 **기판 위 기둥.** 마지막 규칙 때문에 스무딩 기둥은 `Slab` 기판 위에 딱 붙여 세울 수 없습니다.
 선택지는 다음과 같습니다.
 

@@ -179,6 +179,18 @@ A smoothed body may sit **inside** a cell-snapped structure, or on top of anothe
 a `Cylinder` or unturned `Box` standing flush on the face of an unturned smoothed `Box` is handled
 by `Numerics(junction="split")`, the default (`"staircase"` and `"refuse"` are the alternatives).
 
+The global `Numerics.junction` policy is read only by the standing body of each
+supported flush pair, using the engine's role selection after substrate continuation.
+The substrate and unrelated structures retain their ordinary rule, regardless of listing
+order. `"staircase"` selects the owning medium at junction points; `"refuse"` rejects the
+actual shared interface. Invalid values and non-default policies with no supported flush
+pair are errors at `numerics.junction`. The default `"split"` needs no junction, and
+prepared traced junction geometry remains supported only with `"split"`. Prepared reuse
+retains the recorded policy: a traced standing body explicitly rejects `"staircase"`
+at `numerics.junction`, while unrelated traced bodies leave a static staircase pair
+unchanged. `"refuse"` rejects the pair during preparation; it cannot prepare a split
+fallback.
+
 **Pillars on a substrate.** Because of the last rule, a smoothed pillar cannot stand flush on a
 `Slab` substrate. The choices are:
 

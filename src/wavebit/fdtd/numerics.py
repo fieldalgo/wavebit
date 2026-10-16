@@ -75,6 +75,13 @@ class Decay(Declaration):
 @eager_under_torch_compile
 @dataclass(frozen=True, kw_only=True)
 class Numerics(Declaration):
+    """Numerical policy for the physical scene.
+
+    ``junction`` selects split (default), staircase, or refusal on each supported
+    flush pair's standing body. Substrates and unrelated structures retain their
+    ordinary rule. A non-default policy without a supported flush pair is an
+    error at ``numerics.junction``. Traced junction geometry remains split-only.
+    """
     grid: UniformGrid
     duration: Duration
     courant: float = .5
