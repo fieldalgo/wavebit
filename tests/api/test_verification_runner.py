@@ -441,6 +441,87 @@ def test_ci_configuration_changes_refuse_resume(checkout, options):
     assert 'Resume refused' in result.stderr
 
 
+def test_duration_shards_preserve_coverage_and_reject_changed_timing_inputs(checkout):
+    # Count balancing would put the three cheap cases alone; measured time must
+    # instead isolate the single expensive case, including an unmeasured file.
+    (checkout/'tests/test_a.py').write_text('def test_a1(): pass\ndef test_a2(): pass\ndef test_a3(): pass\n')
+    (checkout/'tests/test_b.py').write_text('def test_b(): pass\n')
+    (checkout/'tests/test_c.py').write_text('def test_c(): pass\n')
+    timing_path = checkout.parent/'timings.json'  # also fingerprint external tables
+    table = dict(schema='wavebit.shard-timings/v1', partitions=dict(exclude={
+        'tests/test_a.py': dict(nodes=3, seconds=3),
+        'tests/test_b.py': dict(nodes=1, seconds=100),
+    }))
+    timing_path.write_text(json.dumps(table))
+    options = ['--slow', 'exclude', '--shard-timings', str(timing_path)]
+    outputs, receipts = [], []
+    for index in (1, 2):
+        output = checkout/'artifacts'/f'timed{index}'
+        result, receipt = run(checkout, output, '--shard', f'{index}/2', *options)
+        assert result.returncode == 0, result.stdout + result.stderr
+        outputs.append(str(output))
+        receipts.append(receipt)
+    assert receipts[0]['shard']['files'] == ['tests/test_b.py']
+    assert receipts[1]['shard']['files'] == ['tests/test_a.py', 'tests/test_c.py']
+    command = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '2', *outputs]
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    table['partitions']['exclude']['tests/test_b.py']['seconds'] = 110
+    timing_path.write_text(json.dumps(table))
+    result, _ = run(checkout, checkout/'artifacts/resume-timed', '--shard', '1/2',
+                    '--resume', outputs[0], *options)
+    assert result.returncode == 2 and 'Resume refused' in result.stderr
+    receipts[1]['shard']['timings_digest'] = 'different-table'
+    Path(outputs[1], 'receipt.json').write_text(json.dumps(receipts[1]))
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    assert result.returncode == 1 and 'different timing tables' in result.stdout
+
+
+@pytest.mark.parametrize('seconds', [-1, float('nan'), float('inf')])
+def test_invalid_shard_durations_are_refused_before_collection(checkout, seconds):
+    suite(checkout, 'def test_pass(): pass\n')
+    timing_path = checkout.parent/'timings.json'
+    timing_path.write_text(json.dumps(dict(schema='wavebit.shard-timings/v1',
+        partitions=dict(exclude={'tests/test_tiny.py': dict(nodes=1, seconds=seconds)}))))
+    result, receipt = run(checkout, checkout/'artifacts/invalid-time', '--shard', '1/1',
+                          '--slow', 'exclude', '--shard-timings', str(timing_path))
+    assert result.returncode == 2 and receipt is None
+    assert 'finite nonnegative seconds' in result.stderr
+
+
+def test_timing_import_requires_complete_successful_shards(tmp_path):
+    for label in ('default', 'slow'):
+        directory = tmp_path/f'verification-{label}-1'
+        directory.mkdir()
+        nodes = ['tests/test_example.py::test_one', 'tests/test_example.py::test_two']
+        receipt = dict(shard=dict(index=1, count=1), exit_code=0, integrity_errors=[],
+                       collect_only=False, inputs_unchanged=True, collected_nodeids=nodes,
+                       counts=dict(passed=2), outcomes={
+                           node: dict(complete=True, outcome='passed', duration=seconds)
+                           for node, seconds in zip(nodes, (2.5, 3.5))})
+        (directory/'receipt.json').write_text(json.dumps(receipt))
+        (directory/'collected-nodeids-all.json').write_text(json.dumps(nodes))
+    output = tmp_path/'timings.json'
+    command = [sys.executable, str(ROOT/'tools/update_shard_timings.py'), str(tmp_path),
+               '--source-run', 'https://example.test/run/1', '--output', str(output)]
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    table = json.loads(output.read_text())
+    assert table['partitions']['exclude']['tests/test_example.py'] == dict(nodes=2, seconds=6)
+    assert table['partitions']['only'] == table['partitions']['exclude']
+    original = output.read_bytes()
+    receipt['outcomes'][nodes[0]]['complete'] = False
+    (directory/'receipt.json').write_text(json.dumps(receipt))
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    assert result.returncode != 0 and 'incomplete or invalid timing' in result.stderr
+    assert output.read_bytes() == original
+    receipt['shard']['count'] = 2
+    (directory/'receipt.json').write_text(json.dumps(receipt))
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    assert result.returncode != 0 and 'incomplete baseline' in result.stderr
+    assert output.read_bytes() == original
+
+
 @pytest.mark.parametrize('seconds', ['0', '-1', 'nan', 'inf'])
 def test_timeout_requires_positive_finite_seconds(checkout, seconds):
     suite(checkout, 'def test_pass(): pass\n')

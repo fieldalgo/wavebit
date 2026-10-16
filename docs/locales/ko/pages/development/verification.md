@@ -106,21 +106,23 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)는
 research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
-`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 6개, slow 범위는 2개입니다.
+`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 8개, slow 범위는 3개입니다.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/6 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/8 --workers 2 \
+  --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/default
-python tools/run_verification.py --profile full --slow only --shard 1/2 --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/3 --workers 2 \
+  --shard-timings tools/ci_shard_timings.json \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/slow
 ```
 
 shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shard가 범위 전체를
 수집해 `collected-nodeids-all.json`에 기록한 뒤, 테스트 파일 단위로 결정적으로
-배정합니다. 큰 파일부터 가장 가벼운 shard에 넣으므로 파일이 갈리지 않고, 같은
-수집 목록은 항상 같은 shard를 만듭니다. shard job들이 끝나면
+배정합니다. 예상 시간이 긴 파일부터 가장 가벼운 shard에 넣으므로 파일이 갈리지 않고, 같은
+수집 목록과 시간표는 항상 같은 shard를 만듭니다. shard job들이 끝나면
 `tools/verify_shards.py --count N`이 그 기록을 읽어, 모든 shard가 한 번씩 있고
 같은 목록을 수집했고 그 목록을 빈틈없이 나눴고 각각 종료 코드 0으로 끝났을 때만
 통과합니다. 이 job이 범위를 검증한 것으로 만들며, runner가 죽은 shard는 사라지는
@@ -128,8 +130,8 @@ shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shar
 
 shard는 시간보다 runner 메모리 때문입니다. 일반 범위를 worker 2개 한 번에 돌리면
 사용 가능한 7.9 GB를 넘어 매번 50~61 %에서 종료되었습니다. 테스트별 제한은
-1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 shard당 120분입니다(정상 길이는
-일반 약 50분, slow 약 40분). 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
+1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 shard당 120분입니다. 실측 시간을 배분에 사용하지만
+실제 경과 시간은 수집, 컴파일, worker 스케줄링에도 영향을 받습니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
 대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.
 
 GitHub artifact `verification-default-N`과 `verification-slow-N`에는 shard별 JSON 결과
@@ -177,3 +179,13 @@ python tools/run_distribution_smoke.py
 
 이 도구는 wheel과 source distribution을 만들고 체크아웃 밖의 새 설치 환경에서
 패키지 데이터와 선택적인 plotting 기능까지 확인합니다.
+
+시간표는 `tools/ci_shard_timings.json`에 고정하며, 파일별 setup/call/teardown 합계를
+현재 사례 수에 맞춰 추정합니다. 새 파일은 해당 범위의 사례당 평균 비용(최소 1초)을
+사용합니다. 시간표는 resume fingerprint와 shard 간 일치 검사에 포함됩니다.
+시간표 없이 실행하면 기존 사례 수 기준 배분을 사용합니다.
+갱신은 성공한 실행의 전체 artifact를 내려받은 뒤 아래 명령으로 수행하고 변경을 검토해 커밋합니다.
+
+```shell
+python tools/update_shard_timings.py artifacts/ci-timing-baseline --source-run https://github.com/fieldalgo/wavebit/actions/runs/RUN_ID --output tools/ci_shard_timings.json
+```

@@ -51,8 +51,11 @@ def check(directories, count):
     if not shards:
         return errors, counts
     reference = shards[0][2]
+    timings_digest = shards[0][1]['shard'].get('timings_digest')
     union, duplicates = set(), set()
     for directory, receipt, collection in shards:
+        if receipt['shard'].get('timings_digest') != timings_digest:
+            errors.append(f'{directory}: shards used different timing tables')
         if collection != reference:
             errors.append(f'{directory}: collected a different full list than {shards[0][0]}')
         own = receipt.get('collected_nodeids', [])
