@@ -24,7 +24,9 @@ This study measures what that bought and what it cost.
                semidefinite, rank two inside a switch and where unequal material pairs mix (so
                the rank-two fraction falls with the grid toward the mixing regions' share); on an
                interface the exact normal; and two overlapping boxes of one material against the
-               box they make, which the averaged field tells apart at second order.
+               box they make, which the averaged field tells apart where the outline passes
+               from one box's region label to the other's (a split within one pair is no
+               corner since 2026-10-16: ``boundary._continued_endpoints``).
   4 symmetric  a square sits on its own medial axis: central differences of total transmission
                in its size, h = 1e-3 to 1e-7.
   5 variants   the two averages rejected on the way, as instruments: signed vectors instead of
@@ -374,7 +376,9 @@ def section_bands():
     print(f'  on the {len(midpoints)} interval midpoints: the exact normal dyad to '
           f'{np.abs(np.asarray(fields)[:, 0] - expected).max():.1e}')
     # Two overlapping boxes of one material are the box they make: the outline is the same,
-    # split where it passes from one box's material pair to the other's.
+    # under two region labels, so it passes from one box's material pair to the other's. (The
+    # record's run, 1.3e-3 / 1.2e-4 / 8.1e-6, also counted every split *within* a pair as a
+    # corner; since 2026-10-16 it reads 4.3e-4 / 4.3e-5 / 3.0e-6 -- records/, addendum.)
     cell = ((700., 0.), (0., 700.))
     left, right, union = (dict(type='rectangle', cx=cx, cy=0., lx=lx, ly=300., angle=0., material=4.)
                           for cx, lx in ((-100., 300.), (100., 300.), (0., 500.)))

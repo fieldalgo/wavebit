@@ -664,6 +664,70 @@ def _sample_spacing(xp, grid_shape, lattice, dtype, transform=None):
     return xp.maximum(r1/Nx, r2/Ny)
 
 
+#: Two points closer than this fraction of the cell scale are one point, and an interval
+#: whose endpoint misses another interval's line by less lies on it, to
+#: :func:`_continued_endpoints`. The clipper's shared split points agree to rounding; a real
+#: structure has no two distinct points this close.
+_SAME_POINT = 1e-9
+
+
+def _continued_endpoints(xp, a, e, l2, valid, pair, scale):
+    """Which endpoints of each interval another interval of the same material pair runs straight
+    through, and which intervals repeat an earlier one of their pair.
+
+    The clipper hands the painting route one straight interface in pieces: split where another
+    shape's outline crossed it, at times more than once over the same stretch (a painted sliver's
+    bottom edge arrives three times, once reversed), and under two region labels where two boxes
+    of one material overlap. The hard nearest choice never saw a split -- the perpendicular foot on
+    the continuation is nearer than the split point -- but :func:`material_projector_fields`'s
+    averages would read each one as a corner: a sample past it along the interface sees the
+    piece's endpoint at a distance that exceeds the perpendicular one by second order in the
+    overhang, with a direction tilted by the overhang, and weighs it by ``exp(-s / 2w)`` at
+    overhang ``s`` -- order one within two samples of every split, and tripled by repeats.
+    Measured on three rectangles of unequal contrast at ``shape_nvf_grid_size`` 16, the sampled
+    field lost its mirror symmetry and ``sum(T)`` swung between 0.11 and 0.68 over a 7% change of
+    a width where the hard field reads 0.27 to 0.28.
+
+    ``pair`` labels each interval's material pair. Returns three booleans per interval: an
+    interval of its pair, valid, parallel and not a repeat, passes through its start; through
+    its end; it repeats an earlier interval of its pair (the same two endpoints, either
+    orientation). An interval of zero length continues nothing.
+
+    Only the pair's own continuations are read. Where a straight interface passes from one pair
+    to another (two overlapping boxes of one material arrive under two region labels; two
+    different materials abut along one line) the second pair's nearest point is still the
+    junction, with the tilted direction the hard field read there too, and the average across
+    pairs weighs it as any neighbour: the cost measured in
+    ``docs/validation/rcwa/normal-field-known-limits.md`` section 1b. Zeroing that neighbour
+    instead was tried and withdrawn: two pairs meeting at one point sit at one distance to
+    rounding, so the zero came and went with an ulp, and across the junction's perpendicular it
+    would step by the two pairs' own mixing -- a moving step, which this field exists to remove.
+    """
+    m = a.shape[0]
+    start, end = a, a + e
+    tol2 = (_SAME_POINT*scale)**2
+    cross = e[:, None, 0]*e[None, :, 1] - e[:, None, 1]*e[None, :, 0]
+    parallel = cross*cross <= _SAME_POINT**2*l2[:, None]*l2[None, :]
+    index = xp.arange(m)
+    other = (index[:, None] != index[None, :]) & valid[None, :] & parallel
+    same = pair[:, None] == pair[None, :]
+
+    def on(points):
+        """``points[k]`` lies on interval ``j``: within ``tol`` of its line, between its ends."""
+        d = points[:, None, :] - a[None, :, :]
+        along = d[..., 0]*e[None, :, 0] + d[..., 1]*e[None, :, 1]
+        perp = d[..., 0]*e[None, :, 1] - d[..., 1]*e[None, :, 0]
+        slack = xp.sqrt(tol2*l2)[None, :]
+        return (perp*perp <= tol2*l2[None, :]) & (along >= -slack) & (along <= l2[None, :] + slack)
+
+    start_on, end_on = on(start), on(end)
+    # k repeats j when each holds the other's two endpoints.
+    repeat = other & same & start_on & end_on & xp.permute_dims(start_on & end_on, (1, 0))
+    through = other & same & ~repeat
+    return (xp.any(through & start_on, axis=1), xp.any(through & end_on, axis=1),
+            xp.any(repeat & (index[None, :] < index[:, None]), axis=1))
+
+
 def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
                                interface_plan, transform=None, chunk=None,
                                candidate_fields=None, average=True):
@@ -722,10 +786,15 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     projector the field was before 2026-10-15, and the two converge on one value. Where pairs of
     unequal contrast mix, the limit is the projector-weighted threshold average; until
     2026-10-15 the signed vectors were averaged and one projector formed from their sum. And the
-    average sees, at second order in the step, where the clipper split a straight interface:
-    two overlapping boxes of one material and the box they make no longer read the same
-    matrices to rounding. ``docs/validation/rcwa/normal-field-known-limits.md`` section 1b has
-    each of these measured against the field it replaced.
+    average sees where a straight interface passes from one material pair to another: two
+    overlapping boxes of one material arrive under two region labels, so the box they make no
+    longer reads the same matrices to rounding (4.3e-4, 4.3e-5 and 3.0e-6 at grids 64, 256 and
+    1024). Where the clipper split a straight interface *within* a pair, or handed a stretch of
+    it more than once, the average sees nothing: such a split point is no corner
+    (:func:`_continued_endpoints`), and until 2026-10-16 reading it as one tilted the field by
+    order one within two samples of every split.
+    ``docs/validation/rcwa/normal-field-known-limits.md`` section 1b has each of these measured
+    against the field it replaced.
 
     ``average=False`` takes every choice hard (:func:`_nearest_projector_fields`), the field
     before 2026-10-15, bit for bit. The tensor shapes read it so
@@ -767,12 +836,23 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
                                 interface_plan.images, interface_plan.groups)
     extended = xp.asarray(ids, dtype=xp.int64)
     active, contrasts = active[extended], contrasts[extended]
+    scale = _cell_scale(xp, lattice, dtype)
+    # Which endpoints another interval of the same pair runs straight through, and which
+    # intervals repeat an earlier one: the clipper's splits of one straight interface, which
+    # the average over a pair's intervals must not read as corners.
+    pair = [0]*len(ids)
+    for number, indices in enumerate(groups.values()):
+        for i in indices:
+            pair[i] = number
+    straight = _continued_endpoints(xp, A, E, L2, xp.sum(E*E, axis=1) > 0.,
+                                    xp.asarray(pair, dtype=xp.int64), scale)
     candidates = []
     for key, indices in groups.items():
         index = xp.asarray(indices, dtype=xp.int64)
         valid = xp.sum(E[index]*E[index], axis=1) > 0.
         field = None if candidate_fields is None else candidate_fields.get(key)
-        candidates.append((A[index], E[index], L2[index], contrasts[indices[0]], valid, field))
+        candidates.append((A[index], E[index], L2[index], contrasts[indices[0]], valid, field,
+                           tuple(flag[index] for flag in straight)))
     pts = _folded_sample_points(xp, grid_shape, lattice, dtype, transform)
     reference = E[xp.argmax(xp.astype(active, xp.int32))]
     cross = E[:, 0]*reference[1] - E[:, 1]*reference[0]
@@ -780,7 +860,6 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     reference2 = xp.sum(reference*reference)
     normal = xp.stack([reference[1], -reference[0]]) / xp.sqrt(
         xp.where(reference2 > 0., reference2, xp.ones_like(reference2)))
-    scale = _cell_scale(xp, lattice, dtype)
     threshold2 = _on_interface_threshold2(xp, lattice, dtype)
     # The ratio weights below are formed in units of the cell: the power of two nearest the
     # squared scale, which divides without rounding, so float64 is unchanged. JAX
@@ -817,7 +896,7 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     def evaluate(p):
         rows = xp.arange(p.shape[0])
         distances, directions, projectors = [], [], []
-        for a, e, l2, _, valid, field in candidates:
+        for a, e, l2, _, valid, field, straight in candidates:
             if field is not None:
                 distance, direction = field(p)
                 dx, dy = direction[:, 0], direction[:, 1]
@@ -826,7 +905,20 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
                 projectors.append(xp.stack([dx*dx, dx*dy, dy*dy], axis=-1))
                 continue
             dist2, foot = _seg_dist(xp, p, a, e, l2)
-            dist2 = xp.where(valid[None, :], dist2, remote2)
+            # An interval's endpoint that another interval of the pair runs straight through
+            # is not a corner: the sample past it has its perpendicular foot on the
+            # continuation, and the endpoint's direction, tilted by the overhang, is nothing the
+            # interface does. Such a candidate -- and an interval repeating an earlier one,
+            # which would only multiply its weight -- is no candidate here, not even the
+            # nearest: the continuation's foot is at least as near, and at the shared point it
+            # is the same point. The pair's distance is therefore the one it always was, and
+            # no tie between copies of one interval is left to an ulp.
+            continued_start, continued_end, repeated = straight
+            along = xp.sum((p[:, None, :] - a[None, :, :])*e[None, :, :], axis=-1)
+            live = valid[None, :] & ~(((along < 0.) & continued_start[None, :])
+                                      | ((along > l2[None, :]) & continued_end[None, :])
+                                      | repeated[None, :])
+            dist2 = xp.where(live, dist2, remote2)
             nearest = xp.argmin(dist2, axis=1)
             distance = dist2[rows, nearest]
             off = dist2 > threshold2
@@ -845,7 +937,7 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
             # pole that leaves the exact normal there.
             weight = xp.where((distance <= threshold2)[:, None], xp.astype(~off, dtype), xp.exp(
                 -(length - length[rows, nearest][:, None])/(xp.sqrt(turn2)*width)))
-            weight = xp.where(valid[None, :], weight, xp.zeros_like(weight))
+            weight = xp.where(live, weight, xp.zeros_like(weight))
             total = xp.sum(weight, axis=1)
             total = xp.where(total > 0., total, xp.ones_like(total))
             wx = weight*ux

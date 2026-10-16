@@ -248,7 +248,8 @@ smoothly with the geometry, and the same painted pair misses 0.05%, 0.12% and 0.
 window's change at grids 64, 128 and 256
 (`test_a_painted_layers_position_derivative_integrates_to_the_change`). The price -- a
 projector of rank two inside a switch, a different extension where material pairs of unequal
-contrast mix, the clipper's splits visible at second order, and the field's build time -- is
+contrast mix, a straight interface under two region labels visible within a sample of where
+the labels change, and the field's build time -- is
 measured in [the normal field's known limits](../../validation/rcwa/normal-field-known-limits.md),
 section 1b, which also says why the tensor shapes keep the hard field. See
 [Polygon regions](#polygon-regions) for the measurement on outlines.

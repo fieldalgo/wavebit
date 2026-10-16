@@ -1497,20 +1497,28 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction():
     # The old numeric pin included a same-material internal seam, and its replacement read the
     # independently specified union contour exactly -- true of the hard nearest-interface field,
     # which no interval split can reach. The field averages its switches over half a sample
-    # step since 2026-10-15 and so reads, at second order in the step, where the outline passes
-    # from one box's material pair to the other's: against the union written as one polygon on
-    # the same route, every spelling reads 6.3e-4 / 6.5e-4 at grid 64 and 1.7e-4 / 1.6e-4 at
-    # 128 (k even / odd), and 3.8e-5 at 256.
+    # step since 2026-10-15 and so reads where the outline passes from one box's region label
+    # to the other's, within a sample of that point: against the union written as one polygon
+    # on the same route, every spelling reads 3.9e-4 / 4.1e-4 at grid 64, 1.1e-4 / 1.0e-4 at
+    # 128 (k even / odd) and 2.5e-5 at 256 (6.3e-4 / 6.5e-4, 1.7e-4 / 1.6e-4 and 3.8e-5 while
+    # the average also read the clipper's splits within one pair as corners, until 2026-10-16).
     union = [dict(type='polygon', vertices=((-250., -150.), (250., -150.), (250., 150.),
                                             (-250., 150.)), material=12.25)]
-    gaps = [[abs(_spelled_total(_spelled(k, _TWO_OVERLAPPING, shape_nvf_grid_size=grid))
-                 - _spelled_total(_spelled(k, union, shape_nvf_grid_size=grid))) for k in (0, 1)]
-            for grid in (64, 128)]
+    two = {(k, grid): _spelled_total(_spelled(k, _TWO_OVERLAPPING, shape_nvf_grid_size=grid))
+           for k in (0, 1) for grid in (64, 128)}
+    one = {(k, grid): _spelled_total(_spelled(k, union, shape_nvf_grid_size=grid))
+           for k in (0, 1) for grid in (64, 128)}
+    gaps = [[abs(two[k, grid] - one[k, grid]) for k in (0, 1)] for grid in (64, 128)]
     assert all(fine < coarse / 3 and fine < 3e-4 for coarse, fine in zip(*gaps)), gaps
-    # Odd spellings sample a different quadrature grid: their gap to the even ones closes as
-    # the grid refines (1.4e-5 at 64, 6.0e-7 at 128).
-    refined = [_spelled_total(_spelled(k, _TWO_OVERLAPPING, shape_nvf_grid_size=128)) for k in (0, 1)]
-    assert abs(refined[1] - refined[0]) < abs(odd[0] - reference) / 4
+    # Odd spellings sample a different quadrature grid. The two boxes' gap to the even ones is
+    # the same outline's sampling difference and no more: the union, which has no split to
+    # read, moves 2.7e-5 at grid 64 and 1.4e-5 at 128 between the two quadratures, the two
+    # boxes 1.4e-5 and 8.9e-6 (3.2e-6 at 256). Until 2026-10-16 the boxes read 6.0e-7 at 128
+    # and 3.9e-6 at 256 -- not a convergence but a crossing -- and this held them to a quarter
+    # of their grid-64 gap; the honest bound is the union's own.
+    for grid in (64, 128):
+        assert abs(two[1, grid] - two[0, grid]) < 2*abs(one[1, grid] - one[0, grid]), (two, one)
+    assert abs(two[1, 128] - two[0, 128]) < abs(odd[0] - reference)
 
     frozen = _spelled(10, _TWO_OVERLAPPING).freeze_geometry()
     assert frozen.boundary_plans[0][2] == ((1, -10), (0, 1))

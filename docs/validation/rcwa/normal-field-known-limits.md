@@ -277,10 +277,35 @@ a step straddled at 1e-4 -- and reads 0.1476 / 0.1478 / 0.1477 / 0.1477 / 0.1477
   exactly, at the same orders, neither field is the nearer one: the averaged field reads -2.9e-4,
   -2.6e-4, -2.1e-4, +7.7e-5 and -2.3e-5 from Li at orders 4 to 12, the hard one -1.7e-4, -2.9e-4,
   -2.0e-4, +1.0e-4 and -6.7e-6.
-- *The clipper's splits are visible at second order.* The hard field could not see where the clipper
-  split a straight interface; the average sees it within a sample of the split point. Two
-  overlapping boxes of one material and the box they make no longer read the same matrices to
-  rounding: 1.3e-3, 1.2e-4 and 8.1e-6 at grids 64, 256 and 1024 (section 3).
+- *A straight interface under two labels is visible, falling about tenfold per fourfold grid.*
+  The hard field could not see where the clipper split a straight interface; the average sees a
+  split where the interface passes from one material pair to another, within a sample of the
+  split point. Two overlapping boxes of one material arrive under two region labels, so the box
+  they make no longer reads the same matrices to rounding: 4.3e-4, 4.3e-5 and 3.0e-6 at grids
+  64, 256 and 1024 (section 3, rerun 2026-10-16; the record's run read 1.3e-3, 1.2e-4 and
+  8.1e-6, see next).
+- *A split within a pair is no corner* (fixed 2026-10-16, `boundary._continued_endpoints`).
+  The clipper also hands one pair's straight interface in pieces -- split where a hidden
+  outline crossed it, a painted sliver's edge three times, once reversed -- and the average as
+  first written weighed every piece's endpoint as a candidate: a sample past the split along
+  the interface saw the piece's endpoint, at a distance exceeding the perpendicular one by
+  second order in the overhang but with a direction tilted by it, at weight `exp(-s / 2w)` for
+  overhang `s` -- order one within two samples of every split, tripled by the repeats. On three
+  axis-aligned rectangles of unequal contrast (`tests/rcwa/test_fit_geometry.py`'s design, a
+  0.5 nm painted sliver at each contact, `shape_nvf_grid_size` 16, orders (1, 1)) the sampled
+  field lost the structure's mirror symmetry and `sum(T)` read 0.63 / 0.68 / 0.14 / 0.35 / 0.11
+  at widths 1.21 to 1.30, where the hard field reads 0.27 to 0.28 and the averaged field at
+  grid 256 reads 0.18 to 0.27. An endpoint that another interval of the same pair runs straight
+  through, and a repeat of an earlier interval, are no candidates now, not even the nearest
+  (the continuation's foot is at least as near, and the same point where they meet), so the
+  pair's distance is unchanged and no tie between copies is left to an ulp. The field is
+  mirror-symmetric again (6e-9 at the samples farthest from the shapes, where the planned image
+  rings of the two edges differ in which copies they carry at weights `exp(-18)`), and the
+  two-boxes identity above tightened threefold. Zeroing the *other* pair's candidate at a
+  junction as well was tried and withdrawn: two pairs meeting at one point sit at one distance
+  to rounding, so the zero came and went with an ulp (a 6e-5 spike in `sum(T)` at one width in
+  2e-7), and across the junction's perpendicular it would have stepped by the two pairs' own
+  mixing.
 - *A third candidate* is weighed against the nearest, which itself switches: within about a sample
   of a point where three candidates meet, that weight can still step. The windows above include it.
 - *Time and memory.* The field at the default grid 1024 costs 1.8 to 2.3 times the hard one

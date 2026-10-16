@@ -40,8 +40,28 @@ def _shape_value(width):
 
 
 def _shape_gradient(width):
-    h = 1e-5
+    # Past the overlap the painted layer's transmission at orders (1, 1) is steep and curved in
+    # the width (dT/dw = 3.07 at w = 1.2266 since the painting route's normal field averages its
+    # switches, 2026-10-15): at h = 1e-5 the central difference carried a truncation error of
+    # 4.5e-7 there, and 5e-9 on the closed-form side -- which the replicated trajectories below
+    # multiply by that slope. At 1e-6 both are below 1e-9, and what is left is round-off:
+    # 5e-10 on macOS (Accelerate), 1e-9 on Linux (OpenBLAS).
+    h = 1e-6
     return (_shape_value(width+h) - _shape_value(width-h)) / (2*h)
+
+
+#: The gradient clip in front of every SGD below. The first step from width 1.18 (gradient
+#: -0.058, under the clip) crosses the overlap at 1.2 as it always did; the second starts on
+#: the painted layer, whose transmission at orders (1, 1) and normal grid 16 moves 3 per unit
+#: width once the normal field averages its switches (0.37 before 2026-10-15), and a plain
+#: step of .8 is no design at all (width -1.2: a negative length, which freeze_geometry
+#: refuses). Clipped, every iterate is a legal design and the first still crosses, and the
+#: optimizer's replay on the fresh-NumPy gradients below applies the same clip.
+_CLIP = .1
+
+
+def _sgd(learning_rate, **kwargs):
+    return optax.chain(optax.clip(_CLIP), optax.sgd(learning_rate, **kwargs))
 
 
 def _observed_optimizer(optimizer, observations):
@@ -86,7 +106,7 @@ def test_fit_crosses_an_overlap_with_fresh_numpy_values_and_gradients(door, monk
 
     monkeypatch.setattr(solver, 'freeze_geometry', record)
     values, observations, traces = [], [], []
-    optimizer = optax.sgd(.8, momentum=.4)
+    optimizer = _sgd(.8, momentum=.4)
     final = solver.fit(params, forward, _loss(values, traces, field=door != 'solve'),
                        _observed_optimizer(optimizer, observations), iteration=3,
                        parameterize=_design)
@@ -205,7 +225,7 @@ def test_custom_forward_requires_and_consumes_fresh_preparation(mapped):
     assert prepared == used == []
     values, observations = [], []
     final = solver.fit(params, forward, _loss(values, traces),
-                       _observed_optimizer(optax.sgd(.8), observations), iteration=3,
+                       _observed_optimizer(_sgd(.8), observations), iteration=3,
                        prepare_geometry=prepare, parameterize=_design if mapped else None)
     jax.effects_barrier()
     assert len(prepared) == len(values) == len(observations) == 3
@@ -516,7 +536,7 @@ def test_fit_replaces_a_geometry_captured_as_a_positional_argument(door):
     values, observations, traces = [], [], []
     final = solver.fit(params, partial(method, *args),
                        _loss(values, traces, field=door in ('solve_field', 'solve_field_eager')),
-                       _observed_optimizer(optax.sgd(.8), observations), iteration=2,
+                       _observed_optimizer(_sgd(.8), observations), iteration=2,
                        parameterize=_design,
                        prepare_geometry=solver.freeze_geometry if door == 'wrapper' else None)
     jax.effects_barrier()
@@ -525,10 +545,14 @@ def test_fit_replaces_a_geometry_captured_as_a_positional_argument(door):
     expected = 1.18
     for value, (point, gradient) in zip(values, observations):
         assert float(point['width']) == pytest.approx(expected, abs=2e-7)
-        assert value == pytest.approx(_shape_value(expected), abs=2e-9)
+        # The value at the width the fit actually solved, as the two tests above read it. Read
+        # at the replicated width it carried the painted branch's slope (3.07) times the first
+        # gradient's replication error -- 2.5e-9 on Linux, where the central difference's
+        # round-off is 1e-9, against 6e-10 on macOS -- which is the line above's business.
+        assert value == pytest.approx(_shape_value(float(point['width'])), abs=2e-9)
         want = _shape_gradient(expected)
         assert float(gradient['width']) == pytest.approx(want, abs=2e-7)
-        expected -= .8 * want
+        expected -= .8 * max(-_CLIP, min(_CLIP, want))
     assert float(final['width']) == pytest.approx(expected, abs=4e-7)
 
 
