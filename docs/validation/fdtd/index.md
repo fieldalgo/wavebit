@@ -110,3 +110,20 @@ scattering-accuracy claims. The existing grazing return and PML stability
 measurements remain the evidence for the numerical rule. Function-level product
 mutations and exact source restoration are recorded in
 `tests/fdtd/public_grazing_mutation_evidence.json`.
+
+### Public source admission
+
+`tests/fdtd/test_public_source_admission.py` exercises malformed source types,
+invalid and duplicate names, missing/wrong pulse declarations on all three
+source types with step and period durations, and non-Region TFSF boxes. It checks
+the same field paths through `check`, `prepare`, `run`, `Prepared.validate` and
+`Prepared.run`, then reuses the valid preparation. Valid sources and a Region
+outside the physical domain retain their existing admission behavior.
+
+```sh
+python -m pytest tests/fdtd/test_public_source_admission.py -q
+```
+
+The tests stop at preparation and input refusal; they do not add a propagation
+accuracy claim. Actual guard and entry-point mutations, followed by exact
+source restoration, are recorded in `tests/fdtd/public_source_mutation_evidence.json`.

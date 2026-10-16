@@ -330,6 +330,18 @@ These messages do not relax the return tolerance or the measured support limits.
 
 ## Sources
 
+`Problem.sources` accepts `PlaneWave`, `Dipole` and `TFSF` declarations with
+unique, nonempty string names and a `GaussianPulse`. `check` and
+`Prepared.validate` report malformed declarations at `sources[i]`, invalid or
+duplicate names at `sources[i].name`, and invalid pulses at
+`sources.<name>.pulse`. `prepare`, `run` and `Prepared.run` raise the same
+structured error before reading a duration's source or a reuse signature.
+The pulse's numerical leaves keep their existing concrete and runtime checks.
+
+`TFSF.box` must be a cell-snapped `fdtd.Region`, not a smoothed `fdtd.Box` or a
+plane. Its type is checked at `sources.<name>.box` before reading the box bounds;
+a valid Region still has to fit inside the physical domain.
+
 Every source carries a `GaussianPulse(wavelength, frequency_sigma_hz, cutoff=1e-3)`: a sine at
 the centre frequency `f0 = c / wavelength` under a Gaussian envelope whose **amplitude spectrum**
 has standard deviation `frequency_sigma_hz`. The pulse starts at `cutoff` of its peak, and the

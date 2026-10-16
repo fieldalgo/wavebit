@@ -8,7 +8,7 @@ from wavebit.errors import Issue, ValidationError, UnsupportedFeatureError, Inco
 from wavebit.materials import Material, ConductiveMaterial, DispersiveMaterial
 from .problem import Problem
 from ._policy_report import numerical_policies
-from ._lower_public import lower_problem
+from ._lower_public import lower_problem, validate_sources
 from ._execution import _planned, run as execute
 from ._prepare.report import report as legacy_report
 from .result import adapt_result
@@ -53,6 +53,7 @@ def _material(v):
 
 
 def _signature(problem,numerics):
+    validate_sources(problem)
     structures=[]
     for s in problem.scene.structures:
         if s.name in numerics.geometry_ranges:
