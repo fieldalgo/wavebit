@@ -1,0 +1,122 @@
+{
+  "scope": "Source-column stopping tests; actual production-source mutations, followed by exact byte restoration",
+  "source_sha256": "252a7ac4928685297b50ecb5a4bc6aa7fd6926a9a41f95c645c8ee159b03a6c9",
+  "test_sha256": {
+    "tests/fdtd/test_source_decay.py": "6922a6cf71ed86d7fad058d69241d3d4353705d4899faabaa9cd80f802fb2521",
+    "tests/fdtd/test_fd_decay_stop.py": "8b6547d8ef27c7c5b1f6e20d367c0f2097d5683e3b56aefe786ef134dfc5cdb0"
+  },
+  "mutations": [
+    {
+      "name": "mutation-premature_stop",
+      "node": "tests/fdtd/test_source_decay.py::test_stopped_observables_agree_with_long_fixed_runs[absorber-plane]",
+      "count": 1,
+      "failures": [
+        "test_stopped_observables_agree_with_long_fixed_runs[absorber-plane]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-column_prefix",
+      "node": "tests/fdtd/test_source_decay.py::test_public_column_decay_returns_the_executed_prefix[absorber-plane-numpy]",
+      "count": 1,
+      "failures": [
+        "test_public_column_decay_returns_the_executed_prefix[absorber-plane-numpy]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-ignore_stop",
+      "node": "tests/fdtd/test_source_decay.py::test_column_stop_agrees_with_independent_state_replay[plane]",
+      "count": 1,
+      "failures": [
+        "test_column_stop_agrees_with_independent_state_replay[plane]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-column_H",
+      "node": "tests/fdtd/test_source_decay.py::test_every_incident_memory_can_hold_off_stopping",
+      "count": 9,
+      "failures": [
+        "test_every_incident_memory_can_hold_off_stopping[col:E]",
+        "test_every_incident_memory_can_hold_off_stopping[col:H]",
+        "test_every_incident_memory_can_hold_off_stopping[col:psi]",
+        "test_every_incident_memory_can_hold_off_stopping[drv:E]",
+        "test_every_incident_memory_can_hold_off_stopping[drv:H]",
+        "test_every_incident_memory_can_hold_off_stopping[drv:psi]",
+        "test_every_incident_memory_can_hold_off_stopping[col:P]",
+        "test_every_incident_memory_can_hold_off_stopping[col:previous]",
+        "test_every_incident_memory_can_hold_off_stopping[col:delta]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-driver_schema",
+      "node": "tests/fdtd/test_source_decay.py::test_unknown_column_schemas_are_refused[unknown-term-drv]",
+      "count": 1,
+      "failures": [
+        "test_unknown_column_schemas_are_refused[unknown-term-drv]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-column_schema",
+      "node": "tests/fdtd/test_source_decay.py::test_unknown_column_schemas_are_refused[unknown-term-col]",
+      "count": 1,
+      "failures": [
+        "test_unknown_column_schemas_are_refused[unknown-term-col]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-source_gate",
+      "node": "tests/fdtd/test_source_decay.py::test_column_source_gate_and_concrete_execution_are_preserved[delay-plane]",
+      "count": 1,
+      "failures": [
+        "test_column_source_gate_and_concrete_execution_are_preserved[delay-plane]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-unknown_source",
+      "node": "tests/fdtd/test_fd_decay_stop.py::test_decay_refuses_uncovered_sources_memory_backends_and_transforms[unknown-source]",
+      "count": 1,
+      "failures": [
+        "test_decay_refuses_uncovered_sources_memory_backends_and_transforms[unknown-source]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    },
+    {
+      "name": "mutation-column_material",
+      "node": "tests/fdtd/test_source_decay.py::test_every_incident_memory_can_hold_off_stopping[col:P]",
+      "count": 1,
+      "failures": [
+        "test_every_incident_memory_can_hold_off_stopping[col:P]"
+      ],
+      "errors": [],
+      "exit": 1,
+      "source_restored": true
+    }
+  ],
+  "restored": {
+    "passed": 52,
+    "failed": 0,
+    "errors": 0
+  }
+}

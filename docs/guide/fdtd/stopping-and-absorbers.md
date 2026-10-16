@@ -11,11 +11,20 @@ gate before an eligible window begins. An unexcited scene reaches the cap. Delay
 sources, nonfinite states and residual material memory cannot silently disappear
 from the criterion.
 
-The existing engine's scope is concrete CPU NumPy, JAX and PyTorch with `InitialField`
-or `Dipole` excitation. PlaneWave/TFSF source columns, differentiation, batching and
-external JAX transforms are refused with this policy. Use a fixed duration for AD.
+The supported scope is concrete CPU NumPy, JAX and PyTorch with `InitialField`,
+`Dipole`, `PlaneWave` or axis-aligned `TFSF` excitation. PlaneWave/TFSF incident
+columns, and the extra driver of a layered TFSF column, contribute their own E/H,
+CPML and supported material-memory groups. Accumulating source reference histories
+are excluded. Unknown nested memory schemas are refused. Differentiation, batching
+and external JAX transforms remain unsupported; use a fixed duration for AD.
 Decay is an amplitude heuristic: it does not bound spectral error, predict a later
 reflection, or establish spatial convergence.
+
+Every group's peak is independent, even when the whole group contains only tiny
+round-off leakage. Such CPML or material residuals can keep a run at its cap, and
+round-off differences can change whether different backends stop early. No memory
+group is discarded just because its absolute amplitude is small. Inspect `reason`,
+`reached` and the per-group ratios; reaching the cap is not a successful decay.
 
 The returned result describes the executed prefix. `provenance['actual_steps']`,
 record timestamps, final E/H timestamps and Fourier windows use the actual stop,
@@ -38,6 +47,9 @@ PML reference-media, frequency-shift or reflection-target controls. Study reflec
 and resolution for the actual scene; see the retained
 [absorber evidence](../../validation/fdtd/fd-constitutive-absorber.md) and
 [stopping validation](../../validation/fdtd/fd-decay-stopping.md).
+
+For current PlaneWave/TFSF coverage and the limits of the tested time windows, see
+[source-column stopping validation](../../validation/fdtd/fd-source-decay.md).
 
 Both policies serialize through current `Job` files. The public regression checks
 stopping against an independent uniform-conductor recurrence, exact executed-prefix

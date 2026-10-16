@@ -355,9 +355,10 @@ class Decay:
     min(its Band.cutoff, threshold) before the window starts. Nonfinite state prevents
     success. Static residual material memory can legitimately keep the run at its cap.
 
-    Use ``Run(time=..., decay=Decay(threshold=..., window=...))``. The first scope is
-    concrete forward CPU NumPy/JAX/Torch with InitialField/Dipole excitation, not source
-    columns, AD or an enclosing JAX trace. This is not an energy or spectral-error bound,
+    Use ``Run(time=..., decay=Decay(threshold=..., window=...))``. The supported scope is
+    concrete forward CPU NumPy/JAX/Torch with InitialField, Dipole, PlaneWave and
+    axis-aligned TFSF, including incident columns and layered drivers; not AD or
+    an enclosing JAX trace. This is not an energy or spectral-error bound,
     and it cannot predict a later echo. The fixed-length run remains the default.
     """
 

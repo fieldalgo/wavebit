@@ -42,11 +42,11 @@ def validate_scene(scene):
     """Check the opt-in scene before a planning seed or lowering can detach a leaf."""
     if scene.run.decay is None:
         return
-    from wavebit.fdtd._legacy_sources import Dipole
+    from wavebit.fdtd._legacy_sources import Dipole, PlaneWave, TFSF
     reject_carried(scene)
-    if any(type(source) is not Dipole for source in scene.sources):
-        raise ValueError('DecaySourceRefused: only InitialField and Dipole excitation are '
-                         'supported; PlaneWave/TFSF source columns can carry later echoes.')
+    if any(type(source) not in (Dipole, PlaneWave, TFSF) for source in scene.sources):
+        raise ValueError('DecaySourceRefused: stopping supports InitialField, Dipole, '
+                         'PlaneWave and axis-aligned TFSF excitation.')
     source_gate(scene, scene.run.decay.threshold)
 
 
@@ -80,16 +80,32 @@ def validate_plan(scene, plan):
                          'configuration; an early-result plan describes its actual prefix.')
     from wavebit.fdtd._kernel.observe import DFTRegion
     from wavebit.fdtd._kernel.observe import PointRecord
-    poles, flux, dipole = _term_types()
-    if any(type(t) not in poles + flux + (dipole,) for t in plan.terms):
-        raise ValueError('DecayMemoryRefused: this term has no certified evolving-state '
-                         'group schema for stopping.')
+    _validate_terms(plan)
     if any(type(o) not in (PointRecord, DFTRegion) for o in plan.observers):
         raise ValueError('DecayObserverRefused: only the built-in Record and DFT observers '
                          'have an execution-prefix result contract.')
+    window_steps(plan.decay.window, plan.dt)
+
+
+def _validate_terms(plan, *, column=False):
+    """Enumerate the supported memory schema, including both incident sub-plans.
+
+    Incident columns contain material terms, never independent sources. Keep this
+    restriction explicit so a new nested source cannot silently evade the source gate.
+    """
+    from wavebit.fdtd._kernel.sources import ColumnTerm
+    poles, flux, dipole = _term_types()
+    allowed = poles + flux + (() if column else (dipole, ColumnTerm))
+    if any(type(t) not in allowed for t in plan.terms):
+        raise ValueError('DecayMemoryRefused: this term has no certified evolving-state '
+                         'group schema for stopping.')
     if len({t.name for t in plan.terms}) != len(plan.terms):
         raise ValueError('DecayMemoryRefused: term memory names must be unique.')
-    window_steps(plan.decay.window, plan.dt)
+    for term in plan.terms:
+        if type(term) is ColumnTerm:
+            _validate_terms(term.sub, column=True)
+            if term.driver is not None:
+                _validate_terms(term.driver, column=True)
 
 
 def validate_runtime(rt):
@@ -108,10 +124,11 @@ def validate_runtime(rt):
 
 
 def source_gate(scene, threshold):
-    """Latest trailing Gaussian-envelope eligibility time, including delayed dipoles.
+    """Latest trailing Gaussian-envelope eligibility time, including delayed sources.
 
     Row times are (n+1/2)dt for electric current and n dt for magnetic current. Requiring
-    the WINDOW START n*dt past this bound is conservative for both. The waveform remains
+    the WINDOW START n*dt past this bound is conservative for both and for a column's
+    hard electric drive at (n+1)dt. The waveform remains
     its original infinite Gaussian. The last nextafter rounds the computed time upward;
     this is a floating-point eligibility rule, not a rigorously rounded exp certificate.
     """
@@ -147,6 +164,7 @@ def window_steps(window, dt):
 
 def state_groups(plan, state):
     """Ordered array groups. Unknown or changed memory layouts are refused, not omitted."""
+    from wavebit.fdtd._kernel.sources import ColumnTerm
     poles, flux, dipole = _term_types()
     out = {'E': state['E'], 'H': state['H']}
     for name in sorted(state['psi']):
@@ -167,6 +185,21 @@ def state_groups(plan, state):
                     out[f'mem:{term.name}:{key}[{i}]'] = value
         elif type(term) in flux:
             out[f'mem:{term.name}:flux'] = mem
+        elif type(term) is ColumnTerm:
+            expected = {'col', 'E', 'H'} | ({'drv'} if term.driver is not None else set())
+            if set(mem) != expected:
+                raise ValueError('DecayMemoryRefused: unsupported source column memory layout.')
+            for role, sub in (('col', term.sub), ('drv', term.driver)):
+                if sub is None:
+                    continue
+                column = mem[role]
+                if set(column) != {'E', 'H', 'psi', 'mem'}:
+                    raise ValueError('DecayMemoryRefused: unsupported column state layout.')
+                # E/H here are the evolving incident field, not the term's accumulating
+                # E/H reference histories. Every CPML and material array keeps its own
+                # peak and unit system, just as in the main computational domain.
+                for key, value in state_groups(sub, column).items():
+                    out[f'mem:{term.name}:{role}:{key}'] = value
         elif type(term) is not dipole:
             raise ValueError('DecayMemoryRefused: unsupported evolving term.')
     return out
@@ -240,7 +273,7 @@ def _prefix(plan, state, steps, rt):
         return rt.xp.asarray(value, copy=True)
 
     from wavebit.fdtd._kernel.observe import PointRecord
-    from wavebit.fdtd._kernel.sources import DipoleTerm
+    from wavebit.fdtd._kernel.sources import ColumnTerm, DipoleTerm
     out = dict(state)
     out['obs'] = dict(state['obs'])
     for observer in plan.observers:
@@ -249,9 +282,10 @@ def _prefix(plan, state, steps, rt):
                                     else dict(acc, energy=own(acc['energy'][:steps])))
     out['mem'] = dict(state['mem'])
     for term in plan.terms:
-        if type(term) is DipoleTerm:
+        if type(term) in (DipoleTerm, ColumnTerm):
             mem = dict(state['mem'][term.name])
-            for key in ('drive', 'field', 'work'):
+            keys = ('drive', 'field', 'work') if type(term) is DipoleTerm else ('E', 'H')
+            for key in keys:
                 mem[key] = own(mem[key][:steps])
             out['mem'][term.name] = mem
     # With stride one the completed rows are T^1 .. T^(N-1). Functional backends may

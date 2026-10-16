@@ -569,7 +569,7 @@ def test_source_eligibility_uses_every_gaussian_tail_and_conservative_clock(thre
     assert tracker.observe({'E': 0., 'H': 0.}, first_start, width)
 
 REFUSAL_CASES = (
-    'plane-wave', 'tfsf', 'unknown-runtime', 'torch-device', 'unknown-term',
+    'unknown-source', 'unknown-runtime', 'torch-device', 'unknown-term',
     'missing-memory', 'extra-pole-slot', 'unknown-observer', 'private-fixed-execute',
     'torch-reverse', 'torch-forward', 'torch-jvp', 'torch-vmap', 'torch-callable-dual',
     'jax-grad', 'jax-jvp', 'jax-jit', 'jax-vmap', 'jax-jit-captured', 'jax-callable',
@@ -579,12 +579,11 @@ REFUSAL_CASES = (
 @pytest.mark.parametrize('case', REFUSAL_CASES)
 def test_decay_refuses_uncovered_sources_memory_backends_and_transforms(case):
     scene = scalar_scene(steps=2)
-    if case in ('plane-wave', 'tfsf'):
+    if case == 'unknown-source':
         band = fd.Band(wavelength=4., df=.025)
-        if case == 'plane-wave':
-            source = fd.PlaneWave('pw', z=0., band=band)
-        else:
-            source = fd.TFSF('tf', box=fd.Region(size=(.2, .2, .2)), band=band)
+        class UnknownSource(fd.Dipole):
+            pass
+        source = UnknownSource('unknown', center=(0., 0., 0.), band=band)
         with pytest.raises(ValueError, match='DecaySourceRefused'):
             fd.plan(scene.replace(sources=(source,)))
         return
