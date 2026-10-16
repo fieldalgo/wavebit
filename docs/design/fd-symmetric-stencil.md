@@ -1459,3 +1459,28 @@ cases. Over the 140 fast cases of the four files, each mutant alone:
 | sphere: each triplet shifted the other way | 1 | the new sphere case alone |
 | circle: face read along the edge axis | 2 | the new circle case and `test_rigid_translation_keeps_the_material_operator` |
 | circle: edge read across the edge axis | 1 | the new circle case alone (none before it) |
+
+
+## Stencil reuse and the scene grid
+
+Direct `fd.lower(scene, plan)` must check the scene's snapped grid before allocating
+coefficients. The operator source digest includes nodes made from the **held plan**,
+so it detects changed sphere radius, centre and permittivity but cannot by itself
+detect a changed scene resolution, domain size or domain centre. The stencil selector
+door now compares the scene grid's spacing, snapped cell counts and low corner with
+the held grid and reports `StencilMismatchRefused` if they differ. Requested domain
+sizes that snap to the same grid remain compatible. This adds no plan fields or
+operator inputs and changes no prepared coefficients, hashes or physical limits.
+
+`tests/fdtd/test_fd_stencil_reuse.py` reproduces the three stale-grid lowerings and
+checks refusal before coefficient allocation. Separate spies show that changed
+radius, centre, permittivity and grid never reuse an old fitted term at replanning;
+identical inputs reuse the same term and preserve nonzero fields inside its region
+bit for bit. Both declared and default memory bounds are checked before reuse lookup
+or sparse assembly, including when a reusable term is available. These checks use
+small spheres and allocation spies, not an oversized fit. The existing memory model
+and bound, sphere-only scope and no-AD contract remain unchanged.
+
+Detection was checked with actual product mutations: disabling the grid guard made
+six cases fail; removing the preparation memory check made all four bound/reuse
+cases fail. Each mutation was reverted and the product bytes checked after restoration.
