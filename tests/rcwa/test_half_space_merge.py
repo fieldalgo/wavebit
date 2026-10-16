@@ -101,7 +101,18 @@ def test_a_thick_layer_of_the_substrate_is_the_bare_interface(tetm, side, theta,
     assert max(abs(got[0] - r), abs(got[1] - t)) / scale < 1e-12
     unmerged()
     control = answer()
-    assert control is None or max(abs(control[0] - r), abs(control[1] - t)) / scale > 1e-6
+    if control is None:
+        return
+    gap = max(abs(control[0] - r), abs(control[1] - t)) / scale
+    if gap <= 1e-6:
+        # Without the merge the ETM pivots on rounding, and where it rounds is the LAPACK's
+        # (test_split_layer_labels): OpenBLAS on CI's Linux x86-64 lands the unmerged TE knife
+        # lit from the vacuum on the closed form itself (1.9e-16, run 38832966285), where
+        # Accelerate leaves it 0.38 off. The other seven knives break on both. Recorded here,
+        # not asserted against.
+        assert (tetm, side, algo) == ('te', 'top', 'ETM'), (tetm, side, algo, gap)
+        pytest.xfail(f'the unmerged control lands on the closed form on this LAPACK ({gap:.1e})')
+    assert gap > 1e-6, gap
 
 
 def test_a_vacuum_layer_in_vacuum_is_the_incident_wave_field_and_all():
@@ -118,10 +129,12 @@ def test_a_vacuum_layer_in_vacuum_is_the_incident_wave_field_and_all():
     kx = np.sin(theta)
     kz = _maystre(1 - kx ** 2)
     k0 = 2 * np.pi / WL
-    assert np.all(res.incident.r_s == 0)
+    # Exactly zero under Accelerate; OpenBLAS leaves -1.1e-16 in one reflected order (CI run
+    # 38832966285), a rounding of the same nothing.
+    assert np.all(abs(np.asarray(res.incident.r_s)) < 1e-15)
     t = np.asarray(res.incident.t_s)
     assert abs(t[0, 2] - np.exp(1j * k0 * kz * d)) / abs(t[0, 2]) < 1e-13
-    assert np.all(np.delete(t, 2) == 0)
+    assert np.all(abs(np.delete(t, 2)) < 1e-15)
     z = np.linspace(0, d, 7)
     cell = np.asarray(solver.reconstruct_field(sample_x=[0.], sample_y=[0.], sample_z=z))[:, 0, 0]
     ey = np.exp(1j * k0 * kz * (d - z))           # down from the lit face, unit there
