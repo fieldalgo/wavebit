@@ -332,7 +332,10 @@ class Drude(Pole):
                                                        strict=False))
 
     def eps_term(self, omega):
-        return self.omega_p ** 2 / (-omega ** 2 - 1j * self.gamma * omega)
+        return _damping_eval(self.gamma, _response_damping_limit(omega),
+            lambda g: self.omega_p ** 2 / (-omega ** 2 - 1j * g * omega),
+            lambda g: (_large_divide(self.omega_p, g) * self.omega_p
+                       / (-_large_divide(omega, g) * omega - 1j * omega)))
 
     def coefficients(self, dt):
         return _second_order(dt, 0.0, self.gamma, self.omega_p ** 2)
@@ -370,7 +373,10 @@ class Lorentz(Pole):
             # Zero each finite operand separately: no squares/products may overflow,
             # and traced frequency, resonance and damping retain their zero tangents.
             return 0j * omega + 0j * self.omega_0 + 0j * self.gamma + 0j * self.strength
-        return self.strength / (self.omega_0 ** 2 - omega ** 2 - 1j * self.gamma * omega)
+        return _damping_eval(self.gamma, _response_damping_limit(omega),
+            lambda g: self.strength / (self.omega_0 ** 2 - omega ** 2 - 1j * g * omega),
+            lambda g: (_large_divide(self.strength, g) / (_large_divide(self.omega_0, g) * self.omega_0
+                       - _large_divide(omega, g) * omega - 1j * omega)))
 
     def coefficients(self, dt):
         return _second_order(dt, self.omega_0, self.gamma, self.strength)
@@ -454,6 +460,53 @@ class Debye(Pole):
         return 0.0, self.delta_eps / self.tau ** 2
 
 
+def _stage_numerator(value):
+    # Keep XLA from folding a representable division into a subnormal constant
+    # reciprocal before multiplying a live numerator. Identity, including AD.
+    if is_jax_typed(value):
+        from jax import lax
+        return lax.optimization_barrier(value)
+    return value
+
+
+def _large_divide(numerator, denominator):
+    # Rescale by an exact power of two: the reciprocal of denominator/8 is
+    # normal for every finite float64 denominator. Stage the numerator first.
+    return _stage_numerator(numerator * .125) / (denominator * .125)
+
+
+def _response_damping_limit(omega):
+    """Machine overflow threshold for gamma*omega; not a physical cutoff."""
+    import sys
+    c = concrete(omega)
+    if c is not None:
+        return sys.float_info.max / max(1., abs(c))
+    from wavebit._common.backend import array_namespace
+    xp = array_namespace(omega)
+    return sys.float_info.max / xp.maximum(xp.abs(omega), 1.)
+
+
+def _damping_eval(gamma, limit, ordinary, rescaled):
+    """Preserve ordinary arithmetic; mask both branches before backend selection.
+
+    The alternate expression is algebraically identical. Safe inactive operands
+    prevent an overflow/NaN in an unselected branch from contaminating gradients.
+    """
+    g, bound = concrete(gamma), concrete(limit)
+    if g is not None and bound is not None:
+        return rescaled(gamma) if abs(g) > bound else ordinary(gamma)
+    from wavebit._common.backend import array_namespace, as_array
+    arrays = [v for v in (gamma, limit) if hasattr(v, 'dtype')]
+    xp = array_namespace(*arrays)
+    g = as_array(xp, gamma, dtype=xp.float64, device=getattr(arrays[0], 'device', None))
+    large = xp.abs(g) > limit
+    a = ordinary(xp.where(large, 0., g))
+    b = rescaled(xp.where(large, g, 1.))
+    if isinstance(a, tuple):
+        return tuple(xp.where(large, y, x) for x, y in zip(a, b))
+    return xp.where(large, b, a)
+
+
 def _second_order(dt, omega0, gamma, strength):
     """``(step_gain, hold, drive)`` of ``P'' + gamma P' + omega0^2 P = strength E``.
 
@@ -461,10 +514,45 @@ def _second_order(dt, omega0, gamma, strength):
     spells it (the kernel seed): ``P^{n+1}`` reads ``E^n`` and never ``E^{n+1}``, so nothing
     has to be solved simultaneously.
     """
-    scale = 1.0 / dt ** 2 + 0.5 * gamma / dt
-    return ((2.0 / dt ** 2 - omega0 ** 2) / scale,
-            (1.0 / dt ** 2 - 0.5 * gamma / dt) / scale,
-            strength / scale)
+    import sys
+    def ordinary(g):
+        scale = 1.0 / dt ** 2 + 0.5 * g / dt
+        return ((2.0 / dt ** 2 - omega0 ** 2) / scale,
+                (1.0 / dt ** 2 - 0.5 * g / dt) / scale, strength / scale)
+    def rescaled(g):
+        # Multiply numerator and denominator by dt before gamma/dt overflows.
+        scale = .25 / dt + .125 * g
+        return ((.5 / dt - .25 * omega0 ** 2 * dt) / scale,
+                (.25 / dt - .125 * g) / scale, _stage_numerator(strength * (.25 * dt)) / scale)
+    result = _damping_eval(gamma, sys.float_info.max * min(dt, 1.) / 4., ordinary, rescaled)
+    # CPU JAX flushes subnormal ADE drives to zero. Do not silently remove an
+    # active oscillator on one backend. Compare scaled operands before dividing.
+    tiny = sys.float_info.min
+    g, s = concrete(gamma), concrete(strength)
+    if g is not None and s is not None and all(concrete(v) is not None for v in result):
+        valid = (s == 0 or abs(s * dt) >= tiny * abs(1.0 / dt + .5 * g))
+        valid = valid and all(math.isfinite(concrete(v)) for v in result)
+        return result if valid else (float('nan'),) * 3
+    from wavebit._common.backend import array_namespace, as_array
+    arrays = [v for v in (*result, gamma, strength) if hasattr(v, 'dtype')]
+    xp = array_namespace(*arrays)
+    device = getattr(arrays[0], 'device', None)
+    st = as_array(xp, strength, dtype=xp.float64, device=device)
+    ga = as_array(xp, gamma, dtype=xp.float64, device=device)
+    zero = st == 0
+    if is_jax_typed(st):
+        # Arithmetic equality on CPU can flush a nonzero subnormal to zero.
+        # Test the declaration's magnitude bits, preserving +/-0 as inactive.
+        from jax import lax
+        import jax.numpy as jnp
+        bits = lax.optimization_barrier(lax.bitcast_convert_type(st, jnp.uint64))
+        zero = (bits & jnp.uint64(0x7fffffffffffffff)) == 0
+    valid = zero | (xp.abs(st * dt) >= tiny * xp.abs(1.0 / dt + .5 * ga))
+    for v in result:
+        valid = valid & xp.isfinite(as_array(xp, v, dtype=xp.float64, device=device))
+    return tuple(xp.where(valid, as_array(xp, v, dtype=xp.float64, device=device),
+                          as_array(xp, float('nan'), dtype=xp.float64, device=device))
+                 for v in result)
 
 
 @spec

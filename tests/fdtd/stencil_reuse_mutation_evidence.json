@@ -1,0 +1,195 @@
+{
+  "base": "52f1d094a2a3356b480be9649242b46891ff5729",
+  "records": [
+    {
+      "mutation": "grid_guard_disabled",
+      "product_file": "src/wavebit/fdtd/_prepare/stencil.py",
+      "functions": [
+        "test_direct_lowering_refuses_changed_operator_inputs",
+        "test_changed_grid_is_refused_before_coefficient_allocation"
+      ],
+      "exit": 1,
+      "failed_nodes": [
+        "test_direct_lowering_refuses_changed_operator_inputs[spacing]",
+        "test_direct_lowering_refuses_changed_operator_inputs[domain_size]",
+        "test_direct_lowering_refuses_changed_operator_inputs[domain_center]",
+        "test_changed_grid_is_refused_before_coefficient_allocation[spacing]",
+        "test_changed_grid_is_refused_before_coefficient_allocation[domain_size]",
+        "test_changed_grid_is_refused_before_coefficient_allocation[domain_center]"
+      ],
+      "log": "stencil-quality-grid_guard_disabled.log",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--tb=short",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_direct_lowering_refuses_changed_operator_inputs",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_changed_grid_is_refused_before_coefficient_allocation",
+        "--junitxml=<scratch>/stencil-quality-grid_guard_disabled.xml"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_prepare/stencil.py": "9af07c30c77a53c4666c84dea017024e458429ef2e43d6d5583f43ec01215c5a",
+        "src/wavebit/fdtd/_execution.py": "d58b38b403768df10f055f4190f678c1e42507241f1cf72fc85da14b2a5f4e96"
+      }
+    },
+    {
+      "mutation": "reuse_source_ignored",
+      "product_file": "src/wavebit/fdtd/_prepare/stencil.py",
+      "functions": [
+        "test_replanning_never_reuses_a_changed_operator[material]"
+      ],
+      "exit": 1,
+      "failed_nodes": [
+        "test_replanning_never_reuses_a_changed_operator[material]"
+      ],
+      "log": "stencil-quality-reuse_source_ignored.log",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--tb=short",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_replanning_never_reuses_a_changed_operator[material]",
+        "--junitxml=<scratch>/stencil-quality-reuse_source_ignored.xml"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_prepare/stencil.py": "9af07c30c77a53c4666c84dea017024e458429ef2e43d6d5583f43ec01215c5a",
+        "src/wavebit/fdtd/_execution.py": "d58b38b403768df10f055f4190f678c1e42507241f1cf72fc85da14b2a5f4e96"
+      }
+    },
+    {
+      "mutation": "explicit_plan_ignored",
+      "product_file": "src/wavebit/fdtd/_execution.py",
+      "functions": [
+        "test_identical_reuse_preserves_operator_and_nonzero_fields"
+      ],
+      "exit": 1,
+      "failed_nodes": [
+        "test_identical_reuse_preserves_operator_and_nonzero_fields"
+      ],
+      "log": "stencil-quality-explicit_plan_ignored.log",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--tb=short",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_identical_reuse_preserves_operator_and_nonzero_fields",
+        "--junitxml=<scratch>/stencil-quality-explicit_plan_ignored.xml"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_prepare/stencil.py": "9af07c30c77a53c4666c84dea017024e458429ef2e43d6d5583f43ec01215c5a",
+        "src/wavebit/fdtd/_execution.py": "d58b38b403768df10f055f4190f678c1e42507241f1cf72fc85da14b2a5f4e96"
+      }
+    },
+    {
+      "mutation": "identical_reuse_disabled",
+      "product_file": "src/wavebit/fdtd/_prepare/stencil.py",
+      "functions": [
+        "test_identical_reuse_preserves_operator_and_nonzero_fields"
+      ],
+      "exit": 1,
+      "failed_nodes": [
+        "test_identical_reuse_preserves_operator_and_nonzero_fields"
+      ],
+      "log": "stencil-quality-identical_reuse_disabled.log",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--tb=short",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_identical_reuse_preserves_operator_and_nonzero_fields",
+        "--junitxml=<scratch>/stencil-quality-identical_reuse_disabled.xml"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_prepare/stencil.py": "9af07c30c77a53c4666c84dea017024e458429ef2e43d6d5583f43ec01215c5a",
+        "src/wavebit/fdtd/_execution.py": "d58b38b403768df10f055f4190f678c1e42507241f1cf72fc85da14b2a5f4e96"
+      }
+    },
+    {
+      "mutation": "requested_size_compared",
+      "product_file": "src/wavebit/fdtd/_prepare/stencil.py",
+      "functions": [
+        "test_equivalent_snapped_grid_keeps_the_prepared_operator"
+      ],
+      "exit": 1,
+      "failed_nodes": [
+        "test_equivalent_snapped_grid_keeps_the_prepared_operator"
+      ],
+      "log": "stencil-quality-requested_size_compared.log",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--tb=short",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_equivalent_snapped_grid_keeps_the_prepared_operator",
+        "--junitxml=<scratch>/stencil-quality-requested_size_compared.xml"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_prepare/stencil.py": "9af07c30c77a53c4666c84dea017024e458429ef2e43d6d5583f43ec01215c5a",
+        "src/wavebit/fdtd/_execution.py": "d58b38b403768df10f055f4190f678c1e42507241f1cf72fc85da14b2a5f4e96"
+      }
+    },
+    {
+      "mutation": "plain_number_guard_disabled",
+      "product_file": "src/wavebit/fdtd/_prepare/stencil.py",
+      "functions": [
+        "test_grid_guard_preserves_stencil_no_ad_contract[numpy]"
+      ],
+      "exit": 1,
+      "failed_nodes": [
+        "test_grid_guard_preserves_stencil_no_ad_contract[numpy]"
+      ],
+      "log": "stencil-quality-plain_number_guard_disabled.log",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--tb=short",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_grid_guard_preserves_stencil_no_ad_contract[numpy]",
+        "--junitxml=<scratch>/stencil-quality-plain_number_guard_disabled.xml"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_prepare/stencil.py": "9af07c30c77a53c4666c84dea017024e458429ef2e43d6d5583f43ec01215c5a",
+        "src/wavebit/fdtd/_execution.py": "d58b38b403768df10f055f4190f678c1e42507241f1cf72fc85da14b2a5f4e96"
+      }
+    },
+    {
+      "mutation": "memory_check_removed",
+      "product_file": "src/wavebit/fdtd/_prepare/stencil.py",
+      "functions": [
+        "test_tight_memory_bound_refuses_before_sparse_work"
+      ],
+      "exit": 1,
+      "failed_nodes": [
+        "test_tight_memory_bound_refuses_before_sparse_work[structure-False]",
+        "test_tight_memory_bound_refuses_before_sparse_work[structure-True]",
+        "test_tight_memory_bound_refuses_before_sparse_work[default-False]",
+        "test_tight_memory_bound_refuses_before_sparse_work[default-True]"
+      ],
+      "log": "stencil-quality-memory_check_removed.log",
+      "command": [
+        "python",
+        "-m",
+        "pytest",
+        "-q",
+        "--tb=short",
+        "tests/fdtd/test_fd_stencil_reuse.py::test_tight_memory_bound_refuses_before_sparse_work",
+        "--junitxml=<scratch>/stencil-quality-memory_check_removed.xml"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_prepare/stencil.py": "9af07c30c77a53c4666c84dea017024e458429ef2e43d6d5583f43ec01215c5a",
+        "src/wavebit/fdtd/_execution.py": "d58b38b403768df10f055f4190f678c1e42507241f1cf72fc85da14b2a5f4e96"
+      }
+    }
+  ],
+  "final_target_result": {
+    "command": "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MAX_JOBS=1 PYTHONPATH=src python -m pytest -q tests/fdtd/test_fd_stencil_reuse.py",
+    "result": "24 passed, 0 failed, 0 skipped",
+    "log": "stencil-quality-final.log"
+  }
+}

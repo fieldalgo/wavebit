@@ -1,0 +1,166 @@
+{
+  "review_base": "e94c09fd441529f338c42d78ac8e8ea6b4853053",
+  "review_base_tree": "127a53d4ece2e18ddbe489982b60f07c4803b4bf",
+  "product_changes": "none",
+  "records": [
+    {
+      "mutation": "extent_guard_omitted",
+      "functions": [
+        "tests/fdtd/test_monitor_aperture.py::test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain"
+      ],
+      "failed_nodes": [
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span0-Field-x]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span0-Field-y]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span0-Field-z]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span0-Flux-x]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span0-Flux-y]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span0-Flux-z]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span1-Field-x]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span1-Field-y]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span1-Field-z]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span1-Flux-x]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span1-Flux-y]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span1-Flux-z]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span2-Field-x]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span2-Field-y]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span2-Field-z]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span2-Flux-x]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span2-Flux-y]",
+        "test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain[span2-Flux-z]"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_lower_public.py": "103450af516dd9f9d56bc196cabb3b9f69877f905c8ea0e1ae8ca68f0a7393e1",
+        "src/wavebit/fdtd/_legacy_geometry.py": "dd88151c9f0bbb20b1cdabc738e1485e91b82ceca2ae77d5fb60d285e533bffd",
+        "src/wavebit/fdtd/_prepare/monitors.py": "16f14d147df0da271eef81c139b44f2f5d54da5d2e41ea3a7a2a277286e33342"
+      }
+    },
+    {
+      "mutation": "finite_spans_dropped",
+      "functions": [
+        "tests/fdtd/test_monitor_aperture.py::test_asymmetric_aperture_samples_and_flux_use_the_selected_surface",
+        "tests/fdtd/test_monitor_aperture.py::test_an_aperture_with_no_selected_points_or_cells_is_diagnosed"
+      ],
+      "failed_nodes": [
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans0-False-x]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans0-False-y]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans0-False-z]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans0-True-x]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans0-True-y]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans0-True-z]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans1-False-x]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans1-False-y]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans1-False-z]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans1-True-x]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans1-True-y]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans1-True-z]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans2-False-x]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans2-False-y]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans2-False-z]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans2-True-x]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans2-True-y]",
+        "test_asymmetric_aperture_samples_and_flux_use_the_selected_surface[spans2-True-z]",
+        "test_an_aperture_with_no_selected_points_or_cells_is_diagnosed[Field]",
+        "test_an_aperture_with_no_selected_points_or_cells_is_diagnosed[Flux]"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_lower_public.py": "103450af516dd9f9d56bc196cabb3b9f69877f905c8ea0e1ae8ca68f0a7393e1",
+        "src/wavebit/fdtd/_legacy_geometry.py": "dd88151c9f0bbb20b1cdabc738e1485e91b82ceca2ae77d5fb60d285e533bffd",
+        "src/wavebit/fdtd/_prepare/monitors.py": "16f14d147df0da271eef81c139b44f2f5d54da5d2e41ea3a7a2a277286e33342"
+      }
+    },
+    {
+      "mutation": "invalid_span_constructor_admitted",
+      "functions": [
+        "tests/fdtd/test_monitor_aperture.py::test_reversed_or_zero_width_spans_are_rejected_when_declared"
+      ],
+      "failed_nodes": [
+        "test_reversed_or_zero_width_spans_are_rejected_when_declared"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_lower_public.py": "103450af516dd9f9d56bc196cabb3b9f69877f905c8ea0e1ae8ca68f0a7393e1",
+        "src/wavebit/fdtd/_legacy_geometry.py": "dd88151c9f0bbb20b1cdabc738e1485e91b82ceca2ae77d5fb60d285e533bffd",
+        "src/wavebit/fdtd/_prepare/monitors.py": "16f14d147df0da271eef81c139b44f2f5d54da5d2e41ea3a7a2a277286e33342"
+      }
+    },
+    {
+      "mutation": "allocated_padding_used",
+      "functions": [
+        "tests/fdtd/test_monitor_aperture.py::test_aperture_bounds_use_physical_domain_before_open_padding"
+      ],
+      "failed_nodes": [
+        "test_aperture_bounds_use_physical_domain_before_open_padding[span0-Field]",
+        "test_aperture_bounds_use_physical_domain_before_open_padding[span0-Flux]",
+        "test_aperture_bounds_use_physical_domain_before_open_padding[span1-Field]",
+        "test_aperture_bounds_use_physical_domain_before_open_padding[span1-Flux]"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_lower_public.py": "103450af516dd9f9d56bc196cabb3b9f69877f905c8ea0e1ae8ca68f0a7393e1",
+        "src/wavebit/fdtd/_legacy_geometry.py": "dd88151c9f0bbb20b1cdabc738e1485e91b82ceca2ae77d5fb60d285e533bffd",
+        "src/wavebit/fdtd/_prepare/monitors.py": "16f14d147df0da271eef81c139b44f2f5d54da5d2e41ea3a7a2a277286e33342"
+      }
+    },
+    {
+      "mutation": "requested_box_used",
+      "functions": [
+        "tests/fdtd/test_monitor_aperture_review.py::test_nonaligned_domain_uses_resolved_physical_box"
+      ],
+      "failed_nodes": [
+        "test_nonaligned_domain_uses_resolved_physical_box[False-Field]",
+        "test_nonaligned_domain_uses_resolved_physical_box[False-Flux]",
+        "test_nonaligned_domain_uses_resolved_physical_box[True-Field]",
+        "test_nonaligned_domain_uses_resolved_physical_box[True-Flux]"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_lower_public.py": "103450af516dd9f9d56bc196cabb3b9f69877f905c8ea0e1ae8ca68f0a7393e1",
+        "src/wavebit/fdtd/_legacy_geometry.py": "dd88151c9f0bbb20b1cdabc738e1485e91b82ceca2ae77d5fb60d285e533bffd",
+        "src/wavebit/fdtd/_prepare/monitors.py": "16f14d147df0da271eef81c139b44f2f5d54da5d2e41ea3a7a2a277286e33342"
+      }
+    },
+    {
+      "mutation": "existing_tolerance_removed",
+      "functions": [
+        "tests/fdtd/test_monitor_aperture_review.py::test_existing_absolute_boundary_tolerance_is_preserved"
+      ],
+      "failed_nodes": [
+        "test_existing_absolute_boundary_tolerance_is_preserved[nextafter-low-Field]",
+        "test_existing_absolute_boundary_tolerance_is_preserved[nextafter-low-Flux]",
+        "test_existing_absolute_boundary_tolerance_is_preserved[nextafter-high-Field]",
+        "test_existing_absolute_boundary_tolerance_is_preserved[nextafter-high-Flux]",
+        "test_existing_absolute_boundary_tolerance_is_preserved[tolerance-low-Field]",
+        "test_existing_absolute_boundary_tolerance_is_preserved[tolerance-low-Flux]",
+        "test_existing_absolute_boundary_tolerance_is_preserved[tolerance-high-Field]",
+        "test_existing_absolute_boundary_tolerance_is_preserved[tolerance-high-Flux]"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_lower_public.py": "103450af516dd9f9d56bc196cabb3b9f69877f905c8ea0e1ae8ca68f0a7393e1",
+        "src/wavebit/fdtd/_legacy_geometry.py": "dd88151c9f0bbb20b1cdabc738e1485e91b82ceca2ae77d5fb60d285e533bffd",
+        "src/wavebit/fdtd/_prepare/monitors.py": "16f14d147df0da271eef81c139b44f2f5d54da5d2e41ea3a7a2a277286e33342"
+      }
+    },
+    {
+      "mutation": "absorber_clearance_bypassed",
+      "functions": [
+        "tests/fdtd/test_monitor_aperture_review.py::test_physical_extent_and_sampling_pml_clearance_are_separate"
+      ],
+      "failed_nodes": [
+        "test_physical_extent_and_sampling_pml_clearance_are_separate"
+      ],
+      "restored_sha256": {
+        "src/wavebit/fdtd/_lower_public.py": "103450af516dd9f9d56bc196cabb3b9f69877f905c8ea0e1ae8ca68f0a7393e1",
+        "src/wavebit/fdtd/_legacy_geometry.py": "dd88151c9f0bbb20b1cdabc738e1485e91b82ceca2ae77d5fb60d285e533bffd",
+        "src/wavebit/fdtd/_prepare/monitors.py": "16f14d147df0da271eef81c139b44f2f5d54da5d2e41ea3a7a2a277286e33342"
+      }
+    }
+  ],
+  "final_result": "60 passed, 0 failed, 0 skipped",
+  "command": "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MAX_JOBS=1 PYTHONPATH=src python -m pytest -q tests/fdtd/test_monitor_aperture_review.py tests/fdtd/test_monitor_aperture.py",
+  "conclusions": [
+    "Physical domain is the whole-cell-rounded domain, not the unsnapped requested box.",
+    "1e-12 is present in public base 8715814b _scene._monitor_inside for closed monitor extents; it was preserved.",
+    "Structure clipping permission is separate from source/monitor placement.",
+    "Normal position uses the existing strict comparison; transverse aperture extents retain existing closed-monitor tolerance.",
+    "A stored physical face in padded allocation can still fail the independent Flux absorber-clearance gate.",
+    "Prior backend nine cases are visible as passed in independent frozen targeted-public_plane_span.log (36 passed); why the C follow-up originally excluded them is not established by available local evidence.",
+    "Initial review fixtures incorrectly expected boundary Flux admission and then omitted PML reference wavelength; those fixture failures were corrected without product changes."
+  ]
+}

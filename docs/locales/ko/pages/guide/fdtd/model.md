@@ -195,6 +195,15 @@ custom Shape 자체의 fill 의미를 나타냅니다. `junction`은 기록된 s
 구조별 대상 변경이나 잘못된 ranged 접촉은 거부하고 이전 적용 행을 반환하지 않습니다.
 원래 준비 보고서의 정책 기록은 변경되지 않는 snapshot입니다.
 
+`Result.provenance["numerical_policies"]`는 해당 run의 scene과 실행 plan에서 만든 같은
+정책 형식입니다. runtime guard가 필드를 무효화해도 적용된 연산자 정책을 기록하며,
+그 자체가 수치값의 허용 판정은 아닙니다. 보고서의 `capabilities["runtime_validation"]`는
+입력을 구체적으로 읽을 수 있으면 `"concrete_inputs"`, traced 입력을 host에서 읽지 못하면
+`"deferred"`입니다. deferred validate 보고서의 성공은 구조와 정책의 확인이며 실제 수치
+판정은 run의 `validity.checks["runtime_stability"]`를 확인해야 합니다. 구체적인 거부값은
+issues를 반환하고 resolved 정책 행을 제공하지 않습니다. validate/run은 이전 보고서와
+Result의 정책 기록을 변경하지 않습니다.
+
 **기판 위 기둥.** 마지막 규칙 때문에 스무딩 기둥은 `Slab` 기판 위에 딱 붙여 세울 수 없습니다.
 선택지는 다음과 같습니다.
 

@@ -204,6 +204,17 @@ Invalid/unsupported requests return issues rather than successful application ro
 changed structure targets or invalid ranged contacts are refused, with no stale resolved
 application rows. The preparation's policy records remain an immutable snapshot.
 
+`Result.provenance["numerical_policies"]` carries the same resolved policy schema,
+computed from that run's scene and executed plan, including when a runtime guard
+invalidates the fields. It describes the applied operator, not numeric admission.
+Reports expose `capabilities["runtime_validation"]`: `"concrete_inputs"` when the
+lowered inputs can be checked concretely, or `"deferred"` when traced inputs cannot
+be read on the host. An otherwise successful deferred `Prepared.validate` report
+certifies structure and policies; use the run's `validity.checks["runtime_stability"]`
+for its live numeric verdict. A concrete refused value returns issues and no
+resolved policy rows. Validation and execution do not mutate earlier reports or
+result policy records.
+
 **Pillars on a substrate.** Because of the last rule, a smoothed pillar cannot stand flush on a
 `Slab` substrate. The choices are:
 
