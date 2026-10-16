@@ -85,7 +85,7 @@ jobs:
 
   test:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    name: full backends (${{ matrix.shard }}/6)
+    name: full backends (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     # Six shards, each its own runner, since 2026-10-15. Not for speed first: for memory.
     # This partition never finished on these runners between 2026-09-11 and then. The two
@@ -102,13 +102,13 @@ jobs:
     #
     # `--shard` assigns whole files, largest first to the lightest shard, from the same
     # collection every shard records, and `test-complete` below refuses to call the suite
-    # green unless the six add up to exactly that collection. So nothing can fall between
+    # green unless all eight add up to exactly that collection. So nothing can fall between
     # the shards, and a shard that never reports fails the run by number. Shards are balanced
-    # by test count, and files differ in cost, so expect some spread between them.
+    # by recorded file durations in tools/ci_shard_timings.json; new cases use estimated costs.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     # The backstop under the per-test `--timeout`, which on run 33715389225 never fired
     # while this did, after three hours. 120 for a shard whose healthy length is about 50
     # minutes (above): a hang costs two hours of runner time instead of GitHub's six, and a
@@ -292,7 +292,8 @@ jobs:
         # roughly 100 to 120 here by the same ratio.
         run: >
           python -u tools/run_verification.py --profile full --slow exclude
-          --shard ${{ matrix.shard }}/6
+          --shard ${{ matrix.shard }}/8
+          --shard-timings tools/ci_shard_timings.json
           --workers 2 --timeout 1200 --timeout-method thread --verbose --live-output
           --output artifacts/verification/default
 
@@ -313,7 +314,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # The shards are only a verification of the suite together. This job reads the six
+  # The shards are only a verification of the suite together. This job reads the eight
   # receipts and fails unless every shard is present once, all collected the same list,
   # the lists partition it, and every shard exited 0 -- `tools/verify_shards.py`. It runs
   # whether or not the shards passed (`always()`), so a shard that was cancelled or whose
@@ -333,21 +334,21 @@ jobs:
         with:
           pattern: verification-default-*
           path: shards
-      - name: The six shards must add up to the whole partition
-        run: python tools/verify_shards.py --count 6 shards/verification-default-*/
+      - name: The eight shards must add up to the whole partition
+        run: python tools/verify_shards.py --count 8 shards/verification-default-*/
 
   slow:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    name: slow tests (${{ matrix.shard }}/2)
+    name: slow tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    # Two shards for the same reason `test` has six: the runner's memory, not the clock.
+    # Three time-balanced shards preserve memory isolation and shorten the critical path.
     # Unsharded, this job reached 90 % (147 passed, 0 failed) before the runner shut itself
     # down on run 38574993959; as two shards on run 38727516339 both finished, in 38 and 39
-    # minutes. `slow-complete` below checks the two shards add up.
+    # minutes. `slow-complete` below checks the three shards add up.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     # A healthy slow shard is about 40 minutes (above); this is for a hang.
     timeout-minutes: 120
     steps:
@@ -383,7 +384,8 @@ jobs:
           XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
         run: >
           python -u tools/run_verification.py --profile full --slow only
-          --shard ${{ matrix.shard }}/2
+          --shard ${{ matrix.shard }}/3
+          --shard-timings tools/ci_shard_timings.json
           --workers 2 --timeout 2400 --timeout-method thread --verbose --live-output
           --output artifacts/verification/slow
 
@@ -419,8 +421,8 @@ jobs:
         with:
           pattern: verification-slow-*
           path: shards
-      - name: The two shards must add up to the whole slow partition
-        run: python tools/verify_shards.py --count 2 shards/verification-slow-*/
+      - name: The three shards must add up to the whole slow partition
+        run: python tools/verify_shards.py --count 3 shards/verification-slow-*/
 
   examples:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}

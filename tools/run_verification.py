@@ -61,29 +61,34 @@ def parse_shard(value):
     return index, count
 
 
-def shard_files(nodes, count):
-    """Assign every test file to one of `count` shards, deterministically and by size.
+def shard_files(nodes, count, timings=None):
+    """Assign whole files by recorded duration, falling back to estimated node cost.
 
     Files, not nodes, because CI distributes with `--dist loadfile` and because test modules
-    set process-wide state at import (see tests.yml), so a file must never be split. Largest
-    file first, each to the shard with the fewest nodes so far: the same collection always
-    gives the same assignment, and the shards are as even as whole files allow.
+    set process-wide state at import (see tests.yml), so a file must never be split.
+    The same collection and timing table always give the same assignment. Without
+    a timing table, retain the node-count policy for local and research runs.
     """
     sizes = {}
     for node in nodes:
         name = node.split('::', 1)[0]
         sizes[name] = sizes.get(name, 0) + 1
-    assignment, load = {}, [0] * count
-    for name in sorted(sizes, key=lambda name: (-sizes[name], name)):
+    timings = timings or {}
+    fallback = max(1.0, sum(row['seconds'] for row in timings.values()) /
+                   max(1, sum(row['nodes'] for row in timings.values())))
+    weights = {name: max(0.001, timings[name]['seconds'] / timings[name]['nodes']) * size
+               if name in timings else fallback * size for name, size in sizes.items()}
+    assignment, load = {}, [0.0] * count
+    for name in sorted(sizes, key=lambda name: (-weights[name], name)):
         shard = load.index(min(load))
         assignment[name] = shard + 1
-        load[shard] += sizes[name]
+        load[shard] += weights[name]
     return assignment
 
 
-def shard_nodes(nodes, index, count):
+def shard_nodes(nodes, index, count, timings=None):
     """The nodes of shard `index` of `count`, in collection order, and its files."""
-    assignment = shard_files(nodes, count)
+    assignment = shard_files(nodes, count, timings)
     files = sorted(name for name, shard in assignment.items() if shard == index)
     selected = [node for node in nodes if assignment[node.split('::', 1)[0]] == index]
     return selected, files
@@ -207,10 +212,26 @@ def run(args):
     if args.profile != 'quick' and args.slow != 'include':
         expression += ' and ' + ('slow' if args.slow == 'only' else 'not slow')
     shard = parse_shard(args.shard) if args.shard else None
+    timings = None
+    if args.shard_timings:
+        if not shard or args.profile != 'full' or args.slow not in ('exclude', 'only'):
+            raise ValueError('--shard-timings requires --shard, --profile full and --slow exclude/only')
+        table = load(args.shard_timings)
+        if table.get('schema') != 'wavebit.shard-timings/v1':
+            raise ValueError('Unsupported shard timing schema')
+        timings = table['partitions'][args.slow]
+        if not timings:
+            raise ValueError('Shard timing partition is empty')
+        for row in timings.values():
+            if (type(row['nodes']) is not int or row['nodes'] <= 0 or
+                    type(row['seconds']) not in (int, float) or
+                    not math.isfinite(row['seconds']) or row['seconds'] < 0):
+                raise ValueError('Shard timings need positive node counts and finite nonnegative seconds')
     config = dict(profile=args.profile, expression=expression, paths=paths,
                   workers=args.workers, plugin_autoload=False, distribution='loadfile',
                   slow=args.slow, timeout=args.timeout, timeout_method=args.timeout_method,
                   verbose=args.verbose, live_output=args.live_output,
+                  shard_timings=timings,
                   shard=None if shard is None else dict(index=shard[0], count=shard[1]))
     before = hashes(root)
     inputs = dict(root=str(root), files=before, environment=environment(), config=config)
@@ -250,9 +271,10 @@ def run(args):
             # it, not a different profile -- so every shard of a run collects the same list,
             # and tools/verify_shards.py can check that the shards add up to exactly that list.
             index, count = shard
-            nodes, files = shard_nodes(all_nodes, index, count)
+            nodes, files = shard_nodes(all_nodes, index, count, timings)
             save(output / 'collected-nodeids-all.json', all_nodes)
             receipt['shard'] = dict(index=index, count=count, files=files,
+                                    timings_digest=digest(timings),
                                     nodes_total=len(all_nodes), nodes_in_shard=len(nodes))
             save(output / 'shard.json', receipt['shard'])
             if not nodes:
@@ -351,6 +373,8 @@ def main():
                         help='run only shard INDEX of COUNT, whole test files assigned deterministically; '
                              'every shard records the full collection, tools/verify_shards.py checks they add up')
     parser.add_argument('--collect-only', action='store_true')
+    parser.add_argument('--shard-timings', type=Path,
+                        help='fixed file-duration JSON for time-balanced full-profile CI shards')
     args = parser.parse_args()
     if args.profile == 'quick' and args.slow == 'only':
         parser.error('--profile quick cannot select --slow only')

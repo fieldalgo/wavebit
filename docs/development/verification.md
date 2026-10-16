@@ -110,21 +110,23 @@ validation of its exact commit. This is a CI execution queue, not a PR merge que
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
 uses the runner for both non-research partitions, each split across runners with
-`--shard INDEX/COUNT`: six shards for the ordinary partition, two for the slow one.
+`--shard INDEX/COUNT`: eight shards for the ordinary partition, three for the slow one.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/6 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/8 --workers 2 \
+  --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/default
-python tools/run_verification.py --profile full --slow only --shard 1/2 --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/3 --workers 2 \
+  --shard-timings tools/ci_shard_timings.json \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output artifacts/verification/slow
 ```
 
 A shard is a selection within the profile, not a different profile. Every shard collects
 the whole partition and records it as `collected-nodeids-all.json`; whole test files are
-then assigned to shards deterministically, largest file first to the lightest shard, so
-a file is never split and the same collection always gives the same shards. After the
+then assigned to shards deterministically, largest estimated duration first to the lightest shard, so
+a file is never split and the same collection and timing table give the same shards. After the
 shard jobs, `tools/verify_shards.py --count N` reads their receipts and fails unless every
 shard is present once, all collected the same list, the shards partition it, and each
 exited 0. That job is what makes the partition verified; a shard whose runner died is a
@@ -133,8 +135,8 @@ named failure there, not an absence.
 Sharding is a response to the runners' memory, not to the clock: a single two-worker run
 of the ordinary partition grew past the 7.9 GB available and was shut down at 50 to 61 %
 every time. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
-the job limits are 120 minutes per shard, against healthy lengths of about 50 (ordinary)
-and 40 (slow) minutes. Source-mutating
+the job limits are 120 minutes per shard. Measured durations guide balancing;
+actual elapsed times still depend on collection, compilation and worker scheduling. Source-mutating
 cases within a shard run in the runner's separate serial snapshot, not in the shared
 parallel checkout.
 
@@ -184,3 +186,13 @@ python tools/run_distribution_smoke.py
 
 That tool builds a wheel and source distribution and checks fresh installed
 packages outside the checkout, including package data and optional plotting.
+
+The fixed `tools/ci_shard_timings.json` table scales each file's summed setup/call/teardown
+cost by the current case count. New files use the partition mean per-case cost (at least
+one second). Timing data participates in resume fingerprints and cross-shard consistency
+checks. Without the option, assignment remains count-based. Refresh from all artifacts of
+one successful run, review and commit the result:
+
+```shell
+python tools/update_shard_timings.py artifacts/ci-timing-baseline --source-run https://github.com/fieldalgo/wavebit/actions/runs/RUN_ID --output tools/ci_shard_timings.json
+```
