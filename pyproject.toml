@@ -59,17 +59,17 @@ jax = [
     "tqdm>=4.67",
 ]
 
-# 2.13, not 2.7, because 2.7 cannot compile this solver: `torch.compile` dies with
-# `InternalTorchDynamoError` on every path, from four separate PyTorch defects -- a
-# `torch._numpy` shim missing `np._CopyMode`, an Inductor meta kernel that declares
-# row-major eigenvectors where LAPACK returns column-major, a Dynamo resume-bytecode
-# failure on cell variables, and a complex-view stride error in the backward pass. All
-# four are gone by 2.13, where the suite is green. Eager and autograd work on 2.7, so this
-# floor is about matching the version the suite is verified against, not about enabling
+# 2.14, the version the suite is verified against (CI installs the CPU index's 2.14.1; this
+# floor follows what was measured, not what might work). 2.7 cannot compile this solver:
+# `torch.compile` dies with `InternalTorchDynamoError` on every path, from four separate
+# PyTorch defects, all gone by 2.13. 2.13 then miscompiled a complex identity's in-place
+# diagonal write under Inductor (docs/development/torch-upstream-defects.md, defect 1), which
+# the doors around every public call make harmless and which PyTorch fixed in 2.14.0
+# (pytorch/pytorch#182012). Eager and autograd work on 2.7, so none of this is about enabling
 # `torch.compile` -- which is not worth using either way; see docs/development/torch-compile.md.
-# Versions between 2.8 and 2.12 were not tested.
+# Versions between 2.8 and 2.13 were tested only as described there.
 pytorch = [
-    "torch>=2.13",
+    "torch>=2.14",
     "tqdm>=4.67",
 ]
 

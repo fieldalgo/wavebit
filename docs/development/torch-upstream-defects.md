@@ -23,7 +23,7 @@ change.
 
 | # | Defect (torch) | 2.13.0 | 2.14.1 | 2.15.0 | 2.16 nightly | Upstream | Reaches wavebit when | Workaround | Can go when |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Inductor emits a complex identity's in-place diagonal write after the kernels that read it, when the input requires grad | wrong | right | right | right | none found; fixed by 2.14.1 | `torch.compile` (Inductor) around any solve | doors: `eager_under_torch_compile` | floor ≥ 2.14.1 **and** wavebit compiled without the doors measured exact (not measured yet) |
+| 1 | Inductor emits a complex identity's in-place diagonal write after the kernels that read it, when the input requires grad | wrong | right | right | right | [#182012](https://github.com/pytorch/pytorch/issues/182012), fixed by [PR #182292](https://github.com/pytorch/pytorch/pull/182292) in 2.14.0 | `torch.compile` (Inductor) around any solve | doors: `eager_under_torch_compile` | floor ≥ 2.14 (done 2026-10-16) **and** wavebit compiled without the doors measured exact (not measured yet) |
 | 2 | `linalg.solve`'s JVP differentiated again loses a term (half the second derivative here) | wrong | wrong | right | right | [#192540](https://github.com/pytorch/pytorch/issues/192540) (fixed by [PR #192667](https://github.com/pytorch/pytorch/pull/192667)); [#196695](https://github.com/pytorch/pytorch/issues/196695) open for `left=False` | forward mode inside another level, through any solve site | `linear_solve` routes to LU | floor ≥ 2.15 (the routing for this case can then be narrowed) |
 | 3 | CPU `lu_solve` reads LU at `LU.stride(-3)`, wrong when that axis has size 1 and a non-canonical stride | wrong | wrong | wrong | wrong | [#200599](https://github.com/pytorch/pytorch/issues/200599), open | indirectly, through defect 2's JVP under `vmap(jacfwd)` (2.13–2.14) | `linear_solve` never hands `lu_solve` a re-strided LU | #200599 fixed in a release the floor includes |
 | 4 | `linalg.solve`'s backward drops the matrix's forward tangent when run without `create_graph` | wrong | wrong | wrong | wrong | [#200600](https://github.com/pytorch/pytorch/issues/200600), open | a `forward_ad` dual plus a backward without `create_graph` (forward-over-reverse) | `linear_solve` routes to LU | #200600 fixed in a release the floor includes |
@@ -47,7 +47,7 @@ q = torch.tensor([[1 + 1j, 0], [0, 4 + 4j]], dtype=torch.complex128, requires_gr
 def f(q):
     eye = torch.zeros(2, 2, dtype=q.dtype); eye.diagonal().fill_(1)
     return eye * torch.exp(q) + (q - eye * q)
-torch.compile(f)(q)   # on 2.13.0 differs from eager f(q) by max|diff| 60.24; 0.0 on 2.14.1
+torch.compile(f)(q)   # on 2.13.0 differs from eager f(q) by max|diff| 60.24; 0.0 from 2.14.0
 ```
 
 Each of the following makes it exact on 2.13.0:
@@ -58,8 +58,11 @@ Each of the following makes it exact on 2.13.0:
 - `backend='aot_eager'`;
 - `torch._inductor.config.reorder_for_peak_memory=False`.
 
-On 2.14.1, 2.15.0 and the nightly it is exact as written. Through wavebit on 2.13.0, a 1D TE
-loss read -4.43 for an eager -0.895, and its gradient -0.118 for 0.272.
+On 2.14.0, 2.14.1, 2.15.0 and the nightly it is exact as written. The fix is
+[#182012](https://github.com/pytorch/pytorch/issues/182012) / [PR #182292](https://github.com/pytorch/pytorch/pull/182292)
+(`diagonal_scatter`'s decomposition in `torch/_refs`, in 2.14.0), found 2026-10-16; the
+reproducer's `fill_` on a diagonal view is a `diagonal_scatter` once functionalised. Through
+wavebit on 2.13.0, a 1D TE loss read -4.43 for an eager -0.895, and its gradient -0.118 for 0.272.
 
 The doors make wavebit run eagerly inside a compiled caller ([`torch-compile.md`](torch-compile.md)
 §6). They can come out only after a compile of wavebit *without* them is measured exact on the
