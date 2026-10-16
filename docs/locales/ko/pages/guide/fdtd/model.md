@@ -187,7 +187,9 @@ flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없
 설정과 구조별 실제 적용을 함께 기록합니다. `discretisation` 행의 `stencil`은 실제
 준비된 엔진 연산자, `voxel`은 기본 내장 스무딩 body를 뜻합니다. `rule=None`과
 `whole_cell_fill`은 Slab/Region의 whole-cell fill 유지, `custom_shape_protocol`은
-custom Shape 자체의 fill 의미를 나타냅니다. `junction`은 기록된 standing body에만
+custom Shape 자체의 fill 의미를 나타냅니다. 공개 내장 `Slab`과 `Region`의 정확한
+클래스를 구분하며, 사용자 하위 클래스는 check·prepare·validate 및 run의 provenance에서
+custom protocol 분류를 유지합니다. `junction`은 기록된 standing body에만
 규칙을 표시하고, `junction_face`와 `no_resolved_junction`을 구분하며 각 접합의 구조
 이름과 축을 나열합니다. 접합 없는 기본 split 요청은 적용 없음으로 표시됩니다.
 잘못되거나 지원되지 않는 요청은 적용 성공 행 대신 오류를 반환합니다.

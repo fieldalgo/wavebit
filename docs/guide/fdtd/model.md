@@ -196,6 +196,8 @@ both requested selectors and actual per-structure application. The `discretisati
 rows report `stencil` only for a prepared engine operator and `voxel` for an ordinary
 built-in smoothed body. `rule=None` with `whole_cell_fill` means Slab/Region retain
 whole-cell fills; `custom_shape_protocol` means the custom Shape owns its fill semantics.
+The built-in public `Slab` and `Region` classes are recognised exactly; user subclasses
+retain the custom protocol classification in check, prepare, validate, and run provenance.
 The `junction` rows report a rule only for a recorded standing body, distinguish
 `junction_face` from `no_resolved_junction`, and list each pair by stable structure names
 and axis. A default split request with no pair therefore reports no application.

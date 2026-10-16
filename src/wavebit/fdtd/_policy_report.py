@@ -1,6 +1,7 @@
 """Public numerical-policy provenance from the validated scene and engine plan."""
 from wavebit._common.execution import frozen_mapping
 from . import _legacy_geometry as geometry
+from . import geometry as public_geometry
 from ._kernel.stencil import StencilTerm
 
 
@@ -22,7 +23,7 @@ def numerical_policies(problem, numerics, scene, plan):
         shape = type(lowered.shape)
         if index in stencil:
             rule, reason = 'stencil', 'prepared_stencil_operator'
-        elif shape in (geometry.Slab, geometry.Region):
+        elif shape in (geometry.Slab, geometry.Region, public_geometry.Slab, public_geometry.Region):
             rule, reason = None, 'whole_cell_fill'
         elif shape in (geometry.Sphere, geometry.Box, geometry.Cylinder, geometry.Prism):
             rule, reason = 'voxel', 'voxel_default'
