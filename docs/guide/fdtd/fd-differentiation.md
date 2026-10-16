@@ -292,8 +292,11 @@ rescaled denominator before `gamma / dt` can overflow. Multiplying numerator and
 denominator by `dt` gives `D = 1/dt + gamma/2`, with coefficients
 `(2/dt - omega_0**2*dt)/D`, `(1/dt - gamma/2)/D`, and `strength*dt/D`.
 The implementation also rescales by exact powers of two to keep reciprocals normal.
-The optical response divides its denominator by damping before forming `gamma*omega`
-when that product would overflow. Ordinary-size inputs retain their original arithmetic.
+The Lorentz optical response divides its denominator by damping before forming
+`gamma*omega` when that product would overflow. Float64 Drude susceptibility rescales
+earlier, before the inverse-denominator products used by frequency autodiff enter
+the subnormal range, even when the original response is finite. Ordinary-size
+inputs retain their original arithmetic.
 JAX optimization barriers retain these intermediate scalings without changing XLA flags.
 No material parameter is clipped and no physical upper limit on damping is introduced;
 this rescaling does not certify derivatives at every extreme combination of finite inputs.
@@ -308,9 +311,8 @@ convergence tolerance. A concrete zero strength remains allowed, and its analyti
 tangent is retained. As with any float64 calculation, derivatives that themselves fall
 outside the dtype's representable range are not certified. Intermediate derivative
 operations can also underflow when the final analytic derivative is representable.
-For example, the normalized time-domain response below returns an imaginary
-susceptibility of `1e-208` but a Torch frequency derivative of zero, whereas the
-analytic derivative is approximately `-1e-208`:
+The following normalized Drude example retains both the small imaginary response
+and its frequency derivative, without scaling the differentiation objective:
 
 ```python
 import torch
@@ -319,13 +321,28 @@ from wavebit.materials.time_domain import Drude
 omega = torch.tensor(1., dtype=torch.float64, requires_grad=True)
 chi = Drude(omega_p=1e50, gamma=1e308).eps_term(omega).imag
 frequency_derivative, = torch.autograd.grad(chi, omega)
-print(chi.detach().item(), frequency_derivative.item())  # 1e-208, 0.0
+print(chi.detach().item(), frequency_derivative.item())  # 1e-208, -1e-208
 ```
 
 This example uses normalized engine rates, not the SI rates of the shared public
-material declarations. The admitted value and strength-tangent regressions below
-do not establish frequency or other parameter derivatives for all mixed extreme
-scales. Check the derivative needed by an optimization against an independent
+material declarations. Float64 public `wavebit.materials.Drude.epsilon_term` uses
+the same evaluator with SI frequencies. Public SI evaluation and conversion to
+normalized FDTD rates are tested separately; the normalized example's exact
+`gamma=1e308` is not obtained by converting a finite SI gamma with the available
+unit choices. Public calls containing a float32 frequency or pole parameter retain
+their previous arithmetic and dtype, including mixed-dtype promotion; this repair
+does not extend extreme-value support to float32 or mixed precision.
+
+`tests/materials/test_drude_frequency_scaling.py` compares the unscaled imaginary
+response and forward/reverse frequency derivatives against an independent
+100-digit Decimal formula, including ordinary inputs and float64 neighbours of
+both arithmetic switches. It also checks public SI evaluation, FDTD unit conversion,
+material evaluation at a wavelength, and public float32 compatibility. Lorentz
+response, zero-strength handling and ADE coefficients are unchanged by this Drude
+response repair. These checks do not certify all combinations of extreme finite
+frequencies, pole parameters or differentiation objectives: a finite response and
+a representable final derivative do not guarantee representable intermediate
+arithmetic. Check the derivative needed by an optimization against an independent
 analytic expression or a representable finite difference in that regime.
 
 The arithmetic check follows the recurrence selected by the plan. Spatial film
