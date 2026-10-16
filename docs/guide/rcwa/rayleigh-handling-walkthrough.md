@@ -54,8 +54,9 @@ Every 2D layer, every solve:
     |                        materialize them, so the old detect-and-warn contract stands —
     |                        `check_mode_cutoff` warns below 1e-13 where it can read, and
     |                        the ladder (which runs eagerly around the trace) picks it up:
-    |                        through the current API only when `detuning` is set, and
-    |                        never under a JAX transform, where `detuning` is refused
+    |                        through the current API only when `detuning` is set, on
+    |                        PyTorch and eager jax.grad, and never under jax.jit or
+    |                        jax.vmap, where `detuning` is refused
     |                        (code `prepared.detuning_transform`).
     |
     +-- yes ................ rebuild the grazing cluster:
