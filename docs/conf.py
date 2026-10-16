@@ -23,6 +23,7 @@ notation -- ``:func:``, ``:class:``, 760 of them. Under MkDocs those arrived as 
 and a hook stripped them; here they resolve to links, and `intersphinx` carries them out to
 numpy, jax and torch.
 """
+from datetime import date
 import pathlib
 import posixpath
 import sys
@@ -39,7 +40,7 @@ if pathlib.Path(wavebit.__file__).resolve() != expected_package:
 
 project = 'Wavebit'
 author = 'FieldAlgo'
-copyright = '2026, FieldAlgo'
+copyright = f'{date.today().year}, FieldAlgo'
 # The version the site shows is the version the package it imports declares; nothing to update at a release.
 release = wavebit.__version__
 version = release

@@ -1,12 +1,14 @@
 # First RCWA calculation
 
-Describe the physical structure and illumination with `rcwa.Problem`. Keep the Fourier truncation and factorization in `rcwa.Numerics`, then check, prepare and run. Both solver modules use the same lifecycle and the same physical material definitions.
+Calculate reflection and transmission at three wavelengths for a periodic layer of dielectric cylinders. Start with NumPy; no automatic-differentiation backend is required.
 
-This example uses micrometres, a dielectric cylinder in a single patterned layer, and three vacuum wavelengths. It requests diffraction orders and interior fields. The small Fourier order and 64-point NVF grid make a quick demonstration; they are **not a convergence recommendation**.
+## 1. Define the structure and run
+
+Lengths are in micrometres. The cylinder layer is between air and a dielectric substrate. `Problem` describes the physics; `Numerics` controls the Fourier approximation. These small Fourier orders and the 64-point NVF grid are for a quick demonstration, **not converged design settings**.
 
 ```python
 import numpy as np
-from wavebit import Material, Units, Job, Execution, rcwa
+from wavebit import Material, Units, rcwa
 
 problem = rcwa.Problem(
     units=Units(length='um'),
@@ -31,34 +33,69 @@ report = rcwa.check(problem, numerics=numerics)
 report.raise_if_invalid()
 prepared = rcwa.prepare(problem, numerics=numerics)
 result = prepared.run(problem)
+```
+
+## 2. Read reflection and transmission
+
+Sum the diffraction orders to get total reflected and transmitted power fractions at each wavelength:
+
+```python
+print("R:", result.R.sum(axis=(1, 2)))
+print("T:", result.T.sum(axis=(1, 2)))
+print("R + T:", (result.R + result.T).sum(axis=(1, 2)))
+```
+
+Each array contains one value for each of 0.85, 0.90 and 0.95 µm. For this lossless structure, R + T should be close to 1. Energy balance alone does not establish convergence; increase the Fourier orders and compare the results.
+
+To select one order or wavelength:
+
+```python
 print(result.R.shape)  # (3, 3, 3): wavelength, order_v, order_u
 print(result.transmission.order(0, 0).efficiency)
 print(result.transmission.at_wavelength(1).wavelengths)
+```
+
+`R` and `T` have axes `(wavelength, order_v, order_u)`, even for a single wavelength. Order (0, 0) is the undiffracted order.
+
+## 3. Optional: sample the interior field
+
+The run above retains fields with `outputs=rcwa.Outputs(fields=True)`. Sample them at the following coordinates:
+
+```python
 samples = result.field(x=np.array([0., .1]), y=np.array([0.]), z=np.array([.09]))
 print(samples.values.shape)  # (3, 1, 1, 2, 6)
 print(samples.units)         # E: V/m, H: A/m, coordinates: um
+```
 
+The axes are `(wavelength, z, y, x, component)` and components are `(Ex, Ey, Ez, Hx, Hy, Hz)`. Electric fields use V/m and magnetic fields use A/m; coordinates use the problem's length unit.
+
+## Continue learning
+
+Layers are ordered **bottom to top**. The cell is centered in x/y, and z increases upward from the bottom of the finite stack. See [coordinate conventions](../learn/fundamentals/conventions.md), [materials](../guide/common/materials.md) and [RCWA fundamentals](../learn/fundamentals/index.md).
+
+### Reuse a prepared calculation
+
+For compatible changes, pass the complete updated problem to the prepared calculation. Here only the wavelengths change, with the same count. Earlier results remain associated with the original problem. Structural changes require a new preparation; see [lifecycle and reuse](../guide/common/lifecycle.md).
+
+```python
 new_problem = problem.replace(excitation=problem.excitation.replace(
     wavelength=np.array([.86, .91, .96])))
 new_result = prepared.run(new_problem)
 # result and its retained fields still belong to the first calculation.
-job = Job(solver='rcwa', problem=problem, numerics=numerics,
-          execution=Execution(backend='numpy'))
-assert Job.from_json(job.to_json()).key == job.key
 print(new_result.T.sum(axis=(1, 2)))
 ```
 
-`result.R` and `result.T` have axes `(wavelength, order_v, order_u)`, including a wavelength axis for a single wavelength. `result.transmission.order(0, 0)` selects a physical diffraction order. `result.transmission.at_wavelength(1)` selects the second wavelength without dropping its spectral metadata.
+### Save a job description
 
-Field values have component order `(Ex, Ey, Ez, Hx, Hy, Hz)`. Public fields use **E in V/m and H in A/m**; the internal normalized magnetic field does not leak into this result. Coordinates retain the problem's length unit. The example's field shape is `(3, 1, 1, 2, 6)` for three wavelengths, one z, one y and two x positions.
+For later serialization workflows, a `Job` keeps the problem, numerical settings and execution backend together:
 
-A prepared calculation accepts the complete live problem on every run. The second run replaces only the wavelengths, preserving their count and the static structure. Earlier results and their retained fields still belong to the earlier problem. Structural changes require a new preparation; see [lifecycle and reuse](../guide/common/lifecycle.md).
+```python
+from wavebit import Job, Execution
 
-The layers in `rcwa.Stack.layers` are ordered **bottom to top**. `top` and `bottom` mean physical half-spaces. Angles are in radians, x/y are centered in the cell, and z increases upward from the bottom of the finite stack.
-
-Continue with [materials](../guide/common/materials.md), [RCWA problem declarations](../guide/rcwa/index.md), and [the guided curriculum](../learn/fundamentals/index.md).
-
-## Continue with a complete experiment
+job = Job(solver='rcwa', problem=problem, numerics=numerics,
+          execution=Execution(backend='numpy'))
+assert Job.from_json(job.to_json()).key == job.key
+```
 
 The [film optimization example](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/film_optimization.py)
 uses the current API for a thickness derivative and a bounded optimization. It checks the
