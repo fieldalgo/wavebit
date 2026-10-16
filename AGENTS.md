@@ -26,16 +26,23 @@ counts: a landing is finished when it is pushed.
    this public repository; about seventy minutes). Fix what fails, rebase again if `main`
    moved, and wait for green. A docs-only change goes the same way; there are no exceptions
    by size.
-3. Land the exact commit the green run tested: `git push origin <branch>:main` (a fast-forward;
-   the branch ruleset refuses anything else, and refuses a commit without a green `tests`
-   run). If it is refused because `main` moved, go back to step 1.
-4. Delete the branch.
+3. Land through the pull request: **Rebase and merge** on GitHub, or
+   `gh pr merge <number> --rebase --delete-branch`. GitHub replays the commits onto the tip of
+   `main` (same content and messages, new hashes) and nothing is run again; the branch ruleset
+   allows no other way in -- no direct push, no merge commit, no squash, no force push. Only
+   a pull request that conflicts with `main` needs a manual rebase and a new run.
+4. Cite the hash `main` holds, not the pull request's: read it after landing.
 
-That retry loop is the concurrency control between sessions; do not work around it, and never
-land through the merge button or by fast-forwarding a local `main` without pushing (on
-2026-10-15 twenty commits were landed that way on one machine and had to be rebased by hand).
-When several branches must land together because they fix each other's failures, one session
-stacks them on one branch, runs one pull request, and lands that.
+This is how NumPy and PyTorch land (the pull request's checks gate it; the merged state is not
+run again first), chosen 2026-10-16 over a merge queue for speed while the project is young.
+So `main` can go red when two landings interact. The run on `main` after each landing is the
+record; if it is red, fix it the same day or revert the landing through a pull request
+(`git revert`) and come back later -- a revert is procedure, not failure. Releases are only
+ever cut from a green `main` commit (`release-gate.yml`), so a red `main` never reaches a
+user. Never land by fast-forwarding a local `main` and pushing: on 2026-10-15 twenty commits
+were landed that way on one machine and had to be rebased by hand. When several branches
+must land together because they fix each other's failures, one session stacks them on one
+branch and lands that pull request.
 
 A release: bump the version, land it like anything else, then tag that commit `vX.Y.Z` and
 publish the GitHub release; `release-gate.yml` refuses to publish unless `tests` was green on
