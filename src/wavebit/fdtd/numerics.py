@@ -65,7 +65,10 @@ class Decay(Declaration):
 
     ``window_seconds`` is an SI duration, independent of geometry units. Complete
     windows must pass for fields and every supported memory group after source
-    decay. This concrete forward CPU policy is not differentiable or a bound on
+    decay, including PlaneWave/TFSF incident columns and layered TFSF drivers.
+    Their E/H, CPML and supported material memories keep independent peaks; tiny
+    residuals can legitimately keep the run at its cap. This concrete forward CPU
+    policy is not differentiable or a bound on
     spectral error; fixed-duration execution remains the default.
     """
     threshold: float

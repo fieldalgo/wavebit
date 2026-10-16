@@ -313,8 +313,8 @@ second-order electromagnetic result for any other body.
 
 ``Run(decay=Decay(threshold=..., window=...))`` optionally stops concrete CPU forward
 NumPy/JAX/Torch runs at complete state-amplitude windows, with an explicit steps/periods/time
-hard cap. Only InitialField/Dipole excitation is supported; source columns, AD and enclosing
-JAX traces are refused. Every evolving field, CPML and material array has its own peak;
+hard cap. InitialField, Dipole, PlaneWave and axis-aligned TFSF excitation are supported; AD and
+enclosing JAX traces are refused. Incident columns and layered drivers are monitored. Every evolving field, CPML and material array has its own peak;
 this heuristic is not a spectral-error or future-echo guarantee. Results retain only the
 actual prefix and report cap/reason in ``diagnostics['stopping']``. Both values are required.
 

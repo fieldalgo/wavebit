@@ -234,6 +234,7 @@ subtrees:
               - file: validation/fdtd/fd-debye-stack
               - file: validation/fdtd/fd-debye-sum-film
               - file: validation/fdtd/fd-decay-stopping
+              - file: validation/fdtd/fd-source-decay
               - file: validation/fdtd/fd-hybrid-film
               - file: validation/fdtd/fd-lattice-radiation
               - file: validation/fdtd/fd-metasurface-validation
