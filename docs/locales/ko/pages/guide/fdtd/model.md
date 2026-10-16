@@ -557,3 +557,5 @@ for w, r, t in zip(wavelengths, R, T):
 - 필름 연구(예: [Drude 또는 Lorentz 필름 하나](../../validation/fdtd/fd-single-pole-film.md)) — 손실·분산
   층의 제한된 범위.
 - [FDTD 배우기](../../learn/fdtd/index.md) — 믿을 수 있는 결과를 세우는 순서.
+
+`memory_bound=None` 기본값은 `wavebit.job/v1` 직렬화에서 생략하여 기존 Job 키를 유지합니다. 명시한 한도는 Job과 함께 저장하고 복원합니다.

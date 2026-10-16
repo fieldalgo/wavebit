@@ -99,6 +99,8 @@ class Numerics(Declaration):
     junction: str = 'split'
     decay: object = None
     memory_bound: object = None
+    # Default v1 jobs retain their original canonical envelope and key.
+    _FIELDS_ADDED_IN_V1 = ('memory_bound',)
 
     def __post_init__(self):
         object.__setattr__(self, 'geometry_ranges', frozen_mapping(self.geometry_ranges))
