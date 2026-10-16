@@ -37,7 +37,7 @@ Fixed-cell Cartesian Li rectangles have an array-valued edge-order guard. Their 
 
 ### A thickness and a radius derivative
 
-This example uses the default device policy. One preparation serves every run of the objective. On JAX the layer thickness differentiates under `jax.jit` as well; the radius differentiates under eager `jax.grad` and is refused under `jax.jit`. On PyTorch the radius differentiates too. The small Fourier order and 64-point NVF grid make a quick demonstration, not a converged design:
+This example uses the default device policy. One preparation serves every run of the objective. On JAX the layer thickness differentiates under `jax.jit` as well; the radius differentiates under eager `jax.grad` and is refused under `jax.jit`. On PyTorch the radius differentiates too. The small Fourier order and 64-point NVF grid make a quick demonstration, not a converged design. The wavelength sits off the cell's Rayleigh anomalies: at 0.9 µm, where the first substrate orders graze (0.6 µm times the substrate index 1.5), a wavelength derivative is NaN on both backends:
 
 ```python
 import jax
@@ -52,15 +52,15 @@ def problem(radius, thickness):
             period=(.6, .6), bottom=Material(epsilon=2.25),
             layers=(rcwa.Layer(thickness=thickness, regions=(rcwa.Region(
                 geometry=rcwa.Circle(radius=radius), material=Material(epsilon=12.25)),)),)),
-        excitation=rcwa.Excitation(wavelength=.9, sources=(rcwa.PlaneWave(),)))
+        excitation=rcwa.Excitation(wavelength=.85, sources=(rcwa.PlaneWave(),)))
 
 numerics = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=64)
 
 on_jax = rcwa.prepare(problem(.12, .18), numerics=numerics, backend='jax')
 T00 = lambda t: on_jax.run(problem(.12, t)).transmission.order(0, 0).efficiency[0]
-print(jax.jit(jax.grad(T00))(.18))           # -2.461434...
+print(jax.jit(jax.grad(T00))(.18))           # -21.87787...
 T00_r = lambda r: on_jax.run(problem(r, .18)).transmission.order(0, 0).efficiency[0]
-print(jax.grad(T00_r)(.12))                  # -8.662999...
+print(jax.grad(T00_r)(.12))                  # -67.08197...
 try:
     jax.jit(jax.grad(T00_r))(.12)
 except UnsupportedFeatureError as error:
@@ -69,7 +69,7 @@ except UnsupportedFeatureError as error:
 on_torch = rcwa.prepare(problem(.12, .18), numerics=numerics, backend='torch')
 radius = torch.tensor(.12, dtype=torch.float64, requires_grad=True)
 on_torch.run(problem(radius, .18)).transmission.order(0, 0).efficiency[0].backward()
-print(float(radius.grad))                    # -8.662999...
+print(float(radius.grad))                    # -67.08197...
 ```
 
 Both radius derivatives agree with each other and with a central difference on NumPy (step `1e-6`) to 2e-8 or better.
