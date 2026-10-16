@@ -167,7 +167,7 @@ body { font-family: var(--pst-font-family-base); line-height: 1.7; }
   white-space: nowrap;
 }
 .bd-header .pst-navbar-icon { font-size: 18px; }
-.bd-header .navbar-header-items__end { gap: 4px; }
+.bd-header .navbar-header-items__end { gap: 12px; }
 .bd-article { padding-top: 2rem; padding-bottom: 3rem; }
 .bd-article :is(h1, h2, h3, h4) {
   color: var(--wb-heading);
@@ -215,4 +215,23 @@ body { font-family: var(--pst-font-family-base); line-height: 1.7; }
   .bd-article h1 { font-size: 2rem; }
   .bd-article h2 { font-size: 1.5rem; }
   .bd-article .sd-card-body { padding: 1.25rem; }
+}
+
+
+/* Match the compact version control used by the PyData documentation navbar. */
+.wb-version > button { border: 1px solid var(--pst-color-border); border-radius: 3px; font-size: 13px; color: var(--pst-color-text-base); white-space: nowrap; }
+.wb-version .dropdown-item { font-size: 13px; }
+.wb-company { display: inline-grid; width: 36px; height: 36px; place-items: center; border-radius: 6px; }
+.wb-company img { opacity: .75; filter: grayscale(1); }
+.wb-company:hover img { opacity: 1; filter: none; }
+.wb-company-dark { display: none; }
+html[data-theme="dark"] .wb-company-light { display: none; }
+html[data-theme="dark"] .wb-company-dark { display: block; }
+@media (min-width: 992px) {
+  .bd-header .navbar-header-items { flex-wrap: nowrap; min-width: 0; }
+  .bd-header .navbar-header-items__end { flex-shrink: 0; }
+}
+@media (min-width: 992px) and (max-width: 1199.98px) {
+  .bd-header .navbar-header-items__end { gap: 6px; }
+  .bd-header ul.navbar-nav > li.nav-item > .nav-link { font-size: 12px; padding-inline: 4px; }
 }

@@ -1,0 +1,7 @@
+{# Only offer documentation versions that are actually published. #}
+<div class="wb-version dropdown">
+  <button type="button" class="btn btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ '문서 버전 선택' if language == 'ko' else 'Version switcher list' }}">{{ release }} (stable)</button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item active" href="{{ pathto(root_doc) }}" aria-current="true">{{ release }} (stable)</a></li>
+  </ul>
+</div>

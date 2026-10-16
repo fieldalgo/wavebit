@@ -111,6 +111,7 @@ html_static_path = ['_static', '../assets/branding']
 html_css_files = ['learning/learning.css', 'wavebit-site.css']
 html_js_files = [(f'learning/{name}', {'defer': 'defer'}) for name in (
     'learn-interactions.js', 'nvf-interactions.js', 'reader.js', 'light-section-links.js')]
+html_js_files.append(('wavebit-site.js', {'defer': 'defer'}))
 
 html_theme_options = {
     # The product site's logo, linking to the product site, as its header does; the docs'
@@ -124,6 +125,7 @@ html_theme_options = {
     'github_url': 'https://github.com/fieldalgo/wavebit',
     'show_prev_next': True,
     'navbar_align': 'left',
+    'navbar_end': ['theme-switcher', 'version-switcher.html', 'navbar-icon-links', 'company-link.html'],
     'navbar_persistent': ['language-switcher.html'],
     'show_toc_level': 2,
 }
