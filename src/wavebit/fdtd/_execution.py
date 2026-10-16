@@ -193,7 +193,7 @@ def _solve(scene, p, rt, grazing=None):
 
 
 def _planned(scene, reuse=None):
-    """``(plan(scene), its grazing survey or None)``: the rows its refusal judged, once.
+    """``(plan(scene), its grazing survey or None)``: live rows, or deferred under tracing.
 
     ``reuse`` is a plan the caller already paid for: a prepared extended-stencil operator it
     carries is taken as it is when this scene would prepare the same one
@@ -214,6 +214,12 @@ def _planned(scene, reuse=None):
         # ones is held to them as it is anywhere else; the traced ones are the plan's seeds.
         from wavebit.fdtd._prepare.checks import _resolution_notes
         _resolution_notes(concrete, p)
+        from wavebit.fdtd._prepare.shape_ranges import materials_traced
+        if materials_traced(scene):
+            # These rows certified the seed, not the live traced medium. Let
+            # _results survey the actual scene: traced media are reported as
+            # skipped, while runtime stability carries the live guard verdict.
+            rows = []
     return p, (rows[0] if rows else None)
 
 
