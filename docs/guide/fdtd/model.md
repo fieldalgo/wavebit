@@ -382,6 +382,13 @@ reported as acceptance of the live material. The runtime guard supplies the live
 validity verdict instead. A fixed PML `reference_media` entry fixes the numerical
 stretch, not that physical material's grazing admission.
 
+An off-design `Diffraction` wavelength can require an exit cosine at or above
+one, even when that order is evanescent in the prepared material. A requirement
+above one admits no propagating order. If a live material makes the order
+propagate, the runtime guard refuses it just as `check` does for concrete values.
+At or just below one, admission uses the same rounded cosine as the concrete
+check, without clipping the requirement or relaxing the grazing tolerance.
+
 Each `prepared.run(problem)` starts a fresh field state and returns its own checks.
 A guarded invalid value returns NaN with failed runtime validity; a host-only
 unsupported trace raises explicitly. Neither outcome makes a later valid run
