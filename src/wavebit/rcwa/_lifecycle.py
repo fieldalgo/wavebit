@@ -60,8 +60,8 @@ def _resolve(problem, numerics, execution):
         if numerics.half_space_merge_tolerance:
             raise UnsupportedFeatureError('half_space_merge_tolerance is not implemented for coherent-source runs: their cascade solves every layer as given.',
                                           code='rcwa.coherent_half_space_merge', path='numerics.half_space_merge_tolerance')
-        if _adapt.has_tracer(problem):
-            raise UnsupportedFeatureError('The coherent-source assembly is an eager capability. Its host grouping does not support external JAX transforms.',
+        if _adapt.opaque(problem):
+            raise UnsupportedFeatureError('The coherent-source assembly is an eager capability. Its host grouping does not support jax.jit or jax.vmap; eager jax.grad reads its values, as PyTorch does.',
                                           code='rcwa.coherent_transform', path='excitation.sources')
     solvers = []
     with execution.scope():
@@ -116,9 +116,10 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
     """Return admission and scoped resource estimates without solving scattering."""
     execution = Execution(backend=backend, device=device, precision=precision)
     try:
-        if _adapt.has_tracer(problem):
-            raise UnsupportedFeatureError('check requires concrete inputs; call it outside an autodiff transform.',
+        if _adapt.opaque(problem):
+            raise UnsupportedFeatureError('check requires concrete inputs; call it outside jax.jit or jax.vmap.',
                                           code='check.concrete', path='problem')
+        problem = _adapt.primal_problem(problem)
         solvers = _resolve(problem, numerics, execution)
         # prepare refuses a layer whose regions cannot be built while it freezes their geometry,
         # which check does not do, so the freeze's layer refusals run here without its record.
@@ -180,7 +181,7 @@ def _runtime_checks(problem, execution, partitions):
                                                            execution, True)) > 0)
     partition = xp.asarray(True)
     for i, name, first, inverse in partitions:
-        if _adapt.has_tracer(getattr(problem.stack.layers[i], name)) and len(first) > 256:
+        if _adapt.opaque(getattr(problem.stack.layers[i], name)) and len(first) > 256:
             raise UnsupportedFeatureError('The prepared raster has more than 256 distinct phases. Its equality partition cannot be economically guarded under a trace; use sampled Li, or prepare each concrete design outside the transform.',
                                           code='rcwa.raster_partition_transform', path=f'stack.layers[{i}].{name}')
         a = _adapt._array(xp, getattr(problem.stack.layers[i], name), execution, True).reshape(-1)
@@ -193,7 +194,7 @@ def _runtime_checks(problem, execution, partitions):
         if len(first) <= 256:
             identity = xp.eye(len(first), dtype=xp.bool, device=getattr(a, 'device', None))
             partition = partition & xp.all((phases[:, None] != phases[None, :]) | identity)
-        elif not _adapt.has_tracer(getattr(problem.stack.layers[i], name)):
+        elif not _adapt.opaque(getattr(problem.stack.layers[i], name)):
             current = _adapt.host(getattr(problem.stack.layers[i], name), 'raster').reshape(-1)[first]
             partition = partition & xp.asarray(len(np.unique(current)) == len(first))
     return {'finite_inputs': finite, 'positive_wavelength': positive_wavelength,
@@ -283,7 +284,7 @@ class Prepared:
                     else:
                         raise UnsupportedFeatureError('This geometry decision has no traced topology guard. Fixed-cell Cartesian Li rectangle sizes and centres are supported; prepare other concrete geometry outside the transform.',
                                                       code='prepared.host_topology', path=path)
-            if self.numerics.detuning is not None:
+            if self.numerics.detuning is not None and _adapt.opaque(problem):
                 raise UnsupportedFeatureError('Adaptive detuning is eager-only. Use exact-point numerics under a transform, or explicitly change the physical input and prepare that problem.',
                                               code='prepared.detuning_transform', path='numerics.detuning')
         solvers = _resolve(problem, self.numerics, self.execution)
@@ -300,9 +301,10 @@ class Prepared:
     def validate(self, problem):
         """Eagerly report whether a concrete problem can reuse this preparation."""
         try:
-            if _adapt.has_tracer(problem):
-                raise UnsupportedFeatureError('validate requires concrete inputs; call it outside the transform.',
+            if _adapt.opaque(problem):
+                raise UnsupportedFeatureError('validate requires concrete inputs; call it outside jax.jit or jax.vmap.',
                                               code='validate.concrete', path='problem')
+            problem = _adapt.primal_problem(problem)
             with self.execution.scope():
                 solvers = self._solvers(problem)
                 checks = _runtime_checks(problem, self.execution, self._partitions)
@@ -323,7 +325,7 @@ class Prepared:
             checks = _runtime_checks(problem, self.execution, self._partitions)
             checks.update(self._topology_checks(problem))
             for name, passed in checks.items():
-                if not _adapt.has_tracer(passed) and not bool(_adapt.host(passed, name)):
+                if not _adapt.opaque(passed) and not bool(_adapt.host(passed, name)):
                     raise IncompatibleProblemError('The prepared runtime guard failed.', code=f'prepared.{name}', path='problem')
             solved = []
             for solver, geometry in zip(solvers, self._geometry):
@@ -337,7 +339,7 @@ class Prepared:
                 solved.append((solver, result))
             result = pack(problem, self.numerics, self.execution, solved, checks, self.report)
             finite = result.validity.checks['numerical_finite']
-            if not _adapt.has_tracer(finite) and not bool(_adapt.host(finite, 'result')):
+            if not _adapt.opaque(finite) and not bool(_adapt.host(finite, 'result')):
                 raise NumericalError('The requested solve produced nonfinite observables; no implicit detuning was applied.',
                                      code='rcwa.nonfinite', path='result')
             return result
@@ -353,9 +355,12 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
     register_dataclass(Numerics, static_fields=tuple(f.name for f in fields(Numerics)))
     register_dataclass(Outputs, static_fields=tuple(f.name for f in fields(Outputs)))
     register_dataclass(Execution, static_fields=('backend', 'device', 'precision'))
-    if _adapt.has_tracer(problem):
-        raise UnsupportedFeatureError('prepare requires a concrete problem. Prepare before JAX grad/jit/vmap and pass live Problems to Prepared.run.',
+    if _adapt.opaque(problem):
+        raise UnsupportedFeatureError('prepare requires a concrete problem. Prepare outside jax.jit or jax.vmap and pass live Problems to Prepared.run.',
                                       code='prepare.concrete', path='problem')
+    # Under an eager jax.grad, prepare at the point being differentiated, as a PyTorch call
+    # reads through its tensors: a preparation keeps static records only, never a tracer.
+    problem = _adapt.primal_problem(problem)
     with execution.scope(), _normalize_errors():
         solvers = _resolve(problem, numerics, execution)
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)

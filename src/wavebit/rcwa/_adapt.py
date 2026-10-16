@@ -43,13 +43,26 @@ def has_tracer(value):
     return any(abstract(v) for v in leaves(value))
 
 
+def opaque(value):
+    """Whether ``value`` holds a JAX tracer with no concrete primal: one under jit or vmap.
+
+    An eager ``jax.grad`` or ``jax.jacfwd`` tracer carries its value as a PyTorch tensor
+    does, so every eager decision reads it (:func:`host`, :func:`primal`) and takes the
+    branch PyTorch takes. Only an opaque value is refused where a decision needs a number.
+    """
+    return any(abstract(v) and not carries_primal(v) for v in leaves(value))
+
+
 def host(value, path):
-    if has_tracer(value):
+    if opaque(value):
         raise UnsupportedFeatureError('This value makes a host-only geometry decision. Prepare a concrete problem outside the transform.',
                                       code='rcwa.host_geometry', path=path)
     # Reading values is only for validation; the original leaves are passed to
     # the engine untouched and keep their derivative graph. A sequence is read
-    # leaf by leaf, since np.asarray cannot read a grad-tracking tensor in it.
+    # leaf by leaf, since np.asarray cannot read a grad-tracking tensor in it,
+    # and an eager jax.grad tracer through its primal, as a tensor is detached.
+    if has_tracer(value):
+        value = primal(value)
     if isinstance(value, (list, tuple)):
         return np.asarray([host(v, path) for v in value])
     if hasattr(value, 'detach'):
@@ -300,6 +313,26 @@ def primal_geometry(problem):
     return dataclasses.replace(problem, stack=dataclasses.replace(stack, layers=layers, **cell))
 
 
+def primal_problem(value):
+    """``value`` with every readable JAX tracer in it replaced by its primal.
+
+    What ``prepare``, ``check`` and ``validate`` see under an eager ``jax.grad``: the
+    declaration at the point being differentiated, as a PyTorch call reads through its
+    tensors. Containers holding no tracer are returned as they are.
+    """
+    if not has_tracer(value):
+        return value
+    if dataclasses.is_dataclass(value):
+        return dataclasses.replace(value, **{f.name: primal_problem(getattr(value, f.name))
+                                            for f in dataclasses.fields(value)
+                                            if f.init and not f.name.startswith('_')})
+    if isinstance(value, Mapping):
+        return {k: primal_problem(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return tuple(primal_problem(v) for v in value)
+    return primal(value)
+
+
 def check_structure(problem, expected):
     if structure_key(problem) != expected:
         raise IncompatibleProblemError('The problem declaration layout changed. Prepare it again (layer/source/model counts, tensor shape, magnetic presence, outputs, and spectral shape are structural).',
@@ -336,30 +369,30 @@ def coherent_dependencies(problem):
 
 
 def validate_values(problem):
-    if problem.stack.period is not None and not has_tracer(problem.stack.period):
+    if problem.stack.period is not None and not opaque(problem.stack.period):
         period = host(problem.stack.period, 'stack.period')
         if period.shape != (2,) or not np.isrealobj(period) or not np.all(np.isfinite(period) & (period > 0)):
             raise ValidationError('period must contain two positive finite real lengths.',
                                   code='stack.period', path='stack.period')
     for index, wavelength in enumerate(wavelengths(problem)):
-        if not has_tracer(wavelength):
+        if not opaque(wavelength):
             a = host(wavelength, 'excitation.wavelength')
             if a.shape or not np.isrealobj(a) or not np.isfinite(a) or a <= 0:
                 raise ValidationError('Vacuum wavelengths must be positive finite real scalars.',
                                       code='wavelength.value', path=f'excitation.wavelength[{index}]')
     for i, layer in enumerate(problem.stack.layers):
-        if not has_tracer(layer.thickness):
+        if not opaque(layer.thickness):
             a = host(layer.thickness, 'stack.layers.thickness')
             if a.shape or not np.isrealobj(a) or not np.isfinite(a) or a < 0:
                 raise ValidationError('Layer thickness must be finite and nonnegative.',
                                       code='layer.thickness', path=f'stack.layers[{i}].thickness')
     for i, source in enumerate(problem.excitation.sources):
-        if hasattr(source, 'polarization') and not isinstance(source.polarization, str) and not has_tracer(source.polarization):
+        if hasattr(source, 'polarization') and not isinstance(source.polarization, str) and not opaque(source.polarization):
             pair = host(source.polarization, 'excitation.sources.polarization')
             if pair.shape != (2,) or not np.all(np.isfinite(pair)) or np.sum(np.abs(pair)**2) <= 0:
                 raise ValidationError('Jones polarization must be a finite, nonzero pair.',
                                       code='source.polarization_value', path=f'excitation.sources[{i}].polarization')
-        if hasattr(source, 'amplitude') and not has_tracer(source.amplitude):
+        if hasattr(source, 'amplitude') and not opaque(source.amplitude):
             a = host(source.amplitude, 'excitation.sources.amplitude')
             if a.shape or not np.isfinite(a) or (single_plane(problem) and abs(a) == 0):
                 raise ValidationError('Source amplitude must be finite; a single incident plane wave must be nonzero.',
