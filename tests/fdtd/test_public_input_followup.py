@@ -121,3 +121,29 @@ def test_stencil_multiple_structure_remedy_uses_public_numerics():
     # Applying the offered setting removes this refusal without deleting a body.
     report = fdtd.check(problem, numerics=_numerics(discretisation='voxel'))
     assert report.ok
+
+
+def test_default_stencil_memory_bound_preserves_existing_v1_job_key():
+    from wavebit import Job
+    problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(1., 1., 1.)),
+        boundaries=fdtd.Boundaries.periodic(z=fdtd.Open())))
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
+                             duration=fdtd.Duration(steps=3))
+    job = Job(solver='fdtd', problem=problem, numerics=numerics)
+    # Canonical key measured before this field existed, at main 6d453750.
+    expected = '78499379496ea489cd43a4a40f5d29fb07400a955e722a5507f30d36ed707e0e'
+    assert job.key == expected
+    assert Job.from_json(job.to_json()).key == expected
+
+
+@pytest.mark.parametrize('bound', [1, 2.5e9])
+def test_explicit_stencil_memory_bound_survives_job_roundtrip(bound):
+    from wavebit import Job
+    default = Job(solver='fdtd', problem=_sphere_problem(),
+                  numerics=_numerics(discretisation='stencil'))
+    job = default.replace(numerics=default.numerics.replace(memory_bound=bound))
+    restored = Job.from_json(job.to_json())
+    assert restored.numerics.memory_bound == bound
+    assert restored.key == job.key != default.key
+    assert restored.replace(numerics=restored.numerics.replace(memory_bound=None)).key == default.key

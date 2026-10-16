@@ -590,3 +590,5 @@ for the protocol and [stopping/absorbers](stopping-and-absorbers.md) for numeric
 - The film studies (for example [one Drude or Lorentz film](../../validation/fdtd/fd-single-pole-film.md)) — the bounded
   scopes for lossy and dispersive layers.
 - [Learning FDTD](../../learn/fdtd/index.md) — the order in which to establish a trustworthy result.
+
+The default `memory_bound=None` is omitted from `wavebit.job/v1` serialization, so existing job keys remain unchanged. Explicit bounds are serialized and round-trip with the job.
