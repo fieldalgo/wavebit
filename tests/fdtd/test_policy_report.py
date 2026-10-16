@@ -144,3 +144,28 @@ def test_stencil_cannot_hide_unsupported_cell_subclass_beside_exact_sphere(shape
     report=quiet(fd.check,p,numerics=n)
     assert not report.ok and report.issues[0].path=='numerics.discretisation'
     assert not report.resolved
+
+
+@pytest.mark.parametrize('shape,reason', [
+    pytest.param(fd.Slab(z=(-.75, -.55)), 'whole_cell_fill', id='public-slab'),
+    pytest.param(fd.Region(size=(.3,) * 3), 'whole_cell_fill', id='public-region'),
+    pytest.param(type('UserSlab', (fd.Slab,), {})(z=(-.75, -.55)),
+                 'custom_shape_protocol', id='custom-slab'),
+    pytest.param(type('UserRegion', (fd.Region,), {})(size=(.3,) * 3),
+                 'custom_shape_protocol', id='custom-region'),
+])
+@pytest.mark.parametrize('stage', ['check', 'prepare', 'validate', 'run'])
+def test_public_cell_shape_policy_preserves_exact_type_and_custom_protocol(shape, reason, stage):
+    p, n = case((shape,))
+    if stage == 'check':
+        got = policies(quiet(fd.check, p, numerics=n))
+    else:
+        prepared = quiet(fd.prepare, p, numerics=n)
+        if stage == 'prepare':
+            got = policies(prepared.report)
+        elif stage == 'validate':
+            got = policies(quiet(prepared.validate, p))
+        else:
+            got = quiet(prepared.run, p).provenance['numerical_policies']
+    row, = got['discretisation']['structures']
+    assert dict(row) == dict(structure='0', index=0, rule=None, reason=reason)
