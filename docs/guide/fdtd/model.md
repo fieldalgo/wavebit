@@ -399,6 +399,9 @@ above one admits no propagating order. If a live material makes the order
 propagate, the runtime guard refuses it just as `check` does for concrete values.
 At or just below one, admission uses the same rounded cosine as the concrete
 check, without clipping the requirement or relaxing the grazing tolerance.
+For an explicit very small `Axis1D(k=...)`, an interval lower endpoint can round
+to zero. Zero is an open-boundary sentinel only; the eager arithmetic for every
+positive material index and all admission thresholds remain unchanged.
 
 Each `prepared.run(problem)` starts a fresh field state and returns its own checks.
 A guarded invalid value returns NaN with failed runtime validity; a host-only

@@ -420,6 +420,11 @@ def _rounded_band(ku, kv, wavelength, c):
     low = k2 / (k0 * k0)
 
     def s2(value):
+        # A positive subnormal cutoff can round up past the first propagating
+        # float. Its predecessor is zero: an open-boundary sentinel, never a
+        # material index to divide by. Every positive float keeps eager arithmetic.
+        if value == 0.0:
+            return math.inf
         k = math.sqrt(value) * 2.0 * math.pi / wavelength
         return k2 / (k * k)
 
