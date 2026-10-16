@@ -46,10 +46,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Each main run records a landed state independently: do not serialize main runs
-  # or replace a pending one when another commit lands. Runner capacity still applies.
-  # Other refs keep one group so newer PR updates supersede their older checks.
-  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  # Preserve main runs in one queue per workflow/ref; supersede older non-main runs.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  queue: ${{ github.ref == 'refs/heads/main' && 'max' || 'single' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:

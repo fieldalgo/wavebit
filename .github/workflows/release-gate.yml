@@ -10,9 +10,9 @@
 #
 # So the release order is: land on main, wait for `tests` to go green on that commit, then
 # publish the release. A release published too early fails here and publishes nothing; once
-# the tests pass, re-run the failed workflow runs from the Actions tab. `tests.yml` cancels a
-# run superseded by a newer push, so a commit that was not the tip long enough to finish needs
-# `tests` started on it by hand (Actions -> tests -> Run workflow, pick the tag).
+# the tests pass, re-run the failed workflow runs from the Actions tab. Main validation runs
+# queue without superseding one another. If a run was cancelled manually or by a platform
+# limit, start `tests` on the exact commit (Actions -> tests -> Run workflow, pick the tag).
 name: release gate
 
 on:
