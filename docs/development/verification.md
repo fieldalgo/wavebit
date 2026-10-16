@@ -1,5 +1,23 @@
 # Recorded verification and safe resumption
 
+## Repository validation policy
+
+Open PRs as drafts; draft PRs allocate no CI runners and feature-branch pushes
+do not run validation. Mark a reviewed PR Ready after relevant checks pass in
+a suitable local or remote environment. The workflow runs on main, Ready PR
+events and explicit manual dispatch. Automatic Rebase and merge preserves every
+required check. Main runs use a stable workflow/ref queue (`queue: max`, no
+cancellation); non-main runs use `queue: single` and replace older runs. This
+Actions queue is separate from a PR merge queue.
+
+Full Linux acceptance includes the default/slow partitions, examples and docs.
+The independent distribution matrix builds an sdist and wheel, installs outside
+the source tree and checks public NumPy RCWA/FDTD use, bundled data and plotting
+on Linux, macOS and Windows with Python 3.12. A platform smoke pass does not imply
+that all optional backends or the full numerical suite passed on that OS. Inspect
+the exact commit's checks and artifacts before reporting validation or release
+readiness. Contributor instructions live in AGENTS.md; CLAUDE.md imports them.
+
 Run the repository tool with the Python interpreter used for development:
 
 ```shell
