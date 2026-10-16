@@ -58,6 +58,17 @@ inputs are errors, not successful empty runs. A passed call is reusable only
 after its teardown completes. An interrupted run retains completed events and
 returns a nonzero exit status; it does not claim that unreported nodes passed.
 
+## Concurrent main validation
+
+Each `main` run of the test workflow has its own concurrency group, identified by
+`github.run_id`. New main commits can therefore be validated alongside earlier
+ones without cancelling running checks or replacing pending main runs. Available
+GitHub-hosted runner capacity still limits how many jobs can execute at once.
+Pull requests keep a shared group per ref: a newer update supersedes the older
+check for that same pull request. Test selection, numerical acceptance criteria
+and required checks are unchanged. This policy applies to runs using this workflow
+version; it does not change runs already queued under an older version.
+
 ## CI runs the two partitions in shards
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
