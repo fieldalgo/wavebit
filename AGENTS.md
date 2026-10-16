@@ -1,5 +1,6 @@
 # Wavebit — conventions for agent sessions
 
+This is the canonical source of repository instructions; `CLAUDE.md` imports it.
 This file holds the branching and landing rules of the repository. Maintainers keep their private notes
 outside this repository; nothing private belongs in any branch, commit message or file here.
 
@@ -24,10 +25,9 @@ counts: a landing is finished when it is pushed.
    WIP/fixup commits here.
 2. Push the branch and open a **draft** pull request against `main` (`gh pr create --draft`).
    A draft runs no CI, so push as often as you like while the work is in progress. Run the
-   tests the change touches locally; when they pass, mark the pull request ready
+   tests the change touches in a suitable local or remote environment; when they pass, mark the pull request ready
    (`gh pr ready <number>`). That starts the Linux suite (free on this public repository, about
-   seventy minutes, and the account runs only one such suite at a time, so every run you do
-   not need delays everyone's). Fix what fails, rebase again if `main` moved, and wait for
+   seventy minutes; shared runner capacity can add queue time). Fix what fails and wait for
    green. A docs-only change goes the same way; there are no exceptions by size.
 3. Land through the pull request: **Rebase and merge** on GitHub, or
    `gh pr merge <number> --rebase --delete-branch`. GitHub replays the commits onto the tip of
@@ -62,10 +62,34 @@ before they are pushed.
 
 ## Issues
 
-The open issues are the work list: bugs, accuracy gaps, enhancements, performance, documentation
-and validation, one item per issue, labelled as `CONTRIBUTING.md` describes. A session that finds
-such an item drafts the issue with what the matching form asks for -- a minimal script, what it
-got, what it expected, and the release or `main` commit it ran on -- after searching the open
-issues for it. It opens the issue when the maintainer has approved it. Nothing private goes into
-an issue: it is public the moment it is opened. A pull request that resolves one says
-`Fixes #<number>`.
+Public-safe observations, suspected bugs, accuracy and research questions,
+enhancements and validation gaps are welcome, one topic per issue. Search open
+and closed issues first. Use the closest form, state available evidence and mark
+unknown details honestly. A complete reproducer, independent reference or confirmed
+defect is helpful but not a prerequisite. Pin the release or public commit and
+distinguish main, released, nightly and PR-only behavior. Agents prepare a concrete
+draft and post only after the maintainer approves it. No private information goes
+into public issues. A resolving PR uses `Fixes #<number>`; partial work references
+the issue without claiming closure. Intake does not relax review or acceptance.
+
+## Shared validation and contribution policy
+
+Reviewed Ready PRs use automatic Rebase and merge after relevant validation and
+all required checks. Never bypass protections or auto-merge an unreviewed draft.
+Main validation uses one stable workflow/ref group with `queue: max` and no
+cancellation. Non-main runs use `queue: single` and supersede older runs. These
+Actions queues are distinct from a PR merge queue.
+
+Use portable path, temporary-directory and subprocess APIs with explicit text
+encodings. Validate OS-sensitive contracts on the supported systems, retaining
+failures and artifacts. Full Linux tests and isolated distribution checks on
+Linux, macOS and Windows have different scopes; a pass on one does not establish
+the others. Do not weaken numerical gates or add unexplained skips to hide a
+platform failure.
+
+English is canonical for code, contribution guidance and README files. Update
+English and Korean product documentation together under docs, preserving units,
+commands and limits. Keep private planning and progress records outside the
+public repository. Record implementation, exact validation and landing separately.
+Verify dependency licenses and provenance before adoption. Agent commits carry
+their co-author trailer, for example `Co-authored-by: Codex <noreply@openai.com>`.

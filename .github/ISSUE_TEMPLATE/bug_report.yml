@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        A minimal script that still fails is the most useful thing you can give.
+        Observations and suspected bugs are welcome. A reproducer is helpful but not required.
         See [CONTRIBUTING.md](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md#reporting-bugs).
   - type: textarea
     id: summary
@@ -18,10 +18,10 @@ body:
     id: script
     attributes:
       label: Minimal script
-      description: The structure, wavelength, backend and Fourier order, as short as it can be while it still fails.
+      description: Optional if available; a reproducer is not required to report an observation or question.
       render: python
     validations:
-      required: true
+      required: false
   - type: textarea
     id: got
     attributes:
@@ -48,4 +48,4 @@ body:
       description: Wavebit (a release or a commit), Python, and each backend you tried.
       placeholder: wavebit 0.0.3, Python 3.12, NumPy 2.5, JAX 0.11, PyTorch 2.13
     validations:
-      required: true
+      required: false
