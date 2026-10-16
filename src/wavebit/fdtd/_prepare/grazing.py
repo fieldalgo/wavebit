@@ -410,12 +410,14 @@ def _rounded_band(ku, kv, wavelength, c):
     Algebra alone loses a few ulps: the survey first rounds sqrt(eps*mu), then
     n*2*pi/w and its square. Find the last non-propagating float at the lower
     end and the first accepted float at the upper end using that same arithmetic.
+    A threshold above one refuses every finite propagating index; infinity
+    represents that open upper end. At or just below one, search the ordered
+    float lattice in at most 63 steps, preserving the eager rounded-cos test.
     This changes no exit-cos threshold or physical tolerance.
     """
     k2 = ku * ku + kv * kv
     k0 = 2.0 * math.pi / wavelength
     low = k2 / (k0 * k0)
-    high = low / (1.0 - c * c)
 
     def s2(value):
         k = math.sqrt(value) * 2.0 * math.pi / wavelength
@@ -429,10 +431,20 @@ def _rounded_band(ku, kv, wavelength, c):
         low = math.nextafter(low, -math.inf)
     while s2(math.nextafter(low, math.inf)) >= 1.0:
         low = math.nextafter(low, math.inf)
-    while not accepted(high):
-        high = math.nextafter(high, math.inf)
-    while accepted(math.nextafter(high, -math.inf)):
-        high = math.nextafter(high, -math.inf)
+    # Positive binary64 bit patterns have numerical order. Search this finite
+    # lattice, rather than walking an arbitrarily wide rounded-cos plateau.
+    # Infinity is the upper sentinel when no finite index is accepted (c > 1).
+    # For c == 1, preserve the first finite value whose eager cos rounds to 1.
+    first = int(np.float64(low).view(np.uint64))
+    last = int(np.float64(math.inf).view(np.uint64))
+    while last - first > 1:
+        middle = (first + last) // 2
+        value = float(np.uint64(middle).view(np.float64))
+        if accepted(value):
+            last = middle
+        else:
+            first = middle
+    high = float(np.uint64(last).view(np.float64))
     return low, high
 
 
@@ -445,7 +457,9 @@ def refused_bands(scene, plan, n_max):
     propagates at an exit cos the face's pure stretch does not accept (:func:`accepted_cos`),
     at every wavelength a Diffraction monitor asks for: an order of transverse wavenumber
     ``K`` propagates for ``n^2 k0^2 > K^2`` and exits at ``cos^2 = 1 - K^2 / (n^2 k0^2)``, so it
-    is refused for ``K^2 / k0^2 < n^2 < K^2 / (k0^2 (1 - c^2))``. Orders are counted at
+    is refused for ``K^2 / k0^2 < n^2 < K^2 / (k0^2 (1 - c^2))`` when ``c < 1``.
+    For ``c > 1`` every propagating index is refused; at ``c == 1`` the upper
+    endpoint is where the survey's rounded cosine first reaches one. Orders are counted at
     ``n_max``; a larger index is the caller's to refuse. A stabilized face's rows are judged
     on the face's exact return as well (:func:`_judge`), which these bands do not hold; the
     caller keeps a traced medium out of such a layer. Endpoints are rounded to the
@@ -482,6 +496,9 @@ def refused_bands(scene, plan, n_max):
                 low = (ku * ku + kv * kv) / (k0 * k0)
                 if low > 0.0:
                     bands.append(_rounded_band(ku, kv, w, c))
+                elif c > 1.0:
+                    # Even the normal order's cos=1 fails this face's threshold.
+                    bands.append((0.0, math.inf))
         for label, _ in _layer_materials(scene, plan.grid, P, side, face.cells):
             out[(name, label)] = tuple(bands)
     return out
