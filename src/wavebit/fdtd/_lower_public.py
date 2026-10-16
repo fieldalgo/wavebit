@@ -182,7 +182,9 @@ def lower_problem(problem, numerics, *, plan=None):
     scene, units = problem.scene, problem.units
     rule = numerics.discretisation
     if rule not in ('voxel', 'stencil'):
-        raise ValidationError("choose 'voxel' or 'stencil'", path='numerics.discretisation', actual=rule)
+        raise ValidationError(
+            f"Numerics(discretisation={rule!r}): the two spellings are 'voxel' and 'stencil'.",
+            path='numerics.discretisation', actual=rule)
     if rule == 'stencil':
         # Whole-cell shapes retain their fill rule. Do not silently fall back for
         # unsupported smoothed bodies or accept an option that affects nothing.
@@ -344,8 +346,9 @@ def lower_problem(problem, numerics, *, plan=None):
     # comparisons: prepared split junctions support traced geometry.
     from ._prepare.junction import DEFAULT, RULES, _roles
     if not isinstance(numerics.junction, str) or numerics.junction not in RULES:
-        raise ValidationError('choose split, staircase, or refuse',
-                              path='numerics.junction', actual=numerics.junction)
+        raise ValidationError(
+            f'Numerics(junction={numerics.junction!r}): choose split, staircase, or refuse.',
+            path='numerics.junction', actual=numerics.junction)
     if numerics.junction != DEFAULT:
         from ._prepare.shape_ranges import traced
         if plan is not None:

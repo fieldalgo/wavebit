@@ -183,6 +183,11 @@ flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없
 접합을 바꾸지 않습니다. `"refuse"`는 준비 단계에서 접합을 거부하므로 split으로
 대체된 계산을 준비할 수 없습니다.
 
+잘못된 selector 값은 공개 `Numerics(junction=...)` 또는
+`Numerics(discretisation=...)` 표기와 지원하는 값으로 설명합니다. `check`는
+`invalid_input` issue를 반환하고 `prepare`는 같은 issue를 가진 `ValidationError`를
+발생시킵니다. `path`는 해당 설정을 가리키며 `actual`은 입력한 값을 보존합니다.
+
 `check(...).resolved["numerical_policies"]`와 `prepare(...).report.resolved`는 요청한
 설정과 구조별 실제 적용을 함께 기록합니다. `discretisation` 행의 `stencil`은 실제
 준비된 엔진 연산자, `voxel`은 기본 내장 스무딩 body를 뜻합니다. `rule=None`과
