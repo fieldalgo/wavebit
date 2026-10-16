@@ -230,6 +230,14 @@ Kottke, Farjadpour, Johnson(*Phys. Rev. E* **77**, 036611, 2008)의 비등방 �
 cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 대역의 단파장 끝이 해상도 규칙이
 읽는 파장입니다(다음 절). `amplitude`, `phase`, `delay`(초)는 파형을 이동하고 스케일합니다.
 
+`Plane`은 `fdtd.Plane(z=.3)`처럼 법선 축 하나를 스칼라로 지정합니다.
+`Field`와 `Flux`는 `fdtd.Plane(z=.3, x=(-.05, .05))` 같은 유한 가로 범위도
+지원합니다. `PlaneWave`와 `Diffraction`은 가로 셀 전체를 사용하므로 두 가로
+범위를 모두 생략해야 합니다. 셀 경계와 일치하더라도 명시한 범위는 지원하지
+않으며, `sources.<name>.plane` 또는 `outputs.<name>.plane` 경로의 구조화된
+`plane_span` 오류가 됩니다. `check`는 이 오류를 보고하고, `prepare`와 `run`은
+`UnsupportedFeatureError`를 발생시킵니다.
+
 | 소스 | 하는 일 |
 | --- | --- |
 | `PlaneWave(name, plane, pulse, direction="-z", theta=0, phi=0, polarization="s")` | `plane`에 가장 가까운 노드 평면의 한 방향 시트로, `direction` 쪽으로만 내보냅니다. `theta`는 진행 축으로부터의 극각, `phi`는 첫 번째 가로 축(z 방향 파동이면 x)으로부터의 방위각입니다. `"s"`는 E가 입사면에 수직, `"p"`는 입사면 안입니다. 가로 면은 `Periodic()`(수직 입사)이거나 `Bloch.from_source`가 만든 `Bloch` 면이어야 합니다. 가로 파수 벡터는 펄스의 중심 파장에서 고정되므로, 비스듬한 광대역 펄스는 일정한 각도의 조명이 아닙니다. |

@@ -243,6 +243,14 @@ spectrum falls to `cutoff` at `f0 ± k·σ` with `exp(-k²/2) = cutoff`; the sho
 that band is the wavelength the resolution rule reads (next section). `amplitude`, `phase` and
 `delay` (seconds) shift and scale the waveform.
 
+`Plane` names its normal with one scalar, for example `fdtd.Plane(z=.3)`.
+`Field` and `Flux` also accept finite transverse spans, such as
+`fdtd.Plane(z=.3, x=(-.05, .05))`. `PlaneWave` and `Diffraction` require the
+whole transverse cell: omit both transverse spans. Any explicit span, even
+one matching the cell boundaries, is unsupported and produces a structured
+`plane_span` issue at `sources.<name>.plane` or `outputs.<name>.plane`.
+`check` reports the issue; `prepare` and `run` raise `UnsupportedFeatureError`.
+
 | Source | What it does |
 | --- | --- |
 | `PlaneWave(name, plane, pulse, direction="-z", theta=0, phi=0, polarization="s")` | a one-way sheet at the node plane nearest `plane`, launching toward `direction`. `theta` is the polar angle from the propagation axis and `phi` the azimuth from the first transverse axis (x for a z wave); `"s"` has E perpendicular to the plane of incidence, `"p"` in it. The transverse faces must be `Periodic()` (normal incidence) or the `Bloch` faces from `Bloch.from_source`; the transverse wavevector is fixed at the pulse's centre wavelength, so an oblique broadband pulse is not constant-angle illumination. |

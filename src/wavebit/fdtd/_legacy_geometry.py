@@ -1555,6 +1555,9 @@ class Plane:
     The axis named with a scalar is the plane's normal; it snaps to the nearest **node plane**
     (where the tangential E lives). The other two axes run the whole box unless given as a
     span, ``fd.Plane(z=0.2, x=(-0.3, 0.3), y=(-0.3, 0.3))``, whose ends snap to node planes too.
+    Finite transverse spans are supported by Field and Flux. Public PlaneWave and
+    Diffraction require the whole transverse cell and reject any explicit span with
+    the structured ``plane_span`` error, even if its bounds match the cell.
     Every number is static: it picks indices, so it fixes the plan.
     """
 

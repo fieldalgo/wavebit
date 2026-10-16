@@ -85,6 +85,19 @@ def _pulse(value, units):
                            df=units.rate_to_internal(value.frequency_sigma_hz), cutoff=value.cutoff)
 
 
+def _full_cell_plane(plane, path):
+    """Full-cell ports cannot implement a finite transverse aperture."""
+    if not isinstance(plane, geometry.Plane):
+        raise ValidationError('expected Plane', path=path)
+    spans = {a: getattr(plane, a) for i, a in enumerate('xyz')
+             if i != plane.axis and getattr(plane, a) is not None}
+    if spans:
+        raise UnsupportedFeatureError(
+            'PlaneWave and Diffraction require the full transverse cell; '
+            'omit transverse Plane spans. Field and Flux support finite spans.',
+            code='plane_span', path=path, expected='no transverse spans', actual=spans)
+
+
 def _source(source, units):
     if not isinstance(source, (sources.PlaneWave, sources.Dipole, sources.TFSF)):
         raise UnsupportedFeatureError('unsupported source', path='sources', actual=type(source).__name__)
@@ -92,8 +105,7 @@ def _source(source, units):
               amplitude=source.current_moment if isinstance(source,sources.Dipole) else source.amplitude,
               phase=source.phase, delay=units.time_to_internal(source.delay))
     if isinstance(source, sources.PlaneWave):
-        if not isinstance(source.plane, geometry.Plane):
-            raise ValidationError('expected Plane', path='sources.'+source.name+'.plane')
+        _full_cell_plane(source.plane, 'sources.'+source.name+'.plane')
         kw['xyz'[source.plane.axis]] = source.plane.position
         return old_sources.PlaneWave(**kw, direction=source.direction,
             theta=math.degrees(_number(source.theta, 'sources.'+source.name+'.theta')),
@@ -137,8 +149,7 @@ def _monitor(m, problem):
             raise ValidationError('diffraction source must name one PlaneWave', path='outputs.'+m.name+'.source')
         if len(problem.sources) != 1:
             raise UnsupportedFeatureError('normalized diffraction currently requires one PlaneWave', path='outputs.'+m.name)
-        if not isinstance(m.plane, geometry.Plane):
-            raise ValidationError('expected Plane', path='outputs.'+m.name+'.plane')
+        _full_cell_plane(m.plane, 'outputs.'+m.name+'.plane')
         return old_monitors.Diffraction(m.name, **{'xyz'[m.plane.axis]: m.plane.position},
             side=m.side, wavelengths=m.wavelengths, orders=m.orders,
             reference_plane=m.reference_plane, incident_plane=m.incident_plane)
