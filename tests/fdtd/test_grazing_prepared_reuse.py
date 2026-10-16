@@ -26,7 +26,7 @@ def problem(value=2.1, *, kind='slab', coefficient='epsilon', monitor=True):
     return p.replace(scene=scene, outputs=p.outputs.replace(monitors=monitors))
 
 
-def settings(kind='slab', *, stabilize=0., reference=True, steps=40):
+def settings(kind='slab', *, stabilize=0., reference=True, steps=160):
     n = numerics(steps=steps).replace(geometry_ranges={})
     refs = {'z-': Material(2.1), 'z+': Material(2.1 if kind == 'background' else 1.)}
     return n.replace(absorber=n.absorber.replace(stabilize=stabilize,
@@ -63,7 +63,7 @@ def test_prepared_allowed_values_and_derivatives_and_grazing_boundary(backend, k
             value, aux = objective(v)
             derivative, = torch.autograd.grad(value, v)
             return (value.detach(), aux), derivative.detach()
-    value = 2.15
+    value = 2.05
     (got, (electric, magnetic, stable)), derivative = evaluate(value)
     direct = quiet(fdtd.run, make(value), numerics=n)
     assert bool(stable)
