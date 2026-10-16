@@ -164,6 +164,23 @@ def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(numerics.absorber, (PML, Absorber)):
         raise UnsupportedFeatureError('choose PML or Absorber numerical padding', path='numerics.absorber')
     scene, units = problem.scene, problem.units
+    rule = numerics.discretisation
+    if rule not in ('voxel', 'stencil'):
+        raise ValidationError("choose 'voxel' or 'stencil'", path='numerics.discretisation', actual=rule)
+    if rule == 'stencil':
+        # Whole-cell shapes retain their fill rule. Do not silently fall back for
+        # unsupported smoothed bodies or accept an option that affects nothing.
+        shapes = tuple(item.shape for item in scene.structures)
+        unsupported = tuple(type(s).__name__ for s in shapes
+                            if type(s) is not geometry.Sphere
+                            and type(s) not in (geometry.Slab, geometry.Region))
+        if unsupported:
+            raise UnsupportedFeatureError(
+                'stencil supports only Sphere smoothed bodies; Slab/Region keep whole-cell fills',
+                path='numerics.discretisation', actual=unsupported)
+        if not any(type(s) is geometry.Sphere for s in shapes):
+            raise UnsupportedFeatureError('stencil requires an applicable Sphere smoothed body',
+                                          path='numerics.discretisation')
     dx = _number(numerics.grid.spacing, 'numerics.grid.spacing')
     old_scene.Resolution(dx=dx)
     physical_n = tuple(cell_count(s, dx) for s in scene.domain.size)
@@ -234,7 +251,7 @@ def lower_problem(problem, numerics, *, plan=None):
                      and _number(hi[a], 'scene.structures.'+item.name) >= physical_high[a])):
                     raise UnsupportedFeatureError('a finite body touches an Open face; its continuation into padding is unspecified', code='padding_continuation', path='scene.structures.'+item.name)
         structures.append(old_geometry.Structure(shape, material,
-                          discretisation=numerics.discretisation))
+                          discretisation=rule if type(shape) is old_geometry.Sphere else 'voxel'))
     converted = {}
     references = numerics.absorber.reference_media if isinstance(numerics.absorber, PML) else {}
     invalid_references = set(references)-{f for f,n in pad.items() if n}

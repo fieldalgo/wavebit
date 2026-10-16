@@ -202,6 +202,14 @@ flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없
 [Mie 검증](../../validation/fdtd/fd-mie-validation.md)과
 [smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md)에 있습니다.
 
+장면 전체의 `Numerics(discretisation="stencil")` 설정은 스무딩 본체에만 전달됩니다.
+`Slab`과 `Region`은 whole-cell fill을 유지합니다. `Box`, `Cylinder`, `Prism` 등
+지원하지 않는 형상과 적용할 `Sphere`가 없는 장면은 `numerics.discretisation`에서
+거부합니다. 이 설정은 정확한 내장 `Sphere`, `Slab`, `Region` 타입만 받습니다.
+사용자 Shape와 subclass는 fill 프로토콜을 바꿀 수 있어 거부합니다.
+stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분하지 않는
+구체적인 수치만 지원하며, slab이나 region을 추가한 다중 구조물 장면은 지원하지 않습니다.
+
 ## 재료
 
 | 모델 | 용도 |

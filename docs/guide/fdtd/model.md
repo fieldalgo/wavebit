@@ -214,6 +214,15 @@ alternative `discretisation="stencil"` passed that gate for a sphere (order 2.24
 [the Mie validation](../../validation/fdtd/fd-mie-validation.md) and
 [smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md).
 
+The scene-wide `Numerics(discretisation="stencil")` selector is forwarded only to
+smoothed bodies. `Slab` and `Region` retain their whole-cell fills. `Box`, `Cylinder`,
+`Prism`, other unsupported shapes, and scenes without an applicable `Sphere` are
+refused at `numerics.discretisation`. Only the exact built-in `Sphere`, `Slab`, and
+`Region` types pass this selector gate; custom shapes and subclasses may change the
+fill protocol and are refused. This does not extend the stencil's scope:
+it still requires one lone sphere in vacuum and concrete, non-differentiated values;
+adding a slab or region does not make a multi-structure stencil scene supported.
+
 ## Materials
 
 | Model | Use |
