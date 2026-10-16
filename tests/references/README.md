@@ -1330,7 +1330,7 @@ and PyMoosh's its 4.0.1.
 
 | Golden | Frozen with | When |
 | --- | --- | --- |
-| `golden_s4.npz` | the S4 Python extension `s4-fieldalgo 0.1.0+b98c80e`: FieldAlgo's fork of S4 1.1 (`victorliu/S4`) at fork commit `b98c80e` (branch `modernize/master-fixed`), built against Accelerate for Python 3.12 and installed in the project env | 2026-08-10 |
+| `golden_s4.npz` | the S4 Python extension `s4-fieldalgo 0.1.0+b98c80e`: FieldAlgo's fork of S4 1.1 (`victorliu/S4`), built against Accelerate for Python 3.12 and installed in the project env. `b98c80e` is the build stamp, a commit of the fork's unpublished development history; the fork publishes each release as one commit on upstream's last, and that release, tag `v0.1.0` (`3940533`) on [fieldalgo/S4](https://github.com/fieldalgo/S4), has a byte-identical `S4/` source tree -- build that tag to reproduce these goldens | 2026-08-10 |
 | `golden_s4_field.npz` | the same build | 2026-08-14; regenerated 2026-10-14 on it, every field array bit for bit, only the two `__stack` arrays changed |
 | `golden_s4_polygon.npz` | the same build | 2026-10-15 |
 | `golden_fmmax.npz` | fmmax 1.7.1, jax and jaxlib 0.10.2, numpy 2.4.6, Python 3.11, in `fwref` | 2026-08-10 |
