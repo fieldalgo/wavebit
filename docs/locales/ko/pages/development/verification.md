@@ -1,5 +1,23 @@
 # 검증 기록과 안전한 이어 실행
 
+## 저장소 검증 정책
+
+PR은 draft로 엽니다. draft PR에는 CI 실행기를 배정하지 않고 기능 브랜치
+push도 검증을 실행하지 않습니다. 적절한 로컬 또는 원격 환경에서 관련 검사를
+통과하고 검토한 뒤 Ready로 전환합니다. workflow는 main, Ready PR 이벤트,
+명시적 수동 dispatch에서 실행합니다. 자동 Rebase and merge는 모든 필수 검사를
+유지합니다. main은 고정 workflow/ref 대기열(`queue: max`, 취소 없음)을 사용하고,
+다른 ref는 `queue: single`로 이전 실행을 대체합니다. 이 Actions 대기열은
+PR 병합 큐와 별개입니다.
+
+전체 Linux 수용에는 default/slow 범위, 예제, 문서 검증이 포함됩니다.
+독립 배포 검증표는 sdist와 wheel을 만들고 소스 트리 밖에 설치하여
+Python 3.12의 Linux·macOS·Windows에서 공개 NumPy RCWA/FDTD 사용, 번들 데이터와
+plotting을 확인합니다. 플랫폼 smoke 통과가 그 OS에서 모든 선택적 backend나
+전체 수치 시험을 통과했다는 뜻은 아닙니다. 검증이나 릴리스 준비를 보고하기 전에
+정확 커밋의 검사와 artifact를 확인합니다. 기여 지침은 AGENTS.md가 원본이고
+CLAUDE.md는 이를 불러옵니다.
+
 개발에 사용하는 Python 인터프리터로 저장소 도구를 실행합니다.
 
 ```shell

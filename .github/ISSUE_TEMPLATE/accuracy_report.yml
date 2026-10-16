@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        An accuracy report needs a reference: an analytic result, another solver, a paper,
-        a converged refinement, or a finite-difference check of a derivative. Say where it comes from.
+        Accuracy questions and research observations are welcome before a reference is available.
+        Include an analytic result, solver comparison or convergence evidence if known; mark unknowns honestly.
   - type: input
     id: quantity
     attributes:
@@ -18,14 +18,15 @@ body:
     id: script
     attributes:
       label: Minimal script
+      description: Optional if available; a reproducer is not required to report an observation or question.
       render: python
     validations:
-      required: true
+      required: false
   - type: textarea
     id: values
     attributes:
       label: Wavebit's value and the reference
-      description: Both numbers, the reference's source, and how far apart they are (relative or absolute).
+      description: Available observations or accuracy question; include a reference and discrepancy if known, or say what remains unknown.
     validations:
       required: true
   - type: textarea
@@ -45,4 +46,4 @@ body:
       label: Versions
       placeholder: wavebit 0.0.3, Python 3.12, NumPy 2.5, JAX 0.11, PyTorch 2.13
     validations:
-      required: true
+      required: false

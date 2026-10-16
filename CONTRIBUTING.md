@@ -58,7 +58,10 @@ and the [current source map](docs/development/source-map.md) for change location
 
 ## Reporting bugs
 
-Numerical software bugs are often subtle, so a good report makes all the difference. Please include:
+Suspected bugs, accuracy questions and research observations are welcome even
+before a defect is confirmed. A complete reproducer or reference is helpful but
+is not required. Search existing open and closed issues first; include available
+evidence and mark unknown details honestly. Helpful details include:
 
 - A **minimal script** that reproduces the issue (structure, wavelength, backend, Fourier order).
 - The **backend** (NumPy / JAX / PyTorch) and its version, plus your Python and Wavebit versions.
@@ -66,7 +69,9 @@ Numerical software bugs are often subtle, so a good report makes all the differe
 
 If the same case behaves differently on two backends, say so — cross-backend discrepancies are treated as high-priority bugs.
 
-The issue forms -- **Bug report**, **Accuracy report** and **Enhancement** -- ask for exactly this.
+Use the closest **Bug report**, **Accuracy report** or **Enhancement** form.
+Pin the version or public commit, disclose local changes, and distinguish main
+behavior from PR-only behavior. Reporting does not relax acceptance of a fix.
 
 ## Issues are the work list
 
@@ -81,6 +86,11 @@ request that resolves an issue says `Fixes #<number>`, so landing it closes the 
 Not sure whether something is a bug, a usage question, or a feature idea? Open an issue anyway and label it as a question. Questions about RCWA methodology (Fourier factorization choices, convergence behavior, conventions) are welcome — they often turn into documentation improvements.
 
 ## Pull requests
+
+Follow the branch and validation policy in [AGENTS.md](AGENTS.md). Open drafts,
+run relevant checks in an appropriate environment, and mark them Ready after
+review. Reviewed Ready PRs may use automatic Rebase and merge only after all
+required checks pass. Main CI retains earlier runs in its workflow queue.
 
 - **Keep PRs small and focused.** One fix or one feature per PR reviews much faster than a grab-bag.
 - **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests/` for the pattern.
