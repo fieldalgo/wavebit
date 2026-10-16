@@ -132,6 +132,7 @@ def _report(problem,numerics,execution,scene,plan,metadata):
                        estimates={'state_bytes':r.bytes_per_state,'parameter_bytes':r.bytes_per_params,
         'scope':'main E/H, CPML and material arrays; excludes runtime, temporary, source and observation storage'},
         capabilities={'backend':execution.backend,'precision':execution.precision,'device':execution.device,
+                      'runtime_validation':'concrete_inputs' if r.params_known else 'deferred',
                       'warnings':tuple(to_public(w) for w in r.warnings),
                       'automatic_stopping':numerics.decay is not None,
                       'geometry_ranges':tuple(numerics.geometry_ranges)},resolved=resolved)
@@ -208,6 +209,8 @@ class Prepared:
                 raise _issue(exc) from exc
             try:
                 raw=execute(scene,backend=self.execution.backend,device=self.execution.device,plan=self._plan)
+                metadata=dict(metadata,numerical_policies=numerical_policies(
+                    problem,self.numerics,scene,raw.plan))
                 return adapt_result(problem,self.numerics,self.execution,raw,metadata)
             except (TypeError,ValueError,NotImplementedError,RuntimeError) as exc:
                 _reraise_public(exc)

@@ -1484,3 +1484,28 @@ and bound, sphere-only scope and no-AD contract remain unchanged.
 Detection was checked with actual product mutations: disabling the grid guard made
 six cases fail; removing the preparation memory check made all four bound/reuse
 cases fail. Each mutation was reverted and the product bytes checked after restoration.
+
+
+### Reuse regression quality follow-up
+
+The original reuse test executed the original plan twice. It now executes the new
+`build_plan(..., _reuse=p)` result and observes that exact plan at stencil lowering.
+A product mutation that discards the caller's explicit plan fails this observation,
+although its numerical results remain equal. The test separately requires nonzero
+E and H inside the operator region and exact equality of both final fields.
+
+Every new function in `tests/fdtd/test_fd_stencil_reuse.py` was checked against an
+actual product mutation, with restoration of the original product bytes after each:
+
+| Function (without `test_`) | Product mutation | Failing cases |
+| --- | --- | ---: |
+| `direct_lowering_refuses_changed_operator_inputs` | disable grid guard | 3 |
+| `changed_grid_is_refused_before_coefficient_allocation` | disable grid guard | 3 |
+| `replanning_never_reuses_a_changed_operator` | ignore operator source digest at reuse | 1 (material) |
+| `identical_reuse_preserves_operator_and_nonzero_fields` | discard explicit run plan; separately disable reuse | 1 each |
+| `tight_memory_bound_refuses_before_sparse_work` | omit preparation memory check | 4 |
+| `equivalent_snapped_grid_keeps_the_prepared_operator` | compare requested domain size to snapped size | 1 |
+| `grid_guard_preserves_stencil_no_ad_contract` | bypass plain-number refusal | 1 (NumPy array) |
+
+The source-digest, explicit-plan, memory and no-AD mutations are validation-only;
+none is part of the submitted product. No new physical limit or tolerance is used.

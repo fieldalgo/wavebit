@@ -286,3 +286,29 @@ Finite extreme inputs pass this range door; this alone does not certify the CFL 
 resolution, or recurrence arithmetic at extreme finite scales; an inactive analytic response does
 not excuse an invalid parameter declaration. This is covered by
 `tests/fdtd/test_material_finite_guard.py`, including admitted coefficient derivatives.
+
+For very large finite Drude/Lorentz damping, ADE coefficients use an algebraically
+rescaled denominator before `gamma / dt` can overflow. Multiplying numerator and
+denominator by `dt` gives `D = 1/dt + gamma/2`, with coefficients
+`(2/dt - omega_0**2*dt)/D`, `(1/dt - gamma/2)/D`, and `strength*dt/D`.
+The implementation also rescales by exact powers of two to keep reciprocals normal.
+The optical response divides its denominator by damping before forming `gamma*omega`
+when that product would overflow. Ordinary-size inputs retain their original arithmetic.
+JAX optimization barriers preserve these intermediate scalings without changing XLA flags,
+values, or derivatives; no material parameter is clipped and there is no physical upper
+limit on damping.
+
+For these second-order poles, a nonzero ADE drive below the smallest normal float64
+value cannot be preserved on the
+supported JAX CPU path, which flushes subnormals to zero. Such a drive, or a nonfinite ADE
+coefficient, is refused eagerly as `PoleArithmeticRefused`; a traced crossing poisons the
+existing runtime guard. This machine representability door is shared with NumPy and Torch,
+so an active oscillator cannot silently disappear on only one backend. It is not an optical
+convergence tolerance. A concrete zero strength remains allowed, and its analytic strength
+tangent is retained. As with any float64 calculation, derivatives that themselves fall
+outside the dtype's representable range are not certified.
+
+`tests/fdtd/test_large_damping.py` compares branch neighbours and zero/nonzero strengths
+with independent Decimal arithmetic, checks finite optical susceptibility, compares a
+small physical `check`/`prepare`/live-run scene, and exercises both sides of the drive
+representability door and admitted value/strength derivatives.

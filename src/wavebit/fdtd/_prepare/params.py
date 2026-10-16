@@ -179,6 +179,18 @@ def lower(scene, plan, rt='numpy', device=None):
     guard = _stability_guard(scene, plan, rt)
     guard = _axis1d_guard(scene, rt, guard)
     guard = _material_door_guard(scene, rt, guard)
+    # A carried pole may cross the same representability door check_stability
+    # asks eagerly. Read the actual recurrence, not an upper bound on gamma.
+    from wavebit.fdtd._prepare.shape_ranges import materials_traced
+    if materials_traced(scene):
+        for structure in scene.structures:
+            for pole in structure.material.poles:
+                valid = rt.array(1., 'float64') > 0
+                for coefficient in pole.coefficients(plan.dt):
+                    valid = valid & rt.xp.isfinite(rt.array(coefficient, 'float64'))
+                held = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'),
+                                              rt.array(float('nan'), 'float64')))
+                guard = held if guard is None else guard * held
     guard = resolution_guard(scene, plan, rt, guard)
     guard = grazing_guard(scene, plan, rt, guard)
     guard = shape_guard(scene, plan, rt, guard)

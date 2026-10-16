@@ -76,12 +76,23 @@ def test_identical_reuse_preserves_operator_and_nonzero_fields(monkeypatch):
     monkeypatch.setattr(stencil,'_assemble',forbidden)
     reused = quiet(build_plan,s,_reuse=p)
     assert stencil_term(reused) is stencil_term(p)
-    second = quiet(fd.run,s,plan=p)
+    assert reused is not p
+    # Observe the actual lowering path: passing p again would miss the result
+    # returned by build_plan, and ignoring run's explicit plan must fail too.
+    used = []
+    real_lower = stencil.lower
+    def observe(scene,plan,rt):
+        used.append(plan)
+        return real_lower(scene,plan,rt)
+    monkeypatch.setattr(stencil,'lower',observe)
+    second = quiet(fd.run,s,plan=reused)
+    assert used and all(plan is reused for plan in used)
     np.testing.assert_array_equal(first.final.E,second.final.E)
     np.testing.assert_array_equal(first.final.H,second.final.H)
     region = stencil_term(p).region
     box = (slice(None),slice(*region.z),slice(*region.y),slice(*region.x))
-    assert np.any(first.final.E[box] != 0), 'operator region must be excited'
+    assert np.any(first.final.E[box] != 0), 'operator E region must be excited'
+    assert np.any(first.final.H[box] != 0), 'operator H region must be excited'
 
 
 @pytest.mark.parametrize('reuse', [False,True])
@@ -104,7 +115,8 @@ def test_equivalent_snapped_grid_keeps_the_prepared_operator():
     s,p = prepared()
     equivalent = s.replace(domain=s.domain.replace(size=(1.99,)*3))
     assert equivalent.domain.size != s.domain.size
-    first,second = quiet(lower,s,p,'numpy'),quiet(lower,equivalent,p,'numpy')
+    aligned = s.replace(domain=s.domain.replace(size=p.grid.size))
+    first,second = quiet(lower,aligned,p,'numpy'),quiet(lower,equivalent,p,'numpy')
     np.testing.assert_array_equal(first['be'],second['be'])
     for name in first['stencil']:
         for key in first['stencil'][name]:

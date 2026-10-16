@@ -1979,6 +1979,16 @@ def cfl_bound(scene, plan):
 
 def check_stability(scene, plan):
     """Refuse a concretely unstable ``dt``; return whether the bound could be read at all."""
+    # ADE arithmetic must be representable too, not just CFL-admissible.
+    for material in [_background(scene)] + [s.material for s in scene.structures]:
+        for pole in material.poles:
+            if any(concrete(getattr(pole, f)) is None for f in pole.__dataclass_fields__):
+                continue
+            coefficients = pole.coefficients(plan.dt)
+            if any(not math.isfinite(concrete(v)) for v in coefficients):
+                raise ValueError('PoleArithmeticRefused: nonfinite ADE coefficient or nonzero '
+                                 'subnormal second-order drive; change the material/time discretization. '
+                                 'No pole is clipped or silently removed.')
     bound, reason = cfl_bound(scene, plan)
     if bound is None:
         return False
