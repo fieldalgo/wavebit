@@ -20,8 +20,8 @@ under `jax.jit` or `jax.vmap` for the shapes `Numerics(topology_check=...)` admi
 Cartesian Li rectangles by default (`'device'`), the other scalar shapes with `'host'`, the rest
 refused by name ([checked shape JIT](../../guide/rcwa/guarded-shape-jit.md)). So the "jax jit on
 shapes" rows and recommendations apply to the retired interface and do not carry over to that
-lifecycle. Backend speed through `prepared.run` was measured separately on 2026-10-16 and is in
-the differentiation guide's [backend speed](../../guide/common/autodiff.md#backend-speed) section. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
+lifecycle. Backend speed through `prepared.run` was measured separately on 2026-10-16, jitted shape
+steps included, and is in the differentiation guide's [backend speed](../../guide/common/autodiff.md#backend-speed) section. The [differentiation guide](../../guide/common/autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)
 lists which inputs differentiate on which backend there.
 
 Targets:

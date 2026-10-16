@@ -41,7 +41,9 @@ and all its differentiable inputs keep their JAX graphs. Under vmap the checks r
 sequentially for each geometry; they can limit throughput, especially for complex
 paintings. This is an explicit host-transfer policy, not a claim of fully device-resident
 execution or a backend speed measurement. CPU JAX execution is covered by the regression
-suite; accelerator performance has not been measured.
+suite; accelerator performance has not been measured. One CPU measurement of a jitted step, a circle under `topology_check='host'` and a Cartesian Li
+rectangle under the default, is in the differentiation guide's
+[backend speed](../common/autodiff.md#backend-speed) section.
 
 `result.validity.checks['shape_topology']` is false when the host check rejects a live
 geometry. Diffraction powers and amplitudes, retained fields, boundary fields and

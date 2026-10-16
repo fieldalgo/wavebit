@@ -102,13 +102,13 @@ When a pattern moves every step under jit, use `('sampled', 'li')` or prepare ea
 
 The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the earlier solver interface (`freeze_geometry()` and `solve(geometry=...)`, retired with `wavebit.compat` on 2026-10-15; a historical checkout runs them). They are not measurements of this lifecycle or its Cartesian Li runtime guard or host callback policy. Backend speed through `prepared.run` is measured below.
 
-Through `prepared.run`, one derivative step -- the run and the gradient of its summed transmission -- took the following on one CPU (Apple M4, 2026-10-16), for a circle in a 600 nm cell under NVF with `shape_nvf_grid_size=256`:
+Through `prepared.run`, one derivative step -- the run and the gradient of its summed transmission -- took the following on one CPU (Apple M4, 2026-10-16, `main` at `99aedad4`, PyTorch 2.14.1, JAX 0.11.0). Each cell gives PyTorch / eager `jax.grad` / `jax.jit(jax.grad)`. The circle (radius 160 nm in a 600 nm cell, NVF on a 256-point grid) uses `Numerics(topology_check='host')`, the policy that admits it under `jax.jit`; the 260 x 200 nm rectangle uses Cartesian Li, which the default guard admits; the thickness is the circle problem's, default numerics:
 
-| `orders` | radius, PyTorch | radius, eager `jax.grad` | thickness, PyTorch | thickness, eager `jax.grad` | thickness, `jax.jit(jax.grad)` |
-| --- | --- | --- | --- | --- | --- |
-| `(3, 3)` | 0.071 s | 0.27 s | 0.032 s | 0.15 s | 0.024 s |
-| `(5, 5)` | 0.39 s | 0.48 s | 0.33 s | 0.37 s | 0.18 s |
-| `(7, 7)` | 1.7 s | 1.7 s | 1.4 s | 1.3 s | 0.84 s |
-| `(9, 9)` | 6.4 s | 4.6 s | 4.1 s | 3.6 s | 2.4 s |
+| `orders` | circle radius | rectangle width | layer thickness |
+| --- | --- | --- | --- |
+| `(3, 3)` | 0.036 / 0.17 / 0.023 s | 0.027 / 0.16 / 0.019 s | 0.025 / 0.12 / 0.018 s |
+| `(5, 5)` | 0.20 / 0.28 / 0.11 s | 0.19 / 0.25 / 0.10 s | 0.17 / 0.21 / 0.089 s |
+| `(7, 7)` | 0.81 / 0.81 / 0.49 s | 0.74 / 0.75 / 0.49 s | 0.68 / 0.63 / 0.40 s |
+| `(9, 9)` | 2.65 / 2.65 / 1.93 s | 2.78 / 2.56 / 1.90 s | 2.39 / 2.26 / 1.68 s |
 
-Each entry is the median of five calls after a first one, each configuration in a fresh process, on a machine shared with other work; the fastest call was up to 1.7 times quicker than the median. Eager `jax.grad` also pays 13 to 22 s on its first call in a process, compiling each operation it meets, where `jax.jit(jax.grad)` compiled in 2 to 5 s. So for a shape derivative PyTorch is the faster choice at low orders, and the two are level within that spread from `orders=(7, 7)`. For an input `jax.jit` admits, the jitted step was the fastest at every order measured, 1.3 times PyTorch at `(3, 3)` and 1.7 to 1.8 times from `(5, 5)`. The script and its record are in [`studies/rcwa/lifecycle_backend_speed/`](https://github.com/fieldalgo/wavebit/tree/main/studies/rcwa/lifecycle_backend_speed).
+Each entry is the median of five calls after a first one, each configuration in a fresh process, on a machine shared with other work (load average 4.1 at the start, 8.8 at the end); the fastest call was within 9% of the median. Eager `jax.grad` also pays 9.6 to 16 s on its first call in a process, compiling each operation it meets; `jax.jit(jax.grad)` compiled in 1.4 to 4.5 s; PyTorch's first call took at most 0.2 s longer than its median. So the jitted step was the fastest at every order measured, for shapes as for the thickness: 1.4 to 1.9 times PyTorch. Without `jit`, `jax.grad` is slower than PyTorch at low orders (4.7 times at `(3, 3)` for the radius) and level from `(7, 7)`. An earlier run that morning, with PyTorch 2.13.0 on a more heavily loaded machine (load average about 9), measured slower PyTorch steps -- 6.4 s against 2.65 s for the radius at `(9, 9)` -- and was not repeated to separate the version from the load; its record is in the study's history. The script and its record are in [`studies/rcwa/lifecycle_backend_speed/`](https://github.com/fieldalgo/wavebit/tree/main/studies/rcwa/lifecycle_backend_speed).
