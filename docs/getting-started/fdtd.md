@@ -4,6 +4,8 @@ An FDTD problem describes a physical domain, its structures, sources and request
 
 This small pulse calculation records Ey below a dielectric film. Its small transverse domain is periodic in x and y; the z faces are open. The PML is added **outside** the physical domain. This is a quick execution example, not a calibrated spectrum or a refinement study.
 
+## 1. Define the domain and run
+
 ```python
 from wavebit import Material, Units, fdtd
 
@@ -23,10 +25,18 @@ numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
 report = fdtd.check(problem, numerics=numerics)
 assert report.ok
 result = fdtd.run(problem, numerics=numerics)
+```
+
+## 2. Read the recorded signal
+
+```python
 print("samples:", len(result["probe"].time), "time unit: s; field unit:", result["probe"].units)
 ```
 
+
 The record's time axis is in seconds, and Ey is in V/m. Magnetic records use A/m. `Record` samples the nearest Yee point for its selected component; it is not spatial interpolation at an arbitrary position.
+
+## Optional: reuse a prepared calculation
 
 For repeated compatible runs, use `prepared = fdtd.prepare(problem, numerics=numerics)` and `prepared.run(problem)`. Every run receives the complete current problem. Changing grid topology, duration structure, monitor layout or other prepared constraints requires a new preparation; rejected reuse raises a structured incompatibility error.
 
