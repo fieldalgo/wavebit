@@ -173,6 +173,34 @@ def _monitor_plane_bounds(monitor, low, high):
                                   expected=(low[a], high[a]), actual=span)
 
 
+def validate_sources(problem):
+    """Check source structure before duration, bounds or prepared signatures read it.
+
+    Numerical pulse/waveform leaves stay borrowed; their existing concrete and
+    runtime guards still apply. This also serves prepared reuse, whose signature
+    is inspected before lowering the replacement problem.
+    """
+    names = set()
+    for index, source in enumerate(problem.sources):
+        indexed = f'sources[{index}]'
+        if not isinstance(source, (sources.PlaneWave, sources.Dipole, sources.TFSF)):
+            raise UnsupportedFeatureError('expected PlaneWave, Dipole or TFSF',
+                                          path=indexed, actual=type(source).__name__)
+        if not isinstance(source.name, str) or not source.name:
+            raise ValidationError('source name must be a nonempty string', path=indexed+'.name')
+        if source.name in names:
+            raise ValidationError('source names must be unique', path=indexed+'.name', actual=source.name)
+        names.add(source.name)
+        path = 'sources.' + source.name
+        if not isinstance(source.pulse, sources.GaussianPulse):
+            raise ValidationError('expected GaussianPulse', path=path+'.pulse',
+                                  actual=type(source.pulse).__name__)
+        if isinstance(source, sources.TFSF) and not isinstance(source.box, geometry.Region):
+            raise ValidationError('expected Region: a TFSF surface uses cell-snapped node planes; '
+                                  'Box is a smoothed structure body', path=path+'.box',
+                                  actual=type(source.box).__name__)
+
+
 def _stencil_memory_bound(problem, numerics):
     """Reject unused or malformed public limits before preparation allocates."""
     bound = numerics.memory_bound
@@ -196,6 +224,7 @@ def _stencil_memory_bound(problem, numerics):
 def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
         raise ValidationError('expected fdtd.Problem and fdtd.Numerics', path='problem')
+    validate_sources(problem)
     if not isinstance(numerics.grid, UniformGrid) or not isinstance(numerics.duration, Duration):
         raise ValidationError('expected UniformGrid and Duration', path='numerics')
     if not isinstance(numerics.absorber, (PML, Absorber)):

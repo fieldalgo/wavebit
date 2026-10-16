@@ -1,0 +1,218 @@
+{
+  "base_commit": "060dbd9351c5ab8d324e0877379dc7576902f7c6",
+  "scope": "Structural source admission before duration, bounds and prepared reuse; numerical guards unchanged.",
+  "environment": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.12.9",
+    "packages": {
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "jax": "0.11.0",
+      "torch": "2.14.1",
+      "pytest": "9.1.1"
+    },
+    "internal_threads": 1,
+    "XLA_FLAGS": null
+  },
+  "baseline": {
+    "cases": 26,
+    "failed": 26,
+    "exit": 1
+  },
+  "mutations": [
+    {
+      "name": "source_kind",
+      "exit": 1,
+      "count": 4,
+      "failed": [
+        "test_unknown_source_is_refused_before_reading_its_name[None]",
+        "test_unknown_source_is_refused_before_reading_its_name[0.5]",
+        "test_unknown_source_is_refused_before_reading_its_name[source2]",
+        "test_unknown_source_is_refused_before_reading_its_name[light]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.679322542011505,
+      "log_sha256": "51f9474ddb1a03a82c719a1495e8a6d4da27357df3e8b70715b2e39df745e956",
+      "function": "test_unknown_source_is_refused_before_reading_its_name",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "9af6655bc2a76b6440f47c9d84035188a1e807fa2a0444244abc0246a53f54f0",
+      "restored_sha256": "2c545126595ebc3341a9314848a9b1c1367748813837ef3eb93c2e7b0a28c25c",
+      "source_restored": true
+    },
+    {
+      "name": "source_name",
+      "exit": 1,
+      "count": 4,
+      "failed": [
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[None]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[1]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[name2]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.44527312499121763,
+      "log_sha256": "bf9041b062ce1cd2ed4b443c965ebccf37d09b5771bf14b385fe3d424bcd7769",
+      "function": "test_source_name_is_checked_before_building_paths_or_resolving_duration",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "e949eb28c0f4ace298c81b39593ab19b64b31d6a6176039d6d0f1e0fb3aab696",
+      "restored_sha256": "2c545126595ebc3341a9314848a9b1c1367748813837ef3eb93c2e7b0a28c25c",
+      "source_restored": true
+    },
+    {
+      "name": "source_unique",
+      "exit": 1,
+      "count": 1,
+      "failed": [
+        "test_duplicate_source_names_are_refused_before_resolving_duration"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.4058565839950461,
+      "log_sha256": "909e5155b8e809bb83a5f16ded89905f4a2993a8a6ead72487309b2b74942a6a",
+      "function": "test_duplicate_source_names_are_refused_before_resolving_duration",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "b608b97956ccf75c20e5db4c2569000c29e3bff3ec1c51411633c9dc050d2d95",
+      "restored_sha256": "2c545126595ebc3341a9314848a9b1c1367748813837ef3eb93c2e7b0a28c25c",
+      "source_restored": true
+    },
+    {
+      "name": "source_pulse",
+      "exit": 1,
+      "count": 12,
+      "failed": [
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-TFSF]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.6204314579954371,
+      "log_sha256": "27bfb5264e1ac1a9677f30ad6f8bf4c199575ab19acfb0c33db5a9a1f520f4c7",
+      "function": "test_pulse_type_is_checked_before_duration_or_prepared_signature",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "f2aa7b244a900f1cbf56a35d9cd991f5e9a01442805fcb8a2250f308c56ad0d0",
+      "restored_sha256": "2c545126595ebc3341a9314848a9b1c1367748813837ef3eb93c2e7b0a28c25c",
+      "source_restored": true
+    },
+    {
+      "name": "tfsf_box",
+      "exit": 1,
+      "count": 5,
+      "failed": [
+        "test_tfsf_box_type_is_checked_before_physical_bounds[None]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[0.5]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box2]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box3]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box4]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.5249414590070955,
+      "log_sha256": "c6aa8d0fe29252198bab6c2aa4b51db133c6e07113dc66eae31f837fe22d1cb2",
+      "function": "test_tfsf_box_type_is_checked_before_physical_bounds",
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "76ce471d9a124a45a4ccb942cc6f4beef4c5bbe02455ff1ee3008f9fab19cb0e",
+      "restored_sha256": "2c545126595ebc3341a9314848a9b1c1367748813837ef3eb93c2e7b0a28c25c",
+      "source_restored": true
+    },
+    {
+      "name": "direct_admission",
+      "exit": 1,
+      "count": 26,
+      "failed": [
+        "test_unknown_source_is_refused_before_reading_its_name[None]",
+        "test_unknown_source_is_refused_before_reading_its_name[0.5]",
+        "test_unknown_source_is_refused_before_reading_its_name[source2]",
+        "test_unknown_source_is_refused_before_reading_its_name[light]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[None]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[1]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[name2]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[]",
+        "test_duplicate_source_names_are_refused_before_resolving_duration",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-TFSF]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[None]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[0.5]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box2]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box3]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box4]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.745821208023699,
+      "log_sha256": "83ed6b6f97bb746feb14d95a49e210e16f89373cc6fbcd72f0a3cf22e1e22028",
+      "function": null,
+      "product_file": "src/wavebit/fdtd/_lower_public.py",
+      "mutant_sha256": "2b19e5a16917db7d07a73b2f35d852e6cb1d12d70dcb1eb783ce2e87a81db998",
+      "restored_sha256": "2c545126595ebc3341a9314848a9b1c1367748813837ef3eb93c2e7b0a28c25c",
+      "source_restored": true
+    },
+    {
+      "name": "reuse_admission",
+      "exit": 1,
+      "count": 26,
+      "failed": [
+        "test_unknown_source_is_refused_before_reading_its_name[None]",
+        "test_unknown_source_is_refused_before_reading_its_name[0.5]",
+        "test_unknown_source_is_refused_before_reading_its_name[source2]",
+        "test_unknown_source_is_refused_before_reading_its_name[light]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[None]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[1]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[name2]",
+        "test_source_name_is_checked_before_building_paths_or_resolving_duration[]",
+        "test_duplicate_source_names_are_refused_before_resolving_duration",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-steps-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[None-periods-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-steps-TFSF]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-PlaneWave]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-Dipole]",
+        "test_pulse_type_is_checked_before_duration_or_prepared_signature[pulse1-periods-TFSF]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[None]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[0.5]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box2]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box3]",
+        "test_tfsf_box_type_is_checked_before_physical_bounds[box4]"
+      ],
+      "errors": [],
+      "elapsed_seconds": 0.6402846249984577,
+      "log_sha256": "284d0a5135e5c64aa552f0766fdd0a5f8658865e8876e88e443bc4ab17fa64a0",
+      "function": null,
+      "product_file": "src/wavebit/fdtd/_api.py",
+      "mutant_sha256": "f2891aa8f87dcfa50eab3b1328fce927e732fbf00991129ecca5e8d8df815caf",
+      "restored_sha256": "fa7113988c355f77edaf4de7c701ed44376594bc5381aa27c32f4e08fed2d084",
+      "source_restored": true
+    }
+  ],
+  "restored": {
+    "cases": 26,
+    "passed": 26,
+    "exit": 0,
+    "all_source_bytes_restored": true
+  },
+  "restored_source_sha256": {
+    "src/wavebit/fdtd/_lower_public.py": "2c545126595ebc3341a9314848a9b1c1367748813837ef3eb93c2e7b0a28c25c",
+    "src/wavebit/fdtd/_api.py": "fa7113988c355f77edaf4de7c701ed44376594bc5381aa27c32f4e08fed2d084",
+    "tests/fdtd/test_public_source_admission.py": "425319ffdffa0b07590ceaea3067f791e35f92f2c59529c1762e3730735ccd4e"
+  }
+}

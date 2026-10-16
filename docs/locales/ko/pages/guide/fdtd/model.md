@@ -309,6 +309,17 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 
 ## 소스
 
+`Problem.sources`에는 `PlaneWave`, `Dipole`, `TFSF`를 넣습니다. 이름은 중복되지 않는
+빈 문자열이 아닌 문자열이어야 하며, 펄스는 `GaussianPulse`여야 합니다. `check`와
+`Prepared.validate`는 잘못된 선언을 `sources[i]`, 잘못되거나 중복된 이름을
+`sources[i].name`, 잘못된 펄스 형식을 `sources.<name>.pulse` 경로에 보고합니다.
+`prepare`, `run`, `Prepared.run`도 실행 시간의 기준 소스나 재사용 서명을 읽기 전에
+같은 경로의 구조화된 오류를 냅니다. 펄스의 수치값에는 기존 구체값·런타임 검사가 적용됩니다.
+
+`TFSF.box`는 셀에 맞추는 `fdtd.Region`이어야 합니다. 스무딩 바디인 `fdtd.Box`나 평면은
+받지 않습니다. 박스 경계를 읽기 전에 `sources.<name>.box`에서 형식을 검사하며,
+올바른 Region도 물리 도메인 안에 있어야 합니다.
+
 모든 소스는 `GaussianPulse(wavelength, frequency_sigma_hz, cutoff=1e-3)`를 가집니다. 중심 진동수
 `f0 = c / wavelength`의 사인파에 가우시안 포락선을 씌운 것으로, **진폭 스펙트럼**의 표준편차가
 `frequency_sigma_hz`입니다. 펄스는 최댓값의 `cutoff`에서 시작하고, 스펙트럼은 `exp(-k²/2) =
