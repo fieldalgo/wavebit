@@ -404,6 +404,38 @@ def accepted_cos(reflection, cells, g, periods):
     return lowest
 
 
+def _rounded_band(ku, kv, wavelength, c):
+    """Open n-squared interval with exactly the eager order test's float endpoints.
+
+    Algebra alone loses a few ulps: the survey first rounds sqrt(eps*mu), then
+    n*2*pi/w and its square. Find the last non-propagating float at the lower
+    end and the first accepted float at the upper end using that same arithmetic.
+    This changes no exit-cos threshold or physical tolerance.
+    """
+    k2 = ku * ku + kv * kv
+    k0 = 2.0 * math.pi / wavelength
+    low = k2 / (k0 * k0)
+    high = low / (1.0 - c * c)
+
+    def s2(value):
+        k = math.sqrt(value) * 2.0 * math.pi / wavelength
+        return k2 / (k * k)
+
+    def accepted(value):
+        ratio = s2(value)
+        return ratio < 1.0 and math.sqrt(1.0 - ratio) >= c
+
+    while s2(low) < 1.0:
+        low = math.nextafter(low, -math.inf)
+    while s2(math.nextafter(low, math.inf)) >= 1.0:
+        low = math.nextafter(low, math.inf)
+    while not accepted(high):
+        high = math.nextafter(high, math.inf)
+    while accepted(math.nextafter(high, -math.inf)):
+        high = math.nextafter(high, -math.inf)
+    return low, high
+
+
 def refused_bands(scene, plan, n_max):
     """``{(face name, medium label): ((low, high), ...)}``: what the orders' rows would refuse.
 
@@ -416,7 +448,10 @@ def refused_bands(scene, plan, n_max):
     is refused for ``K^2 / k0^2 < n^2 < K^2 / (k0^2 (1 - c^2))``. Orders are counted at
     ``n_max``; a larger index is the caller's to refuse. A stabilized face's rows are judged
     on the face's exact return as well (:func:`_judge`), which these bands do not hold; the
-    caller keeps a traced medium out of such a layer. ``{}`` where the survey judges no
+    caller keeps a traced medium out of such a layer. Endpoints are rounded to the
+    survey's own float arithmetic (:func:`_rounded_band`), rather than accepting or
+    rejecting a neighbouring float differently after the algebraic rearrangement.
+    ``{}`` where the survey judges no
     orders.
     """
     from wavebit.fdtd._legacy_monitors import Diffraction
@@ -446,7 +481,7 @@ def refused_bands(scene, plan, n_max):
             for _, _, (ku, kv) in _orders(kpar, n_max, w):
                 low = (ku * ku + kv * kv) / (k0 * k0)
                 if low > 0.0:
-                    bands.append((low, low / (1.0 - c * c)))
+                    bands.append(_rounded_band(ku, kv, w, c))
         for label, _ in _layer_materials(scene, plan.grid, P, side, face.cells):
             out[(name, label)] = tuple(bands)
     return out
