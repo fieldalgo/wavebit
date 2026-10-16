@@ -332,10 +332,7 @@ class Drude(Pole):
                                                        strict=False))
 
     def eps_term(self, omega):
-        return _damping_eval(self.gamma, _response_damping_limit(omega),
-            lambda g: self.omega_p ** 2 / (-omega ** 2 - 1j * g * omega),
-            lambda g: (_large_divide(self.omega_p, g) * self.omega_p
-                       / (-_large_divide(omega, g) * omega - 1j * omega)))
+        return _drude_response(omega, self.omega_p, self.gamma)
 
     def coefficients(self, dt):
         return _second_order(dt, 0.0, self.gamma, self.omega_p ** 2)
@@ -475,15 +472,29 @@ def _large_divide(numerator, denominator):
     return _stage_numerator(numerator * .125) / (denominator * .125)
 
 
-def _response_damping_limit(omega):
-    """Machine overflow threshold for gamma*omega; not a physical cutoff."""
+def _drude_response(omega, omega_p, gamma):
+    # A finite complex quotient can still lose its frequency tangent: AD divides
+    # by the denominator again before multiplying by gamma. Rescale before the
+    # reciprocal square becomes subnormal, including a finite primal. The exact
+    # power-of-two margin keeps both sides of the switch in the normal range.
     import sys
+    limit = _response_damping_limit(omega, maximum=.5 * math.sqrt(1. / sys.float_info.min))
+    return _damping_eval(gamma, limit,
+        lambda g: omega_p ** 2 / (-omega ** 2 - 1j * g * omega),
+        lambda g: (_large_divide(omega_p, g) * omega_p
+                   / (-_large_divide(omega, g) * omega - 1j * omega)))
+
+
+def _response_damping_limit(omega, *, maximum=None):
+    """Machine arithmetic threshold for gamma*omega; not a physical cutoff."""
+    import sys
+    maximum = sys.float_info.max if maximum is None else maximum
     c = concrete(omega)
     if c is not None:
-        return sys.float_info.max / max(1., abs(c))
+        return maximum / max(1., abs(c))
     from wavebit._common.backend import array_namespace
     xp = array_namespace(omega)
-    return sys.float_info.max / xp.maximum(xp.abs(omega), xp.ones_like(omega))
+    return maximum / xp.maximum(xp.abs(omega), xp.ones_like(omega))
 
 
 def _damping_eval(gamma, limit, ordinary, rescaled):
