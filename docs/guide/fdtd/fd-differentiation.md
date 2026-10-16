@@ -308,7 +308,14 @@ coefficient, is refused eagerly as `PoleArithmeticRefused`; a traced crossing po
 existing runtime guard. This machine representability door is shared with NumPy and Torch,
 so an active oscillator cannot silently disappear on only one backend. It is not an optical
 convergence tolerance. A concrete zero strength remains allowed, and its analytic strength
-tangent is retained. As with any float64 calculation, derivatives that themselves fall
+tangent is retained. A traced parameter does not suppress a host arithmetic exception in a
+concrete operand: for example, an unrepresentable concrete `omega_0**2` beside a traced
+Lorentz damping is still reported as `PoleArithmeticRefused` by the public lifecycle.
+Representability that depends on a live parameter continues to use runtime invalidity,
+including Torch; planning does not detach the parameter to certify it. The JAX zero-strength
+check folds the two integer magnitude words before comparing with zero, so a combined
+compiled guard cannot treat a nonzero subnormal as an inactive oscillator.
+See [the arithmetic regression record](../../validation/fdtd/fd-pole-arithmetic.md). As with any float64 calculation, derivatives that themselves fall
 outside the dtype's representable range are not certified. Intermediate derivative
 operations can also underflow when the final analytic derivative is representable.
 The following normalized Drude example retains both the small imaginary response

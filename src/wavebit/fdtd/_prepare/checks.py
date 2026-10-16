@@ -1987,10 +1987,15 @@ def check_stability(scene, plan):
             continue
         index = int(term.name[len('poles['):-1])
         for pole in scene.structures[index].material.poles:
-            if any(concrete(getattr(pole, f)) is None for f in pole.__dataclass_fields__):
-                continue
+            traced = any(concrete(getattr(pole, f)) is None
+                         for f in pole.__dataclass_fields__)
             try:
-                finite = all(math.isfinite(concrete(v)) for v in pole.coefficients(plan.dt))
+                # A carried parameter does not protect concrete operands from
+                # host overflow (for example omega_0**2 beside traced damping).
+                values = pole.coefficients(plan.dt)
+                # Traced representability remains the runtime guard's contract:
+                # even a constant NaN result may derive from a live parameter.
+                finite = traced or all(math.isfinite(concrete(v)) for v in values)
             except (OverflowError, ZeroDivisionError):
                 finite = False
             if not finite:
