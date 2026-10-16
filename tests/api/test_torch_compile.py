@@ -26,9 +26,10 @@ What each test is there to catch:
   ``torch.jit.trace`` (refused at every door; its values are concrete, so nothing else noticed
   it, and it returned a gradient without wavebit's share -- of a solve, of a solved result's
   field at a traced height, of a cell built from a traced length);
-* the reason still holds: the canary reproduces the Inductor defect on a five-line function, so a
-  torch that fixes it is noticed where it was measured, macOS arm64 (the doors stay; the docs
-  should say so).
+* the reason is kept on record: the canary runs the five-line reproduction of the Inductor
+  defect that forced the doors and requires the torch 2.14 fix to hold, so a torch that
+  miscompiles it again is noticed on every platform the suite runs on (the doors stay either
+  way; the docs say so).
 """
 
 from wavebit.lattice import Lattice as _legacy_wavebit_Lattice
@@ -460,26 +461,24 @@ def _eye_then_read(q):
     return eye * q.exp() + (q - eye * q)
 
 
-#: Where the reorder was measured: macOS arm64, CPU, torch 2.13.0. Inductor generates its own C++
-#: per platform, and nobody has run this on CI's Linux x86-64 with the CPU index's latest torch.
-_CANARY_MEASURED_ON = ('darwin', 'arm64')
+def test_canary_inductor_compiles_the_eye_write_in_order():
+    """Fails if a torch miscompiles the five-line ``f`` again: then the doors are the only thing
+    between a compiled caller and wrong numbers, and docs/development/torch-compile.md §6 needs
+    the measurement.
 
-
-def test_canary_inductor_still_reorders_the_eye_write():
-    """Fails when torch stops miscompiling this: then say so in docs/development/torch-compile.md §6. The doors
-    stay -- they keep wavebit out of every future defect, at the cost measured there.
-
-    Asserted only where the reorder was measured. Elsewhere a gap that does not reproduce skips
-    with what it read, for the docs, rather than failing a run for a reason nobody has measured.
+    On torch 2.13.0 this gap was 1.381 (complex128 or complex64 with an input that requires
+    grad; 0 for float64 or without grad), measured on macOS arm64 and recorded in
+    docs/development/torch-upstream-defects.md as defect 1. PyTorch fixed it in 2.14.0
+    (pytorch/pytorch#182012, PR #182292: the ``diagonal_scatter`` decomposition, which an
+    in-place diagonal fill becomes once functionalised); the gap is 0 on 2.14.0 and 2.14.1 on
+    macOS arm64 and on CI's Linux x86-64. The floor is 2.14, so this holds on every supported
+    torch. The doors stay regardless: compiling wavebit's part buys no speed (§4), and the
+    next Inductor defect is not this one.
     """
     q = torch.complex(torch.randn(5, 5, generator=torch.Generator().manual_seed(0), dtype=torch.float64),
                       torch.randn(5, 5, generator=torch.Generator().manual_seed(1), dtype=torch.float64))
     q.requires_grad_()
     _reset_dynamo()
     gap = float((torch.compile(_eye_then_read)(q) - _eye_then_read(q)).abs().max())
-    here = (sys.platform, platform.machine())
-    if gap <= 1e-3 and here != _CANARY_MEASURED_ON:
-        pytest.skip(f'the eye-write reorder does not reproduce on {here} with torch '
-                    f'{torch.__version__} (gap {gap:.1e}); it was measured on {_CANARY_MEASURED_ON} '
-                    f'with torch 2.13.0 -- record this platform in docs/development/torch-compile.md §6')
-    assert gap > 1e-3, f'torch {torch.__version__} compiles the eye write in order now (gap {gap:.1e})'
+    assert gap <= 1e-12, (f'torch {torch.__version__} on {sys.platform}/{platform.machine()} '
+                          f'miscompiles the eye write again (gap {gap:.3e}); see torch-compile.md §6')

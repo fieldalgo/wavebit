@@ -1,7 +1,7 @@
 # `torch.compile` — why it failed, why it is not worth chasing, and why wavebit runs eagerly under it
 
 Written: 2026-08. Measured on macOS arm64 (CPU only) against `develop` at `8257e2c`, with
-NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0. **Updated 2026-10 (§6)**, on torch 2.13.0.
+NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0. **Updated 2026-10 (§6)**, on torch 2.13.0; §6's defect is fixed in torch 2.14.0 (noted 2026-10-16).
 
 Targets:
 - `src/wavebit/rcwa/_engine/engine.py::CoreSolveMixin.period` — where the first failure was raised (it was the block modeller's own `period` setter until that path was removed)
@@ -385,12 +385,17 @@ Two implementation facts are relied on, and both would fail silently if they cha
 
 `tests/api/test_torch_compile.py` catches either (its tripwire compares a compiled solve with eager
 autograd at 1e-12), so run it on every torch upgrade. Its canary,
-`test_canary_inductor_still_reorders_the_eye_write`, fails once a torch compiles the five-line
-`f` above correctly. Then update this section; the doors stay, because they keep wavebit out of
-every future Inductor defect at the cost above.
+`test_canary_inductor_compiles_the_eye_write_in_order`, runs the five-line `f` above and
+requires the gap to be zero; it would fail on a torch that brought the reorder back.
 
-Everything in this section was measured on macOS arm64 (CPU) with torch 2.13.0 only. CI runs on
-Linux x86-64 with the CPU index's latest torch, where nobody has measured the reorder: Inductor
-writes its own C++ per platform. So the canary asserts only on macOS arm64, and elsewhere a gap
-that does not reproduce skips with the gap and the torch version it read. Record what such a
-platform does here.
+**Fixed upstream, 2026-10-16.** The defect above was measured on torch 2.13.0, macOS arm64
+(CPU). PyTorch fixed it in 2.14.0: [pytorch/pytorch#182012](https://github.com/pytorch/pytorch/issues/182012)
+(`torch.compile` silently zeroing the gradient of `diagonal_scatter`, which is what an in-place
+diagonal `fill_` becomes once functionalised), closed by
+[PR #182292](https://github.com/pytorch/pytorch/pull/182292) in `torch/_refs`, in the 2.14.0
+release notes as "Fix incorrect compiled output and gradients for overlapping-input
+`torch.diagonal_scatter` operations". Re-measured here with the snippet as written: 2.13.0 gives
+1.381 for complex128 and complex64 with grad; 2.14.0 and 2.14.1 give 0 for every dtype, on
+macOS arm64 and on CI's Linux x86-64. The floor is 2.14 since that date, so the canary asserts
+on every platform. The doors stay, for the reason above: they keep wavebit out of every future
+Inductor defect at the cost measured, and compiling wavebit's part buys nothing (§4).
