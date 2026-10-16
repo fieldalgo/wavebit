@@ -148,7 +148,7 @@ planned `fd.run` admits.
 
 | Leaf | Where | Notes |
 | --- | --- | --- |
-| `eps`, `mu` of a plain `fd.Material` | any structure, the background | One scalar each (`eps=x`, not `eps=(x, y, z)`). With traced geometry or beside a Sphere, Cylinder, Prism or turned Box: not a structure filling a stabilized PML layer (`PML(stabilize=...)`) along a PlaneWave's axis in a scene with a Diffraction monitor, and not the background when a PML is matched to it or the scene has a PlaneWave or TFSF source or a `FarField(propagation='yee')`. A flush junction's media -- the pillar, its face, the background -- name no `mu`, traced or not (only electric junctions are measured). |
+| `eps`, `mu` of a plain `fd.Material` | any structure, the background | One scalar each (`eps=x`, not `eps=(x, y, z)`). Not a material filling a stabilized PML layer (`PML(stabilize=...)`) along a PlaneWave's axis in a scene with a Diffraction monitor. With traced geometry or beside a Sphere, Cylinder, Prism or turned Box: not the background when a PML is matched to it or the scene has a PlaneWave or TFSF source or a `FarField(propagation='yee')`. A flush junction's media -- the pillar, its face, the background -- name no `mu`, traced or not (only electric junctions are measured). |
 | `sigma` of `fd.Conductor`, pole parameters of `fd.Dispersive` | structures | Refused with traced geometry or beside a Sphere, Cylinder, Prism or turned Box when run with `fd.run`, where they have no certificate. |
 | `radius`, `center` | `fd.Sphere(range=...)` | |
 | `radius`, `height`, `center` | `fd.Cylinder(range=...)` | `axis` stays static. |
@@ -186,8 +186,10 @@ gradients, and `result.diagnostics['stable']` reads `False`. The runtime checks:
 | Resolution | a traced medium falls below 8 cells per wavelength (`eps * mu` above `(w / 8 dx)**2`) at the band's shortest wavelength or any shorter `Diffraction` wavelength `w` | "cells per wavelength" |
 | Grazing order | a traced medium filling a PML layer along a PlaneWave's axis lets an order a `Diffraction` monitor asks for leave at an exit angle the layer does not accept | "Grazing order refused" |
 
-The grazing check runs with traced geometry or beside a Sphere, Cylinder, Prism or turned
-Box. The resolution check runs for every traced plain `fd.Material`: since 2026-10-15 that
+The grazing check runs for every traced plain material in a judged PML layer, including
+cell-snapped Slabs and scenes without smoothed bodies. A fixed PML reference medium fixes
+the stretch profile, not the physical index used to judge outgoing orders. The resolution
+check runs for every traced plain `fd.Material`: since 2026-10-15 that
 includes a traced `eps` on a Slab, a Region or an unturned Box with concrete geometry, where
 the plan can only warn that it could not count the cells. At `dx = 0.05` and the band above
 (shortest wavelength 0.642), the floor admits `eps * mu` up to
@@ -201,7 +203,9 @@ traced value is held to.
 ## What is refused, and why
 
 These are refused by name when the scene is run, because no runtime check could stand in
-for them. They apply with traced geometry or beside a Sphere, Cylinder, Prism or turned Box
+for them. The stabilized-PML row applies even without smoothed bodies; its exact-return
+survey has no runtime derivative check. The other rows apply with traced geometry or beside
+a Sphere, Cylinder, Prism or turned Box
 (a direct `fd.lower` of concrete geometry skips the conductivity row, and reads a seed only to compare how `mu` was named):
 
 | Refused | Why | What to do |

@@ -19,6 +19,12 @@ permittivity may vary while the absorber reference remains concrete. Omitting
 the entry follows the boundary medium and therefore cannot provide a static
 profile for a traced material. Reference media do not replace physical materials.
 The engine's stability, PML incidence and junction checks continue to apply.
+For a PlaneWave with Diffraction monitors, a traced physical medium in a pure-stretch
+PML is checked against the same grazing-order rule as an eager run, including scenes
+without smoothed bodies. Invalid transformed values produce NaN fields and derivatives
+and failed runtime validity. A traced medium filling a stabilized PML layer is refused:
+the exact-return survey is host-only, even with a fixed `reference_media` entry.
+Keep that medium concrete or use `stabilize=0`.
 
 The following example expresses the original pillar scene in micrometres and SI
 pulse bandwidth. The physical height is 1.3 µm; eight cells at 0.05 µm on each end

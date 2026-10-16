@@ -194,6 +194,25 @@ def _stabilized_media(scene, plan):
     return out
 
 
+def _refuse_stabilized_materials(scene, plan):
+    """The exact-return survey has no traced twin, even without smoothed bodies."""
+    from wavebit.materials.time_domain import as_material
+    if not materials_traced(scene):
+        return
+    stabilized = _stabilized_media(scene, plan)
+    for key, material in _materials(scene):
+        label = 'the background' if key < 0 else f'structures[{key}]'
+        if not _carries(as_material(material)):
+            continue
+        if label in stabilized:
+            raise ValueError(
+                f'{label} has a traced material value and fills a stabilized PML layer along '
+                'the PlaneWave\'s axis; the grazing rule judges the orders '
+                'a Diffraction monitor asks for there on the face\'s exact return, on the host '
+                'only, at the values the plan was built with. Keep that material concrete, or '
+                'the face a pure stretch (stabilize=0), whose rule is checked at run time.')
+
+
 def _mirror_could_couple(scene, plan, term, a, side):
     """Whether ``term``'s cross coefficients in its end layer on the ``side`` face of axis
     ``a`` can be nonzero beside a traced medium: a smoothed body in the term has a fractional
@@ -290,7 +309,7 @@ def _seeded_materials(scene, plan, where, substitute=True):
     background, structures = None, list(scene.structures)
     grid = plan.grid
     pml = dict(plan.pml_cells)
-    stabilized = _stabilized_media(scene, plan) if materials_traced(scene) else set()
+    _refuse_stabilized_materials(scene, plan)
     for key, material in _materials(scene):
         material = as_material(material)
         if not _carries(material):
@@ -321,13 +340,6 @@ def _seeded_materials(scene, plan, where, substitute=True):
                     'column\'s transverse wavevector and drive, the grazing survey and the '
                     'lattice far-field map are built from it on the host. Give each PML a '
                     'concrete background=, or differentiate a structure\'s material instead.')
-        elif label in stabilized:
-            raise ValueError(
-                f'{label} has a traced material value and fills a stabilized PML layer along '
-                f'the PlaneWave\'s axis; in a scene {where}, the grazing rule judges the orders '
-                'a Diffraction monitor asks for there on the face\'s exact return, on the host '
-                'only, at the values the plan was built with. Keep that material concrete, or '
-                'the face a pure stretch (stabilize=0), whose rule is checked at run time.')
         seed = seeds.get(key)
         if not substitute and seed is None:
             continue
@@ -616,7 +628,10 @@ def validate(scene, plan):
     caller's plan without a host plan rebuilt here, as it always has; beside smoothed
     coupling it first hears the refusals of what no runtime guard checks
     (:func:`_seeded_materials` with ``substitute=False``), which ``fd.run`` asks too.
+    The stabilized-PML refusal applies to every traced material in a judged layer,
+    independently of geometry smoothing.
     """
+    _refuse_stabilized_materials(scene, plan)
     if not traced(scene):
         if seeded(scene, plan):
             _seeded_materials(scene, plan, 'with smoothed structures', substitute=False)
@@ -742,10 +757,10 @@ def grazing_guard(scene, plan, rt, previous):
     rule here: its live ``min_c eps_c mu_c`` may not fall in any interval
     ``grazing.refused_bands`` finds (orders counted up to the resolution floor,
     :func:`resolution_guard`'s, above which the run is ``nan`` already), or the run's
-    coefficients are ``nan``. Built only for a seeded scene with a traced material in such a
+    coefficients are ``nan``. Built for every scene with a traced material in such a
     layer, so every other run's ``stable`` is unchanged.
     """
-    if not (materials_traced(scene) and seeded(scene, plan)):
+    if not materials_traced(scene):
         return previous
     from wavebit.materials.time_domain import Material
     from wavebit.materials.time_domain import as_material
