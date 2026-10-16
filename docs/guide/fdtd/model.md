@@ -191,6 +191,19 @@ at `numerics.junction`, while unrelated traced bodies leave a static staircase p
 unchanged. `"refuse"` rejects the pair during preparation; it cannot prepare a split
 fallback.
 
+`check(...).resolved["numerical_policies"]` and `prepare(...).report.resolved` record
+both requested selectors and actual per-structure application. The `discretisation`
+rows report `stencil` only for a prepared engine operator and `voxel` for an ordinary
+built-in smoothed body. `rule=None` with `whole_cell_fill` means Slab/Region retain
+whole-cell fills; `custom_shape_protocol` means the custom Shape owns its fill semantics.
+The `junction` rows report a rule only for a recorded standing body, distinguish
+`junction_face` from `no_resolved_junction`, and list each pair by stable structure names
+and axis. A default split request with no pair therefore reports no application.
+Invalid/unsupported requests return issues rather than successful application rows.
+`Prepared.validate(problem)` refreshes this report for an accepted concrete reuse;
+changed structure targets or invalid ranged contacts are refused, with no stale resolved
+application rows. The preparation's policy records remain an immutable snapshot.
+
 **Pillars on a substrate.** Because of the last rule, a smoothed pillar cannot stand flush on a
 `Slab` substrate. The choices are:
 
@@ -284,6 +297,19 @@ one matching the cell boundaries, is unsupported and produces a structured
 Monitors are declared by name in `Outputs(monitors=...)` and read with `result[name]`; each
 frequency-domain monitor accumulates its transforms during the run at the wavelengths it lists.
 
+For finite monitor apertures, `Field` returns each component's Yee points inside the
+requested transverse intervals, including endpoints; its array axes are frequency,
+z, y, x, and its coordinate arrays describe those samples. `Flux` instead snaps each
+transverse endpoint to the nearest node and integrates the surface between those
+nodes, using midpoint samples and half weights at end nodes. Its area can therefore
+differ from the requested geometric area for a nonaligned aperture. No interpolation
+or fractional edge-cell integration is performed. A finite Flux span must cover at
+least one cell and end at or before the last stored node (the high domain face is
+not stored); a Field span must contain a point of every requested component.
+Both refuse requested transverse intervals outside the physical domain, before
+clipping or snapping, with `monitor_extent` at `outputs.<name>.plane.<axis>`.
+Reversed or zero-width intervals are refused when constructing `Plane`.
+
 | Monitor | Returns |
 | --- | --- |
 | `Record(name, at, component)` | the time series of one component at its nearest Yee point, in V/m or A/m, with the sample time axis in seconds |
@@ -347,6 +373,19 @@ A `Result` carries `validity.checks`: `admitted`, `runtime_stability` (false whe
 rejected a traced value, see below) and, per `Diffraction` monitor, `source_reference`.
 `result.provenance` records the backend, the units, `dt_seconds`, the actual step count and every
 domain.
+
+`admitted` describes the static declaration; it does not override a failed
+`runtime_stability` check. In a differentiated run, `diagnostics['grazing']` marks a
+traced physical medium as `skipped`: its index cannot be surveyed on the host.
+Acceptance rows computed from the preparation's concrete material seed are not
+reported as acceptance of the live material. The runtime guard supplies the live
+validity verdict instead. A fixed PML `reference_media` entry fixes the numerical
+stretch, not that physical material's grazing admission.
+
+Each `prepared.run(problem)` starts a fresh field state and returns its own checks.
+A guarded invalid value returns NaN with failed runtime validity; a host-only
+unsupported trace raises explicitly. Neither outcome makes a later valid run
+invalid or changes an earlier result. Reuse the complete valid problem to retry.
 
 (fdtd-model-differentiating)=
 ## Differentiating a run

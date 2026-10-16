@@ -274,3 +274,15 @@ Lorentz strengths at resonance; and active Lorentz coefficient derivatives away 
 resonance. Fallback tests retain the first planned PML wavelength (not the shortest),
 Resolution precedence over PML, source-band precedence over both, and multiplication by
 an existing zero, finite or NaN guard. These checks do not change the physical thresholds.
+
+
+Traced material values retain the constructors' finite-value requirement, including
+conductivity and every pole parameter even when a Lorentz strength is concretely zero.
+Positive infinity is not an admissible positive parameter: it poisons the material guard
+just as NaN, negative values, or a forbidden zero do. Conductivity, damping and oscillator
+strength still admit zero; permittivity, permeability, frequencies and Debye relaxation
+time remain strictly positive. No clipping or upper physical cutoff is introduced.
+Finite extreme inputs pass this range door; this alone does not certify the CFL bound,
+resolution, or recurrence arithmetic at extreme finite scales; an inactive analytic response does
+not excuse an invalid parameter declaration. This is covered by
+`tests/fdtd/test_material_finite_guard.py`, including admitted coefficient derivatives.

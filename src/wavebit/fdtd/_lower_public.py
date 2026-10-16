@@ -156,6 +156,22 @@ def _monitor(m, problem):
     raise UnsupportedFeatureError('unsupported monitor', path='outputs.monitors', actual=type(m).__name__)
 
 
+def _monitor_plane_bounds(monitor, low, high):
+    """Refuse requested apertures outside the physical box before grid clipping/snapping."""
+    if not isinstance(monitor, (old_monitors.Field, old_monitors.Flux)) or monitor.plane is None:
+        return
+    plane = monitor.plane
+    for a, axis in enumerate('xyz'):
+        if a == plane.axis:
+            continue
+        span = plane.extent(a)
+        if span is not None and (not all(math.isfinite(v) for v in span)
+                                 or span[0] < low[a] - 1e-12 or span[1] > high[a] + 1e-12):
+            raise ValidationError('monitor aperture is outside the physical domain',
+                                  code='monitor_extent', path='outputs.'+monitor.name+'.plane.'+axis,
+                                  expected=(low[a], high[a]), actual=span)
+
+
 def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
         raise ValidationError('expected fdtd.Problem and fdtd.Numerics', path='problem')
@@ -302,6 +318,7 @@ def lower_problem(problem, numerics, *, plan=None):
     # Validate physical monitor positions before adding the implementation padding.
     outputs=tuple(_monitor(m,problem) for m in problem.outputs.monitors)
     for m in outputs:
+        _monitor_plane_bounds(m, physical_low, physical_high)
         if isinstance(m,old_monitors.Record):
             if any(not(a<=p<=b) for a,p,b in zip(physical_low,m.at,physical_high)):
                 raise ValidationError('monitor is outside the physical domain',path='outputs.'+m.name)

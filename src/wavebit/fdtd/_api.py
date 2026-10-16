@@ -7,6 +7,7 @@ from wavebit._common.backend import eager_under_torch_compile
 from wavebit.errors import Issue, ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from wavebit.materials import Material, ConductiveMaterial, DispersiveMaterial
 from .problem import Problem
+from ._policy_report import numerical_policies
 from ._lower_public import lower_problem
 from ._execution import _planned, run as execute
 from ._prepare.report import report as legacy_report
@@ -122,7 +123,7 @@ def _snapped(problem,scene,plan):
 
 def _report(problem,numerics,execution,scene,plan,metadata):
     r=legacy_report(scene,plan)
-    resolved=dict(metadata,grid_shape=(plan.nx,plan.ny,plan.nz),spacing=plan.dx,
+    resolved=dict(metadata,numerical_policies=numerical_policies(problem,numerics,scene,plan),grid_shape=(plan.nx,plan.ny,plan.nz),spacing=plan.dx,
                   dt_seconds=plan.dt*problem.units.time_seconds,steps=plan.steps,
                   duration_seconds=plan.steps*plan.dt*problem.units.time_seconds,dtype=plan.dtype,
                   duration_policy='fixed' if numerics.decay is None else 'hard cap with concrete state-decay stopping',
@@ -179,8 +180,8 @@ class Prepared:
         """Validate concrete reuse; runtime guards still judge transformed values."""
         try:
             with self.execution.scope(),_public_spelling():
-                self._lower(problem)
-            return CheckReport(resolved=self.report.resolved,capabilities=self.report.capabilities)
+                scene,metadata=self._lower(problem)
+                return _report(problem,self.numerics,self.execution,scene,self._plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:
             return CheckReport(issues=(_issue(exc).issue,))
 

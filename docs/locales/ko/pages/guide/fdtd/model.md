@@ -183,6 +183,18 @@ flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없
 접합을 바꾸지 않습니다. `"refuse"`는 준비 단계에서 접합을 거부하므로 split으로
 대체된 계산을 준비할 수 없습니다.
 
+`check(...).resolved["numerical_policies"]`와 `prepare(...).report.resolved`는 요청한
+설정과 구조별 실제 적용을 함께 기록합니다. `discretisation` 행의 `stencil`은 실제
+준비된 엔진 연산자, `voxel`은 기본 내장 스무딩 body를 뜻합니다. `rule=None`과
+`whole_cell_fill`은 Slab/Region의 whole-cell fill 유지, `custom_shape_protocol`은
+custom Shape 자체의 fill 의미를 나타냅니다. `junction`은 기록된 standing body에만
+규칙을 표시하고, `junction_face`와 `no_resolved_junction`을 구분하며 각 접합의 구조
+이름과 축을 나열합니다. 접합 없는 기본 split 요청은 적용 없음으로 표시됩니다.
+잘못되거나 지원되지 않는 요청은 적용 성공 행 대신 오류를 반환합니다.
+`Prepared.validate(problem)`는 허용된 concrete 재사용의 보고서를 갱신합니다.
+구조별 대상 변경이나 잘못된 ranged 접촉은 거부하고 이전 적용 행을 반환하지 않습니다.
+원래 준비 보고서의 정책 기록은 변경되지 않는 snapshot입니다.
+
 **기판 위 기둥.** 마지막 규칙 때문에 스무딩 기둥은 `Slab` 기판 위에 딱 붙여 세울 수 없습니다.
 선택지는 다음과 같습니다.
 
@@ -268,6 +280,18 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 
 모니터는 `Outputs(monitors=...)`에 이름으로 선언하고 `result[name]`으로 읽습니다. 주파수 영역
 모니터는 나열한 파장에서 실행 중에 변환을 누적합니다.
+
+유한 monitor 범위에서 `Field`는 요청한 가로 구간 안의 각 성분 Yee 점을 끝점까지
+포함해 반환합니다. 배열 축은 주파수, z, y, x 순서이며 좌표 배열은 실제 샘플을
+나타냅니다. `Flux`는 가로 끝점을 가장 가까운 노드에 맞추고 그 사이 표면을
+적분합니다. 셀 중심 샘플과 양 끝 노드의 절반 가중치를 사용하므로, 비정렬 범위의
+실제 적분 면적은 요청한 기하학적 면적과 다를 수 있습니다. 보간이나 가장자리
+셀의 부분 면적 적분은 하지 않습니다. 유한 Flux 구간은 적어도 한 셀을 포함하고
+마지막 저장 노드 이내에서 끝나야 합니다(높은 쪽 domain 면 자체는 저장하지
+않습니다). Field 구간은 요청한 모든 성분의 점을 포함해야 합니다.
+두 monitor 모두 물리 domain 밖의 요청 가로 구간을 자르거나 격자에 맞추기 전에
+`outputs.<name>.plane.<axis>` 경로의 `monitor_extent` 오류로 거부합니다.
+역순 또는 폭이 0인 구간은 `Plane`을 만들 때 거부합니다.
 
 | 모니터 | 돌려주는 것 |
 | --- | --- |

@@ -506,7 +506,8 @@ def _material_door_guard(scene, rt, guard):
             if concrete(value) is not None:
                 continue
             v = rt.array(value, 'float64')
-            checks_.append(v > zero if strict else v >= zero)
+            in_range = v > zero if strict else v >= zero
+            checks_.append(rt.xp.isfinite(v) & in_range)
     if not checks_:
         return guard
     ok = checks_[0]
