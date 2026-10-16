@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="FieldAlgo">
+  <title>FieldAlgo mark</title>
+<!-- FieldAlgo company mark: alignment-mark cross core.
+     Geometry: 6x6 grid, corner brackets pulled 0.3 cell toward centre,
+     fractional-centred plus core. Core #4338ca, centre cell cyan #22d3ee.
+     Light bg: brackets #475569, wordmark #1e293b (slate-800).
+     Dark bg: brackets #94a3b8, wordmark #f1f5f9.
+     Wordmark: Space Grotesk Medium, outlined; cap-height = 58% of mark height. -->
+  <rect x="11.19" y="11.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="26.19" y="11.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="11.19" y="26.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="62.19" y="11.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="77.19" y="11.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="77.19" y="26.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="11.19" y="62.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="11.19" y="77.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="26.19" y="77.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="62.19" y="77.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="77.19" y="62.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="77.19" y="77.19" width="11.62" height="11.62" rx="2.09" fill="#475569"/>
+  <rect x="28.73" y="43.73" width="12.54" height="12.54" rx="2.26" fill="#4338ca"/>
+  <rect x="43.73" y="28.73" width="12.54" height="12.54" rx="2.26" fill="#4338ca"/>
+  <rect x="43.73" y="43.73" width="12.54" height="12.54" rx="2.26" fill="#22d3ee"/>
+  <rect x="43.73" y="58.73" width="12.54" height="12.54" rx="2.26" fill="#4338ca"/>
+  <rect x="58.73" y="43.73" width="12.54" height="12.54" rx="2.26" fill="#4338ca"/>
+</svg>

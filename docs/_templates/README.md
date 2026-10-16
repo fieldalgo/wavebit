@@ -19,3 +19,9 @@ For a CSS-only preview against an existing bilingual build, replace
 `_static/wavebit-site.css` and `ko/_static/wavebit-site.css` with the source file;
 HTML and the search index do not need to be regenerated. Check light and dark
 modes, desktop and mobile navigation, and a page containing a code block.
+
+`version-switcher.html` displays the build release in the header and links to the
+current documentation home. Add older versions only when their documentation is
+published. `wavebit-site.js` uses the theme’s existing light/dark actions for a
+one-click toggle. Include this script when previewing these controls in an older
+HTML build.
