@@ -208,10 +208,13 @@ def _1d_T(rule, order, tetm):
 def test_te_on_a_one_dimensional_grating_is_lis_answer():
     """TE reads ``epy`` alone, where both rules build ``[[eps]]`` (Li's nested rule reduces to
     it on a y-invariant layer), so the two answers are one to round-off, order by order."""
+    # 2e-13, not 1e-13: at order 40 Linux's OpenBLAS put the two 1.08e-13 apart on three of
+    # four CI runs (38769652161 failed at 1.0797e-13, 38738075697 passed); the same solve on
+    # macOS sits under 1e-13. Round-off of the 81x81 eigenproblem, not a rule difference.
     for order in (5, 20, 40):
         li, _ = _1d_T('li', order, 'te')
         laurent, _ = _1d_T('laurent', order, 'te')
-        assert _gap(li, laurent) < 1e-13, order
+        assert _gap(li, laurent) < 2e-13, order
 
 
 def test_tm_converges_first_order_where_li_converges_faster():
