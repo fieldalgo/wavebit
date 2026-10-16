@@ -111,3 +111,45 @@ def test_public_mixed_poles_keep_valid_coefficient_tangents(backend, kind):
     assert value == pytest.approx(expected, rel=1e-12, abs=0.)
     assert derivative != 0
     assert tangent == pytest.approx(derivative, rel=1e-12, abs=0.)
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_public_traced_frequency_retains_runtime_invalidity(backend):
+    from dataclasses import replace
+    runtime(backend)
+
+    def initial(x, y, z):
+        return 1+0*x
+
+    def live(frequency):
+        return replace(problem('drude-gamma', .5, frequency=frequency),
+                       initial=fdtd.InitialField(E=(None, initial, None)),
+                       outputs=fdtd.Outputs(monitors=(
+                           fdtd.Record('field', at=(0.,)*3, component='Ey'),)))
+
+    prepared = quiet(fdtd.prepare, live(2.), numerics=numerics(), backend=backend)
+
+    def run(frequency):
+        result = quiet(prepared.run, live(frequency))
+        return result['field'].values, result.validity.checks['runtime_stability']
+
+    for frequency, expected_valid in ((2., True), (1e200, False)):
+        failure = None
+        try:
+            if backend == 'jax':
+                import jax
+                values, valid = jax.jit(run)(frequency)
+                values = np.asarray(values)
+            else:
+                import torch
+                values, valid = run(torch.tensor(frequency, dtype=torch.float64,
+                                                requires_grad=True))
+                values = values.detach().numpy()
+        except Exception as exc:
+            failure = exc
+        assert failure is None, repr(failure)
+        assert bool(valid) == expected_valid
+        if expected_valid:
+            assert np.isfinite(values).all() and np.any(values != 0)
+        else:
+            assert np.isnan(values).all()
