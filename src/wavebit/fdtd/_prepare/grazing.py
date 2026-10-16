@@ -201,6 +201,7 @@ import math
 
 import numpy as np
 
+from wavebit.fdtd._spelling import is_public
 from wavebit.fdtd._legacy_boundaries import AXES
 from wavebit.fdtd._legacy_boundaries import Axis1D
 from wavebit.fdtd._legacy_boundaries import Bloch
@@ -915,9 +916,11 @@ def _lossy_message(row, pw, what, scene, plan, others):
     c, R, rho = row['cos'], row['reflection'], row['stabilize']
     face = scene.boundaries.face(row['face'])
     governed = _governed(scene, row['face'])
+    description = (f"PML(cells={row['cells']}, reflection={R:g}, stabilize={rho:g})"
+                   if is_public() else _spell_face(face, row['cells'], f'stabilize={rho:g}'))
     head = (f"Stabilized face refused: {what} at wavelength {row['wavelength']:g} has exit cos "
             f"theta = {c:.3f}. That face is "
-            f"{_spell_face(face, row['cells'], f'stabilize={rho:g}')}, and it sends back "
+            f"{description}, and it sends back "
             f"{row['return']:.2e} of this order "
             f"({row['polarisation']}): above the amplitude tolerance {GRAZING_TOLERANCE:g} and "
             f"above the {row['return_pure']:.2e} the same face returns without the loss, so it "
@@ -928,6 +931,8 @@ def _lossy_message(row, pw, what, scene, plan, others):
             f"The loss sits on the field component normal to the face: it is inert at normal "
             f"incidence and sends back more the more oblique the order, first order in "
             f"stabilize. ")
+    if is_public():
+        return head + _public_remedy(row, pw, scene, plan, others) + _refused_too(others)
     axis = row['face'][0]
     blocked = [r for r in others if r['face'] not in governed]
     if blocked:
@@ -1009,6 +1014,59 @@ def _lossy_message(row, pw, what, scene, plan, others):
             'the angle or the wavelengths).' + tail + _refused_too(others))
 
 
+def _public_remedy(row, pw, scene, plan, others):
+    """Public control locations and candidates, without promising whole-problem acceptance.
+
+    The engine's offers judge equal face declarations. Public lowering can give one
+    common absorber different reference media on different faces, so those offers are
+    only candidates here. Keep the caller's unmentioned controls and physical domain.
+    """
+    candidates = []
+
+    def candidate(controls, periods=None):
+        duration = (f', duration=fdtd.Duration(periods={periods}, source={pw.name!r})'
+                    if periods is not None else '')
+        return f'updated = numerics.replace(absorber=numerics.absorber.replace({controls}){duration})'
+
+    if row['verdict'] == 'lossy':
+        governed = _governed(scene, row['face'])
+        if any(r['face'] not in governed for r in others):
+            advice = ('The refused faces have different resolved reference media. Increase '
+                      'cells or reduce stabilize in the common Numerics.absorber and check '
+                      'all faces together; no numeric candidate is offered for this combination. ')
+        else:
+            fix = lossy_fixes(row, scene, plan)
+            if fix['cells'] is not None:
+                candidates.append(candidate(f'cells={fix["cells"]}', fix['periods']))
+            if fix['rho'] is not None:
+                rho = repr(fix['rho']) if fix['rho'] > 0.0 else 'None'
+                candidates.append(candidate(f'cells={fix["rho_cells"]}, stabilize={rho}', fix['periods']))
+            advice = ('Candidates judged on the quoted face and any equal face declaration; '
+                      'they still need a full public check:\n'
+                      + '\n'.join(candidates) + '\n' if candidates else
+                      'No numeric candidate was found within the measured search. ')
+        advice += ('Reducing stabilize can let a bound mode grow again; check the decay '
+                   'warning and tests/fdtd/test_fd_pml_stability.py. ')
+    else:
+        cells = max(row['cells'], GRAZING_CELLS)
+        reflection = min(row['reflection'], _quoted_target(row['cos'], row['g']))
+        periods = (GRAZING_PERIODS if row['periods'] is None
+                   or row['periods'] < GRAZING_PERIODS else None)
+        advice = (f'This order needs at least {GRAZING_CELLS} absorber cells, '
+                  f'reflection <= {_quoted_target(row["cos"], row["g"]):.1e}, and at least '
+                  f'{GRAZING_PERIODS} periods of source {pw.name!r}. '
+                  'Candidate preserving stronger controls and an already long enough duration:\n'
+                  + candidate(f'cells={cells}, reflection={reflection!r}', periods) + '\n')
+    return (advice + 'Numerics.absorber applies common numerical controls to every Open face; '
+            'each face keeps its resolved reference medium. These updates preserve wavelength, '
+            'reference_media and allow_thin. A deeper absorber adds padding outside the '
+            'physical domain automatically; keep problem.scene.domain unchanged. More cells '
+            'and a longer duration increase memory and time. Re-run '
+            'fdtd.check(problem, numerics=updated) to judge every face, order, medium and '
+            'wavelength; a candidate is not a guarantee that the whole problem passes. '
+            'Or change the period, angle or wavelengths to make the order less oblique.')
+
+
 def _message(row, pw, scene=None, plan=None, others=()):
     c = row['cos']
     g = row['g']
@@ -1034,6 +1092,8 @@ def _message(row, pw, scene=None, plan=None, others=()):
                f'wavelength against R_c 6.2e-3) and targets past 1e-16 were not measured, so '
                f'this is refused outright: change the period, the angle or the wavelengths so '
                f'the order is less grazing, or leaves the window as evanescent.')
+    elif is_public():
+        fix = _public_remedy(row, pw, scene, plan, others)
     else:
         fix = (f'Below cos theta = {cos_min(DEFAULT_REFLECTION, g=g):.3f} (the default face\'s reach) '
                f'an order is allowed only when that face declares PML(cells>={GRAZING_CELLS}, '

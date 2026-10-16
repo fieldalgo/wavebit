@@ -304,6 +304,30 @@ unless `allow_thin=True`), `reflection=1e-8`, `wavelength` (the sources' shared 
 when omitted) and `stabilize`, an extra loss that stops a bound mode next to the face from growing
 (see `GrowingFieldWarning` below).
 
+### Acting on a grazing refusal
+
+`check`, `prepare` and `run` name the worst refused incidence or diffraction order,
+its face, wavelength and return criterion, and list the other refused rows. The
+public control is `Numerics.absorber`: its numerical settings apply to **every
+Open face**, while each face keeps its physical or fixed reference medium.
+
+When the diagnostic prints an `updated = numerics.replace(...)` candidate, use
+the existing `numerics` value. Its nested `absorber.replace(...)` preserves
+`wavelength`, `reference_media` and `allow_thin`. A duration change includes the
+actual source name in `fdtd.Duration(periods=..., source=...)`. Stronger reflection
+targets, deeper layers and already sufficient durations are retained. Increasing
+the absorber depth adds padding **outside** the physical region automatically;
+keep `problem.scene.domain` unchanged. More cells and periods cost memory and time.
+
+Apply one candidate, then run `fdtd.check(problem, numerics=updated)` again. A
+candidate for one face is not a guarantee for all faces, orders, media and
+wavelengths. If refused faces have different resolved reference media, the
+message asks for a common absorber change and a full recheck without offering a
+numeric combination. Reducing `stabilize` can let a bound mode grow again; inspect
+decay as well. Below the measured grazing floor, changing absorber controls or
+duration is not an accepted remedy: change the period, angle or wavelengths.
+These messages do not relax the return tolerance or the measured support limits.
+
 ## Sources
 
 Every source carries a `GaussianPulse(wavelength, frequency_sigma_hz, cutoff=1e-3)`: a sine at
