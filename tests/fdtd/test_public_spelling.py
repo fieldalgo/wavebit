@@ -424,6 +424,31 @@ def _oblique(theta, **faces):
         outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
 
 
+@pytest.mark.parametrize('entry', ['check', 'prepare'])
+@pytest.mark.parametrize('field, value, choices', [
+    ('junction', 'blend', 'choose split, staircase, or refuse'),
+    ('junction', None, 'choose split, staircase, or refuse'),
+    ('discretisation', 'bogus', "the two spellings are 'voxel' and 'stencil'"),
+    ('discretisation', None, "the two spellings are 'voxel' and 'stencil'"),
+])
+def test_public_numerics_refusal_preserves_message_and_issue_fields(entry, field, value, choices):
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
+                            duration=fdtd.Duration(steps=20), absorber=fdtd.PML(cells=12),
+                            **{field: value})
+    if entry == 'check':
+        (issue,) = fdtd.check(_film(), numerics=numerics).issues
+    else:
+        with pytest.raises(ValidationError) as error:
+            fdtd.prepare(_film(), numerics=numerics)
+        issue = error.value.issue
+    assert issue.message == f'Numerics({field}={value!r}): {choices}.'
+    assert issue.code == 'invalid_input'
+    assert issue.path == f'numerics.{field}'
+    assert issue.actual == value
+    assert issue.expected is None
+    assert issue.severity == 'error'
+
+
 @pytest.mark.parametrize('theta, faces, said', [
     (.3, dict(x=fdtd.Periodic(), y=fdtd.Periodic()), "PlaneWave('pw', theta=0.3, phi=0.2) has"),
     (.3, dict(x=fdtd.Bloch(k=1.), y=fdtd.Bloch(k=1.)), 'wavelength 0.8, theta 0.3, phi 0.2)'),

@@ -191,6 +191,11 @@ at `numerics.junction`, while unrelated traced bodies leave a static staircase p
 unchanged. `"refuse"` rejects the pair during preparation; it cannot prepare a split
 fallback.
 
+Invalid selector values are reported with the public `Numerics(junction=...)` or
+`Numerics(discretisation=...)` spelling and the supported choices. `check` returns
+an `invalid_input` issue and `prepare` raises `ValidationError` with the same issue:
+`path` identifies the selector and `actual` retains the supplied value.
+
 `check(...).resolved["numerical_policies"]` and `prepare(...).report.resolved` record
 both requested selectors and actual per-structure application. The `discretisation`
 rows report `stencil` only for a prepared engine operator and `voxel` for an ordinary

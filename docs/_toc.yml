@@ -244,6 +244,7 @@ subtrees:
               - file: validation/fdtd/fd-single-pole-film
               - file: validation/fdtd/fd-sphere-clip-jit
               - file: validation/fdtd/fd-policy-cell-shapes
+              - file: validation/fdtd/fd-public-numerics-refusals
               - file: validation/fdtd/fd-subpixel-occupancy
               - file: validation/fdtd/fd-two-debye-film
               - file: validation/fdtd/fdtd-adjoint-validation
