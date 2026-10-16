@@ -100,25 +100,20 @@ required checks pass. Main CI retains earlier runs in its workflow queue.
 
 ### Branches and preserved solver ancestry
 
-Ordinary feature work is rebased onto `main` and lands by fast-forward after its pull request's CI is green (see `CLAUDE.md`).
-If another session lands first, rebase the ordinary feature branch again and retry.
-Keep its commits focused, with messages explaining what changed and why; squash WIP and
-fixup commits before landing.
+All new work, including RCWA/FDTD integration, follows the same `main` PR flow
+in [AGENTS.md](AGENTS.md): reviewed Ready PRs, green required checks, and GitHub
+Rebase and merge. Do not push a local fast-forward to main, create merge commits
+for new integration, or treat later FDTD syncs as an exception. A conflicting PR
+needs a manual rebase and another validation run; an unrelated main advance alone
+does not require replaying a green PR.
 
-The repository owner's RCWA/FDTD integration is an explicit exception. Preserve the
-independently developed `fdtd-general` ancestry with a true merge; do not squash or
-plain-rebase that integration. If `main` advances before landing, merge it into the
-integration branch and resolve there. Intentional merge commits, including `--no-ff`, are
-allowed for that integration and later FDTD syncs. Land the resulting branch onto `main`
-with `git merge --ff-only`, retaining both histories.
-
-The initial solver merge is `04b449754e6b226bdcd4374b2897732054468ce7`, with develop parent
+Preserve existing history. The historical solver merge
+`04b449754e6b226bdcd4374b2897732054468ce7` has develop parent
 `db37dbb8722b8993c2486c6af4f491e3b1b8bc13` and FDTD parent
-`d1119445bb2839dd03d2af0b769a2797d0be2d13`. The detailed policy is in
-[`CLAUDE.md`](CLAUDE.md). The `merge.ff=only` guard remains appropriate for ordinary feature
-work; it does not erase this documented exception.
+`d1119445bb2839dd03d2af0b769a2797d0be2d13`. These are provenance records, not an
+exception permitting future merge commits under the current policy.
 
-**One trap, because this repository turns it on.** `rebase.updateRefs` is set to `true` here, so
+**Check the clone configuration.** If `rebase.updateRefs` is `true`,
 every rebase moves *any other branch* pointing into the rebased range — no flag needed. That
 makes the obvious safety net useless: `git branch backup/my-work` before a rebase gets carried
 along with the rebase and ends up at the new commits, backing up nothing. **Tag instead** —
