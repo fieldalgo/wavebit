@@ -18,13 +18,24 @@ from wavebit._common.backend import eager_under_torch_compile
 
 
 def _host_value(value):
-    """Concrete data for eager validation; tracing never chooses the field path."""
+    """Concrete data for eager validation; tracing never chooses the field path.
+
+    An eager ``jax.grad`` tracer is read through its primal, as a torch tensor is detached;
+    only a value with no number (under ``jax.jit`` or ``jax.vmap``) gives ``None``.
+    """
     try:
         if hasattr(value, 'detach'):
             value = value.detach().cpu().numpy()
         return np.asarray(value)
     except (TypeError, ValueError, RuntimeError):
-        return None
+        pass
+    if type(value).__module__.split('.')[0] == 'jax':
+        import jax                              # local: jax is optional
+        try:
+            return np.asarray(jax.lax.stop_gradient(value))
+        except (TypeError, ValueError, RuntimeError):
+            pass
+    return None
 
 
 def _copy(value):

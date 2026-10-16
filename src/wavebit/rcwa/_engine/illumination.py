@@ -68,8 +68,16 @@ def _host(value):
     try:
         return np.asarray(value)
     except Exception as exc:
-        raise ValueError('Source grouping needs concrete directions. Construct and solve '
-                         'sources eagerly, outside jit/compile.') from exc
+        failure = exc
+    if type(value).__module__.split('.')[0] == 'jax':
+        import jax                              # local: jax is optional
+        try:
+            # An eager jax.grad tracer's primal, read as a torch tensor is detached above.
+            return np.asarray(jax.lax.stop_gradient(value))
+        except Exception as exc:                # a jit or vmap tracer has none
+            failure = exc
+    raise ValueError('Source grouping needs concrete directions. Construct and solve '
+                     'sources eagerly, outside jit/compile.') from failure
 
 
 def _plane_basis(xp, kx, ky, epsilon, mu, direction, azimuth=None):
