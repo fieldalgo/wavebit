@@ -260,7 +260,7 @@ def test_an_etched_grating_on_its_own_slab_takes_the_state_below(path, theta, bo
     def r(algorithm):
         kw = (dict(tetm='te') if path == 'te'
               else dict(psi=0.4798290669051883, phi=1.120655317939452))
-        solver = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=bot, theta=theta,
+        solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=bot, theta=theta,
                                       truncation_order=[orders], wavelength=1000.0,
                                       period=[period], thickness=[slab, teeth],
                                       structure=np.stack([np.full((1, 20), X, dtype=complex),
@@ -268,7 +268,7 @@ def test_an_etched_grating_on_its_own_slab_takes_the_state_below(path, theta, bo
                                       complex_dtype=0, fourier_coefficients='integrated',
                                       factorization='li', layer_algorithm=algorithm, **kw)
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore', _legacy_wavebit.ComplexIncidenceWarning)
+            warnings.simplefilter('ignore', _legacy_wavebit_ComplexIncidenceWarning)
             res = solver.solve(auto_detune=False)
         subs = (res.incident,) if path == 'te' else (res.s_inc, res.p_inc)
         return np.concatenate([np.ravel(np.asarray(getattr(sub, f))) for sub in subs

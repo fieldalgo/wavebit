@@ -27,7 +27,7 @@ are only reliably freed when a process exits. The record in records/ came from
 with the package's ``src`` on PYTHONPATH.
 """
 import sys, time, resource, statistics
-import numpy as np, jax, jax.numpy as jnp, torch
+import jax, jax.numpy as jnp, torch
 jax.config.update("jax_enable_x64", True)
 from wavebit import Material, Units, rcwa
 

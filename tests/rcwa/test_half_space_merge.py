@@ -18,7 +18,7 @@ stack and moves the answer to the faces analytically.
   half-space's, at any angle, and is refused where nothing can read it.
 """
 
-from wavebit.compat import legacy as _legacy_wavebit
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import warnings
 
 import numpy as np
@@ -27,7 +27,7 @@ import pytest
 import wavebit
 from wavebit.rcwa._engine import engine
 
-pytestmark = pytest.mark.filterwarnings('ignore::wavebit.compat.legacy.ComplexIncidenceWarning')
+pytestmark = pytest.mark.filterwarnings('ignore::wavebit._common.backend.ComplexIncidenceWarning')
 
 WL = 1000.0
 
@@ -55,7 +55,7 @@ def unmerged(monkeypatch):
 
 def _uniform(tetm, side, theta, d, eps=9.0, **kw):
     """A layer of the substrate's permittivity over it, vacuum above."""
-    return _legacy_wavebit.rcwa(backend='numpy', tetm=tetm, top=1.0, bot=eps, theta=theta,
+    return _legacy_wavebit_rcwa(backend='numpy', tetm=tetm, top=1.0, bot=eps, theta=theta,
                                 wavelength=WL, period=[700.], truncation_order=[2], thickness=[d],
                                 structure=np.full((1, 1, 4), eps + 0j), incidence_side=side, **kw)
 
@@ -110,7 +110,7 @@ def test_a_vacuum_layer_in_vacuum_is_the_incident_wave_field_and_all():
     -- ``E_y`` and Faraday's ``H = k x E`` of it. Unmerged, SMM left ``r_s = -1.2e-8 + 4.9e-9j``.
     """
     theta, d = 0.5 + 0.3j, 1e4
-    solver = _legacy_wavebit.rcwa(backend='numpy', tetm='te', top=1.0, bot=1.0, theta=theta,
+    solver = _legacy_wavebit_rcwa(backend='numpy', tetm='te', top=1.0, bot=1.0, theta=theta,
                                   wavelength=WL, period=[700.], truncation_order=[2],
                                   thickness=[d], structure=np.ones((1, 1, 4), complex),
                                   answers='field')
@@ -144,7 +144,7 @@ def _grating(kind, side, structure, thickness, *, top=1.0, bot=2.25, theta=0.3 +
         args.update(psi=0.4, phi=0.3, truncation_order=[3], period=[700.])
     else:
         args.update(tetm=kind, truncation_order=[3], period=[700.])
-    return _legacy_wavebit.rcwa(**args)
+    return _legacy_wavebit_rcwa(**args)
 
 
 def _raster(kind, values):
@@ -341,7 +341,7 @@ def test_real_angles_keep_their_bits():
 
 def test_an_excitation_solves_every_layer():
     """The face shift carries one incident order; an excitation lights several."""
-    s = _legacy_wavebit.rcwa(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=0.3 + 0.08j,
+    s = _legacy_wavebit_rcwa(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=0.3 + 0.08j,
                              wavelength=WL, period=[1500.], truncation_order=[3],
                              thickness=[150., 220.], structure=_raster('te', [2.25, None]),
                              excitation={0: 1.0, -1: 0.5})
@@ -421,7 +421,7 @@ def test_a_snapped_lossy_incident_medium_absorbs_between_the_faces(side, answers
 @pytest.mark.parametrize('value', [-1e-9, 1.0, 2.0, float('nan'), float('inf'), True, 1e-3j, 'x'])
 def test_the_tolerance_is_a_relative_number_below_one(value):
     with pytest.raises((ValueError, TypeError)):
-        _legacy_wavebit.rcwa(backend='numpy', half_space_merge_tolerance=value)
+        _legacy_wavebit_rcwa(backend='numpy', half_space_merge_tolerance=value)
 
 
 def test_a_tolerance_nothing_can_read_is_refused():
@@ -431,7 +431,7 @@ def test_a_tolerance_nothing_can_read_is_refused():
     """
     torch = pytest.importorskip('torch')
     layers = _raster('te', [2.25, None])
-    s = _legacy_wavebit.rcwa(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=0.3,
+    s = _legacy_wavebit_rcwa(backend='numpy', tetm='te', top=1.0, bot=2.25, theta=0.3,
                              wavelength=WL, period=[1500.], truncation_order=[3],
                              thickness=[100., 100.], structure=layers,
                              excitation={0: 1.0, -1: 0.5}, half_space_merge_tolerance=1e-8)
@@ -493,7 +493,7 @@ def test_the_solver_door_keeps_its_sampling_rules_after_a_merge():
     hexagon = np.column_stack(([period, 0.], [period / 2, period * np.sqrt(3) / 2]))
     layers = np.ones((3, 12, 12), complex)
     layers[0], layers[1, 3:8, 4:9], layers[2] = 2.25, 5.76, 1.0
-    s = _legacy_wavebit.rcwa(backend='numpy', structure=layers, truncation_order=[2, 2],
+    s = _legacy_wavebit_rcwa(backend='numpy', structure=layers, truncation_order=[2, 2],
                              thickness=th, wavelength=WL, top=1.0, bot=2.25, theta=0.3 + 0.05j,
                              phi=0.2, psi=0.4, lattice=hexagon, factorization='nvf',
                              answers='field')
@@ -513,7 +513,7 @@ def test_a_traced_angle_merges_and_snaps():
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
     layers = np.stack([np.full((2, 2), 2.25 * (1 + 1e-3)), np.full((2, 2), 3.0)])
-    s = _legacy_wavebit.rcwa(backend='jax', top=1.0, bot=2.25, theta=0.29, phi=0.0,
+    s = _legacy_wavebit_rcwa(backend='jax', top=1.0, bot=2.25, theta=0.29, phi=0.0,
                              polarization=(1, 0), truncation_order=[1, 1], period=[700., 800.],
                              wavelength=800., thickness=[180., 100.], structure=layers,
                              half_space_merge_tolerance=1e-2)
@@ -548,7 +548,7 @@ def test_an_unlit_order_that_overflows_leaves_every_derivative_finite():
     d0 = np.array([100.0, 130000.0])
 
     def solve(backend, d):
-        return _legacy_wavebit.rcwa(
+        return _legacy_wavebit_rcwa(
             backend=backend, tetm='te', top=2.25, bot=1.0, theta=0.001 - 0.3j,
             truncation_order=1, wavelength=500.0, period=[500.0 / 1.2],
             structure=np.stack([np.full((1, 4), 4.0 + 0j), np.full((1, 4), 2.25 + 0j)]),

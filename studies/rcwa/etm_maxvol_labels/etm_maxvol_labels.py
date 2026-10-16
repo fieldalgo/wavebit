@@ -78,7 +78,7 @@ os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
 import mpmath as mp  # noqa: E402
 import numpy as np  # noqa: E402
 
-from wavebit.compat import legacy as _legacy_wavebit  # noqa: E402
+from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa  # noqa: E402
 
 try:
     from wavebit.rcwa._engine import maxvol_labels as _maxvol
@@ -264,7 +264,7 @@ def uniform(sc):
 def solver(sc, algorithm, theta=None, layers=None, answers='amplitude'):
     layers = sc['layers'] if layers is None else layers
     kw = dict(tetm=sc['kind']) if sc['kind'] in ('te', 'tm') else dict(psi=sc['psi'], phi=sc['phi'])
-    return _legacy_wavebit.rcwa(
+    return _legacy_wavebit_rcwa(
         backend='numpy', top=sc['top'], bot=sc['bot'], theta=sc['theta'] if theta is None else theta,
         truncation_order=[sc['to']], wavelength=sc['wavelength'], period=[sc['period']],
         structure=np.stack([np.asarray(row, dtype=complex).reshape(1, -1) for row, _ in layers]),
@@ -313,7 +313,7 @@ def pool(fn, items):
 def _table_r0(kw, algorithm, mode):
     with labels(mode), warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        s = _legacy_wavebit.rcwa(backend='numpy', complex_dtype=0, fourier_coefficients='integrated',
+        s = _legacy_wavebit_rcwa(backend='numpy', complex_dtype=0, fourier_coefficients='integrated',
                                  factorization='li', layer_algorithm=algorithm, **kw)
         try:
             res = s.solve(auto_detune=False)
@@ -893,7 +893,7 @@ def section_cost():
                                            ('SMM', 'SMM', 'off')):
                 with labels(mode), warnings.catch_warnings():
                     warnings.simplefilter('ignore')
-                    s = _legacy_wavebit.rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta,
+                    s = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=25.0, theta=theta,
                                              wavelength=900e-9, thickness=[100e-9] * 3,
                                              layer_algorithm=algorithm, **kw)
                     s.solve(auto_detune=False)
