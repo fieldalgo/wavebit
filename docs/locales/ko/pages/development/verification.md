@@ -15,8 +15,19 @@ PR 병합 큐와 별개입니다.
 Python 3.12의 Linux·macOS·Windows에서 공개 NumPy RCWA/FDTD 사용, 번들 데이터와
 plotting을 확인합니다. 플랫폼 smoke 통과가 그 OS에서 모든 선택적 backend나
 전체 수치 시험을 통과했다는 뜻은 아닙니다. 검증이나 릴리스 준비를 보고하기 전에
-정확 커밋의 검사와 artifact를 확인합니다. 기여 지침은 AGENTS.md가 원본이고
-CLAUDE.md는 이를 불러옵니다.
+정확 커밋의 검사와 artifact를 확인합니다. [기여 안내](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md)와
+개발 문서가 공통 정책의 원본입니다. AGENTS.md는 짧은 기술 안내이며 CLAUDE.md는
+이를 불러옵니다. 개인 선호·계정 설정·비공개 경로·세션 이력은 공개 저장소 밖에서 관리합니다.
+
+main 대상 draft PR에서 관련 검사와 검토를 마친 뒤 필수 CI와 GitHub Rebase and merge를
+거칩니다. 충돌할 때만 수동 rebase와 재실행이 필요합니다. 공개 이력을 보존하며 main 직접
+push·공유 브랜치 강제 push·반영 시 squash·통합 merge 커밋을 사용하지 않습니다.
+결과 main SHA와 main 검증을 보존하고, 실패한 main 변경은 릴리스 전에 PR로 수정하거나
+되돌립니다. 릴리스 태그에는 정확한 결과 커밋의 검증 성공이 필요합니다.
+
+경로·임시 디렉터리·subprocess는 이식 가능한 API와 명시적 인코딩을 사용합니다.
+수치 기준을 낮추거나 설명 없는 skip으로 실패를 감추지 않고 OS별 동작을 확인합니다.
+기본 언어는 영어이며 한국어 문서를 영어판과 함께 갱신합니다. 실행 예제와 코드는 영어로 유지합니다.
 
 개발에 사용하는 Python 인터프리터로 저장소 도구를 실행합니다.
 

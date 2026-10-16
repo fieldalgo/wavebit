@@ -16,7 +16,22 @@ the source tree and checks public NumPy RCWA/FDTD use, bundled data and plotting
 on Linux, macOS and Windows with Python 3.12. A platform smoke pass does not imply
 that all optional backends or the full numerical suite passed on that OS. Inspect
 the exact commit's checks and artifacts before reporting validation or release
-readiness. Contributor instructions live in AGENTS.md; CLAUDE.md imports them.
+readiness. The [contribution guide](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md) and development documents
+hold the shared policy. AGENTS.md is a short technical entry point; CLAUDE.md imports it.
+Personal preferences, account settings, private paths and session history stay outside
+the public repository.
+
+Changes target main through draft PRs, relevant checks and review, then required CI
+and GitHub Rebase and merge. Only conflicts require a manual rebase and another run.
+Preserve published history; do not directly push main, force-push shared branches,
+squash on landing or create integration merge commits. Record the resulting main SHA
+and retain main validation. Fix or revert failed main changes through a PR before
+release. Release tags require successful validation of the exact resulting commit.
+
+Use portable path, temporary-directory and subprocess APIs with explicit encodings.
+Verify OS-sensitive behavior without weakening numerical gates or hiding failures
+with unexplained skips. English is canonical; update Korean documentation alongside
+its English counterpart. Keep executable examples and code in English.
 
 Run the repository tool with the Python interpreter used for development:
 

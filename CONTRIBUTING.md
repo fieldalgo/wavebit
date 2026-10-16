@@ -87,10 +87,10 @@ Not sure whether something is a bug, a usage question, or a feature idea? Open a
 
 ## Pull requests
 
-Follow the branch and validation policy in [AGENTS.md](AGENTS.md). Open drafts,
-run relevant checks in an appropriate environment, and mark them Ready after
-review. Reviewed Ready PRs may use automatic Rebase and merge only after all
-required checks pass. Main CI retains earlier runs in its workflow queue.
+`main` is the only development trunk. Open draft PRs against it, run relevant
+checks in a suitable environment and mark them Ready after reviewing the change.
+Documentation changes follow the same required CI as code changes. Reviewed Ready
+PRs use automatic **Rebase and merge** after every required check passes.
 
 - **Keep PRs small and focused.** One fix or one feature per PR reviews much faster than a grab-bag.
 - **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests/` for the pattern.
@@ -98,27 +98,41 @@ required checks pass. Main CI retains earlier runs in its workflow queue.
 - **Backend neutrality.** New solver code should be written against the Array API (`src/wavebit/_common/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
 - For anything larger than a bug fix, please open an issue first to discuss the design — it protects your time as much as the maintainer's.
 
-### Branches and preserved solver ancestry
+### Branches and releases
 
-All new work, including RCWA/FDTD integration, follows the same `main` PR flow
-in [AGENTS.md](AGENTS.md): reviewed Ready PRs, green required checks, and GitHub
-Rebase and merge. Do not push a local fast-forward to main, create merge commits
-for new integration, or treat later FDTD syncs as an exception. A conflicting PR
-needs a manual rebase and another validation run; an unrelated main advance alone
-does not require replaying a green PR.
+Start new work from current `origin/main`. Preserve published and shared history;
+use a new branch if replaying submitted work is necessary. Do not push directly to
+main, force-push shared work, squash on landing or create merge commits. The same
+PR/Rebase procedure applies to every solver and integration change.
 
-Preserve existing history. The historical solver merge
-`04b449754e6b226bdcd4374b2897732054468ce7` has develop parent
-`db37dbb8722b8993c2486c6af4f491e3b1b8bc13` and FDTD parent
-`d1119445bb2839dd03d2af0b769a2797d0be2d13`. These are provenance records, not an
-exception permitting future merge commits under the current policy.
+Only conflicting PRs need a manual rebase and another validation run. There is no
+PR merge queue. GitHub Rebase and merge creates new commit IDs: record the landed
+main SHA. Preserve unfinished work before merged branches are deleted automatically.
+Main push CI validates the combined state; investigate failures and fix or revert
+through a PR before releasing that state.
 
-**Check the clone configuration.** If `rebase.updateRefs` is `true`,
-every rebase moves *any other branch* pointing into the rebased range — no flag needed. That
-makes the obvious safety net useless: `git branch backup/my-work` before a rebase gets carried
-along with the rebase and ends up at the new commits, backing up nothing. **Tag instead** —
-`git tag backup/my-work` — since tags are not updated, or pass `--no-update-refs` for that one
-rebase. Found the hard way by a session that thought it had a backup.
+Feature pushes and draft PRs allocate no validation runners. Ready PRs, main pushes
+and explicit dispatch run the checks. Main validation retains runs in a stable
+workflow/ref queue; non-main validation supersedes older runs for the same ref.
+See the [verification guide](docs/development/verification.md) for exact scope,
+platform limits and queue behavior.
+
+Create `maintenance/X.Y.x` from a release tag only when that release needs a patch.
+Land version changes through the same PR process. Tag `vX.Y.Z` and publish only after
+the resulting main commit passes validation; `release-gate.yml` checks that exact
+commit before publication. A branch update alone does not publish a release.
+
+### Portable changes and agent entry points
+
+Use portable path, temporary-directory and subprocess APIs with explicit text
+encodings. Check OS-sensitive behavior on the supported platforms; do not weaken
+numerical criteria or add unexplained skips to conceal failures. Keep Linux full
+acceptance and Linux/macOS/Windows installed-distribution checks distinct.
+
+This document and the development guides are the shared contributor contract.
+`AGENTS.md` provides short repository navigation and essential commands;
+`CLAUDE.md` imports it. Keep personal preferences, account settings, private paths,
+session coordination and operational history outside the public repository.
 
 ## Development setup
 
