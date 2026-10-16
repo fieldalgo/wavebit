@@ -1,0 +1,27 @@
+name: Enhancement
+description: A new capability, a wider scope for an existing one, or a better message or default.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What you would like
+    validations:
+      required: true
+  - type: textarea
+    id: use
+    attributes:
+      label: What it is for
+      description: The calculation or workflow it would serve.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today
+      description: The current behaviour, with any refusal code it raises (for example `prepared.host_topology`) and a short script if one helps.
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it might work
+      description: Optional. What would have to change, if you have an idea.

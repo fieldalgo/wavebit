@@ -56,3 +56,13 @@ history here.
 
 Never rewrite `main` once pushed: docs, tests and studies cite their commits by hash. Commits that exist only on one machine may be rebased onto the updated remote branch
 before they are pushed.
+
+## Issues
+
+The open issues are the work list: bugs, accuracy gaps, enhancements, performance, documentation
+and validation, one item per issue, labelled as `CONTRIBUTING.md` describes. A session that finds
+such an item drafts the issue with what the matching form asks for -- a minimal script, what it
+got, what it expected, and the release or `main` commit it ran on -- after searching the open
+issues for it. It opens the issue when the maintainer has approved it. Nothing private goes into
+an issue: it is public the moment it is opened. A pull request that resolves one says
+`Fixes #<number>`.

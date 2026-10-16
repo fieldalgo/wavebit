@@ -1,0 +1,51 @@
+name: Bug report
+description: A wrong result, a crash, or an error that is not a structured wavebit refusal.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A minimal script that still fails is the most useful thing you can give.
+        See [CONTRIBUTING.md](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md#reporting-bugs).
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: One or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: script
+    attributes:
+      label: Minimal script
+      description: The structure, wavelength, backend and Fourier order, as short as it can be while it still fails.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What you got
+      description: The output, or the full error with its code (for example `prepared.topology`).
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: dropdown
+    id: backends
+    attributes:
+      label: Backends tried
+      multiple: true
+      options: [NumPy, JAX, PyTorch]
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Wavebit (a release or a commit), Python, and each backend you tried.
+      placeholder: wavebit 0.0.3, Python 3.12, NumPy 2.5, JAX 0.11, PyTorch 2.13
+    validations:
+      required: true

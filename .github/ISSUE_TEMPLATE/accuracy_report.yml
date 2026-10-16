@@ -1,0 +1,48 @@
+name: Accuracy report
+description: The calculation runs, but a number is less accurate than it should be.
+labels: [accuracy]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An accuracy report needs a reference: an analytic result, another solver, a paper,
+        a converged refinement, or a finite-difference check of a derivative. Say where it comes from.
+  - type: input
+    id: quantity
+    attributes:
+      label: Quantity
+      description: What is off, for example `sum(T)`, a per-order efficiency, or a derivative with respect to a radius.
+    validations:
+      required: true
+  - type: textarea
+    id: script
+    attributes:
+      label: Minimal script
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: values
+    attributes:
+      label: Wavebit's value and the reference
+      description: Both numbers, the reference's source, and how far apart they are (relative or absolute).
+    validations:
+      required: true
+  - type: textarea
+    id: convergence
+    attributes:
+      label: Convergence
+      description: Does the gap shrink with the Fourier order, the grid or the step size? Which settings did you try?
+  - type: dropdown
+    id: backends
+    attributes:
+      label: Backends tried
+      multiple: true
+      options: [NumPy, JAX, PyTorch]
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: wavebit 0.0.3, Python 3.12, NumPy 2.5, JAX 0.11, PyTorch 2.13
+    validations:
+      required: true
