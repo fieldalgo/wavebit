@@ -294,9 +294,9 @@ denominator by `dt` gives `D = 1/dt + gamma/2`, with coefficients
 The implementation also rescales by exact powers of two to keep reciprocals normal.
 The optical response divides its denominator by damping before forming `gamma*omega`
 when that product would overflow. Ordinary-size inputs retain their original arithmetic.
-JAX optimization barriers preserve these intermediate scalings without changing XLA flags,
-values, or derivatives; no material parameter is clipped and there is no physical upper
-limit on damping.
+JAX optimization barriers retain these intermediate scalings without changing XLA flags.
+No material parameter is clipped and no physical upper limit on damping is introduced;
+this rescaling does not certify derivatives at every extreme combination of finite inputs.
 
 For these second-order poles, a nonzero ADE drive below the smallest normal float64
 value cannot be preserved on the
@@ -306,7 +306,27 @@ existing runtime guard. This machine representability door is shared with NumPy 
 so an active oscillator cannot silently disappear on only one backend. It is not an optical
 convergence tolerance. A concrete zero strength remains allowed, and its analytic strength
 tangent is retained. As with any float64 calculation, derivatives that themselves fall
-outside the dtype's representable range are not certified.
+outside the dtype's representable range are not certified. Intermediate derivative
+operations can also underflow when the final analytic derivative is representable.
+For example, the normalized time-domain response below returns an imaginary
+susceptibility of `1e-208` but a Torch frequency derivative of zero, whereas the
+analytic derivative is approximately `-1e-208`:
+
+```python
+import torch
+from wavebit.materials.time_domain import Drude
+
+omega = torch.tensor(1., dtype=torch.float64, requires_grad=True)
+chi = Drude(omega_p=1e50, gamma=1e308).eps_term(omega).imag
+frequency_derivative, = torch.autograd.grad(chi, omega)
+print(chi.detach().item(), frequency_derivative.item())  # 1e-208, 0.0
+```
+
+This example uses normalized engine rates, not the SI rates of the shared public
+material declarations. The admitted value and strength-tangent regressions below
+do not establish frequency or other parameter derivatives for all mixed extreme
+scales. Check the derivative needed by an optimization against an independent
+analytic expression or a representable finite difference in that regime.
 
 The arithmetic check follows the recurrence selected by the plan. Spatial film
 terms use their own coefficient and CFL checks; they do not evaluate the unused
