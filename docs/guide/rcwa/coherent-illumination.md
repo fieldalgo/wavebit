@@ -447,11 +447,14 @@ amplitude scale, coordinate axes and phase conventions.
 
 A run with more than one source, or with any source other than a single `PlaneWave`, uses the
 Cartesian **first-order formulation with SMM**. NumPy, JAX and PyTorch are supported in eager
-execution. PlaneWave grouping requires concrete directions, so a JAX-traced input is refused
-(code `rcwa.coherent_transform`): this path does not support `jit` or `vmap`. Under
+execution. PlaneWave grouping requires concrete directions, so an input traced under `jax.jit`
+or `jax.vmap` is refused (code `rcwa.coherent_transform`); eager `jax.grad` reads its values, as
+PyTorch does, and differentiates. Under
 `torch.compile` it runs eagerly inside the compiled caller, as every public wavebit callable
-does ([`torch-compile.md`](../../development/torch-compile.md) §6). Its autodiff behavior is
-not a supported contract. It does not expose the single-plane-wave `R`, `T`, per-order
+does ([`torch-compile.md`](../../development/torch-compile.md) §6). Eager derivatives with
+respect to a region permittivity, a layer thickness and a radius were compared with a central
+difference on both backends for two plane waves (`tests/api/test_eager_grad_parity.py`); other
+inputs and sources have not been compared. It does not expose the single-plane-wave `R`, `T`, per-order
 amplitudes or scattering matrix: `Outputs(diffraction=True)` is refused (code
 `rcwa.coherent_diffraction`), and so is `Outputs(scattering=True)` (code
 `rcwa.coherent_scattering`). A prepared problem fixes the cell, the wavelengths, the source

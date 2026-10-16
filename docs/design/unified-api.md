@@ -410,7 +410,9 @@ perform that validation explicitly outside a compiled region. It does not
 certify arbitrary future values.
 
 For autodiff, construct a concrete Problem, prepare outside the transform, and
-pass a freshly constructed differentiable Problem to each run. For example:
+pass a freshly constructed differentiable Problem to each run. Under an eager
+`jax.grad`, as with a PyTorch tensor, preparation, checks and validation read the
+values a tracer carries; under `jax.jit` or `jax.vmap` they refuse it. For example:
 
 ```python
 import jax
@@ -1067,9 +1069,11 @@ The [RCWA guide](../guide/rcwa/index.md) covers layered stacks, material and geo
 declarations, single-incidence diffraction, requested fields, and supported
 coherent/internal-source observations. Coherent-source runs expose boundary
 power and requested fields; they do not invent a unique single-port R/T or a
-group-independent scattering matrix. Coherent assembly is currently eager-only.
+group-independent scattering matrix. Coherent assembly is currently eager-only:
+PyTorch and eager `jax.grad`, not `jax.jit` or `jax.vmap`.
 Scattering-matrix outputs require SMM. Host-only geometry decisions and adaptive
-detuning cannot be assumed safe inside an external autodiff transform.
+detuning cannot be assumed safe inside an external autodiff transform that carries no
+value.
 
 The [FDTD guide](../guide/fdtd/general-fdtd.md) covers physical domains, supported
 structures, plane-wave and current-dipole sources, and requested records,

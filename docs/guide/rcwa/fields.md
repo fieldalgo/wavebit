@@ -68,7 +68,7 @@ releases them instead of keeping a hidden reconstruction state.
 
 On JAX, prepare outside the transform and pass the live problem inside it, for example
 `jax.jit(lambda p: prepared.run(p).field(x=..., y=..., z=...).values)`. This holds for a single
-plane wave; other sources refuse a JAX-traced input. Explicit coordinate arrays and integer
+plane wave; other sources refuse an input traced under `jax.jit` (eager `jax.grad` takes them). Explicit coordinate arrays and integer
 counts both work inside, and so does a traced layer thickness with explicit heights. A region
 geometry or cell under `jax.jit` needs the Cartesian Li device guard or explicit
 `Numerics(topology_check='host')` for admitted scalar regions. Invalid topology masks

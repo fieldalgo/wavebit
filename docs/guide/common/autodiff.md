@@ -35,6 +35,12 @@ Fixed-cell Cartesian Li rectangles have an array-valued edge-order guard. Their 
 
 `Polygon.vertices` differentiates as an `(N, 2)` tensor or as `N` pairs of scalars; prepare with the spelling you run with, since the two are different layouts. Its derivative is exact under `factorization='laurent'`. Under the default NVF it is not: the painting route's normal field jumps across its medial axis, and autodiff misses the jumps' share of the change -- 10% across a four-pixel window at `orders=(3, 3)` on an L-shaped outline, 3% at `(9, 9)`, whatever `shape_nvf_grid_size`, and the same holds for any region painted over another. See [polygon regions](../rcwa/boundary-modeling.md#polygon-regions).
 
+### Eager `jax.grad` takes PyTorch's branches
+
+Without `jit` or `vmap`, a `jax.grad` or `jax.jacfwd` tracer carries its value as a PyTorch tensor does, and the lifecycle reads it through `jax.lax.stop_gradient` wherever an eager decision needs a number. So under eager `jax.grad`, `rcwa.prepare`, `rcwa.check`, `Prepared.validate` and `rcwa.run` work at the point being differentiated, and coherent sources, adaptive `detuning` and rasters with more than 256 distinct phases differentiate as they do on PyTorch. A failing check raises the error PyTorch raises: a negative thickness is a `ValidationError` with code `layer.thickness`, a moved raster partition `prepared.raster_partition`, nonfinite observables a `NumericalError` with code `rcwa.nonfinite`. Under `jax.jit` or `jax.vmap` there is no value to read, and the same cases stay refused: `rcwa.coherent_transform`, `prepared.detuning_transform`, `rcwa.raster_partition_transform`, `prepare.concrete`, `check.concrete` and `validate.concrete`.
+
+On one example each, the two-plane-wave derivatives with respect to a region permittivity, a layer thickness and a radius, the detuned derivative at a Rayleigh point, and the derivatives of two 400-phase rasters agree with a central difference to 2e-7 or better on both backends ([`tests/api/test_eager_grad_parity.py`](../../../tests/api/test_eager_grad_parity.py)). JAX and PyTorch agree to round-off except for the region permittivity: there PyTorch's derivative sits 1.1e-8 (one plane wave) to 5.6e-8 (two) from a Richardson extrapolation, where JAX's sits within 2e-10.
+
 ### A thickness and a radius derivative
 
 This example uses the default device policy. One preparation serves every run of the objective. On JAX the layer thickness differentiates under `jax.jit` as well; the radius differentiates under eager `jax.grad` and is refused under `jax.jit`. On PyTorch the radius differentiates too. The small Fourier order and 64-point NVF grid make a quick demonstration, not a converged design. The wavelength sits off the cell's Rayleigh anomalies: at 0.9 µm, where the first substrate orders graze (0.6 µm times the substrate index 1.5), a wavelength derivative is NaN on both backends:
@@ -96,7 +102,7 @@ Raster values stay live, but some Fourier paths record which pixels share a phas
 | `'sampled'`, `'nvf'` | NaN under jit; PyTorch raises |
 | `'integrated'`, `'li'` | NaN under jit; PyTorch raises |
 
-When a pattern moves every step under jit, use `('sampled', 'li')` or prepare each concrete pattern outside the transform.
+When a pattern moves every step under jit, use `('sampled', 'li')` or prepare each concrete pattern outside the transform. A recording path guards the partition under jit only up to 256 distinct phases; beyond that a traced raster is refused with `rcwa.raster_partition_transform`, while eager `jax.grad` and PyTorch check it on its values.
 
 ### Backend speed
 
