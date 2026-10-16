@@ -218,7 +218,7 @@ body { font-family: var(--pst-font-family-base); line-height: 1.7; }
 .wb-version > button { border: 1px solid var(--pst-color-border); border-radius: 3px; font-size: 13px; color: var(--pst-color-text-base); white-space: nowrap; }
 .wb-version .dropdown-item { font-size: 13px; }
 .wb-company { display: inline-grid; width: 36px; height: 36px; place-items: center; border-radius: 6px; }
-.wb-company img { opacity: .75; filter: grayscale(1); }
+.wb-company img { width: 24px; height: 24px; filter: grayscale(1); transition: filter 150ms; }
 .wb-company:hover img { opacity: 1; filter: none; }
 .wb-company-dark { display: none; }
 html[data-theme="dark"] .wb-company-light { display: none; }
@@ -232,17 +232,17 @@ html[data-theme="dark"] .wb-company-dark { display: block; }
 
 
 /* Keep one header row; move navigation into the existing drawer before it wraps. */
-@media (min-width: 1200px) {
-  .bd-header .navbar-header-items, .bd-header .navbar-nav { flex-wrap: nowrap; }
+@media (min-width: 1280px) {
+  .bd-header .navbar-header-items, .bd-header ul.navbar-nav { flex-wrap: nowrap; }
   .bd-header .navbar-header-items__end { flex-shrink: 0; }
 }
-@media (min-width: 992px) and (max-width: 1199.98px) {
+@media (min-width: 960px) and (max-width: 1279.98px) {
   .bd-header .navbar-header-items { display: none !important; }
   .bd-header .primary-toggle { display: flex !important; }
   .bd-header .navbar-persistent--mobile { display: flex !important; }
   .bd-header .navbar-header-items__start { margin-right: auto; }
 }
-@media (min-width: 992px) and (max-width: 1199.98px) {
+@media (min-width: 960px) and (max-width: 1279.98px) {
   #pst-primary-sidebar-modal[open] {
     display: flex !important; position: fixed; inset: 0 auto 0 0;
     margin: 0; width: 340px; max-width: 85vw; height: 100dvh; max-height: 100dvh;
@@ -251,3 +251,15 @@ html[data-theme="dark"] .wb-company-dark { display: block; }
   }
   #pst-primary-sidebar-modal .sidebar-header-items { display: block !important; }
 }
+
+/* Match the visible size and hit area of all utility icons. */
+:is(.bd-header, .sidebar-header-items) .pst-navbar-icon,
+:is(.bd-header, .sidebar-header-items) .theme-switch-button,
+.wb-company { width: 36px; height: 36px; padding: 0; display: inline-grid; place-items: center; border-radius: 6px; transition: color 150ms, background-color 150ms; }
+:is(.bd-header, .sidebar-header-items) .pst-navbar-icon:hover,
+:is(.bd-header, .sidebar-header-items) .theme-switch-button:hover,
+.wb-company:hover { background: var(--pst-color-surface); color: var(--pst-color-primary); }
+:is(.bd-header, .sidebar-header-items) .pst-navbar-icon svg,
+:is(.bd-header, .sidebar-header-items) .pst-navbar-icon i,
+:is(.bd-header, .sidebar-header-items) .theme-switch { font-size: 18px; width: 18px; height: 18px; }
+.bd-header .navbar-persistent--container { align-items: center; gap: 4px; }
