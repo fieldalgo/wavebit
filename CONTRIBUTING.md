@@ -66,6 +66,16 @@ Numerical software bugs are often subtle, so a good report makes all the differe
 
 If the same case behaves differently on two backends, say so — cross-backend discrepancies are treated as high-priority bugs.
 
+The issue forms -- **Bug report**, **Accuracy report** and **Enhancement** -- ask for exactly this.
+
+## Issues are the work list
+
+Planned work is tracked as issues too, one item per issue, so the open issues are the project's
+to-do list. A label says what kind of item it is: `bug`, `accuracy` (it runs, but a number is less
+accurate than it should be), `enhancement`, `performance`, `documentation` or `validation` (a
+comparison or check not yet made); and which part it touches: `rcwa`, `fdtd`, `autodiff`. A pull
+request that resolves an issue says `Fixes #<number>`, so landing it closes the issue.
+
 ## Questions and discussions
 
 Not sure whether something is a bug, a usage question, or a feature idea? Open an issue anyway and label it as a question. Questions about RCWA methodology (Fourier factorization choices, convergence behavior, conventions) are welcome — they often turn into documentation improvements.
