@@ -58,6 +58,21 @@ inputs are errors, not successful empty runs. A passed call is reusable only
 after its teardown completes. An interrupted run retains completed events and
 returns a nonzero exit status; it does not claim that unreported nodes passed.
 
+## Queued main validation
+
+Each `main` run of a validation workflow shares a stable workflow/ref concurrency
+group with `queue: max` and `cancel-in-progress: false`. One run executes at a time
+in that group, preserving up to 100 pending runs instead of replacing them on a
+new push. Further runs can be cancelled when that queue is full. Queue entry order
+determines processing order; commit or push order is not guaranteed.
+
+Other refs use `queue: single` and cancel superseded runs for the same ref. Different
+validation workflows and repositories can still run concurrently, subject to runner
+capacity; this does not reserve slots or give PRs scheduling priority. Existing runs
+keep their original workflow configuration. Test selection, numerical criteria,
+required checks and release gates are unchanged. A release still requires successful
+validation of its exact commit. This is a CI execution queue, not a PR merge queue.
+
 ## CI runs the two partitions in shards
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
