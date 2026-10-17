@@ -43,6 +43,20 @@ CUDA의 초기 E/H 패턴은 고정 호스트 선언(NumPy 배열, 미분하지 
 텐서, 호스트 callable)입니다. CUDA 텐서나 미분 가능한 텐서 패턴은 허용하지
 않으며, 별도 `InitialField.amplitude`는 미분 가능한 live 입력입니다.
 
+별도의 균질 ADE 범위는 전체 격자를 채우는 Slab 하나, Lorentz 또는 Drude
+극점 하나, 여섯 Periodic 면, 유한 실수 전체 격자 NumPy 초기 배열과
+Record 또는 최종 장 출력을 허용합니다. 초기 장 하나는 `None`일 수 있으나
+이 ADE 범위에서 CPU 텐서·callable·성분별 리스트는 제외합니다. 경계면이나
+외부 광원은 없습니다. 스칼라 `epsilon_inf`, `mu`, `gamma`,
+Lorentz `omega_0`는 비미분 값이며(`mu=None`은 1), 호환되는 prepared
+재사용 시 구체값을 바꿀 수 있습니다. 이 범위에서 실수 초기 진폭과 Lorentz strength
+또는 Drude plasma frequency만 live 미분 입력입니다. 편극 메모리는 정지
+상태에서 시작하여 첫 전기장 갱신에는 전달된 극점 증가량이 없습니다.
+시험한 원래 시간축의 연속체 초기화 오차는 시간 간격에 대해 일차이며,
+시간축을 옮긴 진단은 보정이나 이차 정확도 주장이 아닙니다. 독립 이산·미분
+검사와 eager 역방향·double backward 근거는 [균질 ADE 범위와 근거](../../validation/fdtd/general-cuda.md#균질-단일-극점-ade)를
+참고하세요.
+
 ## 단위와 규약
 
 | 물리량 | 단위 |

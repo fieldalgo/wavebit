@@ -25,6 +25,11 @@ Targets:
 - `tests/fdtd/test_general_cuda_bloch_contract.py`
 - `tests/fdtd/test_general_cuda_bloch_planewave.py`
 - `tests/fdtd/test_general_cuda_bloch_observations.py`
+- `tests/fdtd/test_general_ade_modes.py`
+- `tests/fdtd/test_general_ade_ad.py`
+- `tests/fdtd/test_general_ade_record_ad.py`
+- `tests/fdtd/test_general_ade_units.py`
+- `tests/fdtd/test_general_ade_contract.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -49,7 +54,7 @@ the original leaves. Other non-CPU backends and single precision remain refused.
 | --- | --- |
 | Grid and duration | Existing uniform cubic grid; fixed duration; `discretisation='voxel'`; no `geometry_ranges` |
 | Boundaries and padding | `Periodic`, `Open`, `PEC` and `PMC`; static `Bloch` with only Bloch/Periodic/Open companions; `PML` padding on open faces |
-| Materials | Existing nondispersive `Material` and `ConductiveMaterial`, with their ordinary material checks |
+| Materials | Existing nondispersive `Material` and `ConductiveMaterial`; the separate homogeneous single-pole ADE scope below |
 | Structures | Cell-snapped `Slab` only |
 | Sources | `PlaneWave`, fixed-center electric/magnetic `Dipole` with `bspline` or `tent` stamp, or initial fields; Bloch scenes admit only PlaneWave/initial fields |
 | Observations | `Record`, `Field`, `Flux` and final fields |
@@ -79,11 +84,103 @@ fixed transverse wavevector at the pulse's centre wavelength, not a constant
 angle across its spectrum.
 
 `Decay`, the alternative `Absorber`, ranged or smoothed geometry, dispersive
-materials, symmetry/invariant-axis faces, TFSF sources,
+scenes outside the homogeneous ADE scope, symmetry/invariant-axis faces, TFSF sources,
 diffraction and far-field monitors are outside this CUDA route. Unsupported
 combinations return a `cuda_scope` issue with the relevant public field path
 before planning. Admission does not waive sampling, CFL, material, padding or
 other scientific checks. A passed `check` or `prepare` advances no fields.
+
+## Homogeneous single-pole ADE
+
+The bounded dispersive route uses `DispersiveMaterial` in exactly one `Slab`
+covering the whole actual grid, with all six faces `Periodic` and exactly one
+`Lorentz` or `Drude` pole. The ordinary uniform-grid, fixed-duration, double-
+precision and voxel requirements still apply. There are no material interfaces
+or external sources; the background declaration remains ordinary `Material`.
+Initial E/H are plain finite real NumPy arrays of shape `(3,nz,ny,nx)` over the
+full grid; one may be `None` to supply a zero field. CPU tensors, callables and
+component lists are not accepted in this ADE scope. Floating and integer arrays
+convert to double execution precision; float32 retains the existing precision
+warning. Observations are `Record` and/or final fields, including Record-only
+runs with `final_fields=False`. Open/PML, Bloch, walls, multiple poles, Debye, dispersive background,
+spatial films and Fourier/Flux observations are outside this route.
+
+`epsilon_inf`, `mu`, damping `gamma` and Lorentz `omega_0` are nondifferentiable
+scalars; `mu=None` means 1. Their concrete values may change on prepared reuse
+when the resolved plan remains compatible and scientific checks pass. This
+differs from the fixed spatial patterns, whose changes require preparation
+again. The admitted differentiable inputs are real scalar `InitialField.amplitude` and Lorentz
+`strength` or Drude `omega_p`, expressed in the existing SI pole convention.
+Initial spatial patterns are not differentiable inputs. This scope retains
+the existing material validity and pole-aware time-step checks; it is not a
+waiver of passivity, finiteness or stability restrictions.
+
+The existing startup sets the algorithmic polarization memories and carried
+polarization increment to zero. The first E update therefore has no carried
+pole increment; the pole is advanced afterwards. This is a discrete initial
+state, not a continuum-equilibrated polarization initialization. For a uniform
+electric field, a raw fixed-time refinement diagnostic shows first-order
+time error for the tested Lorentz and Drude examples. Evaluating a separately
+shifted reference at `(n-.5)*dt` explains the startup phase offset but does not
+repair the solution or establish second-order raw continuum accuracy.
+
+The two CPU diagnostics hold the grid and physical end time
+`6.671281903963041e-15` s fixed and use 64/128/256 steps. The maximum window
+errors and successive observed orders are:
+
+| Pole | Raw errors at `n*dt` | Raw orders | Shifted errors at `(n-.5)*dt` | Shifted orders |
+| --- | --- | --- | --- | --- |
+| Lorentz | 0.0148468 / 0.00748655 / 0.00376165 | 0.98778 / 0.99293 | 0.00234079 / 0.000592359 / 0.000149097 | 1.98245 / 1.99022 |
+| Drude | 0.0357578 / 0.0179577 / 0.00900017 | 0.99366 / 0.99658 | 0.000903182 / 0.000229998 / 0.0000580323 | 1.97339 / 1.98670 |
+
+These are diagnostics of the unchanged startup, not fitted acceptance orders.
+All three time resolutions still pass the independent discrete-solution gate.
+
+The independent gates use SI characteristic roots and a scalar recurrence for
+uniform fields, and an explicitly assembled 15×15 Maxwell/polarization state
+matrix for nonzero Fourier modes at physical Yee offsets. Missing-pole and
+wrong-startup controls must be detectably different. Field/Record errors use
+peak-normalized `1e-11`; uniform recurrence residuals use `1e-12`. A 45×45
+matrix-power Frechet construction supplies amplitude/material gradients and
+full Hessians for final-field and signed Record-history objectives, at relative
+`2e-12` with zero absolute tolerance. Plain and checkpoint scans, mixed-device
+leaves, prepared reuse and retained old outputs are separate checks. These
+oracles share the declared discrete startup; they qualify eager reverse mode
+and double backward, not arbitrary continuum initial states or general transforms.
+
+Public numerical qualification covers 40 distinct CPU cases (26 unchanged
+passing cases retained plus 14 modified cases rerun) and **42 actual CUDA cases**
+(10.99 s, 40 deselected, 51 expected mesh warnings). The contract suite separately
+passed 58 checks needing no device plus seven CPU cases, then six actual CUDA
+cases (0.90 s, 65 deselected, seven expected warnings). Together these are
+153 distinct new cases; the nine existing scope-refusal checks are separate.
+These results use the public admission path, without an experimental context.
+
+| CUDA control | Worst recorded relative error | Budget |
+| --- | ---: | ---: |
+| Uniform final fields | 4.00635199454821e-13 | 1e-11 |
+| Uniform Records | 1.3211653993039363e-14 | 1e-11 |
+| Uniform scalar recurrence | 2.7755575615628914e-16 | 1e-12 |
+| Fourier final fields | 2.1958220980047683e-13 | 1e-11 |
+| Fourier Records | 4.73407123422404e-13 | 1e-11 |
+| Magnetic-only initial mode, `E=None`, `mu=None` | 7.496839298600154e-15 | 1e-11 |
+| Translated rectangular grid, all Slab axes, equivalent um/nm declarations | 8.560921989767082e-15 | 1e-11 |
+| Prepared reuse with changed concrete epsilon/mu/gamma/omega_0 | 7.137981093552503e-15 | 1e-11 |
+| Final-field value, gradient and full Hessian | 4.438322122768973e-14 | 2e-12 |
+| Record-only value, gradient and full Hessian | 7.834081628920496e-15 | 2e-12 |
+
+The translated box declares `(0.61,0.49,0.71)` um at 0.05 um spacing; upward
+rounding produces `(13,10,15)` cells and physical size `(0.65,0.5,0.75)` um.
+The full-grid Slab must cover those actual cells, not only the nominal extent.
+The derivative cases use 12³ cells, 17 steps, plain or block-7 scans with a
+three-step tail, two amplitude/material parameter points, a CPU amplitude leaf
+and a material leaf on the execution device. Record objectives use all six
+staggered components and a nonzero signed linear term as well as weighted squares;
+no final-field output is required. The contract checks also retain invalid-live
+material behavior, float32/integer conversion, precision warnings and the CPU
+epsilon-derivative route. No budget was relaxed. This local qualification does
+not establish full CI, release integration, general dispersive CUDA support or
+second-order raw continuum initialization.
 
 ## Evidence and its limits
 
@@ -657,6 +754,9 @@ python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_modes.py tests/fdtd/test_general_cuda_bloch_planewave.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_general_cuda_bloch_contract.py tests/fdtd/test_general_cuda_bloch_observations.py -q -o junit_family=legacy
+python -m pytest tests/fdtd/test_general_ade_modes.py tests/fdtd/test_general_ade_units.py tests/fdtd/test_general_ade_ad.py tests/fdtd/test_general_ade_record_ad.py -q -o junit_family=legacy
+python -m pytest tests/fdtd/test_general_ade_contract.py -q
+python -m pytest tests/fdtd/test_general_ade_modes.py -k raw_continuum -q -s
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json

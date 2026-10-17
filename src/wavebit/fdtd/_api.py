@@ -107,7 +107,83 @@ def _checkpoint(numerics,execution):
     return value
 
 
-def _cuda_scope(problem,numerics,execution):
+def _cuda_homogeneous_ade(problem,scene):
+    """Admit only the independently qualified homogeneous oscillator geometry.
+
+    Filled cells are checked on the lowered grid, using the planner's own
+    rounding rule. Material validity and pole-aware stability remain the
+    ordinary scientific guards' responsibility, including on prepared reuse.
+    """
+    from . import boundaries, geometry, monitors
+    from ._kernel.grid import Grid
+    from wavebit.materials import Drude, Lorentz
+    from wavebit._common.declarations import static_float
+
+    def refuse(message,path):
+        raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
+
+    if type(problem.scene.background) is not Material:
+        refuse('CUDA homogeneous ADE requires an ordinary Material background',
+               'scene.background')
+    if len(problem.scene.structures)!=1:
+        refuse('CUDA homogeneous ADE requires exactly one full-grid Slab','scene.structures')
+    structure=problem.scene.structures[0]
+    path='scene.structures.'+structure.name
+    material=structure.material
+    if (type(structure.shape) is not geometry.Slab or
+            type(material) is not DispersiveMaterial):
+        refuse('CUDA homogeneous ADE requires one DispersiveMaterial Slab',path)
+    for axis in 'xyz':
+        for side in '-+':
+            if type(problem.scene.boundaries.face(axis+side)) is not boundaries.Periodic:
+                refuse('CUDA homogeneous ADE requires six Periodic faces',
+                       'scene.boundaries.'+axis+side)
+    if len(material.poles)!=1 or type(material.poles[0]) not in (Lorentz,Drude):
+        refuse('CUDA homogeneous ADE requires exactly one Lorentz or Drude pole',
+               path+'.material.poles')
+    pole=material.poles[0]
+    fixed=[('epsilon_inf',material.epsilon_inf),('mu',1. if material.mu is None else material.mu),
+           ('poles[0].gamma',pole.gamma)]
+    if type(pole) is Lorentz:
+        fixed.append(('poles[0].omega_0',pole.omega_0))
+    for name,value in fixed:
+        where=path+'.material.'+name
+        if _leaf_shape(value)!=():
+            refuse('CUDA homogeneous ADE requires scalar epsilon, mu and pole rates',where)
+        try:static_float('homogeneous ADE',name,value)
+        except (TypeError,ValueError) as exc:
+            raise IncompatibleProblemError(
+                'CUDA homogeneous ADE differentiates only oscillator weight and initial amplitude; '
+                'epsilon_inf, mu, gamma and omega_0 must be static scalars',
+                code='static_input',path=where) from exc
+    grid=Grid.from_domain(scene.domain.size,scene.domain.center,scene.resolution.dx)
+    if scene.structures[0].shape.filled_cells(grid)!=tuple((0,n) for n in grid.n):
+        refuse('CUDA homogeneous ADE Slab must fill every cell of the actual rounded grid',
+               path+'.shape')
+    if problem.sources:
+        refuse('CUDA homogeneous ADE supports initial fields only','sources')
+    initial=problem.initial
+    if initial is None or (initial.E is None and initial.H is None):
+        refuse('CUDA homogeneous ADE requires a real static initial field','initial')
+    for name,value in (('E',initial.E),('H',initial.H)):
+        if value is None:
+            continue
+        if (type(value) is not np.ndarray or value.dtype.kind not in 'fiu'
+                or value.shape!=grid.shape or not np.isfinite(value).all()):
+            refuse('CUDA homogeneous ADE initial patterns must be finite real host arrays '
+                   'of shape (3,nz,ny,nx)', 'initial.'+name)
+    amplitude=initial.amplitude
+    if (_leaf_shape(amplitude)!=() or isinstance(amplitude,(bool,np.bool_,complex))
+            or str(getattr(amplitude,'dtype','')) in ('bool','torch.bool')
+            or 'complex' in str(getattr(amplitude,'dtype',''))):
+        refuse('CUDA homogeneous ADE initial amplitude must be a real scalar','initial.amplitude')
+    for monitor in problem.outputs.monitors:
+        if type(monitor) is not monitors.Record:
+            refuse('CUDA homogeneous ADE supports Record and final fields only',
+                   'outputs.'+monitor.name)
+
+
+def _cuda_scope(problem,numerics,execution,*,scene=None):
     """Keep the first CUDA route inside the cases covered by device regressions.
 
     Planning remains on the host. This admission is separate from the scientific
@@ -156,9 +232,15 @@ def _cuda_scope(problem,numerics,execution):
                    'scene.structures.'+structure.name+'.shape')
     materials=(('scene.background',problem.scene.background),)+tuple(
         ('scene.structures.'+s.name+'.material',s.material) for s in problem.scene.structures)
+    homogeneous_ade=any(isinstance(material,DispersiveMaterial) for _,material in materials)
+    if homogeneous_ade:
+        if scene is None:
+            scene,_=lower_problem(problem,numerics)
+        _cuda_homogeneous_ade(problem,scene)
     for path,material in materials:
-        if type(material) not in (Material,ConductiveMaterial):
-            refuse('CUDA currently supports nondispersive Material and ConductiveMaterial only',path)
+        if (type(material) not in (Material,ConductiveMaterial)
+                and not (homogeneous_ade and type(material) is DispersiveMaterial)):
+            refuse('CUDA supports Material, ConductiveMaterial and restricted homogeneous ADE',path)
     for source in problem.sources:
         if type(source) not in (sources.PlaneWave, sources.Dipole):
             refuse('CUDA currently supports PlaneWave, fixed-center Dipole sources or initial fields only',
@@ -252,7 +334,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
         with execution.scope(),_public_spelling():
             scene,metadata=lower_problem(problem,numerics)
             schedule=_checkpoint(numerics,execution)
-            _cuda_scope(problem,numerics,execution)
+            _cuda_scope(problem,numerics,execution,scene=scene)
             plan,_=_planned(scene,schedule=schedule)
             _signature(problem,numerics)
             return _report(problem,numerics,execution,scene,plan,metadata)
@@ -289,7 +371,7 @@ class Prepared:
                 raise IncompatibleProblemError('changed prepared structure; prepare this problem again',code='prepared_structure',path=key)
         scene,metadata=lower_problem(problem,self.numerics,plan=self._plan)
         schedule=_checkpoint(self.numerics,self.execution)
-        _cuda_scope(problem,self.numerics,self.execution)
+        _cuda_scope(problem,self.numerics,self.execution,scene=scene)
         plan,_=_planned(scene,reuse=self._plan,schedule=schedule)
         if plan.skeleton!=self._plan.skeleton:
             path='numerics.duration' if (plan.steps,plan.dt)!=(self._plan.steps,self._plan.dt) else 'problem'
@@ -320,17 +402,25 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
         try:
             scene,metadata=lower_problem(problem,numerics)
             schedule=_checkpoint(numerics,execution)
-            _cuda_scope(problem,numerics,execution)
+            _cuda_scope(problem,numerics,execution,scene=scene)
             plan,_=_planned(scene,schedule=schedule)
             signature=_signature(problem,numerics)
             report=_report(problem,numerics,execution,scene,plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:
             raise _issue(exc) from exc
-    contract=frozen_mapping({'static':tuple(signature),'live':('material coefficients subject to constitutive guards',
+    homogeneous_ade=(execution.device!='cpu' and any(
+        type(s.material) is DispersiveMaterial for s in problem.scene.structures))
+    material_live=('oscillator weight (Lorentz strength or Drude omega_p) subject to constitutive guards'
+                   if homogeneous_ade else 'material coefficients subject to constitutive guards')
+    contract=frozen_mapping({'static':tuple(signature),'live':(material_live,
         'source amplitude/phase/delay and band subject to fixed plan dependencies','initial amplitude')
         + (('ranged geometry subject to reserved-support guards',) if execution.device=='cpu' else ()),
         'differentiation':('concrete forward only; Decay refuses AD and external transforms' if numerics.decay is not None
-                          else 'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity'),
+                          else 'CUDA homogeneous ADE: oscillator weight (Lorentz strength or Drude omega_p) '
+                               'and initial amplitude support eager reverse derivatives; epsilon_inf, mu, gamma '
+                               'and omega_0 are nondifferentiable scalars; initial patterns are static host arrays'
+                          if homogeneous_ade else
+                               'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity'),
         'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_seconds,
         'resolved_checkpoint_steps':plan.schedule})
     return Prepared(numerics,execution,report,contract,plan,frozen_mapping(signature))

@@ -25,6 +25,11 @@ Targets:
 - `tests/fdtd/test_general_cuda_bloch_contract.py`
 - `tests/fdtd/test_general_cuda_bloch_planewave.py`
 - `tests/fdtd/test_general_cuda_bloch_observations.py`
+- `tests/fdtd/test_general_ade_modes.py`
+- `tests/fdtd/test_general_ade_ad.py`
+- `tests/fdtd/test_general_ade_record_ad.py`
+- `tests/fdtd/test_general_ade_units.py`
+- `tests/fdtd/test_general_ade_contract.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -49,7 +54,7 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 | --- | --- |
 | 격자와 실행 길이 | 기존 균일 정육면체 격자; 고정 실행 길이; `discretisation='voxel'`; `geometry_ranges` 없음 |
 | 경계와 padding | `Periodic`, `Open`, `PEC`, `PMC`; Bloch/Periodic/Open 면만 동반하는 정적 `Bloch`; 열린 면의 `PML` padding |
-| 재료 | 기존 비분산 `Material`, `ConductiveMaterial`과 해당 재료 검사 |
+| 재료 | 기존 비분산 `Material`, `ConductiveMaterial`; 아래의 별도 균질 단일 극점 ADE 범위 |
 | 구조 | 셀에 스냅하는 `Slab`만 허용 |
 | 광원 | `PlaneWave`, 고정 중심의 전기·자기 `Dipole`(`bspline` 또는 `tent` stamp), 초기 장; Bloch 장면에서는 PlaneWave/초기 장만 허용 |
 | 관측 | `Record`, `Field`, `Flux`, 최종 장 |
@@ -75,12 +80,99 @@ PEC/PMC 벽 또는 Dipole 광원의 조합은 계속 거부합니다. 비스듬�
 각도는 라디안이며 `Bloch.from_source(source, units=...)`가 펄스 중심 파장의
 고정 가로 파수 벡터를 만듭니다. 전 스펙트럼에서 일정한 입사각을 뜻하지 않습니다.
 
-`Decay`, 다른 흡수층인 `Absorber`, 범위 지정·스무딩 기하, 분산 재료,
+`Decay`, 다른 흡수층인 `Absorber`, 범위 지정·스무딩 기하, 균질 ADE 범위 밖의 분산 장면,
 대칭·불변축 경계, TFSF 광원, 회절·원거리장 관측은 이
 CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해당 공개 필드
 경로의 `cuda_scope` 이슈를 반환합니다. 입력 허용이 표본화, CFL, 재료,
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
 장을 시간 진행했다는 뜻이 아닙니다.
+
+## 균질 단일 극점 ADE
+
+제한된 분산 경로는 실제 격자 전체를 덮는 `Slab` 하나에
+`DispersiveMaterial`을 놓고, 여섯 면 모두 `Periodic`이며 `Lorentz` 또는
+`Drude` 극점이 정확히 하나인 경우입니다. 기존 균일 격자·고정 실행 길이·
+배정밀도·voxel 조건을 유지합니다. 재료 경계면이나 외부 광원은 없고 배경
+선언은 일반 `Material`입니다. 초기 E/H는 전체 격자의 `(3,nz,ny,nx)` 모양인
+유한 실수 NumPy 배열이며, 하나는 `None`으로 두어 영인 장을 사용할 수
+있습니다. 이 ADE 범위는 CPU 텐서·callable·성분별 리스트를 허용하지
+않습니다. 실수·정수 배열은 배정밀도 실행 값으로 변환하고 float32의 기존
+정밀도 경고는 유지합니다. `Record` 또는 최종 장을 관측하며,
+`final_fields=False`인 Record 전용 실행도 가능합니다.
+Open/PML, Bloch, 벽, 여러 극점, Debye, 분산 배경 재료, 공간 필름,
+푸리에·Flux 관측은 이 경로 밖입니다.
+
+`epsilon_inf`, `mu`, 감쇠 `gamma`, Lorentz `omega_0`는 비미분 스칼라이고
+`mu=None`은 1입니다. resolved plan이 호환되고 과학적 검사를 통과하면
+prepared 재사용 시 구체적인 값을 바꿀 수 있습니다. 이는 변경 시 다시
+준비해야 하는 고정 공간 패턴과 다릅니다. 허용하는 미분 입력은 실수 스칼라
+`InitialField.amplitude`와 기존 SI 극점 단위를 쓰는
+Lorentz `strength` 또는 Drude `omega_p`입니다. 초기 공간 패턴 자체는
+미분 입력이 아닙니다. 기존 재료 유효성·극점별 시간 간격 검사를 유지하며,
+수동성·유한성·안정성 제한을 면제하지 않습니다.
+
+기존 초기화는 알고리즘의 편극 메모리와 다음 단계에 전달할 편극 증가량을
+0으로 둡니다. 따라서 첫 E 갱신에는 전달된 극점 증가량이 없고, 그 뒤에
+극점을 진행합니다. 이는 이산 초기 상태이며 연속체의 평형 편극 초기화가
+아닙니다. 균일 전기장의 고정 시간 세분화 진단에서 시험한 Lorentz·Drude
+사례는 원래 시간축 기준 일차 시간 오차를 보입니다. 별도로 기준 시간을
+`(n-.5)*dt`로 옮기면 초기화 위상 차이를 설명할 수 있지만, 해를 수정하거나
+원래 시간축의 이차 연속체 정확도를 입증하지는 않습니다.
+
+CPU 진단 두 사례는 격자와 물리적 종료 시간 `6.671281903963041e-15`초를
+고정하고 64/128/256단계를 사용합니다. 전체 시간창의 최대 오차와 연속한
+구간의 관측 차수는 다음과 같습니다.
+
+| 극점 | `n*dt`의 원래 오차 | 원래 차수 | `(n-.5)*dt`의 이동한 오차 | 이동한 차수 |
+| --- | --- | --- | --- | --- |
+| Lorentz | 0.0148468 / 0.00748655 / 0.00376165 | 0.98778 / 0.99293 | 0.00234079 / 0.000592359 / 0.000149097 | 1.98245 / 1.99022 |
+| Drude | 0.0357578 / 0.0179577 / 0.00900017 | 0.99366 / 0.99658 | 0.000903182 / 0.000229998 / 0.0000580323 | 1.97339 / 1.98670 |
+
+이는 기존 초기화의 진단값이며 결과에 맞춘 수용 차수가 아닙니다.
+세 시간 해상도 모두 독립 이산해 검사를 통과합니다.
+
+독립 검사는 균일 장에 SI 특성근·스칼라 갱신식을, 0 아닌 푸리에 모드에
+직접 구성한 15×15 맥스웰·편극 상태 행렬과 물리적 Yee 위치를 사용합니다.
+극점 누락·잘못된 초기화 대조군은 검출 가능한 차이를 내야 합니다.
+장·Record 최대값 정규화 오차 기준은 `1e-11`, 균일 갱신식 잔차는 `1e-12`
+입니다. 45×45 행렬 거듭제곱의 Frechet 미분이 최종 장 및 부호를 포함한
+Record 이력 목적함수의 진폭·재료 기울기와 전체 Hessian을 제공합니다.
+기준은 상대 `2e-12`, 절대 0입니다. 일반·체크포인트 스캔, 서로 다른 장치의
+리프, prepared 재사용과 이전 결과 보존을 별도로 검사합니다. 이 기준은
+선언한 이산 초기화를 공유합니다. Eager 역방향 미분과 double backward를
+검증하며 임의의 연속체 초기 상태나 일반적인 변환을 검증하지 않습니다.
+
+공개 수치 검증은 CPU 고유 40사례(변하지 않은 통과 26사례 유지, 수정한
+14사례 재실행)와 **실제 CUDA 42사례**(10.99초, 40 deselect, 예상한 격자
+경고 51개)를 포함합니다. 별도의 계약 검사는 장치가 필요 없는 58사례와
+CPU 7사례, 이후 실제 CUDA 6사례(0.90초, 65 deselect, 예상 경고 7개)가
+통과했습니다. 새 고유 사례는 합계 153개이며 기존 범위 거부 9사례는
+별도입니다. 실험용 컨텍스트 없이 공개 입력 허용 경로를 실행한 결과입니다.
+
+| CUDA 대조군 | 기록한 최대 상대 오차 | 기준 |
+| --- | ---: | ---: |
+| 균일 최종 장 | 4.00635199454821e-13 | 1e-11 |
+| 균일 Record | 1.3211653993039363e-14 | 1e-11 |
+| 균일 스칼라 갱신식 | 2.7755575615628914e-16 | 1e-12 |
+| 푸리에 최종 장 | 2.1958220980047683e-13 | 1e-11 |
+| 푸리에 Record | 4.73407123422404e-13 | 1e-11 |
+| 자기장만 초기화, `E=None`, `mu=None` | 7.496839298600154e-15 | 1e-11 |
+| 이동한 직육면체, 모든 Slab 축, 같은 SI의 um/nm 선언 | 8.560921989767082e-15 | 1e-11 |
+| epsilon/mu/gamma/omega_0 구체값을 바꾼 prepared 재사용 | 7.137981093552503e-15 | 1e-11 |
+| 최종 장 값·기울기·전체 Hessian | 4.438322122768973e-14 | 2e-12 |
+| Record 전용 값·기울기·전체 Hessian | 7.834081628920496e-15 | 2e-12 |
+
+이동한 상자는 간격 0.05 um에서 `(0.61,0.49,0.71)` um를 선언하며,
+올림 후 `(13,10,15)` 셀과 실제 크기 `(0.65,0.5,0.75)` um가 됩니다.
+전체 격자 Slab은 명목 영역뿐 아니라 이 실제 셀 전체를 덮어야 합니다.
+미분 사례는 12³ 셀, 17단계, 일반 스캔 또는 꼬리 3단계를 가진 블록 7,
+진폭·재료 파라미터 두 점, CPU 진폭 리프와 실행 장치의 재료 리프를
+사용합니다. Record 목적함수는 시간·공간이 엇갈린 여섯 성분 모두의 가중
+제곱과 0 아닌 부호 있는 선형 항을 사용하며 최종 장 출력은 필요하지
+않습니다. 계약 검사는 유효하지 않은 live 재료 처리, float32·정수 변환,
+정밀도 경고와 CPU epsilon 미분 경로도 유지합니다. 기준을 완화하지
+않았습니다. 이 로컬 검증은 전체 CI, 릴리스 통합, 일반 분산 CUDA 지원이나
+원래 시간축의 이차 연속체 초기화를 입증하지 않습니다.
 
 ## 근거와 한계
 
@@ -616,6 +708,9 @@ python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_modes.py tests/fdtd/test_general_cuda_bloch_planewave.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_general_cuda_bloch_contract.py tests/fdtd/test_general_cuda_bloch_observations.py -q -o junit_family=legacy
+python -m pytest tests/fdtd/test_general_ade_modes.py tests/fdtd/test_general_ade_units.py tests/fdtd/test_general_ade_ad.py tests/fdtd/test_general_ade_record_ad.py -q -o junit_family=legacy
+python -m pytest tests/fdtd/test_general_ade_contract.py -q
+python -m pytest tests/fdtd/test_general_ade_modes.py -k raw_continuum -q -s
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json
