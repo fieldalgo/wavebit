@@ -183,6 +183,71 @@ def _cuda_homogeneous_ade(problem,scene):
                    'outputs.'+monitor.name)
 
 
+def _cuda_region(problem,scene):
+    """The fixed, strictly interior, scalar-material Region CUDA family.
+
+    Geometry and initial patterns remain static. Material values are inspected only
+    for scalar real shape here; their ordinary scientific runtime guards retain AD.
+    """
+    from . import boundaries, geometry, monitors, sources
+    from ._kernel.grid import Grid
+
+    def refuse(message,path):
+        raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
+
+    if len(problem.scene.structures)!=1:
+        refuse('CUDA Region requires exactly one structure without Slab mixtures', 'scene.structures')
+    structure=problem.scene.structures[0]
+    path='scene.structures.'+structure.name
+    if type(structure) is not geometry.Structure or type(structure.shape) is not geometry.Region:
+        refuse('CUDA Region requires an exact static Region structure',path)
+    if structure.continuation:
+        refuse('CUDA Region does not support continuation',path+'.continuation')
+    for axis in 'xyz':
+        for side in '-+':
+            if type(problem.scene.boundaries.face(axis+side)) is not boundaries.Periodic:
+                refuse('CUDA Region requires six Periodic faces','scene.boundaries.'+axis+side)
+    grid=Grid.from_domain(scene.domain.size,scene.domain.center,scene.resolution.dx)
+    cells=scene.structures[0].shape.filled_cells(grid)
+    if any(not 0<lo<hi<n for (lo,hi),n in zip(cells,grid.n)):
+        refuse('CUDA Region must occupy strictly interior cells on every axis; '
+               'seams and full-span axes are not supported',path+'.shape')
+
+    def real_scalar(value):
+        return (_leaf_shape(value)==() and not isinstance(value,(bool,np.bool_,complex))
+                and str(getattr(value,'dtype','')) not in ('bool','torch.bool')
+                and 'complex' not in str(getattr(value,'dtype','')))
+
+    for where,material in (('scene.background',problem.scene.background),
+                            (path+'.material',structure.material)):
+        if type(material) not in (Material,ConductiveMaterial):
+            refuse('CUDA Region supports scalar Material or ConductiveMaterial only',where)
+        leaves=[('epsilon',material.epsilon),('mu',1. if material.mu is None else material.mu)]
+        if type(material) is ConductiveMaterial:
+            leaves.append(('conductivity',material.conductivity))
+        for name,value in leaves:
+            if not real_scalar(value):
+                refuse('CUDA Region requires real scalar material values',where+'.'+name)
+    if problem.sources:
+        refuse('CUDA Region supports initial fields only','sources')
+    initial=problem.initial
+    if (type(initial) is not sources.InitialField or
+            (initial.E is None and initial.H is None)):
+        refuse('CUDA Region requires an ordinary real static InitialField','initial')
+    for name,value in (('E',initial.E),('H',initial.H)):
+        if value is None:
+            continue
+        if (type(value) is not np.ndarray or value.dtype.kind not in 'fiu'
+                or value.shape!=grid.shape or not np.isfinite(value).all()):
+            refuse('CUDA Region initial patterns must be finite real host arrays '
+                   'of shape (3,nz,ny,nx)','initial.'+name)
+    if not real_scalar(initial.amplitude):
+        refuse('CUDA Region initial amplitude must be a real scalar','initial.amplitude')
+    for monitor in problem.outputs.monitors:
+        if type(monitor) is not monitors.Record:
+            refuse('CUDA Region supports Record and final fields only','outputs.'+monitor.name)
+
+
 def _cuda_scope(problem,numerics,execution,*,scene=None):
     """Keep the first CUDA route inside the cases covered by device regressions.
 
@@ -227,9 +292,13 @@ def _cuda_scope(problem,numerics,execution,*,scene=None):
             refuse('CUDA Bloch currently supports Periodic or Open companion faces only',
                    'scene.boundaries.'+name)
     for structure in problem.scene.structures:
-        if type(structure.shape) is not geometry.Slab:
-            refuse('CUDA currently supports cell-snapped Slab structures only',
+        if type(structure.shape) not in (geometry.Slab,geometry.Region):
+            refuse('CUDA currently supports Slab or restricted interior Region structures only',
                    'scene.structures.'+structure.name+'.shape')
+    if any(type(s.shape) is geometry.Region for s in problem.scene.structures):
+        if scene is None:
+            scene,_=lower_problem(problem,numerics)
+        _cuda_region(problem,scene)
     materials=(('scene.background',problem.scene.background),)+tuple(
         ('scene.structures.'+s.name+'.material',s.material) for s in problem.scene.structures)
     homogeneous_ade=any(isinstance(material,DispersiveMaterial) for _,material in materials)
@@ -417,16 +486,24 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             raise _issue(exc) from exc
     homogeneous_ade=(execution.device!='cpu' and any(
         type(s.material) is DispersiveMaterial for s in problem.scene.structures))
+    from .geometry import Region
+    interior_region=(execution.device!='cpu' and any(
+        type(s.shape) is Region for s in problem.scene.structures))
     material_live=('oscillator weight (Lorentz strength or Drude omega_p) subject to constitutive guards'
                    if homogeneous_ade else 'material coefficients subject to constitutive guards')
-    contract=frozen_mapping({'static':tuple(signature),'live':(material_live,
-        'source amplitude/phase/delay and band subject to fixed plan dependencies','initial amplitude')
+    source_live=(() if interior_region else
+                 ('source amplitude/phase/delay and band subject to fixed plan dependencies',))
+    contract=frozen_mapping({'static':tuple(signature),'live':(material_live,)+source_live+('initial amplitude',)
         + (('ranged geometry subject to reserved-support guards',) if execution.device=='cpu' else ()),
         'differentiation':('concrete forward only; Decay refuses AD and external transforms' if numerics.decay is not None
                           else 'CUDA homogeneous ADE: oscillator weight (Lorentz strength or Drude omega_p) '
                                'and initial amplitude support eager reverse derivatives; epsilon_inf, mu, gamma '
                                'and omega_0 are nondifferentiable scalars; initial patterns are static host arrays'
                           if homogeneous_ade else
+                          'CUDA Region: one static strictly interior Region with scalar real epsilon, mu '
+                          'and conductivity, plus initial amplitude, supports eager reverse derivatives; '
+                          'six Periodic faces and real static host initial patterns; Record/final fields only'
+                          if interior_region else
                                'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity'),
         'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_seconds,
         'resolved_checkpoint_steps':plan.schedule})

@@ -13,6 +13,9 @@ Targets:
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
+- `tests/fdtd/test_general_cuda_region_contract.py`
+- `tests/fdtd/test_general_cuda_region.py`
+- `tests/fdtd/_region_yee_reference.py`
 - `tests/fdtd/test_general_cuda_observations.py`
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
@@ -63,7 +66,7 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 | 격자와 실행 길이 | 기존 균일 정육면체 격자; 고정 실행 길이; `discretisation='voxel'`; `geometry_ranges` 없음 |
 | 경계와 padding | `Periodic`, `Open`, `PEC`, `PMC`; Bloch/Periodic/Open 면만 동반하는 정적 `Bloch`; 열린 면의 `PML` padding |
 | 재료 | 기존 비분산 `Material`, `ConductiveMaterial`; 아래의 별도 균질 단일 극점 ADE 범위 |
-| 구조 | 셀에 스냅하는 `Slab`만 허용 |
+| 구조 | 셀 스냅 `Slab`; 아래 별도 제한을 만족하는 내부 `Region` 하나 |
 | 광원 | `PlaneWave`, 고정 중심의 전기·자기 `Dipole`(`bspline` 또는 `tent` stamp), 초기 장; Bloch 장면에서는 PlaneWave/초기 장만 허용 |
 | 관측 | `Record`, `Field`, `Flux`, 최종 장 |
 
@@ -94,6 +97,87 @@ CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해
 경로의 `cuda_scope` 이슈를 반환합니다. 입력 허용이 표본화, CFL, 재료,
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
 장을 시간 진행했다는 뜻이 아닙니다.
+
+## 정적인 내부 Region
+
+별도로 제한한 Region 경로는 일반 `Structure(Region(...), material)` 하나,
+여섯 `Periodic` 면과 외부 광원이 없는 경우를 대상으로 합니다. 각 Region
+면은 실제 반올림 격자의 가장 가까운 셀 경계로 스냅합니다. 모든 축의
+채워진 구간이 `0 < lo < hi < n`을 만족해야 합니다. 주기 이음새에 닿거나
+한 축 전체를 차지하거나 빈 구간으로 줄어드는 형상은 범위 밖입니다.
+여러 Region, Region/Slab 혼합, continuation, `Box`, smoothing과 형상 미분은
+제외합니다. 기존 Slab과 CPU 경로는 각각의 계약을 유지합니다.
+
+배경과 내부 재료 모두 스칼라 실수 비분산 `Material` 또는
+`ConductiveMaterial`을 사용하며 `mu=None`은 1입니다. 기존 유한값·양수·CFL
+검사는 준비와 재사용에도 적용됩니다. Region 중심·크기와 초기 공간 패턴은
+정적입니다. 형상이나 패턴을 바꾸면 다시 준비해야 하며, 호환되는 스칼라
+재료 값이나 실수 초기 진폭의 변경은 기존 live 입력 경로를 사용합니다.
+
+초기 E/H 중 하나 이상은 실제 `(3,nz,ny,nx)` 모양의 유한한 실수 plain NumPy
+배열이어야 하고 다른 하나는 `None`이어도 됩니다. 텐서 패턴, callable,
+성분 리스트는 이 경로에서 제외합니다. 일반 `Record`와 최종 장 출력만
+허용하며 고정 실행 길이·배정밀도·voxel 표본화와 기존 선택적 체크포인트
+정책을 적용합니다. Open/PML, PEC/PMC, Bloch, ADE, 광원, Field/Flux,
+범위 지정 기하를 포함한 Region 장면은 이 제한 범위 밖입니다. 입력 허용이
+경계면 수렴이나 일반 형상 미분 검증을 뜻하지 않습니다.
+
+### 독립 이산 Region 기준
+
+기준해는 선언한 기하에서 점유 셀 마스크를 독립적으로 만들고 명시적인
+modulo 인덱스의 전방·후방 Yee 차분을 사용합니다. `h=Z0*H`,
+`r=sigma*dt/(2*epsilon0)`, `q=(epsilon-r)/(epsilon+r)`,
+`g=c0*dt/(epsilon+r)`로 두면 `h_new=h-c0*dt/mu*curl_plus(E)` 뒤에
+`E_new=q*E+g*curl_minus(h_new)`를 갱신합니다. 내부 epsilon·mu·conductivity와
+초기 진폭의 tangent는 전도도 분모와 자기장 계수를 포함한 독립 chain rule로
+진행합니다. 제품의 curl·재료 배치·계수·AD helper는 호출하지 않습니다.
+명시한 이산 갱신식을 검증하며 연속체 경계면 해를 검증하는 것은 아닙니다.
+
+기본 사례는 dx 0.05 um, 영역 크기 `(0.61,0.49,0.71)` um, 중심
+`(0.1,-0.15,0.2)` um입니다. 독립 올림으로 `(nx,ny,nz)=(13,10,15)`, 실제
+아래쪽 모서리 `(-0.225,-0.4,-0.175)` um를 얻습니다. Region 크기
+`(0.305,0.225,0.365)` um와 중심 `(0.0375,-0.2025,0.1625)` um는 반열린
+인덱스 구간 x `[2:8]`, y `[2:6]`, z `[3:10]`의 168셀을 차지합니다.
+세 순환 축 배치와 동일 SI의 um/nm 선언으로 방향과 단위 변환을 검사합니다.
+초기 실수 장은 성분별 Yee 위치에서 표본화하며 여섯 성분 모두 Record와
+최종 장으로 관측합니다.
+
+검사는 17·41단계이며 체크포인트 7의 나머지는 각각 3·6단계입니다.
+전체 장·Record 이력은 최대값 정규화 `2e-12`, 시각은 상대 `2e-14`, 가중
+장·Record 제곱 norm과 영이 아닌 네 재료·진폭 미분은 상대 `2e-12`, 절대 0을
+사용합니다. `|parameter_scale*gradient|/loss > 1e-6` 조건으로 의미 없는
+미분 비교를 막습니다. CUDA 검증 전에 마스크 이동, floor/nearest 차이,
+축·주기 연결·curl 부호 오류, mu 누락, 전도도 분모·tangent 항 누락을 각각
+`1e-4`보다 크게 구별해야 합니다. 여덟 mutant 모두 사전 기준을 통과했으며
+가장 작은 분리는 `0.0111898253`이었습니다. 두 중앙차분 간격으로 해석적
+접선을 상대 `2e-6` 기준에서 독립 검사했고 최대 차이는 `1.15306194e-6`이었습니다.
+
+내부 재료 재사용 사례는 `(epsilon,mu,sigma,A)=(2.25,1.3,600,1.2)`와
+`(1.8,1.1,900,0.7)`을 사용하며 전도도 단위는 S/m입니다. CUDA 재료 리프와
+CPU 진폭 리프는 같은 prepared 장면에 연결됩니다. 입력 패턴·리프 소유권과
+이전 출력은 보존됩니다. 별도 무손실 사례는 `Material`을 검사합니다.
+비진공 배경 `(epsilon,mu,sigma)=(1.4,1.1,80)`은 회전 1·41단계에서 각각
+새 um/nm 실행으로 배경 재료·진폭 미분을 비교합니다. 이는 단위 쌍 검사이며
+배경 재료의 prepared 재사용 검사는 아닙니다.
+
+| 검증 | 호스트 사례 | 실제 CUDA 사례 |
+| --- | ---: | ---: |
+| 독립 마스크/Yee/접선, 장, Record, 재사용과 단위 | 25 | 17 |
+| 입력 허용·변환·거부 및 같은 리프의 invalid/recovery 계약 | 51 | 6 |
+| 고유 신규 사례 | 76 | 23 |
+
+**고유 신규 99사례가 모두 통과**했습니다. 호스트 76사례는 장치 없이
+실행한 검사 44개와 실제 CPU 실행 32개입니다. CUDA 23사례는 10.40초에
+통과했고 경고 25개가 발생했습니다. 반복 검증은 고유 사례 수에 더하지
+않았으며, 기존 CPU 회귀 검사 25개도 별도로 통과했습니다.
+
+기록된 내부 재료 재사용 장·Record 오차의 최대값은 `3.97962361e-15`입니다.
+기록된 내부·배경 목적함수 기울기를 독립 감사한 최대 상대 오차는
+`9.28604067e-14`로, 기존 `2e-12` 기준을 만족합니다. 무손실·단위 쌍의 장
+assertion도 통과했지만 개별 오차를 기록하지 않았으므로 내부 재사용의
+최대값을 모든 장 사례의 최대값으로 해석하지 않습니다. 이 결과는 제한된
+이산 1차 미분 계약을 검증하며 연속체 경계면 정확도·형상 미분·임의 Region
+조합을 검증하지 않습니다.
 
 ## 유한한 광원 값과 prepared 복구
 
@@ -952,6 +1036,7 @@ python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_ob
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
+python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q

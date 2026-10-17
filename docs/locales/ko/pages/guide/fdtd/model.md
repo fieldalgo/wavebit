@@ -43,6 +43,15 @@ CUDA의 초기 E/H 패턴은 고정 호스트 선언(NumPy 배열, 미분하지 
 텐서, 호스트 callable)입니다. CUDA 텐서나 미분 가능한 텐서 패턴은 허용하지
 않으며, 별도 `InitialField.amplitude`는 미분 가능한 live 입력입니다.
 
+별도의 Region 범위는 여섯 Periodic 면 모두에서 엄격히 안쪽에 있는 정적
+셀 스냅 body 하나를 허용합니다. 배경·내부 재료는 스칼라 실수
+Material/ConductiveMaterial이고 외부 광원 없이 유한한 실수 전체 격자 NumPy
+초기 패턴과 Record/최종 장만 사용합니다. 초기 장 하나는 `None`일 수 있으며
+이 범위의 텐서 패턴·callable은 제외합니다. 스칼라 재료 값과 실수 초기 진폭은
+live 입력으로 둘 수 있지만 형상 미분·여러 body·full-span/주기 이음새·
+Open/PML·Bloch·Field/Flux는 제외합니다. 정확한 계약과 독립 이산 검증 기준은
+[내부 Region 범위](../../validation/fdtd/general-cuda.md#정적인-내부-region)를 참고하세요.
+
 별도의 균질 ADE 범위는 전체 격자를 채우는 Slab 하나, Lorentz 또는 Drude
 극점 하나, 여섯 Periodic 면, 유한 실수 전체 격자 NumPy 초기 배열과
 Record 또는 최종 장 출력을 허용합니다. 초기 장 하나는 `None`일 수 있으나
