@@ -30,8 +30,11 @@ Targets:
 - `tests/fdtd/test_general_ade_record_ad.py`
 - `tests/fdtd/test_general_ade_units.py`
 - `tests/fdtd/test_general_ade_contract.py`
+- `tests/fdtd/test_general_ade_memory.py`
+- `tests/fdtd/test_ade_cost_study.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
+- `studies/fdtd/general_cuda/ade_cost.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
 - `studies/fdtd/general_cuda/monitor_cost.py`
 
@@ -181,6 +184,105 @@ material behavior, float32/integer conversion, precision warnings and the CPU
 epsilon-derivative route. No budget was relaxed. This local qualification does
 not establish full CI, release integration, general dispersive CUDA support or
 second-order raw continuum initialization.
+
+### Compact CUDA pole state
+
+Within this admitted homogeneous scope, Torch CUDA preparation selects a pole
+term carrying only the current and previous polarization vectors. Their
+increment is computed once before each E update instead of being carried as a
+third vector. The recurrence order and zero-memory startup are unchanged;
+first and second derivatives are independently qualified below. The autograd
+graph itself changes. This is a state-storage change, not a continuum startup
+correction or a new material-admission policy. The term type participates in
+plan identity, and compatible prepared reuse selects it again. A compact plan
+cannot execute on CPU or a non-Torch backend.
+
+Ordinary CPU, NumPy/JAX and other existing pole consumers retain their original
+term. In particular, this change does not extend to source-bearing or `Decay`
+plans, films, source columns, subclasses, multiple poles, CPML or geometry
+ranges. For one full-grid pole in double precision, the logical E/H-plus-pole
+report falls from 15 scalar components (120 bytes/cell) to 12 (96 bytes/cell).
+The pole histories alone fall from nine to six scalar components. This 20%
+logical-state reduction is not a prediction of allocated or reserved peak:
+reverse graphs, checkpoint boundaries, observations and temporary tensors have
+separate lifetimes.
+
+The preceding numerical tables record qualification before this storage
+change. A separate bounded 32³/64³, 163-step research comparison found lower
+allocated peaks for plain, block-8 and block-32 scans, with overlapping timing
+ranges in every pair. Those historical measurements motivate the change;
+they are not measurements of the final product route or evidence of a general
+speed advantage. Current-product reproduction uses
+`studies/fdtd/general_cuda/ade_cost.py` through ordinary public preparation,
+without replacing a runtime or pole factory. It checks independent roots,
+recurrence and amplitude/material derivatives outside the timed interval and
+separates logical payload, forward-retained graphs and timed allocator peaks.
+See `studies/fdtd/general_cuda/README.md` for fresh-process commands, source
+identity and the matched size-32 forecast required for size 64.
+
+The final compact implementation requalified the same **153 existing ADE
+cases**: 105 CPU/device-free and 48 actual CUDA cases. These are repeat
+qualification of the preceding evidence, not 153 additional cases. Separately,
+`test_general_ade_memory.py` passed **31 new cases**, 21 CPU/device-free and ten
+actual CUDA. They cover selection/refusal, actual state bytes and prepared
+reuse; eight CUDA cases compare full Hessians after no-grad/inference warm-up,
+using blocks 8/32 over 35 steps with a three-step tail. The earlier discrete
+and derivative budgets remain unchanged. The study's independent-oracle suite
+passed 17 checks, and eight existing CPU regressions retained ordinary/film
+Decay memory, film energy and PlaneWave source lowering across their relevant
+NumPy/JAX/Torch routes. These groups are separate; none implies full CI.
+
+#### Product cost measurements
+
+The product study used Python 3.12.14, Torch 2.14.1+cu130, CUDA 13.0, NumPy
+2.5.4, Windows 11 and an RTX 4060 Ti (8585216000 device bytes), with one Torch
+CPU thread and float64. Each row is a fresh process, one warm-up and five
+synchronized repetitions of 163 steps. The fixture differentiates uniform
+initial amplitude and Lorentz strength through a full-grid material, one Ey
+Record and final fields. Its `sum(E_final**2)` objective uses the same SI
+recurrence for every policy.
+
+| Grid | Block | Median seconds [min, max] | Peak allocated bytes | Peak reserved bytes |
+| --- | --- | --- | ---: | ---: |
+| 32³ | None | 0.5996247 [0.5644854, 0.6452413] | 139294720 | 186646528 |
+| 32³ | 8 | 0.9246021 [0.8720379, 0.9788882] | 81847296 | 109051904 |
+| 32³ | 32 | 0.9088761 [0.8831410, 0.9662563] | 53517312 | 71303168 |
+| 64³ | None | 0.6187804 [0.6039556, 0.6469672] | 1113685504 | 1239416832 |
+| 64³ | 8 | 0.8916072 [0.8579039, 0.9124741] | 654371328 | 736100352 |
+| 64³ | 32 | 0.8806111 [0.8426255, 0.8994670] | 427860480 | 484442112 |
+
+Timing includes fresh leaves/live-problem construction, public prepared
+execution (including its validation, lowering, adaptation and associated host
+work), the objective and `autograd.grad`. Initial preparation, instrument
+numerical checks/output host copies, allocator inspection and cleanup are
+excluded. The cache is released after warm-up and after all five repetitions,
+retained between them; each returned tensor bundle is released before the next
+baseline. Peaks in the table belong to timed runs, excluding the separate
+untimed lifecycle and ownership calls. Allocator quantities exclude CPU,
+driver/display and other-process memory.
+
+All 30 measured repetitions passed independent roots/Record (`1e-11`), absolute
+recurrence (`1e-12`) and objective/material/amplitude derivative checks (relative
+`2e-12`, zero absolute tolerance). Worst Record, absolute recurrence and relative
+gradient errors were `6.106226635438361e-15`, `3.9985376121265404e-16` and
+`2.3453478832892504e-13`. Source hashes remained unchanged and final current
+allocated/reserved bytes returned to zero in all six processes. Actual pole
+initial-memory bytes matched the report: 1572864 at 32³ and 12582912 at 64³;
+E/H-plus-pole state was 3145728 and 25165824 bytes respectively.
+
+At 64³ the separate forward-retained allocated values were 1038181888 (plain),
+534827520 (block 8) and 157309440 (block 32) bytes; after backward each retained
+12587008 bytes before release. These are not the logical state payload or the
+timed peak. The current peaks equal the corresponding historical compact-state
+measurements; historical baseline-versus-compact timing ranges overlap. The
+product table establishes this bounded memory/time tradeoff, not a general
+speedup, scaling law or universally best checkpoint block.
+
+Size 64 used matching successful size-32 receipts. Reserved forecasts were
+2239758336/1308622848/855638016 bytes for plain/8/32, below the 4 GiB cap.
+Each prewarm-up check saw 7389315072 free bytes and passed the additional 1 GiB
+headroom requirement. The forecast does not reserve memory or guarantee against
+an out-of-memory failure. No profiler was active during these measurements.
 
 ## Evidence and its limits
 

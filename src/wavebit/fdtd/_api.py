@@ -254,6 +254,12 @@ def _cuda_scope(problem,numerics,execution,*,scene=None):
                    'outputs.'+monitor.name)
 
 
+def _compact_poles(problem,execution):
+    """Select compact memory only after the bounded CUDA admission succeeds."""
+    return (execution.backend=='torch' and execution.device.split(':')[0]=='cuda'
+            and any(type(s.material) is DispersiveMaterial for s in problem.scene.structures))
+
+
 def _snapped(problem,scene,plan):
     """A warning for each cell-snapped structure whose interfaces the grid moved.
 
@@ -335,7 +341,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             scene,metadata=lower_problem(problem,numerics)
             schedule=_checkpoint(numerics,execution)
             _cuda_scope(problem,numerics,execution,scene=scene)
-            plan,_=_planned(scene,schedule=schedule)
+            plan,_=_planned(scene,schedule=schedule,compact_poles=_compact_poles(problem,execution))
             _signature(problem,numerics)
             return _report(problem,numerics,execution,scene,plan,metadata)
     except (TypeError,ValueError,NotImplementedError) as exc:
@@ -372,7 +378,8 @@ class Prepared:
         scene,metadata=lower_problem(problem,self.numerics,plan=self._plan)
         schedule=_checkpoint(self.numerics,self.execution)
         _cuda_scope(problem,self.numerics,self.execution,scene=scene)
-        plan,_=_planned(scene,reuse=self._plan,schedule=schedule)
+        plan,_=_planned(scene,reuse=self._plan,schedule=schedule,
+                        compact_poles=_compact_poles(problem,self.execution))
         if plan.skeleton!=self._plan.skeleton:
             path='numerics.duration' if (plan.steps,plan.dt)!=(self._plan.steps,self._plan.dt) else 'problem'
             raise IncompatibleProblemError('resolved numerical dependencies changed; prepare this problem again',code='prepared_dependencies',path=path)
@@ -403,7 +410,7 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             scene,metadata=lower_problem(problem,numerics)
             schedule=_checkpoint(numerics,execution)
             _cuda_scope(problem,numerics,execution,scene=scene)
-            plan,_=_planned(scene,schedule=schedule)
+            plan,_=_planned(scene,schedule=schedule,compact_poles=_compact_poles(problem,execution))
             signature=_signature(problem,numerics)
             report=_report(problem,numerics,execution,scene,plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:

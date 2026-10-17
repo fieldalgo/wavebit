@@ -84,6 +84,9 @@ def execute(plan, params, rt):
     that is also the compile cache's key, so a prepared operator lives exactly as long as the
     caller's plan does, on JAX too.
     """
+    if _compact_state(plan) and (rt.name != 'torch'
+                                 or getattr(getattr(rt, 'device', None), 'type', None) != 'cuda'):
+        raise ValueError('CompactPoleTerm requires Torch CUDA execution')
     if plan.decay is not None:
         raise ValueError('DecayExecutionRefused: use fd.run(scene) for a Decay plan; '
                          'the fixed-length executor has no source-eligibility context.')
@@ -192,7 +195,12 @@ def _solve(scene, p, rt, grazing=None):
     return _results(scene, p, state, rt, params, grazing)
 
 
-def _planned(scene, reuse=None, *, schedule=None):
+def _compact_state(plan):
+    from wavebit.fdtd._kernel.poles import CompactPoleTerm
+    return plan is not None and any(type(t) is CompactPoleTerm for t in plan.terms)
+
+
+def _planned(scene, reuse=None, *, schedule=None, compact_poles=False):
     """``(plan(scene), its grazing survey or None)``: live rows, or deferred under tracing.
 
     ``reuse`` is a plan the caller already paid for: a prepared extended-stencil operator it
@@ -220,6 +228,9 @@ def _planned(scene, reuse=None, *, schedule=None):
             # _results survey the actual scene: traced media are reported as
             # skipped, while runtime stability carries the live guard verdict.
             rows = []
+    if compact_poles:
+        from wavebit.fdtd._prepare.compact import compact_plan
+        p = compact_plan(scene, p)
     # Scheduling changes retained reverse-mode state, not the physical plan.
     # Keep None untouched so old skeletons and default execution stay identical.
     if schedule is not None:
@@ -247,7 +258,13 @@ def run(scene, backend='numpy', plan=None, device=None):
     """
     # The survey is always this scene's: from its own plan, even when the caller passes one
     # (a plan with the same skeleton may be another scene's, whose materials it does not hold).
-    p, rows = _planned(scene, reuse=plan, schedule=None if plan is None else plan.schedule)
+    compact = _compact_state(plan)
+    if compact:
+        name = getattr(backend, 'name', backend)
+        if str(name).lower() != 'torch' or str(device).split(':')[0] != 'cuda':
+            raise ValueError('CompactPoleTerm requires Torch CUDA execution')
+    p, rows = _planned(scene, reuse=plan, schedule=None if plan is None else plan.schedule,
+                       compact_poles=compact)
     if plan is not None:
         if plan.skeleton != p.skeleton:
             raise ValueError(
