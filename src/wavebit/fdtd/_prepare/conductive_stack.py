@@ -1,11 +1,13 @@
-"""Separated parallel conductive films, composed from the singleton C8 response.
+"""Parallel conductive films, separated or an exactly touching pair.
 
 Every member is a concrete Conductor (including sigma=0) on an unturned,
 unranged voxel Box in one plain dielectric host. Each member separately passes
 conductive_film.descriptor. They have the same normal axis and disjoint half-open
 padded supports. The actual floor/ceil support decides admission, without a gap
 tolerance. An unturned Box is cross-free, so there is no constitutive interpolation
-halo beyond this support. H remains mu=1. Touching films, other material families,
+halo beyond this support. H remains mu=1. Exactly two touching films instead use the local DC plus Debye
+response in conductive_contact, with one memory covering their union.
+Other material families,
 a heterogeneous host and traced geometry/material values are outside this scope.
 
 The singleton's analytic Yee fills, induced Debye recurrence and split energy
@@ -35,6 +37,7 @@ from wavebit.materials.time_domain import concrete
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab
 import wavebit.fdtd._prepare.conductive_film as single
+from wavebit.fdtd._prepare import conductive_contact as contact
 from wavebit.fdtd._prepare.shape_ranges import _carries
 from wavebit.fdtd._prepare.shape_ranges import materials_traced
 
@@ -94,7 +97,7 @@ def _overlap(stack):
 def descriptor(scene, grid):
     """The fully admitted K>=2 stack, or None without admitting a partial subset."""
     stack = _candidate(scene, grid)
-    return stack if stack is not None and _overlap(stack) is None else None
+    return stack if stack is not None and (contact.touching(stack) or _overlap(stack) is None) else None
 
 
 def _refuse_overlap(scene, grid):
@@ -103,7 +106,7 @@ def _refuse_overlap(scene, grid):
     if stack is None:
         return
     pair = _overlap(stack)
-    if pair is not None:
+    if pair is not None and not contact.touching(stack):
         (left, i), (right, j) = pair
         raise ValueError(f'conductive-stack structures[{i}] support {left} and '
                          f'structures[{j}] support {right} overlap along {"xyz"[stack.axis]}. '
@@ -117,6 +120,12 @@ def terms(scene, grid):
     stack = descriptor(scene, grid)
     if stack is None:
         return ()
+    if contact.touching(stack):
+        box = contact.box(stack)
+        region = Region(z=box[2], y=box[1], x=box[0])
+        slabs = tuple(Slab(c=c, z=region.z, y=region.y, x=region.x) for c in range(3))
+        return (ConductiveStackTerm(name='conductive_stack[contact]', region=region,
+                slabs=slabs, n_poles=1, signature=stack.signature, member_index=-1),)
     out = []
     for index, film in enumerate(stack.films):
         region = Region(z=film.box[2], y=film.box[1], x=film.box[0])
@@ -147,8 +156,8 @@ def refuse_mismatch(scene, plan):
             and s.shape.body() is not None for s in structures):
         raise ValueError('conductive-stack smoothing requires only concrete axis-aligned '
                          'Conductor films with one common normal, a plain lossless host, '
-                         'and pairwise disjoint padded supports outside absorbers. '
-                         'Initial fields, tracing, touching films and mixed material '
+                         'and pairwise disjoint padded supports or exactly two touching films, outside absorbers. '
+                         'Initial fields, tracing, gaps with overlapping support and mixed material '
                          'families are outside this scope; a prepared plan cannot bypass it.')
 
 
@@ -157,6 +166,9 @@ def material_profiles(scene, plan, rt):
     stack = descriptor(scene, plan.grid)
     if stack is None:
         return None
+    if contact.touching(stack):
+        eps, sigma, *_ = contact.profiles(stack, plan.grid, plan.dt)
+        return rt.array(eps, 'float64'), rt.array(sigma, 'float64')
     shape = [3, 1, 1, 1]
     shape[3-stack.axis] = plan.grid.n[stack.axis]
     eps = np.full(shape, stack.films[0].host_eps)
@@ -176,6 +188,8 @@ def pole_params(scene, plan, rt):
     stack = descriptor(scene, plan.grid)
     if stack is None:
         return {}
+    if contact.touching(stack):
+        return contact.pole_params(stack, plan, rt)
     return {f'conductive_stack[{i}]':
             single.pole_params(_member_scene(scene, i), plan, rt)['conductive[0]']
             for i in range(len(stack.films))}
@@ -186,6 +200,8 @@ def extra_rate(scene, plan):
     stack = descriptor(scene, plan.grid)
     if stack is None:
         return 0.0
+    if contact.touching(stack):
+        return float(np.max(contact.profiles(stack, plan.grid, plan.dt)[-1]))
     return max(float(np.max(single._profiles(film, plan.grid, plan.dt)[-1]))
                for film in stack.films)
 
