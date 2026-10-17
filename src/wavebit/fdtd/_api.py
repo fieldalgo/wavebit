@@ -132,8 +132,8 @@ def _cuda_scope(problem,numerics,execution):
     for axis in 'xyz':
         for side in '-+':
             face=problem.scene.boundaries.face(axis+side)
-            if type(face) not in (boundaries.Periodic,boundaries.Open):
-                refuse('CUDA currently supports Periodic and Open faces only',
+            if type(face) not in (boundaries.Periodic,boundaries.Open,boundaries.PEC,boundaries.PMC):
+                refuse('CUDA currently supports Periodic, Open, PEC and PMC faces only',
                        'scene.boundaries.'+axis+side)
     for structure in problem.scene.structures:
         if type(structure.shape) is not geometry.Slab:

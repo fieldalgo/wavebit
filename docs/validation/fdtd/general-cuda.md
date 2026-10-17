@@ -17,6 +17,8 @@ Targets:
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
 - `tests/fdtd/test_general_cuda_dipole_radiation.py`
+- `tests/fdtd/test_general_cuda_walls.py`
+- `tests/fdtd/test_general_cuda_wall_ad.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -40,7 +42,7 @@ the original leaves. Other non-CPU backends and single precision remain refused.
 | Part | CUDA admission |
 | --- | --- |
 | Grid and duration | Existing uniform cubic grid; fixed duration; `discretisation='voxel'`; no `geometry_ranges` |
-| Boundaries and padding | `Periodic` and `Open` faces; `PML` padding |
+| Boundaries and padding | `Periodic`, `Open`, `PEC` and `PMC` faces; `PML` padding on open faces |
 | Materials | Existing nondispersive `Material` and `ConductiveMaterial`, with their ordinary material checks |
 | Structures | Cell-snapped `Slab` only |
 | Sources | `PlaneWave`, fixed-center electric/magnetic `Dipole` with `bspline` or `tent` stamp, or initial fields |
@@ -58,11 +60,11 @@ for equivalent magnetic sources. Its strength parameter is `current_moment`;
 `PlaneWave.amplitude` instead specifies electric-field amplitude in V/m.
 Current moment, phase and delay retain live graphs.
 Dipole center and stamp are static: changing them requires new preparation.
-Position derivatives, support crossing a periodic seam, and support in PML
+Position derivatives, support crossing a periodic seam, touching a conducting wall, or in PML
 remain refused by the existing source checks.
 
 `Decay`, the alternative `Absorber`, ranged or smoothed geometry, dispersive
-materials, Bloch/wall/symmetry/invariant-axis faces, TFSF sources,
+materials, Bloch/symmetry/invariant-axis faces, TFSF sources,
 diffraction and far-field monitors are outside this CUDA route. Unsupported
 combinations return a `cuda_scope` issue with the relevant public field path
 before planning. Admission does not waive sampling, CFL, material, padding or
@@ -145,6 +147,42 @@ lattice duality is separately checked at `1e-13`. Mesh warnings remain visible.
 This establishes the stated vacuum bspline radiation cases through source work,
 not separate far-field or enclosing-surface flux accuracy, tent/nonvacuum
 radiation accuracy, position derivatives or arbitrary source transformations.
+
+## PEC/PMC wall evidence
+
+A separate wall qualification passed 38 CPU cases and 41 CUDA cases (79 new
+cases), plus nine existing refusal controls. The remaining restrictions above
+still apply; Bloch, symmetry and invariant-axis faces remain outside this route.
+
+| Test file | CPU / CUDA passes | Evidence |
+| --- | ---: | --- |
+| `test_general_cuda_walls.py` | 20 / 20 | PEC/PMC 16³ cavities over 300 steps; both mixed-wall orientations on x/y/z; source support touching each wall refused. |
+| `test_general_cuda_wall_ad.py` | 18 / 21 | Independent initial node projection, 41-step initial-amplitude and interior electric/magnetic Dipole derivatives, prepared ownership, and two wall/Open/PML interaction cases. |
+
+Cavity references use independent discrete Yee frequencies and exact staggered
+fields: recurrence residual relative `1e-11` and phase/amplitude relative
+`1e-10`, retaining the established budgets. Wall-position mutants must exceed
+`1e-4` recurrence error. Mixed PEC/PMC walls use their actual length
+`L - dx/2` or `L + dx/2`; treating either as L fails. These are exact discrete
+mode checks, not a continuum refinement or arbitrary cavity-accuracy claim.
+
+Arbitrary nonzero host arrays independently verify the initial projection
+before the first curl: PEC-low zeros tangential E and normal H, PMC-high zeros
+tangential H and normal E. PEC-high and PMC-low use exterior ghosts and do not
+zero an extra stored layer. Unmasked interiors and caller inputs are unchanged.
+At 41 steps, CPU runs use the plain scan; CUDA also exercises block 7 with a
+six-step tail. CPU/CUDA amplitude leaves retain the quadratic identity at
+`2e-12`; initial-amplitude NumPy secants use `1e-7`. Interior xyz electric and
+magnetic Dipoles retain current-moment/phase derivatives against two NumPy
+secants at `1e-7` plus `1e-10*loss`, quadratic scaling at `1e-12`, and half-step
+source work at `1e-13`. Fresh and prepared reuse preserve old results and input
+ownership; changing boundary declarations invalidates preparation.
+
+Two additional cases combine x PEC, y PMC and z Open with four-cell PML,
+electric Ey or magnetic Hy, and an 8³ physical domain. They use CPU plain scans
+and CUDA block 7 at the same 41-step horizon. These bounded parity/AD checks
+exercise the wall/CPML/checkpoint interaction; thin padding does not establish
+PML reflection accuracy or radiation accuracy. Existing mesh warnings remain.
 
 ## Independent public slab gate
 
@@ -292,6 +330,42 @@ the conductivity run used
 `997bf8c7e4de01e6dca1e2469d84a6305aa6e660a32ce1a21388c65a47496848`,
 which adds the material derivative control.
 
+### Separate 64³ material-gradient measurement
+
+A later experiment scales only the same 163-step conductor fixture to 64³
+and differentiates both amplitude and conductivity. Each policy ran in a fresh
+process, sequentially in order 8, 32, None, with one warm-up and five synchronized
+repetitions; one Torch CPU dispatch thread and the same prepared-call timing
+boundary were retained. Every repetition passed the independent SI objective
+and both derivative checks at relative `2e-12`, absolute zero, and the recorded
+values and gradients were exactly equal across policies.
+
+| Block | Median seconds [minimum–maximum] | Peak allocated bytes | Peak reserved bytes |
+| --- | ---: | ---: | ---: |
+| 8 | 0.700060 [0.681144–0.727873] | 413192192 | 463470592 |
+| 32 | 0.701149 [0.660019–0.751319] | 526407680 | 589299712 |
+| None | 0.549679 [0.535557–0.623938] | 2101355520 | 2350907392 |
+
+Both checkpoint policies reduced allocator peaks and increased median time
+relative to the plain scan in this fixture. The checkpoint time ranges overlap;
+they do not rank block 8 versus 32 reliably. This does not qualify other
+durations, differentiated inputs, source histories or monitor loads.
+
+Before each warm-up, free/total device memory was 7408189440/8585216000 bytes.
+Allocated/reserved baselines were zero; after every timed repetition allocated
+memory returned to zero, and final collection/cache release returned both to
+zero. Peaks are absolute and incremental here because the baselines coincide;
+they exclude driver/display/other-process memory. Cleanup is outside timing.
+
+The instrument forecasts reserved memory from the measured 32³ material peaks,
+multiplied by eight for cell count and a 1.5 margin: about 0.773/0.984/3.914 GiB for
+8/32/None. It refuses forecasts above 4 GiB or free memory below the forecast
+plus 1 GiB. This is a budget estimate, not a reservation or guarantee against
+out-of-memory failure; concurrent users can change free memory after admission.
+The extension accepts only 64³/163 steps/material derivatives and one policy
+per process. Local JSON records used instrument SHA-256
+`6aaed9733821a062f28fae6b6defa1f8161c1e98095af0f71daa5ce68238a6fa`.
+
 ## Computing only requested DFT phases
 
 Each observation call now skips the phase of any field it does not request:
@@ -393,7 +467,12 @@ python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
+python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q
+python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 0 --repeat 5 --output artifacts/general-checkpoint-64-plain.json
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 4 --repeat 5 --device cuda:0 --profile --output-dir artifacts/general-monitor-profile
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 16 --checkpoint-steps 8 --repeat 5 --device cuda:0 --output-dir artifacts/general-monitor-no-grad
 ```

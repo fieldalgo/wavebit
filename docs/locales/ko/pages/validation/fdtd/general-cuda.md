@@ -17,6 +17,8 @@ Targets:
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
 - `tests/fdtd/test_general_cuda_dipole_radiation.py`
+- `tests/fdtd/test_general_cuda_walls.py`
+- `tests/fdtd/test_general_cuda_wall_ad.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -40,7 +42,7 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 | 부분 | CUDA 허용 범위 |
 | --- | --- |
 | 격자와 실행 길이 | 기존 균일 정육면체 격자; 고정 실행 길이; `discretisation='voxel'`; `geometry_ranges` 없음 |
-| 경계와 padding | `Periodic`, `Open` 면; `PML` padding |
+| 경계와 padding | `Periodic`, `Open`, `PEC`, `PMC` 면; 열린 면의 `PML` padding |
 | 재료 | 기존 비분산 `Material`, `ConductiveMaterial`과 해당 재료 검사 |
 | 구조 | 셀에 스냅하는 `Slab`만 허용 |
 | 광원 | `PlaneWave`, 고정 중심의 전기·자기 `Dipole`(`bspline` 또는 `tent` stamp), 초기 장 |
@@ -56,11 +58,11 @@ CPU에서 CUDA로 변환해도 기울기가 연결됩니다. prepared 재사용�
 전류 모멘트입니다. 세기 파라미터는 `current_moment`이며,
 `PlaneWave.amplitude`는 V/m 단위의 전기장 진폭입니다. 전류 모멘트·phase·
 delay는 live 미분 그래프를 유지합니다. Dipole 중심과 stamp는 고정값이며
-바꾸려면 다시 준비해야 합니다. 위치 미분, 주기 경계를 가로지르는 지지 영역,
-PML 안의 지지 영역은 기존 광원 검사에서 계속 거부합니다.
+바꾸려면 다시 준비해야 합니다. 위치 미분, 주기 경계를 가로지르거나 전도성
+벽에 닿거나 PML 안에 있는 지지 영역은 기존 광원 검사에서 계속 거부합니다.
 
 `Decay`, 다른 흡수층인 `Absorber`, 범위 지정·스무딩 기하, 분산 재료,
-Bloch·벽·대칭·불변축 경계, TFSF 광원, 회절·원거리장 관측은 이
+Bloch·대칭·불변축 경계, TFSF 광원, 회절·원거리장 관측은 이
 CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해당 공개 필드
 경로의 `cuda_scope` 이슈를 반환합니다. 입력 허용이 표본화, CFL, 재료,
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
@@ -139,6 +141,40 @@ Richardson 절댓값 `1e-3` 미만, 거친 격자 오차 -0.06~-0.03입니다.
 광원 일로 명시한 진공 bspline 복사 사례를 검증한 것이며 별도 원거리장이나
 닫힌 표면 플럭스 정확도, tent·비진공 복사 정확도, 위치 미분 또는 임의의
 광원 변환을 검증하지 않습니다.
+
+## PEC/PMC 벽 경계 근거
+
+별도 벽 검증은 CPU 38사례와 CUDA 41사례(새 검사 총 79사례), 기존 거부
+대조군 아홉 사례가 통과했습니다. 위의 나머지 제한은 그대로이며 Bloch,
+대칭, 불변축 경계는 이 경로 밖입니다.
+
+| 검사 파일 | CPU / CUDA 통과 | 근거 |
+| --- | ---: | --- |
+| `test_general_cuda_walls.py` | 20 / 20 | 300단계 PEC/PMC 16³ 공동, x/y/z의 양방향 혼합 벽, 각 벽에 닿는 광원 지지 영역 거부. |
+| `test_general_cuda_wall_ad.py` | 18 / 21 | 독립 초기 노드 투영, 41단계 초기 진폭·내부 전기·자기 Dipole 미분, prepared 소유권, 벽/Open/PML 상호작용 두 사례. |
+
+공동 기준은 독립 이산 Yee 주파수와 정확한 시공간 엇갈림 장을 사용하며
+기존 갱신식 잔차 상대 `1e-11`, 위상·진폭 상대 `1e-10`을 유지합니다.
+벽 위치 변이는 갱신식 오차가 `1e-4`보다 커야 합니다. 혼합 PEC/PMC 벽의
+실제 길이는 `L - dx/2` 또는 `L + dx/2`이며 둘을 L로 간주하면 실패합니다.
+정확한 이산 모드 검사이지 연속체 세분화나 임의의 공동 정확도 주장은 아닙니다.
+
+임의의 영이 아닌 호스트 배열로 첫 curl 전에 초기 투영을 독립 검사합니다.
+PEC-low는 접선 E·법선 H, PMC-high는 접선 H·법선 E를 0으로 만듭니다.
+PEC-high와 PMC-low는 외부 ghost를 사용하며 저장된 층을 추가로 0으로 만들지
+않습니다. 마스크 밖 내부와 사용자 입력은 유지합니다. 41단계 CPU 실행은
+단순 스캔이며 CUDA는 블록 7·6단계 tail도 검사합니다. CPU/CUDA 진폭 리프의
+이차 항등식은 `2e-12`, 초기 진폭의 NumPy 중앙차분은 `1e-7`입니다.
+내부 xyz 전기·자기 Dipole의 전류 모멘트·phase 미분은 두 NumPy 중앙차분과
+`1e-7` 및 `1e-10*loss`, 이차 스케일은 `1e-12`, 반 단계 광원 일은
+`1e-13`으로 일치합니다. 새 실행과 prepared 재사용은 이전 결과와 입력
+소유권을 유지하며 경계 선언이 바뀌면 준비가 무효화됩니다.
+
+추가 두 사례는 8³ 물리 영역에 x PEC, y PMC, z Open·4셀 PML과 전기 Ey
+또는 자기 Hy를 함께 둡니다. 같은 41단계에서 CPU 단순 스캔, CUDA 블록 7을
+사용합니다. 제한된 장치 비교·미분 검사로 벽/CPML/체크포인트 상호작용을
+검사하며, 얇은 padding이 PML 반사 정확도나 복사 정확도를 입증하지는
+않습니다. 기존 격자 경고는 유지합니다.
 
 ## 공개 슬래브의 독립 검사
 
@@ -273,6 +309,40 @@ live 리프 생성, prepared 실행, 목적함수와 역방향 미분을 포함�
 전도도 실행은 재료 미분 검사를 추가한
 `997bf8c7e4de01e6dca1e2469d84a6305aa6e660a32ce1a21388c65a47496848`입니다.
 
+### 별도의 64³ 재료 미분 측정
+
+이후 실험은 같은 163단계 전도체 사례만 64³으로 키워 진폭·전도도를 함께
+미분했습니다. 정책 8, 32, None을 이 순서대로 새 프로세스에서 하나씩
+실행하며 각 한 번 예열하고 동기화한 반복 다섯 번을 측정했습니다. Torch
+CPU 디스패치 한 스레드와 같은 prepared 호출 시간 경계를 유지했습니다.
+모든 반복에서 독립 SI 목적함수와 두 미분 검사를 상대 `2e-12`, 절대 0으로
+통과했으며 기록한 값과 기울기는 모든 정책에서 정확히 같았습니다.
+
+| 블록 | 중앙값 초 [최소–최대] | 최대 allocated 바이트 | 최대 reserved 바이트 |
+| --- | ---: | ---: | ---: |
+| 8 | 0.700060 [0.681144–0.727873] | 413192192 | 463470592 |
+| 32 | 0.701149 [0.660019–0.751319] | 526407680 | 589299712 |
+| None | 0.549679 [0.535557–0.623938] | 2101355520 | 2350907392 |
+
+이 사례에서 두 체크포인트 정책은 단순 스캔보다 최대 할당량을 줄이고
+중앙값 시간을 늘렸습니다. 두 체크포인트 시간 범위는 겹치므로 블록 8과 32의
+시간 순위를 신뢰성 있게 정하지 못합니다. 다른 실행 길이, 미분 입력, 광원
+이력이나 관측기 부하를 검증한 것은 아닙니다.
+
+각 예열 전 free/total 장치 메모리는 7408189440/8585216000바이트였습니다.
+시작 allocated·reserved는 0이며 매 반복 후 allocated는 0으로, 최종 가비지
+수집·캐시 해제 후에는 둘 다 0으로 돌아왔습니다. 시작값이 같아 최대 절댓값과
+증분 최대값이 같으며 드라이버·화면·다른 프로세스 메모리는 제외합니다.
+정리는 시간 측정 밖입니다.
+
+측정기는 기존 32³ 재료의 reserved 최대값에 셀 수 8배와 여유 계수 1.5를
+곱해 예측합니다. 8/32/None의 예측은 약 0.773/0.984/3.914 GiB입니다.
+예측이 4 GiB를 넘거나 가용 메모리가 예측+1 GiB보다 작으면 거부합니다.
+이는 예산 추정이며 메모리 예약이나 부족 실패 방지 보장이 아닙니다. 다른
+사용자가 검사 후 가용 메모리를 바꿀 수 있습니다. 확장은 64³·163단계·
+재료 미분과 프로세스당 정책 하나만 허용합니다. 로컬 JSON 기록의 측정기
+SHA-256은 `6aaed9733821a062f28fae6b6defa1f8161c1e98095af0f71daa5ce68238a6fa`입니다.
+
 ## 요청한 DFT 위상만 계산
 
 관측 호출은 요청하지 않은 장의 위상을 생략합니다. Ey 전용 관측기는
@@ -369,7 +439,12 @@ python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
+python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q
+python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 0 --repeat 5 --output artifacts/general-checkpoint-64-plain.json
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 4 --repeat 5 --device cuda:0 --profile --output-dir artifacts/general-monitor-profile
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 16 --checkpoint-steps 8 --repeat 5 --device cuda:0 --output-dir artifacts/general-monitor-no-grad
 ```
