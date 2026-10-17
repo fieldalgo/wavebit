@@ -314,7 +314,7 @@ class Result:
 
 
 def _adapt(raw, problem, numerics):
-    from wavebit._common.backend import array_namespace
+    from wavebit._common.backend import array_namespace, _device_of
     u = problem.units
     fields = {}
     for component, data in raw['fields'].items():
@@ -331,8 +331,10 @@ def _adapt(raw, problem, numerics):
         h = xp.moveaxis(raw['magnetic_spectrum'], 2, -1)*u.time_seconds/Z0
         spectrum = SpectralFieldSamples(values=xp.concat((e, h), axis=-1),
             coordinates={'z': raw['z_nodes'][raw['monitor_z']],
-                         'y': xp.arange(e.shape[2])*numerics.grid.spacing[1],
-                         'x': xp.arange(e.shape[3])*numerics.grid.spacing[2]},
+                         'y': xp.arange(e.shape[2], dtype=e.real.dtype,
+                                        device=_device_of(e))*numerics.grid.spacing[1],
+                         'x': xp.arange(e.shape[3], dtype=e.real.dtype,
+                                        device=_device_of(e))*numerics.grid.spacing[2]},
             components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
             units={'E': 'V s/m', 'H': 'A s/m', 'coordinates': u.length},
             wavelengths=raw['wavelengths'], frequencies=C0/(raw['wavelengths']*u.length_metres),
