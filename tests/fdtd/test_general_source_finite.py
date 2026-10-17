@@ -112,7 +112,8 @@ def test_same_initial_amplitude_nan_refused_or_reported_invalid_then_recovers(de
 def excitation_scene(name, value):
     """Lowered excitation leaves, without constructor refusals hiding the runtime door."""
     source = SimpleNamespace(amplitude=-2., phase=0., delay=-.3,
-                             band=SimpleNamespace(wavelength=2., df=.08))
+                             band=SimpleNamespace(wavelength=2., df=.08,
+                                                  sigmas=np.sqrt(-2*np.log(1e-3))))
     initial = SimpleNamespace(amplitude=.7)
     if name == 'initial':
         initial.amplitude = value

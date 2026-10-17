@@ -555,11 +555,15 @@ Supported runtime guards check carried values such as the stability bound,
 positive material parameters and ranged-body limits; an invalid guarded value
 makes fields NaN and sets `validity.checks["runtime_stability"]` to false.
 This is not a universal replacement for host scientific checks. In particular,
-a traced pulse band may prevent the shortest-band-wavelength resolution check,
-and the runtime does not generally enforce `f0 > k*frequency_sigma_hz` for such
-a band. Positive finite pulse parameters and a true stability flag do not
-certify spectral or spatial resolution. Check the intended live parameter range
-independently. See the [bounded pulse Hessian qualification](../../validation/fdtd/general-cuda.md#gaussian-pulse-wavelength-bandwidth-phase-and-delay-hessians)
+a carried wavelength or bandwidth now enforces finite carrier frequency `f0`
+and cutoff width `k*frequency_sigma_hz`, with strict `f0 > k*frequency_sigma_hz`.
+Here `f0=c0/wavelength` in SI units and `k=sqrt(-2*log(cutoff))`. Invalid carried
+bands fail runtime validity; concrete constructor handling is unchanged.
+A traced pulse band may still prevent the shortest-band-wavelength spatial
+resolution check. A true stability flag does not certify that resolution or all
+waveform intermediates. Check the intended live parameter range independently.
+See the [carrier cutoff contract](../../validation/fdtd/general-cuda.md#live-band-carrier-cutoff)
+and [bounded pulse Hessian qualification](../../validation/fdtd/general-cuda.md#gaussian-pulse-wavelength-bandwidth-phase-and-delay-hessians)
 for physical scaling and the fixed-delay/bandwidth dependence.
 A derivative of the discrete solver is not a statement about convergence; compare it with a
 finite difference and refine the forward solve as well. The [differentiation guide](fd-differentiation.md)
