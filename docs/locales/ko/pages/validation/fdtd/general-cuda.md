@@ -12,6 +12,7 @@ Targets:
 - `src/wavebit/fdtd/_kernel/observe.py`
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
+- `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_observations.py`
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
@@ -38,6 +39,7 @@ Targets:
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/ade_cost.py`
+- `studies/fdtd/general_cuda/optimizer_reuse.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
 - `studies/fdtd/general_cuda/monitor_cost.py`
 
@@ -132,6 +134,100 @@ phase·초기 진폭 리프를 제자리에서 갱신하며, 리프의 동일성
 미분 두 사례입니다. 기존 수치 기준을 그대로 유지했고 CUDA 실행의 격자·
 관측창 경고 46개도 남겼습니다. 이 결과는 제한된 회귀 검사이며 전체 CI나
 최적화 수렴 검증은 아닙니다.
+
+## 같은 리프의 SGD 재사용
+
+`studies/fdtd/general_cuda/optimizer_reuse.py`는 같은 학습 리프를 반복해서
+갱신하며 prepared 실행을 재사용하는지 검사합니다. 전기 Ey Dipole 사례는
+축마다 물리 셀 12개, 각 Open 면에 PML 셀 네 개를 더한 실제 20³ 격자에서
+41단계를 실행합니다. 일반 스캔과 체크포인트 7은 같은 물리를 사용하며
+체크포인트 끝에는 여섯 단계가 남습니다. 짧고 얇은 PML을 쓴 이 사례는
+이산 미분·수명주기 연구이며 PML 정확도나 성능 벤치마크가 아닙니다.
+
+광원 위상 0과 pi/2의 NumPy 실행 두 개에서 최종 장 기저 `b0`, `b1`을
+얻습니다. 각 벡터는 일관된 SI 장 단위의 E와 Z0 H를 이어 붙입니다.
+`S = ||b0||² + ||b1||²`, `G_ij = dot(b_i,b_j)/S`,
+`u(phi) = (cos(phi), sin(phi))`, `r = A*u(phi) - 1.1*u(0.2)`로 두면
+정규화한 fitting 손실은 `L = r.T*G*r/2`이고 미분은
+`dL/dA = u.T*G*r`, `dL/dphi = A*u'.T*G*r`입니다. 이는 **같은 이산 solver**에
+대한 독립적인 대수적 값·기울기·갱신 기준이며 독립 Maxwell 해가 아닙니다.
+목적함수는 최종 장만 사용하고 광원 파형을 제외하며 줄 단위 에너지가 아닙니다.
+
+각 실행은 `(A,phi)=(0.8,-0.3)` 또는 `(1.4,0.7)`에서 시작하여 학습률 0.125,
+`foreach=False`, `zero_grad(set_to_none=True)`로 SGD를 16번 갱신합니다.
+A는 무차원이며 광원 전류 모멘트는 `1e-16*A` A·m, 위상은 라디안입니다.
+진폭 리프는 CPU에, 위상 리프는 실행 장치에 유지합니다. 리프 동일성·저장
+주소·dtype·장치를 유지하고 제자리 갱신마다 버전 카운터가 증가해야 합니다.
+장은 기저와 최대값 정규화 `2e-12`로 비교합니다. 손실·기울기·갱신된
+파라미터는 해석적 갱신식과 상대 `2e-12`, 절대 0으로 비교하며 비교량이
+영이 아닌지도 검사합니다. 첫 두
+반복 동안 이전 출력을 보유하여 정확히 변하지 않았는지 검사합니다.
+별도의 NaN 진폭·위상 갱신은 유효성 실패 또는 유한값을 명시한 구조화된
+거부를 받아야 하며 같은 리프와 prepared 객체에서 복구해야 합니다.
+
+CUDA에서는 이전 출력을 해제한 뒤 매 반복의 allocated 바이트가 지속해서
+보유하는 목표 장·리프의 정확한 기준값으로 돌아와야 합니다. 증가 허용량이나
+반복 중 캐시 비우기를 사용하지 않습니다. peak 카운터는 0부터 센 반복 1까지 누적하고
+한 번 초기화한 뒤 다시 누적하므로 반복별 최대값이 아닙니다. 마지막 텐서
+해제 후 allocated가 프로세스 기준값으로 돌아와야 하며 이후 캐시를 해제합니다.
+reserved와 드라이버 메모리는 별도로 기록합니다. 루프 시간에는 검증·동기화·
+호스트 복사·가비지 수집·기록 쓰기가 포함되므로 solver 속도 비교가 아닙니다.
+
+새 외부 출력 디렉터리, 일치하는 소스·기저 해시와 별도 120초 제한의 CUDA
+감독 프로세스를 사용합니다. CUDA 시작에는 가용 메모리 5 GiB를 요구하고
+Torch 할당자는 4 GiB로 제한하지만, 메모리를 예약하거나 드라이버·다른
+프로세스 사용량을 제한하지는 않습니다. 실행 전에 정확한 소스 사본과 시도
+기록을 만들며 소스·기저 파일이 없거나 달라지면 해당 시도를 무효화합니다.
+전체 기록 계약은 연구 디렉터리 README를 참고하세요.
+
+### 옵티마이저 연구 결과
+
+연구의 **대수·기록·CLI 제어 테스트 24개가 통과**했습니다. 별도로 NumPy
+기저 생성 명령, CPU 일반 루프 두 실행과 실제 CUDA 네 실행(두 초기값 ×
+일반/K7)이 통과했습니다. 이 여섯 실행은 CLI 연구 실행이며 추가로 실행한
+pytest 여섯 사례가 아닙니다. 대응하는 통합 사례는 테스트 파일에 제공합니다.
+각 루프는 16번의 갱신과 잘못된 입력 복구 두 검사를 모두 완료했습니다.
+기저 Gram 행렬은 양의 정부호였고 조건수는 `73.9756791383416`이었습니다.
+
+CPU 기울기의 최대 상대 오차는 `3.025309471976914e-15`였습니다. CUDA 네
+실행의 최대 상대 손실·기울기·갱신 후 파라미터 오차는 각각
+`5.096959445281874e-15`, `4.421606151350874e-15`,
+`1.380285480163295e-15`로 기존 `2e-12` 기준을 만족했습니다. 이전 출력,
+리프 동일성·버전, 잘못된 입력 복구 검사도 모두 통과했습니다. 이는 정해진
+비선형 SGD 갱신식과의 일치를 검증하며, 수렴 임계값이나 목표 파라미터의
+복원을 합격 조건으로 삼지 않았습니다.
+
+보유하던 이전 출력을 해제한 뒤 CUDA의 매 반복은 **allocated 384512바이트**로
+돌아왔습니다. 목표 장 384000바이트와 위상 리프의 512바이트 할당 블록이며,
+CPU 진폭 리프는 이 장치 합계에 포함되지 않습니다. 두 초기값 모두 0부터
+센 반복 1이 끝난 뒤 한 번 초기화한 peak 카운터에서 다음 값을 보였습니다.
+따라서 표는 반복 2–15의 누적 최대값입니다.
+
+| 스캔 정책 | Peak allocated 바이트 | Peak reserved 바이트 | 매 해제 후 allocated |
+| --- | ---: | ---: | ---: |
+| 일반 | 3315712 | 6291456 | 384512 |
+| 체크포인트 7 | 7171072 | 12582912 | 384512 |
+
+이 작은 사례에서는 체크포인트의 allocated와 reserved가 더 컸습니다.
+보편적인 체크포인트 순위나 총메모리 상한을 뜻하지 않습니다. 반복 중에는
+캐시를 비우지 않았습니다. 마지막 텐서 정리 뒤 allocated는 프로세스 기준값
+0으로 돌아왔지만 reserved는 명시적으로 캐시를 해제하기 전까지
+6291456/12582912바이트로 남았습니다. 캐시 해제 후 allocated/reserved는 모두
+0이었고 드라이버 가용 메모리는 7389315072바이트였습니다. 이 할당자 검사가
+CUDA 드라이버·컨텍스트 할당까지 0이라는 뜻은 아닙니다.
+
+검사가 포함된 루프 총시간은 초기값 0/1에 대해 일반 스캔 9.2828/9.1116초,
+K7 13.2623/13.0117초였습니다. 위의 검사·기록 작업을 모두 포함하므로 성능
+비교 수치가 아닙니다. 각 실행에서 소스 파일 263개의 해시와 기준 기록·기저
+파일 해시가 유지되었습니다. 환경은 Python 3.12.14, Torch 2.14.1+cu130,
+CUDA 13.0, NumPy 2.5.4, Windows 11, RTX 4060 Ti, Torch CPU 스레드 하나입니다.
+이 제한된 로컬 결과는 검토 대상 CI를 대신하거나 임의의 최적화 알고리즘·
+목적함수·긴 궤적·재료 최적화·다른 장치를 검증하지 않습니다.
+
+아래 명령은 초기값 0을 보여 줍니다. CPU, CUDA 일반, CUDA K7을 각각
+`--seed 1`과 서로 다른 새 출력 디렉터리로 반복하면 두 초기값을 재현합니다.
+기본 `--block 0`은 일반 스캔을 선택하며 공개
+`Numerics(checkpoint_steps=0)`을 뜻하지 않습니다.
 
 ## 균질 단일 극점 ADE
 
@@ -855,6 +951,7 @@ CPU 진폭과 CUDA 재료 리프는 사용자가 소유하며 변하지 않습�
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
+python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
@@ -866,6 +963,10 @@ python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_genera
 python -m pytest tests/fdtd/test_general_ade_modes.py tests/fdtd/test_general_ade_units.py tests/fdtd/test_general_ade_ad.py tests/fdtd/test_general_ade_record_ad.py -q -o junit_family=legacy
 python -m pytest tests/fdtd/test_general_ade_contract.py -q
 python -m pytest tests/fdtd/test_general_ade_modes.py -k raw_continuum -q -s
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode basis --output-dir ../optimizer-reuse/optimizer-basis
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cpu --seed 0 --output-dir ../optimizer-reuse/optimizer-cpu-0
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cuda:0 --seed 0 --output-dir ../optimizer-reuse/optimizer-cuda-plain-0
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cuda:0 --block 7 --seed 0 --output-dir ../optimizer-reuse/optimizer-cuda-k7-0
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json

@@ -4,6 +4,7 @@
 | --- | --- |
 | `checkpoint_cost.py` | How do opt-in checkpoint blocks change reverse-call time and allocator peaks for a bounded general-scene conductor with an exact SI recurrence? |
 | `ade_cost.py` | What allocator peaks and reverse-call times does the bounded homogeneous Lorentz CUDA route produce, and how do they differ from its logical state payload? |
+| `optimizer_reuse.py` | Do repeated SGD updates of the same source leaves preserve the discrete derivative oracle, prior outputs and bounded CUDA live allocation? |
 | `monitor_cost.py` | How much dispatch and device work does a bounded no-grad prepared run with two Ey Field and two Flux monitors perform? |
 
 ## Checkpoint cost
@@ -162,12 +163,64 @@ retained allocations and cleanup are recorded even when a check fails. Add
 and one profiled call, with zero unprofiled timing samples. Operator JSON and
 a Chrome trace are instrumentation evidence, not throughput measurements.
 The [validation record](../../../docs/validation/fdtd/general-cuda.md)
-separates historical state-reduction evidence from current product measurements.
+separates historical state-reduction evidence from the pinned product measurement.
 
-The current six-row 32³/64³ production measurement is recorded in the validation
-page. It repeats all six configurations after the compact scalar-recurrence
+The historical six-row 32³/64³ product measurement at revision `5dd110ad` is
+recorded in the validation page. It repeats all six configurations after the compact scalar-recurrence
 arithmetic guards were restored, since live lowering belongs to the timed
 public call. Prior attempts remain historical records; allocator peaks were
 unchanged in the guarded follow-up. All checks passed, and allocated/reserved peaks matched the earlier
 compact-state research measurements. Those historical timing comparisons had
-overlapping ranges; the product table does not establish a general speedup.
+overlapping ranges; the pinned product table does not establish a general speedup.
+It predates the later excitation-finiteness guard and is not a timing measurement
+of that revised initial-amplitude lowering path.
+
+
+## Same-leaf optimizer reuse
+
+This bounded instrument uses the existing electric-Dipole CPML fixture: 12 cells
+per physical axis, four padding cells on each side, 41 time steps and final E/H.
+Two NumPy runs at source phases zero and pi/2 define a discrete field basis.
+The objective fits the final E and Z0 H fields to amplitude 1.1 and phase 0.2;
+it excludes the source waveform and does not represent physical energy in joules.
+The basis supplies independent algebraic objective/gradient/update values, not
+an independent Maxwell or CPML accuracy reference.
+
+```sh
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode basis --output-dir ../optimizer-reuse/optimizer-basis
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cpu --seed 0 --output-dir ../optimizer-reuse/optimizer-cpu-0
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cuda:0 --block 7 --seed 0 --output-dir ../optimizer-reuse/optimizer-cuda-k7-0
+```
+
+Use a new output directory outside the product checkout per attempt; in-checkout
+raw output paths are refused. The two fixed seeds are (0.8, -0.3) and
+(1.4, 0.7); run both with plain CUDA and K7 separately. Every run performs 16 SGD
+updates at learning rate 0.125, using `foreach=False`, the same CPU amplitude leaf
+and the same execution-device phase leaf, and `zero_grad(set_to_none=True)`.
+Every objective, gradient and updated parameter is compared with the independent
+nonlinear amplitude/phase recurrence at relative tolerance 2e-12 and zero absolute
+tolerance. No arbitrary objective-decrease target or convergence claim is used.
+NaN amplitude and phase are separately refused with a finiteness-related
+structured error, or must return nonfinite fields with failed runtime validity; each is restored and a valid run checked again.
+
+Exact source bytes are saved before any solver call, and checked again afterwards.
+The basis receipt and its artifact hash must match the run's source identity.
+An initial attempt receipt precedes source auditing. Missing or unreadable source
+and reference files produce failed receipts with separate audit errors; an
+original solver exception remains primary. If the receipt destination itself
+becomes unwritable, the original exception includes that recording failure.
+An input change fails the receipt rather than silently substituting a new basis.
+Torch is optional for basis generation and required for optimizer execution.
+
+For CUDA, first run each mode in a fresh process with an external 120-second
+supervisor. The instrument additionally requires 5 GiB free before setup and sets
+a 4 GiB Torch allocator limit. These do not reserve memory or control driver and
+other-process allocation. The first two iterations include an old-result ownership
+check. After its release, every iteration must return to exactly the persistent
+target/leaf allocated-byte baseline, with no permitted drift. Reserved and driver
+memory are reported separately; no cache purge is performed during the loop.
+Peak counters are cumulative from the pre-setup reset through iteration 1 and
+cumulative from the reset after iteration 1 thereafter, not per-iteration peaks.
+Final tensor release must return allocated bytes to the pre-setup process baseline,
+then cache release is measured separately. History is stored as host scalars and
+arrays. Instrumented validation wall time is not a benchmark speed comparison.
