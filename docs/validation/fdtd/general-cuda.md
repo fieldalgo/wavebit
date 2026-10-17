@@ -20,6 +20,11 @@ Targets:
 - `tests/fdtd/test_general_cuda_dipole_radiation.py`
 - `tests/fdtd/test_general_cuda_walls.py`
 - `tests/fdtd/test_general_cuda_wall_ad.py`
+- `tests/fdtd/test_general_cuda_bloch_modes.py`
+- `tests/fdtd/test_general_cuda_bloch_ad.py`
+- `tests/fdtd/test_general_cuda_bloch_contract.py`
+- `tests/fdtd/test_general_cuda_bloch_planewave.py`
+- `tests/fdtd/test_general_cuda_bloch_observations.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -43,10 +48,10 @@ the original leaves. Other non-CPU backends and single precision remain refused.
 | Part | CUDA admission |
 | --- | --- |
 | Grid and duration | Existing uniform cubic grid; fixed duration; `discretisation='voxel'`; no `geometry_ranges` |
-| Boundaries and padding | `Periodic`, `Open`, `PEC` and `PMC` faces; `PML` padding on open faces |
+| Boundaries and padding | `Periodic`, `Open`, `PEC` and `PMC`; static `Bloch` with only Bloch/Periodic/Open companions; `PML` padding on open faces |
 | Materials | Existing nondispersive `Material` and `ConductiveMaterial`, with their ordinary material checks |
 | Structures | Cell-snapped `Slab` only |
-| Sources | `PlaneWave`, fixed-center electric/magnetic `Dipole` with `bspline` or `tent` stamp, or initial fields |
+| Sources | `PlaneWave`, fixed-center electric/magnetic `Dipole` with `bspline` or `tent` stamp, or initial fields; Bloch scenes admit only PlaneWave/initial fields |
 | Observations | `Record`, `Field`, `Flux` and final fields |
 
 Initial E/H patterns are static host declarations: use NumPy arrays, CPU tensors
@@ -64,8 +69,17 @@ Dipole center and stamp are static: changing them requires new preparation.
 Position derivatives, support crossing a periodic seam, touching a conducting wall, or in PML
 remain refused by the existing source checks.
 
+For CUDA, Bloch `phase` or `k` is static; live boundary derivatives are outside
+this scope, including forward-AD duals and transformed/batched wrappers. Ordinary
+host scalar tensors without derivatives remain valid static declarations.
+Changing its value or phase/k representation requires preparation
+again. Bloch with PEC/PMC walls or Dipole sources remains refused. Oblique
+PlaneWave angles are radians; `Bloch.from_source(source, units=...)` supplies the
+fixed transverse wavevector at the pulse's centre wavelength, not a constant
+angle across its spectrum.
+
 `Decay`, the alternative `Absorber`, ranged or smoothed geometry, dispersive
-materials, Bloch/symmetry/invariant-axis faces, TFSF sources,
+materials, symmetry/invariant-axis faces, TFSF sources,
 diffraction and far-field monitors are outside this CUDA route. Unsupported
 combinations return a `cuda_scope` issue with the relevant public field path
 before planning. Admission does not waive sampling, CFL, material, padding or
@@ -104,6 +118,90 @@ the native engine, not this general-scene route. General execution defaults to
 the existing plain time scan. The memory results below depend on which inputs
 are differentiated; they establish no universal saving, compilation, long-time
 stability or multi-GPU claim.
+
+## Static Bloch evidence
+
+This admission change uses the existing complex kernel and CPML recurrence.
+The final new coverage contains **66 unique cases**: 25 CPU, 28 actual CUDA,
+and 13 rejection controls that need no CUDA device. The CPU material/amplitude
+AD case was separately verified with Torch 2.14.1. The existing nine general
+scope-refusal checks are separate from these new cases.
+
+| New coverage | CPU | Actual CUDA |
+| --- | ---: | ---: |
+| Exact discrete modes | 4 | 4 |
+| Material/amplitude AD | 1 | 2 |
+| Lifecycle and physical contracts | 13 | 13 |
+| Oblique PlaneWave | 5 | 5 |
+| Complex-CPML observable AD | 2 | 4 |
+
+The initial CUDA run passed 18 mode/AD/contract cases in 5.72 seconds; the
+PlaneWave run passed five in 27.37 seconds. A later run passed the expanded
+13 contracts plus four observable cases in 103.92 seconds. Its 142 expected
+coarse-mesh/finite-window warnings remain visible. The later contract rerun
+overlaps the initial run and is not added again to the unique total.
+The 13 device-independent controls cover Dipole/wall exclusions, forward-AD/
+`torch.func` wrappers and same-primal forward-dual values on prepared reuse.
+Their success establishes early rejection, not CUDA execution.
+
+| Gate | Independent control and unchanged budget |
+| --- | --- |
+| Complex Yee modes, 16³, 300 steps | Three cyclic orientations with signed Bloch phases and one Periodic axis, plus all-Bloch axes; exact E/H fields and records to `1e-10`, temporal recurrence to `1e-11`; omitted/reversed phase controls exceed `1e-4` |
+| Material and initial-amplitude AD, 16³, 17 steps | Analytically differentiated discrete eigenfrequency and complex squared-modulus objective; full E/H, objective and both derivatives to relative `2e-12`, absolute zero; plain and K7 with a three-step tail, mixed-device leaves and prepared reuse |
+| Static/lifecycle controls | Equivalent phase/k declarations agree; changed phase, representation or initial pattern rejects reuse; CUDA live phase/k and unqualified Bloch/source/wall combinations refuse; paired faces, nonzero phase, complex dtype, source-wavevector consistency and one-cell guards remain active |
+
+For the AD oracle, `K_j = 2*sin(k_j*dx/2)/dx` and
+`omega = 2/dt*asin(dt*|K|/(2*sqrt(epsilon*mu)))`. Static initial E/H arrays
+are chosen so that `E_N = A*E_0*cos(N*omega*dt)` for each live epsilon. The
+objective is `A**2*mean(abs(E_0)**2)*cos(N*omega*dt)**2`; its analytic amplitude
+and epsilon derivatives do not differentiate the initialization. The two
+changed leaf sets preserve old outputs, original arrays and leaf ownership.
+This is an exact discrete-mode derivative gate, not a continuum or Bloch-phase
+derivative claim.
+
+The public oblique fixture uses a 0.25×0.2×3 µm physical domain, 0.05 µm spacing,
+24-cell PML and a Gaussian pulse. Four cases cover 20° s/p incidence in both
+z directions for 1100 steps. The closed form uses the independently written
+waveform transform, fixed-k Yee dispersion and staggered discrete polarization;
+the hard-source-to-probe distance is derived from the declared geometry.
+Public seconds/radians and H in A/m are explicitly converted for this oracle.
+Real-frequency errors were at most `5.545210e-7` on CUDA against the existing
+`2e-6` budget. A fifth case, 30° polar/35° azimuth p polarization, uses 1600
+steps and the damped contour `omega + 0.4i` in geometry-time units; its error
+was `6.135543e-8` against `3e-6`.
+
+Across the five CUDA runs, backward/forward peak was at most `8.393595e-16`,
+entry-plane reference error `1.111734e-15`, and neighbouring-cell phase error
+`1.347744e-15`, each below the unchanged `1e-13` budget. All six field components
+are checked, with a nonzero forward floor and complex128 device placement.
+The source reference is compared with main-grid samples, while the forward
+wave is independently checked against the closed form. These finite vacuum
+cases do not establish every incidence angle, material, PML thickness or
+complex-observable derivative.
+
+### Complex CPML observations and source derivatives
+
+The additional 83-step fixture uses a 30°/35° p-polarized PlaneWave, static
+transverse Bloch phases, a nondispersive slab and four-cell Open-z PML. It
+checks plain scans and K7 with a six-step tail. Both CPU cases and all four
+actual CUDA cases passed; the CUDA counts include both scan policies.
+
+Two NumPy source-phase basis runs give a real Gram matrix from complex inner
+products for each of five groups: final E, final H, E/H records, all six Fourier
+field components, and electric/magnetic incident reference histories. Analytic
+source-amplitude/phase values, gradients and full Hessians agree at relative
+`2e-12`, absolute zero at two changed leaf sets. These are source phase
+derivatives, not derivatives of the static Bloch boundary phase. CPU amplitude
+and execution-device phase leaves, retained backward graphs and old public
+output buffers keep their ownership through prepared reuse.
+
+Separate Record, Field and Flux objectives compare values with NumPy at relative
+`5e-13`, the amplitude quadratic identity at `2e-12`, and source-phase/slab-epsilon
+central differences at relative `2e-6`, all with zero absolute tolerance. Each
+secant uses both `1e-4` and `5e-5` times the parameter value, with nonzero signal
+and derivative floors. Only fixed SI unit factors rescale outputs. Short-window
+and mesh warnings remain visible: these finite-trajectory AD controls do not
+establish PML reflection accuracy or converged optical spectra.
 
 ## Fixed-center Dipole evidence
 
@@ -153,7 +251,8 @@ radiation accuracy, position derivatives or arbitrary source transformations.
 
 A separate wall qualification passed 38 CPU cases and 41 CUDA cases (79 new
 cases), plus nine existing refusal controls. The remaining restrictions above
-still apply; Bloch, symmetry and invariant-axis faces remain outside this route.
+still apply: Bloch combined with PEC/PMC walls is refused, and symmetry and
+invariant-axis faces remain outside the CUDA route.
 
 | Test file | CPU / CUDA passes | Evidence |
 | --- | ---: | --- |
@@ -519,6 +618,8 @@ python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
+python -m pytest tests/fdtd/test_general_cuda_bloch_modes.py tests/fdtd/test_general_cuda_bloch_planewave.py --run-slow -q
+python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_general_cuda_bloch_contract.py tests/fdtd/test_general_cuda_bloch_observations.py -q -o junit_family=legacy
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json

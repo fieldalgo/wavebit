@@ -20,6 +20,11 @@ Targets:
 - `tests/fdtd/test_general_cuda_dipole_radiation.py`
 - `tests/fdtd/test_general_cuda_walls.py`
 - `tests/fdtd/test_general_cuda_wall_ad.py`
+- `tests/fdtd/test_general_cuda_bloch_modes.py`
+- `tests/fdtd/test_general_cuda_bloch_ad.py`
+- `tests/fdtd/test_general_cuda_bloch_contract.py`
+- `tests/fdtd/test_general_cuda_bloch_planewave.py`
+- `tests/fdtd/test_general_cuda_bloch_observations.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -43,10 +48,10 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 | 부분 | CUDA 허용 범위 |
 | --- | --- |
 | 격자와 실행 길이 | 기존 균일 정육면체 격자; 고정 실행 길이; `discretisation='voxel'`; `geometry_ranges` 없음 |
-| 경계와 padding | `Periodic`, `Open`, `PEC`, `PMC` 면; 열린 면의 `PML` padding |
+| 경계와 padding | `Periodic`, `Open`, `PEC`, `PMC`; Bloch/Periodic/Open 면만 동반하는 정적 `Bloch`; 열린 면의 `PML` padding |
 | 재료 | 기존 비분산 `Material`, `ConductiveMaterial`과 해당 재료 검사 |
 | 구조 | 셀에 스냅하는 `Slab`만 허용 |
-| 광원 | `PlaneWave`, 고정 중심의 전기·자기 `Dipole`(`bspline` 또는 `tent` stamp), 초기 장 |
+| 광원 | `PlaneWave`, 고정 중심의 전기·자기 `Dipole`(`bspline` 또는 `tent` stamp), 초기 장; Bloch 장면에서는 PlaneWave/초기 장만 허용 |
 | 관측 | `Record`, `Field`, `Flux`, 최종 장 |
 
 초기 E/H 패턴은 고정된 호스트 선언입니다. NumPy 배열, `requires_grad`가
@@ -62,8 +67,16 @@ delay는 live 미분 그래프를 유지합니다. Dipole 중심과 stamp는 고
 바꾸려면 다시 준비해야 합니다. 위치 미분, 주기 경계를 가로지르거나 전도성
 벽에 닿거나 PML 안에 있는 지지 영역은 기존 광원 검사에서 계속 거부합니다.
 
+CUDA의 Bloch `phase`나 `k`는 정적 값이며 순방향 AD dual과 변환·배치 래퍼를
+포함한 경계값의 live 미분은 이 범위 밖입니다. 미분하지 않는 일반 호스트
+스칼라 텐서는 정적 선언으로 허용합니다. 값이나 phase/k 표현을 바꾸면 다시
+준비해야 합니다. Bloch와
+PEC/PMC 벽 또는 Dipole 광원의 조합은 계속 거부합니다. 비스듬한 PlaneWave
+각도는 라디안이며 `Bloch.from_source(source, units=...)`가 펄스 중심 파장의
+고정 가로 파수 벡터를 만듭니다. 전 스펙트럼에서 일정한 입사각을 뜻하지 않습니다.
+
 `Decay`, 다른 흡수층인 `Absorber`, 범위 지정·스무딩 기하, 분산 재료,
-Bloch·대칭·불변축 경계, TFSF 광원, 회절·원거리장 관측은 이
+대칭·불변축 경계, TFSF 광원, 회절·원거리장 관측은 이
 CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해당 공개 필드
 경로의 `cuda_scope` 이슈를 반환합니다. 입력 허용이 표본화, CFL, 재료,
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
@@ -100,6 +113,83 @@ Job 네 사례를 포함한 통합 실행은 60사례가 모두 통과했습니�
 장면 실행의 성능이 아닙니다. 일반 실행의 기본값은 기존의 단순 시간 스캔입니다.
 아래 메모리 결과는 어떤 입력을 미분하는지에 따라 달라집니다. 보편적인
 메모리 절감, 컴파일, 장시간 안정성, 여러 GPU를 검증했다고 주장하지 않습니다.
+
+## 정적 Bloch 근거
+
+이 허용 범위 변경은 기존 복소수 커널과 CPML 갱신식을 사용합니다. 최종 신규
+범위는 **중복 없는 66개 사례**이며 CPU 25개, 실제 CUDA 28개, CUDA 장치가
+필요 없는 거부 검사 13개입니다. CPU 재료/진폭 AD 사례는 Torch 2.14.1에서
+별도로 검증했습니다. 기존 일반 범위 거부 검사 9개는 이 신규 합계와 별개입니다.
+
+| 신규 범위 | CPU | 실제 CUDA |
+| --- | ---: | ---: |
+| 정확한 이산 모드 | 4 | 4 |
+| 재료/진폭 AD | 1 | 2 |
+| 수명주기·물리 계약 | 13 | 13 |
+| 경사 입사 PlaneWave | 5 | 5 |
+| 복소수 CPML 관측값 AD | 2 | 4 |
+
+첫 CUDA 실행은 모드·AD·계약 18개를 5.72초에 통과했고 PlaneWave 실행은
+5개를 27.37초에 통과했습니다. 이후 확장한 계약 13개와 관측값 4개가
+103.92초에 통과했습니다. 이 실행의 예상 coarse-mesh·유한 관측 창 경고
+142개를 그대로 기록했습니다. 나중 계약 재실행은 첫 실행과 겹치므로 고유
+합계에 다시 더하지 않습니다. 장치가 필요 없는 13개 검사는 Dipole/벽 제외,
+순방향 AD/`torch.func` 래퍼, prepared 재사용 시 primal은 같고 tangent가
+있는 forward dual을 다룹니다. 이는 실행 전 거부의 근거이며 CUDA 실행의
+근거는 아닙니다.
+
+| 검사 | 독립 기준과 유지한 허용오차 |
+| --- | --- |
+| 복소수 Yee 모드, 16³, 300단계 | 부호 있는 Bloch 위상과 Periodic 한 축의 세 순환 방향, 전체 Bloch 축 사례; 정확한 E/H 장·기록 `1e-10`, 시간 갱신식 `1e-11`; 위상 생략·반전 대조군은 `1e-4` 초과 |
+| 재료·초기 진폭 AD, 16³, 17단계 | 이산 고유주파수와 복소수 절대값 제곱 목적함수의 해석적 미분; 전체 E/H·목적함수·두 미분 상대 `2e-12`, 절대 0; 단순 스캔과 K7·3단계 tail, 서로 다른 장치 리프와 prepared 재사용 |
+| 정적 값·수명주기 | 동등한 phase/k 선언의 일치; phase·표현·초기 패턴 변경 시 재사용 거부; CUDA live phase/k와 미검증 Bloch/광원/벽 조합 거부; 짝지은 면, 0 아닌 위상, 복소수 dtype, 광원 파수 일치와 한 셀 검사를 유지 |
+
+AD 기준은 `K_j = 2*sin(k_j*dx/2)/dx`,
+`omega = 2/dt*asin(dt*|K|/(2*sqrt(epsilon*mu)))`입니다. 정적 초기 E/H 배열을
+고르면 각 live epsilon에서 `E_N = A*E_0*cos(N*omega*dt)`가 성립합니다.
+목적함수는 `A**2*mean(abs(E_0)**2)*cos(N*omega*dt)**2`이며 진폭·epsilon의
+해석적 미분은 초기화를 미분하지 않습니다. 바꾼 두 리프 묶음으로 이전 결과,
+원래 배열과 리프 소유권을 확인합니다. 정확한 이산 모드의 미분 검사이며
+연속체나 Bloch 위상 미분의 검증은 아닙니다.
+
+공개 경사 입사 사례는 물리 영역 0.25×0.2×3 µm, 간격 0.05 µm, 24셀 PML과
+Gaussian 펄스를 사용합니다. 네 사례가 20° s/p의 양쪽 z 방향을 1100단계
+실행합니다. 독립적으로 쓴 파형 변환, 고정 k의 Yee 분산과 엇갈린 이산 편광을
+닫힌식으로 사용하며 hard-source부터 probe까지 거리는 선언한 기하에서
+구합니다. 공개 초·라디안과 A/m 단위 H를 기준식에 맞춰 명시적으로 변환합니다.
+CUDA 실주파수 오차의 최대값은 `5.545210e-7`로 기존 `2e-6` 기준 이내였습니다.
+다섯 번째 사례는 극각 30°·방위각 35°의 p 편광을 1600단계 실행하고 기하 시간
+단위의 감쇠 contour `omega + 0.4i`를 사용합니다. 오차 `6.135543e-8`로
+`3e-6` 기준을 통과했습니다.
+
+CUDA 다섯 실행의 역방향/순방향 최대값 비는 최대 `8.393595e-16`, 입구면
+기준 오차는 `1.111734e-15`, 이웃 셀 위상 오차는 `1.347744e-15`로 각각
+유지한 `1e-13` 기준보다 작습니다. 여섯 장 성분 모두 검사하며 0 아닌 순방향
+하한과 complex128 장치 배치를 확인합니다. 광원 기준은 주 격자 샘플과
+비교하고 순방향 파동은 독립 닫힌식과 비교합니다. 이 유한 진공 사례로 모든
+입사각·재료·PML 두께나 복소수 관측값 미분을 검증하지 않습니다.
+
+### 복소수 CPML 관측과 광원 미분
+
+추가 83단계 사례는 30°/35° p 편광 PlaneWave, 정적 가로 Bloch 위상,
+비분산 슬래브와 4셀 Open-z PML을 사용합니다. 단순 스캔과 K7·6단계 tail을
+검사합니다. CPU 두 사례와 실제 CUDA 네 사례가 모두 통과했으며 CUDA
+합계에는 두 스캔 정책을 포함합니다.
+
+NumPy 광원 위상 기저 실행 두 개의 복소수 내적으로 다섯 그룹의 실수 Gram
+행렬을 만듭니다. 그룹은 최종 E, 최종 H, E/H 기록, Fourier 장 여섯 성분,
+전기·자기 입사 기준 이력입니다. 바꾼 두 리프 묶음에서 해석적 광원 진폭/위상
+값·기울기·전체 Hessian이 상대 `2e-12`, 절대 0으로 일치합니다. 정적 Bloch
+경계 위상의 미분이 아니라 광원 위상의 미분입니다. CPU 진폭과 실행 장치
+위상 리프, 보존한 역방향 그래프와 이전 공개 출력 버퍼는 prepared 재사용에도
+소유권을 유지합니다.
+
+별도의 Record·Field·Flux 목적함수는 NumPy 값 상대 `5e-13`, 진폭 제곱 관계
+`2e-12`, 광원 위상·슬래브 epsilon 중앙 차분 상대 `2e-6`으로 비교하며 모두
+절대 허용오차는 0입니다. 각 secant는 파라미터 값의 `1e-4`와 `5e-5` 두
+간격을 사용하고 0 아닌 신호·미분 하한을 둡니다. 출력에는 고정 SI 단위
+인자만 곱합니다. 짧은 관측 창과 mesh 경고를 유지하며 이 유한 궤적 AD
+검사로 PML 반사 정확도나 수렴한 광학 스펙트럼을 검증하지 않습니다.
 
 ## 고정 중심 Dipole 근거
 
@@ -146,8 +236,8 @@ Richardson 절댓값 `1e-3` 미만, 거친 격자 오차 -0.06~-0.03입니다.
 ## PEC/PMC 벽 경계 근거
 
 별도 벽 검증은 CPU 38사례와 CUDA 41사례(새 검사 총 79사례), 기존 거부
-대조군 아홉 사례가 통과했습니다. 위의 나머지 제한은 그대로이며 Bloch,
-대칭, 불변축 경계는 이 경로 밖입니다.
+대조군 아홉 사례가 통과했습니다. 위의 나머지 제한은 그대로이며 Bloch와
+PEC/PMC 벽 조합은 거부합니다. 대칭·불변축 경계는 CUDA 범위 밖입니다.
 
 | 검사 파일 | CPU / CUDA 통과 | 근거 |
 | --- | ---: | --- |
@@ -488,6 +578,8 @@ python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
+python -m pytest tests/fdtd/test_general_cuda_bloch_modes.py tests/fdtd/test_general_cuda_bloch_planewave.py --run-slow -q
+python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_general_cuda_bloch_contract.py tests/fdtd/test_general_cuda_bloch_observations.py -q -o junit_family=legacy
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json

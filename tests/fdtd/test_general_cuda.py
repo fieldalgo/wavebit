@@ -81,7 +81,7 @@ def test_cuda_scope_refuses_before_planning_without_a_device(monkeypatch, case, 
     if case=='absorber': n=n.replace(absorber=fdtd.Absorber())
     if case=='stencil': n=n.replace(discretisation='stencil')
     if case=='range': n=n.replace(geometry_ranges={'body': ((-.15, .15),)*3})
-    if case=='boundary': p=p.replace(scene=p.scene.replace(boundaries=p.scene.boundaries.replace(x=fdtd.Bloch(phase=.2))))
+    if case=='boundary': p=p.replace(scene=p.scene.replace(boundaries=p.scene.boundaries.replace(x=fdtd.Axis1D(k=.2,k_max=.2))))
     if case in ('shape', 'range', 'stencil'):
         p=p.replace(scene=p.scene.replace(structures=(fdtd.Structure(name='body', shape=fdtd.Sphere(radius=.08), material=Material(epsilon=2.)),)))
     if case=='material':

@@ -29,7 +29,9 @@
 | `Field`, `Flux`, `Diffraction`, `FarField` | 실행 중에 누적되는 장의 푸리에 변환 |
 
 CPU 실행은 NumPy·JAX·PyTorch 배정밀도를 사용합니다. 제한된 Torch CUDA는
-고정 실행 길이의 voxel 장면, Periodic/Open/PEC/PMC 경계, PML, 비분산
+고정 실행 길이의 voxel 장면, Periodic/Open/PEC/PMC와 정적 Bloch 경계를
+허용합니다. Bloch 장면은 Bloch/Periodic/Open 면과 PlaneWave 또는 초기 장만
+허용하며 벽이나 Dipole과의 조합은 거부합니다. PML, 비분산
 Material/ConductiveMaterial, 셀 스냅 Slab, PlaneWave, 고정 중심 전기·자기
 Dipole(`bspline` 또는 `tent`), 초기 장과 Record/Field/Flux 관측을 허용합니다.
 Dipole 중심·stamp는 고정값이며 `current_moment`는 평면파의 V/m 진폭과
