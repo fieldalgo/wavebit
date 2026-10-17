@@ -75,11 +75,83 @@ def _signature(problem,numerics):
 def _execution(backend,device,precision):
     value=Execution(backend=backend,device=device,precision=precision)
     value.validate()
-    if device!='cpu':
-        raise UnsupportedFeatureError('the current FDTD executor supports CPU only',code='device',path='execution.device')
+    if device!='cpu' and not (backend=='torch' and device.split(':')[0]=='cuda'):
+        raise UnsupportedFeatureError('FDTD supports CPU or the limited Torch CUDA route',code='device',path='execution.device')
     if precision!='double':
         raise UnsupportedFeatureError('the current FDTD executor requires double precision',code='precision',path='execution.precision')
     return value
+
+
+def _checkpoint(numerics,execution):
+    """Resolve the opt-in static schedule without changing a default CPU run."""
+    value=numerics.checkpoint_steps
+    if value is None:
+        return None
+    from wavebit._common.declarations import static_int
+    path='numerics.checkpoint_steps'
+    try:
+        if isinstance(value,(bool,np.bool_)) or str(getattr(value,'dtype','')) in ('bool','torch.bool'):
+            raise ValueError('a bool is not a checkpoint block length')
+        value=static_int('Numerics','checkpoint_steps',value)
+        if value<=0:
+            raise ValueError('checkpoint_steps must be positive')
+    except (TypeError,ValueError) as exc:
+        raise ValidationError('checkpoint_steps must be a positive static integer or None',
+                              code='checkpoint_steps',path=path) from exc
+    if execution.backend!='torch' or execution.device.split(':')[0]!='cuda':
+        raise UnsupportedFeatureError('checkpoint_steps currently requires Torch CUDA execution',
+                                      code='checkpoint_scope',path=path)
+    if numerics.decay is not None:
+        raise UnsupportedFeatureError('checkpoint_steps requires fixed-duration execution without Decay',
+                                      code='checkpoint_scope',path='numerics.decay')
+    return value
+
+
+def _cuda_scope(problem,numerics,execution):
+    """Keep the first CUDA route inside the cases covered by device regressions.
+
+    Planning remains on the host. This admission is separate from the scientific
+    guards in lowering/planning, which still apply on every preparation and reuse.
+    """
+    if execution.device == 'cpu':
+        return
+    from . import boundaries, geometry, monitors, sources
+    from .numerics import PML
+
+    def refuse(message,path):
+        raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
+
+    if numerics.decay is not None:
+        refuse('CUDA requires a fixed duration; Decay remains CPU only','numerics.decay')
+    if not isinstance(numerics.absorber,PML):
+        refuse('CUDA currently supports PML padding only','numerics.absorber')
+    if numerics.discretisation!='voxel':
+        refuse('CUDA currently requires voxel discretisation','numerics.discretisation')
+    if numerics.geometry_ranges:
+        refuse('CUDA does not yet admit ranged geometry','numerics.geometry_ranges')
+    for axis in 'xyz':
+        for side in '-+':
+            face=problem.scene.boundaries.face(axis+side)
+            if type(face) not in (boundaries.Periodic,boundaries.Open):
+                refuse('CUDA currently supports Periodic and Open faces only',
+                       'scene.boundaries.'+axis+side)
+    for structure in problem.scene.structures:
+        if type(structure.shape) is not geometry.Slab:
+            refuse('CUDA currently supports cell-snapped Slab structures only',
+                   'scene.structures.'+structure.name+'.shape')
+    materials=(('scene.background',problem.scene.background),)+tuple(
+        ('scene.structures.'+s.name+'.material',s.material) for s in problem.scene.structures)
+    for path,material in materials:
+        if type(material) not in (Material,ConductiveMaterial):
+            refuse('CUDA currently supports nondispersive Material and ConductiveMaterial only',path)
+    for source in problem.sources:
+        if type(source) is not sources.PlaneWave:
+            refuse('CUDA currently supports PlaneWave sources or initial fields only',
+                   'sources.'+source.name)
+    for monitor in problem.outputs.monitors:
+        if type(monitor) not in (monitors.Record,monitors.Field,monitors.Flux):
+            refuse('CUDA currently supports Record, Field and Flux monitors only',
+                   'outputs.'+monitor.name)
 
 
 def _snapped(problem,scene,plan):
@@ -127,6 +199,7 @@ def _report(problem,numerics,execution,scene,plan,metadata):
     resolved=dict(metadata,numerical_policies=numerical_policies(problem,numerics,scene,plan),grid_shape=(plan.nx,plan.ny,plan.nz),spacing=plan.dx,
                   dt_seconds=plan.dt*problem.units.time_seconds,steps=plan.steps,
                   duration_seconds=plan.steps*plan.dt*problem.units.time_seconds,dtype=plan.dtype,
+                  checkpoint_steps=plan.schedule,
                   duration_policy='fixed' if numerics.decay is None else 'hard cap with concrete state-decay stopping',
                   monitor_samples=tuple((o.name,getattr(o,'indices',None)) for o in plan.observers))
     return CheckReport(issues=_snapped(problem,scene,plan),
@@ -160,7 +233,9 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
         execution=_execution(backend,device,precision)
         with execution.scope(),_public_spelling():
             scene,metadata=lower_problem(problem,numerics)
-            plan,_=_planned(scene)
+            schedule=_checkpoint(numerics,execution)
+            _cuda_scope(problem,numerics,execution)
+            plan,_=_planned(scene,schedule=schedule)
             _signature(problem,numerics)
             return _report(problem,numerics,execution,scene,plan,metadata)
     except (TypeError,ValueError,NotImplementedError) as exc:
@@ -195,7 +270,9 @@ class Prepared:
             if value!=self._signature[key]:
                 raise IncompatibleProblemError('changed prepared structure; prepare this problem again',code='prepared_structure',path=key)
         scene,metadata=lower_problem(problem,self.numerics,plan=self._plan)
-        plan,_=_planned(scene,reuse=self._plan)
+        schedule=_checkpoint(self.numerics,self.execution)
+        _cuda_scope(problem,self.numerics,self.execution)
+        plan,_=_planned(scene,reuse=self._plan,schedule=schedule)
         if plan.skeleton!=self._plan.skeleton:
             path='numerics.duration' if (plan.steps,plan.dt)!=(self._plan.steps,self._plan.dt) else 'problem'
             raise IncompatibleProblemError('resolved numerical dependencies changed; prepare this problem again',code='prepared_dependencies',path=path)
@@ -210,7 +287,7 @@ class Prepared:
                 raise _issue(exc) from exc
             try:
                 raw=execute(scene,backend=self.execution.backend,device=self.execution.device,plan=self._plan)
-                metadata=dict(metadata,numerical_policies=numerical_policies(
+                metadata=dict(metadata,checkpoint_steps=raw.plan.schedule,numerical_policies=numerical_policies(
                     problem,self.numerics,scene,raw.plan))
                 return adapt_result(problem,self.numerics,self.execution,raw,metadata)
             except (TypeError,ValueError,NotImplementedError,RuntimeError) as exc:
@@ -224,17 +301,20 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
     with execution.scope(),_public_spelling():
         try:
             scene,metadata=lower_problem(problem,numerics)
-            plan,_=_planned(scene)
+            schedule=_checkpoint(numerics,execution)
+            _cuda_scope(problem,numerics,execution)
+            plan,_=_planned(scene,schedule=schedule)
             signature=_signature(problem,numerics)
             report=_report(problem,numerics,execution,scene,plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:
             raise _issue(exc) from exc
     contract=frozen_mapping({'static':tuple(signature),'live':('material coefficients subject to constitutive guards',
-        'source amplitude/phase/delay and band subject to fixed plan dependencies','initial amplitude',
-        'ranged geometry subject to reserved-support guards'),
+        'source amplitude/phase/delay and band subject to fixed plan dependencies','initial amplitude')
+        + (('ranged geometry subject to reserved-support guards',) if execution.device=='cpu' else ()),
         'differentiation':('concrete forward only; Decay refuses AD and external transforms' if numerics.decay is not None
                           else 'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity'),
-        'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_seconds})
+        'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_seconds,
+        'resolved_checkpoint_steps':plan.schedule})
     return Prepared(numerics,execution,report,contract,plan,frozen_mapping(signature))
 
 

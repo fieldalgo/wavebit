@@ -192,7 +192,7 @@ def _solve(scene, p, rt, grazing=None):
     return _results(scene, p, state, rt, params, grazing)
 
 
-def _planned(scene, reuse=None):
+def _planned(scene, reuse=None, *, schedule=None):
     """``(plan(scene), its grazing survey or None)``: live rows, or deferred under tracing.
 
     ``reuse`` is a plan the caller already paid for: a prepared extended-stencil operator it
@@ -220,6 +220,10 @@ def _planned(scene, reuse=None):
             # _results survey the actual scene: traced media are reported as
             # skipped, while runtime stability carries the live guard verdict.
             rows = []
+    # Scheduling changes retained reverse-mode state, not the physical plan.
+    # Keep None untouched so old skeletons and default execution stay identical.
+    if schedule is not None:
+        p = p.with_static(schedule=schedule)
     return p, (rows[0] if rows else None)
 
 
@@ -243,7 +247,7 @@ def run(scene, backend='numpy', plan=None, device=None):
     """
     # The survey is always this scene's: from its own plan, even when the caller passes one
     # (a plan with the same skeleton may be another scene's, whose materials it does not hold).
-    p, rows = _planned(scene, reuse=plan)
+    p, rows = _planned(scene, reuse=plan, schedule=None if plan is None else plan.schedule)
     if plan is not None:
         if plan.skeleton != p.skeleton:
             raise ValueError(
@@ -259,7 +263,7 @@ def run(scene, backend='numpy', plan=None, device=None):
         # The second solve: the same scene with the PlaneWave's other polarisation. Its own
         # plan (the column's drive weights are static), its own decay check.
         other = _other_polarization(scene)
-        p2, rows2 = _planned(other, reuse=p)
+        p2, rows2 = _planned(other, reuse=p, schedule=p.schedule)
         res2 = _solve(other, p2, rt, rows2)
         for m in both:
             res._series[m.name] = res[m.name].with_both(res2[m.name].orders.incident)
