@@ -559,6 +559,43 @@ before and
 after skipping unused phases. This experiment precedes any change to no-grad checkpoint
 dispatch.
 
+### Bounded DFT addcmul experiment: not adopted
+
+A separate experiment at `91200897` replaced the functional DFT multiply-plus-add
+with out-of-place `torch.addcmul`, guarded by dtype metadata to retain the
+original expression when intermediate promotion would differ. It passed 30 CPU
+and 30 CUDA primitive cases, nine CPU independent quadrature/derivative checks
+and one frozen Bloch reference, six CUDA observation/derivative cases (142.21 s, 190 expected coarse-mesh
+and unsettled-field warnings), and three CUDA Airy cases (107.25 s, six mesh
+warnings). These numerical checks did not establish a performance benefit.
+
+The same environment and 4×4×84, 128-step plain no-grad monitor fixture above
+were used, additionally returning final E/H for full-array checks. Each row is
+a fresh process with one warm-up and five synchronized prepared calls; initial
+preparation, host copies, post-run numerical checks, cleanup and profiling are
+excluded; live validation within the prepared call is included.
+Outputs are released between repetitions, with allocator cache retained after
+the first timed run. The second pair reverses execution order.
+
+| Execution order | Implementation | Median seconds [minimum–maximum] |
+| --- | --- | ---: |
+| First pair, first | Original expression | 0.5814155 [0.5355944–0.6884793] |
+| First pair, second | Candidate | 0.6112528 [0.5513491–0.6458652] |
+| Reverse pair, first | Candidate | 0.5895994 [0.5594044–0.6366238] |
+| Reverse pair, second | Original expression | 0.5563477 [0.5421061–0.6044896] |
+
+All four attempts passed full monitor/final-field NumPy comparisons at the
+unchanged peak-relative `5e-13` budget (worst `5.207610346140793e-16`) and output
+ownership checks. Timed peak allocated/reserved bytes were 420864/2097152 in
+every run; final cleanup returned both to zero. Separate single-run profiles
+changed `aten::mul` 5120→3840, `aten::add` 2603→1323 and `aten::addcmul` 0→1280;
+`aten::copy_` remained 912. Both time ranges overlap, and neither wall time nor
+allocator peak shows an advantage. Fewer operators alone do not justify adoption.
+The runtime retains the original expression. Candidate code and raw machine
+records are not distributed here; these observations describe only this bounded
+experiment and do not establish a cause for its timing outcome or a general
+ranking of the operations.
+
 ## Forward-only execution with a checkpoint policy
 
 When Torch gradient recording is disabled by `torch.no_grad()` or
