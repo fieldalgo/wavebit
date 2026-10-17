@@ -179,6 +179,7 @@ def lower(scene, plan, rt='numpy', device=None):
     guard = _stability_guard(scene, plan, rt)
     guard = _axis1d_guard(scene, rt, guard)
     guard = _material_door_guard(scene, rt, guard)
+    guard = _excitation_door_guard(scene, rt, guard)
     # A carried pole may cross the same representability door check_stability
     # asks eagerly. Read the actual recurrence, not an upper bound on gamma.
     from wavebit.fdtd._prepare.shape_ranges import materials_traced
@@ -492,6 +493,54 @@ def _axis1d_guard(scene, rt, guard):
                          rt.array(float('nan'), 'float64'))
         guard = ok if guard is None else guard * ok
     return guard
+
+
+def _excitation_door_guard(scene, rt, guard):
+    """Include finite excitation leaves and positive bandwidth leaves in validity.
+
+    Constructors cannot read transformed leaves. Initial amplitudes and complex source
+    amplitudes also need this check when concrete. Valid concrete inputs leave the incoming
+    guard untouched, including source-free recursive column scenes. This is a leaf-domain
+    check, not a bound on derived waveform arithmetic or the band's spectral cutoff.
+    """
+    from wavebit._common.backend import carries_autodiff
+    from wavebit._common.declarations import torch_carried
+
+    sources = getattr(scene, 'sources', ()) or ()
+    initial = getattr(scene, 'initial', None)
+    if not sources and initial is None:
+        return guard
+    leaves = [] if initial is None else [(initial.amplitude, False)]
+    for source in sources:
+        leaves.extend((getattr(source, name), False) for name in ('amplitude', 'phase', 'delay'))
+        leaves.extend((getattr(source.band, name), True) for name in ('wavelength', 'df'))
+    predicates = []
+    for value, positive in leaves:
+        # A concrete read of a forward dual can silently discard its tangent. Ask both
+        # derivative and batching doors before any host conversion, even without reverse AD.
+        if not (torch_carried(value) or carries_autodiff(value)):
+            if hasattr(value, 'detach'):
+                # Read logical values, including conjugate/negative views and bfloat16,
+                # which cannot always be exposed directly as a NumPy storage view.
+                host = np.asarray(value.detach().cpu().resolve_conj().resolve_neg().tolist())
+            else:
+                host = np.asarray(value)
+            finite = np.all(np.isfinite(host))
+            if finite and (not positive or np.all(host > 0)):
+                continue
+        # Complex amplitudes require both parts to be finite; do not cast them to real.
+        v = rt.array(value, 'complex128' if not positive else 'float64')
+        ok = rt.xp.all(rt.xp.isfinite(v))
+        if positive:
+            ok = rt.xp.logical_and(ok, rt.xp.all(v > 0))
+        predicates.append(ok)
+    if not predicates:
+        return guard
+    ok = predicates[0]
+    for predicate in predicates[1:]:
+        ok = rt.xp.logical_and(ok, predicate)
+    factor = rt.xp.where(ok, rt.array(1.0, 'float64'), rt.array(float('nan'), 'float64'))
+    return factor if guard is None else guard * factor
 
 
 def _material_door_guard(scene, rt, guard):

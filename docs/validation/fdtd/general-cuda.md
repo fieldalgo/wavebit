@@ -8,8 +8,10 @@ Targets:
 - `src/wavebit/fdtd/sources.py`
 - `src/wavebit/fdtd/numerics.py`
 - `src/wavebit/fdtd/_runtime.py`
+- `src/wavebit/fdtd/_prepare/params.py`
 - `src/wavebit/fdtd/_kernel/observe.py`
 - `tests/fdtd/test_general_cuda.py`
+- `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_cuda_observations.py`
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
@@ -93,6 +95,49 @@ diffraction and far-field monitors are outside this CUDA route. Unsupported
 combinations return a `cuda_scope` issue with the relevant public field path
 before planning. Admission does not waive sampling, CFL, material, padding or
 other scientific checks. A passed `check` or `prepare` advances no fields.
+
+## Finite excitation values and prepared recovery
+
+Source amplitude, phase and delay, and `InitialField.amplitude`, must be finite.
+Source `Band.wavelength` and `Band.df` must also be positive. Complex amplitudes
+are checked in both real and imaginary parts only where the existing field
+contract admits complex values; real-plan complex amplitudes remain refused.
+For Dipoles, the public strength is `current_moment`, from which lowering derives
+the source amplitude.
+
+Previously, changing a live source or initial-amplitude leaf to NaN could yield
+NaN fields while `result.validity.checks['runtime_stability']` remained true.
+The excitation-domain guard now contributes to the existing runtime validity
+factor. Existing constructors may refuse readable invalid declarations earlier;
+otherwise invalid excitation leaves yield failed runtime validity and NaN
+fields. An optimizer-style in-place update does not make a prepared structure
+incompatible by itself: restore valid leaf values and run again with the same
+preparation. Earlier returned results must remain unchanged.
+
+Valid concrete excitation values leave the incoming stability guard unchanged.
+This does not expand initial-pattern, source or complex-field admission. The
+check covers the input domains above, not every overflow in derived waveform
+arithmetic or the traced Band spectral-cutoff inequality. Numerical and
+derivative qualification remains specific to the exercised cases.
+
+`test_general_source_finite.py` passed **77 new cases**: 44 CPU and 33 actual
+CUDA cases. Public valid→invalid→valid runs update the same source amplitude,
+phase or initial-amplitude leaf in place, preserve its identity and prior
+outputs, and recover the original fields and source history exactly. Direct
+guard cases cover NaN and both infinities, nonpositive wavelength/bandwidth,
+complex parts, mixed-device leaves, valid concrete guard identity, logical
+Torch views and bfloat16 conversion. Torch forward/batched transforms and JAX
+JIT/derivatives are helper-level controls; they do not qualify arbitrary full
+solver transforms or complex Dipole admission.
+
+Separately, two existing CPU CPML amplitude/phase Hessian cases and three
+existing CPU source-gradient/waveform cases passed across their Torch/JAX and
+Dipole/TFSF/PlaneWave paths. Ten existing actual CUDA cases passed: four CPML
+Hessians, two complex Bloch observation Hessians, two exact conductor Hessians,
+and two conductivity/initial-amplitude derivative cases. Their original
+numerical budgets remain unchanged; the CUDA run retained 46 mesh/window
+warnings. These are bounded regressions, not full CI or optimizer convergence
+qualification.
 
 ## Homogeneous single-pole ADE
 
@@ -243,13 +288,16 @@ passed 17 checks, and eight existing CPU regressions retained ordinary/film
 Decay memory, film energy and PlaneWave source lowering across their relevant
 NumPy/JAX/Torch routes. These groups are separate; none implies full CI.
 
-#### Product cost measurements
+#### Historical product cost measurements
 
-These six measurements were repeated after restoring the scalar-recurrence
-arithmetic guards for compact storage, because lowering is inside the measured
-public call. The table reports that final guarded source. Earlier attempts
-remain historical records; allocated/reserved peaks were unchanged. This
-follow-up does not establish a general speed advantage.
+These six measurements describe product commit `5dd110ad`, after the
+scalar-recurrence arithmetic guards for compact storage were restored. Lowering
+is inside the measured public call, so later source and initial-amplitude
+validity checks are not represented by these timings. Reproducing this table
+requires that historical source; running the current study measures the current
+checkout instead. Earlier attempts remain historical records; allocated/reserved
+peaks were unchanged in that follow-up. These results do not establish a general
+speed advantage.
 
 The product study used Python 3.12.14, Torch 2.14.1+cu130, CUDA 13.0, NumPy
 2.5.4, Windows 11 and an RTX 4060 Ti (8585216000 device bytes), with one Torch
@@ -290,7 +338,7 @@ E/H-plus-pole state was 3145728 and 25165824 bytes respectively.
 At 64³ the separate forward-retained allocated values were 1038181888 (plain),
 534827520 (block 8) and 157309440 (block 32) bytes; after backward each retained
 12587008 bytes before release. These are not the logical state payload or the
-timed peak. The current peaks equal the corresponding historical compact-state
+timed peak. These recorded peaks equal the corresponding earlier compact-state
 measurements; historical baseline-versus-compact timing ranges overlap. The
 product table establishes this bounded memory/time tradeoff, not a general
 speedup, scaling law or universally best checkpoint block.
@@ -865,6 +913,7 @@ described in the [native setup](native-cuda.md#environment-and-reproduction).
 ```sh
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
+python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q

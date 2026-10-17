@@ -8,8 +8,10 @@ Targets:
 - `src/wavebit/fdtd/sources.py`
 - `src/wavebit/fdtd/numerics.py`
 - `src/wavebit/fdtd/_runtime.py`
+- `src/wavebit/fdtd/_prepare/params.py`
 - `src/wavebit/fdtd/_kernel/observe.py`
 - `tests/fdtd/test_general_cuda.py`
+- `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_cuda_observations.py`
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
@@ -90,6 +92,46 @@ CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해
 경로의 `cuda_scope` 이슈를 반환합니다. 입력 허용이 표본화, CFL, 재료,
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
 장을 시간 진행했다는 뜻이 아닙니다.
+
+## 유한한 광원 값과 prepared 복구
+
+광원 진폭·phase·delay와 `InitialField.amplitude`는 유한해야 합니다.
+광원의 `Band.wavelength`와 `Band.df`는 양수이면서 유한해야 합니다.
+복소 진폭은 기존 장 계약에서 허용하는 경우에만 실수부·허수부를 모두
+검사하며, 실수 실행의 복소 진폭은 계속 거부합니다. Dipole의 공개 세기
+파라미터는 `current_moment`이며 lowering이 여기서 광원 진폭을 유도합니다.
+
+이전에는 live 광원 또는 초기 진폭 리프를 NaN으로 바꾸면 장이 NaN이면서
+`result.validity.checks['runtime_stability']`가 true로 남을 수 있었습니다.
+이제 광원 입력 범위 검사를 기존 런타임 유효성 계수에 합칩니다. 읽을 수
+있는 잘못된 선언은 기존 생성자가 먼저 거부할 수 있고, 그렇지 않으면
+잘못된 광원 리프가 실패한 런타임 유효성과 NaN 장을 반환하게 합니다.
+최적화처럼 같은 리프 값을 제자리에서 갱신하는 것 자체가 prepared 구조를
+비호환으로 만들지는 않습니다. 유효한 리프 값으로 복원하면 같은 준비를
+다시 실행할 수 있으며, 이전에 반환한 결과는 변하지 않아야 합니다.
+
+유효한 concrete 광원 값은 들어온 안정성 계수를 바꾸지 않습니다. 초기
+패턴·광원·복소 장의 허용 범위를 넓히지 않습니다. 위 입력 값의 범위를
+검사하는 것이며, 유도한 파형 연산의 모든 오버플로나 traced Band의
+스펙트럼 cutoff 부등식을 검사하지는 않습니다. 수치·미분 검증 범위는
+실제로 실행한 사례로 한정합니다.
+
+`test_general_source_finite.py`의 **새 77사례**가 통과했습니다. CPU 44사례와
+실제 CUDA 33사례입니다. 공개 valid→invalid→valid 실행은 같은 광원 진폭·
+phase·초기 진폭 리프를 제자리에서 갱신하며, 리프의 동일성과 이전 출력을
+보존하고 원래 장과 광원 이력을 정확히 복구합니다. 직접 guard 검사는 NaN,
+양·음의 무한대, 양수가 아닌 파장·대역폭, 복소수 양쪽 성분, 혼합 장치
+리프, 유효한 concrete guard의 동일성, Torch 논리 view와 bfloat16 변환을
+포함합니다. Torch 순방향·배치 변환과 JAX JIT·미분은 helper 수준의 검사이며,
+임의의 전체 solver 변환이나 복소 Dipole 허용을 검증한 것이 아닙니다.
+
+별도로 기존 CPU CPML 진폭·phase Hessian 두 사례와 기존 CPU 광원 미분·
+파형 세 사례가 해당 Torch/JAX 및 Dipole/TFSF/PlaneWave 경로에서 통과했습니다.
+기존 실제 CUDA 열 사례도 통과했습니다. CPML Hessian 네 사례, 복소 Bloch
+관측 Hessian 두 사례, 정확한 전도체 Hessian 두 사례와 전도도·초기 진폭
+미분 두 사례입니다. 기존 수치 기준을 그대로 유지했고 CUDA 실행의 격자·
+관측창 경고 46개도 남겼습니다. 이 결과는 제한된 회귀 검사이며 전체 CI나
+최적화 수렴 검증은 아닙니다.
 
 ## 균질 단일 극점 ADE
 
@@ -228,12 +270,14 @@ no-grad/inference 예열 뒤 35단계·블록 8/32·나머지 3단계에서 전�
 필름 에너지, PlaneWave 소스 lowering의 해당 NumPy/JAX/Torch 경로를
 유지했습니다. 이 집계는 서로 구분하며 전체 CI 통과를 뜻하지 않습니다.
 
-#### 제품 비용 측정
+#### 과거 제품 비용 측정
 
-공개 호출의 lowering도 시간 측정에 포함되므로 축소 저장의 스칼라 갱신식
-산술 검사를 복원한 뒤 여섯 측정을 다시 실행했습니다. 표는 최종 검사가
-적용된 소스의 결과입니다. 이전 시도는 과거 기록으로 보존했고
-allocated/reserved 최대값은 같았습니다. 이 후속 측정도 일반적인 가속을
+이 여섯 측정은 축소 저장의 스칼라 갱신식 산술 검사를 복원한 제품 커밋
+`5dd110ad`의 결과입니다. 공개 호출의 lowering도 측정하므로 이후 추가된
+소스·초기 진폭 유효성 검사는 이 시간에 반영되지 않았습니다. 표를 재현하려면
+해당 과거 소스를 사용해야 하며, 현재 연구 도구를 실행하면 현재 체크아웃의
+비용을 측정합니다. 더 이른 시도도 과거 기록으로 보존했고 해당 후속 측정의
+allocated/reserved 최대값은 같았습니다. 이 결과는 일반적인 가속을
 입증하지 않습니다.
 
 제품 연구는 Python 3.12.14, Torch 2.14.1+cu130, CUDA 13.0, NumPy 2.5.4,
@@ -273,7 +317,7 @@ E/H+극점 상태는 각각 3145728, 25165824바이트였습니다.
 64³의 별도 순방향 후 보유 allocated는 일반 스캔 1038181888, 블록 8은
 534827520, 블록 32는 157309440바이트였으며, 역전파 후 해제 전에는 모두
 12587008바이트를 보유했습니다. 이는 논리 상태 payload나 시간 측정 최대값과
-다릅니다. 현재 최대값은 대응하는 과거 축소 상태 측정과 같고, 과거 원래 상태와
+다릅니다. 이 기록의 최대값은 대응하는 더 이른 축소 상태 측정과 같고, 과거 원래 상태와
 축소 상태의 시간 범위는 겹칩니다. 제품 표는 이 제한된 메모리·시간 관계를
 보이며 일반적인 가속, 크기 확장 법칙, 보편적인 최적 체크포인트 블록을
 입증하지 않습니다.
@@ -810,6 +854,7 @@ CPU 진폭과 CUDA 재료 리프는 사용자가 소유하며 변하지 않습�
 ```sh
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
+python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
