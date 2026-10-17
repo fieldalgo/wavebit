@@ -14,6 +14,7 @@ Targets:
 - `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_source_band_guard.py`
 - `tests/fdtd/test_general_source_resolution_guard.py`
+- `tests/fdtd/test_general_source_waveform_guard.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -350,6 +351,90 @@ qualification exactly, retaining the reported forward/value/gradient/Hessian
 maxima; the ninth unit-pair case remains assertion-only. Numerical budgets were
 unchanged. Declared-pole scenes and other derived waveform overflow remain
 outside this added certificate; independent physical refinement is still needed.
+
+## Fixed-time waveform representability
+
+Finite source inputs alone do not guarantee representable sampled Gaussian
+waveforms. The original regression changed a normalized delay to the finite
+value `1e308`: the sampled drive became nonfinite and the electric field became
+NaN, while `runtime_stability` remained true. One CPU and two CUDA reproductions
+(plain and checkpoint-7) exposed this gap. Restoring the original delay recovered
+the prepared run, and earlier owned results remained unchanged.
+
+The bounded guard checks fixed-time source arithmetic:
+positive finite lowered `tau`, `f0` and `t0`, then finite shifted time, normalized
+time, its square, Gaussian exponent `-0.5*(s/tau)**2`, carrier prefactor
+`omega=2*pi*f0` and phase `omega*s+phase` at `n=0` and `n=steps-1`
+of each actual source row. The row shifts remain 0.5 for electric, 0 for
+magnetic and 1 for column sources. It preserves the kernel's arithmetic order.
+With positive fixed time
+increments, the endpoint bounds cover the intermediate finite samples without a
+per-step or full-field scan. Both paths evaluate the predicate using the actual
+lowered backend parameters, rather than reconstructing the arithmetic in NumPy.
+Fully eager concrete execution reads one backend boolean per source per run:
+an invalid declaration raises `ValidationError` with code
+`source_waveform_range`, while a valid declaration preserves the incoming guard
+identity. On CUDA this entails a scalar synchronization once per source per run,
+not once per time step. If the original inputs, lowered parameters or predicate
+carry a differentiation or transformation trace, no host read is made; a
+constant factor of one or NaN contributes to the existing runtime certificate.
+JIT-derived constants can therefore use a traced factor of one without promising
+literal `None` guard identity. Carried-path timing does not measure the concrete
+scalar synchronization cost.
+`test_general_source_waveform_guard.py` passed **36 new cases: 19 CPU and
+17 CUDA**. CPU passed in 5.24 s with four warnings; CUDA passed in 2.97 s
+with six coarse-mesh warnings and one Torch JIT future warning. Both signs of
+huge delay now fail runtime validity and propagate NaN fields, then recover
+exactly after the same leaf is restored; earlier outputs, leaf identity and
+existing `.grad` buffers remain unchanged. Concrete invalid values receive the
+structured refusal. Additional checks cover individual arithmetic overflows,
+the last sample, electric/magnetic row shifts, neighboring backend `t0`
+overflow values, valid guard identity and untouched source-free/`Decay` paths.
+Torch forward/reverse/batch and JAX JIT/gradient/Hessian/batch checks qualify the
+constant certificate only, not arbitrary transformed full-solver execution.
+
+The five related test files passed **174 cases** in 78.26 s with 44 warnings:
+finite excitation (77), carrier cutoff (43), spatial resolution (30), pulse
+higher-order derivatives (18), and projected pulse fitting (6). Together with
+the 36 new cases, this change qualified **210 unique cases**. Earlier partial
+reruns are not added to that total. Recorded source copies and current source
+hashes matched; this is scoped local qualification, not full CI.
+
+This is a representability restriction, not a reformulation of the Gaussian:
+a huge finite pulse declaration may be refused even when its ideal envelope
+would be zero. It does not change the waveform arithmetic, expand source or
+field admission, or qualify the adaptive `Decay` path. A true
+`runtime_stability` means the implemented certificates passed; it is not a
+blanket test that every output, intermediate or derivative is finite.
+
+A bounded cost comparison used the same 8³ bspline pulse fixture, plain scans,
+17 or 41 steps, one warmup and five public `prepared.run` calls under
+`torch.no_grad()`. Preparation and instrument numerical checks were outside the
+timer; public validation, lowering and adaptation stayed inside, with CUDA
+synchronization at the timing boundaries. CPU used one thread. The pre-guard
+source was `76bdea9b`; only the guard implementation changed. Concrete baseline
+imports were checked against the archived pre-guard source. All sampled outputs
+passed the existing independent discrete forward checks.
+
+| Input path | Device | Steps | Before median [min, max], ms | After median [min, max], ms |
+|---|---|---:|---:|---:|
+| carried | CPU | 17 | 10.8012 [10.0707, 12.7233] | 10.7788 [10.2527, 10.8481] |
+| carried | CPU | 41 | 18.3311 [18.1400, 19.1682] | 18.9597 [18.7516, 19.0930] |
+| carried | CUDA | 17 | 25.0447 [24.4767, 27.9889] | 26.5309 [25.8810, 42.3962] |
+| carried | CUDA | 41 | 47.8544 [47.5453, 49.8249] | 54.0605 [49.8878, 64.7790] |
+| concrete | CPU | 17 | 9.5441 [9.4136, 11.0372] | 10.6422 [10.0567, 11.2492] |
+| concrete | CPU | 41 | 17.6719 [17.3286, 17.7771] | 19.2064 [18.7677, 22.8558] |
+| concrete | CUDA | 17 | 22.8888 [21.9422, 32.5485] | 31.4461 [23.7319, 34.6008] |
+| concrete | CUDA | 41 | 47.8459 [44.3152, 59.2735] | 52.3676 [48.2676, 62.7320] |
+
+These are five calls in the same order, without a reversed or randomized repeat;
+they do not bound general overhead. The carried CUDA 41-step ranges did not
+overlap; the other CUDA pairs did. No speed improvement is claimed. CUDA timed
+peak allocated memory was unchanged: 140,288 bytes for carried inputs and
+137,216 bytes for concrete inputs at both step counts. CPU memory was not
+measured. The concrete comparison includes its backend scalar synchronization;
+the carried comparison alone cannot measure that cost. This is no-grad evidence,
+not a gradient-cost or peak device-memory guarantee.
 
 ## Same-leaf SGD reuse
 
@@ -1411,6 +1496,7 @@ python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_source_band_guard.py -q
 python -m pytest tests/fdtd/test_general_source_resolution_guard.py -q
+python -m pytest tests/fdtd/test_general_source_waveform_guard.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q

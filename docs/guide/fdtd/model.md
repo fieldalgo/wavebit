@@ -489,6 +489,15 @@ rejected a traced value, see below) and, per `Diffraction` monitor, `source_refe
 `result.provenance` records the backend, the units, `dt_seconds`, the actual step count and every
 domain.
 
+A true `runtime_stability` reports that the implemented runtime certificates
+passed; it is not a scan of every output or derivative for finite values.
+Fixed-time sources also check the representability of sampled Gaussian
+intermediates at each source row's endpoints. Concrete invalid values raise
+`source_waveform_range`; carried invalid values fail runtime validity. This
+conservative restriction can refuse huge finite pulses even when the ideal
+envelope would be zero; the adaptive `Decay` path is unchanged. See the
+[waveform representability contract](../../validation/fdtd/general-cuda.md#fixed-time-waveform-representability).
+
 `admitted` describes the static declaration; it does not override a failed
 `runtime_stability` check. In a differentiated run, `diagnostics['grazing']` marks a
 traced physical medium as `skipped`: its index cannot be surveyed on the host.
