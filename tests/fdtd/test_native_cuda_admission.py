@@ -124,9 +124,7 @@ def test_native_check_and_prepare_do_not_advance_cuda(torch_device, monkeypatch)
     assert not prepared.validate(problem.replace(outputs=n.Outputs())).ok
 
 
-@pytest.mark.parametrize('phase', [0., .37])
-@pytest.mark.parametrize('steps', [37, 513])
-def test_native_plane_wave_matches_independent_yee_dispersion(torch_device, phase, steps):
+def _yee_wave_case(phase, steps):
     # In a uniform medium, centered Yee differences admit a discrete plane wave:
     # sin(omega*dt/2) = dt*sin(k*dz/2)/(dz*sqrt(epsilon*mu)), with c=1.
     # The twist exp(i*phase) closes the grid; the chosen mode makes two turns
@@ -147,7 +145,111 @@ def test_native_plane_wave_matches_independent_yee_dispersion(torch_device, phas
     numerics = n.Numerics(
         grid=n.Grid(spacing=(dz,) * 3), time_step_seconds=dt * units.time_seconds,
         steps=steps, checkpoint_steps=7)
-    result = n.run(problem, numerics=numerics, backend='torch', device=str(torch_device))
     rotation = np.exp(-1j * omega * dt * steps)
+    return problem, numerics, electric, magnetic, rotation
+
+
+@pytest.mark.parametrize('phase', [0., .37])
+@pytest.mark.parametrize('steps', [37, 513])
+def test_native_plane_wave_matches_independent_yee_dispersion(torch_device, phase, steps):
+    problem, numerics, electric, magnetic, rotation = _yee_wave_case(phase, steps)
+    result = n.run(problem, numerics=numerics, backend='torch', device=str(torch_device))
     np.testing.assert_allclose(result.E.detach().cpu(), electric * rotation, rtol=3e-13, atol=0.)
     np.testing.assert_allclose(result.H.detach().cpu(), magnetic * rotation, rtol=3e-13, atol=0.)
+
+
+def _long_wave_budget(steps):
+    # A predeclared numerical acceptance choice: preserve the existing 513-step
+    # allowance per step for coherently accumulated roundoff. This is not a
+    # rigorous floating-point bound, and does not loosen either existing gate.
+    return 3e-13 * max(1., steps / 513)
+
+
+def _long_wave_metrics(electric, magnetic, initial_e, initial_h, rotation):
+    metrics = {}
+    for name, actual, initial in (('E', electric, initial_e), ('H', magnetic, initial_h)):
+        assert np.isfinite(actual).all()
+        norm_squared = np.vdot(initial, initial).real
+        coefficient = np.vdot(initial, actual) / norm_squared
+        metrics[name + '_field_error'] = float(
+            np.max(np.abs(actual - initial * rotation)) / np.max(np.abs(initial)))
+        metrics[name + '_phase_error'] = float(abs(np.angle(coefficient * rotation.conjugate())))
+        metrics[name + '_amplitude_error'] = float(abs(abs(coefficient) - 1))
+        metrics[name + '_nonmodal_residual'] = float(
+            np.linalg.norm(actual - coefficient * initial) / np.sqrt(norm_squared))
+    # This single complex traveling eigenmode has constant E/H magnitudes.
+    # This norm is not claimed to be the conserved energy of an arbitrary
+    # superposition of staggered Yee states; epsilon_0/2 cancels in the ratio.
+    def mode_energy(e, h):
+        return 2.4 * np.vdot(e, e).real + 1.7 * Z0 ** 2 * np.vdot(h, h).real
+    metrics['energy_drift'] = float(abs(
+        mode_energy(electric, magnetic) / mode_energy(initial_e, initial_h) - 1))
+    return metrics
+
+
+def _assert_long_wave_metrics(metrics, budget):
+    for name, value in metrics.items():
+        allowance = 2 * budget + budget ** 2 if name == 'energy_drift' else budget
+        assert np.isfinite(value) and value <= allowance, (name, value, allowance, metrics)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize('steps', [4097, 16385])
+def test_cuda_long_native_wave_preserves_phase_amplitude_and_mode(steps, record_property):
+    torch = pytest.importorskip('torch')
+    if not torch.cuda.is_available():
+        pytest.skip('requires a CUDA-enabled Torch installation and an NVIDIA GPU')
+    problem, numerics, initial_e, initial_h, rotation = _yee_wave_case(.37, steps)
+    assert problem.outputs.record is None and problem.outputs.spectrum is None
+    assert numerics.tail is None
+    # No field history, diagnostic history or reverse-mode graph is requested.
+    # The current engine still allocates a zero complex128 drive[steps] without
+    # a source: memory is O(grid + steps), not strictly independent of duration
+    # (64/256 KiB of zero drive at these two horizons).
+    with torch.no_grad():
+        result = n.run(problem, numerics=numerics, backend='torch', device='cuda:0')
+    assert result.E.device.type == result.H.device.type == 'cuda'
+    assert result.E.dtype == result.H.dtype == torch.complex128
+    assert not result.E.requires_grad and not result.H.requires_grad
+    assert bool(result.validity.checks['stable']) and bool(result.validity.checks['finite_fields'])
+    assert not result.fields and result.spectrum is None and result.diagnostics['tail'] is None
+    electric, magnetic = result.E.detach().cpu().numpy(), result.H.detach().cpu().numpy()
+    budget = _long_wave_budget(steps)
+    metrics = _long_wave_metrics(electric, magnetic, initial_e, initial_h, rotation)
+    record_property('steps', steps)
+    record_property('relative_budget', budget)
+    for key, value in metrics.items():
+        record_property(key, value)
+    print(f'Native long wave: steps={steps}, phase=.37, budget={budget!r}, metrics={metrics!r}',
+          flush=True)
+    _assert_long_wave_metrics(metrics, budget)
+    # Retain elementwise phase/amplitude checks, including exact zeros of the
+    # four unexcited components, in addition to the modal diagnostics above.
+    np.testing.assert_allclose(electric, initial_e * rotation, rtol=budget, atol=0.)
+    np.testing.assert_allclose(magnetic, initial_h * rotation, rtol=budget, atol=0.)
+
+
+@pytest.mark.parametrize('steps', [4097, 16385])
+@pytest.mark.parametrize('mutation', ['phase', 'amplitude', 'orthogonal-component'])
+def test_long_wave_acceptance_rejects_nonphysical_mutations(steps, mutation):
+    """CPU-only controls: energy alone cannot expose a wrong modal phase."""
+    _, _, initial_e, initial_h, rotation = _yee_wave_case(.37, steps)
+    e, h = initial_e * rotation, initial_h * rotation
+    budget = _long_wave_budget(steps)
+    _assert_long_wave_metrics(_long_wave_metrics(e, h, initial_e, initial_h, rotation), budget)
+    if mutation == 'phase':
+        e, h = e * np.exp(1e-6j), h * np.exp(1e-6j)
+        metric = 'E_phase_error'
+    elif mutation == 'amplitude':
+        e, h = e * (1 + 1e-6), h * (1 + 1e-6)
+        metric = 'E_amplitude_error'
+    else:
+        e[1] = 1e-6
+        metric = 'E_nonmodal_residual'
+    metrics = _long_wave_metrics(e, h, initial_e, initial_h, rotation)
+    assert metrics[metric] > 100 * budget
+    if mutation == 'phase':
+        assert metrics['energy_drift'] < budget
+        assert metrics['E_amplitude_error'] < budget
+    with pytest.raises(AssertionError):
+        _assert_long_wave_metrics(metrics, budget)
