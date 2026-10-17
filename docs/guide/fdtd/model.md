@@ -24,8 +24,17 @@ for the declaration API, see [domains, sources and observations](general-fdtd.md
 | `Record` | the time series of one component at its nearest Yee point |
 | `Field`, `Flux`, `Diffraction`, `FarField` | running Fourier transforms of the fields, accumulated during the run |
 
-Runs execute on CPU in double precision with the NumPy, JAX or PyTorch backend. JAX and PyTorch
-runs are differentiable; see [Differentiating a run](#differentiating-a-run).
+Runs use double precision with NumPy, JAX or PyTorch on CPU. A restricted Torch
+CUDA route admits fixed-duration voxel scenes with Periodic/Open boundaries,
+PML, nondispersive Material/ConductiveMaterial, cell-snapped Slabs, PlaneWave or
+initial-field excitation, and Record/Field/Flux observations. Pass
+`backend='torch', device='cuda:0'`; see the [CUDA scope and validation](../../validation/fdtd/general-cuda.md).
+JAX and PyTorch runs are differentiable; see [Differentiating a run](#differentiating-a-run).
+
+For CUDA, initial E/H patterns remain static host declarations (NumPy arrays,
+CPU tensors without gradients, or host callables). Direct CUDA or differentiable
+tensor patterns are not admitted; the separate `InitialField.amplitude` remains
+a live differentiable input.
 
 ## Units and conventions
 
@@ -482,6 +491,24 @@ With `backend="jax"` or `backend="torch"`, a prepared run is differentiable in i
 material values, source amplitude, phase, delay and pulse, and the initial-field amplitude. JAX
 needs `jax.config.update("jax_enable_x64", True)` before arrays are built.
 
+For fixed-duration Torch CUDA runs in the admitted scope, set
+`Numerics(checkpoint_steps=11)` to recompute blocks during reverse mode.
+`None` keeps the ordinary scan. An explicit setting must be a positive static
+integer; CPU execution and `Decay` are refused. Source and observation histories
+remain retained, so the setting is not a memory cap. A block longer than the
+run leaves an ordinary tail. The chosen schedule appears in the check report's
+`resolved['checkpoint_steps']`, the prepared contract's
+`resolved_checkpoint_steps`, and the result's `provenance['checkpoint_steps']`.
+Prepare again to change the schedule. See the [CUDA checkpoint validation](../../validation/fdtd/general-cuda.md)
+for derivative coverage and measured costs: checkpointing increased or reduced
+memory depending on the differentiated inputs in the conductor fixture.
+Default v1 Job keys are preserved
+because `None` is omitted; explicit schedules round-trip with the Job.
+
+Under `torch.no_grad()` or `torch.inference_mode()`, execution bypasses the
+backward checkpoint wrappers and block copies. Policy metadata remains intact;
+later prepared reuse with gradient recording enabled uses the requested schedule.
+
 Float64 Drude susceptibility rescales large damping to preserve the tested frequency
 values and tangents in both the public SI model and the normalized FDTD model.
 Public calls carrying float32 retain their previous arithmetic and dtype; this
@@ -569,7 +596,8 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
 
 ## General-scene limits
 
-- GPU devices and single precision are refused; the grid is uniform and cubic.
+- CUDA is limited to the [documented Torch scope](../../validation/fdtd/general-cuda.md);
+  other GPU backends and single precision are refused. The grid is uniform and cubic.
 - Per-cell sampled grids use `fdtd.native`; this general-scene formulation has no raster body.
   Constructive solid geometry (union, intersection, difference) and tilted extrusion axes are unsupported.
 - No Gaussian beams, mode sources or mode monitors.

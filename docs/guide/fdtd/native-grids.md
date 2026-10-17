@@ -56,6 +56,14 @@ same engine. Current execution requires double precision. Set JAX x64 before
 creating arrays. JAX jit and Torch eager AD are supported; Torch compilation is
 not an established execution mode.
 
+For Torch CUDA, pass `backend='torch', device='cuda:0'` to `run` or `prepare`.
+Inputs are converted to the execution device; gradients remain associated with
+their original leaf tensors. The
+[CUDA validation record](../../validation/fdtd/native-cuda.md) gives the isolated
+installation, tested numerical and derivative scope, and synchronized cost
+measurements. General-scene CUDA has a [separate restricted scope](../../validation/fdtd/general-cuda.md);
+neither record qualifies every periodic-stack configuration.
+
 See the runnable [material derivative](../../../examples/fdtd/fdtd_grid_gradient.py),
 [Bloch derivative](../../../examples/fdtd/fdtd_bloch_gradient.py),
 [Lorentz derivative](../../../examples/fdtd/fdtd_dispersive_gradient.py) and
