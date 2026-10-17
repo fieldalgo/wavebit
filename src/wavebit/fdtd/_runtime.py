@@ -763,7 +763,10 @@ class TorchRuntime(_Functional):
         return fn(operand) if pred else operand
 
     def scan(self, body, carry, steps, schedule=None):
-        if schedule is None:
+        # Block copies protect backward replay. Forward-only execution has no
+        # replay; do not infer this from carry leaves, since live parameters can
+        # instead be captured in the body's closure.
+        if schedule is None or not self.torch.is_grad_enabled():
             for n in range(steps):
                 carry = body(carry, n)
             return carry

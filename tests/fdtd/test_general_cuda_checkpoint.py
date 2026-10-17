@@ -175,3 +175,64 @@ def test_checkpoint_preserves_invalid_live_material_guard(cuda):
     result=prepared.run(slab_problem(epsilon=epsilon))
     assert not bool(result.validity.checks['runtime_stability'])
     assert cuda.isnan(result['e'].values).all()
+
+
+@pytest.mark.parametrize('forward_context',['no_grad','inference_mode'])
+def test_checkpoint_forward_context_then_live_gradient_reuse(cuda,forward_context):
+    """A forward-only use must neither retain inference state nor change later AD."""
+    base=slab_problem();numerics=fixed_numerics(163)
+    plain=fdtd.prepare(base,numerics=numerics,backend='torch',device='cuda:0')
+    scheduled=fdtd.prepare(base,numerics=numerics.replace(checkpoint_steps=11),
+                           backend='torch',device='cuda:0')
+
+    def arrays(result):
+        return (result.final_fields.values['E'],result.final_fields.values['H'],
+                result['e'].values,result['field'].values['Ey'],result['field'].values['Hx'],
+                result['flux'].energy_density,result.sources['pw']['incident'],
+                result.sources['pw']['incident_H'])
+
+    # Live leaves created outside the disabled-grad context remain caller-owned.
+    epsilon=cuda.tensor(2.25,dtype=cuda.float64,device='cuda:0',requires_grad=True)
+    amplitude=cuda.tensor(1.2,dtype=cuda.float64,device='cpu',requires_grad=True)
+    input_copies=tuple(x.detach().clone() for x in (epsilon,amplitude))
+    problem=slab_problem(epsilon=epsilon,amplitude=amplitude)
+    with getattr(cuda,forward_context)():
+        expected=plain.run(problem)
+        actual=scheduled.run(problem)
+    assert actual.provenance['checkpoint_steps']==11
+    for result in (expected,actual):
+        assert bool(result.validity.checks['runtime_stability'])
+        assert all(not x.requires_grad for x in arrays(result))
+    for got,want in zip(arrays(actual),arrays(expected)):parity(got,want)
+    old_arrays=arrays(expected)+arrays(actual)
+    old_copies=tuple(x.detach().clone() for x in old_arrays)
+
+    def differentiated(prepared):
+        eps=cuda.tensor(2.4,dtype=cuda.float64,device='cuda:0',requires_grad=True)
+        amp=cuda.tensor(.8,dtype=cuda.float64,device='cpu',requires_grad=True)
+        copies=tuple(x.detach().clone() for x in (eps,amp))
+        result=prepared.run(slab_problem(epsilon=eps,amplitude=amp))
+        assert bool(result.validity.checks['runtime_stability'])
+        losses=((result.final_fields.values['E']**2).sum(),)+observable_losses(result,base.units)
+        derivatives=[]
+        for index,loss in enumerate(losses):
+            pair=cuda.autograd.grad(loss,(eps,amp),retain_graph=index<len(losses)-1)
+            assert tuple(g.device for g in pair)==(eps.device,amp.device)
+            derivatives.append([float(g.detach().cpu()) for g in pair])
+        values=np.array([float(loss.detach().cpu()) for loss in losses])
+        derivatives=np.asarray(derivatives)
+        assert np.isfinite(values).all() and np.isfinite(derivatives).all()
+        assert np.all(np.abs(values)>1e-12)
+        np.testing.assert_allclose(derivatives[:,1],2*values/.8,rtol=2e-11,atol=0.)
+        for leaf,copy in zip((eps,amp),copies):
+            assert leaf.requires_grad and cuda.equal(leaf.detach(),copy)
+        return result,values,derivatives
+
+    expected_grad,want_values,want_derivatives=differentiated(plain)
+    actual_grad,got_values,got_derivatives=differentiated(scheduled)
+    for got,want in zip(arrays(actual_grad),arrays(expected_grad)):parity(got,want)
+    np.testing.assert_allclose(got_values,want_values,rtol=5e-13,atol=0.)
+    np.testing.assert_allclose(got_derivatives,want_derivatives,rtol=1e-12,atol=0.)
+    for old,copy in zip(old_arrays,old_copies):assert cuda.equal(old,copy)
+    for leaf,copy in zip((epsilon,amplitude),input_copies):
+        assert leaf.requires_grad and leaf.grad is None and cuda.equal(leaf.detach(),copy)
