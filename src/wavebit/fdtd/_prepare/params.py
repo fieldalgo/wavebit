@@ -183,9 +183,9 @@ def lower(scene, plan, rt='numpy', device=None):
     # asks eagerly. Read the actual recurrence, not an upper bound on gamma.
     from wavebit.fdtd._prepare.shape_ranges import materials_traced
     if materials_traced(scene):
-        from wavebit.fdtd._kernel.poles import PoleTerm
+        from wavebit.fdtd._kernel.poles import CompactPoleTerm, PoleTerm
         for term in plan.terms:
-            if type(term) is not PoleTerm:
+            if type(term) not in (PoleTerm, CompactPoleTerm):
                 continue
             valid = rt.array(1., 'float64') > 0
             for kind in ('step_gain', 'hold', 'drive'):

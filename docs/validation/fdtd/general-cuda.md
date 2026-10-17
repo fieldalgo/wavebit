@@ -31,6 +31,7 @@ Targets:
 - `tests/fdtd/test_general_ade_units.py`
 - `tests/fdtd/test_general_ade_contract.py`
 - `tests/fdtd/test_general_ade_memory.py`
+- `tests/fdtd/test_general_ade_arithmetic.py`
 - `tests/fdtd/test_ade_cost_study.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
@@ -117,6 +118,16 @@ again. The admitted differentiable inputs are real scalar `InitialField.amplitud
 Initial spatial patterns are not differentiable inputs. This scope retains
 the existing material validity and pole-aware time-step checks; it is not a
 waiver of passivity, finiteness or stability restrictions.
+
+The compact storage route retains the ordinary scalar-recurrence arithmetic
+guards. A positive finite pole declaration can still produce an unrepresentable
+nonzero drive: concrete values are refused with `PoleArithmeticRefused`, while
+traced live values mark the result's `runtime_stability` false and propagate
+invalid fields rather than report them stable. Prepared reuse from valid to
+invalid and back to valid is covered for both Lorentz and Drude. The dedicated
+arithmetic regression adds eight CPU/device-free and two actual CUDA cases;
+38 existing mixed-arithmetic checks also passed. These checks preserve the
+arithmetic contract rather than expand the admitted material range.
 
 The existing startup sets the algorithmic polarization memories and carried
 polarization increment to zero. The first E update therefore has no carried
@@ -234,6 +245,12 @@ NumPy/JAX/Torch routes. These groups are separate; none implies full CI.
 
 #### Product cost measurements
 
+These six measurements were repeated after restoring the scalar-recurrence
+arithmetic guards for compact storage, because lowering is inside the measured
+public call. The table reports that final guarded source. Earlier attempts
+remain historical records; allocated/reserved peaks were unchanged. This
+follow-up does not establish a general speed advantage.
+
 The product study used Python 3.12.14, Torch 2.14.1+cu130, CUDA 13.0, NumPy
 2.5.4, Windows 11 and an RTX 4060 Ti (8585216000 device bytes), with one Torch
 CPU thread and float64. Each row is a fresh process, one warm-up and five
@@ -244,12 +261,12 @@ recurrence for every policy.
 
 | Grid | Block | Median seconds [min, max] | Peak allocated bytes | Peak reserved bytes |
 | --- | --- | --- | ---: | ---: |
-| 32³ | None | 0.5996247 [0.5644854, 0.6452413] | 139294720 | 186646528 |
-| 32³ | 8 | 0.9246021 [0.8720379, 0.9788882] | 81847296 | 109051904 |
-| 32³ | 32 | 0.9088761 [0.8831410, 0.9662563] | 53517312 | 71303168 |
-| 64³ | None | 0.6187804 [0.6039556, 0.6469672] | 1113685504 | 1239416832 |
-| 64³ | 8 | 0.8916072 [0.8579039, 0.9124741] | 654371328 | 736100352 |
-| 64³ | 32 | 0.8806111 [0.8426255, 0.8994670] | 427860480 | 484442112 |
+| 32³ | None | 0.6346065 [0.6136485, 0.6656123] | 139294720 | 186646528 |
+| 32³ | 8 | 0.9067716 [0.8781101, 0.9841063] | 81847296 | 109051904 |
+| 32³ | 32 | 0.9275602 [0.8787053, 0.9474104] | 53517312 | 71303168 |
+| 64³ | None | 0.6113849 [0.5887202, 0.6221247] | 1113685504 | 1239416832 |
+| 64³ | 8 | 0.8852429 [0.8678227, 0.9109478] | 654371328 | 736100352 |
+| 64³ | 32 | 0.8840796 [0.8349297, 0.9061474] | 427860480 | 484442112 |
 
 Timing includes fresh leaves/live-problem construction, public prepared
 execution (including its validation, lowering, adaptation and associated host
