@@ -610,3 +610,81 @@ def test_the_pin_resolves_a_part_in_a_billion_of_an_amplitude(golden):
     assert math.isclose(gaps['dft__box::z+__Eu'], 1e-9, rel_tol=1e-3), gaps['dft__box::z+__Eu']
     assert math.isclose(gaps['result__box__flux'], 2e-9, rel_tol=1e-3), gaps['result__box__flux']
     assert math.isclose(gaps['source__d__power'], 2e-9, rel_tol=1e-3), gaps['source__d__power']
+
+
+def _manufactured_dft_history(backend, components, complex_fields, scales=(1., 1.)):
+    """Stream unrelated E/H histories; the oracle is an offline cosine/sine sum.
+
+    This isolates quadrature from Maxwell stepping and end corrections. In
+    particular, a magnetic-only observation must use half-step sample times even
+    when no electric component is requested.
+    """
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    from wavebit.fdtd._kernel.masks import Slab
+    from wavebit.fdtd._kernel.observe import DFTRegion
+
+    rt = runtime(backend, device='cpu')
+    context = rt.jax.default_device(rt.device) if backend == 'jax' else nullcontext()
+    steps, dt = 7, .07
+    freqs = (.23, .71, 1.17)
+    n = np.arange(steps, dtype=float)[:, None, None, None, None]
+    spatial = (1 + np.arange(72).reshape(3, 2, 3, 4)) / 73.
+    e = (1 + .2 * n) * spatial + .03 * n ** 2
+    h = (2 - .15 * n) * spatial - .02 * n ** 2
+    if complex_fields:
+        e = e + 1j * (.1 - .3 * n) * spatial
+        h = h + 1j * (1 + .1 * n ** 2) * (1 - spatial)
+    parts = tuple((c, c[0], Slab(c='xyz'.index(c[1]), z=(0, 2), y=(1, 3), x=(1, 4)))
+                  for c in components)
+    region = DFTRegion(name='quadrature', monitor='quadrature', freqs=freqs,
+                       parts=parts, dt=dt)
+    expected = {}
+    for label, field, slab in parts:
+        # Batch matrix contraction differs from the observer's streaming order;
+        # use explicit sample timestamps, not its phase construction helper.
+        times = (np.arange(steps) + (1. if field == 'E' else .5)) * dt
+        angles = 2 * np.pi * np.asarray(freqs)[:, None] * times[None, :]
+        kernel = np.cos(angles) + 1j * np.sin(angles)
+        history = (e if field == 'E' else h)[(slice(None),) + slab.slices]
+        expected[label] = dt * np.einsum('fn,nzyx->fzyx', kernel, history)
+    with context:
+        params = {'dft': {region.name: rt.array(2 * np.pi * np.asarray(freqs), 'float64')}}
+        acc = region.init(SimpleNamespace(steps=steps), rt)
+        dtype = 'complex128' if complex_fields else 'float64'
+        E, H = rt.array(e, dtype) * scales[0], rt.array(h, dtype) * scales[1]
+        for index in range(steps):
+            acc = region.observe(acc, E[index], H[index], index, params, rt)
+    return acc, expected
+
+
+@pytest.mark.parametrize('backend', backends())
+@pytest.mark.parametrize('components', [('Ex', 'Ey'), ('Hx', 'Hz'), ('Ex', 'Hy')],
+                         ids=['electric-only', 'magnetic-only', 'mixed'])
+@pytest.mark.parametrize('complex_fields', [False, True], ids=['real', 'complex'])
+def test_dft_selected_fields_equal_offline_yee_time_quadrature(backend, components, complex_fields):
+    actual, expected = _manufactured_dft_history(backend, components, complex_fields)
+    for label, want in expected.items():
+        assert np.max(np.abs(want)) > .01
+        assert relative_gap(to_numpy(actual[label]), want) < TOL, (backend, label)
+
+
+@pytest.mark.parametrize('components', [('Ex', 'Ey'), ('Hx', 'Hz'), ('Ex', 'Hy')],
+                         ids=['electric-only', 'magnetic-only', 'mixed'])
+def test_dft_selected_fields_keep_phase_sensitive_torch_gradients(components):
+    torch = pytest.importorskip('torch')
+    scales = torch.tensor([1.2, .7], dtype=torch.float64, device='cpu', requires_grad=True)
+    actual, expected = _manufactured_dft_history('torch', components, True, scales)
+    # A squared magnitude could hide a uniform half-step phase error. This
+    # real linear functional reads both quadratures with different weights.
+    weights = np.asarray([.3 + .7j, -.2 + .4j, .8 - .5j])[:, None, None, None]
+    weight = torch.as_tensor(weights, dtype=torch.complex128, device='cpu')
+    loss = sum((weight * actual[label]).real.sum() for label in components)
+    gradient = torch.autograd.grad(loss, scales)[0].detach().numpy()
+    want = np.zeros(2)
+    for label, value in expected.items():
+        want[0 if label[0] == 'E' else 1] += np.real(weights * value).sum()
+    used = np.asarray([any(c[0] == field for c in components) for field in ('E', 'H')])
+    assert np.all(np.abs(want[used]) > .01)
+    np.testing.assert_array_equal(gradient[~used], np.zeros(np.count_nonzero(~used)))
+    assert relative_gap(gradient[used], want[used]) < TOL
