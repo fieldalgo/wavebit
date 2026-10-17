@@ -15,6 +15,7 @@ Targets:
 - `tests/fdtd/test_general_source_band_guard.py`
 - `tests/fdtd/test_general_source_resolution_guard.py`
 - `tests/fdtd/test_general_source_waveform_guard.py`
+- `tests/fdtd/test_general_cuda_initial_patterns.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -85,6 +86,15 @@ differentiable tensor patterns are not admitted. `InitialField.amplitude` is
 live and keeps its gradient through CPU-to-CUDA conversion; this distinction
 also applies to prepared reuse. The prepared contract does not advertise ranged
 geometry on CUDA.
+
+A callable is evaluated during each run, including reuse of the same callable.
+Its returned pattern must satisfy the same static host/non-carried restriction,
+including nested component values; callable identity alone does not certify its
+result. `check` and `prepare` do not execute these callbacks. Live initial
+amplitude remains supported. This CUDA restriction does not change CPU/JAX or
+legacy initial-pattern differentiation.
+The dedicated initial-pattern tests passed 33 new cases (16 CPU and 17 CUDA),
+including same-callable invalid-result refusal and subsequent valid recovery.
 
 `Dipole.current_moment` is a current moment in A·m for electric sources or V·m
 for equivalent magnetic sources. Its strength parameter is `current_moment`;
@@ -1497,6 +1507,7 @@ python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_source_band_guard.py -q
 python -m pytest tests/fdtd/test_general_source_resolution_guard.py -q
 python -m pytest tests/fdtd/test_general_source_waveform_guard.py -q
+python -m pytest tests/fdtd/test_general_cuda_initial_patterns.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
