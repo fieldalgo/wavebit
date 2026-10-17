@@ -117,6 +117,7 @@ def _cuda_scope(problem,numerics,execution):
         return
     from . import boundaries, geometry, monitors, sources
     from .numerics import PML
+    from wavebit._common.declarations import static_float
 
     def refuse(message,path):
         raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
@@ -129,12 +130,26 @@ def _cuda_scope(problem,numerics,execution):
         refuse('CUDA currently requires voxel discretisation','numerics.discretisation')
     if numerics.geometry_ranges:
         refuse('CUDA does not yet admit ranged geometry','numerics.geometry_ranges')
-    for axis in 'xyz':
-        for side in '-+':
-            face=problem.scene.boundaries.face(axis+side)
-            if type(face) not in (boundaries.Periodic,boundaries.Open,boundaries.PEC,boundaries.PMC):
-                refuse('CUDA currently supports Periodic, Open, PEC and PMC faces only',
-                       'scene.boundaries.'+axis+side)
+    faces=tuple((axis+side,problem.scene.boundaries.face(axis+side))
+                for axis in 'xyz' for side in '-+')
+    has_bloch=any(type(face) is boundaries.Bloch for _,face in faces)
+    for name,face in faces:
+        if type(face) not in (boundaries.Periodic,boundaries.Open,boundaries.PEC,
+                              boundaries.PMC,boundaries.Bloch):
+            refuse('CUDA currently supports Periodic, Open, PEC, PMC and static Bloch faces only',
+                   'scene.boundaries.'+name)
+        if type(face) is boundaries.Bloch:
+            for parameter in ('phase','k'):
+                value=getattr(face,parameter)
+                if value is not None:
+                    try:static_float('Bloch',parameter,value)
+                    except (TypeError,ValueError) as exc:
+                        raise IncompatibleProblemError(
+                            'CUDA Bloch phase and wavevector must be static scalars',
+                            code='static_input',path='scene.boundaries.'+name+'.'+parameter) from exc
+        if has_bloch and type(face) in (boundaries.PEC,boundaries.PMC):
+            refuse('CUDA Bloch currently supports Periodic or Open companion faces only',
+                   'scene.boundaries.'+name)
     for structure in problem.scene.structures:
         if type(structure.shape) is not geometry.Slab:
             refuse('CUDA currently supports cell-snapped Slab structures only',
@@ -148,6 +163,9 @@ def _cuda_scope(problem,numerics,execution):
         if type(source) not in (sources.PlaneWave, sources.Dipole):
             refuse('CUDA currently supports PlaneWave, fixed-center Dipole sources or initial fields only',
                    'sources.'+source.name)
+        if has_bloch and type(source) is sources.Dipole:
+            refuse('CUDA Bloch currently supports PlaneWave sources or initial fields only; '
+                   'complex Dipole source work is not qualified','sources.'+source.name)
     for monitor in problem.outputs.monitors:
         if type(monitor) not in (monitors.Record,monitors.Field,monitors.Flux):
             refuse('CUDA currently supports Record, Field and Flux monitors only',
