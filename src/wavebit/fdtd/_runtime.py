@@ -10,9 +10,9 @@ of them. What each primitive is on each backend was decided by measurement
     slab_add         np.add(view, v, out=view)     4-D index scatter-add            autograd.Function: add_ in place,
                                                    (never a slice add)              mark_dirty; backward slices g
     slab_mul         in place                      4-D index scatter-multiply       same Function pattern with mul_
-    cpml_stretch     four fused in-place ops on    d.at[slices].add -- a DUS,       the same four in place; no
-                     the slab view, one            never the scatter                scratch at all
-                     slab-shaped scratch
+    cpml_stretch     four fused in-place ops on    d.at[slices].add -- a DUS,       the same four without AD;
+                     the slab view, one            never the scatter                functional recurrence
+                     slab-shaped scratch                                            under autograd
     diff / update    out= into preallocated        functional                       functional (out of place)
                      buffers
     dft_add          multiply into a region        acc + phase * view               acc + phase * view
@@ -60,8 +60,10 @@ the scatters, which trade them for gather fusions) -- but the times do not follo
 (+21..+27 ms/step at N = 128 for every layout), so read that as the reason the slab layout
 does not get *worse* under reverse mode, not as a saving. **Under Torch autograd neither
 in-place writing applies unchanged**: a psi is read as well as written, so its
-``autograd.Function``'s backward is not the slab-add one, and that case is unmeasured. Until
-it is, a differentiated Torch run takes the out-of-place writing below and pays for it.
+``autograd.Function``'s backward is not the slab-add one. A guarded static-profile CUDA
+adjoint passed bounded derivative checks but showed overlapping time ranges and unchanged
+allocator peaks; see ``docs/validation/fdtd/general-cuda.md``. The differentiated Torch
+runtime therefore retains the functional writing below.
 
 **Why NumPy works in preallocated buffers.** A stand-in kernel that allocated a temporary
 per operation ran 40-50x slower than JAX's; the real kernel keeps H, E and the two curl
@@ -712,20 +714,18 @@ class TorchRuntime(_Functional):
         ``view.mul_(ik).add_(psi)``, 1.13x against 1.18x for the gathered form at 128^3 with
         six faces.
 
-        **Under autograd it is out of place instead, and that is a stated gap, not a
-        preference.** The stage-0 study settled that a Torch in-place *slab add* needs a
-        ``mark_dirty`` autograd Function whose backward slices the cotangent; a CPML psi is
-        read as well as written, so that Function's backward is a different one and it was
-        not measured. Writing in place without it would be wrong (autograd would see a
-        version-counter violation or, worse, differentiate the wrong graph); writing with an
-        unmeasured one would be a claim this package has no number for. So a differentiated
-        Torch run takes the functional form and pays a full-volume copy per stretch per step,
-        and measuring the Function is the first thing stage 1 owes stage 6.
+        Under autograd the recurrence remains functional. A CPML memory is read as well
+        as written, so the slab-add backward cannot be reused. A static-profile CUDA
+        adjoint was tested with ownership, transform and dtype guards, including higher
+        derivatives and checkpoint tails. Its final bounded measurements established no
+        consistent time or allocator benefit, so it was not adopted. The functional path
+        still pays a full-volume copy per live stretch; the validation record reports the
+        experiment and its limits without promising a general saving.
         """
         view = d[region.slices]
         if self._live(d, psi, b, a, ik):
             psi = b * psi + a * view
-            out = d.clone()                      # the full-volume copy the gap costs
+            out = d.clone()                      # functional ownership of the derivative
             out[region.slices] = view * ik + psi
             return out, psi
         psi.mul_(b).addcmul_(a, view)
