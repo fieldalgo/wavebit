@@ -4,7 +4,7 @@ Use rcwa.Problem or fdtd.Problem with the corresponding check/prepare/run
 lifecycle. Historical inputs require explicit migration; see wavebit.migration.
 Importing this package never enables a backend or changes global precision.
 """
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 from . import materials, rcwa, fdtd
 from .materials import (Material, MaterialResponse, ConductiveMaterial, DispersiveMaterial,
