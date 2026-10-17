@@ -44,7 +44,7 @@ def _source_read(app, docname, source):
         alternate = root / 'locales/ko/assets' / resolved
         if alternate.is_file():
             app.env.note_dependency(str(alternate))
-            return match.group(1) + posixpath.relpath(str(alternate.relative_to(root)), posixpath.dirname(docname) or '.')
+            return match.group(1) + posixpath.relpath(alternate.relative_to(root).as_posix(), posixpath.dirname(docname) or '.')
         return match.group(0)
     source[0] = re.sub(r'((?:`{3,}|:{3,})\{(?:figure|image)\}\s+)([^\s]+)', localized, source[0])
     source[0] = re.sub(r'(!\[[^\]]*\]\()([^\s)]+)', localized, source[0])
