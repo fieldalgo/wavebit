@@ -20,6 +20,9 @@ Targets:
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
 - `tests/fdtd/test_general_cuda_higher_order.py`
+- `tests/fdtd/_pulse_yee_reference.py`
+- `tests/fdtd/test_general_cuda_pulse_reference.py`
+- `tests/fdtd/test_general_cuda_pulse_higher_order.py`
 - `tests/fdtd/test_general_cuda_cpml_higher_order.py`
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
@@ -774,6 +777,91 @@ Hessian을 상대 `2e-12`, 절대 0으로 비교하며 혼합 미분의 양쪽 �
 임의의 기하, CPML, 다른 광원·재료 종류의 Hessian이나 `torch.func` 변환을
 검증하지 않습니다.
 
+## Gaussian pulse 파장·대역폭·위상·지연 Hessian
+
+이 검사는 기존 electric Ey Dipole 경로를 사용하며 런타임이나 입력 허용 규칙을
+바꾸지 않습니다. 주기적 8³ 격자는 dx 0.05 um, Courant 0.5, 상대 epsilon 2.25,
+mu 1.3, 전도도 600 S/m입니다. 고정된 비격자 중심 `(0.013,-0.021,0.007)` um와
+전류 모멘트 `I0=1.7e-16` A·m에 `bspline` 또는 `tent`를 사용합니다. 초기 장은
+0이고 17·41단계를 실행하며 CUDA 체크포인트 7의 나머지는 3·6단계입니다.
+
+`T=1 um/c0`, `k=sqrt(-2*log(1e-3))`, 무차원 좌표 `p=(l,b,phi,d)`에 대해
+물리 입력은 다음과 같습니다.
+
+```text
+wavelength = 2*l um
+frequency_sigma_hz = 0.08*b/T
+phase = phi radians
+delay = BASE_DELAY + T*d seconds, BASE_DELAY = -k*T/(2*pi*0.08).
+```
+
+지연 기준값은 고정입니다. 대역폭을 바꾸면 포락선 폭과 피크 시각
+`delay+k/(2*pi*frequency_sigma_hz)`가 함께 바뀌며 피크를 고정하도록
+재중심화하지 않습니다. 두 점은 `(1,1,0.4,0.12)`와 `(0.97,1.01,-0.2,0.16)`입니다.
+um·Hz·radian·second 단위의 물리 좌표 x는 `x=offset+S*p`,
+`S=diag(2,0.08/T,1,T)`이므로 `g_p=S*g_x`, `H_p=S*H_x*S`입니다. 물리 Hessian은
+각 원소를 두 좌표의 스케일로 나누어야 합니다. 파장을 m로 쓰면 첫 인자는 `2e-6`입니다.
+
+독립 기준해는 Gaussian 전류와 네 1차·열여섯 2차 미분을 해석적으로 씁니다.
+전기 전류 시각 `(n+0.5)*dt`에서 `u=t-delay-k/(2*pi*f_sigma)`,
+`v=2*pi*f_sigma*u`, `Q=-v²/2+i*(2*pi*c0*u/wavelength+phi)`이면
+`I=I0*Im(exp(Q))`입니다. 1·2차 forcing 미분은 `Q_i`와 `Q_i*Q_j+Q_ij`를
+포함합니다. 독립 cardinal cubic 또는 폭 두 셀의 tent stamp로 모멘트·중심을
+검사하고, 값 1개·1차 4개·대칭 2차 10개의 15 lane을 명시적 주기 인덱스
+Yee 갱신으로 전파합니다. SI 전류 계수는
+`-dt/(epsilon0*(epsilon+sigma*dt/(2*epsilon0))*dx³)`입니다.
+제품 waveform·stamp·curl·계수·AD helper는 기준해에 사용하지 않습니다.
+
+목적함수는 `mean((drive/I0)²)`와 가중 최종 E·Z0H 및 여섯 Record 제곱 평균의
+두 가지입니다. 가중치는 `(1,0.7,1.3,0.6,1.1,0.9)`, 성분 정규화는 `1/6`,
+Record 인자는 `1/4`, Record 시각 가중치는 `1+0.2*n/N`입니다. 값·네 기울기·
+완전한 4×4 Hessian과 양쪽 혼합 미분 순서에 상대 `2e-12`, 절대 0을 씁니다.
+장은 전체 배열 최대값으로, Record는 E/H별 그룹 최대값으로 정규화하므로
+구조적으로 0인 Hy도 0으로 나누지 않고 검사합니다. 순방향 오차는 `2e-12`,
+시각은 `2e-14`입니다.
+
+독립 기준해는 고유 14사례를 검증했습니다. 첫 secant 실행은 13통과·1실패였으며,
+정규화 좌표의 절대 간격 `2e-5`에서 혼합 Hessian 차분 오차 `3.96673119e-6`가
+`2e-6`을 넘었습니다. 간격을 절반으로 하면 절대 오차가 약 4배 줄어 중앙차분의
+`O(h²)` 절단오차와 일치했습니다. 최종 절대 간격 `1e-5`·`5e-6`은 같은
+`2e-6` 기준을 통과했고 최대 오차는 `9.91691679e-7`입니다. 목적값으로 정규화한
+최소 Hessian 원소는 `0.0793395795`로 기존 비자명성 하한 `1e-6`보다 큽니다.
+원실패를 보존했으며 직접 미분이나 secant 허용오차를 늘리지 않았습니다.
+일곱 forcing·stamp mutant 모두 `1e-4` 분리 하한을 통과했습니다.
+
+공개 검사는 CPU/CUDA plain 및 CUDA 체크포인트를 비교하며 같은 리프로
+점 0 → 점 1 → 점 0을 재사용합니다. 파장·위상 리프는 CPU에, 대역폭·지연
+리프는 실행 장치에 둡니다. 미분 소유권과 과거 출력·기울기·Hessian 텐서의
+불변성, 광원 일과 원래 값 복구를 검사합니다. 별도의 새 준비 um/nm 쌍은
+물리적 동등성을 검사합니다. 정적 cutoff·중심 변경, 비스칼라 band, 주기 수
+기반 실행 길이에서의 파장 변경은 stepping 전 거부하는지 확인합니다.
+**고유 32사례가 모두 통과**했습니다. 독립 기준해 14개, 공개 CPU 9개
+(solver·단위 5개와 실행 전 거부 4개), 실제 CUDA 9개(Hessian·재사용 8개와
+단위 쌍 1개)입니다. 공개 CPU는 3.39초·경고 8개, CUDA는 27.42초와
+traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 아래의
+해상도 검사 한계를 보존하며, 독립 측정한 거친 격자 오차를 뜻하지 않습니다.
+
+| 기록된 CUDA 비교 | 최대 상대·정규화 오차 | 기준 |
+| --- | ---: | ---: |
+| 주검사 8개의 순방향 장·Record·광원 drive | 2.72025560e-14 | 2e-12 |
+| 두 목적값 | 1.31006317e-14 | 2e-12 |
+| 네 기울기 | 6.06181771e-14 | 2e-12 |
+| 완전한 4×4 Hessian | 9.27036226e-14 | 2e-12 |
+
+미분 감사는 주 CUDA 검사 8개 각각의 세 방문·두 목적함수 기록을 독립적으로
+재계산했습니다. 별도 CUDA 단위 쌍은 assertion을 통과했지만 이 최대값에
+포함할 오차를 기록하지 않았습니다. 공개 CPU의 기록된 순방향 최대 오차는
+`2.72594056e-14`이며, CPU 미분 assertion도 통과했지만 별도 최대값은
+기록하지 않았습니다. 검증 전후 소스 해시는 변하지 않았습니다.
+
+이는 이산 forcing과 eager double-backward 검증이며 방사 정확도·연속체 수렴·
+임의 펄스 최적화·변환 지원 검증이 아닙니다. 두 기준점은 독립적으로 양의
+스펙트럼 하한과 매질 내 최단 cutoff-band 파장당 10셀 초과를 만족합니다.
+traced pulse band에는 `f0 > k*f_sigma`와 최단 파장 해상도를 보편적으로
+보장하는 런타임 검사가 없습니다. 파장·대역폭의 유한한 양수 guard와
+`runtime_stability=True`가 이 조건을 보증하지 않으므로 최적화 범위와
+독립 해상도 검사가 필요합니다.
+
 ## CPML 진폭/위상 2차 미분
 
 공개 `test_general_cuda_cpml_higher_order.py`는 여섯 Open 면, 4셀 PML을 둔 균일
@@ -1038,6 +1126,7 @@ python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
+python -m pytest tests/fdtd/test_general_cuda_pulse_reference.py tests/fdtd/test_general_cuda_pulse_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q

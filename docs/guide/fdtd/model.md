@@ -551,10 +551,16 @@ inside that box for every value it takes, the box must stay inside the domain an
 absorbing layers, its material must be an isotropic lossless `Material`, the reserved boxes of
 differentiated bodies must not overlap, and the scene may not use an initial field. A cell-snapped shape's geometry is never differentiable.
 
-Values a traced computation produces cannot be checked before the run, so the engine checks them
-during it: a time step past the stability bound, a non-positive permittivity, a medium sampled
-below 8 cells per wavelength, or a ranged body leaving its box turns the run's fields into NaN and
-sets `validity.checks["runtime_stability"]` to false, instead of returning a plausible number.
+Supported runtime guards check carried values such as the stability bound,
+positive material parameters and ranged-body limits; an invalid guarded value
+makes fields NaN and sets `validity.checks["runtime_stability"]` to false.
+This is not a universal replacement for host scientific checks. In particular,
+a traced pulse band may prevent the shortest-band-wavelength resolution check,
+and the runtime does not generally enforce `f0 > k*frequency_sigma_hz` for such
+a band. Positive finite pulse parameters and a true stability flag do not
+certify spectral or spatial resolution. Check the intended live parameter range
+independently. See the [bounded pulse Hessian qualification](../../validation/fdtd/general-cuda.md#gaussian-pulse-wavelength-bandwidth-phase-and-delay-hessians)
+for physical scaling and the fixed-delay/bandwidth dependence.
 A derivative of the discrete solver is not a statement about convergence; compare it with a
 finite difference and refine the forward solve as well. The [differentiation guide](fd-differentiation.md)
 covers the measurements, using the compatibility spelling of the same engine.
