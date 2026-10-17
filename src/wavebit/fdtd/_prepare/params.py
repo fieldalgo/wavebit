@@ -500,8 +500,10 @@ def _excitation_door_guard(scene, rt, guard):
 
     Constructors cannot read transformed leaves. Initial amplitudes and complex source
     amplitudes also need this check when concrete. Valid concrete inputs leave the incoming
-    guard untouched, including source-free recursive column scenes. This is a leaf-domain
-    check, not a bound on derived waveform arithmetic or the band's spectral cutoff.
+    guard untouched, including source-free recursive column scenes. A carried band also
+    retains the constructor's strict positive-carrier condition, with finite derived
+    frequency and cutoff width. This does not check spatial resolution or bound other
+    derived waveform arithmetic.
     """
     from wavebit._common.backend import carries_autodiff
     from wavebit._common.declarations import torch_carried
@@ -515,6 +517,18 @@ def _excitation_door_guard(scene, rt, guard):
         leaves.extend((getattr(source, name), False) for name in ('amplitude', 'phase', 'delay'))
         leaves.extend((getattr(source.band, name), True) for name in ('wavelength', 'df'))
     predicates = []
+    for source in sources:
+        band = source.band
+        if any(torch_carried(value) or carries_autodiff(value)
+               for value in (band.wavelength, band.df)):
+            # Decide whether a band is carried before reading either leaf on the host.
+            # Only the validity certificate is constant; lower_sources retains both
+            # physical leaves and their derivatives in the actual waveform.
+            frequency = 1.0 / rt.array(band.wavelength, 'float64')
+            cutoff_width = band.sigmas * rt.array(band.df, 'float64')
+            finite = rt.xp.logical_and(rt.xp.all(rt.xp.isfinite(frequency)),
+                                       rt.xp.all(rt.xp.isfinite(cutoff_width)))
+            predicates.append(rt.xp.logical_and(finite, rt.xp.all(frequency > cutoff_width)))
     for value, positive in leaves:
         # A concrete read of a forward dual can silently discard its tangent. Ask both
         # derivative and batching doors before any host conversion, even without reverse AD.

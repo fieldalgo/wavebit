@@ -12,6 +12,7 @@ Targets:
 - `src/wavebit/fdtd/_kernel/observe.py`
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
+- `tests/fdtd/test_general_source_band_guard.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -201,8 +202,9 @@ assertion도 통과했지만 개별 오차를 기록하지 않았으므로 내�
 
 유효한 concrete 광원 값은 들어온 안정성 계수를 바꾸지 않습니다. 초기
 패턴·광원·복소 장의 허용 범위를 넓히지 않습니다. 위 입력 값의 범위를
-검사하는 것이며, 유도한 파형 연산의 모든 오버플로나 traced Band의
-스펙트럼 cutoff 부등식을 검사하지는 않습니다. 수치·미분 검증 범위는
+검사하는 것이며 유도한 파형 연산의 모든 오버플로를 검사하지는 않습니다.
+아래의 별도 live Band cutoff guard가 스펙트럼 부등식을 추가하지만 동적 공간
+해상도 검사를 추가하지는 않습니다. 수치·미분 검증 범위는
 실제로 실행한 사례로 한정합니다.
 
 `test_general_source_finite.py`의 **새 77사례**가 통과했습니다. CPU 44사례와
@@ -221,6 +223,52 @@ phase·초기 진폭 리프를 제자리에서 갱신하며, 리프의 동일성
 미분 두 사례입니다. 기존 수치 기준을 그대로 유지했고 CUDA 실행의 격자·
 관측창 경고 46개도 남겼습니다. 이 결과는 제한된 회귀 검사이며 전체 CI나
 최적화 수렴 검증은 아닙니다.
+
+### Live Band carrier cutoff
+
+미분·변환 값을 담은 파장 또는 대역폭도 concrete 생성자의 엄격한 양의
+스펙트럼 하한 조건을 유지합니다. 물리 SI 단위로는
+`f0=c0/wavelength > k*frequency_sigma_hz`, `k=sqrt(-2*log(cutoff))`입니다.
+엔진의 정규화 Band 단위에서는 `f0=1/band.wavelength`와 `k*band.df`를
+검사합니다. 두 유도량 모두 유한해야 하며 cutoff에서의 등호는 실패합니다.
+기존 리프의 유한한 양수 검사도 계속 적용됩니다.
+
+이전에는 같은 live 파장·대역폭 리프를 주파수 0에 닿는 스펙트럼으로 바꾸면
+concrete 입력은 거부되는데도 유한한 장과 `runtime_stability=True`를 반환할
+수 있었습니다. 수정 전 CPU 1개와 실제 CUDA 2개에서 재현했습니다. 이제
+backend predicate가 잘못된 carried band의 장을 NaN으로 만들고 런타임
+유효성을 실패시킵니다. 같은 리프를 유효한 값으로 복원하면 과거 결과·리프
+소유권·기존 `.grad` 버퍼를 바꾸지 않고 원래 출력을 복구합니다.
+
+순방향·배치 Torch와 JAX 미분 값을 포함해, 두 스펙트럼 리프를 host에서
+읽기 전에 carried-band 분기를 선택합니다. 이 분기는 유효성 certificate만
+추가하며 실제 파형 lowering은 물리 리프와 미분을 유지합니다. 일반 concrete
+Band 처리는 유효한 입력의 기존 guard 동일성을 포함해 변하지 않습니다.
+phase만 carried인 경우 concrete band를 다시 검사하지 않습니다. 새 광원·
+재료·기하·변환 입력 허용을 추가하지 않습니다.
+
+`test_general_source_band_guard.py`의 **새 43사례: CPU 22개·CUDA 21개가
+통과**했습니다. 공개 복구 사례는 주기적 8³·17단계 Ey Dipole에서 같은
+파장·대역폭 리프를 사용하며 CUDA plain과 체크포인트 7을 검사합니다.
+helper 사례는 엄격한 경계값, 파장만 또는 대역폭만 carried인 경우, 혼합
+리프 장치, 두 스펙트럼 유도량의 오버플로, 이전 실패 유효성 보존, Torch/JAX
+미분·배치 certificate를 검사합니다. Helper 변환이 임의의 공개 solver 변환
+지원을 뜻하지 않습니다.
+
+**관련 98사례도 모두 통과**했습니다. CPU는 유한 excitation 44개·기존 광원
+검사 3개·펄스 Hessian 9개이며, CUDA는 유한 excitation 33개·펄스 Hessian
+9개입니다. 관련 CUDA 42개는 28.07초·경고 10개로 통과했습니다. 신규 43개와
+합쳐 고유 로컬 141사례이며 전체 CI나 FDTD GPU 전체 검증 완료를 뜻하지
+않습니다. 모든 수치·미분 허용오차는 그대로 유지했습니다. 주 CUDA 펄스
+검사 8개의 모든 기록 property 문자열이 guard 전 검증과 정확히 같아 기존
+순방향·목적값·기울기·Hessian 최대 오차도 유지됩니다. 아홉 번째 단위 쌍은
+계속 assertion 근거만 제공합니다. 실행 중 소스 사본과 전후 해시는 변하지
+않았습니다.
+
+이 guard는 동적인 최단 대역 파장의 공간 해상도 검사를 추가하거나 모든
+파형 중간 연산의 범위를 보장하지 않습니다. Carrier 조건과
+`runtime_stability=True`가 최적화의 전체 파라미터 범위에서 공간 해상도가
+충분함을 보증하지는 않습니다.
 
 ## 같은 리프의 SGD 재사용
 
@@ -857,10 +905,11 @@ traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 아
 이는 이산 forcing과 eager double-backward 검증이며 방사 정확도·연속체 수렴·
 임의 펄스 최적화·변환 지원 검증이 아닙니다. 두 기준점은 독립적으로 양의
 스펙트럼 하한과 매질 내 최단 cutoff-band 파장당 10셀 초과를 만족합니다.
-traced pulse band에는 `f0 > k*f_sigma`와 최단 파장 해상도를 보편적으로
-보장하는 런타임 검사가 없습니다. 파장·대역폭의 유한한 양수 guard와
-`runtime_stability=True`가 이 조건을 보증하지 않으므로 최적화 범위와
-독립 해상도 검사가 필요합니다.
+후속 [live Band cutoff guard](#live-band-carrier-cutoff)는 carried band의
+`f0`·`k*f_sigma`가 유한하고 엄격한 `f0 > k*f_sigma`를 만족하는지 검사합니다.
+최단 대역 파장의 공간 해상도 검사는 별개이며 `runtime_stability=True`가
+이를 보증하지 않습니다. 최적화 범위·독립 해상도 검사와 다른 파형 중간
+연산의 범위 제어는 여전히 필요합니다.
 
 ## CPML 진폭/위상 2차 미분
 
@@ -1123,6 +1172,7 @@ CPU 진폭과 CUDA 재료 리프는 사용자가 소유하며 변하지 않습�
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
+python -m pytest tests/fdtd/test_general_source_band_guard.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q

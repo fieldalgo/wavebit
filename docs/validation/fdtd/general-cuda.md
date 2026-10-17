@@ -12,6 +12,7 @@ Targets:
 - `src/wavebit/fdtd/_kernel/observe.py`
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
+- `tests/fdtd/test_general_source_band_guard.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -215,7 +216,8 @@ preparation. Earlier returned results must remain unchanged.
 Valid concrete excitation values leave the incoming stability guard unchanged.
 This does not expand initial-pattern, source or complex-field admission. The
 check covers the input domains above, not every overflow in derived waveform
-arithmetic or the traced Band spectral-cutoff inequality. Numerical and
+arithmetic. The separate live Band cutoff guard below adds the spectral
+inequality; it does not add dynamic spatial-resolution validation. Numerical and
 derivative qualification remains specific to the exercised cases.
 
 `test_general_source_finite.py` passed **77 new cases**: 44 CPU and 33 actual
@@ -236,6 +238,56 @@ and two conductivity/initial-amplitude derivative cases. Their original
 numerical budgets remain unchanged; the CUDA run retained 46 mesh/window
 warnings. These are bounded regressions, not full CI or optimizer convergence
 qualification.
+
+### Live Band carrier cutoff
+
+A carried wavelength or bandwidth now retains the concrete constructor's strict
+positive lower-frequency condition. In physical SI units this is
+`f0=c0/wavelength > k*frequency_sigma_hz`, where `k=sqrt(-2*log(cutoff))`.
+In the engine's normalized Band units the checked quantities are
+`f0=1/band.wavelength` and `k*band.df`. Both derived quantities must be finite;
+equality at the cutoff fails. The existing positive-finite leaf checks still
+apply.
+
+Previously, the same live wavelength/bandwidth leaves could move to a spectrum
+reaching zero frequency and return finite fields with `runtime_stability=True`,
+while the concrete twin was refused. This discrepancy was reproduced in one
+CPU and two actual CUDA cases before the fix. The backend predicate now marks
+that invalid carried band with NaN fields and failed runtime validity; restoring
+the valid leaf values recovers the original outputs without changing earlier
+results, leaf ownership or existing `.grad` buffers.
+
+The carried-band branch is selected before reading either spectral leaf on the
+host, including forward/batched Torch and JAX derivative values. It contributes
+only a validity certificate; waveform lowering retains the physical leaves and
+their derivatives. Ordinary concrete Band handling is unchanged, including the
+incoming guard's identity for valid concrete inputs. A carried phase alone does
+not recheck an otherwise concrete band. This introduces no new source, material,
+geometry or transform admission.
+
+`test_general_source_band_guard.py` passed **43 new cases: 22 CPU and 21 CUDA**.
+The public recovery cases use the same wavelength/bandwidth leaves with a
+periodic 8³, 17-step Ey Dipole; CUDA checks plain and checkpoint-7 execution.
+Helper cases exercise strict boundary values, wavelength-only/bandwidth-only
+carrying, mixed leaf devices, overflow of the two derived spectral quantities,
+preservation of prior failed validity, and Torch/JAX derivative and batching
+certificates. Helper transformations do not establish arbitrary transformed
+public solver support.
+
+All **98 related cases also passed**: CPU finite-excitation 44, legacy source
+checks three and pulse-Hessian nine; CUDA finite-excitation 33 and pulse-Hessian
+nine. The related CUDA run passed 42 cases in 28.07 s with ten warnings. Together
+with the 43 new cases this is 141 unique local cases, not full CI or complete
+FDTD GPU qualification. All numerical and derivative budgets remained unchanged.
+Every recorded property in the eight main CUDA pulse cases matched the pre-guard
+qualification strings exactly, preserving its reported forward/value/gradient/
+Hessian maxima; the ninth unit-pair case remains assertion-only evidence.
+Source snapshots and before/after hashes were unchanged during these runs.
+
+This guard does not add dynamic shortest-band-wavelength spatial-resolution
+validation or bound all intermediate waveform arithmetic. A passed carrier
+predicate and `runtime_stability=True` therefore do not certify that an
+optimization's entire parameter range is spatially resolved.
 
 ## Same-leaf SGD reuse
 
@@ -924,10 +976,11 @@ This is discrete forcing and eager double-backward validation, not radiation
 accuracy, continuum convergence, arbitrary pulse optimization or transform
 support. The two reference points independently satisfy a positive lower
 spectral edge and more than ten cells per shortest cutoff-band wavelength in
-the medium. Traced pulse bands do not have a universal runtime guarantee of
-`f0 > k*f_sigma` or that shortest-wavelength resolution check. Positive finite
-wavelength/bandwidth guards and `runtime_stability=True` do not certify those
-conditions; optimization bounds and independent resolution checks remain needed.
+the medium. The subsequent [live Band cutoff guard](#live-band-carrier-cutoff)
+enforces finite `f0` and `k*f_sigma` with strict `f0 > k*f_sigma` for carried
+bands. The shortest-band-wavelength spatial-resolution check remains separate:
+`runtime_stability=True` does not certify it. Optimization bounds and independent
+resolution checks remain needed, as do controls on other waveform intermediates.
 
 ## CPML amplitude/phase second derivatives
 
@@ -1206,6 +1259,7 @@ described in the [native setup](native-cuda.md#environment-and-reproduction).
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
+python -m pytest tests/fdtd/test_general_source_band_guard.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q

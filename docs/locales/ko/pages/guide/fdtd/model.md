@@ -522,11 +522,15 @@ FDTD 모델에서 시험한 주파수별 값과 미분을 보존합니다. float
 지원되는 런타임 guard는 안정 한계·양의 재료 파라미터·범위 지정 바디 한계처럼
 carried 값을 검사합니다. 검사 대상 값이 잘못되면 장을 NaN으로 만들고
 `validity.checks["runtime_stability"]`를 거짓으로 둡니다. 이는 모든 host 과학
-검사를 대체하지 않습니다. 특히 traced pulse band는 최단 대역 파장의 해상도
-검사를 막을 수 있으며, 런타임은 이런 band의 `f0 > k*frequency_sigma_hz`를
-일반적으로 강제하지 않습니다. 유한한 양수 펄스 값과 참인 안정성 플래그가
-스펙트럼·공간 해상도를 보증하지 않으므로 사용할 live 파라미터 범위를
-독립적으로 확인하세요. 물리 단위 스케일과 고정 지연·대역폭 의존성은
+검사를 대체하지 않습니다. Carried 파장 또는 대역폭은 이제 유한한 carrier
+주파수 `f0`와 cutoff 폭 `k*frequency_sigma_hz`, 엄격한
+`f0 > k*frequency_sigma_hz`를 검사합니다. SI 단위에서 `f0=c0/wavelength`,
+`k=sqrt(-2*log(cutoff))`입니다. 잘못된 carried band는 런타임 유효성을
+실패시키며 concrete 생성자 처리는 변하지 않습니다. Traced pulse band는
+여전히 최단 대역 파장의 공간 해상도 검사를 막을 수 있습니다. 참인 안정성
+플래그가 그 해상도나 모든 파형 중간 연산을 보증하지 않으므로 사용할 live
+파라미터 범위를 독립적으로 확인하세요.
+[Carrier cutoff 계약](../../validation/fdtd/general-cuda.md#live-band-carrier-cutoff)을 참고하세요. 물리 단위 스케일과 고정 지연·대역폭 의존성은
 [제한된 펄스 Hessian 검증](../../validation/fdtd/general-cuda.md#gaussian-pulse-파장대역폭위상지연-hessian)을 참고하세요. 이산 솔버의 미분은 수렴에 대한 진술이
 아닙니다. 유한 차분과 비교하고 순방향 계산도 함께 다듬으세요. [영문 미분 가이드](fd-differentiation.md)가
 같은 엔진의 호환(compat) 표기로 측정을 다룹니다.
