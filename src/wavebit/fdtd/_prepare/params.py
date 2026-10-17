@@ -180,6 +180,7 @@ def lower(scene, plan, rt='numpy', device=None):
     guard = _axis1d_guard(scene, rt, guard)
     guard = _material_door_guard(scene, rt, guard)
     guard = _excitation_door_guard(scene, rt, guard)
+    guard = _source_waveform_guard(scene, plan, params, rt, guard)
     # A carried pole may cross the same representability door check_stability
     # asks eagerly. Read the actual recurrence, not an upper bound on gamma.
     from wavebit.fdtd._prepare.shape_ranges import materials_traced
@@ -554,6 +555,84 @@ def _excitation_door_guard(scene, rt, guard):
     for predicate in predicates[1:]:
         ok = rt.xp.logical_and(ok, predicate)
     factor = rt.xp.where(ok, rt.array(1.0, 'float64'), rt.array(float('nan'), 'float64'))
+    return factor if guard is None else guard * factor
+
+
+def _waveform_endpoints_finite(plan, rows, source, rt):
+    """Certify every sampled argument using the waveform's exact operation order.
+
+    With positive dt, f0 and tau, the rounded affine time and carrier operations
+    are monotone. The largest absolute Gaussian argument is at an endpoint, so
+    its square is finite everywhere if both endpoint squares are finite. This
+    deliberately rejects an overflowing exponent even if its mathematical
+    exponential would round to zero; it does not modify the physical waveform.
+    """
+    xp = rt.xp
+    ok = xp.all(xp.isfinite(source['f0']) & (source['f0'] > 0))
+    for name in ('tau', 't0'):
+        ok = ok & xp.all(xp.isfinite(source[name]) & (source[name] > 0))
+    omega = (2.0 * math.pi) * source['f0']
+    ok = ok & xp.all(xp.isfinite(omega))
+    n = rt.array([0.0, float(plan.steps - 1)], 'float64')
+    for shift in rows:
+        s = (n + shift) * plan.dt - source['t0'] - source['delay']
+        ratio = s / source['tau']
+        square = ratio ** 2
+        exponent = -0.5 * square
+        angle = omega * s + source['phase']
+        for value in (s, ratio, square, exponent, angle):
+            ok = ok & xp.all(xp.isfinite(value))
+    return ok
+
+
+def _source_waveform_guard(scene, plan, params, rt, guard):
+    """Representability door for fixed-duration Gaussian waveform arguments.
+
+    This is a source-domain certificate, not a finite-field detector. Concrete
+    inputs are refused by name and valid ones preserve the incoming guard by
+    identity. Carried inputs are checked only on the execution backend; only
+    their certificate is constant, never the physical source parameters.
+    Decay keeps its existing contract and is not covered by this fixed-time door.
+    """
+    if plan.decay is not None:
+        return guard
+    from wavebit._common.backend import carries_autodiff
+    from wavebit._common.declarations import torch_carried
+
+    sources = {source.name: source for source in getattr(scene, 'sources', ()) or ()}
+    predicates = []
+    for term in plan.terms:
+        rows = getattr(term, 'rows', ())
+        if not rows:
+            continue
+        source = sources[term.name]
+        lowered = params['sources'][term.name]
+        valid = _waveform_endpoints_finite(plan, rows, lowered, rt)
+        values = (source.band.wavelength, source.band.df, source.phase, source.delay,
+                  *(lowered[name] for name in ('f0', 'tau', 't0', 'phase', 'delay')), valid)
+        # A closed-over concrete source can produce traced lowered constants under
+        # JAX jit. Classify both the original and actual backend arguments before
+        # reading a value. The physical leaves and waveform remain untouched.
+        if any(torch_carried(value) or carries_autodiff(value) for value in values):
+            predicates.append(valid)
+            continue
+        # This one scalar read per eager concrete source certifies the actual
+        # backend arithmetic, including its rounding at overflow boundaries.
+        # Valid inputs do not add a unit factor to the existing coefficients.
+        valid = rt.numpy(valid)
+        if not bool(valid):
+            from wavebit.errors import ValidationError
+            raise ValidationError(
+                'Gaussian waveform arguments must remain finite and its frequency, '
+                'width and offset must remain positive finite over the fixed run',
+                code='source_waveform_range', path=f'sources.{source.name}')
+    if not predicates:
+        return guard
+    ok = predicates[0]
+    for predicate in predicates[1:]:
+        ok = ok & predicate
+    factor = rt.constant(rt.xp.where(ok, rt.array(1.0, 'float64'),
+                                    rt.array(float('nan'), 'float64')))
     return factor if guard is None else guard * factor
 
 

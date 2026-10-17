@@ -14,6 +14,7 @@ Targets:
 - `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_source_band_guard.py`
 - `tests/fdtd/test_general_source_resolution_guard.py`
+- `tests/fdtd/test_general_source_waveform_guard.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -326,6 +327,87 @@ property 문자열이 원래 펄스 검증과 정확히 같아 보고한 순방�
 근거만 제공합니다. 수치 허용오차도 그대로입니다. 극점을 선언한 장면과
 다른 파형 중간 연산의 오버플로는 추가 certificate 범위 밖이며 독립적인
 물리 해상도 세분화는 여전히 필요합니다.
+
+## Fixed-time waveform representability
+
+유한한 광원 입력만으로 표본화한 Gaussian 파형의 표현 가능성을 보장할 수는
+없습니다. 원래 회귀 사례에서 정규화한 delay를 유한한 값 `1e308`로 바꾸면
+표본 drive가 비유한 값이 되고 전기장이 NaN이지만 `runtime_stability`는
+true로 남았습니다. CPU 한 사례와 CUDA 두 사례(plain, checkpoint-7)가
+이 공백을 재현했습니다. 원래 delay를 복원하면 같은 준비를 재사용할 수
+있었고, 이전에 소유권을 분리해 반환한 결과도 변하지 않았습니다.
+
+제한적 guard는 고정 시간 광원 연산을 확인합니다. Lowering한
+`tau`, `f0`, `t0`가 양수이면서 유한한지, 각 광원 표본 행의 양 끝에서 이동한
+시간·정규화한 시간·그 제곱·Gaussian 지수 `-0.5*(s/tau)**2`·carrier
+prefactor `omega=2*pi*f0`·phase `omega*s+phase`가 유한한지 검사합니다.
+실제 광원 행마다 `n=0`, `n=steps-1`을 사용하며 row shift는 전기 0.5,
+자기 0, column 1을 유지합니다. 커널의 연산 순서를 바꾸지 않습니다.
+양수인 고정 시간 간격에서는 끝점 경계로
+중간 표본의 유한성을 확인하므로 매 단계 검사나 전체 장 스캔은 필요하지
+않습니다. 두 경로 모두 NumPy로 연산을 재구성하지 않고 실제 lowering된
+backend 파라미터로 predicate를 계산합니다. 완전한 eager concrete 실행은
+광원마다 run당 backend boolean 하나를 읽습니다. 무효 선언은
+`source_waveform_range` 코드의 `ValidationError`를 발생시키고, 유효 선언은
+들어온 guard의 동일성을 유지합니다. CUDA에서는 광원마다 run당 한 번의
+스칼라 동기화가 필요하며, 시간 단계마다 동기화하는 것은 아닙니다.
+원래 입력·lowering된 파라미터·predicate 중 하나라도 미분 또는 변환 trace를
+가지면 host에서 읽지 않고 상수 1 또는 NaN 인자를 기존 런타임 certificate에
+합칩니다. 따라서 JIT에서 유도된 상수도 traced 인자 1을 사용할 수 있으며
+guard가 문자 그대로 `None`인 동일성까지 보장하지 않습니다. Carried 경로의
+시간 측정은 concrete 스칼라 동기화 비용을 측정한 것이 아닙니다.
+`test_general_source_waveform_guard.py`는 **새 36사례(CPU 19, CUDA 17)**를
+통과했습니다. CPU는 5.24초·경고 4건, CUDA는 2.97초·coarse-mesh 경고
+6건과 Torch JIT future warning 1건입니다. 양수·음수의 매우 큰 delay는
+이제 런타임 유효성을 실패시키고 NaN 장을 전달합니다. 같은 잎을 복원하면
+정확히 회복하며 이전 출력·잎의 동일성·기존 `.grad` 버퍼는 변하지 않습니다.
+Concrete 무효 값은 구조화된 거부를 받습니다. 개별 중간 연산 오버플로,
+마지막 표본, 전기·자기 row shift, backend `t0` 오버플로 경계의 인접값,
+유효 guard 동일성과 변경하지 않은 source-free·`Decay` 경로도 검사했습니다.
+Torch forward/reverse/batch와 JAX JIT/gradient/Hessian/batch 검사는 상수
+certificate에 한정되며 임의 변환을 적용한 전체 solver를 검증한 것은 아닙니다.
+
+관련 다섯 시험 파일은 **174사례**를 78.26초·경고 44건으로 통과했습니다.
+유한 여기 77, carrier cutoff 43, 공간 해상도 30, 펄스 고차 미분 18,
+projected pulse fitting 6사례입니다. 새 36사례와 합쳐 이번 변경의 검증은
+**중복 없는 210사례**이며 앞선 일부 재실행을 더하지 않았습니다. 보존한
+소스 사본과 현재 소스 해시도 일치했습니다. 제한된 로컬 검증이며 전체 CI는
+아닙니다.
+
+이는 Gaussian 식을 바꾸는 것이 아니라 표현 가능 범위를 제한하는 검사입니다.
+이상적인 envelope가 0이더라도 매우 큰 유한 펄스 선언은 거부될 수 있습니다.
+파형 연산·광원 및 장의 허용 범위를 바꾸거나 적응형 `Decay` 경로를 검증하지
+않습니다. `runtime_stability`가 true라는 것은 구현된 certificate를
+통과했다는 뜻이며, 모든 출력·중간값·미분값이 유한한지 전부 검사했다는 뜻은
+아닙니다.
+
+
+제한적 비용 비교는 같은 8³ bspline 펄스, plain scan, 17·41단계에서 warmup
+한 번 뒤 `torch.no_grad()` 아래 공개 `prepared.run`을 다섯 번 호출했습니다.
+Preparation과 계측기의 수치 검사는 시간 밖에, 공개 validation·lowering·adaptation은
+시간 안에 두었으며 CUDA는 시간 경계에서 동기화했습니다. CPU는 한 스레드입니다.
+변경 전 소스는 `76bdea9b`이며 guard 구현만 달라졌습니다. Concrete baseline의
+import는 보존한 변경 전 소스와 대조했습니다. 모든 표본 출력은 기존 독립 이산
+전진 계산 검사를 통과했습니다.
+
+| 입력 경로 | 장치 | 단계 | 변경 전 중앙값 [최소, 최대], ms | 변경 후 중앙값 [최소, 최대], ms |
+|---|---|---:|---:|---:|
+| carried | CPU | 17 | 10.8012 [10.0707, 12.7233] | 10.7788 [10.2527, 10.8481] |
+| carried | CPU | 41 | 18.3311 [18.1400, 19.1682] | 18.9597 [18.7516, 19.0930] |
+| carried | CUDA | 17 | 25.0447 [24.4767, 27.9889] | 26.5309 [25.8810, 42.3962] |
+| carried | CUDA | 41 | 47.8544 [47.5453, 49.8249] | 54.0605 [49.8878, 64.7790] |
+| concrete | CPU | 17 | 9.5441 [9.4136, 11.0372] | 10.6422 [10.0567, 11.2492] |
+| concrete | CPU | 41 | 17.6719 [17.3286, 17.7771] | 19.2064 [18.7677, 22.8558] |
+| concrete | CUDA | 17 | 22.8888 [21.9422, 32.5485] | 31.4461 [23.7319, 34.6008] |
+| concrete | CUDA | 41 | 47.8459 [44.3152, 59.2735] | 52.3676 [48.2676, 62.7320] |
+
+같은 순서의 다섯 호출이며 역순·무작위 반복이 아니므로 일반적인 overhead 상한은
+아닙니다. Carried CUDA 41단계의 두 범위는 겹치지 않았고 다른 CUDA 쌍은
+겹쳤습니다. 속도 향상을 주장하지 않습니다. 시간 측정 중 CUDA peak allocated는
+두 단계 수 모두 carried 140,288 bytes, concrete 137,216 bytes로 변하지
+않았습니다. CPU 메모리는 측정하지 않았습니다. Concrete 비교에는 backend 스칼라
+동기화가 포함되며 carried 비교만으로 그 비용을 판단할 수 없습니다. No-grad
+근거이며 미분 비용이나 전체 장치 메모리 상한을 보장하지 않습니다.
 
 ## 같은 리프의 SGD 재사용
 
@@ -1308,6 +1390,7 @@ python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_source_band_guard.py -q
 python -m pytest tests/fdtd/test_general_source_resolution_guard.py -q
+python -m pytest tests/fdtd/test_general_source_waveform_guard.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q

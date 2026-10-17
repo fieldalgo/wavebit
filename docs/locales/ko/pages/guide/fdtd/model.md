@@ -461,6 +461,15 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 거절하면 거짓, 아래 참고), 그리고 `Diffraction` 모니터별 `source_reference`입니다.
 `result.provenance`는 백엔드, 단위, `dt_seconds`, 실제 스텝 수, 모든 도메인을 기록합니다.
 
+`runtime_stability`가 true이면 구현된 런타임 certificate를 통과했다는
+뜻입니다. 모든 출력이나 미분값의 유한성을 스캔한 결과는 아닙니다.
+고정 시간 광원은 각 광원 행의 끝점에서 Gaussian 중간 연산의 표현 가능성도
+검사합니다. Concrete 무효 값은 `source_waveform_range`로 거부하고 carried
+무효 값은 런타임 유효성을 실패시킵니다. 보수적인 범위 제한이므로 이상적인
+피복이 0이더라도 매우 큰 유한 펄스는 거부될 수 있습니다. 적응형 `Decay`
+경로는 변경하지 않습니다.
+[파형 표현 가능 범위 계약](../../validation/fdtd/general-cuda.md#fixed-time-waveform-representability)을 참고하세요.
+
 `admitted`는 정적 선언의 허용 여부이며, 실패한 `runtime_stability` 판정을 덮어쓰지
 않습니다. 미분하는 실행에서 `diagnostics['grazing']`는 host에서 지수를 조사할 수 없는
 traced 물리 매질을 `skipped`로 표시합니다. 준비할 때 사용한 구체적인 재료 seed의
