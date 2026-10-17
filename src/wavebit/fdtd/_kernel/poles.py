@@ -40,7 +40,7 @@ structure, which is every scene a packet gate builds.
 """
 import dataclasses
 
-__all__ = ['PoleTerm']
+__all__ = ['PoleTerm', 'CompactPoleTerm']
 
 
 @dataclasses.dataclass(frozen=True)
@@ -100,3 +100,45 @@ class PoleTerm:
             previous.append(mem['P'][k])
             delta.append(nxt - mem['P'][k])
         return {'P': tuple(P), 'previous': tuple(previous), 'delta': tuple(delta)}
+
+
+class CompactPoleTerm(PoleTerm):
+    """Two histories for bounded homogeneous Torch CUDA plans.
+
+    The base schema stays unchanged for CPU, source columns, Decay and films.
+    Both operands of the increment already survive each step: P - previous
+    equals the original delta. Reconstruct once before component slicing,
+    preserving recurrence association and scale/accumulation order. The
+    distinct term type participates in the static plan hash and prepared reuse.
+    """
+
+    memory_arrays_per_pole = 2
+
+    def init_mem(self, plan, rt):
+        zeros = [rt.zeros((3,) + self.region.shape, plan.dtype)
+                 for _ in range(2 * self.n_poles)]
+        return {'P': tuple(zeros[:self.n_poles]),
+                'previous': tuple(zeros[self.n_poles:])}
+
+    def before_E(self, cH, H, mem, n, params, rt):
+        delta = tuple(new - old for new, old in zip(mem['P'], mem['previous']))
+        scale = -params['poles'][self.name]['dx_over_dt']
+        for c, slab in enumerate(self.slabs):
+            total = None
+            for value in delta:
+                total = value[c] if total is None else total + value[c]
+            cH = rt.slab_add(cH, slab, scale * total)
+        return cH
+
+    def advance(self, mem, E, H, n, params, rt):
+        coefficients = params['poles'][self.name]
+        drive_field = E[(slice(None),) + self.region.slices]
+        P, previous = [], []
+        for k in range(self.n_poles):
+            step_gain = coefficients['step_gain'][k]
+            hold = coefficients['hold'][k]
+            drive = coefficients['drive'][k]
+            nxt = step_gain * mem['P'][k] - hold * mem['previous'][k] + drive * drive_field
+            P.append(nxt)
+            previous.append(mem['P'][k])
+        return {'P': tuple(P), 'previous': tuple(previous)}

@@ -3,6 +3,7 @@
 | Entry | Question it answers |
 | --- | --- |
 | `checkpoint_cost.py` | How do opt-in checkpoint blocks change reverse-call time and allocator peaks for a bounded general-scene conductor with an exact SI recurrence? |
+| `ade_cost.py` | What allocator peaks and reverse-call times does the bounded homogeneous Lorentz CUDA route produce, and how do they differ from its logical state payload? |
 | `monitor_cost.py` | How much dispatch and device work does a bounded no-grad prepared run with two Ey Field and two Flux monitors perform? |
 
 ## Checkpoint cost
@@ -105,3 +106,65 @@ the disabled-gradient forward path. Allocated peak fell from 7394304 to
 time ranges overlapped. This is a forward-only result for the measured fixture,
 not a reverse-mode saving or an unconditional speedup. The policy is still
 reported and applies to later gradient-enabled prepared reuse.
+
+## Homogeneous ADE cost
+
+`ade_cost.py` uses the ordinary public preparation/execution path for one
+full-grid Lorentz material in a six-periodic-face box. It has no alternate
+runtime context or baseline/candidate switch. CUDA selects the compact pole
+state; the optional CPU instrument check retains the ordinary pole state.
+The fixed fixture has 163 steps, double precision, uniform initial Ey, one
+Record and final fields. It differentiates the initial amplitude and Lorentz
+strength. Plain execution omits `--checkpoint-steps`; 8 and 32 each leave a
+three-step tail.
+
+Set `ADE_RECORDS` to a writable directory outside the checkout, then run each
+configuration in a fresh process and a new output directory:
+
+```sh
+python studies/fdtd/general_cuda/ade_cost.py --size 32 --checkpoint-steps 8 --output-dir "$ADE_RECORDS/ade-32-k8"
+python studies/fdtd/general_cuda/ade_cost.py --size 64 --checkpoint-steps 8 --forecast-from "$ADE_RECORDS/ade-32-k8/attempt.json" --output-dir "$ADE_RECORDS/ade-64-k8"
+python studies/fdtd/general_cuda/ade_cost.py --device cpu --size 8 --output-dir "$ADE_RECORDS/ade-cpu-check"
+```
+
+Repeat the size-32 then size-64 pair with block 32 or with no block argument
+for the other policies. Size 64 requires an authentic passed size-32 receipt
+with the same policy, fixture, source/script hashes, product revision and
+recorded environment. The maximum reserved peak is scaled by eightfold volume
+and a 1.5 margin. The study refuses a forecast above 4 GiB or free device memory
+below forecast plus 1 GiB, both before construction and before warm-up. This is
+a budget estimate, not a memory reservation or an out-of-memory guarantee.
+
+Each process performs one warm-up and five synchronized measurements. One timed
+interval includes fresh leaf and live-problem construction, `prepared.run`
+(including live validation, lowering and adaptation), the squared-final-E
+objective and `autograd.grad`. Initial preparation, instrument numerical
+checks/output host copies, allocator queries and cleanup are outside timing.
+The public run's own validation/adaptation host work remains included. The allocator cache
+is released after warm-up and after all repetitions, but retained between
+repetitions. Returned tensors are released before the next baseline.
+
+Every repetition checks the full Record against independent damped roots and
+a scalar recurrence, and the objective plus both derivatives against a
+four-state matrix and its Frechet derivative. The Record budget is `1e-11`,
+absolute recurrence residual is below `1e-12`, and objective/gradient relative
+budget is `2e-12` with zero absolute tolerance. A separate untimed lifecycle
+records retained memory after forward and backward; two further runs check
+old-output ownership. These allocator peaks are distinct from timed peaks.
+The attempt also verifies actual pole `init_mem` bytes against the logical
+report. Logical E/H-plus-pole state is 96 bytes/cell for the compact CUDA term,
+versus 120 for the ordinary CPU term; neither includes the retained autograd
+graph, observations, temporary arrays, allocator reserve or driver memory.
+
+Attempts, source integrity, raw times, baselines, absolute/incremental peaks,
+retained allocations and cleanup are recorded even when a check fails. Add
+`--profile` only in a separate process/output directory: it performs a warm-up
+and one profiled call, with zero unprofiled timing samples. Operator JSON and
+a Chrome trace are instrumentation evidence, not throughput measurements.
+The [validation record](../../../docs/validation/fdtd/general-cuda.md)
+separates historical state-reduction evidence from current product measurements.
+
+The current six-row 32³/64³ production measurement is recorded in the validation
+page. All checks passed, and allocated/reserved peaks matched the earlier
+compact-state research measurements. Those historical timing comparisons had
+overlapping ranges; the product table does not establish a general speedup.
