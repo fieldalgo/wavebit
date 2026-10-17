@@ -25,6 +25,9 @@ Targets:
 - `tests/fdtd/_pulse_yee_reference.py`
 - `tests/fdtd/test_general_cuda_pulse_reference.py`
 - `tests/fdtd/test_general_cuda_pulse_higher_order.py`
+- `tests/fdtd/_pulse_fit_reference.py`
+- `tests/fdtd/test_pulse_fit_reference.py`
+- `tests/fdtd/test_general_cuda_pulse_optimizer.py`
 - `tests/fdtd/test_general_cuda_cpml_higher_order.py`
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
@@ -966,6 +969,81 @@ traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 hos
 재료에 극점이 없을 때 현재 값의 기존 하한을 검사합니다. 극점이 있으면 이전
 해상도 경로를 유지합니다. 어느 predicate도 연속체 정확도나 최적화 전체 범위를
 보증하지 않으므로 독립 세분화와 다른 파형 중간 연산의 범위 제어가 필요합니다.
+
+## 네 좌표의 projected pulse fitting
+
+이 회귀 검증은 기존 electric Ey Dipole 경로를 대상으로 하며 runtime이나
+admission 규칙을 바꾸지 않습니다. 앞의 독립 15-lane 펄스 기준해에 `bspline`
+stamp, 주기 8³ 격자, 41단계와 고정 매질을 사용합니다. 정규화 목표는
+`p*=(0.985,1.005,0.1,0.14)`, 두 시작점은 `(1,1,0.4,0.12)`와
+`(0.97,1.01,-0.2,0.16)`입니다. 파장·대역폭·위상·지연은 앞서 설명한 물리
+좌표 변환과 고정 지연 기준값을 유지합니다.
+
+F는 최종 E·Z0H, R은 H에 Z0를 곱한 여섯 Record입니다. 성분 가중치는
+`(1,0.7,1.3,0.6,1.1,0.9)`, Record 시각 가중치는 `1+0.2*n/41`이며
+잔차 목적함수는 다음과 같습니다.
+
+```text
+C = mean(w_R * R_target**2) + 0.25*mean(w_F * F_target**2)
+L(p) = [mean(w_R * (R(p)-R_target)**2)
+        + 0.25*mean(w_F * (F(p)-F_target)**2)] / C.
+```
+
+목표와 잔차 값·기울기·전체 Hessian은 독립 SI 기준해에서 구하며 잔차와
+2차 미분의 곱 항도 포함합니다. HVP 방향은 `(1,-0.5,0.25,0.75)`입니다.
+잔차가 0인 목표에서 Gauss–Newton Hessian을 G라 두고
+`D=diag(1/diag(G))`, `eta=0.1/lambda_max(sqrt(D)*G*sqrt(D))`로 정합니다.
+이 값들은 trajectory 전에 고정되며 좌표별 SGD 학습률은 `eta*D_ii`입니다.
+
+열두 번의 각 갱신에서 먼저 `q=p-eta*D*g`를 제안한 다음 q를 고정 정규화
+box `[0.94,1.04] × [0.97,1.04] × [-0.5,0.7] × [0.08,0.2]`에 성분별로
+투영합니다. optimizer는 `foreach=False`와 `zero_grad(set_to_none=True)`를
+사용합니다. 투영은 autograd 밖에서 수행합니다. 미분 비교 대상은 각 평가점의
+매끄러운 잔차이며, 비매끄러운 투영이나 전체 최적화 mapping은 아닙니다.
+
+원래 비제약 사전 실행은 두 번째 seed의 두 번째 제안에서 파장 좌표가 약
+`0.92887`로 `0.94`보다 작아져 box를 벗어났습니다. 이는 trajectory 정의역
+실패이며 미분 불일치가 아닙니다. projected 규약은 그 검증 전에 별도로
+명시했고, 원시도를 보존하며 미분 허용오차를 늘리지 않았습니다.
+
+**새 고유 14사례가 모두 통과**했습니다. 독립 기준해 control 8개, 공개 CPU
+plain trajectory 2개, 실제 CUDA trajectory 4개입니다. CUDA는 두 seed 각각
+plain 또는 체크포인트 7을 사용하며 tail은 6입니다. 공개 CPU 실행은
+9.76초·경고 4개, CUDA는 34.71초·경고 4개로 통과했습니다. 이는 테스트 실행
+시간이며 성능 측정값이 아닙니다. 검증 전후 소스와 기존 미분 기준은 유지했습니다.
+
+파장·위상은 caller CPU에, 대역폭·지연은 실행 장치에 둡니다. 각 갱신에서
+raw SGD 제안과 투영한 점을 독립 trajectory와 비교하고, 실제 local point의
+잔차 값·기울기·HVP도 검사합니다. 상대 허용오차는 `2e-12`, 절대 허용오차는
+0입니다. 같은 리프와 과거 detached 출력을 유지하며 `.grad`를 비우고, 다음
+반복 전에 live 결과·미분 graph의 weak reference가 모두 해제되었는지 검사합니다.
+
+독립 감사에서 여섯 trajectory와 72개 갱신을 재계산했습니다. 최대 상대오차는
+목적값 `1.55049897e-13`, 기울기 `1.78910054e-13`, HVP `5.13582612e-14`이며,
+기록된 순방향 정규화 최대 오차는 `1.04404066e-14`입니다.
+
+| Seed | 시작 목적값 | 12번 갱신 후 목적값 | 투영이 적용된 갱신 수 |
+| --- | ---: | ---: | ---: |
+| 0 | 0.122965706571319 | 0.021001548655822 | 0 |
+| 1 | 0.151257104004487 | 0.011733149330523 | 11 |
+
+두 번째 trajectory는 파장 좌표 경계 `l=0.94`에서 끝납니다. 잔차 감소는 목표
+좌표의 유일 복원을 뜻하지 않습니다. CUDA 네 사례 모두 출력 한 묶음을 보유한
+열두 번의 갱신 후 검사에서 allocated 60,416바이트를 기록했습니다. 그 출력을
+해제하면 목표 텐서와 caller 리프가 남아 있는 persistent baseline으로 복귀했으며,
+전체 allocation이 0이 된 것은 아닙니다. 이 값들은 live storage 검사이며
+peak-memory 측정이나 체크포인트 시간·메모리 이득의 근거가 아닙니다.
+범위는 이 이산 fitting 회귀 검증이며 보편적 수렴·연속체 역문제 정확도·공개
+optimizer API를 뜻하지 않습니다.
+
+검증된 환경에서 독립 control과 공개 여섯 trajectory를 재현할 수 있습니다.
+실제 CUDA 장치가 없으면 CUDA 사례는 skip됩니다. 공개 CPU만 선택하려면
+`-k cpu_plain`, CUDA만 선택하려면 `-k 'gpu_plain or gpu_k7'`를 사용합니다.
+
+```sh
+python -m pytest tests/fdtd/test_pulse_fit_reference.py -q
+python -m pytest tests/fdtd/test_general_cuda_pulse_optimizer.py -q
+```
 
 ## CPML 진폭/위상 2차 미분
 
