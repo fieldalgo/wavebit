@@ -319,17 +319,23 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                 values.append(xp.sum(weights_e*xp.where(active, density, 0.))*spacing[1]*spacing[2])
             return xp.stack(values) if values else material_zero
 
+    # These live Bloch factors are constant over the trajectory. Keep their
+    # graph, but avoid repeating scalar indexing and inversion in every curl.
+    forward_factors = tuple(factors[axis] for axis in range(3))
+    backward_factors = tuple(1/factor for factor in forward_factors)
+
     def shifted(v, axis, forward, factor):
         interior = [slice(None)]*v.ndim
         edge = [slice(None)]*v.ndim
         interior[axis] = slice(1, None) if forward else slice(None, -1)
         edge[axis] = slice(0, 1) if forward else slice(-1, None)
-        wrapped = v[tuple(edge)]*(factor if forward else 1/factor)
+        wrapped = v[tuple(edge)]*factor
         pieces = (v[tuple(interior)], wrapped) if forward else (wrapped, v[tuple(interior)])
         return xp.concat(pieces, axis=axis)
 
     def derivative(v, axis, forward):
-        neighbor = shifted(v, axis, forward, factors[axis])
+        neighbor = shifted(v, axis, forward,
+                           (forward_factors if forward else backward_factors)[axis])
         denominator = ((dz_forward if forward else dz_backward)
                        if nonuniform and axis == 0 else float(spacing[axis]))
         return (neighbor-v if forward else v-neighbor)/denominator
@@ -373,13 +379,13 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         for c, (zh, yh, xh) in enumerate(offsets):
             face = v[c, iz]
             if zh:
-                previous = v[c, (iz-1)%shape[1]]*xp.where(iz == 0, 1/factors[0], 1)[:, None, None]
+                previous = v[c, (iz-1)%shape[1]]*xp.where(iz == 0, backward_factors[0], 1)[:, None, None]
                 weight = plane_weight if nonuniform else .5
                 face = weight*face+(1-weight)*previous
             if yh:
-                face = .5*(face+shifted(face, 1, False, factors[1]))
+                face = .5*(face+shifted(face, 1, False, backward_factors[1]))
             if xh:
-                face = .5*(face+shifted(face, 2, False, factors[2]))
+                face = .5*(face+shifted(face, 2, False, backward_factors[2]))
             values.append(face)
         return xp.stack(values, axis=1)
 

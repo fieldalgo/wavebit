@@ -100,6 +100,31 @@ def test_a_shared_program_returns_the_bytes_of_a_cold_compile():
     assert shared[0][0].tobytes() != shared[1][0].tobytes()
 
 
+def test_changed_bloch_factors_remain_live_in_a_shared_scan_program():
+    """Hoisted forward/inverse phases are this call's constants, never cached values."""
+    phases = ((.1, -.2, .3), (.4, .15, -.25))
+
+    def run(phase):
+        out = _legacy_wavebit_fdtd_grid(np.full((16, 2, 2), 2.),
+            spacing=(1.,)*3, dt=.2, steps=23, electric=E0,
+            wavelengths=[20.], monitor_z=[0, 3], bloch_phase=np.array(phase),
+            checkpoint_steps=7, backend='jax')
+        return [np.asarray(out[key]) for key in ('E', 'H', 'electric_spectrum', 'magnetic_spectrum')]
+
+    time_domain._SCAN_PROGRAMS.clear()
+    first = run(phases[0])
+    programs = set(time_domain._SCAN_PROGRAMS)
+    assert programs
+    shared = run(phases[1])
+    assert set(time_domain._SCAN_PROGRAMS) == programs
+    assert first[0].tobytes() != shared[0].tobytes()
+    time_domain._SCAN_PROGRAMS.clear()
+    cold = run(phases[1])
+    for hot, fresh in zip(shared, cold):
+        assert (hot.dtype, hot.shape) == (fresh.dtype, fresh.shape)
+        assert hot.tobytes() == fresh.tobytes()
+
+
 def _inner_jit_scan(c):
     """An eager scan whose body calls an inner ``jax.jit`` that closes over the array ``c``."""
     import jax.numpy as jnp
