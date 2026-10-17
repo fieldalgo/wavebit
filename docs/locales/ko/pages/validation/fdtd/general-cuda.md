@@ -13,6 +13,7 @@ Targets:
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_source_band_guard.py`
+- `tests/fdtd/test_general_source_resolution_guard.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -203,8 +204,8 @@ assertion도 통과했지만 개별 오차를 기록하지 않았으므로 내�
 유효한 concrete 광원 값은 들어온 안정성 계수를 바꾸지 않습니다. 초기
 패턴·광원·복소 장의 허용 범위를 넓히지 않습니다. 위 입력 값의 범위를
 검사하는 것이며 유도한 파형 연산의 모든 오버플로를 검사하지는 않습니다.
-아래의 별도 live Band cutoff guard가 스펙트럼 부등식을 추가하지만 동적 공간
-해상도 검사를 추가하지는 않습니다. 수치·미분 검증 범위는
+아래의 별도 live Band cutoff guard는 스펙트럼 부등식을, 후속 pole-free
+resolution guard는 별도의 공간 certificate를 추가합니다. 수치·미분 검증 범위는
 실제로 실행한 사례로 한정합니다.
 
 `test_general_source_finite.py`의 **새 77사례**가 통과했습니다. CPU 44사례와
@@ -265,10 +266,63 @@ helper 사례는 엄격한 경계값, 파장만 또는 대역폭만 carried인 �
 계속 assertion 근거만 제공합니다. 실행 중 소스 사본과 전후 해시는 변하지
 않았습니다.
 
-이 guard는 동적인 최단 대역 파장의 공간 해상도 검사를 추가하거나 모든
-파형 중간 연산의 범위를 보장하지 않습니다. Carrier 조건과
-`runtime_stability=True`가 최적화의 전체 파라미터 범위에서 공간 해상도가
-충분함을 보증하지는 않습니다.
+Carrier guard만으로 공간 해상도나 모든 파형 중간 연산의 범위를 보장하지
+않습니다. 아래의 후속 pole-free certificate는 현재 값에서 기존 공간 하한을
+검사합니다. 어느 guard도 최적화의 전체 파라미터 범위나 연속체 정확도를
+보증하지 않습니다.
+
+### Live Band pole-free spatial resolution
+
+파장 또는 대역폭이 미분 값을 담고 **선언된 모든 재료에 극점이 없으면**,
+backend certificate가 실행마다 기존 광원·보고서의 공간 하한을 검사합니다.
+정규화 Band 단위에서
+`lambda_min = min_sources(1 / (1/lambda + k*df))`를 계산하며 concrete인 다른
+광원도 포함합니다. Concrete 재료를 포함한 배경과 모든 구조를 검사하고,
+최단 파장은 유한한 양수여야 합니다. 기존 굴절률 규칙은
+`abs(epsilon*mu)`가 가장 큰 성분(동률이면 첫 성분)의 수동 제곱근을
+선택합니다. 파동 규칙은 **매질 내 파장당 8셀**에서 등호를 허용합니다.
+기존 금속 광원·보고서의 skin-depth 규칙과 정적 Diffraction 파장의 파동
+규칙은 구분해서 유지합니다. 전도도는 기존 conductive-film descriptor가
+성립할 때만 이 certificate에 들어가며, 일반 전도도 해상도 규칙이나 필름
+허용 범위를 추가하지 않습니다.
+
+Certificate만 detach하며 실제 광원·재료 리프와 파형 미분은 유지합니다.
+모두 concrete인 Band 처리는 변하지 않습니다. **선언된 재료 하나라도
+극점이 있으면**, 세기가 0인 비활성 극점을 포함해 기존 live-material 검사
+등 이전 해상도 경로 전체를 유지합니다. 그 장면의 동적 Band 해상도를 새로
+보증하지 않습니다. 광원·매질·기하·관측·변환 허용 범위를 넓히지 않습니다.
+Host의 `CoarseMeshWarning`은 계획 단계에서 traced 최단 파장을 읽지 못했다고
+계속 알릴 수 있습니다. 이 host 보고서 한계와 제한된 런타임 certificate는
+별개이며, 경고가 측정된 거친 격자 오차를 뜻하지 않습니다. 8셀 하한은
+거부 기준이지 정확도나 수렴 보증이 아닙니다.
+
+원래 파장 갱신은 concrete 입력이 거부되는 하한 미만에서도 유한한 장과
+성공한 런타임 유효성을 반환했으며 CPU 1개·CUDA 2개에서 재현했습니다.
+별도의 대역폭만 바꾸는 갱신은 파장을 고정한 채 약 9.01셀에서
+`7.3330730`셀로, 파장 갱신은 `7.55748757`셀로 이동합니다. 두 경우 모두
+양의 carrier cutoff를 유지합니다. 수정 후 공개 valid→invalid→valid 검사는
+잘못된 점에서 NaN 장과 실패한 런타임 유효성을 반환하고, 이전 결과와
+리프·`.grad` 소유권을 보존하며 정확히 복구합니다. 주기적 8³·17단계 Ey
+Dipole에서 CPU plain과 CUDA plain·체크포인트 7을 사용합니다.
+
+`test_general_source_resolution_guard.py`의 **새 30사례: CPU 25개·CUDA
+5개가 통과**했습니다. Helper 대조군은 등호를 포함한 하한과 인접 부동소수점
+값, 모든 광원·재료 선택, 이전 실패 유효성, 정적 Diffraction, descriptor로
+한정한 전도도, 극점이 있을 때 전체 이전 경로 유지, live band의 host 읽기
+없이 상수인 Torch/JAX 미분 certificate를 검사합니다. 이는 일반 solver
+변환 지원을 뜻하지 않습니다. 첫 CPU 묶음 119개가 통과한 뒤 추가한 대역폭
+갱신 CPU 1개만 별도로 통과했습니다. **관련 125사례**는 CPU 재료 해상도
+64개, carrier cutoff CPU 22개·CUDA 21개, 펄스 CPU 9개·CUDA 9개입니다.
+새 검사와 관련 검사를 합쳐 **고유 로컬 155사례**이며 전체 CI는 아닙니다.
+새 CUDA 5개는 2.64초·경고 9개, 관련 CUDA 30개는 27.49초·경고 13개로
+통과했습니다.
+
+소스 사본과 전후 해시는 변하지 않았습니다. 주 CUDA 펄스 8개의 모든 기록
+property 문자열이 원래 펄스 검증과 정확히 같아 보고한 순방향·목적값·
+기울기·Hessian 최대 오차를 유지합니다. 아홉 번째 단위 쌍은 assertion
+근거만 제공합니다. 수치 허용오차도 그대로입니다. 극점을 선언한 장면과
+다른 파형 중간 연산의 오버플로는 추가 certificate 범위 밖이며 독립적인
+물리 해상도 세분화는 여전히 필요합니다.
 
 ## 같은 리프의 SGD 재사용
 
@@ -886,8 +940,9 @@ Record 인자는 `1/4`, Record 시각 가중치는 `1+0.2*n/N`입니다. 값·�
 **고유 32사례가 모두 통과**했습니다. 독립 기준해 14개, 공개 CPU 9개
 (solver·단위 5개와 실행 전 거부 4개), 실제 CUDA 9개(Hessian·재사용 8개와
 단위 쌍 1개)입니다. 공개 CPU는 3.39초·경고 8개, CUDA는 27.42초와
-traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 아래의
-해상도 검사 한계를 보존하며, 독립 측정한 거친 격자 오차를 뜻하지 않습니다.
+traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 host 계획
+단계의 검사를 설명하며 후속 pole-free 런타임 certificate와는 별개입니다.
+독립 측정한 거친 격자 오차를 뜻하지 않습니다.
 
 | 기록된 CUDA 비교 | 최대 상대·정규화 오차 | 기준 |
 | --- | ---: | ---: |
@@ -907,9 +962,10 @@ traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 아
 스펙트럼 하한과 매질 내 최단 cutoff-band 파장당 10셀 초과를 만족합니다.
 후속 [live Band cutoff guard](#live-band-carrier-cutoff)는 carried band의
 `f0`·`k*f_sigma`가 유한하고 엄격한 `f0 > k*f_sigma`를 만족하는지 검사합니다.
-최단 대역 파장의 공간 해상도 검사는 별개이며 `runtime_stability=True`가
-이를 보증하지 않습니다. 최적화 범위·독립 해상도 검사와 다른 파형 중간
-연산의 범위 제어는 여전히 필요합니다.
+후속 [pole-free 공간 certificate](#live-band-pole-free-spatial-resolution)는 선언된
+재료에 극점이 없을 때 현재 값의 기존 하한을 검사합니다. 극점이 있으면 이전
+해상도 경로를 유지합니다. 어느 predicate도 연속체 정확도나 최적화 전체 범위를
+보증하지 않으므로 독립 세분화와 다른 파형 중간 연산의 범위 제어가 필요합니다.
 
 ## CPML 진폭/위상 2차 미분
 
@@ -1173,6 +1229,7 @@ python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_ob
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_source_band_guard.py -q
+python -m pytest tests/fdtd/test_general_source_resolution_guard.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q

@@ -526,10 +526,14 @@ carried 값을 검사합니다. 검사 대상 값이 잘못되면 장을 NaN으�
 주파수 `f0`와 cutoff 폭 `k*frequency_sigma_hz`, 엄격한
 `f0 > k*frequency_sigma_hz`를 검사합니다. SI 단위에서 `f0=c0/wavelength`,
 `k=sqrt(-2*log(cutoff))`입니다. 잘못된 carried band는 런타임 유효성을
-실패시키며 concrete 생성자 처리는 변하지 않습니다. Traced pulse band는
-여전히 최단 대역 파장의 공간 해상도 검사를 막을 수 있습니다. 참인 안정성
-플래그가 그 해상도나 모든 파형 중간 연산을 보증하지 않으므로 사용할 live
-파라미터 범위를 독립적으로 확인하세요.
+실패시키며 concrete 생성자 처리는 변하지 않습니다. Carried band에서 선언된
+모든 재료에 극점이 없으면 별도의 런타임 certificate가 모든 광원·재료의 최단
+cutoff-band 파장을 기존 공간 하한(등호를 포함한 8셀)과 비교합니다. Host는
+traced band를 읽지 못하므로 계획 단계 경고가 남을 수 있습니다. 선언된 극점이
+하나라도 있으면 이전 해상도 경로 전체를 유지하며 동적 Band 검사 공백도 남습니다.
+이 하한은 정확도·수렴이나 모든 파형 중간 연산을 보증하지 않습니다. 사용할
+파라미터 범위를 독립적으로 세분화해 확인하세요.
+[Pole-free 공간 계약](../../validation/fdtd/general-cuda.md#live-band-pole-free-spatial-resolution)을 참고하세요.
 [Carrier cutoff 계약](../../validation/fdtd/general-cuda.md#live-band-carrier-cutoff)을 참고하세요. 물리 단위 스케일과 고정 지연·대역폭 의존성은
 [제한된 펄스 Hessian 검증](../../validation/fdtd/general-cuda.md#gaussian-pulse-파장대역폭위상지연-hessian)을 참고하세요. 이산 솔버의 미분은 수렴에 대한 진술이
 아닙니다. 유한 차분과 비교하고 순방향 계산도 함께 다듬으세요. [영문 미분 가이드](fd-differentiation.md)가
