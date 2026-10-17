@@ -20,6 +20,9 @@ Targets:
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
 - `tests/fdtd/test_general_cuda_higher_order.py`
+- `tests/fdtd/_pulse_yee_reference.py`
+- `tests/fdtd/test_general_cuda_pulse_reference.py`
+- `tests/fdtd/test_general_cuda_pulse_higher_order.py`
 - `tests/fdtd/test_general_cuda_cpml_higher_order.py`
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
@@ -832,6 +835,100 @@ two cases are separate from the earlier first-derivative test counts. They do
 not establish Hessians for arbitrary geometry, CPML, other source/material
 families, or `torch.func` transformations.
 
+## Gaussian pulse wavelength, bandwidth, phase and delay Hessians
+
+This gate exercises the existing electric Ey Dipole route; it changes no runtime
+or admission rule. The periodic 8³ fixture has dx 0.05 um, Courant 0.5, relative
+epsilon 2.25, mu 1.3 and conductivity 600 S/m. A fixed off-grid center
+`(0.013,-0.021,0.007)` um and current moment `I0=1.7e-16` A·m use either
+`bspline` or `tent`. The initial fields are zero. The two lengths are 17 and
+41 steps; CUDA checkpoint-7 tails are three and six steps.
+
+Let `T=1 um/c0`, `k=sqrt(-2*log(1e-3))` and the dimensionless coordinates be
+`p=(l,b,phi,d)`. The physical inputs are
+
+```text
+wavelength = 2*l um
+frequency_sigma_hz = 0.08*b/T
+phase = phi radians
+delay = BASE_DELAY + T*d seconds, BASE_DELAY = -k*T/(2*pi*0.08).
+```
+
+The delay baseline is fixed. Changing bandwidth therefore changes both envelope
+width and peak time `delay+k/(2*pi*frequency_sigma_hz)`; it is not recentered to
+hold the peak fixed. The two points are `(1,1,0.4,0.12)` and
+`(0.97,1.01,-0.2,0.16)`. For physical coordinates x in um, Hz, radians and seconds,
+`x=offset+S*p` with `S=diag(2,0.08/T,1,T)`. Thus `g_p=S*g_x` and
+`H_p=S*H_x*S`; physical Hessian entries require division by both scale factors.
+For wavelength in metres, replace the first factor by `2e-6`.
+
+The independent reference writes the Gaussian current and all four first and
+sixteen second derivatives analytically. At electric-current times `(n+0.5)*dt`,
+`u=t-delay-k/(2*pi*f_sigma)`, `v=2*pi*f_sigma*u` and
+`Q=-v²/2+i*(2*pi*c0*u/wavelength+phi)` give `I=I0*Im(exp(Q))`.
+The first/second forcing derivatives include `Q_i` and `Q_i*Q_j+Q_ij`.
+An independently constructed cardinal cubic or width-two tent stamp preserves
+moment and centroid. Fifteen lanes (value, four first derivatives, ten symmetric
+second derivatives) propagate through explicit periodic indexed Yee updates
+with the SI electric-current factor
+`-dt/(epsilon0*(epsilon+sigma*dt/(2*epsilon0))*dx³)`.
+No product waveform, stamp, curl, coefficient or AD helper supplies this oracle.
+
+Two objectives are checked: `mean((drive/I0)²)` and the weighted squared final
+E and Z0H plus six Record means, with weights `(1,0.7,1.3,0.6,1.1,0.9)`, component
+normalization `1/6`, Record factor `1/4`, and Record time weights `1+0.2*n/N`.
+Value, all four gradients and the complete 4×4 Hessian, including both mixed
+orders, use relative `2e-12`, absolute zero. Fields use full-array peak scaling;
+Records use the corresponding E/H group peak so the structurally zero Hy remains
+checked without division by zero. Forward errors use `2e-12`, clocks `2e-14`.
+
+The pure-reference qualification covers 14 unique cases. Its initial secant
+attempt passed 13 and failed one: at absolute normalized step `2e-5`, a mixed
+Hessian secant error `3.96673119e-6` exceeded `2e-6`. Halving the step reduced the
+absolute error by approximately four, consistent with central-difference
+`O(h²)` truncation. The final absolute steps `1e-5` and `5e-6` passed the same
+`2e-6` budget; the maximum was `9.91691679e-7`. The minimum normalized Hessian
+entry was `0.0793395795`, above the unchanged `1e-6` non-vacuity floor. The failed
+attempt is retained; no direct derivative or secant tolerance was increased.
+All seven forcing/stamp mutants passed the separation floor of `1e-4`.
+
+The public tests compare plain CPU/CUDA and CUDA checkpoint execution, retaining
+the same leaves through point 0 → point 1 → point 0. Wavelength and phase leaves
+start on CPU, bandwidth and delay on the execution device. They check derivative
+ownership, unchanged prior output/gradient/Hessian tensors, source work and
+recovery of the original values. A separate fresh-preparation um/nm pair checks
+physical equivalence. Static cutoff/center changes, nonscalar bands and changed
+wavelength under a period-based duration are checked for refusal before stepping.
+All **32 unique cases passed**: 14 pure-reference cases, nine public CPU cases
+(five solver/unit cases and four pre-execution refusals), and nine actual CUDA
+cases (eight Hessian/reuse cases and one unit pair). The public CPU run passed
+in 3.39 s with eight warnings; CUDA passed in 27.42 s with nine traced-band
+`CoarseMeshWarning`s. These warnings preserve the resolution-check limitation
+below and are not evidence of an independently measured coarse-grid error.
+
+| Recorded CUDA comparison | Maximum relative/scaled error | Budget |
+| --- | ---: | ---: |
+| Forward fields, Records and source drive in eight main cases | 2.72025560e-14 | 2e-12 |
+| Two objective values | 1.31006317e-14 | 2e-12 |
+| Four gradients | 6.06181771e-14 | 2e-12 |
+| Complete 4×4 Hessians | 9.27036226e-14 | 2e-12 |
+
+The derivative audit independently recomputed all eight main CUDA cases at
+three visits and two objectives from their recorded values. The separate CUDA
+unit pair passed its assertions but did not record errors for this maximum.
+The recorded public CPU forward maximum was `2.72594056e-14`; CPU derivative
+assertions passed without a separately recorded maximum. Source hashes remained
+unchanged through qualification.
+
+This is discrete forcing and eager double-backward validation, not radiation
+accuracy, continuum convergence, arbitrary pulse optimization or transform
+support. The two reference points independently satisfy a positive lower
+spectral edge and more than ten cells per shortest cutoff-band wavelength in
+the medium. Traced pulse bands do not have a universal runtime guarantee of
+`f0 > k*f_sigma` or that shortest-wavelength resolution check. Positive finite
+wavelength/bandwidth guards and `runtime_stability=True` do not certify those
+conditions; optimization bounds and independent resolution checks remain needed.
+
 ## CPML amplitude/phase second derivatives
 
 The public `test_general_cuda_cpml_higher_order.py` uses electric and
@@ -1112,6 +1209,7 @@ python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
+python -m pytest tests/fdtd/test_general_cuda_pulse_reference.py tests/fdtd/test_general_cuda_pulse_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
