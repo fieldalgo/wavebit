@@ -171,10 +171,12 @@ class DFTRegion:
     def observe(self, acc, E, H, n, params, rt):
         omega, dt = params['dft'][self.name], self.dt
         # Each field at its own time level, the dt of the sum folded into the phase.
-        phase = {'E': rt.xp.exp(1j * (omega * ((n + 1.0) * dt))) * dt,
-                 'H': rt.xp.exp(1j * (omega * ((n + 0.5) * dt))) * dt}
+        phase = {}
         out, energy = {}, None
         for label, field, slab in self.parts:
+            if field not in phase:
+                shift = 1.0 if field == 'E' else 0.5
+                phase[field] = rt.xp.exp(1j * (omega * ((n + shift) * dt))) * dt
             view = (E if field == 'E' else H)[slab.slices]
             out[label] = rt.dft_add(acc[label], view, phase[field], f'dft[{self.name}]{label}')
             e = rt.energy(view)
