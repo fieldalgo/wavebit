@@ -559,9 +559,14 @@ a carried wavelength or bandwidth now enforces finite carrier frequency `f0`
 and cutoff width `k*frequency_sigma_hz`, with strict `f0 > k*frequency_sigma_hz`.
 Here `f0=c0/wavelength` in SI units and `k=sqrt(-2*log(cutoff))`. Invalid carried
 bands fail runtime validity; concrete constructor handling is unchanged.
-A traced pulse band may still prevent the shortest-band-wavelength spatial
-resolution check. A true stability flag does not certify that resolution or all
-waveform intermediates. Check the intended live parameter range independently.
+For a carried band with no poles in any declared material, a separate runtime
+certificate checks the shortest cutoff-band wavelength across every source and
+material against the existing spatial floor (eight cells, including equality).
+The host planning warning can remain because it cannot read the traced band.
+Any declared pole retains the whole previous resolution path; that dynamic-band
+gap remains. This floor is not an accuracy or convergence guarantee, and does
+not bound all waveform intermediates. Refine the intended parameter range
+independently. See the [pole-free spatial contract](../../validation/fdtd/general-cuda.md#live-band-pole-free-spatial-resolution).
 See the [carrier cutoff contract](../../validation/fdtd/general-cuda.md#live-band-carrier-cutoff)
 and [bounded pulse Hessian qualification](../../validation/fdtd/general-cuda.md#gaussian-pulse-wavelength-bandwidth-phase-and-delay-hessians)
 for physical scaling and the fixed-delay/bandwidth dependence.

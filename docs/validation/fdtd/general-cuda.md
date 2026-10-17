@@ -13,6 +13,7 @@ Targets:
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_source_band_guard.py`
+- `tests/fdtd/test_general_source_resolution_guard.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -217,7 +218,8 @@ Valid concrete excitation values leave the incoming stability guard unchanged.
 This does not expand initial-pattern, source or complex-field admission. The
 check covers the input domains above, not every overflow in derived waveform
 arithmetic. The separate live Band cutoff guard below adds the spectral
-inequality; it does not add dynamic spatial-resolution validation. Numerical and
+inequality; the subsequent pole-free resolution guard adds a separate spatial
+certificate. Numerical and
 derivative qualification remains specific to the exercised cases.
 
 `test_general_source_finite.py` passed **77 new cases**: 44 CPU and 33 actual
@@ -284,10 +286,67 @@ qualification strings exactly, preserving its reported forward/value/gradient/
 Hessian maxima; the ninth unit-pair case remains assertion-only evidence.
 Source snapshots and before/after hashes were unchanged during these runs.
 
-This guard does not add dynamic shortest-band-wavelength spatial-resolution
-validation or bound all intermediate waveform arithmetic. A passed carrier
-predicate and `runtime_stability=True` therefore do not certify that an
-optimization's entire parameter range is spatially resolved.
+The carrier guard alone does not establish spatial resolution or bound all
+intermediate waveform arithmetic. The subsequent pole-free certificate below
+checks the existing spatial floor at the current values; neither guard
+certifies an optimization's entire parameter range or continuum accuracy.
+
+### Live Band pole-free spatial resolution
+
+When wavelength or bandwidth carries a derivative and **every declared material
+has no poles**, a backend certificate checks the existing source/report spatial
+floor at each run. In normalized Band units it takes
+`lambda_min = min_sources(1 / (1/lambda + k*df))`, including concrete sibling
+sources, and checks the background and every structure, including concrete
+materials. The shortest wavelength must be finite and positive. The existing
+index rule selects the component with largest `abs(epsilon*mu)` (first on ties)
+and its passive square root. The wave rule includes equality at **eight cells
+per wavelength in the medium**. The existing metal source/report skin-depth
+rule remains separate from static Diffraction wavelengths, which retain their
+wave-only rule. Conductivity enters this certificate only under the existing
+conductive-film descriptor; this does not add a general conductivity resolution
+rule or broaden film admission.
+
+Only the certificate is detached; physical source/material leaves and their
+waveform derivatives remain intact. All-concrete Band handling is unchanged.
+If **any declared material has any pole**, including an inactive zero-strength
+pole, the whole previous resolution path remains in use, including its existing
+live-material checks: dynamic Band resolution is not newly certified for that
+scene. No source, medium, geometry, observation or transform admission expands.
+The host `CoarseMeshWarning` can still state that planning could not read a
+traced shortest wavelength. That host-report limitation coexists with this
+bounded runtime certificate; it is not a measured coarse-grid error. The eight-
+cell floor is a refusal threshold, not an accuracy or convergence guarantee.
+
+The original wavelength update reproduced finite fields with successful runtime
+validity below that floor in one CPU and two CUDA cases, although its concrete
+twin was refused. A separate bandwidth-only update holds wavelength fixed and
+moves from about 9.01 to `7.3330730` cells; the wavelength-update case reaches
+`7.55748757` cells. Both retain a positive carrier cutoff. The fixed public
+valid→invalid→valid tests fail runtime validity with NaN fields at the invalid
+point, then recover exactly while preserving old results and leaf/`.grad`
+ownership. They use the periodic 8³, 17-step Ey Dipole, with plain CPU and plain
+or checkpoint-7 CUDA execution.
+
+`test_general_source_resolution_guard.py` passed **30 new cases: 25 CPU and five
+CUDA**. Helper controls cover the inclusive floor and its adjacent floating-
+point values, all-source/all-material selection, prior failed validity, static
+Diffraction, descriptor-scoped conductivity, whole-path pole fallback and
+constant Torch/JAX derivative certificates without live-band host reads.
+These helper transforms do not establish general transformed solver support.
+The first CPU batch passed 119 cases; the added bandwidth trajectory then passed
+its one new CPU case separately. In total, **125 related cases passed**:
+64 CPU material-resolution, 22 CPU and 21 CUDA carrier-cutoff, and nine CPU and
+nine CUDA pulse cases. New plus related coverage is **155 unique local cases**,
+not full CI. The new CUDA run passed five cases in 2.64 s with nine warnings;
+the related CUDA run passed 30 in 27.49 s with 13 warnings.
+
+Source snapshots and before/after hashes were unchanged. Every recorded property
+string in the eight main CUDA pulse cases matched the original pulse
+qualification exactly, retaining the reported forward/value/gradient/Hessian
+maxima; the ninth unit-pair case remains assertion-only. Numerical budgets were
+unchanged. Declared-pole scenes and other derived waveform overflow remain
+outside this added certificate; independent physical refinement is still needed.
 
 ## Same-leaf SGD reuse
 
@@ -955,8 +1014,9 @@ All **32 unique cases passed**: 14 pure-reference cases, nine public CPU cases
 (five solver/unit cases and four pre-execution refusals), and nine actual CUDA
 cases (eight Hessian/reuse cases and one unit pair). The public CPU run passed
 in 3.39 s with eight warnings; CUDA passed in 27.42 s with nine traced-band
-`CoarseMeshWarning`s. These warnings preserve the resolution-check limitation
-below and are not evidence of an independently measured coarse-grid error.
+`CoarseMeshWarning`s. These warnings describe the host planning check; the
+subsequent pole-free runtime certificate is separate. They are not evidence of
+an independently measured coarse-grid error.
 
 | Recorded CUDA comparison | Maximum relative/scaled error | Budget |
 | --- | ---: | ---: |
@@ -978,9 +1038,11 @@ support. The two reference points independently satisfy a positive lower
 spectral edge and more than ten cells per shortest cutoff-band wavelength in
 the medium. The subsequent [live Band cutoff guard](#live-band-carrier-cutoff)
 enforces finite `f0` and `k*f_sigma` with strict `f0 > k*f_sigma` for carried
-bands. The shortest-band-wavelength spatial-resolution check remains separate:
-`runtime_stability=True` does not certify it. Optimization bounds and independent
-resolution checks remain needed, as do controls on other waveform intermediates.
+bands. The later [pole-free spatial certificate](#live-band-pole-free-spatial-resolution)
+checks the existing floor at current values when no declared material has poles.
+Declared-pole scenes retain the previous resolution path. Neither predicate
+certifies continuum accuracy or an entire optimization range; independent
+refinement and controls on other waveform intermediates remain needed.
 
 ## CPML amplitude/phase second derivatives
 
@@ -1260,6 +1322,7 @@ python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_ob
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_source_band_guard.py -q
+python -m pytest tests/fdtd/test_general_source_resolution_guard.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q

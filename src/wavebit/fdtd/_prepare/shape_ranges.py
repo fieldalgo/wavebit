@@ -821,6 +821,55 @@ def _resolution_index(material, wavelength, rt, *, conductive=False):
     return xp.real(n), xp.imag(n)
 
 
+def _carried_band(scene):
+    """Structural detection before reading either band leaf on the host."""
+    from wavebit._common.backend import carries_autodiff
+    from wavebit._common.declarations import torch_carried
+    return any(torch_carried(value) or carries_autodiff(value)
+               for source in scene.sources
+               for value in (source.band.wavelength, source.band.df))
+
+
+def _band_resolution_guard(scene, plan, rt, previous, materials):
+    """The source/report floor for a live band with only pole-free declared media.
+
+    Every source participates in the minimum, including concrete siblings, and
+    every declared medium is checked. This is the eager endpoint certificate,
+    not a bound over a dispersive band. Declared poles retain the old path.
+    Only the certificate is constant; physical source/material leaves are intact.
+    """
+    import math
+    from wavebit.fdtd._legacy_monitors import Diffraction
+    from wavebit.fdtd._prepare.conductive_film import descriptor
+    xp = rt.xp
+    shortest = None
+    valid = rt.array(1., 'float64') > 0
+    for source in scene.sources:
+        band = source.band
+        wavelength = rt.constant(1. / (1. / rt.array(band.wavelength, 'float64')
+                                       + band.sigmas * rt.array(band.df, 'float64')))
+        valid = valid & xp.isfinite(wavelength) & (wavelength > 0)
+        shortest = wavelength if shortest is None else xp.minimum(shortest, wavelength)
+    # With sources, the eager report uses their shortest band, never the
+    # Resolution/PML fallback. Diffraction has a separate wave-only door.
+    wavelengths = [(shortest, True)] + [
+        (rt.array(w, 'float64'), False) for m in scene.monitors
+        if isinstance(m, Diffraction) for w in m.wavelengths]
+    conductive = descriptor(scene, plan.grid) is not None
+    for material in materials:
+        for wavelength, skin_check in wavelengths:
+            n, k = _resolution_index(material, wavelength, rt, conductive=conductive)
+            metal = n < xp.abs(k)
+            wave_ok = wavelength / (n * plan.dx) >= 8.0
+            skin = 1. / ((2. * math.pi / wavelength) * xp.where(metal, k, 1.))
+            skin_ok = skin / plan.dx >= 1.0
+            ok = xp.where(metal, skin_ok if skin_check else True, wave_ok)
+            valid = valid & ok & xp.isfinite(n) & xp.isfinite(k)
+    value = rt.constant(xp.where(valid, rt.array(1., 'float64'),
+                                rt.array(float('nan'), 'float64')))
+    return value if previous is None else previous * value
+
+
 def resolution_guard(scene, plan, rt, previous):
     """Hold traced media to the eager wavelength and skin-depth refusals.
 
@@ -831,10 +880,16 @@ def resolution_guard(scene, plan, rt, previous):
     Invalid live values poison coefficients; admitted physical derivatives remain
     untouched because this certificate is constant to autodiff.
     """
+    from wavebit.materials.time_domain import as_material
+    if _carried_band(scene):
+        materials = tuple(as_material(material) for _, material in _materials(scene))
+        if all(not material.poles for material in materials):
+            return _band_resolution_guard(scene, plan, rt, previous, materials)
+        # A pole anywhere retains this entire pre-existing path, including live
+        # material checks. Dynamic-band/pole resolution remains uncertified.
     if not materials_traced(scene):
         return previous
     import math
-    from wavebit.materials.time_domain import as_material
     from wavebit.fdtd._legacy_monitors import Diffraction
     from wavebit.fdtd._prepare.checks import _wavelength
     from wavebit.fdtd._prepare.sources import shortest_wavelength
