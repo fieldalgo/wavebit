@@ -145,8 +145,8 @@ def _cuda_scope(problem,numerics,execution):
         if type(material) not in (Material,ConductiveMaterial):
             refuse('CUDA currently supports nondispersive Material and ConductiveMaterial only',path)
     for source in problem.sources:
-        if type(source) is not sources.PlaneWave:
-            refuse('CUDA currently supports PlaneWave sources or initial fields only',
+        if type(source) not in (sources.PlaneWave, sources.Dipole):
+            refuse('CUDA currently supports PlaneWave, fixed-center Dipole sources or initial fields only',
                    'sources.'+source.name)
     for monitor in problem.outputs.monitors:
         if type(monitor) not in (monitors.Record,monitors.Field,monitors.Flux):

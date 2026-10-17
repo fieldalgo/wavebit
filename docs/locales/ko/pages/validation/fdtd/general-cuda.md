@@ -5,6 +5,7 @@ Written: 2026-10-18
 Targets:
 
 - `src/wavebit/fdtd/_api.py`
+- `src/wavebit/fdtd/sources.py`
 - `src/wavebit/fdtd/numerics.py`
 - `src/wavebit/fdtd/_runtime.py`
 - `src/wavebit/fdtd/_kernel/observe.py`
@@ -13,6 +14,9 @@ Targets:
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
 - `tests/fdtd/test_general_cuda_higher_order.py`
+- `tests/fdtd/test_general_cuda_dipole.py`
+- `tests/fdtd/test_general_cuda_dipole_conductive.py`
+- `tests/fdtd/test_general_cuda_dipole_radiation.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -21,7 +25,7 @@ Targets:
 일반 `wavebit.fdtd` API는 제한된 Torch CUDA 배정밀도 실행을 허용합니다.
 계획 수립은 호스트에서 수행하고 기존 물리적 입력 검사를 유지하며, 시간
 진행과 미분 가능한 관측은 CUDA에서 실행합니다. 일반 장면·관측 로컬
-검증 35사례는 CPU에서 가능한 입력 검사와 실제 CUDA 실행을
+초기 검증 35사례는 CPU에서 가능한 입력 검사와 실제 CUDA 실행을
 포함합니다. 모든 일반 FDTD 기능이나 연속체 수렴을 검증한 것은 아닙니다.
 아래 체크포인트 연구는 전도체 한 사례의 비용을 측정하며 일반 장면 전체의
 성능을 대표하지 않습니다.
@@ -39,7 +43,7 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 | 경계와 padding | `Periodic`, `Open` 면; `PML` padding |
 | 재료 | 기존 비분산 `Material`, `ConductiveMaterial`과 해당 재료 검사 |
 | 구조 | 셀에 스냅하는 `Slab`만 허용 |
-| 광원 | `PlaneWave` 또는 초기 장 |
+| 광원 | `PlaneWave`, 고정 중심의 전기·자기 `Dipole`(`bspline` 또는 `tent` stamp), 초기 장 |
 | 관측 | `Record`, `Field`, `Flux`, 최종 장 |
 
 초기 E/H 패턴은 고정된 호스트 선언입니다. NumPy 배열, `requires_grad`가
@@ -48,8 +52,15 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 CPU에서 CUDA로 변환해도 기울기가 연결됩니다. prepared 재사용에도 이 구분이
 적용되며 CUDA prepared 계약은 범위 지정 기하를 제공한다고 표시하지 않습니다.
 
+`Dipole.current_moment`는 전기 광원의 A·m 또는 등가 자기 광원의 V·m 단위
+전류 모멘트입니다. 세기 파라미터는 `current_moment`이며,
+`PlaneWave.amplitude`는 V/m 단위의 전기장 진폭입니다. 전류 모멘트·phase·
+delay는 live 미분 그래프를 유지합니다. Dipole 중심과 stamp는 고정값이며
+바꾸려면 다시 준비해야 합니다. 위치 미분, 주기 경계를 가로지르는 지지 영역,
+PML 안의 지지 영역은 기존 광원 검사에서 계속 거부합니다.
+
 `Decay`, 다른 흡수층인 `Absorber`, 범위 지정·스무딩 기하, 분산 재료,
-Bloch·벽·대칭·불변축 경계, dipole/TFSF 광원, 회절·원거리장 관측은 이
+Bloch·벽·대칭·불변축 경계, TFSF 광원, 회절·원거리장 관측은 이
 CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해당 공개 필드
 경로의 `cuda_scope` 이슈를 반환합니다. 입력 허용이 표본화, CFL, 재료,
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
@@ -86,6 +97,48 @@ Job 네 사례를 포함한 통합 실행은 60사례가 모두 통과했습니�
 장면 실행의 성능이 아닙니다. 일반 실행의 기본값은 기존의 단순 시간 스캔입니다.
 아래 메모리 결과는 어떤 입력을 미분하는지에 따라 달라집니다. 보편적인
 메모리 절감, 컴파일, 장시간 안정성, 여러 GPU를 검증했다고 주장하지 않습니다.
+
+## 고정 중심 Dipole 근거
+
+이후 Dipole 추가 검증은 별도 실행에서 CPU 42사례와 실제 CUDA 46사례가
+통과했으며 기존 CUDA 거부 대조군 아홉 사례도 통과했습니다. 앞의 60사례
+실행과 별개의 기록입니다. 고정 실행 길이·배정밀도·voxel·재료·Slab·경계·
+관측기의 기존 제한은 그대로 적용합니다.
+
+| 검사 파일 | CPU / CUDA 통과 | 근거 |
+| --- | ---: | --- |
+| `test_general_cuda_dipole.py` | 23 / 27 | 전기·자기, 세 축, 두 stamp: 한 단계 SI 모멘트 상대 `1e-13`, 독립적으로 재구성한 Yee 무게중심 절대 `1e-13` um. 짧은 슬래브/PML 장·광원 이력·관측은 NumPy와 최대값 정규화 `5e-13`으로 일치하며 고정값·지지 영역 거부와 재사용을 검사. |
+| `test_general_cuda_dipole_conductive.py` | 12 / 12 | 전기 Dipole: 세 축 × 두 stamp × 스칼라/대각 epsilon·mu, 스칼라 전도도 600 또는 2400 S/m. 독립식 `E1 = -dt*J/(epsilon0*epsilon + sigma*dt/2)`으로 같은 기준의 모멘트·무게중심을 복원하고 반 단계 SI 광원 일을 검사. |
+| `test_general_cuda_dipole_radiation.py` | 7 / 7 | 진공 Gaussian bspline 광원: Larmor 에너지 세분화, 전기·자기 쌍대성, um/nm 기하 단위를 바꿔도 같은 SI 결과. |
+
+기본 미분 사례는 CPU 전류 모멘트·delay와 CUDA phase·재료 리프를
+사용합니다. 무차원 섭동 좌표에서 두 간격의 NumPy 중앙차분이 상대 `1e-7`
+및 절대 `1e-10*loss`로 일치하며, 전류 모멘트의 이차 항등식은 상대
+`1e-12`로 일치합니다. 41단계 체크포인트 사례는 블록 7·6단계 tail을
+사용하고 광원 장 이력의 미분을 유지하며 새 실행·prepared 재사용에서 사용자
+입력과 이전 이력을 보존합니다. 얇은 PML과 미완료 푸리에 시간창 경고는
+의도한 것이며 짧은 장치 비교·미분 사례가 복사 정확도를 입증하지 않습니다.
+
+별도 복사 사례는 폭 0.6파장의 진공 상자, 12셀 PML, 광원 8주기와 기본
+bspline stamp를 사용합니다. 에너지는 광원의 delivered-work 이력을 시간
+적분한 값이며 독립 SI Gaussian 전류 Larmor 값
+`2.5026540826870543e-24` J와 비교합니다. 실제 CUDA 결과는 다음과 같습니다.
+
+| 파장당 셀 수 | 전달 에너지 (J) | 상대 Larmor 오차 |
+| --- | ---: | ---: |
+| 14 | 2.3846422619180062e-24 | -0.0471546673531249 |
+| 20 | 2.444240894665441e-24 | -0.02334049616593281 |
+| 28 | 2.472762333282175e-24 | -0.01194401959570257 |
+
+적합 차수는 `1.9810176952811915`, 2차 Richardson 상대 오차는
+`-7.26898350460655e-5`였습니다. 기존 기준은 차수 1.9~2.1,
+Richardson 절댓값 `1e-3` 미만, 거친 격자 오차 -0.06~-0.03입니다.
+열린 상자의 자기/전기 에너지 비에서 1을 뺀 값은
+`-2.7458726875040362e-5`로 기존 `1e-4` 기준을 통과했으며 주기 격자
+쌍대성은 별도로 `1e-13`에서 검사합니다. 격자 경고는 그대로 표시합니다.
+광원 일로 명시한 진공 bspline 복사 사례를 검증한 것이며 별도 원거리장이나
+닫힌 표면 플럭스 정확도, tent·비진공 복사 정확도, 위치 미분 또는 임의의
+광원 변환을 검증하지 않습니다.
 
 ## 공개 슬래브의 독립 검사
 
@@ -314,6 +367,8 @@ CPU 진폭과 CUDA 재료 리프는 사용자가 소유하며 변하지 않습�
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
+python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
+python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 4 --repeat 5 --device cuda:0 --profile --output-dir artifacts/general-monitor-profile
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 16 --checkpoint-steps 8 --repeat 5 --device cuda:0 --output-dir artifacts/general-monitor-no-grad

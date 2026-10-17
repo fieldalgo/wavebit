@@ -5,6 +5,7 @@ Written: 2026-10-18
 Targets:
 
 - `src/wavebit/fdtd/_api.py`
+- `src/wavebit/fdtd/sources.py`
 - `src/wavebit/fdtd/numerics.py`
 - `src/wavebit/fdtd/_runtime.py`
 - `src/wavebit/fdtd/_kernel/observe.py`
@@ -13,6 +14,9 @@ Targets:
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
 - `tests/fdtd/test_general_cuda_higher_order.py`
+- `tests/fdtd/test_general_cuda_dipole.py`
+- `tests/fdtd/test_general_cuda_dipole_conductive.py`
+- `tests/fdtd/test_general_cuda_dipole_radiation.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
@@ -21,7 +25,7 @@ Targets:
 The general `wavebit.fdtd` API admits a restricted Torch CUDA route in double
 precision. Host planning and the existing physical admission rules remain in
 place; time stepping and differentiable observations use CUDA. The local
-validation ran 35 general-scene and observation cases, including CPU-only
+initial validation ran 35 general-scene and observation cases, including CPU-only
 admission checks and actual CUDA execution. It does not qualify every general
 FDTD feature or establish continuum convergence. The checkpoint study below
 measures one conductor fixture, not general-scene performance broadly.
@@ -39,7 +43,7 @@ the original leaves. Other non-CPU backends and single precision remain refused.
 | Boundaries and padding | `Periodic` and `Open` faces; `PML` padding |
 | Materials | Existing nondispersive `Material` and `ConductiveMaterial`, with their ordinary material checks |
 | Structures | Cell-snapped `Slab` only |
-| Sources | `PlaneWave` or initial fields |
+| Sources | `PlaneWave`, fixed-center electric/magnetic `Dipole` with `bspline` or `tent` stamp, or initial fields |
 | Observations | `Record`, `Field`, `Flux` and final fields |
 
 Initial E/H patterns are static host declarations: use NumPy arrays, CPU tensors
@@ -49,8 +53,16 @@ live and keeps its gradient through CPU-to-CUDA conversion; this distinction
 also applies to prepared reuse. The prepared contract does not advertise ranged
 geometry on CUDA.
 
+`Dipole.current_moment` is a current moment in A·m for electric sources or V·m
+for equivalent magnetic sources. Its strength parameter is `current_moment`;
+`PlaneWave.amplitude` instead specifies electric-field amplitude in V/m.
+Current moment, phase and delay retain live graphs.
+Dipole center and stamp are static: changing them requires new preparation.
+Position derivatives, support crossing a periodic seam, and support in PML
+remain refused by the existing source checks.
+
 `Decay`, the alternative `Absorber`, ranged or smoothed geometry, dispersive
-materials, Bloch/wall/symmetry/invariant-axis faces, dipole/TFSF sources,
+materials, Bloch/wall/symmetry/invariant-axis faces, TFSF sources,
 diffraction and far-field monitors are outside this CUDA route. Unsupported
 combinations return a `cuda_scope` issue with the relevant public field path
 before planning. Admission does not waive sampling, CFL, material, padding or
@@ -89,6 +101,50 @@ the native engine, not this general-scene route. General execution defaults to
 the existing plain time scan. The memory results below depend on which inputs
 are differentiated; they establish no universal saving, compilation, long-time
 stability or multi-GPU claim.
+
+## Fixed-center Dipole evidence
+
+The later Dipole addition passed 42 CPU and 46 actual CUDA cases in separate
+runs; nine existing CUDA refusal controls also passed. These receipts are
+separate from the earlier 60-case run. Existing fixed-duration, double-precision,
+voxel, material, Slab, boundary and monitor restrictions still apply.
+
+| Test file | CPU / CUDA passes | Evidence |
+| --- | ---: | --- |
+| `test_general_cuda_dipole.py` | 23 / 27 | Electric/magnetic, three axes, both stamps: one-step SI moment relative `1e-13` and independently reconstructed Yee centroid absolute `1e-13` um. Short slab/PML fields, source histories and observations match NumPy at peak-normalized `5e-13`; static/support refusals and reuse checked. |
+| `test_general_cuda_dipole_conductive.py` | 12 / 12 | Electric dipoles: three axes × two stamps × scalar/diagonal epsilon and mu, with scalar conductivity 600 or 2400 S/m. Independent `E1 = -dt*J/(epsilon0*epsilon + sigma*dt/2)` recovers moment and centroid at the same budgets and checks SI source work at the half step. |
+| `test_general_cuda_dipole_radiation.py` | 7 / 7 | Vacuum Gaussian bspline source: Larmor energy refinement, electric/magnetic duality and unchanged SI results under um/nm geometry units. |
+
+The core derivative cases use CPU current-moment/delay and CUDA phase/material
+leaves. Two NumPy central differences in dimensionless perturbation coordinates
+agree at relative `1e-7` plus absolute `1e-10*loss`; the current-moment quadratic
+identity agrees at relative `1e-12`. The 41-step checkpoint cases use block 7
+and a six-step tail, retain source-field history gradients, and preserve caller
+inputs and old histories during fresh and prepared reuse. Their thin PML and
+unfinished Fourier-window warnings are intentional; these short parity/AD
+cases do not establish radiation accuracy.
+
+The separate radiation fixture uses a vacuum box 0.6 wavelengths wide,
+12-cell PML, eight source periods and the default bspline stamp. Energy is
+the time integral of the source's delivered-work history, compared with the
+independent SI Gaussian-current Larmor value `2.5026540826870543e-24` J.
+Actual CUDA values were:
+
+| Cells per wavelength | Delivered energy (J) | Relative Larmor error |
+| --- | ---: | ---: |
+| 14 | 2.3846422619180062e-24 | -0.0471546673531249 |
+| 20 | 2.444240894665441e-24 | -0.02334049616593281 |
+| 28 | 2.472762333282175e-24 | -0.01194401959570257 |
+
+Fitted order was `1.9810176952811915`; the second-order Richardson relative
+error was `-7.26898350460655e-5`. The unchanged gates require order between
+1.9 and 2.1, Richardson magnitude below `1e-3`, and coarse error between
+-0.06 and -0.03. Open-box magnetic/electric energy minus one was
+`-2.7458726875040362e-5` against the existing `1e-4` criterion; periodic
+lattice duality is separately checked at `1e-13`. Mesh warnings remain visible.
+This establishes the stated vacuum bspline radiation cases through source work,
+not separate far-field or enclosing-surface flux accuracy, tent/nonvacuum
+radiation accuracy, position derivatives or arbitrary source transformations.
 
 ## Independent public slab gate
 
@@ -335,6 +391,8 @@ described in the [native setup](native-cuda.md#environment-and-reproduction).
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
+python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
+python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 4 --repeat 5 --device cuda:0 --profile --output-dir artifacts/general-monitor-profile
 python studies/fdtd/general_cuda/monitor_cost.py --steps 128 --transverse-cells 16 --checkpoint-steps 8 --repeat 5 --device cuda:0 --output-dir artifacts/general-monitor-no-grad

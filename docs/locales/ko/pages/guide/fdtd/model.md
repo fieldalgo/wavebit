@@ -30,8 +30,10 @@
 
 CPU 실행은 NumPy·JAX·PyTorch 배정밀도를 사용합니다. 제한된 Torch CUDA는
 고정 실행 길이의 voxel 장면, Periodic/Open 경계, PML, 비분산
-Material/ConductiveMaterial, 셀 스냅 Slab, PlaneWave 또는 초기 장,
-Record/Field/Flux 관측을 허용합니다. `backend='torch', device='cuda:0'`를
+Material/ConductiveMaterial, 셀 스냅 Slab, PlaneWave, 고정 중심 전기·자기
+Dipole(`bspline` 또는 `tent`), 초기 장과 Record/Field/Flux 관측을 허용합니다.
+Dipole 중심·stamp는 고정값이며 `current_moment`는 평면파의 V/m 진폭과
+구별되는 A·m/V·m 단위입니다. `backend='torch', device='cuda:0'`를
 전달하며 [CUDA 범위와 검증](../../validation/fdtd/general-cuda.md)을 참고하세요. JAX와 PyTorch
 실행은 미분할 수 있습니다. [실행 미분](#실행-미분)을 보세요.
 
