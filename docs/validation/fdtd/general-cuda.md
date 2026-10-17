@@ -12,6 +12,7 @@ Targets:
 - `src/wavebit/fdtd/_kernel/observe.py`
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
+- `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_observations.py`
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
@@ -38,6 +39,7 @@ Targets:
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
 - `studies/fdtd/general_cuda/ade_cost.py`
+- `studies/fdtd/general_cuda/optimizer_reuse.py`
 - `studies/fdtd/general_cuda/checkpoint_cost.py`
 - `studies/fdtd/general_cuda/monitor_cost.py`
 
@@ -138,6 +140,106 @@ and two conductivity/initial-amplitude derivative cases. Their original
 numerical budgets remain unchanged; the CUDA run retained 46 mesh/window
 warnings. These are bounded regressions, not full CI or optimizer convergence
 qualification.
+
+## Same-leaf SGD reuse
+
+`studies/fdtd/general_cuda/optimizer_reuse.py` checks repeated updates of the
+same trainable leaves through a prepared run. The electric Ey Dipole fixture
+has 12 physical cells per axis, four Open-face PML cells on each side, an actual
+20³ grid and 41 steps. Plain and checkpoint-7 scans use identical physics;
+checkpointing leaves a six-step tail. This short thin-PML fixture is a discrete
+derivative/lifetime study, not a PML-accuracy or performance benchmark.
+
+Two NumPy runs at source phases zero and pi/2 supply final-field basis vectors
+`b0` and `b1`, each concatenating E and Z0 H in consistent SI field units. Let
+`S = ||b0||² + ||b1||²`, `G_ij = dot(b_i,b_j)/S`,
+`u(phi) = (cos(phi), sin(phi))` and `r = A*u(phi) - 1.1*u(0.2)`.
+The normalized fitting loss is `L = r.T*G*r/2`, with derivatives
+`dL/dA = u.T*G*r` and `dL/dphi = A*u'.T*G*r`. This is an independent algebraic
+value/gradient/update oracle for the **same discrete solver**, not an
+independent Maxwell solution. The objective uses final fields only, excludes
+the source waveform, and is not an energy in joules.
+
+Each run makes 16 SGD updates with learning rate 0.125, `foreach=False` and
+`zero_grad(set_to_none=True)`, starting from `(A,phi)=(0.8,-0.3)` or `(1.4,0.7)`.
+A is dimensionless: the source current moment is `1e-16*A` A·m; phase is in
+radians. The amplitude leaf stays on CPU, and the phase leaf on the execution
+device. Leaf identities, storage addresses, dtypes and devices must remain
+unchanged; their version counters must advance with each in-place update.
+Fields use a peak-normalized `2e-12` comparison against the basis. Losses,
+gradients and updated parameters use relative `2e-12`, absolute zero against
+the analytic recurrence, with nonzero comparison controls. Old outputs are retained through the first two iterations
+and checked for exact immutability. Separate NaN amplitude/phase updates must
+fail validity or receive a finiteness-specific structured refusal, then recover
+on the same leaves and prepared object.
+
+For CUDA, after the old output is released, every iteration must return to the
+exact persistent target/leaf allocated-byte baseline; no drift allowance or
+in-loop cache purge is used. Peak counters are cumulative through zero-based iteration 1,
+then reset once and cumulative thereafter; they are not per-iteration peaks.
+Final tensor release must return allocated bytes to the process baseline before
+cache release. Reserved and driver memory are recorded separately. The reported
+loop wall time includes validation, synchronization, host copies, garbage
+collection and receipt writing, so it is not a solver-speed comparison.
+
+The study requires a fresh external output directory, matching source and basis
+hashes, and a separately supervised CUDA process with a 120-second limit. CUDA
+setup requires 5 GiB free and caps the Torch allocator at 4 GiB; this does not
+reserve memory or cap driver/other-process use. Exact source snapshots and an
+attempt receipt precede execution; missing or changed reference/source files
+invalidate the attempt. See the study README for the complete receipt contract.
+
+### Recorded optimizer study
+
+The study's **24 algebra/receipt/CLI control tests passed**. Separately, the
+NumPy basis command, two CPU plain-loop commands and four actual CUDA loop
+commands (two seeds × plain/K7) passed. These are six CLI study executions,
+not six additional executed pytest cases; matching integration cases are
+provided in the test file. Each loop completed all 16 updates and both invalid-
+input recovery probes. The basis Gram matrix was positive definite, with
+condition number `73.9756791383416`.
+
+CPU gradient error was at most `3.025309471976914e-15`. Across the four CUDA
+runs, maximum relative loss, gradient and post-update parameter errors were
+`5.096959445281874e-15`, `4.421606151350874e-15` and
+`1.380285480163295e-15`, respectively, below the unchanged `2e-12` budget.
+All old-output checks, leaf-identity/version checks and negative-input recovery
+checks passed. This establishes agreement with the prescribed nonlinear SGD
+recurrence; no convergence threshold or recovery of the target parameters was
+used as an acceptance condition.
+
+Every CUDA iteration after releasing the retained old output returned to
+**384512 allocated bytes**: 384000 target-field bytes plus the phase leaf's
+512-byte allocator block. The CPU amplitude leaf is outside that device total.
+Both seeds produced the same following cumulative peaks after the single reset
+at the end of zero-based iteration 1 (covering iterations 2–15):
+
+| Scan policy | Peak allocated bytes | Peak reserved bytes | Allocated after each release |
+| --- | ---: | ---: | ---: |
+| Plain | 3315712 | 6291456 | 384512 |
+| Checkpoint 7 | 7171072 | 12582912 | 384512 |
+
+Checkpointing used more allocated and reserved memory in this small case.
+This is not a universal checkpoint ranking or a total-memory bound. There was
+no in-loop cache purge. Final tensor cleanup returned allocated bytes to the
+zero process baseline; reserved bytes remained 6291456/12582912 until explicit
+cache release. Afterwards allocated/reserved were both zero and reported driver
+free memory was 7389315072 bytes. These allocator checks do not imply zero
+CUDA driver/context allocation.
+
+Instrumented loop totals were 9.2828/9.1116 seconds for plain and
+13.2623/13.0117 seconds for K7 (seeds 0/1). They include all the inspection and
+receipt work described above and are not a performance comparison. Each run
+preserved all 263 source-file hashes and the reference receipt/artifact hashes.
+The environment was Python 3.12.14, Torch 2.14.1+cu130, CUDA 13.0, NumPy 2.5.4,
+Windows 11, RTX 4060 Ti and one Torch CPU thread. These bounded local results do
+not replace reviewed-candidate CI or qualify arbitrary optimizers, objectives,
+long trajectories, material optimization or other devices.
+
+The commands below show seed 0. Repeat CPU, CUDA plain and CUDA K7 with
+`--seed 1` and distinct new output directories to reproduce both seeds.
+The default `--block 0` selects the plain scan; it is not public
+`Numerics(checkpoint_steps=0)`.
 
 ## Homogeneous single-pole ADE
 
@@ -914,6 +1016,7 @@ described in the [native setup](native-cuda.md#environment-and-reproduction).
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
+python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
@@ -925,6 +1028,10 @@ python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_genera
 python -m pytest tests/fdtd/test_general_ade_modes.py tests/fdtd/test_general_ade_units.py tests/fdtd/test_general_ade_ad.py tests/fdtd/test_general_ade_record_ad.py -q -o junit_family=legacy
 python -m pytest tests/fdtd/test_general_ade_contract.py -q
 python -m pytest tests/fdtd/test_general_ade_modes.py -k raw_continuum -q -s
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode basis --output-dir ../optimizer-reuse/optimizer-basis
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cpu --seed 0 --output-dir ../optimizer-reuse/optimizer-cpu-0
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cuda:0 --seed 0 --output-dir ../optimizer-reuse/optimizer-cuda-plain-0
+python studies/fdtd/general_cuda/optimizer_reuse.py --mode run --reference ../optimizer-reuse/optimizer-basis/receipt.json --device cuda:0 --block 7 --seed 0 --output-dir ../optimizer-reuse/optimizer-cuda-k7-0
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 16 32 --steps 163 --blocks 0 8 32 200 --repeat 3 --output artifacts/general-checkpoint.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
 python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json
