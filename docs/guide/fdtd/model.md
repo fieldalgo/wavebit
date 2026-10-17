@@ -25,7 +25,7 @@ for the declaration API, see [domains, sources and observations](general-fdtd.md
 | `Field`, `Flux`, `Diffraction`, `FarField` | running Fourier transforms of the fields, accumulated during the run |
 
 Runs use double precision with NumPy, JAX or PyTorch on CPU. A restricted Torch
-CUDA route admits fixed-duration voxel scenes with Periodic/Open boundaries,
+CUDA route admits fixed-duration voxel scenes with Periodic/Open/PEC/PMC boundaries,
 PML, nondispersive Material/ConductiveMaterial, cell-snapped Slabs, PlaneWave,
 fixed-center electric/magnetic Dipole (`bspline` or `tent`), or initial-field
 excitation, and Record/Field/Flux observations. Dipole center and stamp are
