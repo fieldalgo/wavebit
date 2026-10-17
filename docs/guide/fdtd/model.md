@@ -40,6 +40,20 @@ CPU tensors without gradients, or host callables). Direct CUDA or differentiable
 tensor patterns are not admitted; the separate `InitialField.amplitude` remains
 a live differentiable input.
 
+A separate homogeneous ADE scope admits one full-grid Slab with one Lorentz or
+Drude pole, six Periodic faces, fixed finite real full-grid NumPy initial arrays
+and Record and/or final-field outputs. One initial field may be `None`; CPU
+tensors, callables and component lists are excluded from this ADE scope. There
+are no interfaces or external sources. Scalar `epsilon_inf`, `mu`, `gamma` and Lorentz
+`omega_0` are nondifferentiable (`mu=None` means 1); their concrete values may
+change on compatible prepared reuse. Only real initial amplitude and Lorentz strength or Drude
+plasma frequency are live differentiable inputs in this scope. Polarization
+memories start at rest: the first electric update has no carried pole increment.
+The tested raw continuum startup error is first order in time; a shifted-time
+diagnostic is not a correction or a second-order accuracy claim. See
+[homogeneous ADE scope and evidence](../../validation/fdtd/general-cuda.md#homogeneous-single-pole-ade)
+for independent discrete, eager reverse-mode and double-backward qualification.
+
 ## Units and conventions
 
 | Quantity | Unit |
