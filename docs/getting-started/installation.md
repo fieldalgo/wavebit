@@ -1,6 +1,6 @@
 # Installation
 
-This is **0.0.3**, an alpha. It is on PyPI:
+This is **0.0.4**, an alpha. It is on PyPI:
 
 ```shell
 pip install wavebit
