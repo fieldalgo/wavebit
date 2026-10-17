@@ -29,6 +29,37 @@ exclude driver/display memory; the baseline allocation is recorded separately.
 Neither this fixture nor checkpointing establishes a total-memory bound or a
 guaranteed saving for other fields, observations or source histories.
 
+The legacy matrix remains sizes 4..32 and durations 1..512. A separate volume
+scaling case permits **only 64³, 163 steps, material gradients**, with one policy
+per fresh process. Run these commands sequentially in the order shown; each has
+one warm-up and five timed repetitions:
+
+```sh
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 8 --repeat 5 --output artifacts/general-checkpoint-64-k8.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 32 --repeat 5 --output artifacts/general-checkpoint-64-k32.json
+python studies/fdtd/general_cuda/checkpoint_cost.py --sizes 64 --steps 163 --parameters material --blocks 0 --repeat 5 --output artifacts/general-checkpoint-64-plain.json
+```
+
+Before warm-up, the instrument saves free/total device memory and current
+allocated/reserved bytes to the attempt. For the 64³ case it forecasts reserved
+memory from the observed 32³/163-step material peaks: 350224384 bytes for plain,
+69206016 for K8 and 88080384 for K32. Eightfold cell count and a 1.5× margin give
+approximately 3.914, 0.773 and 0.984 GiB respectively. It refuses a forecast above
+4 GiB or free VRAM below the forecast plus 1 GiB headroom. This estimate cannot
+reserve memory or guarantee avoidance of an out-of-memory failure; other GPU
+users can change free memory after the check. Larger durations and combined
+policy invocations at 64³ are rejected.
+
+Each row records post-warm-up allocated/reserved baselines, absolute and
+incremental peaks, per-repetition allocated bytes after releasing the returned
+objective/gradients, and allocated/reserved bytes after final collection and
+cache release. Raw synchronized times, median and range describe the entire
+forward-plus-reverse call. Cleanup and allocator inspection are outside timing.
+The SI objective and both derivative tolerances remain `rtol=2e-12, atol=0`.
+Failed preflights and execution failures retain their attempt records; use a new
+output path on every invocation. Profile separately because instrumentation
+changes tensor lifetimes and costs.
+
 The [CUDA validation record](../../../docs/validation/fdtd/general-cuda.md)
 reports both measured derivative modes, including a case where checkpointing
 increases allocated peak and one where it reduces it at a time cost.
