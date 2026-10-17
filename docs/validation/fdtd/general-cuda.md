@@ -25,6 +25,9 @@ Targets:
 - `tests/fdtd/_pulse_yee_reference.py`
 - `tests/fdtd/test_general_cuda_pulse_reference.py`
 - `tests/fdtd/test_general_cuda_pulse_higher_order.py`
+- `tests/fdtd/_pulse_fit_reference.py`
+- `tests/fdtd/test_pulse_fit_reference.py`
+- `tests/fdtd/test_general_cuda_pulse_optimizer.py`
 - `tests/fdtd/test_general_cuda_cpml_higher_order.py`
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
@@ -1043,6 +1046,91 @@ checks the existing floor at current values when no declared material has poles.
 Declared-pole scenes retain the previous resolution path. Neither predicate
 certifies continuum accuracy or an entire optimization range; independent
 refinement and controls on other waveform intermediates remain needed.
+
+## Projected four-coordinate pulse fitting
+
+This regression targets the existing electric Ey Dipole route and changes no
+runtime or admission rule. It uses the preceding independent 15-lane pulse
+reference with the `bspline` stamp, periodic 8³ grid, 41 steps and fixed medium.
+The normalized target is `p*=(0.985,1.005,0.1,0.14)`; the two initial points are
+`(1,1,0.4,0.12)` and `(0.97,1.01,-0.2,0.16)`. Wavelength, bandwidth, phase and
+delay retain the physical mapping and fixed delay baseline described above.
+
+Let F contain final E and Z0H, and R contain the six Records with H multiplied
+by Z0. Component weights are `(1,0.7,1.3,0.6,1.1,0.9)` and Record time weights
+are `1+0.2*n/41`. The residual objective is
+
+```text
+C = mean(w_R * R_target**2) + 0.25*mean(w_F * F_target**2)
+L(p) = [mean(w_R * (R(p)-R_target)**2)
+        + 0.25*mean(w_F * (F(p)-F_target)**2)] / C.
+```
+
+The target and residual value, gradient and full Hessian come from the
+independent SI reference, including the residual-times-second-derivative term.
+The checked HVP uses direction `(1,-0.5,0.25,0.75)`. At the zero-residual target,
+let G be the target Gauss–Newton Hessian, `D=diag(1/diag(G))`, and
+`eta=0.1/lambda_max(sqrt(D)*G*sqrt(D))`. These quantities are fixed before the
+trajectory; each coordinate's SGD learning rate is `eta*D_ii`.
+
+Each of twelve updates first proposes `q=p-eta*D*g`, then projects q componentwise
+onto the fixed normalized box
+`[0.94,1.04] × [0.97,1.04] × [-0.5,0.7] × [0.08,0.2]`.
+The optimizer uses `foreach=False` and clears gradients with
+`zero_grad(set_to_none=True)`. Projection occurs outside autograd: the derivative
+comparison concerns the smooth residual at each evaluated point, not the
+nonsmooth projection or the complete optimization map.
+
+The original unconstrained preflight left this box on the second proposal from
+the second seed, with wavelength coordinate approximately `0.92887` below
+`0.94`. That was a trajectory-domain failure, not a derivative mismatch. The
+projected protocol was specified separately before its qualification; the
+original attempt is retained and no derivative tolerance was relaxed.
+
+All **14 unique new cases passed**: eight pure-reference controls, two public
+plain CPU trajectories and four actual CUDA trajectories (two seeds with plain
+or checkpoint-7 execution, tail six). The public CPU run passed in 9.76 s with
+four warnings; CUDA passed in 34.71 s with four warnings. These are test-run
+elapsed times, not performance measurements. Qualification preserved source
+bytes and the original derivative budgets.
+
+Wavelength and phase remain on the caller CPU; bandwidth and delay are on the
+execution device. At every update, the tests compare both the raw SGD proposal
+and projected point with the independent trajectory, as well as residual
+value/gradient/HVP at the actual local point. Relative tolerance is `2e-12`,
+with zero absolute tolerance. They retain the same leaves, preserve old detached
+outputs, clear `.grad`, and require weak references to live result/derivative
+graphs to die before the next iteration.
+
+An independent audit recomputed all six trajectories and 72 updates. Maximum
+relative errors were `1.55049897e-13` for loss, `1.78910054e-13` for gradients and
+`5.13582612e-14` for HVP; the maximum recorded forward scaled error was
+`1.04404066e-14`.
+
+| Seed | Initial loss | Loss after 12 updates | Updates with projection |
+| --- | ---: | ---: | ---: |
+| 0 | 0.122965706571319 | 0.021001548655822 | 0 |
+| 1 | 0.151257104004487 | 0.011733149330523 | 11 |
+
+The second trajectory ends on the wavelength-coordinate boundary `l=0.94`.
+A lower residual is not unique recovery of the target coordinates. All four
+CUDA cases recorded 60,416 allocated bytes at each of the twelve post-update
+checks with one owned output pack held. Releasing that pack restored the
+persistent baseline with target tensors and caller leaves still alive; this is
+not total allocation zero. These observations are live-storage checks, not
+peak-memory measurements or evidence of checkpoint speed/memory benefit.
+The scope remains this discrete fitting regression, without universal
+convergence, continuum inverse accuracy or a public optimizer API.
+
+Reproduce the pure controls and all six public trajectories in the qualified
+environment; CUDA cases skip when an actual CUDA device is absent. To select
+only public CPU or CUDA cases, use `-k cpu_plain` or
+`-k 'gpu_plain or gpu_k7'`, respectively.
+
+```sh
+python -m pytest tests/fdtd/test_pulse_fit_reference.py -q
+python -m pytest tests/fdtd/test_general_cuda_pulse_optimizer.py -q
+```
 
 ## CPML amplitude/phase second derivatives
 
