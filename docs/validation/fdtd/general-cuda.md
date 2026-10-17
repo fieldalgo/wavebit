@@ -13,6 +13,9 @@ Targets:
 - `tests/fdtd/test_general_cuda.py`
 - `tests/fdtd/test_general_source_finite.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
+- `tests/fdtd/test_general_cuda_region_contract.py`
+- `tests/fdtd/test_general_cuda_region.py`
+- `tests/fdtd/_region_yee_reference.py`
 - `tests/fdtd/test_general_cuda_observations.py`
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
@@ -63,7 +66,7 @@ the original leaves. Other non-CPU backends and single precision remain refused.
 | Grid and duration | Existing uniform cubic grid; fixed duration; `discretisation='voxel'`; no `geometry_ranges` |
 | Boundaries and padding | `Periodic`, `Open`, `PEC` and `PMC`; static `Bloch` with only Bloch/Periodic/Open companions; `PML` padding on open faces |
 | Materials | Existing nondispersive `Material` and `ConductiveMaterial`; the separate homogeneous single-pole ADE scope below |
-| Structures | Cell-snapped `Slab` only |
+| Structures | Cell-snapped `Slab`; one strictly interior `Region` under the separate restrictions below |
 | Sources | `PlaneWave`, fixed-center electric/magnetic `Dipole` with `bspline` or `tent` stamp, or initial fields; Bloch scenes admit only PlaneWave/initial fields |
 | Observations | `Record`, `Field`, `Flux` and final fields |
 
@@ -97,6 +100,96 @@ diffraction and far-field monitors are outside this CUDA route. Unsupported
 combinations return a `cuda_scope` issue with the relevant public field path
 before planning. Admission does not waive sampling, CFL, material, padding or
 other scientific checks. A passed `check` or `prepare` advances no fields.
+
+## Static interior Region
+
+The separate bounded Region route requires exactly one ordinary
+`Structure(Region(...), material)`, six `Periodic` faces and no external sources.
+Each Region face snaps to the nearest cell boundary on the actual rounded grid.
+On every axis its filled interval must satisfy `0 < lo < hi < n`: touching a
+periodic seam, spanning a whole axis or collapsing to an empty interval is
+outside this route. Multiple Regions, Region/Slab mixtures, continuation,
+`Box`, smoothing and shape derivatives are excluded. The existing Slab and CPU
+routes keep their separate contracts.
+
+Both background and body use scalar, real, nondispersive `Material` or
+`ConductiveMaterial`; `mu=None` means one. Their existing finite/positive/CFL
+checks still apply on preparation and reuse. The Region's center and size and
+the initial spatial patterns are static. A changed shape or pattern requires
+new preparation; changing compatible scalar material values or the real initial
+amplitude retains the existing live-input path.
+
+At least one initial E/H pattern must be present as a plain finite real NumPy
+array of actual shape `(3,nz,ny,nx)`; the other may be `None`. Tensor patterns,
+callables and component lists are excluded here. Only ordinary `Record` and
+final-field outputs are admitted. Fixed duration, double precision, voxel
+sampling and the existing optional checkpoint policy apply. Region scenes with
+Open/PML, PEC/PMC, Bloch, ADE, sources, Field/Flux or ranged geometry remain
+outside this bounded route. Admission does not establish interface convergence
+or general geometry differentiation.
+
+### Independent discrete Region reference
+
+The reference constructs the occupied-cell mask independently from declared
+geometry and uses explicit modulo-index forward/backward Yee differences. With
+`h=Z0*H`, `r=sigma*dt/(2*epsilon0)`, `q=(epsilon-r)/(epsilon+r)` and
+`g=c0*dt/(epsilon+r)`, the update is
+`h_new=h-c0*dt/mu*curl_plus(E)` followed by
+`E_new=q*E+g*curl_minus(h_new)`. Body epsilon, mu, conductivity and initial
+amplitude tangents are propagated by an independently written chain rule,
+including the conductive denominator and magnetic coefficient. This reference
+does not call the product curl, material-painting, coefficient or AD helpers.
+It validates the stated discrete update, not a continuum interface solution.
+
+The declared base fixture uses dx 0.05 um, domain size `(0.61,0.49,0.71)` um and
+center `(0.1,-0.15,0.2)` um. Independent upward rounding gives `(nx,ny,nz)=(13,10,15)`
+and actual lower corner `(-0.225,-0.4,-0.175)` um. Region size
+`(0.305,0.225,0.365)` um and center `(0.0375,-0.2025,0.1625)` um give half-open
+index ranges x `[2:8]`, y `[2:6]`, z `[3:10]`, occupying 168 cells. Three cyclic
+axis arrangements and equivalent um/nm declarations exercise orientation and
+unit conversion. Initial real fields are sampled at each component's Yee
+location; all six components are observed as Records and final fields.
+
+The checks use 17 and 41 steps, with checkpoint-7 tails of three and
+six steps. Full fields and Record histories use peak-normalized `2e-12`, clocks
+use relative `2e-14`, and weighted squared field/Record norms and their four nonzero
+material/amplitude derivatives use relative `2e-12`, absolute zero. A
+`|parameter_scale*gradient|/loss > 1e-6` floor prevents vacuous derivative
+comparisons. Mask shifts, floor-versus-nearest rounding, axis/wrap/curl-sign
+mistakes, omitted mu and conductive-denominator/tangent terms must each exceed
+a `1e-4` separation floor. All eight mutants passed this predeclared gate;
+the smallest separation was `0.0111898253`. Two central-difference step sizes
+independently check the analytic tangents at relative `2e-6`; their largest
+observed discrepancy was `1.15306194e-6`.
+
+The body-material reuse cases use `(epsilon,mu,sigma,A)=(2.25,1.3,600,1.2)`
+and `(1.8,1.1,900,0.7)`, with conductivity in S/m. CUDA material leaves and a CPU
+amplitude leaf remain connected to the same prepared scene. Input patterns,
+leaf ownership and earlier outputs remain unchanged. Separate lossless cases
+exercise `Material`. A nonvacuum background `(epsilon,mu,sigma)=(1.4,1.1,80)`
+uses fresh um/nm runs at rotation 1 and 41 steps, comparing background-material
+and amplitude derivatives; this is a unit-pair check, not background prepared
+reuse.
+
+| Qualification | Host cases | Actual CUDA cases |
+| --- | ---: | ---: |
+| Independent mask/Yee/tangents, fields, Records, reuse and units | 25 | 17 |
+| Admission, conversion, refusal and same-leaf invalid/recovery contract | 51 | 6 |
+| Unique new cases | 76 | 23 |
+
+All **99 unique new cases passed**: the host total comprises 44 device-free
+checks and 32 actual CPU cases. The 23-case CUDA run took 10.40 s and emitted
+25 warnings. Repeated qualification checks do not add to these counts; 25
+existing CPU regressions passed separately.
+
+The largest recorded body-reuse field/Record error was
+`3.97962361e-15`. An independent audit of the recorded body and background
+objective gradients found maximum relative error `9.28604067e-14`, below the
+unchanged `2e-12` budget. Lossless and unit-pair field assertions also passed,
+but their errors were not individually recorded, so the body-reuse maximum is
+not a maximum over every field case. These results qualify the bounded discrete
+first-derivative contract; they do not establish continuum interface accuracy,
+shape derivatives or arbitrary Region combinations.
 
 ## Finite excitation values and prepared recovery
 
@@ -1017,6 +1110,7 @@ python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_ob
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
+python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q

@@ -40,6 +40,16 @@ CPU tensors without gradients, or host callables). Direct CUDA or differentiable
 tensor patterns are not admitted; the separate `InitialField.amplitude` remains
 a live differentiable input.
 
+A separate Region scope admits one static cell-snapped body strictly inside all
+six Periodic faces, with scalar real Material/ConductiveMaterial background and
+body, no external sources, finite real full-grid NumPy initial patterns and
+Record/final outputs only. One initial field may be `None`; tensor patterns and
+callables are excluded here. Scalar material values and real initial amplitude
+may remain live; shape derivatives, multiple bodies, full-span/seam cases,
+Open/PML, Bloch and Field/Flux are excluded. See the
+[interior Region scope](../../validation/fdtd/general-cuda.md#static-interior-region)
+for the exact contract and independent discrete validation criteria.
+
 A separate homogeneous ADE scope admits one full-grid Slab with one Lorentz or
 Drude pole, six Periodic faces, fixed finite real full-grid NumPy initial arrays
 and Record and/or final-field outputs. One initial field may be `None`; CPU
