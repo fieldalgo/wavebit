@@ -85,6 +85,8 @@ translations are the public reading routes.
 
 | Document | Question it answers | Decision |
 | --- | --- | --- |
+| [Native CUDA](validation/fdtd/native-cuda.md) | Which physical native-grid values and derivatives have actual Torch CUDA evidence, and what do their measured costs include? | Qualify the bounded double-precision cases and keep general-scene, JAX GPU and broader accuracy claims separate. |
+| [General-scene CUDA](validation/fdtd/general-cuda.md) | Which general FDTD scenes pass actual CUDA execution and derivative controls, and how do checkpoint costs depend on differentiated inputs? | Admit the restricted fixed-duration voxel route while preserving physical guards; bound checkpoint memory and time claims to measured graphs. |
 | [`nvf-galerkin-error.md`](validation/rcwa/nvf-galerkin-error.md) | Can conforming electric and displacement fields bound the closed auxiliary-cell error and drive mesh refinement? | Exact physical residual integrals and a coercivity bound separate nodal solve accuracy from constitutive approximation; optical accuracy remains separate. |
 | [`nvf-contact-solver.md`](validation/rcwa/nvf-contact-solver.md) | Can complete retained elimination accelerate contact solves without losing physical QR safeguards? | Both methods solve the same finite space; every original guard precedes acceptance. |
 | [`nvf-polynomial-pair-coupling.md`](validation/rcwa/nvf-polynomial-pair-coupling.md) | Can cubic and quartic pair fields retain the full real contact trace without losing precision in nearly coincident gradients? | Invertible real coordinates and direct field products preserve the original physical guards; optical qualification remains separate. |

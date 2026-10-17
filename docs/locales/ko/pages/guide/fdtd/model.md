@@ -28,8 +28,16 @@
 | `Record` | 한 성분의, 가장 가까운 Yee 점에서의 시계열 |
 | `Field`, `Flux`, `Diffraction`, `FarField` | 실행 중에 누적되는 장의 푸리에 변환 |
 
-실행은 CPU에서 배정밀도로, NumPy·JAX·PyTorch 백엔드 중 하나로 돌아갑니다. JAX와 PyTorch
+CPU 실행은 NumPy·JAX·PyTorch 배정밀도를 사용합니다. 제한된 Torch CUDA는
+고정 실행 길이의 voxel 장면, Periodic/Open 경계, PML, 비분산
+Material/ConductiveMaterial, 셀 스냅 Slab, PlaneWave 또는 초기 장,
+Record/Field/Flux 관측을 허용합니다. `backend='torch', device='cuda:0'`를
+전달하며 [CUDA 범위와 검증](../../validation/fdtd/general-cuda.md)을 참고하세요. JAX와 PyTorch
 실행은 미분할 수 있습니다. [실행 미분](#실행-미분)을 보세요.
+
+CUDA의 초기 E/H 패턴은 고정 호스트 선언(NumPy 배열, 미분하지 않는 CPU
+텐서, 호스트 callable)입니다. CUDA 텐서나 미분 가능한 텐서 패턴은 허용하지
+않으며, 별도 `InitialField.amplitude`는 미분 가능한 live 입력입니다.
 
 ## 단위와 규약
 
@@ -455,6 +463,22 @@ host에서만 검사할 수 있는 지원되지 않는 trace는 명시적으로 
 재료 값, 소스의 진폭·위상·지연·펄스, 초기장 진폭입니다. JAX는 배열을 만들기 전에
 `jax.config.update("jax_enable_x64", True)`가 필요합니다.
 
+허용 범위의 고정 길이 Torch CUDA 실행은 `Numerics(checkpoint_steps=11)`로
+역방향 미분 중 블록을 재계산할 수 있습니다. `None`은 기존 스캔을 유지합니다.
+명시적 설정은 양의 정적 정수여야 하며 CPU 실행과 `Decay`에서는 거부합니다.
+광원·관측 이력은 계속 보존하므로 메모리 상한이 아닙니다. 블록이 전체 실행보다
+길면 일반 tail만 남습니다. 선택한 스케줄은 check 보고서의
+`resolved['checkpoint_steps']`, prepared 계약의 `resolved_checkpoint_steps`,
+결과의 `provenance['checkpoint_steps']`에 표시됩니다. 바꾸려면 다시
+prepare하세요. 미분 범위와 한계는 [CUDA 체크포인트 검증](../../validation/fdtd/general-cuda.md)을
+참고하세요. 전도체 실측에서는 미분하는 입력에 따라 체크포인트가 메모리를
+늘리거나 줄였습니다. `None`은 생략하여 기존 v1 Job 키를 유지하며 명시적 스케줄은
+Job과 함께 저장·복원됩니다.
+
+`torch.no_grad()` 또는 `torch.inference_mode()`에서는 역방향용 체크포인트
+래퍼와 블록 복사를 생략합니다. 정책 메타데이터는 유지하며 이후 기울기
+기록을 켠 prepared 재사용은 요청한 스케줄을 사용합니다.
+
 float64 Drude 감수율은 큰 감쇠에서 식을 재스케일링하여, 공개 SI 모델과 정규화된
 FDTD 모델에서 시험한 주파수별 값과 미분을 보존합니다. float32 입력을 포함하는
 공개 호출은 기존 산술과 dtype을 유지하며, float32나 혼합 정밀도의 극단값 지원을
@@ -539,7 +563,7 @@ for w, r, t in zip(wavelengths, R, T):
 
 ## 일반 장면 API의 범위
 
-- 일반 장면 실행은 CPU·배정밀도·균일한 정육면체 격자를 사용합니다.
+- CUDA는 [명시한 Torch 범위](../../validation/fdtd/general-cuda.md)로 제한되며, 다른 GPU 백엔드와 단정밀도는 거부합니다. 격자는 균일한 정육면체입니다.
 - 셀별 배열과 비균일 z 격자는 `fdtd.native`로 선언합니다. 일반 장면의 CSG 합집합·교집합·차집합과 기울어진 밀어내기 축은 지원하지 않습니다.
 - 일반 장면의 가우시안 빔·모드 소스·모드 모니터는 아직 구현하지 않았습니다.
 - 자동 정지는 `fdtd.Decay`, 단계형 전도도 흡수층은 `fdtd.Absorber`로 제공합니다. [정지와 흡수층](stopping-and-absorbers.md)을 참고하세요.

@@ -236,6 +236,8 @@ subtrees:
               - file: validation/fdtd/fd-debye-sum-film
               - file: validation/fdtd/fd-decay-stopping
               - file: validation/fdtd/fd-source-decay
+              - file: validation/fdtd/native-cuda
+              - file: validation/fdtd/general-cuda
               - file: validation/fdtd/fd-hybrid-film
               - file: validation/fdtd/fd-lattice-radiation
               - file: validation/fdtd/fd-metasurface-validation

@@ -231,7 +231,10 @@ implementation, common graph-preserving conversion, and separate NumPy/JAX/Torch
 time-loop policies. Torch additionally passes the existing FDTDX field/gradient
 goldens for non-dispersive, ADE and Bloch cases. Omitting backend in `wavebit.compat.legacy.fdtd`
 preserves legacy Stack/Incidence dispatch; explicitly selecting one invokes the common scene
-adapter. Actual GPU execution is unverified on the current CPU-only machine. See the [native-grid guide](time-domain.md).
+adapter. These historical external comparisons used CPU. Current public APIs
+have separate [native and periodic-slab CUDA evidence](../../validation/fdtd/native-cuda.md)
+and [bounded general-scene CUDA evidence](../../validation/fdtd/general-cuda.md).
+See the [native-grid guide](time-domain.md) for the earlier interface.
 
 ## Reproduce the installation check
 
@@ -525,7 +528,9 @@ retain warnings and known limitations in examples. Before claiming a broader 3D 
 capability, add more independent material cases, especially low-loss metals and strong
 resonances, and repeat runtime/absorber refinement for those scenes. The selected cases above do not
 cover the whole input space.
-GPU execution is a separate development project. Autodiff has since landed on the
+GPU evidence is limited to the [current native cases and periodic slab](../../validation/fdtd/native-cuda.md)
+and [restricted general-scene route](../../validation/fdtd/general-cuda.md); the historical CPU
+comparisons do not extend those scopes. Autodiff has since landed on the
 explicit-backend route above, and general domains, sources and field monitors in the
 [current FDTD module](general-fdtd.md).
 

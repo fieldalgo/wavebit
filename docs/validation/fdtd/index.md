@@ -8,7 +8,9 @@
 
 Spatial, temporal, material and boundary studies. Each report states its measured configuration and remaining limits.
 
-Current public API: [automatic stopping with incident source columns](fd-source-decay.md).
+Current public API: [automatic stopping with incident source columns](fd-source-decay.md)
+and [native Yee-grid CUDA validation](native-cuda.md), with separate evidence for
+[bounded general-scene CUDA execution](general-cuda.md).
 
 These records predate the public `wavebit.fdtd` module (2026-10-13) and name the interfaces they
 measured. The general engine they call `wavebit.fd` (`fd.Scene`, `fd.plan`, `fd.run`, `fd.check`)

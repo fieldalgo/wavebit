@@ -573,7 +573,9 @@ CPU parity, discrete eigenmode propagation, material/pulse derivatives, and bloc
 checkpoint equivalence are tested. External CPU checks additionally compare slab
 complex fields/power with Meep and native 3D updates/material gradients with
 FDTDX; frozen external outputs support regression tests. See the
-[validation scope](fdtd-alpha.md). Actual GPU execution has not been validated.
+[validation scope](fdtd-alpha.md). Those historical comparisons used CPU.
+Actual Torch CUDA evidence for the current public native API is recorded
+separately in [native CUDA validation](../../validation/fdtd/native-cuda.md).
 `examples/fdtd/fdtd_grid_gradient.py` differentiates slab transmission;
 `studies/fdtd/grid_benchmark/fdtd_grid_benchmark.py` reports compilation separately from warm execution;
 its measurements, and why the speed-up belongs to the host, are in
@@ -629,7 +631,8 @@ increasing width does not demonstrate temporal convergence. The reference pulse
 is symmetric with zero DC, and tests also extend runtime and double PML width.
 This does not establish arbitrary-band or grazing-angle accuracy.
 `examples/fdtd/fdtd_dispersive_gradient.py` differentiates Lorentz oscillator strength
-with CPML enabled. Actual GPU execution remains unverified.
+with CPML enabled. The historical external comparisons above remain CPU
+evidence; the current API has separate [bounded CUDA field and derivative checks](../../validation/fdtd/native-cuda.md).
 
 ### CPML strength
 
@@ -803,8 +806,11 @@ Far-plane extrapolation of strongly evanescent amplitudes is ill-conditioned.
 
 The explicit-backend adapter currently does not accept skewed lattices or
 arbitrary curved-shape derivatives; unsupported
-explicit-backend keywords raise an error. There is no implicit backend fallback. Actual GPU execution remains
-unverified on this CPU-only machine.
+explicit-backend keywords raise an error. There is no implicit backend fallback.
+Those historical scene measurements used CPU. The current periodic API has
+[two CUDA slab checks](../../validation/fdtd/native-cuda.md);
+they do not qualify the wider scene family described here. The current general
+API has a [separate bounded CUDA route](../../validation/fdtd/general-cuda.md).
 
 Tests compare complex slab amplitudes with Airy under refinement, magnetic
 conical Jones amplitudes and asymmetric diffraction with RCWA, a wavelength-band
