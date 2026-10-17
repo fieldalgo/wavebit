@@ -91,19 +91,19 @@ def test_internal_run_keeps_schedule_on_both_polarization_solves(monkeypatch):
     class Result:
         def __init__(self):self._series={'port':Port()};self.diagnostics={}
         def __getitem__(self,key):return self._series[key]
-    plan=SimpleNamespace(schedule=11,skeleton='same')
+    plan=SimpleNamespace(schedule=11,skeleton='same',terms=())
     scene=SimpleNamespace(monitors=(Both(),))
     schedules=[]
-    def planned(scene,reuse=None,*,schedule=None):
-        schedules.append(schedule)
-        return SimpleNamespace(schedule=schedule,skeleton='same'),None
+    def planned(scene,reuse=None,*,schedule=None,compact_poles=False):
+        schedules.append((schedule,compact_poles))
+        return SimpleNamespace(schedule=schedule,skeleton='same',terms=()),None
     monkeypatch.setattr(execution,'Diffraction',Both)
     monkeypatch.setattr(execution,'_planned',planned)
     monkeypatch.setattr(execution,'_other_polarization',lambda scene:scene)
     monkeypatch.setattr(execution,'runtime',lambda *a:None)
     monkeypatch.setattr(execution,'_solve',lambda *a:Result())
     result=execution.run(scene,plan=plan)
-    assert schedules==[11,11]
+    assert schedules==[(11,False),(11,False)]
     assert result.diagnostics['runs']==2
     assert result['port']==('combined','second incidence')
 
