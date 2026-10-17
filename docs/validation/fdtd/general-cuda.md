@@ -14,6 +14,7 @@ Targets:
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
 - `tests/fdtd/test_general_cuda_higher_order.py`
+- `tests/fdtd/test_general_cuda_cpml_higher_order.py`
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
 - `tests/fdtd/test_general_cuda_dipole_radiation.py`
@@ -273,6 +274,54 @@ two cases are separate from the earlier first-derivative test counts. They do
 not establish Hessians for arbitrary geometry, CPML, other source/material
 families, or `torch.func` transformations.
 
+## CPML amplitude/phase second derivatives
+
+The public `test_general_cuda_cpml_higher_order.py` uses electric and
+magnetic Dipoles in a uniform vacuum box with six Open faces, four-cell PML and
+41 steps. Plain scans and CUDA K7 with a six-step tail share the same oracle.
+Two NumPy basis runs at phase 0 and pi/2 supply a Gram matrix `G`; for amplitude
+`A` and `u = (cos(phi), sin(phi))`, the quadratic objective is `A**2 * u.T G u`.
+Analytically differentiating this expression gives value, gradient and the full
+amplitude/phase Hessian at relative `2e-12`, absolute zero. CPU amplitude and
+device phase leaves, changed prepared inputs and immutable previous outputs
+exercise graph ownership. The reference shares the spatial discretisation:
+it establishes bounded derivatives, not independent PML reflection accuracy or
+arbitrary material/geometry Hessians. All six cases passed on the retained
+functional runtime: two CPU and four actual CUDA cases, in 21.71 seconds. This
+is a separate qualification result from the earlier conductor Hessian cases.
+
+### Bounded CPML optimization experiment: not adopted
+
+A CUDA-specific scratch-reuse adjoint was evaluated against the original
+functional CPML expression. The final guarded candidate did not demonstrate a
+consistent timing improvement or any allocator reduction in the bounded
+PML8/K7 comparison, so the runtime optimization was not adopted. The functional
+CPML implementation remains; the independent derivative gate is retained.
+
+The experiment used the same RTX 4060 Ti environment, one Torch CPU thread,
+float64, a 16³ physical grid, Periodic x/y and Open z, eight-cell PML, a live
+slab permittivity and live electric-Dipole current moment over 41 steps. Each
+fresh process performed one warmup and five repetitions. Timings include
+prepared execution, objective, backward, synchronization and allocator queries
+after forward and backward. Initial preparation, leaf creation, result checks,
+host copies, profiling and cache cleanup are excluded. Cache release after
+warmup and each repetition makes these instrumented, cache-released wall times.
+
+| Order | Functional reference median seconds [minimum–maximum] | Guarded candidate median seconds [minimum–maximum] |
+| --- | ---: | ---: |
+| Reference then candidate | 0.3954916 [0.3694054–0.4154265] | 0.3865133 [0.3495335–0.4249051] |
+| Candidate then reference | 0.4004945 [0.3895314–0.4209488] | 0.4036426 [0.3598773–0.4964137] |
+
+Both pairs' ranges overlap. All runs passed the NumPy objective/central-secant,
+moment-quadratic and source-work checks, with exactly equal recorded objective
+and gradients. Peak allocated/reserved bytes were 6639104/8388608 in both
+implementations. Allocator peaks exclude driver/display memory. The short,
+thin-PML workload does not establish absorption accuracy. These results neither
+identify the cause of the timing variation nor support a general speedup or
+memory saving; the experimental candidate is not part of the shipped runtime.
+Raw experimental machine records and the rejected candidate are not distributed
+with this page; the public command below reproduces the retained Hessian gate.
+
 ## Measured checkpoint cost
 
 The prepared conductor fixture uses the environment listed in the native
@@ -465,6 +514,7 @@ described in the [native setup](native-cuda.md#environment-and-reproduction).
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
+python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q

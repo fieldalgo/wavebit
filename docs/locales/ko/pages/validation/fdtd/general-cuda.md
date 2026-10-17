@@ -14,6 +14,7 @@ Targets:
 - `tests/fdtd/test_general_cuda_checkpoint.py`
 - `tests/fdtd/test_general_cuda_airy.py`
 - `tests/fdtd/test_general_cuda_higher_order.py`
+- `tests/fdtd/test_general_cuda_cpml_higher_order.py`
 - `tests/fdtd/test_general_cuda_dipole.py`
 - `tests/fdtd/test_general_cuda_dipole_conductive.py`
 - `tests/fdtd/test_general_cuda_dipole_radiation.py`
@@ -257,6 +258,51 @@ Hessian을 상대 `2e-12`, 절대 0으로 비교하며 혼합 미분의 양쪽 �
 임의의 기하, CPML, 다른 광원·재료 종류의 Hessian이나 `torch.func` 변환을
 검증하지 않습니다.
 
+## CPML 진폭/위상 2차 미분
+
+공개 `test_general_cuda_cpml_higher_order.py`는 여섯 Open 면, 4셀 PML을 둔 균일
+진공 상자에서 전기·자기 Dipole을 41단계 실행합니다. 단순 스캔과 CUDA K7의
+6단계 tail에 같은 기준을 사용합니다. 위상 0과 pi/2의 NumPy 두 기저 실행으로
+Gram 행렬 `G`를 구하면 진폭 `A`, `u = (cos(phi), sin(phi))`의 제곱 목적함수는
+`A**2 * u.T G u`입니다. 이 식을 해석적으로 미분한 값·기울기·전체 진폭/위상
+Hessian을 상대 `2e-12`, 절대 0으로 비교합니다. CPU 진폭과 실행 장치 위상
+리프, 바꾼 입력의 prepared 재사용과 이전 결과 보존으로 그래프 소유권을
+검사합니다. 같은 공간 이산화를 공유하는 기준이므로 제한된 미분 검증이며
+PML 반사 정확도나 임의 재료·기하 Hessian의 독립 기준은 아닙니다.
+유지한 함수형 runtime에서 6개 모두 통과했습니다. CPU 2개와 실제 CUDA
+4개이며 실행 시간은 21.71초였습니다. 앞의 전도체 Hessian 사례와 별개의
+검증 결과입니다.
+
+### 범위를 한정한 CPML 최적화 실험: 미채택
+
+CUDA 전용 임시 배열 재사용 adjoint를 원래 함수형 CPML 식과 비교했습니다.
+최종 조건 검사를 포함한 후보는 제한된 PML8/K7 비교에서 일관된 시간 개선이나
+할당량 감소를 보이지 않아 runtime 최적화를 채택하지 않았습니다. 함수형
+CPML 구현은 유지하고 독립 미분 검사는 보존합니다.
+
+같은 RTX 4060 Ti 환경, Torch CPU 한 스레드, float64, 물리 격자 16³,
+x/y 주기 경계와 z Open 경계, 8셀 PML, live 슬래브 유전율과 전기 Dipole
+전류 모멘트를 41단계 실행했습니다. 각 새 프로세스에서 한 번 예열 후 다섯
+번 반복했습니다. 시간에는 prepared 실행, 목적함수, 역방향 미분과 순방향·
+역방향 후 동기화 및 할당자 조회를 포함합니다. 초기 준비, 리프 생성, 결과
+검사, 호스트 복사, 프로파일링과 캐시 정리는 제외합니다. 예열과 매 반복 후
+캐시를 해제한 계측 wall time입니다.
+
+| 순서 | 함수형 기준 중앙값 초 [최소–최대] | 조건 검사를 포함한 후보 중앙값 초 [최소–최대] |
+| --- | ---: | ---: |
+| 기준 후 후보 | 0.3954916 [0.3694054–0.4154265] | 0.3865133 [0.3495335–0.4249051] |
+| 후보 후 기준 | 0.4004945 [0.3895314–0.4209488] | 0.4036426 [0.3598773–0.4964137] |
+
+두 쌍 모두 범위가 겹칩니다. 모든 실행이 NumPy 목적함수·중앙 secant,
+모멘트 제곱 관계와 광원 일 검사를 통과했고, 기록한 목적함수와 기울기는
+정확히 같았습니다. allocated/reserved 최대값은 두 구현 모두
+6639104/8388608바이트였습니다. 할당자 최대값은 드라이버·화면 메모리를
+제외합니다. 짧고 얇은 PML 사례로 흡수 정확도를 검증하지 않습니다. 이 결과로
+시간 변동의 원인을 특정하거나 일반적인 가속·메모리 절감을 주장할 수 없으며,
+실험 후보는 제공되는 runtime에 포함되지 않습니다. 원시 실험 환경 기록과
+미채택 후보는 이 페이지와 함께 배포하지 않으며, 아래 공개 명령은 유지한
+Hessian 검사를 재현합니다.
+
 ## 체크포인트 비용 실측
 
 prepared 전도체 사례는 native 기록의 환경, Torch CPU 디스패치 한 스레드,
@@ -437,6 +483,7 @@ CPU 진폭과 CUDA 재료 리프는 사용자가 소유하며 변하지 않습�
 python -m pytest tests/fdtd/test_general_cuda.py tests/fdtd/test_general_cuda_observations.py tests/fdtd/test_general_cuda_checkpoint.py tests/api/test_fdtd_checkpoint_jobs.py -q
 python -m pytest tests/fdtd/test_general_cuda_airy.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
+python -m pytest tests/fdtd/test_general_cuda_cpml_higher_order.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole.py tests/fdtd/test_general_cuda_dipole_conductive.py -q
 python -m pytest tests/fdtd/test_general_cuda_dipole_radiation.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_walls.py --run-slow -q
