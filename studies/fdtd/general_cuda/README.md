@@ -165,6 +165,9 @@ The [validation record](../../../docs/validation/fdtd/general-cuda.md)
 separates historical state-reduction evidence from current product measurements.
 
 The current six-row 32³/64³ production measurement is recorded in the validation
-page. All checks passed, and allocated/reserved peaks matched the earlier
+page. It repeats all six configurations after the compact scalar-recurrence
+arithmetic guards were restored, since live lowering belongs to the timed
+public call. Prior attempts remain historical records; allocator peaks were
+unchanged in the guarded follow-up. All checks passed, and allocated/reserved peaks matched the earlier
 compact-state research measurements. Those historical timing comparisons had
 overlapping ranges; the product table does not establish a general speedup.

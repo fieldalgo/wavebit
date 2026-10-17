@@ -1981,9 +1981,9 @@ def check_stability(scene, plan):
     """Refuse a concretely unstable ``dt``; return whether the bound could be read at all."""
     # Check the scalar recurrence only when the plan actually uses it. Spatial
     # film subclasses own different coefficients and concrete inactive-slot rules.
-    from wavebit.fdtd._kernel.poles import PoleTerm
+    from wavebit.fdtd._kernel.poles import CompactPoleTerm, PoleTerm
     for term in plan.terms:
-        if type(term) is not PoleTerm:
+        if type(term) not in (PoleTerm, CompactPoleTerm):
             continue
         index = int(term.name[len('poles['):-1])
         for pole in scene.structures[index].material.poles:

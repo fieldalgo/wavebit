@@ -160,7 +160,8 @@ def main(argv=None):
             ['git', '-C', str(args.source_root), 'rev-parse', 'HEAD'], text=True).strip()
         names = ('_api.py', '_runtime.py', '_execution.py', '_kernel/poles.py', '_kernel/step.py',
                  '_kernel/observe.py', '_prepare/plan.py', '_prepare/params.py',
-                 '_prepare/coefficients.py', '_prepare/report.py', '_prepare/compact.py')
+                 '_prepare/coefficients.py', '_prepare/report.py', '_prepare/compact.py',
+                 '_prepare/checks.py')
         report['source_sha256'] = {name: digest(args.source_root/'src/wavebit/fdtd'/name) for name in names}
         identity_before = {key: report[key] for key in ('script_sha256', 'source_sha256')}
 
