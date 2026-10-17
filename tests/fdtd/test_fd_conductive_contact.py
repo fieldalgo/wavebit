@@ -181,3 +181,49 @@ def test_identical_contact_reduces_to_single_film_and_order_is_irrelevant():
         results.append((to_numpy(state['E']), to_numpy(state['H'])))
     for got in results[1:]:
         np.testing.assert_allclose(got, results[0], rtol=3e-12, atol=3e-12)
+
+
+def test_contact_reference_limits_and_reciprocity():
+    from tests.fixtures.fdtd.conductive_contact import FILMS, WAVELENGTHS, reference
+    from studies.fdtd.layer_alignment.fdtd_layer_alignment import multilayer
+    import math
+    omega = 2*np.pi/np.asarray(WAVELENGTHS)
+    kz = np.sqrt(omega**2-(2*np.pi*np.sin(math.radians(35.)))**2)
+    for pol in ('s', 'p'):
+        r, t = reference(pol, ((1., 0., .125), (1., 0., .125)))
+        np.testing.assert_allclose(r, 0., atol=2e-13, rtol=2e-13)
+        np.testing.assert_allclose(t, np.exp(1j*kz*.25), atol=2e-13, rtol=2e-13)
+        r, t = reference(pol, ((4., 0., .125), (2.25, 0., .125)))
+        np.testing.assert_allclose(abs(r)**2+abs(t)**2, 1., atol=2e-13, rtol=2e-13)
+        r, t = reference(pol)
+        np.testing.assert_allclose(reference(pol, FILMS[::-1])[1], t, atol=2e-13, rtol=2e-13)
+        assert np.all(1-abs(r)**2-abs(t)**2 > 0)
+        equal = reference(pol, ((4., 8., .125), (4., 8., .125)))
+        single = multilayer(WAVELENGTHS, [4.+8j/omega], [.25], theta=math.radians(35.))['tm' if pol == 'p' else 'te']
+        np.testing.assert_allclose(equal, single, atol=2e-13, rtol=2e-13)
+
+
+def test_public_contact_admission_and_union_memory_accounting():
+    from wavebit import fdtd as public, Units
+    from wavebit.materials import ConductiveMaterial
+    from wavebit.fdtd._lower_public import lower_problem
+    from wavebit.fdtd._runtime import runtime
+    from wavebit.fdtd._kernel.step import initial_state
+    from wavebit.fdtd._prepare.report import report
+    problem = public.Problem(units=Units(length='um'), scene=public.Scene(
+        domain=public.Domain(size=(.5, .5, 4.)),
+        boundaries=public.Boundaries(x=public.Periodic(), y=public.Periodic(), z=public.Periodic()),
+        structures=(public.Structure('a', public.Box(size=(1., 1., .5), center=(0., 0., -.25)),
+                                     ConductiveMaterial(epsilon=4., conductivity=2e4)),
+                    public.Structure('b', public.Box(size=(1., 1., .5), center=(0., 0., .25)),
+                                     ConductiveMaterial(epsilon=2.25, conductivity=1e4)))))
+    numerics = public.Numerics(grid=public.UniformGrid(spacing=.125), duration=public.Duration(steps=3))
+    assert public.check(problem, numerics=numerics).ok
+    scene, _ = lower_problem(problem, numerics)
+    plan = quiet(fd.plan, scene)
+    params = fd.lower(scene, plan, 'numpy')
+    state = initial_state(plan, params, runtime('numpy'))
+    term, = stack_terms(plan)
+    assert set(state['mem']) == {term.name}
+    held = sum(v.nbytes for values in state['mem'][term.name].values() for v in values)
+    assert report(scene, plan, params).bytes_per_state == state['E'].nbytes+state['H'].nbytes+held
