@@ -69,7 +69,7 @@ def parity(actual, expected):
     ('decay', 'numerics.decay'), ('absorber', 'numerics.absorber'),
     ('stencil', 'numerics.discretisation'), ('range', 'numerics.geometry_ranges'),
     ('boundary', 'scene.boundaries.x-'), ('shape', 'scene.structures.body.shape'),
-    ('material', 'scene.background'), ('source', 'sources.dipole'),
+    ('material', 'scene.background'), ('source', 'sources.tfsf'),
     ('monitor', 'outputs.far')])
 def test_cuda_scope_refuses_before_planning_without_a_device(monkeypatch, case, path):
     # Exercise public admission on CPU-only CI as well. No runtime is constructed.
@@ -87,8 +87,8 @@ def test_cuda_scope_refuses_before_planning_without_a_device(monkeypatch, case, 
     if case=='material':
         p=p.replace(scene=p.scene.replace(background=DispersiveMaterial(epsilon_inf=2., poles=(Lorentz(8e14, 1e13, 1e28),))))
     if case=='source':
-        p=p.replace(sources=(fdtd.Dipole('dipole', center=(0,0,0), component='Ey',
-            pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13), current_moment=1e-12),), initial=None)
+        p=p.replace(sources=(fdtd.TFSF('tfsf', box=fdtd.Region(size=(.2,.2,.2)),
+            pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),), initial=None)
     if case=='monitor':
         p=p.replace(outputs=fdtd.Outputs(monitors=(fdtd.FarField('far', wavelengths=(.8,), box=fdtd.Region(size=(.2,.2,.2))),)))
     report=fdtd.check(p,numerics=n,backend='torch',device='cuda')

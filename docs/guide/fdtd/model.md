@@ -26,8 +26,10 @@ for the declaration API, see [domains, sources and observations](general-fdtd.md
 
 Runs use double precision with NumPy, JAX or PyTorch on CPU. A restricted Torch
 CUDA route admits fixed-duration voxel scenes with Periodic/Open boundaries,
-PML, nondispersive Material/ConductiveMaterial, cell-snapped Slabs, PlaneWave or
-initial-field excitation, and Record/Field/Flux observations. Pass
+PML, nondispersive Material/ConductiveMaterial, cell-snapped Slabs, PlaneWave,
+fixed-center electric/magnetic Dipole (`bspline` or `tent`), or initial-field
+excitation, and Record/Field/Flux observations. Dipole center and stamp are
+static; `current_moment` uses A·m/V·m rather than plane-wave V/m amplitude. Pass
 `backend='torch', device='cuda:0'`; see the [CUDA scope and validation](../../validation/fdtd/general-cuda.md).
 JAX and PyTorch runs are differentiable; see [Differentiating a run](#differentiating-a-run).
 
