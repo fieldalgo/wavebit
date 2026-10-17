@@ -89,6 +89,12 @@ class Numerics(Declaration):
     limit in bytes. It requires ``discretisation='stencil'`` with a Sphere and
     a positive finite real number (not a bool). ``None`` keeps the engine's
     default limit. This prediction is not a cap on total process memory.
+
+    ``checkpoint_steps`` optionally recomputes blocks during reverse-mode
+    differentiation of fixed-duration Torch CUDA runs. A positive static integer
+    selects the block length; ``None`` preserves the ordinary scan. This is a
+    compute/memory tradeoff, not a memory cap. Observation and source histories
+    are retained, and a block longer than the run leaves only an ordinary tail.
     """
     grid: UniformGrid
     duration: Duration
@@ -99,8 +105,9 @@ class Numerics(Declaration):
     junction: str = 'split'
     decay: object = None
     memory_bound: object = None
+    checkpoint_steps: object = None
     # Default v1 jobs retain their original canonical envelope and key.
-    _FIELDS_ADDED_IN_V1 = ('memory_bound',)
+    _FIELDS_ADDED_IN_V1 = ('memory_bound','checkpoint_steps')
 
     def __post_init__(self):
         object.__setattr__(self, 'geometry_ranges', frozen_mapping(self.geometry_ranges))
