@@ -451,6 +451,8 @@ def check_smoothed(scene, grid):
     film = conductive_film(scene, grid)
     from wavebit.fdtd._prepare.conductive_stack import descriptor as conductive_stack
     stack = conductive_stack(scene, grid)
+    from wavebit.fdtd._prepare.conductive_contact import touching
+    conductive_contact = stack is not None and touching(stack)
     from wavebit.fdtd._prepare.debye_stack import descriptor as debye_stack
     relaxation_stack = debye_stack(scene, grid)
     from wavebit.fdtd._prepare.oscillator_stack import descriptor as oscillator_stack
@@ -589,6 +591,8 @@ def check_smoothed(scene, grid):
                     or relaxation_film is not None or relaxation_stack is not None
                     or resonant_stack is not None) and name == where:
                 continue  # These bounded C8 film scopes carry their exact memory.
+            if conductive_contact:
+                continue  # Both members are covered by the contact DC/Debye realization.
             what = ('a conductivity' if isinstance(material, Conductor)
                     else f'{len(material.poles)} pole(s)')
             # Door 4 below reads the self case the same way. A structure does not "share cells
@@ -640,6 +644,8 @@ def check_smoothed(scene, grid):
     for i in range(len(smoothed)):
         for j in range(i + 1, len(smoothed)):
             (ia, sa, ba), (ib, sb, bb) = smoothed[i], smoothed[j]
+            if conductive_contact:
+                continue  # No lossless junction painter: one union material memory.
             boxa, boxb = sa.shape.support(grid), sb.shape.support(grid)
             if not _intersects(boxa, boxb):
                 continue
@@ -2259,7 +2265,15 @@ def _smoothed_notes(scene, plan, rows=None):
     film = descriptor(scene, plan.grid)
     from wavebit.fdtd._prepare.conductive_stack import descriptor as stack_descriptor
     stack = stack_descriptor(scene, plan.grid)
-    if stack is not None:
+    from wavebit.fdtd._prepare.conductive_contact import touching
+    if stack is not None and touching(stack):
+        out.append((SubpixelAccuracyWarning,
+                    'Two exactly touching conductive films use one union memory with '
+                    'local DC conductivity and induced Debye relaxation. Only concrete '
+                    'axis-aligned films in a lossless host, outside absorbers, are admitted. '
+                    'Validate spatial, time and boundary convergence separately. '
+                    'See docs/validation/fdtd/fd-conductive-stack.md.'))
+    elif stack is not None:
         out.append((SubpixelAccuracyWarning,
                     f'The conductive stack has {len(stack.films)} films normal to '
                     f'{"xyz"[stack.axis]}, each with independent induced Debye memory '

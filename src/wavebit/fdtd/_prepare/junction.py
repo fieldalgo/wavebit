@@ -361,6 +361,15 @@ def refuse_mismatch(scene, plan):
     from wavebit.fdtd._prepare.shape_ranges import traced
     if traced(scene):
         scene = planning_scene(scene, plan)
+    from wavebit.fdtd._prepare.conductive_stack import descriptor as stack_descriptor
+    from wavebit.fdtd._prepare.conductive_stack import refuse_mismatch as stack_guard
+    from wavebit.fdtd._prepare.conductive_contact import touching
+    stack = stack_descriptor(scene, plan.grid)
+    if stack is not None and touching(stack):
+        stack_guard(scene, plan)
+        if plan.junctions or any(s.junction != DEFAULT for s in scene.structures):
+            raise ValueError('conductive contact uses its own material memory, not a junction rule.')
+        return
     records = plan.junctions
     if records:
         signature = _signature(scene, plan.grid)
