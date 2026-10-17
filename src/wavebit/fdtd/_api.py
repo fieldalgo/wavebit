@@ -462,7 +462,13 @@ class Prepared:
             except (TypeError,ValueError,NotImplementedError) as exc:
                 raise _issue(exc) from exc
             try:
-                raw=execute(scene,backend=self.execution.backend,device=self.execution.device,plan=self._plan)
+                from ._prepare.fields import static_host_patterns
+                cuda_patterns=(self.execution.backend=='torch'
+                               and self.execution.device.split(':')[0]=='cuda')
+                # Explicit False also isolates a nested public CPU/JAX run from
+                # an outer CUDA callback's pattern policy. The token is restored.
+                with static_host_patterns(cuda_patterns):
+                    raw=execute(scene,backend=self.execution.backend,device=self.execution.device,plan=self._plan)
                 metadata=dict(metadata,checkpoint_steps=raw.plan.schedule,numerical_policies=numerical_policies(
                     problem,self.numerics,scene,raw.plan))
                 return adapt_result(problem,self.numerics,self.execution,raw,metadata)

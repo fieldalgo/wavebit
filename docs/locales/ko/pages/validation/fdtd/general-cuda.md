@@ -15,6 +15,7 @@ Targets:
 - `tests/fdtd/test_general_source_band_guard.py`
 - `tests/fdtd/test_general_source_resolution_guard.py`
 - `tests/fdtd/test_general_source_waveform_guard.py`
+- `tests/fdtd/test_general_cuda_initial_patterns.py`
 - `tests/fdtd/test_general_cuda_optimizer.py`
 - `tests/fdtd/test_general_cuda_region_contract.py`
 - `tests/fdtd/test_general_cuda_region.py`
@@ -84,6 +85,14 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 텐서 패턴은 허용하지 않습니다. `InitialField.amplitude`는 live 입력이며
 CPU에서 CUDA로 변환해도 기울기가 연결됩니다. prepared 재사용에도 이 구분이
 적용되며 CUDA prepared 계약은 범위 지정 기하를 제공한다고 표시하지 않습니다.
+
+같은 callable을 재사용해도 매 run에서 호출 결과를 평가합니다. 반환한 패턴은
+중첩된 성분 값까지 동일한 고정 호스트/non-carried 제한을 따라야 하며,
+callable 객체의 동일성만으로 결과를 허용하지 않습니다. `check`와 `prepare`는
+이 callback을 실행하지 않습니다. Live 초기 진폭은 계속 지원하며 이 CUDA
+제한은 CPU/JAX 또는 legacy 초기 패턴 미분을 바꾸지 않습니다.
+전용 초기 패턴 시험은 새 33사례(CPU 16, CUDA 17)를 통과했으며 같은
+callable의 무효 반환값 거부와 이후 유효 반환값 복구를 포함합니다.
 
 `Dipole.current_moment`는 전기 광원의 A·m 또는 등가 자기 광원의 V·m 단위
 전류 모멘트입니다. 세기 파라미터는 `current_moment`이며,
@@ -1391,6 +1400,7 @@ python -m pytest tests/fdtd/test_general_source_finite.py -q
 python -m pytest tests/fdtd/test_general_source_band_guard.py -q
 python -m pytest tests/fdtd/test_general_source_resolution_guard.py -q
 python -m pytest tests/fdtd/test_general_source_waveform_guard.py -q
+python -m pytest tests/fdtd/test_general_cuda_initial_patterns.py -q
 python -m pytest tests/fdtd/test_general_cuda_optimizer.py -q
 python -m pytest tests/fdtd/test_general_cuda_region_contract.py tests/fdtd/test_general_cuda_region.py -q
 python -m pytest tests/fdtd/test_general_cuda_higher_order.py -q
