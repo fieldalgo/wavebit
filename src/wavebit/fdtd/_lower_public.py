@@ -131,19 +131,34 @@ def _scaled_initial(value, scale):
     return value * scale
 
 
+_GEOMETRY = (geometry.Shape, geometry.Slab, geometry.Region, geometry.Plane,
+             geometry.Sphere, geometry.Box, geometry.Cylinder, geometry.Prism)
+
+
+def _monitor_geometry(m, field, expected):
+    """A monitor's plane/box: a non-geometry value is refused at the monitor (#48).
+
+    Geometry of the wrong kind passes through; the monitor's own check names what it needs.
+    """
+    value = getattr(m, field)
+    if not isinstance(value, _GEOMETRY):
+        raise ValidationError('expected ' + expected, path='outputs.'+m.name+'.'+field)
+    return _geometry(value)
+
+
 def _monitor(m, problem):
     if isinstance(m, monitors.Record):
         return m
     if isinstance(m, (monitors.Field, monitors.Flux)):
         kw = dict(name=m.name, wavelengths=m.wavelengths,
-                  plane=None if m.plane is None else _geometry(m.plane),
-                  box=None if m.box is None else _geometry(m.box))
+                  plane=None if m.plane is None else _monitor_geometry(m, 'plane', 'Plane'),
+                  box=None if m.box is None else _monitor_geometry(m, 'box', 'Region'))
         if isinstance(m, monitors.Field):
             kw['components'] = m.components
         return getattr(old_monitors, type(m).__name__)(**kw)
     if isinstance(m, monitors.FarField):
-        return old_monitors.FarField(m.name, box=_geometry(m.box), wavelengths=m.wavelengths,
-                                    propagation=m.propagation)
+        return old_monitors.FarField(m.name, box=_monitor_geometry(m, 'box', 'Region'),
+                                    wavelengths=m.wavelengths, propagation=m.propagation)
     if isinstance(m, monitors.Diffraction):
         choices = [s for s in problem.sources if s.name == m.source]
         if len(choices) != 1 or not isinstance(choices[0], sources.PlaneWave):
