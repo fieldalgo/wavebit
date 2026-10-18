@@ -83,3 +83,21 @@ def test_painted_eight_complex_channels_and_three_shape_derivatives_at_resolutio
     assert np.all(error <= meep_error), (error, meep_error)
     # And near Meep itself: two FDTDs of one graded profile, within twice the measured gap.
     assert np.all(apart < [.03, .01, .07, .18]), apart
+
+
+@pytest.mark.slow
+def test_painted_jacobian_under_jit_equals_the_eager_one_at_resolution_6():
+    """The resolution-20 case above runs eagerly; this keeps the outer ``jax.jit`` around the
+    value and ``jacfwd`` covered, on the same painted scene at resolution 6, where it costs
+    5.3 GB peak RSS rather than 13.6 (Linux CPU, jax 0.11.0; the jit's cost is mostly
+    compilation, 6.2 GB at resolution 8 and 7.2 at 10). Measured: both paths agree to 1.1e-15
+    in value and Jacobian, and every Jacobian column reaches 1.2e-2, so the comparison is not
+    of zeros."""
+    jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
+    p = np.array([.37, .055, .22])
+    f = lambda p: response(p, 6, duration=40)
+    eager = np.asarray(f(p)), np.asarray(jax.jacfwd(f)(p))
+    traced = tuple(map(np.asarray, jax.jit(lambda p: (f(p), jax.jacfwd(f)(p)))(p)))
+    assert np.min(np.max(abs(eager[1]), axis=0)) > 1e-3
+    for actual, expected in zip(traced, eager):
+        np.testing.assert_allclose(actual, expected, atol=1e-12, rtol=0)
