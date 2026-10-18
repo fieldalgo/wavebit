@@ -265,6 +265,116 @@ def _intersects(left, right):
     return all(a0 < b1 and b0 < a1 for (a0, a1), (b0, b1) in zip(left, right))
 
 
+def check_switched(scene, plan):
+    """Refuse the scenes where a temporal boundary's ``D`` correction would not be exact.
+
+    ``_kernel/switched.py`` corrects the E update over one structure's snapped cells, against
+    coefficients built from the permittivity before the jump. That is exact for a lossless,
+    non-overlapping, cell-snapped region with nothing else writing or reading the medium there,
+    and each condition below is one of those:
+
+    * a smoothed shape mixes its ``eps`` into interface cells, so a cell is neither medium;
+    * an overlap means a cell the term corrects is painted by another structure;
+    * a background fills the absorbing layers, whose coefficients are not ``eps``'s;
+    * an absorbing layer's damping changes ``ae`` and ``be`` inside the region;
+    * a plane wave, TFSF box or dipole inside injects a field built for one fixed medium;
+    * a diffraction or far-field reading inside divides by one fixed medium's impedance;
+    * ``discretisation='stencil'`` replaces the coefficients the correction is written against;
+    * a jump before E level 2 needs ``E^0`` over the region, which the term does not hold.
+    """
+    from wavebit.materials.time_domain import Switched
+    from wavebit.fdtd._legacy_monitors import Diffraction
+    from wavebit.fdtd._legacy_sources import Dipole, PlaneWave, TFSF
+    from wavebit.fdtd._prepare.plan import switch_level
+    grid = plan.grid
+    if isinstance(getattr(scene, 'background', None), Switched):
+        raise ValueError('Scene(background=fd.Switched(...)): a switched background fills the '
+                         'absorbing layers too, and a layer matched to one medium is not matched '
+                         'to the other. Put the switched medium in a Structure inside the box.')
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    boxes = [s.shape.support(grid) for s in structures]
+    layers = []
+    for name, cells in plan.absorbing_faces:
+        a, side = 'xyz'.index(name[0]), name[1]
+        layers.append((name, a, (0, cells) if side == '-' else (grid.n[a] - cells, grid.n[a])))
+
+    def world(box):
+        return tuple((grid.low[a] + lo * grid.dx, grid.low[a] + hi * grid.dx)
+                     for a, (lo, hi) in enumerate(box))
+
+    def inside_point(point, span):
+        tol = 0.5 * grid.dx
+        return all(lo - tol <= float(p) <= hi + tol for p, (lo, hi) in zip(point, span)
+                   if p is not None)
+
+    def inside_box(other, span):
+        tol = 0.5 * grid.dx
+        return all(float(o0) <= hi + tol and lo - tol <= float(o1)
+                   for (o0, o1), (lo, hi) in zip(other, span))
+
+    for index, structure in enumerate(structures):
+        material = structure.material
+        if not isinstance(material, Switched):
+            continue
+        where = f'structures[{index}] ({structure.shape.describe()})'
+        if structure.shape.body() is not None:
+            raise ValueError(
+                f'{where} is an fd.Switched on a smoothed shape. A smoothed shape mixes its '
+                f'permittivity into the interface cells, and a cell that is part one medium is '
+                f'not switched by the jump of the other. Spell the switched region as an '
+                f'fd.Slab or fd.Region.')
+        if getattr(structure, 'discretisation', 'voxel') == 'stencil':
+            raise ValueError(f"{where}: discretisation='stencil' rebuilds the coefficients a "
+                             f"temporal boundary is corrected against; use the default voxel "
+                             f"discretisation for an fd.Switched structure.")
+        for other in range(len(structures)):
+            if other != index and _intersects(boxes[index], boxes[other]):
+                raise ValueError(
+                    f'{where} and structures[{other}] ({structures[other].shape.describe()}) '
+                    f'share cells. A temporal boundary is corrected over its own cells, so a '
+                    f'cell another structure paints would be switched as if it were the '
+                    f'switched medium. Spell them as disjoint slabs or regions.')
+        for name, a, layer in layers:
+            k0, k1 = boxes[index][a]
+            if k0 < layer[1] and layer[0] < k1:
+                raise ValueError(
+                    f'{where} reaches the absorbing layer on face {name}. The layer damps the '
+                    f'update there, and the temporal boundary is written against an undamped, '
+                    f'lossless one. Keep the switched region inside the box, clear of the layer.')
+        span = world(boxes[index])
+        for source in tuple(getattr(scene, 'sources', ()) or ()):
+            hit = False
+            if isinstance(source, Dipole) and source.center is not None:
+                hit = inside_point(source.center, span)
+            elif isinstance(source, PlaneWave):
+                hit = inside_point((source.x, source.y, source.z), span)
+            elif isinstance(source, TFSF) and source.box is not None:
+                hit = inside_box(source.box, span)
+            if hit:
+                raise ValueError(
+                    f'source {source.name!r} sits inside {where}. A source injects a field built '
+                    f'for one fixed medium, and the medium there changes during the run. Move the '
+                    f'source into the unswitched part of the box.')
+        for monitor in tuple(getattr(scene, 'monitors', ()) or ()):
+            hit = False
+            if isinstance(monitor, Diffraction):
+                hit = inside_point((monitor.x, monitor.y, monitor.z), span)
+            elif type(monitor).__name__ == 'FarField' and getattr(monitor, 'box', None) is not None:
+                hit = inside_box(monitor.box, span)
+            if hit:
+                raise ValueError(
+                    f'monitor {monitor.name!r} reads inside {where}. Its result divides by the '
+                    f'impedance of one fixed medium, and the medium there changes during the run. '
+                    f'Place it in the unswitched part of the box.')
+        level = switch_level(material, plan.dt)
+        if level < 2:
+            raise ValueError(
+                f'{where}: fd.Switched(time={material.time!r}) lands on E level {level}, and a '
+                f'jump needs at least two steps of the medium before it (dt = {plan.dt:.6g}). '
+                f'Use time > dt; a medium that is already switched at the start is '
+                f'fd.Material(eps=after).')
+
+
 def check_smoothed(scene, grid):
     """What a smoothed shape may meet in C2: the five doors subpixel averaging opens.
 

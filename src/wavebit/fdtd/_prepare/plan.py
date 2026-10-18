@@ -378,6 +378,43 @@ def _absorbing(scene, grid):
     return (tuple(cpml), tuple(absorbing), tuple(pml), tuple(absorber), tuple(wavelengths))
 
 
+def _switched_terms(scene, p):
+    """One :class:`SwitchedTerm` per structure whose material is ``Switched``.
+
+    The jump lands on the first E level at or after ``time`` (``k = ceil(time/dt)``). The
+    refusals that keep the correction exact -- a snapped shape, no overlap, no absorber, no
+    source or reading monitor inside, a jump after E level 1 -- are ``checks.check_switched``.
+    """
+    from wavebit.materials.time_domain import Switched
+    from wavebit.fdtd._kernel.switched import SwitchedTerm
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    if not any(isinstance(s.material, Switched) for s in structures):
+        return ()
+    checks.check_switched(scene, p)
+    terms = []
+    for index, structure in enumerate(structures):
+        if not isinstance(structure.material, Switched):
+            continue
+        box = structure.shape.support(p.grid)
+        region = Region(z=tuple(box[2]), y=tuple(box[1]), x=tuple(box[0]))
+        slabs = tuple(Slab(c=c, z=region.z, y=region.y, x=region.x) for c in range(3))
+        terms.append(SwitchedTerm(name=f'switched[{index}]', region=region, slabs=slabs,
+                                  k=switch_level(structure.material, p.dt)))
+    return tuple(terms)
+
+
+def switch_level(material, dt):
+    """The first E level that holds the value after the jump: ``ceil(time/dt)``.
+
+    A time within a millionth of a step of a level lands on that level, so a time written as
+    ``k * dt`` is not pushed one step later by its own rounding.
+    """
+    import math
+    ratio = float(material.time) / dt
+    nearest = round(ratio)
+    return int(nearest if abs(ratio - nearest) <= 1e-6 else math.ceil(ratio))
+
+
 def _pole_terms(scene, grid):
     """One :class:`PoleTerm` per dispersive structure, over that structure's snapped cells.
 
@@ -526,6 +563,11 @@ def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
     sources = source_terms(scene, p)
     if sources:
         p = p.with_static(terms=tuple(p.terms) + sources)
+    # Last, after the sources: the jump's correction rescales everything a term has added to
+    # the curl, and a current density is part of dD/dt (``_kernel/switched.py``).
+    switched = _switched_terms(scene, p)
+    if switched:
+        p = p.with_static(terms=tuple(p.terms) + switched)
     if not _column:
         rows = grazing.enforce(scene, p)
         if _grazing is not None and rows is not None:

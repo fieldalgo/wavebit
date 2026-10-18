@@ -174,6 +174,7 @@ def lower(scene, plan, rt='numpy', device=None):
     params.update({'bloch': {}, 'axis1d': {}, 'amplitude': None, 'E0': None, 'H0': None,
                    'cpml': _cpml(scene, plan, rt), 'cpml_loss': _cpml_loss(scene, plan, rt),
                    'poles': _poles(scene, plan, rt),
+                   'switched': _switched(scene, plan, rt),
                    'sources': lower_sources(scene, plan, rt), 'dft': _dft(plan, rt),
                    'stable': None})
     guard = _stability_guard(scene, plan, rt)
@@ -453,6 +454,26 @@ def _poles(scene, plan, rt):
     out.update(oscillator_stack_poles(scene, plan, rt))
     out.update(oscillator_sum_film_poles(scene, plan, rt))
     out.update(hybrid_film_poles(scene, plan, rt))
+    return out
+
+
+def _switched(scene, plan, rt):
+    """``params['switched'][name]``: each jump's two permittivities, per component, and ``dx/dt``.
+
+    Traced leaves, so a gradient with respect to either side of a temporal boundary flows;
+    the step at which it happens is static and lives in the term (``_kernel/switched.py``).
+    """
+    from wavebit.fdtd._kernel.switched import SwitchedTerm
+    out = {}
+    structures = tuple(getattr(scene, 'structures', ()) or ())
+    for term in plan.terms:
+        if not isinstance(term, SwitchedTerm):
+            continue
+        material = structures[int(term.name[len('switched['):-1])].material
+        out[term.name] = {
+            'before': tuple(rt.array(e, 'float64') for e in material.eps),
+            'after': tuple(rt.array(e, 'float64') for e in material.after),
+            'dx_over_dt': rt.array(plan.dx / plan.dt, 'float64')}
     return out
 
 

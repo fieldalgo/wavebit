@@ -56,7 +56,7 @@ from wavebit._common.declarations import is_jax_typed
 from wavebit._common.declarations import spec
 from wavebit._common.declarations import torch_carried
 
-__all__ = ['Material', 'Conductor', 'Dispersive', 'Drude', 'Lorentz', 'Debye',
+__all__ = ['Material', 'Conductor', 'Dispersive', 'Switched', 'Drude', 'Lorentz', 'Debye',
            'MaterialBase', 'Pole', 'eps_at', 'concrete', 'as_material']
 
 
@@ -609,6 +609,54 @@ class Dispersive(MaterialBase):
     def eps(self):
         """The high-frequency permittivity; what the update coefficients are built from."""
         return self.eps_inf
+
+
+@spec
+class Switched(MaterialBase):
+    """A lossless medium whose permittivity jumps once: ``eps`` before ``time``, ``after`` from it.
+
+    A temporal boundary. The electric displacement ``D = eps(t) E`` and the magnetic field are
+    continuous across the jump, so a wave keeps its wavenumber and changes its frequency by
+    ``n_before / n_after``, splitting into a forward and a backward wave (Morgenthaler, IRE
+    Trans. Microwave Theory Tech. 6, 167 (1958); Xiao, Maywar and Agrawal, Opt. Lett. 39, 574
+    (2014)). The update is written for ``D``, not as ``eps dE/dt``: the latter is the right
+    equation for the wrong field and is off by a factor of two at the jump
+    (``src/wavebit/fdtd/_kernel/switched.py``).
+
+    ``time`` is in the scene's time unit (``c = 1``: a length). The coefficients are built from
+    ``eps`` (the value before the jump); :class:`~wavebit.fdtd._kernel.switched.SwitchedTerm`
+    corrects the update over the structure's cells. ``index_bound`` reads both values, so the
+    CFL bound holds on either side of the jump.
+    """
+
+    eps: object = 1.0
+    after: object = 1.0
+    time: object = 0.0
+
+    @property
+    def mu(self):
+        return None
+
+    def __post_init__(self):
+        object.__setattr__(self, 'eps', _diagonal('Switched', 'eps', self.eps))
+        object.__setattr__(self, 'after', _diagonal('Switched', 'after', self.after))
+        _positive('Switched', 'eps', self.eps)
+        _positive('Switched', 'after', self.after)
+        if concrete(self.time) is None:
+            raise TypeError('Switched(time=...): the switching time decides which step the '
+                            'jump falls on, a static choice; it cannot be traced.')
+        if not math.isfinite(float(concrete(self.time))):
+            raise ValueError(f'Switched(time={self.time!r}): the switching time must be finite.')
+
+    def index_bound(self):
+        """The smaller of the two media's bounds: the faster side sets the CFL limit."""
+        out = []
+        for e in self.eps + self.after:
+            ce = concrete(e)
+            if ce is None:
+                return None
+            out.append(math.sqrt(ce))
+        return min(out)
 
 
 @_eager_under_torch_compile
