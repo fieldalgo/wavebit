@@ -112,15 +112,20 @@ The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workf
 uses the runner for both non-research partitions, each split across runners with
 `--shard INDEX/COUNT`: eight shards for the ordinary partition, three for the slow one.
 
+CI stores both verification outputs and their pytest temporary fixtures under
+`RUNNER_TEMP`, outside the checkout, so study fixtures can enforce their raw-output
+isolation contract. GitHub provides this variable; for local reproduction, set it
+to an external scratch directory first. Artifact uploads use the same output root.
+
 ```shell
 python tools/run_verification.py --profile full --slow exclude --shard 1/8 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
-  --output artifacts/verification/default
+  --output "$RUNNER_TEMP/wavebit-verification/default"
 python tools/run_verification.py --profile full --slow only --shard 1/3 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 2400 --timeout-method thread --verbose --live-output \
-  --output artifacts/verification/slow
+  --output "$RUNNER_TEMP/wavebit-verification/slow"
 ```
 
 A shard is a selection within the profile, not a different profile. Every shard collects

@@ -295,8 +295,10 @@ jobs:
           --shard ${{ matrix.shard }}/8
           --shard-timings tools/ci_shard_timings.json
           --workers 2 --timeout 1200 --timeout-method thread --verbose --live-output
-          --output artifacts/verification/default
+          --output "${{ runner.temp }}/wavebit-verification/default"
 
+      # The output also contains pytest temporary fixtures. Keep it outside the
+      # checkout so study fixtures satisfy their raw-output isolation contract.
       # Keep receipts and partial logs after failures without uploading source copies,
       # pytest caches or temporary fixtures. Each phase writes its reports at one level.
       - name: Upload verification evidence
@@ -305,12 +307,12 @@ jobs:
         with:
           name: verification-default-${{ matrix.shard }}
           path: |
-            artifacts/verification/default/*.json
-            artifacts/verification/default/*/*.json
-            artifacts/verification/default/*/*.jsonl
-            artifacts/verification/default/*/*.xml
-            artifacts/verification/default/*/*.log
-            !artifacts/verification/default/snapshot/**
+            ${{ runner.temp }}/wavebit-verification/default/*.json
+            ${{ runner.temp }}/wavebit-verification/default/*/*.json
+            ${{ runner.temp }}/wavebit-verification/default/*/*.jsonl
+            ${{ runner.temp }}/wavebit-verification/default/*/*.xml
+            ${{ runner.temp }}/wavebit-verification/default/*/*.log
+            !${{ runner.temp }}/wavebit-verification/default/snapshot/**
           if-no-files-found: warn
           retention-days: 14
 
@@ -387,8 +389,10 @@ jobs:
           --shard ${{ matrix.shard }}/3
           --shard-timings tools/ci_shard_timings.json
           --workers 2 --timeout 2400 --timeout-method thread --verbose --live-output
-          --output artifacts/verification/slow
+          --output "${{ runner.temp }}/wavebit-verification/slow"
 
+      # The output also contains pytest temporary fixtures. Keep it outside the
+      # checkout so study fixtures satisfy their raw-output isolation contract.
       # Keep receipts and partial logs after failures without uploading source copies,
       # pytest caches or temporary fixtures. Each phase writes its reports at one level.
       - name: Upload verification evidence
@@ -397,12 +401,12 @@ jobs:
         with:
           name: verification-slow-${{ matrix.shard }}
           path: |
-            artifacts/verification/slow/*.json
-            artifacts/verification/slow/*/*.json
-            artifacts/verification/slow/*/*.jsonl
-            artifacts/verification/slow/*/*.xml
-            artifacts/verification/slow/*/*.log
-            !artifacts/verification/slow/snapshot/**
+            ${{ runner.temp }}/wavebit-verification/slow/*.json
+            ${{ runner.temp }}/wavebit-verification/slow/*/*.json
+            ${{ runner.temp }}/wavebit-verification/slow/*/*.jsonl
+            ${{ runner.temp }}/wavebit-verification/slow/*/*.xml
+            ${{ runner.temp }}/wavebit-verification/slow/*/*.log
+            !${{ runner.temp }}/wavebit-verification/slow/snapshot/**
           if-no-files-found: warn
           retention-days: 14
 
