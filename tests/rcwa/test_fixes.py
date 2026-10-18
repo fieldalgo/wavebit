@@ -22,17 +22,14 @@ def test_1_si_glass_branch_cut():
     )
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
-        try:
-            solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
-            res = solver.solve()
-            assert res.R is not None and res.T is not None
-            R = float(res.R.sum())
-            T = float(res.T.sum())
-            print(f"[{backend_name}] R = {R:.6f}, T = {T:.6f}, R+T = {R+T:.6f}")
-            assert 0.0 <= R <= 1.0, f"Unphysical reflectance R = {R}"
-            assert abs(R + T - 1.0) < 1e-4, f"Energy conservation failed: R+T = {R+T}"
-        except Exception as e:
-            print(f"[{backend_name}] Error: {e}")
+        solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
+        res = solver.solve()
+        assert res.R is not None and res.T is not None
+        R = float(res.R.sum())
+        T = float(res.T.sum())
+        print(f"[{backend_name}] R = {R:.6f}, T = {T:.6f}, R+T = {R+T:.6f}")
+        assert 0.0 <= R <= 1.0, f"Unphysical reflectance R = {R}"
+        assert abs(R + T - 1.0) < 1e-4, f"Energy conservation failed: R+T = {R+T}"
     print("SUCCESS: Test 1 Passed!\n")
 
 
@@ -53,15 +50,12 @@ def test_2_air_au_raw_n_lossy_substrate():
     )
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
-        try:
-            solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
-            res = solver.solve()
-            assert res.R is not None
-            R = float(res.R.sum())
-            print(f"[{backend_name}] Calculated R = {R:.6f} (Diff: {abs(R - R_exact):.6e})")
-            assert abs(R - R_exact) < 1e-3, f"Fresnel match failed for {backend_name}"
-        except Exception as e:
-            print(f"[{backend_name}] Error: {e}")
+        solver = _legacy_wavebit_rcwa(backend=backend_id, **option)
+        res = solver.solve()
+        assert res.R is not None
+        R = float(res.R.sum())
+        print(f"[{backend_name}] Calculated R = {R:.6f} (Diff: {abs(R - R_exact):.6e})")
+        assert abs(R - R_exact) < 1e-3, f"Fresnel match failed for {backend_name}"
     print("SUCCESS: Test 2 Passed!\n")
 
 
@@ -96,24 +90,23 @@ def test_4_tm_transmittance_conjugation():
     print("==================================================")
 
     n_au = 0.18 + 3.0j
-    # 1D Conical with TM polarization
+    # 1D conical with TM (p) polarization. `tetm` cannot carry this: it declares the azimuth
+    # is not a degree of freedom, so the solver refuses it with a nonzero `phi`. The conical
+    # path takes the incidence as `psi`, and `psi=0` is p (TM) light.
     option_conical = dict(
-        tetm='tm', top=1.0, bot=eps_from_refractive_index(n_au), theta=10 * np.pi / 180,
+        psi=0.0, top=1.0, bot=eps_from_refractive_index(n_au), theta=10 * np.pi / 180,
         phi=30 * np.pi / 180,
         truncation_order=3, wavelength=500, period=[1000],
         structure=eps_from_refractive_index(np.array([[[1.0, n_au]]])), thickness=[20]
     )
 
     for backend_id, backend_name in [('numpy', 'NumPy'), ('torch', 'PyTorch')]:
-        try:
-            solver = _legacy_wavebit_rcwa(backend=backend_id, **option_conical)
-            res = solver.solve()
-            assert res.p_inc is not None and res.p_inc.T_p is not None
-            T_p = float(res.p_inc.T_p.sum())
-            print(f"[{backend_name} Conical TM] Transmittance T_p = {T_p:.6f}")
-            assert T_p >= 0.0, f"Negative transmittance found in {backend_name}: T_p = {T_p}"
-        except Exception as e:
-            print(f"[{backend_name}] Error: {e}")
+        solver = _legacy_wavebit_rcwa(backend=backend_id, **option_conical)
+        res = solver.solve()
+        assert res.p_inc is not None and res.p_inc.T_p is not None
+        T_p = float(res.p_inc.T_p.sum())
+        print(f"[{backend_name} Conical TM] Transmittance T_p = {T_p:.6f}")
+        assert T_p >= 0.0, f"Negative transmittance found in {backend_name}: T_p = {T_p}"
     print("SUCCESS: Test 4 Passed!\n")
 
 
