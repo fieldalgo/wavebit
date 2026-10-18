@@ -283,6 +283,84 @@ def test_the_plan_holds_no_coordinate_and_no_material():
         assert all(isinstance(v, (int, bool, str)) for v in leaves)
 
 
+def test_a_partner_written_periods_away_keeps_its_pair():
+    """Two boxes sharing a face, the second written ``k`` cells over: one structure, one pair.
+
+    Issue #25. The ring is sized on centre differences within one cell, and a region's centre
+    is not folded into the cell, so from ``k = 3`` (ring 2) the flush pair was not swept and
+    the shared same-material face stayed an interface. The pair is the one at ``k = 0``, at
+    the image that names the partner as written -- ``(-k, 0)`` along ``a1``, ``(0, -k)``
+    along ``a2`` -- whichever shape is moved and whichever way.
+    """
+    A = as_lattice(lattice=SQUARE)
+    left = _box(lx=140.0, ly=210.0, cx=-70.0)
+    right = _box(lx=140.0, ly=210.0, cx=70.0)
+    base = P.plan_gamma([left, right], A)
+    assert base.ring == 2 and len(base.pairs) == 1 and base.pairs[0][2:4] == (0, 0)
+    for k in (-5, -3, 1, 2, 3, 4, 8, 1000):
+        for di, dj in ((k, 0), (0, k)):
+            moved = dict(right, cx=right['cx'] + di * PERIOD, cy=right['cy'] + dj * PERIOD)
+            plan = P.plan_gamma([left, moved], A)
+            assert plan.pieces == base.pieces and plan.ring == base.ring, (k, di, dj)
+            assert [(pr.p, pr.q, pr.flush) for pr in plan.pairs] == \
+                [(pr.p, pr.q, pr.flush) for pr in base.pairs], (k, di, dj)
+            assert (plan.pairs[0].m, plan.pairs[0].n) == (-di, -dj), (k, di, dj)
+            # Moving the first shape instead names the image the other way round.
+            plan = P.plan_gamma([dict(left, cx=left['cx'] - di * PERIOD,
+                                      cy=left['cy'] - dj * PERIOD), right], A)
+            assert (plan.pairs[0].m, plan.pairs[0].n) == (-di, -dj), (k, di, dj)
+
+
+@pytest.mark.parametrize('lattice', [SHEAR, UNREDUCED], ids=['shear', 'unreduced'])
+def test_a_partner_written_periods_away_keeps_its_pair_on_a_sheared_cell(lattice):
+    """Issue #25 on a sheared cell: the fold is on the reduced basis, and so is the offset.
+
+    The partner moved by ``k a1 + j a2`` as given is named by that move's coordinates on the
+    reduced basis -- on :data:`UNREDUCED`, where ``a2 = 2 u + v``, a move of ``4 a2`` is the
+    image ``(-8, -4)``.
+    """
+    A = as_lattice(lattice=lattice)
+    basis = np.asarray(reduced_basis(A).columns, dtype=float)
+    left = _box(lx=140.0, ly=210.0, cx=-70.0)
+    right = _box(lx=140.0, ly=210.0, cx=70.0)
+    base = P.plan_gamma([left, right], A)
+    assert len(base.pairs) == 1 and base.pairs[0][2:4] == (0, 0)
+    for k, j in ((3, 0), (0, 4), (5, -3), (-7, 2)):
+        d = k * lattice[:, 0] + j * lattice[:, 1]
+        plan = P.plan_gamma([left, dict(right, cx=right['cx'] + d[0], cy=right['cy'] + d[1])], A)
+        assert plan.pieces == base.pieces and plan.ring == base.ring, (k, j)
+        assert [(pr.p, pr.q, pr.flush) for pr in plan.pairs] == \
+            [(pr.p, pr.q, pr.flush) for pr in base.pairs], (k, j)
+        m, n = np.rint(np.linalg.solve(basis, -d)).astype(int)
+        assert (plan.pairs[0].m, plan.pairs[0].n) == (m, n), (k, j)
+
+
+def test_a_partner_written_periods_away_solves_the_same_structure():
+    """End to end on the public API, issue #25's script: ``sum(T)`` is the ``k = 0`` one.
+
+    Before the fold ``k = 3`` moved ``sum(T)`` by 1.6e-8 and ``k >= 4`` by 3.0e-7 at order 5;
+    the same structure now gives the same answer to rounding (measured 1e-14 at order 3,
+    against 6e-12 before the fix at this order).
+    """
+    from wavebit import Material, rcwa
+
+    def total(k):
+        regions = tuple(
+            rcwa.Region(geometry=rcwa.Rectangle(size=(0.2, 0.3), center=(cx, 0.0)),
+                        material=Material(4.0)) for cx in (-0.1, 0.1 + k))
+        layer = rcwa.Layer(thickness=0.3, background=Material(1.0), regions=regions)
+        problem = rcwa.Problem(
+            stack=rcwa.Stack(period=(1.0, 1.0), layers=(layer,)),
+            excitation=rcwa.Excitation(wavelength=1.3,
+                                       sources=(rcwa.PlaneWave(theta=0.2, polarization='s'),)))
+        numerics = rcwa.Numerics(orders=(3, 3), factorization='nvf', shape_nvf_grid_size=128)
+        return float(np.sum(np.asarray(rcwa.run(problem, numerics=numerics).T)))
+
+    ref = total(0)
+    for k in (3, 4):
+        assert abs(total(k) - ref) <= 5e-13, k
+
+
 def test_image_lists_are_bounded_by_size_alone():
     """Every offset within ``diam + 2R`` of the fold is listed, ``<=`` at the boundary.
 

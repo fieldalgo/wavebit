@@ -926,8 +926,11 @@ class GammaPlan(namedtuple('GammaPlan', 'ring pieces pairs empty reduction')):
         One integer ``r``: every image ``(m, n)`` with ``|m|, |n| <= r`` was swept for
         contacts. ``1 + ceil(max_ij (R_i + R_j) / h_min)`` with ``h_min = |det| / max(|a1|,
         |a2|)`` the shortest lattice height -- a real length ``rho`` moves a fractional
-        coordinate by at most ``rho / h_min``, and centre differences are within one cell. It
-        is 1 to 3 on an ordinary cell: the L box, 689 x 200 on a 700 square, needs 3.
+        coordinate by at most ``rho / h_min``, and centre differences are within one cell
+        because the sweep folds each centre to its nearest cell first (a region written any
+        number of periods away; the pair offsets are then restated in the shapes' own names,
+        issue #25). It is 1 to 3 on an ordinary cell: the L box, 689 x 200 on a 700 square,
+        needs 3.
     ``pieces``
         One :class:`Piece` per face of every box (``+u``, ``-u``, ``+v``, ``-v`` -- whole
         faces, never split) and one ``'arc'`` per round shape, in shape order. Each carries
@@ -1128,7 +1131,23 @@ def plan_gamma(shapes, lattice):
 
     radii = [0.0 if p is None else _overlap._bounding_radius(p) for p in prims]
     ring = 1 + int(math.ceil(2.0 * max(radii, default=0.0) / h_min))
-    records = _overlap.face_pairs(prims, reduced, ring, tol)
+    # The ring assumes centre differences within one cell, and a region may be written any
+    # number of periods away (issue #25: a box written 3 cells over lost its flush partner at
+    # ring 2). So the sweep runs on each centre folded to its nearest cell, by integer
+    # ``fold[i]``, and every record is put back in the shapes' own names: ``q`` of ``j`` at
+    # ``t`` against the folded ``p`` of ``i`` is ``j``'s image ``t + fold[i] - fold[j]``
+    # against ``i`` as written -- the offset the replay's absolute images read. Self pairs
+    # and the runs are translation invariant and come back unchanged.
+    det_signed = a1x * a2y - a2x * a1y
+    fold = [(0, 0) if p is None else
+            (int(round((a2y * p[1] - a2x * p[2]) / det_signed)),
+             int(round((-a1y * p[1] + a1x * p[2]) / det_signed))) for p in prims]
+    folded = [None if p is None else
+              _overlap._shifted(p, -(km * a1x + kn * a2x), -(km * a1y + kn * a2y))
+              for p, (km, kn) in zip(prims, fold)]
+    records = [c._replace(m=c.m + fold[c.i][0] - fold[c.j][0],
+                          n=c.n + fold[c.i][1] - fold[c.j][1])
+               for c in _overlap.face_pairs(folded, reduced, ring, tol)]
 
     pieces, index = [], {}
     for i, prim in enumerate(prims):
