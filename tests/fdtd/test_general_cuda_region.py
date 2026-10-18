@@ -88,8 +88,8 @@ def test_reference_geometry_tangents_and_mutants(rotation, record_property):
             separation = max(scaled(wrong[f], exact[f]) for f in ('E', 'H'))
         assert separation > 1e-4, (mutant, separation)
         separations[mutant] = separation
-    record_property('mutant_separations', separations)
-    record_property('maximum_secant_relative_error', max(secant_errors))
+    record_property('mutant_separations', {name: float(value) for name, value in separations.items()})
+    record_property('maximum_secant_relative_error', float(max(secant_errors)))
 
 
 @pytest.mark.parametrize('rotation', range(3))

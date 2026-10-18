@@ -70,7 +70,7 @@ def test_pulse_objectives_full_hessian_two_secants(stamp, steps, point, record_p
                 assert hessian_error < SECANT_TOL, (name, j, h, hessian_error)
                 maxima.extend((float(gradient_error), float(hessian_error)))
     record_property('maximum_secant_relative_error', max(maxima))
-    record_property('physical_peak_time_seconds', peak_time)
+    record_property('physical_peak_time_seconds', float(peak_time))
 
 
 @pytest.mark.parametrize('stamp', ['bspline', 'tent'])
