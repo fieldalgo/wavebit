@@ -630,6 +630,55 @@ def test_check_refuses_a_region_whose_size_is_not_positive(geometry, build, says
     assert says in issue.message
 
 
+@pytest.mark.parametrize('build', ['scalar', 'tensor'])
+@pytest.mark.parametrize('angle', [np.inf, -np.inf, np.nan], ids=['inf', 'minus-inf', 'nan'])
+@pytest.mark.parametrize('geometry', [lambda a: rcwa.Rectangle(size=(.2, .3), angle=a),
+                                      lambda a: rcwa.Ellipse(radii=(.1, .15), angle=a)],
+                         ids=['rectangle', 'ellipse'])
+def test_check_refuses_a_region_whose_angle_is_not_finite(geometry, angle, build):
+    # Issue #26: an infinite angle passed `check`, and `run` then blamed a `jax.jit` tracer,
+    # because `math.cos(inf)` raised inside the primitive reader that skips traced layers.
+    problem, numerics = one_layer(geometry(angle), build=build)
+    issue = the_issue_check_and_prepare_report(problem, numerics)
+    assert issue.code == 'rcwa.invalid'
+    assert 'has a non-finite angle' in issue.message
+    with pytest.raises(ValidationError, match='has a non-finite angle') as refused:
+        rcwa.run(problem, numerics=numerics)
+    assert 'tracer' not in str(refused.value)
+
+
+@pytest.mark.parametrize('backend', ['torch', 'jax'])
+def test_a_non_finite_angle_is_refused_alike_on_every_backend(backend):
+    pytest.importorskip(backend)
+    import contextlib
+    x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else contextlib.nullcontext())
+    with x64:
+        for angle in (np.inf, np.nan):
+            problem, numerics = one_layer(rcwa.Rectangle(size=(.2, .3), angle=angle))
+            (issue,) = rcwa.check(problem, numerics=numerics, backend=backend).issues
+            assert 'has a non-finite angle' in issue.message
+            with pytest.raises(ValidationError, match='has a non-finite angle'):
+                rcwa.run(problem, numerics=numerics, backend=backend)
+
+
+def test_a_non_finite_angle_is_not_blamed_on_a_jax_grad_tracer():
+    # The thickness is traced; the infinite angle is a concrete number and is named as such.
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    numerics = rcwa.Numerics(orders=(2, 2))
+
+    def transmitted(thickness):
+        problem, _ = one_layer(rcwa.Rectangle(size=(.2, .3), angle=np.inf))
+        layer = problem.stack.layers[0].replace(thickness=thickness)
+        problem = problem.replace(stack=problem.stack.replace(layers=(layer,)))
+        return jnp.sum(rcwa.run(problem, numerics=numerics, backend='jax').T)
+
+    with jax.enable_x64(True):
+        with pytest.raises(ValidationError, match='has a non-finite angle') as refused:
+            jax.grad(transmitted)(jnp.asarray(.2))
+    assert 'tracer' not in str(refused.value)
+
+
 def test_check_passes_what_only_touches_its_images():
     # The other side of each refusal above: the checks do not refuse a legal layer.
     legal = [one_layer(rcwa.Rectangle(size=(1., .4))),                    # fills the period
