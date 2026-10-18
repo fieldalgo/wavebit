@@ -7,7 +7,7 @@ result = rcwa.run(problem, numerics=numerics,
                   backend="numpy", device="cpu", precision="double")
 ```
 
-The same keywords apply to `fdtd.run`, `check`, and `prepare`. Backend names are `"numpy"`, `"jax"`, and `"torch"`; precision is `"single"` or `"double"`. NumPy requires CPU. JAX accepts available `cpu`, `gpu` or `tpu` devices, optionally with an index; Torch accepts CPU or available CUDA devices. These device options describe RCWA execution. General-scene `fdtd` requires CPU and double precision on every backend. The explicit `fdtd.native` and shared `fdtd.periodic` paths also require double precision and accept available backend devices; the periodic reference algorithm requires NumPy/CPU. Device admission is not a GPU performance or accuracy measurement. Physical feature support remains solver-specific.
+The same keywords apply to `fdtd.run`, `check`, and `prepare`. Backend names are `"numpy"`, `"jax"`, and `"torch"`; precision is `"single"` or `"double"`. NumPy requires CPU. JAX accepts available `cpu`, `gpu` or `tpu` devices, optionally with an index; Torch accepts CPU or available CUDA devices. These device options describe RCWA execution. General-scene `fdtd` requires double precision: NumPy and JAX use CPU, while Torch also admits the [bounded CUDA scene contract](../../validation/fdtd/general-cuda.md). The explicit `fdtd.native` and shared `fdtd.periodic` paths also require double precision and accept available backend devices; the periodic reference algorithm requires NumPy/CPU. Device admission is not a GPU performance or accuracy measurement. Physical feature support remains solver-specific.
 
 Importing Wavebit does not enable JAX x64 globally. Configure double precision before creating JAX arrays:
 

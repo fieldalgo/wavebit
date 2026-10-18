@@ -19,10 +19,11 @@ The alpha API may change; the experimental auxiliary solver has the narrower sco
 [method selection](../guide/rcwa/nvf-method-selection.md).
 
 The base installation runs both public solvers on NumPy. JAX and PyTorch add supported
-automatic differentiation. RCWA also supports compatible accelerator execution; the current
-public FDTD lifecycle accepts **CPU and double precision only**, including with JAX or
-PyTorch. Backend availability does not widen a solver's physical or numerical scope; use
-`check` before preparing a problem and read the [execution guide](../guide/common/backends.md).
+automatic differentiation. RCWA also supports compatible accelerator execution. General-scene
+FDTD requires double precision: NumPy and JAX use CPU, while PyTorch also admits the
+[bounded CUDA scene contract](../validation/fdtd/general-cuda.md). Backend availability does
+not widen a solver's physical or numerical scope; use `check` before preparing a problem
+and read the [execution guide](../guide/common/backends.md).
 
 Install an optional backend when you need it:
 
