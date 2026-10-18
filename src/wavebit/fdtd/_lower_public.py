@@ -269,6 +269,12 @@ def lower_problem(problem, numerics, *, plan=None):
     center = tuple(c+(pad[a+'+']-pad[a+'-'])*dx/2 for a,c in zip('xyz', scene.domain.center))
     allocated_low = tuple(c-s/2 for c,s in zip(center,size))
     allocated_high = tuple(c+s/2 for c,s in zip(center,size))
+    from wavebit.fdtd.media import SwitchedMaterial, lower_switched
+    if isinstance(scene.background, SwitchedMaterial):
+        raise UnsupportedFeatureError('a switched background would fill the absorbing layers too, '
+                                      'and a layer matched to one medium is not matched to the '
+                                      'other; put the switched medium in a structure',
+                                      code='switched_background', path='scene.background')
     background = lower_material(scene.background, units=units)
     faces = {f: background for f, n in pad.items() if n}
     structures = []
@@ -276,7 +282,14 @@ def lower_problem(problem, numerics, *, plan=None):
     if unknown_ranges:
         raise ValidationError('range names an absent structure', path='numerics.geometry_ranges', actual=sorted(unknown_ranges))
     for item in scene.structures:
-        material = lower_material(item.material, units=units)
+        if isinstance(item.material, SwitchedMaterial):
+            if item.continuation:
+                raise UnsupportedFeatureError('a switched structure cannot continue into an '
+                                              'absorbing layer', code='switched_continuation',
+                                              path='scene.structures.'+item.name)
+            material = lower_switched(item.material, units=units)
+        else:
+            material = lower_material(item.material, units=units)
         shape = _geometry(item.shape, numerics.geometry_ranges.get(item.name))
         if item.continuation:
             shape = _continue_box(item, shape, pad, physical_low, physical_high,

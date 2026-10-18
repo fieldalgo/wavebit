@@ -461,7 +461,7 @@ def _switched(scene, plan, rt):
     """``params['switched'][name]``: each jump's two permittivities, per component, and ``dx/dt``.
 
     Traced leaves, so a gradient with respect to either side of a temporal boundary flows;
-    the step at which it happens is static and lives in the term (``_kernel/switched.py``).
+    the step at which it happens is static and lives in the term (``src/wavebit/fdtd/_kernel/switched.py``).
     """
     from wavebit.fdtd._kernel.switched import SwitchedTerm
     out = {}

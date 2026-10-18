@@ -48,6 +48,8 @@ def _leaf_shape(v):
 def _material(v):
     if isinstance(v,Material):return ('Material',_leaf_shape(v.epsilon),_leaf_shape(v.mu))
     if isinstance(v,ConductiveMaterial):return ('ConductiveMaterial',_leaf_shape(v.epsilon),_leaf_shape(v.mu),_leaf_shape(v.conductivity))
+    from wavebit.fdtd.media import SwitchedMaterial
+    if isinstance(v,SwitchedMaterial):return ('SwitchedMaterial',_leaf_shape(v.epsilon_before),_leaf_shape(v.epsilon_after),float(v.switch_time))
     if isinstance(v,DispersiveMaterial):return ('DispersiveMaterial',_leaf_shape(v.epsilon_inf),_leaf_shape(v.mu),tuple(type(p).__name__ for p in v.poles))
     return (type(v).__name__,_leaf_shape(v))
 

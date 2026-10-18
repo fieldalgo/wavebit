@@ -1296,6 +1296,10 @@ ey, ex, time = diag['field_e'].real, diag['field_ex'].real, diag['field_t']
   for the wrong field**, so the band gap, the growth rate and energy conservation all come out
   right, and only a temporal boundary separates them, by a factor of exactly two that no
   resolution shrinks.
+  (Since 2026-10-18 the first of these, a single jump of a lossless isotropic permittivity,
+  is `fdtd.SwitchedMaterial`, written for `D` and checked against the closed form and that
+  mutant; see [temporal boundaries](temporal-boundaries.md). Continuous modulation and
+  nonlinear media are still open.)
 - **A crossed-grating convergence study on a scene chosen for margin**, the way §8e's was in
   2D. The figures in §8g (1.83 / 1.50) are honest for a scene whose `m = -1` order sits at
   `kz_top = 0.09i`, and that is near enough to the Rayleigh cutoff to set the constant. Scanning

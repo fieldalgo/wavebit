@@ -268,7 +268,7 @@ def _intersects(left, right):
 def check_switched(scene, plan):
     """Refuse the scenes where a temporal boundary's ``D`` correction would not be exact.
 
-    ``_kernel/switched.py`` corrects the E update over one structure's snapped cells, against
+    ``src/wavebit/fdtd/_kernel/switched.py`` corrects the E update over one structure's snapped cells, against
     coefficients built from the permittivity before the jump. That is exact for a lossless,
     non-overlapping, cell-snapped region with nothing else writing or reading the medium there,
     and each condition below is one of those:

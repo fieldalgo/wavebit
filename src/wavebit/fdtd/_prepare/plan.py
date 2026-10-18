@@ -388,7 +388,8 @@ def _switched_terms(scene, p):
     from wavebit.materials.time_domain import Switched
     from wavebit.fdtd._kernel.switched import SwitchedTerm
     structures = tuple(getattr(scene, 'structures', ()) or ())
-    if not any(isinstance(s.material, Switched) for s in structures):
+    if not any(isinstance(s.material, Switched) for s in structures) \
+            and not isinstance(getattr(scene, 'background', None), Switched):
         return ()
     checks.check_switched(scene, p)
     terms = []
@@ -564,7 +565,7 @@ def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
     if sources:
         p = p.with_static(terms=tuple(p.terms) + sources)
     # Last, after the sources: the jump's correction rescales everything a term has added to
-    # the curl, and a current density is part of dD/dt (``_kernel/switched.py``).
+    # the curl, and a current density is part of dD/dt (``src/wavebit/fdtd/_kernel/switched.py``).
     switched = _switched_terms(scene, p)
     if switched:
         p = p.with_static(terms=tuple(p.terms) + switched)

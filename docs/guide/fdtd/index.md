@@ -15,3 +15,4 @@ Start with the [current FDTD problem API](general-fdtd.md), [how the solver mode
 - [Current FDTD domains, sources and observations](general-fdtd.md)
 - [How the FDTD solver models a problem](model.md)
 - [A solve in the time domain](time-domain.md)
+- [Temporal boundaries: a permittivity that jumps during the run](temporal-boundaries.md)

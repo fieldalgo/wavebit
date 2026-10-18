@@ -42,6 +42,9 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 .. autoclass:: wavebit.fdtd.Structure
    :members:
 
+.. autoclass:: wavebit.fdtd.SwitchedMaterial
+   :members:
+
 .. autoclass:: wavebit.fdtd.Boundaries
    :members:
 
