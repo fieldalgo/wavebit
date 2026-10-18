@@ -65,7 +65,9 @@ The structure is refused in these cases. In each one the correction would not be
 | A `Diffraction` or `FarField` reading inside the region | the result divides by one fixed medium's impedance |
 | `discretisation='stencil'` | it replaces the coefficients the correction is written against |
 
-Readings outside the region, such as `Record` and `Flux`, are unaffected.
+Readings outside the region, such as `Record` and `Flux`, are unaffected. Automatic stopping
+(`fdtd.Decay`) works: the term's stored field is one more group that has to decay, and a
+prepared problem reruns with new permittivities. Changing `switch_time` needs a new `prepare`.
 
 ## Validation
 
@@ -79,6 +81,7 @@ Readings outside the region, such as `Record` and `Flux`, are unaffected.
 | `E`-continuous mutant | both amplitudes 2.000x the closed form |
 | NumPy against JAX and PyTorch | 1.4e-14 of the peak on JAX; bit-identical on PyTorch |
 | `d/d epsilon_after`, `d/d epsilon_before` on JAX and PyTorch | agree with central differences to 1e-6 relative |
+| `Decay` against the fixed-length run | stops at step 2496 of 6000; record bit-identical to that prefix |
 
 ## Limitations
 

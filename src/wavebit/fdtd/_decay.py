@@ -66,7 +66,10 @@ def _term_types():
     poles = (PoleTerm, InterfacePoleTerm, ConductiveStackTerm, DebyeFilmTerm,
              DebyeSumFilmTerm, HybridFilmTerm, OscillatorSumFilmTerm,
              DispersiveFilmTerm, TwoDebyeFilmTerm)
-    return poles, (ConstitutiveTerm, StencilTerm), DipoleTerm
+    from wavebit.fdtd._kernel.switched import SwitchedTerm
+    # A temporal boundary's memory is one array (its region's previous E), grouped like a
+    # flux memory: it keeps its own peak, so it has to decay with the field it copies.
+    return poles, (ConstitutiveTerm, StencilTerm, SwitchedTerm), DipoleTerm
 
 
 def validate_plan(scene, plan):

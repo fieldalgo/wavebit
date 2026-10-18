@@ -64,7 +64,9 @@ omega_after     = omega_before * n1 / n2
 | 영역 안의 `Diffraction`·`FarField` 판독 | 결과를 고정된 한 매질의 임피던스로 나눕니다 |
 | `discretisation='stencil'` | 보정의 기준인 계수를 바꿉니다 |
 
-`Record`, `Flux`처럼 영역 밖에서 읽는 판독은 영향을 받지 않습니다.
+`Record`, `Flux`처럼 영역 밖에서 읽는 판독은 영향을 받지 않습니다. 자동 종료(`fdtd.Decay`)도
+쓸 수 있습니다. 이 term이 보관하는 장도 감쇠해야 하는 묶음 하나로 함께 판정합니다. 준비한 문제는
+새 유전율로 다시 실행할 수 있지만, `switch_time`을 바꾸려면 `prepare`를 다시 해야 합니다.
 
 ## 검증
 
@@ -78,6 +80,7 @@ omega_after     = omega_before * n1 / n2
 | `E` 연속 변이 | 두 진폭 모두 해석해의 2.000배 |
 | NumPy 대비 JAX·PyTorch | JAX는 최댓값의 1.4e-14, PyTorch는 비트 단위로 같음 |
 | JAX·PyTorch의 `d/d epsilon_after`, `d/d epsilon_before` | 중심 차분과 상대 1e-6 이내로 일치 |
+| 고정 길이 실행 대비 `Decay` | 6000 단계 중 2496에서 종료; 기록이 그 구간과 비트 단위로 같음 |
 
 ## 한계
 

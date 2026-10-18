@@ -335,3 +335,35 @@ def test_the_public_declaration_validates_its_inputs():
     with pytest.raises(UnsupportedFeatureError):
         fdtd.run(problem, numerics=fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
                                                  duration=fdtd.Duration(steps=4)))
+
+
+def test_automatic_stopping_runs_a_switched_scene_and_keeps_its_prefix():
+    """``Decay`` groups the term's memory and stops; the records equal the fixed run's prefix.
+
+    Measured: stopped at step 2496 of 6000, the record bit-identical to the first 2496 steps.
+    """
+    def problem():
+        return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+            domain=fdtd.Domain(size=(.05, .05, 3.)),
+            boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+            structures=(fdtd.Structure('s', fdtd.Slab(z=(-.6, .6)), fdtd.SwitchedMaterial(
+                epsilon_before=1.0, epsilon_after=2.25, switch_time=4e-6 / C0)),)),
+            sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=1.0), pulse=fdtd.GaussianPulse(
+                wavelength=.8, frequency_sigma_hz=4e13)),),
+            outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0., 0., -1.0), component='Ey'),)))
+
+    def numerics(**decay):
+        return fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
+                             duration=fdtd.Duration(steps=6000), absorber=fdtd.PML(cells=12),
+                             **decay)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        fixed = fdtd.run(problem(), numerics=numerics())
+        stopped = fdtd.run(problem(), numerics=numerics(
+            decay=fdtd.Decay(threshold=.01, window_seconds=5e-15)))
+    assert stopped.diagnostics['stopping']['reason'] == 'decay'
+    steps = stopped.provenance['actual_steps']
+    assert 1000 < steps < 6000
+    a, b = to_numpy(fixed['e'].values), to_numpy(stopped['e'].values)
+    np.testing.assert_array_equal(a[:len(b)], b)
