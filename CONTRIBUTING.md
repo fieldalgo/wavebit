@@ -111,6 +111,14 @@ main SHA. Preserve unfinished work before merged branches are deleted automatica
 Main push CI validates the combined state; investigate failures and fix or revert
 through a PR before releasing that state.
 
+When a commit lands work first written in another commit (replayed onto a new base,
+rewritten, squashed before submission, or ported by another contributor), name each
+original in the commit or PR body with one `Ports: <sha>` line. A PR's own commits
+landed by Rebase and merge need no such line; the PR records them. Give the SHA only,
+without private branch names or paths. A commit that is not an ancestor of main may
+still have landed under a new ID: check `Ports:` lines, the PR record or the behavior
+on main before reporting it missing.
+
 Feature pushes and draft PRs allocate no validation runners. Ready PRs, main pushes
 and explicit dispatch run the checks. Main validation retains runs in a stable
 workflow/ref queue; non-main validation supersedes older runs for the same ref.
