@@ -229,6 +229,7 @@ subtrees:
             - entries:
               - file: validation/fdtd/fd-conductive-film
               - file: validation/fdtd/fd-conductive-stack
+              - file: validation/fdtd/fd-conductive-contact
               - file: validation/fdtd/fd-constitutive-absorber
               - file: validation/fdtd/fd-debye-film
               - file: validation/fdtd/fd-debye-stack
