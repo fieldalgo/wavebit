@@ -3,6 +3,8 @@
 Memory admission is tested before the sparse solve: reaching geometry is observed
 with a sentinel, so these routing checks never allocate the fitted operator.
 """
+import dataclasses
+
 import pytest
 
 from wavebit import Material, Units, fdtd
@@ -43,6 +45,48 @@ def test_plane_wave_rejects_non_plane_before_reading_coordinates(plane):
     assert fdtd.check(_plane_problem(fdtd.Plane(z=.5)), numerics=_numerics()).ok
     outside = fdtd.check(_plane_problem(fdtd.Plane(z=.9)), numerics=_numerics())
     assert not outside.ok and 'outside the physical domain' in outside.issues[0].message
+
+
+def _monitor_problem(monitor):
+    problem = _plane_problem(fdtd.Plane(z=.5))
+    return dataclasses.replace(problem, outputs=fdtd.Outputs(monitors=(monitor,)))
+
+
+_WAVELENGTHS = (.8,)
+
+
+@pytest.mark.parametrize('build, path, expected', [
+    (lambda v: fdtd.Field('m', plane=v, wavelengths=_WAVELENGTHS), 'outputs.m.plane', 'Plane'),
+    (lambda v: fdtd.Flux('m', plane=v, wavelengths=_WAVELENGTHS), 'outputs.m.plane', 'Plane'),
+    (lambda v: fdtd.Field('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'Region'),
+    (lambda v: fdtd.Flux('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'Region'),
+    (lambda v: fdtd.FarField('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'Region'),
+], ids=['field-plane', 'flux-plane', 'field-box', 'flux-box', 'farfield-box'])
+@pytest.mark.parametrize('value', [.5, 'z=.5', (.5,)])
+def test_monitor_geometry_that_is_not_geometry_is_refused_at_the_monitor(build, path, expected, value):
+    """A non-geometry monitor plane/box names the monitor, not the scene structures (#48)."""
+    problem = _monitor_problem(build(value))
+    report = fdtd.check(problem, numerics=_numerics())
+    assert not report.ok
+    (issue,) = report.issues
+    assert issue.path == path
+    assert 'expected ' + expected in issue.message
+    for door in (fdtd.prepare, fdtd.run):
+        with pytest.raises(ValidationError) as error:
+            door(problem, numerics=_numerics())
+        assert error.value.path == path
+
+
+def test_monitor_plane_of_the_wrong_geometry_keeps_its_specific_message():
+    # Geometry of the wrong kind is still explained by the monitor's own check.
+    problem = _monitor_problem(fdtd.Field('m', plane=fdtd.Box(center=(0, 0, 0), size=(.1,) * 3),
+                                          wavelengths=_WAVELENGTHS))
+    report = fdtd.check(problem, numerics=_numerics())
+    assert not report.ok
+    assert 'fdtd.Plane' in report.issues[0].message
+    assert fdtd.check(_monitor_problem(fdtd.Field('m', plane=fdtd.Plane(z=.3),
+                                                  wavelengths=_WAVELENGTHS)),
+                      numerics=_numerics()).ok
 
 
 def _sphere_problem(count=1):
