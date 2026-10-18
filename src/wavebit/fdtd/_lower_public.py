@@ -125,7 +125,8 @@ def _scaled_initial(value, scale):
     if value is None:
         return None
     if callable(value):
-        return lambda x, y, z: value(x, y, z) * scale
+        from ._prepare.fields import _ScaledInitialPattern
+        return _ScaledInitialPattern(value, scale)
     if isinstance(value, (tuple, list)):
         return tuple(_scaled_initial(v, scale) for v in value)
     return value * scale

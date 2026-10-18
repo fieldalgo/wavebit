@@ -90,10 +90,12 @@ geometry on CUDA.
 A callable is evaluated during each run, including reuse of the same callable.
 Its returned pattern must satisfy the same static host/non-carried restriction,
 including nested component values; callable identity alone does not certify its
-result. `check` and `prepare` do not execute these callbacks. Live initial
+result. Raw H callback results are checked before SI normalization, including
+under `no_grad` and inference contexts, so unit conversion cannot hide a carried
+pattern. `check` and `prepare` do not execute these callbacks. Live initial
 amplitude remains supported. This CUDA restriction does not change CPU/JAX or
 legacy initial-pattern differentiation.
-The dedicated initial-pattern tests passed 33 new cases (16 CPU and 17 CUDA),
+The dedicated initial-pattern tests passed 43 cases (22 CPU and 21 CUDA),
 including same-callable invalid-result refusal and subsequent valid recovery.
 
 `Dipole.current_moment` is a current moment in A·m for electric sources or V·m

@@ -19,10 +19,21 @@ coordinate for every component (``flat=``), not the Yee offset a differenced axi
 
 import contextlib
 import contextvars
+from dataclasses import dataclass
 
 __all__ = ['evaluate']
 
 _STATIC_HOST_PATTERNS = contextvars.ContextVar('wavebit_fdtd_static_host_patterns', default=False)
+
+
+@dataclass(frozen=True, slots=True)
+class _ScaledInitialPattern:
+    """Keep a public unit conversion separate from the user callback's result."""
+    pattern: object
+    scale: float
+
+    def __call__(self, *coords):
+        return self.pattern(*coords) * self.scale
 
 
 @contextlib.contextmanager
@@ -78,8 +89,15 @@ def _component(name, c, entry, grid, field, rt, dtype, flat=(), concrete_only=Fa
         # The policy constrains this callable's result, not work it invokes.
         # Nested public calls select their own policy; internal calls retain
         # their original behavior. Restore the outer policy before validation.
+        scaled = entry if type(entry) is _ScaledInitialPattern else None
+        callback = entry if scaled is None else scaled.pattern
         with static_host_patterns(False):
-            entry = entry(*coords)
+            entry = callback(*coords)
+        if scaled is not None:
+            # Check the raw H callback before our SI conversion can erase its
+            # requires_grad metadata under no_grad or inference_mode.
+            _check_static_host_pattern(name, entry)
+            entry = entry * scaled.scale
     if concrete_only:
         from wavebit.fdtd._decay import reject_carried
         reject_carried(entry)
