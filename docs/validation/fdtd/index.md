@@ -22,6 +22,7 @@ usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 - [Mixed material parameters and pole arithmetic refusals](fd-pole-arithmetic.md)
 - [C8: one conductive film in a dielectric](fd-conductive-film.md)
 - [C8: separated parallel conductive films](fd-conductive-stack.md)
+- [C8: two exactly touching conductive films](fd-conductive-contact.md)
 - [Matched absorption of commuting coupled dielectrics](fd-constitutive-absorber.md)
 - [C8: one Debye film in a dielectric](fd-debye-film.md)
 - [C8: separated Debye films](fd-debye-stack.md)

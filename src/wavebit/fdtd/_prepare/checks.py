@@ -2272,7 +2272,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'local DC conductivity and induced Debye relaxation. Only concrete '
                     'axis-aligned films in a lossless host, outside absorbers, are admitted. '
                     'Validate spatial, time and boundary convergence separately. '
-                    'See docs/validation/fdtd/fd-conductive-stack.md.'))
+                    'See docs/validation/fdtd/fd-conductive-contact.md.'))
     elif stack is not None:
         out.append((SubpixelAccuracyWarning,
                     f'The conductive stack has {len(stack.films)} films normal to '

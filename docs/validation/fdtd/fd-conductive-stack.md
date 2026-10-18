@@ -34,7 +34,8 @@ All films share one normal axis. Their actual padded half-open grid supports
 must be pairwise disjoint: after sorting supports for this check, each upper
 index must be at most the next lower index. A physical gap alone does not
 establish this condition. Overlap diagnostics name an adjacent original member
-pair and its support intervals. Direct contact, intersecting supports, mixed
+pair and its support intervals. An exactly touching pair uses the separate
+[contact route](fd-conductive-contact.md). Intersecting supports, mixed
 material families, lossy hosts and arbitrary curved bodies remain outside this
 scope. It does not complete C8 or resolve the earlier C7 findings.
 
