@@ -58,12 +58,18 @@ def test_painted_eight_complex_channels_and_three_shape_derivatives_at_resolutio
     table): against RCWA 7.95e-3 in amplitude and 1.59e-3, 7.25e-3, 9.65e-3 in the angle, position
     and width derivatives; Meep at 20 is 2.09e-2 and 3.25e-3, 4.12e-2, 9.44e-2 from the same
     reference, and the two FDTDs are 1.50e-2 and 4.8e-3, 3.4e-2, 8.7e-2 apart.
+
+    No outer ``jax.jit``: wrapped around the value and ``jacfwd``, it took the process to
+    13.6 GB peak RSS (Linux CPU, jax 0.11.0) against 3.6 GB without it, in the same time and
+    within 2.3e-15 of the same numbers. At 13.3 GB on a 16.4 GB CI runner, beside a second
+    xdist worker, it shut the runner down (slow shard 3/3 of run 39098232669, both attempts;
+    measured by the diagnostics run 39145409231).
     """
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     p, value, jac = target
     meep_a, meep_j = meep_at_20
     f = lambda p: response(p, 20)
-    a, j = map(np.asarray, jax.jit(lambda p: (f(p), jax.jacfwd(f)(p)))(p))
+    a, j = np.asarray(f(p)), np.asarray(jax.jacfwd(f)(p))
     error = np.r_[np.max(abs(a-value)), np.max(abs(j-jac), axis=0)]
     meep_error = np.r_[np.max(abs(meep_a-value)), np.max(abs(meep_j-jac), axis=0)]
     apart = np.r_[np.max(abs(a-meep_a)), np.max(abs(j-meep_j), axis=0)]
