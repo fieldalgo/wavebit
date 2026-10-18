@@ -88,10 +88,12 @@ CPU에서 CUDA로 변환해도 기울기가 연결됩니다. prepared 재사용�
 
 같은 callable을 재사용해도 매 run에서 호출 결과를 평가합니다. 반환한 패턴은
 중첩된 성분 값까지 동일한 고정 호스트/non-carried 제한을 따라야 하며,
-callable 객체의 동일성만으로 결과를 허용하지 않습니다. `check`와 `prepare`는
+callable 객체의 동일성만으로 결과를 허용하지 않습니다. H callback의 원래
+반환값은 `no_grad`와 inference 문맥에서도 SI 정규화 전에 검사하므로 단위
+변환으로 carried 패턴이 가려지지 않습니다. `check`와 `prepare`는
 이 callback을 실행하지 않습니다. Live 초기 진폭은 계속 지원하며 이 CUDA
 제한은 CPU/JAX 또는 legacy 초기 패턴 미분을 바꾸지 않습니다.
-전용 초기 패턴 시험은 새 33사례(CPU 16, CUDA 17)를 통과했으며 같은
+전용 초기 패턴 시험은 43사례(CPU 22, CUDA 21)를 통과했으며 같은
 callable의 무효 반환값 거부와 이후 유효 반환값 복구를 포함합니다.
 
 `Dipole.current_moment`는 전기 광원의 A·m 또는 등가 자기 광원의 V·m 단위

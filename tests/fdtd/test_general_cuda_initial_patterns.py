@@ -355,3 +355,162 @@ def test_cpu_callback_exception_list_output_and_decay_contract():
     with pytest.raises(ValueError, match='DecayConcreteOnly'):
         fields.evaluate('E', (None, lambda x, y, z: leaf, None), grid, 'E', rt,
                         'float64', concrete_only=True)
+
+
+@pytest.mark.parametrize('mode', ['no_grad', 'inference'])
+def test_gpu_magnetic_callback_raw_carrier_refused_before_unit_scaling(mode, record_property):
+    torch = runtime('cuda:0')
+    leaf = torch.tensor(1.2, dtype=torch.float64, requires_grad=True)
+    version = leaf._version
+    calls = []
+
+    def pattern(x, y, z):
+        calls.append(1)
+        return leaf
+
+    policy = fixed_numerics(STEPS)
+    context = torch.no_grad if mode == 'no_grad' else torch.inference_mode
+    # The identical raw E callback must refuse even when reverse recording is off.
+    electric = closed_problem().replace(initial=fdtd.InitialField(
+        E=(0., pattern, 0.), H=None, amplitude=1.))
+    with context(), pytest.raises(ValidationError) as caught:
+        fdtd.run(electric, numerics=policy, backend='torch', device='cuda:0')
+    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.path == 'initial.E'
+    assert calls == [1]
+    calls.clear()
+    magnetic = closed_problem().replace(initial=fdtd.InitialField(
+        E=None, H=(0., pattern, 0.), amplitude=1.))
+    try:
+        with context():
+            result = fdtd.run(magnetic, numerics=policy, backend='torch', device='cuda:0')
+    except ValidationError as exc:
+        assert exc.issue.code == 'static_input'
+        assert exc.issue.path == 'initial.H'
+        assert calls == [1]
+        assert leaf.is_leaf and leaf.requires_grad and leaf._version == version
+        assert leaf.grad is None
+        return
+    # A uniform magnetic field has zero curl and no magnetic conductivity here.
+    field = result.final_fields.values['H'][1].detach().cpu().numpy()
+    np.testing.assert_allclose(field, 1.2, rtol=RTOL, atol=0.)
+    assert calls == [1] and leaf._version == version and leaf.grad is None
+    observation = {'mode': mode, 'magnetic_field_min': float(field.min()),
+                   'magnetic_field_max': float(field.max()),
+                   'runtime_stability': bool(result.validity.checks['runtime_stability']),
+                   'raw_leaf_requires_grad': leaf.requires_grad,
+                   'returned_field_requires_grad': result.final_fields.values['H'].requires_grad}
+    record_property('unexpected_magnetic_pattern_bypass', json.dumps(observation))
+    print(observation, flush=True)
+    pytest.fail('CUDA H callback admitted a carried raw value after internal unit scaling')
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'], ids=['cpu', 'gpu'])
+@pytest.mark.parametrize('mode', ['no_grad', 'inference'])
+def test_magnetic_static_callback_live_amplitude_after_forward_warmup(device, mode):
+    torch = runtime(device)
+    amplitude = torch.tensor(1.2, dtype=torch.float64, requires_grad=True)
+    calls = []
+
+    def pattern(x, y, z):
+        calls.append(1)
+        return torch.ones(x.shape, dtype=torch.float64)
+
+    problem = closed_problem().replace(initial=fdtd.InitialField(
+        E=None, H=(0., pattern, 0.), amplitude=amplitude))
+    prepared = fdtd.prepare(problem, numerics=fixed_numerics(STEPS),
+                            backend='torch', device=device)
+    assert not calls
+    context = torch.no_grad if mode == 'no_grad' else torch.inference_mode
+    with context():
+        warmup = prepared.run(problem)
+    assert calls == [1]
+    saved = warmup.final_fields.values['H'].detach().clone()
+    for value in (1.2, .7, 1.2):
+        with torch.no_grad():
+            amplitude.fill_(value)
+        version = amplitude._version
+        before = len(calls)
+        result = prepared.run(problem)
+        field = result.final_fields.values['H']
+        gradient, = torch.autograd.grad(field[1].square().mean(), amplitude)
+        np.testing.assert_allclose(field[1].detach().cpu(), value, rtol=RTOL, atol=0.)
+        np.testing.assert_allclose(gradient.detach().cpu(), 2*value, rtol=RTOL, atol=0.)
+        assert field.device == torch.device(device) and gradient.device == amplitude.device
+        assert amplitude.is_leaf and amplitude.requires_grad and amplitude.grad is None
+        assert amplitude._version == version and len(calls) == before+1
+        torch.testing.assert_close(warmup.final_fields.values['H'], saved, rtol=0, atol=0)
+    torch.testing.assert_close(field, saved, rtol=0, atol=0)
+
+
+def test_cpu_magnetic_callback_preserves_pattern_derivative():
+    torch = runtime('cpu')
+    leaf = torch.tensor(1.2, dtype=torch.float64, requires_grad=True)
+    calls = []
+
+    def pattern(x, y, z):
+        calls.append(1)
+        return leaf
+
+    problem = closed_problem().replace(initial=fdtd.InitialField(
+        E=None, H=(0., pattern, 0.), amplitude=1.))
+    prepared = fdtd.prepare(problem, numerics=fixed_numerics(STEPS), backend='torch')
+    assert not calls
+    result = prepared.run(problem)
+    field = result.final_fields.values['H'][1]
+    gradient, = torch.autograd.grad(field.square().mean(), leaf)
+    np.testing.assert_allclose(field.detach(), 1.2, rtol=RTOL, atol=0.)
+    np.testing.assert_allclose(gradient.detach(), 2.4, rtol=RTOL, atol=0.)
+    assert calls == [1] and leaf.grad is None and leaf._version == 0
+
+
+def test_cpu_jax_public_magnetic_callback_preserves_pattern_derivative():
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    calls = []
+
+    def loss(value):
+        def pattern(x, y, z):
+            calls.append(1)
+            return value
+        problem = closed_problem().replace(initial=fdtd.InitialField(
+            E=None, H=(0., pattern, 0.), amplitude=1.))
+        prepared = fdtd.prepare(problem, numerics=fixed_numerics(STEPS), backend='jax')
+        before = len(calls)
+        result = prepared.run(problem)
+        assert len(calls) == before+1
+        return jnp.mean(result.final_fields.values['H'][1]**2)
+
+    value, gradient = jax.value_and_grad(loss)(1.2)
+    np.testing.assert_allclose(value, 1.2**2, rtol=RTOL, atol=0.)
+    np.testing.assert_allclose(gradient, 2.4, rtol=RTOL, atol=0.)
+    assert calls == [1]
+
+
+@pytest.mark.parametrize('mode', ['no_grad', 'inference'])
+def test_cpu_magnetic_raw_guard_precedes_scaling_and_host_reads(mode, monkeypatch):
+    torch = runtime('cpu')
+    fields, grid, rt = evaluation_fixture()
+    from wavebit.fdtd._lower_public import _scaled_initial
+    from wavebit.units import Z0
+    leaf = torch.tensor(1.2, dtype=torch.float64, requires_grad=True)
+    calls = []
+
+    def pattern(x, y, z):
+        calls.append(1)
+        return leaf
+
+    scaled = _scaled_initial(pattern, Z0)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('raw magnetic rejection must precede host reads and conversion')
+
+    monkeypatch.setattr(rt, 'array', forbidden)
+    for name in ('cpu', 'numpy', 'item'):
+        monkeypatch.setattr(torch.Tensor, name, forbidden)
+    context = torch.no_grad if mode == 'no_grad' else torch.inference_mode
+    with context(), fields.static_host_patterns(True), pytest.raises(ValidationError) as caught:
+        fields.evaluate('H', (None, scaled, None), grid, 'H', rt, 'float64')
+    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.path == 'initial.H' and calls == [1]
