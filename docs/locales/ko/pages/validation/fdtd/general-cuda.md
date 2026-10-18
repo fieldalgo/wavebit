@@ -365,7 +365,12 @@ backend 파라미터로 predicate를 계산합니다. 완전한 eager concrete �
 스칼라 동기화가 필요하며, 시간 단계마다 동기화하는 것은 아닙니다.
 원래 입력·lowering된 파라미터·predicate 중 하나라도 미분 또는 변환 trace를
 가지면 host에서 읽지 않고 상수 1 또는 NaN 인자를 기존 런타임 certificate에
-합칩니다. 따라서 JIT에서 유도된 상수도 traced 인자 1을 사용할 수 있으며
+합칩니다. Torch 변환이 활성화되어 있으면 closure로 포착한 concrete 광원의
+certificate도 wrapper 값에 미분이 없더라도 backend에 유지합니다. 변환된
+boolean의 host storage를 읽지 않으며 일반 eager concrete의 동일성·거부와
+물리 파형 식은 바꾸지 않습니다. 별도 closed-source 회귀는 host 읽기를 금지한
+상태에서 유효·무효 상수의 JVP, grad, jacfwd, Hessian, JVP-of-grad, vmap,
+vmap-of-grad를 확인합니다. 따라서 JIT에서 유도된 상수도 traced 인자 1을 사용할 수 있으며
 guard가 문자 그대로 `None`인 동일성까지 보장하지 않습니다. Carried 경로의
 시간 측정은 concrete 스칼라 동기화 비용을 측정한 것이 아닙니다.
 `test_general_source_waveform_guard.py`는 **새 36사례(CPU 19, CUDA 17)**를
