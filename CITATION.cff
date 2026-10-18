@@ -1,0 +1,30 @@
+# How to cite Wavebit. GitHub reads this file for "Cite this repository", and Zenodo reads it
+# when it archives a GitHub release. `version` and `date-released` name the release this
+# commit belongs to; a release changes them together with `version` in pyproject.toml, and a
+# test keeps the two versions equal.
+cff-version: 1.2.0
+message: "If you use Wavebit in your work, please cite the version you used."
+type: software
+title: "Wavebit: Differentiable Electromagnetic Simulation Suite"
+abstract: >-
+  Wavebit computes how light scatters from periodic nanostructures with rigorous
+  coupled-wave analysis (RCWA) and how electromagnetic fields evolve in time with
+  the finite-difference time-domain method (FDTD), behind one API on NumPy, JAX
+  and PyTorch. It differentiates through the RCWA calculation, so the model that
+  predicts a device's response is the model that optimizes it.
+authors:
+  - family-names: Kim
+    given-names: Yongha
+    affiliation: FieldAlgo
+version: 0.0.4
+date-released: 2026-10-17
+license: Apache-2.0
+repository-code: "https://github.com/fieldalgo/wavebit"
+keywords:
+  - electromagnetics
+  - RCWA
+  - FDTD
+  - nanophotonics
+  - automatic differentiation
+  - JAX
+  - PyTorch

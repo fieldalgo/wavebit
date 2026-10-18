@@ -47,7 +47,7 @@ ROOT = repository_root()
 PUBLISHED = ('src', 'docs', 'tests', 'studies', 'tutorials', 'examples', 'tools', 'assets', 'artifacts')
 # `.log` because the results logs are committed records, and one carried a build machine's
 # temporary directories.
-TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.yml', '.yaml', '.txt', '.m', '.log'}
+TEXT_SUFFIXES = {'.py', '.md', '.ipynb', '.toml', '.cfg', '.cff', '.yml', '.yaml', '.txt', '.m', '.log'}
 
 # A home directory or a user-rooted absolute path. `~/` alone is not enough to match: it is
 # ordinary in prose ("keep it as a sibling of the checkout"), and what makes a pointer a leak
@@ -262,7 +262,8 @@ def test_the_outward_pattern_leaves_inward_paths_alone(line):
 def test_the_checks_read_the_top_of_the_tree_and_the_results_logs():
     """The files at the root and the committed `.log` records ship, so the checks read them."""
     read = {p.relative_to(ROOT).as_posix() for p in published_files()}
-    assert {'README.md', 'LICENSE', 'CITATION.bib', 'pyproject.toml', 'environment.yml'} <= read
+    assert {'README.md', 'LICENSE', 'CITATION.bib', 'CITATION.cff', 'pyproject.toml',
+            'environment.yml'} <= read
     _, records = _relocation_metadata(ROOT)
     logs = {r for r in records if r.endswith('.log')}
     assert logs, 'The relocation ledger must include the preserved experiment logs.'

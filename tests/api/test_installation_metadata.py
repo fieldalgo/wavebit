@@ -1,6 +1,7 @@
 """Fast installation metadata/data checks; wheel isolation has its own smoke tool."""
 import importlib.metadata
 import importlib.resources
+import re
 from pathlib import Path
 import tomllib
 
@@ -24,6 +25,13 @@ def test_every_version_the_package_states_is_the_pyproject_one():
     root = Path(__file__).resolve().parents[2]
     version = tomllib.loads((root / 'pyproject.toml').read_text())['project']['version']
     assert wavebit.__version__ == version
+    # The citation files name the release a citation points at; a release that bumps the
+    # package and not them would have Zenodo archive it under the previous version.
+    assert re.findall(r'^version: (\S+)$', (root / 'CITATION.cff').read_text(encoding='utf-8'),
+                      re.MULTILINE) == [version]
+    for name in ('CITATION.bib', 'README.md'):
+        text = (root / name).read_text(encoding='utf-8')
+        assert re.findall(r'^\s*version\s*=\s*\{([^}]*)\}', text, re.MULTILINE) == [version], name
 
 
 
