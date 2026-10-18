@@ -49,7 +49,9 @@ every resolution. The regression tests keep this mutant failing.
 ## Scope
 
 The material is lossless and isotropic, and it jumps once. Both permittivities may be traced
-and differentiated on JAX and PyTorch. The switching time is a static number of seconds. The
+and differentiated on JAX and PyTorch. The stability bound, its traced guard and the
+cells-per-wavelength check read both sides of the jump: a value after the jump that the grid
+cannot hold is refused, or makes a traced run NaN, as the same plain material would. The switching time is a static number of seconds. The
 jump lands on the first E time level at or after `switch_time`, so `switch_time` must be at
 least two time steps into the run.
 
@@ -61,13 +63,14 @@ The structure is refused in these cases. In each one the correction would not be
 | Overlap with another structure | a cell painted by another structure would be switched too |
 | A switched `background`, or `continuation` into a face | an absorbing layer matched to one medium is not matched to the other |
 | Reaching an absorbing layer | the layer damps the update the correction is written against |
-| A source inside the region | its injected field is built for one fixed medium |
-| A `Diffraction` or `FarField` reading inside the region | the result divides by one fixed medium's impedance |
-| `discretisation='stencil'` | it replaces the coefficients the correction is written against |
+| A dipole inside the region, or a TFSF surface through it | its injected field is built for one fixed medium |
+| A `Diffraction` plane inside the region, or a `FarField` surface through it | the result divides by one fixed medium's impedance |
 
-Readings outside the region, such as `Record` and `Flux`, are unaffected. Automatic stopping
-(`fdtd.Decay`) works: the term's stored field is one more group that has to decay, and a
-prepared problem reruns with new permittivities. Changing `switch_time` needs a new `prepare`.
+A TFSF box or a `FarField` box that encloses the switched region with a cell to spare is the
+normal way to illuminate and observe it, and is exact. Readings outside the region, such as
+`Record` and `Flux`, are unaffected. Automatic stopping (`fdtd.Decay`) works and does not stop
+before the jump: the term's stored field is one more group that has to decay. A prepared
+problem reruns with new permittivities. Changing `switch_time` needs a new `prepare`.
 
 ## Validation
 

@@ -23,9 +23,11 @@ class SwitchedMaterial(Declaration):
     ``n_before (n_after +- n_before) / (2 n_after^2)`` of the incident one.
 
     FDTD only, on a cell-snapped :class:`~wavebit.fdtd.Slab` or :class:`~wavebit.fdtd.Region`
-    that overlaps no other structure, stays clear of the absorbing layers and holds no source
-    or diffraction/far-field reading. Both permittivities may be traced (differentiated); the
-    switching time is static.
+    that overlaps no other structure and stays clear of the absorbing layers. No dipole or
+    diffraction plane may sit inside it and no TFSF or far-field surface may cross it; a box
+    that encloses it with a cell to spare is fine. Both permittivities may be traced
+    (differentiated), and the stability and resolution checks read both; the switching time
+    is static.
     """
 
     epsilon_before: object

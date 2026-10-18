@@ -245,6 +245,10 @@ def report(scene, p=None, params=None):
     psi = sum(4 * face.cells * (p.cells // p.grid.n['xyz'.index(face.name[0])])
               for face in p.cpml) * itemsize
     flux_memory = sum(3 * np.prod(t.region.shape) for t in p.constitutive) * itemsize
+    # A temporal boundary keeps its region's previous E: one more three-component array.
+    from wavebit.fdtd._kernel.switched import SwitchedTerm
+    flux_memory += sum(3 * np.prod(t.region.shape) for t in p.terms
+                       if isinstance(t, SwitchedTerm)) * itemsize
     # PoleTerm reserves three histories; a hybrid film declares a fourth auxiliary
     # array per slot. Count every declared slot, including inactive ones, statically:
     # initializing full buffers here would defeat a pre-run report.

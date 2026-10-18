@@ -531,8 +531,9 @@ def _material_door_guard(scene, rt, guard):
     zero = rt.array(0.0, 'float64')
     checks_ = []
     background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
-    for material in [background] + [s.material for s in (getattr(scene, 'structures', ())
-                                                          or ())]:
+    from wavebit.materials.time_domain import phases
+    for material in [phase for m in [background] + [s.material for s in (
+            getattr(scene, 'structures', ()) or ())] for phase in phases(m)]:
         leaves = [(v, True) for v in material.eps] + [(v, True) for v in material.mu_value]
         leaves += [(v, False) for v in getattr(material, 'sigma', ()) or ()]
         for pole in material.poles:
@@ -577,7 +578,9 @@ def _traced_guard(scene, plan, rt):
     the name drops every earlier phase from the pairing.
     """
     background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
-    materials = [background] + [s.material for s in (getattr(scene, 'structures', ()) or ())]
+    from wavebit.materials.time_domain import phases
+    materials = [phase for m in [background] + [s.material for s in (getattr(scene, 'structures', ())
+                                                                     or ())] for phase in phases(m)]
     zero = rt.array(0.0, 'float64')
     eps_min, mu_min, resonance, coupling = None, None, zero, zero
     for material in materials:

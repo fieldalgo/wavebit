@@ -277,9 +277,11 @@ def check_switched(scene, plan):
     * an overlap means a cell the term corrects is painted by another structure;
     * a background fills the absorbing layers, whose coefficients are not ``eps``'s;
     * an absorbing layer's damping changes ``ae`` and ``be`` inside the region;
-    * a plane wave, TFSF box or dipole inside injects a field built for one fixed medium;
-    * a diffraction or far-field reading inside divides by one fixed medium's impedance;
-    * ``discretisation='stencil'`` replaces the coefficients the correction is written against;
+    * a dipole inside, or a TFSF surface through the region, injects a field built for one
+      fixed medium (a TFSF box that encloses the region with a cell to spare is exact; a plane
+      wave inside any structure is refused by the sheet's own door);
+    * a diffraction plane inside, or a far-field surface through the region, divides by one
+      fixed medium's impedance (a far-field box that encloses the region is exact);
     * a jump before E level 2 needs ``E^0`` over the region, which the term does not hold.
     """
     from wavebit.materials.time_domain import Switched
@@ -307,10 +309,22 @@ def check_switched(scene, plan):
         return all(lo - tol <= float(p) <= hi + tol for p, (lo, hi) in zip(point, span)
                    if p is not None)
 
-    def inside_box(other, span):
-        tol = 0.5 * grid.dx
-        return all(float(o0) <= hi + tol and lo - tol <= float(o1)
-                   for (o0, o1), (lo, hi) in zip(other, span))
+    def surface_meets(box, span):
+        """Whether a TFSF or far-field box's surface reaches the switched cells.
+
+        A box that encloses the region with a cell to spare, or one clear of it, leaves its
+        surface in the unswitched medium -- the normal way to illuminate or observe a switched
+        scatterer, and exact. Anything else puts the surface (and a TFSF's one-cell correction
+        shell) in a medium that changes.
+        """
+        bounds = [(float(c) - float(w) / 2, float(c) + float(w) / 2)
+                  for c, w in zip(box.center, box.size)]
+        margin = grid.dx * 1.5
+        clear = any(hi <= b0 - 0.5 * grid.dx or b1 + 0.5 * grid.dx <= lo
+                    for (b0, b1), (lo, hi) in zip(bounds, span))
+        enclosed = all(b0 + margin <= lo and hi <= b1 - margin
+                       for (b0, b1), (lo, hi) in zip(bounds, span))
+        return not (clear or enclosed)
 
     for index, structure in enumerate(structures):
         material = structure.material
@@ -323,10 +337,6 @@ def check_switched(scene, plan):
                 f'permittivity into the interface cells, and a cell that is part one medium is '
                 f'not switched by the jump of the other. Spell the switched region as an '
                 f'fd.Slab or fd.Region.')
-        if getattr(structure, 'discretisation', 'voxel') == 'stencil':
-            raise ValueError(f"{where}: discretisation='stencil' rebuilds the coefficients a "
-                             f"temporal boundary is corrected against; use the default voxel "
-                             f"discretisation for an fd.Switched structure.")
         for other in range(len(structures)):
             if other != index and _intersects(boxes[index], boxes[other]):
                 raise ValueError(
@@ -349,7 +359,12 @@ def check_switched(scene, plan):
             elif isinstance(source, PlaneWave):
                 hit = inside_point((source.x, source.y, source.z), span)
             elif isinstance(source, TFSF) and source.box is not None:
-                hit = inside_box(source.box, span)
+                if surface_meets(source.box, span):
+                    raise ValueError(
+                        f'source {source.name!r}: its TFSF surface reaches {where}. The surface '
+                        f'injects a field built for one fixed medium, and the medium there '
+                        f'changes during the run. Enclose the switched region with a cell to '
+                        f'spare, or keep the box clear of it.')
             if hit:
                 raise ValueError(
                     f'source {source.name!r} sits inside {where}. A source injects a field built '
@@ -360,7 +375,7 @@ def check_switched(scene, plan):
             if isinstance(monitor, Diffraction):
                 hit = inside_point((monitor.x, monitor.y, monitor.z), span)
             elif type(monitor).__name__ == 'FarField' and getattr(monitor, 'box', None) is not None:
-                hit = inside_box(monitor.box, span)
+                hit = surface_meets(monitor.box, span)
             if hit:
                 raise ValueError(
                     f'monitor {monitor.name!r} reads inside {where}. Its result divides by the '
@@ -2018,7 +2033,9 @@ def cfl_bound(scene, plan):
     its own index is 2 -- E along x sees ``eps = 1`` and the H beside it ``mu = 1``).
     """
     background, structures = _background(scene), tuple(getattr(scene, 'structures', ()) or ())
-    materials = [background] + [s.material for s in structures]
+    from wavebit.materials.time_domain import phases
+    materials = [phase for m in [background] + [s.material for s in structures]
+                 for phase in phases(m)]
     n_min, resonance, coupling = None, 0.0, 0.0
     from wavebit.fdtd._prepare.oscillator_sum_film import policy_rate as oscillator_policy_rate
     oscillator_rate = oscillator_policy_rate(scene, plan)
@@ -2187,7 +2204,9 @@ def check_stability(scene, plan):
                   f'differenced axis adds (its derivative is i k, bounded by nothing but k_max): '
                   f'{", ".join(axis1d)}; a smaller k_max= widens the bound.')
     background = _background(scene)
-    phases = [background] + [s.material for s in (getattr(scene, 'structures', ()) or ())]
+    from wavebit.materials.time_domain import phases as _phases
+    phases = [phase for m in [background] + [s.material for s in (getattr(scene, 'structures', ())
+                                                                  or ())] for phase in _phases(m)]
     own = min(m.index_bound() for m in phases)
     eps_min = min(concrete(e) for m in phases for e in m.eps)
     mu_min = min(concrete(m) for p in phases for m in p.mu_value)
@@ -2712,9 +2731,11 @@ def _resolution_notes(scene, plan):
         return hybrid_notes
     from wavebit.fdtd._prepare.conductive_film import descriptor
     conductive = descriptor(scene, plan.grid) is not None
+    from wavebit.materials.time_domain import phases
     materials = [('Scene(background=)', _background(scene))]
-    materials += [(f'structures[{i}]', s.material)
-                  for i, s in enumerate(getattr(scene, 'structures', ()) or ())]
+    materials += [(f'structures[{i}]', phase)
+                  for i, s in enumerate(getattr(scene, 'structures', ()) or ())
+                  for phase in phases(s.material)]
     sources = tuple(getattr(scene, 'sources', ()) or ())
     if not sources and len(materials) == 1 and not materials[0][1].poles \
             and _index_at(materials[0][1], 1.0)[0] == 1.0:
@@ -2835,9 +2856,11 @@ def check_wavelength_resolution(scene, grid):
     from wavebit.fdtd._legacy_monitors import Diffraction
     from wavebit.fdtd._prepare.conductive_film import descriptor
     conductive = descriptor(scene, grid) is not None
+    from wavebit.materials.time_domain import phases
     materials = [('Scene(background=)', _background(scene))]
-    materials += [(f'structures[{i}]', s.material)
-                  for i, s in enumerate(getattr(scene, 'structures', ()) or ())]
+    materials += [(f'structures[{i}]', phase)
+                  for i, s in enumerate(getattr(scene, 'structures', ()) or ())
+                  for phase in phases(s.material)]
     asked = {}
     for m in getattr(scene, 'monitors', ()) or ():
         if isinstance(m, Diffraction):

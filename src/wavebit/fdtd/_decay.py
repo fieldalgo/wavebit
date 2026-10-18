@@ -154,6 +154,12 @@ def source_gate(scene, threshold):
         except (ArithmeticError, ValueError) as err:
             raise ValueError('DecaySourceRange: the source eligibility time must be '
                              'representable as a finite float64 value.') from err
+    # A temporal boundary is a scheduled event too: a window may not start before the last
+    # jump, or a field that had settled before it would stop the run with the jump unmade.
+    from wavebit.materials.time_domain import Switched
+    for structure in tuple(getattr(scene, 'structures', ()) or ()):
+        if isinstance(structure.material, Switched):
+            latest = max(latest, math.nextafter(float(structure.material.time), math.inf))
     return latest
 
 

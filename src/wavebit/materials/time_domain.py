@@ -57,7 +57,7 @@ from wavebit._common.declarations import spec
 from wavebit._common.declarations import torch_carried
 
 __all__ = ['Material', 'Conductor', 'Dispersive', 'Switched', 'Drude', 'Lorentz', 'Debye',
-           'MaterialBase', 'Pole', 'eps_at', 'concrete', 'as_material']
+           'MaterialBase', 'Pole', 'eps_at', 'concrete', 'as_material', 'phases']
 
 
 def _complex_refusal(where, name, value):
@@ -657,6 +657,19 @@ class Switched(MaterialBase):
                 return None
             out.append(math.sqrt(ce))
         return min(out)
+
+
+def phases(material):
+    """The media a material is during the run: itself, or a :class:`Switched` one's two sides.
+
+    Every door that bounds the run by the media it holds -- the CFL bound, its traced guard,
+    the positivity guard, the cells-per-wavelength check -- reads ``material.eps``, which for a
+    :class:`Switched` material is the value before the jump only. They read this instead, so
+    the medium after the jump is held to the same bounds.
+    """
+    if isinstance(material, Switched):
+        return (Material(eps=material.eps), Material(eps=material.after))
+    return (material,)
 
 
 @_eager_under_torch_compile

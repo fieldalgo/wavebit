@@ -79,5 +79,6 @@ class SwitchedTerm:
         return cH
 
     def advance(self, mem, E, H, n, params, rt):
-        # A copy: on NumPy the view would follow E's buffer into the next update.
+        # A copy, so the memory is an array of its own (the state, the Decay groups and the
+        # memory report count it as one); the next before_E reads it before E is updated.
         return E[(slice(None),) + self.region.slices] * 1.0

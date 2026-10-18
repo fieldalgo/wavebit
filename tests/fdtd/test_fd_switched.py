@@ -299,7 +299,8 @@ def test_a_source_inside_the_switched_region_is_refused():
     """
     source = fd.Dipole('d', center=(0.0, 0.0, 0.1), component='Ey',
                        band=fd.Band(wavelength=1.0, df=0.2))
-    scene = thin_scene([fd.Structure(fd.Slab(z=(-0.5, 0.5)), SWITCHED)], sources=[source])
+    scene = thin_scene([fd.Structure(fd.Slab(z=(-0.5, 0.5)),
+                                     Switched(eps=1.0, after=2.0, time=0.2))], sources=[source])
     scene = fd.Scene(domain=fd.Domain(size=(0.4, 0.4, 3.0)), boundaries=scene.boundaries,
                      resolution=scene.resolution, run=scene.run, structures=scene.structures,
                      sources=scene.sources)
@@ -367,3 +368,155 @@ def test_automatic_stopping_runs_a_switched_scene_and_keeps_its_prefix():
     assert 1000 < steps < 6000
     a, b = to_numpy(fixed['e'].values), to_numpy(stopped['e'].values)
     np.testing.assert_array_equal(a[:len(b)], b)
+
+
+# ---------------------------------------------------------------------------------------------
+# Review findings (2026-10-18): each test below failed before its fix
+# ---------------------------------------------------------------------------------------------
+
+PULSE = fdtd.GaussianPulse(wavelength=1.0, frequency_sigma_hz=4e13)
+
+
+def box_problem(region, sources=(), monitors=()):
+    material = fdtd.SwitchedMaterial(epsilon_before=1.0, epsilon_after=2.25,
+                                     switch_time=2e-6 / C0)
+    return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(2., 2., 2.)),
+        boundaries=fdtd.Boundaries(x=fdtd.Open(), y=fdtd.Open(), z=fdtd.Open()),
+        structures=(fdtd.Structure('s', region, material),)),
+        sources=sources, outputs=fdtd.Outputs(monitors=monitors))
+
+
+BOX_NUMERICS = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=6),
+                             absorber=fdtd.PML(cells=12))
+
+
+def test_a_tfsf_box_and_a_far_field_box_around_a_switched_region_run():
+    """The normal way to illuminate and observe a switched scatterer; both surfaces sit outside.
+
+    Before the fix any TFSF or FarField in the scene failed with "'Region' object is not
+    iterable", and a naive fix refused the enclosing case.
+    """
+    problem = box_problem(
+        fdtd.Region(size=(.2, .2, .2), center=(0., 0., 0.)),
+        sources=(fdtd.TFSF('t', box=fdtd.Region(size=(.6, .6, .6), center=(0., 0., 0.)),
+                           pulse=PULSE),),
+        monitors=(fdtd.FarField('ff', wavelengths=(1.0,),
+                                box=fdtd.Region(size=(1., 1., 1.), center=(0., 0., 0.))),))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        result = fdtd.run(problem, numerics=BOX_NUMERICS)
+    assert result is not None
+
+
+def test_a_tfsf_surface_through_the_switched_region_is_refused():
+    problem = box_problem(
+        fdtd.Region(size=(.6, .6, .6), center=(0., 0., 0.)),
+        sources=(fdtd.TFSF('t', box=fdtd.Region(size=(.4, .4, .4), center=(0., 0., 0.)),
+                           pulse=PULSE),))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        report = fdtd.check(problem, numerics=BOX_NUMERICS)
+    # The TFSF door's own scatterer rule names it first; the switched door says the same.
+    assert any('TFSF' in issue.message or 'correction layer' in issue.message
+               for issue in report.issues), report.issues
+
+
+def periodic_box(material, courant, background):
+    return fd.Scene(
+        domain=fd.Domain(size=(0.5, 0.5, 0.5)),
+        boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(), z=fd.Periodic()),
+        resolution=fd.Resolution(dx=0.05), run=fd.Run(steps=10, courant=courant),
+        background=background,
+        structures=(fd.Structure(fd.Region(size=(0.2, 0.2, 0.2), center=(0, 0, 0)), material),))
+
+
+def test_the_cfl_bound_pairs_the_permittivity_after_the_jump():
+    """``eps 1 -> 0.25`` in ``eps 4, mu 0.25``: the pairing bound 0.0072 refuses dt 0.0141.
+
+    Before the fix the plan read only ``eps_before`` there and the run reached NaN in 6000
+    steps; the same scene with a plain ``eps 0.25`` was refused.
+    """
+    background = fd.Material(eps=4.0, mu=0.25)
+    for material in (fd.Material(eps=0.25), Switched(eps=1.0, after=0.25, time=0.1)):
+        assert 'stability bound' in plan_error(periodic_box(material, 0.49, background))
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_a_traced_permittivity_after_the_jump_past_the_bound_reads_unstable(backend):
+    """A traced ``after = 0.2`` at courant 0.5 is past the bound: NaN, not a silent blow-up.
+
+    Before the fix the guard read ``eps_before`` only: |E| reached 53.8 reading stable.
+    """
+    library = pytest.importorskip(backend)
+
+    def final(after):
+        scene = packet_scene(120, 1.0, length=6.0, z0=2.0, t_switch=0.4, travel=1.0,
+                             material=Switched(eps=1.0, after=after, time=0.4))
+        return fd.run(scene, backend=backend).final.E
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        if backend == 'jax':
+            library.config.update('jax_enable_x64', True)
+            value, _ = library.value_and_grad(lambda a: library.numpy.sum(final(a) ** 2))(0.2)
+            assert np.isnan(float(value))
+        else:
+            E = to_numpy(final(library.tensor(0.2, dtype=library.float64, requires_grad=True)))
+            assert np.all(np.isnan(E))
+
+
+def test_the_resolution_door_reads_the_medium_after_the_jump():
+    """A slab switched to ``eps 25`` is 4 cells per wavelength afterwards, as ``eps 25`` is."""
+    dx = 0.05
+
+    def scene(material):
+        return fd.Scene(
+            domain=fd.Domain(size=(dx, dx, 3.0)),
+            boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(), z=fd.PML(cells=12)),
+            resolution=fd.Resolution(dx=dx), run=fd.Run(steps=10, courant=COURANT),
+            structures=(fd.Structure(fd.Slab(z=(-0.5, 0.0)), material),),
+            sources=(fd.PlaneWave('pw', z=0.6, direction='-z',
+                                  band=fd.Band(wavelength=1.0, df=0.2)),),
+            monitors=(fd.Diffraction('t', z=-0.8, side='transmit', wavelengths=(1.0,)),))
+
+    for material in (fd.Material(eps=25.0), Switched(eps=1.0, after=25.0, time=1.0)):
+        assert '4.00 cells per wavelength' in plan_error(scene(material))
+
+
+def test_the_memory_report_counts_the_stored_field():
+    from wavebit.fdtd._prepare.report import report
+    scene = fd.Scene(
+        domain=fd.Domain(size=(0.4, 0.4, 1.0)),
+        boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(), z=fd.Periodic()),
+        resolution=fd.Resolution(dx=0.05), run=fd.Run(steps=10, courant=COURANT),
+        structures=(fd.Structure(fd.Slab(z=(-0.5, 0.5)), SWITCHED),))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        counted = report(scene).bytes_per_state
+    cells = 8 * 8 * 20
+    assert counted == (2 * 3 + 3) * cells * 8
+
+
+def test_automatic_stopping_waits_for_the_jump():
+    """A field that settles before the jump must not stop the run with the jump unmade."""
+    def problem(switch_time):
+        return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+            domain=fdtd.Domain(size=(.05, .05, 3.)),
+            boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+            structures=(fdtd.Structure('s', fdtd.Slab(z=(-.6, .6)), fdtd.SwitchedMaterial(
+                epsilon_before=4.0, epsilon_after=1.0, switch_time=switch_time * 1e-6 / C0)),)),
+            sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=1.0), pulse=fdtd.GaussianPulse(
+                wavelength=.8, frequency_sigma_hz=4e13)),),
+            outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0., 0., -1.0), component='Ey'),)))
+
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
+                             duration=fdtd.Duration(steps=12000), absorber=fdtd.PML(cells=12),
+                             decay=fdtd.Decay(threshold=.01, window_seconds=5e-15))
+    dt = COURANT * .025 / math.sqrt(3)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        settled = fdtd.run(problem(70.0), numerics=numerics).provenance['actual_steps']
+        jump = (settled + 400) * dt
+        stopped = fdtd.run(problem(jump), numerics=numerics).provenance['actual_steps']
+    assert stopped * dt > jump
