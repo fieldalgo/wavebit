@@ -27,6 +27,9 @@ Preserve published history; do not directly push main, force-push shared branche
 squash on landing or create integration merge commits. Record the resulting main SHA
 and retain main validation. Fix or revert failed main changes through a PR before
 release. Release tags require successful validation of the exact resulting commit.
+A commit or PR that lands work replayed, rewritten, squashed or ported from another
+commit names each original in its body as `Ports: <sha>` (SHA only); do not report a
+commit missing from SHA ancestry alone.
 
 Use portable path, temporary-directory and subprocess APIs with explicit encodings.
 Verify OS-sensitive behavior without weakening numerical gates or hiding failures
