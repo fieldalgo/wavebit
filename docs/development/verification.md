@@ -110,7 +110,7 @@ validation of its exact commit. This is a CI execution queue, not a PR merge que
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
 uses the runner for both non-research partitions, each split across runners with
-`--shard INDEX/COUNT`: eight shards for the ordinary partition, three for the slow one.
+`--shard INDEX/COUNT`: eight shards for the ordinary partition, six for the slow one.
 
 CI stores both verification outputs and their pytest temporary fixtures under
 `RUNNER_TEMP`, outside the checkout, so study fixtures can enforce their raw-output
@@ -122,7 +122,7 @@ python tools/run_verification.py --profile full --slow exclude --shard 1/8 --wor
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
-python tools/run_verification.py --profile full --slow only --shard 1/3 --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/6 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/slow"
@@ -139,7 +139,8 @@ named failure there, not an absence.
 
 Sharding is a response to the runners' memory, not to the clock: a single two-worker run
 of the ordinary partition grew past the 7.9 GB available and was shut down at 50 to 61 %
-every time. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
+every time. The slow partition followed: as three shards, shard 3 lost its runner
+at about 95 % on both attempts of run 39098232669, so it now runs as six. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
 the job limits are 120 minutes per shard. Measured durations guide balancing;
 actual elapsed times still depend on collection, compilation and worker scheduling. Source-mutating
 cases within a shard run in the runner's separate serial snapshot, not in the shared
@@ -149,6 +150,27 @@ GitHub artifacts `verification-default-N` and `verification-slow-N` retain each 
 JSON receipts and inventories, JSONL events, JUnit XML and logs. The writable source
 snapshot is excluded from upload to avoid copying the repository into every
 artifact. These are verification records, not full source snapshots.
+
+## Runner diagnostics
+
+A manual dispatch with the `slow_runner_diagnostics` input runs only the slow shards, each
+with a Linux-only sidecar that flushes host memory/swap, memory pressure, process RSS
+and cgroup v2 limits/events every five seconds to both the live CI log and
+`runner-diagnostics-slow-N`. It does not collect command lines or environment
+variables. With passwordless sudo and tracefs support, a private tracing instance
+also records kernel signal generation (sender task/PID and target) and OOM victims.
+A harmless SIGCONT self-probe checks the signal stream. Missing tracing permissions
+or capabilities are explicitly logged; absence of an event does not prove absence
+of a signal or an OOM. SIGKILL or host loss can prevent final samples and uploads.
+
+Such a run skips the other jobs and the ordinary partition's aggregator; `slow tests
+complete` still checks the slow shards add up. A `diagnostics run, not a CI gate` job
+fails the run on purpose, so the release gate, which accepts any successful `tests`
+run on the release commit, never counts it. With the input omitted or false, the
+normal CI gates remain and no sidecar runs. The numerical tests, worker count and
+timeout limits are unchanged. Compare memory counters and signal timestamps with
+test progress before attributing a shutdown to a test, a resource limit or a manual
+cancellation.
 
 ## Resume an identical run
 
