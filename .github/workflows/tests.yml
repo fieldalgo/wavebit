@@ -48,6 +48,11 @@ on:
     # landing starts when the author marks it ready, after the local tests (owner, 2026-10-16).
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      slow_runner_diagnostics:
+        description: 'Run only the slow shards, with runner diagnostics (not a complete CI gate)'
+        type: boolean
+        default: false
 
 concurrency:
   # Preserve main runs in one queue per workflow/ref; supersede older non-main runs.
@@ -57,7 +62,7 @@ concurrency:
 
 jobs:
   lint:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
     name: lint
     runs-on: ubuntu-latest
     steps:
@@ -84,7 +89,7 @@ jobs:
         run: ruff check .
 
   test:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
     name: full backends (${{ matrix.shard }}/8)
     runs-on: ubuntu-latest
     # Six shards, each its own runner, since 2026-10-15. Not for speed first: for memory.
@@ -325,7 +330,7 @@ jobs:
     name: full backends complete
     runs-on: ubuntu-latest
     needs: test
-    if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    if: ${{ !inputs.slow_runner_diagnostics && (always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) ) }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -341,17 +346,20 @@ jobs:
 
   slow:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    name: slow tests (${{ matrix.shard }}/3)
+    name: slow tests (${{ matrix.shard }}/6)
     runs-on: ubuntu-latest
-    # Three time-balanced shards preserve memory isolation and shorten the critical path.
-    # Unsharded, this job reached 90 % (147 passed, 0 failed) before the runner shut itself
-    # down on run 38574993959; as two shards on run 38727516339 both finished, in 38 and 39
-    # minutes. `slow-complete` below checks the three shards add up.
+    # Six time-balanced shards, for memory isolation as in `test` above. Unsharded, this job
+    # reached 90 % (147 passed, 0 failed) before the runner shut itself down on run
+    # 38574993959; as two shards on run 38727516339 both finished, in 38 and 39 minutes. As
+    # three, shard 3 lost its runner at about 95 %, 48 minutes in, on both attempts of run
+    # 39098232669 (exit 143, the same shutdown signal), so the tier is split again: the
+    # recorded timings put each of six near 36 worker-minutes. `slow-complete` below checks
+    # the six shards add up.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
-    # A healthy slow shard is about 40 minutes (above); this is for a hang.
+        shard: [1, 2, 3, 4, 5, 6]
+    # A healthy slow shard is about 20 minutes (above); this is for a hang.
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
@@ -371,6 +379,14 @@ jobs:
       - name: Verify all three backends and contourpy are importable
         run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
 
+      # Only on a `slow_runner_diagnostics` dispatch: the instrument is checked on this
+      # runner before the slow tests rely on it. Ordinary runs test it in `test`.
+      - name: Check runner diagnostic instrument
+        if: ${{ inputs.slow_runner_diagnostics }}
+        env:
+          CUDA_VISIBLE_DEVICES: '-1'
+        run: python -m pytest tests/api/test_ci_runner_diagnostics.py -q
+
       # The environment is `test`'s, and the comments there are the reasons for it. What
       # differs is the per-test bound, 2400 s rather than 1200 s. The slowest of these took
       # 752 s at `-n 5` on the desktop, and 1110 s on another run, where 1200 s killed its
@@ -384,12 +400,26 @@ jobs:
           NUMEXPR_NUM_THREADS: 1
           VECLIB_MAXIMUM_THREADS: 1
           XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
-        run: >
-          python -u tools/run_verification.py --profile full --slow only
-          --shard ${{ matrix.shard }}/3
-          --shard-timings tools/ci_shard_timings.json
-          --workers 2 --timeout 2400 --timeout-method thread --verbose --live-output
-          --output "${{ runner.temp }}/wavebit-verification/slow"
+        run: |
+          if [ "${{ inputs.slow_runner_diagnostics }}" = "true" ]; then
+            python -u tools/ci_runner_diagnostics.py --output "$RUNNER_TEMP/runner-diagnostics.jsonl" &
+            diagnostic_pid=$!
+            trap 'kill -TERM "$diagnostic_pid" 2>/dev/null || true; wait "$diagnostic_pid" || true' EXIT
+          fi
+          python -u tools/run_verification.py --profile full --slow only \
+            --shard ${{ matrix.shard }}/6 \
+            --shard-timings tools/ci_shard_timings.json \
+            --workers 2 --timeout 2400 --timeout-method thread --verbose --live-output \
+            --output "${{ runner.temp }}/wavebit-verification/slow"
+
+      - name: Upload runner diagnostics
+        if: ${{ always() && inputs.slow_runner_diagnostics }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: runner-diagnostics-slow-${{ matrix.shard }}
+          path: ${{ runner.temp }}/runner-diagnostics.jsonl
+          if-no-files-found: warn
+          retention-days: 14
 
       # The output also contains pytest temporary fixtures. Keep it outside the
       # checkout so study fixtures satisfy their raw-output isolation contract.
@@ -414,6 +444,8 @@ jobs:
     name: slow tests complete
     runs-on: ubuntu-latest
     needs: slow
+    # Also on a diagnostics dispatch, which runs every slow shard: it then checks the slow
+    # tier alone, still not the whole CI.
     if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     timeout-minutes: 10
     steps:
@@ -425,11 +457,25 @@ jobs:
         with:
           pattern: verification-slow-*
           path: shards
-      - name: The three shards must add up to the whole slow partition
-        run: python tools/verify_shards.py --count 3 shards/verification-slow-*/
+      - name: The six shards must add up to the whole slow partition
+        run: python tools/verify_shards.py --count 6 shards/verification-slow-*/
+
+  # A diagnostics dispatch skips most of CI, so it must never conclude as a successful
+  # `tests` run: release-gate.yml accepts any successful run on the release commit. This
+  # job fails it on purpose; read the slow tier's verdict from `slow tests complete`.
+  diagnostics-not-a-gate:
+    name: diagnostics run, not a CI gate
+    if: ${{ inputs.slow_runner_diagnostics }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail the run so no gate counts it
+        run: |
+          echo "::error::slow_runner_diagnostics skips most of CI; this run is not a CI pass. The slow tier's own result is the 'slow tests complete' job."
+          exit 1
 
   examples:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
     name: examples smoke
     runs-on: ubuntu-latest
     steps:
@@ -465,7 +511,7 @@ jobs:
         run: python tools/run_tutorials_smoke.py
 
   minimal:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
     name: distribution (${{ matrix.os }}, Python ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -486,7 +532,7 @@ jobs:
         run: python tools/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
 
   docs:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
     name: docs
     runs-on: ubuntu-latest
     steps:

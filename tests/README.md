@@ -14,6 +14,9 @@ in [`../studies/`](../studies) with a [`../docs/`](../docs) write-up instead. Se
 
 ## Recorded runs
 
+`tests/api/test_ci_runner_diagnostics.py` checks memory/cgroup evidence, signal-sender identity,
+secret exclusion and Linux sidecar signal shutdown without running a solver.
+
 Use `python tools/run_verification.py --profile quick` for the small smoke profile,
 `--profile full` for every non-research test **including slow tests**, and
 `--profile research` for the research tier. Add `--workers N` for pytest-xdist.
@@ -23,7 +26,7 @@ nodes only when inputs, environment, configuration and collection still match.
 Source mutation tests run in a separate serial snapshot. CI uses two workers per shard
 and retains the per-test timeouts: 1,200 seconds for the ordinary partition, 2,400 seconds
 for slow tests, both with the thread timeout method. The ordinary partition runs as eight
-shards and the slow one as three, each shard limited to 120 minutes; a `complete` job after
+shards and the slow one as six, each shard limited to 120 minutes; a `complete` job after
 each checks with `tools/verify_shards.py` that the shards add up to the whole partition.
 Artifacts `verification-default-N` and `verification-slow-N` keep each shard's receipts,
 inventories, JSONL events, JUnit XML and logs; the writable source snapshot is not uploaded.

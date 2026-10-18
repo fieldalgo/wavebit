@@ -108,7 +108,7 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)는
 research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
-`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 8개, slow 범위는 3개입니다.
+`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 8개, slow 범위는 6개입니다.
 
 CI는 검증 결과와 그 안의 pytest 임시 자료를 checkout 바깥의 `RUNNER_TEMP`에
 저장하여 study fixture의 원자료 경로 분리 조건을 지킵니다. GitHub가 이 변수를
@@ -120,7 +120,7 @@ python tools/run_verification.py --profile full --slow exclude --shard 1/8 --wor
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
-python tools/run_verification.py --profile full --slow only --shard 1/3 --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/6 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/slow"
@@ -136,7 +136,8 @@ shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shar
 대신 이름이 남는 실패가 됩니다.
 
 shard는 시간보다 runner 메모리 때문입니다. 일반 범위를 worker 2개 한 번에 돌리면
-사용 가능한 7.9 GB를 넘어 매번 50~61 %에서 종료되었습니다. 테스트별 제한은
+사용 가능한 7.9 GB를 넘어 매번 50~61 %에서 종료되었습니다. slow 범위도 3개 shard일 때
+run 39098232669의 두 시도 모두 shard 3의 runner가 약 95 %에서 종료되어 6개로 나눕니다. 테스트별 제한은
 1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 shard당 120분입니다. 실측 시간을 배분에 사용하지만
 실제 경과 시간은 수집, 컴파일, worker 스케줄링에도 영향을 받습니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
 대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.
@@ -196,3 +197,23 @@ python tools/run_distribution_smoke.py
 ```shell
 python tools/update_shard_timings.py artifacts/ci-timing-baseline --source-run https://github.com/fieldalgo/wavebit/actions/runs/RUN_ID --output tools/ci_shard_timings.json
 ```
+
+## Runner diagnostics
+
+수동 workflow 입력 `slow_runner_diagnostics`로 실행하면 slow shard만 돌며, 각 shard에서
+Linux 전용 보조 프로세스가 시스템 메모리/swap, 메모리 pressure, 프로세스 RSS,
+cgroup v2 제한/이벤트를 5초마다 실시간 CI 로그와 `runner-diagnostics-slow-N`에
+기록합니다. 명령행과 환경 변수는 수집하지 않습니다.
+비밀번호 없는 sudo와 tracefs가 지원되면 별도 tracing instance에서 커널 신호 발생의
+발신 task/PID 및 수신 대상, OOM 희생 프로세스도 기록합니다. 동작에 영향을 주지 않는
+SIGCONT 자체 신호로 기록 경로를 확인합니다. 권한이나 기능이 없으면 명시적으로
+기록하며, 이벤트가 없다고 신호나 OOM이 없었다고 단정하지 않습니다. SIGKILL이나
+호스트 유실 시 마지막 샘플과 업로드가 남지 않을 수 있습니다.
+
+이 실행은 다른 job과 일반 범위 집계를 생략하지만, `slow tests complete`는 slow shard들이
+범위 전체를 이루는지 그대로 확인합니다. `diagnostics run, not a CI gate` job이 실행을
+일부러 실패로 끝내므로, 릴리스 커밋의 성공한 `tests` 실행을 받아들이는 릴리스 검증이
+이 실행을 통과로 세지 않습니다. 입력을 생략하거나 false로 두면 일반 CI gate가 유지되고
+보조 프로세스는 돌지 않습니다. 수치 시험, worker 수와 시간 제한은 그대로입니다. 종료 원인을
+시험/자원 제한/수동 취소로 판단하기 전에 메모리 counter 및 신호 시각을 시험 진행 로그와
+대조해야 합니다.

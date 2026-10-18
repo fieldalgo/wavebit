@@ -3,6 +3,7 @@
 These tools maintain the checkout; they are not part of the installed package.
 
 - `run_verification.py` records quick/full/research pytest profiles and resumes only identical inputs; `--shard INDEX/COUNT` runs one deterministic whole-file shard of a profile; see [recorded verification](../docs/development/verification.md).
+- `ci_runner_diagnostics.py` records Linux runner memory, cgroup events and optional kernel signal/OOM events without changing test execution; see [runner diagnostics](../docs/development/verification.md#runner-diagnostics).
 - `verify_shards.py` reads the receipts of a sharded run and fails unless the shards are all present, collected the same list and partition it exactly; CI's `full backends complete` and `slow tests complete` jobs run it.
 - `run_examples_smoke.py` runs the executable examples from any working directory.
 - `run_tutorials_smoke.py` executes the current RCWA/FDTD notebook code cells in fresh interpreters.
