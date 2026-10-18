@@ -48,6 +48,7 @@ Targets:
 - `tests/fdtd/test_general_ade_contract.py`
 - `tests/fdtd/test_general_ade_memory.py`
 - `tests/fdtd/test_general_ade_arithmetic.py`
+- `tests/fdtd/test_general_ade_energy.py`
 - `tests/fdtd/test_ade_cost_study.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
@@ -546,6 +547,21 @@ Lorentz `strength` 또는 Drude `omega_p`입니다. 초기 공간 패턴 자체�
 검사합니다. 전용 산술 회귀의 CPU·장치 불필요 여덟 사례와 실제 CUDA
 두 사례, 기존 혼합 산술 38검사가 통과했습니다. 산술 계약을 보존하는
 검사이며 허용 재료 범위를 넓히는 것이 아닙니다.
+
+스칼라 ADE의 interior-energy 진단은 갱신 계수 `hold`의 숫자값이 아니라
+선언한 극점 종류로 저장 에너지 식을 선택합니다. `gamma*dt=2`이면 Drude와
+Lorentz 모두 `hold=0`일 수 있지만 Debye 극점이 되는 것은 아닙니다. 원래
+Drude CUDA 사례는 이 충돌에서 진단 에너지가 NaN이었고, 시험한 Lorentz
+사례는 도달 가능한 상태에서 이미 통과했습니다. 명시적 숫자 파라미터
+`energy_is_debye`가 lowering과 checkpoint/JAX pytree를 거쳐 극점 종류를
+유지합니다. 셀마다가 아니라 극점마다 double 하나(8바이트)를 추가하며 장의
+갱신식과 전달 상태는 바꾸지 않습니다. 기존 비용 표는 이 metadata 추가 전의
+측정입니다.
+
+`test_general_ade_energy.py`는 zero-hold 장과 정규화한 합산 저장 에너지를
+독립적으로 작성한 균일 Ampere/oscillator 갱신식과 비교하며 상대 `2e-12`,
+절대 0을 사용합니다. 진단의 정수 E 표본 시간을 따르며 SI joule 총량이나
+새로운 연속체 정확도 주장은 아닙니다.
 
 기존 초기화는 알고리즘의 편극 메모리와 다음 단계에 전달할 편극 증가량을
 0으로 둡니다. 따라서 첫 E 갱신에는 전달된 극점 증가량이 없고, 그 뒤에
@@ -1415,6 +1431,7 @@ python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_modes.py tests/fdtd/test_general_cuda_bloch_planewave.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_general_cuda_bloch_contract.py tests/fdtd/test_general_cuda_bloch_observations.py -q -o junit_family=legacy
 python -m pytest tests/fdtd/test_general_ade_modes.py tests/fdtd/test_general_ade_units.py tests/fdtd/test_general_ade_ad.py tests/fdtd/test_general_ade_record_ad.py -q -o junit_family=legacy
+python -m pytest tests/fdtd/test_general_ade_energy.py -q
 python -m pytest tests/fdtd/test_general_ade_contract.py -q
 python -m pytest tests/fdtd/test_general_ade_modes.py -k raw_continuum -q -s
 python studies/fdtd/general_cuda/optimizer_reuse.py --mode basis --output-dir ../optimizer-reuse/optimizer-basis

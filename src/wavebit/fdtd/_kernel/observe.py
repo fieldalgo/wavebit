@@ -618,18 +618,22 @@ class InteriorEnergy:
                 continue
             gain, hold, drive = (rt.constant(coefficients[key][j])
                                  for key in ('step_gain', 'hold', 'drive'))
+            # The declared family disambiguates an oscillator with gamma*dt=2 from Debye.
+            # Bare coefficient dictionaries used by legacy test hooks retain their inference.
+            is_debye = (rt.constant(coefficients['energy_is_debye'][j]) != 0.0
+                        if 'energy_is_debye' in coefficients else hold == 0.0)
             # Which kind is static wherever the coefficients are concrete (NumPy, Torch), so
             # one branch is computed; under a JAX trace both are, and ``where`` picks. A pole
             # with no strength (``Lorentz(strength=0)``, ``Debye(delta_eps=0)`` are legal) is
             # never driven and stores nothing: skipped when concrete, and under a trace its
             # denominators are kept finite and its reading zeroed.
-            kind, strength = _static(hold), _static(drive)
+            kind, strength = _static(is_debye), _static(drive)
             if strength == 0.0:
                 continue
             live = None if strength is not None else drive != 0.0
             new, old = mem['P'][j][inside], mem['previous'][j][inside]
             second = debye = None
-            if kind is None or kind != 0.0:
+            if kind is None or kind == 0.0:
                 scale = 2.0 / (dt * dt * (1.0 + hold))
                 s = drive * scale
                 step = new - old
@@ -637,12 +641,12 @@ class InteriorEnergy:
                            + (2.0 / (dt * dt) - gain * scale) * rt.real_inner(new, old))
                           / (s if live is None else rt.xp.where(live, s, 1.0))
                           - rt.real_inner(field, step))
-            if kind is None or kind == 0.0:
+            if kind is None or kind != 0.0:
                 # Debye's delta_eps divides by 1 - gain^2, which a second-order pole can zero;
                 # where that is not the branch taken, the denominator is kept finite.
                 one = 1.0 - gain * gain
                 delta_eps = 2.0 * drive / (one if kind is not None
-                                           else rt.xp.where(hold == 0.0, one, 1.0))
+                                           else rt.xp.where(is_debye, one, 1.0))
                 c = 0.5 * delta_eps * (1.0 - gain)
                 debye = (rt.weighted_energy(old + c * field, 1.0)
                          / (delta_eps if live is None else rt.xp.where(live, delta_eps, 1.0))
@@ -652,7 +656,7 @@ class InteriorEnergy:
             elif debye is None:
                 value = second
             else:
-                value = rt.xp.where(hold == 0.0, debye, second)
+                value = rt.xp.where(is_debye, debye, second)
             total = total + (value if live is None else rt.xp.where(live, value, 0.0))
         if rank_one:
             # The diagonal potential above uses the unshifted bulk resonance.

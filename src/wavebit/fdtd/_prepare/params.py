@@ -21,7 +21,8 @@ Torch or NumPy. Its leaves are the numbers a gradient may flow through:
     cpml_loss         {'<face>:<E|H>': {'keep', 'lift'}} -- the PML's stabilizing loss on
                       the normal component, shaped like a CPML profile; only faces with
                       ``stabilize > 0`` (``src/wavebit/fdtd/_kernel/cpml.py::damp``)
-    poles             {term name: {'step_gain', 'hold', 'drive', 'dx_over_dt'}} per pole
+    poles             {term name: {'step_gain', 'hold', 'drive', 'energy_is_debye',
+                      'dx_over_dt'}} per pole
     sources           {source name: {'amplitude', 'phase', 'delay', 'f0', 'tau', 't0', ...}}
                       per stage-2 source, with a Dipole's 'stamp', a column's own params
                       ('column', and 'driver' for a layered TFSF column's uniform drive) and
@@ -373,13 +374,16 @@ def _dft(plan, rt):
 
 
 def _poles(scene, plan, rt):
-    """``{term name: {'step_gain', 'hold', 'drive', 'dx_over_dt'}}`` for every pole term.
+    """Scalar recurrence coefficients and declared energy family for every pole term.
 
     The coefficients are per pole and are scalars, because a stage-1 structure is one uniform
     material over its slab; they are leaves, so a gradient with respect to a pole strength
     flows through ``drive``. ``dx_over_dt`` is what turns the polarisation increment into the
     right addition to ``cH``, which carries no ``1/dx`` (``src/wavebit/fdtd/_kernel/poles.py``).
+    ``energy_is_debye`` is a numeric pytree leaf derived from the declared pole type: a
+    Drude/Lorentz recurrence also has zero hold when ``gamma*dt == 2``.
     """
+    from wavebit.materials.time_domain import Debye
     from wavebit.fdtd._prepare.conductive_film import InterfacePoleTerm
     from wavebit.fdtd._prepare.conductive_film import pole_params as film_poles
     from wavebit.fdtd._prepare.single_pole_film import DispersiveFilmTerm
@@ -426,14 +430,16 @@ def _poles(scene, plan, rt):
             continue                                    # a test hook's term, not a pole set
         index = int(term.name[len('poles['):-1])
         poles = (getattr(scene, 'structures', ()) or ())[index].material.poles
-        step_gain, hold, drive = [], [], []
+        step_gain, hold, drive, energy_is_debye = [], [], [], []
         for pole in poles:
             g, h, d = pole.coefficients(plan.dt)
             step_gain.append(rt.array(g, 'float64'))
             hold.append(rt.array(h, 'float64'))
             drive.append(rt.array(d, 'float64'))
+            energy_is_debye.append(rt.array(float(isinstance(pole, Debye)), 'float64'))
         out[term.name] = {'step_gain': tuple(step_gain), 'hold': tuple(hold),
                           'drive': tuple(drive),
+                          'energy_is_debye': tuple(energy_is_debye),
                           'dx_over_dt': rt.array(plan.dx / plan.dt, 'float64')}
     if structures and len(out) != len(structures):
         # Not reachable through ``fd.plan``, which always builds one term per dispersive
