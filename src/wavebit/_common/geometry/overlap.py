@@ -148,9 +148,13 @@ def primitive(stype, cx, cy, lx, ly, angle):
     # `checked_float`, not `float`: a `jax.grad` tracer refuses `float()` while carrying a
     # perfectly concrete primal, and `parametric._primitives` reads that refusal as "traced --
     # skip the check". See the helper for what that cost.
+    theta = checked_float(angle)
+    # `math.cos(inf)` raises ValueError, which `_primitives` would read as "traced" and so
+    # skip every check on the layer (issue #26). A non-finite angle has no direction, so it
+    # is carried as NaN for the funnel's own non-finite refusal to name.
+    turn = (math.cos(theta), math.sin(theta)) if math.isfinite(theta) else (math.nan, math.nan)
     return (kind, checked_float(cx), checked_float(cy),
-            checked_float(lx) / 2.0, checked_float(ly) / 2.0,
-            math.cos(checked_float(angle)), math.sin(checked_float(angle)))
+            checked_float(lx) / 2.0, checked_float(ly) / 2.0, *turn)
 
 
 def _is_circle(p):
