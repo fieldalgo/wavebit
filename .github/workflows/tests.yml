@@ -354,7 +354,12 @@ jobs:
     # three, shard 3 lost its runner at about 95 %, 48 minutes in, on both attempts of run
     # 39098232669 (exit 143, the same shutdown signal), so the tier is split again: the
     # recorded timings put each of six near 36 worker-minutes. `slow-complete` below checks
-    # the six shards add up.
+    # the six shards add up. The cause was then measured, not guessed: the diagnostics run
+    # 39145409231 (all six passed) found these runners at 16.4 GB and four CPUs (the repository
+    # is public; the 7.9 GB above was measured while it was private), and one test,
+    # test_fdtd_painted_optics.py's resolution-20 Jacobian, taking its worker from 3.5 to
+    # 13.3 GB, the runner to 0.22 GB available. Both lost attempts died as the other worker
+    # started its own large jit beside that peak.
     strategy:
       fail-fast: false
       matrix:
