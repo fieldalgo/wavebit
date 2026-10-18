@@ -48,6 +48,7 @@ Targets:
 - `tests/fdtd/test_general_ade_contract.py`
 - `tests/fdtd/test_general_ade_memory.py`
 - `tests/fdtd/test_general_ade_arithmetic.py`
+- `tests/fdtd/test_general_ade_energy.py`
 - `tests/fdtd/test_ade_cost_study.py`
 - `tests/fdtd/test_fd_stage3_backends.py`
 - `tests/api/test_fdtd_checkpoint_jobs.py`
@@ -582,6 +583,21 @@ invalid and back to valid is covered for both Lorentz and Drude. The dedicated
 arithmetic regression adds eight CPU/device-free and two actual CUDA cases;
 38 existing mixed-arithmetic checks also passed. These checks preserve the
 arithmetic contract rather than expand the admitted material range.
+
+The scalar ADE interior-energy diagnostic selects its storage formula from the
+declared pole family, not the numerical recurrence coefficient `hold`. At
+`gamma*dt=2`, Drude and Lorentz can both have `hold=0`; this does not make them
+Debye poles. The original Drude CUDA case produced NaN diagnostic energy at
+this collision, while the tested Lorentz case already passed on its reachable
+state. An explicit numeric `energy_is_debye` parameter now preserves the family
+through lowering and checkpoint/JAX pytrees. It adds one double (eight bytes)
+per pole, not per grid cell; the field recurrence and carried state are unchanged.
+The existing cost tables predate this metadata addition.
+
+`test_general_ade_energy.py` compares the zero-hold field and normalized summed
+storage with an independently written uniform Ampere/oscillator recurrence at
+relative `2e-12`, zero absolute tolerance. The diagnostic uses its integer-E
+sample times; it is not an SI joule total or a new continuum-accuracy claim.
 
 The existing startup sets the algorithmic polarization memories and carried
 polarization increment to zero. The first E update therefore has no carried
@@ -1522,6 +1538,7 @@ python -m pytest tests/fdtd/test_general_cuda_wall_ad.py -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_modes.py tests/fdtd/test_general_cuda_bloch_planewave.py --run-slow -q
 python -m pytest tests/fdtd/test_general_cuda_bloch_ad.py tests/fdtd/test_general_cuda_bloch_contract.py tests/fdtd/test_general_cuda_bloch_observations.py -q -o junit_family=legacy
 python -m pytest tests/fdtd/test_general_ade_modes.py tests/fdtd/test_general_ade_units.py tests/fdtd/test_general_ade_ad.py tests/fdtd/test_general_ade_record_ad.py -q -o junit_family=legacy
+python -m pytest tests/fdtd/test_general_ade_energy.py -q
 python -m pytest tests/fdtd/test_general_ade_contract.py -q
 python -m pytest tests/fdtd/test_general_ade_modes.py -k raw_continuum -q -s
 python studies/fdtd/general_cuda/optimizer_reuse.py --mode basis --output-dir ../optimizer-reuse/optimizer-basis
