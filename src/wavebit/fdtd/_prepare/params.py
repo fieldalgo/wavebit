@@ -602,7 +602,7 @@ def _source_waveform_guard(scene, plan, params, rt, guard):
     """
     if plan.decay is not None:
         return guard
-    from wavebit._common.backend import carries_autodiff
+    from wavebit._common.backend import _transform_active, carries_autodiff
     from wavebit._common.declarations import torch_carried
 
     sources = {source.name: source for source in getattr(scene, 'sources', ()) or ()}
@@ -617,9 +617,12 @@ def _source_waveform_guard(scene, plan, params, rt, guard):
         values = (source.band.wavelength, source.band.df, source.phase, source.delay,
                   *(lowered[name] for name in ('f0', 'tau', 't0', 'phase', 'delay')), valid)
         # A closed-over concrete source can produce traced lowered constants under
-        # JAX jit. Classify both the original and actual backend arguments before
-        # reading a value. The physical leaves and waveform remain untouched.
-        if any(torch_carried(value) or carries_autodiff(value) for value in values):
+        # JAX jit. A derivative-free torch.func wrapper also has no NumPy storage:
+        # derivative ownership alone cannot decide whether a host read is safe.
+        # Keep certificates on the backend throughout an active Torch transform.
+        # The physical leaves and waveform remain untouched.
+        if (_transform_active(valid)
+                or any(torch_carried(value) or carries_autodiff(value) for value in values)):
             predicates.append(valid)
             continue
         # This one scalar read per eager concrete source certifies the actual

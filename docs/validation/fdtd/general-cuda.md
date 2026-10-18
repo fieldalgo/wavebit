@@ -391,6 +391,12 @@ identity. On CUDA this entails a scalar synchronization once per source per run,
 not once per time step. If the original inputs, lowered parameters or predicate
 carry a differentiation or transformation trace, no host read is made; a
 constant factor of one or NaN contributes to the existing runtime certificate.
+An active Torch transform also keeps closed-over concrete source certificates
+on the backend, even when their wrapped values have no derivatives. This avoids
+reading a transformed boolean through host storage; ordinary eager concrete
+identity/refusal and the physical waveform formulas are unchanged. Separate
+closed-source regressions cover valid and invalid constants through JVP, grad,
+jacfwd, Hessian, JVP-of-grad, vmap and vmap-of-grad with host reads forbidden.
 JIT-derived constants can therefore use a traced factor of one without promising
 literal `None` guard identity. Carried-path timing does not measure the concrete
 scalar synchronization cost.

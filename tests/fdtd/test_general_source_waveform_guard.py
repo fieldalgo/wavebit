@@ -354,3 +354,60 @@ def test_jax_jit_closed_concrete_source_uses_lowered_tracer_certificate():
     np.testing.assert_array_equal(jax.grad(good)(x), 2*x)
     np.testing.assert_array_equal(jax.grad(jax.grad(good))(x), 2.)
     assert np.isnan(np.asarray(bad(x)))
+
+
+@pytest.mark.parametrize('device', ['cpu', 'cuda:0'], ids=['cpu', 'gpu'])
+@pytest.mark.parametrize('name', ['ordinary', 'positive_delay'])
+def test_torch_transforms_keep_closed_source_certificate_off_host(device, name, monkeypatch):
+    """Geometry-only transforms still wrap a closed source's boolean certificate."""
+    torch = torch_runtime(device)
+    from wavebit.fdtd._prepare.params import _source_waveform_guard
+    from wavebit.fdtd._runtime import runtime
+    rt = runtime('torch', device)
+    values = waveform_case(name)
+    valid = name == 'ordinary'
+
+    def function(x):
+        guard = _source_waveform_guard(*certificate_inputs(values, rt), rt, None)
+        return x*x*(1. if guard is None else guard)
+
+    point = torch.tensor(.7, dtype=torch.float64, device=device)
+    direction = torch.tensor(.2, dtype=point.dtype, device=device)
+    before = point.clone()
+    # Eager constants retain the identity/refusal contract. A genuine forward dual
+    # on the unrelated input likewise must keep its derivative; it need not make
+    # the closed source itself carried.
+    with torch.autograd.forward_ad.dual_level():
+        dual = torch.autograd.forward_ad.make_dual(point, direction)
+        if valid:
+            value, tangent = torch.autograd.forward_ad.unpack_dual(function(dual))
+            torch.testing.assert_close(value, point.square(), rtol=0, atol=0)
+            torch.testing.assert_close(tangent, 2*point*direction, rtol=0, atol=0)
+        else:
+            with pytest.raises(ValidationError) as caught:
+                function(dual)
+            assert caught.value.code == 'source_waveform_range'
+
+    def forbidden(*args, **kwargs):
+        pytest.fail('a closed-source transform certificate attempted a host read')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(rt, 'numpy', forbidden)
+        value, tangent = torch.func.jvp(function, (point,), (direction,))
+        gradient = torch.func.grad(function)(point)
+        forward = torch.func.jacfwd(function)(point)
+        hessian = torch.func.hessian(function)(point)
+        _, mixed = torch.func.jvp(torch.func.grad(function), (point,), (direction,))
+        batch = torch.stack((point, point+.1))
+        batched = torch.func.vmap(function)(batch)
+        batched_grad = torch.func.vmap(torch.func.grad(function))(batch)
+    actual = (value, tangent, gradient, forward, hessian, mixed, batched, batched_grad)
+    expected = (point.square(), 2*point*direction, 2*point, 2*point,
+                torch.full_like(point, 2.), 2*direction, batch.square(), 2*batch)
+    for got, wanted in zip(actual, expected):
+        if valid:
+            torch.testing.assert_close(got, wanted, rtol=0, atol=0)
+        else:
+            assert bool(torch.isnan(got).all())
+    torch.testing.assert_close(point, before, rtol=0, atol=0)
+    assert point.grad is None
