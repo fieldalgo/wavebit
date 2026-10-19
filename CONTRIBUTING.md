@@ -92,7 +92,7 @@ checks in a suitable environment and mark them Ready after reviewing the change.
 Documentation changes follow the same required CI as code changes. Reviewed Ready
 PRs use automatic **Rebase and merge** after every required check passes.
 
-- **Keep PRs small and focused.** One fix or one feature per PR reviews much faster than a grab-bag.
+- **One topic per PR.** Changes on the same topic go in one PR, each as its own self-contained commit; unrelated changes go in separate PRs. The test is whether a later reader -- a person or an agent -- can follow what changed and why from the PR and its commits, not how many CI runs it takes.
 - **Add or extend a test.** Solver changes need a numerical test against a reference value; see `tests/` for the pattern.
 - **Mind the conventions.** All sign and branch-cut choices live in `src/wavebit/_common/conventions.py` — never introduce a local `sqrt`/`kz` branch decision elsewhere. Wavebit uses the `e^{-iωt}` time convention (`Im(n) > 0` = loss).
 - **Backend neutrality.** New solver code should be written against the Array API (`src/wavebit/_common/backend.py`) rather than importing NumPy/JAX/Torch directly, unless there is a documented reason.
