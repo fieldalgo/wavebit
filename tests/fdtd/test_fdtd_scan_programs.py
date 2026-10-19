@@ -253,6 +253,39 @@ def test_a_jax_that_moved_a_name_the_key_reads_costs_the_sharing_not_the_solve(m
     assert not time_domain._SCAN_PROGRAMS
 
 
+def test_a_scan_inside_a_trace_never_resolves_the_key_names(monkeypatch):
+    """Inside a trace nothing is dispatched, so the plain scan is exact and the key's names are
+    not needed. Resolving them there was not harmless: the resolver used to import
+    ``jax.extend``, and from jax 0.12.0 that import adds entries to JAX's tracing context, so a
+    user's ``jax.jit`` holding the process's first FDTD solve traced twice (measured
+    2026-10-19). This holds on any JAX: the resolver may not run inside a trace at all."""
+    import jax.numpy as jnp
+
+    def refuse():
+        raise AssertionError('the eager-scan key names were resolved inside a trace')
+    monkeypatch.setattr(time_domain, '_jax_api', refuse)
+
+    def step(c, n):
+        return c + n, None
+    out = jax.jit(lambda c: time_domain._eager_scan(step, c, jnp.arange(3.))[0])(jnp.zeros(()))
+    assert float(out) == 3.
+
+
+def test_resolving_the_key_names_leaves_the_tracing_context_alone():
+    """The resolver used to import ``jax.extend``; from jax 0.12.0 that import grows JAX's
+    tracing context (51 to 53 entries), so every program compiled before it missed its cache
+    once afterwards -- the next solve's eager operations all compiled again. The context's
+    length is read through a private name; a JAX without it skips this check. It can only
+    fail where nothing earlier in the process imported ``jax.extend``."""
+    config = pytest.importorskip('jax._src.config')
+    if not hasattr(config, 'trace_context'):
+        pytest.skip('this JAX has no trace_context to compare')
+    before = len(config.trace_context())
+    api = time_domain._jax_api.__wrapped__()
+    assert api is not None and len(api.functions) > len(time_domain._FUNCTION_TYPES)
+    assert len(config.trace_context()) == before
+
+
 def test_a_parameter_enters_the_key_by_its_bytes():
     """An array or float parameter is compared by bit pattern -- ``-0.0`` is not ``0.0``, one
     element changed is another program -- and a function-valued one cannot be keyed at all."""
