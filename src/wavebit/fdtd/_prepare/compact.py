@@ -9,7 +9,7 @@ def compact_plan(scene, plan):
     again. Every replan starts with ordinary terms and applies this same
     conversion before comparing hashes. No global factory or runtime changes.
     """
-    from wavebit.fdtd import geometry, monitors
+    from wavebit.fdtd import _geometry as geometry, _monitors as monitors
     from wavebit.fdtd._legacy_boundaries import Periodic
     from wavebit.fdtd._legacy_monitors import Record
     from wavebit.materials.time_domain import Dispersive, Drude, Lorentz, Material
@@ -20,14 +20,14 @@ def compact_plan(scene, plan):
             or plan.cpml or plan.absorbing_faces or plan.shape_ranges
             or any(type(scene.boundaries.face(a+s)) is not Periodic
                    for a in 'xyz' for s in '-+')
-            or any(type(m) not in (Record, monitors.Record) for m in scene.monitors)):
+            or any(type(m) not in (Record, monitors.TimeSeriesMonitor) for m in scene.monitors)):
         raise ValueError('compact ADE requires source-free fixed periodic homogeneous scope')
     structure = scene.structures[0]
     material = structure.material
-    if (type(structure.shape) is not geometry.Slab or structure.discretisation != 'voxel'
+    if (type(structure.shape) is not geometry.SnappedSlab or structure.discretisation != 'voxel'
             or type(material) is not Dispersive or len(material.poles) != 1
             or type(material.poles[0]) not in (Lorentz, Drude)):
-        raise ValueError('compact ADE requires one full-grid Slab with one Lorentz or Drude pole')
+        raise ValueError('compact ADE requires one full-grid SnappedSlab with one Lorentz or Drude pole')
     if len(plan.terms) != 1 or type(plan.terms[0]) is not PoleTerm:
         raise ValueError('compact ADE requires one exact ordinary PoleTerm')
     term = plan.terms[0]

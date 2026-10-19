@@ -84,7 +84,7 @@ def mode(rotation, all_bloch):
         domain=fdtd.Domain(size=(1.,) * 3), boundaries=fdtd.Boundaries(**faces)),
         initial=fdtd.InitialField(E=electric, H=DT / 2 * curl / Z0),
         outputs=fdtd.Outputs(final_fields=True, monitors=tuple(
-            fdtd.Record(field + 'xyz'[c], component=field + 'xyz'[c], at=probe_at(field, c))
+            fdtd.TimeSeriesMonitor(field + 'xyz'[c], component=field + 'xyz'[c], at=probe_at(field, c))
             for field in ('E', 'H') for c in range(3))))
     return problem, phases, k, electric, curl, value
 

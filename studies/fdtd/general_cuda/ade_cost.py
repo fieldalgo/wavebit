@@ -228,9 +228,9 @@ def main(argv=None):
         problem = fdtd.Problem(units=units, scene=fdtd.Scene(
             domain=fdtd.Domain(size=(side,)*3),
             boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
-            structures=(fdtd.Structure('body', fdtd.Slab(z=(-side/2, side/2)), material),)),
+            structures=(fdtd.Structure('body', shape=fdtd.SnappedSlab(z=(-side/2, side/2)), material=material),)),
             initial=fdtd.InitialField(E=electric, amplitude=AMPLITUDE),
-            outputs=fdtd.Outputs(final_fields=True, monitors=(fdtd.Record(
+            outputs=fdtd.Outputs(final_fields=True, monitors=(fdtd.TimeSeriesMonitor(
                 'probe', at=(0., 0., 0.), component='Ey'),)))
         policy = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX),
             duration=fdtd.Duration(steps=STEPS), courant=.5, checkpoint_steps=args.checkpoint_steps)

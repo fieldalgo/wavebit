@@ -44,9 +44,9 @@ def test_conductive_dipole_one_step_si_moment_centroid_and_work(
         domain=fdtd.Domain(size=(16*DX,)*3),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
         background=ConductiveMaterial(epsilon=epsilon, mu=mu, conductivity=conductivity)),
-        sources=(fdtd.Dipole('d', center=CENTER, component='E'+axis, kind='electric',
+        sources=(fdtd.CurrentDipole('d', center=CENTER, component='E'+axis, kind='electric',
             current_moment=MOMENT, stamp=stamp, pulse=pulse,
-            phase=np.pi/2, delay=dt/2-peak),), outputs=fdtd.Outputs(final_fields=True))
+            phase=np.pi/2, delay_seconds=dt/2-peak),), outputs=fdtd.Outputs(final_fields=True))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX),
         duration=fdtd.Duration(steps=1), courant=.5)
     with torch.no_grad():

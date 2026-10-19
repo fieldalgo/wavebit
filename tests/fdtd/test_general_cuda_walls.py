@@ -63,7 +63,7 @@ def public_problem(shape, boundaries, electric, magnetic, components):
         domain=fdtd.Domain(size=tuple(n * DX for n in shape)), boundaries=boundaries),
         initial=fdtd.InitialField(E=electric, H=magnetic / Z0),
         outputs=fdtd.Outputs(final_fields=True, monitors=tuple(
-            fdtd.Record(field + 'xyz'[c], component=field + 'xyz'[c],
+            fdtd.TimeSeriesMonitor(field + 'xyz'[c], component=field + 'xyz'[c],
                         at=probe_at(shape, field, c)) for field, c in components)))
 
 
@@ -204,7 +204,7 @@ def test_public_dipole_stamp_cannot_touch_a_conducting_wall(device, kind, axis, 
     center[axis] = side * .49
     problem = fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(1.,) * 3), boundaries=fdtd.Boundaries(x=face, y=face, z=face)),
-        sources=(fdtd.Dipole('d', center=tuple(center), component='E'+'xyz'[(axis+1) % 3],
+        sources=(fdtd.CurrentDipole('d', center=tuple(center), component='E'+'xyz'[(axis+1) % 3],
             pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15/UNITS.time_seconds)),))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX), duration=fdtd.Duration(steps=1))
     assert not fdtd.check(problem, numerics=numerics, backend='torch', device=name).ok

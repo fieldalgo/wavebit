@@ -56,7 +56,7 @@ def periodic_problem(kind='electric', component='Ey', stamp='bspline', center=CE
         domain=fdtd.Domain(size=(16 * DX,) * 3),
         background=Material(epsilon=2.25, mu=1.4),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Periodic())),
-        sources=(fdtd.Dipole('d', center=center, component=component, kind=kind, stamp=stamp,
+        sources=(fdtd.CurrentDipole('d', center=center, component=component, kind=kind, stamp=stamp,
                             current_moment=1.7e-16, phase=np.pi / 2, pulse=pulse()),),
         outputs=fdtd.Outputs(final_fields=True))
 
@@ -77,7 +77,7 @@ def test_public_dipole_one_step_si_moment_and_yee_centroid(torch_device, kind, a
     prepared = fdtd.prepare(problem, numerics=numerics(1), backend='torch', device=device)
     dt = prepared.contract['resolved_dt_seconds']
     first = .5 * dt if kind == 'electric' else 0.
-    source = problem.sources[0].replace(delay=first - pulse_peak_seconds())
+    source = problem.sources[0].replace(delay_seconds=first - pulse_peak_seconds())
     problem = problem.replace(sources=(source,))
     with torch.no_grad():
         result = prepared.run(problem)
@@ -113,16 +113,16 @@ def slab_problem(kind='electric', stamp='bspline', moment=1.3e-16, phase=.4,
         domain=fdtd.Domain(size=(8 * DX, 8 * DX, 12 * DX)),
         background=Material(epsilon=1., mu=1.2),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()),
-        structures=(fdtd.Structure('film', fdtd.Slab(z=(.1, .25)),
-                                   Material(epsilon=epsilon, mu=1.2)),)),
-        sources=(fdtd.Dipole('d', center=AD_CENTER, component=component, kind=kind,
+        structures=(fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(.1, .25)),
+                                   material=Material(epsilon=epsilon, mu=1.2)),)),
+        sources=(fdtd.CurrentDipole('d', center=AD_CENTER, component=component, kind=kind,
                             stamp=stamp, pulse=pulse(), current_moment=moment,
-                            phase=phase, delay=delay),),
+                            phase=phase, delay_seconds=delay),),
         outputs=fdtd.Outputs(monitors=(
-            fdtd.Record('probe', at=(.05, -.03, -.025), component=component),
-            fdtd.Field('near', plane=fdtd.Plane(z=0.), wavelengths=(1.8, 2.),
+            fdtd.TimeSeriesMonitor('probe', at=(.05, -.03, -.025), component=component),
+            fdtd.FieldMonitor('near', plane=fdtd.Plane(z=0.), wavelengths=(1.8, 2.),
                        components=('Ey', 'Hy')),
-            fdtd.Flux('flux', plane=fdtd.Plane(z=.15), wavelengths=(1.8, 2.))), final_fields=True))
+            fdtd.FluxMonitor('flux', plane=fdtd.Plane(z=.15), wavelengths=(1.8, 2.))), final_fields=True))
 
 
 def assert_source_contract(result, problem):
@@ -134,7 +134,7 @@ def assert_source_contract(result, problem):
     np.testing.assert_allclose(host(history['time']), times, rtol=2e-14, atol=0.)
     np.testing.assert_allclose(host(history['field_time']), field_times, rtol=2e-14, atol=0.)
     tau = 1 / (2 * np.pi * source.pulse.frequency_sigma_hz)
-    shifted = times - pulse_peak_seconds() - float(host(source.delay))
+    shifted = times - pulse_peak_seconds() - float(host(source.delay_seconds))
     expected = (float(host(source.current_moment)) * np.exp(-.5 * (shifted / tau) ** 2)
                 * np.sin(2 * np.pi * C0 / (source.pulse.wavelength * UNITS.length_metres)
                          * shifted + float(host(source.phase))))
@@ -192,7 +192,7 @@ def live_solve(torch, device, prepared, kind, stamp, values):
 def test_public_dipole_device_fields_histories_and_mixed_leaf_gradients(torch_device, kind, stamp):
     torch, device = torch_device
     base = slab_problem(kind, stamp)
-    values = np.asarray([1.3e-16, .4, base.sources[0].delay, 2.25])
+    values = np.asarray([1.3e-16, .4, base.sources[0].delay_seconds, 2.25])
     prepared = fdtd.prepare(base, numerics=numerics(), backend='torch', device=device)
     problem, result, loss, gradient = live_solve(torch, device, prepared, kind, stamp, values)
     assert_source_contract(result, problem)
@@ -229,7 +229,7 @@ def test_cuda_dipole_checkpoint_tail_and_fresh_reuse_own_source_histories(kind, 
     scheduled = fdtd.prepare(base, numerics=numerics(checkpoint=7), backend='torch', device=device)
     saved = None
     for moment, phase, epsilon in ((1.3e-16, .4, 2.25), (.9e-16, .55, 2.4)):
-        values = (moment, phase, base.sources[0].delay, epsilon)
+        values = (moment, phase, base.sources[0].delay_seconds, epsilon)
         p, result, loss, gradient = live_solve(torch, device, scheduled, kind, stamp, values)
         _, reference, expected_loss, expected_gradient = live_solve(
             torch, device, plain, kind, stamp, values)

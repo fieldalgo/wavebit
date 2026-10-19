@@ -26,13 +26,13 @@ def slab_problem(epsilon=2.25):
     """A fixed physical film; None removes it for the incident reference."""
     units = Units(length='um')
     structures = () if epsilon is None else (fdtd.Structure(
-        name='film', shape=fdtd.Slab(z=(FRONT, BACK)),
+        name='film', shape=fdtd.SnappedSlab(z=(FRONT, BACK)),
         material=Material(epsilon=epsilon)),)
     monitors = tuple(monitor for name, z in (('front', -.6), ('back', .6))
                      for monitor in (
-                         fdtd.Field(name, plane=fdtd.Plane(z=z), wavelengths=BAND,
+                         fdtd.FieldMonitor(name, plane=fdtd.Plane(z=z), wavelengths=BAND,
                                     components=('Ey',)),
-                         fdtd.Flux(name + '_flux', plane=fdtd.Plane(z=z), wavelengths=BAND)))
+                         fdtd.FluxMonitor(name + '_flux', plane=fdtd.Plane(z=z), wavelengths=BAND)))
     return fdtd.Problem(units=units, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.1, .1, 3.)), background=Material(epsilon=1.),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()), structures=structures),

@@ -50,13 +50,13 @@ def fixture(point=POINTS[0], stamp='bspline', steps=17, block=None, unit='um'):
             offsets = np.array([.5*(a == c if field == 'E' else a != c) for a in range(3)])
             at = (-CELLS*DX/2+(np.asarray(PROBE)+offsets)*DX)/scale
             label = field+'xyz'[c]
-            records.append(fdtd.Record(label, component=label, at=tuple(at)))
+            records.append(fdtd.TimeSeriesMonitor(label, component=label, at=tuple(at)))
     problem = fdtd.Problem(units=units, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(CELLS*DX/scale,)*3),
         background=ConductiveMaterial(epsilon=EPSILON, mu=MU, conductivity=SIGMA),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic())),
-        sources=(fdtd.Dipole('d', center=tuple(CENTER/scale), component='Ey', kind='electric',
-            current_moment=MOMENT, stamp=stamp, phase=phase, delay=BASE_DELAY+T*delay,
+        sources=(fdtd.CurrentDipole('d', center=tuple(CENTER/scale), component='Ey', kind='electric',
+            current_moment=MOMENT, stamp=stamp, phase=phase, delay_seconds=BASE_DELAY+T*delay,
             pulse=fdtd.GaussianPulse(wavelength=(2e-6/scale)*l,
                                      frequency_sigma_hz=(.08/T)*bandwidth, cutoff=CUTOFF)),),
         outputs=fdtd.Outputs(final_fields=True, monitors=tuple(records)))

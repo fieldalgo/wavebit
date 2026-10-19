@@ -59,7 +59,7 @@ def fixture(case):
     pulse = fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15 / UNITS.time_seconds)
     source = fdtd.PlaneWave('pw', plane=fdtd.Plane(z=0.), direction=direction,
         theta=theta, phi=phi, polarization=polarization, pulse=pulse,
-        amplitude=A, phase=PHASE, delay=DELAY * UNITS.time_seconds)
+        amplitude=A, phase=PHASE, delay_seconds=DELAY * UNITS.time_seconds)
     faces = fdtd.Bloch.from_source(source, units=UNITS)
     expected_k = 2 * np.pi * vectors(theta, phi, sign, polarization)[0]
     for axis, index in (('x', 0), ('y', 1)):
@@ -72,12 +72,12 @@ def fixture(case):
     for component in COMPONENTS:
         # Incident normal E and every H use the index of the interior H half plane.
         entry_node = 0. if component in ('Ex', 'Ey') or sign > 0 else -DX
-        monitors.append(fdtd.Record('entry_' + component, at=point(component, entry_node), component=component))
+        monitors.append(fdtd.TimeSeriesMonitor('entry_' + component, at=point(component, entry_node), component=component))
         for name, z, ix, iy in (('forward', sign * .8, 0, 0),
                                 ('xnext', sign * .8, 1, 0),
                                 ('ynext', sign * .8, 0, 1),
                                 ('backward', -sign * .6, 0, 0)):
-            monitors.append(fdtd.Record(name + '_' + component,
+            monitors.append(fdtd.TimeSeriesMonitor(name + '_' + component,
                 at=point(component, z, ix, iy), component=component))
     problem = fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=SIZE), background=Material(epsilon=1.),

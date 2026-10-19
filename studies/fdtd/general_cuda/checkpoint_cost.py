@@ -43,7 +43,7 @@ def measure(size, steps, block, repeat, parameters='amplitude', record_preflight
         background=ConductiveMaterial(epsilon=2.25, conductivity=600.),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic())),
         initial=fdtd.InitialField(E=(0., 1., 0.)),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('probe', at=(0., 0., 0.), component='Ey'),),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('probe', at=(0., 0., 0.), component='Ey'),),
                              final_fields=True))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
         duration=fdtd.Duration(steps=steps), checkpoint_steps=block)

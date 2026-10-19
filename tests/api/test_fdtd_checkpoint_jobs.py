@@ -1,4 +1,4 @@
-"""Optional FDTD checkpoint policy preserves old v1 envelopes and job keys."""
+"""An optional FDTD checkpoint policy leaves a job that does not use it unchanged."""
 import json
 
 import pytest
@@ -13,16 +13,16 @@ def job():
     return Job(solver='fdtd',problem=problem,numerics=numerics)
 
 
-def test_checkpoint_default_preserves_original_v1_job_key_and_omission():
-    # Frozen before optional Numerics additions, also pinned by the memory-bound gate.
-    expected='78499379496ea489cd43a4a40f5d29fb07400a955e722a5507f30d36ed707e0e'
+def test_a_default_checkpoint_policy_is_not_written_to_a_job():
+    """Written only off its default, so a job that does not use it keeps the key it had without
+    the field. The key itself was pinned in wavebit.job/v1; v2 changed every key."""
     original=job()
-    assert original.key==expected
+    assert 'checkpoint_steps' in fdtd.Numerics._FIELDS_OMITTED_AT_DEFAULT
     fields=json.loads(original.to_json())['numerics']['fields']
     assert 'checkpoint_steps' not in fields
     restored=Job.from_json(original.to_json())
     assert restored.numerics.checkpoint_steps is None
-    assert restored.key==expected
+    assert restored.key==original.key
     assert original.replace(numerics=original.numerics.replace(checkpoint_steps=None)).to_json()==original.to_json()
 
 

@@ -49,7 +49,7 @@ def test_same_band_leaves_undersampled_then_recover(device, block, trajectory):
         try:
             current, _ = problem(*leaves)
             assert current.sources[0].center == initial.sources[0].center
-            assert current.sources[0].delay == initial.sources[0].delay
+            assert current.sources[0].delay_seconds == initial.sources[0].delay_seconds
             return prepared.run(current)
         finally:
             assert tuple(id(leaf) for leaf in leaves) == identities

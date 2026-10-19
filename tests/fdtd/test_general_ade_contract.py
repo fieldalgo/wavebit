@@ -32,10 +32,10 @@ def problem(kind='lorentz', **parameters):
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(1.,)*3),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
-        structures=(fdtd.Structure('body', fdtd.Slab(z=(-.5, .5)), material),)),
+        structures=(fdtd.Structure('body', shape=fdtd.SnappedSlab(z=(-.5, .5)), material=material),)),
         initial=fdtd.InitialField(E=electric, amplitude=parameters.get('amplitude', 1.)),
         outputs=fdtd.Outputs(final_fields=True, monitors=(
-            fdtd.Record('electric', component='Ey', at=(0., 0., 0.)),)))
+            fdtd.TimeSeriesMonitor('electric', component='Ey', at=(0., 0., 0.)),)))
 
 
 def numerics():
@@ -62,7 +62,7 @@ def test_translated_rounded_full_cells_admit_without_runtime(no_device, axis, un
     resolved = np.array(cells)*(.05*factor)
     index = 'xyz'.index(axis)
     span = (center[index]-resolved[index]/2, center[index]+resolved[index]/2)
-    structure = p.scene.structures[0].replace(shape=fdtd.Slab(**{axis: span}))
+    structure = p.scene.structures[0].replace(shape=fdtd.SnappedSlab(**{axis: span}))
     fields = np.zeros((3, cells[2], cells[1], cells[0]))
     fields[1] = 1.
     p = p.replace(units=Units(length=unit), scene=p.scene.replace(
@@ -97,7 +97,7 @@ def test_unsupported_ade_refuses_before_planning(no_device, monkeypatch, case, p
     p, n = problem(), numerics()
     s = p.scene.structures[0]
     if case == 'partial':
-        p = p.replace(scene=p.scene.replace(structures=(s.replace(shape=fdtd.Slab(z=(-.375, .5))),)))
+        p = p.replace(scene=p.scene.replace(structures=(s.replace(shape=fdtd.SnappedSlab(z=(-.375, .5))),)))
     elif case == 'two':
         p = p.replace(scene=p.scene.replace(structures=(s, s.replace(name='other'))))
     elif case == 'background':
@@ -111,11 +111,11 @@ def test_unsupported_ade_refuses_before_planning(no_device, monkeypatch, case, p
         p = p.replace(scene=p.scene.replace(boundaries=p.scene.boundaries.replace(
             z=fdtd.PEC() if case == 'wall' else fdtd.Bloch(phase=.3))))
     elif case == 'source':
-        p = p.replace(sources=(fdtd.Dipole('drive', center=(0., 0., 0.),
+        p = p.replace(sources=(fdtd.CurrentDipole('drive', center=(0., 0., 0.),
             pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=2e13),
             current_moment=1e-10),))
     elif case == 'dft':
-        p = p.replace(outputs=fdtd.Outputs(monitors=(fdtd.Field('field', plane=fdtd.Plane(z=0.), wavelengths=(1.,)),)))
+        p = p.replace(outputs=fdtd.Outputs(monitors=(fdtd.FieldMonitor('field', plane=fdtd.Plane(z=0.), wavelengths=(1.,)),)))
     elif case == 'no_initial':
         p = p.replace(initial=None)
     elif case == 'empty_initial':
@@ -150,7 +150,7 @@ def test_unsupported_ade_refuses_before_planning(no_device, monkeypatch, case, p
 @pytest.mark.parametrize('fraction,admitted', [(.49, True), (.51, False)])
 def test_cell_coverage_uses_snapped_cells_not_declared_continuum_span(no_device, axis, fraction, admitted):
     p = problem()
-    structure = p.scene.structures[0].replace(shape=fdtd.Slab(**{
+    structure = p.scene.structures[0].replace(shape=fdtd.SnappedSlab(**{
         axis: (-.5+fraction*.125, .5)}))
     p = p.replace(scene=p.scene.replace(structures=(structure,)))
     report = fdtd.check(p, numerics=numerics(), backend='torch', device='cuda:0')

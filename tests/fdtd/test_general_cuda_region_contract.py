@@ -1,4 +1,4 @@
-"""Bounded interior Region admission; numerical Yee oracles live separately."""
+"""Bounded interior SnappedBox admission; numerical Yee oracles live separately."""
 import numpy as np
 import pytest
 
@@ -17,12 +17,12 @@ def problem(*, epsilon=2.25, mu=1.3, sigma=600., amplitude=1.):
         domain=fdtd.Domain(size=(.61, .49, .71), center=(.1, -.15, .2)),
         background=ConductiveMaterial(epsilon=1.2, mu=1.1, conductivity=100.),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
-        structures=(fdtd.Structure('body', fdtd.Region(size=(.305, .225, .365),
+        structures=(fdtd.Structure('body', shape=fdtd.SnappedBox(size=(.305, .225, .365),
             center=(.0375, -.2025, .1625)),
-            ConductiveMaterial(epsilon=epsilon, mu=mu, conductivity=sigma)),)),
+            material=ConductiveMaterial(epsilon=epsilon, mu=mu, conductivity=sigma)),)),
         initial=fdtd.InitialField(E=e, H=h, amplitude=amplitude),
         outputs=fdtd.Outputs(final_fields=True, monitors=(
-            fdtd.Record('e', component='Ey', at=(.1, -.15, .2)),)))
+            fdtd.TimeSeriesMonitor('e', component='Ey', at=(.1, -.15, .2)),)))
 
 
 def numerics(block=None):
@@ -46,7 +46,7 @@ def test_metadata_admits_translated_rounded_cells_and_schedule(no_device, block,
     p = p.replace(units=Units(length=unit), scene=p.scene.replace(
         domain=fdtd.Domain(size=tuple(factor*np.array(p.scene.domain.size)),
                            center=tuple(factor*np.array(p.scene.domain.center))),
-        structures=(s.replace(shape=fdtd.Region(size=tuple(factor*np.array(s.shape.size)),
+        structures=(s.replace(shape=fdtd.SnappedBox(size=tuple(factor*np.array(s.shape.size)),
                             center=tuple(factor*np.array(s.shape.center)))),)),
         outputs=fdtd.Outputs(final_fields=True))
     n = numerics(block).replace(grid=fdtd.UniformGrid(spacing=.05*factor))
@@ -56,7 +56,7 @@ def test_metadata_admits_translated_rounded_cells_and_schedule(no_device, block,
     prepared = fdtd.prepare(p, numerics=n, backend='torch', device='cuda:0')
     assert prepared.validate(p).ok
     assert prepared.contract['resolved_checkpoint_steps'] == block
-    assert 'strictly interior Region' in prepared.contract['differentiation']
+    assert 'strictly interior SnappedBox' in prepared.contract['differentiation']
     assert not any('source amplitude' in item for item in prepared.contract['live'])
     assert prepared.contract['resolved_dt_seconds'] == pytest.approx(
         .5*.05/np.sqrt(3)*Units(length='um').time_seconds, rel=2e-15)
@@ -68,16 +68,16 @@ def changed(p, case):
         return p.replace(scene=p.scene.replace(structures=(s, s.replace(name='other'))))
     if case == 'slab_mix':
         return p.replace(scene=p.scene.replace(structures=(s, s.replace(
-            name='other', shape=fdtd.Slab(z=(.05, .15))))))
+            name='other', shape=fdtd.SnappedSlab(z=(.05, .15))))))
     if case in ('box', 'shape_subclass', 'fullspan', 'seam', 'clipped', 'empty'):
-        class RegionSubclass(fdtd.Region):
+        class RegionSubclass(fdtd.SnappedBox):
             pass
         shapes = dict(box=fdtd.Box(size=s.shape.size, center=s.shape.center),
             shape_subclass=RegionSubclass(size=s.shape.size, center=s.shape.center),
-            fullspan=fdtd.Region(size=(.65, .225, .365), center=(.1, -.2025, .1625)),
-            seam=fdtd.Region(size=(.1, .225, .365), center=(-.175, -.2025, .1625)),
-            clipped=fdtd.Region(size=(.4, .225, .365), center=(-.2, -.2025, .1625)),
-            empty=fdtd.Region(size=(.001, .225, .365), center=(.025, -.2025, .1625)))
+            fullspan=fdtd.SnappedBox(size=(.65, .225, .365), center=(.1, -.2025, .1625)),
+            seam=fdtd.SnappedBox(size=(.1, .225, .365), center=(-.175, -.2025, .1625)),
+            clipped=fdtd.SnappedBox(size=(.4, .225, .365), center=(-.2, -.2025, .1625)),
+            empty=fdtd.SnappedBox(size=(.001, .225, .365), center=(.025, -.2025, .1625)))
         return p.replace(scene=p.scene.replace(structures=(s.replace(shape=shapes[case]),)))
     if case in ('open', 'pec', 'pmc', 'bloch', 'periodic_subclass'):
         class PeriodicSubclass(fdtd.Periodic):
@@ -96,13 +96,13 @@ def changed(p, case):
             return p.replace(scene=p.scene.replace(background=materials['ade']))
         return p.replace(scene=p.scene.replace(structures=(s.replace(material=materials[case]),)))
     if case == 'source':
-        return p.replace(sources=(fdtd.Dipole('d', center=(.1, -.15, .2), component='Ey',
+        return p.replace(sources=(fdtd.CurrentDipole('d', center=(.1, -.15, .2), component='Ey',
             pulse=fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=1e13), current_moment=1e-16),))
     if case in ('field', 'flux', 'record_subclass'):
-        class RecordSubclass(fdtd.Record):
+        class RecordSubclass(fdtd.TimeSeriesMonitor):
             pass
-        monitor = dict(field=fdtd.Field('f', plane=fdtd.Plane(z=.2), wavelengths=(2.,)),
-            flux=fdtd.Flux('f', plane=fdtd.Plane(z=.2), wavelengths=(2.,)),
+        monitor = dict(field=fdtd.FieldMonitor('f', plane=fdtd.Plane(z=.2), wavelengths=(2.,)),
+            flux=fdtd.FluxMonitor('f', plane=fdtd.Plane(z=.2), wavelengths=(2.,)),
             record_subclass=RecordSubclass('r', component='Ey', at=(.1, -.15, .2)))[case]
         return p.replace(outputs=fdtd.Outputs(monitors=(monitor,)))
     if case == 'no_initial':
@@ -166,7 +166,7 @@ def test_metadata_live_material_reuse_and_static_pattern_refusal(no_device):
     assert prepared.validate(live.replace(scene=live.scene.replace(background=background))).ok
     value = live.initial.E.copy(); value[1, 2, 3, 4] += .1
     assert not prepared.validate(live.replace(initial=live.initial.replace(E=value))).ok
-    moved = live.scene.structures[0].replace(shape=fdtd.Region(size=(.31, .225, .365),
+    moved = live.scene.structures[0].replace(shape=fdtd.SnappedBox(size=(.31, .225, .365),
                                                              center=(.0375, -.2025, .1625)))
     report = prepared.validate(live.replace(scene=live.scene.replace(structures=(moved,))))
     assert not report.ok and report.issues[0].code == 'prepared_structure'
@@ -178,7 +178,7 @@ def test_region_geometry_is_static_under_torch_transforms(transform):
     torch = pytest.importorskip('torch')
     x = torch.tensor(.305, dtype=torch.float64, requires_grad=transform == 'reverse')
     def make(value):
-        fdtd.Region(size=(value, .225, .365), center=(.0375, -.2025, .1625))
+        fdtd.SnappedBox(size=(value, .225, .365), center=(.0375, -.2025, .1625))
         return value*2
     with pytest.raises((ValueError, ValidationError), match='static'):
         if transform == 'reverse': make(x)

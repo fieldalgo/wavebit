@@ -85,13 +85,13 @@ def problem(point=POINTS[0], rotation=0, unit='um', background=(1., 1., 0.),
             offset = np.array([.5*(a == c if field == 'E' else a != c) for a in range(3)])
             at = (geo['low']+(geo['probe']+offset)*DX)/scale
             label = field+'xyz'[c]
-            records.append(fdtd.Record(label, component=label, at=tuple(at)))
+            records.append(fdtd.TimeSeriesMonitor(label, component=label, at=tuple(at)))
     return fdtd.Problem(units=units, scene=fdtd.Scene(
         domain=fdtd.Domain(size=tuple(geo['size']/scale), center=tuple(geo['center']/scale)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
         background=material(background), structures=(fdtd.Structure('body',
-            fdtd.Region(size=tuple(geo['region_size']/scale),
-                        center=tuple(geo['region_center']/scale)), material((eps, mu, sigma))),)),
+            shape=fdtd.SnappedBox(size=tuple(geo['region_size']/scale),
+                        center=tuple(geo['region_center']/scale)), material=material((eps, mu, sigma))),)),
         initial=fdtd.InitialField(E=electric, H=magnetic, amplitude=amplitude),
         outputs=fdtd.Outputs(final_fields=True, monitors=tuple(records)))
 
