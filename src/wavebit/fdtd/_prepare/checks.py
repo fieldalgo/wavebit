@@ -290,7 +290,7 @@ def check_switched(scene, plan):
     from wavebit.fdtd._prepare.plan import switch_level
     grid = plan.grid
     if isinstance(getattr(scene, 'background', None), Switched):
-        raise ValueError('Scene(background=fd.Switched(...)): a switched background fills the '
+        raise ValueError('A SwitchedMaterial background fills the '
                          'absorbing layers too, and a layer matched to one medium is not matched '
                          'to the other. Put the switched medium in a Structure inside the box.')
     structures = tuple(getattr(scene, 'structures', ()) or ())
@@ -333,7 +333,7 @@ def check_switched(scene, plan):
         where = f'structures[{index}] ({structure.shape.describe()})'
         if structure.shape.body() is not None:
             raise ValueError(
-                f'{where} is an fd.Switched on a smoothed shape. A smoothed shape mixes its '
+                f'{where} is a SwitchedMaterial on a smoothed shape. A smoothed shape mixes its '
                 f'permittivity into the interface cells, and a cell that is part one medium is '
                 f'not switched by the jump of the other. Spell the switched region as an '
                 f'fd.Slab or fd.Region.')
@@ -384,7 +384,7 @@ def check_switched(scene, plan):
         level = switch_level(material, plan.dt)
         if level < 2:
             raise ValueError(
-                f'{where}: fd.Switched(time={material.time!r}) lands on E level {level}, and a '
+                f'{where}: the SwitchedMaterial jump at time {material.time!r} lands on E level {level}, and a '
                 f'jump needs at least two steps of the medium before it (dt = {plan.dt:.6g}). '
                 f'Use time > dt; a medium that is already switched at the start is '
                 f'fd.Material(eps=after).')
