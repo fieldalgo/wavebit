@@ -59,21 +59,5 @@ def public_description(shape):
     return text
 
 
-class Answered:
-    """The ``obj`` of a tombstone's AttributeError: the message already names the replacement,
-    so Python's "Did you mean" (computed from ``dir(obj)``) has nothing to add."""
-
-    def __dir__(self):
-        return []
-
-
-def removed(owner, name, replacement, note=None):
-    """The AttributeError for ``owner.name``, a public name that ``replacement`` replaced.
-
-    A tombstone, never an alias: reading the old name raises and names the new one. ``note``
-    says how to convert a value that is not carried over as it is.
-    """
-    text = f'{owner}.{name} is now {replacement}'
-    return AttributeError(f'{text}{"; " + note if note else ""}. The old name was removed, not '
-                          f'aliased; see the public-name migration guide, '
-                          f'docs/migration/public-names.md.', name=name, obj=Answered())
+# The tombstone helpers live with the other declaration refusals; fdtd re-exports them.
+from wavebit._common.declarations import Answered, removed  # noqa: E402,F401
