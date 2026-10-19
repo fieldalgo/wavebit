@@ -8,6 +8,23 @@ __all__ = ['Open', 'Periodic', 'Bloch', 'PEC', 'PMC', 'MirrorSymmetry', 'Invaria
            'Boundaries']
 
 
+def _publicly(build):
+    """``build()``, with an engine refusal spelled for a public caller.
+
+    The engine face a public face lowers to checks its own values; the refusal it raises names
+    its own leaves and keywords until the public spelling translates it.
+    """
+    from ._spelling import public, public_error
+    with public():
+        try:
+            return build()
+        except (TypeError, ValueError, NotImplementedError) as exc:
+            translated = public_error(exc)
+            if translated is exc:
+                raise
+            raise translated from exc
+
+
 @spec
 class Open:
     """An outgoing face: waves leave the domain through it.
@@ -50,18 +67,10 @@ class Bloch:
         from wavebit.materials._lower import lower_material
         from wavebit.units import require_units
         from ._lower_public import _source
-        from ._spelling import public, public_error
         require_units(units)
         medium = Material(epsilon=1.) if background is None else background
-        with public():
-            try:
-                values = _legacy_boundaries.Bloch.from_source(
-                    _source(source, units), lower_material(medium, units=units), invariant_axes)
-            except (TypeError, ValueError, NotImplementedError) as exc:
-                translated = public_error(exc)
-                if translated is exc:
-                    raise
-                raise translated from exc
+        values = _publicly(lambda: _legacy_boundaries.Bloch.from_source(
+            _source(source, units), lower_material(medium, units=units), invariant_axes))
         faces = {}
         for axis, value in values.items():
             if isinstance(value, _legacy_boundaries.Bloch):
@@ -85,7 +94,7 @@ class MirrorSymmetry:
     parity: int
 
     def __post_init__(self):
-        object.__setattr__(self, 'parity', _legacy_boundaries.Symmetry(parity=self.parity).parity)
+        object.__setattr__(self, 'parity', _publicly(self._lowered).parity)
 
     def _lowered(self):
         return _legacy_boundaries.Symmetry(parity=self.parity)
@@ -106,7 +115,7 @@ class InvariantAxis:
     k_max: object = None
 
     def __post_init__(self):
-        object.__setattr__(self, 'k_max', self._lowered().k_max)
+        object.__setattr__(self, 'k_max', _publicly(self._lowered).k_max)
 
     def _lowered(self):
         return _legacy_boundaries.Axis1D(k=self.k, k_max=self.k_max)

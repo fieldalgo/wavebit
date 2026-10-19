@@ -13,7 +13,8 @@ and does not pass C3's cylinder arm. Since 2026-09-26 it prepares with no `studi
 it, from an installed package as from a checkout (see "The seam, closed").
 Since 2026-10-13 `fd` is the earlier interface, `wavebit.compat.legacy.fd`, and `fd` on this
 page means it; the public `wavebit.fdtd` module asks for the operator for a whole scene with
-`fdtd.Numerics(discretisation='stencil')`, the default staying `'voxel'`
+`fdtd.Numerics(discretization='stencil')` (spelled `discretisation` before 2026-10-19), the
+default staying `'voxel'`
 ([the FDTD model guide](../guide/fdtd/model.md)).
 The production cylinder has mean/RMS orders 1.60337/1.58655. The older
 three-dimensional symmetric triplet candidate misses the small high-index

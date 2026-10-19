@@ -30,6 +30,7 @@ whose primal ``float()`` reads just as silently.
 """
 import dataclasses
 import difflib
+import inspect
 import operator
 import sys
 
@@ -223,6 +224,28 @@ def renamed_keyword_message(where, gone, renamed):
             f'guide, docs/migration/public-names.md.')
 
 
+def _signature(cls, leading):
+    """The signature ``inspect`` and the API reference show for a spec's ``__init__``.
+
+    The wrapper itself takes ``*args, **kwargs``; this says what it accepts: the ``leading``
+    fields positionally or by keyword, every other field by keyword only, with its default.
+    """
+    def default(f):
+        if f.default is not dataclasses.MISSING:
+            return f.default
+        if f.default_factory is not dataclasses.MISSING:
+            return f.default_factory()
+        return inspect.Parameter.empty
+
+    fields_ = {f.name: f for f in dataclasses.fields(cls) if f.init}
+    params = [inspect.Parameter('self', inspect.Parameter.POSITIONAL_OR_KEYWORD)]
+    params += [inspect.Parameter(n, inspect.Parameter.POSITIONAL_OR_KEYWORD, default=default(fields_[n]))
+               for n in leading if n in fields_]
+    params += [inspect.Parameter(n, inspect.Parameter.KEYWORD_ONLY, default=default(f))
+               for n, f in fields_.items() if n not in leading]
+    return inspect.Signature(params)
+
+
 def spec(cls=None, *, positional=(), renamed=None):
     """Make ``cls`` a frozen, keyword-only dataclass that refuses unknown keywords by name.
 
@@ -238,6 +261,9 @@ def spec(cls=None, *, positional=(), renamed=None):
     cls = dataclasses.dataclass(frozen=True, kw_only=True)(cls)
     generated = cls.__init__
     names = tuple(f.name for f in dataclasses.fields(cls) if f.init)
+    required = tuple(f.name for f in dataclasses.fields(cls) if f.init
+                     and f.default is dataclasses.MISSING
+                     and f.default_factory is dataclasses.MISSING)
     leading = tuple(positional)
     removed = dict(renamed or {})
 
@@ -259,10 +285,17 @@ def spec(cls=None, *, positional=(), renamed=None):
             if gone:
                 raise TypeError(renamed_keyword_message(where, gone, removed))
             raise TypeError(unknown_keyword_message(where, unknown, names))
+        missing = [k for k in required if k not in kwargs]
+        if missing:
+            # The generated __init__ would name the class it was generated for -- an engine
+            # declaration's, for a public subclass -- so the refusal is made here instead.
+            raise TypeError(f'{where} needs {" and ".join(map(repr, missing))}. It takes '
+                            f'{list(names)}.')
         generated(self, **kwargs)
 
     __init__.__qualname__ = generated.__qualname__
     __init__.__doc__ = generated.__doc__
+    __init__.__signature__ = _signature(cls, leading)
     cls.__init__ = __init__
 
     def replace(self, **changes):

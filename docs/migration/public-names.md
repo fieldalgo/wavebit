@@ -3,7 +3,9 @@
 Wavebit is still in alpha, so the general-FDTD declarations were renamed in one clean break.
 Every class is now named for what it is, every monitor for what it records, and every keyword
 carries its unit where the unit is not obvious. The old names were removed, not aliased: an old
-spelling fails at once and names its replacement. Nothing numerical changed. The lowered scene,
+attribute (`fdtd.Record`) or keyword (`discretisation=`) fails at once and names its replacement
+(the import forms are under [What an old spelling does now](#what-an-old-spelling-does-now)).
+Nothing numerical changed. The lowered scene,
 the static plan and every output are identical (`tests/fdtd/test_public_names.py` pins the plan
 skeletons of eight scenes measured before the rename).
 

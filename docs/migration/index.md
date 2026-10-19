@@ -21,7 +21,7 @@ engines and their scientific regression tests remain; no replacement mutable fac
 | `solver.slice_structure` | `rcwa.sample_structure(problem, quantity='epsilon' or 'mu')` |
 | Experimental NVF and scattering operators | `rcwa.experimental` and `rcwa.operators` |
 | `JobSpec` v10 | `migration.migrate_legacy_jobs(document, units=Units(...))` → tuple of current `Job` objects |
-| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines |
+| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines. v23 (2026-10-19): the [public names](public-names.md) and `wavebit.job/v2` |
 | Import-time JAX precision change | Configure `jax.config.update('jax_enable_x64', True)` before constructing arrays |
 
 Spatial lengths use `Units`; times, conductivity and material rates use SI. H is A/m.
