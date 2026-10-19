@@ -114,6 +114,20 @@ def _periods(solver):
     return float(np.real(solver.period[0])), float(np.real(solver.period[1]))
 
 
+def _to_cell(x, y, basis):
+    """The whole-cell move that carries the point ``(x, y)`` into the cell of the cell centre.
+
+    A shape may be written any number of periods away (``cx`` and ``cx + Px`` are one
+    structure), and :data:`_IMAGES` is one ring around the shape *as written*: from two periods
+    out, no image of it reaches the picture. The move is counted on the reduced basis, as the
+    images are, and is zero for a point already in that cell.
+    """
+    images_on = np.asarray(reduced_basis(basis), dtype=float)
+    mid = 0.5 * (np.asarray(basis, dtype=float)[:, 0] + np.asarray(basis, dtype=float)[:, 1])
+    k = np.round(np.linalg.solve(images_on, np.array([x, y]) - mid))
+    return -(images_on @ k)
+
+
 # =========================================================== path 1: parametric shape sampling
 
 def _shape_inside(shape, X, Y, basis, Px, Py):
@@ -121,6 +135,8 @@ def _shape_inside(shape, X, Y, basis, Px, Py):
     kind, cx, cy, lx, ly, angle = _parametric.shape_geometry(shape, basis)
     cx, cy, lx, ly, angle = (float(np.real(np.asarray(v, dtype=complex)))
                              for v in (cx, cy, lx, ly, angle))
+    sx, sy = _to_cell(cx, cy, basis)
+    cx, cy = cx + sx, cy + sy
     cos_a, sin_a = np.cos(angle), np.sin(angle)
     count = np.zeros(X.shape, dtype=int)
     images_on = np.asarray(reduced_basis(basis))       # the origin above is the basis as given
@@ -231,6 +247,7 @@ def _render_paint(layer, xs, ys, basis, period):
     for eps_s, loops in _resolved_regions(layer.get('shapes', []), period, basis):
         cover = np.zeros((ys.size, xs.size), dtype=int)
         for V in loops:
+            V = V + _to_cell(*V.mean(axis=0), basis)
             for m in _IMAGES:
                 for k in _IMAGES:
                     shift = np.array([m * images_on[0][0] + k * images_on[0][1],
