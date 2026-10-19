@@ -253,14 +253,14 @@ def test_delay_seconds_stays_a_live_source_leaf():
 
 
 def test_public_name_relabels_only_the_engine_classes():
-    """A caller's own class called ``Region``, or ``fdtd.periodic.Record``, keeps its name."""
+    """A caller's own class called ``Region``, or ``fdtd.periodic.Region`` (RCWA's), keeps its name."""
     from wavebit.fdtd import _legacy as engine
     from wavebit.fdtd._public_names import PUBLIC_NAMES, public_name
     for old, new in PUBLIC_NAMES.items():
         assert public_name(getattr(engine, old)) == new
     mine = type('Region', (engine.Shape,), {})
     assert public_name(mine) == 'Region'
-    assert public_name(fdtd.periodic.Record) == 'Record'
+    assert public_name(fdtd.periodic.Region) == 'Region'
     assert public_name(fdtd.SnappedBox) == 'SnappedBox'
 
 
