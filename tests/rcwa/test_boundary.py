@@ -1399,6 +1399,51 @@ def test_the_polygon_normal_field_folds_to_the_nearest_image():
     assert total(0.0) == total(P)
 
 
+#: Painted layers whose last region is written ``d`` cells away: an outline beside a box, and
+#: two overlapping boxes beside a third. Both take the boundary route under NVF.
+_PAINTED_SHIFTS = {
+    'polygon': lambda d: (
+        ('polygon', dict(vertices=((-.31, -.13), (-.12, -.08), (-.17, .11), (-.36, .07))), 9.0),
+        ('rectangle', dict(size=(.2, .3), center=(.2 + d[0], .01 + d[1])), 4.0)),
+    'overlap': lambda d: (
+        ('rectangle', dict(size=(.3, .3), center=(-.2, 0.)), 4.0),
+        ('rectangle', dict(size=(.15, .12), center=(-.12, .07), angle=.4), 9.0),
+        ('rectangle', dict(size=(.18, .1), center=(.25 + d[0], -.2 + d[1]), angle=.2), 2.25)),
+}
+
+
+@pytest.mark.parametrize('layout', sorted(_PAINTED_SHIFTS))
+def test_a_painted_region_written_periods_away_solves_the_same_structure(layout):
+    """The painted union's quadrature anchor is counted with each loop in its nearest cell.
+
+    The boundary route samples its normal field on a grid centred on the area centroid of the
+    painted union, so a rigid translation is exact. That centroid was taken over the union as
+    written, so a region written ``d`` cells away moved it by the region's share of the area
+    times a lattice vector -- 77.3 samples at ``N = 128`` for the outline layout and ``d = (1,
+    0)`` -- and the same structure was sampled at different points. Before the fold, ``sum(T)``
+    moved by up to 2.3e-6 (outline) and 3.9e-6 (overlap) over these shifts; after it the shifts
+    agree to 4e-14. A layer written inside the cell adds zero to the anchor and is unchanged to
+    the bit, which is what keeps the paint-order tests in ``test_polygon_interfaces.py`` exact.
+    """
+    from wavebit import Material, rcwa
+
+    def total(d):
+        regions = tuple(rcwa.Region(geometry=getattr(rcwa, kind.title())(**geometry),
+                                    material=Material(eps))
+                        for kind, geometry, eps in _PAINTED_SHIFTS[layout](d))
+        layer = rcwa.Layer(thickness=0.3, background=Material(1.0), regions=regions)
+        problem = rcwa.Problem(
+            stack=rcwa.Stack(period=(1.0, 1.0), layers=(layer,)),
+            excitation=rcwa.Excitation(wavelength=1.3,
+                                       sources=(rcwa.PlaneWave(theta=0.2, polarization='s'),)))
+        numerics = rcwa.Numerics(orders=(3, 3), factorization='nvf', shape_nvf_grid_size=128)
+        return float(np.sum(np.asarray(rcwa.run(problem, numerics=numerics).T)))
+
+    ref = total((0, 0))
+    for d in ((1, 0), (3, 0), (-2, 0), (0, 2), (2, -1)):
+        assert abs(total(d) - ref) <= 5e-13, d
+
+
 # ------------------------------------------------ the reduced basis (2026-09-06)
 
 def _spelling(k, period=700.0):
