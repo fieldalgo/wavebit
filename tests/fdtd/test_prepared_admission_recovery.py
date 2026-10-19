@@ -16,7 +16,7 @@ def problem(epsilon=2.1):
 
 def settings(steps=12, stabilize=0.):
     n = numerics(steps=steps)
-    return n.replace(absorber=n.absorber.replace(stabilize=stabilize,
+    return n.replace(absorber=n.absorber.replace(stabilizing_loss=stabilize,
                      reference_media={'z-': Material(2.1)}))
 
 

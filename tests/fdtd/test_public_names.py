@@ -250,3 +250,27 @@ def test_delay_seconds_stays_a_live_source_leaf():
         later = problem.replace(sources=(problem.sources[0].replace(delay_seconds=3e-16),))
         assert prepared.validate(later).ok
         prepared.run(later)
+
+
+def test_public_name_relabels_only_the_engine_classes():
+    """A caller's own class called ``Region``, or ``fdtd.periodic.Record``, keeps its name."""
+    from wavebit.fdtd import _legacy as engine
+    from wavebit.fdtd._public_names import PUBLIC_NAMES, public_name
+    for old, new in PUBLIC_NAMES.items():
+        assert public_name(getattr(engine, old)) == new
+    mine = type('Region', (engine.Shape,), {})
+    assert public_name(mine) == 'Region'
+    assert public_name(fdtd.periodic.Record) == 'Record'
+    assert public_name(fdtd.SnappedBox) == 'SnappedBox'
+
+
+def test_a_wrapped_axis_refusal_offers_a_face_the_public_api_takes():
+    """The advice was ``InvariantAxis(k=0.0, k_max=0.0, algebraic=True)``, which is refused."""
+    problem = fdtd.Problem(units=UM, scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.05, .4, .4)),
+        boundaries=fdtd.Boundaries(x=(fdtd.InvariantAxis(k=0.), fdtd.PEC()), y=fdtd.PEC(),
+                                   z=fdtd.PEC())))
+    (message,) = _check_messages(problem, _num())[:1]
+    offered = re.search(r'x=(InvariantAxis\(.*?\))\.$', message)
+    assert offered, message
+    assert eval('fdtd.' + offered.group(1)) == fdtd.InvariantAxis(k=0.)

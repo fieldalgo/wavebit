@@ -16,14 +16,32 @@ PUBLIC_NAMES = {
 }
 
 
+#: Where each renamed engine class is defined. A class is relabelled only if it IS that engine
+#: class: a caller's own ``Region`` subclass of ``Shape``, or ``fdtd.periodic.Record``, keeps
+#: its name.
+_ENGINE_MODULES = {
+    'Record': 'monitors', 'Field': 'monitors', 'Flux': 'monitors', 'Diffraction': 'monitors',
+    'FarField': 'monitors', 'Decay': 'monitors', 'Region': 'geometry', 'Slab': 'geometry',
+    'Dipole': 'sources', 'Axis1D': 'boundaries', 'Symmetry': 'boundaries', 'Absorber': 'boundaries',
+}
+
+
+def _renamed(cls):
+    """The public name of ``cls`` if it is one of the renamed engine classes, else ``None``."""
+    home = _ENGINE_MODULES.get(cls.__name__)
+    if home and cls.__module__ == f'wavebit.fdtd._legacy_{home}':
+        return PUBLIC_NAMES[cls.__name__]
+    return None
+
+
 def public_name(declaration):
     """The public class name of ``declaration`` (a class or an instance).
 
-    An engine class whose public twin is spelled differently returns the public spelling; any
-    other class, a public subclass included, returns its own name.
+    A renamed engine class returns the public spelling; any other class, a public subclass or
+    a caller's own class included, returns its own name.
     """
     cls = declaration if isinstance(declaration, type) else type(declaration)
-    return PUBLIC_NAMES.get(cls.__name__, cls.__name__)
+    return _renamed(cls) or cls.__name__
 
 
 def public_description(shape):
@@ -35,7 +53,7 @@ def public_description(shape):
     """
     text = shape.describe()
     for cls in type(shape).__mro__:
-        public = PUBLIC_NAMES.get(cls.__name__)
+        public = _renamed(cls)
         if public and text.startswith(cls.__name__ + '('):
             return public + text[len(cls.__name__):]
     return text

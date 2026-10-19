@@ -69,7 +69,7 @@ Import every declaration from `wavebit.fdtd`. The implementation modules
 `wavebit.fdtd.problem`, `geometry`, `boundaries`, `sources`, `monitors`, `numerics`, `result`
 and `results` are no longer public; an attribute access such as `fdtd.monitors` fails and says
 to use `wavebit.fdtd`. The public submodules are `fdtd.native`, `fdtd.periodic` and
-`fdtd.diagnostics`.
+`fdtd.diagnostics`, and `dir(fdtd)` lists only the public names.
 
 ## What an old spelling does now
 
@@ -80,13 +80,34 @@ AttributeError: wavebit.fdtd.Record is now wavebit.fdtd.TimeSeriesMonitor. The o
 TypeError: Numerics(discretisation=...) is now Numerics(discretization=...). The old keyword was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
 ```
 
+An attribute access (`fdtd.Record`, `fdtd.monitors`) is the spelling that names the
+replacement. `from wavebit.fdtd import Record` raises Python's own `ImportError: cannot import
+name 'Record'`, and `import wavebit.fdtd.monitors` raises `ModuleNotFoundError`: Python discards
+a module's message for those two forms, as it does for NumPy's removed names. The tables above
+give the replacement for each.
+
+## Report keys and issue paths
+
+The same renames reach the data a check, a preparation and a result return:
+
+| Before | After |
+| --- | --- |
+| `report.resolved['numerical_policies']['discretisation']`, and the same key in `Result.provenance` | `...['numerical_policies']['discretization']` |
+| issue path `numerics.discretisation` | `numerics.discretization` |
+| issue paths `numerics.decay`, `numerics.decay.window_seconds` | `numerics.stopping`, `numerics.stopping.window_seconds` |
+
+`Prepared.contract` describes the live source leaves as `amplitude/phase/delay_seconds`.
+
 ## Job files and run records
 
 A saved `Job` records each declaration by its public name, so the schema is now
-`wavebit.job/v2`. A `wavebit.job/v1` file is refused with code `job.schema` rather than read
-with names that no longer exist; rebuild the declaration with the new names and save it again.
-Job keys of FDTD jobs change with the names. Run records are `wavebit.run/v2` for the same
-reason, and a `wavebit.run/v1` record is refused. The capability manifest is version 23.
+`wavebit.job/v2`, for both solvers. The execution settings are tagged by their one public path,
+`wavebit.Execution` (it was `wavebit._common.execution.Execution`). A `wavebit.job/v1` file of
+either solver is refused with code `job.schema` rather than read with names that no longer
+exist: build the Job again from current declarations and save it. Every job key changes, RCWA
+jobs included, because the schema and the execution tag are part of what a key hashes. Run
+records are `wavebit.run/v2` for the same reason, and a `wavebit.run/v1` record is refused with
+code `record.format`. The capability manifest is version 23.
 
 ## A complete example
 

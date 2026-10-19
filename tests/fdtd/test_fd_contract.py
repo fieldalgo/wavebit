@@ -68,7 +68,7 @@ def test_later_stages_are_refused_by_name():
               run=base.run)
     # Stage 2 made ``sources=`` and ``Run(periods=)`` legal; their refusals live in
     # tests/fdtd/test_fd_sources_doors.py. Decay belongs on Run, not directly on Scene.
-    with pytest.raises(NotImplementedError, match=r'Run\(decay=Decay'):
+    with pytest.raises(NotImplementedError, match=r'Numerics\(stopping=fdtd\.DecayStop'):
         fd.Scene(decay=1e-6, **kw)
     # ``materials=`` and ``pml=`` are stage-1 features spelled another way, so the refusal
     # now points at the spelling rather than at the stage; ``Boundaries.open`` is the

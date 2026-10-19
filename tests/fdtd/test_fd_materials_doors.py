@@ -117,7 +117,7 @@ LOSSY = [pytest.param(fd.Conductor(eps=2.25, sigma=0.01), id='Conductor'),
 def test_a_lossy_structure_reaching_a_pml_face_is_refused_naming_absorber(material):
     """And the same structure on an ``Absorber`` face runs: that is what the fallback is for."""
     through = fd.Structure(fd.Slab(z=(-1.0, 0.0)), material)       # reaches the z- layer
-    with pytest.raises(ValueError, match='fd.Absorber') as e:
+    with pytest.raises(ValueError, match='fdtd.ConductiveAbsorber') as e:
         quiet(fd.plan, scene(structures=(through,)))
     assert 'matched' in str(e.value) and type(material).__name__ in str(e.value)
     absorbing = fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(), z=fd.Absorber(cells=12))
@@ -554,7 +554,7 @@ def test_structures_takes_structures_and_the_scalar_shorthand_is_a_material():
 
 def test_a_dispersive_background_is_refused_naming_absorber_and_the_gate_it_lacks():
     metal = fd.Dispersive(eps_inf=1.0, poles=(fd.Drude(omega_p=1.0, gamma=1.0),))
-    with pytest.raises(NotImplementedError, match='fd.Absorber') as e:
+    with pytest.raises(NotImplementedError, match='fdtd.ConductiveAbsorber') as e:
         quiet(fd.plan, scene(background=metal))
     assert 'as a Structure' in str(e.value)
 

@@ -466,7 +466,7 @@ def test_the_scene_takes_a_tuple_of_named_sources():
     one = fd.Dipole('d', center=(0, 0, 0), band=b)
     scene = dipole_box(size=0.6, steps=5)
     assert scene.replace(sources=one).sources == (one,)
-    with pytest.raises(TypeError, match='fd.Dipole, fd.PlaneWave or fd.TFSF'):
+    with pytest.raises(TypeError, match='fdtd.CurrentDipole, fd.PlaneWave or fd.TFSF'):
         scene.replace(sources=(fd.Record('r', at=(0, 0, 0)),))
     with pytest.raises(ValueError, match="repeated: \\['d'\\]"):
         scene.replace(sources=(one, one.replace(center=(0.1, 0, 0))))

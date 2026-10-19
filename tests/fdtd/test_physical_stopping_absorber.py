@@ -32,17 +32,17 @@ def test_physical_stopping_matches_an_independent_scalar_recurrence_and_prefix(b
     # The uniform periodic field has zero curl: one scalar CN conductor update.
     ratio = p.scene.background.conductivity * dt / (2*EPSILON0*2.)
     a = (1-ratio)/(1+ratio)
-    width = math.ceil(n.decay.window_seconds/dt)
+    width = math.ceil(n.stopping.window_seconds/dt)
     expected = next(end for end in range(width, 174, width)
-                    if a**(end-width+1) <= n.decay.threshold)
+                    if a**(end-width+1) <= n.stopping.threshold)
     assert result.provenance['actual_steps'] == expected < 173
     np.testing.assert_allclose(result.final_fields.values['E'][0], a**expected, rtol=3e-14)
     assert result.final_fields.metadata['E_time'] == pytest.approx(expected*dt)
     assert result.final_fields.metadata['H_time'] == pytest.approx((expected-.5)*dt)
     stopping = result.diagnostics['stopping']
     assert stopping['reason'] == 'decay' and stopping['reached']
-    assert stopping['window_seconds'] == pytest.approx(n.decay.window_seconds)
-    fixed = fdtd.run(p, numerics=n.replace(duration=fdtd.Duration(steps=expected), decay=None), backend=backend)
+    assert stopping['window_seconds'] == pytest.approx(n.stopping.window_seconds)
+    fixed = fdtd.run(p, numerics=n.replace(duration=fdtd.Duration(steps=expected), stopping=None), backend=backend)
     for component in ('E', 'H'):
         np.testing.assert_array_equal(result.final_fields.values[component], fixed.final_fields.values[component])
     np.testing.assert_array_equal(result['E'].values, fixed['E'].values)
@@ -55,7 +55,7 @@ def test_stopping_is_invariant_under_geometry_unit_changes_and_portable_jobs():
     other, other_n = scalar_case('nm', 1000.)
     job = Job(solver='fdtd', problem=other, numerics=other_n)
     restored = Job.from_json(job.to_json())
-    assert restored.key == job.key and restored.numerics.decay == other_n.decay
+    assert restored.key == job.key and restored.numerics.stopping == other_n.stopping
     b = fdtd.run(restored.problem, numerics=restored.numerics)
     assert a.provenance['actual_steps'] == b.provenance['actual_steps']
     np.testing.assert_allclose(a.final_fields.values['E'], b.final_fields.values['E'], rtol=5e-14)

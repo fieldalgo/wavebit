@@ -579,8 +579,9 @@ def test_an_unlit_order_that_overflows_leaves_every_derivative_finite():
 
 
 def test_a_job_that_does_not_use_the_tolerance_keeps_its_key():
-    """The field joined ``rcwa.Numerics`` after ``wavebit.job/v1`` was fixed: written only off
-    its default, so every saved run record keeps its identity, and a set value round-trips."""
+    """The field joined ``rcwa.Numerics`` after the job schema was fixed: written only off its
+    default, so a job that leaves it alone keeps the key it had without it, and a set value
+    round-trips."""
     from wavebit import Job
     plain, snapped = wavebit.rcwa.Numerics(), wavebit.rcwa.Numerics(half_space_merge_tolerance=1e-6)
     layer = wavebit.rcwa.Layer(thickness=.2, background=wavebit.Material(2.25))

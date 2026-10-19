@@ -1217,14 +1217,14 @@ def test_a_diffraction_wavelength_the_grid_cannot_carry_is_refused(kind, rho):
         return scene.replace(boundaries=fd.Boundaries(
             x=scene.boundaries.x, y=scene.boundaries.y, z=fd.PML(cells=12, stabilize=rho)))
     message = _refusal(grating(0.22, 13))
-    assert message.startswith("Diffraction('r') asks for wavelength 0.22, where "
+    assert message.startswith("DiffractionMonitor('r') asks for wavelength 0.22, where "
                               "Scene(background=) is sampled at 2.86 cells per wavelength")
     message = _refusal(grating(0.4, 20))
-    assert message.startswith("Diffraction('r') asks for wavelength 0.4, where structures[0] "
+    assert message.startswith("DiffractionMonitor('r') asks for wavelength 0.4, where structures[0] "
                               "is sampled at 7.30 cells per wavelength (index 1.095")
     assert 'refine dx to at most 0.0456435' in message
     message = _refusal(grating(0.45, 20))
-    assert message is None or not message.startswith('Diffraction(')
+    assert message is None or not message.startswith('DiffractionMonitor(')
 
 
 def test_the_sources_band_is_held_to_the_same_floor_at_the_same_door():

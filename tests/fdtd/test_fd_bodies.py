@@ -234,9 +234,9 @@ def test_a_body_crosses_a_wrapping_face_only_where_it_is_uniform_along_it():
             resolution=fd.Resolution(dx=DX), run=fd.Run(steps=4), structures=(structure,))
     _quiet(fd.plan, invariant(fd.Structure(
         fd.Cylinder(radius=0.15, height=1.0, axis='y'), glass)))
-    with pytest.raises(ValueError, match='fd.Axis1D face'):
+    with pytest.raises(ValueError, match='fdtd.InvariantAxis face'):
         _quiet(fd.plan, invariant(fd.Structure(fd.Sphere(radius=0.2), glass)))
-    with pytest.raises(ValueError, match='fd.Axis1D face'):
+    with pytest.raises(ValueError, match='fdtd.InvariantAxis face'):
         _quiet(fd.plan, invariant(fd.Structure(
             fd.Cylinder(radius=0.15, height=0.4, axis='z'), glass)))
 

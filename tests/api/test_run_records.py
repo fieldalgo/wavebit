@@ -217,6 +217,20 @@ def test_corrupt_archives_fail_with_structured_errors(tmp_path, solved, damage):
     assert raised.value.code == 'record.format'
 
 
+
+def test_a_v1_record_is_refused_with_the_migration_guide_named(tmp_path, solved):
+    """Records written before the public names were renamed are refused, not read as v2."""
+    path = tmp_path/'run'
+    records.save_run(path, job=solved[0], result=solved[1], include_source=False)
+    manifest = json.loads((path/'manifest.json').read_text())
+    assert manifest['schema'] == 'wavebit.run/v2'
+    manifest['schema'] = 'wavebit.run/v1'
+    (path/'manifest.json').write_text(json.dumps(manifest))
+    with pytest.raises(ValidationError, match='public-names.md') as raised:
+        records.load_run(path)
+    assert raised.value.code == 'record.format' and raised.value.path == 'manifest.schema'
+
+
 def test_existing_destination_and_wrong_solver_never_overwrite(tmp_path, solved):
     path = tmp_path/'run'
     records.save_run(path, job=solved[0], result=solved[1], include_source=False)

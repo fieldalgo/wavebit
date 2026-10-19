@@ -214,10 +214,11 @@ class Job:
             raise _error(f'Invalid JSON: {exc}', 'job') from exc
         if isinstance(body, dict) and body.get('schema') == 'wavebit.job/v1':
             raise UnsupportedFeatureError(
-                'This is a wavebit.job/v1 file, written before the public names were renamed '
-                '(for example fdtd.Flux is now fdtd.FluxMonitor). It is not converted: rebuild the '
-                'Problem with the current names and save it again; see the public-name migration '
-                'guide, docs/migration/public-names.md.', code='job.schema', path='schema')
+                'This is a wavebit.job/v1 file. Saved jobs became wavebit.job/v2 when the public '
+                'names were renamed (fdtd.Flux is now fdtd.FluxMonitor, and the execution tag is '
+                'wavebit.Execution), and a v1 job of either solver is refused, not converted: '
+                'build the Job again from current declarations and save it; see the public-name '
+                'migration guide, docs/migration/public-names.md.', code='job.schema', path='schema')
         if not isinstance(body, dict) or body.get('schema') != _SCHEMA:
             raise UnsupportedFeatureError('Expected wavebit.job/v2. Legacy JobSpec requires explicit migration; do not edit its version number.',
                                           code='job.schema', path='schema')
