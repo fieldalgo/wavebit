@@ -220,6 +220,14 @@ final direct-error order under the registered spread rule. Fewer low cells do
 not establish a more accurate design or identify the slow-convergence cause.
 C7 remains unpassed; the full 108-cell comparison is in the validation document.
 
+Two other FDTD codes do no better on the epsilon-12 box. Run on the same grids and scored
+the same way, Meep 1.34.0's worst errors are 1.4 to 2.1 times Wavebit's at every rung, and
+FDTDx 0.6.3's (at one wavelength) 5.6 to 18 times. Neither code converges at second order
+either. That is not evidence of a limit in the scene: Meep levels off at its own error
+floor, and FDTDx uses staircased materials. The slow order is therefore kept as a known
+limitation of Wavebit on scenes like this one; check convergence on your own scene.
+See "Cross-tool comparison" in the validation document.
+
 Three practical consequences:
 
 * **For a percent on every order, 40 cells per wavelength is about right for these indices**,

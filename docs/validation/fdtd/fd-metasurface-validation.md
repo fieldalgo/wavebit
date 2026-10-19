@@ -75,6 +75,14 @@ is not necessary for low order in a y ridge. Its tail remains, and changing heig
 the corner fields too. These finite-grid results do not identify the mechanism or establish
 that it causes M3's coarser-grid behaviour ("The y ridge through 640 cells" below).
 
+**Against Meep and FDTDx, M3's errors are the smallest of the three tools, and the slow order
+is kept as a known limitation (2026-10-19).** Both external tools ran M3 s on the same grids
+and ran through the same scorer against RCWA. Neither reaches order 1.8 (Meep 1.62 / 1.43,
+FDTDx 1.58 / 1.22, amplitude / efficiency). Wavebit's worst errors sit below Meep's at every
+rung, by 1.4 to 2.1 times. This does not show that the scene limits the order: Meep's values
+settle about 4e-3 away from RCWA, a floor whose cause four controls did not find, and FDTDx
+is a staircase. C7 stays unpassed under its registered rule ("Cross-tool comparison" below).
+
 ## The question
 
 Stage 4's use case (a) is a periodic metasurface lit by an oblique plane wave and read as
@@ -1236,6 +1244,70 @@ skipped), passed all 81 slow cases, and reproduced 1141 freezer arrays bit for
 bit. The new audit/docs exits and the explicit evidence-reuse record are in
 `fdtd_metasurface_tall_validation.json`, archived outside the repository.
 
+## Cross-tool comparison (2026-10-19)
+
+The owner asked whether M3 is simply hard for FDTD. Two independent FDTD codes ran M3 s on the
+campaign's own grids, and the results were scored the same way as Wavebit's.
+
+**Matched conditions.**
+
+* The same scene: period 1.3 by 0.5, the epsilon-12 box 0.3 by 0.2 by 0.3 on epsilon-2.25 glass,
+  the fixed transverse wavenumber, wavelengths 0.95 / 1 / 1.05.
+* The same grids: 52 by 20 by 149, 104 by 40 by 249 and 156 by 60 by 349 cells at 40, 80 and
+  120 cells per wavelength, with the box placed against the grid as on each Wavebit rung.
+* The same numerics: a 24-cell absorbing layer, `dt = 0.5 dx / sqrt(3)` and 120 periods.
+* The same scoring: each tool's fields are projected onto the Floquet orders at fixed monitor
+  planes, normalised by a matched vacuum run, and compared with the campaign's RCWA truncation 32.
+* The source differs. The external runs use a Gaussian-modulated sine pulse, not Wavebit's band
+  source, so only the normalised amplitudes are compared.
+
+**Meep 1.34.0** runs with its default subpixel averaging. **FDTDx 0.6.3** (JAX 0.11.2, float64)
+uses voxelised materials and was run at wavelength 1 only.
+
+| Code | Worst amplitude error at 40 / 80 / 120 | order (pairs) | Worst efficiency error at 40 / 80 / 120 | order (pairs) |
+| --- | --- | --- | --- | --- |
+| Wavebit (this campaign) | 2.21e-2 / 7.10e-3 / 3.64e-3 | 1.64 (1.64, 1.65) | 1.16e-2 / 4.09e-3 / 2.19e-3 | 1.51 (1.50, 1.54) |
+| Meep, three wavelengths | 3.72e-2 / 9.93e-3 / 6.49e-3 | 1.62 (1.90, 1.05) | 2.11e-2 / 5.93e-3 / 4.64e-3 | 1.43 (1.83, 0.61) |
+| Wavebit, wavelength 1 | 2.21e-2 / 7.10e-3 / 3.64e-3 | 1.64 | 6.04e-3 / 1.32e-3 / 5.38e-4 | 2.20 |
+| FDTDx, wavelength 1 | 1.23e-1 / 4.03e-2 / 2.19e-2 | 1.58 | 3.68e-2 / 1.55e-2 / 9.66e-3 | 1.22 |
+
+Reading the table:
+
+- **Errors.** Wavebit's worst errors are the smallest at every rung. Against Meep they are 1.4
+  to 1.8 times smaller in amplitude and 1.45 to 2.1 times in efficiency. Against FDTDx at
+  wavelength 1 they are 5.6 to 6.0 times smaller in amplitude and 6 to 18 times in efficiency.
+- **Meep's order is not a scene limit.** Meep falls at about second order from 40 to 80 (1.90 /
+  1.83), then flattens. Its values settle about 4e-3 away from RCWA: an order-2 extrapolation
+  from 80 and 120 lands 3.8e-3 from the reference in its worst cell. Four controls left the
+  values where they were:
+  - doubling the run time (at 40 cells): moved them by at most 1.2e-6;
+  - a stronger absorbing layer, `R_asymptotic` 1e-12 to 1e-24 (at 40): by at most 1.2e-5;
+  - the layer held at 0.6 L0 instead of 24 cells (at 80): by at most 1.8e-5;
+  - a tighter subpixel tolerance, `subpixel_tol` 1e-4 to 1e-8 (at 40): the values and the
+    dielectric grid were bit-identical.
+
+  The floor's cause is not identified. Meep's averaging rule at the box's edges and the
+  source/normalisation chain are not excluded.
+- **FDTDx is a staircase.** Its box base lands a quarter cell off the glass on every rung.
+  Its incident wave also carries a p admixture that barely shrinks with the grid: 2.4e-3,
+  1.9e-3 and 1.8e-3 of the s amplitude, against Meep's 1.1e-4, 2.7e-5 and 1.2e-5. A low order
+  is expected from such a code.
+- **What follows.** The comparison establishes that Wavebit is more accurate than these two
+  codes on M3 at matched grids. It does not establish a common limit. M3's slow convergence
+  remains Wavebit's own open question ("What this does not show").
+
+**Status.** C7 remains unpassed under its registered rule. The tolerances, rows and verdicts
+above are unchanged. Following the owner's decision, the slow order is recorded as a known
+limitation: on M3-like scenes, the worst error falls at order 1.5 to 1.75 rather than 2. For a
+target accuracy, check convergence on your own scene, for example with the 40/80/120 ladder
+above. Wavebit's own absorbing-layer-thickness check for C7 has not been run.
+
+**Provenance.** The maintainers ran the external codes in separate environments, using only
+their public APIs. Meep is never imported by Wavebit, and its implementation source was not
+read. The comparison scripts and raw outputs are kept outside this repository. A second,
+separately written scorer reproduced every external value to 3e-16 and the orders to the
+printed digits. The runs themselves were not repeated independently.
+
 ## What the tests hold
 
 `tests/fdtd/test_fd_metasurface.py` keeps three things in the suite.
@@ -1287,7 +1359,9 @@ The runner is `studies/cross_solver/metasurface/fdtd_metasurface_validation.py`.
   on 40/60/80 changes the cellwise self-orders in both directions and retains 11 low
   cells in the tall box. Its capped reference leaves every tall final direct-error
   order unresolved. The vertical edges, vertices and field along finite edges remain
-  candidates too; the height result does not separate these causes.
+  candidates too; the height result does not separate these causes. The cross-tool
+  comparison does not settle it either: Meep and FDTDx fall short of 1.8 too, but for
+  reasons of their own (a floor of unidentified cause in Meep, a staircase in FDTDx).
 * **One pillar per cell.** No supercell, so no plan with several junctions, as a
   phase-gradient metasurface has.
 * **Two body kinds.** Cylinders and unturned boxes, the bodies a junction supports; no prism,
