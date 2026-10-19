@@ -702,7 +702,7 @@ LATER_STAGES = [
     pytest.param('source', 'stage 2', id='source'),       # the stage-2 spelling is sources=
     pytest.param('shapes', 'stage 4', id='shapes'),
     pytest.param('structure', 'stage 4', id='structure'),
-    pytest.param('decay', r'Run\(decay=Decay', id='decay'),
+    pytest.param('decay', r'Numerics\(stopping=fdtd\.DecayStop', id='decay'),
 ]
 
 
