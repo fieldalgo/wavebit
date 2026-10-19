@@ -48,6 +48,7 @@ usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 - [Rotated elliptical FDTD shapes and derivatives](fdtd-ellipse-gradients.md)
 - [Lossy ENZ films and calibrated scattering convergence](fdtd-enz.md)
 - [Half-space derivatives without changing the experiment](fdtd-halfspace-gradients.md)
+- [Outer-jit memory of area-painted FDTD derivatives](fdtd-jit-painting-memory.md)
 - [Separating lattice, boundary and finite-time scattering errors](fdtd-lattice-reference.md)
 - [Fitting planar dispersive layer boundaries](fdtd-layer-alignment.md)
 - [Internal layer derivatives on a fixed mesh](fdtd-layer-gradients.md)
