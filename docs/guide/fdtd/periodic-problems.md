@@ -113,8 +113,8 @@ your own outer `jax.jit`, so you choose it there.
 It matters when one layer holds two or more rectangles with `shape_integration='area'`, the
 setting every rotated rectangle needs because `'separable'` refuses rotation. In that case a forward-mode derivative
 (`jax.jvp`, `jax.jacfwd`) compiled on CPU can need several times the memory of the same
-derivative computed eagerly. XLA:CPU's default scheduler keeps every shape-painting intermediate
-alive until the painting's last reduction. The memory-optimized scheduler computes the same
+derivative computed eagerly. XLA:CPU's default scheduler releases none of the shape-painting
+intermediates until the last one has been created, so all of them are alive at once. The memory-optimized scheduler computes the same
 values with a much smaller working set:
 
 ```python

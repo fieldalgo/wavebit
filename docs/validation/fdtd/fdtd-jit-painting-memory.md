@@ -17,7 +17,7 @@ operation at a time and never holds more than one painting's working set.
 
 With `xla_cpu_scheduler_type=CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED`, the same program asks for a
 17.5× smaller XLA temp allocation for `jit(value, jacfwd)` at resolution 20 (11.67 GB → 0.67 GB).
-It ran at a 2.44 GB peak, where the slow test's docstring records 13.6 GB with the default
+It ran at a 2.44 GB peak, where the resolution-20 test's docstring records 13.6 GB with the default
 scheduler. Its Jacobian matches the eager one to 1.1e-15.
 
 Public `wavebit.fdtd.periodic.run(..., backend='jax')` users are affected when a layer holds
@@ -31,12 +31,18 @@ Measured on 2026-10-19 at `3f2ad83`: a Linux x86-64 cloud container (Intel Xeon 
 4 vCPU, 15 GiB), Python 3.13.16, NumPy 2.5.4, JAX/jaxlib 0.11.0, float64 throughout. The
 workload is `fdtd_painted_shapes.response(p, resolution)` with `p = [.37, .055, .22]` and its
 default duration 60. Each row is a separate process, and the processes ran one at a time.
+The one-rectangle and reverse-mode rows (compile-only) were added later the same day in a fresh
+container whose CPU reports Intel Xeon @ 2.10 GHz (4 vCPU, 15 GiB; same Python, NumPy and JAX;
+source unchanged since `3f2ad83`). Two slow tests in `tests/fdtd/test_fdtd_painted_optics.py` are
+cited below. The resolution-20 test is
+`test_painted_eight_complex_channels_and_three_shape_derivatives_at_resolution_20`, and the
+resolution-6 test is `test_painted_jacobian_under_jit_equals_the_eager_one_at_resolution_6`.
 
 - **Peak** is `ru_maxrss`.
 - **Temp** is `jax.jit(g).lower(p).compile().memory_analysis().temp_size_in_bytes`.
 - The memory-optimized rows set only
   `XLA_FLAGS=--xla_cpu_scheduler_type=CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED`.
-- **jac** is `jit(lambda p: (f(p), jax.jacfwd(f)(p)))`, the form the study and the slow test used.
+- **jac** is `jit(lambda p: (f(p), jax.jacfwd(f)(p)))`, the form the study uses and the resolution-6 test runs.
 - **jvp** is one forward column in the angle.
 
 Run times are single calls. The per-process measurement logs and XLA dumps are not committed.
@@ -57,7 +63,7 @@ The last section, Reproducing, gives the calls that produce them.
 | 10 | jac | 2.49 GB | 3.00 / 4.68 GB | 0.166 / 1.90 GB |
 | 20 | jac | 2.67 GB | 11.67 GB / not run | 0.67 / 2.44 GB |
 
-The two scheduled modules contain the same instructions in a different order: 2,938 entry
+The two scheduled JVP modules at resolution 6 contain the same instructions in a different order: 2,938 entry
 instructions, 1,071 large values and 216 YNN fusions under both. So compilation costs the same
 under both. The process holds 0.3–0.4 GB after lowering and
 1.3–1.6 GB after compiling a derivative program, so compiling adds 1.0–1.2 GB. Each jit peak is
@@ -65,7 +71,7 @@ about that post-compile figure plus the temp. The temp grows roughly with `nx·n
 4×4 at resolution 6, and the resolution-20 temp is 8.8× the resolution-6 one.
 
 The resolution-20 default temp plus the compile figure comes to about 13.3 GB. That matches the
-13.6 GB that the slow test's docstring records for this case on Linux CPU with jax 0.11.0, and
+13.6 GB that the resolution-20 test's docstring records for this case on Linux CPU with jax 0.11.0, and
 the 13.3 GB it records on a CI runner. The default resolution-20 program was compiled but not run
 here, because 13.3 GB would leave too little headroom on this 15 GiB machine. The 22.9 GB single
 allocation that the same docstring reports for resolution 30 is consistent with this temp buffer.
@@ -90,7 +96,7 @@ concurrency-optimized scheduler.
 ## What the buffers are
 
 XLA's buffer-assignment report for resolution 6 (`--xla_dump_to`,
-`*-memory-usage-report.txt`) gives these allocations, grouped by shape:
+`*-memory-usage-report.txt`) gives these allocations, each counted under the first shape it lists:
 
 ```text
 primal: 239.2 MiB   295 x f64[41,9,4,4,9,2]     jvp: 867.5 MiB  1070 x f64[41,9,4,4,9,2]
@@ -104,8 +110,9 @@ names are `jvp(jit(clip))/select_n`, `min` and `max`, `jvp(jit(_where))/select_n
 and `div`.
 
 The scheduled entry computation defines 1,071 values of this shape for the JVP (297 for the
-primal). The report counts allocations, and a few allocations are shared by more than one value, so
-its counts are one or two lower. 96 of the program's 216 YNN fusions read these values. A typical one:
+primal). Each of those values has an allocation of its own. One JVP allocation and two primal ones list a
+`c128[3,42,4,4]` value first, so the block above counts them under that shape and shows one or two
+fewer. 96 of the program's 216 YNN fusions read these values. A typical one:
 
 ```text
 %ynn_fusion.40 = f64[4,4,2] fusion(<40 operands>), calls=%fused_computation.40,
@@ -118,7 +125,9 @@ its counts are one or two lower. 96 of the program's 216 YNN fusions read these 
 The fusion holds the Gauss-node and segment sums of line 629 and the `sum(value*jump,
 axis=(0, 1))` of line 630. Under JVP the product rule splits them into many terms. The
 reductions start before the last large value is defined: 48 of those 96 fusions run earlier. But
-every large value is read again later, so none reaches its last use until all 1,071 exist.
+all 1,071, including the 96 those early fusions read, are also read by the other 48 fusions. Those
+run after the last one is defined (instructions 2,757–2,851 of 2,938), so none reaches its last
+use until all 1,071 exist.
 A liveness pass over the scheduled entry computation counts how many are alive at once:
 
 | Schedule (jvp, resolution 6) | Large values | Alive at once | Temp |
@@ -137,7 +146,7 @@ Disabling YNN fusion (`--xla_cpu_experimental_ynn_fusion_type=`) gives 107 MB fo
   0.45 MB (`c128[3,42,4,4]` fields with their tangents). The checkpointed scans are not where the
   memory goes.
 - **Captured constants.** All HLO constants together come to 0.26 MB in the JVP module.
-- **Compilation as the main cost.** The slow test's resolution-6 docstring calls the jit's cost
+- **Compilation as the main cost.** The resolution-6 test's docstring calls the jit's cost
   "mostly compilation". Compiling adds 1.0–1.2 GB and hardly changes with resolution. The part
   that grows is the execution temp. Here it takes the derivative case from 1.2–2.5× the eager
   peak at resolutions 6–10 to about 3.8× at resolution 20 (13.6 GB against 3.6 GB in the
@@ -163,7 +172,10 @@ The setup:
   extraction_method='directional')`.
 - `run(..., backend='jax')` under `jax.jit(jax.jvp(...))`.
 
-It compiles a somewhat different program from the study, so the absolute temps differ.
+It compiles a somewhat different program from the study. Its default-scheduler temps equal the
+study's jvp temps (1031.5 MB at resolution 6, 2321.5 MB at 10). Its memory-optimized temps are
+larger: 201.5 against 42.5 MB at resolution 6 and 453.2 against 92.1 MB at 10, a reduction of about
+5× instead of 24×.
 
 | Public route, resolution 6 | Temp | Peak |
 |---|---:|---:|
@@ -185,7 +197,7 @@ rectangles in one layer, or differentiates their angle, is on the affected path 
 outer jit runs on CPU.
 
 Reverse mode was measured once, compile-only, at resolution 6. For the study's
-`jax.jit(jax.grad(lambda p: sum(abs(response(p, 6))**2)))` the temp is 361 MB with the default
+`jax.jit(jax.grad(lambda p: jnp.sum(jnp.abs(response(p, 6))**2)))` the temp is 361 MB with the default
 scheduler and 203 MB with the memory-optimized one. Its eager peak was not measured. GPU was not
 measured; XLA:GPU uses a different scheduler.
 
@@ -193,7 +205,7 @@ measured; XLA:GPU uses a different scheduler.
 
 | Fix | Scope | Expected effect |
 |---|---|---|
-| `jax.jit(g, compiler_options={'xla_cpu_scheduler_type': 'CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED'})` | one jitted call, such as the slow test | Measured: jvp temp 1031 → 42 MB at resolution 6, the same as the flag. Should allow an outer jit at resolution 20 again (2.44 GB measured with the flag) |
+| `jax.jit(g, compiler_options={'xla_cpu_scheduler_type': 'CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED'})` | one jitted call, such as the resolution-20 test | Measured: jvp temp 1031 → 42 MB at resolution 6, the same as the flag. Should allow an outer jit at resolution 20 again (2.44 GB measured with the flag) |
 | Add `--xla_cpu_scheduler_type=CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED` to `XLA_FLAGS` (keeping the flags already set) | process or CI job, like the existing Eigen flag | The same per-program effect for every jit in the job. Derivative run times were equal or shorter here, but the primal was up to 38% slower at resolutions 8 and 10, and other programs were not measured |
 | Bound the painting's live set in `_painted_cell_materials`: run the four Yee offsets or the edge groups sequentially through the backend's loop, or contract the `cdf`/`weight` window products into the reduction without materializing `[E,9,ny,nx,9,2]` | library, every scheduler and user | Expected to bring the temp near the memory-optimized figures for any caller. Not implemented or measured. It must stay backend-neutral and keep the numbers unchanged |
 | Disable YNN fusion | process | Partial: jac temp 1333 → 433 MB at resolution 6. Experimental flag; not recommended |

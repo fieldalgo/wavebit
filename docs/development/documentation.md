@@ -53,7 +53,10 @@ build; English pages remain canonical. Maintained guide and developer pages may 
 complete overlays — currently the [current implementation map](source-map.md),
 [recorded verification](verification.md), [run records](../guide/run-records.md),
 [exceptional points](../guide/rcwa/exceptional-points.md),
-[how the FDTD solver models a problem](../guide/fdtd/model.md) and
+[backends, devices and precision](../guide/common/backends.md),
+[how the FDTD solver models a problem](../guide/fdtd/model.md),
+[physical native Yee grids](../guide/fdtd/native-grids.md),
+[automatic stopping and graded absorbing padding](../guide/fdtd/stopping-and-absorbers.md) and
 [physical periodic-stack FDTD](../guide/fdtd/periodic-problems.md) — recorded separately from the
 imported course translations in the language inventory. Other pages use gettext where available
 and otherwise display an explicit English-fallback notice. Localized SVG and PNG
