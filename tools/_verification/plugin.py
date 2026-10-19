@@ -30,6 +30,23 @@ def pytest_configure(config):
     config.addinivalue_line('markers', 'source_mutation: temporarily rewrites package sources; run in an isolated serial snapshot')
 
 
+def shard_unit(item):
+    """The CI shard unit of a node marked `shard_unit`, or None for its file's unit.
+
+    A bare marker makes each node its own unit; `shard_unit('name')` puts the nodes of one
+    file that carry the same name in one unit, for nodes that share a cache or fixture.
+    """
+    marker = item.get_closest_marker('shard_unit')
+    if marker is None:
+        return None
+    if marker.kwargs or len(marker.args) > 1 or (
+            marker.args and (not isinstance(marker.args[0], str) or not marker.args[0])):
+        raise pytest.UsageError(f'{item.nodeid}: shard_unit takes no argument or one name')
+    if not marker.args:
+        return item.nodeid
+    return f"{item.nodeid.split('::', 1)[0]}::@{marker.args[0]}"
+
+
 def pytest_sessionstart(session):
     root = Path(CONTRACT['root'])
     expected = root / 'src/wavebit/__init__.py'
@@ -49,7 +66,8 @@ def pytest_collection_modifyitems(config, items):
     mutations = [item.nodeid for item in items
                  if item.get_closest_marker('source_mutation') or
                  any(item.nodeid.startswith(prefix) for prefix in MUTATIONS)]
-    write(f'collection-{WORKER}.json', dict(nodeids=nodes, mutation_nodes=mutations))
+    units = {item.nodeid: unit for item in items if (unit := shard_unit(item)) is not None}
+    write(f'collection-{WORKER}.json', dict(nodeids=nodes, mutation_nodes=mutations, shard_units=units))
     expected = CONTRACT.get('expected')
     if expected is not None and nodes != expected:
         raise pytest.UsageError('Collection changed between verification phases; no partial reuse is allowed.')

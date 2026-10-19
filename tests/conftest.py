@@ -78,6 +78,9 @@ def pytest_configure(config):
     _relocate_cached_nodeids(config)
     config.addinivalue_line(
         'markers', 'slow: costs minutes; a directory run skips it unless --run-slow or -m asks')
+    config.addinivalue_line(
+        'markers', 'shard_unit(name): CI may run this node apart from the rest of its file '
+        '(tools/run_verification.py --shard); nodes of one file that share a name stay together')
 
 
 def pytest_collection_modifyitems(config, items):

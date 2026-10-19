@@ -477,6 +477,55 @@ def test_duration_shards_preserve_coverage_and_reject_changed_timing_inputs(chec
     assert result.returncode == 1 and 'different timing tables' in result.stdout
 
 
+def test_marked_units_leave_their_file_and_named_units_stay_together(checkout):
+    # One heavy file: two independent marked cases, a named pair that shares state, and the
+    # unmarked rest. As one unit the whole file would be one shard's load.
+    suite(checkout, '''
+        import pytest
+        @pytest.mark.shard_unit
+        @pytest.mark.parametrize('n', [1, 2])
+        def test_alone(n): pass
+        @pytest.mark.shard_unit('pair')
+        def test_pair_fill(): pass
+        def test_rest_one(): pass
+        @pytest.mark.shard_unit('pair')
+        def test_pair_read(): pass
+        def test_rest_two(): pass
+    ''')
+    heavy = 'tests/test_tiny.py'
+    timing_path = checkout.parent/'timings.json'
+    # A unit's own row wins; `test_alone[2]` has none and costs the file's mean, 10.
+    timing_path.write_text(json.dumps(dict(schema='wavebit.shard-timings/v1', partitions=dict(exclude={
+        heavy: dict(nodes=6, seconds=60),
+        f'{heavy}::test_alone[1]': dict(nodes=1, seconds=40),
+        f'{heavy}::@pair': dict(nodes=2, seconds=30)}))))
+    options = ['--slow', 'exclude', '--shard-timings', str(timing_path)]
+    outputs, selected = [], []
+    for index in (1, 2, 3):
+        output = checkout/'artifacts'/f'unit{index}'
+        result, receipt = run(checkout, output, '--shard', f'{index}/3', *options)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert receipt['shard']['files'] == [heavy]
+        assert receipt['shard']['units'][f'{heavy}::test_pair_read'] == f'{heavy}::@pair'
+        assert f'{heavy}::test_rest_one' not in receipt['shard']['units']
+        outputs.append(str(output))
+        selected.append([node.split('::')[1] for node in receipt['collected_nodeids']])
+    # Largest first to the lightest shard: 40 | 30 | the rest (20), then 10 beside it.
+    assert selected == [['test_alone[1]'], ['test_pair_fill', 'test_pair_read'],
+                        ['test_alone[2]', 'test_rest_one', 'test_rest_two']]
+    command = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '3', *outputs]
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize('marker', ["shard_unit('')", "shard_unit('a', 'b')", 'shard_unit(name="a")'])
+def test_a_malformed_shard_unit_is_refused_at_collection(checkout, marker):
+    suite(checkout, f'import pytest\n@pytest.mark.{marker}\ndef test_one(): pass\n')
+    result, receipt = run(checkout, checkout/'artifacts/malformed', '--shard', '1/1')
+    assert result.returncode != 0
+    assert 'shard_unit takes no argument or one name' in (checkout/'artifacts/malformed/collection/pytest.log').read_text()
+
+
 @pytest.mark.parametrize('seconds', [-1, float('nan'), float('inf')])
 def test_invalid_shard_durations_are_refused_before_collection(checkout, seconds):
     suite(checkout, 'def test_pass(): pass\n')
@@ -493,12 +542,13 @@ def test_timing_import_requires_complete_successful_shards(tmp_path):
     for label in ('default', 'slow'):
         directory = tmp_path/f'verification-{label}-1'
         directory.mkdir()
-        nodes = ['tests/test_example.py::test_one', 'tests/test_example.py::test_two']
-        receipt = dict(shard=dict(index=1, count=1), exit_code=0, integrity_errors=[],
-                       collect_only=False, inputs_unchanged=True, collected_nodeids=nodes,
-                       counts=dict(passed=2), outcomes={
+        nodes = ['tests/test_example.py::test_one', 'tests/test_example.py::test_two',
+                 'tests/test_example.py::test_apart']
+        receipt = dict(shard=dict(index=1, count=1, units={nodes[2]: nodes[2]}), exit_code=0,
+                       integrity_errors=[], collect_only=False, inputs_unchanged=True,
+                       collected_nodeids=nodes, counts=dict(passed=3), outcomes={
                            node: dict(complete=True, outcome='passed', duration=seconds)
-                           for node, seconds in zip(nodes, (2.5, 3.5))})
+                           for node, seconds in zip(nodes, (2.5, 3.5, 9.0))})
         (directory/'receipt.json').write_text(json.dumps(receipt))
         (directory/'collected-nodeids-all.json').write_text(json.dumps(nodes))
     output = tmp_path/'timings.json'
@@ -507,7 +557,9 @@ def test_timing_import_requires_complete_successful_shards(tmp_path):
     result = subprocess.run(command, text=True, capture_output=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     table = json.loads(output.read_text())
+    # A marked unit is its own row; the rest of the file stays the file's row.
     assert table['partitions']['exclude']['tests/test_example.py'] == dict(nodes=2, seconds=6)
+    assert table['partitions']['exclude'][nodes[2]] == dict(nodes=1, seconds=9)
     assert table['partitions']['only'] == table['partitions']['exclude']
     original = output.read_bytes()
     receipt['outcomes'][nodes[0]]['complete'] = False
