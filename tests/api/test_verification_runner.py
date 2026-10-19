@@ -72,7 +72,7 @@ def test_outcomes_have_exact_phases_and_no_secret_environment(checkout):
     assert 'DO_NOT_RECORD_THIS_SECRET' not in (output/'inputs.json').read_text()
     assert receipt['inputs_unchanged'] and not receipt['integrity_errors']
     again, _ = run(checkout, output)
-    assert again.returncode == 2 and 'exists' in again.stderr
+    assert again.returncode == 2 and 'Output directory already exists' in again.stderr
 
 
 def test_resume_reuses_only_completed_nonfailures_and_preserves_chain(checkout):
@@ -217,7 +217,7 @@ def test_source_mutations_run_only_in_a_restored_snapshot(checkout):
     assert receipt['counts'] == {'passed': 1}
     assert (checkout/'src/wavebit/__init__.py').read_bytes() == before
     origin = json.loads((checkout/'artifacts/run/mutations/import-origin-controller.json').read_text())
-    assert '/snapshot/src/wavebit/' in origin['wavebit']
+    assert Path(origin['wavebit']).parts[-4:-1] == ('snapshot', 'src', 'wavebit')
 
 
 def test_xdist_records_each_phase_once_and_resume_uses_the_same_membership(checkout):
