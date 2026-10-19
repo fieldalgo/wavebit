@@ -100,7 +100,7 @@
     "src/wavebit/_core/illumination.py": "src/wavebit/rcwa/_engine/illumination.py",
     "src/wavebit/_core/interfaces.py": "src/wavebit/_common/geometry/interfaces.py",
     "src/wavebit/_core/lattice.py": "src/wavebit/lattice.py",
-    "src/wavebit/_core/materials.py": "src/wavebit/materials/tabulated.py",
+    "src/wavebit/_core/materials.py": "src/wavebit/materials/_tabulated.py",
     "src/wavebit/_core/modal_gradient.py": "src/wavebit/rcwa/_engine/modal_gradient.py",
     "src/wavebit/_core/normal_methods.py": "src/wavebit/rcwa/_engine/normal_methods.py",
     "src/wavebit/_core/overlap.py": "src/wavebit/_common/geometry/overlap.py",
@@ -194,7 +194,7 @@
     "src/wavebit/fd/boundaries.py": "src/wavebit/fdtd/_legacy_boundaries.py",
     "src/wavebit/fd/diagnostics.py": "src/wavebit/fdtd/diagnostics.py",
     "src/wavebit/fd/geometry.py": "src/wavebit/fdtd/_legacy_geometry.py",
-    "src/wavebit/fd/materials.py": "src/wavebit/materials/time_domain.py",
+    "src/wavebit/fd/materials.py": "src/wavebit/materials/_time_domain.py",
     "src/wavebit/fd/monitors.py": "src/wavebit/fdtd/_legacy_monitors.py",
     "src/wavebit/fd/results.py": "src/wavebit/fdtd/_legacy_results.py",
     "src/wavebit/fd/scene.py": "src/wavebit/fdtd/_scene.py",
@@ -208,7 +208,9 @@
     "src/wavebit/fdtd/results.py": "src/wavebit/fdtd/_legacy_results.py",
     "src/wavebit/fdtd/sources.py": "src/wavebit/fdtd/_sources.py",
     "src/wavebit/main.py": "src/wavebit/compat/legacy.py",
-    "src/wavebit/materials.py": "src/wavebit/materials/catalog.py"
+    "src/wavebit/materials.py": "src/wavebit/materials/catalog.py",
+    "src/wavebit/materials/tabulated.py": "src/wavebit/materials/_tabulated.py",
+    "src/wavebit/materials/time_domain.py": "src/wavebit/materials/_time_domain.py"
   },
   "modules": {
     "wavebit": "wavebit",
@@ -311,7 +313,7 @@
     "wavebit._core.illumination": "wavebit.rcwa._engine.illumination",
     "wavebit._core.interfaces": "wavebit._common.geometry.interfaces",
     "wavebit._core.lattice": "wavebit.lattice",
-    "wavebit._core.materials": "wavebit.materials.tabulated",
+    "wavebit._core.materials": "wavebit.materials._tabulated",
     "wavebit._core.modal_gradient": "wavebit.rcwa._engine.modal_gradient",
     "wavebit._core.normal_methods": "wavebit.rcwa._engine.normal_methods",
     "wavebit._core.overlap": "wavebit._common.geometry.overlap",
@@ -405,7 +407,7 @@
     "wavebit.fd.boundaries": "wavebit.fdtd._legacy_boundaries",
     "wavebit.fd.diagnostics": "wavebit.fdtd.diagnostics",
     "wavebit.fd.geometry": "wavebit.fdtd._legacy_geometry",
-    "wavebit.fd.materials": "wavebit.materials.time_domain",
+    "wavebit.fd.materials": "wavebit.materials._time_domain",
     "wavebit.fd.monitors": "wavebit.fdtd._legacy_monitors",
     "wavebit.fd.results": "wavebit.fdtd._legacy_results",
     "wavebit.fd.scene": "wavebit.fdtd._scene",
@@ -420,7 +422,9 @@
     "wavebit.fdtd.sources": "wavebit.fdtd._sources",
     "wavebit.main": "wavebit.compat.legacy",
     "wavebit.manifest": "wavebit.manifest",
-    "wavebit.materials": "wavebit.materials.catalog"
+    "wavebit.materials": "wavebit.materials.catalog",
+    "wavebit.materials.tabulated": "wavebit.materials._tabulated",
+    "wavebit.materials.time_domain": "wavebit.materials._time_domain"
   },
   "symbols": [
     {

@@ -690,8 +690,8 @@ def _refuse_structure(structure, index, when='plan'):
     pins which door answers where.
     """
     from wavebit.fdtd._legacy_geometry import Sphere as _SphereShape
-    from wavebit.materials.time_domain import Conductor
-    from wavebit.materials.time_domain import Dispersive
+    from wavebit.materials._time_domain import Conductor
+    from wavebit.materials._time_domain import Dispersive
     where = f'structures[{index}] ({public_description(structure.shape)})'
     if structure.shape.body() is None:
         raise ValueError(
@@ -755,7 +755,7 @@ def _refuse_structure(structure, index, when='plan'):
 
 def _refuse_background(scene, where, when='plan'):
     """The scene around the body must be vacuum: the operator was fitted for nothing else."""
-    from wavebit.materials.time_domain import Material
+    from wavebit.materials._time_domain import Material
     background, _ = _materials(scene)
     if type(background) is Material:
         _refuse_numbers(where, tuple((f'Scene(background=) eps[{a}]', v)

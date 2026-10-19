@@ -68,7 +68,7 @@ def test_homogeneous_record_amplitude_material_full_hessian(device, block, kind,
         pytest.skip('CUDA device required')
     _, discrete_k, initial, electric, magnetic, spatial = fourier_mode(CELLS, 0)
     patterns = electric.copy(), magnetic.copy()
-    dt = .5/CELLS/math.sqrt(3)*UNITS.time_seconds
+    dt = .5/CELLS/math.sqrt(3)*UNITS.time_unit_seconds
     policy = numerics(CELLS, STEPS).replace(checkpoint_steps=block)
     square_weights = torch.as_tensor(QUADRATIC, dtype=torch.float64, device=device)
     linear_weights = torch.as_tensor(LINEAR, dtype=torch.float64, device=device)

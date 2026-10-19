@@ -197,9 +197,9 @@ whole number counts as that number, so a window written as `N` time steps covers
 carry over `tail_steps=N`, take the time step from a check:
 
 ```python
-numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_seconds)
+numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_unit_seconds)
 dt_seconds = periodic.check(problem, numerics=numerics).resolved['time_step_seconds']
-numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_seconds,
+numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_unit_seconds,
                              decay_check=periodic.DecayCheck(window_seconds=40*dt_seconds))
 ```
 
@@ -252,7 +252,7 @@ recomputed from sigma, so it matches the old width only when sigma is written as
 of that width, `frequency_sigma_hz=1/(np.sqrt(2)*np.pi*W)`, and then to within its last bit or
 two: it was exact in these cases and differed by at most 2 units in the last place over 10⁵
 random widths. A rounded decimal (`2.25e13` for a width of three um time units,
-`3*units.time_seconds`) gives a slightly different width, and slightly different numbers. The
+`3*units.time_unit_seconds`) gives a slightly different width, and slightly different numbers. The
 other is the native rounding allowance under [the decay window](#the-decay-window), which
 changes only the decay diagnostic.
 

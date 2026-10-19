@@ -20,7 +20,7 @@ RTOL = 2e-12
 
 
 def problem(amplitude=1., phase=0., kind='electric'):
-    pulse = fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08 / UNITS.time_seconds)
+    pulse = fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08 / UNITS.time_unit_seconds)
     peak = np.sqrt(2 * np.log(1 / pulse.cutoff)) / (2 * np.pi * pulse.frequency_sigma_hz)
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.6,) * 3), background=Material(epsilon=1.),
@@ -28,7 +28,7 @@ def problem(amplitude=1., phase=0., kind='electric'):
         sources=(fdtd.CurrentDipole('d', center=(-.031, .017, -.10),
             component='Ey' if kind == 'electric' else 'Hy', kind=kind,
             pulse=pulse, current_moment=MOMENT * amplitude,
-            phase=phase, delay_seconds=-peak + .12 * UNITS.time_seconds),),
+            phase=phase, delay_seconds=-peak + .12 * UNITS.time_unit_seconds),),
         outputs=fdtd.Outputs(final_fields=True))
 
 

@@ -95,7 +95,7 @@ def remember(scene, plan):
                   if isinstance(s.shape, (Sphere, Cylinder, Box, Prism)) and s.shape.range is not None)
     if seeds:
         object.__setattr__(plan, '_shape_seeds', seeds)
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import as_material
     materials = tuple((key, *seed) for key, material in _materials(scene)
                       for seed in (_material_seed(as_material(material)),) if seed is not None)
     if materials:
@@ -112,8 +112,8 @@ def _material_seed(material):
     """``(eps, mu)`` of a plain concrete ``fd.Material`` as host floats (``mu`` None when it
     was not named), or None for any other material or one ``materials.concrete`` cannot
     read -- a JAX tracer or a Torch tensor that asks for a gradient."""
-    from wavebit.materials.time_domain import Material
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import Material
+    from wavebit.materials._time_domain import concrete
     if type(material) is not Material:
         return None
     eps = tuple(concrete(v) for v in material.eps)
@@ -125,7 +125,7 @@ def _material_seed(material):
 
 def materials_traced(scene):
     """Whether the background or any structure's material carries a derivative."""
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import as_material
     return any(_carries(as_material(m)) for _, m in _materials(scene))
 
 
@@ -143,7 +143,7 @@ def _coupled(plan):
 def _one_number(triple):
     """A triple given as one scalar (the same object three times, traced or not) or three
     equal concrete numbers: the isotropic reading a traced value allows."""
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     if triple[0] is triple[1] is triple[2]:
         return True
     values = [concrete(v) for v in triple]
@@ -197,7 +197,7 @@ def _stabilized_media(scene, plan):
 
 def _refuse_stabilized_materials(scene, plan):
     """The exact-return survey has no traced twin, even without smoothed bodies."""
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import as_material
     if not materials_traced(scene):
         return
     stabilized = _stabilized_media(scene, plan)
@@ -227,7 +227,7 @@ def _mirror_could_couple(scene, plan, term, a, side):
     of the layer (``_post.layer_share``'s reading), with the exact clip's round-off.
     """
     import numpy as np
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import as_material
     from wavebit.fdtd._shapes import occupancy as body_occupancy
     from wavebit.fdtd._prepare.checks import _CLIP_ROUNDOFF
     from wavebit.fdtd._prepare.constitutive import _intersect
@@ -301,8 +301,8 @@ def _seeded_materials(scene, plan, where, substitute=True):
     then needed only to compare how ``mu`` was named, and a non-plain traced value -- a
     snapped partner's conductivity, say -- lowers as it always has.
     """
-    from wavebit.materials.time_domain import Material
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import Material
+    from wavebit.materials._time_domain import as_material
     from wavebit.fdtd._kernel.stencil import StencilTerm
     from wavebit.fdtd._legacy_monitors import FarField
     from wavebit.fdtd._legacy_sources import PlaneWave
@@ -449,8 +449,8 @@ def planning_scene(scene, plan):
         raise ValueError(f'A traced {where} requires plan= built by fd.plan(scene) from '
                          'concrete geometry before differentiation.')
     refuse_mismatch(scene, plan)
-    from wavebit.materials.time_domain import Material
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import Material
+    from wavebit.materials._time_domain import as_material
     if scene.initial is not None:
         raise ValueError(f'A traced {where} supports ranged Sphere/Cylinder/Box/Prism bodies '
                          'with disjoint interpolation halos, beside concrete partners clear of '
@@ -764,8 +764,8 @@ def grazing_guard(scene, plan, rt, previous):
     """
     if not materials_traced(scene):
         return previous
-    from wavebit.materials.time_domain import Material
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import Material
+    from wavebit.materials._time_domain import as_material
     from wavebit.fdtd._prepare.grazing import refused_bands
     floor = _floor_index(scene, plan)
     if floor is None:
@@ -801,9 +801,9 @@ def _resolution_index(material, wavelength, rt, *, conductive=False):
     square root. In particular eps_inf is not a dispersive medium's index.
     """
     import math
-    from wavebit.materials.time_domain import Conductor
-    from wavebit.materials.time_domain import Lorentz
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import Conductor
+    from wavebit.materials._time_domain import Lorentz
+    from wavebit.materials._time_domain import concrete
     xp = rt.xp
     values = []
     for e, m, sigma in zip(material.eps, material.mu_value, material.sigma):
@@ -882,7 +882,7 @@ def resolution_guard(scene, plan, rt, previous):
     Invalid live values poison coefficients; admitted physical derivatives remain
     untouched because this certificate is constant to autodiff.
     """
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import as_material
     if _carried_band(scene):
         materials = tuple(as_material(material) for _, material in _materials(scene))
         if all(not material.poles for material in materials):

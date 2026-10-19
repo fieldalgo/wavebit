@@ -9,7 +9,7 @@ import pytest
 
 from wavebit.materials import Material, MaterialResponse, ConductiveMaterial, DispersiveMaterial, Drude, Lorentz, Debye, TabulatedMaterial
 from wavebit.materials._lower import lower_material
-from wavebit.materials import time_domain
+from wavebit.materials import _time_domain as time_domain
 from wavebit.units import Units, C0, EPSILON0
 from wavebit.errors import UnsupportedFeatureError, ValidationError
 from wavebit.observations import DiffractionOrders
@@ -35,7 +35,7 @@ def test_conductivity_is_si_and_lowered_once(length,wavelength):
     expected=2.+1j*1e4/(EPSILON0*(2*np.pi*C0/(800e-9)))
     assert model.at(wavelength,units=units).epsilon==pytest.approx(expected)
     old=lower_material(model,units=units)
-    assert old.sigma[0]==pytest.approx(1e4*units.length_metres/(EPSILON0*C0))
+    assert old.sigma[0]==pytest.approx(1e4*units.length_unit_meters/(EPSILON0*C0))
     assert old.mu==(1.2,)*3
 
 
@@ -108,7 +108,7 @@ from wavebit.errors import UnsupportedFeatureError
 try: Execution(backend='jax',precision='double').validate()
 except UnsupportedFeatureError: pass
 else: raise AssertionError('double was silently downgraded')
-with Execution(backend='jax',precision='single').scope():
+with Execution(backend='jax',precision='single')._scope():
     lift_jax_x64(required=True)
     assert not jax.config.x64_enabled
 assert not jax.config.x64_enabled

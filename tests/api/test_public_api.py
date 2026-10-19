@@ -13,6 +13,8 @@ import importlib
 import pkgutil
 import traceback
 
+import numpy as np
+
 import pytest
 
 import wavebit
@@ -48,16 +50,11 @@ PUBLIC = {
                            'Outputs', 'PlaneWave', 'Polygon', 'Prepared', 'Problem', 'Pulse',
                            'RasterDispersion', 'Rectangle', 'Region', 'Result', 'Snapshots',
                            'Stack', 'check', 'prepare', 'run'),
- 'wavebit.lattice': ('DrawnOn', 'Lattice', 'as_lattice', 'is_axis_aligned', 'jacobian',
-                     'meshgrid_xy', 'order_kxy', 'periods_of', 'reduced_basis',
-                     'reduction_transform', 'sample_grid'),
+ 'wavebit.lattice': ('DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy'),
  'wavebit.materials': ('ConductiveMaterial', 'Debye', 'DispersiveMaterial', 'Drude', 'Lorentz',
                        'Material', 'MaterialResponse', 'TabulatedMaterial', 'available',
                        'eps_from_refractive_index', 'load', 'refractive_index_from_eps'),
  'wavebit.materials.catalog': ('available', 'load'),
- 'wavebit.materials.time_domain': ('Conductor', 'Debye', 'Dispersive', 'Drude', 'Lorentz',
-                                   'Material', 'MaterialBase', 'Pole', 'as_material', 'concrete',
-                                   'eps_at'),
  'wavebit.migration': ('migrate_legacy_jobs',),
  'wavebit.observations': ('DiffractionOrder', 'DiffractionOrders', 'FieldSamples', 'ModeFit',
                           'RawDiffractionSpectrum', 'SpectralFieldSamples', 'TimeSeries',
@@ -405,3 +402,66 @@ def test_a_numerical_failure_is_a_wavebit_error_and_not_a_validation_error():
     assert (error.code, error.path, error.issue.code) == ('rcwa.nonfinite', 'result', 'rcwa.nonfinite')
     assert issubclass(ValidationError, WavebitError) and issubclass(ValidationError, ValueError)
     assert issubclass(IncompatibleProblemError, ValidationError)
+
+
+# ---------------------------------------------------------------------------------------------
+# Shared modules (#57 section 4): units, lattice, materials, execution
+# ---------------------------------------------------------------------------------------------
+
+SHARED_RENAMED = (
+    (lambda: wavebit.Units(length='um'), 'length_metres', 'Units.length_unit_meters'),
+    (lambda: wavebit.Units(length='um'), 'time_seconds', 'Units.time_unit_seconds'),
+    (lambda: wavebit.Units(length='um'), 'time_to_internal', 'time_unit_seconds'),
+    (lambda: wavebit.Material(2.25), 'is_anisotropic', 'Material.is_tensor'),
+    (lambda: wavebit.TabulatedMaterial([1., 2.], [2.25, 2.25], wavelength_unit='um'), 'interpolation',
+     'TabulatedMaterial.interpolated_quantity'),
+    (lambda: wavebit.Execution(), 'scope', 'private'),
+)
+
+
+@pytest.mark.parametrize('build, old, replacement', SHARED_RENAMED,
+                         ids=[row[1] for row in SHARED_RENAMED])
+def test_a_renamed_shared_member_fails_naming_its_replacement(build, old, replacement):
+    value = build()
+    with pytest.raises(AttributeError) as caught:
+        getattr(value, old)
+    message = str(caught.value)
+    assert replacement in message and 'public-names.md' in message, message
+    assert 'Did you mean' not in ''.join(traceback.format_exception(caught.value))
+    with pytest.raises(AttributeError, match='has no attribute'):
+        value.no_such_member
+    assert not hasattr(value, 'dtype')
+
+
+def test_the_renamed_shared_members_answer_what_they_did():
+    units = wavebit.Units(length='um')
+    assert units.length_unit_meters == 1e-6
+    assert units.time_unit_seconds == 1e-6/wavebit.units.C0
+    assert wavebit.Material((2., 2., 2.)).is_tensor and not wavebit.Material(2.).is_tensor
+    table = wavebit.TabulatedMaterial([1., 2.], [2.25, 2.25], wavelength_unit='um')
+    assert table.interpolated_quantity == 'epsilon'
+    assert 'interpolated_quantity=' in repr(table) and 'interpolation=' not in repr(table)
+
+
+def test_oblique_takes_the_lengths_of_the_two_lattice_vectors():
+    import inspect
+    assert list(inspect.signature(wavebit.Lattice.oblique).parameters) == [
+        'length_u', 'length_v', 'angle']
+    a = wavebit.Lattice.oblique(1., 2., 1.)
+    b = wavebit.Lattice.oblique(length_u=1., length_v=2., angle=1.)
+    assert np.array_equal(a.u, b.u) and np.array_equal(a.v, b.v)
+    with pytest.raises(TypeError, match=r'Lattice\.oblique\(lx=\.\.\.\) is now '
+                                        r'Lattice\.oblique\(length_u=\.\.\.\)') as caught:
+        wavebit.Lattice.oblique(lx=1., ly=2., angle=1.)
+    assert 'length_v' in str(caught.value) and 'public-names.md' in str(caught.value)
+
+
+@pytest.mark.parametrize('name', ['time_domain', 'tabulated'])
+def test_a_former_materials_module_is_not_a_public_path(name):
+    import importlib
+    import wavebit.materials as materials
+    with pytest.raises(AttributeError, match='no longer a public module') as caught:
+        getattr(materials, name)
+    assert 'Did you mean' not in ''.join(traceback.format_exception(caught.value))
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(f'wavebit.materials.{name}')

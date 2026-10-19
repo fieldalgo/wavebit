@@ -77,7 +77,7 @@ def run(device, problem, steps=STEPS):
         result = fdtd.run(problem, numerics=numerics, backend='torch', device=name)
     assert bool(result.validity.checks['runtime_stability'])
     assert result.provenance['dt_seconds'] == pytest.approx(
-        DT * UNITS.time_seconds, rel=2e-15, abs=0.)
+        DT * UNITS.time_unit_seconds, rel=2e-15, abs=0.)
     for field in ('E', 'H'):
         value = result.final_fields.values[field]
         assert value.device == torch.device(name) and value.dtype == torch.float64
@@ -91,7 +91,7 @@ def assert_trace(result, field, c, expected, omega, wrong_omega, device):
     assert series.values.device == torch.device(name) and series.values.dtype == torch.float64
     values = host(series.values) * (Z0 if field == 'H' else 1.)
     times = (np.arange(STEPS) + (1. if field == 'E' else .5)) * DT
-    np.testing.assert_allclose(host(series.times), times * UNITS.time_seconds,
+    np.testing.assert_allclose(host(series.times), times * UNITS.time_unit_seconds,
                                rtol=2e-14, atol=0.)
     peak = np.max(np.abs(expected))
     assert peak > 1e-3 and np.max(np.abs(values)) > 1e-3
@@ -205,7 +205,7 @@ def test_public_dipole_stamp_cannot_touch_a_conducting_wall(device, kind, axis, 
     problem = fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(1.,) * 3), boundaries=fdtd.Boundaries(x=face, y=face, z=face)),
         sources=(fdtd.CurrentDipole('d', center=tuple(center), component='E'+'xyz'[(axis+1) % 3],
-            pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15/UNITS.time_seconds)),))
+            pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15/UNITS.time_unit_seconds)),))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX), duration=fdtd.Duration(steps=1))
     assert not fdtd.check(problem, numerics=numerics, backend='torch', device=name).ok
     with pytest.raises(ValueError, match=kind.upper() + ' wall'):

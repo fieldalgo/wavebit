@@ -18,7 +18,7 @@ TOL = 2e-12
 
 
 def problem(kind):
-    scale = UNITS.time_seconds
+    scale = UNITS.time_unit_seconds
     gamma = (2/DT)/scale
     pole = (Drude(omega_p=math.sqrt(STRENGTH)/scale, gamma=gamma) if kind == 'drude'
             else Lorentz(omega_0=2/scale, strength=STRENGTH/scale**2, gamma=gamma))
@@ -100,7 +100,7 @@ def test_cpu_debye_energy_keeps_its_declared_family(backend, delta):
             module.config.update('jax_enable_x64', True)
     declaration = problem('drude')
     material = DispersiveMaterial(epsilon_inf=EPSILON, poles=(
-        Debye(tau=DT/2*UNITS.time_seconds, delta_epsilon=delta),))
+        Debye(tau=DT/2*UNITS.time_unit_seconds, delta_epsilon=delta),))
     body = declaration.scene.structures[0].replace(material=material)
     declaration = declaration.replace(scene=declaration.scene.replace(structures=(body,)))
     result = fdtd.prepare(declaration, numerics=numerics(), backend=backend).run(declaration)

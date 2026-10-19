@@ -31,11 +31,11 @@ import numpy as np
 from wavebit.fdtd._legacy_boundaries import Absorbing
 from wavebit.fdtd._legacy_boundaries import FACES
 from wavebit.fdtd._legacy_geometry import Box
-from wavebit.materials.time_domain import Debye
-from wavebit.materials.time_domain import Dispersive
-from wavebit.materials.time_domain import Material
-from wavebit.materials.time_domain import as_material
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import Debye
+from wavebit.materials._time_domain import Dispersive
+from wavebit.materials._time_domain import Material
+from wavebit.materials._time_domain import as_material
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab
 from wavebit.fdtd._kernel.poles import PoleTerm

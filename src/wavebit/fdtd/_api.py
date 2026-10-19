@@ -372,8 +372,8 @@ def _snapped(problem,scene,plan):
 def _report(problem,numerics,execution,scene,plan,metadata):
     r=legacy_report(scene,plan)
     resolved=dict(metadata,numerical_policies=numerical_policies(problem,numerics,scene,plan),grid_shape=(plan.nx,plan.ny,plan.nz),spacing=plan.dx,
-                  dt_seconds=plan.dt*problem.units.time_seconds,steps=plan.steps,
-                  duration_seconds=plan.steps*plan.dt*problem.units.time_seconds,dtype=plan.dtype,
+                  dt_seconds=plan.dt*problem.units.time_unit_seconds,steps=plan.steps,
+                  duration_seconds=plan.steps*plan.dt*problem.units.time_unit_seconds,dtype=plan.dtype,
                   checkpoint_steps=plan.schedule,
                   duration_policy='fixed' if numerics.stopping is None else 'hard cap with concrete state-decay stopping',
                   monitor_samples=tuple((o.name,getattr(o,'indices',None)) for o in plan.observers))
@@ -406,7 +406,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
     """Validate and estimate resources without advancing any field."""
     try:
         execution=_execution(backend,device,precision)
-        with execution.scope(),_public_spelling():
+        with execution._scope(),_public_spelling():
             scene,metadata=lower_problem(problem,numerics)
             schedule=_checkpoint(numerics,execution)
             _cuda_scope(problem,numerics,execution,scene=scene)
@@ -431,7 +431,7 @@ class Prepared:
     def validate(self,problem):
         """Validate concrete reuse; runtime guards still judge transformed values."""
         try:
-            with self.execution.scope(),_public_spelling():
+            with self.execution._scope(),_public_spelling():
                 scene,metadata=self._lower(problem)
                 return _report(problem,self.numerics,self.execution,scene,self._plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:
@@ -457,7 +457,7 @@ class Prepared:
     @eager_under_torch_compile
     def run(self,problem):
         """Run the complete supplied live problem; never update this preparation."""
-        with self.execution.scope(),_public_spelling():
+        with self.execution._scope(),_public_spelling():
             try:scene,metadata=self._lower(problem)
             except (TypeError,ValueError,NotImplementedError) as exc:
                 raise _issue(exc) from exc
@@ -480,7 +480,7 @@ class Prepared:
 def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
     """Validate concrete inputs and fix the computational structure for later runs."""
     execution=_execution(backend,device,precision)
-    with execution.scope(),_public_spelling():
+    with execution._scope(),_public_spelling():
         try:
             scene,metadata=lower_problem(problem,numerics)
             schedule=_checkpoint(numerics,execution)
@@ -511,7 +511,7 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
                           'six Periodic faces and real static host initial patterns; TimeSeriesMonitor/final fields only'
                           if interior_region else
                                'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity'),
-        'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_seconds,
+        'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_unit_seconds,
         'resolved_checkpoint_steps':plan.schedule})
     return Prepared(numerics,execution,report,contract,plan,frozen_mapping(signature))
 

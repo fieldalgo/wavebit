@@ -193,7 +193,7 @@ class Bloch(FaceType):
         the one-cell invariant axis of a conical problem, whose domain is one cell there.
         """
         import math
-        from wavebit.materials.time_domain import as_material
+        from wavebit.materials._time_domain import as_material
         from wavebit.fdtd._legacy_sources import PlaneWave
         if not isinstance(source, PlaneWave):
             raise TypeError(f'Bloch.from_source({public_name(source)}): the phases come '
@@ -447,7 +447,7 @@ class PML(Absorbing):
     stabilize: object = None
 
     def __post_init__(self):
-        from wavebit.materials.time_domain import as_material
+        from wavebit.materials._time_domain import as_material
         cells = static_int('PML', 'cells', self.cells)
         if cells < 1:
             raise ValueError(f'PML(cells={self.cells!r}): a layer is at least one cell deep.')

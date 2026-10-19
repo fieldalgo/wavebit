@@ -20,8 +20,11 @@ class Execution(Declaration):
     precision: str = 'double'
 
     @contextmanager
-    def scope(self):
-        """Prevent legacy implementation doors from mutating global JAX precision."""
+    def _scope(self):
+        """Prevent legacy implementation doors from mutating global JAX precision.
+
+        Private: every solver entry point opens it itself.
+        """
         self.validate()
         from .backend import ALLOW_LEGACY_PRECISION_LIFT
         token = ALLOW_LEGACY_PRECISION_LIFT.set(False)
@@ -29,6 +32,13 @@ class Execution(Declaration):
             yield self
         finally:
             ALLOW_LEGACY_PRECISION_LIFT.reset(token)
+
+    def __getattr__(self, name):
+        # Reached only when normal lookup fails, so it never shadows a field or method.
+        if name == 'scope':
+            from .declarations import removed
+            raise removed('Execution', name, 'private', 'run, check and prepare open it themselves')
+        raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
 
     def validate(self):
         try:

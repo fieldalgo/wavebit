@@ -8,7 +8,7 @@ from wavebit.materials import DispersiveMaterial, Drude
 from wavebit.fdtd import _legacy as fd
 from wavebit.fdtd._runtime import runtime
 from wavebit.fdtd._lower_public import lower_problem
-from wavebit.materials.time_domain import _second_order
+from wavebit.materials._time_domain import _second_order
 from tests.fdtd.test_material_resolution_guard import backend_call, quiet, scene
 from wavebit.fdtd._prepare.shape_ranges import resolution_guard
 from types import SimpleNamespace

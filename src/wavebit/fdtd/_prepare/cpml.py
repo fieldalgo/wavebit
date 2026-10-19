@@ -51,7 +51,7 @@ import math
 
 import numpy as np
 
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import concrete
 
 __all__ = ['ORDER', 'KAPPA_MAX', 'ALPHA_RELATIVE', 'STABILIZING_LOSS', 'DEFAULT_STABILIZE',
            'profiles', 'face_eps_r', 'damping_profile', 'stabilizing_rate',

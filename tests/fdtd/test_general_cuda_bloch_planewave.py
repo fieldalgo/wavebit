@@ -56,10 +56,10 @@ def fixture(case):
     theta_deg, polarization, phi_deg, direction, steps, gamma = case
     theta, phi = np.deg2rad([theta_deg, phi_deg])
     sign = 1 if direction == '+z' else -1
-    pulse = fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15 / UNITS.time_seconds)
+    pulse = fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15 / UNITS.time_unit_seconds)
     source = fdtd.PlaneWave('pw', plane=fdtd.Plane(z=0.), direction=direction,
         theta=theta, phi=phi, polarization=polarization, pulse=pulse,
-        amplitude=A, phase=PHASE, delay_seconds=DELAY * UNITS.time_seconds)
+        amplitude=A, phase=PHASE, delay_seconds=DELAY * UNITS.time_unit_seconds)
     faces = fdtd.Bloch.from_source(source, units=UNITS)
     expected_k = 2 * np.pi * vectors(theta, phi, sign, polarization)[0]
     for axis, index in (('x', 0), ('y', 1)):
@@ -108,7 +108,7 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
     with torch.no_grad():
         result = prepared.run(problem)
     assert bool(result.validity.checks['runtime_stability'])
-    dt = prepared.contract['resolved_dt_seconds'] / UNITS.time_seconds
+    dt = prepared.contract['resolved_dt_seconds'] / UNITS.time_unit_seconds
     plan = SimpleNamespace(dx=DX, dt=dt)
     source = result.sources['pw']
     assert source['plane'] == pytest.approx(0., abs=1e-14)
@@ -158,7 +158,7 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
         sample = result['forward_' + component]
         np.testing.assert_allclose(sample.coordinates['sample'][2], oracle.sign * .8, atol=1e-14, rtol=0.)
         expected = polarisation[c] * waveform * np.exp(1j * _discrete_kz(oracle, plan, omega) * distance)
-        actual = _dft(host(sample.times) / UNITS.time_seconds, host(sample.values), omega)
+        actual = _dft(host(sample.times) / UNITS.time_unit_seconds, host(sample.values), omega)
         error = max(error, float(np.max(np.abs(actual - expected)) / normalization))
     record_property('closed_form_peak_relative_error', error)
     record_property('backward_over_forward', float(backward / forward))

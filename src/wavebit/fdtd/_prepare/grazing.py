@@ -207,8 +207,8 @@ from wavebit.fdtd._legacy_boundaries import Axis1D
 from wavebit.fdtd._legacy_boundaries import Bloch
 from wavebit.fdtd._legacy_boundaries import PML
 from wavebit.fdtd._legacy_boundaries import Periodic
-from wavebit.materials.time_domain import as_material
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import as_material
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._prepare.cpml import ALPHA_RELATIVE
 from wavebit.fdtd._prepare.cpml import ORDER
 from wavebit.fdtd._prepare.cpml import face_eps_r

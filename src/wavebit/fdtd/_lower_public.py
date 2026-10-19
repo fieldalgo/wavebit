@@ -91,7 +91,7 @@ def _pulse(value, units):
     if not isinstance(value, sources.GaussianPulse):
         raise ValidationError('expected GaussianPulse', path='sources.pulse')
     return old_sources.Band(wavelength=value.wavelength,
-                           df=units.rate_to_internal(value.frequency_sigma_hz), cutoff=value.cutoff)
+                           df=units._rate_to_internal(value.frequency_sigma_hz), cutoff=value.cutoff)
 
 
 def _full_cell_plane(plane, path):
@@ -112,7 +112,7 @@ def _source(source, units):
         raise UnsupportedFeatureError('unsupported source', path='sources', actual=type(source).__name__)
     kw = dict(name=source.name, band=_pulse(source.pulse, units),
               amplitude=source.current_moment if isinstance(source,sources.CurrentDipole) else source.amplitude,
-              phase=source.phase, delay=units.time_to_internal(source.delay_seconds))
+              phase=source.phase, delay=units._time_to_internal(source.delay_seconds))
     if isinstance(source, sources.PlaneWave):
         _full_cell_plane(source.plane, 'sources.'+source.name+'.plane')
         kw['xyz'[source.plane.axis]] = source.plane.position
@@ -123,7 +123,7 @@ def _source(source, units):
     if isinstance(source, sources.TFSF):
         return old_sources.TFSF(**kw, box=_geometry(source.box), direction=source.direction,
                                polarization=source.polarization)
-    scale = (Z0 if source.kind == 'electric' else 1.) / units.length_metres ** 2
+    scale = (Z0 if source.kind == 'electric' else 1.) / units.length_unit_meters ** 2
     kw['amplitude'] = source.current_moment * scale
     return old_sources.Dipole(**kw, center=source.center, component=source.component,
                              kind=source.kind, stamp=source.stamp)
@@ -395,13 +395,13 @@ def lower_problem(problem, numerics, *, plan=None):
         wavelength=_number(selected[0].pulse.wavelength,'sources.'+duration.source+'.pulse.wavelength')
         run=old_scene.Run(time=_number(duration.periods,'numerics.duration.periods')*wavelength,courant=numerics.courant)
     elif duration.seconds is not None:
-        run=old_scene.Run(time=units.time_to_internal(duration.seconds),courant=numerics.courant)
+        run=old_scene.Run(time=units._time_to_internal(duration.seconds),courant=numerics.courant)
     else:run=old_scene.Run(steps=duration.steps,courant=numerics.courant)
     if numerics.stopping is not None:
         if not isinstance(numerics.stopping, DecayStop):
             raise ValidationError('expected DecayStop or None', path='numerics.stopping')
         run=run.replace(decay=old_monitors.Decay(threshold=numerics.stopping.threshold,
-            window=units.time_to_internal(_number(numerics.stopping.window_seconds,
+            window=units._time_to_internal(_number(numerics.stopping.window_seconds,
                                                   'numerics.stopping.window_seconds'))))
     initial=None
     if problem.initial is not None:

@@ -37,8 +37,8 @@ def test_conductive_dipole_one_step_si_moment_centroid_and_work(
         torch_device, axis, stamp, epsilon, mu, conductivity):
     torch, device = torch_device
     # The fixed Courant policy sets this timestep independently of material.
-    dt = .5 * DX * UNITS.time_seconds / np.sqrt(3.)
-    pulse = fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08/UNITS.time_seconds)
+    dt = .5 * DX * UNITS.time_unit_seconds / np.sqrt(3.)
+    pulse = fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08/UNITS.time_unit_seconds)
     peak = np.sqrt(-2*np.log(pulse.cutoff))/(2*np.pi*pulse.frequency_sigma_hz)
     physical = fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(16*DX,)*3),
@@ -62,7 +62,7 @@ def test_conductive_dipole_one_step_si_moment_centroid_and_work(
     component = 'xyz'.index(axis)
     eps = epsilon[component] if isinstance(epsilon, tuple) else epsilon
     coefficient = EPSILON0*eps + conductivity*dt/2
-    cell_volume = (DX*UNITS.length_metres)**3
+    cell_volume = (DX*UNITS.length_unit_meters)**3
     deposited = -electric[component]*coefficient*cell_volume/dt
     moment = deposited.sum()
     np.testing.assert_allclose(moment, MOMENT, rtol=1e-13, atol=0.)

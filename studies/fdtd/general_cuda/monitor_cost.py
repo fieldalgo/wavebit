@@ -113,7 +113,7 @@ def main():
                                        material=Material(epsilon=2.25)),)),
             sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=-.9), direction='+z',
                 polarization='s', pulse=fdtd.GaussianPulse(wavelength=1.,
-                    frequency_sigma_hz=.15/units.time_seconds)),),
+                    frequency_sigma_hz=.15/units.time_unit_seconds)),),
             outputs=fdtd.Outputs(monitors=monitors))
         numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
             duration=fdtd.Duration(steps=args.steps), courant=.5,

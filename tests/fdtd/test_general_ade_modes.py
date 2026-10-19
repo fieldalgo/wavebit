@@ -51,7 +51,7 @@ def test_uniform_closed_roots_and_recurrence(execution_device, kind, damped, com
     problem = make_problem(kind, damped, electric, magnetic, cells)
     result = run_problem(problem, numerics(cells, steps), device=execution_device)
     dt = result.provenance['dt_seconds']
-    assert dt == pytest.approx(.5/cells/math.sqrt(3)*UNITS.time_seconds, rel=2e-15)
+    assert dt == pytest.approx(.5/cells/math.sqrt(3)*UNITS.time_unit_seconds, rel=2e-15)
     parameters = pole_parameters(kind, damped)
     expected = uniform_history(steps, dt, *parameters)
     metrics = {'device': execution_device, 'kind': kind, 'damped': damped,
@@ -95,7 +95,7 @@ def test_nonzero_fourier_mode_against_independent_si_matrix(execution_device, ki
     problem = make_problem(kind, damped, electric, magnetic, cells)
     result = run_problem(problem, numerics(cells, steps), device=execution_device)
     dt = result.provenance['dt_seconds']
-    assert dt == pytest.approx(.5/cells/math.sqrt(3)*UNITS.time_seconds, rel=2e-15)
+    assert dt == pytest.approx(.5/cells/math.sqrt(3)*UNITS.time_unit_seconds, rel=2e-15)
     parameters = pole_parameters(kind, damped)
     matrix = transition(dt, discrete_k, *parameters)
     expected = matrix_history(matrix, initial, steps)
@@ -136,7 +136,7 @@ def test_nonzero_fourier_mode_against_independent_si_matrix(execution_device, ki
 
 @pytest.mark.parametrize('kind', ['lorentz', 'drude'])
 def test_raw_continuum_refinement_diagnostic_without_phase_alignment(kind):
-    cells, end_time = 8, 2*UNITS.time_seconds
+    cells, end_time = 8, 2*UNITS.time_unit_seconds
     electric = np.zeros((3, cells, cells, cells))
     electric[1] = 1.
     problem = make_problem(kind, False, electric, np.zeros_like(electric), cells)
@@ -144,7 +144,7 @@ def test_raw_continuum_refinement_diagnostic_without_phase_alignment(kind):
     rows = []
     for steps in (64, 128, 256):
         dt = end_time/steps
-        courant = dt/UNITS.time_seconds*cells*math.sqrt(3)
+        courant = dt/UNITS.time_unit_seconds*cells*math.sqrt(3)
         result = run_problem(problem, numerics(cells, steps, courant), device='cpu')
         assert result.provenance['dt_seconds'] == pytest.approx(dt, rel=2e-15)
         actual = np.r_[1., host(result['Ey'].values)]
@@ -188,7 +188,7 @@ def test_magnetic_only_initial_fourier_mode(execution_device, kind, record_prope
                           structure, material=replace(structure.material, mu=None)),)),
                       initial=replace(problem.initial, E=None))
     result = run_problem(problem, numerics(cells, steps), device=execution_device)
-    dt = .5/cells/math.sqrt(3)*UNITS.time_seconds
+    dt = .5/cells/math.sqrt(3)*UNITS.time_unit_seconds
     np.testing.assert_allclose(result.provenance['dt_seconds'], dt, rtol=2e-15, atol=0.)
     expected = matrix_history(transition(dt, discrete_k, *pole_parameters(kind, True), mu=1.),
                               initial, steps)

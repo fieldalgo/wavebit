@@ -42,7 +42,7 @@ def time_weights(steps):
 
 def fixture(point=POINTS[0], stamp='bspline', steps=17, block=None, unit='um'):
     units = Units(length=unit)
-    scale = units.length_metres
+    scale = units.length_unit_meters
     l, bandwidth, phase, delay = point
     records = []
     for field in ('E', 'H'):

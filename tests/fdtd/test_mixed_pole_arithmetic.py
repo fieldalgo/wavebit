@@ -16,7 +16,7 @@ KINDS = ('lorentz-gamma', 'lorentz-strength', 'drude-gamma')
 
 def problem(kind, value, frequency=2.):
     units = Units(length='m')
-    scale = units.time_seconds
+    scale = units.time_unit_seconds
     if kind == 'drude-gamma':
         pole = Drude(omega_p=frequency/scale, gamma=value/scale)
     else:

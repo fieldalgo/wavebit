@@ -38,7 +38,7 @@ def slab_problem(epsilon=2.25):
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()), structures=structures),
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=-.9), direction='+z',
             polarization='s', pulse=fdtd.GaussianPulse(
-                wavelength=1., frequency_sigma_hz=.15 / units.time_seconds)),),
+                wavelength=1., frequency_sigma_hz=.15 / units.time_unit_seconds)),),
         outputs=fdtd.Outputs(monitors=monitors))
 
 
@@ -68,7 +68,7 @@ def measurements(request):
             result = prepared.run(problem)
         assert bool(result.validity.checks['runtime_stability'])
         sample = dict(dx=dx, periods=periods,
-                      dt=prepared.contract['resolved_dt_seconds'] / problem.units.time_seconds,
+                      dt=prepared.contract['resolved_dt_seconds'] / problem.units.time_unit_seconds,
                       steps=prepared.contract['resolved_steps'])
         for name in ('front', 'back'):
             value = result[name].values['Ey']

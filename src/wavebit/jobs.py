@@ -92,7 +92,7 @@ def _encode(value, registry, path):
         return {'type': 'table', 'wavelengths': _encode(value.wavelengths, registry, path+'.wavelengths'),
                 'values': _encode(value.values, registry, path+'.values'),
                 'mu': _encode(value.mu, registry, path+'.mu'),
-                'wavelength_unit': value.wavelength_unit, 'interpolation': value.interpolation}
+                'wavelength_unit': value.wavelength_unit, 'interpolation': value.interpolated_quantity}
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         tag = next((tag for tag, cls in registry.items() if type(value) is cls), None)
         if tag is None:

@@ -313,7 +313,7 @@ def diffraction_window(monitor, scene, grid, eps, mu):
     """
     import wavebit.fdtd._post as _post
     from wavebit.fdtd._legacy_boundaries import Bloch
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     where = f'DiffractionMonitor({monitor.name!r})'
     P = monitor.axis
     u, v = (P + 1) % 3, (P + 2) % 3

@@ -136,7 +136,7 @@ def _is_complex(v):
 
 def concrete_or_none(v):
     """``float(v)`` when readable now, ``None`` for a traced scalar (the materials rule)."""
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     return concrete(v)
 
 

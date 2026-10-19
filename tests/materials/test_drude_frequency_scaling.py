@@ -8,7 +8,7 @@ import pytest
 
 from wavebit.materials import DispersiveMaterial, Drude
 from wavebit.materials._lower import lower_material
-from wavebit.materials.time_domain import Drude as NormalizedDrude
+from wavebit.materials._time_domain import Drude as NormalizedDrude
 from wavebit.units import C0, Units
 
 
@@ -31,7 +31,7 @@ def response(route, plasma, gamma):
     units = Units(length='m')
     if route == 'lowered':
         normalized = lower_material(material, units=units)
-        return lambda w: normalized.poles[0].eps_term(w*units.time_seconds).imag
+        return lambda w: normalized.poles[0].eps_term(w*units.time_unit_seconds).imag
     assert route == 'material-at'
     return lambda w: material.at(2*math.pi*C0/w, units=units).epsilon.imag
 

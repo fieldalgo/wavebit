@@ -49,7 +49,7 @@ def test_cuda_conductor_matches_independent_si_recurrence(torch_cuda):
 def pulse_case():
     shape = (16, 2, 2)
     units = Units(length='um')
-    ts = units.time_seconds
+    ts = units.time_unit_seconds
     mask = np.zeros(shape); mask[7:9] = 1.
     current = np.zeros((3,)+shape); current[0, 5] = 1e7
     p = n.Problem(units=units,
@@ -130,7 +130,7 @@ def test_cuda_material_and_bloch_gradients_match_cpu_secants(torch_cuda):
     torch = torch_cuda
     p, nums = pulse_case()
     mask = np.zeros((16, 2, 2)); mask[7:9] = 1.
-    ts = p.units.time_seconds
+    ts = p.units.time_unit_seconds
     def objective(v, backend):
         weights = torch.tensor(mask, device='cuda', dtype=torch.float64) if backend == 'torch' else mask
         q = p.replace(medium=p.medium.replace(epsilon=1.+v[0]*weights,

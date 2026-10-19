@@ -30,10 +30,10 @@ import math
 import numpy as np
 
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
-from wavebit.materials.time_domain import Drude
-from wavebit.materials.time_domain import Lorentz
-from wavebit.materials.time_domain import Dispersive
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import Drude
+from wavebit.materials._time_domain import Lorentz
+from wavebit.materials._time_domain import Dispersive
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab
 from wavebit.fdtd._kernel.poles import PoleTerm
@@ -41,6 +41,7 @@ import wavebit.fdtd._prepare.single_pole_film as single
 import wavebit.fdtd._prepare.single_pole_resolution as resolution
 from wavebit.fdtd._prepare.shape_ranges import _carries
 from wavebit.fdtd._prepare.shape_ranges import materials_traced
+from ._identity import recorded_module
 
 __all__ = ['Stack', 'OscillatorStackTerm', 'descriptor', 'terms', 'material_profiles',
            'pole_params', 'policy_rate', 'refuse_mismatch', 'validate', 'notes', 'index_at']
@@ -75,7 +76,7 @@ def _boundary_record(value):
     if isinstance(value, (tuple, list)):
         return tuple(_boundary_record(item) for item in value)
     if dataclasses.is_dataclass(value):
-        return (type(value).__module__, type(value).__qualname__,
+        return (recorded_module(type(value)), type(value).__qualname__,
                 tuple((field.name, _boundary_record(getattr(value, field.name)))
                       for field in dataclasses.fields(value)))
     scalar = concrete(value)

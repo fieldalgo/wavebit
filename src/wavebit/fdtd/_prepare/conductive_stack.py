@@ -32,8 +32,8 @@ import numpy as np
 from wavebit._common.conventions import boundary_kz
 
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
-from wavebit.materials.time_domain import Conductor
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import Conductor
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab

@@ -324,7 +324,7 @@ and its frequency derivative, without scaling the differentiation objective:
 
 ```python
 import torch
-from wavebit.materials.time_domain import Drude
+from wavebit.materials._time_domain import Drude  # the solvers' private model
 
 omega = torch.tensor(1., dtype=torch.float64, requires_grad=True)
 chi = Drude(omega_p=1e50, gamma=1e308).eps_term(omega).imag
@@ -332,8 +332,8 @@ frequency_derivative, = torch.autograd.grad(chi, omega)
 print(chi.detach().item(), frequency_derivative.item())  # 1e-208, -1e-208
 ```
 
-This example uses normalized engine rates, not the SI rates of the shared public
-material declarations. Float64 public `wavebit.materials.Drude.epsilon_term` uses
+This example uses the solvers' private normalized-unit model and its rates, not the SI
+rates of the shared public material declarations. Float64 public `wavebit.materials.Drude.epsilon_term` uses
 the same evaluator with SI frequencies. Public SI evaluation and conversion to
 normalized FDTD rates are tested separately; the normalized example's exact
 `gamma=1e308` is not obtained by converting a finite SI gamma with the available

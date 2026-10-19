@@ -29,7 +29,7 @@ STEPS = 23
 
 def fixture(kind, slab_axis, unit_name):
     units = Units(length=unit_name)
-    scale = units.length_metres
+    scale = units.length_unit_meters
     low = CENTER_SI-SIZE_SI/2
     k = 2*np.pi*np.array([1., 2., 1.])/SIZE_SI
     discrete_k = 2*np.sin(k*DX_SI/2)/DX_SI
@@ -146,7 +146,7 @@ def test_prepared_reuse_concrete_material_constants(device, kind, record_propert
     problem = make_problem(kind, True, electric, magnetic, cells)
     policy = numerics(cells, steps)
     prepared = fdtd.prepare(problem, numerics=policy, backend='torch', device=device)
-    dt = .5/cells/math.sqrt(3)*UNITS.time_seconds
+    dt = .5/cells/math.sqrt(3)*UNITS.time_unit_seconds
     saved_electric, saved_magnetic = electric.copy(), magnetic.copy()
     with torch.no_grad():
         original = prepared.run(problem)
@@ -154,8 +154,8 @@ def test_prepared_reuse_concrete_material_constants(device, kind, record_propert
         original[field+'xyz'[c]].values for field in ('E', 'H') for c in range(3))
     original_copies = tuple(value.clone() for value in original_values)
     _, _, strength = pole_parameters(kind, True)
-    omega0 = 0. if kind == 'drude' else 4.2/UNITS.time_seconds
-    gamma = .4/UNITS.time_seconds
+    omega0 = 0. if kind == 'drude' else 4.2/UNITS.time_unit_seconds
+    gamma = .4/UNITS.time_unit_seconds
     epsilon, mu = 1.8, 1.1
     pole = (Drude(omega_p=math.sqrt(strength), gamma=gamma) if kind == 'drude' else
             Lorentz(omega_0=omega0, gamma=gamma, strength=strength))

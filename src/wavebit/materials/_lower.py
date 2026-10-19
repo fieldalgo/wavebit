@@ -6,7 +6,7 @@ from wavebit.units import require_units
 from wavebit.errors import UnsupportedFeatureError
 from .response import Material, MaterialResponse
 from .models import ConductiveMaterial, DispersiveMaterial, TabulatedMaterial, Drude, Lorentz, Debye
-from . import time_domain as td
+from . import _time_domain as td
 
 
 def lower_material(model, *, units):
@@ -27,9 +27,9 @@ def lower_material(model, *, units):
         if isinstance(model, Material):
             return td.Material(eps=diagonal(model.epsilon), mu=diagonal(model.mu))
         if isinstance(model, ConductiveMaterial):
-            return td.Conductor(eps=diagonal(model.epsilon), sigma=units.conductivity_to_internal(model.conductivity), mu=diagonal(model.mu))
+            return td.Conductor(eps=diagonal(model.epsilon), sigma=units._conductivity_to_internal(model.conductivity), mu=diagonal(model.mu))
         poles = []
-        scale = units.time_seconds
+        scale = units.time_unit_seconds
         for p in model.poles:
             if isinstance(p, Drude): poles.append(td.Drude(omega_p=p.omega_p * scale, gamma=p.gamma * scale))
             elif isinstance(p, Lorentz): poles.append(td.Lorentz(omega_0=p.omega_0 * scale, gamma=p.gamma * scale, strength=p.strength * scale ** 2))

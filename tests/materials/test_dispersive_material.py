@@ -22,7 +22,7 @@ from wavebit._common.periodic import Stack
 
 from wavebit._common._jobs_v1 import Sweep
 from wavebit import Material
-from wavebit.materials.tabulated import TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial
 
 
 def scalar(value):

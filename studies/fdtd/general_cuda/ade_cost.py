@@ -195,13 +195,13 @@ def main(argv=None):
             return memory()
 
         units = Units(length='um')
-        dt = .5*DX/math.sqrt(3)*units.time_seconds
+        dt = .5*DX/math.sqrt(3)*units.time_unit_seconds
         report['fixture_identity'] = dict(kind='homogeneous-lorentz', spacing_um=DX, courant=.5,
-            epsilon=EPSILON, mu=MU, omega0_si=5/units.time_seconds, gamma_si=.7/units.time_seconds,
-            strength0_si=12/units.time_seconds**2, amplitude=AMPLITUDE, parameter=PARAMETER,
+            epsilon=EPSILON, mu=MU, omega0_si=5/units.time_unit_seconds, gamma_si=.7/units.time_unit_seconds,
+            strength0_si=12/units.time_unit_seconds**2, amplitude=AMPLITUDE, parameter=PARAMETER,
             initial='real uniform Ey=1; H=None', boundaries='six Periodic',
             outputs='Ey TimeSeriesMonitor and final E/H', dt_seconds=dt)
-        expected = oracle(args.size, dt, units.time_seconds)
+        expected = oracle(args.size, dt, units.time_unit_seconds)
         report['oracle'] = dict(value=expected['value'], gradients=expected['gradients'].tolist(),
             method='independent four-state matrix and eight-state Frechet power; separate damped quadratic roots')
         save('preflight')
@@ -222,8 +222,8 @@ def main(argv=None):
         electric[1] = 1.
         saved_pattern = electric.copy()
         side = args.size*DX
-        pole = Lorentz(omega_0=5/units.time_seconds, gamma=.7/units.time_seconds,
-                       strength=PARAMETER*12/units.time_seconds**2)
+        pole = Lorentz(omega_0=5/units.time_unit_seconds, gamma=.7/units.time_unit_seconds,
+                       strength=PARAMETER*12/units.time_unit_seconds**2)
         material = DispersiveMaterial(epsilon_inf=EPSILON, mu=MU, poles=(pole,))
         problem = fdtd.Problem(units=units, scene=fdtd.Scene(
             domain=fdtd.Domain(size=(side,)*3),
@@ -266,7 +266,7 @@ def main(argv=None):
         def forward():
             leaves = tuple(torch.tensor(value, dtype=torch.float64, device=args.device, requires_grad=True)
                            for value in (AMPLITUDE, PARAMETER))
-            live_pole = pole.replace(strength=leaves[1]*12/units.time_seconds**2)
+            live_pole = pole.replace(strength=leaves[1]*12/units.time_unit_seconds**2)
             live_material = material.replace(poles=(live_pole,))
             live_structure = problem.scene.structures[0].replace(material=live_material)
             live = problem.replace(scene=problem.scene.replace(structures=(live_structure,)),

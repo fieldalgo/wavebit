@@ -32,9 +32,9 @@ import numpy as np
 from wavebit._common.conventions import boundary_kz
 
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
-from wavebit.materials.time_domain import Debye
-from wavebit.materials.time_domain import Dispersive
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import Debye
+from wavebit.materials._time_domain import Dispersive
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab
@@ -44,6 +44,7 @@ import wavebit.fdtd._prepare.two_debye_film as two_debye_film
 import wavebit.fdtd._prepare.debye_sum_film as debye_sum_film
 from wavebit.fdtd._prepare.shape_ranges import _carries
 from wavebit.fdtd._prepare.shape_ranges import materials_traced
+from ._identity import recorded_module
 
 __all__ = ['Stack', 'DebyeStackTerm', 'descriptor', 'terms', 'material_profiles',
            'pole_params', 'policy_rate', 'refuse_mismatch', 'validate', 'notes', 'index_at']
@@ -82,7 +83,7 @@ def _boundary_record(value):
     if isinstance(value, (tuple, list)):
         return tuple(_boundary_record(item) for item in value)
     if dataclasses.is_dataclass(value):
-        return (type(value).__module__, type(value).__qualname__,
+        return (recorded_module(type(value)), type(value).__qualname__,
                 tuple((field.name, _boundary_record(getattr(value, field.name)))
                       for field in dataclasses.fields(value)))
     scalar = concrete(value)

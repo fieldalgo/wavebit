@@ -1,7 +1,7 @@
 """Physical units at public solver boundaries; internal kernels may be normalized."""
 from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass
-from ._common.declarations import Declaration
+from ._common.declarations import Declaration, removed
 from .errors import ValidationError
 
 C0 = 299792458.0
@@ -20,28 +20,43 @@ class Units(Declaration):
             raise ValidationError("length must be 'm', 'mm', 'um', or 'nm'", code='unknown_length_unit', path='units.length', actual=self.length)
 
     @property
-    def length_metres(self):
+    def length_unit_meters(self):
+        """Meters in one length unit (1e-6 for ``'um'``)."""
         return _LENGTH_METRES[self.length]
 
     @property
-    def time_seconds(self):
-        """Seconds represented by one normalized kernel time unit."""
-        return self.length_metres / C0
+    def time_unit_seconds(self):
+        """Seconds in one internal time unit, the time light takes to cross one length unit."""
+        return self.length_unit_meters / C0
 
-    def to_metres(self, length):
-        return length * self.length_metres
+    # Conversions the solvers make at their own boundaries; not part of the public surface.
+    def _time_to_internal(self, seconds):
+        return seconds / self.time_unit_seconds
 
-    def time_to_internal(self, seconds):
-        return seconds / self.time_seconds
+    def _rate_to_internal(self, rate):
+        return rate * self.time_unit_seconds
 
-    def time_from_internal(self, value):
-        return value * self.time_seconds
+    def _conductivity_to_internal(self, conductivity):
+        return conductivity * self.length_unit_meters / (EPSILON0 * C0)
 
-    def rate_to_internal(self, rate):
-        return rate * self.time_seconds
+    def __getattr__(self, name):
+        # Reached only when normal lookup fails, so it never shadows a field or property.
+        if name in _RENAMED:
+            new, note = _RENAMED[name]
+            raise removed('Units', name, new, note)
+        raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
 
-    def conductivity_to_internal(self, conductivity):
-        return conductivity * self.length_metres / (EPSILON0 * C0)
+
+#: Units members that were renamed or made private, with what replaces them.
+_RENAMED = {
+    'length_metres': ('Units.length_unit_meters', None),
+    'time_seconds': ('Units.time_unit_seconds', None),
+    'to_metres': ('a multiplication by Units.length_unit_meters', None),
+    'time_to_internal': ('private', 'divide seconds by Units.time_unit_seconds'),
+    'time_from_internal': ('private', 'multiply by Units.time_unit_seconds'),
+    'rate_to_internal': ('private', 'multiply a rate in 1/s by Units.time_unit_seconds'),
+    'conductivity_to_internal': ('private', 'the solvers convert S/m themselves'),
+}
 
 
 def require_units(units):

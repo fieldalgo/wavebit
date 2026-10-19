@@ -33,7 +33,7 @@ def main():
         excitation=fdtd.Excitation(wavelength=900.,sources=(fdtd.PlaneWave(theta=.3,phi=.4,polarization=pair),)),
         outputs=fdtd.Outputs(snapshots=fdtd.Snapshots(every=5,components=(args.component,))))
     result=fdtd.run(problem,numerics=fdtd.Numerics(spacing=1/.025,
-        duration_seconds=80*900*units.time_seconds,algorithm='reference'))
+        duration_seconds=80*900*units.time_unit_seconds,algorithm='reference'))
     series=result.snapshots[args.component]
     strength=np.max(np.abs(series.values.real),axis=(1,2,3))
     frame=int(np.argmax(strength))

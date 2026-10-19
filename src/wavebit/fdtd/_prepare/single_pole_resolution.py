@@ -12,7 +12,7 @@ import cmath
 import math
 
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd._prepare.shape_ranges import _carries
 from wavebit.fdtd._prepare.single_pole_film import descriptor

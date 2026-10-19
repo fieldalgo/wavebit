@@ -13,8 +13,8 @@ from wavebit.fdtd._kernel.constitutive import ConstitutiveTerm
 from wavebit.fdtd._kernel.constitutive import cross_action
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab
-from wavebit.materials.time_domain import Conductor
-from wavebit.materials.time_domain import Dispersive
+from wavebit.materials._time_domain import Conductor
+from wavebit.materials._time_domain import Dispersive
 from wavebit.fdtd._prepare.coefficients import _paste
 from wavebit.fdtd._prepare.coefficients import build
 from wavebit.fdtd._prepare.coefficients import materials_of

@@ -9,9 +9,9 @@ import numpy as np
 
 
 UNITS = Units(length='um')
-TIME = UNITS.time_seconds
+TIME = UNITS.time_unit_seconds
 # Scale the SI Fourier plane power to a dimensionless optimization objective.
-POWER = TIME**2 * UNITS.length_metres**2 / Z0
+POWER = TIME**2 * UNITS.length_unit_meters**2 / Z0
 
 
 def objective(strength, backend):
@@ -24,7 +24,7 @@ def objective(strength, backend):
     problem=native.Problem(units=UNITS,
         medium=native.Medium(epsilon=1+.2*mask, poles=(native.Oscillator(
             omega_0=3./TIME,gamma=.5/TIME,strength=strength*mask/TIME**2),)),
-        current=native.Current(density=source/(Z0*UNITS.length_metres),
+        current=native.Current(density=source/(Z0*UNITS.length_unit_meters),
             samples=np.exp(-((t-2)/.5)**2)*np.sin(3*t)),
         outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(2.4,),z_indices=(32,))))
     result=native.run(problem,backend=backend,numerics=native.Numerics(

@@ -13,9 +13,9 @@ import jax.numpy as jnp
 
 
 UNITS = Units(length='um')
-TIME = UNITS.time_seconds
+TIME = UNITS.time_unit_seconds
 # Scale the SI Fourier plane power to a dimensionless optimization objective.
-POWER = TIME**2 * UNITS.length_metres**2 / Z0
+POWER = TIME**2 * UNITS.length_unit_meters**2 / Z0
 
 
 def main():
@@ -32,7 +32,7 @@ def main():
         # Bounded material stays above vacuum throughout differentiation.
         epsilon=jnp.broadcast_to(1.+3.*jax.nn.sigmoid(parameter)*mask,shape)
         problem=native.Problem(units=UNITS,medium=native.Medium(epsilon=epsilon),
-            current=native.Current(density=source.astype(jnp.complex128)/(Z0*UNITS.length_metres),samples=pulse),
+            current=native.Current(density=source.astype(jnp.complex128)/(Z0*UNITS.length_unit_meters),samples=pulse),
             outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(.5,),z_indices=(48,))))
         result=native.run(problem,backend='jax',numerics=native.Numerics(
             grid=native.Grid(spacing=(.025,)*3),time_step_seconds=dt*TIME,steps=steps,

@@ -93,7 +93,7 @@ def mirror():
 
 def hybrid():
     units = Units(length='m')
-    scale = units.time_seconds
+    scale = units.time_unit_seconds
     poles = (Debye(tau=1e-250 * scale, delta_epsilon=0.),
              Lorentz(omega_0=1e200 / scale, gamma=1e200 / scale, strength=0.),
              Debye(tau=.15 * scale, delta_epsilon=3.))

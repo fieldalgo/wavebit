@@ -15,9 +15,9 @@ from wavebit.fdtd._legacy_boundaries import Bloch
 from wavebit.fdtd._legacy_boundaries import PEC
 from wavebit.fdtd._legacy_boundaries import PMC
 from wavebit.fdtd._legacy_boundaries import Periodic
-from wavebit.materials.time_domain import Material
-from wavebit.materials.time_domain import as_material
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import Material
+from wavebit.materials._time_domain import as_material
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._legacy_geometry import Box
 from wavebit.fdtd._legacy_geometry import Cylinder
 from wavebit.fdtd._legacy_geometry import Prism
@@ -31,6 +31,7 @@ from wavebit.fdtd._prepare.coefficients import _damping
 from wavebit.fdtd._prepare.coefficients import materials_of
 from wavebit.fdtd._prepare.shape_ranges import _carries
 from wavebit.fdtd._prepare.shape_ranges import materials_traced
+from ._identity import recorded_module
 
 PAIRS = ((0, 1), (0, 2), (1, 2))
 
@@ -48,7 +49,7 @@ def _record(value):
     if isinstance(value, (tuple, list)):
         return tuple(_record(v) for v in value)
     if dataclasses.is_dataclass(value):
-        return (type(value).__module__, type(value).__qualname__,
+        return (recorded_module(type(value)), type(value).__qualname__,
                 tuple((f.name, _record(getattr(value, f.name)))
                       for f in dataclasses.fields(value)))
     scalar = concrete(value)

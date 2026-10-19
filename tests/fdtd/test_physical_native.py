@@ -87,7 +87,7 @@ def test_pole_current_and_bloch_derivatives_follow_si_values(backend):
     if backend=='jax': m.config.update('jax_enable_x64',True)
     p,nums=problem()
     nums=nums.replace(decay_check=None)
-    ts=p.units.time_seconds
+    ts=p.units.time_unit_seconds
     mask=np.zeros((16,2,2));mask[6:9]=1.
     def loss(v,engine):
         mask_value=m.tensor(mask) if engine=='torch' else mask

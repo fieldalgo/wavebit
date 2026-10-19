@@ -52,12 +52,14 @@ What the skew *does* reach is any quantity that is Cartesian-geometric rather th
 index-based: see :func:`jacobian`, which is what the NVF normal field needs.
 """
 import dataclasses
+import inspect
 import sys
 from typing import Any
 
 import numpy as np
 
 from wavebit._common.backend import array_namespace
+from wavebit._common.declarations import renamed_keyword_message
 from wavebit._common.backend import as_array
 from wavebit._common.backend import carries_autodiff
 from wavebit._common.backend import checked_float
@@ -67,10 +69,17 @@ from wavebit._common.enums import Backend
 from wavebit._common.enums import backend_of
 from wavebit._common.backend import eager_under_torch_compile
 
-__all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy', 'is_axis_aligned', 'jacobian',
-           'order_kxy', 'periods_of', 'reduced_basis', 'reduction_transform', 'sample_grid']
+#: The public surface. The other module-level helpers (order_kxy, sample_grid, reduced_basis,
+#: ...) work on the raw basis for the solvers and are not part of it.
+__all__ = ['DrawnOn', 'Lattice', 'as_lattice', 'meshgrid_xy']
 
 _PYTREE_REGISTERED = False
+
+#: Lattice.oblique's arguments: the lengths of the two lattice vectors and the angle between them.
+_OBLIQUE_SIGNATURE = inspect.Signature([
+    inspect.Parameter(n, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    for n in ('length_u', 'length_v', 'angle')])
+_OBLIQUE_RENAMED = {'lx': 'length_u', 'ly': 'length_v'}
 
 
 @eager_under_torch_compile
@@ -305,14 +314,17 @@ class Lattice:
 
 
     @classmethod
-    def oblique(cls, lx, ly, angle):
+    def oblique(cls, *args, **kwargs):
         """A cell given by two edge lengths and the **angle between them**, in radians.
 
-        ``a1`` lies along x with length ``lx``; ``a2`` has length ``ly`` and makes ``angle`` with
-        it, so::
+        ``Lattice.oblique(length_u, length_v, angle)``: ``a1`` lies along x with length
+        ``length_u``; ``a2`` has length ``length_v`` and makes ``angle`` with it, so::
 
-            A = [[lx, ly*cos(angle)],
-                 [ 0, ly*sin(angle)]]
+            A = [[length_u, length_v*cos(angle)],
+                 [       0, length_v*sin(angle)]]
+
+        ``length_v`` is the length of the second lattice vector, not a y extent: on a skewed
+        cell the two differ.
 
         Radians, because every other angle in this API is (``theta``, ``phi``, a shape's ``angle``).
         ``np.radians(60)`` for the usual ones, or :meth:`hexagonal` for the usual-est.
@@ -339,6 +351,14 @@ class Lattice:
         forward-mode dual to its primal, so ``hexagonal(a)`` of a dual ``a`` came back a constant
         basis and its derivative zero, with no error.
         """
+        gone = [k for k in kwargs if k in _OBLIQUE_RENAMED]
+        if gone:
+            raise TypeError(renamed_keyword_message('Lattice.oblique', gone, _OBLIQUE_RENAMED))
+        try:
+            bound = _OBLIQUE_SIGNATURE.bind(*args, **kwargs)
+        except TypeError as error:
+            raise TypeError(f'Lattice.oblique(length_u, length_v, angle): {error}') from None
+        lx, ly, angle = bound.args
         traced = [v for v in (lx, ly, angle) if carries_autodiff(v)]
         if traced:
             xp = array_namespace(*traced)
@@ -364,6 +384,10 @@ class Lattice:
             M = np.asarray(cols, dtype=float)
             return cls(M[:, 0], M[:, 1], is_axis_aligned(M))    # a right angle says so
         return cls(cols[:, 0], cols[:, 1], False)   # traced: the general path, always correct
+
+    oblique.__func__.__signature__ = _OBLIQUE_SIGNATURE.replace(parameters=[
+        inspect.Parameter('cls', inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        *_OBLIQUE_SIGNATURE.parameters.values()])
 
 
     @classmethod

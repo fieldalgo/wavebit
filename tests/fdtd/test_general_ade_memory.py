@@ -67,16 +67,16 @@ def test_selected_state_bytes_and_concrete_reuse(backend, device, kind):
     original = prepared.run(p)
     snapshots = {key: host(value).copy() for key, value in original.final_fields.values.items()}
     old_record = host(original['electric'].values).copy()
-    dt = .5/8/math.sqrt(3)*UNITS.time_seconds
+    dt = .5/8/math.sqrt(3)*UNITS.time_unit_seconds
     omega0, gamma, strength = pole_parameters(kind, True)
     expected = uniform_history(17, dt, omega0, gamma, strength)
     np.testing.assert_allclose(host(original['electric'].values), expected[1:], rtol=1e-11, atol=0.)
-    changed = problem(kind, epsilon_inf=1.9, mu=1.1, gamma=.4/UNITS.time_seconds,
-                      omega_0=4.2/UNITS.time_seconds)
+    changed = problem(kind, epsilon_inf=1.9, mu=1.1, gamma=.4/UNITS.time_unit_seconds,
+                      omega_0=4.2/UNITS.time_unit_seconds)
     assert prepared.validate(changed).ok
     result = prepared.run(changed)
-    reference = uniform_history(17, dt, 0. if kind == 'drude' else 4.2/UNITS.time_seconds,
-                                .4/UNITS.time_seconds, strength, epsilon=1.9)
+    reference = uniform_history(17, dt, 0. if kind == 'drude' else 4.2/UNITS.time_unit_seconds,
+                                .4/UNITS.time_unit_seconds, strength, epsilon=1.9)
     np.testing.assert_allclose(host(result['electric'].values), reference[1:], rtol=1e-11, atol=0.)
     np.testing.assert_allclose(host(result.final_fields.values['E'])[1], reference[-1], rtol=1e-11, atol=0.)
     assert np.max(abs(host(result.final_fields.values['H']))) == 0
@@ -114,7 +114,7 @@ def test_gpu_checkpoint_reuse_after_nograd_full_hessian(kind, block, warm_mode):
     assert type(prepared._plan.terms[0]) is CompactPoleTerm
     assert prepared.contract['resolved_steps'] == steps
     assert prepared.contract['resolved_checkpoint_steps'] == block and steps % block == 3
-    dt = .5/CELLS/math.sqrt(3)*UNITS.time_seconds
+    dt = .5/CELLS/math.sqrt(3)*UNITS.time_unit_seconds
     with getattr(torch, warm_mode)():
         warm = prepared.run(p)
         warm_loss = warm.final_fields.values['E'].square().sum()+(Z0*warm.final_fields.values['H']).square().sum()

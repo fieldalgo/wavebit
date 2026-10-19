@@ -696,7 +696,7 @@ def _round_trip(scene, src, series):
     n^2`` over the scene's materials that carry the wave (``n > s``, ``s = n_background sin
     theta``); ``None`` when a material is traced."""
     from wavebit.fdtd._prepare.checks import _index_at
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import as_material
     from wavebit.fdtd._legacy_sources import concrete_or_none
     wavelength = concrete_or_none(src.band.wavelength)
     if wavelength is None:

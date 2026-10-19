@@ -76,7 +76,7 @@ def sample_structure(problem, *, layer=0, n=512, wavelength_index=0,
         excitation=Excitation(wavelength=wavelength, sources=(PlaneWave(),)), outputs=Outputs())
     _adapt.validate_values(sampled)
     execution = Execution()
-    with execution.scope():
+    with execution._scope():
         solver = _adapt.build_solver(sampled, Numerics(), execution, wavelength)
         from .plotting import slice_structure
         values = np.array(slice_structure(solver, layer=0, n=n, component=component), copy=True)

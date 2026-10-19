@@ -144,8 +144,8 @@ def test_radians_are_lowered_once_and_pulse_width_is_hz():
     source=lowered.sources[0]
     assert source.theta==pytest.approx(math.degrees(.2))
     assert source.phi==pytest.approx(math.degrees(.3))
-    assert source.band.df==pytest.approx(4e13*p.units.time_seconds)
-    assert source.delay==pytest.approx(1e-15/p.units.time_seconds)
+    assert source.band.df==pytest.approx(4e13*p.units.time_unit_seconds)
+    assert source.delay==pytest.approx(1e-15/p.units.time_unit_seconds)
 
 
 @pytest.mark.parametrize('backend',['jax','torch'])

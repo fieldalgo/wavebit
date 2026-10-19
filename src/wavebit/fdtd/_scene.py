@@ -237,7 +237,7 @@ class Scene:
 
     def __post_init__(self):
         from wavebit.fdtd._legacy_geometry import Structure
-        from wavebit.materials.time_domain import as_material
+        from wavebit.materials._time_domain import as_material
         object.__setattr__(self, 'background',
                            as_material(self.background, 'Scene(background=)'))
         if isinstance(self.structures, Structure):

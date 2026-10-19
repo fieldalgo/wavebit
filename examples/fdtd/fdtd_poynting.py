@@ -23,12 +23,12 @@ def main():
         excitation=fdtd.Excitation(wavelength=900.,sources=(fdtd.PlaneWave(),)),
         outputs=fdtd.Outputs(snapshots=fdtd.Snapshots(every=1)))
     result=fdtd.run(problem,numerics=fdtd.Numerics(spacing=1/.03,
-        duration_seconds=80*900*units.time_seconds,algorithm='reference'))
+        duration_seconds=80*900*units.time_unit_seconds,algorithm='reference'))
     probe=result.sample(x=0.,y=0.,z=50.)
     flux=np.cross(probe.values[:,:3].real,probe.values[:,3:].real)
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 4), constrained_layout=True)
-    ax.plot(probe.time/(900*units.time_seconds), flux[:,2], color='#297fc1')
+    ax.plot(probe.time/(900*units.time_unit_seconds), flux[:,2], color='#297fc1')
     ax.set(xlabel='Time (optical cycles)', ylabel='Sz (W/m²)',
            title='Instantaneous energy flow at z=50 nm inside a dielectric film')
     ax.axhline(0., color='gray', linewidth=.7)

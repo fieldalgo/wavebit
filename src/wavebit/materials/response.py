@@ -167,7 +167,7 @@ class Material:
         return constant_response(self.epsilon, self.mu, wavelength, units=units)
 
     @property
-    def is_anisotropic(self):
+    def is_tensor(self):
         """Whether epsilon or mu is supplied as three principal values or a 3x3 tensor.
 
         This selects tensor arithmetic structurally, including an isotropic diagonal
@@ -175,6 +175,14 @@ class Material:
         """
         from wavebit.materials.tensors import material_is_tensor
         return material_is_tensor(self)
+
+    def __getattr__(self, name):
+        # Reached only when normal lookup fails, so it never shadows a field or property.
+        if name == 'is_anisotropic':
+            from wavebit._common.declarations import removed
+            raise removed('Material', name, 'Material.is_tensor',
+                          'it is True for any tensor spelling, an isotropic diagonal one included')
+        raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
 
     def rotated(self, angle, axis='z'):
         """Return a material actively rotated about x, y or z by radians.
@@ -279,7 +287,7 @@ def as_material(value, where='material') -> Material:
             raise ValueError(f'{where}: a material evaluated at an array of wavelengths is a spectrum; '
                              'evaluate at one wavelength or assign the material model')
         return value
-    from wavebit.materials.tabulated import TabulatedMaterial
+    from wavebit.materials._tabulated import TabulatedMaterial
     if isinstance(value, TabulatedMaterial):
         raise TypeError(f'{where}: evaluate a TabulatedMaterial with .at(wavelength), '
                         'or assign it directly to an RCWA material slot')

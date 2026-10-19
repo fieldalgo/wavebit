@@ -10,7 +10,7 @@ def main():
         stack=fdtd.Stack(period=(.2,),layers=(fdtd.Layer(thickness=.1,epsilon=np.ones((1,2))),)),
         excitation=fdtd.Excitation(wavelength=(.85,.9,.95),sources=(fdtd.PlaneWave(),)),
         outputs=fdtd.Outputs(planes={'reflection':.75,'transmission':-.2}))
-    numerics=fdtd.Numerics(spacing=1/30,duration_seconds=90*units.time_seconds,algorithm='reference')
+    numerics=fdtd.Numerics(spacing=1/30,duration_seconds=90*units.time_unit_seconds,algorithm='reference')
     reference=fdtd.run(problem,numerics=numerics)
     film=problem.stack.layers[0].replace(epsilon=np.full((1,2),2.25))
     result=fdtd.run(problem.replace(stack=problem.stack.replace(layers=(film,))),numerics=numerics)

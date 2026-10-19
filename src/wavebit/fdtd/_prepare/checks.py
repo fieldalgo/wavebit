@@ -73,11 +73,11 @@ import numpy as np
 from wavebit.fdtd.diagnostics import AbsorberProximityWarning
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
 from wavebit.fdtd.diagnostics import PMLStabilityWarning
-from wavebit.materials.time_domain import Conductor
-from wavebit.materials.time_domain import Dispersive
-from wavebit.materials.time_domain import Material
-from wavebit.materials.time_domain import concrete
-from wavebit.materials.time_domain import eps_at
+from wavebit.materials._time_domain import Conductor
+from wavebit.materials._time_domain import Dispersive
+from wavebit.materials._time_domain import Material
+from wavebit.materials._time_domain import concrete
+from wavebit.materials._time_domain import eps_at
 from wavebit.fdtd._public_names import public_description, public_name
 
 __all__ = ['face_wavelength', 'check_faces', 'check_overlaps', 'check_absorbing_layers',
@@ -1832,7 +1832,7 @@ def check_absorbing_layers(scene, plan):
 
 
 def _background(scene):
-    from wavebit.materials.time_domain import as_material
+    from wavebit.materials._time_domain import as_material
     return as_material(getattr(scene, 'background', None), 'Scene(background=)')
 
 
@@ -2551,7 +2551,7 @@ def _index_at(material, wavelength, *, conductive=False):
         if eps is None or mu is None:
             return None, None
         if material.poles:
-            from wavebit.materials.time_domain import Lorentz
+            from wavebit.materials._time_domain import Lorentz
             from wavebit.fdtd._prepare.shape_ranges import _carries
             # An exactly inactive concrete oscillator is zero at its nominal resonance
             # too. This reader also serves post-run source round-trip diagnostics.

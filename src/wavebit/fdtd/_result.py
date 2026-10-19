@@ -49,7 +49,7 @@ class Result(Declaration):
 def _measure(problem, raw):
     invariant=sum(isinstance(problem.scene.boundaries.face(a+'-'),boundaries.InvariantAxis) for a in 'xyz')
     exponent=2-invariant
-    return (problem.units.length_metres**exponent / (Z0*raw.plan.dx**invariant),
+    return (problem.units.length_unit_meters**exponent / (Z0*raw.plan.dx**invariant),
             'J/Hz' if invariant==0 else ('J/(Hz*m)' if invariant==1 else 'J/(Hz*m^2)'), invariant)
 
 
@@ -77,7 +77,7 @@ class FarFieldSpectrum(Declaration):
 
 
 def adapt_result(problem,numerics,execution,raw,metadata):
-    units=problem.units;ts=units.time_seconds
+    units=problem.units;ts=units.time_unit_seconds
     measure,flux_units,invariant=_measure(problem,raw)
     spectral_factor=2*ts**2*measure
     outputs={}
@@ -103,11 +103,11 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             outputs[name]=SpectralFieldSamples(coordinates=value.coords,values=values,
                 components=tuple(value.fields),units={c:'A*s/m' if c.startswith('H') else 'V*s/m' for c in value.fields},
                 sampling='raw Yee components',wavelengths=value.wavelengths,
-                frequencies=np.asarray([C0/(w*units.length_metres) for w in value.wavelengths]),
+                frequencies=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
                 window=transform['window'],metadata={'length_unit':units.length,'duration_seconds':transform['duration_seconds']})
         elif isinstance(m,monitors.FluxMonitor):
             outputs[name]=SpectralFlux(wavelengths=value.wavelengths,
-                frequencies=np.asarray([C0/(w*units.length_metres) for w in value.wavelengths]),
+                frequencies=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
                 energy_density=value.flux*spectral_factor,units=flux_units,
                 faces=None if value.faces is None else {f:v*spectral_factor for f,v in value.faces.items()},
                 metadata=dict(transform,orientation='positive plane normal or outward closed surface',invariant_axes=invariant))
@@ -122,8 +122,8 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             rt=source.context.rt;xp=rt.xp
             incident=source.incident_amplitude(value.wavelengths,plane=value.incident_plane)*ts
             declaration=next(s for s in problem.sources if s.name==m.source)
-            frequency=rt.array([C0/(w*units.length_metres) for w in value.wavelengths],'float64')
-            nominal=xp.exp(-.5*((frequency-C0/(declaration.pulse.wavelength*units.length_metres))/
+            frequency=rt.array([C0/(w*units.length_unit_meters) for w in value.wavelengths],'float64')
+            nominal=xp.exp(-.5*((frequency-C0/(declaration.pulse.wavelength*units.length_unit_meters))/
                                 declaration.pulse.frequency_sigma_hz)**2)
             # Both a nominal source-band condition and a measured signal floor are
             # required. A zero-amplitude pulse cannot define scattering ratios.
@@ -138,9 +138,9 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                 outward_normal=value.raw['outward_normal'],tangent_axes=value.raw['tangent_axes'],
                 incident_amplitude=incident,incident_amplitude_units='V*s/m')
             if invariant==0:
-                reference['cell_area_m2']=value.raw['cell_area']*units.length_metres**2
+                reference['cell_area_m2']=value.raw['cell_area']*units.length_unit_meters**2
             else:
-                reference['integration_measure']=value.raw['cell_area']*units.length_metres**(2-invariant)/raw.plan.dx**invariant
+                reference['integration_measure']=value.raw['cell_area']*units.length_unit_meters**(2-invariant)/raw.plan.dx**invariant
                 reference['integration_measure_units']='m' if invariant==1 else '1'
             common=dict(wavelengths=value.wavelengths,orders_u=tuple(value.orders.orders_u),
                         orders_v=tuple(value.orders.orders_v),kz=value.kz*next(v for v in value.raw['outward_normal'] if v),k_parallel=value.raw['k_parallel'],
@@ -165,11 +165,11 @@ def adapt_result(problem,numerics,execution,raw,metadata):
     for name,s in raw.sources.items():
         if s.kind.startswith('Dipole'):
             magnetic=s.kind=='Dipole(H)'
-            drive_scale=units.length_metres**2/(1. if magnetic else Z0)
+            drive_scale=units.length_unit_meters**2/(1. if magnetic else Z0)
             source_references[name]=dict(time=s.t*ts,drive=s.drive*drive_scale,
                 drive_units='V*m' if magnetic else 'A*m',field=s.field/(Z0 if magnetic else 1.),
                 field_units='A/m' if magnetic else 'V/m',field_time=s.t_field*ts,
-                delivered_power=s.work*units.length_metres**2/Z0,power_units='W',time_unit='s')
+                delivered_power=s.work*units.length_unit_meters**2/Z0,power_units='W',time_unit='s')
         else:
             source_references[name]=dict(time=s.t*ts,incident=s.incident,
                 magnetic_time=None if s.t_H is None else s.t_H*ts,

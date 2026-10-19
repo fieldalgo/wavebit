@@ -21,7 +21,7 @@ problem = fdtd.Problem(
     excitation=fdtd.Excitation(wavelength=(.85,.9,.95),
                                sources=(fdtd.PlaneWave(),)))
 numerics = fdtd.Numerics(spacing=1/30,
-                         duration_seconds=90*units.time_seconds)
+                         duration_seconds=90*units.time_unit_seconds)
 result = fdtd.run(problem, numerics=numerics)
 print(result.R.sum(axis=(-2,-1)), result.T.sum(axis=(-2,-1)))
 ```

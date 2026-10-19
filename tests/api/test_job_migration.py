@@ -62,7 +62,7 @@ def test_unrecognized_shape_fields_cannot_be_silently_dropped():
 def test_table_permeability_and_oblique_cell_preserve_bottom_incidence():
     from wavebit._common._jobs_v1 import JobSpec, Numerics
     from wavebit._common.periodic import Stack, Layer, Incidence
-    from wavebit.materials.tabulated import TabulatedMaterial
+    from wavebit.materials._tabulated import TabulatedMaterial
     table=TabulatedMaterial.from_refractive_index([800.,1000.],[1.5,1.6],mu=1.2)
     spec=JobSpec(stack=Stack(lattice=[[700.,100.],[0.,600.]],top=table,bot=1.,
         layers=[Layer(100.,np.full((2,2),2.25),mu=np.full((2,2),1.1))]),

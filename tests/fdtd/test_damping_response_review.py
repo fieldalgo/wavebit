@@ -1,7 +1,7 @@
 """Carried frequency must retain the selected susceptibility's derivative."""
 import numpy as np
 import pytest
-from wavebit.materials.time_domain import Drude, Lorentz
+from wavebit.materials._time_domain import Drude, Lorentz
 from wavebit.fdtd._runtime import runtime
 
 

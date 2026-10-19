@@ -237,7 +237,7 @@ class Stack(_DeclaredFieldsOnly):
         solve will succeed; it is a promise that these particular mistakes are not present.
         """
         from wavebit._common.validation import _refuse_shaped_half_space
-        from wavebit.materials.tabulated import TabulatedMaterial
+        from wavebit.materials._tabulated import TabulatedMaterial
         problems = []
         for where, value in (('top', self.top), ('bot', self.bot)):
             try:
