@@ -125,7 +125,7 @@ def test_a_region_is_one_plane_or_one_box(cls):
         cls('m', plane=plane, box=box, wavelengths=WS)
     with pytest.raises(TypeError, match='fd.Plane'):
         cls('m', plane=0.0, wavelengths=WS)
-    with pytest.raises(TypeError, match='fd.Region'):
+    with pytest.raises(TypeError, match='fdtd.SnappedBox'):
         cls('m', box=(0.2, 0.2, 0.2), wavelengths=WS)
     cls('m', plane=plane, wavelengths=WS)
     cls('m', box=box, wavelengths=WS)
@@ -298,7 +298,7 @@ def test_a_flux_surface_keeps_off_a_dipoles_stamp():
         return scene.replace(monitors=(fd.Flux('f', wavelengths=WS, **region),))
 
     for size in (0.1, 0.2):                          # inside the stamp; through its tail
-        with pytest.raises(ValueError, match=r"cuts the stamp of Dipole\('d'\)") as e:
+        with pytest.raises(ValueError, match=r"cuts the stamp of CurrentDipole\('d'\)") as e:
             _plan(flux(box=fd.Region(size=(size,) * 3)))
         assert 'enclose it with one cell to spare' in str(e.value)
         with pytest.raises(ValueError, match='cuts the stamp'):
@@ -496,7 +496,7 @@ def test_a_box_obeys_the_absorbing_layer_rules():
     with pytest.raises(ValueError, match='ends inside the PML'):
         _plan(scene.replace(structures=(ends_inside,)))
     through = fd.Structure(fd.Region(size=(2 * n, 0.2, 0.2)), fd.Conductor(eps=2.25, sigma=0.1))
-    with pytest.raises(ValueError, match='fd.Absorber'):
+    with pytest.raises(ValueError, match='fdtd.ConductiveAbsorber'):
         _plan(scene.replace(structures=(through,)))
     _plan(scene.replace(structures=(fd.Structure(fd.Region(size=(2 * n, 0.2, 0.2)), 2.25),)))
     inside = fd.Structure(fd.Region(size=(0.2, 0.2, 0.2)), fd.Conductor(eps=2.25, sigma=0.1))
@@ -593,7 +593,7 @@ def test_a_far_field_is_a_closed_box():
 
 
 def test_a_far_field_in_a_periodic_cell_is_refused_naming_diffraction():
-    with pytest.raises(ValueError, match='fd.Diffraction'):
+    with pytest.raises(ValueError, match='fdtd.DiffractionMonitor'):
         _plan(_pw_scene(monitors=(fd.FarField('ff', box=fd.Region(size=(0.1, 0.1, 0.4)),
                                               wavelengths=WS),)))
     _plan(dipole_box(size=0.6, steps=5, monitors=(_ff(),)))
@@ -693,9 +693,9 @@ def test_a_bloch_phase_on_a_one_cell_axis_is_refused_naming_axis1d():
     pw = scene.sources[0]
     one_cell = scene.replace(boundaries=fd.Boundaries(**fd.Bloch.from_source(pw),
                                                       z=scene.boundaries.face('z-')))
-    with pytest.raises(ValueError, match='fd.Axis1D') as e:
+    with pytest.raises(ValueError, match='fdtd.InvariantAxis') as e:
         _plan(one_cell)                                             # y: Bloch(k) on one cell
-    assert 'artificial' in str(e.value) and "axis1d='y'" in str(e.value)
+    assert 'artificial' in str(e.value) and "invariant_axes='y'" in str(e.value)
     _plan(scene)                                                    # y: Axis1D(k)
     dx = scene.resolution.dx
     two = one_cell.replace(domain=one_cell.domain.replace(
@@ -762,7 +762,7 @@ def test_a_traced_k_past_k_max_makes_the_run_nan_and_says_unstable():
 
 def test_a_source_spanning_cells_along_axis1d_is_refused():
     dip = fd.Dipole('d', center=(0.0, 0.0, 0.0), component='Ez', band=band())
-    with pytest.raises(ValueError, match='fd.Axis1D axis'):
+    with pytest.raises(ValueError, match='fdtd.InvariantAxis axis'):
         _plan(_axis1d_scene(sources=(dip,)))
     scene, _ = conical_grating(periods=1)
     _plan(scene)                                        # a PlaneWave is uniform along it
@@ -782,7 +782,7 @@ def test_a_plane_wave_must_carry_the_axis1d_k():
     wrong = scene.replace(boundaries=fd.Boundaries(x=scene.boundaries.face('x-'),
                                                    z=scene.boundaries.face('z-'),
                                                    y=fd.Axis1D(k=info['ky'] * 1.1)))
-    with pytest.raises(ValueError, match='the Axis1D face on y carries'):
+    with pytest.raises(ValueError, match='the InvariantAxis face on y carries'):
         _plan(wrong)
     with pytest.raises(ValueError, match='transverse axes'):
         fd.Bloch.from_source(scene.sources[0], axis1d='z')

@@ -260,15 +260,15 @@ def test_what_no_runtime_guard_covers_is_refused_by_name(monkeypatch):
     q = quiet(fd.plan, open_)
     moved = open_.replace(structures=open_.structures[:2] + (film.replace(
         material=fd.Material(eps=_t(1.4))),))
-    _refused(r"Diffraction\('R'\).*give orders=", planning_scene, moved, q)
-    _refused(r"Diffraction\('R'\).*give orders=", fd.lower, moved, q, 'torch')
+    _refused(r"DiffractionMonitor\('R'\).*give orders=", planning_scene, moved, q)
+    _refused(r"DiffractionMonitor\('R'\).*give orders=", fd.lower, moved, q, 'torch')
     _ran(planning_scene, moved.replace(monitors=reflected(orders=0)), q)
     # A sphere centred on a Symmetry face is planned only where its contrast is zero there; a
     # traced value would then couple across the mirror unchecked.
-    _refused('reaches a Symmetry plane', fd.plan, closed_scene(mirror=True))
+    _refused('reaches a MirrorSymmetry plane', fd.plan, closed_scene(mirror=True))
     mirrored = quiet(fd.plan, closed_scene(mirror=True, eps=1.))
     for run in (lambda s: planning_scene(s, mirrored), lambda s: fd.lower(s, mirrored, 'torch')):
-        _refused('reaches the Symmetry plane.*traced', run, closed_scene(mirror=True,
+        _refused('reaches the MirrorSymmetry plane.*traced', run, closed_scene(mirror=True,
                                                                          eps=_t(2.25)))
     # The direct lower of concrete geometry hears the per-axis refusal too.
     closed = quiet(fd.plan, closed_scene())
@@ -383,7 +383,7 @@ def test_the_resolution_floor_reads_mu_and_every_diffraction_wavelength():
         result = _ran(fd.run, scene(_traced(point[:3] + (eps,)), steps=20).replace(
             monitors=short), 'torch', plan=p)
         assert bool(result.diagnostics['stable']) is stable
-    with pytest.raises(ValueError, match=r"Diffraction\('T'\) asks for wavelength 0.62"):
+    with pytest.raises(ValueError, match=r"DiffractionMonitor\('T'\) asks for wavelength 0.62"):
         quiet(fd.plan, scene(point[:3] + (2.5,), steps=20).replace(monitors=short))
 
 

@@ -1,6 +1,6 @@
 """Serialize physical Jobs and expand an explicit three-point wavelength sweep.
 
-The filename is retained for course links. This writes wavebit.job/v1, not JobSpec.
+The filename is retained for course links. This writes wavebit.job/v2, not JobSpec.
 """
 import json
 import numpy as np

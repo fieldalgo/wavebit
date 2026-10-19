@@ -1598,7 +1598,7 @@ def test_a_smoothed_shape_on_a_one_cell_invariant_axis_is_refused():
             resolution=fd.Resolution(dx=DX), run=fd.Run(steps=4), structures=(structure,))
 
     ball = fd.Structure(fd.Sphere(radius=0.2), 4.0)
-    with pytest.raises(ValueError, match='fd.Axis1D face') as e:
+    with pytest.raises(ValueError, match='fdtd.InvariantAxis face') as e:
         _quiet(fd.plan, scene(fd.Axis1D(k=0.3, k_max=1.0), ball))
     assert 'invariant' in str(e.value) and 'fd.Cylinder' in str(e.value)
     with pytest.raises(ValueError, match='periodic face'):

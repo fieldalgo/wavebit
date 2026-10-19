@@ -763,7 +763,7 @@ def test_a_non_vacuum_background_is_refused_not_replaced_by_vacuum():
     background, spelt as a material, reaches the solve.
     """
     message = refusal(scene(background=fd.Material(eps=1.44)))
-    assert 'StencilBackgroundRefused' in message and "discretisation='voxel'" in message
+    assert 'StencilBackgroundRefused' in message and "discretization='voxel'" in message
     # The spelling it names works: the same scene on the voxel rule plans.
     assert quiet(build_plan, scene(background=fd.Material(eps=1.44), discretisation='voxel'))
     # A background that names mu=1 is vacuum's values with a permeability path. The refusal
@@ -810,7 +810,7 @@ def test_a_second_structure_anywhere_is_refused():
     ball = fd.Structure(fd.Sphere(radius=.115, center=(.25, .25, 0)), 2.25)
     for extra in (box, ball):
         message = refusal(s.replace(structures=s.structures + (extra,)))
-        assert 'StencilStructuresRefused' in message and "discretisation='voxel'" in message
+        assert 'StencilStructuresRefused' in message and "discretization='voxel'" in message
     # The spelling it names for the scene as written: the ball on the voxel rule plans.
     voxel = s.structures[0].replace(discretisation='voxel')
     assert quiet(build_plan, s.replace(structures=(voxel, box)))
@@ -830,7 +830,7 @@ def test_a_complex_run_is_refused_and_a_real_periodic_one_is_not():
         x=fd.Bloch(phase=.3), y=fd.Periodic(), z=fd.PML(cells=6, allow_thin=True)))
     message = refusal(bloch)
     assert 'StencilDtypeRefused' in message
-    assert "discretisation='voxel'" in message and 'fd.Periodic()' in message
+    assert "discretization='voxel'" in message and 'fd.Periodic()' in message
     voxel = bloch.replace(structures=(bloch.structures[0].replace(discretisation='voxel'),))
     assert quiet(build_plan, voxel).dtype == 'complex128'
     assert reaches_assembly(bloch.replace(boundaries=fd.Boundaries(
@@ -856,7 +856,7 @@ def test_only_fd_sphere_itself_can_ask():
         pass
     message = refusal(with_structure(scene(), Sphere(radius=.14)))
     assert 'StencilShapeRefused' in message and 'not a subclass' in message
-    assert "discretisation='voxel'" in message
+    assert "discretization='voxel'" in message
     assert quiet(build_plan, with_structure(scene(), Sphere(radius=.14), discretisation='voxel'))
     assert reaches_assembly(with_structure(scene(), fd.Sphere(radius=.14)))
 
@@ -870,7 +870,7 @@ def test_a_magnetic_structure_is_told_it_is_magnetic():
     message = refusal(with_structure(scene(), material=fd.Material(eps=1.44, mu=1.05)))
     assert 'StencilScopeRefused' in message and 'permeability' in message
     assert 'region' not in message.split('.')[0]
-    assert "discretisation='voxel'" in message and 'Leave mu unnamed' in message
+    assert "discretization='voxel'" in message and 'Leave mu unnamed' in message
     assert quiet(build_plan, with_structure(scene(), material=fd.Material(eps=1.44, mu=1.05),
                                             discretisation='voxel'))
     assert reaches_assembly(with_structure(scene(), material=fd.Material(eps=1.44)))
@@ -900,7 +900,7 @@ def test_a_source_the_clearance_rule_cannot_read_is_refused():
     dipole = scene().replace(monitors=(), sources=(fd.Dipole(
         'd', center=(0., 0., .5), component='Ex', band=fd.Band(wavelength=1., df=.1)),))
     message = refusal(dipole)
-    assert 'StencilSourceRefused' in message and "discretisation='voxel'" in message
+    assert 'StencilSourceRefused' in message and "discretization='voxel'" in message
     assert 'fd.TFSF' in message
     assert quiet(build_plan, dipole.replace(
         structures=(dipole.structures[0].replace(discretisation='voxel'),)))
@@ -1125,7 +1125,7 @@ def test_lowering_takes_plain_numbers_only_on_every_path():
             path(loss('stencil', plan, backend), 2.25)
         message = str(err.value)
         assert 'StencilNumberRefused' in message and 'fd.lower' in message, name
-        assert "discretisation='voxel'" in message and 'BOTH' in message, name
+        assert "discretization='voxel'" in message and 'BOTH' in message, name
     # A traced background is refused as well: the operator was fitted for vacuum around it.
     def background_loss(eps):
         return lower_params(scene(background=fd.Material(eps=eps)), plan, 'jax')['be'].sum()
@@ -1244,7 +1244,7 @@ def test_a_stencil_scene_is_told_its_own_accuracy_and_not_the_voxel_rules():
     v, voxel_plan = prepared('voxel')
     said = [m for c, m in notes(s, plan) if c is fd.SubpixelAccuracyWarning]
     assert len(said) == 1, said
-    assert "discretisation='stencil'" in said[0] and '2.064' in said[0] and '2.244' in said[0]
+    assert "discretization='stencil'" in said[0] and '2.064' in said[0] and '2.244' in said[0]
     assert 'passes the stage-4 C3 Mie gate' in said[0] and 'larger than with the default rule' in said[0]
     assert 'adjoint inverse-material' not in said[0] and '2.023' not in said[0]
     voxel = [m for c, m in notes(v, voxel_plan) if c is fd.SubpixelAccuracyWarning]
@@ -1274,7 +1274,7 @@ def test_the_discretisation_door_at_lowering_works_both_ways():
     for other in (voxel_plan, bare):
         message = refusal(None, lambda: lower_params(s, other, 'numpy'))
         assert 'StencilMismatchRefused' in message and 'carries no operator' in message
-        assert "discretisation='voxel' in the scene you lower" in message
+        assert "Numerics(discretization='voxel') for the scene you lower" in message
 
     def loss(eps, backend='jax'):
         traced = with_structure(scene(), material=fd.Material(eps=eps))
