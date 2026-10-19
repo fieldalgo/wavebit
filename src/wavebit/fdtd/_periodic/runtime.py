@@ -31,25 +31,47 @@ _FUNCTION_TYPES = (types.FunctionType, types.MethodType, types.BuiltinFunctionTy
 def _jax_api():
     """The JAX names the program key reads, or ``None`` when this JAX no longer has one of them.
 
-    Not all are public promises -- ``jax.extend.core`` exists so that code like this can reach
-    the jaxpr types, and it says it may change -- so a JAX that moves one costs the sharing,
-    never the solve: :func:`_eager_scan` warns once and runs the plain ``lax.scan``.
+    The jaxpr types are read off two tiny public traces (``jax.make_jaxpr``) rather than
+    imported from ``jax.extend``: from jax 0.12.0, importing ``jax.extend`` adds entries to
+    JAX's tracing context, so importing it partway through a session made every compiled
+    program miss its cache once -- a user's ``jax.jit`` around the first solve traced twice,
+    and the next solve's eager operations all compiled again (measured 2026-10-19). Reading
+    the types off traces changes nothing (checked on jax 0.11.0 and 0.12.0: the same classes
+    ``jax.extend.core`` names, and an unchanged context). Not all are public promises, so a
+    JAX that moves one costs the sharing, never the solve: :func:`_eager_scan` warns once and
+    runs the plain ``lax.scan``.
     """
     try:
         import jax
-        from jax.extend import core
+        closed = jax.make_jaxpr(lambda x: x * 2.)(1.)
+        literal = closed.jaxpr.eqns[0].invars[1]
+        if not hasattr(literal, 'val'):   # a constant that is no longer a literal atom
+            return None
         api = types.SimpleNamespace(
             Tracer=jax.core.Tracer, typeof=jax.typeof, eval_jaxpr=jax.core.eval_jaxpr,
-            ClosedJaxpr=core.ClosedJaxpr, Jaxpr=core.Jaxpr, Literal=core.Literal)
-    except (ImportError, AttributeError):
+            ClosedJaxpr=type(closed), Jaxpr=type(closed.jaxpr), Literal=type(literal))
+    except (ImportError, AttributeError, IndexError):
         return None
-    try:
-        from jax.extend import linear_util
-        wrapped = (linear_util.WrappedFun,)
-    except (ImportError, AttributeError):
-        wrapped = ()
-    api.functions = _FUNCTION_TYPES + wrapped
+    api.functions = _FUNCTION_TYPES + _wrapped_function_types(jax)
     return api
+
+
+def _wrapped_function_types(jax):
+    """JAX's wrapped-function class, read off a ``custom_jvp`` trace, or ``()`` if none shows.
+
+    A ``custom_jvp`` equation carries its rule as a ``WrappedFun`` parameter (jax 0.11.0 and
+    0.12.0). Missing it costs only sharing: :func:`_param_key` would hash such a rule instead
+    of refusing it, which keys every call apart.
+    """
+    try:
+        @jax.custom_jvp
+        def probe(x):
+            return x
+        probe.defjvp(lambda primals, tangents: (primals[0], tangents[0]))
+        params = jax.make_jaxpr(probe)(1.).jaxpr.eqns[0].params
+    except Exception:
+        return ()
+    return tuple({type(v) for v in params.values() if type(v).__name__ == 'WrappedFun'})
 
 
 def _eager_scan(f, init, xs):
@@ -77,6 +99,13 @@ def _eager_scan(f, init, xs):
     (warned once).
     """
     import jax
+    leaves = jax.tree.leaves((init, xs))
+    # Inside a trace nothing is dispatched, so the plain scan is exact: return before the key's
+    # names are resolved. Resolving them is a session-wide side effect (it used to import
+    # ``jax.extend``, which from jax 0.12.0 made a user's ``jax.jit`` around the first solve
+    # trace twice; see :func:`_jax_api`), and a trace is the wrong place for one.
+    if any(isinstance(v, jax.core.Tracer) for v in leaves):
+        return jax.lax.scan(f, init, xs)
     api = _jax_api()
     if api is None:
         if not _API_WARNED:
@@ -86,7 +115,6 @@ def _eager_scan(f, init, xs):
                 'eager FDTD scan compiles again on each call, as it did before the cache. The '
                 'answers are unaffected.', RuntimeWarning, stacklevel=2)
         return jax.lax.scan(f, init, xs)
-    leaves = jax.tree.leaves((init, xs))
     lengths = tuple(np.shape(x)[:1] for x in jax.tree.leaves(xs))
     if (not lengths or () in lengths
             or any(isinstance(v, api.Tracer) for v in leaves)):
