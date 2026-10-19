@@ -94,6 +94,59 @@ def test_unsupported_geometry_is_refused_on_freeze_and_solve(shape):
             getattr(solver([shape]),method)()
 
 
+def test_a_rectangle_written_periods_away_is_the_same_layer():
+    """``cx`` and ``cx + m Px`` are one structure; the Cartesian Li reads both in the cell.
+
+    It used to refuse every centre outside the cell, a copy that sits wholly inside one cell
+    included ("requires rectangles inside one cell"), while NVF and Laurent solved the same
+    layer. The plan now records how many whole cells each rectangle is written away and reads
+    its edges back in the cell: the matrices are the same array, since every move here is exact
+    in floating point. A plan frozen with the rectangle in the cell is stale once it is written
+    a cell over, and a rectangle that crosses the cell edge is refused wherever it is written.
+    """
+    from wavebit.rcwa._engine.factorization import StaleGeometryError
+    shapes = [box(300, 300, -150, material=4), box(200, 250, 150, 100, material=9)]
+    ref = solver(shapes)
+    frozen = ref.freeze_geometry()
+    want = ref._eps_conv_matrices(frozen)
+    for m, n in ((1, 0), (3, 0), (-2, 1), (0, -4)):
+        moved = [shapes[0], dict(shapes[1], cx=150. + 700.*m, cy=100. + 700.*n)]
+        s = solver(moved)
+        for a, b in zip(s._eps_conv_matrices(s.freeze_geometry())[:3], want[:3]):
+            np.testing.assert_array_equal(a, b)
+    with pytest.raises(StaleGeometryError, match='whole cells'):
+        solver(moved)._eps_conv_matrices(frozen)
+    with pytest.raises(ValueError, match='crosses the cell edge'):
+        solver([box(cx=350. + 1400.)]).freeze_geometry()
+
+
+def test_the_traced_edge_guard_reads_a_rectangle_written_periods_away_in_the_cell():
+    """Under ``jax.jit`` the prepared run checks edge order on the traced values; it has to
+    apply the same whole-cell fold the plan recorded, or a valid layer reads as invalid (NaN)."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit import Material, rcwa
+
+    def problem(cx):
+        regions = (rcwa.Region(geometry=rcwa.Rectangle(size=(300., 200.), center=(cx, 50.)),
+                               material=Material(4.)),
+                   rcwa.Region(geometry=rcwa.Rectangle(size=(200., 250.), center=(-210., -140.)),
+                               material=Material(9.)))
+        layer = rcwa.Layer(thickness=300., background=Material(1.), regions=regions)
+        return rcwa.Problem(stack=rcwa.Stack(period=(700., 700.), layers=(layer,)),
+                            excitation=rcwa.Excitation(wavelength=900.,
+                                                       sources=(rcwa.PlaneWave(theta=.2),)))
+
+    numerics = rcwa.Numerics(orders=(2, 2), factorization='li')
+    with jax.enable_x64(True):
+        values = []
+        for cx in (70., 70. + 1400.):
+            prepared = rcwa.prepare(problem(cx), numerics=numerics, backend='jax')
+            run = jax.jit(lambda c: jnp.real(jnp.sum(prepared.run(problem(c)).T)))
+            values.append(float(run(jnp.asarray(cx))))
+    assert np.isfinite(values[1]) and abs(values[1] - values[0]) <= 1e-12, values
+
+
 def test_jitted_gap_and_material_derivatives_match_two_finite_differences():
     jax=pytest.importorskip('jax');import jax.numpy as jnp
     jax.config.update('jax_enable_x64',True)

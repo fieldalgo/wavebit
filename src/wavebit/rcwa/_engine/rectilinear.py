@@ -1,7 +1,9 @@
 """Exact Cartesian Li integration of axis-aligned rectangular paintings.
 
-The grid follows live rectangle edges. Plans contain only edge order and cell
-ownership; materials, lengths and positions are replayed on the active backend.
+The grid follows live rectangle edges. Plans contain only edge order, cell
+ownership and the whole cells each rectangle is written away from the cell (a
+rectangle written ``m`` periods over is the same structure, and the edges are
+read in the cell); materials, lengths and positions are replayed on the active backend.
 No normal field or pixel raster is constructed. The rules are nested as
 ``nesting`` says (``enums.Nesting``, ``'fixed'`` by default), by the same
 integrated builder the raster path uses, so a plan serves both nestings.
@@ -18,7 +20,7 @@ from wavebit.rcwa._engine.factorization import fourier2d_integrated
 from wavebit.lattice import is_axis_aligned
 import wavebit.rcwa._engine.parametric as P
 
-Plan = namedtuple('RectilinearPlan', 'x y owners count')
+Plan = namedtuple('RectilinearPlan', 'x y owners count folds')
 
 
 def validate(layers, lattice):
@@ -36,37 +38,47 @@ def validate(layers, lattice):
                 raise NotImplementedError("factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes")
 
 
-def _coordinate(shapes, axis, node, period):
+def _coordinate(shapes, axis, node, period, folds):
     owner, side = node
     if owner == -1:
         return side * period
     shape = shapes[owner]
-    return period/2 + shape.get('c'+axis, 0.) + side*shape['l'+axis]/2
+    fold = folds[owner]['xy'.index(axis)]
+    return period/2 + shape.get('c'+axis, 0.) - fold*period + side*shape['l'+axis]/2
 
 
 def _primal_axes(shapes, lattice):
+    """Each axis's edge positions in the cell, and each rectangle's whole-cell fold.
+
+    A centre written ``m`` periods from the cell (``cx`` and ``cx + m Px`` are one structure)
+    is read ``m`` periods back, to the nearest cell; the fold is an integer of the plan, so a
+    replay reads the same cell and a rectangle moved by whole periods needs a new plan.
+    """
     periods = [checked_float(lattice[i][i]) for i in (0, 1)]
     if any(not math.isfinite(v) or v <= 0 for v in periods):
         raise ValueError('Cartesian shape Li requires positive finite cell periods')
-    result = []
-    for axis, period in zip(('x', 'y'), periods):
+    result, folds = [], [[0, 0] for _ in shapes]
+    for a, (axis, period) in enumerate(zip(('x', 'y'), periods)):
         values = {(-1, 0): 0., (-1, 1): period}
         for i, shape in enumerate(shapes):
             length = checked_float(shape.get('l'+axis, 0.))
             center = checked_float(shape.get('c'+axis, 0.))
             if not math.isfinite(length) or not math.isfinite(center) or length <= 0:
                 raise ValueError('Cartesian shape Li requires positive finite sizes and finite centers')
-            low, high = period/2+center-length/2, period/2+center+length/2
+            fold = round(center / period)
+            low, high = period/2+center-fold*period-length/2, period/2+center-fold*period+length/2
             if low < 0 or high > period:
-                raise ValueError('Cartesian shape Li currently requires rectangles inside one cell, including its edges')
+                raise ValueError('Cartesian shape Li currently requires rectangles inside one cell, including its edges: '
+                                 'a rectangle that crosses the cell edge, wherever it is written, is refused')
             values[i, -1], values[i, 1] = low, high
+            folds[i][a] = fold
         result.append(values)
-    return result
+    return result, tuple(tuple(f) for f in folds)
 
 
 def plan_layer(shapes, lattice):
     try:
-        values = _primal_axes(shapes, lattice)
+        values, folds = _primal_axes(shapes, lattice)
     except TypeError as error:
         # Only a traced topology cannot be sorted; invalid concrete values keep
         # the diagnosis from _primal_axes.
@@ -93,16 +105,18 @@ def plan_layer(shapes, lattice):
                     owner = i  # later shapes paint over earlier ones
             row.append(owner)
         owners.append(tuple(row))
-    return Plan(x, y, tuple(owners), len(shapes))
+    return Plan(x, y, tuple(owners), len(shapes), folds)
 
 
 def check_plan(shapes, lattice, plan):
     if len(shapes) != plan.count:
         raise StaleGeometryError('Cartesian Li shape count changed; freeze_geometry() again')
     try:
-        values = _primal_axes(shapes, lattice)
+        values, folds = _primal_axes(shapes, lattice)
     except TypeError:
         return  # Frozen replay: ordering is checked on concrete calls, as for other plans.
+    if folds != plan.folds:
+        raise StaleGeometryError('a Cartesian Li rectangle moved by whole cells; freeze_geometry() again')
     for nodes, coords in zip((plan.x, plan.y), values):
         positions = [coords[n] for n in nodes]
         if any(a > b for a, b in zip(positions, positions[1:])):
@@ -118,7 +132,7 @@ def layer_partition(xp, shapes, lattice, dtype, plan=None, device=None):
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     edges = []
     for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), (lattice[0][0], lattice[1][1])):
-        edges.append(xp.stack([as_array(xp, _coordinate(shapes, axis, n, period)/period,
+        edges.append(xp.stack([as_array(xp, _coordinate(shapes, axis, n, period, plan.folds)/period,
                                         dtype=real_dtype, device=device) for n in nodes[1:]]).reshape((-1, 1)))
     return edges, plan.owners
 
