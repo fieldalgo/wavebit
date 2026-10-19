@@ -14,6 +14,9 @@ import wavebit
 from wavebit.rcwa._engine import boundary, parametric, tensor_shapes
 from wavebit.lattice import as_lattice, sample_grid
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 
 CELL = np.array([[600., 0.], [416., 672.]])
 POINT = np.array([787.5, 100., 0.])

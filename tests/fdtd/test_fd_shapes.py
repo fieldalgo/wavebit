@@ -195,6 +195,9 @@ from wavebit.fdtd._shapes._cut import _first_difference, _first_difference_squar
 
 from tests.fixtures.fdtd.fd_helpers import backends
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 #: The stage-2/3 autodiff budget, unchanged: ``|g_ad - g_fd| <= RTOL |g_fd| + FTOL |f|``.
 RTOL, FTOL = 1e-7, 1e-10
 

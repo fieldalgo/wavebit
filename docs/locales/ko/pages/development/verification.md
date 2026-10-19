@@ -108,7 +108,7 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)는
 research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
-`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 16개, slow 범위는 12개입니다.
+`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 32개, slow 범위는 12개입니다.
 
 CI는 검증 결과와 그 안의 pytest 임시 자료를 checkout 바깥의 `RUNNER_TEMP`에
 저장하여 study fixture의 원자료 경로 분리 조건을 지킵니다. GitHub가 이 변수를
@@ -116,7 +116,7 @@ CI는 검증 결과와 그 안의 pytest 임시 자료를 checkout 바깥의 `RU
 artifact 업로드도 같은 결과 경로를 사용합니다.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/16 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/32 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
@@ -131,8 +131,10 @@ shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shar
 예상 시간이 긴 단위부터 가장 가벼운 shard에 넣으므로 같은 수집 목록과 시간표는 항상 같은
 shard를 만듭니다. 단위는 테스트 파일이며, `shard_unit` 표시가 붙은 테스트만 예외입니다.
 인자 없는 `@pytest.mark.shard_unit`은 그 사례 하나하나를 파일의 나머지와 다른 shard에서
-실행할 수 있게 하고, `shard_unit('이름')`은 한 파일에서 같은 이름을 단 사례를 함께 묶습니다.
-캐시나 module fixture를 공유하는 사례에 씁니다. import 때 프로세스 전역 상태를 바꾸는
+실행할 수 있게 하고, `shard_unit(per='test')`는 테스트 함수 하나를 그 매개변수 사례 전체와 함께
+한 단위로 만듭니다(파일 전체는 `pytestmark`로 지정). `shard_unit('이름')`은 한 파일에서 같은 이름을
+단 사례를 함께 묶으며, 캐시나 module fixture를 공유하는 사례에 씁니다. 사례에 가장 가까운 표시가
+우선하므로 이름 묶음이 파일 전체 표시보다 앞섭니다. import 때 프로세스 전역 상태를 바꾸는
 파일도 어느 쪽이든 안전합니다. shard마다 별도 프로세스이고, shard 안에서는 `--dist loadfile`이
 한 파일의 사례를 여전히 한 worker에 둡니다. 같은 파일의 다른 사례가 먼저 실행되어야 하는
 사례에는 표시하지 않습니다. shard job들이 끝나면
@@ -145,7 +147,9 @@ shard는 시간보다 runner 메모리 때문입니다. 일반 범위를 worker 
 사용 가능한 7.9 GB를 넘어 매번 50~61 %에서 종료되었습니다. slow 범위도 3개 shard일 때
 run 39098232669의 두 시도 모두 shard 3의 runner가 약 95 %에서 종료되어 6개로 나눴습니다.
 2026-10-20부터의 12개는 시간 때문입니다. 파일 단위로는 slow shard를 가장 큰 파일(21.7 worker-분)
-아래로 줄일 수 없었고, `shard_unit`을 쓰면 가장 큰 단위가 8.1 worker-분입니다. 테스트별 제한은
+아래로 줄일 수 없었고, `shard_unit`을 쓰면 가장 큰 단위가 8.1 worker-분입니다. 일반 범위도 같은 날 16개에서
+32개로 늘렸습니다. 16개일 때는 전체 부하(585 worker-분)와 가장 큰 파일(18.3 worker-분) 양쪽에 막혀
+있었고, 9 worker-분이 넘는 파일 14개는 이제 테스트 함수 단위로 표시합니다. 테스트별 제한은
 1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 shard당 120분입니다. 실측 시간을 배분에 사용하지만
 실제 경과 시간은 수집, 컴파일, worker 스케줄링에도 영향을 받습니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
 대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.

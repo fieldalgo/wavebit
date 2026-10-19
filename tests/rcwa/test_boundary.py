@@ -53,6 +53,9 @@ from tests.fixtures.rcwa.gamma_instruments import mutated  # noqa: E402
 from wavebit._common.geometry import clipper as _c
 from wavebit._common.geometry.polygon import polygon_ft, polygon_area, rect_verts, ellipse_verts
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 PERIOD = (1.0, 1.0)
 CELL = as_lattice(period=PERIOD)      # the same cell, as the basis every builder now takes
 

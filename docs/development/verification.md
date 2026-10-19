@@ -113,7 +113,7 @@ validation of its exact commit. This is a CI execution queue, not a PR merge que
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
 uses the runner for both non-research partitions, each split across runners with
-`--shard INDEX/COUNT`: sixteen shards for the ordinary partition, twelve for the slow one.
+`--shard INDEX/COUNT`: thirty-two shards for the ordinary partition, twelve for the slow one.
 
 CI stores both verification outputs and their pytest temporary fixtures under
 `RUNNER_TEMP`, outside the checkout, so study fixtures can enforce their raw-output
@@ -121,7 +121,7 @@ isolation contract. GitHub provides this variable; for local reproduction, set i
 to an external scratch directory first. Artifact uploads use the same output root.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/16 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/32 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
@@ -136,8 +136,10 @@ the whole partition and records it as `collected-nodeids-all.json`; whole shard 
 then assigned to shards deterministically, largest estimated duration first to the lightest shard,
 so the same collection and timing table give the same shards. A unit is a test file, except
 for tests marked `shard_unit`: a bare `@pytest.mark.shard_unit` lets each of its cases run
-apart from the rest of the file, and `shard_unit('name')` keeps the cases of one file that
-carry that name together, for cases that share a cache or a module fixture. A file that sets
+apart from the rest of the file, `shard_unit(per='test')` makes each test function one unit
+with all its parameter cases (a whole file opts in with `pytestmark`), and `shard_unit('name')`
+keeps the cases of one file that carry that name together, for cases that share a cache or a
+module fixture. The marker closest to a case wins, so a named group overrides a file's mark. A file that sets
 process-wide state at import is safe either way, since every shard is a separate process; within
 a shard `--dist loadfile` still keeps one file's cases on one worker. Mark only cases that do not
 rely on another case of their file having run first. After the
@@ -151,7 +153,10 @@ of the ordinary partition grew past the 7.9 GB available and was shut down at 50
 every time. The slow partition followed: as three shards, shard 3 lost its runner
 at about 95 % on both attempts of run 39098232669, so it ran as six. Twelve since 2026-10-20
 are for the clock: whole files could not bring a slow shard under the largest file, 21.7
-worker-minutes, and with `shard_unit` the largest unit is 8.1. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
+worker-minutes, and with `shard_unit` the largest unit is 8.1. The ordinary partition went
+from sixteen to thirty-two the same day: as sixteen it was bound both by load (585
+worker-minutes) and by its largest file (18.3), and its fourteen files above 9 worker-minutes
+are now marked per test. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
 the job limits are 120 minutes per shard. Measured durations guide balancing;
 actual elapsed times still depend on collection, compilation and worker scheduling. Source-mutating
 cases within a shard run in the runner's separate serial snapshot, not in the shared

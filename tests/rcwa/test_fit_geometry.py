@@ -18,6 +18,9 @@ from functools import partial
 import numpy as np
 import pytest
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 
 jax = pytest.importorskip('jax')
 jnp = pytest.importorskip('jax.numpy')

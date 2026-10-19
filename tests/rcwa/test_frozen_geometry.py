@@ -24,6 +24,9 @@ import pytest
 
 import wavebit
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 #: A permittivity raster. Drawn as an index and squared, so it is the same layer this file
 #: measured before `structure` started holding permittivity.
 STRUCTURE = np.random.default_rng(0).uniform(1.0, 4.0, (1, 5, 5)) ** 2
