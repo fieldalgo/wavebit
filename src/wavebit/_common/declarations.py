@@ -235,6 +235,26 @@ def renamed_keyword_message(where, gone, renamed):
             f'guide, docs/migration/public-names.md.')
 
 
+class Answered:
+    """The ``obj`` of a tombstone's AttributeError: the message already names the replacement,
+    so Python's "Did you mean" (computed from ``dir(obj)``) has nothing to add."""
+
+    def __dir__(self):
+        return []
+
+
+def removed(owner, name, replacement, note=None):
+    """The AttributeError for ``owner.name``, a public name that ``replacement`` replaced.
+
+    A tombstone, never an alias: reading the old name raises and names the new one. ``note``
+    says how to convert a value that is not carried over as it is.
+    """
+    text = f'{owner}.{name} is now {replacement}'
+    return AttributeError(f'{text}{"; " + note if note else ""}. The old name was removed, not '
+                          f'aliased; see the public-name migration guide, '
+                          f'docs/migration/public-names.md.', name=name, obj=Answered())
+
+
 def _signature(cls, leading):
     """The signature ``inspect`` and the API reference show for a spec's ``__init__``.
 
