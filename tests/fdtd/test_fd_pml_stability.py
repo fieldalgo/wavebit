@@ -588,7 +588,7 @@ def test_the_door_takes_a_non_negative_static_number():
     assert fd.PML(cells=12, wavelength=1.0, stabilize=0).stabilize == 0.0
     assert fd.PML(cells=12, wavelength=1.0, stabilize=np.float64(1e-2)).stabilize == 1e-2
     for bad in (-1e-3, float('nan'), float('inf'), 'x', True):
-        with pytest.raises(ValueError, match='stabilize'):
+        with pytest.raises(ValueError, match='stabilizing_loss'):
             fd.PML(cells=12, wavelength=1.0, stabilize=bad)
     # A value so large that the update stops being a loss is refused at lowering, by name.
     with pytest.raises(ValueError, match='a conductor, not a stabilizer'):
