@@ -55,15 +55,9 @@ dependencies = [
 # src/wavebit/_common/backend.py calls jax.lax.linalg.eig(enable_eigvec_derivs=True), which does not
 # exist before 0.11 -- an older jax installs fine and then fails at the first
 # eigendecomposition.
-#
-# The ceiling is temporary. jax 0.12.0 (2026-10-19) recompiles the FDTD scene on a repeated
-# solve -- tests/fdtd/test_fdtd_scan_programs.py::test_a_repeated_scene_solve_runs_no_compiler
-# logs 106 jit compilations on 0.12.0 and none on 0.11.2, on the same code -- and five single-
-# trace FDTD tests fail with it. Nothing has been verified on 0.12, so it stays out until the
-# FDTD side is fixed for it and the suite has been run there; then lift the ceiling.
 jax = [
-    "jax>=0.11,<0.12",
-    "jaxlib>=0.11,<0.12",
+    "jax>=0.11",
+    "jaxlib>=0.11",
     "optax>=0.2",
     "tqdm>=4.67",
 ]
