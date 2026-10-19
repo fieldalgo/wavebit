@@ -5,8 +5,8 @@ Written: 2026-10-18
 Targets:
 
 - `src/wavebit/fdtd/_api.py`
-- `src/wavebit/fdtd/sources.py`
-- `src/wavebit/fdtd/numerics.py`
+- `src/wavebit/fdtd/_sources.py`
+- `src/wavebit/fdtd/_numerics.py`
 - `src/wavebit/fdtd/_runtime.py`
 - `src/wavebit/fdtd/_prepare/params.py`
 - `src/wavebit/fdtd/_kernel/observe.py`
@@ -74,12 +74,12 @@ prepared 실행은 장치를 유지하며 재사용할 때마다 새 입력을 �
 
 | 부분 | CUDA 허용 범위 |
 | --- | --- |
-| 격자와 실행 길이 | 기존 균일 정육면체 격자; 고정 실행 길이; `discretisation='voxel'`; `geometry_ranges` 없음 |
+| 격자와 실행 길이 | 기존 균일 정육면체 격자; 고정 실행 길이; `discretization='voxel'`; `geometry_ranges` 없음 |
 | 경계와 padding | `Periodic`, `Open`, `PEC`, `PMC`; Bloch/Periodic/Open 면만 동반하는 정적 `Bloch`; 열린 면의 `PML` padding |
 | 재료 | 기존 비분산 `Material`, `ConductiveMaterial`; 아래의 별도 균질 단일 극점 ADE 범위 |
-| 구조 | 셀 스냅 `Slab`; 아래 별도 제한을 만족하는 내부 `Region` 하나 |
-| 광원 | `PlaneWave`, 고정 중심의 전기·자기 `Dipole`(`bspline` 또는 `tent` stamp), 초기 장; Bloch 장면에서는 PlaneWave/초기 장만 허용 |
-| 관측 | `Record`, `Field`, `Flux`, 최종 장 |
+| 구조 | 셀 스냅 `SnappedSlab`; 아래 별도 제한을 만족하는 내부 `SnappedBox` 하나 |
+| 광원 | `PlaneWave`, 고정 중심의 전기·자기 `CurrentDipole`(`bspline` 또는 `tent` stamp), 초기 장; Bloch 장면에서는 PlaneWave/초기 장만 허용 |
+| 관측 | `TimeSeriesMonitor`, `FieldMonitor`, `FluxMonitor`, 최종 장 |
 
 초기 E/H 패턴은 고정된 호스트 선언입니다. NumPy 배열, `requires_grad`가
 없는 CPU 텐서, 호스트 callable을 사용합니다. CUDA 텐서 패턴과 미분 가능한
@@ -97,10 +97,10 @@ callable 객체의 동일성만으로 결과를 허용하지 않습니다. H cal
 전용 초기 패턴 시험은 43사례(CPU 22, CUDA 21)를 통과했으며 같은
 callable의 무효 반환값 거부와 이후 유효 반환값 복구를 포함합니다.
 
-`Dipole.current_moment`는 전기 광원의 A·m 또는 등가 자기 광원의 V·m 단위
+`CurrentDipole.current_moment`는 전기 광원의 A·m 또는 등가 자기 광원의 V·m 단위
 전류 모멘트입니다. 세기 파라미터는 `current_moment`이며,
 `PlaneWave.amplitude`는 V/m 단위의 전기장 진폭입니다. 전류 모멘트·phase·
-delay는 live 미분 그래프를 유지합니다. Dipole 중심과 stamp는 고정값이며
+delay는 live 미분 그래프를 유지합니다. `CurrentDipole` 중심과 stamp는 고정값이며
 바꾸려면 다시 준비해야 합니다. 위치 미분, 주기 경계를 가로지르거나 전도성
 벽에 닿거나 PML 안에 있는 지지 영역은 기존 광원 검사에서 계속 거부합니다.
 
@@ -108,42 +108,42 @@ CUDA의 Bloch `phase`나 `k`는 정적 값이며 순방향 AD dual과 변환·�
 포함한 경계값의 live 미분은 이 범위 밖입니다. 미분하지 않는 일반 호스트
 스칼라 텐서는 정적 선언으로 허용합니다. 값이나 phase/k 표현을 바꾸면 다시
 준비해야 합니다. Bloch와
-PEC/PMC 벽 또는 Dipole 광원의 조합은 계속 거부합니다. 비스듬한 PlaneWave
+PEC/PMC 벽 또는 CurrentDipole 광원의 조합은 계속 거부합니다. 비스듬한 PlaneWave
 각도는 라디안이며 `Bloch.from_source(source, units=...)`가 펄스 중심 파장의
 고정 가로 파수 벡터를 만듭니다. 전 스펙트럼에서 일정한 입사각을 뜻하지 않습니다.
 
-`Decay`, 다른 흡수층인 `Absorber`, 범위 지정·스무딩 기하, 균질 ADE 범위 밖의 분산 장면,
+`DecayStop`, 다른 흡수층인 `ConductiveAbsorber`, 범위 지정·스무딩 기하, 균질 ADE 범위 밖의 분산 장면,
 대칭·불변축 경계, TFSF 광원, 회절·원거리장 관측은 이
 CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해당 공개 필드
 경로의 `cuda_scope` 이슈를 반환합니다. 입력 허용이 표본화, CFL, 재료,
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
 장을 시간 진행했다는 뜻이 아닙니다.
 
-## 정적인 내부 Region
+## 정적인 내부 SnappedBox
 
-별도로 제한한 Region 경로는 일반 `Structure(Region(...), material)` 하나,
-여섯 `Periodic` 면과 외부 광원이 없는 경우를 대상으로 합니다. 각 Region
+별도로 제한한 SnappedBox 경로는 일반 `Structure(name, shape=SnappedBox(...), material=...)` 하나,
+여섯 `Periodic` 면과 외부 광원이 없는 경우를 대상으로 합니다. 각 SnappedBox
 면은 실제 반올림 격자의 가장 가까운 셀 경계로 스냅합니다. 모든 축의
 채워진 구간이 `0 < lo < hi < n`을 만족해야 합니다. 주기 이음새에 닿거나
 한 축 전체를 차지하거나 빈 구간으로 줄어드는 형상은 범위 밖입니다.
-여러 Region, Region/Slab 혼합, continuation, `Box`, smoothing과 형상 미분은
-제외합니다. 기존 Slab과 CPU 경로는 각각의 계약을 유지합니다.
+여러 SnappedBox, SnappedBox/SnappedSlab 혼합, continuation, `Box`, smoothing과 형상 미분은
+제외합니다. 기존 SnappedSlab과 CPU 경로는 각각의 계약을 유지합니다.
 
 배경과 내부 재료 모두 스칼라 실수 비분산 `Material` 또는
 `ConductiveMaterial`을 사용하며 `mu=None`은 1입니다. 기존 유한값·양수·CFL
-검사는 준비와 재사용에도 적용됩니다. Region 중심·크기와 초기 공간 패턴은
+검사는 준비와 재사용에도 적용됩니다. SnappedBox 중심·크기와 초기 공간 패턴은
 정적입니다. 형상이나 패턴을 바꾸면 다시 준비해야 하며, 호환되는 스칼라
 재료 값이나 실수 초기 진폭의 변경은 기존 live 입력 경로를 사용합니다.
 
 초기 E/H 중 하나 이상은 실제 `(3,nz,ny,nx)` 모양의 유한한 실수 plain NumPy
 배열이어야 하고 다른 하나는 `None`이어도 됩니다. 텐서 패턴, callable,
-성분 리스트는 이 경로에서 제외합니다. 일반 `Record`와 최종 장 출력만
+성분 리스트는 이 경로에서 제외합니다. 일반 `TimeSeriesMonitor`와 최종 장 출력만
 허용하며 고정 실행 길이·배정밀도·voxel 표본화와 기존 선택적 체크포인트
-정책을 적용합니다. Open/PML, PEC/PMC, Bloch, ADE, 광원, Field/Flux,
-범위 지정 기하를 포함한 Region 장면은 이 제한 범위 밖입니다. 입력 허용이
+정책을 적용합니다. Open/PML, PEC/PMC, Bloch, ADE, 광원, FieldMonitor/FluxMonitor,
+범위 지정 기하를 포함한 SnappedBox 장면은 이 제한 범위 밖입니다. 입력 허용이
 경계면 수렴이나 일반 형상 미분 검증을 뜻하지 않습니다.
 
-### 독립 이산 Region 기준
+### 독립 이산 SnappedBox 기준
 
 기준해는 선언한 기하에서 점유 셀 마스크를 독립적으로 만들고 명시적인
 modulo 인덱스의 전방·후방 Yee 차분을 사용합니다. `h=Z0*H`,
@@ -156,16 +156,16 @@ modulo 인덱스의 전방·후방 Yee 차분을 사용합니다. `h=Z0*H`,
 
 기본 사례는 dx 0.05 um, 영역 크기 `(0.61,0.49,0.71)` um, 중심
 `(0.1,-0.15,0.2)` um입니다. 독립 올림으로 `(nx,ny,nz)=(13,10,15)`, 실제
-아래쪽 모서리 `(-0.225,-0.4,-0.175)` um를 얻습니다. Region 크기
+아래쪽 모서리 `(-0.225,-0.4,-0.175)` um를 얻습니다. SnappedBox 크기
 `(0.305,0.225,0.365)` um와 중심 `(0.0375,-0.2025,0.1625)` um는 반열린
 인덱스 구간 x `[2:8]`, y `[2:6]`, z `[3:10]`의 168셀을 차지합니다.
 세 순환 축 배치와 동일 SI의 um/nm 선언으로 방향과 단위 변환을 검사합니다.
-초기 실수 장은 성분별 Yee 위치에서 표본화하며 여섯 성분 모두 Record와
+초기 실수 장은 성분별 Yee 위치에서 표본화하며 여섯 성분 모두 TimeSeriesMonitor 이력과
 최종 장으로 관측합니다.
 
 검사는 17·41단계이며 체크포인트 7의 나머지는 각각 3·6단계입니다.
-전체 장·Record 이력은 최대값 정규화 `2e-12`, 시각은 상대 `2e-14`, 가중
-장·Record 제곱 norm과 영이 아닌 네 재료·진폭 미분은 상대 `2e-12`, 절대 0을
+전체 장·TimeSeriesMonitor 이력은 최대값 정규화 `2e-12`, 시각은 상대 `2e-14`, 가중
+장·시계열 제곱 norm과 영이 아닌 네 재료·진폭 미분은 상대 `2e-12`, 절대 0을
 사용합니다. `|parameter_scale*gradient|/loss > 1e-6` 조건으로 의미 없는
 미분 비교를 막습니다. CUDA 검증 전에 마스크 이동, floor/nearest 차이,
 축·주기 연결·curl 부호 오류, mu 누락, 전도도 분모·tangent 항 누락을 각각
@@ -183,7 +183,7 @@ CPU 진폭 리프는 같은 prepared 장면에 연결됩니다. 입력 패턴·�
 
 | 검증 | 호스트 사례 | 실제 CUDA 사례 |
 | --- | ---: | ---: |
-| 독립 마스크/Yee/접선, 장, Record, 재사용과 단위 | 25 | 17 |
+| 독립 마스크/Yee/접선, 장, 시계열, 재사용과 단위 | 25 | 17 |
 | 입력 허용·변환·거부 및 같은 리프의 invalid/recovery 계약 | 51 | 6 |
 | 고유 신규 사례 | 76 | 23 |
 
@@ -192,12 +192,12 @@ CPU 진폭 리프는 같은 prepared 장면에 연결됩니다. 입력 패턴·�
 통과했고 경고 25개가 발생했습니다. 반복 검증은 고유 사례 수에 더하지
 않았으며, 기존 CPU 회귀 검사 25개도 별도로 통과했습니다.
 
-기록된 내부 재료 재사용 장·Record 오차의 최대값은 `3.97962361e-15`입니다.
+기록된 내부 재료 재사용 장·시계열 오차의 최대값은 `3.97962361e-15`입니다.
 기록된 내부·배경 목적함수 기울기를 독립 감사한 최대 상대 오차는
 `9.28604067e-14`로, 기존 `2e-12` 기준을 만족합니다. 무손실·단위 쌍의 장
 assertion도 통과했지만 개별 오차를 기록하지 않았으므로 내부 재사용의
 최대값을 모든 장 사례의 최대값으로 해석하지 않습니다. 이 결과는 제한된
-이산 1차 미분 계약을 검증하며 연속체 경계면 정확도·형상 미분·임의 Region
+이산 1차 미분 계약을 검증하며 연속체 경계면 정확도·형상 미분·임의 SnappedBox
 조합을 검증하지 않습니다.
 
 ## 유한한 광원 값과 prepared 복구
@@ -205,7 +205,7 @@ assertion도 통과했지만 개별 오차를 기록하지 않았으므로 내�
 광원 진폭·phase·delay와 `InitialField.amplitude`는 유한해야 합니다.
 광원의 `Band.wavelength`와 `Band.df`는 양수이면서 유한해야 합니다.
 복소 진폭은 기존 장 계약에서 허용하는 경우에만 실수부·허수부를 모두
-검사하며, 실수 실행의 복소 진폭은 계속 거부합니다. Dipole의 공개 세기
+검사하며, 실수 실행의 복소 진폭은 계속 거부합니다. `CurrentDipole`의 공개 세기
 파라미터는 `current_moment`이며 lowering이 여기서 광원 진폭을 유도합니다.
 
 이전에는 live 광원 또는 초기 진폭 리프를 NaN으로 바꾸면 장이 NaN이면서
@@ -231,10 +231,10 @@ phase·초기 진폭 리프를 제자리에서 갱신하며, 리프의 동일성
 양·음의 무한대, 양수가 아닌 파장·대역폭, 복소수 양쪽 성분, 혼합 장치
 리프, 유효한 concrete guard의 동일성, Torch 논리 view와 bfloat16 변환을
 포함합니다. Torch 순방향·배치 변환과 JAX JIT·미분은 helper 수준의 검사이며,
-임의의 전체 solver 변환이나 복소 Dipole 허용을 검증한 것이 아닙니다.
+임의의 전체 solver 변환이나 복소 CurrentDipole 허용을 검증한 것이 아닙니다.
 
 별도로 기존 CPU CPML 진폭·phase Hessian 두 사례와 기존 CPU 광원 미분·
-파형 세 사례가 해당 Torch/JAX 및 Dipole/TFSF/PlaneWave 경로에서 통과했습니다.
+파형 세 사례가 해당 Torch/JAX 및 CurrentDipole/TFSF/PlaneWave 경로에서 통과했습니다.
 기존 실제 CUDA 열 사례도 통과했습니다. CPML Hessian 네 사례, 복소 Bloch
 관측 Hessian 두 사례, 정확한 전도체 Hessian 두 사례와 전도도·초기 진폭
 미분 두 사례입니다. 기존 수치 기준을 그대로 유지했고 CUDA 실행의 격자·
@@ -265,7 +265,7 @@ phase만 carried인 경우 concrete band를 다시 검사하지 않습니다. �
 재료·기하·변환 입력 허용을 추가하지 않습니다.
 
 `test_general_source_band_guard.py`의 **새 43사례: CPU 22개·CUDA 21개가
-통과**했습니다. 공개 복구 사례는 주기적 8³·17단계 Ey Dipole에서 같은
+통과**했습니다. 공개 복구 사례는 주기적 8³·17단계 Ey CurrentDipole에서 같은
 파장·대역폭 리프를 사용하며 CUDA plain과 체크포인트 7을 검사합니다.
 helper 사례는 엄격한 경계값, 파장만 또는 대역폭만 carried인 경우, 혼합
 리프 장치, 두 스펙트럼 유도량의 오버플로, 이전 실패 유효성 보존, Torch/JAX
@@ -297,7 +297,7 @@ backend certificate가 실행마다 기존 광원·보고서의 공간 하한을
 최단 파장은 유한한 양수여야 합니다. 기존 굴절률 규칙은
 `abs(epsilon*mu)`가 가장 큰 성분(동률이면 첫 성분)의 수동 제곱근을
 선택합니다. 파동 규칙은 **매질 내 파장당 8셀**에서 등호를 허용합니다.
-기존 금속 광원·보고서의 skin-depth 규칙과 정적 Diffraction 파장의 파동
+기존 금속 광원·보고서의 skin-depth 규칙과 정적 DiffractionMonitor 파장의 파동
 규칙은 구분해서 유지합니다. 전도도는 기존 conductive-film descriptor가
 성립할 때만 이 certificate에 들어가며, 일반 전도도 해상도 규칙이나 필름
 허용 범위를 추가하지 않습니다.
@@ -319,11 +319,11 @@ Host의 `CoarseMeshWarning`은 계획 단계에서 traced 최단 파장을 읽�
 양의 carrier cutoff를 유지합니다. 수정 후 공개 valid→invalid→valid 검사는
 잘못된 점에서 NaN 장과 실패한 런타임 유효성을 반환하고, 이전 결과와
 리프·`.grad` 소유권을 보존하며 정확히 복구합니다. 주기적 8³·17단계 Ey
-Dipole에서 CPU plain과 CUDA plain·체크포인트 7을 사용합니다.
+CurrentDipole에서 CPU plain과 CUDA plain·체크포인트 7을 사용합니다.
 
 `test_general_source_resolution_guard.py`의 **새 30사례: CPU 25개·CUDA
 5개가 통과**했습니다. Helper 대조군은 등호를 포함한 하한과 인접 부동소수점
-값, 모든 광원·재료 선택, 이전 실패 유효성, 정적 Diffraction, descriptor로
+값, 모든 광원·재료 선택, 이전 실패 유효성, 정적 DiffractionMonitor 파장, descriptor로
 한정한 전도도, 극점이 있을 때 전체 이전 경로 유지, live band의 host 읽기
 없이 상수인 Torch/JAX 미분 certificate를 검사합니다. 이는 일반 solver
 변환 지원을 뜻하지 않습니다. 첫 CPU 묶음 119개가 통과한 뒤 추가한 대역폭
@@ -380,7 +380,7 @@ guard가 문자 그대로 `None`인 동일성까지 보장하지 않습니다. C
 정확히 회복하며 이전 출력·잎의 동일성·기존 `.grad` 버퍼는 변하지 않습니다.
 Concrete 무효 값은 구조화된 거부를 받습니다. 개별 중간 연산 오버플로,
 마지막 표본, 전기·자기 row shift, backend `t0` 오버플로 경계의 인접값,
-유효 guard 동일성과 변경하지 않은 source-free·`Decay` 경로도 검사했습니다.
+유효 guard 동일성과 변경하지 않은 source-free·`DecayStop` 경로도 검사했습니다.
 Torch forward/reverse/batch와 JAX JIT/gradient/Hessian/batch 검사는 상수
 certificate에 한정되며 임의 변환을 적용한 전체 solver를 검증한 것은 아닙니다.
 
@@ -393,7 +393,7 @@ projected pulse fitting 6사례입니다. 새 36사례와 합쳐 이번 변경�
 
 이는 Gaussian 식을 바꾸는 것이 아니라 표현 가능 범위를 제한하는 검사입니다.
 이상적인 envelope가 0이더라도 매우 큰 유한 펄스 선언은 거부될 수 있습니다.
-파형 연산·광원 및 장의 허용 범위를 바꾸거나 적응형 `Decay` 경로를 검증하지
+파형 연산·광원 및 장의 허용 범위를 바꾸거나 적응형 `DecayStop` 경로를 검증하지
 않습니다. `runtime_stability`가 true라는 것은 구현된 certificate를
 통과했다는 뜻이며, 모든 출력·중간값·미분값이 유한한지 전부 검사했다는 뜻은
 아닙니다.
@@ -429,7 +429,7 @@ import는 보존한 변경 전 소스와 대조했습니다. 모든 표본 출�
 ## 같은 리프의 SGD 재사용
 
 `studies/fdtd/general_cuda/optimizer_reuse.py`는 같은 학습 리프를 반복해서
-갱신하며 prepared 실행을 재사용하는지 검사합니다. 전기 Ey Dipole 사례는
+갱신하며 prepared 실행을 재사용하는지 검사합니다. 전기 Ey CurrentDipole 사례는
 축마다 물리 셀 12개, 각 Open 면에 PML 셀 네 개를 더한 실제 20³ 격자에서
 41단계를 실행합니다. 일반 스캔과 체크포인트 7은 같은 물리를 사용하며
 체크포인트 끝에는 여섯 단계가 남습니다. 짧고 얇은 PML을 쓴 이 사례는
@@ -522,7 +522,7 @@ CUDA 13.0, NumPy 2.5.4, Windows 11, RTX 4060 Ti, Torch CPU 스레드 하나입�
 
 ## 균질 단일 극점 ADE
 
-제한된 분산 경로는 실제 격자 전체를 덮는 `Slab` 하나에
+제한된 분산 경로는 실제 격자 전체를 덮는 `SnappedSlab` 하나에
 `DispersiveMaterial`을 놓고, 여섯 면 모두 `Periodic`이며 `Lorentz` 또는
 `Drude` 극점이 정확히 하나인 경우입니다. 기존 균일 격자·고정 실행 길이·
 배정밀도·voxel 조건을 유지합니다. 재료 경계면이나 외부 광원은 없고 배경
@@ -530,10 +530,10 @@ CUDA 13.0, NumPy 2.5.4, Windows 11, RTX 4060 Ti, Torch CPU 스레드 하나입�
 유한 실수 NumPy 배열이며, 하나는 `None`으로 두어 영인 장을 사용할 수
 있습니다. 이 ADE 범위는 CPU 텐서·callable·성분별 리스트를 허용하지
 않습니다. 실수·정수 배열은 배정밀도 실행 값으로 변환하고 float32의 기존
-정밀도 경고는 유지합니다. `Record` 또는 최종 장을 관측하며,
-`final_fields=False`인 Record 전용 실행도 가능합니다.
+정밀도 경고는 유지합니다. `TimeSeriesMonitor` 또는 최종 장을 관측하며,
+`final_fields=False`인 TimeSeriesMonitor 전용 실행도 가능합니다.
 Open/PML, Bloch, 벽, 여러 극점, Debye, 분산 배경 재료, 공간 필름,
-푸리에·Flux 관측은 이 경로 밖입니다.
+푸리에·플럭스 관측은 이 경로 밖입니다.
 
 `epsilon_inf`, `mu`, 감쇠 `gamma`, Lorentz `omega_0`는 비미분 스칼라이고
 `mu=None`은 1입니다. resolved plan이 호환되고 과학적 검사를 통과하면
@@ -591,9 +591,9 @@ CPU 진단 두 사례는 격자와 물리적 종료 시간 `6.671281903963041e-1
 독립 검사는 균일 장에 SI 특성근·스칼라 갱신식을, 0 아닌 푸리에 모드에
 직접 구성한 15×15 맥스웰·편극 상태 행렬과 물리적 Yee 위치를 사용합니다.
 극점 누락·잘못된 초기화 대조군은 검출 가능한 차이를 내야 합니다.
-장·Record 최대값 정규화 오차 기준은 `1e-11`, 균일 갱신식 잔차는 `1e-12`
+장·시계열 최대값 정규화 오차 기준은 `1e-11`, 균일 갱신식 잔차는 `1e-12`
 입니다. 45×45 행렬 거듭제곱의 Frechet 미분이 최종 장 및 부호를 포함한
-Record 이력 목적함수의 진폭·재료 기울기와 전체 Hessian을 제공합니다.
+시계열 목적함수의 진폭·재료 기울기와 전체 Hessian을 제공합니다.
 기준은 상대 `2e-12`, 절대 0입니다. 일반·체크포인트 스캔, 서로 다른 장치의
 리프, prepared 재사용과 이전 결과 보존을 별도로 검사합니다. 이 기준은
 선언한 이산 초기화를 공유합니다. Eager 역방향 미분과 double backward를
@@ -609,22 +609,22 @@ CPU 7사례, 이후 실제 CUDA 6사례(0.90초, 65 deselect, 예상 경고 7개
 | CUDA 대조군 | 기록한 최대 상대 오차 | 기준 |
 | --- | ---: | ---: |
 | 균일 최종 장 | 4.00635199454821e-13 | 1e-11 |
-| 균일 Record | 1.3211653993039363e-14 | 1e-11 |
+| 균일 시계열 | 1.3211653993039363e-14 | 1e-11 |
 | 균일 스칼라 갱신식 | 2.7755575615628914e-16 | 1e-12 |
 | 푸리에 최종 장 | 2.1958220980047683e-13 | 1e-11 |
-| 푸리에 Record | 4.73407123422404e-13 | 1e-11 |
+| 푸리에 시계열 | 4.73407123422404e-13 | 1e-11 |
 | 자기장만 초기화, `E=None`, `mu=None` | 7.496839298600154e-15 | 1e-11 |
-| 이동한 직육면체, 모든 Slab 축, 같은 SI의 um/nm 선언 | 8.560921989767082e-15 | 1e-11 |
+| 이동한 직육면체, 모든 SnappedSlab 축, 같은 SI의 um/nm 선언 | 8.560921989767082e-15 | 1e-11 |
 | epsilon/mu/gamma/omega_0 구체값을 바꾼 prepared 재사용 | 7.137981093552503e-15 | 1e-11 |
 | 최종 장 값·기울기·전체 Hessian | 4.438322122768973e-14 | 2e-12 |
-| Record 전용 값·기울기·전체 Hessian | 7.834081628920496e-15 | 2e-12 |
+| TimeSeriesMonitor 전용 값·기울기·전체 Hessian | 7.834081628920496e-15 | 2e-12 |
 
 이동한 상자는 간격 0.05 um에서 `(0.61,0.49,0.71)` um를 선언하며,
 올림 후 `(13,10,15)` 셀과 실제 크기 `(0.65,0.5,0.75)` um가 됩니다.
-전체 격자 Slab은 명목 영역뿐 아니라 이 실제 셀 전체를 덮어야 합니다.
+전체 격자 SnappedSlab은 명목 영역뿐 아니라 이 실제 셀 전체를 덮어야 합니다.
 미분 사례는 12³ 셀, 17단계, 일반 스캔 또는 꼬리 3단계를 가진 블록 7,
 진폭·재료 파라미터 두 점, CPU 진폭 리프와 실행 장치의 재료 리프를
-사용합니다. Record 목적함수는 시간·공간이 엇갈린 여섯 성분 모두의 가중
+사용합니다. TimeSeriesMonitor 목적함수는 시간·공간이 엇갈린 여섯 성분 모두의 가중
 제곱과 0 아닌 부호 있는 선형 항을 사용하며 최종 장 출력은 필요하지
 않습니다. 계약 검사는 유효하지 않은 live 재료 처리, float32·정수 변환,
 정밀도 경고와 CPU epsilon 미분 경로도 유지합니다. 기준을 완화하지
@@ -643,7 +643,7 @@ plan 식별에 포함되고 호환되는 prepared 재사용에서도 다시 선�
 축소된 plan은 CPU나 Torch 외 백엔드에서 실행할 수 없습니다.
 
 일반 CPU, NumPy/JAX 및 다른 기존 극점 사용 경로는 원래 항을 유지합니다.
-특히 소스가 있는 plan, `Decay`, 필름, 소스 열, 하위 클래스, 여러 극점,
+특히 소스가 있는 plan, `DecayStop`, 필름, 소스 열, 하위 클래스, 여러 극점,
 CPML, 기하 범위로 확장하지 않습니다. 배정밀도 전체 격자 극점 하나에서
 논리적 E/H+극점 보고량은 스칼라 성분 15개(셀당 120바이트)에서
 12개(96바이트)로 줄어듭니다. 극점 이력만 보면 성분 아홉 개에서 여섯 개로
@@ -668,7 +668,7 @@ CPU·장치 불필요 21사례와 실제 CUDA 10사례를 통과했습니다. �
 실제 상태 바이트, prepared 재사용을 검사하며, CUDA 여덟 사례는
 no-grad/inference 예열 뒤 35단계·블록 8/32·나머지 3단계에서 전체 Hessian을
 비교합니다. 기존 이산해·미분 기준은 유지했습니다. 연구 도구의 독립 기준해
-17검사도 통과했고, 기존 CPU 회귀 여덟 검사는 일반·필름 Decay 메모리,
+17검사도 통과했고, 기존 CPU 회귀 여덟 검사는 일반·필름 DecayStop 메모리,
 필름 에너지, PlaneWave 소스 lowering의 해당 NumPy/JAX/Torch 경로를
 유지했습니다. 이 집계는 서로 구분하며 전체 CI 통과를 뜻하지 않습니다.
 
@@ -685,7 +685,7 @@ allocated/reserved 최대값은 같았습니다. 이 결과는 일반적인 가�
 제품 연구는 Python 3.12.14, Torch 2.14.1+cu130, CUDA 13.0, NumPy 2.5.4,
 Windows 11, RTX 4060 Ti(장치 8585216000바이트), Torch CPU 스레드 하나,
 float64를 사용했습니다. 각 행은 새 프로세스에서 한 번 예열한 뒤
-163단계를 동기화하여 다섯 번 측정했습니다. 전체 격자 재료, Ey Record
+163단계를 동기화하여 다섯 번 측정했습니다. 전체 격자 재료, Ey 시계열
 하나와 최종 장을 사용하는 균일 초기 진폭·Lorentz strength 미분 사례이며,
 모든 정책의 `sum(E_final**2)` 목적함수는 같은 SI 갱신식을 따릅니다.
 
@@ -707,9 +707,9 @@ lowering·adaptation 및 관련 호스트 작업), 목적함수와 `autograd.gra
 소유권 실행의 최대값은 포함하지 않습니다. 할당자 값에는 CPU, 드라이버·
 화면, 다른 프로세스 메모리가 포함되지 않습니다.
 
-측정한 30회 모두 독립 특성근·Record(`1e-11`), 절대 갱신식 잔차(`1e-12`),
+측정한 30회 모두 독립 특성근·시계열(`1e-11`), 절대 갱신식 잔차(`1e-12`),
 목적함수·재료·진폭 미분(상대 `2e-12`, 절대 0) 검사를 통과했습니다.
-최대 Record, 절대 갱신식, 상대 기울기 오차는 각각
+최대 시계열, 절대 갱신식, 상대 기울기 오차는 각각
 `6.106226635438361e-15`, `3.9985376121265404e-16`,
 `2.3453478832892504e-13`입니다. 소스 해시는 변하지 않았고 여섯 프로세스
 모두 마지막 current allocated/reserved가 0으로 돌아왔습니다. 실제 극점
@@ -740,10 +740,10 @@ Job 네 사례를 포함한 통합 실행은 60사례가 모두 통과했습니�
 | --- | --- |
 | 주기 상자의 균일 전도체, 20단계 | E와 시간 기록의 정확한 SI 전도도 갱신식, 변하지 않는 H; 상대 `2e-14` |
 | 전도도와 초기 진폭 미분 | 갱신식의 닫힌형 미분과 상대 `2e-12`; CPU와 CUDA 파라미터 리프 모두 검사 |
-| CPML, 평면파, 장 기록·푸리에 장·플럭스를 포함한 슬래브 | 기존 최대값 정규화 무한대 노름 기준 `5e-13`으로 NumPy CPU 비교; prepared 재사용, 바뀐 입력, 이전 결과 보존 |
-| 슬래브 유전율과 광원 미분 | NumPy 재료 중앙차분과 상대 `1e-6`, 절대 `1e-8`; 정확한 광원 이차 항등식과 상대 `2e-12` |
-| 161단계 Record, Field, Flux 목적함수 | CPU/CUDA 값과 상대 `5e-13`; 광원 이차 항등식과 `2e-11`; 두 간격의 영이 아닌 재료 중앙차분과 `2e-6` |
-| x·y·z 법선 슬래브, 열린 3D 펄스, 전도도가 있거나 없는 대각 epsilon·mu | 최대값 정규화 `5e-13`으로 CPU 장 비교; 방향 오차가 상쇄로 숨지 않도록 영이 아닌 상자 플럭스 여섯 면을 개별 비교 |
+| CPML, 평면파, 장 기록·푸리에 장·플럭스를 포함한 SnappedSlab | 기존 최대값 정규화 무한대 노름 기준 `5e-13`으로 NumPy CPU 비교; prepared 재사용, 바뀐 입력, 이전 결과 보존 |
+| SnappedSlab 유전율과 광원 미분 | NumPy 재료 중앙차분과 상대 `1e-6`, 절대 `1e-8`; 정확한 광원 이차 항등식과 상대 `2e-12` |
+| 161단계 TimeSeriesMonitor, FieldMonitor, FluxMonitor 목적함수 | CPU/CUDA 값과 상대 `5e-13`; 광원 이차 항등식과 `2e-11`; 두 간격의 영이 아닌 재료 중앙차분과 `2e-6` |
+| x·y·z 법선 SnappedSlab, 열린 3D 펄스, 전도도가 있거나 없는 대각 epsilon·mu | 최대값 정규화 `5e-13`으로 CPU 장 비교; 방향 오차가 상쇄로 숨지 않도록 영이 아닌 상자 플럭스 여섯 면을 개별 비교 |
 | 서로 다른 장치의 재료·광원 리프 | Epsilon/mu/conductivity 값과 미분은 CPU와 일치; CPU phase와 CUDA delay 미분은 두 간격의 영이 아닌 NumPy 중앙차분과 상대 `2e-6`으로 일치; 리프 장치 소유권 유지 |
 | 고정 초기 패턴과 정밀도 | prepared CPU 텐서 패턴을 수정하면 재사용 무효; 미분 가능한 패턴 거부; float32 호스트 패턴은 정밀도 경고를 유지하며 실행 장은 float64, 입력은 보존하고 진폭 기울기는 원래 float32 CPU 리프로 반환 |
 | 입력과 재사용 제어 | 지원 밖 범위는 계획 전에 거부; 준비는 장을 진행하지 않음; 호환되지 않거나 잘못된 재사용 거부; 잘못된 미분 가능 재료는 실패한 validity와 NaN을 유지 |
@@ -781,7 +781,7 @@ Job 네 사례를 포함한 통합 실행은 60사례가 모두 통과했습니�
 5개를 27.37초에 통과했습니다. 이후 확장한 계약 13개와 관측값 4개가
 103.92초에 통과했습니다. 이 실행의 예상 coarse-mesh·유한 관측 창 경고
 142개를 그대로 기록했습니다. 나중 계약 재실행은 첫 실행과 겹치므로 고유
-합계에 다시 더하지 않습니다. 장치가 필요 없는 13개 검사는 Dipole/벽 제외,
+합계에 다시 더하지 않습니다. 장치가 필요 없는 13개 검사는 CurrentDipole/벽 제외,
 순방향 AD/`torch.func` 래퍼, prepared 재사용 시 primal은 같고 tangent가
 있는 forward dual을 다룹니다. 이는 실행 전 거부의 근거이며 CUDA 실행의
 근거는 아닙니다.
@@ -832,24 +832,24 @@ NumPy 광원 위상 기저 실행 두 개의 복소수 내적으로 다섯 그�
 위상 리프, 보존한 역방향 그래프와 이전 공개 출력 버퍼는 prepared 재사용에도
 소유권을 유지합니다.
 
-별도의 Record·Field·Flux 목적함수는 NumPy 값 상대 `5e-13`, 진폭 제곱 관계
+별도의 TimeSeriesMonitor·FieldMonitor·FluxMonitor 목적함수는 NumPy 값 상대 `5e-13`, 진폭 제곱 관계
 `2e-12`, 광원 위상·슬래브 epsilon 중앙 차분 상대 `2e-6`으로 비교하며 모두
 절대 허용오차는 0입니다. 각 secant는 파라미터 값의 `1e-4`와 `5e-5` 두
 간격을 사용하고 0 아닌 신호·미분 하한을 둡니다. 출력에는 고정 SI 단위
 인자만 곱합니다. 짧은 관측 창과 mesh 경고를 유지하며 이 유한 궤적 AD
 검사로 PML 반사 정확도나 수렴한 광학 스펙트럼을 검증하지 않습니다.
 
-## 고정 중심 Dipole 근거
+## 고정 중심 CurrentDipole 근거
 
-이후 Dipole 추가 검증은 별도 실행에서 CPU 42사례와 실제 CUDA 46사례가
+이후 CurrentDipole 추가 검증은 별도 실행에서 CPU 42사례와 실제 CUDA 46사례가
 통과했으며 기존 CUDA 거부 대조군 아홉 사례도 통과했습니다. 앞의 60사례
-실행과 별개의 기록입니다. 고정 실행 길이·배정밀도·voxel·재료·Slab·경계·
+실행과 별개의 기록입니다. 고정 실행 길이·배정밀도·voxel·재료·SnappedSlab·경계·
 관측기의 기존 제한은 그대로 적용합니다.
 
 | 검사 파일 | CPU / CUDA 통과 | 근거 |
 | --- | ---: | --- |
 | `test_general_cuda_dipole.py` | 23 / 27 | 전기·자기, 세 축, 두 stamp: 한 단계 SI 모멘트 상대 `1e-13`, 독립적으로 재구성한 Yee 무게중심 절대 `1e-13` um. 짧은 슬래브/PML 장·광원 이력·관측은 NumPy와 최대값 정규화 `5e-13`으로 일치하며 고정값·지지 영역 거부와 재사용을 검사. |
-| `test_general_cuda_dipole_conductive.py` | 12 / 12 | 전기 Dipole: 세 축 × 두 stamp × 스칼라/대각 epsilon·mu, 스칼라 전도도 600 또는 2400 S/m. 독립식 `E1 = -dt*J/(epsilon0*epsilon + sigma*dt/2)`으로 같은 기준의 모멘트·무게중심을 복원하고 반 단계 SI 광원 일을 검사. |
+| `test_general_cuda_dipole_conductive.py` | 12 / 12 | 전기 CurrentDipole: 세 축 × 두 stamp × 스칼라/대각 epsilon·mu, 스칼라 전도도 600 또는 2400 S/m. 독립식 `E1 = -dt*J/(epsilon0*epsilon + sigma*dt/2)`으로 같은 기준의 모멘트·무게중심을 복원하고 반 단계 SI 광원 일을 검사. |
 | `test_general_cuda_dipole_radiation.py` | 7 / 7 | 진공 Gaussian bspline 광원: Larmor 에너지 세분화, 전기·자기 쌍대성, um/nm 기하 단위를 바꿔도 같은 SI 결과. |
 
 기본 미분 사례는 CPU 전류 모멘트·delay와 CUDA phase·재료 리프를
@@ -890,7 +890,7 @@ PEC/PMC 벽 조합은 거부합니다. 대칭·불변축 경계는 CUDA 범위 �
 | 검사 파일 | CPU / CUDA 통과 | 근거 |
 | --- | ---: | --- |
 | `test_general_cuda_walls.py` | 20 / 20 | 300단계 PEC/PMC 16³ 공동, x/y/z의 양방향 혼합 벽, 각 벽에 닿는 광원 지지 영역 거부. |
-| `test_general_cuda_wall_ad.py` | 18 / 21 | 독립 초기 노드 투영, 41단계 초기 진폭·내부 전기·자기 Dipole 미분, prepared 소유권, 벽/Open/PML 상호작용 두 사례. |
+| `test_general_cuda_wall_ad.py` | 18 / 21 | 독립 초기 노드 투영, 41단계 초기 진폭·내부 전기·자기 CurrentDipole 미분, prepared 소유권, 벽/Open/PML 상호작용 두 사례. |
 
 공동 기준은 독립 이산 Yee 주파수와 정확한 시공간 엇갈림 장을 사용하며
 기존 갱신식 잔차 상대 `1e-11`, 위상·진폭 상대 `1e-10`을 유지합니다.
@@ -904,7 +904,7 @@ PEC-high와 PMC-low는 외부 ghost를 사용하며 저장된 층을 추가로 0
 않습니다. 마스크 밖 내부와 사용자 입력은 유지합니다. 41단계 CPU 실행은
 단순 스캔이며 CUDA는 블록 7·6단계 tail도 검사합니다. CPU/CUDA 진폭 리프의
 이차 항등식은 `2e-12`, 초기 진폭의 NumPy 중앙차분은 `1e-7`입니다.
-내부 xyz 전기·자기 Dipole의 전류 모멘트·phase 미분은 두 NumPy 중앙차분과
+내부 xyz 전기·자기 CurrentDipole의 전류 모멘트·phase 미분은 두 NumPy 중앙차분과
 `1e-7` 및 `1e-10*loss`, 이차 스케일은 `1e-12`, 반 단계 광원 일은
 `1e-13`으로 일치합니다. 새 실행과 prepared 재사용은 이전 결과와 입력
 소유권을 유지하며 경계 선언이 바뀌면 준비가 무효화됩니다.
@@ -917,7 +917,7 @@ PEC-high와 PMC-low는 외부 ghost를 사용하며 저장된 층을 추가로 0
 
 ## 공개 슬래브의 독립 검사
 
-`test_general_cuda_airy.py`는 공개 `PlaneWave`, `Field`, `Flux` 인터페이스를
+`test_general_cuda_airy.py`는 공개 `PlaneWave`, `FieldMonitor`, `FluxMonitor` 인터페이스를
 통한 독립 광학 검사입니다. CPU 세 사례와 실제 CUDA 세 사례로 총 여섯 사례가
 모두 통과했습니다. 별도 실행이므로 위 60사례에는 포함하지 않습니다. 독립
 광학 근거의 범위는 아래 평면 사례로 한정됩니다.
@@ -933,7 +933,7 @@ PEC-high와 PMC-low는 외부 ghost를 사용하며 저장된 층을 추가로 0
 기준면을 슬래브 면으로 이동합니다.
 
 복소 r과 t는 기존 독립 이산 Yee Airy 방정식에 대해 최대 절대 `2e-6`,
-상대 `1e-5` 오차 안에 있어야 합니다. Flux로 구한 R/T는 장 진폭의 제곱과
+상대 `1e-5` 오차 안에 있어야 합니다. 플럭스로 구한 R/T는 장 진폭의 제곱과
 절대 `2e-5`로 일치해야 하며 앞·뒤 기준 플럭스에도 같은 기준을 적용합니다.
 진공 박막 대조군은 반사가 정확히 0이고 이산 투과 위상은 상대 `1e-12`로
 일치해야 합니다. 이 CUDA 경로에 맞춰 새로 정한 허용오차가 아닌 기존 기준입니다.
@@ -949,7 +949,7 @@ PEC-high와 PMC-low는 외부 ghost를 사용하며 저장된 층을 추가로 0
 
 `Numerics(checkpoint_steps=K)`는 고정 실행 길이의 Torch CUDA에서 양의
 정적 정수 블록 길이를 선택합니다. 기본값 `None`은 기존 스캔을 유지합니다.
-명시적 체크포인트는 CPU 백엔드, 다른 장치, `Decay`에서 거부합니다. 잘못된
+명시적 체크포인트는 CPU 백엔드, 다른 장치, `DecayStop`에서 거부합니다. 잘못된
 값, 불리언(불리언 텐서 포함), 미분·변환을 거치는 블록 길이는 계획 전에
 거부하며 기존 CUDA 기능 범위도 그대로 적용합니다.
 
@@ -964,7 +964,7 @@ tail만 남습니다. 한 블록으로 처리하는 native 실행기와 이 점�
 체크포인트 파일은 실제 CUDA 네 사례를 포함한 21사례가 통과했습니다.
 17단계 전도체의 블록 1·64는 독립 SI 갱신식과 전도도·초기 진폭 미분을
 보존합니다. 163단계 슬래브의 블록 11은 9단계 tail을 남기며 최종 장,
-Record, Field, Flux 목적함수와 재료·광원 미분이 기존 스캔과 일치합니다
+TimeSeriesMonitor, FieldMonitor, FluxMonitor 목적함수와 재료·광원 미분이 기존 스캔과 일치합니다
 (값 상대 `5e-13`, 기울기 상대 `1e-12`). 여러 backward 조회가 그래프를
 올바르게 유지하고, 독립적인 리프로 두 번 prepared 재사용해도 이전 결과를
 보존합니다. 광원 이차 항등식은 별도로 `2e-11`에서 검사하며, 잘못된 live
@@ -973,9 +973,9 @@ Record, Field, Flux 목적함수와 재료·광원 미분이 기존 스캔과 �
 입력 검사에는 불리언 Torch 텐서를 블록 길이로 거부하는 회귀 세 사례가
 포함됩니다.
 
-Job 네 사례는 고정된 기존 기본 키와 명시적 스케줄의 저장·복원을 검사합니다.
-`checkpoint_steps=None`은 v1 Job envelope에서 생략하며 명시적 정수는
-직렬화합니다. 선택적 계약과 제한된 미분 일치를 검증한 것으로, 일반 장면의
+Job 네 사례는 기본값이 이 필드가 없을 때의 job 키를 그대로 두는지와 명시적
+스케줄의 저장·복원을 검사합니다. `checkpoint_steps=None`은 `wavebit.job/v2`
+envelope에서 생략하며 명시적 정수는 직렬화합니다. 선택적 계약과 제한된 미분 일치를 검증한 것으로, 일반 장면의
 메모리 측정은 이 합격 검사와 별개입니다.
 
 ## 범위를 한정한 2차 미분
@@ -998,7 +998,7 @@ Hessian을 상대 `2e-12`, 절대 0으로 비교하며 혼합 미분의 양쪽 �
 
 ## Gaussian pulse 파장·대역폭·위상·지연 Hessian
 
-이 검사는 기존 electric Ey Dipole 경로를 사용하며 런타임이나 입력 허용 규칙을
+이 검사는 기존 electric Ey CurrentDipole 경로를 사용하며 런타임이나 입력 허용 규칙을
 바꾸지 않습니다. 주기적 8³ 격자는 dx 0.05 um, Courant 0.5, 상대 epsilon 2.25,
 mu 1.3, 전도도 600 S/m입니다. 고정된 비격자 중심 `(0.013,-0.021,0.007)` um와
 전류 모멘트 `I0=1.7e-16` A·m에 `bspline` 또는 `tent`를 사용합니다. 초기 장은
@@ -1031,11 +1031,11 @@ Yee 갱신으로 전파합니다. SI 전류 계수는
 `-dt/(epsilon0*(epsilon+sigma*dt/(2*epsilon0))*dx³)`입니다.
 제품 waveform·stamp·curl·계수·AD helper는 기준해에 사용하지 않습니다.
 
-목적함수는 `mean((drive/I0)²)`와 가중 최종 E·Z0H 및 여섯 Record 제곱 평균의
+목적함수는 `mean((drive/I0)²)`와 가중 최종 E·Z0H 및 여섯 TimeSeriesMonitor 제곱 평균의
 두 가지입니다. 가중치는 `(1,0.7,1.3,0.6,1.1,0.9)`, 성분 정규화는 `1/6`,
-Record 인자는 `1/4`, Record 시각 가중치는 `1+0.2*n/N`입니다. 값·네 기울기·
+시계열 인자는 `1/4`, 시계열 시각 가중치는 `1+0.2*n/N`입니다. 값·네 기울기·
 완전한 4×4 Hessian과 양쪽 혼합 미분 순서에 상대 `2e-12`, 절대 0을 씁니다.
-장은 전체 배열 최대값으로, Record는 E/H별 그룹 최대값으로 정규화하므로
+장은 전체 배열 최대값으로, 시계열은 E/H별 그룹 최대값으로 정규화하므로
 구조적으로 0인 Hy도 0으로 나누지 않고 검사합니다. 순방향 오차는 `2e-12`,
 시각은 `2e-14`입니다.
 
@@ -1063,7 +1063,7 @@ traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 hos
 
 | 기록된 CUDA 비교 | 최대 상대·정규화 오차 | 기준 |
 | --- | ---: | ---: |
-| 주검사 8개의 순방향 장·Record·광원 drive | 2.72025560e-14 | 2e-12 |
+| 주검사 8개의 순방향 장·시계열·광원 drive | 2.72025560e-14 | 2e-12 |
 | 두 목적값 | 1.31006317e-14 | 2e-12 |
 | 네 기울기 | 6.06181771e-14 | 2e-12 |
 | 완전한 4×4 Hessian | 9.27036226e-14 | 2e-12 |
@@ -1086,15 +1086,15 @@ traced band의 `CoarseMeshWarning` 9개로 통과했습니다. 이 경고는 hos
 
 ## 네 좌표의 projected pulse fitting
 
-이 회귀 검증은 기존 electric Ey Dipole 경로를 대상으로 하며 runtime이나
+이 회귀 검증은 기존 electric Ey CurrentDipole 경로를 대상으로 하며 runtime이나
 admission 규칙을 바꾸지 않습니다. 앞의 독립 15-lane 펄스 기준해에 `bspline`
 stamp, 주기 8³ 격자, 41단계와 고정 매질을 사용합니다. 정규화 목표는
 `p*=(0.985,1.005,0.1,0.14)`, 두 시작점은 `(1,1,0.4,0.12)`와
 `(0.97,1.01,-0.2,0.16)`입니다. 파장·대역폭·위상·지연은 앞서 설명한 물리
 좌표 변환과 고정 지연 기준값을 유지합니다.
 
-F는 최종 E·Z0H, R은 H에 Z0를 곱한 여섯 Record입니다. 성분 가중치는
-`(1,0.7,1.3,0.6,1.1,0.9)`, Record 시각 가중치는 `1+0.2*n/41`이며
+F는 최종 E·Z0H, R은 H에 Z0를 곱한 여섯 TimeSeriesMonitor 이력입니다. 성분 가중치는
+`(1,0.7,1.3,0.6,1.1,0.9)`, 시계열 시각 가중치는 `1+0.2*n/41`이며
 잔차 목적함수는 다음과 같습니다.
 
 ```text
@@ -1162,7 +1162,7 @@ python -m pytest tests/fdtd/test_general_cuda_pulse_optimizer.py -q
 ## CPML 진폭/위상 2차 미분
 
 공개 `test_general_cuda_cpml_higher_order.py`는 여섯 Open 면, 4셀 PML을 둔 균일
-진공 상자에서 전기·자기 Dipole을 41단계 실행합니다. 단순 스캔과 CUDA K7의
+진공 상자에서 전기·자기 CurrentDipole을 41단계 실행합니다. 단순 스캔과 CUDA K7의
 6단계 tail에 같은 기준을 사용합니다. 위상 0과 pi/2의 NumPy 두 기저 실행으로
 Gram 행렬 `G`를 구하면 진폭 `A`, `u = (cos(phi), sin(phi))`의 제곱 목적함수는
 `A**2 * u.T G u`입니다. 이 식을 해석적으로 미분한 값·기울기·전체 진폭/위상
@@ -1182,7 +1182,7 @@ CUDA 전용 임시 배열 재사용 adjoint를 원래 함수형 CPML 식과 비�
 CPML 구현은 유지하고 독립 미분 검사는 보존합니다.
 
 같은 RTX 4060 Ti 환경, Torch CPU 한 스레드, float64, 물리 격자 16³,
-x/y 주기 경계와 z Open 경계, 8셀 PML, live 슬래브 유전율과 전기 Dipole
+x/y 주기 경계와 z Open 경계, 8셀 PML, live 슬래브 유전율과 전기 쌍극자
 전류 모멘트를 41단계 실행했습니다. 각 새 프로세스에서 한 번 예열 후 다섯
 번 반복했습니다. 시간에는 prepared 실행, 목적함수, 역방향 미분과 순방향·
 역방향 후 동기화 및 할당자 조회를 포함합니다. 초기 준비, 리프 생성, 결과
@@ -1302,8 +1302,8 @@ SHA-256은 `6aaed9733821a062f28fae6b6defa1f8161c1e98095af0f71daa5ce68238a6fa`입
 JAX, Torch에서 검사합니다.
 
 제한된 `monitor_cost.py` 실험은 같은 RTX 4060 Ti 환경, CPU 디스패치 한
-스레드, 4×4×84 격자, 128단계, 12셀 PML, 세 파장의 Ey Field 두 개와
-Flux 두 개를 사용했습니다. 두 실행 모두 `torch.no_grad()`와 단순 스캔을
+스레드, 4×4×84 격자, 128단계, 12셀 PML, 세 파장의 Ey FieldMonitor 두 개와
+FluxMonitor 두 개를 사용했습니다. 두 실행 모두 `torch.no_grad()`와 단순 스캔을
 사용했습니다. 예열 한 번 후 동기화한 prepared 실행 다섯 번으로 아래 시간을
 측정하고, **별도의 계측 실행 한 번**으로 연산 횟수를 셌습니다. 시간에는 live
 검사, lowering, 결과 변환을 포함하며 최초 준비, 결과 검사, 호스트 복사,
@@ -1380,8 +1380,8 @@ prepared 계약과 결과 provenance에 유지하며 같은 prepared 객체를 �
 
 이후 실행은 확장한 체크포인트 파일 23사례와 관측 미분 두 사례로 총
 25사례가 통과했습니다. 앞의 60사례 합계를 수정한 것이 아닌 별도 결과입니다.
-새 컨텍스트 두 사례는 163단계·블록 11에서 최종 E/H, Record, 푸리에 E/H,
-Flux, 광원 이력을 두 기울기 비활성 컨텍스트의 단순 스캔과 비교합니다.
+새 컨텍스트 두 사례는 163단계·블록 11에서 최종 E/H, 시계열, 푸리에 E/H,
+플럭스, 광원 이력을 두 기울기 비활성 컨텍스트의 단순 스캔과 비교합니다.
 CPU 진폭과 CUDA 재료 리프는 사용자가 소유하며 변하지 않습니다. 이후 새
 리프로 미분 가능한 재사용을 하여 목적함수 네 개, 보존한 backward 그래프,
 광원 이차 항등식, 기울기의 장치 소유권, 이전 결과의 불변성을 검사합니다.

@@ -5,8 +5,8 @@ Written: 2026-10-18
 Targets:
 
 - `src/wavebit/fdtd/_api.py`
-- `src/wavebit/fdtd/sources.py`
-- `src/wavebit/fdtd/numerics.py`
+- `src/wavebit/fdtd/_sources.py`
+- `src/wavebit/fdtd/_numerics.py`
 - `src/wavebit/fdtd/_runtime.py`
 - `src/wavebit/fdtd/_prepare/params.py`
 - `src/wavebit/fdtd/_kernel/observe.py`
@@ -74,12 +74,12 @@ the original leaves. Other non-CPU backends and single precision remain refused.
 
 | Part | CUDA admission |
 | --- | --- |
-| Grid and duration | Existing uniform cubic grid; fixed duration; `discretisation='voxel'`; no `geometry_ranges` |
+| Grid and duration | Existing uniform cubic grid; fixed duration; `discretization='voxel'`; no `geometry_ranges` |
 | Boundaries and padding | `Periodic`, `Open`, `PEC` and `PMC`; static `Bloch` with only Bloch/Periodic/Open companions; `PML` padding on open faces |
 | Materials | Existing nondispersive `Material` and `ConductiveMaterial`; the separate homogeneous single-pole ADE scope below |
-| Structures | Cell-snapped `Slab`; one strictly interior `Region` under the separate restrictions below |
-| Sources | `PlaneWave`, fixed-center electric/magnetic `Dipole` with `bspline` or `tent` stamp, or initial fields; Bloch scenes admit only PlaneWave/initial fields |
-| Observations | `Record`, `Field`, `Flux` and final fields |
+| Structures | Cell-snapped `SnappedSlab`; one strictly interior `SnappedBox` under the separate restrictions below |
+| Sources | `PlaneWave`, fixed-center electric/magnetic `CurrentDipole` with `bspline` or `tent` stamp, or initial fields; Bloch scenes admit only PlaneWave/initial fields |
+| Observations | `TimeSeriesMonitor`, `FieldMonitor`, `FluxMonitor` and final fields |
 
 Initial E/H patterns are static host declarations: use NumPy arrays, CPU tensors
 without `requires_grad`, or host callables. Direct CUDA tensor patterns and
@@ -99,11 +99,11 @@ legacy initial-pattern differentiation.
 The dedicated initial-pattern tests passed 43 cases (22 CPU and 21 CUDA),
 including same-callable invalid-result refusal and subsequent valid recovery.
 
-`Dipole.current_moment` is a current moment in A·m for electric sources or V·m
+`CurrentDipole.current_moment` is a current moment in A·m for electric sources or V·m
 for equivalent magnetic sources. Its strength parameter is `current_moment`;
 `PlaneWave.amplitude` instead specifies electric-field amplitude in V/m.
 Current moment, phase and delay retain live graphs.
-Dipole center and stamp are static: changing them requires new preparation.
+The `CurrentDipole` center and stamp are static: changing them requires new preparation.
 Position derivatives, support crossing a periodic seam, touching a conducting wall, or in PML
 remain refused by the existing source checks.
 
@@ -111,46 +111,46 @@ For CUDA, Bloch `phase` or `k` is static; live boundary derivatives are outside
 this scope, including forward-AD duals and transformed/batched wrappers. Ordinary
 host scalar tensors without derivatives remain valid static declarations.
 Changing its value or phase/k representation requires preparation
-again. Bloch with PEC/PMC walls or Dipole sources remains refused. Oblique
+again. Bloch with PEC/PMC walls or CurrentDipole sources remains refused. Oblique
 PlaneWave angles are radians; `Bloch.from_source(source, units=...)` supplies the
 fixed transverse wavevector at the pulse's centre wavelength, not a constant
 angle across its spectrum.
 
-`Decay`, the alternative `Absorber`, ranged or smoothed geometry, dispersive
+`DecayStop`, the alternative `ConductiveAbsorber`, ranged or smoothed geometry, dispersive
 scenes outside the homogeneous ADE scope, symmetry/invariant-axis faces, TFSF sources,
 diffraction and far-field monitors are outside this CUDA route. Unsupported
 combinations return a `cuda_scope` issue with the relevant public field path
 before planning. Admission does not waive sampling, CFL, material, padding or
 other scientific checks. A passed `check` or `prepare` advances no fields.
 
-## Static interior Region
+## Static interior SnappedBox
 
-The separate bounded Region route requires exactly one ordinary
-`Structure(Region(...), material)`, six `Periodic` faces and no external sources.
-Each Region face snaps to the nearest cell boundary on the actual rounded grid.
+The separate bounded SnappedBox route requires exactly one ordinary
+`Structure(name, shape=SnappedBox(...), material=...)`, six `Periodic` faces and no external sources.
+Each SnappedBox face snaps to the nearest cell boundary on the actual rounded grid.
 On every axis its filled interval must satisfy `0 < lo < hi < n`: touching a
 periodic seam, spanning a whole axis or collapsing to an empty interval is
-outside this route. Multiple Regions, Region/Slab mixtures, continuation,
-`Box`, smoothing and shape derivatives are excluded. The existing Slab and CPU
+outside this route. Multiple SnappedBoxes, SnappedBox/SnappedSlab mixtures, continuation,
+`Box`, smoothing and shape derivatives are excluded. The existing SnappedSlab and CPU
 routes keep their separate contracts.
 
 Both background and body use scalar, real, nondispersive `Material` or
 `ConductiveMaterial`; `mu=None` means one. Their existing finite/positive/CFL
-checks still apply on preparation and reuse. The Region's center and size and
+checks still apply on preparation and reuse. The SnappedBox's center and size and
 the initial spatial patterns are static. A changed shape or pattern requires
 new preparation; changing compatible scalar material values or the real initial
 amplitude retains the existing live-input path.
 
 At least one initial E/H pattern must be present as a plain finite real NumPy
 array of actual shape `(3,nz,ny,nx)`; the other may be `None`. Tensor patterns,
-callables and component lists are excluded here. Only ordinary `Record` and
+callables and component lists are excluded here. Only ordinary `TimeSeriesMonitor` and
 final-field outputs are admitted. Fixed duration, double precision, voxel
-sampling and the existing optional checkpoint policy apply. Region scenes with
-Open/PML, PEC/PMC, Bloch, ADE, sources, Field/Flux or ranged geometry remain
+sampling and the existing optional checkpoint policy apply. SnappedBox scenes with
+Open/PML, PEC/PMC, Bloch, ADE, sources, FieldMonitor/FluxMonitor or ranged geometry remain
 outside this bounded route. Admission does not establish interface convergence
 or general geometry differentiation.
 
-### Independent discrete Region reference
+### Independent discrete SnappedBox reference
 
 The reference constructs the occupied-cell mask independently from declared
 geometry and uses explicit modulo-index forward/backward Yee differences. With
@@ -165,16 +165,16 @@ It validates the stated discrete update, not a continuum interface solution.
 
 The declared base fixture uses dx 0.05 um, domain size `(0.61,0.49,0.71)` um and
 center `(0.1,-0.15,0.2)` um. Independent upward rounding gives `(nx,ny,nz)=(13,10,15)`
-and actual lower corner `(-0.225,-0.4,-0.175)` um. Region size
+and actual lower corner `(-0.225,-0.4,-0.175)` um. SnappedBox size
 `(0.305,0.225,0.365)` um and center `(0.0375,-0.2025,0.1625)` um give half-open
 index ranges x `[2:8]`, y `[2:6]`, z `[3:10]`, occupying 168 cells. Three cyclic
 axis arrangements and equivalent um/nm declarations exercise orientation and
 unit conversion. Initial real fields are sampled at each component's Yee
-location; all six components are observed as Records and final fields.
+location; all six components are observed as TimeSeriesMonitor histories and final fields.
 
 The checks use 17 and 41 steps, with checkpoint-7 tails of three and
-six steps. Full fields and Record histories use peak-normalized `2e-12`, clocks
-use relative `2e-14`, and weighted squared field/Record norms and their four nonzero
+six steps. Full fields and TimeSeriesMonitor histories use peak-normalized `2e-12`, clocks
+use relative `2e-14`, and weighted squared field/time-series norms and their four nonzero
 material/amplitude derivatives use relative `2e-12`, absolute zero. A
 `|parameter_scale*gradient|/loss > 1e-6` floor prevents vacuous derivative
 comparisons. Mask shifts, floor-versus-nearest rounding, axis/wrap/curl-sign
@@ -195,7 +195,7 @@ reuse.
 
 | Qualification | Host cases | Actual CUDA cases |
 | --- | ---: | ---: |
-| Independent mask/Yee/tangents, fields, Records, reuse and units | 25 | 17 |
+| Independent mask/Yee/tangents, fields, time series, reuse and units | 25 | 17 |
 | Admission, conversion, refusal and same-leaf invalid/recovery contract | 51 | 6 |
 | Unique new cases | 76 | 23 |
 
@@ -204,14 +204,14 @@ checks and 32 actual CPU cases. The 23-case CUDA run took 10.40 s and emitted
 25 warnings. Repeated qualification checks do not add to these counts; 25
 existing CPU regressions passed separately.
 
-The largest recorded body-reuse field/Record error was
+The largest recorded body-reuse field/time-series error was
 `3.97962361e-15`. An independent audit of the recorded body and background
 objective gradients found maximum relative error `9.28604067e-14`, below the
 unchanged `2e-12` budget. Lossless and unit-pair field assertions also passed,
 but their errors were not individually recorded, so the body-reuse maximum is
 not a maximum over every field case. These results qualify the bounded discrete
 first-derivative contract; they do not establish continuum interface accuracy,
-shape derivatives or arbitrary Region combinations.
+shape derivatives or arbitrary SnappedBox combinations.
 
 ## Finite excitation values and prepared recovery
 
@@ -219,7 +219,7 @@ Source amplitude, phase and delay, and `InitialField.amplitude`, must be finite.
 Source `Band.wavelength` and `Band.df` must also be positive. Complex amplitudes
 are checked in both real and imaginary parts only where the existing field
 contract admits complex values; real-plan complex amplitudes remain refused.
-For Dipoles, the public strength is `current_moment`, from which lowering derives
+For a `CurrentDipole`, the public strength is `current_moment`, from which lowering derives
 the source amplitude.
 
 Previously, changing a live source or initial-amplitude leaf to NaN could yield
@@ -247,11 +247,11 @@ guard cases cover NaN and both infinities, nonpositive wavelength/bandwidth,
 complex parts, mixed-device leaves, valid concrete guard identity, logical
 Torch views and bfloat16 conversion. Torch forward/batched transforms and JAX
 JIT/derivatives are helper-level controls; they do not qualify arbitrary full
-solver transforms or complex Dipole admission.
+solver transforms or complex CurrentDipole admission.
 
 Separately, two existing CPU CPML amplitude/phase Hessian cases and three
 existing CPU source-gradient/waveform cases passed across their Torch/JAX and
-Dipole/TFSF/PlaneWave paths. Ten existing actual CUDA cases passed: four CPML
+CurrentDipole/TFSF/PlaneWave paths. Ten existing actual CUDA cases passed: four CPML
 Hessians, two complex Bloch observation Hessians, two exact conductor Hessians,
 and two conductivity/initial-amplitude derivative cases. Their original
 numerical budgets remain unchanged; the CUDA run retained 46 mesh/window
@@ -286,7 +286,7 @@ geometry or transform admission.
 
 `test_general_source_band_guard.py` passed **43 new cases: 22 CPU and 21 CUDA**.
 The public recovery cases use the same wavelength/bandwidth leaves with a
-periodic 8³, 17-step Ey Dipole; CUDA checks plain and checkpoint-7 execution.
+periodic 8³, 17-step Ey CurrentDipole; CUDA checks plain and checkpoint-7 execution.
 Helper cases exercise strict boundary values, wavelength-only/bandwidth-only
 carrying, mixed leaf devices, overflow of the two derived spectral quantities,
 preservation of prior failed validity, and Torch/JAX derivative and batching
@@ -319,7 +319,7 @@ materials. The shortest wavelength must be finite and positive. The existing
 index rule selects the component with largest `abs(epsilon*mu)` (first on ties)
 and its passive square root. The wave rule includes equality at **eight cells
 per wavelength in the medium**. The existing metal source/report skin-depth
-rule remains separate from static Diffraction wavelengths, which retain their
+rule remains separate from static DiffractionMonitor wavelengths, which retain their
 wave-only rule. Conductivity enters this certificate only under the existing
 conductive-film descriptor; this does not add a general conductivity resolution
 rule or broaden film admission.
@@ -342,13 +342,13 @@ moves from about 9.01 to `7.3330730` cells; the wavelength-update case reaches
 `7.55748757` cells. Both retain a positive carrier cutoff. The fixed public
 valid→invalid→valid tests fail runtime validity with NaN fields at the invalid
 point, then recover exactly while preserving old results and leaf/`.grad`
-ownership. They use the periodic 8³, 17-step Ey Dipole, with plain CPU and plain
+ownership. They use the periodic 8³, 17-step Ey CurrentDipole, with plain CPU and plain
 or checkpoint-7 CUDA execution.
 
 `test_general_source_resolution_guard.py` passed **30 new cases: 25 CPU and five
 CUDA**. Helper controls cover the inclusive floor and its adjacent floating-
 point values, all-source/all-material selection, prior failed validity, static
-Diffraction, descriptor-scoped conductivity, whole-path pole fallback and
+DiffractionMonitor wavelengths, descriptor-scoped conductivity, whole-path pole fallback and
 constant Torch/JAX derivative certificates without live-band host reads.
 These helper transforms do not establish general transformed solver support.
 The first CPU batch passed 119 cases; the added bandwidth trajectory then passed
@@ -408,7 +408,7 @@ exactly after the same leaf is restored; earlier outputs, leaf identity and
 existing `.grad` buffers remain unchanged. Concrete invalid values receive the
 structured refusal. Additional checks cover individual arithmetic overflows,
 the last sample, electric/magnetic row shifts, neighboring backend `t0`
-overflow values, valid guard identity and untouched source-free/`Decay` paths.
+overflow values, valid guard identity and untouched source-free/`DecayStop` paths.
 Torch forward/reverse/batch and JAX JIT/gradient/Hessian/batch checks qualify the
 constant certificate only, not arbitrary transformed full-solver execution.
 
@@ -422,7 +422,7 @@ hashes matched; this is scoped local qualification, not full CI.
 This is a representability restriction, not a reformulation of the Gaussian:
 a huge finite pulse declaration may be refused even when its ideal envelope
 would be zero. It does not change the waveform arithmetic, expand source or
-field admission, or qualify the adaptive `Decay` path. A true
+field admission, or qualify the adaptive `DecayStop` path. A true
 `runtime_stability` means the implemented certificates passed; it is not a
 blanket test that every output, intermediate or derivative is finite.
 
@@ -458,7 +458,7 @@ not a gradient-cost or peak device-memory guarantee.
 ## Same-leaf SGD reuse
 
 `studies/fdtd/general_cuda/optimizer_reuse.py` checks repeated updates of the
-same trainable leaves through a prepared run. The electric Ey Dipole fixture
+same trainable leaves through a prepared run. The electric Ey CurrentDipole fixture
 has 12 physical cells per axis, four Open-face PML cells on each side, an actual
 20³ grid and 41 steps. Plain and checkpoint-7 scans use identical physics;
 checkpointing leaves a six-step tail. This short thin-PML fixture is a discrete
@@ -557,7 +557,7 @@ The default `--block 0` selects the plain scan; it is not public
 
 ## Homogeneous single-pole ADE
 
-The bounded dispersive route uses `DispersiveMaterial` in exactly one `Slab`
+The bounded dispersive route uses `DispersiveMaterial` in exactly one `SnappedSlab`
 covering the whole actual grid, with all six faces `Periodic` and exactly one
 `Lorentz` or `Drude` pole. The ordinary uniform-grid, fixed-duration, double-
 precision and voxel requirements still apply. There are no material interfaces
@@ -566,9 +566,9 @@ Initial E/H are plain finite real NumPy arrays of shape `(3,nz,ny,nx)` over the
 full grid; one may be `None` to supply a zero field. CPU tensors, callables and
 component lists are not accepted in this ADE scope. Floating and integer arrays
 convert to double execution precision; float32 retains the existing precision
-warning. Observations are `Record` and/or final fields, including Record-only
-runs with `final_fields=False`. Open/PML, Bloch, walls, multiple poles, Debye, dispersive background,
-spatial films and Fourier/Flux observations are outside this route.
+warning. Observations are `TimeSeriesMonitor` and/or final fields, including
+TimeSeriesMonitor-only runs with `final_fields=False`. Open/PML, Bloch, walls, multiple poles, Debye, dispersive background,
+spatial films and Fourier/flux observations are outside this route.
 
 `epsilon_inf`, `mu`, damping `gamma` and Lorentz `omega_0` are nondifferentiable
 scalars; `mu=None` means 1. Their concrete values may change on prepared reuse
@@ -629,10 +629,10 @@ All three time resolutions still pass the independent discrete-solution gate.
 The independent gates use SI characteristic roots and a scalar recurrence for
 uniform fields, and an explicitly assembled 15×15 Maxwell/polarization state
 matrix for nonzero Fourier modes at physical Yee offsets. Missing-pole and
-wrong-startup controls must be detectably different. Field/Record errors use
+wrong-startup controls must be detectably different. Field and time-series errors use
 peak-normalized `1e-11`; uniform recurrence residuals use `1e-12`. A 45×45
 matrix-power Frechet construction supplies amplitude/material gradients and
-full Hessians for final-field and signed Record-history objectives, at relative
+full Hessians for final-field and signed time-series objectives, at relative
 `2e-12` with zero absolute tolerance. Plain and checkpoint scans, mixed-device
 leaves, prepared reuse and retained old outputs are separate checks. These
 oracles share the declared discrete startup; they qualify eager reverse mode
@@ -649,22 +649,22 @@ These results use the public admission path, without an experimental context.
 | CUDA control | Worst recorded relative error | Budget |
 | --- | ---: | ---: |
 | Uniform final fields | 4.00635199454821e-13 | 1e-11 |
-| Uniform Records | 1.3211653993039363e-14 | 1e-11 |
+| Uniform time series | 1.3211653993039363e-14 | 1e-11 |
 | Uniform scalar recurrence | 2.7755575615628914e-16 | 1e-12 |
 | Fourier final fields | 2.1958220980047683e-13 | 1e-11 |
-| Fourier Records | 4.73407123422404e-13 | 1e-11 |
+| Fourier time series | 4.73407123422404e-13 | 1e-11 |
 | Magnetic-only initial mode, `E=None`, `mu=None` | 7.496839298600154e-15 | 1e-11 |
-| Translated rectangular grid, all Slab axes, equivalent um/nm declarations | 8.560921989767082e-15 | 1e-11 |
+| Translated rectangular grid, all SnappedSlab axes, equivalent um/nm declarations | 8.560921989767082e-15 | 1e-11 |
 | Prepared reuse with changed concrete epsilon/mu/gamma/omega_0 | 7.137981093552503e-15 | 1e-11 |
 | Final-field value, gradient and full Hessian | 4.438322122768973e-14 | 2e-12 |
-| Record-only value, gradient and full Hessian | 7.834081628920496e-15 | 2e-12 |
+| TimeSeriesMonitor-only value, gradient and full Hessian | 7.834081628920496e-15 | 2e-12 |
 
 The translated box declares `(0.61,0.49,0.71)` um at 0.05 um spacing; upward
 rounding produces `(13,10,15)` cells and physical size `(0.65,0.5,0.75)` um.
-The full-grid Slab must cover those actual cells, not only the nominal extent.
+The full-grid SnappedSlab must cover those actual cells, not only the nominal extent.
 The derivative cases use 12³ cells, 17 steps, plain or block-7 scans with a
 three-step tail, two amplitude/material parameter points, a CPU amplitude leaf
-and a material leaf on the execution device. Record objectives use all six
+and a material leaf on the execution device. TimeSeriesMonitor objectives use all six
 staggered components and a nonzero signed linear term as well as weighted squares;
 no final-field output is required. The contract checks also retain invalid-live
 material behavior, float32/integer conversion, precision warnings and the CPU
@@ -685,7 +685,7 @@ plan identity, and compatible prepared reuse selects it again. A compact plan
 cannot execute on CPU or a non-Torch backend.
 
 Ordinary CPU, NumPy/JAX and other existing pole consumers retain their original
-term. In particular, this change does not extend to source-bearing or `Decay`
+term. In particular, this change does not extend to source-bearing or `DecayStop`
 plans, films, source columns, subclasses, multiple poles, CPML or geometry
 ranges. For one full-grid pole in double precision, the logical E/H-plus-pole
 report falls from 15 scalar components (120 bytes/cell) to 12 (96 bytes/cell).
@@ -716,7 +716,7 @@ reuse; eight CUDA cases compare full Hessians after no-grad/inference warm-up,
 using blocks 8/32 over 35 steps with a three-step tail. The earlier discrete
 and derivative budgets remain unchanged. The study's independent-oracle suite
 passed 17 checks, and eight existing CPU regressions retained ordinary/film
-Decay memory, film energy and PlaneWave source lowering across their relevant
+DecayStop memory, film energy and PlaneWave source lowering across their relevant
 NumPy/JAX/Torch routes. These groups are separate; none implies full CI.
 
 #### Historical product cost measurements
@@ -735,7 +735,7 @@ The product study used Python 3.12.14, Torch 2.14.1+cu130, CUDA 13.0, NumPy
 CPU thread and float64. Each row is a fresh process, one warm-up and five
 synchronized repetitions of 163 steps. The fixture differentiates uniform
 initial amplitude and Lorentz strength through a full-grid material, one Ey
-Record and final fields. Its `sum(E_final**2)` objective uses the same SI
+time series and final fields. Its `sum(E_final**2)` objective uses the same SI
 recurrence for every policy.
 
 | Grid | Block | Median seconds [min, max] | Peak allocated bytes | Peak reserved bytes |
@@ -757,9 +757,9 @@ baseline. Peaks in the table belong to timed runs, excluding the separate
 untimed lifecycle and ownership calls. Allocator quantities exclude CPU,
 driver/display and other-process memory.
 
-All 30 measured repetitions passed independent roots/Record (`1e-11`), absolute
+All 30 measured repetitions passed independent roots/time-series (`1e-11`), absolute
 recurrence (`1e-12`) and objective/material/amplitude derivative checks (relative
-`2e-12`, zero absolute tolerance). Worst Record, absolute recurrence and relative
+`2e-12`, zero absolute tolerance). Worst time-series, absolute recurrence and relative
 gradient errors were `6.106226635438361e-15`, `3.9985376121265404e-16` and
 `2.3453478832892504e-13`. Source hashes remained unchanged and final current
 allocated/reserved bytes returned to zero in all six processes. Actual pole
@@ -791,10 +791,10 @@ passed 53 cases.
 | --- | --- |
 | Uniform conductor, periodic box, 20 steps | Exact SI conductivity recurrence for E and its time record, unchanged H; relative `2e-14` |
 | Conductivity and initial-amplitude derivatives | Closed-form derivatives of the recurrence to relative `2e-12`, with both CPU and CUDA parameter leaves |
-| Slab with CPML, plane-wave source, records, Fourier fields and flux | NumPy CPU parity with the existing peak-normalized infinity budget `5e-13`; live prepared reuse, changed inputs and retained old results |
-| Slab permittivity and source derivatives | NumPy material central difference at relative `1e-6`, absolute `1e-8`; exact source quadratic identity at relative `2e-12` |
-| Record, Field and Flux objectives, 161 steps | CPU/CUDA objective parity to relative `5e-13`; source quadratic identity to `2e-11`; nonzero material central differences at two step sizes to `2e-6` |
-| Slabs normal to x, y and z; open 3D pulse; diagonal epsilon and mu with/without conductivity | CPU field parity to peak-normalized `5e-13`; six nonzero box-flux faces compared independently to prevent cancellation hiding orientation errors |
+| SnappedSlab with CPML, plane-wave source, records, Fourier fields and flux | NumPy CPU parity with the existing peak-normalized infinity budget `5e-13`; live prepared reuse, changed inputs and retained old results |
+| SnappedSlab permittivity and source derivatives | NumPy material central difference at relative `1e-6`, absolute `1e-8`; exact source quadratic identity at relative `2e-12` |
+| TimeSeriesMonitor, FieldMonitor and FluxMonitor objectives, 161 steps | CPU/CUDA objective parity to relative `5e-13`; source quadratic identity to `2e-11`; nonzero material central differences at two step sizes to `2e-6` |
+| SnappedSlabs normal to x, y and z; open 3D pulse; diagonal epsilon and mu with/without conductivity | CPU field parity to peak-normalized `5e-13`; six nonzero box-flux faces compared independently to prevent cancellation hiding orientation errors |
 | Mixed-device material and source leaves | Epsilon/mu/conductivity values and derivatives match CPU; CPU phase and CUDA delay derivatives match nonzero NumPy central differences at two step sizes to relative `2e-6`; leaf-device ownership retained |
 | Static initial patterns and precision | Mutating a prepared CPU tensor pattern invalidates reuse; gradient-bearing patterns refused; float32 host patterns retain precision warnings, become float64 execution fields, preserve input ownership and return the amplitude gradient to the original float32 CPU leaf |
 | Input and reuse controls | Unsupported scopes refused before planning; preparation advances no fields; incompatible/invalid reuse refused; invalid live differentiable material preserves failed validity and NaNs |
@@ -835,7 +835,7 @@ PlaneWave run passed five in 27.37 seconds. A later run passed the expanded
 13 contracts plus four observable cases in 103.92 seconds. Its 142 expected
 coarse-mesh/finite-window warnings remain visible. The later contract rerun
 overlaps the initial run and is not added again to the unique total.
-The 13 device-independent controls cover Dipole/wall exclusions, forward-AD/
+The 13 device-independent controls cover CurrentDipole/wall exclusions, forward-AD/
 `torch.func` wrappers and same-primal forward-dual values on prepared reuse.
 Their success establishes early rejection, not CUDA execution.
 
@@ -890,7 +890,7 @@ derivatives, not derivatives of the static Bloch boundary phase. CPU amplitude
 and execution-device phase leaves, retained backward graphs and old public
 output buffers keep their ownership through prepared reuse.
 
-Separate Record, Field and Flux objectives compare values with NumPy at relative
+Separate TimeSeriesMonitor, FieldMonitor and FluxMonitor objectives compare values with NumPy at relative
 `5e-13`, the amplitude quadratic identity at `2e-12`, and source-phase/slab-epsilon
 central differences at relative `2e-6`, all with zero absolute tolerance. Each
 secant uses both `1e-4` and `5e-5` times the parameter value, with nonzero signal
@@ -898,12 +898,12 @@ and derivative floors. Only fixed SI unit factors rescale outputs. Short-window
 and mesh warnings remain visible: these finite-trajectory AD controls do not
 establish PML reflection accuracy or converged optical spectra.
 
-## Fixed-center Dipole evidence
+## Fixed-center CurrentDipole evidence
 
-The later Dipole addition passed 42 CPU and 46 actual CUDA cases in separate
+The later CurrentDipole addition passed 42 CPU and 46 actual CUDA cases in separate
 runs; nine existing CUDA refusal controls also passed. These receipts are
 separate from the earlier 60-case run. Existing fixed-duration, double-precision,
-voxel, material, Slab, boundary and monitor restrictions still apply.
+voxel, material, SnappedSlab, boundary and monitor restrictions still apply.
 
 | Test file | CPU / CUDA passes | Evidence |
 | --- | ---: | --- |
@@ -952,7 +952,7 @@ invariant-axis faces remain outside the CUDA route.
 | Test file | CPU / CUDA passes | Evidence |
 | --- | ---: | --- |
 | `test_general_cuda_walls.py` | 20 / 20 | PEC/PMC 16³ cavities over 300 steps; both mixed-wall orientations on x/y/z; source support touching each wall refused. |
-| `test_general_cuda_wall_ad.py` | 18 / 21 | Independent initial node projection, 41-step initial-amplitude and interior electric/magnetic Dipole derivatives, prepared ownership, and two wall/Open/PML interaction cases. |
+| `test_general_cuda_wall_ad.py` | 18 / 21 | Independent initial node projection, 41-step initial-amplitude and interior electric/magnetic CurrentDipole derivatives, prepared ownership, and two wall/Open/PML interaction cases. |
 
 Cavity references use independent discrete Yee frequencies and exact staggered
 fields: recurrence residual relative `1e-11` and phase/amplitude relative
@@ -968,7 +968,7 @@ zero an extra stored layer. Unmasked interiors and caller inputs are unchanged.
 At 41 steps, CPU runs use the plain scan; CUDA also exercises block 7 with a
 six-step tail. CPU/CUDA amplitude leaves retain the quadratic identity at
 `2e-12`; initial-amplitude NumPy secants use `1e-7`. Interior xyz electric and
-magnetic Dipoles retain current-moment/phase derivatives against two NumPy
+magnetic CurrentDipoles retain current-moment/phase derivatives against two NumPy
 secants at `1e-7` plus `1e-10*loss`, quadratic scaling at `1e-12`, and half-step
 source work at `1e-13`. Fresh and prepared reuse preserve old results and input
 ownership; changing boundary declarations invalidates preparation.
@@ -982,7 +982,7 @@ PML reflection accuracy or radiation accuracy. Existing mesh warnings remain.
 ## Independent public slab gate
 
 `test_general_cuda_airy.py` adds an independent optical gate through the public
-`PlaneWave`, `Field` and `Flux` interfaces. All six cases passed: three CPU and
+`PlaneWave`, `FieldMonitor` and `FluxMonitor` interfaces. All six cases passed: three CPU and
 three actual CUDA cases. This separate run is not included in the 60 cases
 above. Its independent optical evidence is limited to the planar fixture below.
 A later run after skipping unused DFT phases and adding the no-grad runtime guard passed all
@@ -991,7 +991,7 @@ periodic top/bottom slab cases. Existing mesh warnings remained visible.
 
 The fixture is a 0.2 um, epsilon-2.25 film in vacuum, with transverse periodic
 faces, open z faces and 24-cell PML. The five wavelengths are 0.80, 0.90, 1.00,
-1.15 and 1.30 um. Slab and empty-domain runs use the same source and probes;
+1.15 and 1.30 um. Film and empty-domain runs use the same source and probes;
 complex incident fields are subtracted before squaring, and measured reference
 fields cancel the source spectrum. Reference amplitudes must exceed 0.1 of
 their band peak. Discrete propagation phases move r/t to the slab faces.
@@ -1015,7 +1015,7 @@ dispersion, long-time stability or optical derivatives.
 
 `Numerics(checkpoint_steps=K)` selects a positive static integer block length
 for fixed-duration Torch CUDA execution. The default `None` preserves the
-ordinary scan. CPU backends, other devices and `Decay` are refused for explicit
+ordinary scan. CPU backends, other devices and `DecayStop` are refused for explicit
 checkpoint settings; invalid values, booleans (including boolean tensors), and
 differentiable or transform-carried block lengths are rejected before planning.
 The surrounding CUDA feature limits still apply.
@@ -1031,7 +1031,7 @@ one-block behavior. Changing the schedule requires preparing new numerics.
 The checkpoint file passed 21 cases, including four actual CUDA cases. Blocks
 1 and 64 on a 17-step conductor preserve the independent SI recurrence and
 conductivity/initial-amplitude derivatives. A 163-step slab with block 11 has a
-nine-step tail; its final fields, Record, Field and Flux objectives and material/
+nine-step tail; its final fields, TimeSeriesMonitor, FieldMonitor and FluxMonitor objectives and material/
 source derivatives agree with the ordinary scan (values `5e-13`, gradients
 `1e-12` relative). Multiple backward queries retain the graph correctly, and
 two prepared reuses with independently created leaves preserve old results.
@@ -1041,9 +1041,9 @@ invalid live material still returns failed validity and NaNs.
 The admission cases include three regressions rejecting boolean Torch tensors
 as block lengths.
 
-Four Job tests preserve the fixed pre-existing default key and round-trip
-explicit schedules. `checkpoint_steps=None` is omitted from the v1 Job envelope;
-an explicit integer is serialized. This establishes the opt-in contract and
+Four Job tests check that the default leaves a job's key as it is without the
+field, and round-trip explicit schedules. `checkpoint_steps=None` is omitted from
+the `wavebit.job/v2` envelope; an explicit integer is serialized. This establishes the opt-in contract and
 bounded derivative equivalence. General-scene memory measurements are separate
 from these acceptance tests.
 
@@ -1070,7 +1070,7 @@ families, or `torch.func` transformations.
 
 ## Gaussian pulse wavelength, bandwidth, phase and delay Hessians
 
-This gate exercises the existing electric Ey Dipole route; it changes no runtime
+This gate exercises the existing electric Ey CurrentDipole route; it changes no runtime
 or admission rule. The periodic 8³ fixture has dx 0.05 um, Courant 0.5, relative
 epsilon 2.25, mu 1.3 and conductivity 600 S/m. A fixed off-grid center
 `(0.013,-0.021,0.007)` um and current moment `I0=1.7e-16` A·m use either
@@ -1108,11 +1108,12 @@ with the SI electric-current factor
 No product waveform, stamp, curl, coefficient or AD helper supplies this oracle.
 
 Two objectives are checked: `mean((drive/I0)²)` and the weighted squared final
-E and Z0H plus six Record means, with weights `(1,0.7,1.3,0.6,1.1,0.9)`, component
-normalization `1/6`, Record factor `1/4`, and Record time weights `1+0.2*n/N`.
+E and Z0H plus six TimeSeriesMonitor means, with weights `(1,0.7,1.3,0.6,1.1,0.9)`,
+component normalization `1/6`, time-series factor `1/4`, and time-series sample
+weights `1+0.2*n/N`.
 Value, all four gradients and the complete 4×4 Hessian, including both mixed
 orders, use relative `2e-12`, absolute zero. Fields use full-array peak scaling;
-Records use the corresponding E/H group peak so the structurally zero Hy remains
+Time series use the corresponding E/H group peak so the structurally zero Hy remains
 checked without division by zero. Forward errors use `2e-12`, clocks `2e-14`.
 
 The pure-reference qualification covers 14 unique cases. Its initial secant
@@ -1142,7 +1143,7 @@ an independently measured coarse-grid error.
 
 | Recorded CUDA comparison | Maximum relative/scaled error | Budget |
 | --- | ---: | ---: |
-| Forward fields, Records and source drive in eight main cases | 2.72025560e-14 | 2e-12 |
+| Forward fields, time series and source drive in eight main cases | 2.72025560e-14 | 2e-12 |
 | Two objective values | 1.31006317e-14 | 2e-12 |
 | Four gradients | 6.06181771e-14 | 2e-12 |
 | Complete 4×4 Hessians | 9.27036226e-14 | 2e-12 |
@@ -1168,16 +1169,16 @@ refinement and controls on other waveform intermediates remain needed.
 
 ## Projected four-coordinate pulse fitting
 
-This regression targets the existing electric Ey Dipole route and changes no
+This regression targets the existing electric Ey CurrentDipole route and changes no
 runtime or admission rule. It uses the preceding independent 15-lane pulse
 reference with the `bspline` stamp, periodic 8³ grid, 41 steps and fixed medium.
 The normalized target is `p*=(0.985,1.005,0.1,0.14)`; the two initial points are
 `(1,1,0.4,0.12)` and `(0.97,1.01,-0.2,0.16)`. Wavelength, bandwidth, phase and
 delay retain the physical mapping and fixed delay baseline described above.
 
-Let F contain final E and Z0H, and R contain the six Records with H multiplied
-by Z0. Component weights are `(1,0.7,1.3,0.6,1.1,0.9)` and Record time weights
-are `1+0.2*n/41`. The residual objective is
+Let F contain final E and Z0H, and R contain the six TimeSeriesMonitor histories with H
+multiplied by Z0. Component weights are `(1,0.7,1.3,0.6,1.1,0.9)` and time-series
+sample weights are `1+0.2*n/41`. The residual objective is
 
 ```text
 C = mean(w_R * R_target**2) + 0.25*mean(w_F * F_target**2)
@@ -1254,7 +1255,7 @@ python -m pytest tests/fdtd/test_general_cuda_pulse_optimizer.py -q
 ## CPML amplitude/phase second derivatives
 
 The public `test_general_cuda_cpml_higher_order.py` uses electric and
-magnetic Dipoles in a uniform vacuum box with six Open faces, four-cell PML and
+magnetic CurrentDipoles in a uniform vacuum box with six Open faces, four-cell PML and
 41 steps. Plain scans and CUDA K7 with a six-step tail share the same oracle.
 Two NumPy basis runs at phase 0 and pi/2 supply a Gram matrix `G`; for amplitude
 `A` and `u = (cos(phi), sin(phi))`, the quadratic objective is `A**2 * u.T G u`.
@@ -1277,7 +1278,7 @@ CPML implementation remains; the independent derivative gate is retained.
 
 The experiment used the same RTX 4060 Ti environment, one Torch CPU thread,
 float64, a 16³ physical grid, Periodic x/y and Open z, eight-cell PML, a live
-slab permittivity and live electric-Dipole current moment over 41 steps. Each
+slab permittivity and live electric-dipole current moment over 41 steps. Each
 fresh process performed one warmup and five repetitions. Timings include
 prepared execution, objective, backward, synchronization and allocator queries
 after forward and backward. Initial preparation, leaf creation, result checks,
@@ -1404,8 +1405,8 @@ and the existing time-level mutant. Electric-only, magnetic-only and mixed
 components use real and complex input histories across NumPy, JAX and Torch.
 
 The bounded `monitor_cost.py` experiment used the same RTX 4060 Ti environment,
-one CPU dispatch thread and a 4×4×84 grid, 128 steps, 12-cell PML, two Ey Field
-and two Flux monitors at three wavelengths. Both runs used `torch.no_grad()`
+one CPU dispatch thread and a 4×4×84 grid, 128 steps, 12-cell PML, two Ey FieldMonitors
+and two FluxMonitors at three wavelengths. Both runs used `torch.no_grad()`
 and the plain scan. After one warm-up, five synchronized prepared runs supplied
 the timings below; a **separate single instrumented run** supplied operator
 counts. Timing includes live validation, lowering and result adaptation but
@@ -1487,7 +1488,7 @@ result into a differentiable result afterward.
 A later run passed 25 cases: the expanded 23-case checkpoint file and two
 observable derivative cases. This is a separate result, not a revised count
 for the earlier 60-case run. The two new context cases use 163 steps and block
-11, comparing final E/H, Record, Fourier E/H, Flux and source histories with
+11, comparing final E/H, time-series, Fourier E/H, flux and source histories with
 the plain scan under both disabled-gradient contexts. CPU amplitude and CUDA
 material leaves remain caller-owned and unchanged. A later differentiated
 reuse with new leaves checks four objectives, retained backward graphs,

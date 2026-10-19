@@ -5,7 +5,7 @@
 | `checkpoint_cost.py` | How do opt-in checkpoint blocks change reverse-call time and allocator peaks for a bounded general-scene conductor with an exact SI recurrence? |
 | `ade_cost.py` | What allocator peaks and reverse-call times does the bounded homogeneous Lorentz CUDA route produce, and how do they differ from its logical state payload? |
 | `optimizer_reuse.py` | Do repeated SGD updates of the same source leaves preserve the discrete derivative oracle, prior outputs and bounded CUDA live allocation? |
-| `monitor_cost.py` | How much dispatch and device work does a bounded no-grad prepared run with two Ey Field and two Flux monitors perform? |
+| `monitor_cost.py` | How much dispatch and device work does a bounded no-grad prepared run with two Ey FieldMonitors and two FluxMonitors perform? |
 
 ## Checkpoint cost
 
@@ -115,7 +115,7 @@ full-grid Lorentz material in a six-periodic-face box. It has no alternate
 runtime context or baseline/candidate switch. CUDA selects the compact pole
 state; the optional CPU instrument check retains the ordinary pole state.
 The fixed fixture has 163 steps, double precision, uniform initial Ey, one
-Record and final fields. It differentiates the initial amplitude and Lorentz
+TimeSeriesMonitor and final fields. It differentiates the initial amplitude and Lorentz
 strength. Plain execution omits `--checkpoint-steps`; 8 and 32 each leave a
 three-step tail.
 
@@ -145,9 +145,9 @@ The public run's own validation/adaptation host work remains included. The alloc
 is released after warm-up and after all repetitions, but retained between
 repetitions. Returned tensors are released before the next baseline.
 
-Every repetition checks the full Record against independent damped roots and
+Every repetition checks the full TimeSeriesMonitor history against independent damped roots and
 a scalar recurrence, and the objective plus both derivatives against a
-four-state matrix and its Frechet derivative. The Record budget is `1e-11`,
+four-state matrix and its Frechet derivative. The time-series budget is `1e-11`,
 absolute recurrence residual is below `1e-12`, and objective/gradient relative
 budget is `2e-12` with zero absolute tolerance. A separate untimed lifecycle
 records retained memory after forward and backward; two further runs check
@@ -178,7 +178,7 @@ of that revised initial-amplitude lowering path.
 
 ## Same-leaf optimizer reuse
 
-This bounded instrument uses the existing electric-Dipole CPML fixture: 12 cells
+This bounded instrument uses the existing electric CurrentDipole CPML fixture: 12 cells
 per physical axis, four padding cells on each side, 41 time steps and final E/H.
 Two NumPy runs at source phases zero and pi/2 define a discrete field basis.
 The objective fits the final E and Z0 H fields to amplitude 1.1 and phase 0.2;
