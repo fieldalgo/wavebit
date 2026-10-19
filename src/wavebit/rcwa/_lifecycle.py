@@ -256,7 +256,8 @@ class Prepared:
                             size = _adapt._array(xp, rectangle.size[axis], self.execution)
                             center = _adapt._array(xp, rectangle.center[axis], self.execution)
                             valid = valid & (size > 0)
-                            positions.append(period/2+center+side*size/2)
+                            fold = plan.folds[owner][axis]
+                            positions.append(period/2+center-fold*period+side*size/2)
                     edges = xp.stack(positions)
                     valid = valid & xp.all(edges[:-1] <= edges[1:])
         return {'rectilinear_topology': valid}
