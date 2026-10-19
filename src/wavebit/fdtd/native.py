@@ -78,7 +78,7 @@ class Snapshots:
     ``slices`` optionally picks a (z,y,x) part of the grid: per axis an integer index or a
     ``(start, stop[, step])`` tuple of integer indices. It preserves singleton axes and does not
     crop the solve. Recorded time is always SI seconds; ``Result.snapshots`` is keyed by component.
-    Example: ``native.Snapshots(every=10, components=('Ex',), slices=(slice(None), 0, 0))``.
+    Example: ``native.Snapshots(every=10, components=('Ex',), slices=((None, None), 0, 0))``.
     """
     every: int = 1
     components: tuple = COMPONENTS
@@ -94,6 +94,11 @@ class Snapshots:
                 raise ValidationError('slices needs three (z,y,x) selectors: an integer index or '
                                       'a (start, stop[, step]) tuple per axis',
                                       path='outputs.snapshots.slices')
+            # A slice object is stored as its (start, stop, step) tuple: the same selection,
+            # but plain data, so a job can save it and two equal problems compare equal.
+            object.__setattr__(self, 'slices', tuple(
+                (v.start, v.stop, v.step) if isinstance(v, slice)
+                else tuple(v) if isinstance(v, list) else v for v in self.slices))
 
 
 @spec(renamed={'planes': 'z_indices'})
