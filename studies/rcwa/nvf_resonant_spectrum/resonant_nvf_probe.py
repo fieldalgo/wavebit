@@ -5,6 +5,8 @@ The three Wavebit NVF extensions use exact rectangle transforms and the same sol
 It is a scoped diagnostic, not a production factorization option.
 The optional S4 direct rule is an independent implementation, also subject to
 Fourier truncation. Its actual reciprocal orders must match Wavebit's square cap.
+S4 runs in its own interpreter through ``tests/references/interface/s4_resonant_nvf.py``;
+set ``S4_PYTHON`` to that interpreter to use the S4 methods.
 Run: PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py --orders 6 10 14 18
 Add --methods circular s4-direct to compare only the new NVF and S4.
 """
@@ -12,22 +14,22 @@ Add --methods circular s4-direct to compare only the new NVF and S4.
 from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 import argparse
 import json
+import os
+import subprocess
 import time
 from unittest.mock import patch
 import numpy as np
 from wavebit.rcwa._engine import boundary as B, factorization as F, parametric as P
+from tests.references.interface.s4_resonant_nvf import BASES as S4_METHODS, fixture_shape  # noqa: F401
+from tools.repository_paths import repository_path
+
+S4_BRIDGE = repository_path('tests/references/interface/s4_resonant_nvf.py')
 
 
 def polygon_extension(xp, shapes, background, hu, hv, lattice, dtype,
                       shape_nvf_grid_size=256, plan=None):
     return B.to_conv_mat_boundary_layer(xp, shapes, background, hu, hv, lattice,
                                        dtype, shape_nvf_grid_size=shape_nvf_grid_size)
-
-
-def fixture_shape():
-    angle = np.arctan2(1., 2.)
-    return dict(type='rectangle', cx=0., cy=0., lx=640.,
-                ly=700.*np.sin(angle), angle=angle, material=12.25)
 
 
 def make_solver(order, grid, method='pieces', shape=None):
@@ -39,47 +41,20 @@ def make_solver(order, grid, method='pieces', shape=None):
         structure=[dict(background=1., shapes=[fixture_shape() if shape is None else shape])])
 
 
-def s4_solve(order, shape=None, *, basis=None):
-    """Independent S4 solve on a checked square order set; None selects direct rule."""
-    import S4
-    shape = fixture_shape() if shape is None else shape
-    s = S4.New(Lattice=((700., 0.), (0., 700.)), NumBasis=(2*order+1)**2)
-    if basis not in (None, 'Default', 'Normal', 'Jones'):
-        raise ValueError(f'unknown S4 polarization basis: {basis!r}')
-    options = dict(LatticeTruncation='Parallelogramic', PolarizationDecomposition=basis is not None)
-    if basis is not None:
-        options['PolarizationBasis'] = basis
-    s.SetOptions(**options)
-    for name, epsilon in (('air', 1.), ('substrate', 2.25), ('inclusion', float(shape['material']))):
-        s.SetMaterial(Name=name, Epsilon=epsilon)
-    s.AddLayer(Name='top', Thickness=0., Material='air')
-    uniform = shape['lx'] == 700. and shape['ly'] == 700. and shape.get('angle', 0.) == 0.
-    # A full-cell rectangle is a homogeneous periodic layer. Stating it as such
-    # avoids S4's Default/Jones zero-vector failure on this validation control.
-    s.AddLayer(Name='film', Thickness=300., Material='inclusion' if uniform else 'air')
-    if not uniform:
-        s.SetRegionRectangle(Layer='film', Material='inclusion',
-                            Center=(float(shape.get('cx', 0.)), float(shape.get('cy', 0.))),
-                            Angle=float(np.rad2deg(shape.get('angle', 0.))),
-                            Halfwidths=(float(shape['lx'])/2, float(shape['ly'])/2))
-    s.AddLayer(Name='bottom', Thickness=0., Material='substrate')
-    actual = set(s.GetBasisSet())
-    expected = {(m, n) for m in range(-order, order+1) for n in range(-order, order+1)}
-    if actual != expected:
-        raise ValueError('S4 reciprocal-order set differs from the requested square truncation')
-    s.SetFrequency(1./900.)
-    s.SetExcitationPlanewave(IncidenceAngles=(float(np.rad2deg(.2)), 0.),
-                            sAmplitude=0., pAmplitude=1.)
-    incoming, reflected = s.GetPowerFlux(Layer='top')
-    transmitted, _ = s.GetPowerFlux(Layer='bottom')
-    fluxes = np.asarray([incoming, reflected, transmitted], dtype=complex)
-    if not np.isfinite(fluxes).all() or incoming.real <= 0:
-        raise FloatingPointError('S4 returned invalid fluxes; this solve is not a reference')
-    return float(transmitted.real/incoming.real), float(-reflected.real/incoming.real)
+def s4_solve_case(order, method):
+    """Total (T, R) of the fixture from S4, solved in S4's own interpreter.
 
-
-def s4_direct(order, shape=None):
-    return s4_solve(order, shape)
+    S4 is GPL-licensed and never shares this process: the solve runs in the
+    bridge ``tests/references/interface/s4_resonant_nvf.py`` under the
+    interpreter named by the ``S4_PYTHON`` environment variable.
+    """
+    interpreter = os.environ.get('S4_PYTHON')
+    if not interpreter:
+        raise RuntimeError('Set S4_PYTHON to an interpreter with S4 installed to run the S4 methods.')
+    process = subprocess.run([interpreter, str(S4_BRIDGE), '--orders', str(order), '--methods', method],
+                             capture_output=True, text=True, encoding='utf-8', check=True)
+    row = json.loads(process.stdout.strip().splitlines()[-1])
+    return row['T'], row['R']
 
 
 def direct_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy,
@@ -95,10 +70,10 @@ def direct_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy,
 
 def solve_case(order, grid, method='pieces', shape=None):
     """Return total (T, R), restoring every diagnostic override before returning."""
-    s4_bases = {'s4-direct': None, 's4-default': 'Default',
-                's4-normal': 'Normal', 's4-jones': 'Jones'}
-    if method in s4_bases:
-        return s4_solve(order, shape, basis=s4_bases[method])
+    if method in S4_METHODS:
+        if shape is not None:
+            raise ValueError('The S4 methods solve the probe fixture only.')
+        return s4_solve_case(order, method)
     if method not in ('pieces', 'polygon', 'circular', 'wavebit-direct'):
         raise ValueError(f'unknown comparison method: {method!r}')
     if method == 'wavebit-direct':

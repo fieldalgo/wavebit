@@ -737,9 +737,16 @@ NVF: the large difference between S4 direct and circular NVF is not reproduced
 when their constitutive factorization is matched. Neither finite-order
 factorization is thereby established as an accurate Maxwell reference.
 
-Reproduce the independent comparison with:
+Reproduce the independent comparison with the commands below. Since 2026-10-19 S4
+solves in its own interpreter, named by `S4_PYTHON`, through
+`tests/references/interface/s4_resonant_nvf.py`; the probe never loads S4. The numbers
+here were measured before that move, and the separate-process bridge reproduces the
+order-6 values (0.941709091 direct, 0.737344213 Jones) to the printed digits. The
+fixed-order checks that used to call S4 from the test suite now read
+`tests/references/golden_s4_resonant_nvf.npz`.
 
 ```bash
+export S4_PYTHON=/path/to/an/interpreter/with/S4
 PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py --orders 6 10 14 18 --grids 256 512 --methods circular s4-direct
 PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py --orders 6 10 14 --grids 512 --methods wavebit-direct s4-direct
 PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py --orders 22 --grids 512 --methods circular pieces s4-direct
@@ -866,7 +873,7 @@ from one of these finite-order sequences cannot certify the Wavebit NVF result.
 The bridge now exposes these variants for reproducibility:
 
 ```bash
-PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py --orders 6 10 14 --methods s4-default s4-normal s4-jones
+S4_PYTHON=/path/to/an/interpreter/with/S4 PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py --orders 6 10 14 --methods s4-default s4-normal s4-jones
 ```
 
 Nonfinite fluxes or nonpositive incoming flux now raise instead of becoming

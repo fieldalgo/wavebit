@@ -1,32 +1,10 @@
-"""The external convergence comparison must describe the same physical problem."""
+"""The external convergence comparison must describe the same physical problem.
+
+The comparisons with S4 read frozen numbers: see
+``tests/references/test_s4_resonant_nvf_golden.py``.
+"""
 import numpy as np
-import pytest
-from studies.rcwa.nvf_resonant_spectrum.resonant_nvf_probe import fixture_shape, make_solver, s4_direct, s4_solve, solve_case
-
-
-@pytest.mark.parametrize('basis', [None, 'Default', 'Normal', 'Jones'])
-def test_s4_bridge_matches_the_oblique_uniform_slab(basis):
-    pytest.importorskip('S4')
-    shape = dict(type='rectangle', lx=700., ly=700., material=4.)
-    reference = s4_solve(1, shape, basis=basis)
-    result = make_solver(1, 32, shape=shape).solve()
-    np.testing.assert_allclose(reference, [result.T.sum(), result.R.sum()], atol=3e-13, rtol=0)
-
-
-def test_s4_rotation_units_preserve_the_same_rectangle():
-    pytest.importorskip('S4')
-    shape = fixture_shape()
-    equivalent = dict(shape, lx=shape['ly'], ly=shape['lx'], angle=shape['angle']+np.pi/2)
-    np.testing.assert_allclose(s4_direct(2, shape), s4_direct(2, equivalent), atol=3e-12, rtol=0)
-
-
-@pytest.mark.parametrize('order', [2, 4])
-@pytest.mark.parametrize('shift', [(0., 0.), (41., -27.)])
-def test_same_direct_rule_matches_s4_on_the_patterned_contact_fixture(order, shift):
-    pytest.importorskip('S4')
-    shape = dict(fixture_shape(), cx=shift[0], cy=shift[1])
-    np.testing.assert_allclose(solve_case(order, 64, 'wavebit-direct', shape),
-                               s4_direct(order, shape), atol=3e-12, rtol=0)
+from studies.rcwa.nvf_resonant_spectrum.resonant_nvf_probe import fixture_shape, make_solver, solve_case
 
 
 def test_direct_comparison_does_not_leave_nvf_disabled():
@@ -71,23 +49,3 @@ def test_circular_projector_has_exact_normals_on_the_tilted_visible_faces():
                                            solver.lattice, solver.float_dtype, dyadic=True)
             np.testing.assert_allclose(np.array([[xx, xy_], [yx, yy]]), want,
                                        atol=3e-14, rtol=0)
-
-
-@pytest.mark.parametrize('incoming', [np.nan, 0.])
-def test_invalid_external_flux_is_rejected_as_a_reference(monkeypatch, incoming):
-    S4 = pytest.importorskip('S4')
-    new = S4.New
-
-    class InvalidFlux:
-        def __init__(self, *args, **kwargs):
-            self.simulation = new(*args, **kwargs)
-
-        def __getattr__(self, name):
-            return getattr(self.simulation, name)
-
-        def GetPowerFlux(self, **kwargs):
-            return complex(incoming), 0j
-
-    monkeypatch.setattr(S4, 'New', InvalidFlux)
-    with pytest.raises(FloatingPointError, match='not a reference'):
-        s4_direct(1)
