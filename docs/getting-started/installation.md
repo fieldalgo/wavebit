@@ -77,7 +77,8 @@ conda activate wavebit
 ## Requirements, and why the floors are high
 
 Python ≥ 3.12, NumPy ≥ 2.5.1, SciPy ≥ 1.18 and array-api-compat. With the optional backends,
-`jax >= 0.11` or `torch >= 2.14`.
+`jax >= 0.11, < 0.12` or `torch >= 2.14`. The jax ceiling is temporary: jax 0.12.0 makes the
+FDTD scene recompile on a repeated solve, and nothing has been verified on 0.12 yet.
 
 The floors are the versions the suite is **actually verified against**, not the oldest that
 might work. Loosening one later is safe; tightening one after a release is not, so they start
