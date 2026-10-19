@@ -25,7 +25,7 @@ def test_table_roundtrip_preserves_unit_interpolation_and_permeability(index):
     restored = Job.from_json(original.to_json())
     clone = restored.problem.stack.layers[0].background
     assert clone.wavelength_unit == 'nm'
-    assert clone.interpolation == ('index' if index else 'epsilon')
+    assert clone.interpolated_quantity == ('index' if index else 'epsilon')
     assert clone.mu == material.mu
     np.testing.assert_allclose(clone.at(.8, units=Units(length='um')).epsilon,
                                material.at(.8, units=Units(length='um')).epsilon)
