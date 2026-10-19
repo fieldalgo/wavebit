@@ -274,3 +274,44 @@ def test_a_wrapped_axis_refusal_offers_a_face_the_public_api_takes():
     offered = re.search(r'x=(InvariantAxis\(.*?\))\.$', message)
     assert offered, message
     assert eval('fdtd.' + offered.group(1)) == fdtd.InvariantAxis(k=0.)
+
+
+@pytest.mark.parametrize('build, said', [
+    (lambda: fdtd.TimeSeriesMonitor(at=(0., 0., 0.)), "TimeSeriesMonitor needs 'name'"),
+    (lambda: fdtd.TimeSeriesMonitor(), "TimeSeriesMonitor needs 'name' and 'at'"),
+    (lambda: fdtd.SnappedBox(center=(0., 0., 0.)), "SnappedBox needs 'size'"),
+    (lambda: fdtd.Structure('film'), "Structure needs 'shape' and 'material'"),
+], ids=['time series name', 'time series both', 'snapped box', 'structure'])
+def test_a_missing_field_is_named_under_the_public_class(build, said):
+    """The dataclass's own refusal named the engine class it was generated for (``Record``)."""
+    with pytest.raises(TypeError) as caught:
+        build()
+    assert said in str(caught.value) and not REMOVED.search(str(caught.value)), str(caught.value)
+
+
+def test_every_public_declaration_shows_its_fields_to_inspect():
+    """The API reference reads ``inspect.signature``; a ``spec`` wrapper showed ``(*args, **kwargs)``."""
+    import dataclasses
+    import inspect
+    for name in fdtd.__all__:
+        cls = getattr(fdtd, name)
+        if not (isinstance(cls, type) and dataclasses.is_dataclass(cls)):
+            continue
+        shown = inspect.signature(cls).parameters
+        assert not any(p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) for p in shown.values()), name
+        assert set(shown) == {f.name for f in dataclasses.fields(cls) if f.init}, name
+
+
+def test_a_traced_static_face_value_is_refused_with_the_public_leaves():
+    jax = pytest.importorskip('jax')
+    said = []
+
+    def build(x):
+        with pytest.raises(ValueError) as caught:
+            fdtd.InvariantAxis(k=0., k_max=x)
+        said.append(str(caught.value))
+        return x
+
+    jax.grad(build)(1.)
+    assert 'The traced leaves of a public problem' in said[0], said[0]
+    assert not REMOVED.search(said[0]) and 'Band(' not in said[0], said[0]

@@ -16,6 +16,7 @@ only the translations for names both vocabularies share.
 """
 import contextlib
 import contextvars
+import inspect
 import math
 import re
 
@@ -241,6 +242,15 @@ class Spoken:
     ``Spoken``), so the public name changes no skeleton; ``tests/fdtd/test_public_spelling.py``
     pins that.
     """
+
+    def __init_subclass__(cls, **kwargs):
+        # ``__init__`` below takes ``*args, **kwargs``; ``inspect`` and the API reference read
+        # this instead, the signature of the engine constructor it forwards to.
+        super().__init_subclass__(**kwargs)
+        engine = next(c for c in cls.__mro__
+                      if not issubclass(c, Spoken) and '__init__' in vars(c))
+        signature = inspect.signature(engine.__init__)
+        cls.__signature__ = signature.replace(parameters=list(signature.parameters.values())[1:])
 
     def __init__(self, *args, **kwargs):
         try:

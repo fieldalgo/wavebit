@@ -418,6 +418,7 @@ def _slab_init_with_stages(self, *args, **kwargs):
     _slab_init(self, *args, **kwargs)
 
 
+_slab_init_with_stages.__signature__ = _slab_init.__signature__   # what inspect shows
 Slab.__init__ = eager_under_torch_compile(_slab_init_with_stages)
 
 

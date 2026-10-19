@@ -78,7 +78,7 @@ def test_malformed_job_cannot_bypass_explicit_schema_and_declaration_registry(mu
     body = json.loads(job().to_json())
     expected = ValidationError
     if mutation == 'schema':
-        body['schema'] = 'wavebit.job/v2'
+        body['schema'] = 'wavebit.job/v3'
         expected = UnsupportedFeatureError
     elif mutation == 'array_shape':
         body['problem']['fields']['excitation']['fields']['wavelength']['shape'] = [999]

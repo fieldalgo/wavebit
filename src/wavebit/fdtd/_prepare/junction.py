@@ -176,7 +176,7 @@ def _roles(scene, grid, ia, ib):
 
 
 def _engine_class(shape):
-    """``shape``'s engine class: ``wavebit.fdtd.Slab`` is a public name for the engine's ``Slab``.
+    """``shape``'s engine class: ``wavebit.fdtd.SnappedSlab`` is a public name for the engine's ``Slab``.
 
     The public name is a :class:`~wavebit.fdtd._spelling.Spoken` subclass that adds nothing, so
     a signature naming it would move the skeleton of every public scene with a junction and a
