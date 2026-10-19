@@ -496,8 +496,15 @@ def check_layer_shapes(layer, lattice, layer_index=0):
     else:
         what = (f'shapes {_shape_name(shapes, i)} and {_shape_name(shapes, j)} overlap '
                 f'only{_across(ox, oy)}')
-        fix = ('Move them so the overlap falls inside the cell -- an overlap that does is '
-               'resolved into disjoint polygons and built exactly')
+        # The image is counted on the reduced basis (`overlapping_pairs`); moving shape j onto
+        # it is a whole-period move, which leaves the structure as it is.
+        r = reduced_basis(lattice)
+        dx = ox * checked_float(r[0][0]) + oy * checked_float(r[0][1])
+        dy = ox * checked_float(r[1][0]) + oy * checked_float(r[1][1])
+        fix = (f'Write shape {_shape_name(shapes, j)} where that image is -- moved by '
+               f'({dx:g}, {dy:g}), a whole-period move that leaves the structure as it is -- '
+               f'so the two overlap as written: an overlap in the plane is resolved into '
+               f'disjoint polygons and built exactly, inside the cell or across its edge')
     raise ValueError(
         f'Analytic layer {layer_index}: {what}{more}. Neither shape builder here reads a '
         f"shape's periodic images: the closed form sums each shape's own transform, and the "

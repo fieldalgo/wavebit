@@ -1,4 +1,5 @@
 """Independent physical and lifecycle contracts of the public immutable RCWA API."""
+import dataclasses
 import os
 from pathlib import Path
 import subprocess
@@ -613,6 +614,19 @@ def test_check_refuses_regions_that_overlap_only_across_a_cell_edge(pair, build)
     issue = the_issue_check_and_prepare_report(*one_layer(*EDGE_PAIRS[pair], build=build))
     assert issue.code == 'rcwa.invalid'
     assert 'overlap only across the x period boundary' in issue.message
+
+
+@pytest.mark.parametrize('pair', sorted(EDGE_PAIRS))
+def test_the_overlap_refusal_names_the_whole_period_move_that_resolves_it(pair):
+    # The painting is resolved as written, so the fix is to write the second shape where its
+    # overlapping image is -- the same structure. The old advice, "so the overlap falls inside
+    # the cell", was not the condition: written over the edge, the overlap is in the plane.
+    first, second = EDGE_PAIRS[pair]
+    issue = the_issue_check_and_prepare_report(*one_layer(first, second))
+    assert 'moved by (1, 0), a whole-period move' in issue.message
+    moved = dataclasses.replace(second, center=(second.center[0] + 1., second.center[1]))
+    problem, numerics = one_layer(first, moved)
+    assert rcwa.check(problem, numerics=numerics).ok
 
 
 @pytest.mark.parametrize('geometry,build,says', [
