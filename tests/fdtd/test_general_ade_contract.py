@@ -16,7 +16,7 @@ from wavebit.materials import Debye, DispersiveMaterial, Drude, Lorentz
 
 
 UNITS = Units(length='um')
-SCALE = UNITS.time_seconds
+SCALE = UNITS.time_unit_seconds
 
 
 def problem(kind='lorentz', **parameters):

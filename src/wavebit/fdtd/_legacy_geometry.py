@@ -519,7 +519,7 @@ class Structure:
         import math
         from numbers import Real
 
-        from wavebit.materials.time_domain import as_material
+        from wavebit.materials._time_domain import as_material
         from wavebit.fdtd._prepare.stencil import DEFAULT
         from wavebit.fdtd._prepare.stencil import STENCIL
         if self.discretisation not in (DEFAULT, STENCIL):

@@ -73,7 +73,7 @@ wavelength and ``eps_at`` all read ``eps``.
 import numpy as np
 
 from wavebit.fdtd._kernel.grid import OFFSETS
-from wavebit.materials.time_domain import as_material
+from wavebit.materials._time_domain import as_material
 from wavebit.fdtd._prepare.cpml import damping_profile
 from wavebit.fdtd._prepare.occupancy import occupancy
 from wavebit.fdtd._public_names import public_description
@@ -550,13 +550,13 @@ def _broadcast_shape(parts):
 
 
 def _is_one(v):
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     c = concrete(v)
     return c is not None and c == 1.0
 
 
 def _has_loss(background, structures):
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     for material in (background,) + tuple(s.material for s in structures):
         for s in material.sigma:
             c = concrete(s)

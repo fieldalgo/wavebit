@@ -14,7 +14,7 @@ from wavebit._common.periodic import Stack as _legacy_wavebit_Stack
 
 from wavebit._common._jobs_v1 import Sweep as _legacy_wavebit_Sweep
 
-from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
 
 from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 

@@ -17,7 +17,7 @@ from tests.fdtd.test_material_resolution_guard import quiet, scene
 
 def hybrid_problem(active):
     units = Units(length='m')
-    scale = units.time_seconds
+    scale = units.time_unit_seconds
     poles = [Debye(tau=1e-250*scale, delta_epsilon=0.),
              Lorentz(omega_0=1e200/scale, gamma=1e200/scale, strength=0.)]
     if active == 'debye':

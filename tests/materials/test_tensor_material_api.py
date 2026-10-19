@@ -22,7 +22,7 @@ from tests.fixtures.common._conv_frame import slots_about_centre
 import pytest
 
 from wavebit import Material
-from wavebit.materials.tabulated import TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial
 from wavebit.rcwa._engine.geometry import StaleGeometryError
 from tests.rcwa.test_uniform_anisotropic import slab_s, slab_p
 

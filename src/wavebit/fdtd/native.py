@@ -216,7 +216,7 @@ def _arguments(problem, numerics, execution):
     u = problem.units
     medium = problem.medium
     snapshots, spectrum = problem.outputs.snapshots, problem.outputs.spectrum
-    dt = float(numerics.time_step_seconds)/u.time_seconds
+    dt = float(numerics.time_step_seconds)/u.time_unit_seconds
     if not np.isfinite(dt) or dt <= 0:
         raise ValidationError('time step must be finite and positive', path='numerics.time_step_seconds')
     window_steps = None
@@ -235,11 +235,11 @@ def _arguments(problem, numerics, execution):
     absorber = numerics.absorber
     options = dict(spacing=numerics.grid.spacing, z_spacing=numerics.grid.z_spacing,
         dt=dt, steps=numerics.steps, mu=real(medium.mu),
-        conductivity=real(medium.conductivity)*u.length_metres/(EPSILON0*C0),
-        poles=tuple((real(p.omega_0)*u.time_seconds, real(p.gamma)*u.time_seconds,
-                     real(p.strength)*u.time_seconds**2) for p in medium.poles),
+        conductivity=real(medium.conductivity)*u.length_unit_meters/(EPSILON0*C0),
+        poles=tuple((real(p.omega_0)*u.time_unit_seconds, real(p.gamma)*u.time_unit_seconds,
+                     real(p.strength)*u.time_unit_seconds**2) for p in medium.poles),
         electric=vector(problem.initial.E), magnetic=vector(problem.initial.H, Z0),
-        source=None if problem.current is None else vector(problem.current.density, Z0*u.length_metres),
+        source=None if problem.current is None else vector(problem.current.density, Z0*u.length_unit_meters),
         pulse=None if problem.current is None else vector(problem.current.samples),
         bloch_phase=real(problem.bloch_phase), backend=execution.backend, device=device,
         checkpoint_steps=numerics.checkpoint_steps,
@@ -288,11 +288,11 @@ def _grid(epsilon, options, **extra):
 
 
 def _validated(problem, numerics, execution):
-    with execution.scope():
+    with execution._scope():
         epsilon, options = _arguments(problem, numerics, execution)
         admission = _grid(epsilon, options, _validate_only=True)
     return CheckReport(resolved={'shape': admission['shape'],
-        'cfl_time_step_seconds': admission['cfl_dt']*problem.units.time_seconds,
+        'cfl_time_step_seconds': admission['cfl_dt']*problem.units.time_unit_seconds,
         'time_step_seconds': numerics.time_step_seconds, 'steps': numerics.steps},
         estimates={'principal_array_bytes': admission['state_bytes'],
                    'scope': 'E, H and one Fourier accumulator; excludes ADE/CPML, history and temporaries'},
@@ -389,13 +389,13 @@ def _adapt(raw, problem, numerics):
         snapshots[public] = TimeSeries(values=data['values']/(Z0 if magnetic else 1.),
             coordinates={a: data[a] for a in ('x', 'y', 'z')}, components=(public,),
             units={'field': 'A/m' if magnetic else 'V/m', 'coordinates': u.length, 'time': 's'},
-            times=data['t']*u.time_seconds, sampling='native Yee stagger',
+            times=data['t']*u.time_unit_seconds, sampling='native Yee stagger',
             metadata={'axis_order': ('time', 'z', 'y', 'x')})
     xp = array_namespace(raw['E'])
     spectrum = None
     if problem.outputs.spectrum is not None:
-        e = xp.moveaxis(raw['electric_spectrum'], 2, -1)*u.time_seconds
-        h = xp.moveaxis(raw['magnetic_spectrum'], 2, -1)*u.time_seconds/Z0
+        e = xp.moveaxis(raw['electric_spectrum'], 2, -1)*u.time_unit_seconds
+        h = xp.moveaxis(raw['magnetic_spectrum'], 2, -1)*u.time_unit_seconds/Z0
         spectrum = SpectralFieldSamples(values=xp.concat((e, h), axis=-1),
             coordinates={'z': raw['z_nodes'][raw['monitor_z']],
                          'y': xp.arange(e.shape[2], dtype=e.real.dtype,
@@ -404,20 +404,20 @@ def _adapt(raw, problem, numerics):
                                         device=_device_of(e))*numerics.grid.spacing[2]},
             components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
             units={'E': 'V s/m', 'H': 'A s/m', 'coordinates': u.length},
-            wavelengths=raw['wavelengths'], frequencies=C0/(raw['wavelengths']*u.length_metres),
+            wavelengths=raw['wavelengths'], frequencies=C0/(raw['wavelengths']*u.length_unit_meters),
             sampling='spatially collocated; E/H retain their native Fourier timestamps',
             metadata={'axis_order': ('wavelength', 'plane', 'y', 'x', 'component'),
                       'normalization': 'raw Fourier integral; no incident normalization'})
     tail = raw['convergence']
     if tail is not None:
         tail = dict(tail)
-        tail['electric_spectrum_before_window'] *= u.time_seconds
-        tail['magnetic_spectrum_before_window'] *= u.time_seconds/Z0
+        tail['electric_spectrum_before_window'] *= u.time_unit_seconds
+        tail['magnetic_spectrum_before_window'] *= u.time_unit_seconds/Z0
         # The engine's activity is a weighted diagnostic norm, not stored energy.
         tail['material_activity_units'] = 'internal relative norm; not physical energy'
-    diagnostics = dict(time_seconds=raw['time']*u.time_seconds,
-        magnetic_time_seconds=raw['h_time']*u.time_seconds,
-        cfl_time_step_seconds=raw['cfl_dt']*u.time_seconds,
+    diagnostics = dict(time_seconds=raw['time']*u.time_unit_seconds,
+        magnetic_time_seconds=raw['h_time']*u.time_unit_seconds,
+        cfl_time_step_seconds=raw['cfl_dt']*u.time_unit_seconds,
         z_nodes=raw['z_nodes'], z_spacing=raw['z_spacing'], spacing=raw['spacing'],
         bloch_phase=raw['bloch_phase'], dft_subsample=raw['dft_subsample'],
         dft_samples=raw['dft_samples'], tail=tail)
@@ -425,7 +425,7 @@ def _adapt(raw, problem, numerics):
         polarization_density=tuple(p*EPSILON0 for p in raw['polarization']),
         previous_polarization_density=tuple(p*EPSILON0 for p in raw['previous_polarization']),
         snapshots=snapshots, spectrum=spectrum,
-        spectral_power_z=raw['power_z']*u.time_seconds**2*u.length_metres**2/Z0,
+        spectral_power_z=raw['power_z']*u.time_unit_seconds**2*u.length_unit_meters**2/Z0,
         validity=Validity(checks={'stable':raw['stable'],
             'finite_fields':xp.all(xp.isfinite(raw['E'])) & xp.all(xp.isfinite(raw['H']))},
             convergence={} if tail is None else tail), diagnostics=diagnostics,
@@ -436,7 +436,7 @@ def _adapt(raw, problem, numerics):
 
 
 def _run(problem, numerics, execution):
-    with execution.scope():
+    with execution._scope():
         epsilon, options = _arguments(problem, numerics, execution)
         return _adapt(_grid(epsilon, options), problem, numerics)
 

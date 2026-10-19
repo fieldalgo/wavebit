@@ -12,7 +12,7 @@ FIELD_TOL, RECURRENCE_TOL = 1e-11, 1e-12
 
 
 def pole_parameters(kind, damped):
-    scale = UNITS.time_seconds
+    scale = UNITS.time_unit_seconds
     return (0. if kind == 'drude' else 5./scale,
             (.7 if damped else 0.)/scale, 12./scale**2)
 
@@ -128,7 +128,7 @@ def fourier_mode(cells, rotation):
     electric = np.stack([(electric_amplitude[c]*spatial('E', c, mesh(cells, 'E', c))).real
                          for c in range(3)])
     magnetic = np.zeros_like(electric)
-    return k, discrete_k/UNITS.length_metres, initial, electric, magnetic, spatial
+    return k, discrete_k/UNITS.length_unit_meters, initial, electric, magnetic, spatial
 
 
 def matrix_history(matrix, initial, steps):

@@ -52,9 +52,9 @@ from wavebit._common.geometry.recipes import holds_polygon
 from wavebit.materials.response import Material
 from wavebit.materials.response import as_material
 from wavebit.materials.response import refractive_index_from_eps
-from wavebit.materials.tabulated import TabulatedMaterial
-from wavebit.materials.tabulated import evaluate_material
-from wavebit.materials.tabulated import evaluate_structure
+from wavebit.materials._tabulated import TabulatedMaterial
+from wavebit.materials._tabulated import evaluate_material
+from wavebit.materials._tabulated import evaluate_structure
 from wavebit.rcwa._engine.enums import Answers
 from wavebit.rcwa._engine.enums import DEFAULT_ANSWERS
 from wavebit.rcwa._engine.enums import DEFAULT_FACTORIZATION
@@ -2488,7 +2488,7 @@ class CoreSolveMixin:
                 'axis-aligned spelling -- it is (|a1|, |a2|), so it cannot say what the new '
                 'cell is without the angle. Assigning it used to move the read-back and '
                 'nothing else. Set the basis instead:\n'
-                '    solver.lattice = wavebit.Lattice.oblique(lx, ly, angle)\n'
+                '    solver.lattice = wavebit.Lattice.oblique(length_u, length_v, angle)\n'
                 'or `wavebit.Lattice.hexagonal(a)` / a 2x2 column_stack((a1, a2)); `period` follows '
                 'from it.')
 

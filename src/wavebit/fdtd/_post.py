@@ -462,10 +462,10 @@ def medium_at(scene, grid, P, cells, where):
     smoothed ``fd.Box`` film into the film (``eps`` 4 where the voxels hold 1, found in the
     review of C4) and refused a plane a cell and a half clear of it.
     """
-    from wavebit.materials.time_domain import Conductor
-    from wavebit.materials.time_domain import Dispersive
-    from wavebit.materials.time_domain import as_material
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import Conductor
+    from wavebit.materials._time_domain import Dispersive
+    from wavebit.materials._time_domain import as_material
+    from wavebit.materials._time_domain import concrete
     background = as_material(scene.background, 'Scene(background=)')
     owners = set()
     for k in cells:
@@ -720,5 +720,5 @@ def default_orders(monitor, scene, grid, n_medium, kpar):
 
 
 def _concrete(v):
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     return concrete(v)

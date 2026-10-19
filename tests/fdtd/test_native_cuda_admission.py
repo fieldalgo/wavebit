@@ -21,8 +21,8 @@ def small_problem():
             snapshots=n.Snapshots(every=2, components=('Ex', 'Hy'))))
     numerics = n.Numerics(
         grid=n.Grid(spacing=(.1,) * 3),
-        time_step_seconds=.02 * units.time_seconds, steps=5,
-        decay_check=n.DecayCheck(window_seconds=.04 * units.time_seconds))
+        time_step_seconds=.02 * units.time_unit_seconds, steps=5,
+        decay_check=n.DecayCheck(window_seconds=.04 * units.time_unit_seconds))
     return problem, numerics
 
 
@@ -55,7 +55,7 @@ def test_native_rejects_invalid_inputs_before_advancing(torch_device, monkeypatc
     if invalid == 'epsilon':
         problem = problem.replace(medium=n.Medium(epsilon=-problem.medium.epsilon))
     elif invalid == 'cfl':
-        numerics = numerics.replace(time_step_seconds=problem.units.time_seconds)
+        numerics = numerics.replace(time_step_seconds=problem.units.time_unit_seconds)
     elif invalid == 'pml_medium':
         numerics = numerics.replace(absorber=n.PML(cells=2))
         problem = problem.replace(medium=n.Medium(epsilon=2 * problem.medium.epsilon))
@@ -143,7 +143,7 @@ def _yee_wave_case(phase, steps):
         units=units, medium=n.Medium(epsilon=np.full(shape, epsilon), mu=mu),
         initial=n.InitialField(E=electric, H=magnetic), bloch_phase=(phase, 0., 0.))
     numerics = n.Numerics(
-        grid=n.Grid(spacing=(dz,) * 3), time_step_seconds=dt * units.time_seconds,
+        grid=n.Grid(spacing=(dz,) * 3), time_step_seconds=dt * units.time_unit_seconds,
         steps=steps, checkpoint_steps=7)
     rotation = np.exp(-1j * omega * dt * steps)
     return problem, numerics, electric, magnetic, rotation

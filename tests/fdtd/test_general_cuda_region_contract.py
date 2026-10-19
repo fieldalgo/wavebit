@@ -59,7 +59,7 @@ def test_metadata_admits_translated_rounded_cells_and_schedule(no_device, block,
     assert 'strictly interior SnappedBox' in prepared.contract['differentiation']
     assert not any('source amplitude' in item for item in prepared.contract['live'])
     assert prepared.contract['resolved_dt_seconds'] == pytest.approx(
-        .5*.05/np.sqrt(3)*Units(length='um').time_seconds, rel=2e-15)
+        .5*.05/np.sqrt(3)*Units(length='um').time_unit_seconds, rel=2e-15)
 
 
 def changed(p, case):

@@ -4,7 +4,7 @@ References use prescribed phase/decay vectors or a numerical inversion of
 the complex dispersion relation, never the production angle-conversion formula.
 """
 
-from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
 
 from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 

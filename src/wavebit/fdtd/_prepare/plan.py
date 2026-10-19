@@ -82,7 +82,7 @@ from wavebit.fdtd._legacy_boundaries import Absorbing
 from wavebit.fdtd._legacy_boundaries import Axis1D
 from wavebit.fdtd._legacy_boundaries import Bloch
 from wavebit.fdtd._legacy_boundaries import PML
-from wavebit.materials.time_domain import Dispersive
+from wavebit.materials._time_domain import Dispersive
 from wavebit.fdtd._legacy_monitors import Record
 from wavebit.fdtd._kernel.cpml import CpmlFace
 from wavebit.fdtd._kernel.cpml import StabilizedFace

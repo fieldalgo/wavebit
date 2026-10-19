@@ -13,7 +13,7 @@ from wavebit._common.periodic import Incidence
 from wavebit._common._jobs_v1 import JobSpec
 from wavebit._common.periodic import Layer
 from wavebit._common.periodic import Stack
-from wavebit.materials.tabulated import TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial
 from wavebit import eps_from_refractive_index
 
 

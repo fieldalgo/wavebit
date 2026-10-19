@@ -10,9 +10,9 @@ import numpy as np
 
 
 UNITS = Units(length='um')
-TIME = UNITS.time_seconds
+TIME = UNITS.time_unit_seconds
 # Scale the SI Fourier plane power to a dimensionless optimization objective.
-POWER = TIME**2 * UNITS.length_metres**2 / Z0
+POWER = TIME**2 * UNITS.length_unit_meters**2 / Z0
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
         strength=9*jax.nn.sigmoid(parameter)*mask
         problem=native.Problem(units=UNITS,medium=native.Medium(epsilon=1+.5*mask,
             poles=(native.Oscillator(omega_0=10./TIME,gamma=1./TIME,strength=strength/TIME**2),)),
-            current=native.Current(density=source.astype(jnp.complex128)/(Z0*UNITS.length_metres),samples=pulse),
+            current=native.Current(density=source.astype(jnp.complex128)/(Z0*UNITS.length_unit_meters),samples=pulse),
             outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(.8,),z_indices=(56,))))
         result=native.run(problem,backend='jax',numerics=native.Numerics(
             grid=native.Grid(spacing=(.05,)*3),time_step_seconds=dt*TIME,steps=steps,

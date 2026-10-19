@@ -24,7 +24,7 @@ def main():
     require(not output.exists(), 'Preserve existing preparation.')
     folder = RESULTS/(PREFIX+'prevalidation_sources')
     folder.mkdir(exist_ok=False)
-    sources = [ROOT/'src/wavebit/materials/time_domain.py', ROOT/NEW_TEST, *helpers()]
+    sources = [ROOT/'src/wavebit/materials/_time_domain.py', ROOT/NEW_TEST, *helpers()]
     sources += [ROOT/'tests/api/test_docs_contract.py']
     snapshots = [snapshot(p, folder/(p.name+'.txt.gz')) for p in sources]
     record = {'utc': now(), 'base': BASE, 'maps': current, 'guard': guard(), 'snapshots': snapshots,

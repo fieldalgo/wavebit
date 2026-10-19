@@ -188,7 +188,7 @@ def test_wall_initial_amplitude_gradients_checkpoints_and_prepared_ownership(cas
 
 
 def dipole_problem(kind, axis, moment=1.3e-16, phase=.4, open_padding=False):
-    pulse = fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08 / UNITS.time_seconds)
+    pulse = fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08 / UNITS.time_unit_seconds)
     peak = np.sqrt(2 * np.log(1 / pulse.cutoff)) / (2 * np.pi * pulse.frequency_sigma_hz)
     component = ('E' if kind == 'electric' else 'H') + axis
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
@@ -197,7 +197,7 @@ def dipole_problem(kind, axis, moment=1.3e-16, phase=.4, open_padding=False):
         if open_padding else walls('mixed')),
         sources=(fdtd.CurrentDipole('d', center=(.007, -.011, .013), kind=kind, component=component,
                             pulse=pulse, current_moment=moment, phase=phase,
-                            delay_seconds=-peak + .12 * UNITS.time_seconds),),
+                            delay_seconds=-peak + .12 * UNITS.time_unit_seconds),),
         outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('probe', at=(.04, .03, -.02),
                                                  component=component),), final_fields=True))
 

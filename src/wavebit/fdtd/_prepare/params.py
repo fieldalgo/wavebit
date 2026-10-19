@@ -61,7 +61,7 @@ from wavebit._common.backend import check_input_precision
 from wavebit.fdtd._legacy_boundaries import AXES
 from wavebit.fdtd._legacy_boundaries import Axis1D
 from wavebit.fdtd._legacy_boundaries import Bloch
-from wavebit.materials.time_domain import as_material
+from wavebit.materials._time_domain import as_material
 from wavebit.fdtd._kernel.cpml import loss_key
 from wavebit.fdtd._kernel.cpml import psi_key
 import wavebit.fdtd._prepare.checks as checks
@@ -383,7 +383,7 @@ def _poles(scene, plan, rt):
     ``energy_is_debye`` is a numeric pytree leaf derived from the declared pole type: a
     Drude/Lorentz recurrence also has zero hold when ``gamma*dt == 2``.
     """
-    from wavebit.materials.time_domain import Debye
+    from wavebit.materials._time_domain import Debye
     from wavebit.fdtd._prepare.conductive_film import InterfacePoleTerm
     from wavebit.fdtd._prepare.conductive_film import pole_params as film_poles
     from wavebit.fdtd._prepare.single_pole_film import DispersiveFilmTerm
@@ -490,7 +490,7 @@ def _axis1d_guard(scene, rt, guard):
     on the backend, so the run turns into ``nan`` rather than returning a field computed past
     the plan's CFL bound.
     """
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     for axis in AXES:
         face = getattr(scene.boundaries, axis)[0]
         if not isinstance(face, Axis1D) or concrete(face.k) is not None:
@@ -657,7 +657,7 @@ def _material_door_guard(scene, rt, guard):
     ``sigma``) and grew to 4.6e147 in 200 steps reading stable; a traced Lorentz
     ``strength = -4000`` read stable and grew to 3.4e64 in 60.
     """
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import concrete
     zero = rt.array(0.0, 'float64')
     checks_ = []
     background = as_material(getattr(scene, 'background', None), 'Scene(background=)')

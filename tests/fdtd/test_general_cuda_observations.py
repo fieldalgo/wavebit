@@ -23,12 +23,12 @@ def observable_losses(result, units):
     # E and Z0 H share field units. Divide the Fourier integrals by the fixed
     # geometry time unit, not a live field norm, to keep the derivative unchanged.
     field = sum(((fields[c].real ** 2 + fields[c].imag ** 2) * scale ** 2).sum()
-                for c, scale in (('Ey', 1.), ('Hx', Z0))) / units.time_seconds ** 2
+                for c, scale in (('Ey', 1.), ('Hx', Z0))) / units.time_unit_seconds ** 2
     # The general solver returns a two-sided pulse spectral energy. This fixed
     # factor restores its internal signed plane flux without normalizing it by
     # a source amplitude or detaching the field-dependent result.
     flux = result['flux'].energy_density.sum() / (
-        2 * units.time_seconds ** 2 * units.length_metres ** 2 / Z0)
+        2 * units.time_unit_seconds ** 2 * units.length_unit_meters ** 2 / Z0)
     return record, field, flux
 
 

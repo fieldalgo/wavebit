@@ -15,7 +15,7 @@ from wavebit._common.declarations import Declaration
 from wavebit.units import C0, EPSILON0, require_units
 from wavebit.errors import ValidationError
 from .response import Material, MaterialResponse
-from .tabulated import TabulatedMaterial as LegacyTabulatedMaterial
+from ._tabulated import TabulatedMaterial as LegacyTabulatedMaterial
 
 
 def _namespace(*values):
@@ -121,7 +121,7 @@ def angular_frequency(wavelength, *, units, values=()):
     if _concrete(xp.all(valid)) is False:
         raise ValidationError('vacuum wavelength must be finite and positive', code='wavelength', path='wavelength')
     safe = xp.where(valid, w, xp.ones_like(w))
-    omega = 2 * math.pi * C0 / (safe * units.length_metres)
+    omega = 2 * math.pi * C0 / (safe * units.length_unit_meters)
     return xp.where(valid, omega, as_array(xp, float('nan'), device=getattr(ref, 'device', None)))
 
 
@@ -137,7 +137,7 @@ class Drude(Declaration):
         _register(type(self), ('omega_p', 'gamma'))
 
     def epsilon_term(self, omega):
-        from .time_domain import _drude_response
+        from ._time_domain import _drude_response
         # The normalized evaluator is float64. Keep the public single-precision
         # arithmetic and dtype; the large finite damping repair is a float64 path.
         if any(str(getattr(v, 'dtype', '')) in ('float32', 'torch.float32')
@@ -169,7 +169,7 @@ class Lorentz(Declaration):
         Active undamped resonances remain singular; no broadening is introduced.
         """
         from wavebit._common.declarations import is_jax_typed, torch_carried
-        from .time_domain import concrete
+        from ._time_domain import concrete
         if (not torch_carried(self.strength) and concrete(self.strength) == 0
                 and (is_jax_typed(self.strength) or self.strength == 0)):
             # Avoid forming a singular denominator or overflowing finite rates.
@@ -271,8 +271,8 @@ class TabulatedMaterial(LegacyTabulatedMaterial):
         units = Units(length=self.wavelength_unit) if units is None else require_units(units)
         # Form the exact decimal SI-prefix ratio before conversion to binary.
         # 1e-6/1e-9 rounds below 1000 and wrongly excludes the 500 nm endpoint.
-        scale = float(Decimal(str(units.length_metres)) /
-                      Decimal(str(Units(length=self.wavelength_unit).length_metres)))
+        scale = float(Decimal(str(units.length_unit_meters)) /
+                      Decimal(str(Units(length=self.wavelength_unit).length_unit_meters)))
         try:
             xp, ref = _namespace(wavelength)
             w = as_array(xp, wavelength, device=getattr(ref, 'device', None))
@@ -282,8 +282,21 @@ class TabulatedMaterial(LegacyTabulatedMaterial):
         return MaterialResponse(result.epsilon, result.mu, _wavelength_shape=result._wavelength_shape)
 
     @property
-    def interpolation(self):
+    def interpolated_quantity(self):
+        """What the table interpolates between its wavelengths: ``'epsilon'`` or ``'index'``."""
         return self._quantity
+
+    def __repr__(self):
+        return (f'TabulatedMaterial(samples={len(self.wavelengths)}, '
+                f'wavelength_range={self.wavelength_range}, '
+                f'interpolated_quantity={self._quantity!r}, magnetic={self.is_magnetic})')
+
+    def __getattr__(self, name):
+        # Reached only when normal lookup fails, so it never shadows an attribute.
+        if name == 'interpolation':
+            from wavebit._common.declarations import removed
+            raise removed('TabulatedMaterial', name, 'TabulatedMaterial.interpolated_quantity')
+        raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
 
     def rotated(self, angle, axis='z'):
         if self._quantity == 'index':

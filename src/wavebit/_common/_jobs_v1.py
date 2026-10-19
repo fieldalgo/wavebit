@@ -73,7 +73,7 @@ from wavebit.materials.response import Material
 from wavebit._common.periodic import Stack
 from wavebit._common.periodic import Incidence
 from wavebit._common.declarations import _DeclaredFieldsOnly
-from wavebit.materials.tabulated import TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial
 from wavebit.rcwa._engine.enums import Answers
 from wavebit._common.enums import Backend
 from wavebit.rcwa._engine.enums import Factorization

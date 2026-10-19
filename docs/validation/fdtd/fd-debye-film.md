@@ -3,7 +3,7 @@
 Written: 2026-10-06
 
 Targets: `src/wavebit/fdtd/_prepare/debye_film.py`,
-`src/wavebit/fdtd/_prepare/debye_resolution.py`, `src/wavebit/materials/time_domain.py`,
+`src/wavebit/fdtd/_prepare/debye_resolution.py`, `src/wavebit/materials/_time_domain.py`,
 `src/wavebit/fdtd/_kernel/poles.py`, `src/wavebit/fdtd/_kernel/observe.py`,
 `src/wavebit/fdtd/_prepare/checks.py`.
 

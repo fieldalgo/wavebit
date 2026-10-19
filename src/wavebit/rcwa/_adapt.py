@@ -215,7 +215,7 @@ def build_solver(problem, numerics, execution, wavelength):
                 values['orders'] = dict(values['orders'])
             adapted.append(getattr(legacy_sources, type(source).__name__)(**values))
         kwargs.update(excitation=tuple(adapted), power_region=problem.outputs.power_region,
-                      length_unit=problem.units.length_metres)
+                      length_unit=problem.units.length_unit_meters)
     if single_plane(problem):
         formulation = kwargs.pop('formulation', 'auto')
         solver = legacy_rcwa(**kwargs)

@@ -87,7 +87,7 @@ def assemble(problem, *, numerics, backend='numpy', device='cpu', precision='dou
                                       code='operators.detuning', path='numerics.detuning')
     prepared = prepare(problem, numerics=numerics, backend=backend, device=device, precision=precision)
     epsilon, mu = [], []
-    with prepared.execution.scope(), _normalize_errors():
+    with prepared.execution._scope(), _normalize_errors():
         solvers = prepared._solvers(problem)
         for solver, geometry in zip(solvers, prepared._geometry):
             epsilon.append(solver.eps_conv_matrices(geometry=geometry))
@@ -126,7 +126,7 @@ def solve(problem, operators):
     if operators.numerics != prepared.numerics or operators.execution != prepared.execution:
         raise IncompatibleProblemError('The numerical/execution contract changed. Assemble operators again.',
                                        code='operators.execution', path='operators')
-    with prepared.execution.scope(), _normalize_errors():
+    with prepared.execution._scope(), _normalize_errors():
         solvers = prepared._solvers(problem)
         if len(operators.epsilon) != len(solvers) or len(operators.mu) != len(solvers):
             raise ValidationError('One operator tuple is required per wavelength.', code='operators.spectral_shape', path='operators')

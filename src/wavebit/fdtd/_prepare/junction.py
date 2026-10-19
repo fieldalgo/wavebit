@@ -196,8 +196,8 @@ def _signature(scene, grid):
 
 
 def _material_scope(material, where):
-    from wavebit.materials.time_domain import Material
-    from wavebit.materials.time_domain import concrete
+    from wavebit.materials._time_domain import Material
+    from wavebit.materials._time_domain import concrete
     if not isinstance(material, Material) or material.poles:
         raise ValueError(f'{where}: junctions require lossless, non-dispersive media.')
     # is_magnetic means a named mu, even mu=1; keep that static contract under tracing.

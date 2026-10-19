@@ -208,7 +208,7 @@ def test_historical_source_paths_select_the_preserved_engine_not_new_declaration
         'sources.py': 'src/wavebit/fdtd/_legacy_sources.py',
         'boundaries.py': 'src/wavebit/fdtd/_legacy_boundaries.py',
         'monitors.py': 'src/wavebit/fdtd/_legacy_monitors.py',
-        'materials.py': 'src/wavebit/materials/time_domain.py',
+        'materials.py': 'src/wavebit/materials/_time_domain.py',
         '_check.py': 'src/wavebit/fdtd/_prepare/report.py',
         '_lower/plan.py': 'src/wavebit/fdtd/_prepare/plan.py',
         '_run.py': 'src/wavebit/fdtd/_execution.py',

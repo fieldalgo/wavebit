@@ -78,8 +78,8 @@ def test_live_layer_thickness_gradient_matches_finite_difference(backend):
     u=Units(length='um')
     q=p.Problem(units=u,stack=p.Stack(period=(.05,),bottom=Material(2.25),layers=(
         p.Layer(thickness=.28,epsilon=np.array([[2.25]])),p.Layer(thickness=.12,epsilon=np.array([[1.5]])))),
-        excitation=p.Excitation(wavelength=1.,sources=(p.PlaneWave(),)),pulse=p.Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*3*u.time_seconds)))
-    n=p.Numerics(spacing=1/25,duration_seconds=45*u.time_seconds,orders=0,nominal_layer_thickness=(.2,.2),
+        excitation=p.Excitation(wavelength=1.,sources=(p.PlaneWave(),)),pulse=p.Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*3*u.time_unit_seconds)))
+    n=p.Numerics(spacing=1/25,duration_seconds=45*u.time_unit_seconds,orders=0,nominal_layer_thickness=(.2,.2),
         align_layers=True,pml_cells=25,extraction_method='directional',layer_smoothing=.04)
     prepared=p.prepare(q,numerics=n,backend=backend)
     def loss(d,engine):
@@ -118,7 +118,7 @@ def test_crossed_cell_power_is_watts_and_sampled_fields_are_si():
     raw=sample_fdtd_fields(result._engine_diagnostics,z=.05)
     np.testing.assert_allclose(sample.values[:,:3],raw['E'],rtol=1e-13)
     np.testing.assert_allclose(sample.values[:,3:],raw['H']/Z0,rtol=1e-13)
-    np.testing.assert_allclose(sample.time,raw['t']*q.units.time_seconds,rtol=1e-13)
+    np.testing.assert_allclose(sample.time,raw['t']*q.units.time_unit_seconds,rtol=1e-13)
 
 
 def test_full_result_crosses_jit_and_keeps_physical_snapshots_and_power_metadata():

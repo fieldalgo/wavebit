@@ -21,7 +21,7 @@ def migrate_legacy_jobs(document, *, units):
     from wavebit._common.execution import Execution
     from wavebit.jobs import Job
     from wavebit.materials import Material, TabulatedMaterial
-    from wavebit.materials.tabulated import TabulatedMaterial as OldTable
+    from wavebit.materials._tabulated import TabulatedMaterial as OldTable
     from wavebit.lattice import as_lattice
     require_units(units)
     spec=JobSpec.from_json(document) if isinstance(document,str) else JobSpec.from_dict(document)

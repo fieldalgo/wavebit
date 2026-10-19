@@ -119,7 +119,7 @@ def test_static_bloch_material_and_amplitude_derivatives(device, block, record_p
         result = prepared.run(live)
         assert bool(result.validity.checks['runtime_stability'])
         np.testing.assert_allclose(result.provenance['dt_seconds'],
-                                   DT * UNITS.time_seconds, rtol=2e-15, atol=0.)
+                                   DT * UNITS.time_unit_seconds, rtol=2e-15, atol=0.)
         value = result.final_fields.values['E'].abs().square().mean()
         gradients = torch.autograd.grad(value, leaves)
         expected, exact_gradients, omega = analytic(amplitude_value, epsilon_value, electric)

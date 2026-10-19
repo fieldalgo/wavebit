@@ -20,11 +20,11 @@ IDS = ['cpu-plain', 'cuda-plain', 'cuda-k7']
 
 
 def problem(amplitude=1., phase=0., epsilon=2.25):
-    pulse = fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15 / UNITS.time_seconds)
+    pulse = fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15 / UNITS.time_unit_seconds)
     peak = np.sqrt(2 * np.log(1 / pulse.cutoff)) / (2 * np.pi * pulse.frequency_sigma_hz)
     source = fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.3), theta=np.pi / 6,
         phi=np.deg2rad(35.), polarization='p', amplitude=amplitude, phase=phase,
-        pulse=pulse, delay_seconds=-peak + .12 * UNITS.time_seconds)
+        pulse=pulse, delay_seconds=-peak + .12 * UNITS.time_unit_seconds)
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.25, .2, 1.2)), background=Material(epsilon=1.),
         boundaries=fdtd.Boundaries(**fdtd.Bloch.from_source(source, units=UNITS), z=fdtd.Open()),
@@ -53,7 +53,7 @@ def groups(result):
         (result.final_fields.values['E'],),
         (Z0 * result.final_fields.values['H'],),
         (result['e'].values, Z0 * result['h'].values),
-        tuple(result['field'].values[c] * (Z0 if c[0] == 'H' else 1.) / UNITS.time_seconds
+        tuple(result['field'].values[c] * (Z0 if c[0] == 'H' else 1.) / UNITS.time_unit_seconds
               for c in COMPONENTS),
         (source['incident'], Z0 * source['incident_H']),
     )
@@ -67,7 +67,7 @@ def losses(result):
     record = norm2(groups(result)[2])
     field = norm2(groups(result)[3])
     flux = result['flux'].energy_density.sum() / (
-        2 * UNITS.time_seconds ** 2 * UNITS.length_metres ** 2 / Z0)
+        2 * UNITS.time_unit_seconds ** 2 * UNITS.length_unit_meters ** 2 / Z0)
     return record, field, flux
 
 

@@ -98,7 +98,7 @@ def main():
             current=n.Current(density=current, samples=np.sin(np.arange(args.steps) * .15)))
         numerics = n.Numerics(
             grid=n.Grid(spacing=(.1,) * 3),
-            time_step_seconds=.03 * units.time_seconds, steps=args.steps,
+            time_step_seconds=.03 * units.time_unit_seconds, steps=args.steps,
             checkpoint_steps=args.checkpoint_steps,
             absorber=n.PML(cells=2, wavelength=1.))
         reverse = args.mode == 'reverse'

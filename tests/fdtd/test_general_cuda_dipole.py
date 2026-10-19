@@ -43,7 +43,7 @@ def parity(actual, expected):
 
 
 def pulse():
-    return fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08 / UNITS.time_seconds)
+    return fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=.08 / UNITS.time_unit_seconds)
 
 
 def pulse_peak_seconds():
@@ -88,7 +88,7 @@ def test_public_dipole_one_step_si_moment_and_yee_centroid(torch_device, kind, a
     density = host(value[component])
     coefficient = EPSILON0 * 2.25 if field == 'E' else MU0 * 1.4
     # E1=-dt*J/(epsilon0*epsilon), H1/2=-dt*M/(mu0*mu).
-    moment_per_node = -density * coefficient * (DX * UNITS.length_metres) ** 3 / dt
+    moment_per_node = -density * coefficient * (DX * UNITS.length_unit_meters) ** 3 / dt
     moment = moment_per_node.sum()
     np.testing.assert_allclose(moment, source.current_moment, rtol=1e-13, atol=0.)
     np.testing.assert_allclose(host(result.sources['d']['drive'])[0], source.current_moment,
@@ -107,7 +107,7 @@ def test_public_dipole_one_step_si_moment_and_yee_centroid(torch_device, kind, a
 def slab_problem(kind='electric', stamp='bspline', moment=1.3e-16, phase=.4,
                  delay=None, epsilon=2.25):
     if delay is None:
-        delay = -pulse_peak_seconds() + .12 * UNITS.time_seconds
+        delay = -pulse_peak_seconds() + .12 * UNITS.time_unit_seconds
     component = 'Ey' if kind == 'electric' else 'Hy'
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(8 * DX, 8 * DX, 12 * DX)),
@@ -136,7 +136,7 @@ def assert_source_contract(result, problem):
     tau = 1 / (2 * np.pi * source.pulse.frequency_sigma_hz)
     shifted = times - pulse_peak_seconds() - float(host(source.delay_seconds))
     expected = (float(host(source.current_moment)) * np.exp(-.5 * (shifted / tau) ** 2)
-                * np.sin(2 * np.pi * C0 / (source.pulse.wavelength * UNITS.length_metres)
+                * np.sin(2 * np.pi * C0 / (source.pulse.wavelength * UNITS.length_unit_meters)
                          * shifted + float(host(source.phase))))
     np.testing.assert_allclose(host(history['drive']), expected, rtol=1e-13, atol=0.)
     assert history['drive_units'] == ('V*m' if magnetic else 'A*m')
@@ -202,7 +202,7 @@ def test_public_dipole_device_fields_histories_and_mixed_leaf_gradients(torch_de
     np.testing.assert_allclose(gradient[0], 2 * loss / values[0], rtol=1e-12, atol=0.)
     # Work in dimensionless perturbation coordinates for the SI moment/delay.
     # Preserve the existing stage-2 budget: 1e-7*|g_fd| + 1e-10*|loss|.
-    scales = np.asarray([values[0], 1., UNITS.time_seconds, 1.])
+    scales = np.asarray([values[0], 1., UNITS.time_unit_seconds, 1.])
     assert np.all(np.abs(gradient * scales) > 1e-5 * loss)
     for fraction in (1e-5, 5e-6):
         secants = []

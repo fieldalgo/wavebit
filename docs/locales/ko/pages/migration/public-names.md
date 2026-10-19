@@ -189,9 +189,9 @@ periodic의 창은 단계 수 `tail_steps=N`이었습니다. 이제는 native에
 간격을 얻습니다.
 
 ```python
-numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_seconds)
+numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_unit_seconds)
 dt_seconds = periodic.check(problem, numerics=numerics).resolved['time_step_seconds']
-numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_seconds,
+numerics = periodic.Numerics(spacing=1/30, duration_seconds=90*units.time_unit_seconds,
                              decay_check=periodic.DecayCheck(window_seconds=40*dt_seconds))
 ```
 
@@ -241,7 +241,7 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 가지입니다. 첫째, periodic 펄스 폭은 sigma에서 다시 계산하므로 sigma를 옛 폭의 식
 `frequency_sigma_hz=1/(np.sqrt(2)*np.pi*W)`로 적었을 때에만 옛 폭과 맞고, 그때도 마지막 한두
 비트 이내로 맞습니다. 위 사례에서는 정확히 같았고, 무작위 폭 10⁵개에서는 차이가 최대 마지막
-자리 2단위(ulp)였습니다. 반올림한 십진수(um 시간 단위 세 개인 폭 `3*units.time_seconds`에 대해
+자리 2단위(ulp)였습니다. 반올림한 십진수(um 시간 단위 세 개인 폭 `3*units.time_unit_seconds`에 대해
 `2.25e13`)를 쓰면 폭이 조금 달라지고 수치도 조금 달라집니다. 둘째는 [감쇠 창](#감쇠-창)에서
 설명한 native 반올림 허용 범위로, 감쇠 진단만 바꿉니다.
 

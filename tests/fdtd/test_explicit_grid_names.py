@@ -92,8 +92,8 @@ def periodic_run():
     the width it was always given.
     """
     q, n = periodic_case()
-    width = 3*q.units.time_seconds
-    sigma = 1/(np.sqrt(2)*np.pi*3*q.units.time_seconds)
+    width = 3*q.units.time_unit_seconds
+    sigma = 1/(np.sqrt(2)*np.pi*3*q.units.time_unit_seconds)
     dt = periodic.check(q, numerics=n).resolved['time_step_seconds']
     q = q.replace(pulse=periodic.Pulse(frequency_sigma_hz=sigma),
                   outputs=q.outputs.replace(snapshots=periodic.Snapshots(
@@ -390,7 +390,7 @@ def _engine_options(monkeypatch, q, n):
 @pytest.mark.parametrize('width_units', [3, .9, 2.5])
 def test_a_periodic_sigma_reaches_the_engine_as_the_width_it_names(monkeypatch, width_units):
     q, n = periodic_case()
-    ts = q.units.time_seconds
+    ts = q.units.time_unit_seconds
     sigma = 1/(np.sqrt(2)*np.pi*width_units*ts)
     options = _engine_options(monkeypatch, q.replace(pulse=periodic.Pulse(frequency_sigma_hz=sigma)), n)
     np.testing.assert_allclose(options['pulse_width'], width_units, rtol=4e-16, atol=0)
@@ -399,7 +399,7 @@ def test_a_periodic_sigma_reaches_the_engine_as_the_width_it_names(monkeypatch, 
 
 def test_a_periodic_decay_check_reaches_the_engine_in_seconds(monkeypatch):
     q, n = periodic_case()
-    ts = q.units.time_seconds
+    ts = q.units.time_unit_seconds
     n = n.replace(decay_check=periodic.DecayCheck(window_seconds=40*ts, threshold=2e-3))
     options = _engine_options(monkeypatch, q, n)
     assert options['convergence_window_time'] == 40*ts/ts and options['convergence_tol'] == 2e-3

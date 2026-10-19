@@ -243,7 +243,7 @@ def _arguments(problem,numerics,execution):
     band=np.atleast_1d(np.asarray(problem.excitation.wavelength,float))
     if band.ndim!=1 or not len(band) or not np.isfinite(band).all() or np.any(band<=0):
         raise ValidationError('wavelength must be a positive finite scalar or vector',path='excitation.wavelength')
-    ts=problem.units.time_seconds
+    ts=problem.units.time_unit_seconds
     centre=float((band.min()+band.max())/2)
     snapshots=problem.outputs.snapshots
     options=dict(structure=structure,thickness=thickness,top=material(stack.top),bot=material(stack.bottom),
@@ -390,11 +390,11 @@ def _signature(problem,numerics):
 
 def _validated(problem,numerics,execution):
     from ._periodic.adapter import solve_periodic_fdtd
-    with execution.scope():
+    with execution._scope():
         options,backend=_arguments(problem,numerics,execution)
         raw=_engine(solve_periodic_fdtd,dict(options,_validate_only=True),backend=backend)
     return CheckReport(resolved={'shape':raw['shape'],'steps':raw['steps'],
-        'time_step_seconds':raw['dt']*problem.units.time_seconds},
+        'time_step_seconds':raw['dt']*problem.units.time_unit_seconds},
         capabilities={'algorithm':numerics.algorithm,'backend':execution.backend,
             'precision':execution.precision,'device':execution.device,
             'scope':raw.get('scope','full shared-grid admission without time advancement')})
@@ -526,7 +526,7 @@ def _adapt(raw,diag,problem,numerics):
         snapshots[name.capitalize()]=TimeSeries(values=data['values']*amplitude/(Z0 if name.startswith('h') else 1.),
             coordinates={a:data[a] for a in ('x','y','z')},components=(name.capitalize(),),
             units={'field':'A/m' if name.startswith('h') else 'V/m','coordinates':u.length},
-            times=data['t']*u.time_seconds,sampling='native Yee stagger',
+            times=data['t']*u.time_unit_seconds,sampling='native Yee stagger',
             metadata={'axis_order':('time','z','y','x'),
                 'calibration':diag.get('field_normalization',diag.get('normalization'))})
     planes={};powers={}
@@ -538,23 +538,23 @@ def _adapt(raw,diag,problem,numerics):
             units={'E':'V/m','H':'A/m','coordinates':u.length},sampling='collocated phasor',
             metadata={'normalization':data.get('normalization'),'axis_order':('wavelength','y','x','component'),
                       'power_unit':'W/m' if data['per_unit_y'] else 'W',
-                      'integration_measure':data['cell_area']*u.length_metres**(1 if data['per_unit_y'] else 2)})
-        powers[name]=data['power_z']*abs(amplitude)**2*u.length_metres**(1 if data['per_unit_y'] else 2)/Z0
+                      'integration_measure':data['cell_area']*u.length_unit_meters**(1 if data['per_unit_y'] else 2)})
+        powers[name]=data['power_z']*abs(amplitude)**2*u.length_unit_meters**(1 if data['per_unit_y'] else 2)/Z0
     # Only explicitly physical diagnostics cross the public boundary. The private
     # retained snapshot supports existing offline interpolation, without exporting
     # normalized arrays or internal grid objects as user-facing measurements.
     diagnostics={k:diag[k] for k in ('shape','spacing','steps','n_steps','dft_subsample','dft_samples',
         'z_nodes','z_spacing','source_z','pml_bounds','layer_planes','angles','azimuth',
         'invariant_y','diffraction','residual') if k in diag}
-    if 'dt' in diag: diagnostics['time_step_seconds']=diag['dt']*u.time_seconds
-    elif 'grid' in diag: diagnostics['time_step_seconds']=diag['grid'].dt*u.time_seconds
+    if 'dt' in diag: diagnostics['time_step_seconds']=diag['dt']*u.time_unit_seconds
+    elif 'grid' in diag: diagnostics['time_step_seconds']=diag['grid'].dt*u.time_unit_seconds
     if 'pulse' in diag:
         pulse={}
         for key,value in diag['pulse'].items():
             if key in ('width','peak_time','sampled_peak_time'):
-                pulse[key+'_seconds']=value*u.time_seconds
+                pulse[key+'_seconds']=value*u.time_unit_seconds
             elif key in ('frequency','notches'):
-                pulse[key+'_hz']=value/u.time_seconds
+                pulse[key+'_hz']=value/u.time_unit_seconds
             else: pulse[key]=value
         diagnostics['pulse']=pulse
     def tail(value):
@@ -562,9 +562,9 @@ def _adapt(raw,diag,problem,numerics):
         if not isinstance(value,Mapping): return value
         result={}
         for key,v in value.items():
-            if key=='comparison_time': result['comparison_time_seconds']=v*u.time_seconds
-            elif key=='electric_spectrum_before_window': result[key]=v*u.time_seconds
-            elif key=='magnetic_spectrum_before_window': result[key]=v*u.time_seconds/Z0
+            if key=='comparison_time': result['comparison_time_seconds']=v*u.time_unit_seconds
+            elif key=='electric_spectrum_before_window': result[key]=v*u.time_unit_seconds
+            elif key=='magnetic_spectrum_before_window': result[key]=v*u.time_unit_seconds/Z0
             else: result[key]=tail(v)
         return result
     convergence=tail(diag.get('convergence',{}))
@@ -579,7 +579,7 @@ def _adapt(raw,diag,problem,numerics):
     return Result(reflection=orders('r','incident'),transmission=orders('t','incident'),basis=basis,
         snapshots=snapshots,planes=planes,plane_power_z=powers,
         validity=Validity(checks=checks,convergence=dict(convergence,residual=diag.get('residual'))),
-        diagnostics=diagnostics,provenance={'length_unit':u.length,'time_unit_seconds':u.time_seconds,
+        diagnostics=diagnostics,provenance={'length_unit':u.length,'time_unit_seconds':u.time_unit_seconds,
             'incident_amplitude':amplitude,'algorithm':numerics.algorithm,
             'plane_power_units':{name:plane.metadata['power_unit'] for name,plane in planes.items()},
             'time_convention':'exp(-i omega t)','coordinate_convention':'+z up; bottom interface z=0'},
@@ -588,7 +588,7 @@ def _adapt(raw,diag,problem,numerics):
 
 def _run(problem,numerics,execution):
     from ._periodic.adapter import solve_periodic_fdtd
-    with execution.scope():
+    with execution._scope():
         options,backend=_arguments(problem,numerics,execution)
         raw,diag=_engine(solve_periodic_fdtd,options,backend=backend)
         return _adapt(raw,diag,problem,numerics)

@@ -12,7 +12,7 @@ def compact_plan(scene, plan):
     from wavebit.fdtd import _geometry as geometry, _monitors as monitors
     from wavebit.fdtd._legacy_boundaries import Periodic
     from wavebit.fdtd._legacy_monitors import Record
-    from wavebit.materials.time_domain import Dispersive, Drude, Lorentz, Material
+    from wavebit.materials._time_domain import Dispersive, Drude, Lorentz, Material
 
     if (scene.run.decay is not None or plan.decay is not None or scene.sources
             or len(scene.structures) != 1 or type(scene.background) is not Material

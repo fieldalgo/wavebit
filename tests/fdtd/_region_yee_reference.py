@@ -71,7 +71,7 @@ def patterns(rotation=0):
 def problem(point=POINTS[0], rotation=0, unit='um', background=(1., 1., 0.),
             lossless=False, arrays=None):
     units = Units(length=unit)
-    scale = units.length_metres
+    scale = units.length_unit_meters
     geo = geometry(rotation)
     electric, magnetic = patterns(rotation) if arrays is None else arrays
     eps, mu, sigma, amplitude = point
@@ -97,7 +97,7 @@ def problem(point=POINTS[0], rotation=0, unit='um', background=(1., 1., 0.),
 
 
 def numerics(steps, block=None, unit='um'):
-    return fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX/Units(length=unit).length_metres),
+    return fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX/Units(length=unit).length_unit_meters),
                          duration=fdtd.Duration(steps=steps), courant=.5, checkpoint_steps=block)
 
 

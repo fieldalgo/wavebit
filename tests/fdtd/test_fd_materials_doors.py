@@ -331,7 +331,7 @@ def discrete_eps_term(pole, omega, dt):
 
     ``P^{m+1} = step_gain P^m - hold P^{m-1} + drive E^m`` with ``E^m = E z^m``,
     ``z = exp(-i w dt)``, gives ``P/E = drive / (z - step_gain + hold/z)``; on top of that sits
-    whatever the pole reports as :meth:`~wavebit.materials.time_domain.Pole.instantaneous`, which is the
+    whatever the pole reports as :meth:`~wavebit.materials._time_domain.Pole.instantaneous`, which is the
     part of its response that is not in the recurrence at all (Debye's, and nothing else's).
     So this is the whole of what the discretisation answers, and the closed form it is
     compared against is :meth:`eps_term`.

@@ -176,7 +176,7 @@ certify optical convergence. See the [selection guide](../guide/rcwa/nvf-method-
 See [Materials and wavelength sweeps](../guide/common/materials.md) for assignment and evaluation.
 
 ```{eval-rst}
-.. autoclass:: wavebit.materials.tabulated.TabulatedMaterial
+.. autoclass:: wavebit.materials.TabulatedMaterial
    :no-index:
    :members:
 

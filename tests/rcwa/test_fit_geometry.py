@@ -8,7 +8,7 @@ callbacks observe the actual compiled values/gradients, not just the final param
 
 from wavebit.rcwa._engine.geometry import StaleGeometryError as _legacy_wavebit_StaleGeometryError
 
-from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
 
 from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
 

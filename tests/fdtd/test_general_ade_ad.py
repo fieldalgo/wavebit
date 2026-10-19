@@ -109,7 +109,7 @@ def test_homogeneous_material_amplitude_full_hessian(device, block, kind, record
     _, discrete_k, initial, electric, magnetic, spatial = fourier_mode(CELLS, 0)
     patterns = electric.copy(), magnetic.copy()
     policy = numerics(CELLS, STEPS).replace(checkpoint_steps=block)
-    dt = .5/CELLS/math.sqrt(3)*UNITS.time_seconds
+    dt = .5/CELLS/math.sqrt(3)*UNITS.time_unit_seconds
     prepared = fdtd.prepare(live_problem(kind, 1., 1., electric, magnetic),
                             numerics=policy, backend='torch', device=device)
     assert prepared.contract['resolved_steps'] == STEPS

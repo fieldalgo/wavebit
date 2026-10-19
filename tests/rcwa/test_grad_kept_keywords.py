@@ -1,6 +1,6 @@
 """Gradient cleanup preserves explicit concrete keywords without leaking custom writes."""
 
-from wavebit.materials.tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
+from wavebit.materials._tabulated import TabulatedMaterial as _legacy_wavebit_TabulatedMaterial
 
 from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from functools import partial

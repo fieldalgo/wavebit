@@ -65,7 +65,7 @@ def _resolve(problem, numerics, execution):
             raise UnsupportedFeatureError('The coherent-source assembly is an eager capability. Its host grouping does not support jax.jit or jax.vmap; eager jax.grad reads its values, as PyTorch does.',
                                           code='rcwa.coherent_transform', path='excitation.sources')
     solvers = []
-    with execution.scope():
+    with execution._scope():
         for wavelength in _adapt.wavelengths(problem):
             solver = _adapt.build_solver(problem, numerics, execution, wavelength)
             scene = _engine_scene(solver)
@@ -127,7 +127,7 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         # Once: the solvers differ only in their materials, each evaluated at its wavelength.
         # The refusals read the regions and the cell, and the builder a material picks --
         # tensor or scalar -- is the same at every wavelength.
-        with execution.scope():
+        with execution._scope():
             _engine_scene(solvers[0])._check_layer_geometry()
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
@@ -307,7 +307,7 @@ class Prepared:
                 raise UnsupportedFeatureError('validate requires concrete inputs; call it outside jax.jit or jax.vmap.',
                                               code='validate.concrete', path='problem')
             problem = _adapt.primal_problem(problem)
-            with self.execution.scope():
+            with self.execution._scope():
                 solvers = self._solvers(problem)
                 checks = _runtime_checks(problem, self.execution, self._partitions)
                 checks.update(self._topology_checks(problem))
@@ -322,7 +322,7 @@ class Prepared:
     def run(self, problem):
         """Execute live values after structural and numerical guard checks."""
         from .results import pack
-        with self.execution.scope(), _normalize_errors():
+        with self.execution._scope(), _normalize_errors():
             solvers = self._solvers(problem)
             checks = _runtime_checks(problem, self.execution, self._partitions)
             checks.update(self._topology_checks(problem))
@@ -363,7 +363,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
     # Under an eager jax.grad, prepare at the point being differentiated, as a PyTorch call
     # reads through its tensors: a preparation keeps static records only, never a tracer.
     problem = _adapt.primal_problem(problem)
-    with execution.scope(), _normalize_errors():
+    with execution._scope(), _normalize_errors():
         solvers = _resolve(problem, numerics, execution)
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)
         report = _report(problem, numerics, execution, solvers)

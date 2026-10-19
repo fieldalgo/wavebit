@@ -23,7 +23,7 @@ def measure(size, steps, device, reverse, repeat, checkpoint_steps=8):
     problem = n.Problem(units=units, medium=n.Medium(epsilon=np.ones(shape)),
         current=n.Current(density=current, samples=np.sin(np.arange(steps)*.15)))
     nums = n.Numerics(grid=n.Grid(spacing=(.1,)*3),
-        time_step_seconds=.03*units.time_seconds, steps=steps,
+        time_step_seconds=.03*units.time_unit_seconds, steps=steps,
         checkpoint_steps=checkpoint_steps, absorber=n.PML(cells=2, wavelength=1.))
     def run():
         amplitude = torch.tensor(1.2, dtype=torch.float64, device=device, requires_grad=reverse)

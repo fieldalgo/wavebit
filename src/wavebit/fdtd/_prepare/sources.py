@@ -47,9 +47,9 @@ from wavebit.fdtd._legacy_boundaries import Axis1D
 from wavebit.fdtd._legacy_boundaries import Bloch
 from wavebit.fdtd._legacy_boundaries import Periodic
 from wavebit.fdtd._legacy_boundaries import PML
-from wavebit.materials.time_domain import Dispersive
-from wavebit.materials.time_domain import as_material
-from wavebit.materials.time_domain import concrete
+from wavebit.materials._time_domain import Dispersive
+from wavebit.materials._time_domain import as_material
+from wavebit.materials._time_domain import concrete
 from wavebit.fdtd._legacy_sources import Dipole
 from wavebit.fdtd._legacy_sources import PlaneWave
 from wavebit.fdtd._legacy_sources import TFSF

@@ -171,7 +171,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                           {'bottom': plan.bottom, 'top': plan.top, 'snapped': plan.snapped})
             state = result._field_state
             lattice = state.data['lattice']
-            area = xp.abs(xp.linalg.det(lattice)) * problem.units.length_metres**2
+            area = xp.abs(xp.linalg.det(lattice)) * problem.units.length_unit_meters**2
             boundary = state.data['boundary']['incident']
             k_incident = solver._incident_kxy(solver.wavelength)
             physical_power = transverse_k_is_real(xp, *k_incident)
@@ -245,9 +245,9 @@ def pack(problem, numerics, execution, solves, checks, report):
             region = result.power.region
             area = None
             if region == 'cell' if isinstance(region, str) else False:
-                area = xp.abs(xp.linalg.det(as_array(xp, result.lattice))) * problem.units.length_metres**2
+                area = xp.abs(xp.linalg.det(as_array(xp, result.lattice))) * problem.units.length_unit_meters**2
             elif not isinstance(region, str):
-                area = (region[0][1]-region[0][0])*(region[1][1]-region[1][0])*problem.units.length_metres**2
+                area = (region[0][1]-region[0][0])*(region[1][1]-region[1][0])*problem.units.length_unit_meters**2
             scale = 1/Z0 if area is None else area/Z0
             for port in ('top', 'bottom'):
                 boundary[port].append((getattr(result.power, 'incoming_'+port)*scale,
