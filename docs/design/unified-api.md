@@ -1237,6 +1237,25 @@ The private engine keeps its own class and keyword names, because a static plan 
 the rename changes no lowered scene, plan or output, which `tests/fdtd/test_public_names.py`
 pins on eight scenes measured before the change. Saved jobs record public names, so the job
 schema is `wavebit.job/v2` and run records are `wavebit.run/v2`; version 1 files are refused
-rather than read with names that no longer exist. The capability manifest is version 23.
-`fdtd.native`, `fdtd.periodic`, RCWA and the shared namespaces are reviewed in the same issue and
-follow in separate changes.
+rather than read with names that no longer exist. That change made the capability manifest
+version 23.
+
+A second change the same day renamed the explicit-grid modules `fdtd.native` and
+`fdtd.periodic` by the same rules. Each keeps its own classes: `Record` is `Snapshots` in both,
+with components spelled `'Ex'` to `'Hz'` as in every other output (lowercase is refused) and
+results keyed the same way under `Result.snapshots`. Native `Initial` is `InitialField` and
+native `Tail` is `DecayCheck`; periodic gains its own `DecayCheck` in place of its
+`tail_steps`/`tail_tolerance` keywords. A native snapshot region is integer `slices=` and a
+periodic one physical `bounds=`; `Spectrum(planes=)` is `z_indices=`, `RasterDispersion(models=)`
+is `poles=`, and the native `polarization` result is `polarization_density`. Two values change
+form, not only name. The periodic decay window is in seconds, rounded to whole steps by one rule
+shared with native, and a periodic pulse is given by `frequency_sigma_hz`, the spectral standard
+deviation `fdtd.GaussianPulse` already uses, which is 1/(sqrt(2)·pi·W) for the old width `W`.
+The engine keeps its lowercase names and keywords; the public doors translate them, and an
+engine refusal that names an engine keyword reaches a caller reworded as the declaration that
+set it. Old and new spellings gave bit-identical results in a native and a periodic case. The
+job schema stays `wavebit.job/v2`, a v2 file with an old native or periodic name is refused, and
+the capability manifest is version 24. RCWA and the shared namespaces are reviewed in the same
+issue and follow in separate changes. The
+[migration guide](../migration/public-names.md#native-grid-and-periodic-stack-names) lists every
+native and periodic change.

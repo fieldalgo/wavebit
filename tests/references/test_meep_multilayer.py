@@ -38,7 +38,7 @@ def test_constrained_coating_gradients_against_meep_and_continuum(record_propert
         units = Units(length='um')
         problem = fdtd.Problem(units=units, stack=design(p),
             excitation=fdtd.Excitation(wavelength=band, sources=(fdtd.PlaneWave(polarization=(1., 0.)),)),
-            pulse=fdtd.Pulse(width_seconds=3.*units.time_seconds))
+            pulse=fdtd.Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*3.*units.time_seconds)))
         result = fdtd.run(problem, backend='jax', numerics=fdtd.Numerics(
             spacing=1/resolution, pml_cells=resolution,
             nominal_layer_thickness=(.2,)*4, layer_smoothing=1/resolution, align_layers=True,

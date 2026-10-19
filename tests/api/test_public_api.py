@@ -5,16 +5,20 @@ exports in ``__all__``, and every public object has one public path. ``PUBLIC`` 
 public module's ``__all__``: a name is added or removed by editing it here, in the same change
 as the code. ``KNOWN_DUPLICATES`` lists the objects still reachable from two public paths; it
 may only shrink (fieldalgo/wavebit#57 removes them). The FDTD part of the rename
-(``docs/migration/public-names.md``) is checked here too: the old names and keywords fail with
-an error that names their replacement.
+(``docs/migration/public-names.md``), ``fdtd.native`` and ``fdtd.periodic`` included, is checked
+here too: the old names and keywords fail with an error that names their replacement.
 """
+import dataclasses
 import importlib
 import pkgutil
+import traceback
 
 import pytest
 
 import wavebit
 from wavebit import fdtd
+from wavebit.errors import ValidationError
+from wavebit.fdtd import native, periodic
 
 #: Each public module's ``__all__``, sorted.
 PUBLIC = {
@@ -37,13 +41,13 @@ PUBLIC = {
                               'CoarseMeshWarning', 'GeometryClippedWarning', 'GrowingFieldWarning',
                               'PMLStabilityWarning', 'RadiationApproximationWarning',
                               'SubpixelAccuracyWarning', 'UnsettledFieldWarning'),
- 'wavebit.fdtd.native': ('Current', 'Grid', 'Initial', 'Medium', 'Numerics', 'Oscillator',
-                         'Outputs', 'PML', 'Prepared', 'Problem', 'Record', 'Result', 'Spectrum',
-                         'Tail', 'check', 'prepare', 'run'),
- 'wavebit.fdtd.periodic': ('Circle', 'Ellipse', 'Excitation', 'Layer', 'Numerics', 'Outputs',
-                           'PlaneWave', 'Polygon', 'Prepared', 'Problem', 'Pulse',
-                           'RasterDispersion', 'Record', 'Rectangle', 'Region', 'Result', 'Stack',
-                           'check', 'prepare', 'run'),
+ 'wavebit.fdtd.native': ('Current', 'DecayCheck', 'Grid', 'InitialField', 'Medium', 'Numerics',
+                         'Oscillator', 'Outputs', 'PML', 'Prepared', 'Problem', 'Result',
+                         'Snapshots', 'Spectrum', 'check', 'prepare', 'run'),
+ 'wavebit.fdtd.periodic': ('Circle', 'DecayCheck', 'Ellipse', 'Excitation', 'Layer', 'Numerics',
+                           'Outputs', 'PlaneWave', 'Polygon', 'Prepared', 'Problem', 'Pulse',
+                           'RasterDispersion', 'Rectangle', 'Region', 'Result', 'Snapshots',
+                           'Stack', 'check', 'prepare', 'run'),
  'wavebit.lattice': ('DrawnOn', 'Lattice', 'as_lattice', 'is_axis_aligned', 'jacobian',
                      'meshgrid_xy', 'order_kxy', 'periods_of', 'reduced_basis',
                      'reduction_transform', 'sample_grid'),
@@ -243,8 +247,150 @@ def test_dir_of_fdtd_is_its_public_surface():
 
 @pytest.mark.parametrize('name', ['Record', 'Region', 'monitors', 'problem', 'results'])
 def test_a_tombstone_is_not_followed_by_a_guess(name):
-    import traceback
     with pytest.raises(AttributeError) as caught:
         getattr(fdtd, name)
     shown = ''.join(traceback.format_exception_only(caught.value))
     assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+
+
+def _shown(error):
+    """What a reader sees of ``error``, Python's "Did you mean" included."""
+    return ''.join(traceback.format_exception_only(error))
+
+
+#: Old name in an explicit-grid module -> its replacement in the same module.
+GRID_RENAMED = [('native', 'Initial', 'InitialField'), ('native', 'Record', 'Snapshots'),
+                ('native', 'Tail', 'DecayCheck'), ('periodic', 'Record', 'Snapshots')]
+
+
+@pytest.mark.parametrize('module, old, new', GRID_RENAMED,
+                         ids=[f'{module}.{old}' for module, old, _ in GRID_RENAMED])
+def test_a_removed_native_or_periodic_name_fails_naming_its_replacement(module, old, new):
+    namespace = getattr(fdtd, module)
+    assert not hasattr(namespace, old)
+    with pytest.raises(AttributeError, match=rf'wavebit\.fdtd\.{module}\.{old} is now '
+                                             rf'wavebit\.fdtd\.{module}\.{new}\b') as caught:
+        getattr(namespace, old)
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+    assert new in namespace.__all__
+
+
+def test_the_native_tail_tombstone_says_where_its_replacement_goes():
+    """``DecayCheck`` is no drop-in: it goes in ``Numerics(decay_check=)``, with ``threshold=``
+    for ``tolerance=``."""
+    with pytest.raises(AttributeError, match=r'Numerics\(decay_check=\.\.\.\), with tolerance= '
+                                             r'now threshold='):
+        native.Tail
+
+
+def _native_numerics(**kw):
+    return native.Numerics(grid=native.Grid(spacing=(.1, .1, .1)), time_step_seconds=1e-16,
+                           steps=4, **kw)
+
+
+def _periodic_numerics(**kw):
+    return periodic.Numerics(spacing=.02, duration_seconds=1e-14, **kw)
+
+
+#: (module, constructor with the keywords it needs, removed keyword, a value it took, its
+#: replacement, a value that takes). A converted quantity keeps its old value on the old side.
+GRID_RENAMED_KEYWORDS = [
+    ('native', lambda **kw: native.Snapshots(**kw),
+     'bounds', (0, 0, (0, 2)), 'slices', (0, 0, (0, 2))),
+    ('native', lambda **kw: native.Spectrum(wavelengths=(1.,), **kw),
+     'planes', (0,), 'z_indices', (0,)),
+    ('native', lambda **kw: native.Outputs(**kw),
+     'record', native.Snapshots(), 'snapshots', native.Snapshots()),
+    ('native', _native_numerics,
+     'tail', native.DecayCheck(window_seconds=1e-16), 'decay_check',
+     native.DecayCheck(window_seconds=1e-16)),
+    ('periodic', lambda **kw: periodic.Outputs(**kw),
+     'record', periodic.Snapshots(), 'snapshots', periodic.Snapshots()),
+    ('periodic', _periodic_numerics,
+     'tail_steps', 40, 'decay_check', periodic.DecayCheck(window_seconds=1e-15)),
+    ('periodic', _periodic_numerics,
+     'tail_tolerance', 1e-3, 'decay_check',
+     periodic.DecayCheck(window_seconds=1e-15, threshold=1e-3)),
+    ('periodic', lambda **kw: periodic.RasterDispersion(labels=[[[1]]], **kw),
+     'models', {1: ()}, 'poles', {1: ()}),
+    ('periodic', lambda **kw: periodic.Pulse(**kw),
+     'width_seconds', 1e-14, 'frequency_sigma_hz', 3e13),
+]
+
+
+@pytest.mark.parametrize('module, make, old, old_value, new, new_value', GRID_RENAMED_KEYWORDS,
+                         ids=[f'{m}:{old}->{new}'
+                              for m, _, old, _, new, _ in GRID_RENAMED_KEYWORDS])
+def test_a_removed_native_or_periodic_keyword_fails_naming_its_replacement(
+        module, make, old, old_value, new, new_value):
+    with pytest.raises(TypeError, match=rf'\({old}=\.\.\.\) is now \w+\({new}=\.\.\.\)') as caught:
+        make(**{old: old_value})
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'did you mean' not in shown.lower(), shown
+    assert type(make(**{new: new_value})).__module__ == f'wavebit.fdtd.{module}'
+
+
+#: Keywords whose value is not carried over as it is: the refusal says how to convert it.
+CONVERTED_KEYWORDS = [
+    (lambda: periodic.Pulse(width_seconds=1e-14),
+     r'frequency_sigma_hz = 1/\(sqrt\(2\)\*pi\*width_seconds\)'),
+    (lambda: _periodic_numerics(tail_steps=40), r'window_seconds = tail_steps\*time_step_seconds'),
+    (lambda: _periodic_numerics(tail_tolerance=1e-3), r'threshold= is the old tail_tolerance='),
+]
+
+
+@pytest.mark.parametrize('make, conversion', CONVERTED_KEYWORDS,
+                         ids=['width_seconds', 'tail_steps', 'tail_tolerance'])
+def test_a_converted_periodic_keyword_says_how_to_convert_its_value(make, conversion):
+    with pytest.raises(TypeError, match=conversion):
+        make()
+
+
+def test_both_periodic_tail_keywords_are_named_with_one_conversion_note():
+    with pytest.raises(TypeError) as caught:
+        _periodic_numerics(tail_steps=40, tail_tolerance=1e-3)
+    message = str(caught.value)
+    assert 'Numerics(tail_steps=...) is now Numerics(decay_check=...)' in message, message
+    assert 'Numerics(tail_tolerance=...) is now Numerics(decay_check=...)' in message, message
+    assert message.count('takes the window in seconds') == 1, message
+
+
+#: (module, removed Result attribute, its replacement).
+GRID_RESULT_RENAMED = [('native', 'fields', 'snapshots'),
+                       ('native', 'polarization', 'polarization_density'),
+                       ('native', 'previous_polarization', 'previous_polarization_density'),
+                       ('periodic', 'fields', 'snapshots')]
+
+
+def _empty_result(module):
+    """A ``Result`` of ``module`` with every public field empty: only its attributes are read."""
+    cls = getattr(fdtd, module).Result
+    return cls(**{f.name: {} for f in dataclasses.fields(cls)
+                  if f.init and not f.name.startswith('_')})
+
+
+@pytest.mark.parametrize('module, old, new', GRID_RESULT_RENAMED,
+                         ids=[f'{m}.Result.{old}' for m, old, _ in GRID_RESULT_RENAMED])
+def test_a_removed_native_or_periodic_result_attribute_fails_naming_its_replacement(
+        module, old, new):
+    result = _empty_result(module)
+    assert not hasattr(result, old)
+    with pytest.raises(AttributeError, match=rf'{module}\.Result\.{old} is now '
+                                             rf'{module}\.Result\.{new}\b') as caught:
+        getattr(result, old)
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+    assert new in {f.name for f in dataclasses.fields(type(result))}
+    with pytest.raises(AttributeError, match="has no attribute 'unrelated'"):
+        result.unrelated
+
+
+@pytest.mark.parametrize('module', ['native', 'periodic'])
+def test_a_lowercase_snapshot_component_is_refused_naming_its_public_spelling(module):
+    """The engine spells components 'ex'..'hz'; the public declaration takes only 'Ex'..'Hz'."""
+    snapshots = getattr(fdtd, module).Snapshots
+    with pytest.raises(ValidationError, match=r"'Ey', not 'ey'"):
+        snapshots(components=('Ex', 'ey'))
+    assert snapshots(components=('Ex', 'Ey')).components == ('Ex', 'Ey')
+    assert snapshots().components == ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')

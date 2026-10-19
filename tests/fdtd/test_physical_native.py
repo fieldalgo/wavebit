@@ -15,11 +15,11 @@ def problem(length='um', scale=1.):
     current = np.zeros((3,)+shape); current[0, 4] = 1e7
     p = n.Problem(units=Units(length=length), medium=n.Medium(epsilon=np.ones(shape)*2.),
         current=n.Current(density=current, samples=np.sin(np.arange(steps)*.1)),
-        outputs=n.Outputs(spectrum=n.Spectrum(wavelengths=[.8*scale], planes=(10,)),
-            record=n.Record(every=3, components=('ex','hy'), bounds=((2,13,2), 0, (None,None,None)))))
+        outputs=n.Outputs(spectrum=n.Spectrum(wavelengths=[.8*scale], z_indices=(10,)),
+            snapshots=n.Snapshots(every=3, components=('Ex','Hy'), slices=((2,13,2), 0, (None,None,None)))))
     nums = n.Numerics(grid=n.Grid(spacing=(.05*scale,)*3,
         z_spacing=np.linspace(.045,.055,16)*scale), time_step_seconds=dt, steps=steps,
-        tail=n.Tail(window_seconds=7*dt))
+        decay_check=n.DecayCheck(window_seconds=7*dt))
     return p, nums
 
 
@@ -30,7 +30,7 @@ def test_uniform_si_conductor_and_current_match_independent_update(backend):
         if backend == 'jax': m.config.update('jax_enable_x64',True)
     dt=1e-17; sigma=2300.; eps=2.4; current=1e7
     p=n.Problem(units=Units(length='nm'), medium=n.Medium(epsilon=np.full((3,2,2),eps),conductivity=sigma),
-        initial=n.Initial(E=np.ones((3,3,2,2))*2,H=np.ones((3,3,2,2))*.03),
+        initial=n.InitialField(E=np.ones((3,3,2,2))*2,H=np.ones((3,3,2,2))*.03),
         current=n.Current(density=np.ones((3,3,2,2))*current,samples=np.ones(11)))
     nums=n.Numerics(grid=n.Grid(spacing=(10.,)*3),time_step_seconds=dt,steps=11)
     r=n.run(p,numerics=nums,backend=backend)
@@ -48,8 +48,8 @@ def test_geometry_units_records_and_fourier_integrals_are_invariant():
     for name in ('E','H','spectral_power_z'):
         np.testing.assert_allclose(getattr(a,name),getattr(b,name),rtol=2e-12,atol=1e-50)
     np.testing.assert_allclose(a.spectrum.values,b.spectrum.values,rtol=1e-12,atol=1e-35)
-    for name in a.fields:
-        x,y=a.fields[name],b.fields[name]
+    for name in a.snapshots:
+        x,y=a.snapshots[name],b.snapshots[name]
         np.testing.assert_allclose(x.values,y.values,rtol=1e-12,atol=1e-20)
         np.testing.assert_allclose(x.time,y.time,rtol=2e-15)
         np.testing.assert_allclose(x.coordinates['z']*1000,y.coordinates['z'],rtol=2e-15)
@@ -86,7 +86,7 @@ def test_pole_current_and_bloch_derivatives_follow_si_values(backend):
     m=pytest.importorskip(backend)
     if backend=='jax': m.config.update('jax_enable_x64',True)
     p,nums=problem()
-    nums=nums.replace(tail=None)
+    nums=nums.replace(decay_check=None)
     ts=p.units.time_seconds
     mask=np.zeros((16,2,2));mask[6:9]=1.
     def loss(v,engine):
@@ -111,7 +111,7 @@ def test_native_cpml_poles_and_si_initial_h_match_normalized_engine():
     mask=np.zeros(shape);mask[7:9]=1.
     h=np.zeros((3,)+shape);h[1,5]=.03
     q=n.Problem(units=Units(length='um'),medium=n.Medium(epsilon=np.ones(shape),poles=(
-        n.Oscillator(omega_0=2/ts,gamma=.1/ts,strength=.4*mask/ts**2),)),initial=n.Initial(H=h))
+        n.Oscillator(omega_0=2/ts,gamma=.1/ts,strength=.4*mask/ts**2),)),initial=n.InitialField(H=h))
     nums=n.Numerics(grid=n.Grid(spacing=(.1,)*3),time_step_seconds=.02*ts,steps=30,
         absorber=n.PML(cells=3,wavelength=1.))
     a=n.run(q,numerics=nums)
@@ -119,7 +119,7 @@ def test_native_cpml_poles_and_si_initial_h_match_normalized_engine():
         poles=((2.,.1,.4*mask),),pml_cells=3,pml_wavelength=1.)
     np.testing.assert_allclose(a.E,b['E'],rtol=5e-13,atol=1e-14)
     np.testing.assert_allclose(a.H,b['H']/Z0,rtol=5e-13,atol=1e-16)
-    np.testing.assert_allclose(a.polarization[0],b['polarization'][0]*EPSILON0,rtol=5e-13,atol=1e-26)
+    np.testing.assert_allclose(a.polarization_density[0],b['polarization'][0]*EPSILON0,rtol=5e-13,atol=1e-26)
     assert bool(a.validity.checks['stable'])
 
 

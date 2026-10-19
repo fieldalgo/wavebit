@@ -1,7 +1,9 @@
 # Physical periodic-stack FDTD
 
 `from wavebit.fdtd import periodic` provides immutable `Problem`, `Numerics`,
-`check`, `prepare` and `run`. Portable jobs use `solver='fdtd.periodic'`.
+`check`, `prepare` and `run`. Portable jobs use `solver='fdtd.periodic'`. Names
+changed on 2026-10-19 are listed in the
+[public-name migration guide](../../migration/public-names.md#native-grid-and-periodic-stack-names).
 Stack, Layer, Region, typed shapes, Excitation and PlaneWave are the same
 physical declarations as RCWA. Layers run bottom to top, z=0 is the bottom
 interface and x=y=0 is the cell centre.
@@ -25,11 +27,14 @@ print(result.R.sum(axis=(-2,-1)), result.T.sum(axis=(-2,-1)))
 ```
 
 Spatial quantities use the declared length unit. Time and material rates use SI.
-`duration_seconds` rounds up to complete time steps. `Pulse.width_seconds` and
-`notch_frequencies_hz` control the physical Gaussian source. A band shares the
-transverse Bloch wavevector selected at its centre wavelength, so incidence
-angles across the band generally differ. `diagnostics['angles']` reports them
-in radians. Theta/phi are supported; Cartesian kx/ky incidence is refused.
+`duration_seconds` rounds up to complete time steps. `Pulse(frequency_sigma_hz=...)`
+and `notch_frequencies_hz` control the physical Gaussian source: sigma is the
+standard deviation of the amplitude spectrum in Hz, as in `fdtd.GaussianPulse`, and
+the default envelope's 1/e half-width is one period at the centre wavelength
+(sigma = f0/(sqrt(2)·pi)). A band shares the transverse Bloch wavevector selected
+at its centre wavelength, so incidence angles across the band generally differ.
+`diagnostics['angles']` reports them in radians. Theta/phi are supported; Cartesian
+kx/ky incidence is refused.
 
 Choose the numerical algorithm explicitly when reproducing earlier results:
 
@@ -57,7 +62,7 @@ supported painting/topology constraints. See the engine study guides for their
 measured accuracy limits; selecting a typed declaration does not broaden them.
 
 Region/port materials are nondispersive `Material` declarations. Raster epsilon
-is epsilon-infinity; `RasterDispersion(labels=..., models={label: (Drude(...),
+is epsilon-infinity; `RasterDispersion(labels=..., poles={label: (Drude(...),
 Lorentz(...))})` supplies physical electric poles. Label zero is nondispersive.
 Unsupported causal models or region-dispersion requests are refused.
 
@@ -76,20 +81,26 @@ plane. Positive power points upward. Dividing a sample by a separate reference
 run is often the appropriate comparison, as in the
 [frequency-plane example](../../../examples/fdtd/fdtd_frequency_planes.py).
 
-`Record(every=..., components=..., bounds=...)` retains native Yee snapshots,
-including each component's coordinates and E/H half-step timestamps in seconds.
-Physical bounds require shared stepping. Shared records use a constant carrier
+`Outputs(snapshots=Snapshots(every=..., components=..., bounds=...))` keeps native
+Yee snapshots of the components `'Ex'` to `'Hz'`, including each component's
+coordinates and E/H half-step timestamps in seconds; `result.snapshots` is keyed by
+component. `bounds` maps `'x'`, `'y'` or `'z'` to a physical `(low, high)` pair in the
+length unit and requires shared stepping. Shared snapshots use a constant carrier
 calibration to retain a causal waveform, distinct from frequency-by-frequency
 plane calibration. `result.sample(x=..., y=..., z=..., times=...)` interpolates all
-six recorded fields offline using SI times; it refuses source-discontinuity
-crossings and does not retain AD. Instantaneous Poynting is
-`cross(E.real, H.real)`, without the phasor factor 1/2. See the
-[field record](../../../examples/fdtd/fdtd_record.py) and
-[Poynting example](../../../examples/fdtd/fdtd_poynting.py).
+six components offline using SI times, so it needs the default `components`; it
+refuses source-discontinuity crossings and does not retain AD. Instantaneous
+Poynting is `cross(E.real, H.real)`, without the phasor factor 1/2. See the
+[snapshot](../../../examples/fdtd/fdtd_record.py) and
+[Poynting](../../../examples/fdtd/fdtd_poynting.py) examples.
 
-`tail_steps` and `tail_tolerance` diagnose decay and scattering changes without
-terminating early. Diagnostics retain basis-specific changes and the scattering
-bound, with SI times and explicit raw-spectrum units. These checks do not
-establish grid, smoothing or PML convergence. `observations.fit_modes` accepts
-SI timestamps for offline ringdown fitting and returns Hz and decay rates in
-1/s; window and model-order convergence remain separate checks.
+`Numerics(decay_check=DecayCheck(window_seconds=..., threshold=...))` diagnoses
+decay and scattering changes over the final window without terminating early. The
+window is in seconds and is rounded up to whole time steps by the same rule as
+`native.DecayCheck`: `40*dt_seconds`, with `dt_seconds` from
+`check(...).resolved['time_step_seconds']`, covers 40 steps. Diagnostics retain
+basis-specific changes and the scattering bound, with SI times and explicit
+raw-spectrum units. These checks do not establish grid, smoothing or PML
+convergence. `observations.fit_modes` accepts SI timestamps for offline ringdown
+fitting and returns Hz and decay rates in 1/s; window and model-order convergence
+remain separate checks.

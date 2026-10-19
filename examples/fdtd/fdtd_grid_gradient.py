@@ -33,7 +33,7 @@ def main():
         epsilon=jnp.broadcast_to(1.+3.*jax.nn.sigmoid(parameter)*mask,shape)
         problem=native.Problem(units=UNITS,medium=native.Medium(epsilon=epsilon),
             current=native.Current(density=source.astype(jnp.complex128)/(Z0*UNITS.length_metres),samples=pulse),
-            outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(.5,),planes=(48,))))
+            outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(.5,),z_indices=(48,))))
         result=native.run(problem,backend='jax',numerics=native.Numerics(
             grid=native.Grid(spacing=(.025,)*3),time_step_seconds=dt*TIME,steps=steps,
             absorber=ConductiveAbsorber(cells=10),checkpoint_steps=32))

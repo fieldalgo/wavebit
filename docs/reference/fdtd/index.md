@@ -174,14 +174,17 @@ Grid, duration, absorber and stopping rule: choices that do not change the physi
 ## Native-grid and periodic-stack formulations
 
 See [native-grid units and observations](../../guide/fdtd/native-grids.md) and
-[periodic-stack units and observations](../../guide/fdtd/periodic-problems.md).
+[periodic-stack units and observations](../../guide/fdtd/periodic-problems.md). Their
+declarations were renamed on 2026-10-19 too (`native.Record` and `periodic.Record` are now
+`Snapshots`, `native.Tail` is `native.DecayCheck`, among others); see the
+[migration guide](../../migration/public-names.md#native-grid-and-periodic-stack-names).
 
 ```{eval-rst}
 .. automodule:: wavebit.fdtd.native
    :members:
 
 .. automodule:: wavebit.fdtd.periodic
-   :members: Problem, RasterDispersion, Pulse, Outputs, Record, Numerics, Prepared, Result, check, prepare, run
+   :members: Problem, RasterDispersion, Pulse, Outputs, Snapshots, Numerics, DecayCheck, Prepared, Result, check, prepare, run
 
 .. automodule:: wavebit.observations.modes
    :members:

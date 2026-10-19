@@ -32,7 +32,7 @@ def test_cuda_conductor_matches_independent_si_recurrence(torch_cuda):
     dt, sigma, eps, current = 1e-17, 2300., 2.4, 1e7
     p = n.Problem(units=Units(length='nm'),
         medium=n.Medium(epsilon=np.full((3, 2, 2), eps), conductivity=sigma),
-        initial=n.Initial(E=np.full((3, 3, 2, 2), 2.), H=np.full((3, 3, 2, 2), .03)),
+        initial=n.InitialField(E=np.full((3, 3, 2, 2), 2.), H=np.full((3, 3, 2, 2), .03)),
         current=n.Current(density=np.full((3, 3, 2, 2), current), samples=np.ones(11)))
     nums = n.Numerics(grid=n.Grid(spacing=(10.,)*3), time_step_seconds=dt, steps=11)
     result = n.run(p, numerics=nums, backend='torch', device='cuda:0')
@@ -57,8 +57,8 @@ def pulse_case():
             poles=(n.Oscillator(omega_0=2/ts, gamma=.1/ts, strength=.4*mask/ts**2),)),
         current=n.Current(density=current, samples=np.sin(np.arange(30)*.1)),
         bloch_phase=(0., .13, -.08),
-        outputs=n.Outputs(spectrum=n.Spectrum(wavelengths=(.8, 1.), planes=(6, 10)),
-            record=n.Record(every=3, components=('ex', 'hy'))))
+        outputs=n.Outputs(spectrum=n.Spectrum(wavelengths=(.8, 1.), z_indices=(6, 10)),
+            snapshots=n.Snapshots(every=3, components=('Ex', 'Hy'))))
     nums = n.Numerics(grid=n.Grid(spacing=(.1,)*3, z_spacing=np.linspace(.09, .11, 16)),
         time_step_seconds=.02*ts, steps=30, absorber=n.PML(cells=3, wavelength=1.))
     return p, nums
@@ -77,10 +77,10 @@ def test_cuda_cpml_dispersion_bloch_records_and_prepared_reuse(torch_cuda):
             assert value.device.type == 'cuda'
             assert_field_close(value, getattr(expected, name))
         assert_field_close(actual.spectrum.values, expected.spectrum.values)
-        for name in actual.fields:
-            assert actual.fields[name].values.device.type == 'cuda'
-            assert_field_close(actual.fields[name].values, expected.fields[name].values)
-        for value, reference in zip(actual.polarization, expected.polarization):
+        for name in actual.snapshots:
+            assert actual.snapshots[name].values.device.type == 'cuda'
+            assert_field_close(actual.snapshots[name].values, expected.snapshots[name].values)
+        for value, reference in zip(actual.polarization_density, expected.polarization_density):
             assert value.device.type == 'cuda'
             assert_field_close(value, reference)
 
@@ -90,10 +90,10 @@ def test_cuda_cpml_dispersion_bloch_records_and_prepared_reuse(torch_cuda):
 def test_cuda_source_gradient_matches_independent_scaling_and_cpu_secant(torch_cuda, checkpoint, leaf_device):
     torch = torch_cuda
     p, nums = pulse_case()
-    # Recording every three steps splits the loop into three-step intervals,
+    # Snapshots every three steps split the loop into three-step intervals,
     # hiding the distinct 32/7 checkpoint schedules. Exercise the full 30-step
     # loop here; the recorded-observable derivative is checked separately below.
-    p = p.replace(outputs=p.outputs.replace(record=None))
+    p = p.replace(outputs=p.outputs.replace(snapshots=None))
     nums = nums.replace(checkpoint_steps=checkpoint)
     amplitude = torch.tensor(1.2, dtype=torch.float64, device=leaf_device, requires_grad=True)
     density = torch.tensor(p.current.density, dtype=torch.float64, device=leaf_device)
@@ -120,7 +120,7 @@ def test_cuda_recorded_observation_keeps_source_derivative(torch_cuda):
     density = torch.tensor(p.current.density, dtype=torch.float64, device='cuda')
     q = p.replace(current=p.current.replace(density=density*amplitude))
     result = n.run(q, numerics=nums, backend='torch', device='cuda:0')
-    value = result.fields['ex'].values.abs().square().sum()
+    value = result.snapshots['Ex'].values.abs().square().sum()
     gradient = torch.autograd.grad(value, amplitude)[0]
     assert value.item() > 0
     np.testing.assert_allclose(host(gradient), 2*host(value)/1.2, rtol=2e-12)

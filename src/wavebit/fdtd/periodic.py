@@ -18,65 +18,124 @@ from wavebit.materials import Material, Drude, Lorentz
 from wavebit.observations import DiffractionOrders, FieldSamples, TimeSeries, Validity
 from wavebit.rcwa import Stack, Layer, Region, Rectangle, Circle, Ellipse, Polygon, Excitation, PlaneWave
 from wavebit.units import require_units, Z0
+from ._public_names import removed as _removed
+from ._yee_outputs import (COMPONENTS, decay_check_fields, engine_components, snapshot_components,
+                           snapshot_every)
 
 
-@spec
+@spec(renamed={'models': 'poles'})
 class RasterDispersion:
-    """Integer raster labels mapped to physical Drude/Lorentz pole tuples.
+    """Integer raster labels mapped to physical Drude/Lorentz poles.
 
+    ``poles`` maps each nonzero label to a tuple of the same ``materials.Drude`` /
+    ``materials.Lorentz`` objects ``DispersiveMaterial(poles=)`` takes (Debye is refused).
     Label zero is nondispersive. Stack raster epsilon is epsilon-infinity.
     Coefficients are SI rates, independently of the geometry's length unit.
     """
     labels: object
-    models: object
+    poles: object
 
     def __post_init__(self):
-        models = {k: tuple(v) for k, v in self.models.items()}
-        if any(type(k) is not int or k == 0 for k in models):
-            raise ValidationError('models require nonzero integer labels', path='dispersion.models')
-        if any(not isinstance(p, (Drude, Lorentz)) for v in models.values() for p in v):
-            raise ValidationError('use physical Drude/Lorentz poles', path='dispersion.models')
-        object.__setattr__(self, 'models', frozen_mapping(models))
+        poles = {k: tuple(v) for k, v in self.poles.items()}
+        if any(type(k) is not int or k == 0 for k in poles):
+            raise ValidationError('poles require nonzero integer labels', path='dispersion.poles')
+        if any(not isinstance(p, (Drude, Lorentz)) for v in poles.values() for p in v):
+            raise ValidationError('use physical Drude/Lorentz poles', path='dispersion.poles')
+        object.__setattr__(self, 'poles', frozen_mapping(poles))
 
 
-@spec
+#: sigma_f of the Gaussian envelope exp(-((t-t0)/w)**2) is 1/(sqrt(2)*pi*w).
+_SIGMA_NOTE = ('frequency_sigma_hz = 1/(sqrt(2)*pi*width_seconds), the spectral standard deviation '
+               'of the same Gaussian, as in fdtd.GaussianPulse(frequency_sigma_hz=...)')
+
+
+@spec(renamed={'width_seconds': ('frequency_sigma_hz', _SIGMA_NOTE)})
 class Pulse:
-    """Gaussian source envelope with optional causal notches at positive Hz."""
-    width_seconds: object = None
+    """Gaussian source envelope, by its spectral standard deviation, with optional causal notches.
+
+    ``frequency_sigma_hz`` is the standard deviation of the amplitude spectrum
+    ``exp(-(f-f0)**2/(2*sigma**2))`` in Hz, as in ``fdtd.GaussianPulse(frequency_sigma_hz=)``.
+    ``None`` (the default) uses the envelope whose 1/e time half-width is one period at the
+    centre wavelength, so sigma = f0/(sqrt(2)*pi) with f0 the centre frequency.
+    ``notch_frequencies_hz`` suppresses chosen positive frequencies with causal delayed copies.
+    Example: ``periodic.Pulse(frequency_sigma_hz=3e13)``.
+    """
+    frequency_sigma_hz: object = None
     notch_frequencies_hz: object = None
 
+    def __post_init__(self):
+        sigma = self.frequency_sigma_hz
+        if sigma is not None:
+            if (isinstance(sigma, (bool, np.bool_)) or np.ndim(sigma) or np.iscomplexobj(sigma)
+                    or not np.isfinite(sigma) or sigma <= 0):
+                raise ValidationError(f'frequency_sigma_hz={sigma!r}: a finite positive static '
+                                      f'scalar in Hz is needed', path='pulse.frequency_sigma_hz')
+
 
 @spec
-class Record:
-    """Native Yee records, optional physical coordinate bounds by x/y/z."""
+class Snapshots:
+    """Field snapshots every ``every`` steps, of ``components`` ('Ex'..'Hz').
+
+    ``bounds`` optionally limits them to a physical box: a mapping from 'x', 'y' or 'z' to a
+    ``(low, high)`` pair in the problem's length unit. ``Result.snapshots`` is keyed by component.
+    Example: ``periodic.Snapshots(every=5, components=('Ex', 'Hy'), bounds={'z': (0., 0.2)})``.
+    """
     every: int = 1
-    components: tuple = ('ex', 'ey', 'ez', 'hx', 'hy', 'hz')
+    components: tuple = COMPONENTS
     bounds: object = None
 
     def __post_init__(self):
-        object.__setattr__(self, 'components', tuple(self.components))
+        object.__setattr__(self, 'every', snapshot_every(self.every, 'outputs.snapshots.every'))
+        object.__setattr__(self, 'components', snapshot_components(
+            self.components, 'outputs.snapshots.components'))
         if self.bounds is not None:
             object.__setattr__(self, 'bounds', frozen_mapping(self.bounds))
 
 
-@spec
+@spec(renamed={'record': 'snapshots'})
 class Outputs:
     planes: object = field(default_factory=dict)
-    record: object = None
+    snapshots: object = None
 
     def __post_init__(self):
         object.__setattr__(self, 'planes', frozen_mapping(self.planes))
-        if self.record is not None and not isinstance(self.record, Record):
-            raise ValidationError('expected periodic.Record', path='outputs.record')
+        if self.snapshots is not None and not isinstance(self.snapshots, Snapshots):
+            raise ValidationError('expected periodic.Snapshots', path='outputs.snapshots')
 
 
 @spec
+class DecayCheck:
+    """Diagnose whether the fields have decayed over the run's final ``window_seconds``.
+
+    A diagnostic, not a stopping rule: the run always lasts ``Numerics(duration_seconds=)``, and
+    the result's ``validity.convergence`` reports the final-window change against ``threshold``.
+    The window is rounded up to whole time steps. Example:
+    ``periodic.Numerics(..., decay_check=periodic.DecayCheck(window_seconds=20e-15))``.
+    """
+    threshold: float = 1e-4
+    window_seconds: float
+
+    def __post_init__(self):
+        threshold, window = decay_check_fields(self.threshold, self.window_seconds,
+                                               'numerics.decay_check')
+        object.__setattr__(self, 'threshold', threshold)
+        object.__setattr__(self, 'window_seconds', window)
+
+
+_DECAY_NOTE = ('decay_check=DecayCheck(window_seconds=..., threshold=...) takes the window in '
+               'seconds, not steps (window_seconds = tail_steps*time_step_seconds, with the time '
+               "step from check(...).resolved['time_step_seconds']), and threshold= is the old "
+               'tail_tolerance=')
+
+
+@spec(renamed={'tail_steps': ('decay_check', _DECAY_NOTE),
+               'tail_tolerance': ('decay_check', _DECAY_NOTE)})
 class Numerics:
     """Fixed numerical choices; spatial quantities use the problem's length unit.
 
     ``spacing`` is nominal z spacing; ``transverse_spacing`` optionally chooses
     x/y separately. Duration is an SI hard cap rounded up to whole time steps.
-    ``tail_steps`` only diagnoses the final window; it never stops a run early.
+    ``decay_check`` only diagnoses the final window; it never stops a run early.
     Reference stepping admits only its explicitly supported subset and refuses
     shared-only controls, rather than silently ignoring them.
     """
@@ -103,8 +162,7 @@ class Numerics:
     source_distance: object = None
     checkpoint_steps: int = 32
     dft_subsample: int = 1
-    tail_steps: object = None
-    tail_tolerance: float = 1e-4
+    decay_check: object = None
 
     def __post_init__(self):
         if self.algorithm not in ('shared', 'reference'):
@@ -113,6 +171,8 @@ class Numerics:
             v=getattr(self,name)
             if isinstance(v,bool) or np.ndim(v) or not np.isfinite(v) or v<=0:
                 raise ValidationError('expected a finite positive static scalar', path='numerics.'+name)
+        if self.decay_check is not None and not isinstance(self.decay_check, DecayCheck):
+            raise ValidationError('expected periodic.DecayCheck', path='numerics.decay_check')
 
 
 @spec
@@ -128,11 +188,11 @@ class Problem:
         require_units(self.units)
         for name, typ in (('stack',Stack),('excitation',Excitation),('pulse',Pulse),('outputs',Outputs)):
             if not isinstance(getattr(self,name),typ):
-                raise ValidationError(f'expected {typ.__name__}',path=name)
+                raise ValidationError(f'expected periodic.{typ.__name__}',path=name)
         if len(self.excitation.sources)!=1 or not isinstance(self.excitation.sources[0],PlaneWave):
             raise UnsupportedFeatureError('periodic FDTD requires exactly one PlaneWave',path='excitation.sources')
         if self.dispersion is not None and not isinstance(self.dispersion,RasterDispersion):
-            raise ValidationError('expected RasterDispersion',path='dispersion')
+            raise ValidationError('expected periodic.RasterDispersion',path='dispersion')
 
 
 def _execution(numerics,backend,device,precision):
@@ -185,7 +245,7 @@ def _arguments(problem,numerics,execution):
         raise ValidationError('wavelength must be a positive finite scalar or vector',path='excitation.wavelength')
     ts=problem.units.time_seconds
     centre=float((band.min()+band.max())/2)
-    record=problem.outputs.record
+    snapshots=problem.outputs.snapshots
     options=dict(structure=structure,thickness=thickness,top=material(stack.top),bot=material(stack.bottom),
         period=stack.period,lattice=stack.lattice,wavelength=band,mu=mu,
         theta=0. if source.theta is None else source.theta,phi=source.phi,
@@ -195,11 +255,11 @@ def _arguments(problem,numerics,execution):
         courant=numerics.courant,subpixel=numerics.subpixel,truncation_order=numerics.orders,
         pad_scale=numerics.padding_scale,grading=numerics.grading,return_diagnostics=True,
         field_monitors=dict(problem.outputs.planes) or None,
-        record_field=None if record is None else record.every,
-        record_components=None if record is None else record.components)
+        record_field=None if snapshots is None else snapshots.every,
+        record_components=None if snapshots is None else engine_components(snapshots.components))
     if problem.dispersion is not None:
         poles={}
-        for key,terms in problem.dispersion.models.items():
+        for key,terms in problem.dispersion.poles.items():
             poles[key]=tuple((0.,p.gamma*ts,(p.omega_p*ts)**2) if isinstance(p,Drude)
                 else (p.omega_0*ts,p.gamma*ts,p.strength*ts**2) for p in terms)
         options.update(dispersion=problem.dispersion.labels,poles=poles)
@@ -208,14 +268,14 @@ def _arguments(problem,numerics,execution):
         for name in ('transverse_spacing','nominal_indices','nominal_layer_thickness','align_layers',
                      'variable_depth','layer_smoothing','shape_smoothing','shape_integration',
                      'extraction_distance','extraction_method','source_distance','checkpoint_steps',
-                     'dft_subsample','tail_steps','tail_tolerance'):
+                     'dft_subsample','decay_check'):
             value=getattr(numerics,name)
             if isinstance(value,(np.ndarray,Mapping)) or value!=getattr(defaults,name):
                 raise UnsupportedFeatureError('this control requires shared stepping',path='numerics.'+name)
-        if problem.pulse.width_seconds is not None or problem.pulse.notch_frequencies_hz is not None:
+        if problem.pulse.frequency_sigma_hz is not None or problem.pulse.notch_frequencies_hz is not None:
             raise UnsupportedFeatureError('custom pulse controls require shared stepping',path='pulse')
-        if record is not None and record.bounds is not None:
-            raise UnsupportedFeatureError('record bounds require shared stepping',path='outputs.record.bounds')
+        if snapshots is not None and snapshots.bounds is not None:
+            raise UnsupportedFeatureError('snapshot bounds require shared stepping',path='outputs.snapshots.bounds')
         return options,None
     device=execution.device
     if execution.backend=='jax':
@@ -228,17 +288,82 @@ def _arguments(problem,numerics,execution):
             raise ValidationError('expected positive x/y spacing',path='numerics.transverse_spacing')
         transverse=1/spacing
     notches=problem.pulse.notch_frequencies_hz
+    sigma=problem.pulse.frequency_sigma_hz
+    decay=numerics.decay_check
     options.update(device=device,transverse_resolution=transverse,mesh_indices=numerics.nominal_indices,
         mesh_thickness=numerics.nominal_layer_thickness,align_layers=numerics.align_layers,
         variable_depth=numerics.variable_depth,layer_smoothing=numerics.layer_smoothing,
         shape_smoothing=numerics.shape_smoothing,shape_integration=numerics.shape_integration,
         diffraction_distance=numerics.extraction_distance,diffraction_method=numerics.extraction_method,
         source_distance=numerics.source_distance,checkpoint_steps=numerics.checkpoint_steps,
-        dft_subsample=numerics.dft_subsample,convergence_window=numerics.tail_steps,
-        convergence_tol=numerics.tail_tolerance,record_bounds=None if record is None or record.bounds is None else dict(record.bounds),
-        pulse_width=None if problem.pulse.width_seconds is None else problem.pulse.width_seconds/ts,
+        dft_subsample=numerics.dft_subsample,
+        # The window is in seconds; only the engine knows its time step, so it converts.
+        convergence_window_time=None if decay is None else decay.window_seconds/ts,
+        convergence_tol=1e-4 if decay is None else decay.threshold,
+        record_bounds=None if snapshots is None or snapshots.bounds is None else dict(snapshots.bounds),
+        # The envelope exp(-((t-t0)/w)**2) has amplitude-spectrum sigma 1/(sqrt(2)*pi*w).
+        pulse_width=None if sigma is None else (1/(np.sqrt(2)*np.pi*sigma))/ts,
         pulse_notches=None if notches is None else np.asarray(notches)*ts)
     return options,execution.backend
+
+
+#: Engine refusals whose advice reverses under the public spelling (a longer pulse_width is a
+#: smaller frequency_sigma_hz), reworded whole.
+_REWORDED = {
+    'pulse_width leaves a requested wavelength in the numerical source tail; reduce pulse_width '
+    'or narrow the wavelength band.':
+        'The source spectrum is numerically zero at a requested wavelength: raise '
+        'Pulse(frequency_sigma_hz=...) (the default is f0/(sqrt(2)*pi) at the centre frequency f0) '
+        'or narrow Excitation(wavelength=...).',
+    'pulse_width must span at least one time step; increase pulse_width or resolution.':
+        'Pulse(frequency_sigma_hz=...) is too broad for the time step: lower frequency_sigma_hz '
+        'or decrease Numerics(spacing=...).',
+    'convergence_window must be a positive integer smaller than steps.':
+        'DecayCheck(window_seconds=...) must be shorter than the run, '
+        'Numerics(duration_seconds=...).',
+    "Point probes require all six fields; solve with record_components='all'.":
+        'Result.sample needs all six Snapshots(components=...), the default.',
+}
+
+#: Engine keywords a periodic refusal can name, and the public spelling that set them.
+_SPELLING = (('pulse_notches', 'Pulse(notch_frequencies_hz=...)'),
+             ('record_bounds', 'Snapshots(bounds=...)'),
+             ('record_components', 'Snapshots(components=...)'),
+             ('record_field', 'Snapshots(every=...)'),
+             ('mesh_indices', 'Numerics(nominal_indices=...)'),
+             ('mesh_thickness', 'Numerics(nominal_layer_thickness=...)'),
+             ('truncation_order', 'Numerics(orders=...)'),
+             ('n_periods', 'Numerics(duration_seconds=...)'))
+
+
+def _public(exc):
+    """``exc`` spelled for a public caller, or ``exc`` itself if it names no engine keyword.
+
+    The engine keeps its own wording, which its own callers and tests read; only this door
+    rewords, so a refusal names the declaration the caller wrote.
+    """
+    import re
+    text = str(exc)
+    public = _REWORDED.get(text, text)
+    if public == text:
+        for engine, declared in _SPELLING:
+            public = public.replace(engine, declared)
+        # A snapshot refusal names an engine component ('for ex;'); the public name is 'Ex'.
+        public = re.sub(r"\bfor ([eh][xyz])\b", lambda m: f"for '{m.group(1).capitalize()}'", public)
+    if public == text:
+        return exc
+    return ValidationError(public, path=getattr(exc, 'path', '') or 'problem')
+
+
+def _engine(call, *args, **kwargs):
+    """Run an engine call, raising its refusals in the public spelling."""
+    try:
+        return call(*args, **kwargs)
+    except ValueError as exc:
+        public = _public(exc)
+        if public is exc:
+            raise
+        raise public from exc
 
 
 def _signature(problem,numerics):
@@ -267,7 +392,7 @@ def _validated(problem,numerics,execution):
     from ._periodic.adapter import solve_periodic_fdtd
     with execution.scope():
         options,backend=_arguments(problem,numerics,execution)
-        raw=solve_periodic_fdtd(dict(options,_validate_only=True),backend=backend)
+        raw=_engine(solve_periodic_fdtd,dict(options,_validate_only=True),backend=backend)
     return CheckReport(resolved={'shape':raw['shape'],'steps':raw['steps'],
         'time_step_seconds':raw['dt']*problem.units.time_seconds},
         capabilities={'algorithm':numerics.algorithm,'backend':execution.backend,
@@ -318,21 +443,31 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
 
 @spec
 class Result:
+    """Diffraction orders, plane phasors and optional field snapshots of one periodic run.
+
+    ``snapshots`` maps each recorded component ('Ex'..'Hz') to its ``TimeSeries``.
+    """
     reflection: DiffractionOrders
     transmission: DiffractionOrders
     basis: object
-    fields: object
+    snapshots: object
     planes: object
     plane_power_z: object
     validity: Validity
     diagnostics: object
     provenance: object
-    _snapshot: object = None
+    _engine_diagnostics: object = None
 
     def __post_init__(self):
         register_dataclass(type(self))
-        for name in ('basis','fields','planes','plane_power_z','diagnostics','provenance'):
+        for name in ('basis','snapshots','planes','plane_power_z','diagnostics','provenance'):
             object.__setattr__(self,name,frozen_mapping(getattr(self,name)))
+
+    def __getattr__(self, name):
+        # Reached only when normal lookup fails, so it never shadows a field.
+        if name == 'fields':
+            raise _removed('periodic.Result', name, 'periodic.Result.snapshots')
+        raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
 
     @property
     def R(self): return self.reflection.efficiency
@@ -343,12 +478,13 @@ class Result:
     def sample(self,*,x=0.,y=0.,z,times=None):
         """Concrete offline interpolation of all six fields at SI times.
 
-        Requires all six recorded components. Interpolation across the source
+        Requires all six Snapshots components (the default). Interpolation across the source
         discontinuity is refused; this NumPy postprocessing does not retain AD.
         """
         from ._periodic.probes import sample_fdtd_fields
         ts=self.provenance['time_unit_seconds']
-        raw=sample_fdtd_fields(self._snapshot,x=x,y=y,z=z,t=None if times is None else np.asarray(times)/ts)
+        raw=_engine(sample_fdtd_fields,self._engine_diagnostics,x=x,y=y,z=z,
+                    t=None if times is None else np.asarray(times)/ts)
         amplitude=self.provenance['incident_amplitude']
         return TimeSeries(values=np.concatenate((raw['E'],raw['H']/Z0),axis=-1)*amplitude,
             coordinates={'x':x,'y':y,'z':z},components=('Ex','Ey','Ez','Hx','Hy','Hz'),
@@ -384,10 +520,11 @@ def _adapt(raw,diag,problem,numerics):
     for leg in ('s_inc','p_inc'):
         reflected=orders('r',leg)
         if reflected is not None: basis[leg]=(reflected,orders('t',leg))
-    fields={}
+    snapshots={}
     for name,data in diag.get('fields',{}).items():
-        fields[name]=TimeSeries(values=data['values']*amplitude/(Z0 if name.startswith('h') else 1.),
-            coordinates={a:data[a] for a in ('x','y','z')},components=(name,),
+        # The engine keys its records 'ex'..'hz'; the public key is 'Ex'..'Hz'.
+        snapshots[name.capitalize()]=TimeSeries(values=data['values']*amplitude/(Z0 if name.startswith('h') else 1.),
+            coordinates={a:data[a] for a in ('x','y','z')},components=(name.capitalize(),),
             units={'field':'A/m' if name.startswith('h') else 'V/m','coordinates':u.length},
             times=data['t']*u.time_seconds,sampling='native Yee stagger',
             metadata={'axis_order':('time','z','y','x'),
@@ -440,20 +577,20 @@ def _adapt(raw,diag,problem,numerics):
         diagnostics['convergence']=convergence
     checks={'stable':diag.get('stable',True),'finite':xp.all(xp.isfinite(xp.stack([r.R for r in raw])))}
     return Result(reflection=orders('r','incident'),transmission=orders('t','incident'),basis=basis,
-        fields=fields,planes=planes,plane_power_z=powers,
+        snapshots=snapshots,planes=planes,plane_power_z=powers,
         validity=Validity(checks=checks,convergence=dict(convergence,residual=diag.get('residual'))),
         diagnostics=diagnostics,provenance={'length_unit':u.length,'time_unit_seconds':u.time_seconds,
             'incident_amplitude':amplitude,'algorithm':numerics.algorithm,
             'plane_power_units':{name:plane.metadata['power_unit'] for name,plane in planes.items()},
             'time_convention':'exp(-i omega t)','coordinate_convention':'+z up; bottom interface z=0'},
-        _snapshot=diag)
+        _engine_diagnostics=diag)
 
 
 def _run(problem,numerics,execution):
     from ._periodic.adapter import solve_periodic_fdtd
     with execution.scope():
         options,backend=_arguments(problem,numerics,execution)
-        raw,diag=solve_periodic_fdtd(options,backend=backend)
+        raw,diag=_engine(solve_periodic_fdtd,options,backend=backend)
         return _adapt(raw,diag,problem,numerics)
 
 
@@ -463,5 +600,12 @@ def run(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
 
 
 __all__=['Stack','Layer','Region','Rectangle','Circle','Ellipse','Polygon','Excitation','PlaneWave',
-         'RasterDispersion','Pulse','Record','Outputs','Numerics','Problem','Prepared','Result',
-         'check','prepare','run']
+         'RasterDispersion','Pulse','Snapshots','Outputs','DecayCheck','Numerics','Problem',
+         'Prepared','Result','check','prepare','run']
+
+
+def __getattr__(name):
+    # A tombstone naming the replacement, not an alias.
+    if name == 'Record':
+        raise _removed('wavebit.fdtd.periodic', name, 'wavebit.fdtd.periodic.Snapshots')
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

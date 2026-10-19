@@ -42,7 +42,9 @@ def engine_strings():
     """``(where, text)`` for every non-docstring string the general engine holds.
 
     An f-string is read whole, with ``{}`` where a value goes, so a phrase split around a value
-    is read as the reader sees it. The periodic engine is compat-only and is not read.
+    is read as the reader sees it. The explicit-grid engine, ``_periodic``, is not read: what it
+    says leaves through ``fdtd.native`` and ``fdtd.periodic``, which run on it and spell its
+    keywords as their own declarations at their own doors, not through ``_spelling``.
     """
     for path in sorted(ENGINE.rglob('*.py')):
         if '_periodic' in path.parts or path.name == '_spelling.py':

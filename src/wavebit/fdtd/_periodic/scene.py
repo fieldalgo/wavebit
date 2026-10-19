@@ -20,7 +20,7 @@ from wavebit._common.conventions import time_delay_phase
 from wavebit._common.conventions import yee_longitudinal_phase
 from wavebit.materials.response import as_material
 from wavebit.fdtd._periodic.grid import _validate_pml_reflection
-from wavebit.fdtd._periodic.grid import fdtd_grid
+from wavebit.fdtd._periodic.grid import fdtd_grid, window_steps
 from wavebit.observations.diffraction import Result
 from wavebit.observations.diffraction import ResultSub
 from wavebit.fdtd._periodic.runtime import time_loop_backend
@@ -1298,7 +1298,7 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
                      checkpoint_steps=32, return_diagnostics=False,
                      field_monitors=None, record_field=None, record_components=None, grading=None,
                      convergence_window=None, convergence_tol=1e-4, dft_subsample=1, record_bounds=None,
-                     pulse_width=None, align_layers=False, diffraction_distance=None,
+                     convergence_window_time=None, pulse_width=None, align_layers=False, diffraction_distance=None,
                      diffraction_method='electric', pml_reflection=1e-8, pulse_notches=None,
                      source_distance=None, transverse_resolution=None, mesh_indices=None,
                      mesh_thickness=None, layer_smoothing=0., shape_smoothing=0., shape_integration='separable',
@@ -1740,6 +1740,11 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
     check(n_periods*centre >= required_duration,
           'n_periods is too short for the pulse and a round trip across the scene.')
     steps = math.ceil(n_periods*centre/dt)
+    if convergence_window_time is not None:
+        # A window given as a duration (c=1 time) is converted here, where dt is known.
+        if convergence_window is not None:
+            raise ValueError('Give convergence_window or convergence_window_time, not both.')
+        convergence_window = window_steps(convergence_window_time, dt)
     time = np.arange(steps)*dt
     pulse = np.exp(-((time-5*width)/width)**2)*np.exp(-2j*np.pi*time/centre)
     pulse_info = dict(width=width, peak_time=5*width, frequency=1/centre,
