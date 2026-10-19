@@ -61,7 +61,7 @@ def test_tables_retain_interpolation_and_source_units():
     model=TabulatedMaterial.from_refractive_index((500.,1000.),(2.,3.),wavelength_unit='nm')
     expected=2.6**2
     assert model.at(.8,units=Units(length='um')).epsilon==pytest.approx(expected)
-    assert model.interpolation=='index'
+    assert model.interpolated_quantity=='index'
     assert model.replace(wavelength_unit='um')!=model
     with pytest.raises(ValidationError):model.at(-1.,units=Units(length='nm'))
     with pytest.raises(UnsupportedFeatureError,match='causal'):lower_material(model,units=Units(length='nm'))
