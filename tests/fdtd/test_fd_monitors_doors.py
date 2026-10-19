@@ -145,7 +145,7 @@ def test_a_diffraction_monitor_names_its_plane_side_and_window():
         fd.Diffraction('r', wavelengths=WS)
     with pytest.raises(ValueError, match='one position'):
         fd.Diffraction('r', z=1.0, x=0.0, wavelengths=WS)
-    with pytest.raises(ValueError, match="'reflect'"):
+    with pytest.raises(ValueError, match="'reflected'"):
         fd.Diffraction('r', z=1.0, side='up', wavelengths=WS)
     with pytest.raises(ValueError, match='>= 0'):
         fd.Diffraction('r', z=1.0, orders=-1, wavelengths=WS)
@@ -460,7 +460,7 @@ def test_a_box_is_a_structure_and_other_shapes_are_stage_4():
     assert 'stage 4' in str(e.value)
     with pytest.raises(NotImplementedError, match='stage 4') as e:
         fd.Slab(size=1.0)
-    assert 'fd.Region' in str(e.value)
+    assert 'fdtd.SnappedBox' in str(e.value)
 
 
 def test_a_box_snaps_to_cells_on_every_axis_and_the_report_says_so():
