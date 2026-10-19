@@ -120,7 +120,14 @@ class Polygon:
 
 @spec
 class Region:
-    """A typed shape and its material; later regions paint over earlier regions."""
+    """A typed shape and its material; later regions paint over earlier regions.
+
+    A shape may be written in any period: its ``center`` (a polygon's vertices) and the same
+    plus ``m a1 + n a2`` are one structure, and solve the same to rounding. Overlapping
+    regions are painted as written, so two that overlap only through a periodic copy are
+    refused with the whole-period move that resolves it; ``factorization='li'`` reads a
+    rectangle in the cell wherever it is written and refuses one that crosses the cell edge.
+    """
     geometry: object
     material: object
 
