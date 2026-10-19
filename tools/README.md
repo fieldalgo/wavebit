@@ -8,6 +8,7 @@ These tools maintain the checkout; they are not part of the installed package.
 - `run_examples_smoke.py` runs the executable examples from any working directory.
 - `run_tutorials_smoke.py` executes the current RCWA/FDTD notebook code cells in fresh interpreters.
 - `run_distribution_smoke.py` builds and validates an isolated installed distribution.
+- `build_material_tables.py` rebuilds the bundled refractive-index tables from a pinned refractiveindex.info database checkout (needs PyYAML); `src/wavebit/data/refractiveindex/README.md` cites each source.
 - `repository_paths.py` resolves the historical identities recorded in `relocations.json`.
 
 The relocation ledger preserves the exact original Git blob, file mode, and SHA-256

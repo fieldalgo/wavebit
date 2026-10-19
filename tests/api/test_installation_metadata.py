@@ -17,7 +17,7 @@ def test_installed_metadata_matches_the_checkout_distribution_contract():
     requires = {value.replace(' ', '') for value in distribution.requires or ()}
     assert {value.replace(' ', '') for value in project['dependencies']} <= requires
     package = importlib.resources.files('wavebit')
-    assert package.joinpath('data/filmetrics/Si.txt').is_file()
+    assert package.joinpath('data/refractiveindex/Si.txt').is_file()
 
 
 def test_every_version_the_package_states_is_the_pyproject_one():

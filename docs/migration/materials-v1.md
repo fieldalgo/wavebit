@@ -35,7 +35,7 @@ a cache. Table loading does not depend on the numerical backend or precision.
 
 ```python
 wavebit.materials.catalog.available()             # source-qualified catalog identifiers
-silicon = wavebit.materials.catalog.load('filmetrics/Si')
+silicon = wavebit.materials.catalog.load('Green2008-Li1980/Si')
 value = silicon.at(900.)                   # numerical Material at one wavelength
 spectrum = silicon.at([800., 900., 1000.]) # Material containing epsilon arrays
 print(value.epsilon, silicon.wavelength_range)
@@ -43,7 +43,10 @@ print(value.epsilon, silicon.wavelength_range)
 
 Names are case-insensitive. Short names such as `Si` work when unambiguous;
 qualified names identify a specific dataset. The catalog contains
-`filmetrics/Al2O3`, `filmetrics/Si`, `filmetrics/Si3N4` and `filmetrics/SiO2`.
+`Green2008-Li1980/Si`, `Luke2015/Si3N4`, `Malitson1962/Al2O3` and `Malitson1965/SiO2`,
+each named after the publications its numbers come from (2026-10-19). The earlier
+`filmetrics/...` tables carried no recorded source or terms and were removed; loading
+those names raises an error that lists the replacements.
 A formula does not specify all deposition conditions or forms of a material;
 choose data appropriate to the sample. An older `p_Si.mat` asset that declared neither
 its wavelength unit nor its data source was removed from the package on 2026-10-14.
@@ -340,7 +343,7 @@ The `wavelengths` constructor argument identifies where material samples are
 known. It does not enumerate allowed solve wavelengths. A table at 800, 900 and
 1000 can be evaluated at 850 or 873.2; epsilon and optional mu are interpolated
 between adjacent samples. A solve outside 800–1000 needs a table covering that
-range. The bundled Si table covers 190.7–2500 nm. Interpolation cannot recover
+range. The bundled Si table covers 250–14000 nm. Interpolation cannot recover
 spectral features absent from the source data, so choose adequate sample spacing.
 
 ## Valid ranges, derivatives and stored jobs

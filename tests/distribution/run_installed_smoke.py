@@ -28,11 +28,11 @@ def main():
         assert len(matches) == 1, (name, matches)
         assert distribution.locate_file(matches[0]).stat().st_size > 0, name
 
-    asset = 'wavebit/data/filmetrics/Si.txt'
+    asset = 'wavebit/data/refractiveindex/Si.txt'
     assert distribution.locate_file(asset).is_file(), asset
     names = wavebit.materials.catalog.available()
-    assert set(names) == {'filmetrics/Si', 'filmetrics/SiO2',
-                          'filmetrics/Si3N4', 'filmetrics/Al2O3'}
+    assert set(names) == {'Green2008-Li1980/Si', 'Malitson1965/SiO2',
+                          'Luke2015/Si3N4', 'Malitson1962/Al2O3'}
     for name in names:
         material = wavebit.materials.catalog.load(name)
         assert isinstance(material, wavebit.TabulatedMaterial)

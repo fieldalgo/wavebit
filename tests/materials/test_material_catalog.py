@@ -24,12 +24,12 @@ def test_catalog_discovery_is_io_free_and_loading_is_selective(monkeypatch):
         return original(path, *args, **kwargs)
 
     monkeypatch.setattr(Path, 'open', track)
-    assert materials.available() == ('filmetrics/Al2O3', 'filmetrics/Si',
-                                      'filmetrics/Si3N4', 'filmetrics/SiO2')
+    assert materials.available() == ('Green2008-Li1980/Si', 'Luke2015/Si3N4',
+                                      'Malitson1962/Al2O3', 'Malitson1965/SiO2')
     assert opened == []
     m = materials.load('si')
     assert opened == ['Si.txt']
-    assert materials.load('FILMETRICS/SI') is m
+    assert materials.load('GREEN2008-LI1980/SI') is m
     assert opened == ['Si.txt']
     with pytest.raises(FrozenInstanceError):
         m.values = ()
@@ -40,7 +40,7 @@ def test_bundled_data_preserves_interpolated_index_and_loss_sign(name):
     m = materials.load(name)
     # Independent interpolation of the shipped source data checks column order,
     # source selection and the conversion boundary, not a fitted optical model.
-    source = Path(wavebit.__file__).parent / 'data' / (name + '.txt')
+    source = Path(wavebit.__file__).parent / 'data' / materials._CATALOG[name]
     data = np.loadtxt(source, skiprows=1)
     wavelengths = np.array([m.wavelength_range[0], 900., m.wavelength_range[1]])
     expected = (np.interp(wavelengths, data[:, 0], data[:, 1]) +
@@ -53,11 +53,11 @@ def test_bundled_data_preserves_interpolated_index_and_loss_sign(name):
 @pytest.mark.parametrize('unit,scale', [('nm', 1.), ('um', .001), ('mm', 1e-6), ('m', 1e-9)])
 def test_converted_wavelengths_preserve_optical_values_and_endpoints(unit, scale):
     m = materials.load('Si', wavelength_unit=unit)
-    assert m.wavelength_range == pytest.approx(np.array([190.7, 2500.])*scale)
+    assert m.wavelength_range == pytest.approx(np.array([250., 14000.])*scale)
     assert m.at(900.*scale).epsilon == pytest.approx(materials.load('Si').at(900.).epsilon)
     assert np.isfinite(m.at(np.array(m.wavelength_range)).epsilon).all()
     with pytest.raises(ValueError, match='range'):
-        m.at(3000.*scale)
+        m.at(20000.*scale)
 
 
 def test_length_unit_change_preserves_film_optics():
@@ -76,6 +76,19 @@ def test_unknown_or_implicit_modified_material_is_rejected(name):
         materials.load(name)
 
 
+@pytest.mark.parametrize('name', ['filmetrics/Si', 'FILMETRICS/SiO2'])
+def test_removed_tables_name_their_replacements(name):
+    with pytest.raises(ValueError, match='removed on 2026-10-19.*Green2008-Li1980/Si'):
+        materials.load(name)
+
+
+def test_silicon_is_continuous_where_its_two_datasets_meet():
+    m = materials.load('Si')
+    n = m.at(np.array([1440., 1450., 1500.])).epsilon**.5
+    assert abs(n[1]-n[2]) < 6e-3 and abs(n[0]-n[1]) < 2e-3
+    assert m.at(1550.).epsilon.imag == 0
+
+
 @pytest.mark.parametrize('unit', ['angstrom', 'NM', None, 1, []])
 def test_unknown_unit_is_rejected(unit):
     with pytest.raises(ValueError, match='wavelength_unit'):
@@ -86,7 +99,7 @@ def test_ambiguous_short_name_never_selects_by_insertion_order(monkeypatch):
     monkeypatch.setitem(materials._CATALOG, 'another/Si', 'unused.txt')
     with pytest.raises(ValueError, match='ambiguous'):
         materials.load('Si')
-    assert isinstance(materials.load('filmetrics/Si'), TabulatedMaterial)
+    assert isinstance(materials.load('Green2008-Li1980/Si'), TabulatedMaterial)
 
 
 def test_only_explicit_evaluation_returns_a_snapshot():

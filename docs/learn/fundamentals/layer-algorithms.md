@@ -28,9 +28,11 @@ Runnable file: {download}`08_material_and_layers.py <../../../examples/rcwa/lear
 
 | Calculation | R | T | A |
 | --- | --- | --- | --- |
-| ETM | 0.055378772313 | 0.928353823037 | 0.016267404650 |
-| SMM | 0.055378772313 | 0.928353823037 | 0.016267404650 |
-| Separate Airy formula | 0.055378772313 | 0.928353823037 | 0.016267404650 |
+| ETM | 0.059958423249 | 0.935359040096 | 0.004682536654 |
+| SMM | 0.059958423249 | 0.935359040096 | 0.004682536654 |
+| Separate Airy formula | 0.059958423249 | 0.935359040096 | 0.004682536654 |
+
+The values were recomputed on 2026-10-19, when the bundled silicon table changed to the cited Green (2008) data; the course record in `learn-measurements.json` was measured with the earlier table.
 
 This example is a 120 nm silicon film using bundled material data at 900 nm. ETM and SMM R/T were compared with a separately written Airy formula for a single film at normal incidence. This closed form provides an independent elementary check for the teaching example; it does not validate patterned structures or contact NVF accuracy.
 
