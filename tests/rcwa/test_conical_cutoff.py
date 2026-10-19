@@ -60,6 +60,10 @@ import pytest
 
 from wavebit.rcwa._engine import modal_gradient, solve_1d
 
+# CI may run each test of this file in a different shard (tools/run_verification.py
+# --shard); tests that share a cache carry one shard_unit name.
+pytestmark = pytest.mark.shard_unit(per='test')
+
 PERIOD_Y = 700.0          # the 2D oracle's y period; a y-invariant raster makes it immaterial
 HALF_PI = np.pi / 2
 
@@ -405,6 +409,7 @@ def _fit(name):
 
 
 @pytest.mark.parametrize('name', list(PATTERNED))
+@pytest.mark.shard_unit('fit')
 def test_a_patterned_exceptional_point_is_exact(name, monkeypatch):
     """At ``wl0`` and ``rel`` 0, +-1e-15, +-1e-12, +-1e-9: the fit's value, ETM = SMM, silently.
 
@@ -668,6 +673,7 @@ def _reference_gradients():
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.shard_unit('reference-gradients')
 def test_uniform_cutoff_derivatives_on_jax(algo, rebuilds):
     """``jax.grad``, ``jax.jvp`` and ``jax.jacfwd`` at R1's exact point match the 2D path.
 
@@ -695,6 +701,7 @@ def test_uniform_cutoff_derivatives_on_jax(algo, rebuilds):
 
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.shard_unit('reference-gradients')
 def test_uniform_cutoff_derivatives_on_torch(algo):
     """torch reverse (raster) and ``forward_ad`` (wavelength) at R1's exact point vs the 2D path."""
     torch = pytest.importorskip('torch')
@@ -713,6 +720,7 @@ def test_uniform_cutoff_derivatives_on_torch(algo):
 
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name', ['PA616', 'MU614'])
+@pytest.mark.shard_unit('fit')
 def test_patterned_derivatives_match_the_fit(name, algo):
     """``dR/dwl`` at the exceptional point is the fit's slope; JAX and PyTorch agree.
 

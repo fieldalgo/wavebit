@@ -8,6 +8,9 @@ from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 import numpy as np
 import pytest
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 
 
 def options(**changes):

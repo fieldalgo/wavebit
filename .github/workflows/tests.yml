@@ -90,7 +90,7 @@ jobs:
 
   test:
     if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
-    name: full backends (${{ matrix.shard }}/16)
+    name: full backends (${{ matrix.shard }}/32)
     runs-on: ubuntu-latest
     # Six shards, each its own runner, since 2026-10-15. Not for speed first: for memory.
     # This partition never finished on these runners between 2026-09-11 and then. The two
@@ -111,15 +111,25 @@ jobs:
     # about its worker-minutes over two plus 1.8 minutes of setup, and the recorded timings
     # put 73 worker-minutes in each of eight, 36.5 in each of sixteen.
     #
-    # `--shard` assigns whole files, largest first to the lightest shard, from the same
-    # collection every shard records, and `test-complete` below refuses to call the suite
-    # green unless all sixteen add up to exactly that collection. So nothing can fall between
-    # the shards, and a shard that never reports fails the run by number. Shards are balanced
-    # by recorded file durations in tools/ci_shard_timings.json; new cases use estimated costs.
+    # Thirty-two since 2026-10-20. As sixteen the shards were bound twice at about 20 minutes:
+    # by load (585 worker-minutes over 32 workers is 18.3 each) and by whole files (the
+    # largest, test_conical_cutoff.py, is 18.3 worker-minutes on one worker). The fourteen
+    # files above 9 worker-minutes are marked `shard_unit(per='test')`, one unit per test
+    # function, so the largest unit is now 8.4; on the recorded per-test times thirty-two
+    # shards put the slowest near 11 minutes, forty near 10. A run is about 52 jobs with
+    # `slow`, inside the 60 the account ran at once before.
+    #
+    # `--shard` assigns whole units -- files, or `shard_unit` units -- largest first to the
+    # lightest shard, from the same collection every shard records, and `test-complete` below
+    # refuses to call the suite green unless all shards add up to exactly that collection. So
+    # nothing can fall between the shards, and a shard that never reports fails the run by
+    # number. Shards are balanced by recorded unit durations in tools/ci_shard_timings.json;
+    # new cases use estimated costs.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
     # The backstop under the per-test `--timeout`, which on run 33715389225 never fired
     # while this did, after three hours. 120 for a shard whose healthy length is now about 20
     # minutes (above): a hang costs two hours of runner time instead of GitHub's six, and a
@@ -310,7 +320,7 @@ jobs:
         # roughly 100 to 120 here by the same ratio.
         run: >
           python -u tools/run_verification.py --profile full --slow exclude
-          --shard ${{ matrix.shard }}/16
+          --shard ${{ matrix.shard }}/32
           --shard-timings tools/ci_shard_timings.json
           --workers 2 --timeout 1200 --timeout-method thread --verbose --live-output
           --output "${{ runner.temp }}/wavebit-verification/default"
@@ -334,7 +344,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # The shards are only a verification of the suite together. This job reads the sixteen
+  # The shards are only a verification of the suite together. This job reads the thirty-two
   # receipts and fails unless every shard is present once, all collected the same list,
   # the lists partition it, and every shard exited 0 -- `tools/verify_shards.py`. It runs
   # whether or not the shards passed (`always()`), so a shard that was cancelled or whose
@@ -354,8 +364,8 @@ jobs:
         with:
           pattern: verification-default-*
           path: shards
-      - name: The sixteen shards must add up to the whole partition
-        run: python tools/verify_shards.py --count 16 shards/verification-default-*/
+      - name: The thirty-two shards must add up to the whole partition
+        run: python tools/verify_shards.py --count 32 shards/verification-default-*/
 
   slow:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}

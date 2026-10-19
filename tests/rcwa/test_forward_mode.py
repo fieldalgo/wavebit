@@ -45,7 +45,9 @@ import pytest
 
 import wavebit
 
-pytestmark = pytest.mark.filterwarnings('ignore')
+# CI may run each test of this file in a different shard (tools/run_verification.py
+# --shard); tests that share a cache carry one shard_unit name.
+pytestmark = [pytest.mark.filterwarnings('ignore'), pytest.mark.shard_unit(per='test')]
 
 
 # ------------------------------------------------------------------------------- the scenes
@@ -426,6 +428,7 @@ JAX_PATHS = sorted(JACFWD | {'conical, mu, SMM', 'tensor first-order, eps', 'sha
 
 
 @pytest.mark.parametrize('name', JAX_PATHS)
+@pytest.mark.shard_unit('difference')
 def test_jax_forward_mode_is_the_reverse_mode_derivative(name):
     """``jax.jvp`` (and on :data:`JACFWD`, ``jax.jacfwd``) against ``jax.grad`` and a central
     difference."""
@@ -492,6 +495,7 @@ def test_torch_forward_ad_on_an_oblique_cell_angle():
 
 
 @pytest.mark.parametrize('name', list(PATHS))
+@pytest.mark.shard_unit('difference')
 def test_torch_forward_ad_is_the_reverse_mode_derivative(name):
     """``torch.autograd.forward_ad`` against ``backward()`` and a central difference.
 
@@ -766,6 +770,7 @@ def test_a_mixed_second_derivative_differentiates_the_rule_once():
 
 # ------------------------------------------------------------------------------- the other rules
 
+@pytest.mark.shard_unit('difference')
 def test_native_j1_forward_mode():
     """PyTorch's own ``bessel_j1`` (``set_j1_implementation('native')``, and the default below
     float64) is wrapped in an ``autograd.Function`` for the derivative PyTorch does not ship. It

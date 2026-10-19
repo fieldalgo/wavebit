@@ -54,6 +54,9 @@ import pytest
 import wavebit
 from wavebit.fdtd._periodic.legacy import solve_fdtd
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 
 def _legacy_rcwa(**kwargs):
     """Current RCWA as a reference for the private, historical FDTD kernel.

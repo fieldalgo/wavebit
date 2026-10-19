@@ -51,6 +51,9 @@ from wavebit.rcwa._engine import modal_gradient, solve_2d
 from wavebit.rcwa._engine import solve_2d_first_order as fo
 from tests.rcwa.test_conical_cutoff import PATTERNED, R1, _np, _numbers, _rel, _solver, _strict
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 _RELS = (0.0, 1e-15, -1e-15, 1e-12, -1e-12, 1e-9, -1e-9)
 
 

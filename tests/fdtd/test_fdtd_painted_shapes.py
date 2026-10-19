@@ -15,6 +15,9 @@ from wavebit.fdtd._periodic.runtime import time_loop_backend
 from tests.fdtd.test_fdtd_scene_angles import value_and_jacobian
 from tests.fdtd.test_fdtd_circles import setup
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 
 PERIODS = [.6, .4]
 PARAMETERS = np.array([-.08, -.02, .26, .18, .31, 2.1, 1.12,

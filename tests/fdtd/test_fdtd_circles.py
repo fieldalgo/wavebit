@@ -14,6 +14,9 @@ from wavebit.fdtd._periodic.scene import _shape_partition, _shape_cell_fractions
 from wavebit.fdtd._periodic.runtime import time_loop_backend
 from tests.fdtd.test_fdtd_scene_angles import value_and_jacobian
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 
 def chord_integral(cx, cy, radius, x, y, dx, dy, smoothing):
     """Integrate disk chords with independently constructed trapezoid kernels."""

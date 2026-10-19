@@ -9,6 +9,9 @@ from wavebit.fdtd._periodic.runtime import time_loop_backend
 from wavebit.fdtd._periodic.scene import _layer_geometry, _layer_weights, _phase_between_planes
 from tests.fdtd.test_fdtd_scene_angles import value_and_jacobian
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 
 def options(**changes):
     return dict(dict(structure=np.array([[[2.25]], [[1.6]]]), thickness=[.173, .227],

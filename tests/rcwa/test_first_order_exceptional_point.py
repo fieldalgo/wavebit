@@ -23,6 +23,9 @@ import pytest
 from wavebit.rcwa._engine import modal_gradient, solve_2d_first_order as fo
 from tests.rcwa.test_conical_cutoff import PATTERNED as _LANDED, UNIFORM, _np, _pillar, _solver, _strict, _vector
 
+# CI may run each test of this file in a different shard (tools/run_verification.py --shard).
+pytestmark = pytest.mark.shard_unit(per='test')
+
 #: The landed scenes plus two more exceptional points of the same family (root-found the same way).
 PATTERNED = dict(_LANDED,
                  PB687=dict(structure=_pillar(), wavelength=687.239832514180, period=1000.,
