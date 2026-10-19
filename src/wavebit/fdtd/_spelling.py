@@ -58,18 +58,12 @@ _UNIMPLEMENTED = ('ModeSource', 'ModeMonitor', 'GaussianBeam')
 PHRASES = (
     # A static refusal ends with the engine's leaves; the public module has its own.
     (re.escape(_COMPAT_LEAVES), PUBLIC_LEAVES),
-    (r'Run\(decay=Decay\(threshold=\.\.\., window=\.\.\.\)\)',
-     'Numerics(stopping=fdtd.DecayStop(threshold=..., window_seconds=...))'),
-    (r'(?<![\w.])(?:fd\.)?Decay\(threshold=\.\.\., window=\.\.\.\)',
-     'fdtd.DecayStop(threshold=..., window_seconds=...)'),
-    (r'(?<![\w.])Decay\(window=', 'fdtd.DecayStop(window_seconds='),
     # Bloch faces from a plane wave: the public call takes the source and the units.
     (_FD + r'Bloch\.from_source\(pw', 'fdtd.Bloch.from_source(source, units=problem.units'),
     # Absorbing faces: the public face is Open, its absorber a PML in Numerics.
     (_FD + r'Boundaries\.open\(fd\.PML\(cells=12, wavelength=\.\.\.\)\)',
      'fdtd.Boundaries.open() with Numerics(absorber=fdtd.PML(cells=12, wavelength=...))'),
     (_FD + r'Boundaries\(z=fd\.PML\(\.\.\.\), \.\.\.\)', 'fdtd.Boundaries(z=fdtd.Open(), ...)'),
-    (_FD + r'PML(?:\(\.\.\.\))? or fd\.Absorber(?:\(\.\.\.\))?', 'fdtd.Open()'),
     (r'Say fd\.PML\(cells=\.\.\., wavelength=\.\.\.\), or give the whole scene one with '
      r'fd\.Resolution\(cells_per_wavelength=\.\.\., wavelength=\.\.\.\)\.',
      'Say fdtd.PML(cells=..., wavelength=...) as Numerics(absorber=...).'),
@@ -99,8 +93,6 @@ PHRASES = (
      "use Numerics(discretization='voxel'); for the stencil,"),
     # A public structure is named, takes its shape and material by keyword, and its numerical
     # options live in Numerics.
-    (_FD + r'Structure\(\.\.\., discretisation=', 'fdtd.Numerics(discretization='),
-    (_FD + r'Structure\(fd\.(\w+)(\(.*?\)), (\w+)\)', r'fdtd.Structure(name, shape=fd.\1\2, material=\3)'),
     (_FD + r'Structure\(fdtd\.(\w+)(\(.*?\)), (\w+)\)', r'fdtd.Structure(name, shape=fdtd.\1\2, material=\3)'),
     (_FD + r'Structure\(shape, material\)', 'fdtd.Structure(name, shape=shape, material=material)'),
     # The lifecycle: a plan is a preparation, lowering a traced scene is Prepared.run.
@@ -160,11 +152,8 @@ PHRASES = (
      'GaussianPulse(wavelength=..., frequency_sigma_hz=...)'),
     (_U + r'Band\((wavelength|cutoff)=', r'GaussianPulse(\1='),
     (_U + r'Band\(', 'fdtd.GaussianPulse('),
-    (_U + r'Decay\(', 'fdtd.DecayStop('),
-    (_U + r'Absorber\(', 'fdtd.ConductiveAbsorber('),
-    # A structure's junction rule and discretisation are the scene-wide Numerics ones.
+    # A structure's junction rule and memory bound are the scene-wide Numerics ones.
     (_U + r'Structure\(junction=', 'Numerics(junction='),
-    (_U + r'Structure\(discretisation=', 'Numerics(discretization='),
     (_U + r'Structure\(memory_bound=', 'Numerics(memory_bound='),
     # A body's range is its entry in Numerics(geometry_ranges=...).
     (r'Sphere/Cylinder/Box/Prism\(range=\) declarations differ from the plan',

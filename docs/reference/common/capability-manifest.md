@@ -8,7 +8,13 @@
 
 Written: 2026-08-11.
 
-Current version **22** retires the compatibility entry points. `current_lifecycle.solvers`
+Current version **23** (2026-10-19) records the public-name change: the general-FDTD
+declarations say what they are (the monitors end in `Monitor`, among others; see the
+[public-name migration guide](../../migration/public-names.md)), and
+`current_lifecycle.job.schema` is `wavebit.job/v2`. The old names are gone, not aliased.
+Consumers expecting v22 must recognize this version change.
+
+Updated 2026-10-16: manifest version **22** retires the compatibility entry points. `current_lifecycle.solvers`
 indexes `rcwa`, `fdtd`, `fdtd.native` and `fdtd.periodic`; `current_lifecycle.job.migration`
 names the explicit converter. `scope` distinguishes that public physical contract from the
 remaining internal numerical tables. `solvers` now resolves exact private engine functions

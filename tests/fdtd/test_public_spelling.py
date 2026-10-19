@@ -225,7 +225,7 @@ VOCABULARY = re.compile(r'(?<![\w.])fd\.\w|(?<![\w.])(?:Run|Resolution|Band|Deca
     lambda: fdtd.SnappedSlab(radius=1.),
 ], ids=['two axes', 'size', 'radius'])
 def test_a_shared_constructor_refuses_a_public_caller_in_the_public_vocabulary(build):
-    """``fdtd.Slab`` refuses before any entry point runs, so the public name translates itself.
+    """``fdtd.SnappedSlab`` refuses before any entry point runs, so the public name translates itself.
 
     It said "a rectangular rod or block is fd.Structure(fd.Region(size=..., center=...),
     material)", a call with another signature, from a namespace the caller never imported.
@@ -233,15 +233,16 @@ def test_a_shared_constructor_refuses_a_public_caller_in_the_public_vocabulary(b
     with pytest.raises(NotImplementedError) as error:
         build()
     message = str(error.value)
-    assert 'fdtd.Region(size=..., center=...)' in message and 'fdtd.Box(' in message, message
+    assert 'fdtd.SnappedBox(size=..., center=...)' in message and 'fdtd.Box(' in message, message
     assert not VOCABULARY.search(message), message
 
 
-def test_a_compat_shape_still_refuses_in_the_compat_vocabulary():
+def test_an_engine_shape_names_a_renamed_declaration_by_its_public_name():
+    """The engine spells a renamed declaration publicly where it raises; nothing translates it."""
     with pytest.raises(NotImplementedError, match=re.escape(
-            'fd.Structure(fd.Region(size=..., center=...), material)')):
+            'fd.Structure(fdtd.SnappedBox(size=..., center=...), material)')):
         fd.Slab(x=(0., 1.), z=(0., 1.))
-    with pytest.raises(NotImplementedError, match=re.escape('fd.Region(size=..., center=...)')):
+    with pytest.raises(NotImplementedError, match=re.escape('fdtd.SnappedBox(size=..., center=...)')):
         fd.Slab(size=1.)
 
 
@@ -371,7 +372,7 @@ def test_every_unprefixed_compat_call_an_engine_message_holds_has_a_public_spell
             out = to_public(text)
             if UNPREFIXED.search(out):
                 left.append(f'{where}: {UNPREFIXED.findall(out)}')
-    assert read > 40, read
+    assert read > 30, read          # 39 on 2026-10-19, once renamed calls were spelled at the source
     assert not left, 'unprefixed compat calls with no public spelling:\n  ' + '\n  '.join(left)
 
 
@@ -391,14 +392,14 @@ def _film(pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=4e13)):
      'Duration(seconds=...) or Duration(periods=..., source=...): a positive length of time.'),
     (None, dict(courant=1.5), 'Numerics(courant=1.5): dt = courant'),
     (None, dict(junction='blend'), "Numerics(junction='blend'): choose split"),
-    (None, dict(discretisation='bogus'), "Numerics(discretisation='bogus'): the two spellings"),
+    (None, dict(discretization='bogus'), "Numerics(discretization='bogus'): the two spellings"),
     (None, dict(grid=fdtd.UniformGrid(spacing=0.)),
      'UniformGrid(spacing=0.0): the spacing is a positive length.'),
     (fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=1e15), {},
      'GaussianPulse(wavelength=0.8, frequency_sigma_hz=...): the spectrum reaches zero frequency'),
     (fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=-1.), {},
      'GaussianPulse(frequency_sigma_hz=...): a positive number is needed.'),
-], ids=['steps', 'seconds', 'courant', 'junction', 'discretisation', 'spacing', 'wide pulse',
+], ids=['steps', 'seconds', 'courant', 'junction', 'discretization', 'spacing', 'wide pulse',
         'negative width'])
 def test_a_refusal_the_engine_spells_bare_reaches_the_public_caller_in_its_spelling(pulse, changes,
                                                                                     said):
@@ -429,8 +430,8 @@ def _oblique(theta, **faces):
 @pytest.mark.parametrize('field, value, choices', [
     ('junction', 'blend', 'choose split, staircase, or refuse'),
     ('junction', None, 'choose split, staircase, or refuse'),
-    ('discretisation', 'bogus', "the two spellings are 'voxel' and 'stencil'"),
-    ('discretisation', None, "the two spellings are 'voxel' and 'stencil'"),
+    ('discretization', 'bogus', "the two spellings are 'voxel' and 'stencil'"),
+    ('discretization', None, "the two spellings are 'voxel' and 'stencil'"),
 ])
 def test_public_numerics_refusal_preserves_message_and_issue_fields(entry, field, value, choices):
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),

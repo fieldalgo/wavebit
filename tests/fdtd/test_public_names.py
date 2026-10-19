@@ -230,7 +230,7 @@ CHECKED = {
 
 @pytest.mark.parametrize('case', sorted(CONSTRUCTION))
 def test_a_construction_refusal_names_no_removed_public_name(case):
-    with pytest.raises((TypeError, ValueError)) as caught:
+    with pytest.raises((TypeError, ValueError, NotImplementedError)) as caught:
         CONSTRUCTION[case]()
     assert not REMOVED.search(str(caught.value)), str(caught.value)
 

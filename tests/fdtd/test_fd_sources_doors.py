@@ -140,7 +140,7 @@ def test_a_tfsf_whose_propagation_faces_are_not_absorbing_is_refused():
         _plans(walls)
     message = str(e.value)
     assert "TFSF('t') propagates along z" in message and 'PEC' in message
-    assert 'fd.PML(...) or fd.Absorber(...)' in message
+    assert 'fd.PML(...) or fdtd.ConductiveAbsorber(...)' in message
     # the transverse faces may be anything; the propagation faces absorbing
     _plans(scene.replace(boundaries=fd.Boundaries.open(fd.PML(cells=12), x=fd.PEC())))
     _plans(scene.replace(boundaries=fd.Boundaries.open(fd.PML(cells=12),
@@ -439,7 +439,7 @@ def test_a_box_is_a_tfsf_region_and_since_stage_3_a_structure():
     assert 'stage 4' in str(e.value)
     with pytest.raises(ValueError, match='positive length'):
         fd.Region(size=(0.2, 0.0, 0.2))
-    with pytest.raises(TypeError, match="fd.Region"):
+    with pytest.raises(TypeError, match="fdtd.SnappedBox"):
         fd.TFSF('t', box=(0.2, 0.2, 0.2), direction='-z', band=band())
 
 

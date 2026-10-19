@@ -377,7 +377,7 @@ def test_loss_and_mirror_doors_cover_the_interpolation_halo():
     # .285815030367076 and |cross| .004563667272660, so the adjoint door must remain.
     # At 1.0 cells clear (x=-.20), E fills are zero and H fills only -1.45219e-15;
     # the old |cross|=3.32200e-17 refusal was round-off, not a reaching surface.
-    with pytest.raises(ValueError, match='within half a cell of the x- Symmetry plane'):
+    with pytest.raises(ValueError, match='within half a cell of the x- MirrorSymmetry plane'):
         quiet(fd.plan, cavity(center=(-.25,0.,0.)).replace(boundaries=mirror))
     for x in (-.225, -.22):
         with pytest.raises(ValueError, match='mirror-weighted adjoint'):

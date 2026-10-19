@@ -250,9 +250,9 @@ def test_a_bloch_phase_on_a_one_cell_user_axis_is_refused_naming_axis1d():
     bloch = scene.replace(boundaries=fd.Boundaries(**fd.Bloch.from_source(pw),
                                                    z=scene.boundaries.face('z-')))
     assert isinstance(bloch.boundaries.face('y-'), fd.Bloch)
-    with pytest.raises(ValueError, match='fd.Axis1D') as e:
+    with pytest.raises(ValueError, match='fdtd.InvariantAxis') as e:
         fd.plan(bloch)
-    assert "fd.Bloch.from_source(pw, axis1d='y')" in str(e.value)
+    assert "fd.Bloch.from_source(pw, invariant_axes='y')" in str(e.value)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         res = fd.run(scene)                                     # the spelling it names runs

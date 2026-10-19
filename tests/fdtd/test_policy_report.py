@@ -24,13 +24,13 @@ def test_empty_scene_does_not_claim_default_junction_was_applied():
     got=policies(quiet(fd.check,p,numerics=n))
     assert got['junction']['requested']=='split'
     assert got['junction']['pairs']==got['junction']['structures']==()
-    assert got['discretisation']['structures']==()
+    assert got['discretization']['structures']==()
 
 
 def test_whole_cell_fills_and_unrelated_sphere_are_distinguished():
     p,n=case((fd.SnappedSlab(z=(-.75,-.55)),fd.SnappedBox(size=(.3,)*3,center=(.55,.55,.55)),fd.Sphere(radius=.22)))
     got=policies(quiet(fd.check,p,numerics=n))
-    rows=got['discretisation']['structures']
+    rows=got['discretization']['structures']
     assert [r['rule'] for r in rows]==[None,None,'voxel']
     assert [r['reason'] for r in rows]==['whole_cell_fill','whole_cell_fill','voxel_default']
     assert all(r['rule'] is None and r['reason']=='no_resolved_junction' for r in got['junction']['structures'])
@@ -41,8 +41,8 @@ def test_stencil_report_reads_the_prepared_operator():
     n=n.replace(grid=fd.UniformGrid(spacing=1/18))
     prepared=quiet(fd.prepare,p,numerics=n)
     got=policies(prepared.report)
-    assert got['discretisation']['structures'][0]['rule']=='stencil'
-    assert got['discretisation']['structures'][0]['reason']=='prepared_stencil_operator'
+    assert got['discretization']['structures'][0]['rule']=='stencil'
+    assert got['discretization']['structures'][0]['reason']=='prepared_stencil_operator'
     assert policies(quiet(prepared.validate,p))==got
 
 
@@ -60,7 +60,7 @@ class CustomSphere(old.Sphere):
 
 def test_custom_voxel_shape_is_reported_as_protocol_not_builtin_operator():
     p,n=case((CustomSphere(radius=.22),))
-    row=policies(quiet(fd.check,p,numerics=n))['discretisation']['structures'][0]
+    row=policies(quiet(fd.check,p,numerics=n))['discretization']['structures'][0]
     assert row['rule'] is None
     assert row['reason']=='custom_shape_protocol'
 
@@ -69,7 +69,7 @@ def test_custom_voxel_shape_is_reported_as_protocol_not_builtin_operator():
 def test_unsupported_stencil_custom_and_subclass_have_no_success_report(shape):
     p,n=case((shape,),'stencil')
     report=quiet(fd.check,p,numerics=n)
-    assert not report.ok and report.issues[0].path=='numerics.discretisation'
+    assert not report.ok and report.issues[0].path=='numerics.discretization'
     assert not report.resolved
 
 
@@ -142,7 +142,7 @@ def test_report_lists_both_flush_pairs_in_structure_order():
 def test_stencil_cannot_hide_unsupported_cell_subclass_beside_exact_sphere(shape):
     p,n=case((shape,fd.Sphere(radius=.22)),'stencil')
     report=quiet(fd.check,p,numerics=n)
-    assert not report.ok and report.issues[0].path=='numerics.discretisation'
+    assert not report.ok and report.issues[0].path=='numerics.discretization'
     assert not report.resolved
 
 
@@ -167,5 +167,5 @@ def test_public_cell_shape_policy_preserves_exact_type_and_custom_protocol(shape
             got = policies(quiet(prepared.validate, p))
         else:
             got = quiet(prepared.run, p).provenance['numerical_policies']
-    row, = got['discretisation']['structures']
+    row, = got['discretization']['structures']
     assert dict(row) == dict(structure='0', index=0, rule=None, reason=reason)

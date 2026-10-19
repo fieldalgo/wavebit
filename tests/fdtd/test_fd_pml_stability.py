@@ -208,8 +208,8 @@ def _monitored(backend='numpy', time=200.0, monitors=COLUMN_MONITORS, **kwargs):
     return res, growing, unsettled
 
 
-@pytest.mark.parametrize('reflection, knob', [(PML_REFLECTION, 'PML(stabilize=3e-3)'),
-                                              (1e-4, 'PML(stabilize=1e-2)')])
+@pytest.mark.parametrize('reflection, knob', [(PML_REFLECTION, 'PML(stabilizing_loss=3e-3)'),
+                                              (1e-4, 'PML(stabilizing_loss=1e-2)')])
 def test_a_growing_column_warns_growing_and_names_the_value_for_its_target(reflection, knob):
     """The pure stretch, t = 200: the interior's energy rises 3.95 times from quarter to
     quarter at the default target and 7.41 at 1e-4; both monitors see it (their own series rise
@@ -223,7 +223,7 @@ def test_a_growing_column_warns_growing_and_names_the_value_for_its_target(refle
     assert len(growing) == 2 and unsettled == [], (growing, unsettled)
     for name, message in zip(('rec', 'flux'), growing):
         assert f"monitor {name!r}" in message and knob in message, message
-        assert "['z-', 'z+']" in message and 'stabilize=0' in message
+        assert "['z-', 'z+']" in message and 'stabilizing_loss=None' in message
         assert f'{interior:.3g} times higher' in message
         assert f'its own peak rose {growth[name]:.3g} times' in message
 
@@ -265,7 +265,7 @@ def test_a_growing_scene_whose_only_monitor_is_a_record_warns_under_jax_grad():
     assert seen[-1]['growth'] == {'rec': None}, seen[-1]['growth']
     assert seen[-1]['interior_growth'] > GROWTH_THRESHOLD, seen[-1]['interior_growth']
     assert len(growing) == 1 and 'no monitor sees it yet' in growing[0], growing
-    assert 'PML(stabilize=3e-3)' in growing[0]
+    assert 'PML(stabilizing_loss=3e-3)' in growing[0]
 
 
 def test_the_backends_agree_on_the_growth():
@@ -322,8 +322,8 @@ def test_the_warning_names_each_stabilized_face_or_a_defect():
     PML face, that nothing can feed the field and it is a defect to report."""
     cause = _cause(slab_column(reflection=1e-4, stabilize=4e-3))
     defect = _cause(slab_column(z=fd.PEC()))
-    assert 'Every PML face is stabilized' in cause and 'Raise stabilize' in cause
-    assert ("'z-' stabilize=4e-3 at reflection=1e-4 (1e-2 was measured to suffice there)"
+    assert 'Every PML face is stabilized' in cause and 'Raise stabilizing_loss' in cause
+    assert ("'z-' stabilizing_loss=4e-3 at reflection=1e-4 (1e-2 was measured to suffice there)"
             in cause), cause
     assert 'outside the families' in cause
     assert 'No face of this scene is a PML' in defect and 'defect' in defect
@@ -335,7 +335,7 @@ def test_with_two_targets_the_knob_is_the_value_for_the_weaker_one():
     layer = dict(cells=12, wavelength=1.0)
     cause = _cause(slab_column(z=(fd.PML(reflection=1e-8, **layer),
                                   fd.PML(reflection=1e-4, **layer))))
-    assert "['z-', 'z+']" in cause and 'PML(stabilize=1e-2)' in cause, cause
+    assert "['z-', 'z+']" in cause and 'PML(stabilizing_loss=1e-2)' in cause, cause
 
 
 #: The statistic itself, kept for the mutant below to call around.

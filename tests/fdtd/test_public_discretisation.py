@@ -1,4 +1,4 @@
-"""Scene-wide discretisation routes only to bodies with fractional fills.
+"""Scene-wide discretization routes only to bodies with fractional fills.
 
 On base 8715814b68d0a027cafdb335055b0e0efe66c56b, the first ten cases
 failed: eight missing public selector refusals and two cell-fill routing errors.
@@ -31,13 +31,13 @@ def case(shapes, rule='stencil'):
 def test_stencil_refuses_unsupported_or_absent_body_at_public_path(shapes):
     with pytest.raises(ValidationError) as error:
         lower_problem(*case(shapes))
-    assert error.value.path == 'numerics.discretisation'
+    assert error.value.path == 'numerics.discretization'
 
 
 def test_invalid_selector_is_refused_even_in_empty_scene():
     with pytest.raises(ValidationError) as error:
         lower_problem(*case((), 'stencl'))
-    assert error.value.path == 'numerics.discretisation'
+    assert error.value.path == 'numerics.discretization'
 
 
 @pytest.mark.parametrize('cell', [fd.SnappedSlab(z=(-.4,-.3)),fd.SnappedBox(size=(.2,)*3)])
@@ -91,7 +91,7 @@ def test_public_check_reports_the_selector_path():
     p,n = case(())
     report = fd.check(p,numerics=n)
     assert not report.ok
-    assert any(issue.path == 'numerics.discretisation' for issue in report.issues)
+    assert any(issue.path == 'numerics.discretization' for issue in report.issues)
 
 
 class _SphereSubclass(fd.Sphere):
@@ -128,7 +128,7 @@ def test_stencil_never_accepts_protocol_or_builtin_subclasses(shape, beside_sphe
     shapes = (shape,) + ((fd.Sphere(radius=.14),) if beside_sphere else ())
     with pytest.raises(ValidationError) as error:
         lower_problem(*case(shapes))
-    assert error.value.path == 'numerics.discretisation'
+    assert error.value.path == 'numerics.discretization'
 
 
 @pytest.mark.parametrize('cell,box', [

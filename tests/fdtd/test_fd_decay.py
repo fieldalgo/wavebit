@@ -1389,7 +1389,7 @@ def test_a_plane_wave_whose_column_holds_is_judged_from_its_envelope():
     assert abs(res.diagnostics['sources_end'] - _envelope_end(_slab_plane_wave())) < 1e-9
     assert res.diagnostics['interior_growth'] > 3.0, res.diagnostics['interior_growth']
     growing = _growing(caught)
-    assert growing and all('PML(stabilize=3e-3)' in m for m in growing), growing
+    assert growing and all('PML(stabilizing_loss=3e-3)' in m for m in growing), growing
     res, caught = _run_collecting(_slab_plane_wave(stabilize=3e-3))
     assert not _growing(caught), caught
     assert res.diagnostics['sources_end'] > 30.0, res.diagnostics['sources_end']
@@ -1521,7 +1521,7 @@ def test_a_growing_column_warns_naming_the_source(monkeypatch):
     assert interior is None or interior < 1.0, interior
     messages = _growing(caught)
     assert messages and all("source 'pw''s own column" in m for m in messages), messages
-    assert all('Raise stabilize' in m for m in messages), messages
+    assert all('Raise stabilizing_loss' in m for m in messages), messages
     assert set(res.diagnostics['column_growth']) == {'pw'}
 
 
@@ -1657,7 +1657,7 @@ def test_a_lossless_grating_under_the_default_pml_grows_and_says_so():
     assert interior > GROWTH_THRESHOLD, interior            # measured 2.64
     assert own > 1.0, own                                   # measured 2.29
     assert len(growing) == 1 and "monitor 'b'" in growing[0], growing
-    assert 'PML(stabilize=3e-3)' in growing[0] and 'longer run does not settle' in growing[0]
+    assert 'PML(stabilizing_loss=3e-3)' in growing[0] and 'longer run does not settle' in growing[0]
 
 
 @pytest.mark.slow

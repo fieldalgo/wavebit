@@ -258,7 +258,7 @@ def test_a_region_door_names_the_body_box():
                                  band=fd.Band(wavelength=1.0, df=0.1))):
         with pytest.raises(TypeError, match='fd.Box is the smoothed body') as e:
             make()
-        assert 'fd.Region(size=' in str(e.value)
+        assert 'fdtd.SnappedBox(size=' in str(e.value)
 
 
 def test_a_body_is_static_finite_and_straight_or_refused_at_construction():

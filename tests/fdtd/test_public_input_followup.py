@@ -58,9 +58,9 @@ _WAVELENGTHS = (.8,)
 @pytest.mark.parametrize('build, path, expected', [
     (lambda v: fdtd.FieldMonitor('m', plane=v, wavelengths=_WAVELENGTHS), 'outputs.m.plane', 'Plane'),
     (lambda v: fdtd.FluxMonitor('m', plane=v, wavelengths=_WAVELENGTHS), 'outputs.m.plane', 'Plane'),
-    (lambda v: fdtd.FieldMonitor('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'Region'),
-    (lambda v: fdtd.FluxMonitor('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'Region'),
-    (lambda v: fdtd.FarFieldMonitor('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'Region'),
+    (lambda v: fdtd.FieldMonitor('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'SnappedBox'),
+    (lambda v: fdtd.FluxMonitor('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'SnappedBox'),
+    (lambda v: fdtd.FarFieldMonitor('m', box=v, wavelengths=_WAVELENGTHS), 'outputs.m.box', 'SnappedBox'),
 ], ids=['field-plane', 'flux-plane', 'field-box', 'flux-box', 'farfield-box'])
 @pytest.mark.parametrize('value', [.5, 'z=.5', (.5,)])
 def test_monitor_geometry_that_is_not_geometry_is_refused_at_the_monitor(build, path, expected, value):
@@ -153,15 +153,15 @@ def test_stencil_memory_bound_rejects_unused_settings(rule, count):
     assert not report.ok
     (issue,) = report.issues
     assert issue.path == 'numerics.memory_bound'
-    assert "discretisation='stencil' with a Sphere" in issue.message
+    assert "discretization='stencil' with a Sphere" in issue.message
 
 
 def test_stencil_multiple_structure_remedy_uses_public_numerics():
     problem = _sphere_problem(2)
     (issue,) = fdtd.check(problem, numerics=_numerics(discretization='stencil')).issues
     assert 'StencilStructuresRefused' in issue.message
-    assert "Numerics(discretisation='voxel')" in issue.message
-    assert "use discretisation='voxel' on structures" not in issue.message
+    assert "Numerics(discretization='voxel')" in issue.message
+    assert "use discretization='voxel' on structures" not in issue.message
     # Applying the offered setting removes this refusal without deleting a body.
     report = fdtd.check(problem, numerics=_numerics(discretization='voxel'))
     assert report.ok

@@ -52,7 +52,7 @@ def _refuse_at_all_doors(valid, bad, numerics, path, message):
 def test_unknown_source_is_refused_before_reading_its_name(source):
     valid = _problem()
     _refuse_at_all_doors(valid, valid.replace(sources=(source,)), _numerics('periods'),
-                         'sources[0]', 'expected PlaneWave, Dipole or TFSF')
+                         'sources[0]', 'expected PlaneWave, CurrentDipole or TFSF')
 
 
 @pytest.mark.parametrize('name', [None, 1, [], ''])
@@ -88,7 +88,7 @@ def test_pulse_type_is_checked_before_duration_or_prepared_signature(kind, durat
 def test_tfsf_box_type_is_checked_before_physical_bounds(box):
     valid = _problem('TFSF')
     bad = valid.replace(sources=(valid.sources[0].replace(box=box),))
-    _refuse_at_all_doors(valid, bad, _numerics(), 'sources.light.box', 'expected Region')
+    _refuse_at_all_doors(valid, bad, _numerics(), 'sources.light.box', 'expected SnappedBox')
     # A real Region is still judged against the physical domain, before padding.
     outside = valid.replace(sources=(valid.sources[0].replace(
         box=fdtd.SnappedBox(size=(.8,) * 3, center=(0., 0., .7))),))

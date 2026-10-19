@@ -67,7 +67,7 @@ def _json_load(data, path):
 
 def _observations(job, result, samples):
     from .rcwa.results import Result as RCWAResult
-    from .fdtd.result import Result as FDTDResult, FarFieldSpectrum
+    from .fdtd import Result as FDTDResult, FarFieldSpectrum
     expected = RCWAResult if job.solver == 'rcwa' else FDTDResult
     if not isinstance(result, expected) or result.provenance.get('solver') != job.solver:
         raise record_error('The result must belong to the job solver.', 'result')

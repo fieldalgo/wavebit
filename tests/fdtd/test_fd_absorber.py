@@ -369,7 +369,7 @@ def test_a_lossy_medium_crossing_the_face_is_refused_on_a_pml_and_runs_on_an_abs
     with pytest.raises(ValueError) as e:
         fd.plan(doubling_pair(stretched, 12, 0.0, medium=medium)[0])
     message = str(e.value)
-    assert 'fd.Absorber(cells=' in message and f'fd.{name}' in message
+    assert 'fdtd.ConductiveAbsorber(cells=' in message and f'fd.{name}' in message
     assert "'z+'" in message
 
     residual, worst, _ = reflection(absorbing, 12, 0.0, medium=medium)
@@ -426,7 +426,7 @@ def test_the_crossing_is_what_the_refusal_is_about_and_not_the_material():
     assert plan.pml_cells == (('z-', 12), ('z+', 12))
 
 
-@pytest.mark.parametrize('face_of, kind', [(stretched, 'PML'), (absorbing, 'Absorber')])
+@pytest.mark.parametrize('face_of, kind', [(stretched, 'PML'), (absorbing, 'ConductiveAbsorber')])
 @pytest.mark.parametrize('stop', [6, 11])
 def test_a_structure_that_ends_inside_an_absorbing_layer_is_refused(face_of, kind, stop):
     """An interface inside the layer, on **both** absorbing faces, and the two accepted spellings.
@@ -508,7 +508,7 @@ def test_a_structure_close_to_an_absorbing_face_warns_and_names_the_distance():
     assert f'{gap:g}' in message and f'{clearance:g}' in message, message
     assert "'z+'" in message and 'half a wavelength in its own medium' in message
     # An Absorber has no medium to name; it used to say "matched to the background".
-    assert message.endswith(', and an Absorber there is matched at normal incidence only, not '
+    assert message.endswith(', and a ConductiveAbsorber there is matched at normal incidence only, not '
                             "to this structure's near field"), message
 
 
