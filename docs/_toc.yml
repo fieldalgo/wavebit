@@ -293,6 +293,7 @@ subtrees:
       - file: development/source-checkout
       - file: development/source-map
       - file: development/verification
+      - file: development/third-party
       - file: development/torch-compile
       - file: development/torch-upstream-defects
       - file: design/index

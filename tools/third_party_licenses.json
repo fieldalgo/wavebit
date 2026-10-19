@@ -1,0 +1,512 @@
+{
+  "_comment": [
+    "Reviewed license inventory for every Python distribution that may be installed in a",
+    "Wavebit validation, documentation or packaging environment. tools/check_licenses.py",
+    "compares installed metadata against it. Add a reviewed entry before adding a dependency;",
+    "a missing entry fails the check. Human-readable table: docs/development/third-party.md.",
+    "external_tools and bundled are not installed by pip; the check requires the docs to list them."
+  ],
+  "policy": {
+    "permissive": [
+      "0BSD",
+      "Apache-2.0",
+      "BSD-2-Clause",
+      "BSD-3-Clause",
+      "BSL-1.0",
+      "CC0-1.0",
+      "ISC",
+      "MIT",
+      "MIT-0",
+      "MIT-CMU",
+      "PSF-2.0",
+      "Python-2.0",
+      "Unlicense",
+      "Zlib",
+      "LicenseRef-Matplotlib",
+      "LicenseRef-Public-Domain"
+    ],
+    "weak_copyleft": [
+      "LGPL-2.1-only",
+      "LGPL-2.1-or-later",
+      "LGPL-3.0-only",
+      "LGPL-3.0-or-later",
+      "MPL-2.0"
+    ],
+    "test_extras": [],
+    "never": [
+      "AGPL-1.0-only",
+      "AGPL-1.0-or-later",
+      "AGPL-3.0-only",
+      "AGPL-3.0-or-later",
+      "SSPL-1.0"
+    ],
+    "rules": [
+      "runtime (base requirements of wavebit, transitively): permissive only",
+      "optional (wavebit extras) and tool: permissive, or weak copyleft when the entry sets weak_copyleft_review (unmodified, installed separately by pip, never bundled or loaded directly)",
+      "GPL: never imported, linked or bundled by src/wavebit and never a requirement; unshipped tests, studies and reference scripts may run GPL tools, skipping when they are absent",
+      "never: rejected in every environment"
+    ]
+  },
+  "first_party": [
+    "wavebit"
+  ],
+  "first_party_license": "Apache-2.0 AND MIT",
+  "external_tools": {
+    "Meep": {
+      "spdx": "GPL-2.0-or-later",
+      "url": "https://github.com/NanoComp/meep",
+      "use": "FDTD reference solver run in its own interpreter; frozen numbers in tests/references/",
+      "forbidden_imports": [
+        "meep"
+      ]
+    },
+    "S4": {
+      "spdx": "GPL-2.0-or-later",
+      "url": "https://github.com/victorliu/S4",
+      "use": "RCWA reference solver run in its own interpreter; frozen numbers in tests/references/",
+      "forbidden_imports": [
+        "S4"
+      ]
+    },
+    "Octave": {
+      "spdx": "GPL-3.0-or-later",
+      "url": "https://octave.org",
+      "use": "runs RETICOLO as a separate process driven by oct2py",
+      "forbidden_imports": []
+    },
+    "RETICOLO": {
+      "spdx": "CC-BY-4.0",
+      "url": "https://doi.org/10.5281/zenodo.14631951",
+      "use": "RCWA reference run inside Octave; not shipped",
+      "forbidden_imports": []
+    },
+    "oct2py": {
+      "spdx": "MIT",
+      "url": "https://github.com/blink1073/oct2py",
+      "use": "Python driver for Octave in the RETICOLO comparisons",
+      "forbidden_imports": []
+    },
+    "fmmax": {
+      "spdx": "MIT",
+      "url": "https://github.com/facebookresearch/fmmax",
+      "use": "RCWA reference in a separate environment",
+      "forbidden_imports": [
+        "fmmax"
+      ]
+    },
+    "FDTDX": {
+      "spdx": "MIT",
+      "url": "https://github.com/ymahlau/fdtdx",
+      "use": "FDTD reference in a separate environment",
+      "forbidden_imports": [
+        "fdtdx"
+      ]
+    },
+    "PyMoosh": {
+      "spdx": "MIT",
+      "url": "https://github.com/AnMoreau/PyMoosh",
+      "use": "multilayer reference in a throwaway environment",
+      "forbidden_imports": [
+        "PyMoosh"
+      ]
+    },
+    "NGSolve": {
+      "spdx": "LGPL-2.1-only",
+      "url": "https://github.com/NGSolve/ngsolve",
+      "use": "optional FEM reference for NVF research studies; installed binaries also contain GPL-2.0-or-later UMFPACK code, so the environment is never redistributed",
+      "forbidden_imports": [
+        "ngsolve",
+        "netgen"
+      ]
+    }
+  },
+  "bundled": {
+    "meent": {
+      "spdx": "MIT",
+      "url": "https://github.com/kc-ml2/meent",
+      "use": "origin of part of the RCWA code; notice in LICENSE and LICENSE.meent"
+    },
+    "fmmax-eig-bwd": {
+      "spdx": "MIT",
+      "url": "https://github.com/facebookresearch/fmmax",
+      "use": "eigendecomposition gradient ported into src/wavebit/_common/backend.py; notice in LICENSE and LICENSE.fmmax"
+    },
+    "refractiveindex-info": {
+      "spdx": "CC0-1.0",
+      "url": "https://github.com/polyanskiy/refractiveindex.info-database",
+      "use": "src/wavebit/data/refractiveindex/*.txt, shipped in the wheel and sdist; each table's publication is cited in that directory's README.md"
+    }
+  },
+  "distributions": {
+    "absl-py": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/abseil/abseil-py"
+    },
+    "accessible-pygments": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/Quansight-Labs/accessible-pygments"
+    },
+    "alabaster": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://alabaster.readthedocs.io/"
+    },
+    "array-api-compat": {
+      "spdx": "MIT",
+      "url": "https://data-apis.org/array-api-compat/"
+    },
+    "babel": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/python-babel/babel"
+    },
+    "beautifulsoup4": {
+      "spdx": "MIT",
+      "url": "https://www.crummy.com/software/BeautifulSoup/bs4/"
+    },
+    "build": {
+      "spdx": "MIT",
+      "url": "https://github.com/pypa/build"
+    },
+    "certifi": {
+      "spdx": "MPL-2.0",
+      "url": "https://github.com/certifi/python-certifi",
+      "weak_copyleft_review": "Unmodified CA bundle installed by pip as a dependency of requests (Sphinx in the docs extra, and twine). Wavebit never imports, modifies or redistributes it."
+    },
+    "cffi": {
+      "spdx": "MIT-0",
+      "url": "https://github.com/python-cffi/cffi"
+    },
+    "charset-normalizer": {
+      "spdx": "MIT",
+      "url": "https://github.com/jawah/charset_normalizer"
+    },
+    "click": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/pallets/click"
+    },
+    "colorama": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/tartley/colorama"
+    },
+    "contourpy": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/contourpy/contourpy"
+    },
+    "cryptography": {
+      "spdx": "Apache-2.0 OR BSD-3-Clause",
+      "url": "https://github.com/pyca/cryptography"
+    },
+    "cycler": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/matplotlib/cycler"
+    },
+    "docutils": {
+      "spdx": "LicenseRef-Public-Domain AND BSD-2-Clause AND 0BSD",
+      "url": "https://docutils.sourceforge.io/COPYING.html",
+      "metadata_review": "The GPL classifier refers to files outside the wheel; COPYING.rst lists the shipped modules as public domain, BSD-2-Clause or 0BSD (eLyXer-derived files were relicensed to BSD-2-Clause). Reached through Sphinx (docs extra) and twine's README check."
+    },
+    "execnet": {
+      "spdx": "MIT",
+      "url": "https://execnet.readthedocs.io/en/latest/"
+    },
+    "filelock": {
+      "spdx": "MIT",
+      "url": "https://github.com/tox-dev/py-filelock"
+    },
+    "fonttools": {
+      "spdx": "MIT",
+      "url": "https://github.com/fonttools/fonttools"
+    },
+    "fsspec": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/fsspec/filesystem_spec"
+    },
+    "id": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/di/id"
+    },
+    "idna": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/kjd/idna"
+    },
+    "imagesize": {
+      "spdx": "MIT",
+      "url": "https://github.com/shibukawa/imagesize_py"
+    },
+    "iniconfig": {
+      "spdx": "MIT",
+      "url": "https://github.com/pytest-dev/iniconfig"
+    },
+    "jaraco-classes": {
+      "spdx": "MIT",
+      "url": "https://github.com/jaraco/jaraco.classes"
+    },
+    "jaraco-context": {
+      "spdx": "MIT",
+      "url": "https://github.com/jaraco/jaraco.context"
+    },
+    "jaraco-functools": {
+      "spdx": "MIT",
+      "url": "https://github.com/jaraco/jaraco.functools"
+    },
+    "jax": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/jax-ml/jax"
+    },
+    "jaxlib": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/jax-ml/jax"
+    },
+    "jeepney": {
+      "spdx": "MIT",
+      "url": "https://gitlab.com/takluyver/jeepney"
+    },
+    "jinja2": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/pallets/jinja/"
+    },
+    "keyring": {
+      "spdx": "MIT",
+      "url": "https://github.com/jaraco/keyring"
+    },
+    "kiwisolver": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/nucleic/kiwi"
+    },
+    "markdown-it-py": {
+      "spdx": "MIT",
+      "url": "https://github.com/executablebooks/markdown-it-py"
+    },
+    "markupsafe": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/pallets/markupsafe/"
+    },
+    "matplotlib": {
+      "spdx": "LicenseRef-Matplotlib",
+      "url": "https://matplotlib.org/stable/project/license.html",
+      "review": "PSF-based permissive license agreement; no SPDX identifier exists for it."
+    },
+    "mdit-py-plugins": {
+      "spdx": "MIT",
+      "url": "https://github.com/executablebooks/mdit-py-plugins"
+    },
+    "mdurl": {
+      "spdx": "MIT",
+      "url": "https://github.com/executablebooks/mdurl"
+    },
+    "ml-dtypes": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/jax-ml/ml_dtypes"
+    },
+    "more-itertools": {
+      "spdx": "MIT",
+      "url": "https://github.com/more-itertools/more-itertools"
+    },
+    "mpmath": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/fredrik-johansson/mpmath"
+    },
+    "myst-parser": {
+      "spdx": "MIT",
+      "url": "https://github.com/executablebooks/MyST-Parser"
+    },
+    "networkx": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://networkx.org/"
+    },
+    "nh3": {
+      "spdx": "MIT",
+      "url": "https://github.com/messense/nh3"
+    },
+    "numpy": {
+      "spdx": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+      "url": "https://github.com/numpy/numpy/blob/main/LICENSE.txt",
+      "bundled": "Wheels bundle OpenBLAS (BSD-3-Clause) and, on Linux and Windows, the GCC Fortran runtime (GPL-3.0-or-later WITH GCC-exception-3.1)."
+    },
+    "opt-einsum": {
+      "spdx": "MIT",
+      "url": "https://pypi.org/project/opt-einsum/"
+    },
+    "optax": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/google-deepmind/optax"
+    },
+    "packaging": {
+      "spdx": "Apache-2.0 OR BSD-2-Clause",
+      "url": "https://github.com/pypa/packaging"
+    },
+    "pillow": {
+      "spdx": "MIT-CMU",
+      "url": "https://github.com/python-pillow/Pillow"
+    },
+    "pip": {
+      "spdx": "MIT",
+      "url": "https://github.com/pypa/pip"
+    },
+    "pluggy": {
+      "spdx": "MIT",
+      "url": "https://github.com/pytest-dev/pluggy"
+    },
+    "pycparser": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/eliben/pycparser"
+    },
+    "pydata-sphinx-theme": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/pydata/pydata-sphinx-theme"
+    },
+    "pygments": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/pygments/pygments"
+    },
+    "pyparsing": {
+      "spdx": "MIT",
+      "url": "https://github.com/pyparsing/pyparsing"
+    },
+    "pyproject-hooks": {
+      "spdx": "MIT",
+      "url": "https://github.com/pypa/pyproject-hooks"
+    },
+    "pytest": {
+      "spdx": "MIT",
+      "url": "https://github.com/pytest-dev/pytest"
+    },
+    "pytest-timeout": {
+      "spdx": "MIT",
+      "url": "https://github.com/pytest-dev/pytest-timeout"
+    },
+    "pytest-xdist": {
+      "spdx": "MIT",
+      "url": "https://github.com/pytest-dev/pytest-xdist"
+    },
+    "python-dateutil": {
+      "spdx": "Apache-2.0 AND BSD-3-Clause",
+      "url": "https://github.com/dateutil/dateutil/blob/master/LICENSE"
+    },
+    "pyyaml": {
+      "spdx": "MIT",
+      "url": "https://github.com/yaml/pyyaml"
+    },
+    "readme-renderer": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/pypa/readme_renderer"
+    },
+    "requests": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/psf/requests"
+    },
+    "requests-toolbelt": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/requests/toolbelt"
+    },
+    "rfc3986": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/python-hyper/rfc3986"
+    },
+    "rich": {
+      "spdx": "MIT",
+      "url": "https://github.com/Textualize/rich"
+    },
+    "roman-numerals": {
+      "spdx": "0BSD OR CC0-1.0",
+      "url": "https://github.com/AA-Turner/roman-numerals/"
+    },
+    "ruff": {
+      "spdx": "MIT",
+      "url": "https://github.com/astral-sh/ruff"
+    },
+    "scipy": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/scipy/scipy/blob/main/LICENSE.txt",
+      "bundled": "Wheels bundle OpenBLAS (BSD-3-Clause) and, on Linux and Windows, the GCC Fortran runtime (GPL-3.0-or-later WITH GCC-exception-3.1)."
+    },
+    "secretstorage": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/mitya57/secretstorage"
+    },
+    "setuptools": {
+      "spdx": "MIT",
+      "url": "https://github.com/pypa/setuptools"
+    },
+    "six": {
+      "spdx": "MIT",
+      "url": "https://github.com/benjaminp/six"
+    },
+    "snowballstemmer": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/snowballstem/snowball"
+    },
+    "soupsieve": {
+      "spdx": "MIT",
+      "url": "https://github.com/facelessuser/soupsieve"
+    },
+    "sphinx": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/sphinx-doc/sphinx"
+    },
+    "sphinx-design": {
+      "spdx": "MIT",
+      "url": "https://github.com/executablebooks/sphinx-design"
+    },
+    "sphinx-external-toc": {
+      "spdx": "MIT",
+      "url": "https://github.com/executablebooks/sphinx-external-toc"
+    },
+    "sphinx-multitoc-numbering": {
+      "spdx": "MIT",
+      "url": "UNKNOWN"
+    },
+    "sphinxcontrib-applehelp": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/sphinx-doc/sphinxcontrib-applehelp/"
+    },
+    "sphinxcontrib-devhelp": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/sphinx-doc/sphinxcontrib-devhelp/"
+    },
+    "sphinxcontrib-htmlhelp": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/sphinx-doc/sphinxcontrib-htmlhelp/"
+    },
+    "sphinxcontrib-jsmath": {
+      "spdx": "BSD-2-Clause",
+      "url": "http://sphinx-doc.org/"
+    },
+    "sphinxcontrib-mermaid": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/mgaitan/sphinxcontrib-mermaid"
+    },
+    "sphinxcontrib-qthelp": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/sphinx-doc/sphinxcontrib-qthelp/"
+    },
+    "sphinxcontrib-serializinghtml": {
+      "spdx": "BSD-2-Clause",
+      "url": "https://github.com/sphinx-doc/sphinxcontrib-serializinghtml/"
+    },
+    "sympy": {
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/sympy/sympy"
+    },
+    "torch": {
+      "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+      "url": "https://pytorch.org"
+    },
+    "tqdm": {
+      "spdx": "MPL-2.0 AND MIT",
+      "url": "https://github.com/tqdm/tqdm",
+      "weak_copyleft_review": "Progress bars for the optional jax and pytorch extras. Installed separately by pip, unmodified, never bundled in the Wavebit wheel or sdist; the MPL-2.0 files stay under their own terms."
+    },
+    "twine": {
+      "spdx": "Apache-2.0",
+      "url": "https://github.com/pypa/twine"
+    },
+    "typing-extensions": {
+      "spdx": "PSF-2.0",
+      "url": "https://github.com/python/typing_extensions"
+    },
+    "urllib3": {
+      "spdx": "MIT",
+      "url": "https://github.com/urllib3/urllib3"
+    }
+  }
+}

@@ -165,6 +165,13 @@ jobs:
       - name: Verify all three backends and contourpy are importable
         run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
 
+      # Every installed distribution against tools/third_party_licenses.json, strictly:
+      # an unreviewed package or a changed license fails. One shard is enough, since the
+      # sixteen install the same environment. docs/development/third-party.md is the policy.
+      - name: Check installed licenses against the reviewed inventory
+        if: ${{ matrix.shard == 1 }}
+        run: python tools/check_licenses.py
+
       # Single-threaded BLAS, so that two calls with the same inputs give the same bits.
       #
       # Part of the suite asserts exact equality between two results computed in the same
@@ -558,6 +565,9 @@ jobs:
       # since nothing on the public surface needs an optional backend to be introspected.
       - name: Install Wavebit and the docs extra
         run: pip install -e '.[docs]'
+
+      - name: Check installed licenses against the reviewed inventory
+        run: python tools/check_licenses.py
 
       # `-W` turns every warning into a failure, and that is the whole check rather than a
       # tidiness preference. `docs/reference/api.md` names objects by hand, and autodoc
