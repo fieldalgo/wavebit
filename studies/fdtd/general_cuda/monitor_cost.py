@@ -1,6 +1,6 @@
 """Bounded general FDTD monitor cost and optional CPU/CUDA operator profiling.
 
-Two Ey-only Field monitors and two Flux monitors observe a short plane-wave
+Two Ey-only FieldMonitors and two FluxMonitors observe a short plane-wave
 film run. The finite window is a cost fixture, not an Airy accuracy claim.
 Uninstrumented timings and instrumented operator attribution remain separate.
 """
@@ -53,7 +53,7 @@ def main():
                     repeat=args.repeat, device=args.device, profile=args.profile,
                     checkpoint_steps=args.checkpoint_steps),
         script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-        scope='prepared general FDTD no-grad forward with Ey-only Field and E/H Flux monitors',
+        scope='prepared general FDTD no-grad forward with Ey-only FieldMonitor and E/H FluxMonitor monitors',
         timing='synchronized prepared.run including live validation, lowering and result adaptation; excludes initial preparation, result checks, host copies and profiler',
         warmup_runs=1, profiled_runs=int(args.profile), attempts=[], samples=[],
         limitations=[

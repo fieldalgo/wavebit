@@ -1,4 +1,4 @@
-"""Electric Dipole deposition in a conductor against an independent SI update.
+"""Electric CurrentDipole deposition in a conductor against an independent SI update.
 
 From zero initial fields, E1=-dt*J/(epsilon0*epsilon+sigma*dt/2).
 Recover the actual deposited current moment and its centroid from E1 without

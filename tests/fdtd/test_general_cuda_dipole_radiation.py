@@ -1,4 +1,4 @@
-"""Public Dipole SI radiation, duality and geometry-unit gates on Torch.
+"""Public CurrentDipole SI radiation, duality and geometry-unit gates on Torch.
 
 The radiation budgets are the existing test_fd_dipole.py gates: vacuum
 14/20/28 cells per wavelength, eight periods, a .6-wavelength physical box

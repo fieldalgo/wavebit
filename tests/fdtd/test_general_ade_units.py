@@ -2,7 +2,7 @@
 
 The expected cell counts, Yee locations, discrete wave vector and state matrix
 are written independently of product grid/lowering helpers. These cases vary
-the full Slab axis, geometry units, and fixed scalar material constants.
+the full SnappedSlab axis, geometry units, and fixed scalar material constants.
 """
 import math
 from dataclasses import replace

@@ -1,4 +1,4 @@
-"""Bounded Region CUDA gates against independent indexed SI Yee tangents.
+"""Bounded SnappedBox CUDA gates against independent indexed SI Yee tangents.
 
 These fixed cell-snapped boxes establish discrete heterogeneous evolution and
 material derivatives, not smooth geometry derivatives or continuum convergence.

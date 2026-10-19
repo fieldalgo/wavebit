@@ -1,7 +1,7 @@
 """Homogeneous Lorentz forward/reverse allocator and elapsed-time study.
 
 One fresh process per policy. Independent roots and a four-state Frechet matrix
-validate the complete Record, objective and both derivatives outside timing.
+validate the complete TimeSeriesMonitor, objective and both derivatives outside timing.
 """
 import argparse
 from datetime import datetime, timezone
@@ -200,7 +200,7 @@ def main(argv=None):
             epsilon=EPSILON, mu=MU, omega0_si=5/units.time_seconds, gamma_si=.7/units.time_seconds,
             strength0_si=12/units.time_seconds**2, amplitude=AMPLITUDE, parameter=PARAMETER,
             initial='real uniform Ey=1; H=None', boundaries='six Periodic',
-            outputs='Ey Record and final E/H', dt_seconds=dt)
+            outputs='Ey TimeSeriesMonitor and final E/H', dt_seconds=dt)
         expected = oracle(args.size, dt, units.time_seconds)
         report['oracle'] = dict(value=expected['value'], gradients=expected['gradients'].tolist(),
             method='independent four-state matrix and eight-state Frechet power; separate damped quadratic roots')

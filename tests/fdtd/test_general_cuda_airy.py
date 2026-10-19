@@ -1,7 +1,7 @@
 """Public general-scene scattering against independent discrete Airy equations.
 
 The oracle and budgets are the established scalar Yee slab gate, not another
-Wavebit solve. Both devices exercise public PlaneWave, Field and Flux outputs.
+Wavebit solve. Both devices exercise public PlaneWave, FieldMonitor and FluxMonitor outputs.
 The 24/32-period comparison qualifies the finite Fourier window separately from
 the .05/.025 spatial refinement. No CPU/GPU speed comparison is implied.
 """

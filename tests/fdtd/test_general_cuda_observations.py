@@ -1,4 +1,4 @@
-"""General-scene Record/Field/Flux derivatives on CPU and CUDA."""
+"""General-scene TimeSeriesMonitor/FieldMonitor/FluxMonitor derivatives on CPU and CUDA."""
 import numpy as np
 import pytest
 
