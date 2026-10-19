@@ -80,7 +80,7 @@ def test_checkpoint_plan_policy_survives_check_prepare_and_revalidation(monkeypa
 
 
 def test_internal_run_keeps_schedule_on_both_polarization_solves(monkeypatch):
-    # This checks private execution plumbing, not public CUDA Diffraction support.
+    # This checks private execution plumbing, not public CUDA DiffractionMonitor support.
     import wavebit.fdtd._execution as execution
     class Both:
         name='port'

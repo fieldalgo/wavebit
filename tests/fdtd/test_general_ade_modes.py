@@ -113,7 +113,7 @@ def test_nonzero_fourier_mode_against_independent_si_matrix(execution_device, ki
         for c in range(3):
             key = field+'xyz'[c]
             wanted = (expected[1:, offset+c]*spatial(field, c, probe_at(cells, field, c))).real
-            assert np.max(abs(wanted)) > .01, 'Record must not sample a nodal plane'
+            assert np.max(abs(wanted)) > .01, 'TimeSeriesMonitor must not sample a nodal plane'
             values = host(result[key].values)*(Z0 if field == 'H' else 1.)
             error = scaled_error(values, wanted)
             metrics['record'][key] = error

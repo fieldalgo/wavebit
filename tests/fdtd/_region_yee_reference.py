@@ -1,4 +1,4 @@
-"""Independent indexed SI Maxwell-Yee reference for one cell-snapped Region.
+"""Independent indexed SI Maxwell-Yee reference for one cell-snapped SnappedBox.
 
 Only public objects and SI constants are imported. Grid indices, material masks,
 finite differences and their tangent equations are written here independently.

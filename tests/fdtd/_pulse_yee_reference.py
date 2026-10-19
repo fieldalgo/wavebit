@@ -199,7 +199,7 @@ def weighted_jet(value, first, second, weight):
 
 
 def objectives(expected):
-    """Drive mean-square, and 1/6 weighted field means +1/24 weighted Record means."""
+    """Drive mean-square, and 1/6 weighted field means +1/24 weighted TimeSeriesMonitor means."""
     steps = len(expected['drive'])
     drive = weighted_jet(expected['drive']/MOMENT, expected['first_drive']/MOMENT,
                          expected['second_drive']/MOMENT, 1.)

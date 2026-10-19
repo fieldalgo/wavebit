@@ -135,7 +135,7 @@ def test_metadata_refuses_outside_region_family(no_device, monkeypatch, case):
         'source': 'sources', 'field': 'outputs.f', 'flux': 'outputs.f'}
     if case in scope_paths:
         monkeypatch.setattr(no_device, '_planned',
-                            lambda *a, **k: pytest.fail('unsupported Region reached planning'))
+                            lambda *a, **k: pytest.fail('unsupported SnappedBox reached planning'))
     report = fdtd.check(p, numerics=numerics(), backend='torch', device='cuda:0')
     assert not report.ok, case
     if case in scope_paths:

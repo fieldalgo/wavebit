@@ -1,4 +1,4 @@
-"""ADE Record-objective first and second derivatives.
+"""ADE TimeSeriesMonitor-objective first and second derivatives.
 
 Each of the six sampled components uses its own physical Yee position and
 time level. A fixed weighted square plus a fixed signed linear functional
@@ -31,7 +31,7 @@ def record_problem(kind, amplitude, parameter, electric, magnetic):
 
 def expected(kind, amplitude, parameter, dt, discrete_k, initial, spatial):
     # State after step n contains E(n dt) and H((n-.5) dt); these are exactly
-    # the two time levels stored in that step's public Record rows.
+    # the two time levels stored in that step's public TimeSeriesMonitor rows.
     histories = [oracle_states(kind, parameter, dt, discrete_k, initial, steps=n)
                  for n in range(1, STEPS+1)]
     vectors = []

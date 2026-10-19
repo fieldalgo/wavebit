@@ -3,7 +3,7 @@
 The same leaf objects are updated in place, as by an optimizer. Rebuilding
 the Problem refreshes the derived SI current moment without changing the fixed
 prepared structure. These two first regressions use the established small
-electric Dipole/CPML fixture; they do not qualify new source or device scope.
+electric CurrentDipole/CPML fixture; they do not qualify new source or device scope.
 """
 from types import SimpleNamespace
 

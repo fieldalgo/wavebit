@@ -3,7 +3,7 @@
 The initial H half-step is fixed independently of epsilon. This makes the
 17-step electric field a cosine for every live epsilon, without differentiating
 an eigenmode initialization. This gate does not establish phase derivatives,
-PML accuracy, or Bloch/Dipole support.
+PML accuracy, or Bloch/CurrentDipole support.
 """
 import math
 
