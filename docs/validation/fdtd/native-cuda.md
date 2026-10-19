@@ -7,6 +7,7 @@ Targets:
 - `tests/fdtd/test_native_cuda.py`
 - `tests/fdtd/test_native_cuda_admission.py`
 - `tests/fdtd/test_periodic_cuda.py`
+- `tests/fdtd/test_jax_gpu.py`
 - `src/wavebit/fdtd/native.py`
 - `src/wavebit/fdtd/_periodic/grid.py`
 - `tests/fdtd/test_fdtd_scan_programs.py`
@@ -16,8 +17,8 @@ Targets:
 The existing public `wavebit.fdtd.native` engine runs the cases below on Torch
 CUDA in double precision, including eager reverse-mode derivatives. These checks
 add bounded device evidence. The general `wavebit.fdtd` scene API has a
-[separate restricted CUDA validation](general-cuda.md). JAX GPU,
-single precision, compilation and comprehensive periodic-stack CUDA accuracy
+[separate restricted CUDA validation](general-cuda.md). [JAX on GPU](#jax-on-gpu)
+is checked only for the cases in its section. Single precision, compilation and comprehensive periodic-stack CUDA accuracy
 are unvalidated here.
 
 ## Environment and reproduction
@@ -159,6 +160,29 @@ runtime optimizations.
 
 ```sh
 python -m pytest tests/fdtd/test_periodic_cuda.py --run-slow -q
+```
+
+### JAX on GPU
+
+`tests/fdtd/test_jax_gpu.py` reruns the native conductor recurrence, the
+CPML, dispersion, Bloch and prepared-reuse case, and the periodic slab of the
+two sections above with `backend='jax', device='gpu'`, at the same tolerances,
+and adds a source-amplitude derivative compared with JAX on CPU (relative
+`1e-10`) and a CPU central secant (relative `1e-6`). All five passed on
+2026-10-19 at main `3f2ad839` in 71.46 s, on the same RTX 4060 Ti under WSL2
+(Ubuntu 26.04 LTS, NVIDIA driver 610.88) with Python 3.12.14, JAX 0.11.0 and
+`jax-cuda13-plugin` 0.11.0, NumPy 2.5.1 and SciPy 1.18.0. Every checked result
+array was on the GPU device in complex128. Measured margins: the conductor
+fields within 2.2e-16 of the closed form, the dispersive case within 5.4e-16
+peak-normalized of NumPy, the gradient identical to the CPU one and 9.1e-13
+from the secant, slab R, T and reflection within 0.4 % of their tolerance, and
+the refined slab within 1.7e-3 of the Airy reflection. This covers these cases
+only, on one GPU; the general `wavebit.fdtd` scene API admits JAX on CPU only.
+Without a CUDA-enabled jaxlib the tests skip, and a skip is not execution
+evidence.
+
+```sh
+python -m pytest tests/fdtd/test_jax_gpu.py --run-slow -q
 ```
 
 ## Measured cost

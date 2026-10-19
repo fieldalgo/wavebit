@@ -7,6 +7,7 @@ Targets:
 - `tests/fdtd/test_native_cuda.py`
 - `tests/fdtd/test_native_cuda_admission.py`
 - `tests/fdtd/test_periodic_cuda.py`
+- `tests/fdtd/test_jax_gpu.py`
 - `src/wavebit/fdtd/native.py`
 - `src/wavebit/fdtd/_periodic/grid.py`
 - `tests/fdtd/test_fdtd_scan_programs.py`
@@ -16,7 +17,7 @@ Targets:
 기존 공개 `wavebit.fdtd.native` 엔진으로 아래 사례의 Torch CUDA 배정밀도
 실행과 eager 역방향 미분을 검증했습니다. 범위를 한정한 장치 검증
 결과입니다. 일반 `wavebit.fdtd` 장면 API는
-[별도의 제한된 CUDA 검증](general-cuda.md)을 참고하세요. JAX GPU, 단정밀도, 컴파일 실행, 주기 구조의 포괄적인
+[별도의 제한된 CUDA 검증](general-cuda.md)을 참고하세요. [GPU의 JAX](#gpu의-jax)는 해당 절의 사례만 확인했습니다. 단정밀도, 컴파일 실행, 주기 구조의 포괄적인
 CUDA 정확도는 이 문서의 검증 범위에 포함되지 않습니다.
 
 ## 환경과 재현
@@ -147,6 +148,26 @@ python -m pytest tests/fdtd/test_native_cuda_admission.py --run-slow -k "plane_w
 
 ```sh
 python -m pytest tests/fdtd/test_periodic_cuda.py --run-slow -q
+```
+
+### GPU의 JAX
+
+`tests/fdtd/test_jax_gpu.py`는 위 두 절의 native 도체 점화식, CPML·분산·Bloch·
+prepared 재사용 사례, 주기 슬래브를 같은 허용오차로 `backend='jax',
+device='gpu'`에서 다시 실행하고, 광원 진폭 미분을 CPU의 JAX(상대 `1e-10`)
+및 CPU 중앙 차분(상대 `1e-6`)과 비교하는 검사를 더합니다. 2026-10-19 main
+`3f2ad839`에서 다섯 검사가 모두 71.46초에 통과했습니다. 같은 RTX 4060 Ti를
+WSL2(Ubuntu 26.04 LTS, NVIDIA 드라이버 610.88)에서 Python 3.12.14, JAX 0.11.0,
+`jax-cuda13-plugin` 0.11.0, NumPy 2.5.1, SciPy 1.18.0으로 사용했습니다. 확인한
+결과 배열은 모두 GPU 장치의 complex128이었습니다. 측정 여유: 도체 장은 닫힌
+식과 2.2e-16 이내, 분산 사례는 NumPy와 peak 정규화 5.4e-16 이내, 미분은 CPU와
+같고 차분과 9.1e-13 차이, 슬래브 R, T, 반사는 허용오차의 0.4 % 이내, 세밀한
+슬래브는 Airy 반사와 1.7e-3 이내입니다. 이 사례들만, 한 GPU에서 검증한
+것이며 일반 `wavebit.fdtd` 장면 API의 JAX는 CPU만 허용합니다. CUDA를 지원하는
+jaxlib이 없으면 건너뛰며, 건너뜀은 실행 증거가 아닙니다.
+
+```sh
+python -m pytest tests/fdtd/test_jax_gpu.py --run-slow -q
 ```
 
 ## 측정 비용
