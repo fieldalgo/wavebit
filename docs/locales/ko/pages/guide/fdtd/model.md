@@ -31,10 +31,10 @@
 CPU 실행은 NumPy·JAX·PyTorch 배정밀도를 사용합니다. 제한된 Torch CUDA는
 고정 실행 길이의 voxel 장면, Periodic/Open/PEC/PMC와 정적 Bloch 경계를
 허용합니다. Bloch 장면은 Bloch/Periodic/Open 면과 PlaneWave 또는 초기 장만
-허용하며 벽이나 Dipole과의 조합은 거부합니다. PML, 비분산
-Material/ConductiveMaterial, 셀 스냅 Slab, PlaneWave, 고정 중심 전기·자기
-Dipole(`bspline` 또는 `tent`), 초기 장과 Record/Field/Flux 관측을 허용합니다.
-Dipole 중심·stamp는 고정값이며 `current_moment`는 평면파의 V/m 진폭과
+허용하며 벽이나 CurrentDipole과의 조합은 거부합니다. PML, 비분산
+Material/ConductiveMaterial, SnappedSlab 구조, PlaneWave, 고정 중심 전기·자기
+CurrentDipole(`bspline` 또는 `tent`), 초기 장과 TimeSeriesMonitor/FieldMonitor/FluxMonitor 관측을 허용합니다.
+CurrentDipole 중심·stamp는 고정값이며 `current_moment`는 평면파의 V/m 진폭과
 구별되는 A·m/V·m 단위입니다. `backend='torch', device='cuda:0'`를
 전달하며 [CUDA 범위와 검증](../../validation/fdtd/general-cuda.md)을 참고하세요. JAX와 PyTorch
 실행은 미분할 수 있습니다. [실행 미분](#실행-미분)을 보세요.
@@ -43,18 +43,18 @@ CUDA의 초기 E/H 패턴은 고정 호스트 선언(NumPy 배열, 미분하지 
 텐서, 호스트 callable)입니다. CUDA 텐서나 미분 가능한 텐서 패턴은 허용하지
 않으며, 별도 `InitialField.amplitude`는 미분 가능한 live 입력입니다.
 
-별도의 Region 범위는 여섯 Periodic 면 모두에서 엄격히 안쪽에 있는 정적
+별도의 SnappedBox 범위는 여섯 Periodic 면 모두에서 엄격히 안쪽에 있는 정적
 셀 스냅 body 하나를 허용합니다. 배경·내부 재료는 스칼라 실수
 Material/ConductiveMaterial이고 외부 광원 없이 유한한 실수 전체 격자 NumPy
-초기 패턴과 Record/최종 장만 사용합니다. 초기 장 하나는 `None`일 수 있으며
+초기 패턴과 TimeSeriesMonitor/최종 장만 사용합니다. 초기 장 하나는 `None`일 수 있으며
 이 범위의 텐서 패턴·callable은 제외합니다. 스칼라 재료 값과 실수 초기 진폭은
 live 입력으로 둘 수 있지만 형상 미분·여러 body·full-span/주기 이음새·
-Open/PML·Bloch·Field/Flux는 제외합니다. 정확한 계약과 독립 이산 검증 기준은
-[내부 Region 범위](../../validation/fdtd/general-cuda.md#정적인-내부-region)를 참고하세요.
+Open/PML·Bloch·FieldMonitor/FluxMonitor는 제외합니다. 정확한 계약과 독립 이산 검증 기준은
+[내부 SnappedBox 범위](../../validation/fdtd/general-cuda.md#정적인-내부-snappedbox)를 참고하세요.
 
-별도의 균질 ADE 범위는 전체 격자를 채우는 Slab 하나, Lorentz 또는 Drude
+별도의 균질 ADE 범위는 전체 격자를 채우는 SnappedSlab 하나, Lorentz 또는 Drude
 극점 하나, 여섯 Periodic 면, 유한 실수 전체 격자 NumPy 초기 배열과
-Record 또는 최종 장 출력을 허용합니다. 초기 장 하나는 `None`일 수 있으나
+TimeSeriesMonitor 또는 최종 장 출력을 허용합니다. 초기 장 하나는 `None`일 수 있으나
 이 ADE 범위에서 CPU 텐서·callable·성분별 리스트는 제외합니다. 경계면이나
 외부 광원은 없습니다. 스칼라 `epsilon_inf`, `mu`, `gamma`,
 Lorentz `omega_0`는 비미분 값이며(`mu=None`은 1), 호환되는 prepared
@@ -466,7 +466,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 고정 시간 광원은 각 광원 행의 끝점에서 Gaussian 중간 연산의 표현 가능성도
 검사합니다. Concrete 무효 값은 `source_waveform_range`로 거부하고 carried
 무효 값은 런타임 유효성을 실패시킵니다. 보수적인 범위 제한이므로 이상적인
-피복이 0이더라도 매우 큰 유한 펄스는 거부될 수 있습니다. 적응형 `Decay`
+피복이 0이더라도 매우 큰 유한 펄스는 거부될 수 있습니다. 적응형 `DecayStop`
 경로는 변경하지 않습니다.
 [파형 표현 가능 범위 계약](../../validation/fdtd/general-cuda.md#fixed-time-waveform-representability)을 참고하세요.
 
@@ -501,15 +501,15 @@ host에서만 검사할 수 있는 지원되지 않는 trace는 명시적으로 
 
 허용 범위의 고정 길이 Torch CUDA 실행은 `Numerics(checkpoint_steps=11)`로
 역방향 미분 중 블록을 재계산할 수 있습니다. `None`은 기존 스캔을 유지합니다.
-명시적 설정은 양의 정적 정수여야 하며 CPU 실행과 `Decay`에서는 거부합니다.
+명시적 설정은 양의 정적 정수여야 하며 CPU 실행과 `DecayStop`에서는 거부합니다.
 광원·관측 이력은 계속 보존하므로 메모리 상한이 아닙니다. 블록이 전체 실행보다
 길면 일반 tail만 남습니다. 선택한 스케줄은 check 보고서의
 `resolved['checkpoint_steps']`, prepared 계약의 `resolved_checkpoint_steps`,
 결과의 `provenance['checkpoint_steps']`에 표시됩니다. 바꾸려면 다시
 prepare하세요. 미분 범위와 한계는 [CUDA 체크포인트 검증](../../validation/fdtd/general-cuda.md)을
 참고하세요. 전도체 실측에서는 미분하는 입력에 따라 체크포인트가 메모리를
-늘리거나 줄였습니다. `None`은 생략하여 기존 v1 Job 키를 유지하며 명시적 스케줄은
-Job과 함께 저장·복원됩니다.
+늘리거나 줄였습니다. `None`은 Job에서 생략하므로 이 값을 지정하지 않은 Job은 키가 바뀌지 않으며, 명시적
+스케줄은 Job과 함께 저장·복원됩니다.
 
 `torch.no_grad()` 또는 `torch.inference_mode()`에서는 역방향용 체크포인트
 래퍼와 블록 복사를 생략합니다. 정책 메타데이터는 유지하며 이후 기울기

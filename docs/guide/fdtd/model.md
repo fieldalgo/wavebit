@@ -27,10 +27,10 @@ for the declaration API, see [domains, sources and observations](general-fdtd.md
 Runs use double precision with NumPy, JAX or PyTorch on CPU. A restricted Torch
 CUDA route admits fixed-duration voxel scenes with Periodic/Open/PEC/PMC boundaries
 and static Bloch faces. Bloch scenes allow only Bloch/Periodic/Open companions
-and PlaneWave or initial-field excitation; Bloch with walls or Dipoles is refused.
-The route also supports PML, nondispersive Material/ConductiveMaterial, cell-snapped Slabs, PlaneWave,
-fixed-center electric/magnetic Dipole (`bspline` or `tent`), or initial-field
-excitation, and Record/Field/Flux observations. Dipole center and stamp are
+and PlaneWave or initial-field excitation; Bloch with walls or CurrentDipoles is refused.
+The route also supports PML, nondispersive Material/ConductiveMaterial, SnappedSlab structures, PlaneWave,
+fixed-center electric/magnetic CurrentDipole (`bspline` or `tent`), or initial-field
+excitation, and TimeSeriesMonitor/FieldMonitor/FluxMonitor observations. CurrentDipole center and stamp are
 static; `current_moment` uses A·m/V·m rather than plane-wave V/m amplitude. Pass
 `backend='torch', device='cuda:0'`; see the [CUDA scope and validation](../../validation/fdtd/general-cuda.md).
 JAX and PyTorch runs are differentiable; see [Differentiating a run](#differentiating-a-run).
@@ -40,19 +40,19 @@ CPU tensors without gradients, or host callables). Direct CUDA or differentiable
 tensor patterns are not admitted; the separate `InitialField.amplitude` remains
 a live differentiable input.
 
-A separate Region scope admits one static cell-snapped body strictly inside all
+A separate SnappedBox scope admits one static cell-snapped body strictly inside all
 six Periodic faces, with scalar real Material/ConductiveMaterial background and
 body, no external sources, finite real full-grid NumPy initial patterns and
-Record/final outputs only. One initial field may be `None`; tensor patterns and
+TimeSeriesMonitor/final outputs only. One initial field may be `None`; tensor patterns and
 callables are excluded here. Scalar material values and real initial amplitude
 may remain live; shape derivatives, multiple bodies, full-span/seam cases,
-Open/PML, Bloch and Field/Flux are excluded. See the
-[interior Region scope](../../validation/fdtd/general-cuda.md#static-interior-region)
+Open/PML, Bloch and FieldMonitor/FluxMonitor are excluded. See the
+[interior SnappedBox scope](../../validation/fdtd/general-cuda.md#static-interior-snappedbox)
 for the exact contract and independent discrete validation criteria.
 
-A separate homogeneous ADE scope admits one full-grid Slab with one Lorentz or
+A separate homogeneous ADE scope admits one full-grid SnappedSlab with one Lorentz or
 Drude pole, six Periodic faces, fixed finite real full-grid NumPy initial arrays
-and Record and/or final-field outputs. One initial field may be `None`; CPU
+and TimeSeriesMonitor and/or final-field outputs. One initial field may be `None`; CPU
 tensors, callables and component lists are excluded from this ADE scope. There
 are no interfaces or external sources. Scalar `epsilon_inf`, `mu`, `gamma` and Lorentz
 `omega_0` are nondifferentiable (`mu=None` means 1); their concrete values may
@@ -495,7 +495,7 @@ Fixed-time sources also check the representability of sampled Gaussian
 intermediates at each source row's endpoints. Concrete invalid values raise
 `source_waveform_range`; carried invalid values fail runtime validity. This
 conservative restriction can refuse huge finite pulses even when the ideal
-envelope would be zero; the adaptive `Decay` path is unchanged. See the
+envelope would be zero; the adaptive `DecayStop` path is unchanged. See the
 [waveform representability contract](../../validation/fdtd/general-cuda.md#fixed-time-waveform-representability).
 
 `admitted` describes the static declaration; it does not override a failed
@@ -531,7 +531,7 @@ needs `jax.config.update("jax_enable_x64", True)` before arrays are built.
 For fixed-duration Torch CUDA runs in the admitted scope, set
 `Numerics(checkpoint_steps=11)` to recompute blocks during reverse mode.
 `None` keeps the ordinary scan. An explicit setting must be a positive static
-integer; CPU execution and `Decay` are refused. Source and observation histories
+integer; CPU execution and `DecayStop` are refused. Source and observation histories
 remain retained, so the setting is not a memory cap. A block longer than the
 run leaves an ordinary tail. The chosen schedule appears in the check report's
 `resolved['checkpoint_steps']`, the prepared contract's
@@ -539,8 +539,8 @@ run leaves an ordinary tail. The chosen schedule appears in the check report's
 Prepare again to change the schedule. See the [CUDA checkpoint validation](../../validation/fdtd/general-cuda.md)
 for derivative coverage and measured costs: checkpointing increased or reduced
 memory depending on the differentiated inputs in the conductor fixture.
-Default v1 Job keys are preserved
-because `None` is omitted; explicit schedules round-trip with the Job.
+`None` is omitted from the Job, so a job that does not set it keeps its key;
+explicit schedules round-trip with the Job.
 
 Under `torch.no_grad()` or `torch.inference_mode()`, execution bypasses the
 backward checkpoint wrappers and block copies. Policy metadata remains intact;
