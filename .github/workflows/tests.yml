@@ -352,9 +352,9 @@ jobs:
 
   slow:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    name: slow tests (${{ matrix.shard }}/6)
+    name: slow tests (${{ matrix.shard }}/12)
     runs-on: ubuntu-latest
-    # Six time-balanced shards, for memory isolation as in `test` above. Unsharded, this job
+    # Time-balanced shards, first for memory isolation as in `test` above. Unsharded, this job
     # reached 90 % (147 passed, 0 failed) before the runner shut itself down on run
     # 38574993959; as two shards on run 38727516339 both finished, in 38 and 39 minutes. As
     # three, shard 3 lost its runner at about 95 %, 48 minutes in, on both attempts of run
@@ -366,10 +366,19 @@ jobs:
     # test_fdtd_painted_optics.py's resolution-20 Jacobian, taking its worker from 3.5 to
     # 13.3 GB, the runner to 0.22 GB available. Both lost attempts died as the other worker
     # started its own large jit beside that peak.
+    #
+    # Twelve since 2026-10-20, for the clock. As six, a shard's test step took 15 to 18
+    # minutes, and no count of whole files could do better: the largest slow file,
+    # test_fdtd_layer_gradients.py, is 21.7 worker-minutes on one worker under `loadfile`.
+    # Tests marked `shard_unit` may now run apart from the rest of their file (see
+    # `shard_files` in tools/run_verification.py); nodes that share a cache or fixture carry
+    # one name and stay together. On the recorded per-test times the largest unit is the Mie
+    # glass sweep, 8.1 worker-minutes, and twelve shards put the slowest near 11 minutes;
+    # fourteen or sixteen gain under a minute.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     # A healthy slow shard is about 20 minutes (above); this is for a hang.
     timeout-minutes: 120
     steps:
@@ -418,7 +427,7 @@ jobs:
             trap 'kill -TERM "$diagnostic_pid" 2>/dev/null || true; wait "$diagnostic_pid" || true' EXIT
           fi
           python -u tools/run_verification.py --profile full --slow only \
-            --shard ${{ matrix.shard }}/6 \
+            --shard ${{ matrix.shard }}/12 \
             --shard-timings tools/ci_shard_timings.json \
             --workers 2 --timeout 2400 --timeout-method thread --verbose --live-output \
             --output "${{ runner.temp }}/wavebit-verification/slow"
@@ -468,8 +477,8 @@ jobs:
         with:
           pattern: verification-slow-*
           path: shards
-      - name: The six shards must add up to the whole slow partition
-        run: python tools/verify_shards.py --count 6 shards/verification-slow-*/
+      - name: The twelve shards must add up to the whole slow partition
+        run: python tools/verify_shards.py --count 12 shards/verification-slow-*/
 
   # A diagnostics dispatch skips most of CI, so it must never conclude as a successful
   # `tests` run: release-gate.yml accepts any successful run on the release commit. This

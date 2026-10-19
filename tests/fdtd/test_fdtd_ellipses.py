@@ -139,6 +139,7 @@ def response(p, backend='numpy', diagnostics=False, side='bottom', smoothing=0.)
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('smoothing', [0., (.04, .03)])
 @pytest.mark.slow
+@pytest.mark.shard_unit
 def test_bottom_conical_joint_eight_parameter_shape_material_and_depth_graph(backend, smoothing):
     setup(backend)
     p = np.array([.13, -.09, .18, .11, .37, 2.4, 1.13, .14])

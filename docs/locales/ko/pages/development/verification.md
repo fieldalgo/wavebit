@@ -108,7 +108,7 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)는
 research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
-`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 16개, slow 범위는 6개입니다.
+`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 16개, slow 범위는 12개입니다.
 
 CI는 검증 결과와 그 안의 pytest 임시 자료를 checkout 바깥의 `RUNNER_TEMP`에
 저장하여 study fixture의 원자료 경로 분리 조건을 지킵니다. GitHub가 이 변수를
@@ -120,16 +120,22 @@ python tools/run_verification.py --profile full --slow exclude --shard 1/16 --wo
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
-python tools/run_verification.py --profile full --slow only --shard 1/6 --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/12 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/slow"
 ```
 
 shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shard가 범위 전체를
-수집해 `collected-nodeids-all.json`에 기록한 뒤, 테스트 파일 단위로 결정적으로
-배정합니다. 예상 시간이 긴 파일부터 가장 가벼운 shard에 넣으므로 파일이 갈리지 않고, 같은
-수집 목록과 시간표는 항상 같은 shard를 만듭니다. shard job들이 끝나면
+수집해 `collected-nodeids-all.json`에 기록한 뒤, shard 단위로 결정적으로 배정합니다.
+예상 시간이 긴 단위부터 가장 가벼운 shard에 넣으므로 같은 수집 목록과 시간표는 항상 같은
+shard를 만듭니다. 단위는 테스트 파일이며, `shard_unit` 표시가 붙은 테스트만 예외입니다.
+인자 없는 `@pytest.mark.shard_unit`은 그 사례 하나하나를 파일의 나머지와 다른 shard에서
+실행할 수 있게 하고, `shard_unit('이름')`은 한 파일에서 같은 이름을 단 사례를 함께 묶습니다.
+캐시나 module fixture를 공유하는 사례에 씁니다. import 때 프로세스 전역 상태를 바꾸는
+파일도 어느 쪽이든 안전합니다. shard마다 별도 프로세스이고, shard 안에서는 `--dist loadfile`이
+한 파일의 사례를 여전히 한 worker에 둡니다. 같은 파일의 다른 사례가 먼저 실행되어야 하는
+사례에는 표시하지 않습니다. shard job들이 끝나면
 `tools/verify_shards.py --count N`이 그 기록을 읽어, 모든 shard가 한 번씩 있고
 같은 목록을 수집했고 그 목록을 빈틈없이 나눴고 각각 종료 코드 0으로 끝났을 때만
 통과합니다. 이 job이 범위를 검증한 것으로 만들며, runner가 죽은 shard는 사라지는
@@ -137,7 +143,9 @@ shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shar
 
 shard는 시간보다 runner 메모리 때문입니다. 일반 범위를 worker 2개 한 번에 돌리면
 사용 가능한 7.9 GB를 넘어 매번 50~61 %에서 종료되었습니다. slow 범위도 3개 shard일 때
-run 39098232669의 두 시도 모두 shard 3의 runner가 약 95 %에서 종료되어 6개로 나눕니다. 테스트별 제한은
+run 39098232669의 두 시도 모두 shard 3의 runner가 약 95 %에서 종료되어 6개로 나눴습니다.
+2026-10-20부터의 12개는 시간 때문입니다. 파일 단위로는 slow shard를 가장 큰 파일(21.7 worker-분)
+아래로 줄일 수 없었고, `shard_unit`을 쓰면 가장 큰 단위가 8.1 worker-분입니다. 테스트별 제한은
 1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 shard당 120분입니다. 실측 시간을 배분에 사용하지만
 실제 경과 시간은 수집, 컴파일, worker 스케줄링에도 영향을 받습니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
 대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.
@@ -188,8 +196,9 @@ python tools/run_distribution_smoke.py
 이 도구는 wheel과 source distribution을 만들고 체크아웃 밖의 새 설치 환경에서
 패키지 데이터와 선택적인 plotting 기능까지 확인합니다.
 
-시간표는 `tools/ci_shard_timings.json`에 고정하며, 파일별 setup/call/teardown 합계를
-현재 사례 수에 맞춰 추정합니다. 새 파일은 해당 범위의 사례당 평균 비용(최소 1초)을
+시간표는 `tools/ci_shard_timings.json`에 고정하며, 단위(파일, 또는 receipt가 기록한 `shard_unit` 단위 이름:
+사례의 node id나 `FILE::@이름`)별 setup/call/teardown 합계를
+현재 사례 수에 맞춰 추정합니다. 표에 행이 없는 단위는 그 파일의 사례당 평균을, 새 파일은 해당 범위의 사례당 평균 비용(최소 1초)을
 사용합니다. 시간표는 resume fingerprint와 shard 간 일치 검사에 포함됩니다.
 시간표 없이 실행하면 기존 사례 수 기준 배분을 사용합니다.
 갱신은 성공한 실행의 전체 artifact를 내려받은 뒤 아래 명령으로 수행하고 변경을 검토해 커밋합니다.
