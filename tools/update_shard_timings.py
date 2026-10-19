@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Build a fixed CI timing table from a complete successful run's downloaded artifacts."""
+"""Build a fixed CI timing table from a complete successful run's downloaded artifacts.
+
+Rows are shard units: a test file, or a `shard_unit`-marked unit within one, as each
+shard's receipt records it."""
 import argparse
 import json
 import math
@@ -29,7 +32,8 @@ def build(directory, source_run):
                         not isinstance(seconds, (int, float)) or
                         not math.isfinite(seconds) or seconds < 0):
                     raise ValueError(f'{node}: incomplete or invalid timing')
-                row = files.setdefault(node.split('::', 1)[0], dict(nodes=0, seconds=0.0))
+                unit = receipt['shard'].get('units', {}).get(node) or node.split('::', 1)[0]
+                row = files.setdefault(unit, dict(nodes=0, seconds=0.0))
                 row['nodes'] += 1
                 row['seconds'] += seconds
         for row in files.values():

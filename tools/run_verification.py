@@ -61,23 +61,36 @@ def parse_shard(value):
     return index, count
 
 
-def shard_files(nodes, count, timings=None):
-    """Assign whole files by recorded duration, falling back to estimated node cost.
+def unit_of(node, units=None):
+    """A node's shard unit: its file, unless the node is marked `shard_unit` (see plugin.py)."""
+    return (units or {}).get(node) or node.split('::', 1)[0]
 
-    Files, not nodes, because CI distributes with `--dist loadfile` and because test modules
-    set process-wide state at import (see tests.yml), so a file must never be split.
-    The same collection and timing table always give the same assignment. Without
-    a timing table, retain the node-count policy for local and research runs.
+
+def shard_files(nodes, count, timings=None, units=None):
+    """Assign whole shard units by recorded duration, falling back to estimated node cost.
+
+    A unit is a file unless its nodes are marked `shard_unit`. Whole files by default because
+    CI distributes with `--dist loadfile` and test modules set process-wide state at import
+    (see tests.yml). A marked unit may run apart from the rest of its file, in another shard:
+    another process on another runner, which imports the module afresh. Within a shard,
+    `loadfile` still keeps every node of one file on one worker. The same collection, units
+    and timing table always give the same assignment. Without a timing table, retain the
+    node-count policy for local and research runs.
     """
     sizes = {}
     for node in nodes:
-        name = node.split('::', 1)[0]
+        name = unit_of(node, units)
         sizes[name] = sizes.get(name, 0) + 1
     timings = timings or {}
     fallback = max(1.0, sum(row['seconds'] for row in timings.values()) /
                    max(1, sum(row['nodes'] for row in timings.values())))
-    weights = {name: max(0.001, timings[name]['seconds'] / timings[name]['nodes']) * size
-               if name in timings else fallback * size for name, size in sizes.items()}
+
+    def weight(name, size):
+        # A unit the table does not have yet costs its file's recorded mean per node.
+        row = timings.get(name) or timings.get(name.split('::', 1)[0])
+        return max(0.001, row['seconds'] / row['nodes']) * size if row else fallback * size
+
+    weights = {name: weight(name, size) for name, size in sizes.items()}
     assignment, load = {}, [0.0] * count
     for name in sorted(sizes, key=lambda name: (-weights[name], name)):
         shard = load.index(min(load))
@@ -86,25 +99,25 @@ def shard_files(nodes, count, timings=None):
     return assignment
 
 
-def shard_nodes(nodes, index, count, timings=None):
-    """The nodes of shard `index` of `count`, in collection order, and its files."""
-    assignment = shard_files(nodes, count, timings)
-    files = sorted(name for name, shard in assignment.items() if shard == index)
-    selected = [node for node in nodes if assignment[node.split('::', 1)[0]] == index]
+def shard_nodes(nodes, index, count, timings=None, units=None):
+    """The nodes of shard `index` of `count`, in collection order, and their files."""
+    assignment = shard_files(nodes, count, timings, units)
+    selected = [node for node in nodes if assignment[unit_of(node, units)] == index]
+    files = sorted({node.split('::', 1)[0] for node in selected})
     return selected, files
 
 
 def collections(directory):
     records = [load(path) for path in sorted(directory.glob('collection-*.json'))]
     if not records:
-        return [], [], ['No collection record was produced.']
+        return [], [], {}, ['No collection record was produced.']
     errors = []
     first = records[0]
     if any(record != first for record in records[1:]):
         errors.append('Workers collected different test lists.')
     for path in directory.glob('collection-errors-*.jsonl'):
         errors.extend(json.loads(line)['message'] for line in path.read_text().splitlines())
-    return first['nodeids'], first['mutation_nodes'], errors
+    return first['nodeids'], first['mutation_nodes'], first.get('shard_units', {}), errors
 
 
 def relay_output(stream, log, errors):
@@ -201,11 +214,12 @@ def phase_run(output, name, root, config, *, expected=None, selected=None,
                 relay.join(timeout=5)
                 if relay.is_alive():
                     stream_errors.append('Pytest exited but a child kept its output pipe open.')
-    nodes, mutations, errors = collections(directory)
+    nodes, mutations, units, errors = collections(directory)
     errors.extend(stream_errors)
     result = dict(name=name, directory=str(directory), command=args, exit_code=exit_code,
                   seconds=round(time.monotonic()-started, 3), interrupted=interrupted,
-                  collected=nodes, mutation_nodes=mutations, collection_errors=errors)
+                  collected=nodes, mutation_nodes=mutations, shard_units=units,
+                  collection_errors=errors)
     save(directory / 'result.json', result)
     return result
 
@@ -286,9 +300,10 @@ def run(args):
             # it, not a different profile -- so every shard of a run collects the same list,
             # and tools/verify_shards.py can check that the shards add up to exactly that list.
             index, count = shard
-            nodes, files = shard_nodes(all_nodes, index, count, timings)
+            units = collection['shard_units']
+            nodes, files = shard_nodes(all_nodes, index, count, timings, units)
             save(output / 'collected-nodeids-all.json', all_nodes)
-            receipt['shard'] = dict(index=index, count=count, files=files,
+            receipt['shard'] = dict(index=index, count=count, files=files, units=units,
                                     timings_digest=digest(timings),
                                     nodes_total=len(all_nodes), nodes_in_shard=len(nodes))
             save(output / 'shard.json', receipt['shard'])
@@ -385,7 +400,7 @@ def main():
     parser.add_argument('--output', type=Path, help='new output directory; an existing path is always refused')
     parser.add_argument('--resume', type=Path, help='reuse completed successful/skip/xfail nodes from an identical run')
     parser.add_argument('--shard', metavar='INDEX/COUNT',
-                        help='run only shard INDEX of COUNT, whole test files assigned deterministically; '
+                        help='run only shard INDEX of COUNT, whole test files (or shard_unit-marked units) assigned deterministically; '
                              'every shard records the full collection, tools/verify_shards.py checks they add up')
     parser.add_argument('--collect-only', action='store_true')
     parser.add_argument('--shard-timings', type=Path,
