@@ -129,7 +129,7 @@ def test_cuda_bloch_dipole_refuses_without_constructing_a_runtime(monkeypatch):
     import wavebit.fdtd._api as api
     monkeypatch.setattr(Execution, 'validate', lambda self: self)
     monkeypatch.setattr(api, '_planned', lambda *args, **kwargs: pytest.fail('unsupported source planned'))
-    problem = initial_problem().replace(initial=None, sources=(fdtd.Dipole(
+    problem = initial_problem().replace(initial=None, sources=(fdtd.CurrentDipole(
         'd', center=(0., 0., 0.), component='Ey', current_moment=1e-16,
         pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),))
     with pytest.raises(UnsupportedFeatureError) as caught:

@@ -71,10 +71,10 @@ def fixture(kind, slab_axis, unit_name):
     problem = fdtd.Problem(units=units, scene=fdtd.Scene(
         domain=fdtd.Domain(size=tuple(DECLARED_SI/scale), center=tuple(CENTER_SI/scale)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
-        structures=(fdtd.Structure('uniform', fdtd.Slab(**{slab_axis: span}), material),)),
+        structures=(fdtd.Structure('uniform', shape=fdtd.SnappedSlab(**{slab_axis: span}), material=material),)),
         initial=fdtd.InitialField(E=electric, H=magnetic),
         outputs=fdtd.Outputs(final_fields=True, monitors=tuple(
-            fdtd.Record(field+'xyz'[c], component=field+'xyz'[c],
+            fdtd.TimeSeriesMonitor(field+'xyz'[c], component=field+'xyz'[c],
                         at=tuple(r/scale for r in probe(field, c)))
             for field in ('E', 'H') for c in range(3))))
     policy = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX_SI/scale),

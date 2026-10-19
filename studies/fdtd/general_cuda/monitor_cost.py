@@ -104,12 +104,12 @@ def main():
         units = Units(length='um')
         band = (.9, 1., 1.1)
         monitors = tuple(m for name, z in (('front', -.6), ('back', .6)) for m in (
-            fdtd.Field(name, plane=fdtd.Plane(z=z), wavelengths=band, components=('Ey',)),
-            fdtd.Flux(name + '_flux', plane=fdtd.Plane(z=z), wavelengths=band)))
+            fdtd.FieldMonitor(name, plane=fdtd.Plane(z=z), wavelengths=band, components=('Ey',)),
+            fdtd.FluxMonitor(name + '_flux', plane=fdtd.Plane(z=z), wavelengths=band)))
         problem = fdtd.Problem(units=units, scene=fdtd.Scene(
             domain=fdtd.Domain(size=(args.transverse_cells*.05, args.transverse_cells*.05, 3.)),
             background=Material(epsilon=1.), boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()),
-            structures=(fdtd.Structure(name='film', shape=fdtd.Slab(z=(-.1, .1)),
+            structures=(fdtd.Structure(name='film', shape=fdtd.SnappedSlab(z=(-.1, .1)),
                                        material=Material(epsilon=2.25)),)),
             sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=-.9), direction='+z',
                 polarization='s', pulse=fdtd.GaussianPulse(wavelength=1.,

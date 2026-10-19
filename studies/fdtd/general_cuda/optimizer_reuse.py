@@ -34,9 +34,9 @@ def problem(amplitude=1., phase=0.):
     return fdtd.Problem(units=units, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.6,)*3), background=Material(epsilon=1.),
         boundaries=fdtd.Boundaries(x=fdtd.Open(), y=fdtd.Open(), z=fdtd.Open())),
-        sources=(fdtd.Dipole('d', center=(-.031, .017, -.10), component='Ey',
+        sources=(fdtd.CurrentDipole('d', center=(-.031, .017, -.10), component='Ey',
             pulse=pulse, current_moment=1e-16*amplitude, phase=phase,
-            delay=-peak+.12*units.time_seconds),), outputs=fdtd.Outputs(final_fields=True))
+            delay_seconds=-peak+.12*units.time_seconds),), outputs=fdtd.Outputs(final_fields=True))
 
 
 def numerics(block=None):

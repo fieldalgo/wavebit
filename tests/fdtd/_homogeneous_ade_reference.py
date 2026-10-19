@@ -73,10 +73,10 @@ def make_problem(kind, damped, electric, magnetic, cells):
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(1.,)*3),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
-        structures=(fdtd.Structure('uniform', fdtd.Slab(z=(-.5, .5)), material),)),
+        structures=(fdtd.Structure('uniform', shape=fdtd.SnappedSlab(z=(-.5, .5)), material=material),)),
         initial=fdtd.InitialField(E=electric, H=magnetic),
         outputs=fdtd.Outputs(final_fields=True, monitors=tuple(
-            fdtd.Record(field+'xyz'[c], component=field+'xyz'[c],
+            fdtd.TimeSeriesMonitor(field+'xyz'[c], component=field+'xyz'[c],
                         at=probe_at(cells, field, c))
             for field in ('E', 'H') for c in range(3))))
 

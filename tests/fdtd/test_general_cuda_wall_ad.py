@@ -84,7 +84,7 @@ def initial_problem(case='mixed', amplitude=1.):
         domain=fdtd.Domain(size=(8 * DX,) * 3),
         background=Material(epsilon=2.25, mu=1.4), boundaries=walls(case)),
         initial=fdtd.InitialField(E=e, H=h, amplitude=amplitude),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('probe', at=(.04, .03, -.02),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('probe', at=(.04, .03, -.02),
                                                  component='Ey'),), final_fields=True))
 
 
@@ -195,10 +195,10 @@ def dipole_problem(kind, axis, moment=1.3e-16, phase=.4, open_padding=False):
         domain=fdtd.Domain(size=(8 * DX,) * 3), background=Material(epsilon=2.25, mu=1.4),
         boundaries=fdtd.Boundaries(x=fdtd.PEC(), y=fdtd.PMC(), z=fdtd.Open())
         if open_padding else walls('mixed')),
-        sources=(fdtd.Dipole('d', center=(.007, -.011, .013), kind=kind, component=component,
+        sources=(fdtd.CurrentDipole('d', center=(.007, -.011, .013), kind=kind, component=component,
                             pulse=pulse, current_moment=moment, phase=phase,
-                            delay=-peak + .12 * UNITS.time_seconds),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('probe', at=(.04, .03, -.02),
+                            delay_seconds=-peak + .12 * UNITS.time_seconds),),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('probe', at=(.04, .03, -.02),
                                                  component=component),), final_fields=True))
 
 

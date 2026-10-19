@@ -27,8 +27,8 @@ def problem(kind):
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(1.,)*3),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Periodic()),
-        structures=(fdtd.Structure('body', fdtd.Slab(z=(-.5, .5)),
-                                   DispersiveMaterial(epsilon_inf=EPSILON, poles=(pole,))),)),
+        structures=(fdtd.Structure('body', shape=fdtd.SnappedSlab(z=(-.5, .5)),
+                                   material=DispersiveMaterial(epsilon_inf=EPSILON, poles=(pole,))),)),
         initial=fdtd.InitialField(E=initial), outputs=fdtd.Outputs(final_fields=True))
 
 

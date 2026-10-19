@@ -25,10 +25,10 @@ def problem(amplitude=1., phase=0., kind='electric'):
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.6,) * 3), background=Material(epsilon=1.),
         boundaries=fdtd.Boundaries(x=fdtd.Open(), y=fdtd.Open(), z=fdtd.Open())),
-        sources=(fdtd.Dipole('d', center=(-.031, .017, -.10),
+        sources=(fdtd.CurrentDipole('d', center=(-.031, .017, -.10),
             component='Ey' if kind == 'electric' else 'Hy', kind=kind,
             pulse=pulse, current_moment=MOMENT * amplitude,
-            phase=phase, delay=-peak + .12 * UNITS.time_seconds),),
+            phase=phase, delay_seconds=-peak + .12 * UNITS.time_seconds),),
         outputs=fdtd.Outputs(final_fields=True))
 
 

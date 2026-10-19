@@ -56,10 +56,10 @@ def problem(*, kind='electric', axis='z', center=CENTER, size=.6,
                   if periodic else fdtd.Boundaries.open())
     return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(size,)*3), boundaries=boundaries),
-        sources=(fdtd.Dipole('d', center=center, component=field+axis, kind=kind,
+        sources=(fdtd.CurrentDipole('d', center=center, component=field+axis, kind=kind,
             current_moment=CURRENT if kind == 'electric' else Z0*CURRENT,
             pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=.15/TIME_UNIT),
-            delay=delay),), outputs=fdtd.Outputs(final_fields=final_fields))
+            delay_seconds=delay),), outputs=fdtd.Outputs(final_fields=final_fields))
 
 
 def solve(device, physical, numerics):
@@ -67,7 +67,7 @@ def solve(device, physical, numerics):
     # Captured pytest logs preserve the precise attempted case even on failure.
     source = physical.sources[0]
     print(dict(device=name, kind=source.kind, component=source.component,
-        center=source.center, delay=source.delay, spacing=numerics.grid.spacing,
+        center=source.center, delay_seconds=source.delay_seconds, spacing=numerics.grid.spacing,
         duration=repr(numerics.duration), units=physical.units.length), flush=True)
     with torch.no_grad():
         result = fdtd.run(physical, numerics=numerics, backend='torch', device=name)
@@ -182,11 +182,11 @@ def test_public_dipole_si_source_is_invariant_under_geometry_units(device, kind)
         physical = fdtd.Problem(units=Units(length=length), scene=fdtd.Scene(
             domain=fdtd.Domain(size=(1.6*scale,)*3),
             boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic())),
-            sources=(fdtd.Dipole('d', center=(0., 0., 0.), component=component, kind=kind,
+            sources=(fdtd.CurrentDipole('d', center=(0., 0., 0.), component=component, kind=kind,
                 current_moment=CURRENT if kind == 'electric' else Z0*CURRENT,
                 pulse=fdtd.GaussianPulse(wavelength=3*scale, frequency_sigma_hz=.03/TIME_UNIT),
-                delay=-18*TIME_UNIT),),
-            outputs=fdtd.Outputs(monitors=(fdtd.Record('probe', at=(.3*scale, 0., 0.),
+                delay_seconds=-18*TIME_UNIT),),
+            outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('probe', at=(.3*scale, 0., 0.),
                                                        component=component),)))
         numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.1*scale),
             duration=fdtd.Duration(steps=30))

@@ -24,18 +24,18 @@ def problem(amplitude=1., phase=0., epsilon=2.25):
     peak = np.sqrt(2 * np.log(1 / pulse.cutoff)) / (2 * np.pi * pulse.frequency_sigma_hz)
     source = fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.3), theta=np.pi / 6,
         phi=np.deg2rad(35.), polarization='p', amplitude=amplitude, phase=phase,
-        pulse=pulse, delay=-peak + .12 * UNITS.time_seconds)
+        pulse=pulse, delay_seconds=-peak + .12 * UNITS.time_seconds)
     return fdtd.Problem(units=UNITS, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.25, .2, 1.2)), background=Material(epsilon=1.),
         boundaries=fdtd.Boundaries(**fdtd.Bloch.from_source(source, units=UNITS), z=fdtd.Open()),
-        structures=(fdtd.Structure('film', fdtd.Slab(z=(-.1, .1)),
-                                   Material(epsilon=epsilon)),)),
+        structures=(fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(-.1, .1)),
+                                   material=Material(epsilon=epsilon)),)),
         sources=(source,), outputs=fdtd.Outputs(final_fields=True, monitors=(
-            fdtd.Record('e', at=(.025, 0., -.25), component='Ey'),
-            fdtd.Record('h', at=(.025, 0., -.25), component='Hx'),
-            fdtd.Field('field', plane=fdtd.Plane(z=-.25), wavelengths=(1.,),
+            fdtd.TimeSeriesMonitor('e', at=(.025, 0., -.25), component='Ey'),
+            fdtd.TimeSeriesMonitor('h', at=(.025, 0., -.25), component='Hx'),
+            fdtd.FieldMonitor('field', plane=fdtd.Plane(z=-.25), wavelengths=(1.,),
                        components=COMPONENTS),
-            fdtd.Flux('flux', plane=fdtd.Plane(z=-.25), wavelengths=(1.,)))))
+            fdtd.FluxMonitor('flux', plane=fdtd.Plane(z=-.25), wavelengths=(1.,)))))
 
 
 def numerics(block=None):

@@ -19,7 +19,7 @@ def closed_problem(epsilon=2.25, conductivity=600., amplitude=1.):
         background=ConductiveMaterial(epsilon=epsilon, conductivity=conductivity),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic())),
         initial=fdtd.InitialField(E=(0., 1., 0.), H=(2., 0., 0.), amplitude=amplitude),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),),
                              final_fields=True))
 
 
@@ -31,14 +31,14 @@ def slab_problem(epsilon=2.25, amplitude=1.):
     return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.1, .1, 2.4)), background=Material(epsilon=1.),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()),
-        structures=(fdtd.Structure(name='film', shape=fdtd.Slab(z=(-.15, .15)),
+        structures=(fdtd.Structure(name='film', shape=fdtd.SnappedSlab(z=(-.15, .15)),
                                    material=Material(epsilon=epsilon)),)),
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.65), amplitude=amplitude,
             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
         outputs=fdtd.Outputs(monitors=(
-            fdtd.Record('e', at=(0., 0., -.5), component='Ey'),
-            fdtd.Field('field', plane=fdtd.Plane(z=-.5), wavelengths=(.8,), components=('Ey', 'Hx')),
-            fdtd.Flux('flux', plane=fdtd.Plane(z=-.5), wavelengths=(.8,))), final_fields=True))
+            fdtd.TimeSeriesMonitor('e', at=(0., 0., -.5), component='Ey'),
+            fdtd.FieldMonitor('field', plane=fdtd.Plane(z=-.5), wavelengths=(.8,), components=('Ey', 'Hx')),
+            fdtd.FluxMonitor('flux', plane=fdtd.Plane(z=-.5), wavelengths=(.8,))), final_fields=True))
 
 
 @pytest.fixture
@@ -66,8 +66,8 @@ def parity(actual, expected):
 
 
 @pytest.mark.parametrize('case,path', [
-    ('decay', 'numerics.decay'), ('absorber', 'numerics.absorber'),
-    ('stencil', 'numerics.discretisation'), ('range', 'numerics.geometry_ranges'),
+    ('decay', 'numerics.stopping'), ('absorber', 'numerics.absorber'),
+    ('stencil', 'numerics.discretization'), ('range', 'numerics.geometry_ranges'),
     ('boundary', 'scene.boundaries.x-'), ('shape', 'scene.structures.body.shape'),
     ('material', 'scene.background'), ('source', 'sources.tfsf'),
     ('monitor', 'outputs.far')])
@@ -77,20 +77,20 @@ def test_cuda_scope_refuses_before_planning_without_a_device(monkeypatch, case, 
     monkeypatch.setattr(Execution, 'validate', lambda self: self)
     monkeypatch.setattr(api, '_planned', lambda *a, **k: pytest.fail('unsupported CUDA scope reached planning'))
     p=closed_problem(); n=fixed_numerics()
-    if case=='decay': n=n.replace(decay=fdtd.Decay(threshold=1e-3, window_seconds=1e-15))
-    if case=='absorber': n=n.replace(absorber=fdtd.Absorber())
-    if case=='stencil': n=n.replace(discretisation='stencil')
+    if case=='decay': n=n.replace(stopping=fdtd.DecayStop(threshold=1e-3, window_seconds=1e-15))
+    if case=='absorber': n=n.replace(absorber=fdtd.ConductiveAbsorber())
+    if case=='stencil': n=n.replace(discretization='stencil')
     if case=='range': n=n.replace(geometry_ranges={'body': ((-.15, .15),)*3})
-    if case=='boundary': p=p.replace(scene=p.scene.replace(boundaries=p.scene.boundaries.replace(x=fdtd.Axis1D(k=.2,k_max=.2))))
+    if case=='boundary': p=p.replace(scene=p.scene.replace(boundaries=p.scene.boundaries.replace(x=fdtd.InvariantAxis(k=.2,k_max=.2))))
     if case in ('shape', 'range', 'stencil'):
         p=p.replace(scene=p.scene.replace(structures=(fdtd.Structure(name='body', shape=fdtd.Sphere(radius=.08), material=Material(epsilon=2.)),)))
     if case=='material':
         p=p.replace(scene=p.scene.replace(background=DispersiveMaterial(epsilon_inf=2., poles=(Lorentz(8e14, 1e13, 1e28),))))
     if case=='source':
-        p=p.replace(sources=(fdtd.TFSF('tfsf', box=fdtd.Region(size=(.2,.2,.2)),
+        p=p.replace(sources=(fdtd.TFSF('tfsf', box=fdtd.SnappedBox(size=(.2,.2,.2)),
             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),), initial=None)
     if case=='monitor':
-        p=p.replace(outputs=fdtd.Outputs(monitors=(fdtd.FarField('far', wavelengths=(.8,), box=fdtd.Region(size=(.2,.2,.2))),)))
+        p=p.replace(outputs=fdtd.Outputs(monitors=(fdtd.FarFieldMonitor('far', wavelengths=(.8,), box=fdtd.SnappedBox(size=(.2,.2,.2))),)))
     report=fdtd.check(p,numerics=n,backend='torch',device='cuda')
     assert not report.ok
     assert report.issues[0].code=='cuda_scope'
@@ -222,11 +222,11 @@ def axis_slab_problem(axis):
     return fdtd.Problem(units=Units(length='um'),scene=fdtd.Scene(
         domain=fdtd.Domain(size=tuple(size)),background=Material(epsilon=1.),
         boundaries=fdtd.Boundaries(**faces),
-        structures=(fdtd.Structure('film',fdtd.Slab(**{axis:(-.15,.15)}),Material(epsilon=2.25)),)),
+        structures=(fdtd.Structure('film',shape=fdtd.SnappedSlab(**{axis:(-.15,.15)}),material=Material(epsilon=2.25)),)),
         sources=(fdtd.PlaneWave('pw',plane=plane(.65),direction='-'+axis,
             pulse=fdtd.GaussianPulse(wavelength=.8,frequency_sigma_hz=2e13)),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Field('field',plane=plane(-.5),wavelengths=(.8,)),
-            fdtd.Flux('flux',plane=plane(-.5),wavelengths=(.8,))),final_fields=True))
+        outputs=fdtd.Outputs(monitors=(fdtd.FieldMonitor('field',plane=plane(-.5),wavelengths=(.8,)),
+            fdtd.FluxMonitor('flux',plane=plane(-.5),wavelengths=(.8,))),final_fields=True))
 
 
 @pytest.mark.parametrize('axis',['x','y','z'])
@@ -248,8 +248,8 @@ def open_pulse_problem():
         boundaries=fdtd.Boundaries.open()),
         initial=fdtd.InitialField(E=(None,lambda x,y,z: np.exp(-100*(x*x+2*y*y+3*z*z)),None)),
         outputs=fdtd.Outputs(monitors=(
-            fdtd.Record('e',at=(.05,.05,.05),component='Ey'),
-            fdtd.Flux('box',box=fdtd.Region(size=(.2,.2,.2),center=(.025,0,0)),wavelengths=(1.,))),
+            fdtd.TimeSeriesMonitor('e',at=(.05,.05,.05),component='Ey'),
+            fdtd.FluxMonitor('box',box=fdtd.SnappedBox(size=(.2,.2,.2),center=(.025,0,0)),wavelengths=(1.,))),
             final_fields=True))
 
 
@@ -387,7 +387,7 @@ def test_cuda_mixed_device_source_phase_and_delay_match_finite_differences(cuda)
     n=fixed_numerics(171)
     base=slab_problem()
     def problem(phase,delay_scale):
-        return base.replace(sources=(base.sources[0].replace(phase=phase,delay=delay_scale*1e-15),))
+        return base.replace(sources=(base.sources[0].replace(phase=phase,delay_seconds=delay_scale*1e-15),))
     prepared=fdtd.prepare(base,numerics=n,backend='torch',device='cuda:0')
     phase=cuda.tensor(.3,dtype=cuda.float64,device='cpu',requires_grad=True)
     delay=cuda.tensor(.2,dtype=cuda.float64,device='cuda:0',requires_grad=True)
