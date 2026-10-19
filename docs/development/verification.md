@@ -113,7 +113,7 @@ validation of its exact commit. This is a CI execution queue, not a PR merge que
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
 uses the runner for both non-research partitions, each split across runners with
-`--shard INDEX/COUNT`: eight shards for the ordinary partition, six for the slow one.
+`--shard INDEX/COUNT`: sixteen shards for the ordinary partition, six for the slow one.
 
 CI stores both verification outputs and their pytest temporary fixtures under
 `RUNNER_TEMP`, outside the checkout, so study fixtures can enforce their raw-output
@@ -121,7 +121,7 @@ isolation contract. GitHub provides this variable; for local reproduction, set i
 to an external scratch directory first. Artifact uploads use the same output root.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/8 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/16 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
