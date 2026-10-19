@@ -163,7 +163,7 @@ def test_mode_monitors_and_decay_stopping_are_stage_7():
     with pytest.raises(NotImplementedError, match='stage 7'):
         fd.ModeMonitor('m')
     # Decay is now explicit, but both the ratio and physical window are required.
-    with pytest.raises(TypeError, match='window'):
+    with pytest.raises(TypeError, match="needs 'window'"):
         fd.Decay(1e-5)
 
 
@@ -208,9 +208,9 @@ def test_run_takes_one_length_and_time_counts_steps_to_the_end_time():
 def test_stopping_on_decay_is_refused_naming_stage_7(keyword):
     # A bare ratio lacks a window; alternate stopping spellings remain refused.
     exception = TypeError if keyword == 'decay' else NotImplementedError
-    with pytest.raises(exception, match='Decay') as e:
+    with pytest.raises(exception, match=r'fdtd\.DecayStop\(') as e:
         fd.Run(steps=10, **{keyword: 1e-5})
-    assert 'window' in str(e.value)
+    assert 'window_seconds=' in str(e.value)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -416,7 +416,7 @@ def test_the_source_spectra_are_read_off_the_right_source():
     lone = quiet(fd.run, dipole_box(size=0.6, steps=5))
     with pytest.raises(ValueError, match='say which wavelengths'):
         lone.sources['d'].power()
-    with pytest.raises(TypeError, match='Dipole'):
+    with pytest.raises(TypeError, match='CurrentDipole'):
         quiet(fd.run, _pw_scene()).sources['pw'].power((1.0,))
 
 

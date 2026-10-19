@@ -284,7 +284,7 @@ def _traced_doors():
         pytest.param(lambda v: fd.PML(cells=12, wavelength=v),
                      r'PML\(wavelength=\.\.\.\) is static', 0.55, id='pml-wavelength'),
         pytest.param(lambda v: fd.Slab(z=(v, 2.0)),
-                     r'Slab\(z=\.\.\.\) is static', 1.0, id='slab-edge'),
+                     r'SnappedSlab\(z=\.\.\.\) is static', 1.0, id='slab-edge'),
     )
 
 

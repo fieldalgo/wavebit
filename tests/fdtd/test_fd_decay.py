@@ -265,7 +265,7 @@ def test_a_run_cut_off_early_is_told_to_run_longer_and_names_no_knob():
         res, caught = _run_collecting(box)
         assert len(caught) == 1, (layer, caught)
         assert caught[0].category is fd.UnsettledFieldWarning, (layer, caught[0].category)
-        assert 'stabilize' not in str(caught[0].message), layer
+        assert 'stabiliz' not in str(caught[0].message), layer
         assert 'Run longer' in str(caught[0].message)
         assert res.diagnostics['growth'] == {'in': None}, res.diagnostics['growth']
 

@@ -384,7 +384,7 @@ def test_a_digest_is_the_same_number_in_two_interpreters():
 def test_boundaries_missing_an_axis_is_refused_naming_it(missing):
     """Gate 9 door: there is no default face; the refusal names the axis left out."""
     given = {axis: fd.PEC() for axis in 'xyz' if axis != missing}
-    with pytest.raises(TypeError, match=f"'{missing}'"):
+    with pytest.raises(TypeError, match=f"needs '{missing}'"):
         fd.Boundaries(**given)
     with pytest.raises(TypeError, match='face type'):
         fd.Boundaries(**dict(given, **{missing: 'pec'}))
