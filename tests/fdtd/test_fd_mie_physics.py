@@ -26,7 +26,9 @@ def measured(cpw, eps=2.25, offset=PLACEMENTS[0]):
     return read_result(result, eps)
 
 
-@pytest.mark.parametrize('eps', (2.25, 1.1))
+# The weak sphere's sweep shares nothing with the glass rows the tests below read, so CI
+# may run it apart (tools/run_verification.py --shard); the glass sweep stays with them.
+@pytest.mark.parametrize('eps', (2.25, pytest.param(1.1, marks=pytest.mark.shard_unit)))
 def test_public_sphere_mie_convergence(eps):
     errors = [[measured(cpw, eps, place)['error'] for place in PLACEMENTS]
               for cpw in LEVELS]
@@ -83,6 +85,7 @@ def test_public_sphere_angular_pattern():
         assert abs(cut['values'][18]/cut['reference'][18]-1) < .02
 
 
+@pytest.mark.shard_unit
 def test_public_high_contrast_material_rule():
     pytest.importorskip('jax')
     # Additional radius-.1 control, not the radius-.25 convergence fixture.

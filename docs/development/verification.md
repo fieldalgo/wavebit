@@ -113,7 +113,7 @@ validation of its exact commit. This is a CI execution queue, not a PR merge que
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
 uses the runner for both non-research partitions, each split across runners with
-`--shard INDEX/COUNT`: sixteen shards for the ordinary partition, six for the slow one.
+`--shard INDEX/COUNT`: sixteen shards for the ordinary partition, twelve for the slow one.
 
 CI stores both verification outputs and their pytest temporary fixtures under
 `RUNNER_TEMP`, outside the checkout, so study fixtures can enforce their raw-output
@@ -125,16 +125,22 @@ python tools/run_verification.py --profile full --slow exclude --shard 1/16 --wo
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
-python tools/run_verification.py --profile full --slow only --shard 1/6 --workers 2 \
+python tools/run_verification.py --profile full --slow only --shard 1/12 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 2400 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/slow"
 ```
 
 A shard is a selection within the profile, not a different profile. Every shard collects
-the whole partition and records it as `collected-nodeids-all.json`; whole test files are
-then assigned to shards deterministically, largest estimated duration first to the lightest shard, so
-a file is never split and the same collection and timing table give the same shards. After the
+the whole partition and records it as `collected-nodeids-all.json`; whole shard units are
+then assigned to shards deterministically, largest estimated duration first to the lightest shard,
+so the same collection and timing table give the same shards. A unit is a test file, except
+for tests marked `shard_unit`: a bare `@pytest.mark.shard_unit` lets each of its cases run
+apart from the rest of the file, and `shard_unit('name')` keeps the cases of one file that
+carry that name together, for cases that share a cache or a module fixture. A file that sets
+process-wide state at import is safe either way, since every shard is a separate process; within
+a shard `--dist loadfile` still keeps one file's cases on one worker. Mark only cases that do not
+rely on another case of their file having run first. After the
 shard jobs, `tools/verify_shards.py --count N` reads their receipts and fails unless every
 shard is present once, all collected the same list, the shards partition it, and each
 exited 0. That job is what makes the partition verified; a shard whose runner died is a
@@ -143,7 +149,9 @@ named failure there, not an absence.
 Sharding is a response to the runners' memory, not to the clock: a single two-worker run
 of the ordinary partition grew past the 7.9 GB available and was shut down at 50 to 61 %
 every time. The slow partition followed: as three shards, shard 3 lost its runner
-at about 95 % on both attempts of run 39098232669, so it now runs as six. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
+at about 95 % on both attempts of run 39098232669, so it ran as six. Twelve since 2026-10-20
+are for the clock: whole files could not bring a slow shard under the largest file, 21.7
+worker-minutes, and with `shard_unit` the largest unit is 8.1. The per-test limits stay at 1,200 seconds (ordinary) and 2,400 seconds (slow);
 the job limits are 120 minutes per shard. Measured durations guide balancing;
 actual elapsed times still depend on collection, compilation and worker scheduling. Source-mutating
 cases within a shard run in the runner's separate serial snapshot, not in the shared
@@ -217,9 +225,10 @@ python tools/run_distribution_smoke.py
 That tool builds a wheel and source distribution and checks fresh installed
 packages outside the checkout, including package data and optional plotting.
 
-The fixed `tools/ci_shard_timings.json` table scales each file's summed setup/call/teardown
-cost by the current case count. New files use the partition mean per-case cost (at least
-one second). Timing data participates in resume fingerprints and cross-shard consistency
+The fixed `tools/ci_shard_timings.json` table scales each unit's summed setup/call/teardown
+cost by the current case count; its rows are files, and `shard_unit` units by the names the
+receipts record (the case's node id, or `FILE::@name`). A unit without a row uses its file's
+mean per-case cost, and a new file the partition mean per-case cost (at least one second). Timing data participates in resume fingerprints and cross-shard consistency
 checks. Without the option, assignment remains count-based. Refresh from all artifacts of
 one successful run, review and commit the result:
 

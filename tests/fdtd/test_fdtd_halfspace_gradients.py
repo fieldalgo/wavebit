@@ -150,6 +150,7 @@ def test_native_exterior_gradients_include_cpml_and_recorded_fields(backend, non
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
 @pytest.mark.parametrize('method', ['electric', 'directional'])
 @pytest.mark.slow
+@pytest.mark.shard_unit
 def test_joint_halfspace_angle_pole_graphs_through_bottom_scene(backend, method):
     pattern = np.array([[[1.2, 1.8], [1.5, 1.1]]])
     def objective(p, which):
@@ -249,6 +250,7 @@ def test_halfspace_cutoff_can_change_on_one_trace_but_exact_grazing_is_masked():
 
 
 @pytest.mark.slow
+@pytest.mark.shard_unit
 def test_magnetic_halfspace_sensitivities_refine_to_independent_airy(record_property):
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)
     p = np.array([1.2, 1.1, 1.6, 1.15])

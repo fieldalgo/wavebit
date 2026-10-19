@@ -26,14 +26,15 @@ nodes only when inputs, environment, configuration and collection still match.
 Source mutation tests run in a separate serial snapshot. CI uses two workers per shard
 and retains the per-test timeouts: 1,200 seconds for the ordinary partition, 2,400 seconds
 for slow tests, both with the thread timeout method. The ordinary partition runs as sixteen
-shards and the slow one as six, each shard limited to 120 minutes; a `complete` job after
+shards and the slow one as twelve, each shard limited to 120 minutes; a `complete` job after
 each checks with `tools/verify_shards.py` that the shards add up to the whole partition.
 Artifacts `verification-default-N` and `verification-slow-N` keep each shard's receipts,
 inventories, JSONL events, JUnit XML and logs; the writable source snapshot is not uploaded.
 
 CI passes `--shard-timings tools/ci_shard_timings.json`. This fixed table contains summed
-setup/call/teardown seconds per file, separately for ordinary and slow tests. Whole files
-are assigned largest estimated duration first to the lightest shard. Recorded per-case
+setup/call/teardown seconds per shard unit, separately for ordinary and slow tests. Whole
+units -- a file, or tests marked `shard_unit` (see the verification guide) -- are assigned
+largest estimated duration first to the lightest shard. Recorded per-case
 averages scale with the current collection count; new files use the partition's mean
 per-case cost (at least one second). Local runs without this option retain count balancing.
 The table participates in resume fingerprints, and shard receipts must agree on its digest.

@@ -783,6 +783,7 @@ def _sweep(build, cpws, truncation=None):
 
 @pytest.mark.slow
 @pytest.mark.parametrize('pol, need, finest', [('s', 0.9, 8e-3), ('p', 0.9, 5e-3)])
+@pytest.mark.shard_unit
 def test_a_lamellar_grating_converges_toward_rcwa(pol, need, finest):
     """20 / 40 / 80 cells per wavelength at normal incidence (~45 s). Measured s: 2.9e-2 /
     1.2e-2 / 5.5e-3, first order (1.2); p: 1.2e-2 / 3.0e-3 / see the message."""
@@ -796,6 +797,7 @@ def test_a_lamellar_grating_converges_toward_rcwa(pol, need, finest):
 
 
 @pytest.mark.slow
+@pytest.mark.shard_unit
 def test_an_oblique_lamellar_grating_converges_toward_rcwa():
     """20 / 40 / 80 cells per wavelength at 20 degrees (~85 s). Measured 2.1e-2 / 1.1e-2 /
     5.7e-3: first order (0.95). RCWA at truncation 20 is within 4e-6 of 30."""
@@ -817,6 +819,7 @@ def test_an_oblique_lamellar_grating_converges_toward_rcwa():
 
 
 @pytest.mark.slow
+@pytest.mark.shard_unit
 def test_the_crossed_gratings_ringing_is_not_what_its_orders_read():
     """The crossed grating is compared unsettled (:data:`DECAY_LINE`): its ``(1, 0)`` Rayleigh
     wavelength 1.2 sits at the band's edge, whose grazing content leaves the cell too slowly for
@@ -846,6 +849,7 @@ def test_the_crossed_gratings_ringing_is_not_what_its_orders_read():
 
 
 @pytest.mark.slow
+@pytest.mark.shard_unit
 def test_a_crossed_grating_converges_toward_rcwa():
     """20 / 30 / 40 cells per wavelength (the pillar and the cell are whole cells at each;
     ~3 min, the 40 run is 212k cells x 22k steps). Measured 2.7e-2 / 1.8e-2 / 1.3e-2: first

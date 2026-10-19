@@ -76,7 +76,9 @@ def golden():
         yield data
 
 
-@pytest.fixture(scope='module', params=list(CASES))
+# One CI shard unit per material: its three tests share this comparison's runs.
+@pytest.fixture(scope='module', params=[pytest.param(name, marks=pytest.mark.shard_unit(name))
+                                        for name in CASES])
 def comparison(request):
     name = request.param
     case = CASES[name]
