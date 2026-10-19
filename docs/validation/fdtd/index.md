@@ -10,7 +10,9 @@ Spatial, temporal, material and boundary studies. Each report states its measure
 
 Current public API: [automatic stopping with incident source columns](fd-source-decay.md)
 and [native Yee-grid CUDA validation](native-cuda.md), with separate evidence for
-[bounded general-scene CUDA execution](general-cuda.md).
+[bounded general-scene CUDA execution](general-cuda.md). The
+[outer-jit memory of area-painted derivatives](fdtd-jit-painting-memory.md) measures the current
+periodic API and the study engine together.
 
 These records predate the public `wavebit.fdtd` module (2026-10-13) and name the interfaces they
 measured. The general engine they call `wavebit.fd` (`fd.Scene`, `fd.plan`, `fd.run`, `fd.check`)
@@ -48,7 +50,6 @@ usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 - [Rotated elliptical FDTD shapes and derivatives](fdtd-ellipse-gradients.md)
 - [Lossy ENZ films and calibrated scattering convergence](fdtd-enz.md)
 - [Half-space derivatives without changing the experiment](fdtd-halfspace-gradients.md)
-- [Outer-jit memory of area-painted FDTD derivatives](fdtd-jit-painting-memory.md)
 - [Separating lattice, boundary and finite-time scattering errors](fdtd-lattice-reference.md)
 - [Fitting planar dispersive layer boundaries](fdtd-layer-alignment.md)
 - [Internal layer derivatives on a fixed mesh](fdtd-layer-gradients.md)

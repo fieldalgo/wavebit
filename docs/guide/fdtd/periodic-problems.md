@@ -107,20 +107,25 @@ remain separate checks.
 
 ## Memory under an outer `jax.jit` on CPU
 
-Wavebit has no option for this. It is a JAX compiler setting, and the program it affects
-belongs to your own outer `jax.jit`, so you choose it there. With `shape_integration='area'`
-(which every rotated `Rectangle` needs), a forward-mode derivative (`jax.jvp`, `jax.jacfwd`)
-compiled on CPU can need several times the memory of the same derivative computed eagerly.
-XLA:CPU's default scheduler keeps every shape-painting intermediate alive until the end of the
-program. The memory-optimized scheduler computes the same values with a much smaller
-working set:
+Wavebit has no option for this. It is a JAX compiler setting, and the program it affects is
+your own outer `jax.jit`, so you choose it there.
+
+It matters when one layer holds two or more rectangles with `shape_integration='area'`, the
+setting every rotated rectangle needs because `'separable'` refuses rotation. In that case a forward-mode derivative
+(`jax.jvp`, `jax.jacfwd`) compiled on CPU can need several times the memory of the same
+derivative computed eagerly. XLA:CPU's default scheduler keeps every shape-painting intermediate
+alive until the painting's last reduction. The memory-optimized scheduler computes the same
+values with a much smaller working set:
 
 ```python
 options = {'xla_cpu_scheduler_type': 'CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED'}
 jacobian = jax.jit(jax.jacfwd(loss), compiler_options=options)
 ```
 
-To apply it to every jit in a process, set
-`XLA_FLAGS=--xla_cpu_scheduler_type=CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED` before JAX starts.
-The `'separable'` route is not affected. The measurements are in
+To apply it to every jit in a process, add
+`--xla_cpu_scheduler_type=CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED` to `XLA_FLAGS` before JAX
+initializes its backend, keeping any flags already there.
+
+A layer with a single rotated rectangle and the `'separable'` route are not affected. Reverse
+mode (`jax.grad`) was affected much less in the one case measured. The measurements are in
 [outer-jit memory of area-painted FDTD derivatives](../../validation/fdtd/fdtd-jit-painting-memory.md).
