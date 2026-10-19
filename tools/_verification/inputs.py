@@ -13,6 +13,7 @@ EXCLUDED = {'__pycache__', '.pytest_cache', '.ruff_cache', '_build', '.ipynb_che
             '.git', '.venv', 'artifacts', 'build', 'dist'}
 ROOT_FILES = ('pyproject.toml', 'pytest.ini', 'setup.cfg', 'setup.py', 'conftest.py',
               'README.md', 'CONTRIBUTING.md', 'CLAUDE.md', 'environment.yml', 'CITATION.bib',
+              'CITATION.cff',
               '.gitignore', '.gitattributes', 'LICENSE', 'LICENSE.meent', 'LICENSE.fmmax')
 SAFE_ENV = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS',
             'VECLIB_MAXIMUM_THREADS', 'NUMEXPR_NUM_THREADS', 'JAX_ENABLE_X64',

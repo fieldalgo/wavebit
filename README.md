@@ -132,19 +132,17 @@ with the rule for where a new file belongs, and explains how changes are reviewe
 
 ## Citation
 
+If you use Wavebit in your work, please cite the version you used.
+[`CITATION.cff`](CITATION.cff) holds the citation metadata: GitHub's "Cite this repository" button
+on the repository page reads it and exports APA or BibTeX. The same entry as BibTeX, also in
+[`CITATION.bib`](CITATION.bib):
+
 ```bibtex
 @software{wavebit,
-    title  = {Wavebit: Differentiable Electromagnetic Simulation Suite},
-    author = {Kim, Yongha},
-    year   = {2026},
-    url    = {https://github.com/fieldalgo/wavebit},
+    title   = {Wavebit: Differentiable Electromagnetic Simulation Suite},
+    author  = {Kim, Yongha},
+    year    = {2026},
+    version = {0.0.4},
+    url     = {https://github.com/fieldalgo/wavebit},
 }
 ```
-
-## License
-
-Apache-2.0. [LICENSE](LICENSE) also carries the third-party notices this project owes.
-
-## Contact
-
-[dev@fieldalgo.com](mailto:dev@fieldalgo.com)
