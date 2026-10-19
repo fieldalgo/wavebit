@@ -378,9 +378,9 @@ def _static_doors():
 
     return (
         pytest.param(lambda v: fd.Region(size=(v, 0.3, 0.3)),
-                     r'Region\(size=\.\.\.\) is static', 0.3, id='tfsf-box-size'),
+                     r'SnappedBox\(size=\.\.\.\) is static', 0.3, id='tfsf-box-size'),
         pytest.param(lambda v: fd.Region(size=(0.3, 0.3, 0.3), center=(0.0, v, 0.0)),
-                     r'Region\(center=\.\.\.\) is static', 0.05, id='tfsf-box-center'),
+                     r'SnappedBox\(center=\.\.\.\) is static', 0.05, id='tfsf-box-center'),
         pytest.param(dipole_range, r'Dipole\(range=\.\.\.\) is static', -0.1,
                      id='dipole-range'),
         pytest.param(lambda v: fd.Run(steps=v), r'Run\(steps=\.\.\.\) is static', 140,
