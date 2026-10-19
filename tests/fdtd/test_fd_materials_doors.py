@@ -130,7 +130,7 @@ def test_a_lossy_structure_reaching_a_pml_face_is_refused_naming_absorber(materi
 
 @pytest.mark.parametrize('face, kind', [
     (fd.PML(cells=12, wavelength=1.0), 'PML'),
-    (fd.Absorber(cells=12), 'Absorber'),
+    (fd.Absorber(cells=12), 'ConductiveAbsorber'),
 ])
 def test_a_structure_that_ends_inside_an_absorbing_layer_is_refused(face, kind):
     """Both absorbing faces refuse it, and for the reason they share.

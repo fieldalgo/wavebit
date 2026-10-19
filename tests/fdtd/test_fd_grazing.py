@@ -1051,7 +1051,7 @@ def test_an_offered_layer_only_passes_with_the_domain_grown_and_says_so():
     assert ('A deeper layer is taken out of the domain you gave, not added to it: grow '
             'Scene(domain=) along z with the offer you take (26 or 12 more cells on each of '
             'the two faces, 2.6 or 1.2 in total), or the layer eats into the interior and what '
-            'it then reaches -- a Diffraction plane, a structure, the domain left too thin for '
+            'it then reaches -- a DiffractionMonitor plane, a structure, the domain left too thin for '
             'the layers themselves -- is refused next.') in message
     assert _offers(message) == [(38, 1e-16, 3e-3, None), (24, 1e-16, 9.4e-4, None)]
     grown = [_grating(cells, rho=rho, **SUBSTRATE) for cells, _, rho, _ in _offers(message)]
@@ -1065,7 +1065,7 @@ def test_an_offered_layer_only_passes_with_the_domain_grown_and_says_so():
     assert _refusal(literal[0]).startswith(
         'the absorbing layers on z are 76 cells deep in total but the axis has only 72')
     assert _refusal(literal[1]).startswith(
-        "Diffraction('r') reads indices 53..54 along z and reaches the PML on 'z+' (24 cells)")
+        "DiffractionMonitor('r') reads indices 53..54 along z and reaches the PML on 'z+' (24 cells)")
 
 
 def test_a_pair_of_equal_faces_is_one_face_to_the_offer():
