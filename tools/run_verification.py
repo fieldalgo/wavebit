@@ -110,6 +110,17 @@ def collections(directory):
 def relay_output(stream, log, errors):
     """Tee available bytes immediately; do not wait for a full line or pipe buffer."""
     decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+    # A text-mode console writes each '\n' as os.linesep. On Windows the child already wrote
+    # '\r\n', which would reach the console as '\r\r\n'; collapse it first, holding back a
+    # trailing '\r' whose '\n' may arrive in the next block, so the console matches the log.
+    collapse, pending = os.linesep == '\r\n', ''
+    def text(data, final=False):
+        nonlocal pending
+        value = pending + decoder.decode(data, final=final)
+        if not collapse:
+            return value
+        pending = '' if final or not value.endswith('\r') else '\r'
+        return value[:len(value)-len(pending)].replace('\r\n', '\n')
     console = True
     try:
         while block := stream.read1(65536):
@@ -117,12 +128,12 @@ def relay_output(stream, log, errors):
             log.flush()
             if console:
                 try:
-                    sys.stdout.write(decoder.decode(block))
+                    sys.stdout.write(text(block))
                     sys.stdout.flush()
                 except BrokenPipeError:
                     console = False
         if console:
-            sys.stdout.write(decoder.decode(b'', final=True))
+            sys.stdout.write(text(b'', final=True))
             sys.stdout.flush()
     except (OSError, ValueError) as exc:
         errors.append(f'Live output recording failed: {exc}')
@@ -249,7 +260,11 @@ def run(args):
             raise ValueError('Resume refused: previous receipt has collection or recording integrity errors.')
     output = (args.output or root / 'artifacts' / 'verification' /
               (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:8])).resolve()
-    output.mkdir(parents=True, exist_ok=False)
+    try:
+        output.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        # The operating system's own message is localized; name the refusal in English.
+        raise ValueError(f'Output directory already exists: {output}') from None
     save(output / 'inputs.json', inputs)
     started = time.monotonic()
     phases, nodes, inherited, errors = [], [], {}, []
