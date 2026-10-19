@@ -26,7 +26,7 @@ def test_closed_flux_refuses_each_face_cutting_a_sphere(axis, side):
     center[axis] = side*.35
     shape = fd.Sphere(radius=.2, center=tuple(center))
     monitor = fd.Flux('abs', box=fd.Region(size=(.8,)*3), wavelengths=(1.,))
-    with pytest.raises(ValueError, match=r"Flux\('abs'\).*support of structures\[0\].*Sphere"):
+    with pytest.raises(ValueError, match=r"FluxMonitor\('abs'\).*support of structures\[0\].*Sphere"):
         planned(scene(shape, monitor))
 
 

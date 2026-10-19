@@ -29,7 +29,7 @@ def problem(value=2.1, *, kind='slab', coefficient='epsilon', monitor=True):
 def settings(kind='slab', *, stabilize=0., reference=True, steps=160):
     n = numerics(steps=steps).replace(geometry_ranges={})
     refs = {'z-': Material(2.1), 'z+': Material(2.1 if kind == 'background' else 1.)}
-    return n.replace(absorber=n.absorber.replace(stabilize=stabilize,
+    return n.replace(absorber=n.absorber.replace(stabilizing_loss=stabilize,
                      reference_media=refs if reference else {}))
 
 

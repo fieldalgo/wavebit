@@ -99,7 +99,8 @@ class DiffractionMonitor:
         for name in ('wavelengths', 'orders'):
             object.__setattr__(self, name, tuples(getattr(self, name)))
         if self.wave not in WAVES:
-            hint = {'reflect': 'reflected', 'transmit': 'transmitted'}.get(self.wave)
+            hint = ({'reflect': 'reflected', 'transmit': 'transmitted'}.get(self.wave)
+                    if isinstance(self.wave, str) else None)
             raise ValueError(
                 f'DiffractionMonitor(wave={self.wave!r}): {WAVES[0]!r} (leaving on the incidence '
                 f'side) or {WAVES[1]!r} (leaving on the far side).'

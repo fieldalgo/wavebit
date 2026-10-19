@@ -190,8 +190,9 @@ def load_run(path):
         raise record_error('Missing completion manifest; this is not a complete run record.', str(path)) from exc
     if isinstance(manifest, dict) and manifest.get('schema') == 'wavebit.run/v1':
         raise record_error('This is a wavebit.run/v1 record, written before the public names were '
-                           'renamed; it is not converted. Rerun its job with the current names; see '
-                           'the public-name migration guide, docs/migration/public-names.md.',
+                           'renamed; a v1 record of either solver is refused, not converted. Build '
+                           'its job again from current declarations and run it; see the '
+                           'public-name migration guide, docs/migration/public-names.md.',
                            'manifest.schema')
     if not isinstance(manifest, dict) or manifest.get('schema') != _SCHEMA:
         raise record_error('Expected wavebit.run/v2.', 'manifest.schema')

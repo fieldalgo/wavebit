@@ -32,14 +32,29 @@ _PRIVATE_MODULES = ('problem', 'geometry', 'boundaries', 'sources', 'monitors', 
                     'result', 'results')
 
 
+class _Answered:
+    """The ``obj`` of a tombstone's AttributeError: the message already names the replacement,
+    so Python's "Did you mean" (computed from ``dir(obj)``) has nothing to add."""
+
+    def __dir__(self):
+        return []
+
+
 def __getattr__(name):
     if name in _RENAMED:
         raise AttributeError(
             f'wavebit.fdtd.{name} is now wavebit.fdtd.{_RENAMED[name]}. The old name was removed, '
-            f'not aliased; see the public-name migration guide, docs/migration/public-names.md.')
+            f'not aliased; see the public-name migration guide, docs/migration/public-names.md.',
+            name=name, obj=_Answered())
     if name in _PRIVATE_MODULES:
         raise AttributeError(
             f'wavebit.fdtd.{name} is no longer a public module; every public name lives in '
             f'wavebit.fdtd itself (for example wavebit.fdtd.FluxMonitor). See the public-name '
-            f'migration guide, docs/migration/public-names.md.')
+            f'migration guide, docs/migration/public-names.md.', name=name, obj=_Answered())
     raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
+def __dir__():
+    """The public surface only, so ``dir(fdtd)`` and Python's "Did you mean" name no private module."""
+    return sorted(set(__all__) | {'diagnostics'}
+                  | {n for n in globals() if n.startswith('__') and n.endswith('__')})

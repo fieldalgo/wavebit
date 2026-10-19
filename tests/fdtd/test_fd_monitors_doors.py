@@ -219,8 +219,9 @@ def test_stopping_on_decay_is_refused_naming_stage_7(keyword):
 
 def test_the_scene_takes_the_five_monitor_types_and_nothing_else():
     scene = dipole_box(size=0.6, steps=5)
-    with pytest.raises(TypeError, match='fd.Record, fd.Flux, fd.Field, fd.FarField or '
-                                        'fd.Diffraction'):
+    with pytest.raises(TypeError, match='fdtd.TimeSeriesMonitor, fdtd.FluxMonitor, '
+                                        'fdtd.FieldMonitor, fdtd.FarFieldMonitor or '
+                                        'fdtd.DiffractionMonitor'):
         scene.replace(monitors=(fd.Region(size=(0.1, 0.1, 0.1)),))
     one = fd.Flux('f', box=fd.Region(size=(0.3, 0.3, 0.3)), wavelengths=WS)
     assert scene.replace(monitors=one).monitors == (one,)
@@ -454,7 +455,7 @@ def test_a_box_is_a_structure_and_other_shapes_are_stage_4():
     fd.Structure(fd.Region(size=(0.2, 0.2, 0.2)), glass)
     with pytest.raises(TypeError, match='stage 4'):
         fd.Structure(fd.Plane(z=0.0), glass)
-    with pytest.raises(NotImplementedError, match='fd.Region') as e:
+    with pytest.raises(NotImplementedError, match='fdtd.SnappedBox') as e:
         fd.Slab(z=(0, 1), x=(0, 1))
     assert 'stage 4' in str(e.value)
     with pytest.raises(NotImplementedError, match='stage 4') as e:
@@ -724,7 +725,7 @@ def test_the_stage_2_one_cell_columns_are_not_user_faces():
 def test_axis1d_is_one_cell_and_wraps_both_faces():
     with pytest.raises(ValueError, match='one cell'):
         _plan(_axis1d_scene(ny=4))
-    with pytest.raises(ValueError, match='Axis1D wrap the axis'):
+    with pytest.raises(ValueError, match='InvariantAxis wrap the axis'):
         fd.Boundaries(x=fd.Periodic(), y=(fd.Axis1D(k=1.0), fd.PEC()), z=fd.Periodic())
     one = fd.Axis1D(k=1.0)
     fd.Boundaries(x=fd.Periodic(), y=(one, one), z=fd.Periodic())

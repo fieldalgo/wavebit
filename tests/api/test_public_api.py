@@ -233,3 +233,18 @@ def test_the_fdtd_reference_documents_every_public_name():
     documented = set(re.findall(r'^\.\. auto(?:class|function|module):: wavebit\.fdtd\.(\w+)',
                                 page.read_text(encoding='utf-8'), flags=re.M))
     assert documented == set(fdtd.__all__)
+
+
+def test_dir_of_fdtd_is_its_public_surface():
+    """``dir(fdtd)`` is what Python's "Did you mean" reads; it named the private ``_monitors``."""
+    listed = [name for name in dir(fdtd) if not name.startswith('__')]
+    assert sorted(listed) == sorted(set(fdtd.__all__) | {'diagnostics'})
+
+
+@pytest.mark.parametrize('name', ['Record', 'Region', 'monitors', 'problem', 'results'])
+def test_a_tombstone_is_not_followed_by_a_guess(name):
+    import traceback
+    with pytest.raises(AttributeError) as caught:
+        getattr(fdtd, name)
+    shown = ''.join(traceback.format_exception_only(caught.value))
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown

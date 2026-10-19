@@ -139,7 +139,7 @@ def test_single_precision_is_refused_without_a_silent_double_run():
 
 
 def test_radians_are_lowered_once_and_pulse_width_is_hz():
-    p=plane_problem();s=p.sources[0].replace(theta=.2,phi=.3,delay=1e-15)
+    p=plane_problem();s=p.sources[0].replace(theta=.2,phi=.3,delay_seconds=1e-15)
     p=p.replace(sources=(s,));lowered,_=lower_problem(p,plane_numerics())
     source=lowered.sources[0]
     assert source.theta==pytest.approx(math.degrees(.2))

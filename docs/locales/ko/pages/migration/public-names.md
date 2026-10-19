@@ -68,7 +68,7 @@ fdtd.TimeSeriesMonitor('probe', at=(0.0, 0.0, 0.1))
 모든 선언은 `wavebit.fdtd`에서 가져옵니다. 구현 모듈 `wavebit.fdtd.problem`, `geometry`,
 `boundaries`, `sources`, `monitors`, `numerics`, `result`, `results`는 더 이상 공개되지 않습니다.
 `fdtd.monitors` 같은 속성 접근은 실패하며 `wavebit.fdtd`를 쓰라고 알려 줍니다. 공개 하위 모듈은
-`fdtd.native`, `fdtd.periodic`, `fdtd.diagnostics`입니다.
+`fdtd.native`, `fdtd.periodic`, `fdtd.diagnostics`이고, `dir(fdtd)`에는 공개 이름만 나옵니다.
 
 ## 옛 철자를 쓰면
 
@@ -79,13 +79,32 @@ AttributeError: wavebit.fdtd.Record is now wavebit.fdtd.TimeSeriesMonitor. The o
 TypeError: Numerics(discretisation=...) is now Numerics(discretization=...). The old keyword was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
 ```
 
+새 이름을 알려 주는 것은 속성 접근(`fdtd.Record`, `fdtd.monitors`)입니다.
+`from wavebit.fdtd import Record`는 Python 자체의 `ImportError: cannot import name 'Record'`를,
+`import wavebit.fdtd.monitors`는 `ModuleNotFoundError`를 냅니다. 이 두 형태에서는 Python이 모듈의
+메시지를 버리기 때문이며, NumPy에서 지운 이름도 마찬가지입니다. 새 이름은 위의 표에 있습니다.
+
+## 보고서 키와 이슈 경로
+
+같은 이름 변경이 검사·준비·결과가 돌려주는 데이터에도 적용됩니다.
+
+| 이전 | 이후 |
+| --- | --- |
+| `report.resolved['numerical_policies']['discretisation']`, `Result.provenance`의 같은 키 | `...['numerical_policies']['discretization']` |
+| 이슈 경로 `numerics.discretisation` | `numerics.discretization` |
+| 이슈 경로 `numerics.decay`, `numerics.decay.window_seconds` | `numerics.stopping`, `numerics.stopping.window_seconds` |
+
+`Prepared.contract`는 살아 있는 소스 잎을 `amplitude/phase/delay_seconds`로 적습니다.
+
 ## Job 파일과 실행 기록
 
-저장된 `Job`은 각 선언을 공개 이름으로 기록하므로 스키마가 `wavebit.job/v2`가 되었습니다.
-`wavebit.job/v1` 파일은 더 이상 없는 이름으로 읽는 대신 코드 `job.schema`로 거부됩니다. 새
-이름으로 선언을 다시 만들어 다시 저장하십시오. FDTD job의 키는 이름과 함께 바뀝니다. 실행 기록도
-같은 이유로 `wavebit.run/v2`이며, `wavebit.run/v1` 기록은 거부됩니다. 기능 매니페스트는 버전
-23입니다.
+저장된 `Job`은 각 선언을 공개 이름으로 기록하므로 두 솔버 모두 스키마가 `wavebit.job/v2`가
+되었습니다. 실행 설정은 하나뿐인 공개 경로 `wavebit.Execution`으로 태그됩니다(이전에는
+`wavebit._common.execution.Execution`). 어느 솔버의 `wavebit.job/v1` 파일이든 더 이상 없는 이름으로
+읽는 대신 코드 `job.schema`로 거부됩니다. 현재 선언으로 Job을 다시 만들어 저장하십시오. 스키마와
+실행 태그가 키 해시에 들어가므로 RCWA job을 포함한 모든 job 키가 바뀝니다. 실행 기록도 같은 이유로
+`wavebit.run/v2`이며, `wavebit.run/v1` 기록은 코드 `record.format`으로 거부됩니다. 기능 매니페스트는
+버전 23입니다.
 
 ## 전체 예제
 

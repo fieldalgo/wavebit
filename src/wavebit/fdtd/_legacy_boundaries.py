@@ -526,7 +526,16 @@ _WRAPPING = (Periodic, Bloch, Axis1D)
 
 
 def _said(face):
-    """``face`` as a message shows it: its repr, under the class name a public caller wrote."""
+    """``face`` as a public caller writes it, for a message that offers it back as a remedy.
+
+    An absorbing face is ``Open()`` there, its layer a ``Numerics(absorber=...)`` choice; an
+    invariant axis has no ``algebraic`` field (it only ever took ``True``). Any other face is
+    its repr under its public class name.
+    """
+    if isinstance(face, (PML, Absorber)):
+        return 'Open()'
+    if isinstance(face, Axis1D):
+        return f'InvariantAxis(k={face.k!r}, k_max={face.k_max!r})'
     text, own = repr(face), type(face).__name__
     return public_name(face) + text[len(own):] if text.startswith(own) else text
 

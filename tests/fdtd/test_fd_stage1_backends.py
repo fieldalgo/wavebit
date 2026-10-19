@@ -440,4 +440,4 @@ def test_the_dispersive_half_space_warns_that_it_reaches_its_absorber():
                 if issubclass(w.category, fd.AbsorberProximityWarning)]
     assert len(messages) == 1, [str(w.message) for w in caught]
     assert "'z+'" in messages[0] and 'structures[0]' in messages[0]
-    assert 'an Absorber there is matched at normal incidence only' in messages[0]
+    assert 'a ConductiveAbsorber there is matched at normal incidence only' in messages[0]

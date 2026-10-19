@@ -120,7 +120,7 @@ def test_public_continuation_uses_physical_medium_with_fixed_reference(backend):
 def test_public_stabilization_refuses_traced_continued_medium(backend):
     runtime(backend)
     n = numerics(steps=2)
-    n = n.replace(absorber=n.absorber.replace(stabilize=.0001,
+    n = n.replace(absorber=n.absorber.replace(stabilizing_loss=.0001,
                     reference_media={'z-': Material(2.1)}))
     p = quiet(fdtd.prepare, pillar(), numerics=n, backend=backend)
     def run(e):

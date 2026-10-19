@@ -91,7 +91,7 @@ def test_public_column_decay_returns_the_executed_prefix(kind, backend, padding)
                    Fraction(stop['peaks'][k]) for k in stop['groups'])
     else:
         assert stop['reason'] == 'cap' and count == 1800
-    fixed = quiet(fdtd.run, p, numerics=n.replace(decay=None,
+    fixed = quiet(fdtd.run, p, numerics=n.replace(stopping=None,
         duration=fdtd.Duration(steps=count)), backend=backend)
     assert 'mem:s:col:E' in stop['groups'] and 'mem:s:col:H' in stop['groups']
     for component in ('E', 'H'):
@@ -198,7 +198,7 @@ def test_stopped_observables_agree_with_long_fixed_runs(kind, padding):
     if padding == 'absorber':
         n = n.replace(absorber=fdtd.ConductiveAbsorber(cells=12))
     short = quiet(fdtd.run, p, numerics=n)
-    long = quiet(fdtd.run, p, numerics=n.replace(decay=None,
+    long = quiet(fdtd.run, p, numerics=n.replace(stopping=None,
         duration=fdtd.Duration(steps=5400)))
     count = short.provenance['actual_steps']
     trace = np.asarray(long['probe'].values)
@@ -281,7 +281,7 @@ def test_column_source_gate_and_concrete_execution_are_preserved(kind, mode):
     p, n = column_case(kind, steps=4)
     if mode == 'delay':
         delay = 100e-6/C0
-        p = p.replace(sources=(p.sources[0].replace(delay=delay),))
+        p = p.replace(sources=(p.sources[0].replace(delay_seconds=delay),))
         result = quiet(fdtd.run, p, numerics=n)
         stop = result.diagnostics['stopping']
         assert stop['eligible_time_seconds'] > delay
