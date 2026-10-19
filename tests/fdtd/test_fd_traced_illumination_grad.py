@@ -134,7 +134,7 @@ def test_plane_wave_media_must_lie_outside_every_traced_support():
     concrete partner's support may reach them, and a support ending at the read layer may not.
     """
     cases = ((dict(sheet=.55), 0, "PlaneWave('pw') normalisation", '(40, 41)'),
-             (dict(plane=-.55), 1, "Diffraction('T')", '(18, 19)'))
+             (dict(plane=-.55), 1, "DiffractionMonitor('T')", '(18, 19)'))
     for kwargs, index, label, cells in cases:
         p = quiet(fd.plan, stack(**kwargs))
         with pytest.raises(ValueError, match=r'traced structures\[%d\]' % index) as refused:
