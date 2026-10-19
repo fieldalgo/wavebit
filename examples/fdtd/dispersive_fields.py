@@ -23,17 +23,17 @@ def make_problem():
     problem = fdtd.Problem(units=UNITS,
         scene=fdtd.Scene(domain=fdtd.Domain(size=(.1, .1, 1.6)),
             boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-            structures=(fdtd.Structure('film', fdtd.Slab(z=(0., .2)), film),)),
+            structures=(fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(0., .2)), material=film),)),
         sources=(fdtd.PlaneWave('pulse', plane=fdtd.Plane(z=.6),
             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=3e13)),),
         outputs=fdtd.Outputs(monitors=(
-            fdtd.Record('time_Ey', at=(0., 0., -.3), component='Ey'),
-            fdtd.Field('fourier_fields', plane=fdtd.Plane(z=-.3),
+            fdtd.TimeSeriesMonitor('time_Ey', at=(0., 0., -.3), component='Ey'),
+            fdtd.FieldMonitor('fourier_fields', plane=fdtd.Plane(z=-.3),
                 wavelengths=WAVELENGTHS, components=('Ey', 'Hx')),
-            fdtd.Diffraction('r', plane=fdtd.Plane(z=.4), wavelengths=WAVELENGTHS,
-                source='pulse', side='reflect', orders=0, reference_plane=.2, incident_plane=.2),
-            fdtd.Diffraction('t', plane=fdtd.Plane(z=-.3), wavelengths=WAVELENGTHS,
-                source='pulse', side='transmit', orders=0, reference_plane=0., incident_plane=.2),
+            fdtd.DiffractionMonitor('r', plane=fdtd.Plane(z=.4), wavelengths=WAVELENGTHS,
+                source='pulse', wave='reflected', orders=0, reference_plane=.2, incident_plane=.2),
+            fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-.3), wavelengths=WAVELENGTHS,
+                source='pulse', wave='transmitted', orders=0, reference_plane=0., incident_plane=.2),
         )))
     return problem, film
 

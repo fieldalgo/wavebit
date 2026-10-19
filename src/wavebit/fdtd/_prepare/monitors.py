@@ -74,6 +74,7 @@ from wavebit.fdtd._legacy_monitors import Flux
 from wavebit.fdtd._kernel.grid import OFFSETS
 from wavebit.fdtd._kernel.masks import Slab
 from wavebit.fdtd._kernel.observe import DFTRegion
+from wavebit.fdtd._public_names import public_name
 
 __all__ = ['monitor_regions', 'PlaneLayout', 'plane_layout', 'box_faces', 'field_points',
            'diffraction_layout', 'diffraction_window', 'farfield_checks', 'FACE_SEP']
@@ -256,8 +257,8 @@ def field_points(monitor, grid):
                     lo, hi = max(lo, 0), min(hi, n)
                     if hi <= lo:
                         raise ValueError(
-                            f'Field({monitor.name!r}): no {comp} point lies inside the extent '
-                            f'{ext} along {AXES[a]} on dx = {grid.dx:g}.')
+                            f'FieldMonitor({monitor.name!r}): no {comp} point lies inside the '
+                            f'extent {ext} along {AXES[a]} on dx = {grid.dx:g}.')
             ranges[a] = (lo, hi)
             coords[a] = grid.low[a] + (np.arange(lo, hi) + o) * grid.dx
         out[comp] = (_slab(c, ranges), (coords[0], coords[1], coords[2]))
@@ -275,29 +276,30 @@ def plane_waves(scene):
 
 def diffraction_layout(monitor, scene, grid):
     """The :class:`PlaneLayout` of a Diffraction monitor, after its scene-level refusals."""
-    where = f'Diffraction({monitor.name!r})'
+    where = f'DiffractionMonitor({monitor.name!r})'
     waves = plane_waves(scene)
     if len(waves) != 1:
         raise ValueError(
             f'{where}: the orders are normalised by the incident amplitude of the scene\'s '
             f'fd.PlaneWave, read from its own column, and this scene has {len(waves)} '
-            f'PlaneWave sources. A Diffraction monitor needs exactly one.')
+            f'PlaneWave sources. A DiffractionMonitor needs exactly one.')
     pw = waves[0]
     P = monitor.axis
     if P != pw.axis:
         raise ValueError(
             f'{where} is a plane across {AXES[P]}, but PlaneWave({pw.name!r}) travels along '
             f'{AXES[pw.axis]}. The orders live on the plane across the propagation axis: say '
-            f'Diffraction({monitor.name!r}, {AXES[pw.axis]}=...).')
+            f'DiffractionMonitor({monitor.name!r}, plane=fdtd.Plane({AXES[pw.axis]}=...), '
+            f'...).')
     for a in range(3):
         if a == P:
             continue
         face = scene.boundaries.face(AXES[a] + '-')
         if not isinstance(face, (Periodic, Bloch, Axis1D)):
             raise ValueError(
-                f'{where}: the {AXES[a]} faces are {type(face).__name__}; diffraction orders '
-                f'exist in a periodic, Bloch or Axis1D cell only (on an open scene the far '
-                f'field is fd.FarField, the transform of a closed box).')
+                f'{where}: the {AXES[a]} faces are {public_name(face)}; diffraction orders '
+                f'exist in a periodic, Bloch or InvariantAxis cell only (on an open scene the '
+                f'far field is fdtd.FarFieldMonitor, the transform of a closed box).')
     layout = plane_layout(where, grid, P, monitor.position)
     return layout, pw
 
@@ -312,7 +314,7 @@ def diffraction_window(monitor, scene, grid, eps, mu):
     import wavebit.fdtd._post as _post
     from wavebit.fdtd._legacy_boundaries import Bloch
     from wavebit.materials.time_domain import concrete
-    where = f'Diffraction({monitor.name!r})'
+    where = f'DiffractionMonitor({monitor.name!r})'
     P = monitor.axis
     u, v = (P + 1) % 3, (P + 2) % 3
     if monitor.orders is not None:
@@ -321,9 +323,9 @@ def diffraction_window(monitor, scene, grid, eps, mu):
             if M and isinstance(scene.boundaries.face(AXES[a] + '-'), Axis1D):
                 spelled = f'({Mu}, 0)' if a == v else f'(0, {Mv})'
                 raise ValueError(
-                    f'{where}(orders={monitor.orders}): {AXES[a]} is an fd.Axis1D axis, one '
-                    f'cell of a field exp(i k {AXES[a]}), which has the single order 0; say '
-                    f'orders={spelled}.')
+                    f'{where}(orders={monitor.orders}): {AXES[a]} is an fdtd.InvariantAxis '
+                    f'axis, one cell of a field exp(i k {AXES[a]}), which has the single '
+                    f'order 0; say orders={spelled}.')
     else:
         kpar = []
         for a in (u, v):
@@ -371,21 +373,22 @@ def farfield_checks(monitor, scene, grid):
     from wavebit.fdtd._legacy_boundaries import Periodic
     from wavebit.fdtd._legacy_sources import TFSF
     import wavebit.fdtd._post as _post
-    where = f'FarField({monitor.name!r})'
+    where = f'FarFieldMonitor({monitor.name!r})'
     for a, axis in enumerate(AXES):
         for side in '-+':
             face = scene.boundaries.face(axis + side)
             if isinstance(face, (Periodic, Bloch, Axis1D)):
                 raise ValueError(
-                    f'{where}: the {axis} faces are {type(face).__name__} -- a periodic cell, '
+                    f'{where}: the {axis} faces are {public_name(face)} -- a periodic cell, '
                     f'whose far field is a set of plane waves, the diffraction orders. Use '
-                    f'fd.Diffraction(...) there; a FarField is the transform of a closed box in '
-                    f'an open scene.')
+                    f'fdtd.DiffractionMonitor(...) there; a FarFieldMonitor is the transform of '
+                    f'a closed box in an open scene.')
             if not isinstance(face, Absorbing):
                 raise ValueError(
-                    f'{where}: the face {axis + side!r} is {type(face).__name__}. The transform '
-                    f'is the free-space one, so every face must absorb (fd.PML or fd.Absorber); '
-                    f'a wall or a mirror would need image currents, which are not in this build.')
+                    f'{where}: the face {axis + side!r} is {public_name(face)}. The transform '
+                    f'is the free-space one, so every face must absorb (fdtd.Open(), with '
+                    f'fd.PML or fdtd.ConductiveAbsorber as Numerics(absorber=...)); a wall or a '
+                    f'mirror would need image currents, which are not in this build.')
     lo, hi = _box_nodes(where, grid, monitor.box)
     for index, s in enumerate(scene.structures):
         box = s.shape.support(grid)            # everything it may touch must be inside
@@ -461,10 +464,10 @@ def _clear_of_sources(where, scene, grid, lo, hi, closed, tfsf=True):
                         'keep the plane one cell clear of it')
                 raise ValueError(
                     f'{where}: the {shape} (nodes {_nodes_text(lo, hi)}) cuts the stamp of '
-                    f'Dipole({src.name!r}), which writes its {src.field}{"xyz"[src.index]} at '
-                    f'cells {stamp} (two cells either side of its centre). The 2-cell face '
-                    f'reads one cell each side of the surface, so it would count part of the '
-                    f'source and miss part of its power; {keep}.')
+                    f'CurrentDipole({src.name!r}), which writes its '
+                    f'{src.field}{"xyz"[src.index]} at cells {stamp} (two cells either side '
+                    f'of its centre). The 2-cell face reads one cell each side of the surface, '
+                    f'so it would count part of the source and miss part of its power; {keep}.')
         elif isinstance(src, PlaneWave):
             P = src.axis
             k = _node(grid, P, src.position)
@@ -525,12 +528,12 @@ def _clear_of_structures(where, scene, grid, lo, hi):
         if not (inside or outside):
             raise ValueError(
                 f'{where}: the closed box (nodes {_nodes_text(lo, hi)}) cuts or '
-                f'touches the support of structures[{index}] ({type(structure.shape).__name__}, '
+                f'touches the support of structures[{index}] ({public_name(structure.shape)}, '
                 f'cells {box}). Its flux would count only part of that structure, not its '
                 f'whole absorption or scattering. Enclose the entire support with one cell '
                 f'to spare on every side, or keep it one cell outside the box. The support '
-                f'test is conservative for nonrectangular bodies; use fd.Field for interior '
-                f'field samples.')
+                f'test is conservative for nonrectangular bodies; use fdtd.FieldMonitor for '
+                f'interior field samples.')
 
 
 def _clear_of_absorbers(where, scene, grid, P, k_lo, k_hi):
@@ -546,7 +549,7 @@ def _clear_of_absorbers(where, scene, grid, P, k_lo, k_hi):
         if not ok:
             raise ValueError(
                 f'{where} reads indices {k_lo}..{k_hi} along {AXES[P]} and reaches the '
-                f'{type(face).__name__} on {AXES[P] + side!r} ({cells} cells). Inside an '
+                f'{public_name(face)} on {AXES[P] + side!r} ({cells} cells). Inside an '
                 f'absorbing layer the stretched field is not the physical one and its flux '
                 f'means nothing; keep the monitor at indices {cells}..{n - 1 - cells}.')
 
@@ -557,7 +560,7 @@ def monitor_regions(scene, grid, dt):
     for m in scene.monitors:
         if isinstance(m, FarField):
             freqs = tuple(1.0 / w for w in m.wavelengths)
-            where = f'FarField({m.name!r})'
+            where = f'FarFieldMonitor({m.name!r})'
             eps, mu = farfield_checks(m, scene, grid)
             if m.propagation == 'yee':
                 from wavebit.fdtd._radiation import modes
@@ -572,7 +575,7 @@ def monitor_regions(scene, grid, dt):
                                      freqs=freqs, parts=layout.parts(), dt=dt))
         elif isinstance(m, Flux):
             freqs = tuple(1.0 / w for w in m.wavelengths)
-            where = f'Flux({m.name!r})'
+            where = f'FluxMonitor({m.name!r})'
             if m.box is not None:
                 lo, hi = _box_nodes(where, grid, m.box)
                 _clear_of_sources(where, scene, grid, lo, hi, closed=True)
@@ -596,7 +599,7 @@ def monitor_regions(scene, grid, dt):
         elif isinstance(m, Diffraction):
             freqs = tuple(1.0 / w for w in m.wavelengths)
             layout, pw = diffraction_layout(m, scene, grid)
-            where = f'Diffraction({m.name!r})'
+            where = f'DiffractionMonitor({m.name!r})'
             _clear_layout(where, scene, grid, layout)
             _clear_of_sources(where, scene, grid, *_plane_nodes(grid, layout), closed=False)
             # The plane-wave algebra needs one plain medium at the plane and at the sheet;
@@ -623,7 +626,7 @@ def _clear_layout(where, scene, grid, layout):
                     f'{where} runs the whole {AXES[a]} axis, whose faces absorb: it would add up '
                     f'the stretched field inside the layers, which is not a flux of anything. '
                     f'Give the plane an extent clear of them, fd.Plane(..., {AXES[a]}=(lo, hi)), '
-                    f'or use a closed fd.Region.')
+                    f'or use a closed fdtd.SnappedBox.')
             continue                              # a periodic (or walled) axis, read whole
         lo, hi = layout.nodes[a]
         _clear_of_absorbers(where, scene, grid, a, lo, hi - 1)

@@ -12,9 +12,9 @@ def _problem(kind='PlaneWave'):
         domain = fdtd.Domain(size=(.1, .1, 1.6))
         boundaries = fdtd.Boundaries.periodic(z=fdtd.Open())
     else:
-        source = (fdtd.Dipole('light', center=(0., 0., 0.), pulse=pulse)
+        source = (fdtd.CurrentDipole('light', center=(0., 0., 0.), pulse=pulse)
                   if kind == 'Dipole' else
-                  fdtd.TFSF('light', box=fdtd.Region(size=(.8,) * 3), pulse=pulse))
+                  fdtd.TFSF('light', box=fdtd.SnappedBox(size=(.8,) * 3), pulse=pulse))
         domain = fdtd.Domain(size=(1.6,) * 3)
         boundaries = fdtd.Boundaries.open()
     return fdtd.Problem(units=Units(length='um'),
@@ -91,7 +91,7 @@ def test_tfsf_box_type_is_checked_before_physical_bounds(box):
     _refuse_at_all_doors(valid, bad, _numerics(), 'sources.light.box', 'expected Region')
     # A real Region is still judged against the physical domain, before padding.
     outside = valid.replace(sources=(valid.sources[0].replace(
-        box=fdtd.Region(size=(.8,) * 3, center=(0., 0., .7))),))
+        box=fdtd.SnappedBox(size=(.8,) * 3, center=(0., 0., .7))),))
     report = fdtd.check(outside, numerics=_numerics())
     assert not report.ok
     assert report.issues[0].path == 'sources.light.box'

@@ -8,7 +8,7 @@
 
 Written: 2026-10-07
 
-Targets: `src/wavebit/fdtd/_scene.py`, `src/wavebit/fdtd/monitors.py`,
+Targets: `src/wavebit/fdtd/_scene.py`, `src/wavebit/fdtd/_monitors.py`,
 `src/wavebit/fdtd/_prepare/plan.py`, `src/wavebit/fdtd/_execution.py`, `src/wavebit/fdtd/_prepare/report.py`,
 `src/wavebit/fdtd/_decay.py`, `src/wavebit/fdtd/_runtime.py`,
 `tests/fdtd/test_fd_decay_stop.py`, `studies/fdtd/decay_stop/fdtd_decay_stop_probe.py`.

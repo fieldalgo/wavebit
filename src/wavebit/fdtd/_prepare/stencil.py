@@ -69,6 +69,7 @@ from wavebit.fdtd._prepare.triplet import PAIRS
 from wavebit.fdtd._prepare.triplet import TRIPLETS
 from wavebit.fdtd._prepare.triplet import circle_maps
 from wavebit.fdtd._prepare.triplet import sphere_maps
+from wavebit.fdtd._public_names import public_description, public_name
 
 __all__ = ['DEFAULT', 'MEMORY_BOUND_BYTES', 'REACH', 'STENCIL', 'active_rows', 'arguments',
            'energy_bounds', 'fit', 'geometry', 'lower', 'operator_digest', 'padded',
@@ -651,7 +652,7 @@ def _refuse_numbers(where, leaves, when):
             continue
         kind = f'{type(value).__module__}.{type(value).__qualname__}'
         raise ValueError(
-            f'StencilNumberRefused: {where} asked for discretisation={STENCIL!r} and '
+            f'StencilNumberRefused: {where} asked for discretization={STENCIL!r} and '
             f'{"fd.plan" if when == "plan" else "fd.lower"} was handed a {kind} as its {name}, '
             f'not a plain number. The operator is prepared once on the host in SciPy -- a sparse '
             f'least-squares fit, a symmetric eigenpair and a sparse factorization -- so it is a '
@@ -663,7 +664,7 @@ def _refuse_numbers(where, leaves, when):
             f'tensor -- JAX, Torch or NumPy, traced or not -- is refused, at fd.plan and again '
             f'at fd.lower. For the stencil at this value, write the value as a number '
             f'(e.g. eps=2.25). For a derivative with respect to this structure, use the voxel '
-            f'rule in BOTH scenes: discretisation={DEFAULT!r} (or leave it out), '
+            f'rule in BOTH scenes: Numerics(discretization={DEFAULT!r}) (or leave it out), '
             f'p = fd.plan(scene) from plain numbers, then fd.lower(traced_scene, p, backend) -- '
             f'the recipe tests/fdtd/test_fd_constitutive.py uses. The commit that differentiates '
             f'through a prepared operator is what lifts this.')
@@ -691,25 +692,26 @@ def _refuse_structure(structure, index, when='plan'):
     from wavebit.fdtd._legacy_geometry import Sphere as _SphereShape
     from wavebit.materials.time_domain import Conductor
     from wavebit.materials.time_domain import Dispersive
-    where = f'structures[{index}] ({structure.shape.describe()})'
+    where = f'structures[{index}] ({public_description(structure.shape)})'
     if structure.shape.body() is None:
         raise ValueError(
-            f'StencilShapeRefused: {where} asked for discretisation={STENCIL!r}, but it is '
+            f'StencilShapeRefused: {where} asked for discretization={STENCIL!r}, but it is '
             f'cell-snapped -- its edge IS a cell boundary, so there is no interface inside a '
             f'voxel for the operator to constrain the edge and dual-face states across. The '
-            f'extended stencil is for a shape with a fractional edge; leave a Slab or a Region '
-            f'on discretisation={DEFAULT!r}.')
+            f'extended stencil is for a shape with a fractional edge; leave a SnappedSlab or a '
+            f'SnappedBox on Numerics(discretization={DEFAULT!r}).')
     if type(structure.shape) is not _SphereShape:
         raise ValueError(
-            f'StencilShapeRefused: {where} asked for discretisation={STENCIL!r}. The operator '
+            f'StencilShapeRefused: {where} asked for discretization={STENCIL!r}. The operator '
             f'is assembled from a ball\'s exact edge and dual-face fills, and fd.Sphere is '
             f'the one shape that answers both in closed form today '
             f'(src/wavebit/fdtd/_shapes/_bodies.py) -- fd.Sphere itself, not a subclass, whose '
             f'body may be its own. The tangent plane\'s forms beside them are not wired in as '
             f'a fallback: every convergence order this operator has measured was taken with '
             f'the exact ones, and the plane\'s mean gap to the exact sphere falls only like '
-            f'h. Ask with fd.Sphere(radius=..., center=...) itself, or give this shape -- an '
-            f'fd.Box, fd.Cylinder or fd.Prism, or a subclass -- discretisation={DEFAULT!r}. '
+            f'h. Ask with fd.Sphere(radius=..., center=...) itself, or keep this shape -- an '
+            f'fd.Box, fd.Cylinder or fd.Prism, or a subclass -- on '
+            f'Numerics(discretization={DEFAULT!r}). '
             f'The commit that measures a body without them is what lifts this.')
     material = structure.material
     # The radius and centre are not asked about here: fd.Sphere's own static door
@@ -718,7 +720,7 @@ def _refuse_structure(structure, index, when='plan'):
                     + tuple((f'mu[{a}]', v) for a, v in enumerate(material.mu_value)), when)
     if when != 'plan' and isinstance(material, (Conductor, Dispersive)):
         raise ValueError(
-            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with a '
+            f'StencilScopeRefused: {where} asked for discretization={STENCIL!r} with a '
             f'conductivity or poles. The interface states the operator constrains are the '
             f'lossless constant tangential-E and normal-D ones, and it is fitted from the real '
             f'eps alone, so a loss would be dropped from the region without a word. Neither '
@@ -729,19 +731,19 @@ def _refuse_structure(structure, index, when='plan'):
     if material.is_magnetic:
         unit = all(_plain(v) and v == 1 for v in material.mu_value)
         raise ValueError(
-            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} and names a '
+            f'StencilScopeRefused: {where} asked for discretization={STENCIL!r} and names a '
             f'permeability (mu={material.mu!r}'
             f'{", which these doors read as magnetic whatever its value" if unit else ""}). '
             f'The operator is assembled over the E edges and their dual faces alone, so a '
             f'permeability would keep the rule it has today on H while E moved to another one, '
             f'and the two would no longer be the same discretisation; the research driver '
             f'refused any named mu. Leave mu unnamed -- fd.Material(eps=...) -- or use '
-            f'discretisation={DEFAULT!r}, which smooths a magnetic ball today. The magnetic '
-            f'half is the commit that measures it.')
+            f'Numerics(discretization={DEFAULT!r}), which smooths a magnetic ball today. The '
+            f'magnetic half is the commit that measures it.')
     eps = tuple(float(v) for v in material.eps)
     if when != 'plan' and len(set(eps)) != 1:
         raise ValueError(
-            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with the '
+            f'StencilScopeRefused: {where} asked for discretization={STENCIL!r} with the '
             f'anisotropic permittivity eps={eps}. The operator is fitted from one scalar '
             f'contrast -- the research driver refused anything else -- so an anisotropic '
             f'material would be prepared as isotropic eps={eps[0]!r} and its other two '
@@ -763,18 +765,18 @@ def _refuse_background(scene, where, when='plan'):
         vacuum = all(v == 1 for v in background.eps)
         if vacuum and background.is_magnetic and all(v == 1 for v in background.mu_value):
             raise ValueError(
-                f'StencilBackgroundRefused: {where} asked for discretisation={STENCIL!r} in a '
+                f'StencilBackgroundRefused: {where} asked for discretization={STENCIL!r} in a '
                 f'scene whose background names a permeability, mu={background.mu!r}. Its '
                 f'values are vacuum\'s, but a named mu is a magnetic medium to these doors '
                 f'whatever its value -- as it was to the research driver every number of this '
                 f'operator came through -- because it gives the run a permeability path the '
                 f'operator was never measured beside. Leave mu unnamed: '
                 f'Scene(background=fd.Material(eps=1.)), or leave Scene(background=) unset; or '
-                f'use discretisation={DEFAULT!r}.')
+                f'use Numerics(discretization={DEFAULT!r}).')
         if vacuum and not background.is_magnetic:
             return
     raise ValueError(
-        f'StencilBackgroundRefused: {where} asked for discretisation={STENCIL!r} in a '
+        f'StencilBackgroundRefused: {where} asked for discretization={STENCIL!r} in a '
         f'scene whose background is {background!r}, and the operator is fitted with '
         f'VACUUM outside the body -- its baseline is 1/eps inside and 1 outside and its '
         f'constraint rows carry the contrast eps - 1 -- while its diagonal replaces be '
@@ -783,7 +785,8 @@ def _refuse_background(scene, where, when='plan'):
         f'against another background is new physics with no measurement behind it: the '
         f'commit that carries the background permittivity into the fit\'s baseline and '
         f'contrast, and measures it, is what lifts this. For this scene as written use '
-        f'discretisation={DEFAULT!r}; for the stencil, leave Scene(background=) unset.')
+        f'Numerics(discretization={DEFAULT!r}); for the stencil, leave Scene(background=) '
+        f'unset.')
 
 
 def _refuse_scope(scene, plan, structures, asked):
@@ -801,36 +804,37 @@ def _refuse_scope(scene, plan, structures, asked):
         _refuse_structure(structures[index], index)
     index = asked[0]
     structure = structures[index]
-    where = f'structures[{index}] ({structure.shape.describe()})'
+    where = f'structures[{index}] ({public_description(structure.shape)})'
     if len(structures) != 1:
         raise ValueError(
-            f'StencilStructuresRefused: {where} asked for discretisation={STENCIL!r} in a '
+            f'StencilStructuresRefused: {where} asked for discretization={STENCIL!r} in a '
             f'scene of {len(structures)} structures. The prepared operator owns its whole '
             f'grown region -- its diagonal replaces be over the smoothed support plus three '
             f'nodes a side -- and was fitted with vacuum everywhere outside the one body, so '
             f'another structure inside that region would be erased from the run, and one '
             f'outside it composes with the operator in a way nothing has measured. The '
             f'research driver every number of this operator came through refused any second '
-            f'structure. For this scene as written, use discretisation={DEFAULT!r} on '
-            f'{where}; for the stencil, take the other structures out, which removes this '
+            f'structure. For this scene as written, use Numerics(discretization={DEFAULT!r}); '
+            f'for the stencil, take the other structures out, which removes this '
             f'refusal (the ball alone still has to pass the stencil\'s other doors). The commit '
             f'that measures a prepared operator beside others, and refuses the ones that meet '
             f'its region, is what lifts this.')
     _refuse_background(scene, where)
     if plan.dtype != 'float64':
         raise ValueError(
-            f'StencilDtypeRefused: {where} asked for discretisation={STENCIL!r} in a '
+            f'StencilDtypeRefused: {where} asked for discretization={STENCIL!r} in a '
             f'{plan.dtype} run (a Bloch face makes the fields complex). Every number this '
             f'operator has was measured in a real float64 run -- its research driver refused '
             f'any other -- and a Bloch cell\'s periodic images are ones the fit '
-            f'(periodic=None) never saw. For this Bloch cell use discretisation={DEFAULT!r}; '
+            f'(periodic=None) never saw. For this Bloch cell use '
+            f'Numerics(discretization={DEFAULT!r}); '
             f'for the stencil, a real run -- fd.Periodic() in place of fd.Bloch, the zero '
             f'phase -- removes this refusal (the scene still has to pass the stencil\'s other '
             f'doors). The commit that measures it in a Bloch cell is what lifts this.')
     for field, present in (('E', plan.has_E0), ('H', plan.has_H0)):
         if present:
             raise ValueError(
-                f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} with '
+                f'StencilScopeRefused: {where} asked for discretization={STENCIL!r} with '
                 f'InitialField.{field}. The term stores D and not E, so an initial E means '
                 f'inverting the prepared operator once, which is not implemented, and the '
                 f'research driver refused an initial H beside it: no run of this operator '
@@ -838,7 +842,7 @@ def _refuse_scope(scene, plan, structures, asked):
     old, = plan.constitutive
     if old.masks:
         raise ValueError(
-            f'StencilScopeRefused: {where} asked for discretisation={STENCIL!r} and its region '
+            f'StencilScopeRefused: {where} asked for discretization={STENCIL!r} and its region '
             f'meets a PEC or PMC wall. The operator\'s rows reach across the wall, and a wall '
             f'inside the fitted neighbourhood is a boundary condition the fit was not given. '
             f'Move the structure clear of the wall.')
@@ -848,14 +852,14 @@ def _refuse_scope(scene, plan, structures, asked):
         if not isinstance(source, (TFSF, PlaneWave)):
             raise ValueError(
                 f'StencilSourceRefused: source {source.name!r} is an '
-                f'fd.{type(source).__name__}, and the '
+                f'fdtd.{public_name(source)}, and the '
                 f'stencil\'s clearance rule reads a TFSF box or a PlaneWave plane. The '
                 f'operator\'s rows are nonlocal, so a source that injects inside them writes '
                 f'into a neighbourhood the fit assumed was vacuum; the check that says how '
                 f'far away is far enough exists for those two and for no other source yet. '
                 f'Excite the ball with an fd.TFSF box that holds its region or an '
-                f'fd.PlaneWave plane clear of it, or keep this {type(source).__name__} with '
-                f'discretisation={DEFAULT!r}.')
+                f'fd.PlaneWave plane clear of it, or keep this {public_name(source)} with '
+                f'Numerics(discretization={DEFAULT!r}).')
     return index, structure
 
 
@@ -967,8 +971,8 @@ def _refuse_memory(structure, index, args):
             f'constants and not a measurement of this scene. The solve runs on the host '
             f'before the run starts, so exceeding the bound is a machine that stops rather '
             f'than a run that slows. Coarsen fd.Resolution(dx=...) or shrink the structure, or '
-            f'raise the bound for this structure with fd.Structure(..., '
-            f'discretisation={STENCIL!r}, memory_bound=<bytes>). The default admits the '
+            f'raise the bound for this structure with fdtd.Numerics('
+            f'discretization={STENCIL!r}, memory_bound=<bytes>). The default admits the '
             f'research sphere at its three placements at 40 and 56 cells with a 4.5% margin '
             f'(the largest preparation measured is {MEASURED_UNKNOWNS:,} unknowns, '
             f'docs/design/fd-symmetric-stencil.md). The bytes per unknown is the largest of seven '
@@ -1132,24 +1136,24 @@ def refuse_discretisation(scene, plan):
         if getattr(structure, 'discretisation', DEFAULT) == STENCIL and index not in held:
             raise ValueError(
                 f'StencilMismatchRefused: structures[{index}] '
-                f'({structure.shape.describe()}) asks for discretisation={STENCIL!r}, and the '
+                f'({public_description(structure.shape)}) asks for discretization={STENCIL!r}, and the '
                 f'plan fd.lower was handed carries no operator prepared for it -- it was built '
                 f'from a scene that asked for {DEFAULT!r} there, or that did not hold this '
                 f'structure. Lowered anyway, the ball would get the voxel rule while the scene '
                 f'says stencil, and a derivative through it would be the voxel rule\'s: '
                 f'jax.grad and a finite difference of fd.run would compute two different '
                 f'functions. Build the plan from this scene with fd.plan(scene), from plain '
-                f'numbers; or, to differentiate, set discretisation={DEFAULT!r} in the scene '
-                f'you lower as well as in the one you plan.')
+                f'numbers; or, to differentiate, set Numerics(discretization={DEFAULT!r}) for '
+                f'the scene you lower as well as for the one you plan.')
     for index, term in held.items():
         asks = (getattr(structures[index], 'discretisation', DEFAULT)
                 if index < len(structures) else None)
         if asks != STENCIL:
             said = (f'has no structures[{index}]' if asks is None else
-                    f'asks for discretisation={asks!r} there')
+                    f'asks for discretization={asks!r} there')
             raise ValueError(
                 f'StencilMismatchRefused: the plan carries {term.name}, an operator prepared '
-                f'for structures[{index}] with discretisation={STENCIL!r}, and the scene '
+                f'for structures[{index}] with discretization={STENCIL!r}, and the scene '
                 f'fd.lower was handed {said}. Lowered anyway, the operator\'s diagonal would '
                 f'replace the rule that scene asks for over the whole grown region. Build the '
                 f'plan from this scene with fd.plan(scene), or lower the scene the plan was '
@@ -1191,7 +1195,7 @@ def _refuse_lowering(scene, plan, term):
             f'so it is lowered only against the scene it was prepared for. Lower that scene, '
             f'or build the plan from this one with fd.plan(scene).')
     structure = structures[0]
-    where = f'structures[0] ({structure.shape.describe()})'
+    where = f'structures[0] ({public_description(structure.shape)})'
     _refuse_structure(structure, 0, when='lower')
     _refuse_background(scene, where, when='lower')
     box = (term.region.z, term.region.y, term.region.x)

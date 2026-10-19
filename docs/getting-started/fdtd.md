@@ -14,11 +14,13 @@ problem = fdtd.Problem(
     scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.1, .1, 1.6)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-        structures=(fdtd.Structure("film", fdtd.Slab(z=(-.1, .1)), Material(epsilon=2.25)),),
+        structures=(fdtd.Structure("film", shape=fdtd.SnappedSlab(z=(-.1, .1)),
+                                   material=Material(epsilon=2.25)),),
     ),
     sources=(fdtd.PlaneWave("illumination", plane=fdtd.Plane(z=.5),
         pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
-    outputs=fdtd.Outputs(monitors=(fdtd.Record("probe", at=(0., 0., -.3), component="Ey"),)),
+    outputs=fdtd.Outputs(monitors=(
+        fdtd.TimeSeriesMonitor("probe", at=(0., 0., -.3), component="Ey"),)),
 )
 numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
     duration=fdtd.Duration(periods=20, source="illumination"), absorber=fdtd.PML(cells=12))
@@ -34,7 +36,7 @@ print("samples:", len(result["probe"].time), "time unit: s; field unit:", result
 ```
 
 
-The record's time axis is in seconds, and Ey is in V/m. Magnetic records use A/m. `Record` samples the nearest Yee point for its selected component; it is not spatial interpolation at an arbitrary position.
+The monitor's time axis is in seconds, and Ey is in V/m; an H component is in A/m. `TimeSeriesMonitor` samples the nearest Yee point for its selected component; it is not spatial interpolation at an arbitrary position.
 
 ## Optional: reuse a prepared calculation
 
@@ -45,7 +47,7 @@ See [the FDTD guide](../guide/fdtd/general-fdtd.md) for units, supported observa
 ## Continue with dispersion and calibrated observations
 
 The [dispersive field example](https://github.com/fieldalgo/wavebit/blob/main/examples/fdtd/dispersive_fields.py)
-adds a physical Lorentz material, a time record, spectral E/H and a separate reference run.
+adds a physical Lorentz material, a time-series monitor, spectral E/H and a separate reference run.
 It keeps raw Fourier field units distinct from source-normalized fields and checks live
 source-amplitude reuse. Plotting is optional. The [film and grating comparison](https://github.com/fieldalgo/wavebit/blob/main/examples/cross_solver/film_and_grating.py)
 then aligns RCWA and FDTD reference planes and compares complex nonzero diffraction orders

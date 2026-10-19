@@ -1,5 +1,11 @@
 # Migrating to the physical API
 
+:::{note}
+The general-FDTD declarations were renamed on 2026-10-19 (`fdtd.Record` is now
+`fdtd.TimeSeriesMonitor`, `fdtd.Region` is now `fdtd.SnappedBox`, and so on). See
+[public names](public-names.md) for every old and new spelling.
+:::
+
 `wavebit.compat` has been removed. Calculations use physical Problem/Numerics declarations,
 explicit execution and `check` → `prepare` → `prepared.run(problem)`. The underlying numerical
 engines and their scientific regression tests remain; no replacement mutable facade is exported.

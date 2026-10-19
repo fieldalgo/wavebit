@@ -31,8 +31,8 @@ def fdtd_job():
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5),
             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
         outputs=fdtd.Outputs(final_fields=True, monitors=(
-            fdtd.Record('probe', at=(0., 0., -.5), component='Ey'),
-            fdtd.Field('spectrum', wavelengths=(.8,), plane=fdtd.Plane(z=-.4), components=('Ey', 'Hx')))))
+            fdtd.TimeSeriesMonitor('probe', at=(0., 0., -.5), component='Ey'),
+            fdtd.FieldMonitor('spectrum', wavelengths=(.8,), plane=fdtd.Plane(z=-.4), components=('Ey', 'Hx')))))
     return Job(solver='fdtd', problem=problem, numerics=fdtd.Numerics(
         grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=6)))
 
@@ -262,7 +262,7 @@ def test_unsupported_sample_keys_are_refused_before_a_record_is_created(tmp_path
 
 
 def test_far_field_evaluator_is_deferred_and_explicit_samples_are_saved(tmp_path):
-    from wavebit.fdtd.result import FarFieldSpectrum
+    from wavebit.fdtd import FarFieldSpectrum
     job = fdtd_job()
     result = run(job)
     # This evaluator's opaque state must never be inspected or executed by I/O.

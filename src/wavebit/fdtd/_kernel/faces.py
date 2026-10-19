@@ -83,6 +83,7 @@ from wavebit.fdtd._legacy_boundaries import Bloch
 from wavebit.fdtd._legacy_boundaries import Periodic
 from wavebit.fdtd._legacy_boundaries import Symmetry
 from wavebit.fdtd._legacy_boundaries import PML
+from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd._kernel import AX
 from wavebit.fdtd._kernel.grid import OFFSETS
 from wavebit.fdtd._kernel.masks import Mask
@@ -158,9 +159,10 @@ def lower_face(name, face, grid):
     if isinstance(face, Axis1D):
         if n != 1:
             raise ValueError(
-                f'Axis1D on {name!r}: the axis is {n} cells long, and an Axis1D axis is one cell '
-                f'-- the field along it is exp(i k {name[0]}) and nothing else. Give the domain '
-                f'one cell there, Domain(size=...) with dx = {dx:g} along {name[0]}.')
+                f'InvariantAxis on {name!r}: the axis is {n} cells long, and an InvariantAxis '
+                f'axis is one cell -- the field along it is exp(i k {name[0]}) and nothing else. '
+                f'Give the domain one cell there, Domain(size=...) with dx = {dx:g} along '
+                f'{name[0]}.')
         return (FaceRule(name, 'axis1d'), tuple(Pad('axis1d') for _ in range(3)), ())
     if isinstance(face, (PEC, PML, Absorber)):
         # An absorbing face IS a PEC wall with something in front of it: the same zero pad,
@@ -198,14 +200,15 @@ def lower_face(name, face, grid):
             plane, position = 'half', hi - dx / 2
             odd = [('E', axis)] + [('H', c) for c in tangential] if p == +1 else []
         if n < 2:
-            raise ValueError(f'Symmetry on {name!r}: a mirror reads the layer next to the '
+            raise ValueError(f'MirrorSymmetry on {name!r}: a mirror reads the layer next to the '
                              f'edge, so the axis needs at least two cells; it has {n}.')
         pads = tuple(_mirror_pad(field, c, axis, side, p, n) for c in range(3))
         masks = tuple(Mask(f, Slab.layer(c, axis, layer, grid.n)) for f, c in odd)
         return (FaceRule(name, 'symmetry', position=position, plane=plane, parity=p),
                 pads, masks)
-    raise TypeError(f'face {name!r}: {type(face).__name__} is not a face type. The eight are '
-                    f'Periodic, Bloch, Axis1D, PEC, PMC, Symmetry, PML and Absorber.')
+    raise TypeError(f'face {name!r}: {public_name(face)} is not a face type. The eight are '
+                    f'Periodic, Bloch, InvariantAxis, PEC, PMC, MirrorSymmetry, PML and '
+                    f'ConductiveAbsorber.')
 
 
 def pad_neighbor(rt, a, axis, side, pad, factor):

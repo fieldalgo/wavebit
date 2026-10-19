@@ -40,6 +40,7 @@ from wavebit.fdtd._legacy_monitors import MONITOR_TYPES
 from wavebit.fdtd._legacy_monitors import Decay
 from wavebit.fdtd._legacy_monitors import Record
 from wavebit.fdtd._legacy_sources import InitialField
+from wavebit.fdtd._public_names import public_name
 
 __all__ = ['Domain', 'Resolution', 'Run', 'Scene', 'COURANT_DEFAULT']
 
@@ -60,10 +61,11 @@ _LATER = {
     'materials': "not the stage 1 spelling: a scene has one Scene(background=...) and a "
                  "tuple of Scene(structures=(fd.Structure(shape, material), ...))",
     'structure': 'stage 4 (shapes); one structure is still Scene(structures=(...,))',
-    'shapes': 'stage 4 (shapes); stage 1 has fd.Slab, inside a Scene(structures=...)',
-    'decay': 'use Run(decay=Decay(threshold=..., window=...)) with an explicit hard cap',
-    'source': "not the stage 2 spelling: sources are a tuple, Scene(sources=(fd.Dipole(...), "
-              "fd.PlaneWave(...), fd.TFSF(...)))",
+    'shapes': 'stage 4 (shapes); stage 1 has fdtd.SnappedSlab, inside a Scene(structures=...)',
+    'decay': 'use Numerics(stopping=fdtd.DecayStop(threshold=..., window_seconds=...)) with an '
+             'explicit hard cap',
+    'source': "not the stage 2 spelling: sources are a tuple, "
+              "Scene(sources=(fdtd.CurrentDipole(...), fd.PlaneWave(...), fd.TFSF(...)))",
     'pml': "not the stage 1 spelling: an absorber is a FACE, so it goes in Boundaries -- "
            "fd.Boundaries.open(fd.PML(cells=12, wavelength=...)) or fd.Boundaries(z=fd.PML("
            "...), ...)",
@@ -153,7 +155,8 @@ class Run:
 
     def __post_init__(self):
         if self.decay is not None and type(self.decay) is not Decay:
-            raise TypeError('Run(decay=...): use fd.Decay(threshold=..., window=...).')
+            raise TypeError('Numerics(stopping=...): use '
+                            'fdtd.DecayStop(threshold=..., window_seconds=...).')
         given = [k for k in ('steps', 'periods', 'time') if getattr(self, k) is not None]
         if len(given) > 1:
             raise ValueError(f'Run({", ".join(f"{k}={getattr(self, k)!r}" for k in given)}): '
@@ -200,7 +203,8 @@ def _run_init_with_stages(self, *args, **kwargs):
     later = [k for k in kwargs if k in _RUN_LATER]
     if later:
         raise NotImplementedError(
-            f'Run({later[0]}=...): use Run(decay=Decay(threshold=..., window=...)) '
+            f'Run({later[0]}=...): use '
+            f'Numerics(stopping=fdtd.DecayStop(threshold=..., window_seconds=...)) '
             f'with one explicit steps, periods or time hard cap; arbitrary stopping '
             f'callbacks and these alternate spellings are not supported.')
     _run_init(self, *args, **kwargs)
@@ -242,24 +246,25 @@ class Scene:
         for s in structures:
             if not isinstance(s, Structure):
                 raise TypeError(f'Scene(structures=...): every entry is an fd.Structure(shape, '
-                                f'material); got {type(s).__name__}.')
+                                f'material); got {public_name(s)}.')
         object.__setattr__(self, 'structures', structures)
         for name, cls in (('domain', Domain), ('boundaries', Boundaries),
                           ('resolution', Resolution), ('run', Run)):
             if not isinstance(getattr(self, name), cls):
                 raise TypeError(f'Scene({name}=...): expected fd.{cls.__name__}, got '
-                                f'{type(getattr(self, name)).__name__}.')
+                                f'{public_name(getattr(self, name))}.')
         if self.initial is not None and not isinstance(self.initial, InitialField):
             raise TypeError(f'Scene(initial=...): expected fd.InitialField, got '
-                            f'{type(self.initial).__name__}.')
+                            f'{public_name(self.initial)}.')
         if isinstance(self.monitors, MONITOR_TYPES):
             object.__setattr__(self, 'monitors', (self.monitors,))
         monitors = tuple(self.monitors)
         for m in monitors:
             if not isinstance(m, MONITOR_TYPES):
-                raise TypeError(f'Scene(monitors=...): every monitor is an fd.Record, fd.Flux, '
-                                f'fd.Field, fd.FarField or fd.Diffraction; got '
-                                f'{type(m).__name__}.')
+                raise TypeError(f'Scene(monitors=...): every monitor is an '
+                                f'fdtd.TimeSeriesMonitor, fdtd.FluxMonitor, fdtd.FieldMonitor, '
+                                f'fdtd.FarFieldMonitor or fdtd.DiffractionMonitor; got '
+                                f'{public_name(m)}.')
         names = [m.name for m in monitors]
         if len(set(names)) != len(names):
             dup = sorted({n for n in names if names.count(n) > 1})
@@ -272,8 +277,8 @@ class Scene:
         sources = tuple(self.sources)
         for src in sources:
             if not isinstance(src, SOURCE_TYPES):
-                raise TypeError(f'Scene(sources=...): every entry is an fd.Dipole, '
-                                f'fd.PlaneWave or fd.TFSF; got {type(src).__name__}.')
+                raise TypeError(f'Scene(sources=...): every entry is an fdtd.CurrentDipole, '
+                                f'fd.PlaneWave or fd.TFSF; got {public_name(src)}.')
         names = [src.name for src in sources]
         if len(set(names)) != len(names):
             dup = sorted({n for n in names if names.count(n) > 1})
@@ -286,15 +291,15 @@ class Scene:
         for m in monitors:
             if isinstance(m, Record):
                 if any(not (a <= p <= b) for p, a, b in zip(m.at, lo, hi)):
-                    raise ValueError(f'Record({m.name!r}, at={m.at}) lies outside the box '
-                                     f'{lo} .. {hi}.')
+                    raise ValueError(f'TimeSeriesMonitor({m.name!r}, at={m.at}) lies outside '
+                                     f'the box {lo} .. {hi}.')
                 continue
             _monitor_inside(m, lo, hi)
 
 
 def _monitor_inside(m, lo, hi):
     # A region outside the box would clip silently, as a Record would; refused by name.
-    kind = type(m).__name__
+    kind = public_name(m)
     box = getattr(m, 'box', None)
     plane = getattr(m, 'plane', None)
     if box is not None:

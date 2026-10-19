@@ -57,12 +57,12 @@
 
 | 단계 | 구현 | 확인할 내용 |
 | --- | --- | --- |
-| 선언 | [fdtd/problem.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/problem.py), [fdtd/numerics.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/numerics.py) | 물리 영역, 구조, 소스, 이름 있는 관측량을 선언합니다. 격자, 실행 시간과 PML은 수치 설정입니다. |
+| 선언 | [fdtd/_problem.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_problem.py), [fdtd/_numerics.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_numerics.py) | 물리 영역, 구조, 소스, 이름 있는 관측량을 선언합니다. 격자, 실행 시간과 PML은 수치 설정입니다. |
 | 검사와 준비 | [fdtd/_api.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_api.py) | 공개 `check`, `prepare`, `Prepared._lower`를 확인합니다. 재사용은 선언 타입뿐 아니라 실제로 결정된 격자와 시간 간격 구조에도 의존합니다. |
 | 물리 입력의 내부 표현 변환 | [fdtd/_lower_public.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_lower_public.py) | `lower_problem`이 단위를 변환하고 수치적 패딩을 물리 영역 바깥에 둡니다. 전류 모멘트, 펄스 폭, 소스 위치의 물리적 의미를 유지해야 합니다. |
 | 수치 데이터 준비 | [fdtd/_prepare/plan.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_prepare/plan.py), [fdtd/_prepare/__init__.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_prepare/__init__.py) | 고정된 계획과 실행 시점의 계수를 분리합니다. 재료 지원 검사, 점유율, 소스와 모니터는 이 디렉터리의 개별 모듈이 담당합니다. |
 | 장의 시간 적분 | [fdtd/_execution.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_execution.py), [fdtd/_runtime.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_runtime.py), [fdtd/_kernel/step.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_kernel/step.py) | 실행 계층이 계수를 만들고 선택한 런타임으로 Yee 상태를 갱신합니다. 서로 엇갈린 장의 시간 위치, 극점·PML 메모리, 관측 순서를 보존합니다. |
-| 결과 조합과 변환 | [fdtd/_assemble.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_assemble.py), [fdtd/result.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/result.py) | `adapt_result`가 초, 물리 좌표, SI 장 단위로 결과를 제공합니다. 원시 스펙트럼 진폭을 효율로 쓰려면 선언된 기준 계산으로 정규화해야 합니다. |
+| 결과 조합과 변환 | [fdtd/_assemble.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_assemble.py), [fdtd/_result.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/fdtd/_result.py) | `adapt_result`가 초, 물리 좌표, SI 장 단위로 결과를 제공합니다. 원시 스펙트럼 진폭을 효율로 쓰려면 선언된 기준 계산으로 정규화해야 합니다. |
 
 현재 공개 FDTD 경로는 CPU와 배정밀도만 허용합니다. 검사 성공은 입력 허용 여부와
 추정치를 알려줄 뿐, 장을 시간 적분하거나 공간·시간·흡수층 수렴을 입증하지 않습니다.

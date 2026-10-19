@@ -18,7 +18,7 @@ convergence controls are not in the current module yet; each such example says s
 `wavebit.fdtd` is the second solver. A periodic stack lit by a plane wave is an `fdtd.Problem`
 like any other: `Periodic()` x and y faces (or the `Bloch` faces `Bloch.from_source` writes for
 an oblique wave), `Open()` z faces with a PML added outside them, the layers as structures, one
-`PlaneWave`, and a `Diffraction` monitor on each side. Each monitor returns the per-order
+`PlaneWave`, and a `DiffractionMonitor` on each side. Each monitor returns the per-order
 complex s/p amplitudes and efficiencies RCWA returns, normalized by the plane wave's own
 measured incident field. [How the solver models a problem](model.md) describes each piece.
 
@@ -41,11 +41,11 @@ before using a new combination of geometry, incidence and material.
 ## Shared periodic conventions
 
 In the current module both solvers take lengths in the problem's `Units` and angles in
-radians, with +z upward. In FDTD a layer is a cell-snapped `Slab(z=(lo, hi))` or a smoothed
-`Box`; a half-space is a `Slab` that reaches an `Open()` face and continues into that face's
+radians, with +z upward. In FDTD a layer is a cell-snapped `SnappedSlab(z=(lo, hi))` or a smoothed
+`Box`; a half-space is a `SnappedSlab` that reaches an `Open()` face and continues into that face's
 PML, and the scene's `background` fills every cell no structure claims. A `PlaneWave` with
 `direction='-z'` (the default) lights the stack from above and `'+z'` from below; its
-`polarization` is `'s'` or `'p'`. A `Diffraction` monitor's `amplitude_s` and `amplitude_p`
+`polarization` is `'s'` or `'p'`. A `DiffractionMonitor`'s `amplitude_s` and `amplitude_p`
 use each outgoing order's own s/p frame with the cell centre as lateral phase origin, its
 `efficiency` is a power fraction, and `reference_plane` and `incident_plane` name the planes
 its phases refer to (the monitor's own plane by default). Fields are E in V/m and H in A/m.
@@ -122,16 +122,20 @@ problem = fdtd.Problem(
         domain=fdtd.Domain(size=(700., 10., 1200.), center=(0., 0., 150.)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
         structures=(
-            fdtd.Structure('substrate', fdtd.Slab(z=(-450., 0.)), glass),
-            fdtd.Structure('ridge', fdtd.Region(size=(350., 700., 300.), center=(175., 0., 150.)),
-                           silicon))),
+            fdtd.Structure('substrate', shape=fdtd.SnappedSlab(z=(-450., 0.)),
+                           material=glass),
+            fdtd.Structure('ridge',
+                           shape=fdtd.SnappedBox(size=(350., 700., 300.), center=(175., 0., 150.)),
+                           material=silicon))),
     sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=650.), polarization='s',
                             pulse=fdtd.GaussianPulse(wavelength=900., frequency_sigma_hz=2e13)),),
     outputs=fdtd.Outputs(monitors=(
-        fdtd.Diffraction('r', plane=fdtd.Plane(z=500.), wavelengths=(900.,), source='light',
-                         side='reflect', orders=(1, 0), reference_plane=300., incident_plane=300.),
-        fdtd.Diffraction('t', plane=fdtd.Plane(z=-300.), wavelengths=(900.,), source='light',
-                         side='transmit', orders=(1, 0), reference_plane=0., incident_plane=300.))))
+        fdtd.DiffractionMonitor('r', plane=fdtd.Plane(z=500.), wavelengths=(900.,),
+                                source='light', wave='reflected', orders=(1, 0),
+                                reference_plane=300., incident_plane=300.),
+        fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-300.), wavelengths=(900.,),
+                                source='light', wave='transmitted', orders=(1, 0),
+                                reference_plane=0., incident_plane=300.))))
 time_domain = fdtd.run(problem, numerics=fdtd.Numerics(
     grid=fdtd.UniformGrid(spacing=10.),                                  # 10 nm cells
     duration=fdtd.Duration(periods=80, source='light')))
@@ -156,7 +160,7 @@ T[+1] - T[-1] = 2.8e-17
 
 The two problems share their `Material` and `Units` objects, not a scene: RCWA reads a
 [`Stack`](../rcwa/scene.md) of layers, FDTD a domain of structures. Every face here lies on a
-cell boundary, so `fdtd.check` reports no snapped face. Each `Diffraction` monitor returns what
+cell boundary, so `fdtd.check` reports no snapped face. Each `DiffractionMonitor` returns what
 RCWA's `result.transmission` and `result.reflection` return — `order(m).efficiency` and the
 complex `amplitude_s` and `amplitude_p` with a leading wavelength axis — with the phases moved
 to the faces named by `reference_plane` and `incident_plane`, as RCWA's are. The FDTD numbers
@@ -246,12 +250,12 @@ what differs:
 | `n_pml` | `fdtd.PML(cells=12)` in `Numerics(absorber=...)` | 12; fewer is refused unless `allow_thin=True` |
 | `pml_reflection` | `fdtd.PML(reflection=1e-8)` | the same default value |
 | `courant` | `fdtd.Numerics(courant=0.5)` | 0.5 of the three-dimensional vacuum bound `dx / (c√3)` |
-| `subpixel` | the shape decides: `Slab` and `Region` are cell-snapped, `Box`, `Sphere`, `Cylinder` and `Prism` smoothed | — |
+| `subpixel` | the shape decides: `SnappedSlab` and `SnappedBox` are cell-snapped, `Box`, `Sphere`, `Cylinder` and `Prism` smoothed | — |
 | `grading` | not available; the grid is uniform | — |
 | `dispersion`, `poles` | `DispersiveMaterial(epsilon_inf, poles=(Drude(...), Lorentz(...), Debye(...)))`, rates in SI | — |
-| `record_field` | `fdtd.Record(name, at, component)`: one component at one Yee point | — |
+| `record_field` | `fdtd.TimeSeriesMonitor(name, at=..., component=...)`: one component at one Yee point | — |
 | `pad_scale` | the `Domain` size; each PML is added outside it | `AbsorberProximityWarning` closer than half a wavelength in the structure's own medium |
-| `truncation_order` | `fdtd.Diffraction(orders=...)` | every propagating order |
+| `truncation_order` | `fdtd.DiffractionMonitor(orders=...)` | every propagating order |
 | `return_diagnostics` | `result.validity`, `result.diagnostics` and `result.provenance`, always present | — |
 | `wavelength` (a band) | each frequency-domain monitor's `wavelengths` | — |
 
@@ -286,16 +290,18 @@ problem = fdtd.Problem(
         domain=fdtd.Domain(size=(700., 10., 1050.), center=(0., 0., 75.)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
         structures=(
-            fdtd.Structure('substrate', fdtd.Slab(z=(-450., 0.)), glass),
-            fdtd.Structure('strip', fdtd.Region(size=(350., 700., 60.), center=(-175., 0., 30.)),
-                           gold))),
+            fdtd.Structure('substrate', shape=fdtd.SnappedSlab(z=(-450., 0.)),
+                           material=glass),
+            fdtd.Structure('strip',
+                           shape=fdtd.SnappedBox(size=(350., 700., 60.), center=(-175., 0., 30.)),
+                           material=gold))),
     sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=500.),
                             pulse=fdtd.GaussianPulse(wavelength=900., frequency_sigma_hz=2e13)),),
     outputs=fdtd.Outputs(monitors=(
-        fdtd.Diffraction('r', plane=fdtd.Plane(z=350.), wavelengths=band, source='light',
-                         side='reflect'),
-        fdtd.Diffraction('t', plane=fdtd.Plane(z=-300.), wavelengths=band, source='light',
-                         side='transmit'))))
+        fdtd.DiffractionMonitor('r', plane=fdtd.Plane(z=350.), wavelengths=band,
+                                source='light', wave='reflected'),
+        fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-300.), wavelengths=band,
+                                source='light', wave='transmitted'))))
 # The -1 and +1 orders leave the glass at cos(theta) = 0.36 at 980 nm, a grazing exit the
 # default PML refuses; the refusal asks for this deeper absorber and at least 160 periods.
 spectrum = fdtd.run(problem, numerics=fdtd.Numerics(                      # one run
@@ -351,7 +357,7 @@ route once measured with a fixed pulse width: an incident spectrum 2.4e-7 of its
 The polar angle therefore varies with wavelength: about 28.5 degrees at 860 nm
 and 31.5 at 940 nm for a 30-degree centre at 900 nm. In the current module the
 `Bloch` faces from `Bloch.from_source` fix it at the pulse's centre wavelength, and
-each `Diffraction` result reports the polar angles in radians in
+each `DiffractionMonitor` result reports the polar angles in radians in
 `metadata['theta_radians']`. On the earlier factory `diagnostics['angles']`
 reports the polar angles in radians and `azimuth` reports phi. The backend-omitted
 route also retains `angles_deg` as the degree-valued compatibility view of `angles`.
@@ -369,7 +375,7 @@ in-plane coordinates are measured from the centre of the cell, and `Ey` sits on 
 rather than at the pixel centres.
 
 The current module keeps the time series of one component at its nearest Yee point,
-`fdtd.Record(name, at, component)` (times in seconds, fields in V/m or A/m), and the final E
+`fdtd.TimeSeriesMonitor(name, at=..., component=...)` (times in seconds, fields in V/m or A/m), and the final E
 and H, `fdtd.Outputs(final_fields=True)`, each with the coordinates it was sampled at. It does
 not record the whole domain over time yet, so this example and the plotting below keep the
 earlier factory.
@@ -475,9 +481,9 @@ for units, sampling limits and the distinction between total and scattered flux.
 
 ## Streaming frequency planes
 
-In the current module, an `fdtd.Field(name, wavelengths, plane=fdtd.Plane(z=...))` monitor
+In the current module, an `fdtd.FieldMonitor(name, wavelengths=..., plane=fdtd.Plane(z=...))`
 returns the raw Fourier phasors of the six components on their own Yee points (V·s/m and
-A·s/m), and `fdtd.Flux` the net spectral energy through a plane (J/Hz); neither is divided by
+A·s/m), and an `fdtd.FluxMonitor` the net spectral energy through a plane (J/Hz); neither is divided by
 the source spectrum. The rest of this section describes the earlier factory.
 
 Pass `field_monitors={'near': z_near, 'transmitted': z_out}` together with
@@ -721,7 +727,7 @@ extraction are described below. Existing native `fdtd_grid` calls remain compati
 ## Common scene adapter
 
 The current module differentiates live material values on the JAX and PyTorch backends, here a
-slab's permittivity through the whole run and the `Diffraction` normalization:
+slab's permittivity through the whole run and the `DiffractionMonitor` normalization:
 
 ```python
 import torch
@@ -733,12 +739,13 @@ problem = fdtd.Problem(
     scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.4, .05, 2.), center=(0., 0., .15)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-        structures=(fdtd.Structure('slab', fdtd.Slab(z=(0., .3)), Material(epsilon=value)),)),
+        structures=(fdtd.Structure('slab', shape=fdtd.SnappedSlab(z=(0., .3)),
+                                   material=Material(epsilon=value)),)),
     sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=.9),
                             pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=2e13)),),
     outputs=fdtd.Outputs(monitors=(
-        fdtd.Diffraction('t', plane=fdtd.Plane(z=-.5), wavelengths=(1.,), source='light',
-                         side='transmit', orders=(0, 0)),)))
+        fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-.5), wavelengths=(1.,), source='light',
+                                wave='transmitted', orders=(0, 0)),)))
 result = fdtd.run(problem, backend='torch', numerics=fdtd.Numerics(
     grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(periods=30, source='light')))
 derivative, = torch.autograd.grad(result['t'].efficiency.sum(), value)
@@ -824,7 +831,7 @@ the native-core Meep/FDTDX field and derivative references.
 
 The current module differentiates the geometry of a smoothed body given a reserved
 `Numerics(geometry_ranges=...)` box, but not a `Box` angle, not a smoothed body standing flush
-on a half-space `Slab` or near a `Periodic()` face, and not two smoothed surfaces in one cell;
+on a half-space `SnappedSlab` or near a `Periodic()` face, and not two smoothed surfaces in one cell;
 it has no ellipse. Each example in this and the next four sections meets one of those limits,
 so they keep the earlier explicit-backend route.
 
@@ -1282,7 +1289,7 @@ harmonic lattice accuracy from finite-time and finite-boundary differences.
 
 In the current module the incident sheet sits where the problem puts it.
 `PlaneWave(plane=fdtd.Plane(z=...))` places it on the node plane nearest that coordinate, each
-`Diffraction(plane=...)` places a measurement plane, and the `Domain` sets the padding, so none
+`DiffractionMonitor(plane=...)` places a measurement plane, and the `Domain` sets the padding, so none
 of the three moves another. A film 0.213 µm thick, with the sheet 1 µm above its top face:
 
 ```python
@@ -1294,19 +1301,19 @@ problem = fdtd.Problem(
     scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.1, .1, 2.), center=(0., 0., .5)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-        # A smoothed Box keeps both faces where they are declared; a Slab would snap them.
-        structures=(fdtd.Structure('film', fdtd.Box(size=(.2, .2, thickness),
-                                                    center=(0., 0., thickness / 2)),
-                                   Material(epsilon=2.25)),)),
+        # A smoothed Box keeps both faces where they are declared; a SnappedSlab would snap them.
+        structures=(fdtd.Structure('film', shape=fdtd.Box(size=(.2, .2, thickness),
+                                                          center=(0., 0., thickness / 2)),
+                                   material=Material(epsilon=2.25)),)),
     sources=(fdtd.PlaneWave('light', plane=fdtd.Plane(z=thickness + distance),
                             pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=2.25e13)),),
     outputs=fdtd.Outputs(monitors=(
-        fdtd.Diffraction('r', plane=fdtd.Plane(z=thickness + .2), wavelengths=(1.,),
-                         source='light', side='reflect',
-                         reference_plane=thickness, incident_plane=thickness),
-        fdtd.Diffraction('t', plane=fdtd.Plane(z=-.2), wavelengths=(1.,),
-                         source='light', side='transmit',
-                         reference_plane=0., incident_plane=thickness))))
+        fdtd.DiffractionMonitor('r', plane=fdtd.Plane(z=thickness + .2), wavelengths=(1.,),
+                                source='light', wave='reflected',
+                                reference_plane=thickness, incident_plane=thickness),
+        fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-.2), wavelengths=(1.,),
+                                source='light', wave='transmitted',
+                                reference_plane=0., incident_plane=thickness))))
 result = fdtd.run(problem, numerics=fdtd.Numerics(
     grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(periods=50, source='light')))
 print(f"{problem.sources[0].plane.position:.4f}")     # requested sheet position
@@ -1361,7 +1368,7 @@ to be distinguished.
 
 ### Diffraction planes and cutoff diagnostics
 
-In the current module each measurement plane is the `Diffraction(plane=...)` the problem
+In the current module each measurement plane is the `DiffractionMonitor(plane=...)` the problem
 declares, and `reference_plane` and `incident_plane` move its phase references (as in the
 example above); each result carries the Yee `kz` and `k_parallel` of every order. It has no
 cutoff classification yet, so the example below keeps the earlier route.
@@ -1500,7 +1507,7 @@ In the current module every source carries a declared `GaussianPulse(wavelength,
 frequency_sigma_hz)`, the standard deviation of its amplitude spectrum in Hz. The earlier
 `pulse_width=w` below corresponds to `frequency_sigma_hz = c / (sqrt(2) * pi * w)` with `w` a
 length: 2.25e13 Hz for `w = 3` µm. The usable band ends where that spectrum falls to the
-pulse's `cutoff` (1e-3 by default), and a `Diffraction` wavelength outside it comes back NaN.
+pulse's `cutoff` (1e-3 by default), and a `DiffractionMonitor` wavelength outside it comes back NaN.
 The rest of this section describes the earlier route's `pulse_width`.
 
 The explicit-backend scene adapter accepts `pulse_width`, a positive static scalar
@@ -1765,8 +1772,8 @@ agreement.
 
 ### Internal layer thickness derivatives
 
-In the current module a `Slab`'s span is static, so a traced `z` is refused, and a ranged,
-differentiable `Box` layer cannot stand flush on a half-space `Slab` or another cell-snapped
+In the current module a `SnappedSlab`'s span is static, so a traced `z` is refused, and a ranged,
+differentiable `Box` layer cannot stand flush on a half-space `SnappedSlab` or another cell-snapped
 face. The examples in this and the next section keep the earlier route.
 
 Pass static `mesh_thickness` to choose the z mesh while backend `thickness`
@@ -1932,7 +1939,7 @@ backtracking optimization followed by both smoothed and sharp finer-grid checks.
 ### Bottom illumination in the common engine
 
 In the current module, light from below is a `PlaneWave(direction='+z')` placed below the
-stack, with the `side='reflect'` monitor below it and the `side='transmit'` monitor above the
+stack, with the `wave='reflected'` monitor below it and the `wave='transmitted'` monitor above the
 stack; the scene itself does not change.
 
 On the earlier factory, set `Incidence(..., incidence_side='bottom')` or pass `incidence_side='bottom'`.
@@ -2298,7 +2305,7 @@ optimization parameters. For direct grid-index selection on `fdtd_grid`, use
 
 `wavebit.compat.legacy.fit_fdtd_modes(t, signal, modes=...)` analyzes a single point/component
 after the source becomes negligible. It has no current equivalent yet. It is NumPy
-post-processing of any uniformly sampled trace, so the series of a current `fdtd.Record`
+post-processing of any uniformly sampled trace, so the series of a current `fdtd.TimeSeriesMonitor`
 (`result[name].time` in seconds, `.values`) also works; frequencies and decay rates then come
 out in Hz and 1/s. Select a trace from the recorded fields:
 

@@ -89,6 +89,7 @@ from wavebit._common.declarations import spec
 from wavebit._common.declarations import static_float
 from wavebit._common.declarations import torch_carried
 from wavebit._common.declarations import is_jax_typed
+from wavebit.fdtd._public_names import public_name
 
 __all__ = ['Shape', 'Slab', 'Sphere', 'Box', 'Cylinder', 'Prism', 'Structure', 'Region',
            'Plane', 'AXES']
@@ -125,10 +126,10 @@ class Shape:
 
     def _unanswered(self, method, question):
         return NotImplementedError(
-            f'{type(self).__name__}.{method}() is not implemented: {question} '
+            f'{public_name(self)}.{method}() is not implemented: {question} '
             f'fd.Shape names one question per method so that no caller has to guess from '
             f'the type, and a shape that does not answer one is refused here rather than '
-            f'read as a Slab or a Region.')
+            f'read as a SnappedSlab or a SnappedBox.')
 
     # -- the three questions ``cell_box`` used to answer at once ------------------------------
 
@@ -198,15 +199,17 @@ class Shape:
 
         A layer runs the whole box on its other two axes, so it is part of the one-dimensional
         background a ``TFSF`` column is built from and it is what ``sources`` selects on.
-        ``None`` -- the default, and the answer for everything that is not a :class:`Slab` --
-        means "not a layer", and every reader's ``None`` branch is the conservative one: the
-        shape is a scatterer, kept out of the column and never waved past a face.
+        ``None`` -- the default, and the answer for everything that is not a
+        :class:`~wavebit.fdtd.SnappedSlab` -- means "not a layer", and every reader's ``None``
+        branch is the conservative one: the shape is a scatterer, kept out of the column and
+        never waved past a face.
 
         **A non-``None`` answer needs nothing else.** Its cell span along that axis is
         ``support(grid)[layer_axis()]``, and whether it fills one cell layer ``j`` outright is
         ``uniform_along(layer_axis(), (j, j + 1), grid)`` -- both already on this protocol, and
-        both the question the caller means rather than a :class:`Slab` attribute. Until this
-        was written the three readers in ``src/wavebit/fdtd/_prepare/sources.py`` reached for ``shape.axis`` and
+        both the question the caller means rather than a :class:`~wavebit.fdtd.SnappedSlab`
+        attribute. Until this was written the three readers in
+        ``src/wavebit/fdtd/_prepare/sources.py`` reached for ``shape.axis`` and
         ``shape.cells(grid)`` after branching on this method, so a shape that answered the
         whole protocol and declared itself a layer died there with a bare ``AttributeError``
         -- the guess-from-the-type failure this class exists to replace, one method later.
@@ -219,8 +222,9 @@ class Shape:
 
         ``coefficients.varying_axes`` unions these to decide which axes a coefficient array
         is broadcast along, so this fixes array shapes and therefore the skeleton. It is not
-        derived from :meth:`uniform_along`: a :class:`Slab` names its own axis even where its
-        span happens to cover the whole box, and that difference is a frozen array shape.
+        derived from :meth:`uniform_along`: a :class:`~wavebit.fdtd.SnappedSlab` names its own
+        axis even where its span happens to cover the whole box, and that difference is a
+        frozen array shape.
         """
         raise self._unanswered('bounded_axes', 'which axes it varies the medium along is '
                                                'unknown.')
@@ -250,7 +254,7 @@ class Shape:
         The smallest feature the grid has to resolve. Only the axes :meth:`bounded_axes` names
         are measured, and each is measured as it reaches into the box: a shape that runs out
         through a face has no feature size along that axis, and a refusal quoting one would be
-        about a side that is not in the grid. ``Region(size=(0.3, 0.3, 1.0))`` in a box 0.2
+        about a side that is not in the grid. ``SnappedBox(size=(0.3, 0.3, 1.0))`` in a box 0.2
         wide across x and y bounds z alone, and its answer is 1.0, not 0.3.
 
         That is why it takes ``grid``: "bounded" is a question about the grid, so a signature
@@ -285,23 +289,24 @@ class Slab(Shape):
         if len(named) != 1:
             if len(named) == 0:
                 raise ValueError(
-                    'Slab(): name exactly one axis, as Slab(z=(lo, hi)). A slab with no axis '
-                    'is the whole box -- that is Scene(background=...).')
+                    'SnappedSlab(): name exactly one axis, as SnappedSlab(z=(lo, hi)). A slab '
+                    'with no axis is the whole box -- that is Scene(background=...).')
             raise NotImplementedError(
-                f'Slab({", ".join(f"{a}=..." for a in named)}): a slab names exactly ONE axis '
-                f'and runs the whole box across the other two. A rectangular rod or block is '
-                f'fd.Structure(fd.Region(size=..., center=...), material) (stage 3, cell-snapped) '
-                f'or the smoothed fd.Box(size=..., center=...); spheres, cylinders and polygons '
-                f'are stage 4\'s other smoothed bodies, fd.Sphere, fd.Cylinder and fd.Prism.')
+                f'SnappedSlab({", ".join(f"{a}=..." for a in named)}): a slab names exactly '
+                f'ONE axis and runs the whole box across the other two. A rectangular rod or '
+                f'block is fd.Structure(fdtd.SnappedBox(size=..., center=...), material) '
+                f'(stage 3, cell-snapped) or the smoothed fd.Box(size=..., center=...); '
+                f'spheres, cylinders and polygons are stage 4\'s other smoothed bodies, '
+                f'fd.Sphere, fd.Cylinder and fd.Prism.')
         axis = named[0]
         span = getattr(self, axis)
         if not (isinstance(span, (tuple, list)) and len(span) == 2):
-            raise ValueError(f'Slab({axis}={span!r}): a span is the pair (lo, hi).')
-        lo = static_float('Slab', axis, span[0])
-        hi = static_float('Slab', axis, span[1])
+            raise ValueError(f'SnappedSlab({axis}={span!r}): a span is the pair (lo, hi).')
+        lo = static_float('SnappedSlab', axis, span[0])
+        hi = static_float('SnappedSlab', axis, span[1])
         if not lo < hi:
-            raise ValueError(f'Slab({axis}=({lo}, {hi})): lo < hi. A length is a size, so a '
-                             f'reversed or empty span is refused rather than read as the '
+            raise ValueError(f'SnappedSlab({axis}=({lo}, {hi})): lo < hi. A length is a size, '
+                             f'so a reversed or empty span is refused rather than read as the '
                              f'complement.')
         object.__setattr__(self, axis, (lo, hi))
 
@@ -326,10 +331,10 @@ class Slab(Shape):
         if k1 <= k0:
             snapped = (grid.low[a] + k0 * grid.dx, grid.low[a] + k1 * grid.dx)
             raise ValueError(
-                f'Slab({self.axis}={self.span}) snaps to the empty span {snapped} on a grid of '
-                f'dx = {grid.dx:g}: it is thinner than a cell, or it lies outside the box. A '
-                f'layer that snapped to nothing would run as vacuum and look like a physics '
-                f'result, so it is refused. Give at least one cell of thickness (dx <= '
+                f'SnappedSlab({self.axis}={self.span}) snaps to the empty span {snapped} on a '
+                f'grid of dx = {grid.dx:g}: it is thinner than a cell, or it lies outside the '
+                f'box. A layer that snapped to nothing would run as vacuum and look like a '
+                f'physics result, so it is refused. Give at least one cell of thickness (dx <= '
                 f'{abs(self.span[1] - self.span[0]):g}) or move it inside the box.')
         return k0, k1
 
@@ -402,13 +407,14 @@ def _slab_init_with_stages(self, *args, **kwargs):
     if later:
         k = later[0]
         raise NotImplementedError(
-            f'Slab({k}=...) is {_LATER_SHAPES[k]}. A slab is the layer: Slab(x=(lo, hi)), '
-            f'Slab(y=...) or Slab(z=...). The smoothed bodies of stage 4, filled at each '
-            f'component\'s own Yee point, are fd.Sphere(radius=..., center=...), '
-            f'fd.Cylinder(radius=..., height=..., axis=...), fd.Prism(vertices=..., height=..., '
-            f'axis=...) and the rectangular fd.Box(size=..., center=..., angle=...); a '
-            f'cell-snapped block is fd.Region(size=..., center=...). A raster shape is refused '
-            f'outright: its interface normal cannot come from the shape.')
+            f'SnappedSlab({k}=...) is {_LATER_SHAPES[k]}. A slab is the layer: '
+            f'SnappedSlab(x=(lo, hi)), SnappedSlab(y=...) or SnappedSlab(z=...). The smoothed '
+            f'bodies of stage 4, filled at each component\'s own Yee point, are '
+            f'fd.Sphere(radius=..., center=...), fd.Cylinder(radius=..., height=..., axis=...), '
+            f'fd.Prism(vertices=..., height=..., axis=...) and the rectangular '
+            f'fd.Box(size=..., center=..., angle=...); a cell-snapped block is '
+            f'fdtd.SnappedBox(size=..., center=...). A raster shape is refused outright: its '
+            f'interface normal cannot come from the shape.')
     _slab_init(self, *args, **kwargs)
 
 
@@ -517,7 +523,7 @@ class Structure:
         from wavebit.fdtd._prepare.stencil import STENCIL
         if self.discretisation not in (DEFAULT, STENCIL):
             raise ValueError(
-                f'Structure(discretisation={self.discretisation!r}): the two spellings are '
+                f'Numerics(discretization={self.discretisation!r}): the two spellings are '
                 f'{DEFAULT!r} -- the rule this structure\'s shape already names, which is what '
                 f'every scene has had -- and {STENCIL!r}, the symmetric extended-stencil '
                 f'operator of docs/design/fd-symmetric-stencil.md. A value nobody reads is silently '
@@ -526,8 +532,8 @@ class Structure:
                 f'it did not ask for would read as a physics result.')
         if (self.discretisation == STENCIL and isinstance(self.shape, (Sphere, Cylinder, Box, Prism))
                 and self.shape.range is not None):
-            raise ValueError(f"Structure(discretisation='stencil') does not support "
-                             f"{type(self.shape).__name__}(range=): "
+            raise ValueError(f"Numerics(discretization='stencil') does not support "
+                             f"{public_name(self.shape)}(range=): "
                              'the prepared operator depends on the actual geometry. Use the '
                              'voxel discretisation for a sweep with a fixed support range.')
         if self.memory_bound is not None:
@@ -535,7 +541,7 @@ class Structure:
                 raise ValueError(
                     f'Structure(memory_bound={self.memory_bound!r}) bounds the host memory of '
                     f'the extended stencil\'s preparation, and this structure asks for '
-                    f'discretisation={self.discretisation!r}, which prepares nothing. A value '
+                    f'discretization={self.discretisation!r}, which prepares nothing. A value '
                     f'nobody reads is refused rather than ignored.')
             bound = self.memory_bound
             if isinstance(bound, bool) or not isinstance(bound, Real) \
@@ -547,15 +553,16 @@ class Structure:
             raise TypeError(
                 'Structure(shape=fd.Shape()): fd.Shape is the protocol a shape answers, not a '
                 'shape -- it has no extent, and every question below it would refuse. Use '
-                'fd.Slab(z=(lo, hi)) or fd.Region(size=..., center=...), or subclass fd.Shape '
-                'and answer its methods.')
+                'fdtd.SnappedSlab(z=(lo, hi)) or fdtd.SnappedBox(size=..., center=...), or '
+                'subclass fd.Shape and answer its methods.')
         if not isinstance(self.shape, Shape):
             raise TypeError(
-                f'Structure(shape=...): the shapes are fd.Slab(z=(lo, hi)), the cell-snapped '
-                f'fd.Region(size=..., center=...), and stage 4\'s smoothed bodies '
-                f'fd.Sphere(radius=..., center=...), fd.Box(size=..., center=..., angle=...), '
+                f'Structure(shape=...): the shapes are fdtd.SnappedSlab(z=(lo, hi)), the '
+                f'cell-snapped fdtd.SnappedBox(size=..., center=...), and stage 4\'s smoothed '
+                f'bodies fd.Sphere(radius=..., center=...), '
+                f'fd.Box(size=..., center=..., angle=...), '
                 f'fd.Cylinder(radius=..., height=..., axis=...) and fd.Prism(vertices=..., '
-                f'height=..., axis=...); got {type(self.shape).__name__}. External shapes get in '
+                f'height=..., axis=...); got {public_name(self.shape)}. External shapes get in '
                 f'by subclassing fd.Shape and answering its protocol. CSG of the bodies is later '
                 f'in stage 4; a raster shape is refused outright (its interface normal cannot '
                 f'come from the shape).')
@@ -620,10 +627,11 @@ class Region(Shape):
         for name in ('size', 'center'):
             value = getattr(self, name)
             if not (isinstance(value, (tuple, list)) and len(value) == 3):
-                raise ValueError(f'Region({name}={value!r}): a triple (x, y, z).')
-            object.__setattr__(self, name, tuple(static_float('Region', name, v) for v in value))
+                raise ValueError(f'SnappedBox({name}={value!r}): a triple (x, y, z).')
+            object.__setattr__(self, name, tuple(static_float('SnappedBox', name, v)
+                                                 for v in value))
         if any(not s > 0 for s in self.size):
-            raise ValueError(f'Region(size={self.size}): every size is a positive length.')
+            raise ValueError(f'SnappedBox(size={self.size}): every size is a positive length.')
 
     @property
     def low(self):
@@ -643,7 +651,7 @@ class Region(Shape):
             if k1 <= k0:
                 snapped = (grid.low[a] + k0 * grid.dx, grid.low[a] + k1 * grid.dx)
                 raise ValueError(
-                    f'Region(size={self.size}, center={self.center}) snaps to the empty span '
+                    f'SnappedBox(size={self.size}, center={self.center}) snaps to the empty span '
                     f'{snapped} along {axis} on a grid of dx = {grid.dx:g}: it is thinner than '
                     f'a cell there, or it lies outside the box. A structure that snapped to '
                     f'nothing would run as the background and look like a physics result, so '

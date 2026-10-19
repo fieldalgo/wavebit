@@ -66,14 +66,14 @@ Job과 Result가 같은 솔버를 사용하는지 검사합니다. 이미 계산
 `run_recorded`를 사용하세요.
 
 FDTD도 같은 방식으로 `Job(solver="fdtd", problem=..., numerics=...)`를 만듭니다.
-시간 기록, Fourier 장, 회절, flux, 소스 보정 시계열과 요청한 최종 장의
+시계열, Fourier 장, 회절, flux, 소스 보정 시계열과 요청한 최종 장의
 수치 및 물리 메타데이터를 보존합니다.
 
 ## 보존하는 내용
 
 | 데이터 | 저장 표현 |
 | --- | --- |
-| 문제, 재료, 단위, 수치 설정과 실행 설정 | 버전이 있는 `wavebit.job/v1` JSON과 정규화된 Job key |
+| 문제, 재료, 단위, 수치 설정과 실행 설정 | 버전이 있는 `wavebit.job/v2` JSON과 정규화된 Job key |
 | 실제로 평가한 출력과 명시적 표본 | 수치 NPZ 배열과 JSON의 이름 있는 필드 |
 | 배열 dtype, shape, byte order | 불러올 때 배열 payload와 대조 |
 | 좌표, 성분명, 단위, 기준면, 유효성과 진단 정보 | 값과 함께 저장하는 이름 있는 필드 |
@@ -93,6 +93,10 @@ Git patch는 추적된 패키지 파일을 대상으로 하며, 추적되지 않
 표시합니다. 쓰기 작업이 중단되면 불완전한 디렉터리가 남을 수 있으며, `load_run`은
 이를 거부합니다. 체크섬은 손상이나 데이터 불일치를 탐지하며, 작성자를 증명하는
 서명은 아닙니다.
+
+manifest의 schema는 `wavebit.run/v2`입니다. [공개 이름이 바뀌기](../migration/public-names.md)
+전에 기록한 `wavebit.run/v1` 기록은 변환하지 않고 `record.format` 코드로 거부합니다.
+현재 이름으로 그 Job을 다시 실행하세요.
 
 ## 결과 읽기와 다시 계산하기
 

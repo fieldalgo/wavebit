@@ -11,14 +11,14 @@ def problem(radius=.12, height=.3, epsilon=2.25):
     return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.6,.6,1.3), center=(0.,0.,.05)),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()), structures=(
-            fdtd.Structure('substrate', fdtd.Box(size=(10.,10.,2.), center=(0.,0.,PLANE-1.)),
-                           Material(2.1), continuation=('z-',)),
-            fdtd.Structure('pillar', fdtd.Cylinder(radius=radius,height=height,
-                center=(.011,-.007,PLANE+height/2)), Material(epsilon)))),
+            fdtd.Structure('substrate', shape=fdtd.Box(size=(10.,10.,2.), center=(0.,0.,PLANE-1.)),
+                           material=Material(2.1), continuation=('z-',)),
+            fdtd.Structure('pillar', shape=fdtd.Cylinder(radius=radius,height=height,
+                center=(.011,-.007,PLANE+height/2)), material=Material(epsilon)))),
         sources=(fdtd.PlaneWave('pw',plane=fdtd.Plane(z=.45),
             pulse=fdtd.GaussianPulse(wavelength=1.,frequency_sigma_hz=.15*C0/1e-6)),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Diffraction('T',plane=fdtd.Plane(z=-.55),
-            source='pw',side='transmit',wavelengths=(1.,),orders=0),)))
+        outputs=fdtd.Outputs(monitors=(fdtd.DiffractionMonitor('T',plane=fdtd.Plane(z=-.55),
+            source='pw',wave='transmitted',wavelengths=(1.,),orders=0),)))
 
 
 def main(backend='torch'):

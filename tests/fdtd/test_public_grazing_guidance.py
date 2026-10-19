@@ -24,14 +24,14 @@ def _column(cos=.6, name='light'):
     return fdtd.Problem(units=units, scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.05, .05, 1.6)),
         boundaries=fdtd.Boundaries(**fdtd.Bloch.from_source(source, units=units,
-                                    axis1d=('x', 'y')), z=fdtd.Open())),
+                                    invariant_axes=('x', 'y')), z=fdtd.Open())),
         sources=(source,), outputs=fdtd.Outputs(final_fields=True))
 
 
 def _numerics(cells=12, reflection=1e-8, stabilize=None, periods=160, name='light', **pml):
     return fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
         duration=fdtd.Duration(periods=periods, source=name),
-        absorber=fdtd.PML(cells=cells, reflection=reflection, stabilize=stabilize, **pml))
+        absorber=fdtd.PML(cells=cells, reflection=reflection, stabilizing_loss=stabilize, **pml))
 
 
 def _refusal(problem, numerics):

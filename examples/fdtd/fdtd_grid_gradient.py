@@ -5,7 +5,7 @@ uses a graded conductivity absorber, distinct from the scene solver's CPML.
 """
 
 from wavebit import Units
-from wavebit.fdtd import native, Absorber
+from wavebit.fdtd import native, ConductiveAbsorber
 from wavebit.units import Z0
 import numpy as np
 import jax
@@ -36,7 +36,7 @@ def main():
             outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(.5,),planes=(48,))))
         result=native.run(problem,backend='jax',numerics=native.Numerics(
             grid=native.Grid(spacing=(.025,)*3),time_step_seconds=dt*TIME,steps=steps,
-            absorber=Absorber(cells=10),checkpoint_steps=32))
+            absorber=ConductiveAbsorber(cells=10),checkpoint_steps=32))
         return result.spectral_power_z[0,0]/POWER
     value,gradient=jax.jit(jax.value_and_grad(objective))(jnp.array(0.))
     print(f'Devices: {jax.devices()}')

@@ -104,7 +104,7 @@ import wavebit.fdtd._legacy as fd
 import wavebit.fdtd._prepare.checks as checks_module
 import wavebit.fdtd._prepare.coefficients as coefficients_module
 from tests.fixtures.fdtd.fd_helpers import Packet, amplitude_at, backends, packet_layout, run_mutated, to_numpy
-from wavebit.fdtd.results import Series
+from wavebit.fdtd._legacy_results import Series
 
 #: What this file measured for ``Absorber``: rows are cells, columns the nominal angle, values
 #: the amplitude ratio at the carrier frequency.

@@ -56,6 +56,7 @@ from wavebit._common.declarations import spec
 from wavebit._common.declarations import static_float
 from wavebit._common.declarations import static_int
 from wavebit._common.declarations import unknown_keyword_message
+from wavebit.fdtd._public_names import public_name
 
 __all__ = ['Boundaries', 'Periodic', 'Bloch', 'Axis1D', 'PEC', 'PMC', 'Symmetry', 'PML',
            'Absorber', 'Absorbing', 'FACES', 'AXES', 'PML_CELLS', 'PML_REFLECTION']
@@ -195,8 +196,8 @@ class Bloch(FaceType):
         from wavebit.materials.time_domain import as_material
         from wavebit.fdtd._legacy_sources import PlaneWave
         if not isinstance(source, PlaneWave):
-            raise TypeError(f'Bloch.from_source({type(source).__name__}): the phases come '
-                            f'from an fd.PlaneWave; a Dipole or a TFSF box needs none.')
+            raise TypeError(f'Bloch.from_source({public_name(source)}): the phases come '
+                            f'from an fd.PlaneWave; a CurrentDipole or a TFSF box needs none.')
         wavelength = source.band.concrete_wavelength
         if wavelength is None:
             raise ValueError('Bloch.from_source(pw): the band centre is traced, and a Bloch '
@@ -209,8 +210,9 @@ class Bloch(FaceType):
         names = (axis1d,) if isinstance(axis1d, str) else tuple(axis1d)
         for name in names:
             if name not in AXES or AXES.index(name) == source.axis:
-                raise ValueError(f'Bloch.from_source(axis1d={axis1d!r}): name transverse axes of '
-                                 f'the wave, from {[a for a in AXES if AXES.index(a) != source.axis]}.')
+                across = [a for a in AXES if AXES.index(a) != source.axis]
+                raise ValueError(f'Bloch.from_source(invariant_axes={axis1d!r}): name transverse '
+                                 f'axes of the wave, from {across}.')
         k, _, _ = source.vectors()
         k0 = n * 2.0 * math.pi / wavelength
         out = {}
@@ -279,30 +281,30 @@ class Axis1D(FaceType):
     def __post_init__(self):
         if self.algebraic is not True:
             raise ValueError(
-                f'Axis1D(algebraic={self.algebraic!r}): the derivative along a one-cell axis is '
-                f'the algebraic i k and nothing else; the alternative -- the one-cell Bloch '
-                f'difference (exp(i k dx) - 1)/dx -- is the artificial dispersion Axis1D exists '
-                f'to remove. Leave algebraic=True.')
+                f'InvariantAxis(algebraic={self.algebraic!r}): the derivative along a one-cell '
+                f'axis is the algebraic i k and nothing else; the alternative -- the one-cell '
+                f'Bloch difference (exp(i k dx) - 1)/dx -- is the artificial dispersion '
+                f'InvariantAxis exists to remove. Leave algebraic=True.')
         if self.k is None:
-            raise ValueError('Axis1D(k=None): k is the real wavevector along the axis (0 for '
-                             'a field uniform along it).')
-        value = _concrete_scalar('k', self.k, 'Axis1D')
+            raise ValueError('InvariantAxis(k=None): k is the real wavevector along the axis (0 '
+                             'for a field uniform along it).')
+        value = _concrete_scalar('k', self.k, 'InvariantAxis')
         if self.k_max is None:
             if value is None:
                 raise ValueError(
-                    'Axis1D(k=<traced>): a traced k needs k_max=..., the largest |k| the plan '
-                    'is made for. The CFL bound depends on it (the derivative is i k, not a '
+                    'InvariantAxis(k=<traced>): a traced k needs k_max=..., the largest |k| the '
+                    'plan is made for. The CFL bound depends on it (the derivative is i k, not a '
                     'bounded difference) and the plan is static.')
             object.__setattr__(self, 'k_max', abs(value))
         else:
-            k_max = static_float('Axis1D', 'k_max', self.k_max)
+            k_max = static_float('InvariantAxis', 'k_max', self.k_max)
             if not (k_max >= 0.0 and k_max == k_max and k_max != float('inf')):
-                raise ValueError(f'Axis1D(k_max={self.k_max!r}): a non-negative finite '
+                raise ValueError(f'InvariantAxis(k_max={self.k_max!r}): a non-negative finite '
                                  f'wavevector.')
             object.__setattr__(self, 'k_max', k_max)
         if value is not None and abs(value) > self.k_max * (1.0 + 1e-12):
             raise ValueError(
-                f'Axis1D(k={value!r}, k_max={self.k_max!r}): |k| is above k_max, and the '
+                f'InvariantAxis(k={value!r}, k_max={self.k_max!r}): |k| is above k_max, and the '
                 f'plan\'s CFL bound is made for k_max. Raise k_max to at least {abs(value)!r}.')
 
 
@@ -332,7 +334,7 @@ class Symmetry(FaceType):
             p = int(p)
         if isinstance(p, bool) or not isinstance(p, numbers.Integral) or int(p) not in (1, -1):
             raise ValueError(
-                f'Symmetry(parity={self.parity!r}): parity is +1 (tangential E even across '
+                f'MirrorSymmetry(parity={self.parity!r}): parity is +1 (tangential E even across '
                 f'the plane, PMC-like) or -1 (tangential E odd, PEC-like); nothing else is a '
                 f'mirror eigenvalue.')
         object.__setattr__(self, 'parity', int(p))
@@ -465,10 +467,10 @@ class PML(Absorbing):
         object.__setattr__(self, 'reflection', r)
         object.__setattr__(self, 'allow_thin', bool(self.allow_thin))
         if self.stabilize is not None:
-            rho = static_float('PML', 'stabilize', self.stabilize)
+            rho = static_float('PML', 'stabilizing_loss', self.stabilize)
             if not (rho >= 0.0 and math.isfinite(rho)):
                 raise ValueError(
-                    f'PML(stabilize={self.stabilize!r}): the stabilizing loss is a finite '
+                    f'PML(stabilizing_loss={self.stabilize!r}): the stabilizing loss is a finite '
                     f'factor >= 0 -- 0 (or None, the default) is the pure stretch and 3e-3 the '
                     f'measured value that stops a bound mode from growing at the default '
                     f'reflection target (a weaker target needs more).')
@@ -511,11 +513,11 @@ class Absorber(Absorbing):
     cells: int = PML_CELLS
 
     def __post_init__(self):
-        cells = static_int('Absorber', 'cells', self.cells)
+        cells = static_int('ConductiveAbsorber', 'cells', self.cells)
         if cells < 2:
             raise ValueError(
-                f'Absorber(cells={self.cells!r}): the profile 6*u**3/thickness is zero at the '
-                f'inner face and rises across the layer, so one cell is a step and not a '
+                f'ConductiveAbsorber(cells={self.cells!r}): the profile 6*u**3/thickness is zero '
+                f'at the inner face and rises across the layer, so one cell is a step and not a '
                 f'grading; two is the minimum that grades at all.')
         object.__setattr__(self, 'cells', cells)
 
@@ -523,14 +525,21 @@ class Absorber(Absorbing):
 _WRAPPING = (Periodic, Bloch, Axis1D)
 
 
+def _said(face):
+    """``face`` as a message shows it: its repr, under the class name a public caller wrote."""
+    text, own = repr(face), type(face).__name__
+    return public_name(face) + text[len(own):] if text.startswith(own) else text
+
+
 def _pair(axis, value):
     """The ``(low, high)`` pair an axis declaration means, validated."""
     if isinstance(value, FaceType):
         if isinstance(value, Symmetry):
             raise ValueError(
-                f'Boundaries({axis}=Symmetry(...)): a mirror on both faces of one axis is not '
-                f'a half box, and stage 0 has no rule for it. Give a (Symmetry, PEC) or '
-                f'(Symmetry, PMC) pair, mirror side first or last as the geometry needs.')
+                f'Boundaries({axis}=MirrorSymmetry(...)): a mirror on both faces of one axis is '
+                f'not a half box, and stage 0 has no rule for it. Give a (MirrorSymmetry, PEC) '
+                f'or (MirrorSymmetry, PMC) pair, mirror side first or last as the geometry '
+                f'needs.')
         return (value, value)
     if isinstance(value, tuple) and len(value) == 2 and all(isinstance(v, FaceType) for v in value):
         lo, hi = value
@@ -541,20 +550,21 @@ def _pair(axis, value):
                 same = False
             if not same:
                 raise ValueError(
-                    f'Boundaries({axis}=({lo}, {hi})): Periodic, Bloch and Axis1D wrap the axis, so '
-                    f'both faces must carry the same declaration. Give one object for the '
-                    f'axis, {axis}={lo if isinstance(lo, _WRAPPING) else hi}.')
+                    f'Boundaries({axis}=({_said(lo)}, {_said(hi)})): Periodic, Bloch and '
+                    f'InvariantAxis wrap the axis, so both faces must carry the same '
+                    f'declaration. Give one object for the axis, '
+                    f'{axis}={_said(lo if isinstance(lo, _WRAPPING) else hi)}.')
         if isinstance(lo, Symmetry) and isinstance(hi, Symmetry):
             raise ValueError(
-                f'Boundaries({axis}=(Symmetry, Symmetry)): a mirror on both faces of one axis '
-                f'is not a half box; Symmetry goes on at most one face, with PEC or PMC on '
-                f'the other.')
+                f'Boundaries({axis}=(MirrorSymmetry, MirrorSymmetry)): a mirror on both faces '
+                f'of one axis is not a half box; MirrorSymmetry goes on at most one face, with '
+                f'PEC or PMC on the other.')
         return (lo, hi)
     raise TypeError(
         f'Boundaries({axis}={value!r}): an axis takes one face type (both faces) or a '
         f'(low, high) pair of face types -- Periodic(), Bloch(phase=...), PEC(), PMC(), '
-        f'Symmetry(parity=...), PML(cells=..., wavelength=...), Absorber(cells=...). Every '
-        f'axis is required; there is no default face.')
+        f'MirrorSymmetry(parity=...), PML(cells=..., wavelength=...), '
+        f'ConductiveAbsorber(cells=...). Every axis is required; there is no default face.')
 
 
 @spec
@@ -601,8 +611,8 @@ class Boundaries:
             face = PML()
         if not isinstance(face, Absorbing):
             raise TypeError(
-                f'Boundaries.open({face!r}): the preset takes an absorbing face -- '
-                f'fd.PML(...) or fd.Absorber(...) -- and puts it on every axis. For anything '
-                f'else, name the faces: fd.Boundaries(x=..., y=..., z=...).')
+                f'Boundaries.open({_said(face)}): the preset takes an absorbing face -- '
+                f'fd.PML(...) or fdtd.ConductiveAbsorber(...) -- and puts it on every axis. For '
+                f'anything else, name the faces: fd.Boundaries(x=..., y=..., z=...).')
         return cls(x=face if x is None else x, y=face if y is None else y,
                    z=face if z is None else z)

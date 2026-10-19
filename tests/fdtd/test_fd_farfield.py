@@ -68,7 +68,7 @@ import pytest
 
 import wavebit.fdtd._legacy as fd
 from wavebit.fdtd import _post
-from wavebit.fdtd.results import FarFieldResult
+from wavebit.fdtd._legacy_results import FarFieldResult
 from tests.fixtures.fdtd.fd_helpers import WAVELENGTHS, farfield_dipole, sphere_integral, to_numpy
 
 pytestmark = pytest.mark.filterwarnings('ignore::wavebit.fdtd._legacy.CoarseMeshWarning')

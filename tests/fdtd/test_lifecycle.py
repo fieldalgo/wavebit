@@ -18,7 +18,7 @@ def periodic_problem(*,units='um',epsilon=1.,amplitude=1.,outputs=None):
         domain=fdtd.Domain(size=(1.,1.,1.)),background=Material(epsilon=epsilon),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(),y=fdtd.Periodic(),z=fdtd.Periodic())),
         initial=fdtd.InitialField(E=(None,lambda x,y,z: np.cos(2*np.pi*z),None),amplitude=amplitude),
-        outputs=outputs or fdtd.Outputs(monitors=(fdtd.Record('p',at=(0.,0.,0.),component='Ey'),)))
+        outputs=outputs or fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('p',at=(0.,0.,0.),component='Ey'),)))
 
 
 def small_numerics(steps=8):
@@ -31,8 +31,8 @@ def plane_problem(scale=1.,length='um',epsilon=1.,monitors=None):
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(),y=fdtd.Periodic(),z=fdtd.Open())),
         sources=(fdtd.PlaneWave('pw',plane=fdtd.Plane(z=.5*scale),
             pulse=fdtd.GaussianPulse(wavelength=.8*scale,frequency_sigma_hz=4e13)),),
-        outputs=fdtd.Outputs(monitors=monitors or (fdtd.Record('e',at=(0,0,0),component='Ey'),
-                                                 fdtd.Record('h',at=(0,0,0),component='Hx'))))
+        outputs=fdtd.Outputs(monitors=monitors or (fdtd.TimeSeriesMonitor('e',at=(0,0,0),component='Ey'),
+                                                 fdtd.TimeSeriesMonitor('h',at=(0,0,0),component='Hx'))))
 
 
 def plane_numerics(scale=1.,steps=700,cells=12):
@@ -171,10 +171,10 @@ def test_live_amplitude_derivative_matches_exact_quadratic(backend):
 
 def spectral_problem(scale=1.,length='um',amplitude=1.):
     plane=fdtd.Plane(z=-.4*scale);wavelengths=(.8*scale,)
-    monitors=(fdtd.Diffraction('t',plane=plane,wavelengths=wavelengths,source='pw',side='transmit',orders=0),
-        fdtd.Diffraction('raw',plane=plane,wavelengths=wavelengths,source='pw',side='transmit',orders=0,raw=True),
-        fdtd.Flux('q',plane=plane,wavelengths=wavelengths),
-        fdtd.Field('f',plane=plane,wavelengths=wavelengths,components=('Ey','Hx')))
+    monitors=(fdtd.DiffractionMonitor('t',plane=plane,wavelengths=wavelengths,source='pw',wave='transmitted',orders=0),
+        fdtd.DiffractionMonitor('raw',plane=plane,wavelengths=wavelengths,source='pw',wave='transmitted',orders=0,raw=True),
+        fdtd.FluxMonitor('q',plane=plane,wavelengths=wavelengths),
+        fdtd.FieldMonitor('f',plane=plane,wavelengths=wavelengths,components=('Ey','Hx')))
     p=plane_problem(scale,length,monitors=monitors)
     return p.replace(sources=(p.sources[0].replace(amplitude=amplitude),))
 
@@ -240,9 +240,9 @@ def test_point_current_si_units_are_invariant_under_geometry_units(kind,componen
     def problem(scale,length):
         return fdtd.Problem(units=Units(length=length),scene=fdtd.Scene(
             domain=fdtd.Domain(size=(1.6*scale,)*3),boundaries=fdtd.Boundaries(x=fdtd.PEC(),y=fdtd.PEC(),z=fdtd.PEC())),
-            sources=(fdtd.Dipole('d',center=(0.,0.,0.),component=component,kind=kind,current_moment=amplitude,
-                pulse=fdtd.GaussianPulse(wavelength=3.*scale,frequency_sigma_hz=.03*C0/1e-6),delay=-18e-6/C0),),
-            outputs=fdtd.Outputs(monitors=(fdtd.Record('p',at=(.3*scale,0,0),component=component),)))
+            sources=(fdtd.CurrentDipole('d',center=(0.,0.,0.),component=component,kind=kind,current_moment=amplitude,
+                pulse=fdtd.GaussianPulse(wavelength=3.*scale,frequency_sigma_hz=.03*C0/1e-6),delay_seconds=-18e-6/C0),),
+            outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('p',at=(.3*scale,0,0),component=component),)))
     a=fdtd.run(problem(1.,'um'),numerics=small_numerics(30))
     b=fdtd.run(problem(1000.,'nm'),numerics=small_numerics(30).replace(grid=fdtd.UniformGrid(spacing=100.)))
     assert np.max(np.abs(a['p'].values))>1e-8
@@ -254,7 +254,7 @@ def test_point_current_si_units_are_invariant_under_geometry_units(kind,componen
 
 def test_halfspace_continues_to_outer_edge_with_its_own_material():
     p=plane_problem().replace(scene=plane_problem().scene.replace(structures=(
-        fdtd.Structure('substrate',fdtd.Slab(z=(-.8,0.)),Material(epsilon=2.25)),)))
+        fdtd.Structure('substrate',shape=fdtd.SnappedSlab(z=(-.8,0.)),material=Material(epsilon=2.25)),)))
     legacy_scene,metadata=lower_problem(p,plane_numerics(steps=2))
     assert legacy_scene.structures[0].shape.z==pytest.approx((-1.4,0.))
     np.testing.assert_array_equal(legacy_scene.boundaries.face('z-').background.eps,(2.25,)*3)
@@ -287,12 +287,12 @@ def test_a_continued_halfspace_has_no_proximity_note_and_a_film_near_the_face_do
         return listed
 
     glass = Material(epsilon=2.25)
-    substrate = fdtd.Structure('substrate', fdtd.Slab(z=(-.8, 0.)), glass)
+    substrate = fdtd.Structure('substrate', shape=fdtd.SnappedSlab(z=(-.8, 0.)), material=glass)
     assert proximity(substrate) == []
-    (below,) = proximity(fdtd.Structure('film', fdtd.Slab(z=(-.7, -.6)), glass))
+    (below,) = proximity(fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(-.7, -.6)), material=glass))
     assert below.startswith("structures[0] is 0.1 from the inner face of the absorber on 'z-'")
     assert 'the PML there is matched to index 1 (the background)' in below
-    (above,) = proximity(substrate, fdtd.Structure('film', fdtd.Slab(z=(.6, .7)), glass))
+    (above,) = proximity(substrate, fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(.6, .7)), material=glass))
     assert above.startswith("structures[1] is 0.1 from the inner face of the absorber on 'z+'")
 
 
@@ -329,11 +329,11 @@ def test_ranged_geometry_derivative_and_runtime_guard_survive_public_lifecycle()
     import jax
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64',True)
-    body=fdtd.Structure('ball',fdtd.Sphere(radius=.22,center=(-.073,.017,-.009)),Material(epsilon=2.25,mu=1.2))
+    body=fdtd.Structure('ball',shape=fdtd.Sphere(radius=.22,center=(-.073,.017,-.009)),material=Material(epsilon=2.25,mu=1.2))
     p=fdtd.Problem(units=Units(length='um'),scene=fdtd.Scene(domain=fdtd.Domain(size=(1.6,)*3),
         boundaries=fdtd.Boundaries(x=fdtd.PEC(),y=fdtd.PEC(),z=fdtd.PEC()),structures=(body,)),
-        sources=(fdtd.Dipole('d',center=(-.55,.03,-.02),current_moment=1e-16,
-            pulse=fdtd.GaussianPulse(wavelength=3.,frequency_sigma_hz=.03*C0/1e-6),delay=-18e-6/C0),),
+        sources=(fdtd.CurrentDipole('d',center=(-.55,.03,-.02),current_moment=1e-16,
+            pulse=fdtd.GaussianPulse(wavelength=3.,frequency_sigma_hz=.03*C0/1e-6),delay_seconds=-18e-6/C0),),
         outputs=fdtd.Outputs(final_fields=True))
     n=small_numerics(24).replace(geometry_ranges={'ball':((-.36,.36),)*3})
     prepared=fdtd.prepare(p,numerics=n,backend='jax')
@@ -360,15 +360,15 @@ def test_structural_lists_are_owned_but_numeric_array_leaves_remain_borrowed():
               fdtd.Box(size=size, center=center),
               fdtd.Cylinder(radius=.1, height=.2, center=center),
               fdtd.Prism(vertices=vertices, height=.2, center=center),
-              fdtd.Dipole('d', center=center, pulse=pulse))
+              fdtd.CurrentDipole('d', center=center, pulse=pulse))
     wavelengths = [.8, .9]
     components = ['Ey', 'Hx']
     orders = [1, 0]
-    outputs = (fdtd.Field('f', wavelengths=wavelengths, plane=fdtd.Plane(z=0.), components=components),
-               fdtd.Flux('q', wavelengths=wavelengths, plane=fdtd.Plane(z=0.)),
-               fdtd.Diffraction('d', wavelengths=wavelengths, plane=fdtd.Plane(z=0.),
-                                source='pw', side='transmit', orders=orders),
-               fdtd.FarField('far', wavelengths=wavelengths, box=fdtd.Box(size=(1.,1.,1.))))
+    outputs = (fdtd.FieldMonitor('f', wavelengths=wavelengths, plane=fdtd.Plane(z=0.), components=components),
+               fdtd.FluxMonitor('q', wavelengths=wavelengths, plane=fdtd.Plane(z=0.)),
+               fdtd.DiffractionMonitor('d', wavelengths=wavelengths, plane=fdtd.Plane(z=0.),
+                                source='pw', wave='transmitted', orders=orders),
+               fdtd.FarFieldMonitor('far', wavelengths=wavelengths, box=fdtd.Box(size=(1.,1.,1.))))
     center[2] = 99.
     size[0] = 99.
     vertices[0][0] = 99.
@@ -412,17 +412,17 @@ def _traced_resolution_case(kind):
     and skips it, and only the runtime guard is left to hold the 8-cells floor.
     """
     if kind == 'slab':
-        film = fdtd.Structure('film', fdtd.Slab(z=(-.2, 0.)), Material(epsilon=2.25))
+        film = fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(-.2, 0.)), material=Material(epsilon=2.25))
         p = plane_problem().replace(scene=plane_problem().scene.replace(structures=(film,)))
         n = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(steps=200),
                           absorber=fdtd.PML(cells=12))
         return p, n, 400.          # 1.15 cells per wavelength
-    box = fdtd.Structure('box', fdtd.Box(size=(.44, .44, .44)), Material(epsilon=2.25))
+    box = fdtd.Structure('box', shape=fdtd.Box(size=(.44, .44, .44)), material=Material(epsilon=2.25))
     p = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(domain=fdtd.Domain(size=(1.6,)*3),
         boundaries=fdtd.Boundaries(x=fdtd.PEC(), y=fdtd.PEC(), z=fdtd.PEC()), structures=(box,)),
-        sources=(fdtd.Dipole('d', center=(-.55, .03, -.02), current_moment=1e-16,
-            pulse=fdtd.GaussianPulse(wavelength=1.6, frequency_sigma_hz=.03*C0/1e-6), delay=-18e-6/C0),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(.3, 0., 0.), component='Ey'),)))
+        sources=(fdtd.CurrentDipole('d', center=(-.55, .03, -.02), current_moment=1e-16,
+            pulse=fdtd.GaussianPulse(wavelength=1.6, frequency_sigma_hz=.03*C0/1e-6), delay_seconds=-18e-6/C0),),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(.3, 0., 0.), component='Ey'),)))
     n = small_numerics(24).replace(geometry_ranges={'box': ((-.36, .36),)*3})
     return p, n, 12.25             # 3.88 cells per wavelength
 
@@ -466,14 +466,14 @@ def test_a_torch_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_v
 
 def _film(shape):
     p = plane_problem()
-    return p.replace(scene=p.scene.replace(structures=(fdtd.Structure('film', shape, Material(epsilon=2.25)),)))
+    return p.replace(scene=p.scene.replace(structures=(fdtd.Structure('film', shape=shape, material=Material(epsilon=2.25)),)))
 
 
 def test_check_reports_a_cell_snapped_interface_the_grid_moved():
     """A 0.317 film at 0.025 spacing runs as the 0.325 one, bit for bit; check says so."""
     n = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(steps=60),
                       absorber=fdtd.PML(cells=12))
-    moved, whole = _film(fdtd.Slab(z=(0., .317))), _film(fdtd.Slab(z=(0., .325)))
+    moved, whole = _film(fdtd.SnappedSlab(z=(0., .317))), _film(fdtd.SnappedSlab(z=(0., .325)))
     np.testing.assert_array_equal(fdtd.run(moved, numerics=n)['e'].values,
                                   fdtd.run(whole, numerics=n)['e'].values)
     report = fdtd.check(moved, numerics=n)
@@ -486,8 +486,8 @@ def test_check_reports_a_cell_snapped_interface_the_grid_moved():
     assert [i.code for i in fdtd.prepare(moved, numerics=n).report.issues] == ['geometry.cell_snapped']
     # A half-space continued into the padding moves only its inner face; a Region clipped
     # by the periodic faces moves only along z; a smoothed Box stays where it was asked.
-    (issue,) = fdtd.check(_film(fdtd.Slab(z=(-.8, .317))), numerics=n).issues
+    (issue,) = fdtd.check(_film(fdtd.SnappedSlab(z=(-.8, .317))), numerics=n).issues
     assert issue.expected == (('z', -.8, .317),) and issue.actual == (('z', -.8, .325),)
-    (issue,) = fdtd.check(_film(fdtd.Region(size=(.3, .3, .317), center=(0., 0., .1585))), numerics=n).issues
+    (issue,) = fdtd.check(_film(fdtd.SnappedBox(size=(.3, .3, .317), center=(0., 0., .1585))), numerics=n).issues
     assert [row[0] for row in issue.expected] == ['z']
     assert fdtd.check(_film(fdtd.Box(size=(.2, .2, .317), center=(0., 0., .1585))), numerics=n).issues == ()

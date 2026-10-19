@@ -1,8 +1,9 @@
 # Public numerical-selector refusal messages
 
 The public lowering path rejects unsupported `Numerics.junction` and
-`Numerics.discretisation` values. Its early refusals must still name the public
-constructor and selector, as the existing public-spelling regression requires.
+`Numerics.discretization` values (spelt `discretisation` when this was recorded).
+Its early refusals must still name the public constructor and selector, as the
+existing public-spelling regression requires.
 The fix restores that context without changing either acceptance predicate or
 any field calculation. Structured `invalid_input` code, selector path, actual
 value, absent expected value, and error severity are retained.

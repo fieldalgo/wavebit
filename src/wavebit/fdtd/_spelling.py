@@ -7,9 +7,12 @@ The engine also writes some calls without the ``fd.`` prefix -- ``Run(steps=...)
 last in :data:`PHRASES`. ``tests/fdtd/test_public_spelling.py`` reads every string constant
 in the engine and requires each ``fd.`` name and each such call to come out spelled here.
 
-Five public names are the engine's own classes -- ``Domain``, ``Slab``, ``Region``, ``Plane``
-and ``Record`` -- and their constructors refuse before any entry point runs, so each public
-name is a :class:`Spoken` subclass that translates its own refusals.
+Five public classes extend the engine's own -- ``Domain``, ``Plane``, ``SnappedSlab`` (the
+engine's ``Slab``), ``SnappedBox`` (``Region``) and ``TimeSeriesMonitor`` (``Record``) -- and
+their constructors refuse before any entry point runs, so each is a :class:`Spoken` subclass
+that translates its own refusals. Engine messages that name a declaration the public API renamed
+are written in the public spelling where they are raised (``_public_names``); this module keeps
+only the translations for names both vocabularies share.
 """
 import contextlib
 import contextvars
@@ -29,8 +32,8 @@ _COMPAT_LEAVES = 'The traced leaves are ' + '; '.join(TRACED_LEAVES) + '.'
 #: contract's ``live`` entries are what remains.
 PUBLIC_LEAVES = (
     'The traced leaves of a public problem are material values (a permittivity, a '
-    "conductivity, a pole strength); each source's amplitude (a Dipole's current_moment), "
-    'phase and delay, and its GaussianPulse(wavelength=..., frequency_sigma_hz=...); '
+    "conductivity, a pole strength); each source's amplitude (a CurrentDipole's current_moment), "
+    'phase and delay_seconds, and its GaussianPulse(wavelength=..., frequency_sigma_hz=...); '
     'InitialField.amplitude; and the geometry of a Sphere, Cylinder, Box or Prism that '
     'Numerics(geometry_ranges=...) names -- radius, size, height, vertices and center within '
     'that range, orientation and vertex count static, one body or several whose full '
@@ -42,11 +45,12 @@ _FD = r'(?<![\w.])fd\.'
 #: The start of a name with no prefix at all.
 _U = r'(?<![\w.])'
 
-#: Names ``wavebit.fdtd`` exports with the meaning the compat name has.
-_SHARED = ('Slab', 'Region', 'Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'PlaneWave',
-           'Dipole', 'TFSF', 'Record', 'Flux', 'Field', 'FarField', 'Diffraction', 'Bloch',
-           'Boundaries', 'Periodic', 'PEC', 'PMC', 'Symmetry', 'Axis1D', 'InitialField',
-           'Domain', 'Shape', 'Structure', 'PML', 'Absorber', 'Decay')
+#: Names ``wavebit.fdtd`` exports with the meaning, and the spelling, the engine name has. The
+#: names the public API renamed (``_public_names.PUBLIC_NAMES``) are not here: the engine's
+#: messages spell those publicly where they are raised.
+_SHARED = ('Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'PlaneWave', 'TFSF', 'Bloch',
+           'Boundaries', 'Periodic', 'PEC', 'PMC', 'InitialField', 'Domain', 'Shape', 'Structure',
+           'PML')
 
 #: Stage-7 placeholders have never implemented a calculation.
 _UNIMPLEMENTED = ('ModeSource', 'ModeMonitor', 'GaussianBeam')
@@ -55,10 +59,10 @@ PHRASES = (
     # A static refusal ends with the engine's leaves; the public module has its own.
     (re.escape(_COMPAT_LEAVES), PUBLIC_LEAVES),
     (r'Run\(decay=Decay\(threshold=\.\.\., window=\.\.\.\)\)',
-     'Numerics(decay=fdtd.Decay(threshold=..., window_seconds=...))'),
+     'Numerics(stopping=fdtd.DecayStop(threshold=..., window_seconds=...))'),
     (r'(?<![\w.])(?:fd\.)?Decay\(threshold=\.\.\., window=\.\.\.\)',
-     'fdtd.Decay(threshold=..., window_seconds=...)'),
-    (r'(?<![\w.])Decay\(window=', 'fdtd.Decay(window_seconds='),
+     'fdtd.DecayStop(threshold=..., window_seconds=...)'),
+    (r'(?<![\w.])Decay\(window=', 'fdtd.DecayStop(window_seconds='),
     # Bloch faces from a plane wave: the public call takes the source and the units.
     (_FD + r'Bloch\.from_source\(pw', 'fdtd.Bloch.from_source(source, units=problem.units'),
     # Absorbing faces: the public face is Open, its absorber a PML in Numerics.
@@ -92,11 +96,13 @@ PHRASES = (
     (r'bound this structure declared', 'bound declared in Numerics'),
     (r'raise the bound for this structure with', 'raise the preparation bound with'),
     (r"use discretisation='voxel' on structures\[\d+\] \(.*?\); for the stencil,",
-     "use Numerics(discretisation='voxel'); for the stencil,"),
-    # A public structure is named; its numerical options live in Numerics.
-    (_FD + r'Structure\(\.\.\., discretisation=', 'fdtd.Numerics(discretisation='),
-    (_FD + r'Structure\(fd\.', 'fdtd.Structure(name, fd.'),
-    (_FD + r'Structure\(shape, ', 'fdtd.Structure(name, shape, '),
+     "use Numerics(discretization='voxel'); for the stencil,"),
+    # A public structure is named, takes its shape and material by keyword, and its numerical
+    # options live in Numerics.
+    (_FD + r'Structure\(\.\.\., discretisation=', 'fdtd.Numerics(discretization='),
+    (_FD + r'Structure\(fd\.(\w+)(\(.*?\)), (\w+)\)', r'fdtd.Structure(name, shape=fd.\1\2, material=\3)'),
+    (_FD + r'Structure\(fdtd\.(\w+)(\(.*?\)), (\w+)\)', r'fdtd.Structure(name, shape=fdtd.\1\2, material=\3)'),
+    (_FD + r'Structure\(shape, material\)', 'fdtd.Structure(name, shape=shape, material=material)'),
     # The lifecycle: a plan is a preparation, lowering a traced scene is Prepared.run.
     (r'build the plan before differentiation and pass plan= to fd\.run or fd\.lower',
      'prepare before differentiation and differentiate Prepared.run'),
@@ -154,9 +160,11 @@ PHRASES = (
      'GaussianPulse(wavelength=..., frequency_sigma_hz=...)'),
     (_U + r'Band\((wavelength|cutoff)=', r'GaussianPulse(\1='),
     (_U + r'Band\(', 'fdtd.GaussianPulse('),
-    (_U + r'(Decay|Absorber)\(', r'fdtd.\1('),
+    (_U + r'Decay\(', 'fdtd.DecayStop('),
+    (_U + r'Absorber\(', 'fdtd.ConductiveAbsorber('),
     # A structure's junction rule and discretisation are the scene-wide Numerics ones.
-    (_U + r'Structure\((junction|discretisation)=', r'Numerics(\1='),
+    (_U + r'Structure\(junction=', 'Numerics(junction='),
+    (_U + r'Structure\(discretisation=', 'Numerics(discretization='),
     (_U + r'Structure\(memory_bound=', 'Numerics(memory_bound='),
     # A body's range is its entry in Numerics(geometry_ranges=...).
     (r'Sphere/Cylinder/Box/Prism\(range=\) declarations differ from the plan',
@@ -235,14 +243,14 @@ def public_error(exc):
 
 @eager_under_torch_compile
 class Spoken:
-    """The public name of one of the engine's own declarations, refusing in the public vocabulary.
+    """A public class extending one of the engine's own declarations, refusing in the public vocabulary.
 
-    ``fdtd.Slab(x=..., z=...)`` was refused, before any entry point ran, with "a rectangular
-    rod or block is fd.Structure(fd.Region(size=..., center=...), material)", and a traced
-    length on any of the five listed the engine's leaves, a Dipole's centre and the Bloch phase
-    among them. A subclass adds no field and no behaviour -- a plan encodes a declaration by
-    its class name and fields, and a job by its public name, so neither changes -- and
-    translates what the constructor raises, as the entry points translate what leaves them.
+    The engine's constructor refuses before any entry point runs, so the public subclass
+    translates what that constructor raises, as the entry points translate what leaves them.
+    A subclass adds no field and no behaviour. Where the engine records a declaration's class
+    in a plan, it records the engine class this one extends (a junction's signature skips
+    ``Spoken``), so the public name changes no skeleton; ``tests/fdtd/test_public_spelling.py``
+    pins that.
     """
 
     def __init__(self, *args, **kwargs):

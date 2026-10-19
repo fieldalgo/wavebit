@@ -6,12 +6,12 @@ from wavebit._common.execution import Execution, CheckReport, frozen_mapping
 from wavebit._common.backend import eager_under_torch_compile
 from wavebit.errors import Issue, ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from wavebit.materials import Material, ConductiveMaterial, DispersiveMaterial
-from .problem import Problem
+from ._problem import Problem
 from ._policy_report import numerical_policies
 from ._lower_public import lower_problem, validate_sources
 from ._execution import _planned, run as execute
 from ._prepare.report import report as legacy_report
-from .result import adapt_result
+from ._result import adapt_result
 from ._spelling import public as _public_spelling, public_error, to_public
 
 
@@ -21,7 +21,7 @@ def _static(v,path):
     if isinstance(v,Mapping):return tuple((k,_static(x,path+'.'+str(k))) for k,x in v.items())
     if isinstance(v,(tuple,list)):return tuple(_static(x,path) for x in v)
     if is_dataclass(v):return (type(v).__name__,tuple((f.name,_static(getattr(v,f.name),path+'.'+f.name)) for f in fields(v)))
-    from .geometry import Shape
+    from ._geometry import Shape
     if isinstance(v, Shape):
         # Custom protocol implementations are static declarations. Include inherited
         # slots as well as ordinary attributes; object-array bytes are pointer identity.
@@ -65,7 +65,7 @@ def _signature(problem,numerics):
     sources=[]
     for s in problem.sources:
         sources.append((type(s).__name__,tuple((f.name,_static(getattr(s,f.name),'sources.'+s.name+'.'+f.name))
-                       for f in fields(s) if f.name not in ('pulse','amplitude','current_moment','phase','delay')),s.pulse.cutoff))
+                       for f in fields(s) if f.name not in ('pulse','amplitude','current_moment','phase','delay_seconds')),s.pulse.cutoff))
     initial=None if problem.initial is None else (type(problem.initial).__name__,_static(problem.initial.E,'initial.E'),_static(problem.initial.H,'initial.H'))
     return dict(units=problem.units.length,domain=_static(problem.scene.domain,'scene.domain'),
         boundaries=_static(problem.scene.boundaries,'scene.boundaries'),background=_material(problem.scene.background),
@@ -101,9 +101,9 @@ def _checkpoint(numerics,execution):
     if execution.backend!='torch' or execution.device.split(':')[0]!='cuda':
         raise UnsupportedFeatureError('checkpoint_steps currently requires Torch CUDA execution',
                                       code='checkpoint_scope',path=path)
-    if numerics.decay is not None:
-        raise UnsupportedFeatureError('checkpoint_steps requires fixed-duration execution without Decay',
-                                      code='checkpoint_scope',path='numerics.decay')
+    if numerics.stopping is not None:
+        raise UnsupportedFeatureError('checkpoint_steps requires fixed-duration execution without a DecayStop',
+                                      code='checkpoint_scope',path='numerics.stopping')
     return value
 
 
@@ -114,7 +114,7 @@ def _cuda_homogeneous_ade(problem,scene):
     rounding rule. Material validity and pole-aware stability remain the
     ordinary scientific guards' responsibility, including on prepared reuse.
     """
-    from . import boundaries, geometry, monitors
+    from . import _boundaries as boundaries, _geometry as geometry, _monitors as monitors
     from ._kernel.grid import Grid
     from wavebit.materials import Drude, Lorentz
     from wavebit._common.declarations import static_float
@@ -126,13 +126,13 @@ def _cuda_homogeneous_ade(problem,scene):
         refuse('CUDA homogeneous ADE requires an ordinary Material background',
                'scene.background')
     if len(problem.scene.structures)!=1:
-        refuse('CUDA homogeneous ADE requires exactly one full-grid Slab','scene.structures')
+        refuse('CUDA homogeneous ADE requires exactly one full-grid SnappedSlab','scene.structures')
     structure=problem.scene.structures[0]
     path='scene.structures.'+structure.name
     material=structure.material
-    if (type(structure.shape) is not geometry.Slab or
+    if (type(structure.shape) is not geometry.SnappedSlab or
             type(material) is not DispersiveMaterial):
-        refuse('CUDA homogeneous ADE requires one DispersiveMaterial Slab',path)
+        refuse('CUDA homogeneous ADE requires one DispersiveMaterial SnappedSlab',path)
     for axis in 'xyz':
         for side in '-+':
             if type(problem.scene.boundaries.face(axis+side)) is not boundaries.Periodic:
@@ -158,7 +158,7 @@ def _cuda_homogeneous_ade(problem,scene):
                 code='static_input',path=where) from exc
     grid=Grid.from_domain(scene.domain.size,scene.domain.center,scene.resolution.dx)
     if scene.structures[0].shape.filled_cells(grid)!=tuple((0,n) for n in grid.n):
-        refuse('CUDA homogeneous ADE Slab must fill every cell of the actual rounded grid',
+        refuse('CUDA homogeneous ADE SnappedSlab must fill every cell of the actual rounded grid',
                path+'.shape')
     if problem.sources:
         refuse('CUDA homogeneous ADE supports initial fields only','sources')
@@ -178,39 +178,39 @@ def _cuda_homogeneous_ade(problem,scene):
             or 'complex' in str(getattr(amplitude,'dtype',''))):
         refuse('CUDA homogeneous ADE initial amplitude must be a real scalar','initial.amplitude')
     for monitor in problem.outputs.monitors:
-        if type(monitor) is not monitors.Record:
-            refuse('CUDA homogeneous ADE supports Record and final fields only',
+        if type(monitor) is not monitors.TimeSeriesMonitor:
+            refuse('CUDA homogeneous ADE supports TimeSeriesMonitor and final fields only',
                    'outputs.'+monitor.name)
 
 
 def _cuda_region(problem,scene):
-    """The fixed, strictly interior, scalar-material Region CUDA family.
+    """The fixed, strictly interior, scalar-material SnappedBox CUDA family.
 
     Geometry and initial patterns remain static. Material values are inspected only
     for scalar real shape here; their ordinary scientific runtime guards retain AD.
     """
-    from . import boundaries, geometry, monitors, sources
+    from . import _boundaries as boundaries, _geometry as geometry, _monitors as monitors, _sources as sources
     from ._kernel.grid import Grid
 
     def refuse(message,path):
         raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
 
     if len(problem.scene.structures)!=1:
-        refuse('CUDA Region requires exactly one structure without Slab mixtures', 'scene.structures')
+        refuse('CUDA SnappedBox requires exactly one structure without SnappedSlab mixtures', 'scene.structures')
     structure=problem.scene.structures[0]
     path='scene.structures.'+structure.name
-    if type(structure) is not geometry.Structure or type(structure.shape) is not geometry.Region:
-        refuse('CUDA Region requires an exact static Region structure',path)
+    if type(structure) is not geometry.Structure or type(structure.shape) is not geometry.SnappedBox:
+        refuse('CUDA SnappedBox requires an exact static SnappedBox structure',path)
     if structure.continuation:
-        refuse('CUDA Region does not support continuation',path+'.continuation')
+        refuse('CUDA SnappedBox does not support continuation',path+'.continuation')
     for axis in 'xyz':
         for side in '-+':
             if type(problem.scene.boundaries.face(axis+side)) is not boundaries.Periodic:
-                refuse('CUDA Region requires six Periodic faces','scene.boundaries.'+axis+side)
+                refuse('CUDA SnappedBox requires six Periodic faces','scene.boundaries.'+axis+side)
     grid=Grid.from_domain(scene.domain.size,scene.domain.center,scene.resolution.dx)
     cells=scene.structures[0].shape.filled_cells(grid)
     if any(not 0<lo<hi<n for (lo,hi),n in zip(cells,grid.n)):
-        refuse('CUDA Region must occupy strictly interior cells on every axis; '
+        refuse('CUDA SnappedBox must occupy strictly interior cells on every axis; '
                'seams and full-span axes are not supported',path+'.shape')
 
     def real_scalar(value):
@@ -221,31 +221,31 @@ def _cuda_region(problem,scene):
     for where,material in (('scene.background',problem.scene.background),
                             (path+'.material',structure.material)):
         if type(material) not in (Material,ConductiveMaterial):
-            refuse('CUDA Region supports scalar Material or ConductiveMaterial only',where)
+            refuse('CUDA SnappedBox supports scalar Material or ConductiveMaterial only',where)
         leaves=[('epsilon',material.epsilon),('mu',1. if material.mu is None else material.mu)]
         if type(material) is ConductiveMaterial:
             leaves.append(('conductivity',material.conductivity))
         for name,value in leaves:
             if not real_scalar(value):
-                refuse('CUDA Region requires real scalar material values',where+'.'+name)
+                refuse('CUDA SnappedBox requires real scalar material values',where+'.'+name)
     if problem.sources:
-        refuse('CUDA Region supports initial fields only','sources')
+        refuse('CUDA SnappedBox supports initial fields only','sources')
     initial=problem.initial
     if (type(initial) is not sources.InitialField or
             (initial.E is None and initial.H is None)):
-        refuse('CUDA Region requires an ordinary real static InitialField','initial')
+        refuse('CUDA SnappedBox requires an ordinary real static InitialField','initial')
     for name,value in (('E',initial.E),('H',initial.H)):
         if value is None:
             continue
         if (type(value) is not np.ndarray or value.dtype.kind not in 'fiu'
                 or value.shape!=grid.shape or not np.isfinite(value).all()):
-            refuse('CUDA Region initial patterns must be finite real host arrays '
+            refuse('CUDA SnappedBox initial patterns must be finite real host arrays '
                    'of shape (3,nz,ny,nx)','initial.'+name)
     if not real_scalar(initial.amplitude):
-        refuse('CUDA Region initial amplitude must be a real scalar','initial.amplitude')
+        refuse('CUDA SnappedBox initial amplitude must be a real scalar','initial.amplitude')
     for monitor in problem.outputs.monitors:
-        if type(monitor) is not monitors.Record:
-            refuse('CUDA Region supports Record and final fields only','outputs.'+monitor.name)
+        if type(monitor) is not monitors.TimeSeriesMonitor:
+            refuse('CUDA SnappedBox supports TimeSeriesMonitor and final fields only','outputs.'+monitor.name)
 
 
 def _cuda_scope(problem,numerics,execution,*,scene=None):
@@ -256,19 +256,19 @@ def _cuda_scope(problem,numerics,execution,*,scene=None):
     """
     if execution.device == 'cpu':
         return
-    from . import boundaries, geometry, monitors, sources
-    from .numerics import PML
+    from . import _boundaries as boundaries, _geometry as geometry, _monitors as monitors, _sources as sources
+    from ._numerics import PML
     from wavebit._common.declarations import static_float
 
     def refuse(message,path):
         raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
 
-    if numerics.decay is not None:
-        refuse('CUDA requires a fixed duration; Decay remains CPU only','numerics.decay')
+    if numerics.stopping is not None:
+        refuse('CUDA requires a fixed duration; DecayStop remains CPU only','numerics.stopping')
     if not isinstance(numerics.absorber,PML):
         refuse('CUDA currently supports PML padding only','numerics.absorber')
-    if numerics.discretisation!='voxel':
-        refuse('CUDA currently requires voxel discretisation','numerics.discretisation')
+    if numerics.discretization!='voxel':
+        refuse('CUDA currently requires voxel discretization','numerics.discretization')
     if numerics.geometry_ranges:
         refuse('CUDA does not yet admit ranged geometry','numerics.geometry_ranges')
     faces=tuple((axis+side,problem.scene.boundaries.face(axis+side))
@@ -292,10 +292,10 @@ def _cuda_scope(problem,numerics,execution,*,scene=None):
             refuse('CUDA Bloch currently supports Periodic or Open companion faces only',
                    'scene.boundaries.'+name)
     for structure in problem.scene.structures:
-        if type(structure.shape) not in (geometry.Slab,geometry.Region):
-            refuse('CUDA currently supports Slab or restricted interior Region structures only',
+        if type(structure.shape) not in (geometry.SnappedSlab,geometry.SnappedBox):
+            refuse('CUDA currently supports SnappedSlab or restricted interior SnappedBox structures only',
                    'scene.structures.'+structure.name+'.shape')
-    if any(type(s.shape) is geometry.Region for s in problem.scene.structures):
+    if any(type(s.shape) is geometry.SnappedBox for s in problem.scene.structures):
         if scene is None:
             scene,_=lower_problem(problem,numerics)
         _cuda_region(problem,scene)
@@ -311,15 +311,15 @@ def _cuda_scope(problem,numerics,execution,*,scene=None):
                 and not (homogeneous_ade and type(material) is DispersiveMaterial)):
             refuse('CUDA supports Material, ConductiveMaterial and restricted homogeneous ADE',path)
     for source in problem.sources:
-        if type(source) not in (sources.PlaneWave, sources.Dipole):
-            refuse('CUDA currently supports PlaneWave, fixed-center Dipole sources or initial fields only',
+        if type(source) not in (sources.PlaneWave, sources.CurrentDipole):
+            refuse('CUDA currently supports PlaneWave, fixed-center CurrentDipole sources or initial fields only',
                    'sources.'+source.name)
-        if has_bloch and type(source) is sources.Dipole:
+        if has_bloch and type(source) is sources.CurrentDipole:
             refuse('CUDA Bloch currently supports PlaneWave sources or initial fields only; '
-                   'complex Dipole source work is not qualified','sources.'+source.name)
+                   'complex CurrentDipole source work is not qualified','sources.'+source.name)
     for monitor in problem.outputs.monitors:
-        if type(monitor) not in (monitors.Record,monitors.Field,monitors.Flux):
-            refuse('CUDA currently supports Record, Field and Flux monitors only',
+        if type(monitor) not in (monitors.TimeSeriesMonitor,monitors.FieldMonitor,monitors.FluxMonitor):
+            refuse('CUDA currently supports TimeSeriesMonitor, FieldMonitor and FluxMonitor only',
                    'outputs.'+monitor.name)
 
 
@@ -332,7 +332,7 @@ def _compact_poles(problem,execution):
 def _snapped(problem,scene,plan):
     """A warning for each cell-snapped structure whose interfaces the grid moved.
 
-    A Slab or Region fills whole cells, so an interface between two cell boundaries lands on
+    A SnappedSlab or SnappedBox fills whole cells, so an interface between two cell boundaries lands on
     the nearer one: up to half a cell, a first-order error in the spacing. Two spans inside
     the same cells give bit-identical runs -- a 0.317 and a 0.325 film at 0.025 spacing did --
     and the compat report printed the move while this one dropped it. The rows are the
@@ -375,7 +375,7 @@ def _report(problem,numerics,execution,scene,plan,metadata):
                   dt_seconds=plan.dt*problem.units.time_seconds,steps=plan.steps,
                   duration_seconds=plan.steps*plan.dt*problem.units.time_seconds,dtype=plan.dtype,
                   checkpoint_steps=plan.schedule,
-                  duration_policy='fixed' if numerics.decay is None else 'hard cap with concrete state-decay stopping',
+                  duration_policy='fixed' if numerics.stopping is None else 'hard cap with concrete state-decay stopping',
                   monitor_samples=tuple((o.name,getattr(o,'indices',None)) for o in plan.observers))
     return CheckReport(issues=_snapped(problem,scene,plan),
                        estimates={'state_bytes':r.bytes_per_state,'parameter_bytes':r.bytes_per_params,
@@ -383,7 +383,7 @@ def _report(problem,numerics,execution,scene,plan,metadata):
         capabilities={'backend':execution.backend,'precision':execution.precision,'device':execution.device,
                       'runtime_validation':'concrete_inputs' if r.params_known else 'deferred',
                       'warnings':tuple(to_public(w) for w in r.warnings),
-                      'automatic_stopping':numerics.decay is not None,
+                      'automatic_stopping':numerics.stopping is not None,
                       'geometry_ranges':tuple(numerics.geometry_ranges)},resolved=resolved)
 
 
@@ -492,23 +492,23 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             raise _issue(exc) from exc
     homogeneous_ade=(execution.device!='cpu' and any(
         type(s.material) is DispersiveMaterial for s in problem.scene.structures))
-    from .geometry import Region
+    from ._geometry import SnappedBox
     interior_region=(execution.device!='cpu' and any(
-        type(s.shape) is Region for s in problem.scene.structures))
+        type(s.shape) is SnappedBox for s in problem.scene.structures))
     material_live=('oscillator weight (Lorentz strength or Drude omega_p) subject to constitutive guards'
                    if homogeneous_ade else 'material coefficients subject to constitutive guards')
     source_live=(() if interior_region else
-                 ('source amplitude/phase/delay and band subject to fixed plan dependencies',))
+                 ('source amplitude/phase/delay_seconds and pulse subject to fixed plan dependencies',))
     contract=frozen_mapping({'static':tuple(signature),'live':(material_live,)+source_live+('initial amplitude',)
         + (('ranged geometry subject to reserved-support guards',) if execution.device=='cpu' else ()),
-        'differentiation':('concrete forward only; Decay refuses AD and external transforms' if numerics.decay is not None
+        'differentiation':('concrete forward only; DecayStop refuses AD and external transforms' if numerics.stopping is not None
                           else 'CUDA homogeneous ADE: oscillator weight (Lorentz strength or Drude omega_p) '
                                'and initial amplitude support eager reverse derivatives; epsilon_inf, mu, gamma '
                                'and omega_0 are nondifferentiable scalars; initial patterns are static host arrays'
                           if homogeneous_ade else
-                          'CUDA Region: one static strictly interior Region with scalar real epsilon, mu '
+                          'CUDA SnappedBox: one static strictly interior SnappedBox with scalar real epsilon, mu '
                           'and conductivity, plus initial amplitude, supports eager reverse derivatives; '
-                          'six Periodic faces and real static host initial patterns; Record/final fields only'
+                          'six Periodic faces and real static host initial patterns; TimeSeriesMonitor/final fields only'
                           if interior_region else
                                'existing Yee runtime guards apply; invalid transformed states return NaN and failed validity'),
         'resolved_steps':plan.steps,'resolved_dt_seconds':plan.dt*problem.units.time_seconds,

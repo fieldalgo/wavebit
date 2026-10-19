@@ -179,7 +179,9 @@ from wavebit._common._jobs_v1 import SPEC_VERSION
 # argument as '12': these are names a consumer calls, and the old ones are gone, not aliased.
 # '22': retired facade paths become explicitly scoped private engine diagnostics;
 # physical native/periodic interfaces and explicit Job migration join current_lifecycle.
-MANIFEST_VERSION = '22'
+# '23': public names say what they are (fdtd monitors end in Monitor, among others; see
+# docs/migration/public-names.md), and Jobs are wavebit.job/v2. The old names are gone, not aliased.
+MANIFEST_VERSION = '23'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -776,7 +778,7 @@ CURRENT_LIFECYCLE = {
     },
     'job': {
         'type': 'wavebit.Job',
-        'schema': 'wavebit.job/v1',
+        'schema': 'wavebit.job/v2',
         'run': 'wavebit.run',
         'serialization': ['to_json', 'from_json'],
         'legacy_policy': 'JobSpec v10 requires explicit physical units and migration.',

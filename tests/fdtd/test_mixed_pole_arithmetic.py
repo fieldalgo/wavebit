@@ -27,8 +27,8 @@ def problem(kind, value, frequency=2.):
         domain=fdtd.Domain(size=(.4,)*3),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(),
                                   z=fdtd.Periodic()),
-        structures=(fdtd.Structure('block', fdtd.Region(size=(.2,)*3),
-                                  DispersiveMaterial(1., (pole,))),)))
+        structures=(fdtd.Structure('block', shape=fdtd.SnappedBox(size=(.2,)*3),
+                                  material=DispersiveMaterial(1., (pole,))),)))
 
 
 def numerics():
@@ -125,7 +125,7 @@ def test_public_traced_frequency_retains_runtime_invalidity(backend):
         return replace(problem('drude-gamma', .5, frequency=frequency),
                        initial=fdtd.InitialField(E=(None, initial, None)),
                        outputs=fdtd.Outputs(monitors=(
-                           fdtd.Record('field', at=(0.,)*3, component='Ey'),)))
+                           fdtd.TimeSeriesMonitor('field', at=(0.,)*3, component='Ey'),)))
 
     prepared = quiet(fdtd.prepare, live(2.), numerics=numerics(), backend=backend)
 

@@ -15,9 +15,9 @@ def scalar_case(length='um', scale=1.):
             boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
             background=ConductiveMaterial(epsilon=2., conductivity=4*EPSILON0*C0/1e-6)),
         initial=fdtd.InitialField(E=(1., None, None)),
-        outputs=fdtd.Outputs(final_fields=True, monitors=(fdtd.Record('E', at=(0., 0., 0.), component='Ex'),)))
+        outputs=fdtd.Outputs(final_fields=True, monitors=(fdtd.TimeSeriesMonitor('E', at=(0., 0., 0.), component='Ex'),)))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.1*scale),
-        duration=fdtd.Duration(steps=173), decay=fdtd.Decay(threshold=.02, window_seconds=.19e-6/C0))
+        duration=fdtd.Duration(steps=173), stopping=fdtd.DecayStop(threshold=.02, window_seconds=.19e-6/C0))
     return problem, numerics
 
 
@@ -60,7 +60,7 @@ def test_stopping_is_invariant_under_geometry_unit_changes_and_portable_jobs():
     assert a.provenance['actual_steps'] == b.provenance['actual_steps']
     np.testing.assert_allclose(a.final_fields.values['E'], b.final_fields.values['E'], rtol=5e-14)
     assert a.final_fields.metadata['E_time'] == pytest.approx(b.final_fields.metadata['E_time'], rel=1e-15)
-    graded = job.replace(numerics=other_n.replace(absorber=fdtd.Absorber(cells=4)))
+    graded = job.replace(numerics=other_n.replace(absorber=fdtd.ConductiveAbsorber(cells=4)))
     assert Job.from_json(graded.to_json()).key == graded.key
 
 
@@ -92,7 +92,7 @@ def test_graded_absorber_padding_matches_an_independently_declared_lossy_scene()
         initial=fdtd.InitialField(E=(lambda x,y,z: np.exp(-(z/.2)**2), None, None)),
         outputs=fdtd.Outputs(final_fields=True))
     n = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.1), duration=fdtd.Duration(steps=30),
-                      absorber=fdtd.Absorber(cells=4))
+                      absorber=fdtd.ConductiveAbsorber(cells=4))
     manual = old.Scene(domain=old.Domain(size=(.4, .4, 1.8)),
         boundaries=old.Boundaries.periodic(z=old.Absorber(cells=4)),
         resolution=old.Resolution(dx=.1), run=old.Run(steps=30),

@@ -24,7 +24,7 @@ AD. Each E/H component has its own Yee location.
 `native.PML` occupies cells already included at both z ends; it does not expand
 the supplied arrays. Its low/high `(epsilon,mu)` reference media must match each
 end plus an interior cell. Active poles and conductivity must be absent there.
-The z Bloch phase is zero with PML. `fdtd.Absorber` instead chooses the existing
+The z Bloch phase is zero with PML. `fdtd.ConductiveAbsorber` instead chooses the existing
 matched graded conductivity layer, with its finite attenuation floor. Neither
 absorber has a reflection-error guarantee; check width, strength and resolution.
 

@@ -19,14 +19,14 @@
 | --- | --- |
 | `UniformGrid(spacing=dx)` | 세 축 모두 같은 크기 `dx`의 정육면체 셀 |
 | `Domain(size, center)` | 물리 영역. 중심을 기준으로 셀 단위로 **올림**됩니다 |
-| `Slab`, `Region` | **셀 스냅** 구조물: 셀을 통째로 채우고, 면은 가장 가까운 셀 경계로 옮겨집니다 |
+| `SnappedSlab`, `SnappedBox` | **셀 스냅** 구조물: 셀을 통째로 채우고, 면은 가장 가까운 셀 경계로 옮겨집니다 |
 | `Box`, `Sphere`, `Cylinder`, `Prism` | **스무딩** 바디: 경계에 걸친 셀은 바디가 채운 비율만큼 섞은 재료를 받습니다 |
 | `Open()` 면 | 물리 영역 **바깥**에 덧붙는 PML. 그 면에 닿는 매질에 맞춰집니다 |
 | `Periodic()`, `Bloch(...)` | 셀이 반복됩니다. `Bloch`는 위상을 더하고 실행을 복소수로 만듭니다 |
-| `PEC()`, `PMC()`, `Symmetry(parity)`, `Axis1D(k, k_max)` | 도체 벽, 거울면, 정확히 미분되는 불변 축 |
+| `PEC()`, `PMC()`, `MirrorSymmetry(parity)`, `InvariantAxis(k, k_max)` | 도체 벽, 거울면, 정확히 미분되는 불변 축 |
 | `Numerics(courant=0.5)` | 시간 간격 `dt = courant · dx / (c·√3)` |
-| `Record` | 한 성분의, 가장 가까운 Yee 점에서의 시계열 |
-| `Field`, `Flux`, `Diffraction`, `FarField` | 실행 중에 누적되는 장의 푸리에 변환 |
+| `TimeSeriesMonitor` | 한 성분의, 가장 가까운 Yee 점에서의 시계열 |
+| `FieldMonitor`, `FluxMonitor`, `DiffractionMonitor`, `FarFieldMonitor` | 실행 중에 누적되는 장의 푸리에 변환 |
 
 CPU 실행은 NumPy·JAX·PyTorch 배정밀도를 사용합니다. 제한된 Torch CUDA는
 고정 실행 길이의 voxel 장면, Periodic/Open/PEC/PMC와 정적 Bloch 경계를
@@ -71,15 +71,15 @@ Lorentz `omega_0`는 비미분 값이며(`mu=None`은 1), 호환되는 prepared
 | 물리량 | 단위 |
 | --- | --- |
 | 길이, 위치, 진공 파장 | 문제의 `Units(length="m" \| "mm" \| "um" \| "nm")` |
-| 시간, 펄스 지연, `Duration(seconds=...)` | 초 |
+| 시간, 펄스 지연(`delay_seconds`), `Duration(seconds=...)` | 초 |
 | `GaussianPulse(frequency_sigma_hz=...)` | Hz |
 | 각도: `PlaneWave(theta, phi)`, `Box`/`Prism(angle)` | 라디안 |
-| 전기장(`Record`, 최종 장), 평면파·TFSF 진폭 | V/m |
+| 전기장(`TimeSeriesMonitor`, 최종 장), 평면파·TFSF 진폭 | V/m |
 | 자기장 | A/m |
-| `Field` 페이저 | V·s/m, A·s/m (장 시계열의 푸리에 변환) |
-| `Flux` | J/Hz, 양측(two-sided) 스펙트럼 에너지 밀도 (`Axis1D` 면이 하나면 J/(Hz·m)) |
+| `FieldMonitor` 페이저 | V·s/m, A·s/m (장 시계열의 푸리에 변환) |
+| `FluxMonitor` | J/Hz, 양측(two-sided) 스펙트럼 에너지 밀도 (`InvariantAxis` 면이 하나면 J/(Hz·m)) |
 | `ConductiveMaterial(conductivity=...)` | S/m |
-| `Dipole(current_moment=...)` | A·m (전기), V·m (등가 자기) |
+| `CurrentDipole(current_moment=...)` | A·m (전기), V·m (등가 자기) |
 
 시간 규약은 `exp(-iωt)`입니다. `+x` 방향으로 진행하는 파동은 `exp(+ikx)`로 변하고, `Bloch`
 위상 `φ`는 `x + L`에서의 장이 `x`에서의 장의 `exp(+iφ)`배라는 뜻입니다. 스펙트럼 모니터는
@@ -108,8 +108,8 @@ Lorentz `omega_0`는 비미분 값이며(`mu=None`은 1), 호환되는 prepared
 | Ez | (0, 0, 1) | Hz | (1, 1, 0) |
 
 즉 전기장 성분은 자기 축 방향으로 반 셀, 자기장 성분은 나머지 두 축 방향으로 반 셀씩 떨어져
-있습니다. 위치를 다시 읽을 때 이것이 중요합니다. `Record`는 그 성분의 가장 가까운 점에서
-샘플링하고 요청한 좌표와 실제 샘플 좌표를 함께 돌려주며, `Field`는 각 성분을 그 성분의 점에서
+있습니다. 위치를 다시 읽을 때 이것이 중요합니다. `TimeSeriesMonitor`는 그 성분의 가장 가까운 점에서
+샘플링하고 요청한 좌표와 실제 샘플 좌표를 함께 돌려주며, `FieldMonitor`는 각 성분을 그 성분의 점에서
 돌려줍니다. 보간은 하지 않습니다.
 
 **흡수층은 바깥에 덧붙습니다.** 각 `Open()` 면은 물리 도메인 바깥에 `PML(cells=12)`개(기본값)의
@@ -131,15 +131,15 @@ E와 H는 번갈아 갱신됩니다(leapfrog). E는 정수 스텝에, H는 반 �
 
 ## 구조물: 셀 스냅과 스무딩
 
-장면은 배경 재료와, 이름이 붙은 구조물 `Structure(name, shape, material)`의 순서 있는 튜플로
+장면은 배경 재료와, 이름이 붙은 구조물 `Structure(name, shape=..., material=...)`의 순서 있는 튜플로
 이루어집니다. **구조물은 순서대로 칠해집니다. 두 구조물이 겹치면 나중 것이 이깁니다.** 각
 도형은 두 가지 방식 중 하나로 격자에 그려지며, 이 차이가 장면에서 가장 중요한 정확도
 결정입니다.
 
-### 셀 스냅 도형: `Slab`과 `Region`
+### 셀 스냅 도형: `SnappedSlab`과 `SnappedBox`
 
-- `Slab(z=(lo, hi))`는 층입니다. 한 축만 범위가 있고 나머지 두 축은 도메인을 가득 채웁니다.
-- `Region(size=(sx, sy, sz), center=(cx, cy, cz))`는 축에 나란한 블록입니다.
+- `SnappedSlab(z=(lo, hi))`는 층입니다. 한 축만 범위가 있고 나머지 두 축은 도메인을 가득 채웁니다.
+- `SnappedBox(size=(sx, sy, sz), center=(cx, cy, cz))`는 축에 나란한 블록입니다.
 
 둘 다 **셀을 통째로** 채웁니다. 각 면은 가장 가까운 셀 경계 `i = round((x - x_lo) / dx)`로
 옮겨지고, 옮겨진 면 사이의 모든 셀이 여섯 성분 모두에 대해 그 재료를 온전히 가집니다. 그래서
@@ -158,18 +158,18 @@ E와 H는 번갈아 갱신됩니다(leapfrog). E는 정수 스텝에, H는 반 �
 두께가 셀 수의 정수배가 되도록 `dx`를 고르고, `dx`를 줄여 가며 수렴을 확인하세요.
 
 셀 경계 위에 있는 스냅 면도 모든 성분에 대해 정확하지는 않습니다. 면이 놓인 노드 평면 위의
-접선 방향 전기장은 그 주변 셀 전체에 걸쳐 재료를 받기 때문에, 그 장에게는 `Slab`이 통째로 반
+접선 방향 전기장은 그 주변 셀 전체에 걸쳐 재료를 받기 때문에, 그 장에게는 `SnappedSlab`이 통째로 반
 셀 아래에 있는 것처럼 보입니다([smoothed occupancy의 G5](../../validation/fdtd/fd-subpixel-occupancy.md)).
 층 전체가 움직이면 선언한 평면에서 잰 `r`, `t`의 위상이 바뀌지만 효율은 바뀌지 않습니다. 다른
 솔버와 위상까지 맞춰야 한다면, 스무딩된 `Box` 층은 면을 선언한 위치에 둡니다.
 
 스무딩 바디는 못 하고 셀 스냅 도형만 할 수 있는 것:
 
-- **흡수 면 안으로 이어지기.** `Open()` 면의 축을 가로지르는 `Slab`(기판, 상부 매질)은 PML을
+- **흡수 면 안으로 이어지기.** `Open()` 면의 축을 가로지르는 `SnappedSlab`(기판, 상부 매질)은 PML을
   통과해 이어지고, 그 PML은 슬랩의 재료에 맞춰집니다.
 - **지원되는 모든 재료 담기.** `ConductiveMaterial`과 `DispersiveMaterial`도 됩니다.
-- **주기 전체에 걸치기.** `Periodic()` 축 전체에 걸친 `Region`은 셀에 맞춰 잘리며, 라멜라
-  격자의 이빨을 이렇게 씁니다. 주기를 다 덮지 않으면서 주기 이음매를 가로지르는 `Region`은
+- **주기 전체에 걸치기.** `Periodic()` 축 전체에 걸친 `SnappedBox`는 셀에 맞춰 잘리며, 라멜라
+  격자의 이빨을 이렇게 씁니다. 주기를 다 덮지 않으면서 주기 이음매를 가로지르는 `SnappedBox`는
   반대편 이미지가 빠지므로 거절됩니다.
 
 기하는 정적입니다. 크기·중심·구간은 미분되지 않습니다(재료 값은 미분됩니다).
@@ -198,7 +198,7 @@ Kottke, Farjadpour, Johnson(*Phys. Rev. E* **77**, 036611, 2008)의 비등방 �
 | 바디가 경계 짓는 가장 작은 폭이 4셀 이상이어야 합니다. 4~8셀이면 경고 | 그보다 적은 셀에서는 섞인 셀이 어디에 떨어지느냐가 바디보다 답을 더 좌우합니다 |
 | 재료: 유전율과 투자율이 스칼라인 `Material`. 축별 값은 안 됩니다 | 섞는 규칙은 성분별로 적용되고 등방 바디를 가정합니다 |
 | `ConductiveMaterial`, `DispersiveMaterial`은 안 됩니다. 셀 전체에 걸친 평평한 필름만 예외 | 손실·분산 재료의 섞기는 그 필름 범위에서만 검증됐습니다 |
-| `Open()` 면에 닿으면 안 됩니다 | 흡수층 안으로의 연장이 정의되지 않습니다. 그곳에는 `Slab`을 쓰세요 |
+| `Open()` 면에 닿으면 안 됩니다 | 흡수층 안으로의 연장이 정의되지 않습니다. 그곳에는 `SnappedSlab`을 쓰세요 |
 | `Periodic()` 면에 닿으면 안 됩니다. 단 주기 전체를 덮으면서 양쪽 면을 한 셀 **넘게** 지나가면 됩니다 | 그렇지 않으면 이음매에서 일부가 사라집니다 |
 | 두 스무딩 표면이 같은 셀을 지나가면 안 됩니다 | 섞는 규칙은 셀당 매질 둘, 표면 하나를 기술합니다. 한 셀 이상 떨어뜨리거나 한 바디로 쓰세요 |
 | 스무딩 표면이 셀 스냅 면이 자르는 셀을 함께 자르면 안 됩니다 | 그 셀에 매질이 셋 생깁니다(아래 참고) |
@@ -219,15 +219,15 @@ flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없
 대체된 계산을 준비할 수 없습니다.
 
 잘못된 selector 값은 공개 `Numerics(junction=...)` 또는
-`Numerics(discretisation=...)` 표기와 지원하는 값으로 설명합니다. `check`는
+`Numerics(discretization=...)` 표기와 지원하는 값으로 설명합니다. `check`는
 `invalid_input` issue를 반환하고 `prepare`는 같은 issue를 가진 `ValidationError`를
 발생시킵니다. `path`는 해당 설정을 가리키며 `actual`은 입력한 값을 보존합니다.
 
 `check(...).resolved["numerical_policies"]`와 `prepare(...).report.resolved`는 요청한
-설정과 구조별 실제 적용을 함께 기록합니다. `discretisation` 행의 `stencil`은 실제
+설정과 구조별 실제 적용을 함께 기록합니다. `discretization` 행의 `stencil`은 실제
 준비된 엔진 연산자, `voxel`은 기본 내장 스무딩 body를 뜻합니다. `rule=None`과
-`whole_cell_fill`은 Slab/Region의 whole-cell fill 유지, `custom_shape_protocol`은
-custom Shape 자체의 fill 의미를 나타냅니다. 공개 내장 `Slab`과 `Region`의 정확한
+`whole_cell_fill`은 SnappedSlab/SnappedBox의 whole-cell fill 유지, `custom_shape_protocol`은
+custom Shape 자체의 fill 의미를 나타냅니다. 공개 내장 `SnappedSlab`과 `SnappedBox`의 정확한
 클래스를 구분하며, 사용자 하위 클래스는 check·prepare·validate 및 run의 provenance에서
 custom protocol 분류를 유지합니다. `junction`은 기록된 standing body에만
 규칙을 표시하고, `junction_face`와 `no_resolved_junction`을 구분하며 각 접합의 구조
@@ -246,40 +246,40 @@ custom protocol 분류를 유지합니다. `junction`은 기록된 standing body
 issues를 반환하고 resolved 정책 행을 제공하지 않습니다. validate/run은 이전 보고서와
 Result의 정책 기록을 변경하지 않습니다.
 
-**기판 위 기둥.** 마지막 규칙 때문에 스무딩 기둥은 `Slab` 기판 위에 딱 붙여 세울 수 없습니다.
+**기판 위 기둥.** 마지막 규칙 때문에 스무딩 기둥은 `SnappedSlab` 기판 위에 딱 붙여 세울 수 없습니다.
 선택지는 다음과 같습니다.
 
 1. `Open()` 면에 닿지 않는 유한한 스무딩 `Box` 기판 위에 기둥을 딱 붙여 세우기(위의 junction
    규칙);
-2. `Slab` 기판 위의 셀 스냅 `Region` 기둥(직사각형, 면은 스냅됨);
-3. `Slab` 면에서 반 셀 이상 띄운 스무딩 기둥.
+2. `SnappedSlab` 기판 위의 셀 스냅 `SnappedBox` 기둥(직사각형, 면은 스냅됨);
+3. `SnappedSlab` 면에서 반 셀 이상 띄운 스무딩 기둥.
 
 어느 것도 "흡수층까지 이어지는 반공간 기판 위에 붙어 선 스무딩 기둥"은 아닙니다. 그 장면은
 아직 공개 모듈로 쓸 수 없습니다.
 
-**스무딩의 정확도.** 기본 규칙 `Numerics(discretisation="voxel")`은 통제된 유리 구 연구에서
+**스무딩의 정확도.** 기본 규칙 `Numerics(discretization="voxel")`은 통제된 유리 구 연구에서
 2.02차로 수렴했지만, 곡면 정확도 관문을 일반적으로 통과하지는 못했습니다. 스무딩 바디가 있는
-모든 실행이 이를 알리는 `SubpixelAccuracyWarning`을 냅니다. 대안인 `discretisation="stencil"`은
+모든 실행이 이를 알리는 `SubpixelAccuracyWarning`을 냅니다. 대안인 `discretization="stencil"`은
 구에 대해 그 관문을 통과했지만(`ε = 12` 구에서 2.24차) `Sphere`에만 적용되고, 일반 숫자만 받으며
 (미분 불가), `PlaneWave`나 `TFSF` 소스가 필요합니다. 측정은
 [Mie 검증](../../validation/fdtd/fd-mie-validation.md)과
 [smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md)에 있습니다.
 
-장면 전체의 `Numerics(discretisation="stencil")` 설정은 스무딩 본체에만 전달됩니다.
-`Slab`과 `Region`은 whole-cell fill을 유지합니다. `Box`, `Cylinder`, `Prism` 등
-지원하지 않는 형상과 적용할 `Sphere`가 없는 장면은 `numerics.discretisation`에서
-거부합니다. 이 설정은 정확한 내장 `Sphere`, `Slab`, `Region` 타입만 받습니다.
+장면 전체의 `Numerics(discretization="stencil")` 설정은 스무딩 본체에만 전달됩니다.
+`SnappedSlab`과 `SnappedBox`는 whole-cell fill을 유지합니다. `Box`, `Cylinder`, `Prism` 등
+지원하지 않는 형상과 적용할 `Sphere`가 없는 장면은 `numerics.discretization`에서
+거부합니다. 이 설정은 정확한 내장 `Sphere`, `SnappedSlab`, `SnappedBox` 타입만 받습니다.
 사용자 Shape와 subclass는 fill 프로토콜을 바꿀 수 있어 거부합니다.
 stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분하지 않는
 구체적인 수치만 지원하며, slab이나 region을 추가한 다중 구조물 장면은 지원하지 않습니다.
 
 ### Stencil 준비 메모리
 
-`Numerics(discretisation="stencil", memory_bound=2 * 1024**3, ...)`는 호스트
+`Numerics(discretization="stencil", memory_bound=2 * 1024**3, ...)`는 호스트
 준비 과정의 예상 메모리 한도를 바이트로 정합니다(이 예에서는 2 GiB).
 `memory_bound`를 생략하거나 `None`을 쓰면 엔진 기본값 6 GiB를 유지합니다.
 양의 유한 실수만 허용하며, 불리언·0·음수·비유한 값은 `numerics.memory_bound`에서
-거절합니다. `discretisation="stencil"`과 적용 가능한 `Sphere`가 없으면 설정을
+거절합니다. `discretization="stencil"`과 적용 가능한 `Sphere`가 없으면 설정을
 읽는 준비 과정도 없으므로 거절합니다.
 
 기존 예측값을 한도와 비교하는 검사는 희소 행렬 조립과 풀이 **이전**에 실행됩니다.
@@ -287,7 +287,7 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 `UniformGrid(spacing=...)`의 격자를 굵게 하거나 구를 줄이거나, 사용 가능한 자원을
 확인해 한도를 명시적으로 조절하세요. 한도를 올려도 stencil의 물리적 지원 범위는
 넓어지지 않습니다. 현재 연산자는 진공 속 구 하나를 요구합니다. 구조물이 여러 개면
-`Numerics(discretisation="voxel")`을 쓰거나 지원되는 구 하나의 장면으로 줄이세요.
+`Numerics(discretization="voxel")`을 쓰거나 지원되는 구 하나의 장면으로 줄이세요.
 수치 정책은 `Structure`가 아니라 `Numerics`에서 정합니다.
 
 ## 재료
@@ -309,16 +309,16 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 
 | 면 | 의미 |
 | --- | --- |
-| `Open()` | 바깥으로 나가는 면: 물리 도메인 바깥의 PML이 그 면에 닿는 균일 매질에 맞춰집니다. 균일 매질만 닿을 수 있습니다. 배경, 또는 그 축을 가로지르는 `Slab`입니다. 유한한 바디가 닿거나, 직교하는 `Open()` 면을 가로지르는 `Slab`은 거절됩니다. |
+| `Open()` | 바깥으로 나가는 면: 물리 도메인 바깥의 PML이 그 면에 닿는 균일 매질에 맞춰집니다. 균일 매질만 닿을 수 있습니다. 배경, 또는 그 축을 가로지르는 `SnappedSlab`입니다. 유한한 바디가 닿거나, 직교하는 `Open()` 면을 가로지르는 `SnappedSlab`은 거절됩니다. |
 | `Periodic()` | 두 면이 위상 없이 이어집니다. 주기 셀에서의 수직 입사. |
 | `Bloch(phase=φ)` 또는 `Bloch(k=k)` | 두 면이 위상을 두고 이어집니다. 실행이 복소수가 되어 메모리와 계산이 두 배입니다. `Bloch.from_source(source, units=...)`가 비스듬한 `PlaneWave`에 필요한 면을 만들어 줍니다. |
 | `PEC()` / `PMC()` | 벽에서 접선 E / 접선 H가 0입니다. 벽 너머로 뻗은 구조물은 잘리고 `GeometryClippedWarning`이 납니다. |
-| `Symmetry(parity=±1)` | 거울면. `+1`은 접선 E가 면에 대해 짝수(PMC와 비슷한 면), `-1`은 홀수입니다. |
-| `Axis1D(k=..., k_max=...)` | 미분이 정확히 `ik`인 한 셀짜리 불변 축. 2차원 원뿔 격자의 균일한 축을, 한 셀 차분의 인위적 분산 없이 표현합니다. |
+| `MirrorSymmetry(parity=±1)` | 거울면. `+1`은 접선 E가 면에 대해 짝수(PMC와 비슷한 면), `-1`은 홀수입니다. |
+| `InvariantAxis(k=..., k_max=...)` | 미분이 정확히 `ik`인 한 셀짜리 불변 축. 2차원 원뿔 격자의 균일한 축을, 한 셀 차분의 인위적 분산 없이 표현합니다. |
 
 `Numerics(absorber=PML(...))`가 모든 `Open()` 면의 흡수층을 정합니다. `cells=12`(그보다 적으면
 `allow_thin=True` 없이는 거절), `reflection=1e-8`, `wavelength`(생략하면 소스들이 공유하는 중심
-파장), 그리고 면 옆의 속박 모드가 자라지 않게 막는 추가 손실인 `stabilize`입니다(아래
+파장), 그리고 면 옆의 속박 모드가 자라지 않게 막는 추가 손실인 `stabilizing_loss`입니다(아래
 `GrowingFieldWarning` 참고).
 
 ### Grazing 거절 뒤 설정 바꾸기
@@ -338,32 +338,32 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 후보 하나를 적용한 뒤 `fdtd.check(problem, numerics=updated)`로 다시 검사하세요. 한 면의
 후보가 모든 면·차수·매질·파장의 통과를 보장하지는 않습니다. 거절된 면들의 기준 매질이
 서로 다르면 구체적인 수치 조합을 제안하지 않고 공통 흡수층 설정 변경과 전체 재검사를
-안내합니다. `stabilize`를 줄이면 구속 모드가 다시 성장할 수 있으므로 감쇠도 확인하세요.
+안내합니다. `stabilizing_loss`를 줄이면 구속 모드가 다시 성장할 수 있으므로 감쇠도 확인하세요.
 측정된 grazing 한계 아래에서는 흡수층이나 시간 변경으로 통과시킬 수 없으며 주기·각도·파장을
 바꿔야 합니다. 오류 안내는 반사 허용오차나 검증된 지원 범위를 완화하지 않습니다.
 
 ## 소스
 
-`Problem.sources`에는 `PlaneWave`, `Dipole`, `TFSF`를 넣습니다. 이름은 중복되지 않는
+`Problem.sources`에는 `PlaneWave`, `CurrentDipole`, `TFSF`를 넣습니다. 이름은 중복되지 않는
 빈 문자열이 아닌 문자열이어야 하며, 펄스는 `GaussianPulse`여야 합니다. `check`와
 `Prepared.validate`는 잘못된 선언을 `sources[i]`, 잘못되거나 중복된 이름을
 `sources[i].name`, 잘못된 펄스 형식을 `sources.<name>.pulse` 경로에 보고합니다.
 `prepare`, `run`, `Prepared.run`도 실행 시간의 기준 소스나 재사용 서명을 읽기 전에
 같은 경로의 구조화된 오류를 냅니다. 펄스의 수치값에는 기존 구체값·런타임 검사가 적용됩니다.
 
-`TFSF.box`는 셀에 맞추는 `fdtd.Region`이어야 합니다. 스무딩 바디인 `fdtd.Box`나 평면은
+`TFSF.box`는 셀에 맞추는 `fdtd.SnappedBox`여야 합니다. 스무딩 바디인 `fdtd.Box`나 평면은
 받지 않습니다. 박스 경계를 읽기 전에 `sources.<name>.box`에서 형식을 검사하며,
-올바른 Region도 물리 도메인 안에 있어야 합니다.
+올바른 `SnappedBox`도 물리 도메인 안에 있어야 합니다.
 
 모든 소스는 `GaussianPulse(wavelength, frequency_sigma_hz, cutoff=1e-3)`를 가집니다. 중심 진동수
 `f0 = c / wavelength`의 사인파에 가우시안 포락선을 씌운 것으로, **진폭 스펙트럼**의 표준편차가
 `frequency_sigma_hz`입니다. 펄스는 최댓값의 `cutoff`에서 시작하고, 스펙트럼은 `exp(-k²/2) =
 cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 대역의 단파장 끝이 해상도 규칙이
-읽는 파장입니다(다음 절). `amplitude`, `phase`, `delay`(초)는 파형을 이동하고 스케일합니다.
+읽는 파장입니다(다음 절). `amplitude`, `phase`, `delay_seconds`는 파형을 이동하고 스케일합니다.
 
 `Plane`은 `fdtd.Plane(z=.3)`처럼 법선 축 하나를 스칼라로 지정합니다.
-`Field`와 `Flux`는 `fdtd.Plane(z=.3, x=(-.05, .05))` 같은 유한 가로 범위도
-지원합니다. `PlaneWave`와 `Diffraction`은 가로 셀 전체를 사용하므로 두 가로
+`FieldMonitor`와 `FluxMonitor`는 `fdtd.Plane(z=.3, x=(-.05, .05))` 같은 유한 가로 범위도
+지원합니다. `PlaneWave`와 `DiffractionMonitor`는 가로 셀 전체를 사용하므로 두 가로
 범위를 모두 생략해야 합니다. 셀 경계와 일치하더라도 명시한 범위는 지원하지
 않으며, `sources.<name>.plane` 또는 `outputs.<name>.plane` 경로의 구조화된
 `plane_span` 오류가 됩니다. `check`는 이 오류를 보고하고, `prepare`와 `run`은
@@ -371,9 +371,9 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 
 | 소스 | 하는 일 |
 | --- | --- |
-| `PlaneWave(name, plane, pulse, direction="-z", theta=0, phi=0, polarization="s")` | `plane`에 가장 가까운 노드 평면의 한 방향 시트로, `direction` 쪽으로만 내보냅니다. `theta`는 진행 축으로부터의 극각, `phi`는 첫 번째 가로 축(z 방향 파동이면 x)으로부터의 방위각입니다. `"s"`는 E가 입사면에 수직, `"p"`는 입사면 안입니다. 가로 면은 `Periodic()`(수직 입사)이거나 `Bloch.from_source`가 만든 `Bloch` 면이어야 합니다. 가로 파수 벡터는 펄스의 중심 파장에서 고정되므로, 비스듬한 광대역 펄스는 일정한 각도의 조명이 아닙니다. |
-| `Dipole(name, center, pulse, component="Ey", kind="electric", current_moment=1)` | 점 **전류**(A·m), 또는 `kind="magnetic"`이면 그 자기 등가물(V·m)입니다. 매끄러운 스탬프(기본 `"bspline"` 또는 `"tent"`, 둘 다 반폭 두 셀)에 퍼뜨려, 중심이 어디에 있든 모멘트와 무게중심이 정확합니다. C·m 단위의 쌍극자 모멘트가 아닙니다. |
-| `TFSF(name, box, pulse, direction="-z", polarization="x")` | `Region` 상자 안에만 있는 평면파(안은 전체장, 밖은 산란장)로, 유한한 산란체용입니다. 축 방향만 되고, 그 축의 두 면은 `Open()`이어야 합니다. |
+| `PlaneWave(name, plane=..., pulse=..., direction="-z", theta=0, phi=0, polarization="s")` | `plane`에 가장 가까운 노드 평면의 한 방향 시트로, `direction` 쪽으로만 내보냅니다. `theta`는 진행 축으로부터의 극각, `phi`는 첫 번째 가로 축(z 방향 파동이면 x)으로부터의 방위각입니다. `"s"`는 E가 입사면에 수직, `"p"`는 입사면 안입니다. 가로 면은 `Periodic()`(수직 입사)이거나 `Bloch.from_source`가 만든 `Bloch` 면이어야 합니다. 가로 파수 벡터는 펄스의 중심 파장에서 고정되므로, 비스듬한 광대역 펄스는 일정한 각도의 조명이 아닙니다. |
+| `CurrentDipole(name, center=..., pulse=..., component="Ey", kind="electric", current_moment=1)` | 점 **전류**(A·m), 또는 `kind="magnetic"`이면 그 자기 등가물(V·m)입니다. 매끄러운 스탬프(기본 `"bspline"` 또는 `"tent"`, 둘 다 반폭 두 셀)에 퍼뜨려, 중심이 어디에 있든 모멘트와 무게중심이 정확합니다. C·m 단위의 쌍극자 모멘트가 아닙니다. |
+| `TFSF(name, box=..., pulse=..., direction="-z", polarization="x")` | `SnappedBox` 안에만 있는 평면파(안은 전체장, 밖은 산란장)로, 유한한 산란체용입니다. 축 방향만 되고, 그 축의 두 면은 `Open()`이어야 합니다. |
 | `InitialField(E, H, amplitude=1)` | 실행이 시작하는 장: `t = 0`의 E와 `t = -dt/2`의 H를 배열로, 또는 각 성분의 Yee 점에서 평가되는 호출 가능 객체로 줍니다. |
 
 `PlaneWave.plane`에는 `fdtd.Plane(z=.5)`처럼 `fdtd.Plane`을 넣어야 합니다.
@@ -386,25 +386,25 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 모니터는 `Outputs(monitors=...)`에 이름으로 선언하고 `result[name]`으로 읽습니다. 주파수 영역
 모니터는 나열한 파장에서 실행 중에 변환을 누적합니다.
 
-유한 monitor 범위에서 `Field`는 요청한 가로 구간 안의 각 성분 Yee 점을 끝점까지
+유한 monitor 범위에서 `FieldMonitor`는 요청한 가로 구간 안의 각 성분 Yee 점을 끝점까지
 포함해 반환합니다. 배열 축은 주파수, z, y, x 순서이며 좌표 배열은 실제 샘플을
-나타냅니다. `Flux`는 가로 끝점을 가장 가까운 노드에 맞추고 그 사이 표면을
+나타냅니다. `FluxMonitor`는 가로 끝점을 가장 가까운 노드에 맞추고 그 사이 표면을
 적분합니다. 셀 중심 샘플과 양 끝 노드의 절반 가중치를 사용하므로, 비정렬 범위의
 실제 적분 면적은 요청한 기하학적 면적과 다를 수 있습니다. 보간이나 가장자리
-셀의 부분 면적 적분은 하지 않습니다. 유한 Flux 구간은 적어도 한 셀을 포함하고
+셀의 부분 면적 적분은 하지 않습니다. 유한 `FluxMonitor` 구간은 적어도 한 셀을 포함하고
 마지막 저장 노드 이내에서 끝나야 합니다(높은 쪽 domain 면 자체는 저장하지
-않습니다). Field 구간은 요청한 모든 성분의 점을 포함해야 합니다.
+않습니다). `FieldMonitor` 구간은 요청한 모든 성분의 점을 포함해야 합니다.
 두 monitor 모두 물리 domain 밖의 요청 가로 구간을 자르거나 격자에 맞추기 전에
 `outputs.<name>.plane.<axis>` 경로의 `monitor_extent` 오류로 거부합니다.
 역순 또는 폭이 0인 구간은 `Plane`을 만들 때 거부합니다.
 
 | 모니터 | 돌려주는 것 |
 | --- | --- |
-| `Record(name, at, component)` | 한 성분의, 가장 가까운 Yee 점에서의 시계열. V/m 또는 A/m, 시간 축은 초 |
-| `Field(name, wavelengths, plane=... 또는 box=..., components=...)` | 각 성분의 점에서의 푸리에 페이저(V·s/m, A·s/m) |
-| `Flux(name, wavelengths, plane=... 또는 box=...)` | 평면을 (`+` 법선 방향으로) 지나거나 닫힌 상자에서 나가는 포인팅 에너지의 진동수당 양: 와트가 아니라 J/Hz 단위의 펄스 에너지 밀도. 닫힌 상자는 각 구조물을 통째로 감싸거나 통째로 빼야 합니다. |
-| `Diffraction(name, plane, wavelengths, source, side, orders=None)` | 주기 셀의 한쪽(`"reflect"` 또는 `"transmit"`)으로 나가는 차수들. 각 차수의 s/p 좌표계에서의 복소 진폭과 효율이며, 이름 붙은 `PlaneWave`가 직접 잰 입사장으로 정규화됩니다. `PlaneWave`가 정확히 하나여야 합니다. `reference_plane`과 `incident_plane`은 위상 기준면을 옮기고, `raw=True`는 정규화하지 않은 스펙트럼을 남깁니다. 펄스의 사용 가능한 대역 밖 파장은 NaN으로 돌려주며, 그곳에서 `validity.checks["source_reference"]`가 거짓입니다. |
-| `FarField(name, wavelengths, box, propagation="continuum")` | 열린 장면의 복사: 모든 것을 감싸는 닫힌 상자를 무한원으로 변환합니다. `intensity(theta, phi)`는 라디안을 받습니다. 주기 셀은 거절됩니다(주기 셀의 원거리장은 회절 차수입니다). `propagation="yee"`는 격자 자체의 분산을 씁니다. |
+| `TimeSeriesMonitor(name, at=..., component="Ey")` | 한 성분의, 가장 가까운 Yee 점에서의 시계열. V/m 또는 A/m, 시간 축은 초 |
+| `FieldMonitor(name, wavelengths=..., plane=... 또는 box=..., components=...)` | 각 성분의 점에서의 푸리에 페이저(V·s/m, A·s/m) |
+| `FluxMonitor(name, wavelengths=..., plane=... 또는 box=...)` | 평면을 (`+` 법선 방향으로) 지나거나 닫힌 상자에서 나가는 포인팅 에너지의 진동수당 양: 와트가 아니라 J/Hz 단위의 펄스 에너지 밀도. 닫힌 상자는 각 구조물을 통째로 감싸거나 통째로 빼야 합니다. |
+| `DiffractionMonitor(name, plane=..., wavelengths=..., source=..., wave=..., orders=None)` | 주기 셀에서 한 파동으로 나가는 차수들(입사 쪽의 `"reflected"` 또는 반대쪽의 `"transmitted"`). 각 차수의 s/p 좌표계에서의 복소 진폭과 효율이며, 이름 붙은 `PlaneWave`가 직접 잰 입사장으로 정규화됩니다. `PlaneWave`가 정확히 하나여야 합니다. `reference_plane`과 `incident_plane`은 위상 기준면을 옮기고, `raw=True`는 정규화하지 않은 스펙트럼을 남깁니다. 펄스의 사용 가능한 대역 밖 파장은 NaN으로 돌려주며, 그곳에서 `validity.checks["source_reference"]`가 거짓입니다. |
+| `FarFieldMonitor(name, wavelengths=..., box=..., propagation="continuum")` | 열린 장면의 복사: 모든 것을 감싸는 닫힌 상자를 무한원으로 변환합니다. `intensity(theta, phi)`는 라디안을 받습니다. 주기 셀은 거절됩니다(주기 셀의 원거리장은 회절 차수입니다). `propagation="yee"`는 격자 자체의 분산을 씁니다. |
 | `Outputs(final_fields=True)` | 실행 끝의 E, H 배열과 각 성분의 좌표 |
 
 (fdtd-model-accuracy-rules)=
@@ -413,14 +413,14 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 `check`, `prepare`, `run`이 같은 관문을 공유합니다. 거절 메시지는 바꿔야 할 설정을 알려
 줍니다.
 
-- **모든 재료에서 파장당 8셀.** 소스 대역의 최단 파장에서(그리고 모든 `Diffraction` 파장에서),
+- **모든 재료에서 파장당 8셀.** 소스 대역의 최단 파장에서(그리고 모든 `DiffractionMonitor` 파장에서),
   각 매질은 *그 매질 안에서* 파장당 8셀 이상, 즉 `λ / (n·dx) ≥ 8`로 샘플링되어야 합니다. 8
   미만이면 거절되고, 8~12이면 `CoarseMeshWarning`이 납니다. 굴절률 `n`인 구조물은 진공보다
   `n`배 촘촘한 셀이 필요합니다.
 - **스무딩 바디는 4셀 이상의 폭**, 위 표와 같습니다.
 - **시간 간격**은 장면 재료의 안정 한계 안에 있어야 합니다.
 - **PML**은 `allow_thin=True`가 아니면 12셀 이상이어야 합니다.
-- **배치.** 소스와 모니터는 물리 도메인 안에 있어야 하고, 닫힌 `Flux` 상자와 `FarField` 상자는
+- **배치.** 소스와 모니터는 물리 도메인 안에 있어야 하고, 닫힌 `FluxMonitor` 상자와 `FarFieldMonitor` 상자는
   위 표의 설명대로 구조물과 떨어져 있어야 합니다.
 
 이 규칙을 통과하는 것은 입장 검사이지 수렴 결과가 아닙니다. 필요한 양이 더 이상 변하지 않을
@@ -436,12 +436,12 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 | --- | --- |
 | `CoarseMeshWarning` | 매질 안에서 파장당 8~12셀, 또는 폭이 4~8셀인 스무딩 바디 |
 | `SubpixelAccuracyWarning` | 장면에 스무딩 바디가 있습니다. 기본 규칙의 정확도 관문은 아직 완료되지 않았습니다 |
-| `AbsorberProximityWarning` | 구조물이 흡수 면에서 (그 매질 안의) 반 파장 이내에 있습니다. 그 면의 PML은 구조물의 근접장이 아니라 그 면에 닿는 매질에 맞춰져 있습니다. 기판처럼 흡수층 안으로 이어지는 `Slab`에는 나오지 않습니다. 그 PML이 그 층에 맞춰지기 때문입니다. |
+| `AbsorberProximityWarning` | 구조물이 흡수 면에서 (그 매질 안의) 반 파장 이내에 있습니다. 그 면의 PML은 구조물의 근접장이 아니라 그 면에 닿는 매질에 맞춰져 있습니다. 기판처럼 흡수층 안으로 이어지는 `SnappedSlab`에는 나오지 않습니다. 그 PML이 그 층에 맞춰지기 때문입니다. |
 | `GeometryClippedWarning` | 구조물이 `PEC`나 `PMC` 벽 너머로 뻗어 그 부분을 잃습니다 |
 | `UnsettledFieldWarning` | 모니터 영역에 실행 끝까지 장이 남아 있었습니다. 그 스펙트럼에는 잘림이 섞여 있습니다. 더 오래 실행하세요 |
-| `GrowingFieldWarning` | 모든 소스가 끝난 뒤에도 장이 자랍니다. 더 오래 실행하면 더 나빠집니다. 대개 PML 옆의 속박 모드이니, 메시지가 알려 주는 값으로 `PML(stabilize=...)`를 정하세요 |
+| `GrowingFieldWarning` | 모든 소스가 끝난 뒤에도 장이 자랍니다. 더 오래 실행하면 더 나빠집니다. 대개 PML 옆의 속박 모드이니, 메시지가 알려 주는 값으로 `PML(stabilizing_loss=...)`를 정하세요 |
 | `PMLStabilityWarning` | 안정화된 PML이 그런 성장을 막는 데 필요하다고 측정된 것보다 적은 손실을 요청합니다 |
-| `RadiationApproximationWarning` | `FarField(propagation="continuum")`은 이산 플럭스와 정확히 맞지 않을 수 있습니다 |
+| `RadiationApproximationWarning` | `FarFieldMonitor(propagation="continuum")`은 이산 플럭스와 정확히 맞지 않을 수 있습니다 |
 
 ## 수명주기와 리포트
 
@@ -458,7 +458,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 `IncompatibleProblemError`가 납니다. `run`은 `prepare` 후 한 번의 `run`입니다.
 
 `Result`는 `validity.checks`를 가집니다. `admitted`, `runtime_stability`(런타임 가드가 추적된 값을
-거절하면 거짓, 아래 참고), 그리고 `Diffraction` 모니터별 `source_reference`입니다.
+거절하면 거짓, 아래 참고), 그리고 `DiffractionMonitor`별 `source_reference`입니다.
 `result.provenance`는 백엔드, 단위, `dt_seconds`, 실제 스텝 수, 모든 도메인을 기록합니다.
 
 `runtime_stability`가 true이면 구현된 런타임 certificate를 통과했다는
@@ -477,13 +477,13 @@ traced 물리 매질을 `skipped`로 표시합니다. 준비할 때 사용한 �
 runtime guard가 판정합니다. 고정된 PML `reference_media` 항목은 수치적인 stretch를
 고정할 뿐, 물리 매질의 grazing 허용 판정을 대신하지 않습니다.
 
-설계 파장과 다른 `Diffraction` 파장에서는 출사 코사인 요구값이 1 이상일 수 있습니다.
+설계 파장과 다른 `DiffractionMonitor` 파장에서는 출사 코사인 요구값이 1 이상일 수 있습니다.
 준비할 때 해당 차수가 소멸파인 재료도 이에 해당합니다. 요구값이 1보다 크면 전파하는
 차수는 허용되지 않습니다. 살아 있는 재료가 해당 차수를 전파하게 만들면 런타임 가드는
 구체적인 값에 대한 `check`와 같이 거절합니다. 요구값이 1이거나 그 바로 아래일 때도
 구체적인 검사와 같은 반올림된 코사인으로 판정하며, 요구값을 잘라내거나 grazing
 허용오차를 완화하지 않습니다.
-명시적인 아주 작은 `Axis1D(k=...)`에서는 구간의 하한이 0으로 반올림될 수 있습니다.
+명시적인 아주 작은 `InvariantAxis(k=...)`에서는 구간의 하한이 0으로 반올림될 수 있습니다.
 0은 열린 경계의 표식으로만 취급하며, 양수 재료 지수의 eager 연산과 모든 수용 기준은 그대로입니다.
 
 각 `prepared.run(problem)`은 새로운 필드 상태에서 시작하고 자체 검사 결과를
@@ -565,16 +565,18 @@ problem = fdtd.Problem(
         domain=fdtd.Domain(size=(.1, .1, 1.6)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
         structures=(
-            fdtd.Structure("substrate", fdtd.Slab(z=(-.8, 0.)), Material(epsilon=2.25)),
-            fdtd.Structure("coating", fdtd.Slab(z=(0., .1)), Material(epsilon=6.25)),
+            fdtd.Structure("substrate", shape=fdtd.SnappedSlab(z=(-.8, 0.)),
+                           material=Material(epsilon=2.25)),
+            fdtd.Structure("coating", shape=fdtd.SnappedSlab(z=(0., .1)),
+                           material=Material(epsilon=6.25)),
         )),
     sources=(fdtd.PlaneWave("light", plane=fdtd.Plane(z=.5),
                             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
     outputs=fdtd.Outputs(monitors=(
-        fdtd.Diffraction("r", plane=fdtd.Plane(z=.3), wavelengths=wavelengths,
-                         source="light", side="reflect"),
-        fdtd.Diffraction("t", plane=fdtd.Plane(z=-.3), wavelengths=wavelengths,
-                         source="light", side="transmit"),
+        fdtd.DiffractionMonitor("r", plane=fdtd.Plane(z=.3), wavelengths=wavelengths,
+                                source="light", wave="reflected"),
+        fdtd.DiffractionMonitor("t", plane=fdtd.Plane(z=-.3), wavelengths=wavelengths,
+                                source="light", wave="transmitted"),
     )),
 )
 numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=dx),
@@ -607,7 +609,7 @@ for w, r, t in zip(wavelengths, R, T):
 줄어듭니다. 스냅되는 면이 없을 때 기대하는 2차 수렴입니다. 위상은 사정이 다릅니다. 반사 모니터에
 `reference_plane=.1, incident_plane=.1`을 주면, 선언한 위쪽 면에서의 `arg r`이 0.8 µm에서 닫힌
 꼴과 0.163 rad, `dx = 0.01`에서 0.080 rad 차이 납니다. 대략 `k0·dx`로 1차이며, 스냅된 층이 접선
-방향 장에게 반 셀 아래에 있기 때문입니다([셀 스냅 도형](#셀-스냅-도형-slab과-region) 참고).
+방향 장에게 반 셀 아래에 있기 때문입니다([셀 스냅 도형](#셀-스냅-도형-snappedslab과-snappedbox) 참고).
 코팅을 0.105 µm로 쓰면 같은 장면이 `geometry.cell_snapped` 경고를 내고 0.1 µm로 실행됩니다.
 
 ## 일반 장면 API의 범위
@@ -615,7 +617,7 @@ for w, r, t in zip(wavelengths, R, T):
 - CUDA는 [명시한 Torch 범위](../../validation/fdtd/general-cuda.md)로 제한되며, 다른 GPU 백엔드와 단정밀도는 거부합니다. 격자는 균일한 정육면체입니다.
 - 셀별 배열과 비균일 z 격자는 `fdtd.native`로 선언합니다. 일반 장면의 CSG 합집합·교집합·차집합과 기울어진 밀어내기 축은 지원하지 않습니다.
 - 일반 장면의 가우시안 빔·모드 소스·모드 모니터는 아직 구현하지 않았습니다.
-- 자동 정지는 `fdtd.Decay`, 단계형 전도도 흡수층은 `fdtd.Absorber`로 제공합니다. [정지와 흡수층](stopping-and-absorbers.md)을 참고하세요.
+- 자동 정지는 `fdtd.DecayStop`, 단계형 전도도 흡수층은 `fdtd.ConductiveAbsorber`로 제공합니다. [정지와 흡수층](stopping-and-absorbers.md)을 참고하세요.
 - `fdtd.Shape`는 사용자 정의 고정 도형을 받으며 prepared 재사용 시 선언 상태를 검사합니다. 도형의 셀 support는 Open padding에 닿지 않아야 합니다.
 - 손실·분산 스무딩 바디는 평평한 필름으로 제한됩니다.
 
@@ -631,4 +633,4 @@ for w, r, t in zip(wavelengths, R, T):
   층의 제한된 범위.
 - [FDTD 배우기](../../learn/fdtd/index.md) — 믿을 수 있는 결과를 세우는 순서.
 
-`memory_bound=None` 기본값은 `wavebit.job/v1` 직렬화에서 생략하여 기존 Job 키를 유지합니다. 명시한 한도는 Job과 함께 저장하고 복원합니다.
+`memory_bound=None` 기본값은 `wavebit.job/v2` 직렬화에서 생략하므로, 이 값을 지정하지 않은 Job은 키가 바뀌지 않습니다. 명시한 한도는 Job과 함께 저장하고 복원합니다.

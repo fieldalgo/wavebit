@@ -53,9 +53,9 @@ class AbsorberProximityWarning(UserWarning):
     """A structure sits within half a wavelength (in its own medium) of an absorbing face.
 
     A PML is matched to one medium -- the one that reaches its face: the background, or a
-    ``Slab`` continued through the padding (in the compatibility engine, whatever
-    ``PML(background=)`` names) -- and it terminates the near field of whatever is close to
-    it as well; the compatibility engine's ``Absorber`` is matched at normal incidence only.
+    ``SnappedSlab`` continued through the padding (or whatever ``PML(reference_media=...)``
+    names for that face) -- and it terminates the near field of whatever is close to it as
+    well; a ``ConductiveAbsorber`` is matched at normal incidence only.
     The message names which. The legacy engine's measured clearance
     (``src/wavebit/fdtd/_periodic/legacy.py``, ``PAD_WAVELENGTHS``) is half a wavelength in the half-space:
     on the benchmark grating the worst per-order error runs 7.37e-4 at one wavelength of
@@ -85,18 +85,18 @@ class GrowingFieldWarning(UnsettledFieldWarning):
     """The field still **rises** after every source has ended: a longer run makes it worse.
 
     Stage 3's growth diagnostic (``src/wavebit/fdtd/_assemble.py::decay_report``, the result's
-    ``diagnostics['interior_growth']``): once every source has ended -- a Dipole's envelope
-    back below its cutoff, a PlaneWave's or TFSF's column no longer changing on its faces -- the
-    total energy of a passive scene's interior -- every cell but the PML layers', an
-    ``Absorber``'s included, a dispersive structure's stored energy too -- can only hold or
-    fall, so when it averages higher over the last quarter of that span than over the quarter
-    before, by more than ``wavebit.fdtd._assemble.GROWTH_THRESHOLD`` (measured), and rises as
-    an exponential does (``wavebit.fdtd._assemble.GROWTH_STEADY``: energy a PML hands back
-    arrives as a pulse), something is feeding it. An interior energy that overflows to ``inf`` or ``nan``
-    warns this too, once, saying so. The scene is
-    judged and not a monitor: a monitor's own region energy, or a Record's ``|v|^2``, can rise
-    in a passive scene when an echo or a slow beat moves energy through it. In this package the
-    feed is a PML: a stretch backed by its PEC wall is active for evanescent waves, and a
+    ``diagnostics['interior_growth']``): once every source has ended -- a CurrentDipole's
+    envelope back below its cutoff, a PlaneWave's or TFSF's column no longer changing on its
+    faces -- the total energy of a passive scene's interior -- every cell but the PML layers',
+    a ``ConductiveAbsorber``'s included, a dispersive structure's stored energy too -- can only
+    hold or fall, so when it averages higher over the last quarter of that span than over the
+    quarter before, by more than ``wavebit.fdtd._assemble.GROWTH_THRESHOLD`` (measured), and
+    rises as an exponential does (``wavebit.fdtd._assemble.GROWTH_STEADY``: energy a PML hands
+    back arrives as a pulse), something is feeding it. An interior energy that overflows to
+    ``inf`` or ``nan`` warns this too, once, saying so. The scene is judged and not a monitor:
+    a monitor's own region energy, or a TimeSeriesMonitor's ``|v|^2``, can rise in a passive
+    scene when an echo or a slow beat moves energy through it. In this package the feed is a
+    PML: a stretch backed by its PEC wall is active for evanescent waves, and a
     lossless structure with a bound mode just past the light line grows under the pure
     stretch, the default (``src/wavebit/fdtd/_prepare/cpml.py::stabilizing_rate``).
 
@@ -104,7 +104,7 @@ class GrowingFieldWarning(UnsettledFieldWarning):
     two quarters, or it is unsettled -- **instead of** its :class:`UnsettledFieldWarning`, and
     one for the interior when no monitor sees it. The message names the monitor, the
     interior's factor and the two spans compared, the monitor's own factor, and the knob:
-    ``PML(stabilize=...)`` with the value measured for the face's reflection target (the
+    ``PML(stabilizing_loss=...)`` with the value measured for the face's reflection target (the
     weakest target's, over several pure-stretch faces); each face's value against the measured
     one, and that the structure lies outside the sampled families, when every face is already
     stabilized; a defect to report when no face is a PML. A subclass of
@@ -129,9 +129,10 @@ class GeometryClippedWarning(UserWarning):
 
     The warning names the share of the declared volume lost and the faces that took it (stage
     4, C5). A structure meant to run on out of the box -- a substrate, a waveguide -- needs an
-    absorbing face there (``fdtd.Open()``; a ``PML`` or ``Absorber`` face in the compat
-    namespace), and one meant to fill a periodic axis spans it; neither warns. A cell-snapped shape across one periodic seam without spanning the period
-    is refused instead (``src/wavebit/fdtd/_prepare/checks.py::check_seams``), because its
+    absorbing face there (``fdtd.Open()``, with a ``PML`` or ``ConductiveAbsorber`` as
+    ``Numerics(absorber=...)``), and one meant to fill a periodic axis spans it; neither
+    warns. A cell-snapped shape across one periodic seam without spanning the period is
+    refused instead (``src/wavebit/fdtd/_prepare/checks.py::check_seams``), because its
     periodic image is missing, and a smoothed body that is not uniform across a face never gets
     this far (``src/wavebit/fdtd/_prepare/checks.py::check_smoothed``).
     """
@@ -140,7 +141,7 @@ class GeometryClippedWarning(UserWarning):
 class PMLStabilityWarning(UserWarning):
     """A stabilized PML asks for less loss than was measured to stop a bound mode growing.
 
-    ``PML(stabilize=rho)`` adds a loss relative to the stretch's own ``sigma_max``, and the
+    ``PML(stabilizing_loss=rho)`` adds a loss relative to the stretch's own ``sigma_max``, and the
     ``rho`` that suffices depends on the face's ``reflection=`` target: 3e-3 at the default
     1e-8, 5e-3 at 1e-6, 1e-2 at 1e-4, 2e-2 at 1e-3, measured on slab families with the
     one-step-matrix eigen gate (``src/wavebit/fdtd/_prepare/cpml.py::MEASURED_STABILIZE``). Below it,

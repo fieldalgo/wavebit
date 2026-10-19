@@ -12,9 +12,10 @@ from . import _legacy_geometry as old_geometry
 from . import _legacy_boundaries as old_boundaries
 from . import _legacy_sources as old_sources
 from . import _legacy_monitors as old_monitors
-from . import geometry, boundaries, sources, monitors
-from .problem import Problem
-from .numerics import Numerics, UniformGrid, Duration, PML, Absorber, Decay
+from . import _geometry as geometry, _boundaries as boundaries, _sources as sources
+from . import _monitors as monitors
+from ._problem import Problem
+from ._numerics import Numerics, UniformGrid, Duration, PML, ConductiveAbsorber, DecayStop
 from ._kernel.grid import cell_count
 
 
@@ -25,21 +26,28 @@ def _number(value, path):
         raise ValidationError(str(exc), code='static_input', path=path) from exc
 
 
+#: Each public smoothed body and the engine body it lowers to. Explicit, never by class name:
+#: the public and engine names differ, and the engine's are what its plans record.
+_SMOOTHED = ((geometry.Sphere, old_geometry.Sphere), (geometry.Box, old_geometry.Box),
+             (geometry.Cylinder, old_geometry.Cylinder), (geometry.Prism, old_geometry.Prism))
+
+
 def _geometry(shape, reserved=None):
-    if isinstance(shape, (geometry.Slab, geometry.Region, geometry.Plane)):
+    if isinstance(shape, (geometry.SnappedSlab, geometry.SnappedBox, geometry.Plane)):
         return shape
     if isinstance(shape, geometry.Shape) and type(shape).__module__ != old_geometry.__name__:
         if reserved is not None:
             raise UnsupportedFeatureError('custom Shape geometry is static; geometry_ranges requires a built-in body',
                                           path='numerics.geometry_ranges')
         return shape
-    if not isinstance(shape, (geometry.Sphere, geometry.Box, geometry.Cylinder, geometry.Prism)):
+    engine = next((engine for public, engine in _SMOOTHED if isinstance(shape, public)), None)
+    if engine is None:
         raise UnsupportedFeatureError('unsupported geometry', path='scene.structures.shape', actual=type(shape).__name__)
     fields = {f.name: getattr(shape, f.name) for f in dataclasses.fields(shape)}
     if 'angle' in fields:
         fields['angle'] = math.degrees(_number(fields['angle'], 'scene.structures.shape.angle'))
     fields['range'] = reserved
-    return getattr(old_geometry, type(shape).__name__)(**fields)
+    return engine(**fields)
 
 
 def _continue_box(item, shape, pad, physical_low, physical_high,
@@ -94,17 +102,17 @@ def _full_cell_plane(plane, path):
              if i != plane.axis and getattr(plane, a) is not None}
     if spans:
         raise UnsupportedFeatureError(
-            'PlaneWave and Diffraction require the full transverse cell; '
-            'omit transverse Plane spans. Field and Flux support finite spans.',
+            'PlaneWave and DiffractionMonitor require the full transverse cell; '
+            'omit transverse Plane spans. FieldMonitor and FluxMonitor support finite spans.',
             code='plane_span', path=path, expected='no transverse spans', actual=spans)
 
 
 def _source(source, units):
-    if not isinstance(source, (sources.PlaneWave, sources.Dipole, sources.TFSF)):
+    if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
         raise UnsupportedFeatureError('unsupported source', path='sources', actual=type(source).__name__)
     kw = dict(name=source.name, band=_pulse(source.pulse, units),
-              amplitude=source.current_moment if isinstance(source,sources.Dipole) else source.amplitude,
-              phase=source.phase, delay=units.time_to_internal(source.delay))
+              amplitude=source.current_moment if isinstance(source,sources.CurrentDipole) else source.amplitude,
+              phase=source.phase, delay=units.time_to_internal(source.delay_seconds))
     if isinstance(source, sources.PlaneWave):
         _full_cell_plane(source.plane, 'sources.'+source.name+'.plane')
         kw['xyz'[source.plane.axis]] = source.plane.position
@@ -132,7 +140,7 @@ def _scaled_initial(value, scale):
     return value * scale
 
 
-_GEOMETRY = (geometry.Shape, geometry.Slab, geometry.Region, geometry.Plane,
+_GEOMETRY = (geometry.Shape, geometry.SnappedSlab, geometry.SnappedBox, geometry.Plane,
              geometry.Sphere, geometry.Box, geometry.Cylinder, geometry.Prism)
 
 
@@ -147,28 +155,33 @@ def _monitor_geometry(m, field, expected):
     return _geometry(value)
 
 
+#: The engine's name for each role a DiffractionMonitor's ``wave`` names.
+_ENGINE_SIDE = {'reflected': 'reflect', 'transmitted': 'transmit'}
+
+
 def _monitor(m, problem):
-    if isinstance(m, monitors.Record):
-        return m
-    if isinstance(m, (monitors.Field, monitors.Flux)):
+    """The engine monitor for public monitor ``m``, built explicitly (never by class name)."""
+    if isinstance(m, monitors.TimeSeriesMonitor):
+        return old_monitors.Record(m.name, at=m.at, component=m.component)
+    if isinstance(m, (monitors.FieldMonitor, monitors.FluxMonitor)):
         kw = dict(name=m.name, wavelengths=m.wavelengths,
                   plane=None if m.plane is None else _monitor_geometry(m, 'plane', 'Plane'),
-                  box=None if m.box is None else _monitor_geometry(m, 'box', 'Region'))
-        if isinstance(m, monitors.Field):
-            kw['components'] = m.components
-        return getattr(old_monitors, type(m).__name__)(**kw)
-    if isinstance(m, monitors.FarField):
-        return old_monitors.FarField(m.name, box=_monitor_geometry(m, 'box', 'Region'),
+                  box=None if m.box is None else _monitor_geometry(m, 'box', 'SnappedBox'))
+        if isinstance(m, monitors.FieldMonitor):
+            return old_monitors.Field(**kw, components=m.components)
+        return old_monitors.Flux(**kw)
+    if isinstance(m, monitors.FarFieldMonitor):
+        return old_monitors.FarField(m.name, box=_monitor_geometry(m, 'box', 'SnappedBox'),
                                     wavelengths=m.wavelengths, propagation=m.propagation)
-    if isinstance(m, monitors.Diffraction):
+    if isinstance(m, monitors.DiffractionMonitor):
         choices = [s for s in problem.sources if s.name == m.source]
         if len(choices) != 1 or not isinstance(choices[0], sources.PlaneWave):
-            raise ValidationError('diffraction source must name one PlaneWave', path='outputs.'+m.name+'.source')
+            raise ValidationError('a DiffractionMonitor source must name one PlaneWave', path='outputs.'+m.name+'.source')
         if len(problem.sources) != 1:
             raise UnsupportedFeatureError('normalized diffraction currently requires one PlaneWave', path='outputs.'+m.name)
         _full_cell_plane(m.plane, 'outputs.'+m.name+'.plane')
         return old_monitors.Diffraction(m.name, **{'xyz'[m.plane.axis]: m.plane.position},
-            side=m.side, wavelengths=m.wavelengths, orders=m.orders,
+            side=_ENGINE_SIDE[m.wave], wavelengths=m.wavelengths, orders=m.orders,
             reference_plane=m.reference_plane, incident_plane=m.incident_plane)
     raise UnsupportedFeatureError('unsupported monitor', path='outputs.monitors', actual=type(m).__name__)
 
@@ -199,8 +212,8 @@ def validate_sources(problem):
     names = set()
     for index, source in enumerate(problem.sources):
         indexed = f'sources[{index}]'
-        if not isinstance(source, (sources.PlaneWave, sources.Dipole, sources.TFSF)):
-            raise UnsupportedFeatureError('expected PlaneWave, Dipole or TFSF',
+        if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
+            raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole or TFSF',
                                           path=indexed, actual=type(source).__name__)
         if not isinstance(source.name, str) or not source.name:
             raise ValidationError('source name must be a nonempty string', path=indexed+'.name')
@@ -211,8 +224,8 @@ def validate_sources(problem):
         if not isinstance(source.pulse, sources.GaussianPulse):
             raise ValidationError('expected GaussianPulse', path=path+'.pulse',
                                   actual=type(source.pulse).__name__)
-        if isinstance(source, sources.TFSF) and not isinstance(source.box, geometry.Region):
-            raise ValidationError('expected Region: a TFSF surface uses cell-snapped node planes; '
+        if isinstance(source, sources.TFSF) and not isinstance(source.box, geometry.SnappedBox):
+            raise ValidationError('expected SnappedBox: a TFSF surface uses cell-snapped node planes; '
                                   'Box is a smoothed structure body', path=path+'.box',
                                   actual=type(source.box).__name__)
 
@@ -223,9 +236,9 @@ def _stencil_memory_bound(problem, numerics):
     if bound is None:
         return
     path = 'numerics.memory_bound'
-    if numerics.discretisation != 'stencil' or not any(
+    if numerics.discretization != 'stencil' or not any(
             type(item.shape) is geometry.Sphere for item in problem.scene.structures):
-        raise ValidationError("memory_bound requires discretisation='stencil' with a Sphere",
+        raise ValidationError("memory_bound requires discretization='stencil' with a Sphere",
                               path=path, actual=bound)
     try:
         valid = (not isinstance(bound, bool) and isinstance(bound, Real)
@@ -243,29 +256,29 @@ def lower_problem(problem, numerics, *, plan=None):
     validate_sources(problem)
     if not isinstance(numerics.grid, UniformGrid) or not isinstance(numerics.duration, Duration):
         raise ValidationError('expected UniformGrid and Duration', path='numerics')
-    if not isinstance(numerics.absorber, (PML, Absorber)):
-        raise UnsupportedFeatureError('choose PML or Absorber numerical padding', path='numerics.absorber')
+    if not isinstance(numerics.absorber, (PML, ConductiveAbsorber)):
+        raise UnsupportedFeatureError('choose PML or ConductiveAbsorber numerical padding', path='numerics.absorber')
     scene, units = problem.scene, problem.units
     _stencil_memory_bound(problem, numerics)
-    rule = numerics.discretisation
+    rule = numerics.discretization
     if rule not in ('voxel', 'stencil'):
         raise ValidationError(
-            f"Numerics(discretisation={rule!r}): the two spellings are 'voxel' and 'stencil'.",
-            path='numerics.discretisation', actual=rule)
+            f"Numerics(discretization={rule!r}): the two spellings are 'voxel' and 'stencil'.",
+            path='numerics.discretization', actual=rule)
     if rule == 'stencil':
         # Whole-cell shapes retain their fill rule. Do not silently fall back for
         # unsupported smoothed bodies or accept an option that affects nothing.
         shapes = tuple(item.shape for item in scene.structures)
         unsupported = tuple(type(s).__name__ for s in shapes
                             if type(s) is not geometry.Sphere
-                            and type(s) not in (geometry.Slab, geometry.Region))
+                            and type(s) not in (geometry.SnappedSlab, geometry.SnappedBox))
         if unsupported:
             raise UnsupportedFeatureError(
-                'stencil supports only Sphere smoothed bodies; Slab/Region keep whole-cell fills',
-                path='numerics.discretisation', actual=unsupported)
+                'stencil supports only Sphere smoothed bodies; SnappedSlab/SnappedBox keep whole-cell fills',
+                path='numerics.discretization', actual=unsupported)
         if not any(type(s) is geometry.Sphere for s in shapes):
             raise UnsupportedFeatureError('stencil requires an applicable Sphere smoothed body',
-                                          path='numerics.discretisation')
+                                          path='numerics.discretization')
     dx = _number(numerics.grid.spacing, 'numerics.grid.spacing')
     old_scene.Resolution(dx=dx)
     physical_n = tuple(cell_count(s, dx) for s in scene.domain.size)
@@ -346,20 +359,28 @@ def lower_problem(problem, numerics, *, plan=None):
     if invalid_references:
         raise ValidationError('PML reference_media must name Open faces with padding',
                               path='numerics.absorber.reference_media', actual=sorted(invalid_references))
+    # A public mirror or invariant axis lowers to one engine face per declared object, so a
+    # face shared between declarations stays one object -- and its traced k one leaf.
+    engine_faces = {}
     for axis in 'xyz':
         pair=[]
         for sign in '-+':
             face=scene.boundaries.face(axis+sign)
-            if isinstance(face,boundaries.Open) and isinstance(numerics.absorber, Absorber):
+            if isinstance(face,boundaries.Open) and isinstance(numerics.absorber, ConductiveAbsorber):
                 pair.append(old_boundaries.Absorber(cells=numerics.absorber.cells))
             elif isinstance(face,boundaries.Open):
                 opts={f.name:getattr(numerics.absorber,f.name) for f in dataclasses.fields(numerics.absorber)
-                      if f.name != 'reference_media'}
+                      if f.name not in ('reference_media', 'stabilizing_loss')}
                 reference = numerics.absorber.reference_media.get(axis+sign)
                 medium = faces[axis+sign] if reference is None else lower_material(reference, units=units)
-                pair.append(old_boundaries.PML(**opts, background=medium))
+                pair.append(old_boundaries.PML(**opts, stabilize=numerics.absorber.stabilizing_loss,
+                                               background=medium))
             elif isinstance(face,boundaries.Bloch):
                 pair.append(old_boundaries.Bloch(phase=face.phase,k=face.k))
+            elif isinstance(face,(boundaries.MirrorSymmetry,boundaries.InvariantAxis)):
+                if id(face) not in engine_faces:
+                    engine_faces[id(face)]=(face,face._lowered())
+                pair.append(engine_faces[id(face)][1])
             else:pair.append(face)
         # Share one wrapping declaration so traced phase equality never detaches a leaf.
         if (not isinstance(scene.boundaries.face(axis+'-'),boundaries.Open) and
@@ -376,12 +397,12 @@ def lower_problem(problem, numerics, *, plan=None):
     elif duration.seconds is not None:
         run=old_scene.Run(time=units.time_to_internal(duration.seconds),courant=numerics.courant)
     else:run=old_scene.Run(steps=duration.steps,courant=numerics.courant)
-    if numerics.decay is not None:
-        if not isinstance(numerics.decay, Decay):
-            raise ValidationError('expected Decay or None', path='numerics.decay')
-        run=run.replace(decay=old_monitors.Decay(threshold=numerics.decay.threshold,
-            window=units.time_to_internal(_number(numerics.decay.window_seconds,
-                                                  'numerics.decay.window_seconds'))))
+    if numerics.stopping is not None:
+        if not isinstance(numerics.stopping, DecayStop):
+            raise ValidationError('expected DecayStop or None', path='numerics.stopping')
+        run=run.replace(decay=old_monitors.Decay(threshold=numerics.stopping.threshold,
+            window=units.time_to_internal(_number(numerics.stopping.window_seconds,
+                                                  'numerics.stopping.window_seconds'))))
     initial=None
     if problem.initial is not None:
         if not isinstance(problem.initial,sources.InitialField):
@@ -402,7 +423,7 @@ def lower_problem(problem, numerics, *, plan=None):
             axis=source.plane.axis
             if not physical_low[axis]<=source.plane.position<=physical_high[axis]:
                 raise ValidationError('source is outside the physical domain',path='sources.'+source.name+'.plane')
-        elif isinstance(source,sources.Dipole):
+        elif isinstance(source,sources.CurrentDipole):
             if any(not a<=p<=b for a,p,b in zip(physical_low,source.center,physical_high)):
                 raise ValidationError('source is outside the physical domain',path='sources.'+source.name+'.center')
         elif isinstance(source,sources.TFSF):

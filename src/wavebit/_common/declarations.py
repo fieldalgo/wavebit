@@ -216,30 +216,49 @@ def unknown_keyword_message(where, unknown, known):
             f'reads is silently ignored, which is why this is refused rather than dropped.')
 
 
-def spec(cls=None, *, positional=()):
+def renamed_keyword_message(where, gone, renamed):
+    """The refusal text for removed keywords ``gone`` at ``where``; ``renamed`` maps old to new."""
+    bits = ', '.join(f'{where}({old}=...) is now {where}({renamed[old]}=...)' for old in gone)
+    return (f'{bits}. The old keyword was removed, not aliased; see the public-name migration '
+            f'guide, docs/migration/public-names.md.')
+
+
+def spec(cls=None, *, positional=(), renamed=None):
     """Make ``cls`` a frozen, keyword-only dataclass that refuses unknown keywords by name.
 
     ``positional`` names the leading fields that may also be given positionally -- the one
-    use is ``Record('probe', ...)``, where the name is what a reader looks for first.
+    use is a declaration's ``name``, as in ``TimeSeriesMonitor('probe', ...)``, where the name
+    is what a reader looks for first. ``renamed`` maps a removed keyword to the one that
+    replaced it: the old spelling is refused with the new one named (a tombstone, never an
+    alias). Messages name ``type(self)``, so a public subclass of an engine declaration is
+    refused under its own name.
     """
     if cls is None:
-        return lambda c: spec(c, positional=positional)
+        return lambda c: spec(c, positional=positional, renamed=renamed)
     cls = dataclasses.dataclass(frozen=True, kw_only=True)(cls)
     generated = cls.__init__
     names = tuple(f.name for f in dataclasses.fields(cls) if f.init)
     leading = tuple(positional)
+    removed = dict(renamed or {})
 
     def __init__(self, *args, **kwargs):
+        where = type(self).__name__
         if len(args) > len(leading):
-            raise TypeError(f'{cls.__name__} takes keyword arguments only: {list(names)}. '
+            if leading:
+                raise TypeError(f'{where} takes {", ".join(leading)} positionally and everything '
+                                f'else by keyword: {list(names)}.')
+            raise TypeError(f'{where} takes keyword arguments only: {list(names)}. '
                             f'Positional arguments have no natural order here.')
         for name, value in zip(leading, args):
             if name in kwargs:
-                raise TypeError(f'{cls.__name__}: {name!r} given twice, positionally and by keyword.')
+                raise TypeError(f'{where}: {name!r} given twice, positionally and by keyword.')
             kwargs[name] = value
         unknown = [k for k in kwargs if k not in names]
         if unknown:
-            raise TypeError(unknown_keyword_message(cls.__name__, unknown, names))
+            gone = [k for k in unknown if k in removed]
+            if gone:
+                raise TypeError(renamed_keyword_message(where, gone, removed))
+            raise TypeError(unknown_keyword_message(where, unknown, names))
         generated(self, **kwargs)
 
     __init__.__qualname__ = generated.__qualname__

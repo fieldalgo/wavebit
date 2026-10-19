@@ -34,14 +34,14 @@ def problems(profile, polarization):
     temporal = fdtd.Problem(units=UNITS,
         scene=fdtd.Scene(domain=fdtd.Domain(size=(*PERIOD, 1.6)), background=AIR,
             boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-            structures=(fdtd.Structure('film', body, GLASS),)),
+            structures=(fdtd.Structure('film', shape=body, material=GLASS),)),
         sources=(fdtd.PlaneWave('illumination', plane=fdtd.Plane(z=.6), polarization=polarization,
             pulse=fdtd.GaussianPulse(wavelength=WAVELENGTH, frequency_sigma_hz=3e13)),),
-        outputs=fdtd.Outputs(monitors=tuple(fdtd.Diffraction(name, plane=fdtd.Plane(z=z),
-            wavelengths=(WAVELENGTH,), source='illumination', side=side, orders=(1, 0),
+        outputs=fdtd.Outputs(monitors=tuple(fdtd.DiffractionMonitor(name, plane=fdtd.Plane(z=z),
+            wavelengths=(WAVELENGTH,), source='illumination', wave=wave, orders=(1, 0),
             reference_plane=reference, incident_plane=THICKNESS)
-            for name, z, side, reference in (
-                ('r', .4, 'reflect', THICKNESS), ('t', -.3, 'transmit', 0.)))))
+            for name, z, wave, reference in (
+                ('r', .4, 'reflected', THICKNESS), ('t', -.3, 'transmitted', 0.)))))
     return spectral, temporal
 
 

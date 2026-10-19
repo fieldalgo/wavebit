@@ -103,19 +103,19 @@ def test_fdtd_job_roundtrip_preserves_physical_source_geometry_and_monitor_decla
     from wavebit import fdtd
     scene = fdtd.Scene(domain=fdtd.Domain(size=(.1, .1, 1.6)),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()),
-        structures=(fdtd.Structure('film', fdtd.Slab(z=(-.2, 0.)), Material(2.25)),))
+        structures=(fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(-.2, 0.)), material=Material(2.25)),))
     problem = fdtd.Problem(units=Units(length='um'), scene=scene,
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5),
             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('probe', at=(0., 0., -.5), component='Ey'),
-            fdtd.Field('spectrum', wavelengths=(.8,), plane=fdtd.Plane(z=-.4), components=('Ey', 'Hx')))))
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('probe', at=(0., 0., -.5), component='Ey'),
+            fdtd.FieldMonitor('spectrum', wavelengths=(.8,), plane=fdtd.Plane(z=-.4), components=('Ey', 'Hx')))))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=3))
     original = Job(solver='fdtd', problem=problem, numerics=numerics)
     restored = Job.from_json(original.to_json())
     assert restored.key == original.key
-    assert type(restored.problem.scene.structures[0].shape) is fdtd.Slab
+    assert type(restored.problem.scene.structures[0].shape) is fdtd.SnappedSlab
     assert type(restored.problem.sources[0].plane) is fdtd.Plane
-    assert type(restored.problem.outputs.monitors[1]) is fdtd.Field
+    assert type(restored.problem.outputs.monitors[1]) is fdtd.FieldMonitor
     assert restored.problem.sources[0].pulse.frequency_sigma_hz == 2e13
     assert fdtd.check(restored.problem, numerics=restored.numerics).ok
     np.testing.assert_array_equal(run(restored)['probe'].values, run(original)['probe'].values)
@@ -134,3 +134,63 @@ def test_oblique_lattice_job_roundtrip_preserves_physical_basis_and_scattering()
     np.testing.assert_array_equal(restored.problem.stack.lattice.columns, cell.columns)
     np.testing.assert_allclose(run(restored).transmission.amplitude_s,
                                run(original).transmission.amplitude_s, atol=2e-14)
+
+
+def test_a_v1_job_file_is_refused_with_the_migration_guide_named():
+    """Jobs written before the public names were renamed are refused, not converted."""
+    import json
+    from wavebit.errors import UnsupportedFeatureError
+    body = json.loads(job().to_json())
+    assert body['schema'] == 'wavebit.job/v2'
+    body['schema'] = 'wavebit.job/v1'
+    with pytest.raises(UnsupportedFeatureError, match='public-names.md') as caught:
+        Job.from_json(json.dumps(body))
+    assert caught.value.code == 'job.schema'
+
+
+def test_the_execution_tag_names_its_public_path():
+    import json
+    assert json.loads(job().to_json())['execution']['type'] == 'wavebit.Execution'
+
+
+def test_an_allowlisted_name_that_does_not_resolve_is_an_error(monkeypatch):
+    from wavebit import jobs
+    monkeypatch.setitem(jobs._CLASS_MODULES, 'wavebit.fdtd', jobs._CLASS_MODULES['wavebit.fdtd'] + ('Flux',))
+    with pytest.raises(RuntimeError, match='wavebit.fdtd.Flux'):
+        jobs._registry()
+
+
+def test_every_public_fdtd_declaration_has_a_tag_and_round_trips():
+    """A renamed declaration missing from the allowlist would fail only when a user saved it."""
+    import dataclasses
+    from wavebit import fdtd, jobs
+    registry = jobs._registry()
+    results = {'Prepared', 'Result', 'SpectralFlux', 'FarFieldSpectrum'}
+    for name in fdtd.__all__:
+        obj = getattr(fdtd, name)
+        if isinstance(obj, type) and dataclasses.is_dataclass(obj) and name not in results:
+            assert f'wavebit.fdtd.{name}' in registry, name
+    pulse = fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)
+    box = fdtd.SnappedBox(size=(.2, .2, .2))
+    problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(1., 1., 1.)),
+        boundaries=fdtd.Boundaries(x=(fdtd.MirrorSymmetry(parity=1), fdtd.PEC()),
+                                   y=fdtd.InvariantAxis(k=0.), z=fdtd.Open()),
+        structures=(fdtd.Structure('a', shape=fdtd.SnappedSlab(z=(-.2, 0.)), material=Material(2.25)),
+                    fdtd.Structure('b', shape=box, material=Material(2.)),
+                    fdtd.Structure('c', shape=fdtd.Sphere(radius=.1), material=Material(2.)))),
+        sources=(fdtd.CurrentDipole('d', center=(0., 0., .3), pulse=pulse, delay_seconds=1e-15),
+                 fdtd.TFSF('t', box=box, pulse=pulse)),
+        outputs=fdtd.Outputs(final_fields=True, monitors=(
+            fdtd.TimeSeriesMonitor('p', at=(0., 0., 0.)),
+            fdtd.FieldMonitor('f', wavelengths=(.8,), plane=fdtd.Plane(z=.1)),
+            fdtd.FluxMonitor('x', wavelengths=(.8,), box=box),
+            fdtd.FarFieldMonitor('ff', wavelengths=(.8,), box=box),
+            fdtd.DiffractionMonitor('r', plane=fdtd.Plane(z=.4), wavelengths=(.8,), source='d',
+                                    wave='reflected'))))
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=3),
+                             absorber=fdtd.ConductiveAbsorber(cells=4), discretization='voxel',
+                             stopping=fdtd.DecayStop(threshold=1e-3, window_seconds=1e-15))
+    original = Job(solver='fdtd', problem=problem, numerics=numerics)
+    restored = Job.from_json(original.to_json())
+    assert restored == original and restored.key == original.key

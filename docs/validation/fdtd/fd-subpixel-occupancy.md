@@ -3,7 +3,7 @@
 Written: 2026-09-22.
 
 Targets: `src/wavebit/fdtd/_prepare/occupancy.py`, `src/wavebit/fdtd/_prepare/coefficients.py`,
-`src/wavebit/fdtd/_prepare/checks.py`, `src/wavebit/fdtd/geometry.py`,
+`src/wavebit/fdtd/_prepare/checks.py`, `src/wavebit/fdtd/_geometry.py`,
 `src/wavebit/fdtd/_shapes/_cut.py`, `src/wavebit/fdtd/_shapes/_bodies.py`,
 `studies/fdtd/subpixel_tilted_tensor/fdtd_subpixel_tilted_tensor.py`, `tests/fdtd/test_fd_occupancy.py`,
 `tests/fdtd/test_fd_occupancy_integration.py`, `tests/fdtd/test_fd_subpixel_study.py`,

@@ -147,7 +147,7 @@ def _refuse_decay(scene, plan=None):
     if (getattr(scene.run, 'decay', None) is not None
             or getattr(plan, 'decay', None) is not None):
         raise ValueError('OscillatorStackDecayRefused: separated oscillator films require a '
-                         'fixed Run time, steps or periods without Decay. Their evolving '
+                         'fixed Run time, steps or periods without a DecayStop. Their evolving '
                          'state has not been admitted to the stopping protocol.')
 
 

@@ -5,7 +5,7 @@ Written: 2026-09-24
 Targets: `tests/references/mie.py`, `studies/fdtd/subpixel_mie_cylinder/fdtd_subpixel_mie_cylinder.py`,
 `tests/fdtd/test_fd_mie_reference.py`, `tests/fdtd/test_fd_mie_study.py`,
 `tests/fdtd/test_fd_monitor_structure.py`, `src/wavebit/fdtd/_prepare/monitors.py`,
-`src/wavebit/fdtd/monitors.py`, `src/wavebit/fdtd/diagnostics.py`, `src/wavebit/fdtd/_prepare/checks.py`,
+`src/wavebit/fdtd/_monitors.py`, `src/wavebit/fdtd/diagnostics.py`, `src/wavebit/fdtd/_prepare/checks.py`,
 `tests/fdtd/test_fd_occupancy_integration.py`, `tests/fdtd/test_fd_decay.py`,
 `studies/fdtd/subpixel_mie_sphere/fdtd_subpixel_mie_sphere.py`, `tests/fdtd/test_fd_mie_external.py`,
 `tests/references/interface/measure_fd_stage4_meep.py`,

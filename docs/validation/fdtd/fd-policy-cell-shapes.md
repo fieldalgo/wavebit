@@ -1,6 +1,7 @@
 # Public whole-cell shape policy reports
 
-The public `fdtd.Slab` and `fdtd.Region` classes retain the whole-cell filling
+The public `fdtd.SnappedSlab` and `fdtd.SnappedBox` classes (`fdtd.Slab` and `fdtd.Region`
+when this was recorded) retain the whole-cell filling
 semantics of the internal geometry classes. Public lowering preserves their
 wrapper types. Comparing only the exact internal classes therefore mislabelled
 these built-ins as `custom_shape_protocol`, although their fill operator was

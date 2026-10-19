@@ -21,7 +21,7 @@ from ._common.provenance import capture_source, environment, sha256, source_iden
 from ._common.record_io import RecordedFields, decode, encode, record_error
 
 __all__ = ['RunRecord', 'RecordedFields', 'save_run', 'load_run', 'run_recorded']
-_SCHEMA = 'wavebit.run/v1'
+_SCHEMA = 'wavebit.run/v2'
 _PACKAGE = Path(__file__).resolve().parent
 _FILES = {'job.json', 'observations.json', 'arrays.npz', 'source.zip', 'source.patch'}
 
@@ -188,8 +188,13 @@ def load_run(path):
         manifest = _json_load(manifest_path.read_bytes(), 'manifest.json')
     except FileNotFoundError as exc:
         raise record_error('Missing completion manifest; this is not a complete run record.', str(path)) from exc
+    if isinstance(manifest, dict) and manifest.get('schema') == 'wavebit.run/v1':
+        raise record_error('This is a wavebit.run/v1 record, written before the public names were '
+                           'renamed; it is not converted. Rerun its job with the current names; see '
+                           'the public-name migration guide, docs/migration/public-names.md.',
+                           'manifest.schema')
     if not isinstance(manifest, dict) or manifest.get('schema') != _SCHEMA:
-        raise record_error('Expected wavebit.run/v1.', 'manifest.schema')
+        raise record_error('Expected wavebit.run/v2.', 'manifest.schema')
     files = manifest.get('files')
     if not isinstance(files, dict) or not {'job.json','observations.json','arrays.npz'} <= files.keys() or not files.keys() <= _FILES:
         raise record_error('Unexpected or missing archive files.', 'manifest.files')

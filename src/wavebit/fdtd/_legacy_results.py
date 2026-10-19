@@ -46,6 +46,8 @@ from wavebit._common.backend import eager_under_torch_compile as _eager_under_to
 import dataclasses
 from collections.abc import Mapping
 
+from wavebit.fdtd._public_names import PUBLIC_NAMES
+
 __all__ = ['Results', 'Series', 'Final', 'SourceSeries', 'FluxResult', 'FieldResult',
            'FarFieldResult', 'DiffractionResult', 'DiffractionOrders']
 
@@ -106,8 +108,12 @@ class SourceSeries:
 
     def _needs(self, what, kinds):
         if not any(self.kind.startswith(k) for k in kinds):
+            # The kinds are the engine's source kind strings ('Dipole(E)'); the message
+            # names each by its public class.
+            this = self.kind.partition('(')[0]
             raise TypeError(f'res.sources[{self.name!r}].{what}(...) is for a '
-                            f'{" or ".join(kinds)} source; this one is {self.kind}.')
+                            f'{" or ".join(PUBLIC_NAMES.get(k, k) for k in kinds)} source; '
+                            f'this one is a {PUBLIC_NAMES.get(this, this)}.')
         if self.context is None:
             raise ValueError(f'res.sources[{self.name!r}] carries no run context to transform.')
 

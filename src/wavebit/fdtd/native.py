@@ -14,7 +14,7 @@ from wavebit._common.pytrees import register_dataclass
 from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from wavebit.observations import TimeSeries, SpectralFieldSamples, Validity
 from wavebit.units import require_units, Z0, EPSILON0, C0
-from .numerics import Absorber
+from ._numerics import ConductiveAbsorber
 
 
 @spec
@@ -126,8 +126,8 @@ class Numerics:
     def __post_init__(self):
         if not isinstance(self.grid, Grid):
             raise ValidationError('expected native.Grid', path='numerics.grid')
-        if self.absorber is not None and not isinstance(self.absorber, (PML, Absorber)):
-            raise ValidationError('expected native.PML or fdtd.Absorber', path='numerics.absorber')
+        if self.absorber is not None and not isinstance(self.absorber, (PML, ConductiveAbsorber)):
+            raise ValidationError('expected native.PML or fdtd.ConductiveAbsorber', path='numerics.absorber')
         if self.tail is not None and not isinstance(self.tail, Tail):
             raise ValidationError('expected native.Tail', path='numerics.tail')
 
@@ -219,7 +219,7 @@ def _arguments(problem, numerics, execution):
     if isinstance(absorber, PML):
         options.update(pml_cells=absorber.cells, pml_wavelength=absorber.wavelength,
                        pml_background=absorber.media, pml_reflection=absorber.reflection)
-    elif isinstance(absorber, Absorber):
+    elif isinstance(absorber, ConductiveAbsorber):
         options['absorber_cells'] = absorber.cells
     return real(medium.epsilon), options
 

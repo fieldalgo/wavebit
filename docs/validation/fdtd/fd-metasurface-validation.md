@@ -7,7 +7,7 @@ Targets: `studies/cross_solver/metasurface/fdtd_metasurface_rcwa.py`, `studies/c
 `studies/cross_solver/metasurface_fine/fdtd_metasurface_fine.py`,
 `studies/cross_solver/metasurface/fdtd_metasurface_mutations.py`,
 `tests/fdtd/test_fd_metasurface.py`, `tests/references/fd_metasurface_rows.json`,
-`src/wavebit/fdtd/_post.py`, `src/wavebit/fdtd/_assemble.py`, `src/wavebit/fdtd/monitors.py`,
+`src/wavebit/fdtd/_post.py`, `src/wavebit/fdtd/_assemble.py`, `src/wavebit/fdtd/_monitors.py`,
 `docs/guide/fdtd/fd-metasurface.md`.
 
 ## TL;DR

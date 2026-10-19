@@ -66,14 +66,14 @@ this association explicitly; source and environment are observed at save time.
 Prefer `run_recorded` when the record should also cover execution.
 
 For FDTD, construct `Job(solver="fdtd", problem=..., numerics=...)` in the same way.
-Time records, Fourier fields, diffraction, flux, source calibration traces and
+Time series, Fourier fields, diffraction, flux, source calibration traces and
 requested final fields retain their numerical values and physical metadata.
 
 ## What is preserved
 
 | Data | Saved representation |
 | --- | --- |
-| Problem, materials, units, numerical and execution settings | Versioned `wavebit.job/v1` JSON and canonical Job key |
+| Problem, materials, units, numerical and execution settings | Versioned `wavebit.job/v2` JSON and canonical Job key |
 | Materialized outputs and explicit samples | Numeric NPZ arrays plus named fields in JSON |
 | Array dtype, shape and byte order | Checked against the array payload when loaded |
 | Coordinates, component names, units, reference planes, validity and diagnostics | Named fields alongside the values |
@@ -93,6 +93,10 @@ Every payload has a SHA-256 checksum. The manifest is written last as a completi
 marker. An interrupted write may leave an incomplete directory; `load_run`
 refuses it. Checksums detect damaged or inconsistent data; they are not a signature
 proving who created the record.
+
+The manifest's schema is `wavebit.run/v2`. A `wavebit.run/v1` record, written before the
+[public names were renamed](../migration/public-names.md), is refused with code
+`record.format` rather than converted; rerun its Job with the current names.
 
 ## Reading and reproducing a result
 

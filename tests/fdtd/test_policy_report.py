@@ -10,8 +10,8 @@ def case(shapes=(), rule='voxel'):
     return fd.Problem(units=Units(length='um'), scene=fd.Scene(
         domain=fd.Domain(size=(2.,)*3),
         boundaries=fd.Boundaries(x=fd.PEC(),y=fd.PEC(),z=fd.PEC()),
-        structures=tuple(fd.Structure(str(i),s,Material(2.25)) for i,s in enumerate(shapes)))), fd.Numerics(
-        grid=fd.UniformGrid(spacing=.1),duration=fd.Duration(steps=2),discretisation=rule)
+        structures=tuple(fd.Structure(str(i),shape=s,material=Material(2.25)) for i,s in enumerate(shapes)))), fd.Numerics(
+        grid=fd.UniformGrid(spacing=.1),duration=fd.Duration(steps=2),discretization=rule)
 
 
 def policies(report):
@@ -28,7 +28,7 @@ def test_empty_scene_does_not_claim_default_junction_was_applied():
 
 
 def test_whole_cell_fills_and_unrelated_sphere_are_distinguished():
-    p,n=case((fd.Slab(z=(-.75,-.55)),fd.Region(size=(.3,)*3,center=(.55,.55,.55)),fd.Sphere(radius=.22)))
+    p,n=case((fd.SnappedSlab(z=(-.75,-.55)),fd.SnappedBox(size=(.3,)*3,center=(.55,.55,.55)),fd.Sphere(radius=.22)))
     got=policies(quiet(fd.check,p,numerics=n))
     rows=got['discretisation']['structures']
     assert [r['rule'] for r in rows]==[None,None,'voxel']
@@ -46,7 +46,7 @@ def test_stencil_report_reads_the_prepared_operator():
     assert policies(quiet(prepared.validate,p))==got
 
 
-@pytest.mark.parametrize('shape',[fd.Slab(z=(-.75,-.55)),fd.Region(size=(.3,)*3,center=(.55,.55,.55))])
+@pytest.mark.parametrize('shape',[fd.SnappedSlab(z=(-.75,-.55)),fd.SnappedBox(size=(.3,)*3,center=(.55,.55,.55))])
 def test_stencil_scene_refused_by_engine_claims_no_application(shape):
     p,n=case((shape,fd.Sphere(radius=.22)),'stencil')
     report=quiet(fd.check,p,numerics=n)
@@ -91,14 +91,14 @@ def test_prepared_reuse_cannot_claim_an_old_target_for_changed_geometry():
     p,n=case((fd.Sphere(radius=.22),))
     prepared=quiet(fd.prepare,p,numerics=n)
     before=policies(prepared.report)
-    changed=p.replace(scene=p.scene.replace(structures=(p.scene.structures[0].replace(shape=fd.Region(size=(.3,)*3)),)))
+    changed=p.replace(scene=p.scene.replace(structures=(p.scene.structures[0].replace(shape=fd.SnappedBox(size=(.3,)*3)),)))
     report=quiet(prepared.validate,changed)
     assert not report.ok and not report.resolved
     assert policies(prepared.report)==before
 
 
 def test_validate_preserves_inapplicable_whole_cell_fill_warning():
-    p,n=case((fd.Slab(z=(-.73,-.52)),))
+    p,n=case((fd.SnappedSlab(z=(-.73,-.52)),))
     prepared=quiet(fd.prepare,p,numerics=n)
     assert any(i.code=='geometry.cell_snapped' for i in prepared.report.issues)
     report=quiet(prepared.validate,p)
@@ -137,8 +137,8 @@ def test_report_lists_both_flush_pairs_in_structure_order():
     assert {(r['face'],r['standing']) for r in got['pairs']}=={('substrate','left'),('substrate','right')}
 
 
-@pytest.mark.parametrize('shape',[type('CustomSlab',(fd.Slab,),{})(z=(-.75,-.55)),
-                                 type('CustomRegion',(fd.Region,),{})(size=(.3,)*3)])
+@pytest.mark.parametrize('shape',[type('CustomSlab',(fd.SnappedSlab,),{})(z=(-.75,-.55)),
+                                 type('CustomRegion',(fd.SnappedBox,),{})(size=(.3,)*3)])
 def test_stencil_cannot_hide_unsupported_cell_subclass_beside_exact_sphere(shape):
     p,n=case((shape,fd.Sphere(radius=.22)),'stencil')
     report=quiet(fd.check,p,numerics=n)
@@ -147,11 +147,11 @@ def test_stencil_cannot_hide_unsupported_cell_subclass_beside_exact_sphere(shape
 
 
 @pytest.mark.parametrize('shape,reason', [
-    pytest.param(fd.Slab(z=(-.75, -.55)), 'whole_cell_fill', id='public-slab'),
-    pytest.param(fd.Region(size=(.3,) * 3), 'whole_cell_fill', id='public-region'),
-    pytest.param(type('UserSlab', (fd.Slab,), {})(z=(-.75, -.55)),
+    pytest.param(fd.SnappedSlab(z=(-.75, -.55)), 'whole_cell_fill', id='public-slab'),
+    pytest.param(fd.SnappedBox(size=(.3,) * 3), 'whole_cell_fill', id='public-region'),
+    pytest.param(type('UserSlab', (fd.SnappedSlab,), {})(z=(-.75, -.55)),
                  'custom_shape_protocol', id='custom-slab'),
-    pytest.param(type('UserRegion', (fd.Region,), {})(size=(.3,) * 3),
+    pytest.param(type('UserRegion', (fd.SnappedBox,), {})(size=(.3,) * 3),
                  'custom_shape_protocol', id='custom-region'),
 ])
 @pytest.mark.parametrize('stage', ['check', 'prepare', 'validate', 'run'])

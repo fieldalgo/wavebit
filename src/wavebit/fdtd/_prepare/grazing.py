@@ -916,7 +916,7 @@ def _lossy_message(row, pw, what, scene, plan, others):
     c, R, rho = row['cos'], row['reflection'], row['stabilize']
     face = scene.boundaries.face(row['face'])
     governed = _governed(scene, row['face'])
-    description = (f"PML(cells={row['cells']}, reflection={R:g}, stabilize={rho:g})"
+    description = (f"PML(cells={row['cells']}, reflection={R:g}, stabilizing_loss={rho:g})"
                    if is_public() else _spell_face(face, row['cells'], f'stabilize={rho:g}'))
     head = (f"Stabilized face refused: {what} at wavelength {row['wavelength']:g} has exit cos "
             f"theta = {c:.3f}. That face is "
@@ -930,7 +930,7 @@ def _lossy_message(row, pw, what, scene, plan, others):
             f"{row['return_loss']:.2e}, and the continuum round trip R_c = {row['R_c']:.2e}. "
             f"The loss sits on the field component normal to the face: it is inert at normal "
             f"incidence and sends back more the more oblique the order, first order in "
-            f"stabilize. ")
+            f"the stabilizing loss. ")
     if is_public():
         return head + _public_remedy(row, pw, scene, plan, others) + _refused_too(others)
     axis = row['face'][0]
@@ -1007,7 +1007,7 @@ def _lossy_message(row, pw, what, scene, plan, others):
                     else f'the {row["face"]!r} face') + ', '
                  + ' or '.join(f'{e * plan.dx * len(governed):g}' for e in extra)
                  + ' in total), or the layer eats into the interior and what it then reaches '
-                   '-- a Diffraction plane, a structure, the domain left too thin for the '
+                   '-- a DiffractionMonitor plane, a structure, the domain left too thin for the '
                    'layers themselves -- is refused next.')
     return (head + f'What passes on {scope}, before it is offered: '
             + '; or '.join(fixes) + '.' + grown + ' Or make the order less oblique (the period, '
@@ -1032,7 +1032,7 @@ def _public_remedy(row, pw, scene, plan, others):
         governed = _governed(scene, row['face'])
         if any(r['face'] not in governed for r in others):
             advice = ('The refused faces have different resolved reference media. Increase '
-                      'cells or reduce stabilize in the common Numerics.absorber and check '
+                      'cells or reduce stabilizing_loss in the common Numerics.absorber and check '
                       'all faces together; no numeric candidate is offered for this combination. ')
         else:
             fix = lossy_fixes(row, scene, plan)
@@ -1040,12 +1040,13 @@ def _public_remedy(row, pw, scene, plan, others):
                 candidates.append(candidate(f'cells={fix["cells"]}', fix['periods']))
             if fix['rho'] is not None:
                 rho = repr(fix['rho']) if fix['rho'] > 0.0 else 'None'
-                candidates.append(candidate(f'cells={fix["rho_cells"]}, stabilize={rho}', fix['periods']))
+                candidates.append(candidate(f'cells={fix["rho_cells"]}, stabilizing_loss={rho}',
+                                            fix['periods']))
             advice = ('Candidates judged on the quoted face and any equal face declaration; '
                       'they still need a full public check:\n'
                       + '\n'.join(candidates) + '\n' if candidates else
                       'No numeric candidate was found within the measured search. ')
-        advice += ('Reducing stabilize can let a bound mode grow again; check the decay '
+        advice += ('Reducing stabilizing_loss can let a bound mode grow again; check the decay '
                    'warning and tests/fdtd/test_fd_pml_stability.py. ')
     else:
         cells = max(row['cells'], GRAZING_CELLS)
@@ -1079,7 +1080,7 @@ def _message(row, pw, scene=None, plan=None, others=()):
     head = (f"Grazing order refused: {what} at wavelength {row['wavelength']:g} has exit cos "
             f"theta = {c:.3f}. That face is PML(cells={row['cells']}, "
             f"reflection={row['reflection']:g}"
-            + (f", stabilize={row['stabilize']:g}" if 'stabilize' in row else '')
+            + (f", stabilizing_loss={row['stabilize']:g}" if 'stabilize' in row else '')
             + f"): its continuum round trip on this order is R_c = "
             f"{row['reflection']:g}**({g:.3f}*{c:.3f}) = {row['R_c']:.2e} (g = {g:.3f} at "
             f"{row['wavelength'] / row['design_wavelength']:.3g} of the face's design wavelength "

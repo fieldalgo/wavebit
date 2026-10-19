@@ -45,7 +45,7 @@ def validate_scene(scene):
     from wavebit.fdtd._legacy_sources import Dipole, PlaneWave, TFSF
     reject_carried(scene)
     if any(type(source) not in (Dipole, PlaneWave, TFSF) for source in scene.sources):
-        raise ValueError('DecaySourceRefused: stopping supports InitialField, Dipole, '
+        raise ValueError('DecaySourceRefused: stopping supports InitialField, CurrentDipole, '
                          'PlaneWave and axis-aligned TFSF excitation.')
     source_gate(scene, scene.run.decay.threshold)
 
@@ -76,14 +76,14 @@ def validate_plan(scene, plan):
     validate_scene(scene)
     from wavebit.fdtd._prepare.plan import run_steps
     if scene.run.decay != plan.decay or run_steps(scene, plan.dt) != plan.steps:
-        raise ValueError('DecayPlanMismatch: build a plan for this hard cap and Decay '
+        raise ValueError('DecayPlanMismatch: build a plan for this hard cap and DecayStop '
                          'configuration; an early-result plan describes its actual prefix.')
     from wavebit.fdtd._kernel.observe import DFTRegion
     from wavebit.fdtd._kernel.observe import PointRecord
     _validate_terms(plan)
     if any(type(o) not in (PointRecord, DFTRegion) for o in plan.observers):
-        raise ValueError('DecayObserverRefused: only the built-in Record and DFT observers '
-                         'have an execution-prefix result contract.')
+        raise ValueError('DecayObserverRefused: only the built-in TimeSeriesMonitor and DFT '
+                         'observers have an execution-prefix result contract.')
     window_steps(plan.decay.window, plan.dt)
 
 
@@ -157,7 +157,8 @@ def source_gate(scene, threshold):
 def window_steps(window, dt):
     """Exact ceiling for the represented positive floats, without quotient overflow."""
     if not (math.isfinite(window) and window > 0 and math.isfinite(dt) and dt > 0):
-        raise ValueError('DecayWindowRange: window and dt must be finite and positive.')
+        raise ValueError('DecayWindowRange: the DecayStop window and dt must be finite and '
+                         'positive.')
     ratio = Fraction(window) / Fraction(dt)
     return (ratio.numerator + ratio.denominator - 1) // ratio.denominator
 

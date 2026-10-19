@@ -4,6 +4,7 @@ from wavebit.fdtd._legacy_geometry import Cylinder
 from wavebit.fdtd._legacy_geometry import Box
 from wavebit.fdtd._legacy_geometry import Prism
 from wavebit.fdtd._legacy_geometry import _shape_traced
+from wavebit.fdtd._public_names import public_description, public_name
 
 
 def records(scene):
@@ -73,7 +74,7 @@ def _carries(value):
 
 
 def name(scene):
-    return '/'.join(dict.fromkeys(type(s.shape).__name__ for s in scene.structures
+    return '/'.join(dict.fromkeys(public_name(s.shape) for s in scene.structures
                     if any(_shape_traced(v) for v in leaves(s.shape))))
 
 
@@ -208,9 +209,10 @@ def _refuse_stabilized_materials(scene, plan):
             raise ValueError(
                 f'{label} has a traced material value and fills a stabilized PML layer along '
                 'the PlaneWave\'s axis; the grazing rule judges the orders '
-                'a Diffraction monitor asks for there on the face\'s exact return, on the host '
+                'a DiffractionMonitor asks for there on the face\'s exact return, on the host '
                 'only, at the values the plan was built with. Keep that material concrete, or '
-                'the face a pure stretch (stabilize=0), whose rule is checked at run time.')
+                'the face a pure stretch (PML(stabilizing_loss=0)), whose rule is checked at run '
+                'time.')
 
 
 def _mirror_could_couple(scene, plan, term, a, side):
@@ -336,7 +338,7 @@ def _seeded_materials(scene, plan, where, substitute=True):
                 raise ValueError(
                     f'Scene(background=) has a traced value in a scene {where}, and a PML '
                     'matched to the background, a PlaneWave or TFSF source or a '
-                    'FarField(propagation=\'yee\') reads it: the PML match, the plane-wave '
+                    'FarFieldMonitor(propagation=\'yee\') reads it: the PML match, the plane-wave '
                     'column\'s transverse wavevector and drive, the grazing survey and the '
                     'lattice far-field map are built from it on the host. Give each PML a '
                     'concrete background=, or differentiate a structure\'s material instead.')
@@ -365,7 +367,7 @@ def _seeded_materials(scene, plan, where, substitute=True):
                     if (touches and plan.faces['xyz'[a] + side].kind == 'symmetry'
                             and _mirror_could_couple(scene, plan, term, a, side)):
                         raise ValueError(
-                            f'{term.name} reaches the Symmetry plane on {"xyz"[a] + side!r} '
+                            f'{term.name} reaches the MirrorSymmetry plane on {"xyz"[a] + side!r} '
                             f'and a material value is traced; in a scene {where}, the mirror '
                             'check reads cross coefficients that vanish where the plan\'s own '
                             'values have no contrast, and a smoothed surface reaches the '
@@ -379,10 +381,10 @@ def _seeded_materials(scene, plan, where, substitute=True):
                 continue
             layout, _ = diffraction_layout(m, scene, grid)
             eps, mu = _post.medium_at(scene, grid, layout.P, (layout.k - 1, layout.k),
-                                      f'Diffraction({m.name!r})')
+                                      f'DiffractionMonitor({m.name!r})')
             if _carries((eps, mu)):
                 raise ValueError(
-                    f'Diffraction({m.name!r}) counts its propagating orders in a medium whose '
+                    f'DiffractionMonitor({m.name!r}) counts its propagating orders in a medium whose '
                     f'material value is traced; in a scene {where}, give orders=(M_u, M_v): '
                     'the window is a static choice, and a traced index cannot be counted '
                     'after the run.')
@@ -525,7 +527,7 @@ def planning_scene(scene, plan):
                 continue                    # the certified face of j's own junction
             if _overlap(reach, halo):
                 raise ValueError(
-                    f'structures[{i}] ({structure.shape.describe()}), a concrete partner '
+                    f'structures[{i}] ({public_description(structure.shape)}), a concrete partner '
                     f'without a range, reaches the interpolation halo of the traced '
                     f'structures[{j}]: its support widened by one cell shares a cell with '
                     f'that halo (cells {tuple(halo)}), where the coefficients move with the '
@@ -617,7 +619,7 @@ def plane_media(scene, plan):
     for m in scene.monitors:
         if isinstance(m, Diffraction):
             layout, _ = diffraction_layout(m, scene, grid)
-            out.append((layout.P, (layout.k - 1, layout.k), f'Diffraction({m.name!r})'))
+            out.append((layout.P, (layout.k - 1, layout.k), f'DiffractionMonitor({m.name!r})'))
     return out
 
 

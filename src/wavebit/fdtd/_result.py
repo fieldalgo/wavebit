@@ -9,7 +9,7 @@ from wavebit._common.pytrees import register_dataclass
 from wavebit.observations import (TimeSeries, FieldSamples, SpectralFieldSamples,
                                  DiffractionOrders, RawDiffractionSpectrum, Validity)
 from wavebit.units import C0, Z0
-from . import monitors, boundaries
+from . import _monitors as monitors, _boundaries as boundaries
 
 
 @eager_under_torch_compile
@@ -47,7 +47,7 @@ class Result(Declaration):
 
 
 def _measure(problem, raw):
-    invariant=sum(isinstance(problem.scene.boundaries.face(a+'-'),boundaries.Axis1D) for a in 'xyz')
+    invariant=sum(isinstance(problem.scene.boundaries.face(a+'-'),boundaries.InvariantAxis) for a in 'xyz')
     exponent=2-invariant
     return (problem.units.length_metres**exponent / (Z0*raw.plan.dx**invariant),
             'J/Hz' if invariant==0 else ('J/(Hz*m)' if invariant==1 else 'J/(Hz*m^2)'), invariant)
@@ -88,7 +88,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
     requests={m.name:m for m in problem.outputs.monitors}
     for name,m in requests.items():
         value=raw[name]
-        if isinstance(m,monitors.Record):
+        if isinstance(m,monitors.TimeSeriesMonitor):
             scale=1/Z0 if m.component.startswith('H') else 1.
             observer=next(o for o in raw.plan.observers if o.name==name)
             axes=raw.plan.grid.yee_points(m.component[0], 'xyz'.index(m.component[1]))
@@ -98,24 +98,24 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             outputs[name]=TimeSeries(times=value.t*ts,coordinates=coordinates,values=value.values*scale,
                 components=(m.component,),units='A/m' if scale!=1 else 'V/m',sampling='raw Yee component',
                 metadata={'time_unit':'s','length_unit':units.length,'component_time_level':m.component[0]})
-        elif isinstance(m,monitors.Field):
+        elif isinstance(m,monitors.FieldMonitor):
             values={c:v*(ts/Z0 if c.startswith('H') else ts) for c,v in value.fields.items()}
             outputs[name]=SpectralFieldSamples(coordinates=value.coords,values=values,
                 components=tuple(value.fields),units={c:'A*s/m' if c.startswith('H') else 'V*s/m' for c in value.fields},
                 sampling='raw Yee components',wavelengths=value.wavelengths,
                 frequencies=np.asarray([C0/(w*units.length_metres) for w in value.wavelengths]),
                 window=transform['window'],metadata={'length_unit':units.length,'duration_seconds':transform['duration_seconds']})
-        elif isinstance(m,monitors.Flux):
+        elif isinstance(m,monitors.FluxMonitor):
             outputs[name]=SpectralFlux(wavelengths=value.wavelengths,
                 frequencies=np.asarray([C0/(w*units.length_metres) for w in value.wavelengths]),
                 energy_density=value.flux*spectral_factor,units=flux_units,
                 faces=None if value.faces is None else {f:v*spectral_factor for f,v in value.faces.items()},
                 metadata=dict(transform,orientation='positive plane normal or outward closed surface',invariant_axes=invariant))
-        elif isinstance(m,monitors.FarField):
+        elif isinstance(m,monitors.FarFieldMonitor):
             outputs[name]=FarFieldSpectrum(_raw=value,_factor=spectral_factor,wavelengths=value.wavelengths,
                                            units=flux_units+'/sr')
-        elif isinstance(m,monitors.Diffraction):
-            reflected=m.side=='reflect';side='r' if reflected else 't';order=value.orders.incident
+        elif isinstance(m,monitors.DiffractionMonitor):
+            reflected=m.wave=='reflected';side='r' if reflected else 't';order=value.orders.incident
             a=getattr(order,side+'_s');b=getattr(order,side+'_p')
             efficiency=getattr(order,'R' if reflected else 'T')
             source=raw.sources[m.source]
@@ -133,7 +133,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             reference=dict(plane=value.reference_plane,incident_plane=value.incident_plane,
                 lateral_origin=value.lateral_origin,propagation='yee',polarization_frame='per-order s/p',
                 source=m.source,normalization='measured incident reference',length_unit=units.length,
-                amplitude_units='dimensionless',port=m.side,invariant_axes=invariant,
+                amplitude_units='dimensionless',port='reflect' if reflected else 'transmit',invariant_axes=invariant,
                 epsilon=value.raw['epsilon'],mu=value.raw['mu'],
                 outward_normal=value.raw['outward_normal'],tangent_axes=value.raw['tangent_axes'],
                 incident_amplitude=incident,incident_amplitude_units='V*s/m')

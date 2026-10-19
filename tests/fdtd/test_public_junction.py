@@ -10,14 +10,14 @@ from tests.fdtd.test_fd_junction import quiet
 
 def example(rule='staircase', reverse=False, continuation=False, extra=True):
     plane = .0125
-    sub = fd.Structure('substrate', fd.Box(size=(2., 2., 1.2+plane),
-        center=(0., 0., (plane-1.2)/2)), Material(epsilon=2.25),
+    sub = fd.Structure('substrate', shape=fd.Box(size=(2., 2., 1.2+plane),
+        center=(0., 0., (plane-1.2)/2)), material=Material(epsilon=2.25),
         continuation=('z-',) if continuation else ())
-    pillar = fd.Structure('pillar', fd.Cylinder(radius=.15, height=.4,
-        center=(.017, -.013, plane+.2)), Material(epsilon=4.))
+    pillar = fd.Structure('pillar', shape=fd.Cylinder(radius=.15, height=.4,
+        center=(.017, -.013, plane+.2)), material=Material(epsilon=4.))
     structures = (pillar, sub) if reverse else (sub, pillar)
     if extra:
-        structures += (fd.Structure('ball', fd.Sphere(radius=.11, center=(.5,.3,.2)), Material(epsilon=3.)),)
+        structures += (fd.Structure('ball', shape=fd.Sphere(radius=.11, center=(.5,.3,.2)), material=Material(epsilon=3.)),)
     p = fd.Problem(units=Units(length='um'), scene=fd.Scene(
         domain=fd.Domain(size=(1.6,1.6,1.2)), structures=structures,
         boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(),

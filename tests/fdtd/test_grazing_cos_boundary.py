@@ -31,13 +31,13 @@ def public_case(wavelength=10., reflection=1e-8, sine=.3):
     units=Units(length='um')
     source=fd.PlaneWave('pw',plane=fd.Plane(z=.2),theta=math.asin(sine),
         pulse=fd.GaussianPulse(wavelength=1.,frequency_sigma_hz=.1*C0/1e-6))
-    faces=fd.Bloch.from_source(source,units=units,axis1d=('x','y'))
+    faces=fd.Bloch.from_source(source,units=units,invariant_axes=('x','y'))
     def problem(epsilon=1.):
         return fd.Problem(units=units,scene=fd.Scene(domain=fd.Domain(size=(.01,.01,1.)),
             boundaries=fd.Boundaries(**faces,z=fd.Open()),
-            structures=(fd.Structure('slab',fd.Slab(z=(-.5,-.1)),Material(epsilon)),)),
-            sources=(source,),outputs=fd.Outputs(final_fields=True,monitors=(fd.Diffraction('T',
-                plane=fd.Plane(z=-.3),side='transmit',source='pw',wavelengths=(wavelength,),orders=0),)))
+            structures=(fd.Structure('slab',shape=fd.SnappedSlab(z=(-.5,-.1)),material=Material(epsilon)),)),
+            sources=(source,),outputs=fd.Outputs(final_fields=True,monitors=(fd.DiffractionMonitor('T',
+                plane=fd.Plane(z=-.3),wave='transmitted',source='pw',wavelengths=(wavelength,),orders=0),)))
     numerics=fd.Numerics(grid=fd.UniformGrid(spacing=.01),duration=fd.Duration(steps=2),
         absorber=fd.PML(cells=12,wavelength=1.,reflection=reflection,reference_media={'z-':Material(1.)}))
     return problem,numerics

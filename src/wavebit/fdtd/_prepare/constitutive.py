@@ -338,7 +338,7 @@ def validate(scene, plan):
                 touches = lo == 0 if side == '-' else hi == plan.grid.n[a]
                 if (touches and face.kind == 'symmetry'
                         and np.any(np.take(c, end, axis=3-a) != 0)):
-                    raise ValueError(f'{term.name} reaches a Symmetry plane; cross coupling '
+                    raise ValueError(f'{term.name} reaches a MirrorSymmetry plane; cross coupling '
                                      'there needs a mirror-weighted adjoint, which is not '
                                      'written. Leave its surface one cell clear of the '
                                      'mirror: of the smoothed bodies only the unturned fd.Box '

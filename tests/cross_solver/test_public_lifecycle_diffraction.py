@@ -27,13 +27,13 @@ def problems(profile, polarization):
         stack=rcwa.Stack(period=(1.2, .1), layers=(layer,)),
         excitation=rcwa.Excitation(wavelength=.8,
             sources=(rcwa.PlaneWave(polarization=polarization),)))
-    monitors = tuple(fdtd.Diffraction(name, plane=fdtd.Plane(z=z), wavelengths=(.8,),
-        source='pw', side=side, orders=(1, 0), reference_plane=reference, incident_plane=.2)
-        for name, z, side, reference in (('r', .4, 'reflect', .2), ('t', -.3, 'transmit', 0.)))
+    monitors = tuple(fdtd.DiffractionMonitor(name, plane=fdtd.Plane(z=z), wavelengths=(.8,),
+        source='pw', wave=wave, orders=(1, 0), reference_plane=reference, incident_plane=.2)
+        for name, z, wave, reference in (('r', .4, 'reflected', .2), ('t', -.3, 'transmitted', 0.)))
     temporal = fdtd.Problem(units=units,
         scene=fdtd.Scene(domain=fdtd.Domain(size=(1.2, .1, 1.6)), background=air,
             boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-            structures=(fdtd.Structure('body', body, glass),)),
+            structures=(fdtd.Structure('body', shape=body, material=glass),)),
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.6), polarization=polarization,
             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=3e13)),),
         outputs=fdtd.Outputs(monitors=monitors))

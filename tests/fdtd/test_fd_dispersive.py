@@ -110,7 +110,7 @@ import pytest
 
 import wavebit.fdtd._legacy as fd
 from wavebit.fdtd._prepare import checks, lower
-from wavebit.fdtd.results import Series
+from wavebit.fdtd._legacy_results import Series
 from tests.fixtures.fdtd.fd_helpers import Packet, amplitude_at, backends, recurrence_residual, run_mutated, to_numpy
 
 # ---------------------------------------------------------------------------------------------
