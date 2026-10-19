@@ -79,7 +79,7 @@ def test_a_box_crossing_the_plane_unmirrored_is_refused():
     deep does not see: fill 1 on both sides of the plane there.
     """
     message = _refused(_mirror((_box(-0.1, 0.2),)), 'is not its own mirror image',
-                       'x- Symmetry plane at x = 0')
+                       'x- MirrorSymmetry plane at x = 0')
     assert 'studies/fdtd/symmetry_mirror/fdtd_symmetry_mirror.py' in message
     _refused(_mirror((_box(-0.3, 0.1),)), 'is not its own mirror image')
 
@@ -130,16 +130,16 @@ def test_a_cell_snapped_region_crosses_by_its_cells_within_half_a_cell():
     _plans(_mirror((_region(-0.2, 0.2),)))
     _plans(_mirror((_region(0.0, 0.2),)))
     _plans(_mirror((_region(-0.02, 0.2),)))
-    _refused(_mirror((_region(-0.1, 0.2),)), 'crosses the x- Symmetry plane',
+    _refused(_mirror((_region(-0.1, 0.2),)), 'crosses the x- MirrorSymmetry plane',
              'runs as (-0.2, 0.2)', '2.00 cells')
     _plans(_mirror((_region(-0.15, 0.1),), '+'))
     _plans(_mirror((_region(-0.125, 0.075),), '+'))
-    _refused(_mirror((_region(-0.1, 0.1),), '+'), 'crosses the x+ Symmetry plane',
+    _refused(_mirror((_region(-0.1, 0.1),), '+'), 'crosses the x+ MirrorSymmetry plane',
              'half a cell INSIDE the wall')
 
 
 def test_a_slab_is_judged_across_its_own_axis_only():
-    _refused(_mirror((fd.Slab(x=(-0.1, 0.2)),)), 'crosses the x- Symmetry plane')
+    _refused(_mirror((fd.Slab(x=(-0.1, 0.2)),)), 'crosses the x- MirrorSymmetry plane')
     _plans(_mirror((fd.Slab(z=(-0.1, 0.1)),)))
 
 
@@ -214,7 +214,7 @@ def test_a_snapped_face_declared_on_a_plus_plane_is_refused(n):
     """
     plane = -0.025
     for shape in (_region(-0.2, plane), fd.Slab(x=(-0.2, plane))):
-        _refused(_mirror_n((shape,), n), 'declared on the x+ Symmetry plane',
+        _refused(_mirror_n((shape,), n), 'declared on the x+ MirrorSymmetry plane',
                  'to the wall (x = 0)')
     _plans(_mirror_n((_region(-0.2, 0.0),), n))
     _plans(_mirror_n((_region(-0.2, plane - 0.025),), n))
@@ -240,6 +240,7 @@ def test_a_snapped_shape_reaching_the_mirrored_wall_is_judged_against_it():
     """
     _plans(_mirror((_region(-0.9, 0.7),)))
     _plans(_mirror((fd.Slab(x=(-0.9, 0.7)),)))
-    _refused(_mirror((_region(-0.5, 0.7),)), 'crosses the x- Symmetry plane', '2.00 cells')
+    _refused(_mirror((_region(-0.5, 0.7),)), 'crosses the x- MirrorSymmetry plane', '2.00 cells')
     _plans(_mirror((_region(-0.9, 0.85),), '+'))
-    _refused(_mirror((_region(-0.9, 0.5),), '+'), 'crosses the x+ Symmetry plane', '1.00 cells')
+    _refused(_mirror((_region(-0.9, 0.5),), '+'), 'crosses the x+ MirrorSymmetry plane',
+             '1.00 cells')
