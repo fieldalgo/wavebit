@@ -140,4 +140,4 @@ shape_smoothing=.05, ...)`와 `run(..., backend='jax')`로 `jax.jit(jax.jvp(...)
 | `XLA_FLAGS=--xla_cpu_scheduler_type=CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED` | 기존 Eigen 플래그처럼 프로세스 또는 CI job | job의 모든 jit에 프로그램별로 같은 효과. 이 프로그램들에서 실행 시간은 같거나 짧았으나 다른 프로그램에 대한 영향은 측정하지 않음 |
 | `_painted_cell_materials`에서 칠하기의 동시 생존 집합을 제한: Yee 오프셋 네 개나 변 그룹을 백엔드 루프로 순차 실행하거나, `[E,9,ny,nx,9,2]`를 만들지 않고 `cdf`/`weight` 창 곱을 축약 안에서 수축 | 라이브러리, 모든 스케줄러와 사용자 | 어떤 호출자에서도 temp가 메모리 최적화 수치에 가까워질 것으로 예상. 구현·측정하지 않음. 백엔드 중립을 유지하고 값을 바꾸지 않아야 함 |
 | YNN 퓨전 끄기 | 프로세스 | 일부: 해상도 6에서 jac temp 1333 → 433 MB. 실험적 플래그이며 권장하지 않음 |
-| FDTD 미분 가이드에 옵션 문서화 | 공개 사용자 | 코드 변경 없음. CPU에서 `area` 칠하기를 jit하는 사용자가 선택 가능 |
+| 사용자용 옵션 문서화 | 공개 사용자 | 완료: [주기 적층 FDTD 가이드](../../guide/fdtd/periodic-problems.md)의 "Memory under an outer `jax.jit` on CPU". 코드 변경 없음. 사용자가 자신의 jit에서 선택 |
