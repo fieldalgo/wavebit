@@ -2,7 +2,9 @@
 
 :::{note}
 The general-FDTD declarations were renamed on 2026-10-19 (`fdtd.Record` is now
-`fdtd.TimeSeriesMonitor`, `fdtd.Region` is now `fdtd.SnappedBox`, and so on). See
+`fdtd.TimeSeriesMonitor`, `fdtd.Region` is now `fdtd.SnappedBox`, and so on), and the
+`fdtd.native` and `fdtd.periodic` ones the same day (`native.Record` and `periodic.Record` are
+now `Snapshots`, `native.Tail` is now `native.DecayCheck`, and so on). See
 [public names](public-names.md) for every old and new spelling.
 :::
 
@@ -15,13 +17,13 @@ engines and their scientific regression tests remain; no replacement mutable fac
 | Mutable `rcwa(...)` | `rcwa.Problem`, `rcwa.Numerics`, `rcwa.check/prepare/run` |
 | General `fd` scene/plan/run | `fdtd.Problem`, physical `fdtd.Scene`, separate `fdtd.Numerics` |
 | Periodic `fdtd(...)` | [`fdtd.periodic`](../guide/fdtd/periodic-problems.md), explicit `shared` or `reference` algorithm |
-| `fdtd_grid(...)` | [`fdtd.native`](../guide/fdtd/native-grids.md), SI current/conductivity/poles, fields, records and Fourier integrals |
+| `fdtd_grid(...)` | [`fdtd.native`](../guide/fdtd/native-grids.md), SI current/conductivity/poles, fields, snapshots and Fourier integrals |
 | `fit_fdtd_modes` | `observations.fit_modes`, with seconds, Hz and decay rates in 1/s |
 | Custom general-FDTD geometry | `fdtd.Shape` static geometry protocol |
 | `solver.slice_structure` | `rcwa.sample_structure(problem, quantity='epsilon' or 'mu')` |
 | Experimental NVF and scattering operators | `rcwa.experimental` and `rcwa.operators` |
 | `JobSpec` v10 | `migration.migrate_legacy_jobs(document, units=Units(...))` → tuple of current `Job` objects |
-| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines. v23 (2026-10-19): the [public names](public-names.md) and `wavebit.job/v2` |
+| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines. v23 (2026-10-19): the [public names](public-names.md) and `wavebit.job/v2`. v24 (2026-10-19): the [native and periodic names](public-names.md#native-grid-and-periodic-stack-names) |
 | Import-time JAX precision change | Configure `jax.config.update('jax_enable_x64', True)` before constructing arrays |
 
 Spatial lengths use `Units`; times, conductivity and material rates use SI. H is A/m.

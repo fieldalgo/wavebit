@@ -32,20 +32,12 @@ _PRIVATE_MODULES = ('problem', 'geometry', 'boundaries', 'sources', 'monitors', 
                     'result', 'results')
 
 
-class _Answered:
-    """The ``obj`` of a tombstone's AttributeError: the message already names the replacement,
-    so Python's "Did you mean" (computed from ``dir(obj)``) has nothing to add."""
-
-    def __dir__(self):
-        return []
+from ._public_names import Answered as _Answered, removed as _removed  # noqa: E402
 
 
 def __getattr__(name):
     if name in _RENAMED:
-        raise AttributeError(
-            f'wavebit.fdtd.{name} is now wavebit.fdtd.{_RENAMED[name]}. The old name was removed, '
-            f'not aliased; see the public-name migration guide, docs/migration/public-names.md.',
-            name=name, obj=_Answered())
+        raise _removed('wavebit.fdtd', name, f'wavebit.fdtd.{_RENAMED[name]}')
     if name in _PRIVATE_MODULES:
         raise AttributeError(
             f'wavebit.fdtd.{name} is no longer a public module; every public name lives in '

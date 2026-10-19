@@ -27,7 +27,7 @@ def main():
         problem=native.Problem(units=UNITS,medium=native.Medium(epsilon=1+.5*mask,
             poles=(native.Oscillator(omega_0=10./TIME,gamma=1./TIME,strength=strength/TIME**2),)),
             current=native.Current(density=source.astype(jnp.complex128)/(Z0*UNITS.length_metres),samples=pulse),
-            outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(.8,),planes=(56,))))
+            outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(.8,),z_indices=(56,))))
         result=native.run(problem,backend='jax',numerics=native.Numerics(
             grid=native.Grid(spacing=(.05,)*3),time_step_seconds=dt*TIME,steps=steps,
             absorber=native.PML(cells=12,wavelength=.8),checkpoint_steps=32))

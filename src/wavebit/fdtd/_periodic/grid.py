@@ -2,6 +2,7 @@
 
 This low-level API takes native grid coefficients, not Stack/Incidence scenes.
 """
+import math
 import operator
 
 import numpy as np
@@ -21,6 +22,20 @@ def _validate_pml_reflection(value):
     if not np.isfinite(value) or not 0 < value < 1:
         raise ValueError(message)
     return value
+
+
+def window_steps(window, dt):
+    """The whole time steps a final window of duration ``window`` covers, at step ``dt``.
+
+    Both in the same time unit. Rounded up, except that a quotient within 8 ulps above a whole
+    number is that number: a window written as ``N*dt`` comes back as ``N`` and not ``N+1``,
+    whichever unit the caller's dt was computed in.
+    """
+    quotient = float(window)/float(dt)
+    whole = math.floor(quotient)
+    if whole >= 1 and quotient-whole <= 8*np.spacing(quotient):
+        return int(whole)
+    return int(math.ceil(quotient))
 
 
 @eager_under_torch_compile

@@ -21,7 +21,7 @@ def main():
         stack=fdtd.Stack(period=(100.,),bottom=Material(1.44),
             layers=(fdtd.Layer(thickness=100.,epsilon=np.full((1,2),2.25)),)),
         excitation=fdtd.Excitation(wavelength=900.,sources=(fdtd.PlaneWave(),)),
-        outputs=fdtd.Outputs(record=fdtd.Record(every=1)))
+        outputs=fdtd.Outputs(snapshots=fdtd.Snapshots(every=1)))
     result=fdtd.run(problem,numerics=fdtd.Numerics(spacing=1/.03,
         duration_seconds=80*900*units.time_seconds,algorithm='reference'))
     probe=result.sample(x=0.,y=0.,z=50.)

@@ -406,7 +406,7 @@ def lower_problem(problem, numerics, *, plan=None):
     initial=None
     if problem.initial is not None:
         if not isinstance(problem.initial,sources.InitialField):
-            raise ValidationError('expected InitialField',path='initial')
+            raise ValidationError('expected fdtd.InitialField',path='initial')
         initial=old_sources.InitialField(E=problem.initial.E,H=_scaled_initial(problem.initial.H,Z0),amplitude=problem.initial.amplitude)
     # Validate physical monitor positions before adding the implementation padding.
     outputs=tuple(_monitor(m,problem) for m in problem.outputs.monitors)

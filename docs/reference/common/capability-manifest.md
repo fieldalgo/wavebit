@@ -8,7 +8,15 @@
 
 Written: 2026-08-11.
 
-Current version **23** (2026-10-19) records the public-name change: the general-FDTD
+Current version **24** (2026-10-19, later) records the second public-name change: the
+`fdtd.native` and `fdtd.periodic` declarations say what they are too (`Record` is `Snapshots`
+in both, native `Tail` is `DecayCheck`, among others; see the
+[migration guide](../../migration/public-names.md#native-grid-and-periodic-stack-names)). No
+manifest key changes and `current_lifecycle.job.schema` stays `wavebit.job/v2`, but these are
+names a consumer calls, and the old ones are gone, not aliased. Consumers expecting v23 must
+recognize this version change.
+
+Updated 2026-10-19: manifest version **23** records the public-name change: the general-FDTD
 declarations say what they are (the monitors end in `Monitor`, among others; see the
 [public-name migration guide](../../migration/public-names.md)), and
 `current_lifecycle.job.schema` is `wavebit.job/v2`. The old names are gone, not aliased.

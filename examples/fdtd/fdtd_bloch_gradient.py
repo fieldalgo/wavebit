@@ -28,7 +28,7 @@ def main():
         problem=native.Problem(units=UNITS,medium=native.Medium(epsilon=jnp.ones(shape)),
             current=native.Current(density=source.astype(jnp.complex128)/(Z0*UNITS.length_metres),samples=pulse),
             bloch_phase=phase,outputs=native.Outputs(spectrum=native.Spectrum(
-                wavelengths=(wavelength,),planes=(44,))))
+                wavelengths=(wavelength,),z_indices=(44,))))
         out=native.run(problem,backend='jax',numerics=native.Numerics(
             grid=native.Grid(spacing=(spacing,)*3),time_step_seconds=dt*TIME,steps=steps,
             absorber=native.PML(cells=10,wavelength=wavelength),checkpoint_steps=32))

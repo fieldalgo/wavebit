@@ -23,7 +23,7 @@ def main():
     print('Near-field Ey shape:',result.planes['transmission'].values[...,1].shape)
     np.testing.assert_allclose(reflected,result.R.sum(axis=(-2,-1)),atol=.01)
     np.testing.assert_allclose(transmitted,result.T.sum(axis=(-2,-1)),atol=.01)
-    assert not result.fields
+    assert not result.snapshots
 
 
 if __name__=='__main__':

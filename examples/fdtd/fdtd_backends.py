@@ -26,7 +26,7 @@ def objective(strength, backend):
             omega_0=3./TIME,gamma=.5/TIME,strength=strength*mask/TIME**2),)),
         current=native.Current(density=source/(Z0*UNITS.length_metres),
             samples=np.exp(-((t-2)/.5)**2)*np.sin(3*t)),
-        outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(2.4,),planes=(32,))))
+        outputs=native.Outputs(spectrum=native.Spectrum(wavelengths=(2.4,),z_indices=(32,))))
     result=native.run(problem,backend=backend,numerics=native.Numerics(
         grid=native.Grid(spacing=(.2,)*3),time_step_seconds=dt*TIME,steps=steps,
         absorber=native.PML(cells=8,wavelength=2.4)))

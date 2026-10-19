@@ -7,12 +7,12 @@ from wavebit.units import C0, Z0
 from wavebit.fdtd._periodic.adapter import solve_periodic_fdtd
 
 
-def case(algorithm='shared',length='um',scale=1.,side='top',record=False):
+def case(algorithm='shared',length='um',scale=1.,side='top',snapshots=False):
     q=p.Problem(units=Units(length=length),
         stack=p.Stack(period=(.2*scale,),top=Material(1.),bottom=Material(1.),
             layers=(p.Layer(thickness=.1*scale,epsilon=np.full((1,2),2.25)),)),
         excitation=p.Excitation(wavelength=(.85*scale,.9*scale,.95*scale),sources=(p.PlaneWave(side=side),)),
-        outputs=p.Outputs(planes={'outside':-.2*scale},record=p.Record(every=17) if record else None))
+        outputs=p.Outputs(planes={'outside':-.2*scale},snapshots=p.Snapshots(every=17) if snapshots else None))
     n=p.Numerics(algorithm=algorithm,spacing=scale/30,duration_seconds=55*.9e-6/C0,orders=0)
     return q,n
 
@@ -42,13 +42,13 @@ def test_port_amplitudes_and_si_plane_power_match_original_and_airy(algorithm,si
 
 @pytest.mark.parametrize('algorithm',['shared','reference'])
 def test_geometry_unit_changes_keep_fields_times_and_jobs(algorithm):
-    q,n=case(algorithm,record=True); q2,n2=case(algorithm,'nm',1000.,record=True)
+    q,n=case(algorithm,snapshots=True); q2,n2=case(algorithm,'nm',1000.,snapshots=True)
     job=Job(solver='fdtd.periodic',problem=q2,numerics=n2)
     copy=Job.from_json(job.to_json());assert copy.key==job.key
     a=p.run(q,numerics=n);b=run(copy)
     np.testing.assert_allclose(a.T,b.T,rtol=3e-12,atol=1e-13)
-    for component in a.fields:
-        x,y=a.fields[component],b.fields[component]
+    for component in a.snapshots:
+        x,y=a.snapshots[component],b.snapshots[component]
         np.testing.assert_allclose(x.values,y.values,rtol=1e-9,atol=1e-12)
         np.testing.assert_allclose(x.time,y.time,rtol=2e-14)
         np.testing.assert_allclose(x.coordinates['z']*1000,y.coordinates['z'],rtol=1e-13,atol=1e-10)
@@ -78,7 +78,7 @@ def test_live_layer_thickness_gradient_matches_finite_difference(backend):
     u=Units(length='um')
     q=p.Problem(units=u,stack=p.Stack(period=(.05,),bottom=Material(2.25),layers=(
         p.Layer(thickness=.28,epsilon=np.array([[2.25]])),p.Layer(thickness=.12,epsilon=np.array([[1.5]])))),
-        excitation=p.Excitation(wavelength=1.,sources=(p.PlaneWave(),)),pulse=p.Pulse(width_seconds=3*u.time_seconds))
+        excitation=p.Excitation(wavelength=1.,sources=(p.PlaneWave(),)),pulse=p.Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*3*u.time_seconds)))
     n=p.Numerics(spacing=1/25,duration_seconds=45*u.time_seconds,orders=0,nominal_layer_thickness=(.2,.2),
         align_layers=True,pml_cells=25,extraction_method='directional',layer_smoothing=.04)
     prepared=p.prepare(q,numerics=n,backend=backend)
@@ -97,7 +97,7 @@ def test_live_layer_thickness_gradient_matches_finite_difference(backend):
 def test_si_dispersion_is_portable_and_equivalent_under_unit_changes():
     a,n=case();b,m=case(length='nm',scale=1000.)
     terms=(Drude(1e14,1e13),Lorentz(8e14,1e13,1e28))
-    dispersion=p.RasterDispersion(labels=np.ones((1,1,2),dtype=int),models={1:terms})
+    dispersion=p.RasterDispersion(labels=np.ones((1,1,2),dtype=int),poles={1:terms})
     a=a.replace(dispersion=dispersion);b=b.replace(dispersion=dispersion)
     original=Job(solver='fdtd.periodic',problem=a,numerics=n)
     assert Job.from_json(original.to_json()).key==original.key
@@ -105,7 +105,7 @@ def test_si_dispersion_is_portable_and_equivalent_under_unit_changes():
 
 
 def test_crossed_cell_power_is_watts_and_sampled_fields_are_si():
-    q,n=case(record=True)
+    q,n=case(snapshots=True)
     q=q.replace(stack=q.stack.replace(period=(.2,.2),layers=(q.stack.layers[0].replace(epsilon=np.full((2,2),2.25)),)))
     result=p.run(q,numerics=n)
     plane=result.planes['outside'];v=plane.values
@@ -115,15 +115,15 @@ def test_crossed_cell_power_is_watts_and_sampled_fields_are_si():
     # The offline interpolation keeps the E/H half-step and returns physical H.
     from wavebit.fdtd._periodic.probes import sample_fdtd_fields
     sample=result.sample(z=.05)
-    raw=sample_fdtd_fields(result._snapshot,z=.05)
+    raw=sample_fdtd_fields(result._engine_diagnostics,z=.05)
     np.testing.assert_allclose(sample.values[:,:3],raw['E'],rtol=1e-13)
     np.testing.assert_allclose(sample.values[:,3:],raw['H']/Z0,rtol=1e-13)
     np.testing.assert_allclose(sample.time,raw['t']*q.units.time_seconds,rtol=1e-13)
 
 
-def test_full_result_crosses_jit_and_keeps_physical_record_and_power_metadata():
+def test_full_result_crosses_jit_and_keeps_physical_snapshots_and_power_metadata():
     jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
-    q,n=case(record=True)
+    q,n=case(snapshots=True)
     held=p.prepare(q,numerics=n,backend='jax')
     assert held.validate(q).ok
     assert not held.validate(q.replace(outputs=p.Outputs())).ok
@@ -132,5 +132,5 @@ def test_full_result_crosses_jit_and_keeps_physical_record_and_power_metadata():
     result=jax.jit(forward)(1.3)
     expected=forward(1.3)
     np.testing.assert_allclose(result.plane_power_z['outside'],expected.plane_power_z['outside'],rtol=5e-12)
-    np.testing.assert_allclose(result.fields['hy'].values,expected.fields['hy'].values,rtol=5e-12,atol=1e-15)
+    np.testing.assert_allclose(result.snapshots['Hy'].values,expected.snapshots['Hy'].values,rtol=5e-12,atol=1e-15)
     assert result.planes['outside'].metadata['power_unit']=='W/m'

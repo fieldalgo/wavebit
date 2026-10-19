@@ -181,7 +181,9 @@ from wavebit._common._jobs_v1 import SPEC_VERSION
 # physical native/periodic interfaces and explicit Job migration join current_lifecycle.
 # '23': public names say what they are (fdtd monitors end in Monitor, among others; see
 # docs/migration/public-names.md), and Jobs are wavebit.job/v2. The old names are gone, not aliased.
-MANIFEST_VERSION = '23'
+# '24': fdtd.native and fdtd.periodic names a consumer calls say what they are too (Record is
+# Snapshots, Tail is DecayCheck, among others); Jobs stay v2. Removed, not aliased, as in '23'.
+MANIFEST_VERSION = '24'
 
 
 # --------------------------------------------------------------- how a structure is spelled

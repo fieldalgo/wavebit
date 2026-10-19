@@ -153,11 +153,34 @@ def test_the_execution_tag_names_its_public_path():
     assert json.loads(job().to_json())['execution']['type'] == 'wavebit.Execution'
 
 
-def test_an_allowlisted_name_that_does_not_resolve_is_an_error(monkeypatch):
+@pytest.mark.parametrize('module, old', [('wavebit.fdtd', 'Flux'),
+                                         ('wavebit.fdtd.native', 'Record'),
+                                         ('wavebit.fdtd.native', 'Tail'),
+                                         ('wavebit.fdtd.periodic', 'Record')])
+def test_an_allowlisted_name_that_does_not_resolve_is_an_error(monkeypatch, module, old):
+    """A removed name is a tombstone; listed by mistake, it fails here, not when a job is read."""
+    import re
     from wavebit import jobs
-    monkeypatch.setitem(jobs._CLASS_MODULES, 'wavebit.fdtd', jobs._CLASS_MODULES['wavebit.fdtd'] + ('Flux',))
-    with pytest.raises(RuntimeError, match='wavebit.fdtd.Flux'):
+    monkeypatch.setitem(jobs._CLASS_MODULES, module, jobs._CLASS_MODULES[module] + (old,))
+    with pytest.raises(RuntimeError, match=re.escape(f'{module}.{old},')):
         jobs._registry()
+
+
+@pytest.mark.parametrize('module', ['native', 'periodic'])
+def test_every_public_native_and_periodic_declaration_has_a_tag(module):
+    """The explicit-grid declarations, renamed ones included, can be saved in a job.
+
+    ``fdtd.periodic`` re-exports the ``rcwa`` geometry, which is tagged once, as ``wavebit.rcwa``.
+    """
+    import dataclasses
+    from wavebit import fdtd, jobs
+    namespace = getattr(fdtd, module)
+    tagged = {id(cls) for cls in jobs._registry().values()}
+    for name in namespace.__all__:
+        obj = getattr(namespace, name)
+        if (isinstance(obj, type) and dataclasses.is_dataclass(obj)
+                and name not in ('Prepared', 'Result')):
+            assert id(obj) in tagged, f'wavebit.fdtd.{module}.{name}'
 
 
 def test_every_public_fdtd_declaration_has_a_tag_and_round_trips():

@@ -218,9 +218,20 @@ def unknown_keyword_message(where, unknown, known):
 
 
 def renamed_keyword_message(where, gone, renamed):
-    """The refusal text for removed keywords ``gone`` at ``where``; ``renamed`` maps old to new."""
-    bits = ', '.join(f'{where}({old}=...) is now {where}({renamed[old]}=...)' for old in gone)
-    return (f'{bits}. The old keyword was removed, not aliased; see the public-name migration '
+    """The refusal text for removed keywords ``gone`` at ``where``.
+
+    ``renamed`` maps an old keyword to the new one, or to ``(new, note)`` when the value is not
+    carried over as it is (a width that became a spectral sigma, steps that became seconds): the
+    note says how to convert it.
+    """
+    bits, notes = [], []
+    for old in gone:
+        new, note = renamed[old] if isinstance(renamed[old], tuple) else (renamed[old], None)
+        bits.append(f'{where}({old}=...) is now {where}({new}=...)')
+        if note and note not in notes:
+            notes.append(note)
+    text = ', '.join(bits) + ''.join(f'; {note}' for note in notes)
+    return (f'{text}. The old keyword was removed, not aliased; see the public-name migration '
             f'guide, docs/migration/public-names.md.')
 
 
@@ -252,9 +263,9 @@ def spec(cls=None, *, positional=(), renamed=None):
     ``positional`` names the leading fields that may also be given positionally -- the one
     use is a declaration's ``name``, as in ``TimeSeriesMonitor('probe', ...)``, where the name
     is what a reader looks for first. ``renamed`` maps a removed keyword to the one that
-    replaced it: the old spelling is refused with the new one named (a tombstone, never an
-    alias). Messages name ``type(self)``, so a public subclass of an engine declaration is
-    refused under its own name.
+    replaced it, or to ``(new, note)`` when the value must be converted: the old spelling is
+    refused with the new one named (a tombstone, never an alias). Messages name ``type(self)``,
+    so a public subclass of an engine declaration is refused under its own name.
     """
     if cls is None:
         return lambda c: spec(c, positional=positional, renamed=renamed)

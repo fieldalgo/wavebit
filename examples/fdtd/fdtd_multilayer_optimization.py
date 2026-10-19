@@ -35,7 +35,7 @@ def spectrum(parameters, resolution=40, smoothing_cells=1., band=BAND, duration=
     units=Units(length='um')
     problem=fdtd.Problem(stack=design(parameters),units=units,
         excitation=fdtd.Excitation(wavelength=band,sources=(fdtd.PlaneWave(),)),
-        pulse=fdtd.Pulse(width_seconds=3*units.time_seconds))
+        pulse=fdtd.Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*3*units.time_seconds)))
     numerics=fdtd.Numerics(spacing=1/resolution,
         duration_seconds=duration*.5*(float(np.min(band))+float(np.max(band)))*units.time_seconds,
         nominal_layer_thickness=(DEPTH/4,)*4,layer_smoothing=smoothing_cells/resolution,

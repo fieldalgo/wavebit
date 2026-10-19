@@ -39,7 +39,7 @@ def test_jax_gpu_conductor_matches_independent_si_recurrence(gpu):
     dt, sigma, eps, current = 1e-17, 2300., 2.4, 1e7
     problem = n.Problem(units=Units(length='nm'),
         medium=n.Medium(epsilon=np.full((3, 2, 2), eps), conductivity=sigma),
-        initial=n.Initial(E=np.full((3, 3, 2, 2), 2.), H=np.full((3, 3, 2, 2), .03)),
+        initial=n.InitialField(E=np.full((3, 3, 2, 2), 2.), H=np.full((3, 3, 2, 2), .03)),
         current=n.Current(density=np.full((3, 3, 2, 2), current), samples=np.ones(11)))
     nums = n.Numerics(grid=n.Grid(spacing=(10.,)*3), time_step_seconds=dt, steps=11)
     result = n.run(problem, numerics=nums, backend='jax', device='gpu')
@@ -62,8 +62,8 @@ def test_jax_gpu_cpml_dispersion_bloch_records_and_prepared_reuse(gpu):
         actual, expected = prepared.run(live), n.run(live, numerics=nums)
         pairs = [(getattr(actual, name), getattr(expected, name)) for name in ('E', 'H', 'spectral_power_z')]
         pairs.append((actual.spectrum.values, expected.spectrum.values))
-        pairs += [(actual.fields[name].values, expected.fields[name].values) for name in actual.fields]
-        pairs += list(zip(actual.polarization, expected.polarization))
+        pairs += [(actual.snapshots[name].values, expected.snapshots[name].values) for name in actual.snapshots]
+        pairs += list(zip(actual.polarization_density, expected.polarization_density))
         for value, reference in pairs:
             assert placed(value, gpu)
             assert_field_close(value, reference)

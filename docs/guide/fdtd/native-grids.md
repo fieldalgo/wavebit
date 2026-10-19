@@ -1,9 +1,11 @@
 # Physical native Yee grids
 
 Use `from wavebit.fdtd import native` when your physical model is already sampled
-at Yee sites. `native.Problem` separates `Medium`, `Current`, `Initial`, Bloch
+at Yee sites. `native.Problem` separates `Medium`, `Current`, `InitialField`, Bloch
 phases and observations from `native.Numerics`. It supports `check`, `prepare`
-and `run`, and portable `Job(solver='fdtd.native', ...)`.
+and `run`, and portable `Job(solver='fdtd.native', ...)`. Names changed on
+2026-10-19 are listed in the
+[public-name migration guide](../../migration/public-names.md#native-grid-and-periodic-stack-names).
 
 All spatial arrays are `(z,y,x)`; vectors have a leading Cartesian `(x,y,z)`
 component axis. `Grid.spacing` is `(dz,dy,dx)` in `Units.length`. Optional
@@ -17,7 +19,7 @@ AD. Each E/H component has its own Yee location.
 | `Medium.conductivity` | Electric conductivity in S/m |
 | `Oscillator(omega_0, gamma, strength)` | SI angular resonance/damping rates and strength in 1/s²; arrays may broadcast to native E |
 | `Current.density`, `samples` | Current density in A/m² multiplied by dimensionless samples; sample n drives the E update ending at `(n+1)*dt` |
-| `Initial.E`, `Initial.H` | E in V/m at t=0; H in A/m at t=-dt/2 |
+| `InitialField.E`, `InitialField.H` | E in V/m at t=0; H in A/m at t=-dt/2 |
 | `bloch_phase` | Real radians in `(z,y,x)` order: F(r+L)=exp(i phase) F(r) |
 | `time_step_seconds`, `steps` | Explicit SI time step and fixed step count |
 
@@ -28,12 +30,18 @@ The z Bloch phase is zero with PML. `fdtd.ConductiveAbsorber` instead chooses th
 matched graded conductivity layer, with its finite attenuation floor. Neither
 absorber has a reflection-error guarantee; check width, strength and resolution.
 
-`Outputs(record=Record(...))` retains only selected components and index bounds.
-Each entry in `result.fields` is a `TimeSeries` with physical coordinates and SI
-timestamps. H remains half a time step behind E. `result.E` and `result.H` are
-final native arrays; polarization is in C/m², including the previous ADE state.
+`Outputs(snapshots=Snapshots(every=..., components=..., slices=...))` keeps field
+snapshots every `every` steps, of the chosen components `'Ex'` to `'Hz'` (the
+spelling of every Wavebit output; lowercase `'ex'` is refused). `slices` optionally
+picks a part of the grid by integer index: per `(z,y,x)` axis an index or a
+`(start, stop[, step])` tuple. It keeps singleton axes and does not crop the solve.
+`result.snapshots` maps each component name to a `TimeSeries` with physical
+coordinates and SI timestamps. H remains half a time step behind E. `result.E` and
+`result.H` are final native arrays; `result.polarization_density` is the material
+polarization density P in C/m² for each pole, and `previous_polarization_density`
+the same one step earlier, the previous ADE state.
 
-`Spectrum(wavelengths=..., planes=...)` uses integer z-node indices and streams
+`Spectrum(wavelengths=..., z_indices=...)` uses integer z-node indices and streams
 spatially collocated Fourier fields. `result.spectrum` has axes
 `(wavelength,plane,y,x,component)`, E units V s/m and H units A s/m. The transform
 is the raw integral with exp(+i 2 pi f t), without incident-field calibration.
@@ -41,11 +49,13 @@ is the raw integral with exp(+i 2 pi f t), without incident-field calibration.
 cell area. It is not a monochromatic power or pulse-energy measurement.
 `dft_subsample` reduces monitor work only, with no anti-alias filter.
 
-`Tail(window_seconds=..., tolerance=...)` diagnoses the final interval. It does
-not stop early. Field decay, ADE activity and Fourier-tail ratios remain
-separate; the ADE diagnostic is a relative norm, not stored energy, and CPML
-memory is not assessed. `Validity` distinguishes numerical admission from these
-convergence diagnostics.
+`Numerics(decay_check=DecayCheck(window_seconds=..., threshold=...))` diagnoses
+the final interval. It does not stop early. The window is rounded up to whole time
+steps (a window written as N time steps covers N), by the same rule as
+`periodic.DecayCheck`, and must be shorter than the run. Field decay, ADE activity
+and Fourier-tail ratios remain separate; the ADE diagnostic is a relative norm, not
+stored energy, and CPML memory is not assessed. `Validity` distinguishes numerical
+admission from these convergence diagnostics.
 
 `check` shares the execution admission checks and allocates prospective arrays,
 but advances no fields. Prepared execution fixes numerical settings, layout and

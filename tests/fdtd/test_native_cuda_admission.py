@@ -17,12 +17,12 @@ def small_problem():
         units=units, medium=n.Medium(epsilon=np.ones(shape)),
         current=n.Current(density=density, samples=np.ones(5)),
         outputs=n.Outputs(
-            spectrum=n.Spectrum(wavelengths=(.8,), planes=(4,)),
-            record=n.Record(every=2, components=('ex', 'hy'))))
+            spectrum=n.Spectrum(wavelengths=(.8,), z_indices=(4,)),
+            snapshots=n.Snapshots(every=2, components=('Ex', 'Hy'))))
     numerics = n.Numerics(
         grid=n.Grid(spacing=(.1,) * 3),
         time_step_seconds=.02 * units.time_seconds, steps=5,
-        tail=n.Tail(window_seconds=.04 * units.time_seconds))
+        decay_check=n.DecayCheck(window_seconds=.04 * units.time_seconds))
     return problem, numerics
 
 
@@ -94,7 +94,7 @@ def test_native_observations_share_the_execution_device(torch_device):
         assert value.device == torch_device and value.dtype == torch.float64
         np.testing.assert_allclose(value.detach().cpu(), getattr(reference.spectrum, name),
                                    rtol=2e-15, atol=0.)
-    for field in result.fields.values():
+    for field in result.snapshots.values():
         assert field.values.device == field.time.device == torch_device
         assert field.values.dtype == torch.complex128 and field.time.dtype == torch.float64
         assert all(coordinate.device == torch_device for coordinate in field.coordinates.values())
@@ -141,7 +141,7 @@ def _yee_wave_case(phase, steps):
     magnetic[1] = np.sqrt(epsilon / mu) / Z0 * np.exp(1j * k * (z + dz / 2) + 1j * omega * dt / 2)
     problem = n.Problem(
         units=units, medium=n.Medium(epsilon=np.full(shape, epsilon), mu=mu),
-        initial=n.Initial(E=electric, H=magnetic), bloch_phase=(phase, 0., 0.))
+        initial=n.InitialField(E=electric, H=magnetic), bloch_phase=(phase, 0., 0.))
     numerics = n.Numerics(
         grid=n.Grid(spacing=(dz,) * 3), time_step_seconds=dt * units.time_seconds,
         steps=steps, checkpoint_steps=7)
@@ -200,8 +200,8 @@ def test_cuda_long_native_wave_preserves_phase_amplitude_and_mode(steps, record_
     if not torch.cuda.is_available():
         pytest.skip('requires a CUDA-enabled Torch installation and an NVIDIA GPU')
     problem, numerics, initial_e, initial_h, rotation = _yee_wave_case(.37, steps)
-    assert problem.outputs.record is None and problem.outputs.spectrum is None
-    assert numerics.tail is None
+    assert problem.outputs.snapshots is None and problem.outputs.spectrum is None
+    assert numerics.decay_check is None
     # No field history, diagnostic history or reverse-mode graph is requested.
     # The current engine still allocates a zero complex128 drive[steps] without
     # a source: memory is O(grid + steps), not strictly independent of duration
@@ -212,7 +212,7 @@ def test_cuda_long_native_wave_preserves_phase_amplitude_and_mode(steps, record_
     assert result.E.dtype == result.H.dtype == torch.complex128
     assert not result.E.requires_grad and not result.H.requires_grad
     assert bool(result.validity.checks['stable']) and bool(result.validity.checks['finite_fields'])
-    assert not result.fields and result.spectrum is None and result.diagnostics['tail'] is None
+    assert not result.snapshots and result.spectrum is None and result.diagnostics['tail'] is None
     electric, magnetic = result.E.detach().cpu().numpy(), result.H.detach().cpu().numpy()
     budget = _long_wave_budget(steps)
     metrics = _long_wave_metrics(electric, magnetic, initial_e, initial_h, rotation)

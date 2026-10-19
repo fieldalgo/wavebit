@@ -37,9 +37,11 @@ _CLASS_MODULES = {
                      'FarFieldMonitor', 'Numerics', 'UniformGrid', 'Duration', 'PML',
                      'ConductiveAbsorber', 'DecayStop'),
     'wavebit': ('Execution',),
-    'wavebit.fdtd.native': ('Problem', 'Medium', 'Oscillator', 'Current', 'Initial',
-                           'Outputs', 'Record', 'Spectrum', 'Numerics', 'Grid', 'PML', 'Tail'),
-    'wavebit.fdtd.periodic': ('Problem', 'RasterDispersion', 'Pulse', 'Outputs', 'Record', 'Numerics'),
+    'wavebit.fdtd.native': ('Problem', 'Medium', 'Oscillator', 'Current', 'InitialField',
+                           'Outputs', 'Snapshots', 'Spectrum', 'Numerics', 'Grid', 'PML',
+                           'DecayCheck'),
+    'wavebit.fdtd.periodic': ('Problem', 'RasterDispersion', 'Pulse', 'Outputs', 'Snapshots',
+                             'Numerics', 'DecayCheck'),
 }
 
 
@@ -55,6 +57,12 @@ def _registry():
                                    f'public declaration; update the allowlist with the rename.')
             out[f'{module}.{name}'] = cls
     return out
+
+
+#: Appended to a refusal of an unknown type or field: a name a public declaration no longer has
+#: is the likely cause, and a renamed name is refused, never converted.
+_RENAMES = (' A public name that was renamed is not read under its old spelling; see the '
+            'public-name migration guide, docs/migration/public-names.md.')
 
 
 def _error(message, path):
@@ -171,13 +179,13 @@ def _decode(value, registry, path):
         known = {f.name for f in dataclasses.fields(cls) if f.init and not f.name.startswith('_')}
         extra = set(value['fields']) - known
         if extra:
-            raise _error(f'Unknown declaration fields: {sorted(extra)}.', path)
+            raise _error(f'Unknown declaration fields: {sorted(extra)}.{_RENAMES}', path)
         kwargs = {k: _decode(v, registry, f'{path}.{k}') for k, v in value['fields'].items()}
         try:
             return cls(**kwargs)
         except (TypeError, ValueError) as exc:
             raise _error(f'Invalid {tag}: {exc}', path) from exc
-    raise _error(f'Unknown or malformed job type {tag!r}.', path)
+    raise _error(f'Unknown or malformed job type {tag!r}.{_RENAMES}', path)
 
 
 @spec
