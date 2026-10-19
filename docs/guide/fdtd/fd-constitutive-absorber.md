@@ -7,7 +7,7 @@
 
 
 :::{note}
-`Absorber` is not in the current `wavebit.fdtd` yet: its absorbing faces are `Open()` with a `PML` (`Numerics(absorber=...)` takes only `fdtd.PML`), and a finite body may not reach them. This page's example therefore uses the earlier interface, `wavebit.compat.legacy.fd`.
+This route is not in the current `wavebit.fdtd` yet: its absorbing faces are `Open()`, with `fdtd.PML` or `fdtd.ConductiveAbsorber` as `Numerics(absorber=...)`, and a finite body may not reach them. This page's example therefore uses the earlier interface, `wavebit.compat.legacy.fd`.
 :::
 
 This page describes the implemented bounded `wavebit.compat.legacy.fd` route for

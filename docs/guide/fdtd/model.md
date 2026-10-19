@@ -15,14 +15,14 @@ for the declaration API, see [domains, sources and observations](general-fdtd.md
 | --- | --- |
 | `UniformGrid(spacing=dx)` | cubic cells of one size `dx` on all three axes |
 | `Domain(size, center)` | the physical region, rounded **up** to whole cells about its centre |
-| `Slab`, `Region` | **cell-snapped** structures: whole cells, faces moved to the nearest cell boundary |
+| `SnappedSlab`, `SnappedBox` | **cell-snapped** structures: whole cells, faces moved to the nearest cell boundary |
 | `Box`, `Sphere`, `Cylinder`, `Prism` | **smoothed** bodies: each boundary cell gets a mix weighted by how much of it the body fills |
 | `Open()` face | a PML added **outside** the physical region, matched to the medium that reaches the face |
 | `Periodic()`, `Bloch(...)` | the cell repeats; `Bloch` adds a phase and makes the run complex |
-| `PEC()`, `PMC()`, `Symmetry(parity)`, `Axis1D(k, k_max)` | conducting walls, a mirror plane, and an exactly differentiated invariant axis |
+| `PEC()`, `PMC()`, `MirrorSymmetry(parity)`, `InvariantAxis(k, k_max)` | conducting walls, a mirror plane, and an exactly differentiated invariant axis |
 | `Numerics(courant=0.5)` | time step `dt = courant · dx / (c·√3)` |
-| `Record` | the time series of one component at its nearest Yee point |
-| `Field`, `Flux`, `Diffraction`, `FarField` | running Fourier transforms of the fields, accumulated during the run |
+| `TimeSeriesMonitor` | the time series of one component at its nearest Yee point |
+| `FieldMonitor`, `FluxMonitor`, `DiffractionMonitor`, `FarFieldMonitor` | running Fourier transforms of the fields, accumulated during the run |
 
 Runs use double precision with NumPy, JAX or PyTorch on CPU. A restricted Torch
 CUDA route admits fixed-duration voxel scenes with Periodic/Open/PEC/PMC boundaries
@@ -69,15 +69,15 @@ for independent discrete, eager reverse-mode and double-backward qualification.
 | Quantity | Unit |
 | --- | --- |
 | lengths, positions, vacuum wavelengths | the problem's `Units(length="m" \| "mm" \| "um" \| "nm")` |
-| times, pulse delays, `Duration(seconds=...)` | seconds |
+| times, pulse delays (`delay_seconds`), `Duration(seconds=...)` | seconds |
 | `GaussianPulse(frequency_sigma_hz=...)` | Hz |
 | angles: `PlaneWave(theta, phi)`, `Box`/`Prism(angle)` | radians |
-| electric field (`Record`, final fields), plane-wave and TFSF amplitudes | V/m |
+| electric field (`TimeSeriesMonitor`, final fields), plane-wave and TFSF amplitudes | V/m |
 | magnetic field | A/m |
-| `Field` phasors | V·s/m and A·s/m (the Fourier transform of the field time series) |
-| `Flux` | J/Hz, a two-sided spectral energy density (J/(Hz·m) with one `Axis1D` face) |
+| `FieldMonitor` phasors | V·s/m and A·s/m (the Fourier transform of the field time series) |
+| `FluxMonitor` | J/Hz, a two-sided spectral energy density (J/(Hz·m) with one `InvariantAxis` face) |
 | `ConductiveMaterial(conductivity=...)` | S/m |
-| `Dipole(current_moment=...)` | A·m (electric), V·m (magnetic equivalent) |
+| `CurrentDipole(current_moment=...)` | A·m (electric), V·m (magnetic equivalent) |
 
 The time convention is `exp(-iωt)`: a wave travelling toward `+x` varies as `exp(+ikx)`, and a
 `Bloch` phase `φ` means the field at `x + L` is `exp(+iφ)` times the field at `x`. Spectral
@@ -106,14 +106,14 @@ half cells along `(x, y, z)` are
 | Ez | (0, 0, 1) | Hz | (1, 1, 0) |
 
 so each electric component sits half a cell along its own axis and each magnetic component half
-a cell along the other two. This matters whenever a position is read back: a `Record` samples its
+a cell along the other two. This matters whenever a position is read back: a `TimeSeriesMonitor` samples its
 component at that component's nearest point and reports both the requested and the sampled
-coordinates, and `Field` returns each component on its own points. Nothing is interpolated.
+coordinates, and `FieldMonitor` returns each component on its own points. Nothing is interpolated.
 
 **Absorbing layers are added outside.** Each `Open()` face gets `PML(cells=12)` cells (the
 default) beyond the physical domain, so adding PML cells never moves or shrinks the region you
 declared (`resolved["padding_cells"]`, `resolved["allocated_domain"]`). Explicit
-`Numerics(absorber=fdtd.Absorber(cells=...))` instead chooses graded conductivity
+`Numerics(absorber=fdtd.ConductiveAbsorber(cells=...))` instead chooses graded conductivity
 padding for supported media that PML cannot match; see [its attenuation floor and
 scope](stopping-and-absorbers.md).
 
@@ -128,7 +128,7 @@ medium with `ε·μ < 1`, or a dispersive pole, lowers the largest stable step, 
 
 `Duration` takes exactly one of `steps`, `seconds`, or `periods` with `source="name"` (that
 many periods of the named source's centre wavelength). By default a run lasts that duration.
-An explicit `Numerics(decay=fdtd.Decay(threshold=..., window_seconds=...))` makes it a hard cap
+An explicit `Numerics(stopping=fdtd.DecayStop(threshold=..., window_seconds=...))` makes it a hard cap
 for concrete forward CPU execution and may stop at an earlier completed decay window.
 See [automatic stopping](stopping-and-absorbers.md) for supported sources, actual-prefix
 results and why this policy refuses differentiation. End-of-run decay warnings remain
@@ -137,14 +137,14 @@ separate from convergence guarantees (see [Warnings](#warnings)).
 ## Structures: cell-snapped and smoothed
 
 A scene is a background material plus an ordered tuple of named structures,
-`Structure(name, shape, material)`. **Structures are painted in order: where two overlap, the
+`Structure(name, shape=..., material=...)`. **Structures are painted in order: where two overlap, the
 later one wins.** Each shape is drawn into the grid in one of two ways, and the difference is the
 most important accuracy decision in a scene.
 
-### Cell-snapped shapes: `Slab` and `Region`
+### Cell-snapped shapes: `SnappedSlab` and `SnappedBox`
 
-- `Slab(z=(lo, hi))` is a layer: one axis bounded, the other two filling the domain.
-- `Region(size=(sx, sy, sz), center=(cx, cy, cz))` is an axis-aligned block.
+- `SnappedSlab(z=(lo, hi))` is a layer: one axis bounded, the other two filling the domain.
+- `SnappedBox(size=(sx, sy, sz), center=(cx, cy, cz))` is an axis-aligned block.
 
 Both fill **whole cells**. Each face moves to the nearest cell boundary, `i = round((x - x_lo) / dx)`,
 and every cell between the moved faces holds the material entirely, for all six components. So a
@@ -165,18 +165,18 @@ refining `dx`.
 
 Even on a cell boundary a snapped face is not exact for every component. The tangential electric
 field on the face's node plane takes the material over its whole surrounding cell, so for that
-field a `Slab` sits half a cell low as a whole ([G5 in smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md)).
+field a `SnappedSlab` sits half a cell low as a whole ([G5 in smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md)).
 Moving a layer as a whole changes the phases of `r` and `t` measured at the declared planes, not
 the efficiencies; when phases must match another solver, a smoothed `Box` layer puts its faces
 where they were declared.
 
 Cell-snapped shapes support these scopes without a smoothing declaration:
 
-- **Continue into an absorbing face.** A `Slab` across the axis of an `Open()` face (a substrate,
+- **Continue into an absorbing face.** A `SnappedSlab` across the axis of an `Open()` face (a substrate,
   a superstrate) continues through the PML, and that PML is matched to the slab's material.
 - **Hold any supported material,** including `ConductiveMaterial` and `DispersiveMaterial`.
-- **Run the whole period.** A `Region` that spans a `Periodic()` axis is clipped to the cell,
-  which is how a lamellar grating tooth is written. A `Region` that crosses a periodic seam
+- **Run the whole period.** A `SnappedBox` that spans a `Periodic()` axis is clipped to the cell,
+  which is how a lamellar grating tooth is written. A `SnappedBox` that crosses a periodic seam
   without spanning the period is refused, because its image on the other side would be missing.
 
 Their geometry is static: a size, centre or span is not differentiable (the material value is).
@@ -229,16 +229,16 @@ unchanged. `"refuse"` rejects the pair during preparation; it cannot prepare a s
 fallback.
 
 Invalid selector values are reported with the public `Numerics(junction=...)` or
-`Numerics(discretisation=...)` spelling and the supported choices. `check` returns
+`Numerics(discretization=...)` spelling and the supported choices. `check` returns
 an `invalid_input` issue and `prepare` raises `ValidationError` with the same issue:
 `path` identifies the selector and `actual` retains the supplied value.
 
 `check(...).resolved["numerical_policies"]` and `prepare(...).report.resolved` record
-both requested selectors and actual per-structure application. The `discretisation`
+both requested selectors and actual per-structure application. The `discretization`
 rows report `stencil` only for a prepared engine operator and `voxel` for an ordinary
-built-in smoothed body. `rule=None` with `whole_cell_fill` means Slab/Region retain
+built-in smoothed body. `rule=None` with `whole_cell_fill` means SnappedSlab/SnappedBox retain
 whole-cell fills; `custom_shape_protocol` means the custom Shape owns its fill semantics.
-The built-in public `Slab` and `Region` classes are recognised exactly; user subclasses
+The built-in public `SnappedSlab` and `SnappedBox` classes are recognised exactly; user subclasses
 retain the custom protocol classification in check, prepare, validate, and run provenance.
 The `junction` rows report a rule only for a recorded standing body, distinguish
 `junction_face` from `no_resolved_junction`, and list each pair by stable structure names
@@ -260,44 +260,44 @@ resolved policy rows. Validation and execution do not mutate earlier reports or
 result policy records.
 
 **Pillars on a substrate.** Because of the last rule, a smoothed pillar cannot stand flush on a
-`Slab` substrate. The choices are:
+`SnappedSlab` substrate. The choices are:
 
 1. a fixed, transversely uniform smoothed `Box` substrate with
    `Structure(..., continuation=('z-',))`, with the pillar flush on its interior surface;
 2. a finite smoothed `Box` substrate that does not reach the `Open()` face, with the pillar flush
    on it (the junction rule above);
-3. a cell-snapped `Region` pillar on a `Slab` substrate (rectangular, faces snapped);
-4. a smoothed pillar raised at least half a cell above the `Slab` face.
+3. a cell-snapped `SnappedBox` pillar on a `SnappedSlab` substrate (rectangular, faces snapped);
+4. a smoothed pillar raised at least half a cell above the `SnappedSlab` face.
 
 The first choice continues a half-space substrate through the absorber. See
 [the physical example](substrate-gradients.md) for its geometric restrictions and the fixed
 `PML.reference_media` needed when differentiating the substrate material.
 
-**Accuracy of smoothing.** The default rule, `Numerics(discretisation="voxel")`, converged at
+**Accuracy of smoothing.** The default rule, `Numerics(discretization="voxel")`, converged at
 order 2.02 on a controlled glass-sphere study, but has not passed the curved-interface accuracy
 gate in general; every run with a smoothed body emits `SubpixelAccuracyWarning` saying so. The
-alternative `discretisation="stencil"` passed that gate for a sphere (order 2.24 for an
+alternative `discretization="stencil"` passed that gate for a sphere (order 2.24 for an
 `ε = 12` sphere) but applies to `Sphere` only, takes plain numbers (no derivatives), and needs a
 `PlaneWave` or `TFSF` source. The measurements are in
 [the Mie validation](../../validation/fdtd/fd-mie-validation.md) and
 [smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md).
 
-The scene-wide `Numerics(discretisation="stencil")` selector is forwarded only to
-smoothed bodies. `Slab` and `Region` retain their whole-cell fills. `Box`, `Cylinder`,
+The scene-wide `Numerics(discretization="stencil")` selector is forwarded only to
+smoothed bodies. `SnappedSlab` and `SnappedBox` retain their whole-cell fills. `Box`, `Cylinder`,
 `Prism`, other unsupported shapes, and scenes without an applicable `Sphere` are
-refused at `numerics.discretisation`. Only the exact built-in `Sphere`, `Slab`, and
-`Region` types pass this selector gate; custom shapes and subclasses may change the
+refused at `numerics.discretization`. Only the exact built-in `Sphere`, `SnappedSlab`, and
+`SnappedBox` types pass this selector gate; custom shapes and subclasses may change the
 fill protocol and are refused. This does not extend the stencil's scope:
 it still requires one lone sphere in vacuum and concrete, non-differentiated values;
 adding a slab or region does not make a multi-structure stencil scene supported.
 
 ### Stencil preparation memory
 
-`Numerics(discretisation="stencil", memory_bound=2 * 1024**3, ...)` sets the
+`Numerics(discretization="stencil", memory_bound=2 * 1024**3, ...)` sets the
 host preparation prediction limit in bytes (2 GiB in this example). Omit
 `memory_bound`, or use `None`, to retain the engine's default of 6 GiB. A positive
 finite real number is required; booleans, zero, negative and non-finite values
-are refused at `numerics.memory_bound`. A value without `discretisation="stencil"`
+are refused at `numerics.memory_bound`. A value without `discretization="stencil"`
 and an applicable `Sphere` is also refused, because no preparation would read it.
 
 The guard compares the existing prediction with the limit **before** the sparse
@@ -306,7 +306,7 @@ guarantee against exhausting memory. Coarsen `UniformGrid(spacing=...)`, shrink
 the sphere, or explicitly adjust the bound to the available resources. Raising
 it does not extend the stencil's physical scope: the current operator requires
 one sphere in vacuum. For multiple structures, use
-`Numerics(discretisation="voxel")` or reduce the scene to the supported single
+`Numerics(discretization="voxel")` or reduce the scene to the supported single
 sphere. Numerical policy belongs to `Numerics`, not `Structure`.
 
 ## Materials
@@ -329,16 +329,16 @@ type per axis or a `(low, high)` pair.
 
 | Face | Meaning |
 | --- | --- |
-| `Open()` | outgoing: a PML outside the physical domain, matched to the uniform medium that reaches the face. Only uniform media may reach it — the background, or a `Slab` across that axis; a finite body touching it, or a `Slab` crossing an orthogonal `Open()` face, is refused. |
+| `Open()` | outgoing: a PML outside the physical domain, matched to the uniform medium that reaches the face. Only uniform media may reach it — the background, or a `SnappedSlab` across that axis; a finite body touching it, or a `SnappedSlab` crossing an orthogonal `Open()` face, is refused. |
 | `Periodic()` | both faces wrap with no phase; normal incidence in a periodic cell. |
 | `Bloch(phase=φ)` or `Bloch(k=k)` | both faces wrap with a phase; the run becomes complex (twice the memory and work). `Bloch.from_source(source, units=...)` writes the faces an oblique `PlaneWave` needs. |
 | `PEC()` / `PMC()` | tangential E / tangential H vanishes on the wall. A structure reaching past one is clipped, with `GeometryClippedWarning`. |
-| `Symmetry(parity=±1)` | a mirror plane; `+1` makes tangential E even across it (a PMC-like plane), `-1` odd. |
-| `Axis1D(k=..., k_max=...)` | a one-cell invariant axis whose derivative is exactly `ik`: the uniform axis of a 2-D conical grating, without the one-cell difference's artificial dispersion. |
+| `MirrorSymmetry(parity=±1)` | a mirror plane; `+1` makes tangential E even across it (a PMC-like plane), `-1` odd. |
+| `InvariantAxis(k=..., k_max=...)` | a one-cell invariant axis whose derivative is exactly `ik`: the uniform axis of a 2-D conical grating, without the one-cell difference's artificial dispersion. |
 
 `Numerics(absorber=PML(...))` sets every `Open()` face's layer: `cells=12` (fewer is refused
 unless `allow_thin=True`), `reflection=1e-8`, `wavelength` (the sources' shared centre wavelength
-when omitted) and `stabilize`, an extra loss that stops a bound mode next to the face from growing
+when omitted) and `stabilizing_loss`, an extra loss that stops a bound mode next to the face from growing
 (see `GrowingFieldWarning` below).
 
 ### Acting on a grazing refusal
@@ -360,14 +360,14 @@ Apply one candidate, then run `fdtd.check(problem, numerics=updated)` again. A
 candidate for one face is not a guarantee for all faces, orders, media and
 wavelengths. If refused faces have different resolved reference media, the
 message asks for a common absorber change and a full recheck without offering a
-numeric combination. Reducing `stabilize` can let a bound mode grow again; inspect
+numeric combination. Reducing `stabilizing_loss` can let a bound mode grow again; inspect
 decay as well. Below the measured grazing floor, changing absorber controls or
 duration is not an accepted remedy: change the period, angle or wavelengths.
 These messages do not relax the return tolerance or the measured support limits.
 
 ## Sources
 
-`Problem.sources` accepts `PlaneWave`, `Dipole` and `TFSF` declarations with
+`Problem.sources` accepts `PlaneWave`, `CurrentDipole` and `TFSF` declarations with
 unique, nonempty string names and a `GaussianPulse`. `check` and
 `Prepared.validate` report malformed declarations at `sources[i]`, invalid or
 duplicate names at `sources[i].name`, and invalid pulses at
@@ -375,20 +375,20 @@ duplicate names at `sources[i].name`, and invalid pulses at
 structured error before reading a duration's source or a reuse signature.
 The pulse's numerical leaves keep their existing concrete and runtime checks.
 
-`TFSF.box` must be a cell-snapped `fdtd.Region`, not a smoothed `fdtd.Box` or a
+`TFSF.box` must be a cell-snapped `fdtd.SnappedBox`, not a smoothed `fdtd.Box` or a
 plane. Its type is checked at `sources.<name>.box` before reading the box bounds;
-a valid Region still has to fit inside the physical domain.
+a valid `SnappedBox` still has to fit inside the physical domain.
 
 Every source carries a `GaussianPulse(wavelength, frequency_sigma_hz, cutoff=1e-3)`: a sine at
 the centre frequency `f0 = c / wavelength` under a Gaussian envelope whose **amplitude spectrum**
 has standard deviation `frequency_sigma_hz`. The pulse starts at `cutoff` of its peak, and the
 spectrum falls to `cutoff` at `f0 ± k·σ` with `exp(-k²/2) = cutoff`; the short-wavelength edge of
 that band is the wavelength the resolution rule reads (next section). `amplitude`, `phase` and
-`delay` (seconds) shift and scale the waveform.
+`delay_seconds` shift and scale the waveform.
 
 `Plane` names its normal with one scalar, for example `fdtd.Plane(z=.3)`.
-`Field` and `Flux` also accept finite transverse spans, such as
-`fdtd.Plane(z=.3, x=(-.05, .05))`. `PlaneWave` and `Diffraction` require the
+`FieldMonitor` and `FluxMonitor` also accept finite transverse spans, such as
+`fdtd.Plane(z=.3, x=(-.05, .05))`. `PlaneWave` and `DiffractionMonitor` require the
 whole transverse cell: omit both transverse spans. Any explicit span, even
 one matching the cell boundaries, is unsupported and produces a structured
 `plane_span` issue at `sources.<name>.plane` or `outputs.<name>.plane`.
@@ -396,9 +396,9 @@ one matching the cell boundaries, is unsupported and produces a structured
 
 | Source | What it does |
 | --- | --- |
-| `PlaneWave(name, plane, pulse, direction="-z", theta=0, phi=0, polarization="s")` | a one-way sheet at the node plane nearest `plane`, launching toward `direction`. `theta` is the polar angle from the propagation axis and `phi` the azimuth from the first transverse axis (x for a z wave); `"s"` has E perpendicular to the plane of incidence, `"p"` in it. The transverse faces must be `Periodic()` (normal incidence) or the `Bloch` faces from `Bloch.from_source`; the transverse wavevector is fixed at the pulse's centre wavelength, so an oblique broadband pulse is not constant-angle illumination. |
-| `Dipole(name, center, pulse, component="Ey", kind="electric", current_moment=1)` | a point **current** (A·m), or with `kind="magnetic"` its magnetic equivalent (V·m), spread over a smooth stamp (`"bspline"`, the default, or `"tent"`, each with a half-width of two cells) that keeps the moment and its centroid exact wherever the centre sits. It is not a dipole moment in C·m. |
-| `TFSF(name, box, pulse, direction="-z", polarization="x")` | a plane wave inside a `Region` box only (total field inside, scattered field outside), for a finite scatterer. Axis directions only; the two faces along its axis must be `Open()`. |
+| `PlaneWave(name, plane=..., pulse=..., direction="-z", theta=0, phi=0, polarization="s")` | a one-way sheet at the node plane nearest `plane`, launching toward `direction`. `theta` is the polar angle from the propagation axis and `phi` the azimuth from the first transverse axis (x for a z wave); `"s"` has E perpendicular to the plane of incidence, `"p"` in it. The transverse faces must be `Periodic()` (normal incidence) or the `Bloch` faces from `Bloch.from_source`; the transverse wavevector is fixed at the pulse's centre wavelength, so an oblique broadband pulse is not constant-angle illumination. |
+| `CurrentDipole(name, center=..., pulse=..., component="Ey", kind="electric", current_moment=1)` | a point **current** (A·m), or with `kind="magnetic"` its magnetic equivalent (V·m), spread over a smooth stamp (`"bspline"`, the default, or `"tent"`, each with a half-width of two cells) that keeps the moment and its centroid exact wherever the centre sits. It is not a dipole moment in C·m. |
+| `TFSF(name, box=..., pulse=..., direction="-z", polarization="x")` | a plane wave inside a `SnappedBox` only (total field inside, scattered field outside), for a finite scatterer. Axis directions only; the two faces along its axis must be `Open()`. |
 | `InitialField(E, H, amplitude=1)` | the field the run starts from: E at `t = 0` and H at `t = -dt/2`, given as arrays or as callables evaluated at each component's own Yee points. |
 
 `PlaneWave.plane` must be an `fdtd.Plane`, for example `fdtd.Plane(z=.5)`;
@@ -412,26 +412,26 @@ inside the physical domain.
 Monitors are declared by name in `Outputs(monitors=...)` and read with `result[name]`; each
 frequency-domain monitor accumulates its transforms during the run at the wavelengths it lists.
 
-For finite monitor apertures, `Field` returns each component's Yee points inside the
+For finite monitor apertures, `FieldMonitor` returns each component's Yee points inside the
 requested transverse intervals, including endpoints; its array axes are frequency,
-z, y, x, and its coordinate arrays describe those samples. `Flux` instead snaps each
+z, y, x, and its coordinate arrays describe those samples. `FluxMonitor` instead snaps each
 transverse endpoint to the nearest node and integrates the surface between those
 nodes, using midpoint samples and half weights at end nodes. Its area can therefore
 differ from the requested geometric area for a nonaligned aperture. No interpolation
-or fractional edge-cell integration is performed. A finite Flux span must cover at
+or fractional edge-cell integration is performed. A finite `FluxMonitor` span must cover at
 least one cell and end at or before the last stored node (the high domain face is
-not stored); a Field span must contain a point of every requested component.
+not stored); a `FieldMonitor` span must contain a point of every requested component.
 Both refuse requested transverse intervals outside the physical domain, before
 clipping or snapping, with `monitor_extent` at `outputs.<name>.plane.<axis>`.
 Reversed or zero-width intervals are refused when constructing `Plane`.
 
 | Monitor | Returns |
 | --- | --- |
-| `Record(name, at, component)` | the time series of one component at its nearest Yee point, in V/m or A/m, with the sample time axis in seconds |
-| `Field(name, wavelengths, plane=... or box=..., components=...)` | Fourier phasors of the components on their own points (V·s/m, A·s/m) |
-| `Flux(name, wavelengths, plane=... or box=...)` | the net Poynting energy through a plane (along its `+` normal) or out of a closed box, per unit frequency: a pulse energy density in J/Hz, not watts. A closed box must enclose or exclude each structure whole. |
-| `Diffraction(name, plane, wavelengths, source, side, orders=None)` | the orders leaving a periodic cell on one side (`"reflect"` or `"transmit"`), as complex s/p amplitudes in each order's own frame and efficiencies, normalized by the named `PlaneWave`'s own measured incident field. Requires exactly one `PlaneWave`. `reference_plane` and `incident_plane` move the phase references; `raw=True` keeps the unnormalized spectrum. Wavelengths outside the pulse's usable band are returned as NaN, with `validity.checks["source_reference"]` false there. |
-| `FarField(name, wavelengths, box, propagation="continuum")` | the radiation of an open scene: a closed box around everything, transformed to infinity. `intensity(theta, phi)` takes radians. Periodic cells are refused; their far field is the diffraction orders. `propagation="yee"` uses the lattice's own dispersion. |
+| `TimeSeriesMonitor(name, at=..., component="Ey")` | the time series of one component at its nearest Yee point, in V/m or A/m, with the sample time axis in seconds |
+| `FieldMonitor(name, wavelengths=..., plane=... or box=..., components=...)` | Fourier phasors of the components on their own points (V·s/m, A·s/m) |
+| `FluxMonitor(name, wavelengths=..., plane=... or box=...)` | the net Poynting energy through a plane (along its `+` normal) or out of a closed box, per unit frequency: a pulse energy density in J/Hz, not watts. A closed box must enclose or exclude each structure whole. |
+| `DiffractionMonitor(name, plane=..., wavelengths=..., source=..., wave=..., orders=None)` | the orders leaving a periodic cell as one wave (`"reflected"` on the incidence side or `"transmitted"` on the far side), as complex s/p amplitudes in each order's own frame and efficiencies, normalized by the named `PlaneWave`'s own measured incident field. Requires exactly one `PlaneWave`. `reference_plane` and `incident_plane` move the phase references; `raw=True` keeps the unnormalized spectrum. Wavelengths outside the pulse's usable band are returned as NaN, with `validity.checks["source_reference"]` false there. |
+| `FarFieldMonitor(name, wavelengths=..., box=..., propagation="continuum")` | the radiation of an open scene: a closed box around everything, transformed to infinity. `intensity(theta, phi)` takes radians. Periodic cells are refused; their far field is the diffraction orders. `propagation="yee"` uses the lattice's own dispersion. |
 | `Outputs(final_fields=True)` | the E and H arrays at the end of the run, with each component's coordinates |
 
 (fdtd-model-accuracy-rules)=
@@ -440,14 +440,14 @@ Reversed or zero-width intervals are refused when constructing `Plane`.
 `check`, `prepare` and `run` share these doors; a refusal names the setting to change.
 
 - **8 cells per wavelength in every material.** At the shortest wavelength of the source band (and
-  at every `Diffraction` wavelength), each medium must be sampled at 8 cells per wavelength
+  at every `DiffractionMonitor` wavelength), each medium must be sampled at 8 cells per wavelength
   *inside that medium*, `λ / (n·dx) ≥ 8`. Below 8 the scene is refused; between 8 and 12 a
   `CoarseMeshWarning` says so. A structure of index `n` needs `n` times finer cells than vacuum.
 - **4 cells across a smoothed body**, as in the table above.
 - **The time step** stays inside the stability bound of the scene's materials.
 - **The PML** is at least 12 cells unless `allow_thin=True`.
-- **Placement.** Sources and monitors must lie inside the physical domain; a closed `Flux` box and
-  a `FarField` box keep clear of structures as their rows above describe.
+- **Placement.** Sources and monitors must lie inside the physical domain; a closed `FluxMonitor` box and
+  a `FarFieldMonitor` box keep clear of structures as their rows above describe.
 
 Passing these rules is an admission check, not a convergence result. The answer still has to be
 refined in `dx` and in duration until the quantity you need stops changing.
@@ -462,12 +462,12 @@ emits them as Python warnings from `wavebit.fdtd.diagnostics`.
 | --- | --- |
 | `CoarseMeshWarning` | 8 to 12 cells per wavelength in a medium, or a smoothed body 4 to 8 cells across |
 | `SubpixelAccuracyWarning` | the scene has a smoothed body; the default rule's accuracy gate is incomplete |
-| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face, whose PML is matched to the medium that reaches the face rather than to the structure's near field. A `Slab` that continues into the absorber, such as a substrate, does not warn: its PML is matched to it. |
+| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face, whose PML is matched to the medium that reaches the face rather than to the structure's near field. A `SnappedSlab` that continues into the absorber, such as a substrate, does not warn: its PML is matched to it. |
 | `GeometryClippedWarning` | a structure reaches past a `PEC` or `PMC` wall and loses that part |
 | `UnsettledFieldWarning` | a monitored region still held field at the end; its spectrum includes the truncation — run longer |
-| `GrowingFieldWarning` | the field still grows after every source ended; a longer run makes it worse. Usually a bound mode next to a PML: set `PML(stabilize=...)` to the value the message quotes |
+| `GrowingFieldWarning` | the field still grows after every source ended; a longer run makes it worse. Usually a bound mode next to a PML: set `PML(stabilizing_loss=...)` to the value the message quotes |
 | `PMLStabilityWarning` | a stabilized PML asks for less loss than was measured to stop such growth |
-| `RadiationApproximationWarning` | `FarField(propagation="continuum")` need not match the discrete flux exactly |
+| `RadiationApproximationWarning` | `FarFieldMonitor(propagation="continuum")` need not match the discrete flux exactly |
 
 ## The lifecycle and the report
 
@@ -485,7 +485,7 @@ shapes, monitor layout, the material model types — is fixed; changing it raise
 `IncompatibleProblemError`. `run` is `prepare` followed by one `run`.
 
 A `Result` carries `validity.checks`: `admitted`, `runtime_stability` (false when a runtime guard
-rejected a traced value, see below) and, per `Diffraction` monitor, `source_reference`.
+rejected a traced value, see below) and, per `DiffractionMonitor`, `source_reference`.
 `result.provenance` records the backend, the units, `dt_seconds`, the actual step count and every
 domain.
 
@@ -506,13 +506,13 @@ reported as acceptance of the live material. The runtime guard supplies the live
 validity verdict instead. A fixed PML `reference_media` entry fixes the numerical
 stretch, not that physical material's grazing admission.
 
-An off-design `Diffraction` wavelength can require an exit cosine at or above
+An off-design `DiffractionMonitor` wavelength can require an exit cosine at or above
 one, even when that order is evanescent in the prepared material. A requirement
 above one admits no propagating order. If a live material makes the order
 propagate, the runtime guard refuses it just as `check` does for concrete values.
 At or just below one, admission uses the same rounded cosine as the concrete
 check, without clipping the requirement or relaxing the grazing tolerance.
-For an explicit very small `Axis1D(k=...)`, an interval lower endpoint can round
+For an explicit very small `InvariantAxis(k=...)`, an interval lower endpoint can round
 to zero. Zero is an open-boundary sentinel only; the eager arithmetic for every
 positive material index and all admission thresholds remain unchanged.
 
@@ -600,16 +600,18 @@ problem = fdtd.Problem(
         domain=fdtd.Domain(size=(.1, .1, 1.6)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
         structures=(
-            fdtd.Structure("substrate", fdtd.Slab(z=(-.8, 0.)), Material(epsilon=2.25)),
-            fdtd.Structure("coating", fdtd.Slab(z=(0., .1)), Material(epsilon=6.25)),
+            fdtd.Structure("substrate", shape=fdtd.SnappedSlab(z=(-.8, 0.)),
+                           material=Material(epsilon=2.25)),
+            fdtd.Structure("coating", shape=fdtd.SnappedSlab(z=(0., .1)),
+                           material=Material(epsilon=6.25)),
         )),
     sources=(fdtd.PlaneWave("light", plane=fdtd.Plane(z=.5),
                             pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
     outputs=fdtd.Outputs(monitors=(
-        fdtd.Diffraction("r", plane=fdtd.Plane(z=.3), wavelengths=wavelengths,
-                         source="light", side="reflect"),
-        fdtd.Diffraction("t", plane=fdtd.Plane(z=-.3), wavelengths=wavelengths,
-                         source="light", side="transmit"),
+        fdtd.DiffractionMonitor("r", plane=fdtd.Plane(z=.3), wavelengths=wavelengths,
+                                source="light", wave="reflected"),
+        fdtd.DiffractionMonitor("t", plane=fdtd.Plane(z=-.3), wavelengths=wavelengths,
+                                source="light", wave="transmitted"),
     )),
 )
 numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=dx),
@@ -643,7 +645,7 @@ the closed form's 0.3420. Halving `dx` to 0.01 µm gives 0.3440: the error falls
 matter: with `reference_plane=.1, incident_plane=.1` on the reflection monitor, `arg r` at the
 declared top face differs from the closed form by 0.163 rad at 0.8 µm, and by 0.080 rad at
 `dx = 0.01` -- about `k0·dx`, first order, because the snapped layers act half a cell low for the
-tangential field (see [Cell-snapped shapes](#cell-snapped-shapes-slab-and-region)). Written with a
+tangential field (see [Cell-snapped shapes](#cell-snapped-shapes-snappedslab-and-snappedbox)). Written with a
 coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` and run as 0.1 µm.
 
 ## General-scene limits
@@ -671,4 +673,4 @@ for the protocol and [stopping/absorbers](stopping-and-absorbers.md) for numeric
   scopes for lossy and dispersive layers.
 - [Learning FDTD](../../learn/fdtd/index.md) — the order in which to establish a trustworthy result.
 
-The default `memory_bound=None` is omitted from `wavebit.job/v1` serialization, so existing job keys remain unchanged. Explicit bounds are serialized and round-trip with the job.
+The default `memory_bound=None` is omitted from `wavebit.job/v2` serialization, so a job that does not set it keeps its key. Explicit bounds are serialized and round-trip with the job.

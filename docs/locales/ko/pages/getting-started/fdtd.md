@@ -16,11 +16,13 @@ problem = fdtd.Problem(
     scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.1, .1, 1.6)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-        structures=(fdtd.Structure("film", fdtd.Slab(z=(-.1, .1)), Material(epsilon=2.25)),),
+        structures=(fdtd.Structure("film", shape=fdtd.SnappedSlab(z=(-.1, .1)),
+                                   material=Material(epsilon=2.25)),),
     ),
     sources=(fdtd.PlaneWave("illumination", plane=fdtd.Plane(z=.5),
         pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
-    outputs=fdtd.Outputs(monitors=(fdtd.Record("probe", at=(0., 0., -.3), component="Ey"),)),
+    outputs=fdtd.Outputs(monitors=(
+        fdtd.TimeSeriesMonitor("probe", at=(0., 0., -.3), component="Ey"),)),
 )
 numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
     duration=fdtd.Duration(periods=20, source="illumination"), absorber=fdtd.PML(cells=12))
@@ -35,7 +37,7 @@ result = fdtd.run(problem, numerics=numerics)
 print("samples:", len(result["probe"].time), "time unit: s; field unit:", result["probe"].units)
 ```
 
-`result["probe"].time`은 초 단위의 시간 배열입니다. 전기장 Ey의 단위는 V/m이며, 자기장을 기록하면 A/m를 사용합니다. `Record`는 선택한 성분의 가장 가까운 Yee 격자점에서 샘플링합니다. 임의 좌표의 보간값은 아닙니다.
+`result["probe"].time`은 초 단위의 시간 배열입니다. 전기장 Ey의 단위는 V/m이며, 자기장을 기록하면 A/m를 사용합니다. `TimeSeriesMonitor`는 선택한 성분의 가장 가까운 Yee 격자점에서 샘플링합니다. 임의 좌표의 보간값은 아닙니다.
 
 ## 선택: 준비한 계산 재사용하기
 

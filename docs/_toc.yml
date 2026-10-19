@@ -303,6 +303,7 @@ subtrees:
       - file: migration/index
         subtrees:
         - entries:
+          - file: migration/public-names
           - file: migration/legacy-api
           - file: migration/general-fdtd-v1
           - file: migration/materials-v1

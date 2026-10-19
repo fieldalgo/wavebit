@@ -1,7 +1,8 @@
 """Portable, versioned jobs with explicit solver dispatch.
 
 Legacy RCWA JobSpec files require wavebit.migration.migrate_legacy_jobs; changing a schema
-number is not a coordinate or material migration.
+number is not a coordinate or material migration. ``wavebit.job/v1`` files, written before the
+public names were made self-describing, are refused rather than converted.
 """
 import base64
 import dataclasses
@@ -17,7 +18,7 @@ from ._common.declarations import spec
 from ._common.execution import Execution
 from .errors import ValidationError, UnsupportedFeatureError
 
-_SCHEMA = 'wavebit.job/v1'
+_SCHEMA = 'wavebit.job/v2'
 
 # Explicit allowlist: deserializing a job never imports a class named by its input.
 _CLASS_MODULES = {
@@ -28,12 +29,14 @@ _CLASS_MODULES = {
     'wavebit.rcwa': ('Problem', 'Stack', 'Layer', 'Region', 'Rectangle', 'Circle',
                      'Ellipse', 'Polygon', 'Excitation', 'Outputs', 'Numerics',
                      'PlaneWave', 'OrderExcitation', 'GaussianBeam', 'ElectricDipole'),
-    'wavebit.fdtd': ('Problem', 'Scene', 'Domain', 'Structure', 'Slab', 'Box', 'Sphere',
-                     'Cylinder', 'Prism', 'Plane', 'Region', 'Boundaries', 'Periodic', 'Bloch',
-                     'Open', 'PEC', 'PMC', 'Symmetry', 'Axis1D', 'PlaneWave', 'Dipole', 'TFSF', 'InitialField',
-                     'GaussianPulse', 'Outputs', 'Record', 'Field', 'Flux',
-                     'Diffraction', 'FarField', 'Numerics', 'UniformGrid', 'Duration', 'PML', 'Absorber', 'Decay'),
-    'wavebit._common.execution': ('Execution',),
+    'wavebit.fdtd': ('Problem', 'Scene', 'Domain', 'Structure', 'SnappedSlab', 'Box', 'Sphere',
+                     'Cylinder', 'Prism', 'Plane', 'SnappedBox', 'Boundaries', 'Periodic', 'Bloch',
+                     'Open', 'PEC', 'PMC', 'MirrorSymmetry', 'InvariantAxis', 'PlaneWave',
+                     'CurrentDipole', 'TFSF', 'InitialField', 'GaussianPulse', 'Outputs',
+                     'TimeSeriesMonitor', 'FieldMonitor', 'FluxMonitor', 'DiffractionMonitor',
+                     'FarFieldMonitor', 'Numerics', 'UniformGrid', 'Duration', 'PML',
+                     'ConductiveAbsorber', 'DecayStop'),
+    'wavebit': ('Execution',),
     'wavebit.fdtd.native': ('Problem', 'Medium', 'Oscillator', 'Current', 'Initial',
                            'Outputs', 'Record', 'Spectrum', 'Numerics', 'Grid', 'PML', 'Tail'),
     'wavebit.fdtd.periodic': ('Problem', 'RasterDispersion', 'Pulse', 'Outputs', 'Record', 'Numerics'),
@@ -41,13 +44,16 @@ _CLASS_MODULES = {
 
 
 def _registry():
+    """Tag -> class for every portable declaration; a name that does not resolve is a bug here."""
     out = {}
     for module, names in _CLASS_MODULES.items():
         namespace = importlib.import_module(module)
         for name in names:
             cls = getattr(namespace, name, None)
-            if cls is not None and dataclasses.is_dataclass(cls):
-                out[f'{module}.{name}'] = cls
+            if cls is None or not dataclasses.is_dataclass(cls):
+                raise RuntimeError(f'jobs._CLASS_MODULES lists {module}.{name}, which is not a '
+                                   f'public declaration; update the allowlist with the rename.')
+            out[f'{module}.{name}'] = cls
     return out
 
 
@@ -83,10 +89,10 @@ def _encode(value, registry, path):
         tag = next((tag for tag, cls in registry.items() if type(value) is cls), None)
         if tag is None:
             raise _error(f'{type(value).__name__} is not a portable public job declaration.', path)
-        # A field added to a v1 declaration after the format was fixed is written only when it
-        # differs from its default, so every job that does not use it keeps its key (and every
-        # saved run record its identity); the decoder gives an absent field its default.
-        later = getattr(type(value), '_FIELDS_ADDED_IN_V1', ())
+        # A field listed in _FIELDS_OMITTED_AT_DEFAULT is written only when it differs from its
+        # default, so every job that does not use it keeps its key (and every saved run record
+        # its identity); the decoder gives an absent field its default.
+        later = getattr(type(value), '_FIELDS_OMITTED_AT_DEFAULT', ())
         return {'type': tag, 'fields': {f.name: _encode(getattr(value, f.name), registry, f'{path}.{f.name}')
                                       for f in dataclasses.fields(value) if f.init and not f.name.startswith('_')
                                       and not (f.name in later and getattr(value, f.name) == f.default)}}
@@ -206,8 +212,14 @@ class Job:
             body = json.loads(text, parse_constant=lambda name: (_ for _ in ()).throw(ValueError(name)))
         except (TypeError, ValueError) as exc:
             raise _error(f'Invalid JSON: {exc}', 'job') from exc
+        if isinstance(body, dict) and body.get('schema') == 'wavebit.job/v1':
+            raise UnsupportedFeatureError(
+                'This is a wavebit.job/v1 file, written before the public names were renamed '
+                '(for example fdtd.Flux is now fdtd.FluxMonitor). It is not converted: rebuild the '
+                'Problem with the current names and save it again; see the public-name migration '
+                'guide, docs/migration/public-names.md.', code='job.schema', path='schema')
         if not isinstance(body, dict) or body.get('schema') != _SCHEMA:
-            raise UnsupportedFeatureError('Expected wavebit.job/v1. Legacy JobSpec requires explicit migration; do not edit its version number.',
+            raise UnsupportedFeatureError('Expected wavebit.job/v2. Legacy JobSpec requires explicit migration; do not edit its version number.',
                                           code='job.schema', path='schema')
         if set(body) != {'schema', 'solver', 'problem', 'numerics', 'execution'}:
             raise _error('The job envelope contains missing or unknown fields.', 'job')

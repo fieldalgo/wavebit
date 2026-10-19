@@ -218,7 +218,7 @@ class DipoleTerm:
 
     def series(self, plan, mem, rt):
         import numpy as np
-        from wavebit.fdtd.results import SourceSeries
+        from wavebit.fdtd._legacy_results import SourceSeries
         steps = np.arange(plan.steps)
         if self.field == 'E':
             t, t_field = (steps + 0.5) * plan.dt, (steps + 1.0) * plan.dt
@@ -473,7 +473,7 @@ class ColumnTerm:
 
     def series(self, plan, mem, rt):
         import numpy as np
-        from wavebit.fdtd.results import SourceSeries
+        from wavebit.fdtd._legacy_results import SourceSeries
         steps = np.arange(plan.steps)
         return SourceSeries(name=self.name, kind=self.kind, t=(steps + 1.0) * plan.dt,
                             incident=mem['E'], t_H=(steps + 0.5) * plan.dt,

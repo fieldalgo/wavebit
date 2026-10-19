@@ -32,6 +32,7 @@ import math
 from wavebit._common.declarations import spec
 from wavebit._common.declarations import static_float
 from wavebit._common.declarations import static_int
+from wavebit.fdtd._public_names import public_name
 
 __all__ = ['Record', 'Flux', 'Field', 'Diffraction', 'FarField', 'COMPONENTS', 'MONITOR_TYPES',
            'ModeMonitor', 'Decay']
@@ -59,16 +60,17 @@ class Record:
 
     def __post_init__(self):
         if not isinstance(self.name, str) or not self.name:
-            raise ValueError('Record(name=...): the name is the key the result is read back '
-                             'by, res[name]; it must be a non-empty string.')
+            raise ValueError('TimeSeriesMonitor(name=...): the name is the key the result is '
+                             'read back by, res[name]; it must be a non-empty string.')
         if not (isinstance(self.at, (tuple, list)) and len(self.at) == 3):
-            raise ValueError(f'Record(at={self.at!r}): at is a point (x, y, z) in the user\'s '
-                             f'length unit, three numbers.')
+            raise ValueError(f'TimeSeriesMonitor(at={self.at!r}): at is a point (x, y, z) in '
+                             f'the user\'s length unit, three numbers.')
         # The point picks a cell index, so it is static like the grid it indexes.
-        object.__setattr__(self, 'at', tuple(static_float('Record', 'at', v) for v in self.at))
+        object.__setattr__(self, 'at', tuple(static_float('TimeSeriesMonitor', 'at', v)
+                                             for v in self.at))
         if self.component not in COMPONENTS:
-            raise ValueError(f'Record(component={self.component!r}): the components are '
-                             f'{COMPONENTS}.')
+            raise ValueError(f'TimeSeriesMonitor(component={self.component!r}): the components '
+                             f'are {COMPONENTS}.')
 
     @property
     def field(self):
@@ -117,16 +119,17 @@ def _region(where, plane, box):
     from wavebit.fdtd._legacy_geometry import Plane
     from wavebit.fdtd._legacy_geometry import Region
     if (plane is None) == (box is None):
-        raise ValueError(f'{where}: give plane=fd.Plane(...) or box=fd.Region(...), exactly one.')
+        raise ValueError(f'{where}: give plane=fd.Plane(...) or box=fdtd.SnappedBox(...), '
+                         f'exactly one.')
     if plane is not None and not isinstance(plane, Plane):
-        raise TypeError(f'{where}(plane=...): an fd.Plane(z=...); got {type(plane).__name__}.')
+        raise TypeError(f'{where}(plane=...): an fd.Plane(z=...); got {public_name(plane)}.')
     if box is not None and _is_body_box(box):
         raise TypeError(f'{where}(box=fd.Box(...)): fd.Box is the smoothed body a structure '
                         f'fills; a monitor\'s box picks node planes, and that is the '
-                        f'cell-snapped fd.Region(size=..., center=...).')
+                        f'cell-snapped fdtd.SnappedBox(size=..., center=...).')
     if box is not None and not isinstance(box, Region):
-        raise TypeError(f'{where}(box=...): an fd.Region(size=..., center=...); got '
-                        f'{type(box).__name__}.')
+        raise TypeError(f'{where}(box=...): an fdtd.SnappedBox(size=..., center=...); got '
+                        f'{public_name(box)}.')
 
 
 @spec(positional=('name',))
@@ -155,9 +158,9 @@ class Flux:
     wavelengths: tuple = None
 
     def __post_init__(self):
-        _monitor_name('Flux', self.name)
-        _region('Flux', self.plane, self.box)
-        object.__setattr__(self, 'wavelengths', _wavelengths('Flux', self.wavelengths))
+        _monitor_name('FluxMonitor', self.name)
+        _region('FluxMonitor', self.plane, self.box)
+        object.__setattr__(self, 'wavelengths', _wavelengths('FluxMonitor', self.wavelengths))
 
 
 @spec(positional=('name',))
@@ -179,16 +182,17 @@ class Field:
     wavelengths: tuple = None
 
     def __post_init__(self):
-        _monitor_name('Field', self.name)
-        _region('Field', self.plane, self.box)
+        _monitor_name('FieldMonitor', self.name)
+        _region('FieldMonitor', self.plane, self.box)
         comps = (self.components,) if isinstance(self.components, str) else tuple(self.components)
         if not comps or any(c not in COMPONENTS for c in comps):
-            raise ValueError(f'Field(components={self.components!r}): a tuple drawn from '
-                             f'{COMPONENTS}.')
+            raise ValueError(f'FieldMonitor(components={self.components!r}): a tuple drawn '
+                             f'from {COMPONENTS}.')
         if len(set(comps)) != len(comps):
-            raise ValueError(f'Field(components={self.components!r}): a component is repeated.')
+            raise ValueError(f'FieldMonitor(components={self.components!r}): a component is '
+                             f'repeated.')
         object.__setattr__(self, 'components', comps)
-        object.__setattr__(self, 'wavelengths', _wavelengths('Field', self.wavelengths))
+        object.__setattr__(self, 'wavelengths', _wavelengths('FieldMonitor', self.wavelengths))
 
 
 #: What a Diffraction monitor measures, and which way that goes relative to the incidence.
@@ -238,36 +242,39 @@ class Diffraction:
     polarizations: str = 'given'
 
     def __post_init__(self):
-        _monitor_name('Diffraction', self.name)
+        _monitor_name('DiffractionMonitor', self.name)
         named = [a for a in 'xyz' if getattr(self, a) is not None]
         if len(named) != 1:
-            raise ValueError(f'Diffraction(...): name the plane by its one position along the '
-                             f'propagation axis, as Diffraction(name, z=1.2, ...); got '
-                             f'{named or "none"}.')
+            raise ValueError(f'DiffractionMonitor(...): name the plane by its one position along '
+                             f'the propagation axis, as DiffractionMonitor(name, '
+                             f'plane=fdtd.Plane(z=1.2), ...); got {named or "none"}.')
         axis = named[0]
-        object.__setattr__(self, axis, static_float('Diffraction', axis, getattr(self, axis)))
+        object.__setattr__(self, axis,
+                           static_float('DiffractionMonitor', axis, getattr(self, axis)))
         if self.side not in SIDES:
-            raise ValueError(f'Diffraction(side={self.side!r}): {SIDES[0]!r} (away from the '
-                             f'structure on the incidence side) or {SIDES[1]!r} (on the far '
-                             f'side).')
-        object.__setattr__(self, 'wavelengths', _wavelengths('Diffraction', self.wavelengths))
+            raise ValueError("DiffractionMonitor(wave=...): 'reflected' (away from the "
+                             "structure on the incidence side) or 'transmitted' (on the "
+                             "far side).")
+        object.__setattr__(self, 'wavelengths',
+                           _wavelengths('DiffractionMonitor', self.wavelengths))
         if self.orders is not None:
             pair = self.orders if isinstance(self.orders, (tuple, list)) else (self.orders,) * 2
             if len(pair) != 2:
-                raise ValueError(f'Diffraction(orders={self.orders!r}): a half width M, or the '
-                                 f'pair (M_u, M_v).')
-            pair = tuple(static_int('Diffraction', 'orders', v) for v in pair)
+                raise ValueError(f'DiffractionMonitor(orders={self.orders!r}): a half width M, or '
+                                 f'the pair (M_u, M_v).')
+            pair = tuple(static_int('DiffractionMonitor', 'orders', v) for v in pair)
             if any(v < 0 for v in pair):
-                raise ValueError(f'Diffraction(orders={self.orders!r}): half widths are >= 0.')
+                raise ValueError(f'DiffractionMonitor(orders={self.orders!r}): half widths are '
+                                 f'>= 0.')
             object.__setattr__(self, 'orders', pair)
         for key in ('reference_plane', 'incident_plane'):
             v = getattr(self, key)
             if v is not None:
-                object.__setattr__(self, key, static_float('Diffraction', key, v))
+                object.__setattr__(self, key, static_float('DiffractionMonitor', key, v))
         if self.polarizations not in ('given', 'both'):
-            raise ValueError(f"Diffraction(polarizations={self.polarizations!r}): 'given' (the "
-                             f"PlaneWave's own polarisation) or 'both' (a second run with the "
-                             f"other one, filling s_inc and p_inc).")
+            raise ValueError(f"DiffractionMonitor(polarizations={self.polarizations!r}): 'given' "
+                             f"(the PlaneWave's own polarisation) or 'both' (a second run with "
+                             f"the other one, filling s_inc and p_inc).")
 
     @property
     def axis(self):
@@ -313,18 +320,20 @@ class FarField:
 
     def __post_init__(self):
         from wavebit.fdtd._legacy_geometry import Region
-        _monitor_name('FarField', self.name)
+        _monitor_name('FarFieldMonitor', self.name)
         if self.propagation not in ('continuum', 'yee'):
             raise ValueError("FarFieldPropagationRefused: choose propagation='continuum' or 'yee'")
         if _is_body_box(self.box):
-            raise TypeError('FarField(box=fd.Box(...)): fd.Box is the smoothed body a '
+            raise TypeError('FarFieldMonitor(box=fd.Box(...)): fd.Box is the smoothed body a '
                             'structure fills; the closed surface picks node planes, and that is '
-                            'the cell-snapped fd.Region(size=..., center=...).')
+                            'the cell-snapped fdtd.SnappedBox(size=..., center=...).')
         if not isinstance(self.box, Region):
-            raise TypeError(f'FarField(box=...): the closed surface is an fd.Region(size=..., '
-                            f'center=...); got {type(self.box).__name__}. (A plane is not a '
-                            f'closed surface, and the transform needs one.)')
-        object.__setattr__(self, 'wavelengths', _wavelengths('FarField', self.wavelengths))
+            raise TypeError(f'FarFieldMonitor(box=...): the closed surface is an '
+                            f'fdtd.SnappedBox(size=..., center=...); got '
+                            f'{public_name(self.box)}. (A plane is not a closed surface, and '
+                            f'the transform needs one.)')
+        object.__setattr__(self, 'wavelengths',
+                           _wavelengths('FarFieldMonitor', self.wavelengths))
 
     @property
     def plane(self):
@@ -338,8 +347,9 @@ MONITOR_TYPES = (Record, Flux, Field, Diffraction, FarField)
 def ModeMonitor(*args, **kwargs):
     """Refused by name: mode overlaps are stage 7."""
     raise NotImplementedError('fd.ModeMonitor (mode overlaps) belongs to stage 7, with '
-                              'fd.ModeSource. Stage 3 has fd.Record, fd.Flux, fd.Field, '
-                              'fd.FarField and fd.Diffraction.')
+                              'fd.ModeSource. Stage 3 has fdtd.TimeSeriesMonitor, '
+                              'fdtd.FluxMonitor, fdtd.FieldMonitor, fdtd.FarFieldMonitor '
+                              'and fdtd.DiffractionMonitor.')
 
 
 @spec(positional=('threshold',))
@@ -366,11 +376,13 @@ class Decay:
     window: float
 
     def __post_init__(self):
-        threshold = static_float('Decay', 'threshold', self.threshold)
-        window = static_float('Decay', 'window', self.window)
+        threshold = static_float('DecayStop', 'threshold', self.threshold)
+        window = static_float('DecayStop', 'window_seconds', self.window)
         if not (math.isfinite(threshold) and 0 < threshold < 1):
-            raise ValueError('Decay(threshold=...): a finite amplitude ratio in (0, 1) is required.')
+            raise ValueError('DecayStop(threshold=...): a finite amplitude ratio in (0, 1) is '
+                             'required.')
         if not (math.isfinite(window) and window > 0):
-            raise ValueError('Decay(window=...): a finite positive duration is required.')
+            raise ValueError('DecayStop(window_seconds=...): a finite positive duration is '
+                             'required.')
         object.__setattr__(self, 'threshold', threshold)
         object.__setattr__(self, 'window', window)

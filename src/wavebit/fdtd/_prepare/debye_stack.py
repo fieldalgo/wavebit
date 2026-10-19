@@ -35,6 +35,7 @@ from wavebit.fdtd.diagnostics import CoarseMeshWarning
 from wavebit.materials.time_domain import Debye
 from wavebit.materials.time_domain import Dispersive
 from wavebit.materials.time_domain import concrete
+from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab
 from wavebit.fdtd._kernel.poles import PoleTerm
@@ -156,7 +157,7 @@ def _refuse_overlap(scene, grid):
 def _refuse_decay(scene):
     if getattr(scene.run, 'decay', None) is not None:
         raise ValueError('DebyeStackDecayRefused: separated Debye films currently require '
-                         'a fixed Run time, steps or periods without Decay. Their evolving '
+                         'a fixed Run time, steps or periods without a DecayStop. Their evolving '
                          'state has not been admitted to the stopping protocol.')
 
 
@@ -353,8 +354,8 @@ def _points(scene):
     points = {}
     for monitor in getattr(scene, 'monitors', ()) or ():
         for value in getattr(monitor, 'wavelengths', ()) or ():
-            w = _finite(value, f'{type(monitor).__name__}({monitor.name!r}) wavelength')
-            points.setdefault(w, f'{type(monitor).__name__}({monitor.name!r})')
+            w = _finite(value, f'{public_name(monitor)}({monitor.name!r}) wavelength')
+            points.setdefault(w, f'{public_name(monitor)}({monitor.name!r})')
     value = scene.resolution.wavelength
     if value is not None:
         points.setdefault(_finite(value, 'Resolution wavelength'), 'Resolution')

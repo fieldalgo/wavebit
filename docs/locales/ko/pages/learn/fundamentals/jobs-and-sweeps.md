@@ -52,10 +52,13 @@ assert restored.key == points[0].key
 result = run(restored)
 ```
 
-`to_json()`은 명시적 단위와 재료 선언을 포함하는 현재 `wavebit.job/v1` 형식을 저장합니다.
+`to_json()`은 명시적 단위와 재료 선언을 포함하는 현재 `wavebit.job/v2` 형식을 저장합니다.
 번들 재료표의 데이터도 포함하므로 복원한 Job은 같은 표를 평가합니다. `.key`는 정규화한
 입력을 식별하는 속성입니다. 결과 cache나 수치 재현성 증명은 아니므로 패키지·의존성
 버전과 실행 환경도 기록하세요.
+
+[공개 이름이 바뀌기](../../migration/public-names.md) 전에 저장한 `wavebit.job/v1` 파일은
+변환하지 않고 `job.schema` 코드로 거부합니다. 현재 이름으로 문제를 다시 만들어 저장하세요.
 
 이전 `JobSpec` JSON은 다른 형식이며 자동 변환하지 않습니다. [이전 Job 안내](../../migration/jobs-v1.md)로
 원래 단위·편광·sweep을 해석한 다음 현재 선언을 구성해야 합니다.

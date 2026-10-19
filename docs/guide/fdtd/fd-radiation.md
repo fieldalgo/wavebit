@@ -6,15 +6,15 @@
 > Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
 
 
-Use `fdtd.FarField` for a closed measurement box in an open scene.
+Use `fdtd.FarFieldMonitor` for a closed measurement box in an open scene.
 The box must enclose every object and stay in a uniform isotropic background,
 clear of absorbing layers and source surfaces.
 
 ```python
 from wavebit import fdtd
 
-monitor = fdtd.FarField(
-    'ff', wavelengths=(1.,), box=fdtd.Region(size=(1.5,)*3), propagation='yee')
+monitor = fdtd.FarFieldMonitor(
+    'ff', wavelengths=(1.,), box=fdtd.SnappedBox(size=(1.5,)*3), propagation='yee')
 ```
 
 List the monitor in `fdtd.Outputs(monitors=...)` before calling `fdtd.run`.
@@ -35,7 +35,7 @@ projections. Angles are in radians, theta measured from +z and phi from +x
 toward +y. They broadcast together; each output has shape `(nf, ...angles)`.
 `res['ff'].intensity(theta, phi)` gives the pulse's two-sided spectral energy per
 solid angle, in `res['ff'].units` (J/Hz/sr for a three-dimensional scene). For the
-net flux through the box, before any far-field map, add an `fdtd.Flux` monitor on
+net flux through the box, before any far-field map, add an `fdtd.FluxMonitor` on
 the same box: it reads the same faces.
 
 With `'yee'`, angles specify outgoing energy rays. The asymptotic phase is

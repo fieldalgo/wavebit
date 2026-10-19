@@ -340,9 +340,9 @@ def stabilizing_factors(cells, dx, dt, eps_r, side, reflection, rho):
         h = 0.5 * dt * stabilizing_rate(depth, thickness, eps_r, reflection, rho)
         if not float(np.max(h)) < 0.5:
             raise ValueError(
-                f'PML(stabilize={rho!r}): the loss reaches {float(np.max(h)):.3g} per half '
+                f'PML(stabilizing_loss={rho!r}): the loss reaches {float(np.max(h)):.3g} per half '
                 f'step at the wall (rate * dt / 2), and the update stops being a loss at 1 '
                 f'(refused from 0.5). The measured value is {STABILIZING_LOSS}; a value this '
-                f'large is a conductor, not a stabilizer -- use fd.Absorber for that.')
+                f'large is a conductor, not a stabilizer -- use fdtd.ConductiveAbsorber for that.')
         out[name] = ((1.0 - h) / (1.0 + h), 1.0 / (1.0 - h))
     return out

@@ -53,11 +53,15 @@ assert restored.key == points[0].key
 result = run(restored)
 ```
 
-`to_json()` stores the current `wavebit.job/v1` schema, including explicit units and
+`to_json()` stores the current `wavebit.job/v2` schema, including explicit units and
 material declarations. Bundled table data is embedded, so a restored job evaluates
 the same table. `.key` is a property that identifies canonical inputs. It is not a
 result cache or proof of numerical reproducibility; also record package/dependency
 versions and the execution environment.
+
+A `wavebit.job/v1` file, written before the [public names were renamed](../../migration/public-names.md),
+is refused with code `job.schema` rather than converted: rebuild the problem with the
+current names and save it again.
 
 Old `JobSpec` JSON is a different format. It is not silently converted into this
 schema: use the [historical job manual](../../migration/jobs-v1.md) to interpret

@@ -56,7 +56,7 @@ import pytest
 import wavebit.fdtd._legacy as fd
 from wavebit.fdtd._prepare import lower
 from wavebit.fdtd._execution import _results, execute
-from wavebit.fdtd.results import Series
+from wavebit.fdtd._legacy_results import Series
 from wavebit.fdtd._runtime import runtime
 
 BACKENDS = ('numpy', 'jax', 'torch')

@@ -30,7 +30,7 @@ def test_explicit_tiny_axis1d_keeps_admitted_public_traced_run(backend):
     def problem(epsilon=1.):
         p=seed(epsilon)
         return p.replace(scene=p.scene.replace(boundaries=fd.Boundaries(
-            x=fd.Axis1D(k=KU),y=fd.Axis1D(k=0.),z=fd.Open())))
+            x=fd.InvariantAxis(k=KU),y=fd.InvariantAxis(k=0.),z=fd.Open())))
     with warnings.catch_warnings(),bounded(20):
         warnings.simplefilter('ignore')
         assert fd.check(problem(),numerics=numerics).ok

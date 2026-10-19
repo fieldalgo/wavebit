@@ -89,7 +89,7 @@ structures. `Numerics(memory_bound=...)` passes a limit in bytes to the existing
 host prediction guard. The memory routing test stops at entry to sparse geometry
 assembly; it verifies the admission boundary and the unchanged default source,
 not an assembled operator or scattering accuracy. The multi-structure remedy
-is also applied through `check` to confirm that `Numerics(discretisation="voxel")`
+is also applied through `check` to confirm that `Numerics(discretization="voxel")`
 removes that refusal.
 
 See the [current input and memory contract](../../guide/fdtd/model.md).

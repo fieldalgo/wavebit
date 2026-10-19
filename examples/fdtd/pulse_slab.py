@@ -6,11 +6,11 @@ problem = fdtd.Problem(
     scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.1, .1, 1.6)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-        structures=(fdtd.Structure("film", fdtd.Slab(z=(-.1, .1)), Material(epsilon=2.25)),),
+        structures=(fdtd.Structure("film", shape=fdtd.SnappedSlab(z=(-.1, .1)), material=Material(epsilon=2.25)),),
     ),
     sources=(fdtd.PlaneWave("illumination", plane=fdtd.Plane(z=.5),
         pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
-    outputs=fdtd.Outputs(monitors=(fdtd.Record("probe", at=(0., 0., -.3), component="Ey"),)),
+    outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor("probe", at=(0., 0., -.3), component="Ey"),)),
 )
 numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
     duration=fdtd.Duration(periods=20, source="illumination"), absorber=fdtd.PML(cells=12))

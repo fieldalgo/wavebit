@@ -41,7 +41,7 @@ gradient flows. A body's reserved cells are `fdtd.Numerics(geometry_ranges={'pil
 keyed by the structure's name, instead of `range=`; a material leaf is `Material(epsilon=...)`;
 the transmitted zero order is `result['T'].efficiency[0, 0, 0]`; and a run a runtime check
 rejected has `result.validity.checks['runtime_stability']` false. A traced `Bloch` phase or
-`Axis1D` `k` is not live in a prepared calculation yet: `prepared.run` refuses it as a static
+`InvariantAxis` `k` is not live in a prepared calculation yet: `prepared.run` refuses it as a static
 field.
 
 ## A pillar's radius, height and index together

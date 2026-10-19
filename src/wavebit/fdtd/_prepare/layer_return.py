@@ -169,7 +169,7 @@ def layer_return(cells, dx, dt, design_wavelength, eps_r, side, reflection, rho,
             f"{wavelength:g} in index {math.sqrt(eps * mu):g} is past the grid's Nyquist "
             f"limit along the face's axis at dx = {dx:g} (fewer than two cells per wavelength "
             f"along it), and only an order the grid propagates is modelled (the plan refuses "
-            f"a Diffraction wavelength below 8 cells per wavelength in any material first: "
+            f"a DiffractionMonitor wavelength below 8 cells per wavelength in any material first: "
             f"checks.check_wavelength_resolution)")
     if scalar:
         lam = cmath.exp(2j * math.asin(math.sqrt(float(s)) / 2.0))

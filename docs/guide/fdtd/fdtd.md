@@ -601,8 +601,8 @@ over a monitor plane — O(nx) a step — against a whole new RCWA solve. On the
 `wavelength=` took a sequence and returned one `Result` per entry; in the current module a
 monitor's `wavelengths=` takes it, and its result carries a wavelength axis:
 
-    fdtd.Diffraction('t', plane=fdtd.Plane(z=-300.), wavelengths=(860., 900., 940.),
-                     source='light', side='transmit')       # with Units(length='nm')
+    fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-300.), wavelengths=(860., 900., 940.),
+                            source='light', wave='transmitted')  # with Units(length='nm')
 
 It is an identity, not an approximation: the band run and three separate single-wavelength
 runs agree to 3e-3, which is the gap between two source *bandwidths* rather than between two

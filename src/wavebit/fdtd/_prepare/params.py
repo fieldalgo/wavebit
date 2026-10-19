@@ -220,7 +220,7 @@ def lower(scene, plan, rt='numpy', device=None):
             phase = given if face.k is None else face.k * grid.size[a]
             params['bloch'][axis] = rt.xp.exp(1j * rt.array(phase, real))
         elif isinstance(face, Axis1D):
-            check_input_precision(f'Axis1D on {axis}', face.k, np.float64)
+            check_input_precision(f'InvariantAxis on {axis}', face.k, np.float64)
             params['axis1d'][axis] = (1j * grid.dx) * rt.array(face.k, real)
     initial = scene.initial
     if initial is None:

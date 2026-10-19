@@ -429,8 +429,9 @@ def _pole_terms(scene, grid):
         raise NotImplementedError(
             'Scene(background=fd.Dispersive(...)): a dispersive background fills the whole '
             'box, including every absorbing layer, and a PML cannot be matched to it (see '
-            'fd.Absorber). Stage 1 takes a dispersive material as a Structure; a dispersive '
-            'background is not refused on principle, it simply has no gate behind it yet.')
+            'fdtd.ConductiveAbsorber). Stage 1 takes a dispersive material as a Structure; a '
+            'dispersive background is not refused on principle, it simply has no gate behind '
+            'it yet.')
     from wavebit.fdtd._prepare.conductive_film import terms as conductive_terms
     from wavebit.fdtd._prepare.conductive_stack import terms as conductive_stack_terms
     return (tuple(terms) + conductive_terms(scene, grid)

@@ -7,7 +7,7 @@
 
 
 :::{note}
-This page records the measured scope of the earlier periodic factory, kept as `wavebit.compat.legacy.fdtd`, and of its native grid `fdtd_grid`; the evidence was measured there and its limits are unchanged. In the current `wavebit.fdtd` module a periodic stack is an `fdtd.Problem` with `Periodic` or `Bloch` faces, a `PlaneWave` and `Diffraction` monitors (see [the time-domain guide](time-domain.md)), and its scope and admission rules are in [how the solver models a problem](model.md).
+This page records the measured scope of the earlier periodic factory, kept as `wavebit.compat.legacy.fdtd`, and of its native grid `fdtd_grid`; the evidence was measured there and its limits are unchanged. In the current `wavebit.fdtd` module a periodic stack is an `fdtd.Problem` with `Periodic` or `Bloch` faces, a `PlaneWave` and `DiffractionMonitor` outputs (see [the time-domain guide](time-domain.md)), and its scope and admission rules are in [how the solver models a problem](model.md).
 :::
 
 The earlier periodic factory, `wavebit.compat.legacy.fdtd` (formerly `wavebit.fdtd(...)`), is

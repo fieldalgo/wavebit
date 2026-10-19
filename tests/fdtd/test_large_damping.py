@@ -22,10 +22,10 @@ def physical_problem(gamma=1e308, omega_p=1e20):
     return public.Problem(units=Units(length='m'), scene=public.Scene(
         domain=public.Domain(size=(1e-11,)*3), boundaries=public.Boundaries(
             x=public.Periodic(), y=public.Periodic(), z=public.Periodic()),
-        structures=(public.Structure('film', public.Region(size=(4e-12,)*3),
-            DispersiveMaterial(1., (Drude(omega_p=omega_p, gamma=gamma),))),)),
+        structures=(public.Structure('film', shape=public.SnappedBox(size=(4e-12,)*3),
+            material=DispersiveMaterial(1., (Drude(omega_p=omega_p, gamma=gamma),))),)),
         initial=public.InitialField(E=(None, initial, None)),
-        outputs=public.Outputs(monitors=(public.Record('p', at=(0.,)*3, component='Ey'),)))
+        outputs=public.Outputs(monitors=(public.TimeSeriesMonitor('p', at=(0.,)*3, component='Ey'),)))
 
 
 def numerics():

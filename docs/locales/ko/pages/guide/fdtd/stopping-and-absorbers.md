@@ -1,7 +1,7 @@
 # 자동 종료와 단계형 흡수 패딩
 
 `fdtd.Duration`은 실행 상한입니다. 구체값을 사용하는 전진 계산을 더 일찍
-종료하려면 `Numerics(decay=fdtd.Decay(threshold=.02, window_seconds=...))`를
+종료하려면 `Numerics(stopping=fdtd.DecayStop(threshold=.02, window_seconds=...))`를
 설정합니다. 창 길이는 기하 길이 단위와 무관하게 SI 초 단위입니다.
 
 서로 겹치지 않는 완전한 창마다 장과 지원하는 모든 재료·CPML 기억 배열의
@@ -11,7 +11,7 @@
 지연된 광원, 비유한 상태, 재료에 남은 기억을 판정에서 제외하지 않습니다.
 
 지원 범위는 CPU의 NumPy·JAX·PyTorch 구체값 전진 계산이며 `InitialField`,
-`Dipole`, `PlaneWave`, 축 방향 `TFSF` 광원을 사용할 수 있습니다.
+`CurrentDipole`, `PlaneWave`, 축 방향 `TFSF` 광원을 사용할 수 있습니다.
 평면파·TFSF의 입사파 보조 격자와 층상 TFSF의 추가 구동 격자에서도 E/H,
 CPML 및 지원하는 재료 기억을 각각 감시합니다. 누적 광원 이력은 감쇠 상태에
 포함하지 않습니다. 알 수 없는 내부 기억 구조는 거절합니다.
@@ -31,7 +31,7 @@ CPML 및 지원하는 재료 기억을 각각 감시합니다. 누적 광원 이
 `eligible_time_seconds`, 그룹별 무차원 진폭 비율이 있습니다. 원시 최대·창 진폭과
 상한 skeleton은 내부 엔진 단위이며 물리 에너지와 혼용할 수 없습니다.
 
-`Open()` 면에서 `Numerics(absorber=fdtd.Absorber(cells=12))`는 단계형 정합
+`Open()` 면에서 `Numerics(absorber=fdtd.ConductiveAbsorber(cells=12))`는 단계형 정합
 전도도 흡수층을 선택합니다. PML과 마찬가지로 물리 `Domain` **바깥에** 패딩을
 배치합니다. 균일한 경계 매질은 패딩으로 이어지고, 유한 물체를 이어 놓으려면
 지원되는 명시적 선언이 필요합니다. 이 경로는 PML이 거절하는 일부 전도성·분산성

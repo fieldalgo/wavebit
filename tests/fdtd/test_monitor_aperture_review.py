@@ -8,7 +8,7 @@ from wavebit.fdtd._lower_public import lower_problem
 from tests.fdtd.test_monitor_aperture import problem, NUMERICS
 
 
-@pytest.mark.parametrize('kind',[fd.Field,fd.Flux])
+@pytest.mark.parametrize('kind',[fd.FieldMonitor,fd.FluxMonitor])
 @pytest.mark.parametrize('padded',[False,True])
 def test_nonaligned_domain_uses_resolved_physical_box(kind,padded):
     size=.401; dx=.025; center=(.037,-.021,.011)
@@ -33,7 +33,7 @@ def test_nonaligned_domain_uses_resolved_physical_box(kind,padded):
     assert error.value.expected==(low,high)
 
 
-@pytest.mark.parametrize('kind',[fd.Field,fd.Flux])
+@pytest.mark.parametrize('kind',[fd.FieldMonitor,fd.FluxMonitor])
 @pytest.mark.parametrize('side',['low','high'])
 @pytest.mark.parametrize('distance',['nextafter','tolerance','beyond'])
 def test_existing_absolute_boundary_tolerance_is_preserved(kind,side,distance):
@@ -53,7 +53,7 @@ def test_existing_absolute_boundary_tolerance_is_preserved(kind,side,distance):
 
 def test_physical_extent_and_sampling_pml_clearance_are_separate():
     nums=NUMERICS.replace(absorber=fd.PML(wavelength=.8))
-    monitor=fd.Flux('face',plane=fd.Plane(z=0.,x=(.125,.2),y=(-.1,.1)),wavelengths=(.8,))
+    monitor=fd.FluxMonitor('face',plane=fd.Plane(z=0.,x=(.125,.2),y=(-.1,.1)),wavelengths=(.8,))
     p=problem([monitor])
     # Unpadded high node does not exist; this is sampling, not monitor_extent.
     report=fd.check(p,numerics=nums)

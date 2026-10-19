@@ -34,6 +34,7 @@ from wavebit._common.conventions import boundary_kz
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
 from wavebit.materials.time_domain import Conductor
 from wavebit.materials.time_domain import concrete
+from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd._kernel.masks import Region
 from wavebit.fdtd._kernel.masks import Slab
 import wavebit.fdtd._prepare.conductive_film as single
@@ -288,8 +289,8 @@ def _points(scene):
     points = {}
     for monitor in getattr(scene, 'monitors', ()) or ():
         for value in getattr(monitor, 'wavelengths', ()) or ():
-            w = _finite(value, f'{type(monitor).__name__}({monitor.name!r}) wavelength')
-            points.setdefault(w, f'{type(monitor).__name__}({monitor.name!r})')
+            w = _finite(value, f'{public_name(monitor)}({monitor.name!r}) wavelength')
+            points.setdefault(w, f'{public_name(monitor)}({monitor.name!r})')
     value = scene.resolution.wavelength
     if value is not None:
         points.setdefault(_finite(value, 'Resolution wavelength'), 'Resolution')

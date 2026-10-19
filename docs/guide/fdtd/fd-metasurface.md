@@ -133,7 +133,7 @@ trouble is.
 * `polarizations='both'` on a monitor runs the scene a second time with the other polarisation
   and fills `.s_inc` and `.p_inc` beside `.incident`.
 
-A current `fdtd.Diffraction` monitor returns the same selection as a `DiffractionOrders`:
+A current `fdtd.DiffractionMonitor` returns the same selection as a `DiffractionOrders`:
 `.order(m, n)` gives `efficiency`, `amplitude_s` and `amplitude_p` over its wavelengths, the
 whole arrays have the same `(wavelengths, n_v, n_u)` shape, and each wavelength's angle is
 `metadata['theta_radians']`. It has no `polarizations='both'` yet.

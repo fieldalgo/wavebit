@@ -28,9 +28,9 @@ def hybrid_problem(active):
         domain=public.Domain(size=(.4, .4, 2.)),
         boundaries=public.Boundaries(x=public.Periodic(), y=public.Periodic(),
                                      z=public.Periodic()),
-        structures=(public.Structure('film', public.Box(size=(.8, .8, .54),
+        structures=(public.Structure('film', shape=public.Box(size=(.8, .8, .54),
                                                         center=(0., 0., .03)),
-                                     DispersiveMaterial(1., tuple(poles))),)))
+                                     material=DispersiveMaterial(1., tuple(poles))),)))
     numerics = public.Numerics(grid=public.UniformGrid(spacing=.1),
                               duration=public.Duration(steps=2), courant=.2)
     return problem, numerics

@@ -11,6 +11,7 @@ import math
 
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
 from wavebit.materials.time_domain import concrete
+from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd._prepare.two_debye_film import descriptor
 from wavebit.fdtd._prepare.shape_ranges import _carries
 
@@ -76,8 +77,8 @@ def _points(scene):
     points = {}
     for monitor in getattr(scene, 'monitors', ()) or ():
         for value in getattr(monitor, 'wavelengths', ()) or ():
-            w = _finite(value, f'{type(monitor).__name__}({monitor.name!r}) wavelength')
-            points.setdefault(w, f'{type(monitor).__name__}({monitor.name!r})')
+            w = _finite(value, f'{public_name(monitor)}({monitor.name!r}) wavelength')
+            points.setdefault(w, f'{public_name(monitor)}({monitor.name!r})')
     value = scene.resolution.wavelength
     if value is not None:
         points.setdefault(_finite(value, 'Resolution wavelength'), 'Resolution')

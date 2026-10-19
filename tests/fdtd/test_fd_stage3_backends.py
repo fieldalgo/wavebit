@@ -62,7 +62,7 @@ from wavebit.fdtd import _post
 from wavebit.fdtd._prepare import lower
 from wavebit.fdtd._execution import _results, execute
 from wavebit.fdtd._runtime import runtime
-from wavebit.fdtd.results import FieldResult
+from wavebit.fdtd._legacy_results import FieldResult
 
 sys.path.insert(0, str(repository_path('tests/references')))
 from tests.references._fd_stage3_cases import BACKENDS, EXPECTED, EXPECTED_WARNINGS, FAR_ANGLES, GOLDEN, GRATING_WAVELENGTHS, RUN_WARNING, SERIES_FIELDS, TOL, WAVELENGTHS, capture, conical_source, content_digest, describe, lowered, relative_gap, sample_indices, scenes, solve, bloch_stack_source

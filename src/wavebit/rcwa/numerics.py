@@ -23,9 +23,9 @@ class Numerics:
     detuning: object = None
     topology_check: str = 'device'
     half_space_merge_tolerance: float = 0.0
-    #: Fields added after ``wavebit.job/v1`` was fixed, written to a job only off their default
-    #: (``jobs._encode``), so a job that does not use them keeps its key.
-    _FIELDS_ADDED_IN_V1 = ('half_space_merge_tolerance',)
+    #: Written to a job only off their default (``jobs._encode``), so a job that does not use
+    #: them keeps its key.
+    _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance',)
 
     def __post_init__(self):
         object.__setattr__(self, 'orders', tuple(self.orders))

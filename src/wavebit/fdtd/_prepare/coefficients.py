@@ -76,6 +76,7 @@ from wavebit.fdtd._kernel.grid import OFFSETS
 from wavebit.materials.time_domain import as_material
 from wavebit.fdtd._prepare.cpml import damping_profile
 from wavebit.fdtd._prepare.occupancy import occupancy
+from wavebit.fdtd._public_names import public_description
 
 __all__ = ['build', 'varying_axes', 'painters', 'mix', 'materials_of', 'params_bytes']
 
@@ -320,7 +321,7 @@ def painters(scene, plan, axes, occ):
         if k in occ:
             if shape != full:
                 raise ValueError(
-                    f'structures[{k}] ({s.shape.describe()}) is smoothed but the coefficient '
+                    f'structures[{k}] ({public_description(s.shape)}) is smoothed but the coefficient '
                     f'arrays are {shape} rather than {full}: some shape in this scene left an '
                     f'axis out of bounded_axes(). A smoothed shape varies along every axis it '
                     f'reaches, so an axis of extent 1 would broadcast one plane of fill '

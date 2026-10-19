@@ -61,6 +61,7 @@ from wavebit.fdtd._kernel.sources import Correction
 from wavebit.fdtd._kernel.sources import DipoleTerm
 from wavebit.fdtd._kernel.sources import box_corrections
 from wavebit.fdtd._kernel.sources import stamp
+from wavebit.fdtd._public_names import public_description, public_name
 from wavebit.fdtd._spelling import angle
 
 __all__ = ['source_terms', 'lower_sources', 'source_wavelength', 'run_steps',
@@ -126,9 +127,10 @@ def _check_indices(what, axis, lo, hi, scene, plan):
         face = scene.boundaries.face(face_name)
         if isinstance(face, Axis1D):
             ok = lo == 0 and hi == 0
-            reason = (f'spans cells along an fd.Axis1D axis, which holds one cell of a field '
-                      f'exp(i k {name}); a source there must be uniform along it (a PlaneWave '
-                      f"is), and a Dipole's stamp or a TFSF box is not -- not in this build")
+            reason = (f'spans cells along an fdtd.InvariantAxis axis, which holds one cell of a '
+                      f'field exp(i k {name}); a source there must be uniform along it (a '
+                      f"PlaneWave is), and a CurrentDipole's stamp or a TFSF box is not -- not in "
+                      f'this build')
         elif isinstance(face, (Periodic, Bloch)):
             ok = lo >= 0 if side == '-' else hi <= n - 1
             reason = (f'crosses the periodic seam of the box on {face_name!r}; a source '
@@ -136,14 +138,14 @@ def _check_indices(what, axis, lo, hi, scene, plan):
         elif face_name in absorbing:
             cells = absorbing[face_name]
             ok = lo >= cells if side == '-' else hi <= n - 1 - cells
-            kind = type(face).__name__
+            kind = public_name(face)
             reason = (f'reaches into the {kind} on {face_name!r} ({cells} cells, so indices '
                       f'{cells}..{n - 1 - cells} are clear of both layers on {name}); a '
                       f'source inside an absorbing layer is absorbed as it is made and its '
                       f'reference series no longer describes what reached the interior')
         else:
             ok = lo >= 1 if side == '-' else hi <= n - 2
-            reason = (f'touches the {type(face).__name__} wall on {face_name!r}, whose edge '
+            reason = (f'touches the {public_name(face)} wall on {face_name!r}, whose edge '
                       f'layer the wall\'s mask or mirror decides; keep one cell clear '
                       f'(indices 1..{n - 2} on {name})')
         if not ok:
@@ -162,7 +164,7 @@ def source_terms(scene, plan):
         elif isinstance(src, TFSF):
             term = _tfsf_term(scene, plan, src, row)
         else:                                       # Scene already refused anything else
-            raise TypeError(type(src).__name__)
+            raise TypeError(public_name(src))
         terms.append(term)
         row += len(term.rows)
     return tuple(terms)
@@ -190,7 +192,7 @@ def _dipole_term(scene, plan, src, row):
     grid = plan.grid
     field, c = src.field, src.index
     ranges = []
-    what = f'Dipole({src.name!r})' + ('' if src.range is None else ' over its range')
+    what = f'CurrentDipole({src.name!r})' + ('' if src.range is None else ' over its range')
     for a, (i0, i1) in enumerate(dipole_indices(src, grid)):
         _check_indices(what, a, i0, i1, scene, plan)
         ranges.append((i0, i1 + 1))
@@ -227,7 +229,7 @@ def _plane_wave_term(scene, plan, src, row):
         if not isinstance(face, (Periodic, Bloch, Axis1D)):
             raise ValueError(
                 f'PlaneWave({src.name!r}) needs a periodic cell across its propagation axis, '
-                f'but the {AXES[a]} faces are {type(face).__name__}. A plane wave is infinite '
+                f'but the {AXES[a]} faces are {public_name(face)}. A plane wave is infinite '
                 f'across; on a finite box use fd.TFSF, and in a periodic cell say '
                 f'fd.Boundaries(**fd.Bloch.from_source(pw), {AXES[P]}=...), which puts '
                 f'Periodic or the matching Bloch phase on both transverse axes.')
@@ -258,11 +260,11 @@ def _plane_wave_term(scene, plan, src, row):
                 if given is not None and abs(given - expected) > 1e-9 * max(abs(expected),
                                                                               k0):
                     raise ValueError(
-                        f'PlaneWave({src.name!r}): the Axis1D face on {AXES[a]} carries k = '
+                        f'PlaneWave({src.name!r}): the InvariantAxis face on {AXES[a]} carries k = '
                         f"{given:.9g} but the wave's transverse wavevector at the band centre is "
                         f'{expected:.9g} (n = {index:g}, wavelength {wavelength:g}, theta '
                         f'{angle(src.theta)}, phi {angle(src.phi)}). Use fd.Bloch.from_source(pw, '
-                        f'axis1d={AXES[a]!r}, background=...).')
+                        f'invariant_axes={AXES[a]!r}, background=...).')
                 continue
             if abs(k[a]) < 1e-12:
                 raise ValueError(
@@ -295,9 +297,9 @@ def _plane_wave_term(scene, plan, src, row):
                 f'across {AXES[s_axis]}: the structure is not uniform across the '
                 f'sheet, so the sheet would not be launching into the medium its incident '
                 f'field is computed in. A PlaneWave takes layers across its propagation axis, '
-                f'and patterned structures of finite height -- the cell-snapped fd.Region, or '
-                f'a smoothed fd.Sphere, fd.Box, fd.Cylinder or fd.Prism -- that stay clear of '
-                f'the sheet.')
+                f'and patterned structures of finite height -- the cell-snapped '
+                f'fdtd.SnappedBox, or a smoothed fd.Sphere, fd.Box, fd.Cylinder or fd.Prism -- '
+                f'that stay clear of the sheet.')
         if c0 <= used[1] and c1 > used[0]:
             raise ValueError(
                 f'PlaneWave({src.name!r}) sits at {AXES[P]} = {src.position:g} (cells '
@@ -417,9 +419,10 @@ def _tfsf_term(scene, plan, src, row):
         if not isinstance(face, Absorbing):
             raise ValueError(
                 f'TFSF({src.name!r}) propagates along {AXES[P]}, whose {AXES[P] + side!r} face '
-                f'is {type(face).__name__}. The incident field comes from a 1-D auxiliary '
+                f'is {public_name(face)}. The incident field comes from a 1-D auxiliary '
                 f'grid on the scene\'s own cells and faces along that axis, and it must leave '
-                f'through them: make both {AXES[P]} faces fd.PML(...) or fd.Absorber(...).')
+                f'through them: make both {AXES[P]} faces fdtd.Open(), with fd.PML(...) or '
+                f'fdtd.ConductiveAbsorber(...) as Numerics(absorber=...).')
     lo, hi = [0, 0, 0], [0, 0, 0]
     for a in range(3):
         lo[a] = _node_index(grid, a, src.box.low[a])
@@ -445,7 +448,7 @@ def _tfsf_term(scene, plan, src, row):
                 f'1-D grid along {AXES[P]} whose background is the slabs across {AXES[P]} '
                 f'only, so it is wrong wherever this structure changes the medium on the box '
                 f'surface. A slab across {AXES[P]} is part of that background and may cross '
-                f'the box; a finite scatterer -- a cell-snapped fd.Region or a smoothed '
+                f'the box; a finite scatterer -- a cell-snapped fdtd.SnappedBox or a smoothed '
                 f'body -- is a structure clear of its faces.')
     layered = any(s.shape.layer_axis() == P for s in scene.structures)
     driver, sheet = None, ()
@@ -501,7 +504,7 @@ def _check_scatterer(src, index, structure, box, lo, hi):
     if inside or outside:
         return
     raise ValueError(
-        f'structures[{index}] ({structure.shape.describe()}, cells '
+        f'structures[{index}] ({public_description(structure.shape)}, cells '
         f'{tuple(tuple(r) for r in box)}) touches the surface of TFSF({src.name!r}) (nodes '
         f'{tuple(lo)}..{tuple(hi)}). The incident field on the box\'s faces comes from a 1-D '
         f'grid whose background is the slabs across the propagation axis, so a scatterer must '
@@ -705,8 +708,11 @@ def lower_sources(scene, plan, rt):
                              f'not declare; a plan drives the scene it was built from.')
         complex_amplitude = _is_complex(src.amplitude)
         if complex_amplitude and plan.dtype == 'float64':
+            # A dipole's amplitude is held in the engine's units, not as the current_moment
+            # its public caller gave, so it is not quoted.
+            said = '' if isinstance(src, Dipole) else f', amplitude={src.amplitude!r}'
             raise ValueError(
-                f'{type(src).__name__}({src.name!r}, amplitude={src.amplitude!r}): a complex '
+                f'{public_name(src)}({src.name!r}{said}): a complex '
                 f'waveform on a real run is refused. The run is real (no Bloch face), so the '
                 f'field is real and a complex drive has no meaning in it -- NumPy would drop '
                 f'the imaginary part and JAX or Torch would do something else. Say the phase '
@@ -715,9 +721,9 @@ def lower_sources(scene, plan, rt):
         # A leaf handed in below float64 -- a jnp scalar built before x64 was lifted is the
         # usual case, and it cost a TFSF gradient seven digits when this was written -- is
         # widened below without recovering anything; say so, as the other leaves' doors do.
-        kind = type(src).__name__
+        kind = public_name(src)
         for label, value in (('amplitude', src.amplitude), ('phase', src.phase),
-                             ('delay', src.delay), ('band.wavelength', band.wavelength),
+                             ('delay_seconds', src.delay), ('band.wavelength', band.wavelength),
                              ('band.df', band.df)) + tuple(
                 (f'center[{a}]', c) for a, c in enumerate(getattr(src, 'center', None) or ())):
             check_input_precision(f'{kind}({src.name!r}).{label}', value,

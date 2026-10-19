@@ -39,6 +39,7 @@ from typing import runtime_checkable
 from wavebit._common.declarations import is_jax_typed
 from wavebit._common.declarations import spec
 from wavebit._common.declarations import static_float
+from wavebit.fdtd._public_names import public_name
 
 __all__ = ['InitialField', 'Term', 'Band', 'Dipole', 'PlaneWave', 'TFSF', 'SOURCE_TYPES',
            'GaussianBeam', 'ModeSource']
@@ -139,18 +140,20 @@ def concrete_or_none(v):
     return concrete(v)
 
 
-def _leaf(where, name, v, *, positive=False, complex_ok=False):
+def _leaf(where, name, v, *, positive=False, complex_ok=False, quote=True):
     """A traced-or-concrete scalar leaf, validated as far as its value can be read.
 
     The waveform's numbers -- amplitude, phase, delay, the band's centre and width, a
     dipole's position -- are leaves: a gradient flows through them, so a JAX tracer or a
     Torch tensor that asked for one must pass. Everything else is read and checked here.
     """
+    # quote=False leaves the value out of a refusal: the delay is held in the engine's time
+    # unit, and the public caller gave seconds.
+    said = f'{where}({name}={v!r})' if quote else f'{where}({name}=...)'
     if isinstance(v, (bool, str)) or v is None:
-        raise ValueError(f'{where}({name}={v!r}): a number is needed, not a '
-                         f'{type(v).__name__}.')
+        raise ValueError(f'{said}: a number is needed, not a {type(v).__name__}.')
     if _is_complex(v) and not complex_ok:
-        raise ValueError(f'{where}({name}={v!r}): a real number is needed; only the '
+        raise ValueError(f'{said}: a real number is needed; only the '
                          f'amplitude may be complex, and only on a complex (Bloch) run.')
     shape = getattr(v, 'shape', None)
     if shape is not None and tuple(shape) != ():
@@ -160,13 +163,13 @@ def _leaf(where, name, v, *, positive=False, complex_ok=False):
     c = concrete_or_none(v)
     if c is None:
         if not (is_jax_typed(v) or getattr(v, 'requires_grad', False)):
-            raise ValueError(f'{where}({name}={v!r}): a real number is needed (or a traced '
+            raise ValueError(f'{said}: a real number is needed (or a traced '
                              f'scalar of jax or torch).')
         return v
     if not math.isfinite(c):
-        raise ValueError(f'{where}({name}={v!r}): a finite number is needed.')
+        raise ValueError(f'{said}: a finite number is needed.')
     if positive and not c > 0:
-        raise ValueError(f'{where}({name}={v!r}): a positive number is needed.')
+        raise ValueError(f'{said}: a positive number is needed.')
     return v
 
 
@@ -276,7 +279,7 @@ def _name(where, name):
 def _band(where, band):
     if not isinstance(band, Band):
         raise TypeError(f'{where}(band=...): an fd.Band(wavelength=..., df=...) is required; '
-                        f'got {type(band).__name__}. Every source reads its waveform from '
+                        f'got {public_name(band)}. Every source reads its waveform from '
                         f'one, and there is no default band.')
 
 
@@ -284,7 +287,7 @@ def _waveform_leaves(where, obj):
     object.__setattr__(obj, 'amplitude', _leaf(where, 'amplitude', obj.amplitude,
                                                complex_ok=True))
     object.__setattr__(obj, 'phase', _leaf(where, 'phase', obj.phase))
-    object.__setattr__(obj, 'delay', _leaf(where, 'delay', obj.delay))
+    object.__setattr__(obj, 'delay', _leaf(where, 'delay_seconds', obj.delay, quote=False))
 
 
 #: The stamps a :class:`Dipole` may spread its current with. See :class:`Dipole`.
@@ -332,43 +335,43 @@ class Dipole:
     stamp: str = DEFAULT_STAMP
 
     def __post_init__(self):
-        _name('Dipole', self.name)
-        _band('Dipole', self.band)
+        _name('CurrentDipole', self.name)
+        _band('CurrentDipole', self.band)
         if self.kind not in ('electric', 'magnetic'):
-            raise ValueError(f"Dipole(kind={self.kind!r}): 'electric' (a current J, "
+            raise ValueError(f"CurrentDipole(kind={self.kind!r}): 'electric' (a current J, "
                              f"component 'Ex'/'Ey'/'Ez') or 'magnetic' (a current M, "
                              f"component 'Hx'/'Hy'/'Hz').")
         field = 'E' if self.kind == 'electric' else 'H'
         if not (isinstance(self.component, str) and len(self.component) == 2
                 and self.component[0] in 'EH' and self.component[1] in 'xyz'):
-            raise ValueError(f'Dipole(component={self.component!r}): one of '
+            raise ValueError(f'CurrentDipole(component={self.component!r}): one of '
                              f"'{field}x', '{field}y', '{field}z' for kind={self.kind!r}.")
         if self.component[0] != field:
             other = 'magnetic' if field == 'E' else 'electric'
             raise ValueError(
-                f"Dipole(component={self.component!r}, kind={self.kind!r}): a {self.kind} "
+                f"CurrentDipole(component={self.component!r}, kind={self.kind!r}): a {self.kind} "
                 f"dipole drives {field}; say component='{field}{self.component[1]}', or "
                 f"kind='{other}' to drive {self.component}.")
         if self.stamp == 'trilinear':
             raise ValueError(
-                "Dipole(stamp='trilinear'): the 2x2x2 cloud-in-cell stamp is refused. Its "
+                "CurrentDipole(stamp='trilinear'): the 2x2x2 cloud-in-cell stamp is refused. Its "
                 "weights are the one-cell hat: two points per axis where the design asks for "
                 "a smooth stamp of at least three, and a derivative with respect to center "
                 "that jumps at every node, so a gradient in position would be piecewise "
                 "constant. Say stamp='bspline' (the default) or stamp='tent'.")
         if self.stamp not in STAMPS:
-            raise ValueError(f'Dipole(stamp={self.stamp!r}): one of {STAMPS}.')
+            raise ValueError(f'CurrentDipole(stamp={self.stamp!r}): one of {STAMPS}.')
         if not (isinstance(self.center, (tuple, list)) and len(self.center) == 3):
-            raise ValueError(f'Dipole(center={self.center!r}): a point (x, y, z), three '
+            raise ValueError(f'CurrentDipole(center={self.center!r}): a point (x, y, z), three '
                              f'numbers.')
-        center = tuple(_leaf('Dipole', 'center', v) for v in self.center)
+        center = tuple(_leaf('CurrentDipole', 'center', v) for v in self.center)
         object.__setattr__(self, 'center', center)
-        _waveform_leaves('Dipole', self)
+        _waveform_leaves('CurrentDipole', self)
         traced = [concrete_or_none(v) is None for v in center]
         if self.range is None:
             if any(traced):
                 raise ValueError(
-                    'Dipole(center=<traced>): a position that is a gradient leaf needs '
+                    'CurrentDipole(center=<traced>): a position that is a gradient leaf needs '
                     'range=((x0, x1), (y0, y1), (z0, z1)), the static box it may move in -- '
                     'the stamp writes a static set of cells, and without a box nothing says '
                     'which.')
@@ -376,18 +379,20 @@ class Dipole:
         rng = self.range
         if not (isinstance(rng, (tuple, list)) and len(rng) == 3
                 and all(isinstance(r, (tuple, list)) and len(r) == 2 for r in rng)):
-            raise ValueError(f'Dipole(range={rng!r}): three (lo, hi) pairs, one per axis, '
+            raise ValueError(f'CurrentDipole(range={rng!r}): three (lo, hi) pairs, one per axis, '
                              f'((x0, x1), (y0, y1), (z0, z1)).')
-        pairs = tuple((static_float('Dipole', 'range', a), static_float('Dipole', 'range', b))
+        pairs = tuple((static_float('CurrentDipole', 'range', a),
+                       static_float('CurrentDipole', 'range', b))
                       for a, b in rng)
         for axis, (a, b) in zip('xyz', pairs):
             if not a <= b:
-                raise ValueError(f'Dipole(range=...): the {axis} pair ({a}, {b}) has lo > hi.')
+                raise ValueError(f'CurrentDipole(range=...): the {axis} pair ({a}, {b}) has '
+                                 f'lo > hi.')
         object.__setattr__(self, 'range', pairs)
         for axis, v, (a, b) in zip('xyz', center, pairs):
             c = concrete_or_none(v)
             if c is not None and not a <= c <= b:
-                raise ValueError(f'Dipole(center=...): {axis} = {c:g} lies outside the '
+                raise ValueError(f'CurrentDipole(center=...): {axis} = {c:g} lies outside the '
                                  f'declared range ({a:g}, {b:g}). The range is what fixes the '
                                  f'cells the stamp writes; a centre outside it would write '
                                  f'cells the plan never reserved.')
@@ -582,10 +587,10 @@ class TFSF:
         if isinstance(self.box, Box):
             raise TypeError('TFSF(box=fd.Box(...)): fd.Box is the smoothed body a structure '
                             'fills; a TFSF surface picks node planes, and that is the '
-                            'cell-snapped fd.Region(size=(...), center=(...)).')
+                            'cell-snapped fdtd.SnappedBox(size=(...), center=(...)).')
         if not isinstance(self.box, Region):
-            raise TypeError(f'TFSF(box=...): an fd.Region(size=(...), center=(...)); got '
-                            f'{type(self.box).__name__}.')
+            raise TypeError(f'TFSF(box=...): an fdtd.SnappedBox(size=(...), center=(...)); got '
+                            f'{public_name(self.box)}.')
         if self.polarization not in ('x', 'y', 'z') or self.polarization == direction[1]:
             others = [a for a in 'xyz' if a != direction[1]]
             raise ValueError(f'TFSF(polarization={self.polarization!r}): the axis E is along, '
@@ -613,11 +618,11 @@ SOURCE_TYPES = (Dipole, PlaneWave, TFSF)
 def GaussianBeam(*args, **kwargs):
     """Refused by name: a Gaussian beam source is stage 7."""
     raise NotImplementedError('fd.GaussianBeam belongs to stage 7 (beams and mode sources). '
-                              'Stage 2 has fd.Dipole, fd.PlaneWave and fd.TFSF.')
+                              'Stage 2 has fdtd.CurrentDipole, fd.PlaneWave and fd.TFSF.')
 
 
 @_eager_under_torch_compile
 def ModeSource(*args, **kwargs):
     """Refused by name: a waveguide mode source is stage 7."""
     raise NotImplementedError('fd.ModeSource belongs to stage 7 (beams and mode sources). '
-                              'Stage 2 has fd.Dipole, fd.PlaneWave and fd.TFSF.')
+                              'Stage 2 has fdtd.CurrentDipole, fd.PlaneWave and fd.TFSF.')

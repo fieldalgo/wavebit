@@ -22,7 +22,7 @@ def problem(monitors, axis='z', reverse=False):
 
 
 @pytest.mark.parametrize('axis', 'xyz')
-@pytest.mark.parametrize('kind', [fd.Field, fd.Flux])
+@pytest.mark.parametrize('kind', [fd.FieldMonitor, fd.FluxMonitor])
 @pytest.mark.parametrize('span', [(-.201, .05), (-.25, .05), (-.05, .201)])
 def test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain(axis, kind, span):
     transverse = 'xyz'[('xyz'.index(axis)+1) % 3]
@@ -48,9 +48,9 @@ def test_asymmetric_aperture_samples_and_flux_use_the_selected_surface(axis, rev
     transverse = [a for a in range(3) if a != normal]
     extents = dict(zip(transverse, spans))
     finite = fd.Plane(**{axis: 0., **{'xyz'[a]: extents[a] for a in transverse}})
-    p = problem([fd.Field('samples', plane=finite, wavelengths=(.8,)),
-                 fd.Flux('finite', plane=finite, wavelengths=(.8,)),
-                 fd.Flux('whole', plane=fd.Plane(**{axis: 0.}), wavelengths=(.8,))], axis, reverse)
+    p = problem([fd.FieldMonitor('samples', plane=finite, wavelengths=(.8,)),
+                 fd.FluxMonitor('finite', plane=finite, wavelengths=(.8,)),
+                 fd.FluxMonitor('whole', plane=fd.Plane(**{axis: 0.}), wavelengths=(.8,))], axis, reverse)
     r = fd.run(p, numerics=NUMERICS)
     dx = .025
     for component, coords in r['samples'].coordinates.items():
@@ -73,7 +73,7 @@ def test_asymmetric_aperture_samples_and_flux_use_the_selected_surface(axis, rev
     np.testing.assert_allclose(finite_flux/full, area/(.4*.4), rtol=2e-14, atol=0.)
 
 
-@pytest.mark.parametrize('kind', [fd.Field, fd.Flux])
+@pytest.mark.parametrize('kind', [fd.FieldMonitor, fd.FluxMonitor])
 def test_an_aperture_with_no_selected_points_or_cells_is_diagnosed(kind):
     p = problem([kind('empty', plane=fd.Plane(z=0., x=(.001, .002)), wavelengths=(.8,))])
     report = fd.check(p, numerics=NUMERICS)
@@ -90,7 +90,7 @@ def test_reversed_or_zero_width_spans_are_rejected_when_declared():
             fd.Plane(z=0., x=span)
 
 
-@pytest.mark.parametrize('kind', [fd.Field, fd.Flux])
+@pytest.mark.parametrize('kind', [fd.FieldMonitor, fd.FluxMonitor])
 @pytest.mark.parametrize('span', [(-.201, .05), (-.05, .201)])
 def test_aperture_bounds_use_physical_domain_before_open_padding(kind, span):
     p = problem([kind('padded', plane=fd.Plane(z=0., x=span), wavelengths=(.8,))])

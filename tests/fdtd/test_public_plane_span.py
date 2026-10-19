@@ -19,8 +19,8 @@ def problem(axis='z', span=None, target='source'):
                                     **{a: fd.Periodic() for a in transverse}})),
         sources=(fd.PlaneWave('light', plane=source_plane, direction='-'+axis,
                               pulse=fd.GaussianPulse(wavelength=.8, frequency_sigma_hz=4e13)),),
-        outputs=fd.Outputs(monitors=(fd.Diffraction('reflection', plane=output_plane,
-            wavelengths=(.8,), source='light', side='reflect'),)))
+        outputs=fd.Outputs(monitors=(fd.DiffractionMonitor('reflection', plane=output_plane,
+            wavelengths=(.8,), source='light', wave='reflected'),)))
 
 
 @pytest.mark.parametrize('axis', 'xyz')
@@ -52,8 +52,8 @@ def test_unbounded_ports_and_finite_field_flux_remain_supported(axis):
     transverse = [a for a in 'xyz' if a != axis]
     plane = fd.Plane(**{axis: 0., **{a: (-.05, .05) for a in transverse}})
     p = p.replace(outputs=fd.Outputs(monitors=p.outputs.monitors + (
-        fd.Field('field', plane=plane, wavelengths=(.8,)),
-        fd.Flux('flux', plane=plane, wavelengths=(.8,)))))
+        fd.FieldMonitor('field', plane=plane, wavelengths=(.8,)),
+        fd.FluxMonitor('flux', plane=plane, wavelengths=(.8,)))))
     scene, _ = lower_problem(p, NUMERICS)
     assert scene.monitors[1].plane == plane
     assert scene.monitors[2].plane == plane
@@ -85,9 +85,9 @@ def test_field_samples_and_flux_integral_keep_the_requested_aperture(axis, backe
         initial=fd.InitialField(E=tuple(1. if a == electric else 0. for a in range(3)),
                               H=tuple(1./Z0 if a == magnetic else 0. for a in range(3))),
         outputs=fd.Outputs(monitors=(
-            fd.Field('field', plane=finite, wavelengths=(.8,)),
-            fd.Flux('finite', plane=finite, wavelengths=(.8,)),
-            fd.Flux('full', plane=full, wavelengths=(.8,)))))
+            fd.FieldMonitor('field', plane=finite, wavelengths=(.8,)),
+            fd.FluxMonitor('finite', plane=finite, wavelengths=(.8,)),
+            fd.FluxMonitor('full', plane=full, wavelengths=(.8,)))))
     r = fd.run(p, numerics=NUMERICS, backend=backend)
 
     def array(value):

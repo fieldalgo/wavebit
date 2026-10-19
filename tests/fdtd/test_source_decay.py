@@ -27,22 +27,22 @@ def column_case(kind='plane', *, steps=1800, decay=True):
     lateral = .05 if kind == 'plane' else .3
     source = (fdtd.PlaneWave('s', plane=fdtd.Plane(z=.6), pulse=pulse, polarization='p')
               if kind == 'plane' else
-              fdtd.TFSF('s', box=fdtd.Region(size=(.1, .1, 1.2)), pulse=pulse))
+              fdtd.TFSF('s', box=fdtd.SnappedBox(size=(.1, .1, 1.2)), pulse=pulse))
     structures = ()
     if kind in ('layered', 'dispersive'):
         material = (Material(epsilon=2.25) if kind == 'layered' else
                     DispersiveMaterial(epsilon_inf=2., poles=(Debye(.3e-6/C0, .1),)))
-        structures = (fdtd.Structure('film', fdtd.Slab(z=(-.4, 0.)), material),)
+        structures = (fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(-.4, 0.)), material=material),)
     problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(lateral, lateral, 2.)),
         boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()), structures=structures),
         sources=(source,), outputs=fdtd.Outputs(final_fields=True, monitors=(
-            fdtd.Record('probe', at=(0., 0., .2), component='Ex'),
-            fdtd.Field('spectrum', plane=fdtd.Plane(z=.2), wavelengths=(.9, 1., 1.1),
+            fdtd.TimeSeriesMonitor('probe', at=(0., 0., .2), component='Ex'),
+            fdtd.FieldMonitor('spectrum', plane=fdtd.Plane(z=.2), wavelengths=(.9, 1., 1.1),
                        components=('Ex',)))))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
         duration=fdtd.Duration(steps=steps),
-        decay=fdtd.Decay(threshold=.02, window_seconds=1e-6/C0) if decay else None)
+        stopping=fdtd.DecayStop(threshold=.02, window_seconds=1e-6/C0) if decay else None)
     return problem, numerics
 
 
@@ -77,7 +77,7 @@ def test_public_column_decay_returns_the_executed_prefix(kind, backend, padding)
             module.config.update('jax_enable_x64', True)
     p, n = column_case(kind)
     if padding == 'absorber':
-        n = n.replace(absorber=fdtd.Absorber(cells=12))
+        n = n.replace(absorber=fdtd.ConductiveAbsorber(cells=12))
     prepared = quiet(fdtd.prepare, p, numerics=n, backend=backend)
     result = quiet(prepared.run, p)
     stop = result.diagnostics['stopping']
@@ -196,7 +196,7 @@ def test_column_stop_agrees_with_independent_state_replay(kind):
 def test_stopped_observables_agree_with_long_fixed_runs(kind, padding):
     p, n = column_case(kind)
     if padding == 'absorber':
-        n = n.replace(absorber=fdtd.Absorber(cells=12))
+        n = n.replace(absorber=fdtd.ConductiveAbsorber(cells=12))
     short = quiet(fdtd.run, p, numerics=n)
     long = quiet(fdtd.run, p, numerics=n.replace(decay=None,
         duration=fdtd.Duration(steps=5400)))

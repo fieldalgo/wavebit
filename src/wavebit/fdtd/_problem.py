@@ -1,19 +1,19 @@
 """Immutable physical inputs for a time-domain calculation."""
-from wavebit._common.backend import eager_under_torch_compile
-from dataclasses import dataclass, field
-from wavebit._common.declarations import Declaration
+from dataclasses import field
+from wavebit._common.declarations import spec
 from wavebit.materials import Material
 from wavebit.units import Units, require_units
 from wavebit.errors import ValidationError
-from .geometry import Domain, Structure
-from .boundaries import Boundaries
-from .monitors import Outputs
+from ._geometry import Domain, Structure
+from ._boundaries import Boundaries
+from ._monitors import Outputs
 
 __all__ = ['Scene', 'Problem']
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
-class Scene(Declaration):
+
+@spec
+class Scene:
+    """The physical domain, its face conditions, the background medium and the structures."""
     domain: Domain
     boundaries: Boundaries
     background: object = field(default_factory=lambda: Material(epsilon=1.))
@@ -31,9 +31,10 @@ class Scene(Declaration):
         if len(names) != len(set(names)):
             raise ValidationError('structure names must be unique', path='scene.structures')
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
-class Problem(Declaration):
+
+@spec
+class Problem:
+    """The complete physical FDTD problem: scene, units, sources, requested outputs, initial state."""
     scene: Scene
     units: Units
     sources: tuple = ()

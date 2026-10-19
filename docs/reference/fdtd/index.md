@@ -1,6 +1,11 @@
 # FDTD API
 
 See the [runnable first calculation](../../getting-started/fdtd.md) and [common lifecycle](../../guide/common/lifecycle.md).
+Names changed on 2026-10-19 are listed in the [public-name migration guide](../../migration/public-names.md).
+
+## Lifecycle
+
+Declare a `Problem`, check it, prepare it once and run it.
 
 ```{eval-rst}
 .. autofunction:: wavebit.fdtd.check
@@ -12,19 +17,22 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 .. autoclass:: wavebit.fdtd.Problem
    :members:
 
+.. autoclass:: wavebit.fdtd.Prepared
+   :members:
+```
+
+## Scene and geometry
+
+The physical domain and the structures in it. `Sphere`, `Box`, `Cylinder` and `Prism` are smoothed bodies; `SnappedSlab` and `SnappedBox` fill whole Yee cells.
+
+```{eval-rst}
 .. autoclass:: wavebit.fdtd.Scene
    :members:
 
 .. autoclass:: wavebit.fdtd.Domain
    :members:
 
-.. autoclass:: wavebit.fdtd.Slab
-   :members:
-
-.. autoclass:: wavebit.fdtd.Region
-   :members:
-
-.. autoclass:: wavebit.fdtd.Plane
+.. autoclass:: wavebit.fdtd.Structure
    :members:
 
 .. autoclass:: wavebit.fdtd.Sphere
@@ -39,9 +47,24 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 .. autoclass:: wavebit.fdtd.Prism
    :members:
 
-.. autoclass:: wavebit.fdtd.Structure
+.. autoclass:: wavebit.fdtd.SnappedSlab
    :members:
 
+.. autoclass:: wavebit.fdtd.SnappedBox
+   :members:
+
+.. autoclass:: wavebit.fdtd.Plane
+   :members:
+
+.. autoclass:: wavebit.fdtd.Shape
+   :members:
+```
+
+## Boundaries
+
+One physical condition per face; the absorber that implements `Open` is a numerical choice.
+
+```{eval-rst}
 .. autoclass:: wavebit.fdtd.Boundaries
    :members:
 
@@ -60,19 +83,25 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 .. autoclass:: wavebit.fdtd.PMC
    :members:
 
-.. autoclass:: wavebit.fdtd.Symmetry
+.. autoclass:: wavebit.fdtd.MirrorSymmetry
    :members:
 
-.. autoclass:: wavebit.fdtd.Axis1D
+.. autoclass:: wavebit.fdtd.InvariantAxis
    :members:
+```
 
+## Sources
+
+Radians, seconds and SI amplitudes.
+
+```{eval-rst}
 .. autoclass:: wavebit.fdtd.GaussianPulse
    :members:
 
 .. autoclass:: wavebit.fdtd.PlaneWave
    :members:
 
-.. autoclass:: wavebit.fdtd.Dipole
+.. autoclass:: wavebit.fdtd.CurrentDipole
    :members:
 
 .. autoclass:: wavebit.fdtd.TFSF
@@ -80,23 +109,38 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 
 .. autoclass:: wavebit.fdtd.InitialField
    :members:
+```
 
-.. autoclass:: wavebit.fdtd.Record
-   :members:
+## Monitors
 
-.. autoclass:: wavebit.fdtd.Field
-   :members:
+Each monitor is named for what it records.
 
-.. autoclass:: wavebit.fdtd.Flux
-   :members:
-
-.. autoclass:: wavebit.fdtd.Diffraction
-   :members:
-
-.. autoclass:: wavebit.fdtd.FarField
-   :members:
-
+```{eval-rst}
 .. autoclass:: wavebit.fdtd.Outputs
+   :members:
+
+.. autoclass:: wavebit.fdtd.TimeSeriesMonitor
+   :members:
+
+.. autoclass:: wavebit.fdtd.FieldMonitor
+   :members:
+
+.. autoclass:: wavebit.fdtd.FluxMonitor
+   :members:
+
+.. autoclass:: wavebit.fdtd.DiffractionMonitor
+   :members:
+
+.. autoclass:: wavebit.fdtd.FarFieldMonitor
+   :members:
+```
+
+## Numerics
+
+Grid, duration, absorber and stopping rule: choices that do not change the physical problem.
+
+```{eval-rst}
+.. autoclass:: wavebit.fdtd.Numerics
    :members:
 
 .. autoclass:: wavebit.fdtd.UniformGrid
@@ -108,18 +152,16 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 .. autoclass:: wavebit.fdtd.PML
    :members:
 
-.. autoclass:: wavebit.fdtd.Absorber
+.. autoclass:: wavebit.fdtd.ConductiveAbsorber
    :members:
 
-.. autoclass:: wavebit.fdtd.Decay
+.. autoclass:: wavebit.fdtd.DecayStop
    :members:
+```
 
-.. autoclass:: wavebit.fdtd.Numerics
-   :members:
+## Results
 
-.. autoclass:: wavebit.fdtd.Prepared
-   :members:
-
+```{eval-rst}
 .. autoclass:: wavebit.fdtd.Result
    :members:
 
@@ -128,9 +170,7 @@ See the [runnable first calculation](../../getting-started/fdtd.md) and [common 
 
 .. autoclass:: wavebit.fdtd.FarFieldSpectrum
    :members:
-
 ```
-
 ## Native-grid and periodic-stack formulations
 
 See [native-grid units and observations](../../guide/fdtd/native-grids.md) and

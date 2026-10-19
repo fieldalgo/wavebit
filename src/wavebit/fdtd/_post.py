@@ -96,6 +96,8 @@ import math
 
 import numpy as np
 
+from wavebit.fdtd._public_names import public_description, public_name
+
 __all__ = ['dft', 'plane_flux', 'box_flux', 'plane_wave_matrices', 'split_directions',
            'medium_at', 'order_kz', 'DIFFRACTION_KZ', 'decay_ratio', 'far_field',
            'FARFIELD_M_SIGN']
@@ -420,7 +422,7 @@ def layer_share(shape, grid, P, k):
     if any(_shape_traced(v) for v in leaves(shape)):
         raise ValueError(
             f'The medium of cell layer {k} across {"xyz"[P]} depends on a traced '
-            f'{type(shape).__name__}; a plane-wave medium is read from concrete geometry '
+            f'{public_name(shape)}; a plane-wave medium is read from concrete geometry '
             'only. Keep the plane outside the body\'s range and its one-cell margin.')
     body = shape.body()
     if body is None:
@@ -483,7 +485,7 @@ def medium_at(scene, grid, P, cells, where):
             cutter = scene.structures[partial].shape
             raise ValueError(
                 f'{where}: the cell layer {k} across {"xyz"[P]} is not one medium '
-                f'(structures[{partial}], {cutter.describe()}, cuts it). A plane wave -- an '
+                f'(structures[{partial}], {public_description(cutter)}, cuts it). A plane wave -- an '
                 f'order, an incident wave -- is defined in a uniform medium; move the plane '
                 f'into one.')
         owners.add(owner)

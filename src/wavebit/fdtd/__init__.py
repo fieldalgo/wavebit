@@ -1,15 +1,45 @@
 """FDTD physical problems, numerical settings, and immutable prepared execution."""
-from .problem import Problem, Scene
-from .geometry import Domain, Shape, Slab, Region, Plane, Sphere, Box, Cylinder, Prism, Structure
-from .boundaries import Open, Periodic, Bloch, PEC, PMC, Symmetry, Axis1D, Boundaries
-from .sources import GaussianPulse, PlaneWave, Dipole, TFSF, InitialField
-from .monitors import Record, Field, Flux, Diffraction, FarField, Outputs
-from .numerics import UniformGrid, Duration, PML, Absorber, Decay, Numerics
+from ._problem import Problem, Scene
+from ._geometry import (Domain, Shape, SnappedSlab, SnappedBox, Plane, Sphere, Box, Cylinder, Prism,
+                        Structure)
+from ._boundaries import Open, Periodic, Bloch, PEC, PMC, MirrorSymmetry, InvariantAxis, Boundaries
+from ._sources import GaussianPulse, PlaneWave, CurrentDipole, TFSF, InitialField
+from ._monitors import (TimeSeriesMonitor, FieldMonitor, FluxMonitor, DiffractionMonitor,
+                        FarFieldMonitor, Outputs)
+from ._numerics import UniformGrid, Duration, PML, ConductiveAbsorber, DecayStop, Numerics
 from ._api import Prepared, check, prepare, run
-from .result import Result, SpectralFlux, FarFieldSpectrum
+from ._result import Result, SpectralFlux, FarFieldSpectrum
 from . import native, periodic
-__all__ = ['Problem','Scene','Domain','Shape','Slab','Region','Plane','Sphere','Box','Cylinder','Prism',
-           'Structure','Open','Periodic','Bloch','PEC','PMC','Symmetry','Axis1D','Boundaries',
-           'GaussianPulse','PlaneWave','Dipole','TFSF','InitialField','Record','Field','Flux',
-           'Diffraction','FarField','Outputs','UniformGrid','Duration','PML','Absorber','Decay','Numerics',
-           'Prepared','check','prepare','run','Result','SpectralFlux','FarFieldSpectrum','native','periodic']
+
+__all__ = ['Problem', 'Scene',
+           'Domain', 'Shape', 'SnappedSlab', 'SnappedBox', 'Plane', 'Sphere', 'Box', 'Cylinder',
+           'Prism', 'Structure',
+           'Open', 'Periodic', 'Bloch', 'PEC', 'PMC', 'MirrorSymmetry', 'InvariantAxis', 'Boundaries',
+           'GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'InitialField',
+           'TimeSeriesMonitor', 'FieldMonitor', 'FluxMonitor', 'DiffractionMonitor',
+           'FarFieldMonitor', 'Outputs',
+           'UniformGrid', 'Duration', 'PML', 'ConductiveAbsorber', 'DecayStop', 'Numerics',
+           'Prepared', 'check', 'prepare', 'run',
+           'Result', 'SpectralFlux', 'FarFieldSpectrum',
+           'native', 'periodic']
+
+#: Names this module no longer has, and what replaced them. Each is a tombstone, not an alias:
+#: reading one raises, naming the replacement.
+from ._public_names import PUBLIC_NAMES as _RENAMED  # noqa: E402
+
+#: Implementation modules that used to be importable as public paths.
+_PRIVATE_MODULES = ('problem', 'geometry', 'boundaries', 'sources', 'monitors', 'numerics',
+                    'result', 'results')
+
+
+def __getattr__(name):
+    if name in _RENAMED:
+        raise AttributeError(
+            f'wavebit.fdtd.{name} is now wavebit.fdtd.{_RENAMED[name]}. The old name was removed, '
+            f'not aliased; see the public-name migration guide, docs/migration/public-names.md.')
+    if name in _PRIVATE_MODULES:
+        raise AttributeError(
+            f'wavebit.fdtd.{name} is no longer a public module; every public name lives in '
+            f'wavebit.fdtd itself (for example wavebit.fdtd.FluxMonitor). See the public-name '
+            f'migration guide, docs/migration/public-names.md.')
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

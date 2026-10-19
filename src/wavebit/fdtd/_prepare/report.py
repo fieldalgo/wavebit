@@ -229,8 +229,8 @@ def report(scene, p=None, params=None):
                         'a real run')
     axis1d = [name[0] for name, rule in p.face_rules if rule.kind == 'axis1d' and name[1] == '-']
     if axis1d:
-        warnings.append(f'Axis1D on {", ".join(axis1d)}: one cell, derivative i k exactly '
-                        f'(always complex)')
+        warnings.append(f'InvariantAxis on {", ".join(axis1d)}: one cell, derivative i k '
+                        f'exactly (always complex)')
     for axis, n in zip('xyz', grid.n):
         if n < 4 and axis not in axis1d:
             warnings.append(f'{n} cell(s) along {axis}: a box this thin is all boundary')

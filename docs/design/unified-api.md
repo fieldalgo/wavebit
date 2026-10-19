@@ -342,8 +342,11 @@ prepared = fdtd.prepare(problem, numerics=numerics, backend="jax")
 result = prepared.run(problem)
 ```
 
-(Since `4272c7ce` these declarations are the public `wavebit.fdtd` types and
-construct as written.)
+(From `4272c7ce` until the 2026-10-19 public-name change these declarations were the
+public `wavebit.fdtd` types and constructed as written. The current spelling is
+`fdtd.Structure("film", shape=fdtd.SnappedSlab(z=(0.0, 0.2)), material=glass)` and
+`fdtd.TimeSeriesMonitor("probe", at=(0.0, 0.0, -0.2), component="Ey")`; see the
+[public-name checkpoint](#public-name-checkpoint-2026-10-19).)
 
 The source amplitude convention is electric-field amplitude for PlaneWave,
 with phase and normalization explicitly recorded in source references.
@@ -1192,7 +1195,7 @@ not extend that scope.
 | Detuning as explicit, recorded policy (§8) | implemented: `rcwa.Numerics(detuning=None)` is the default and solves the requested point | `src/wavebit/rcwa/numerics.py` |
 | `fdtd.Problem`, `Scene`, `Domain`, `Boundaries`, `Structure`, `PlaneWave`, `GaussianPulse`, `Outputs`, `Record`, `Numerics`, `UniformGrid`, `Duration`, `PML`, with the PML outside the physical domain (§6) | implemented; CPU and double precision only (§13) | `src/wavebit/fdtd/` |
 | FDTD `GaussianBeam`, mode sources and monitors, decay termination, nonuniform grids, GPU (§6) | not implemented, and not exposed | -- |
-| `fdtd.Numerics.geometry_ranges` (§7) | implemented | `src/wavebit/fdtd/numerics.py` |
+| `fdtd.Numerics.geometry_ranges` (§7) | implemented | `src/wavebit/fdtd/_numerics.py` |
 | Host-only topology decisions rejected under an external transform (§7) | implemented: fixed-cell Cartesian Li rectangle sizes/centres use an array-valued edge-order guard under JIT/vmap. Other scalar region geometry can explicitly select `topology_check='host'` for checked CPU callbacks. The default device policy refuses it under `jax.jit` or `jax.vmap` (`prepared.host_topology`); an eager `jax.grad` tracer's primal is checked as a PyTorch tensor is | `src/wavebit/rcwa/_lifecycle.py` |
 | `outputs`, `validity`, `diagnostics`, `provenance` on every result; `DiffractionOrders` with `order(m, n)`, `FieldSamples`, `SpectralFieldSamples`, `RawDiffractionSpectrum`, `TimeSeries` (§8) | implemented | `src/wavebit/observations/` |
 | Shared error families with a stable code and input path (§9) | implemented | `src/wavebit/errors.py` |
@@ -1214,3 +1217,26 @@ separates the public lifecycle index from private normalized engine diagnostics.
 examples use the physical API; numerical instruments name exact private implementations.
 Historical data retain their bytes and source/environment provenance. See the
 [migration guide](../migration/index.md) for current contracts and the pinned historical tree.
+
+## Public-name checkpoint (2026-10-19)
+
+The checkpoints above use the names of their dates. On 2026-10-19 the general-FDTD
+declarations were renamed in one clean break, with no aliases, so that each name says what the
+object is ([issue #57](https://github.com/fieldalgo/wavebit/issues/57)): the five monitors are
+`TimeSeriesMonitor`, `FieldMonitor`, `FluxMonitor`, `DiffractionMonitor` and `FarFieldMonitor`;
+the cell-filling shapes are `SnappedSlab` and `SnappedBox`; `Dipole`, `Axis1D`, `Symmetry`,
+`Absorber` and `Decay` are `CurrentDipole`, `InvariantAxis`, `MirrorSymmetry`,
+`ConductiveAbsorber` and `DecayStop`. Several keywords carry their meaning or unit
+(`discretization`, `stopping`, `stabilizing_loss`, `delay_seconds`, `wave`, `invariant_axes`),
+and a named declaration takes only its name positionally. Each object has one public path,
+`wavebit.fdtd.<Name>`; the former declaration modules are private. An old spelling fails and
+names its replacement. The [public-name migration guide](../migration/public-names.md) lists every
+change.
+
+The private engine keeps its own class and keyword names, because a static plan records them;
+the rename changes no lowered scene, plan or output, which `tests/fdtd/test_public_names.py`
+pins on eight scenes measured before the change. Saved jobs record public names, so the job
+schema is `wavebit.job/v2` and run records are `wavebit.run/v2`; version 1 files are refused
+rather than read with names that no longer exist. The capability manifest is version 23.
+`fdtd.native`, `fdtd.periodic`, RCWA and the shared namespaces are reviewed in the same issue and
+follow in separate changes.

@@ -213,10 +213,10 @@ def test_public_contact_admission_and_union_memory_accounting():
     problem = public.Problem(units=Units(length='um'), scene=public.Scene(
         domain=public.Domain(size=(.5, .5, 4.)),
         boundaries=public.Boundaries(x=public.Periodic(), y=public.Periodic(), z=public.Periodic()),
-        structures=(public.Structure('a', public.Box(size=(1., 1., .5), center=(0., 0., -.25)),
-                                     ConductiveMaterial(epsilon=4., conductivity=2e4)),
-                    public.Structure('b', public.Box(size=(1., 1., .5), center=(0., 0., .25)),
-                                     ConductiveMaterial(epsilon=2.25, conductivity=1e4)))))
+        structures=(public.Structure('a', shape=public.Box(size=(1., 1., .5), center=(0., 0., -.25)),
+                                     material=ConductiveMaterial(epsilon=4., conductivity=2e4)),
+                    public.Structure('b', shape=public.Box(size=(1., 1., .5), center=(0., 0., .25)),
+                                     material=ConductiveMaterial(epsilon=2.25, conductivity=1e4)))))
     numerics = public.Numerics(grid=public.UniformGrid(spacing=.125), duration=public.Duration(steps=3))
     assert public.check(problem, numerics=numerics).ok
     scene, _ = lower_problem(problem, numerics)

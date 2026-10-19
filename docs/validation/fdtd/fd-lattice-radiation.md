@@ -4,8 +4,8 @@ Written: 2026-09-24
 
 Targets:
 - `src/wavebit/fdtd/_radiation.py`
-- `src/wavebit/fdtd/monitors.py`
-- `src/wavebit/fdtd/results.py`
+- `src/wavebit/fdtd/_monitors.py`
+- `src/wavebit/fdtd/_legacy_results.py`
 - `src/wavebit/fdtd/_prepare/monitors.py`
 - `tests/fdtd/test_fd_radiation.py`
 - `tests/references/lattice.py`

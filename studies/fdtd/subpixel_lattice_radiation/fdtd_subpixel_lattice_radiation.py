@@ -23,7 +23,7 @@ from wavebit.fdtd._prepare import plan
 from wavebit.fdtd._prepare.monitors import box_faces
 from wavebit.fdtd._post import box_flux
 from wavebit.fdtd._runtime import runtime
-from wavebit.fdtd.results import FarFieldResult
+from wavebit.fdtd._legacy_results import FarFieldResult
 from studies.fdtd.subpixel_phase_control.fdtd_subpixel_phase_control import scene
 from tests.references.mie import sphere_amplitudes
 from tests.fixtures.fdtd.fd_helpers import sphere_integral

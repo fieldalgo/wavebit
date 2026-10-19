@@ -17,14 +17,14 @@ def case(shapes, rule='stencil'):
     p = fd.Problem(units=Units(length='um'), scene=fd.Scene(
         domain=fd.Domain(size=(2.,)*3),
         boundaries=fd.Boundaries(x=fd.PEC(), y=fd.PEC(), z=fd.PEC()),
-        structures=tuple(fd.Structure(str(i), s, Material(2.25)) for i,s in enumerate(shapes))))
+        structures=tuple(fd.Structure(str(i), shape=s, material=Material(2.25)) for i,s in enumerate(shapes))))
     n = fd.Numerics(grid=fd.UniformGrid(spacing=1/18), duration=fd.Duration(steps=2),
-                    discretisation=rule)
+                    discretization=rule)
     return p,n
 
 
-@pytest.mark.parametrize('shapes', [(), (fd.Slab(z=(-.3,-.2)),),
-    (fd.Region(size=(.2,)*3),), (fd.Box(size=(.2,)*3),),
+@pytest.mark.parametrize('shapes', [(), (fd.SnappedSlab(z=(-.3,-.2)),),
+    (fd.SnappedBox(size=(.2,)*3),), (fd.Box(size=(.2,)*3),),
     (fd.Cylinder(radius=.1,height=.2),),
     (fd.Prism(vertices=((0.,0.),(.1,0.),(0.,.1)),height=.2),),
     (fd.Sphere(radius=.14),fd.Box(size=(.2,)*3))])
@@ -40,7 +40,7 @@ def test_invalid_selector_is_refused_even_in_empty_scene():
     assert error.value.path == 'numerics.discretisation'
 
 
-@pytest.mark.parametrize('cell', [fd.Slab(z=(-.4,-.3)),fd.Region(size=(.2,)*3)])
+@pytest.mark.parametrize('cell', [fd.SnappedSlab(z=(-.4,-.3)),fd.SnappedBox(size=(.2,)*3)])
 def test_cell_fills_keep_voxel_while_sphere_receives_stencil(cell):
     scene,_ = lower_problem(*case((cell,fd.Sphere(radius=.14))))
     assert [s.discretisation for s in scene.structures] == ['voxel','stencil']
@@ -69,7 +69,7 @@ def test_allowed_sphere_lowering_matches_explicit_existing_selector(rule):
 
 @pytest.mark.parametrize('extra,background', [
     ((fd.Sphere(radius=.14,center=(.6,0.,0.)),), Material(1.)),
-    ((fd.Slab(z=(-.4,-.3)),), Material(1.)),
+    ((fd.SnappedSlab(z=(-.4,-.3)),), Material(1.)),
     ((), Material(2.))])
 def test_existing_lone_sphere_and_vacuum_doors_remain(extra,background):
     from wavebit.fdtd import _legacy as old
@@ -79,7 +79,7 @@ def test_existing_lone_sphere_and_vacuum_doors_remain(extra,background):
         old.plan(scene)
 
 
-@pytest.mark.parametrize('shape', [fd.Slab(z=(-.4,-.3)),fd.Region(size=(.2,)*3),
+@pytest.mark.parametrize('shape', [fd.SnappedSlab(z=(-.4,-.3)),fd.SnappedBox(size=(.2,)*3),
     fd.Box(size=(.3,)*3),fd.Cylinder(radius=.15,height=.3),
     fd.Prism(vertices=((0.,0.),(.3,0.),(0.,.3)),height=.3)])
 def test_default_voxel_preserves_every_existing_shape(shape):
@@ -108,11 +108,11 @@ class _CustomBall(fd.Shape):
         return old.Sphere(radius=.14).body()
 
 
-class _SmoothedSlab(fd.Slab):
+class _SmoothedSlab(fd.SnappedSlab):
     body = _CustomBall.body
 
 
-class _SmoothedRegion(fd.Region):
+class _SmoothedRegion(fd.SnappedBox):
     body = _CustomBall.body
 
 
@@ -132,8 +132,8 @@ def test_stencil_never_accepts_protocol_or_builtin_subclasses(shape, beside_sphe
 
 
 @pytest.mark.parametrize('cell,box', [
-    (fd.Slab(z=(-.4,-.3)), (slice(11,13),slice(None),slice(None))),
-    (fd.Region(size=(.2,)*3), (slice(16,20),)*3)])
+    (fd.SnappedSlab(z=(-.4,-.3)), (slice(11,13),slice(None),slice(None))),
+    (fd.SnappedBox(size=(.2,)*3), (slice(16,20),)*3)])
 def test_routed_whole_cell_fill_reaches_prepared_coefficients_exactly(cell, box):
     import numpy as np
     from wavebit.fdtd import _legacy as old

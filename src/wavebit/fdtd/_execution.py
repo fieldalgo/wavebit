@@ -32,9 +32,9 @@ import wavebit.fdtd._prepare.plan as _plan
 from wavebit.fdtd._runtime import runtime
 from wavebit.fdtd._legacy_monitors import Diffraction
 from wavebit.fdtd._legacy_monitors import Record
-from wavebit.fdtd.results import Final
-from wavebit.fdtd.results import Results
-from wavebit.fdtd.results import Series
+from wavebit.fdtd._legacy_results import Final
+from wavebit.fdtd._legacy_results import Results
+from wavebit.fdtd._legacy_results import Series
 
 __all__ = ['run', 'execute']
 
@@ -88,7 +88,7 @@ def execute(plan, params, rt):
                                  or getattr(getattr(rt, 'device', None), 'type', None) != 'cuda'):
         raise ValueError('CompactPoleTerm requires Torch CUDA execution')
     if plan.decay is not None:
-        raise ValueError('DecayExecutionRefused: use fd.run(scene) for a Decay plan; '
+        raise ValueError('DecayExecutionRefused: use fd.run(scene) for a DecayStop plan; '
                          'the fixed-length executor has no source-eligibility context.')
     plan = _program(plan)
 

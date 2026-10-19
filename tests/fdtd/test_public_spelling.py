@@ -152,7 +152,7 @@ def oblique_on_periodic_faces():
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open())),
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5), theta=.3,
                                 pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=4e13)),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
 
 
 NUMERICS = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(steps=20),
@@ -195,10 +195,10 @@ def test_a_planning_warning_is_spelled_for_the_public_caller():
     problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.4, .4, .4)),
         boundaries=fdtd.Boundaries(x=fdtd.PEC(), y=fdtd.PEC(), z=fdtd.PEC()),
-        structures=(fdtd.Structure('block', fdtd.Region(size=(.3, .3, .6), center=(0., 0., 0.)),
-                                   Material(epsilon=2.25)),)),
+        structures=(fdtd.Structure('block', shape=fdtd.SnappedBox(size=(.3, .3, .6), center=(0., 0., 0.)),
+                                   material=Material(epsilon=2.25)),)),
         initial=fdtd.InitialField(E=(None, lambda x, y, z: np.cos(np.pi * x / .4), None)),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=4))
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
@@ -220,9 +220,9 @@ VOCABULARY = re.compile(r'(?<![\w.])fd\.\w|(?<![\w.])(?:Run|Resolution|Band|Deca
 
 
 @pytest.mark.parametrize('build', [
-    lambda: fdtd.Slab(x=(0., 1.), z=(0., 1.)),
-    lambda: fdtd.Slab(size=1.),
-    lambda: fdtd.Slab(radius=1.),
+    lambda: fdtd.SnappedSlab(x=(0., 1.), z=(0., 1.)),
+    lambda: fdtd.SnappedSlab(size=1.),
+    lambda: fdtd.SnappedSlab(radius=1.),
 ], ids=['two axes', 'size', 'radius'])
 def test_a_shared_constructor_refuses_a_public_caller_in_the_public_vocabulary(build):
     """``fdtd.Slab`` refuses before any entry point runs, so the public name translates itself.
@@ -246,11 +246,11 @@ def test_a_compat_shape_still_refuses_in_the_compat_vocabulary():
 
 
 @pytest.mark.parametrize('build', [
-    lambda v: fdtd.Slab(z=(v, 1.)),
-    lambda v: fdtd.Region(size=(v, 1., 1.)),
+    lambda v: fdtd.SnappedSlab(z=(v, 1.)),
+    lambda v: fdtd.SnappedBox(size=(v, 1., 1.)),
     lambda v: fdtd.Plane(z=v),
     lambda v: fdtd.Domain(size=(v, 1., 1.)),
-    lambda v: fdtd.Record('probe', at=(v, 0., 0.)),
+    lambda v: fdtd.TimeSeriesMonitor('probe', at=(v, 0., 0.)),
 ], ids=['Slab', 'Region', 'Plane', 'Domain', 'Record'])
 def test_a_traced_length_is_refused_with_the_public_leaves(build):
     """The engine's list named a Dipole's ``range=``, the Bloch phase and ``Band(df=...)``.
@@ -279,11 +279,11 @@ def _snapped():
     return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.4, .4, .4)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.PEC()),
-        structures=(fdtd.Structure('film', fdtd.Slab(z=(-.1, .05)), Material(epsilon=2.25)),
-                    fdtd.Structure('rod', fdtd.Region(size=(.1, .1, .1), center=(0., 0., .1)),
-                                   Material(epsilon=4.)))),
+        structures=(fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(-.1, .05)), material=Material(epsilon=2.25)),
+                    fdtd.Structure('rod', shape=fdtd.SnappedBox(size=(.1, .1, .1), center=(0., 0., .1)),
+                                   material=Material(epsilon=4.)))),
         initial=fdtd.InitialField(E=(None, lambda x, y, z: np.cos(np.pi * z / .4), None)),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
 
 
 def _flush():
@@ -293,14 +293,14 @@ def _flush():
         domain=fdtd.Domain(size=(.8, .8, 1.2)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.PEC()),
         structures=(
-            fdtd.Structure('substrate', fdtd.Box(size=(2., 2., 1.2125), center=(0., 0., -.59375)),
-                           glass),
-            fdtd.Structure('pillar', fdtd.Cylinder(radius=.15, height=.4,
-                                                   center=(.017, -.013, .2125)), Material(epsilon=4.)),
-            fdtd.Structure('film', fdtd.Slab(z=(.5, .55)), glass))),
-        sources=(fdtd.Dipole('d', center=(.3, .3, .3),
+            fdtd.Structure('substrate', shape=fdtd.Box(size=(2., 2., 1.2125), center=(0., 0., -.59375)),
+                           material=glass),
+            fdtd.Structure('pillar', shape=fdtd.Cylinder(radius=.15, height=.4,
+                                                   center=(.017, -.013, .2125)), material=Material(epsilon=4.)),
+            fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(.5, .55)), material=glass))),
+        sources=(fdtd.CurrentDipole('d', center=(.3, .3, .3),
                              pulse=fdtd.GaussianPulse(wavelength=1.6, frequency_sigma_hz=2e13)),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
 
 
 @pytest.mark.parametrize('problem, junctions', [(_snapped, 0), (_flush, 1)],
@@ -315,12 +315,13 @@ def test_a_public_name_changes_no_plan(problem, junctions):
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         scene, _ = lower_problem(problem(), numerics)
-        compat = {fdtd.Slab: fd.Slab, fdtd.Region: fd.Region, fdtd.Record: fd.Record}
+        compat = {fdtd.SnappedSlab: fd.Slab, fdtd.SnappedBox: fd.Region}
         twin = scene.replace(
             structures=tuple(s.replace(shape=compat[type(s.shape)](**vars(s.shape)))
-                             if type(s.shape) in compat else s for s in scene.structures),
-            monitors=tuple(compat[type(m)](**vars(m)) for m in scene.monitors))
+                             if type(s.shape) in compat else s for s in scene.structures))
         assert not any(type(s.shape) in compat for s in twin.structures)
+        # A public monitor lowers to the engine's own class, so it has no twin to build.
+        assert {type(m) for m in scene.monitors} == {fd.Record}
         plan = fd.plan(scene)
         assert len(plan.junctions) == junctions
         assert plan.skeleton == fd.plan(twin).skeleton
@@ -379,9 +380,9 @@ def _film(pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=4e13)):
     return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.1, .1, 1.6)),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
-        structures=(fdtd.Structure('film', fdtd.Slab(z=(-.4, -.2)), Material(epsilon=2.25)),)),
+        structures=(fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(-.4, -.2)), material=Material(epsilon=2.25)),)),
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5), pulse=pulse),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
 
 
 @pytest.mark.parametrize('pulse, changes, said', [
@@ -421,7 +422,7 @@ def _oblique(theta, **faces):
         domain=fdtd.Domain(size=(.1, .1, 1.6)), boundaries=fdtd.Boundaries(**faces, z=fdtd.Open())),
         sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5), theta=theta, phi=.2,
                                 pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=4e13)),),
-        outputs=fdtd.Outputs(monitors=(fdtd.Record('e', at=(0, 0, 0), component='Ey'),)))
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
 
 
 @pytest.mark.parametrize('entry', ['check', 'prepare'])

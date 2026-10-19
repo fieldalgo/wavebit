@@ -19,7 +19,7 @@ def problem(value=2.1, *, kind='slab', coefficient='epsilon', monitor=True):
     medium = Material(value) if coefficient == 'epsilon' else Material(1., mu=value)
     glass = p.scene.structures[0].replace(material=medium)
     if kind == 'slab':
-        glass = glass.replace(shape=fdtd.Slab(z=(-.6, -.2375)), continuation=())
+        glass = glass.replace(shape=fdtd.SnappedSlab(z=(-.6, -.2375)), continuation=())
     scene = (p.scene.replace(structures=(), background=medium) if kind == 'background'
              else p.scene.replace(structures=(glass,)))
     monitors = (p.outputs.monitors[0].replace(wavelengths=(.62,)),) if monitor else ()

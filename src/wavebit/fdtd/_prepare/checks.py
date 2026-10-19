@@ -78,6 +78,7 @@ from wavebit.materials.time_domain import Dispersive
 from wavebit.materials.time_domain import Material
 from wavebit.materials.time_domain import concrete
 from wavebit.materials.time_domain import eps_at
+from wavebit.fdtd._public_names import public_description, public_name
 
 __all__ = ['face_wavelength', 'check_faces', 'check_overlaps', 'check_absorbing_layers',
            'check_stability', 'notes', 'cfl_bound', 'check_one_cell_bloch', 'cfl_axis_sum',
@@ -160,9 +161,9 @@ def check_one_cell_bloch(scene, grid):
                 f'Bloch({given}) on {axis}, an axis one cell long: the one-cell difference '
                 f'(exp(i k dx) - 1)/dx is all that axis would contribute, and it is an artificial '
                 f'dispersion -- the wave sees 2 sin(k dx/2)/dx instead of k. For the invariant axis '
-                f'of a 2-D (conical) problem say fd.Axis1D(k=..., k_max=...), whose derivative is '
-                f'i k exactly (fd.Bloch.from_source(pw, axis1d={axis!r}) writes it); for a real '
-                f'period, give the axis more than one cell.')
+                f'of a 2-D (conical) problem say fdtd.InvariantAxis(k=..., k_max=...), whose '
+                f'derivative is i k exactly (fd.Bloch.from_source(pw, invariant_axes={axis!r}) '
+                f'writes it); for a real period, give the axis more than one cell.')
 
 
 def cfl_axis_sum(scene, dx):
@@ -240,8 +241,8 @@ def check_overlaps(scene, grid):
                 continue
             which = f'structures[{i}]' if kinds[0] else f'structures[{j}]'
             raise ValueError(
-                f'structures[{i}] ({structures[i].shape.describe()}) and '
-                f'structures[{j}] ({structures[j].shape.describe()}) '
+                f'structures[{i}] ({public_description(structures[i].shape)}) and '
+                f'structures[{j}] ({public_description(structures[j].shape)}) '
                 f'share cells, and {which} is an fd.Dispersive. Where structures overlap a '
                 f'later one overwrites an earlier one, but that rule is carried by the '
                 f'permittivity map alone: a pole term runs over its own structure\'s whole '
@@ -475,14 +476,14 @@ def check_smoothed(scene, grid):
         relaxation_film = debye_sum_film(scene, grid)
     for index, structure, body in smoothed:
         box = structure.shape.support(grid)
-        where = f'structures[{index}] ({structure.shape.describe()})'
+        where = f'structures[{index}] ({public_description(structure.shape)})'
         for a, axis in enumerate('xyz'):
             k0, k1 = box[a]
             if k1 <= k0:
                 raise ValueError(
                     f'{where} reaches no cell along {axis}: it lies outside the box '
                     f'entirely. A smoothed shape is not clipped to the domain the way a '
-                    f'cell-snapped fd.Region is, so it would lower to nothing at all here while '
+                    f'cell-snapped fdtd.SnappedBox is, so it would lower to nothing at all here while '
                     f'the scene still reported it. (One that reaches the box and still '
                     f'leaves it, or whose last half cell the grid has no point for, is refused '
                     f'too, a few lines below, and each on its own message.) '
@@ -493,7 +494,7 @@ def check_smoothed(scene, grid):
             uniform = structure.shape.uniform_along(a, (0, grid.n[a]), grid)
             if isinstance(face, Axis1D) and not uniform:
                 raise ValueError(
-                    f'{where} is smoothed and {axis} is an fd.Axis1D face. Axis1D stands for '
+                    f'{where} is smoothed and {axis} is an fdtd.InvariantAxis face. InvariantAxis stands for '
                     f'an axis the field is *invariant* along -- its domain is one cell and the '
                     f'derivative along it is i k exactly -- so the only structure it can carry '
                     f'is one that is uniform along it, whatever the cell count. A body that '
@@ -505,12 +506,12 @@ def check_smoothed(scene, grid):
                     f'a whole cell beyond each {axis} face (its extent at least the domain plus '
                     f'2 dx = {2 * grid.dx:g}) -- fd.Cylinder(axis={axis!r}), '
                     f'fd.Prism(axis={axis!r}), or an unturned fd.Box spanning {axis} -- or with '
-                    f'the cell-snapped fd.Region, or give {axis} real cells and a face that is '
+                    f'the cell-snapped fdtd.SnappedBox, or give {axis} real cells and a face that is '
                     f'not invariant.')
             if (isinstance(face, (Periodic, Bloch)) and not uniform
                     and not (k0 > 0 and k1 < grid.n[a])):
                 raise ValueError(
-                    f'{where} reaches the {type(face).__name__} '
+                    f'{where} reaches the {public_name(face)} '
                     f'{axis} face (cells {k0}..{k1} of {grid.n[a]}). A smoothed shape that '
                     f'crosses a periodic face is only whole if its geometry is summed over the '
                     f'ring of its own periodic images, and C2 does not do that: the part '
@@ -521,7 +522,7 @@ def check_smoothed(scene, grid):
                     f'{axis} over the whole domain -- extruded along {axis}, or an unturned '
                     f'fd.Box spanning it, a cell beyond each face -- which is carried because '
                     f'every layer holds the same section; or say the periodic geometry with '
-                    f'the cell-snapped fd.Region (which is clipped, and whose clipping is how a '
+                    f'the cell-snapped fdtd.SnappedBox (which is clipped, and whose clipping is how a '
                     f'lamellar grating spells "runs the whole period").')
         mirrors = tuple((a, side) for a, axis in enumerate('xyz') for side in '-+'
                         if isinstance(scene.boundaries.face(axis + side), Symmetry))
@@ -534,7 +535,7 @@ def check_smoothed(scene, grid):
                     f'{where} leaves the domain through the {axis}{side} face: its material '
                     f'fills {fill:.4f} of a voxel that lies wholly outside the domain there. A '
                     f'smoothed shape is not clipped to the domain the way a cell-snapped '
-                    f'fd.Region is -- a Region\'s material is a range of cell indices and is '
+                    f'fdtd.SnappedBox is -- a SnappedBox\'s material is a range of cell indices and is '
                     f'cut to the grid exactly, a body\'s is a fraction of each voxel and out '
                     f'there is no voxel to cut. What the lowering does with the part outside is neither '
                     f'"keep" nor "drop": the six components disagree, because three of them '
@@ -549,7 +550,7 @@ def check_smoothed(scene, grid):
                     f'a body that leaves the box is none of the shapes a reader would name, '
                     f'and it is refused rather than silently trimmed. Move it inside '
                     f'Domain(size=..., center=...), enlarge the domain, or say the truncated '
-                    f'body with the cell-snapped fd.Region, which really is clipped. Inside is '
+                    f'body with the cell-snapped fdtd.SnappedBox, which really is clipped. Inside is '
                     f'not quite enough at a + face: a surface nearer than half a cell '
                     f'({0.5 * grid.dx:g}) to a + wall loses that last half cell, and the OTHER '
                     f'arm of this door says so in its own words. A shape that is uniform '
@@ -573,7 +574,7 @@ def check_smoothed(scene, grid):
                 f'it (3.73e-04) at tangency. Keep the surface at least half a cell '
                 f'({0.5 * grid.dx:g}) clear of the {axis}+ wall, or enlarge the domain with '
                 f'Domain(size=..., center=...). "Move it inside the domain" and "say the '
-                f'truncated body with the cell-snapped fd.Region" are the OTHER arm\'s remedies, '
+                f'truncated body with the cell-snapped fdtd.SnappedBox" are the OTHER arm\'s remedies, '
                 f'for a body that really does leave the box, and neither means anything here: '
                 f'this one is already inside and there is nothing sticking out to truncate. A '
                 f'shape that is uniform ACROSS the face -- a substrate, a half space -- is not '
@@ -583,7 +584,7 @@ def check_smoothed(scene, grid):
                  (_background(scene), 'Scene(background=)')]
         for other, s in enumerate(structures):
             if other != index and _intersects(box, s.shape.support(grid)):
-                media.append((s.material, f'structures[{other}] ({s.shape.describe()})'))
+                media.append((s.material, f'structures[{other}] ({public_description(s.shape)})'))
         for material, name in media:
             if not isinstance(material, (Conductor, Dispersive)):
                 continue
@@ -607,7 +608,7 @@ def check_smoothed(scene, grid):
                 f'coefficients keep the cell-snapped rule, and a shape whose edge is not a '
                 f'cell boundary has no cells to apply it over -- so a partly filled voxel '
                 f'would carry the full conductivity or the full polarisation, which is a '
-                f'plausible number and a wrong one. Use the cell-snapped fd.Region for the lossy '
+                f'plausible number and a wrong one. Use the cell-snapped fdtd.SnappedBox for the lossy '
                 f'or dispersive part (first order in dx, and the whole of stages 1-3 rests on '
                 f'it), or keep it out of the smoothed shape\'s cells. C8 currently admits '
                 f'one concrete axis-aligned conductive, Drude/Lorentz-sum or Debye-sum '
@@ -635,7 +636,7 @@ def check_smoothed(scene, grid):
                     f'Held open, a Sphere with eps=(2.0, 5.0, 9.0) lowers with per-component '
                     f'maxima [2.0, 5.0, 9.0] and no sign that the rule was never derived for '
                     f'it. Give the smoothed shape and everything sharing its cells a scalar '
-                    f'{what}=, or say the anisotropic medium with the cell-snapped fd.Region, '
+                    f'{what}=, or say the anisotropic medium with the cell-snapped fdtd.SnappedBox, '
                     f'whose material is not mixed at all. The tensor form is stage 5\'s, and '
                     f'study S1 found no robust order it buys (docs/validation/fdtd/fd-subpixel-occupancy.md), '
                     f'so nothing schedules it.')
@@ -659,8 +660,8 @@ def check_smoothed(scene, grid):
                 continue
             _, field, c, point, fa, fb = worst
             raise ValueError(
-                f'structures[{ia}] ({sa.shape.describe()}) and structures[{ib}] '
-                f'({sb.shape.describe()}) are both smoothed and their surfaces pass through '
+                f'structures[{ia}] ({public_description(sa.shape)}) and structures[{ib}] '
+                f'({public_description(sb.shape)}) are both smoothed and their surfaces pass through '
                 f'the same voxel: {count} of them, worst at the '
                 f'{field}{"xyz"[c] if c < 3 else " common"} point '
                 f'{point}, where they fill {fa:.4f} and {fb:.4f} of it -- the voxel the two '
@@ -677,7 +678,7 @@ def check_smoothed(scene, grid):
                 f'is not refused -- this is drawn on voxels, not on bounding boxes), or say '
                 f'the two as ONE structure so that there is one body, one interface and one '
                 f'exact answer: today that is a single fd.Sphere, fd.Box, fd.Cylinder or '
-                f'fd.Prism, or the cell-snapped fd.Region for the part that overlaps. The CSG '
+                f'fd.Prism, or the cell-snapped fdtd.SnappedBox for the part that overlaps. The CSG '
                 f'spellings that say it properly -- fd.Union, fd.Intersection and '
                 f'fd.Difference, which resolve the two into one surface before any fill is '
                 f'taken -- are not on the public door. Study S7 counted what this door '
@@ -695,15 +696,15 @@ def check_smoothed(scene, grid):
                 continue
             count, field, c, point, fill, share = joint
             raise ValueError(
-                f'structures[{index}] ({structure.shape.describe()}) is smoothed and its '
+                f'structures[{index}] ({public_description(structure.shape)}) is smoothed and its '
                 f'surface cuts {count} voxel(s) that a face of the cell-snapped '
-                f'structures[{j}] ({other.shape.describe()}) cuts too -- worst at the '
+                f'structures[{j}] ({public_description(other.shape)}) cuts too -- worst at the '
                 f'{field}{"xyz"[c]} point {point}, where the body fills {fill:.4f} of the voxel '
                 f'and the snapped structure\'s cells {share:.4f}. A cell-snapped structure '
                 f'owns whole cells, so to the painter such a voxel is all it or all not, while '
                 f'the geometry is split; the smoothed body then mixes its material into '
                 f'whatever the painter left, and the rest of the voxel is read as one medium '
-                f'where it holds two. Measured, a pillar of eps 12 standing flush on a Slab '
+                f'where it holds two. Measured, a pillar of eps 12 standing flush on a SnappedSlab '
                 f'substrate of eps 2.25 at dx = 0.05: the tangential eps at the joint reads '
                 f'6.5 where the voxel holds 7.125 (8.8%), and 3.2 against 3.825 (16%) with '
                 f'the base 0.3 of a cell above the face -- with every invariant the lowering '
@@ -1156,7 +1157,7 @@ def check_symmetry(scene, grid):
     for index, structure in enumerate(structures):
         shape = structure.shape
         body = shape.body()
-        where = f'structures[{index}] ({shape.describe()})'
+        where = f'structures[{index}] ({public_description(shape)})'
         for a, side, parity in mirrors:
             axis = 'xyz'[a]
             plane = shown(mirror_plane(grid, a, side), grid.dx)
@@ -1170,7 +1171,7 @@ def check_symmetry(scene, grid):
                 if found[1] is None:
                     lo, hi = found[0]
                     raise ValueError(
-                        f'{where} has its {axis} face declared on the {axis}+ Symmetry plane at '
+                        f'{where} has its {axis} face declared on the {axis}+ MirrorSymmetry plane at '
                         f'{axis} = {plane:g} (declared {axis} = ({lo:g}, {hi:g})). On a + face '
                         f'the plane is the centre of the last cell, so a cell-snapped face on it '
                         f'rounds up or down by the cell count\'s parity and by round-off: the '
@@ -1180,15 +1181,15 @@ def check_symmetry(scene, grid):
                         f'({0.5 * grid.dx:g}) short of the plane to keep them apart.')
                 (lo, hi), (r0, r1), gap = found
                 raise ValueError(
-                    f'{where} crosses the {axis}{side} Symmetry plane at {axis} = {plane:g}: '
+                    f'{where} crosses the {axis}{side} MirrorSymmetry plane at {axis} = {plane:g}: '
                     f'declared {axis} = ({lo:g}, {hi:g}), it runs as ({r0:g}, {r1:g}) -- its '
                     f'snapped domain part and that part\'s mirror image, which is what a '
-                    f'Symmetry face models -- and the edge the mirror makes is {gap:.2f} cells '
+                    f'MirrorSymmetry face models -- and the edge the mirror makes is {gap:.2f} cells '
                     f'from the declared one, where the snap alone moves an edge by at most '
                     f'half a cell. Measured with this door held open '
-                    f'(studies/fdtd/symmetry_mirror/fdtd_symmetry_mirror.py), an fd.Region declared (-0.1, 0.2) '
+                    f'(studies/fdtd/symmetry_mirror/fdtd_symmetry_mirror.py), a SnappedBox declared (-0.1, 0.2) '
                     f'across a mirror at 0 runs as (-0.2, 0.2) and moves a cavity\'s resonance '
-                    f'by -9.09e-03 against the same Region in the full cavity. Centre it '
+                    f'by -9.09e-03 against the same SnappedBox in the full cavity. Centre it '
                     f'on the plane, or keep it on the domain side: flush against a - plane it '
                     f'is exact, the mirror joining it to its image; on a + face declare it to '
                     f'the wall for that.{plus}')
@@ -1199,9 +1200,9 @@ def check_symmetry(scene, grid):
             at = '(' + ', '.join(f'{v:.6g}' for v in point) + ')'
             if kind == 'crosses':
                 raise ValueError(
-                    f'{where} crosses the {axis}{side} Symmetry plane at {axis} = {plane:g} and '
+                    f'{where} crosses the {axis}{side} MirrorSymmetry plane at {axis} = {plane:g} and '
                     f'is not its own mirror image there: the {component} voxel at {at} holds '
-                    f'{value:.4f} of it and the mirrored voxel {mirrored:.4f}. A Symmetry face '
+                    f'{value:.4f} of it and the mirrored voxel {mirrored:.4f}. A MirrorSymmetry face '
                     f'stands for a scene that is its own mirror image; the run carries the '
                     f'domain side and reflects it, so the body it models is this one\'s domain '
                     f'part and that part\'s image -- not the one declared. Measured with this '
@@ -1214,7 +1215,7 @@ def check_symmetry(scene, grid):
                     f'stage 4: a body with constitutive cross terms is refused at the plane '
                     f'anyway, because its mirror-weighted adjoint is not written.{plus}')
             raise ValueError(
-                f'{where} reaches within half a cell of the {axis}{side} Symmetry plane at '
+                f'{where} reaches within half a cell of the {axis}{side} MirrorSymmetry plane at '
                 f'{axis} = {plane:g} without crossing it. The plane cuts the {component} voxel '
                 f'at {at} in half: the body fills {value:.4f} of it on the domain side and its '
                 f'image as much on the other, but the fill read there is the body\'s alone, '
@@ -1394,8 +1395,8 @@ def check_seams(scene, grid):
             if (k0 < 0 or k1 > n) and not (k0 <= 0 and k1 >= n):
                 lost = (max(0, -k0) + max(0, k1 - n)) / (k1 - k0)
                 raise ValueError(
-                    f'structures[{index}] ({shape.describe()}) crosses the '
-                    f'{type(face).__name__} {axis} seam without spanning the period: its '
+                    f'structures[{index}] ({public_description(shape)}) crosses the '
+                    f'{public_name(face)} {axis} seam without spanning the period: its '
                     f'snapped cells are {k0}..{k1} along {axis}, of {n}. A cell-snapped shape is '
                     f'clipped to the cell, not wrapped, so the part past the seam -- '
                     f'{100 * lost:.1f}% of its cells -- is not in the run, and its periodic '
@@ -1463,16 +1464,16 @@ def _clipping_notes(scene, plan):
                 face = scene.boundaries.face(axis + end)
                 if isinstance(face, (PEC, PMC)) and past > 1e-9 * grid.dx:
                     cut += past
-                    faces.append(f"'{axis}{end}' ({type(face).__name__})"
+                    faces.append(f"'{axis}{end}' ({public_name(face)})"
                                  + ('' if end == side else f' mirrored in {axis}{side}'))
             kept *= max(hi - lo - cut, 0.0) / (hi - lo)
         if faces:
             out.append((GeometryClippedWarning,
-                        f'structures[{index}] ({structure.shape.describe()}) loses '
+                        f'structures[{index}] ({public_description(structure.shape)}) loses '
                         f'{100 * (1 - kept):.1f}% of its declared volume to the '
                         f'{" and ".join(faces)} face{"s" if len(faces) > 1 else ""}: the part '
                         f'past a PEC or PMC wall is not in the run. A structure meant to run on '
-                        f'out of the box needs fd.PML or fd.Absorber on that face, and one meant '
+                        f'out of the box needs fdtd.Open() on that face, and one meant '
                         f'to fill a periodic axis spans it; neither warns.'))
     return out
 
@@ -1623,11 +1624,11 @@ def check_cells_across(scene, grid):
         if found is None or found[0] >= CELLS_ACROSS_REFUSED * (1.0 - _ACROSS_SLACK):
             continue
         cells, extent = found
-        mirror = (' At a Symmetry face a body declared only on the domain side is measured as '
+        mirror = (' At a MirrorSymmetry face a body declared only on the domain side is measured as '
                   'declared; declared whole, symmetric about the plane, it is measured whole.'
                   if mirrors else '')
         raise ValueError(
-            f'structures[{index}] ({structure.shape.describe()}) is {cells:.2f} cells across '
+            f'structures[{index}] ({public_description(structure.shape)}) is {cells:.2f} cells across '
             f'its smallest extent ({extent:g} at dx = {grid.dx:g}), under the '
             f'{CELLS_ACROSS_REFUSED} a smoothed body needs. Across so few cells what the grid '
             f'scatters from is set by where the mixed voxels fall, not by the body: measured '
@@ -1662,7 +1663,7 @@ def _cells_across_notes(scene, plan):
             continue
         cells, extent = found
         out.append((CoarseMeshWarning,
-                    f'structures[{index}] ({structure.shape.describe()}) is {cells:.1f} cells '
+                    f'structures[{index}] ({public_description(structure.shape)}) is {cells:.1f} cells '
                     f'across its smallest extent ({extent:g}); between {CELLS_ACROSS_REFUSED} '
                     f'and {CELLS_ACROSS_WARNED}, study S2b measured an eps-12 body\'s '
                     f'polarizability within 9.2% -- a sphere\'s between +1.2% and +6.3% by '
@@ -1797,7 +1798,7 @@ def check_absorbing_layers(scene, plan):
     grid = plan.grid
     pml = dict(plan.pml_cells)
     for name, cells in plan.absorbing_faces:
-        kind = 'PML' if name in pml else 'Absorber'
+        kind = 'PML' if name in pml else 'ConductiveAbsorber'
         a, side = 'xyz'.index(name[0]), name[1]
         layer = (0, cells) if side == '-' else (grid.n[a] - cells, grid.n[a])
         for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
@@ -1815,7 +1816,7 @@ def check_absorbing_layers(scene, plan):
                     _refuse_lossy_in_layer(structure.material, name, f'structures[{index}]')
                 continue
             raise ValueError(
-                f'structures[{index}] ({structure.shape.describe()}, cells {k0}..{k1} along '
+                f'structures[{index}] ({public_description(structure.shape)}, cells {k0}..{k1} along '
                 f'{name[0]}) ends inside the {kind} on {name!r} (cells '
                 f'{layer[0]}..{layer[1]}). An absorbing layer terminates the box; an '
                 f'interface inside one is a mirror the layer cannot undo, because the '
@@ -1823,8 +1824,8 @@ def check_absorbing_layers(scene, plan):
                 f'interface are in its way. (In a PML the stretched coordinate is complex '
                 f'there as well, so nothing matches it at all.) Move the interface out of '
                 f'the layer, or run the structure all the way through it -- which today '
-                f'the cell-snapped fd.Region or fd.Slab and an unturned fd.Box can, reaching '
-                f'past the face. An fd.Cylinder or fd.Prism along {name[0]!r} is refused in a '
+                f'the cell-snapped fdtd.SnappedBox or fdtd.SnappedSlab and an unturned fd.Box '
+                f'can, reaching past the face. An fd.Cylinder or fd.Prism along {name[0]!r} is refused in a '
                 f'layer by its cross terms until C9; a sphere cannot run through one.')
         if kind == 'PML':
             _refuse_lossy_in_layer(_background(scene), name, 'Scene(background=)')
@@ -1866,10 +1867,10 @@ def _refuse_lossy_in_layer(material, name, where):
             f'calibrated for what is in it -- measured, five times the reflection in vacuum '
             f'for a conductor -- and for a dispersive medium a CFS-PML in it is the classic '
             f'late-time instability, which nothing here can yet rule out. Use '
-            f'fd.Absorber(cells=...) on that face -- a graded matched conductivity, which '
-            f'needs no match, absorbs worse at every angle and hopelessly at grazing (measured '
-            f'21x worse than the mismatched stretch this refuses, at normal incidence), and is '
-            f'the fallback this case exists for.')
+            f'fdtd.ConductiveAbsorber(cells=...) as Numerics(absorber=...) -- a graded '
+            f'matched conductivity, which needs no match, absorbs worse at every angle and '
+            f'hopelessly at grazing (measured 21x worse than the mismatched stretch this '
+            f'refuses, at normal incidence), and is the fallback this case exists for.')
 
 
 def cfl_bound(scene, plan):
@@ -2079,8 +2080,9 @@ def check_stability(scene, plan):
     axis1d = [f'{a} (k_max = {scene.boundaries.face(a + "-").k_max:g})' for a in 'xyz'
               if isinstance(scene.boundaries.face(a + '-'), Axis1D)]
     if axis1d:
-        worst += (f' An fd.Axis1D axis adds k_max^2/4 to the sum under the bound in place of the 1/dx^2 a '
-                  f'differenced axis adds (its derivative is i k, bounded by nothing but k_max): '
+        worst += (f' An fdtd.InvariantAxis axis adds k_max^2/4 to the sum under the bound in place '
+                  f'of the 1/dx^2 a differenced axis adds (its derivative is i k, bounded by '
+                  f'nothing but k_max): '
                   f'{", ".join(axis1d)}; a smaller k_max= widens the bound.')
     background = _background(scene)
     phases = [background] + [s.material for s in (getattr(scene, 'structures', ()) or ())]
@@ -2182,7 +2184,7 @@ def _traced_material_notes(material):
              'and the plan was certified at the values it was built with. Run the concrete '
              'values to inspect them. The runtime checks positivity, the time-step bound, '
              'the lifted operator\'s stability, 8 cells per wavelength in a traced plain '
-             'Material (at the band\'s shortest and every Diffraction wavelength) and the '
+             'Material (at the band\'s shortest and every DiffractionMonitor wavelength) and the '
              'grazing rule in a PML layer at the traced values; these checks do not '
              'establish physical convergence.')]
 
@@ -2233,7 +2235,7 @@ def _radiation_notes(scene):
     # These measured residuals explain the approximation; they are not a
     # tolerance or a predicted error for another geometry or polarization.
     return [(RadiationApproximationWarning,
-        f'FarField {names} uses continuum propagation on discrete grid fields. '
+        f'FarFieldMonitor {names} uses continuum propagation on discrete grid fields. '
         'A weak sphere (epsilon=1.1, radius/wavelength=0.25) measured optical-theorem '
         'residuals 52.05%/26.38%/12.91% at 20/28/40 cells per wavelength. '
         'These are examples, not an error bound for this scene. Use propagation="yee" '
@@ -2300,7 +2302,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'on disjoint padded supports. Each member retains its single-film '
                     'harmonic normal and arithmetic tangential response in one plain '
                     'lossless dielectric. Touching films, mixed pole families, initial '
-                    'fields, tracing and Decay are outside this bounded scope. Validate '
+                    'fields, tracing and DecayStop are outside this bounded scope. Validate '
                     'observables under refinement and check duration and absorbers '
                     'separately. See docs/validation/fdtd/fd-debye-stack.md.'))
     from wavebit.fdtd._prepare.oscillator_stack import descriptor as oscillator_stack_descriptor
@@ -2312,7 +2314,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'memory on disjoint padded supports. Different member pole kinds are '
                     'admitted; the harmonic normal and arithmetic tangential singleton '
                     'response is unchanged. This bounded scope excludes within-film '
-                    'sums, Debye poles, touching films, initial fields, tracing and Decay. '
+                    'sums, Debye poles, touching films, initial fields, tracing and DecayStop. '
                     'Validate observables under refinement and check duration and '
                     'absorbers separately. See docs/validation/fdtd/fd-oscillator-stack.md.'))
     from wavebit.fdtd._prepare.single_pole_film import descriptor as single_pole_descriptor
@@ -2393,7 +2395,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'its observables under refinement; exact voxel volume alone does not '
                     'guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this '
                     'rule has not passed the stage-4 Mie gate, which '
-                    "discretisation='stencil' passed (C3)."))
+                    "discretization='stencil' passed (C3)."))
     if asked:
         # The voxel rule's sentence above is not this structure's: its E is the prepared
         # operator's. The orders are the research sweeps' (docs/design/fd-symmetric-stencil.md,
@@ -2402,7 +2404,7 @@ def _smoothed_notes(scene, plan, rows=None):
         where = ', '.join(f'structures[{index}]' for index in asked)
         out.append((SubpixelAccuracyWarning,
                     f'{where} use{"s" if len(asked) == 1 else ""} '
-                    f'discretisation={STENCIL!r}: the symmetric extended-stencil operator on E. '
+                    f'discretization={STENCIL!r}: the symmetric extended-stencil operator on E. '
                     'It passes the stage-4 C3 Mie gate: convergence order 2.244 on the '
                     'epsilon=12 sphere (radius/wavelength=0.25, 40/56/80 vacuum cells per '
                     'wavelength, three placements; -4.08% at 80), 2.064 on the glass sphere '
@@ -2480,7 +2482,7 @@ def _check_fill_contract(scene, occupied, grid=None):
                 for name, values in zip(('fill', 'w'), pair):
                     values = np.asarray(values, dtype=float)
                     structure = scene.structures[index]
-                    where = (f'structures[{index}] ({structure.shape.describe()}) answers a '
+                    where = (f'structures[{index}] ({public_description(structure.shape)}) answers a '
                              f'{name} on {field}{"xyz"[c]}')
                     if not np.all(np.isfinite(values)):
                         raise ValueError(f'{where} that is not finite. A fill is the fraction '
@@ -2513,7 +2515,7 @@ def _stabilize_notes(scene, plan):
         need = sufficient_stabilize(reflection)
         if need is None:
             out.append((PMLStabilityWarning,
-                        f'PML on {face.name!r}: stabilize={face.stabilize:g} at '
+                        f'PML on {face.name!r}: stabilizing_loss={face.stabilize:g} at '
                         f'reflection={reflection:g}, a target weaker than any the stabilizing '
                         f'loss was measured at (the weakest is '
                         f'{spell(MEASURED_STABILIZE[-1][0])}, where {spell(MEASURED_STABILIZE[-1][1])} '
@@ -2521,7 +2523,7 @@ def _stabilize_notes(scene, plan):
                         f'face may still grow'))
         elif face.stabilize < need * (1.0 - 1e-12):
             out.append((PMLStabilityWarning,
-                        f'PML on {face.name!r}: stabilize={face.stabilize:g} at '
+                        f'PML on {face.name!r}: stabilizing_loss={face.stabilize:g} at '
                         f'reflection={reflection:g}; the measured value that stops a bound mode '
                         f'growing at this target is {spell(need)} (3e-3 holds only at the default '
                         f'1e-8 and stronger targets; src/wavebit/fdtd/_prepare/cpml.py::'
@@ -2755,7 +2757,7 @@ def check_wavelength_resolution(scene, grid):
             cells = w / (n * grid.dx)
             if cells < 8.0:
                 raise ValueError(
-                    f'Diffraction({asked[w]!r}) asks for wavelength {w:g}, where {where} is '
+                    f'DiffractionMonitor({asked[w]!r}) asks for wavelength {w:g}, where {where} is '
                     f'sampled at {cells:.2f} cells per wavelength (index {n:.3f}, dx '
                     f'{grid.dx:g}): below the 8 the plan holds the sources\' band to, where '
                     f'not even the first digit of an order survives -- the run would return '
@@ -2890,7 +2892,7 @@ def _matched_phrase(scene, plan, name):
     magnetic rates match it by construction, at normal incidence only.
     """
     if name not in dict(plan.pml_cells):
-        return 'an Absorber there is matched at normal incidence only'
+        return 'a ConductiveAbsorber there is matched at normal incidence only'
     from wavebit.fdtd._prepare.cpml import face_eps_r
     matched = _matched_medium(scene, name)
     eps_r = face_eps_r(matched, 'xyz'.index(name[0]))

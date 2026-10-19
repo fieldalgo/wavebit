@@ -792,7 +792,7 @@ def test_custom_protocol_survives_the_physical_boundary_and_static_reuse_guard()
     problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.8,)*3),
         boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Periodic()),
-        structures=(fdtd.Structure('custom', pebble, Material(epsilon=2.)),)),
+        structures=(fdtd.Structure('custom', shape=pebble, material=Material(epsilon=2.)),)),
         initial=fdtd.InitialField(E=(lambda x,y,z: np.cos(2*np.pi*x/.8), None, None)),
         outputs=fdtd.Outputs(final_fields=True))
     numerics=fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX),duration=fdtd.Duration(steps=4))
@@ -811,12 +811,12 @@ def test_custom_protocol_support_is_used_for_open_face_clearance():
     from wavebit import fdtd, Material, Units
     problem=fdtd.Problem(units=Units(length='um'),scene=fdtd.Scene(
         domain=fdtd.Domain(size=(.8,)*3),boundaries=fdtd.Boundaries.open(),
-        structures=(fdtd.Structure('custom',_Pebble(.08),Material(epsilon=2.)),)))
+        structures=(fdtd.Structure('custom',shape=_Pebble(.08),material=Material(epsilon=2.)),)))
     numerics=fdtd.Numerics(grid=fdtd.UniformGrid(spacing=DX),duration=fdtd.Duration(steps=2),
-                          absorber=fdtd.Absorber(cells=4))
+                          absorber=fdtd.ConductiveAbsorber(cells=4))
     assert fdtd.check(problem,numerics=numerics).ok
     touching=problem.replace(scene=problem.scene.replace(structures=(
-        fdtd.Structure('custom',_Pebble(.18,center=(.25,0.,0.)),Material(epsilon=2.)),)))
+        fdtd.Structure('custom',shape=_Pebble(.18,center=(.25,0.,0.)),material=Material(epsilon=2.)),)))
     report=fdtd.check(touching,numerics=numerics)
     assert not report.ok
     assert any(issue.code=='padding_continuation' for issue in report.issues)

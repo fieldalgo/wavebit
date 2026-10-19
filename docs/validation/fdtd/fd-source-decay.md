@@ -1,6 +1,6 @@
 # Automatic stopping with incident source columns
 
-The public `fdtd.Decay` policy admits concrete CPU `PlaneWave` and axis-aligned
+The public `fdtd.DecayStop` policy admits concrete CPU `PlaneWave` and axis-aligned
 `TFSF` sources. It reads each incident column's E/H, CPML histories and supported
 material memories; layered TFSF also contributes its uniform driver. All groups
 retain separate all-time peaks. This extends state coverage without changing the
@@ -25,7 +25,7 @@ as limits of an all-memory relative-amplitude policy, not used to remove groups 
 relax thresholds. Backend stopping counts need not agree for round-off-dominated
 groups. A cap result must still reproduce the requested fixed-duration run.
 
-Separate fixtures explicitly select the existing `Absorber(cells=12)` and require
+Separate fixtures explicitly select the existing `fdtd.ConductiveAbsorber(cells=12)` and require
 early stopping on all three CPU backends, with the same threshold/window/cap.
 This is a different absorbing boundary, not a replacement for PML or a claim of
 equivalent reflection. Both boundary choices compare final fields, point records,

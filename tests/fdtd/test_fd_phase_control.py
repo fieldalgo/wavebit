@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from studies.fdtd.subpixel_phase_control import fdtd_subpixel_phase_control as study
-from wavebit.fdtd.results import SourceSeries
+from wavebit.fdtd._legacy_results import SourceSeries
 from wavebit.fdtd._kernel.grid import Grid
 from wavebit.fdtd._prepare.monitors import box_faces
 

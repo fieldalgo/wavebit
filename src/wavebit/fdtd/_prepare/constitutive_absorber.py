@@ -81,7 +81,8 @@ def _scope(scene, plan):
         material_values.append(eps[0])
     for source in scene.sources:
         if type(source) is not Dipole or source.kind != 'electric':
-            raise ValueError('ConstitutiveAbsorberScope: only electric Dipoles are admitted.')
+            raise ValueError('ConstitutiveAbsorberScope: only electric CurrentDipoles are '
+                             'admitted.')
     actual = []
     for axis in 'xyz':
         for side in '-+':

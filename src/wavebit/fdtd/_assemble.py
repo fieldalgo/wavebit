@@ -25,6 +25,7 @@ from wavebit.fdtd._prepare.monitors import diffraction_window
 from wavebit.fdtd._prepare.monitors import farfield_checks
 from wavebit.fdtd._prepare.monitors import field_points
 from wavebit.fdtd._prepare.monitors import plane_layout
+from wavebit.fdtd._public_names import public_name
 from wavebit.fdtd.diagnostics import GrowingFieldWarning
 from wavebit.fdtd.diagnostics import UnsettledFieldWarning
 from wavebit.fdtd._legacy_monitors import Diffraction
@@ -243,7 +244,7 @@ def _incident_split(series, wavelengths):
     H = _post.dft(rt, series.incident_H, series.t_H, dt, freqs, leapfrog=True)   # (nf, 3)
     entry = int(round((series.plane - grid.low[P]) / dx))
     eps, mu = _post.medium_at(scene, grid, P, (entry - 1, entry),
-                              f'{type(src).__name__}({src.name!r}) normalisation')
+                              f'{public_name(src)}({src.name!r}) normalisation')
     eps, mu = rt.array(eps, 'float64'), rt.array(mu, 'float64')
     if type(src).__name__ == 'PlaneWave':
         ku, kv = _post.bloch_k(rt, scene, grid, u), _post.bloch_k(rt, scene, grid, v)
@@ -357,10 +358,10 @@ def consistent_accumulators(plan, state, rt, params=None):
 
 def monitor_results(scene, plan, state, rt, sources, params=None):
     """``{monitor name: result}`` for every stage-3 monitor; records are left to the caller."""
-    from wavebit.fdtd.results import DiffractionResult
-    from wavebit.fdtd.results import FarFieldResult
-    from wavebit.fdtd.results import FieldResult
-    from wavebit.fdtd.results import FluxResult
+    from wavebit.fdtd._legacy_results import DiffractionResult
+    from wavebit.fdtd._legacy_results import FarFieldResult
+    from wavebit.fdtd._legacy_results import FieldResult
+    from wavebit.fdtd._legacy_results import FluxResult
     grid = plan.grid
     obs = consistent_accumulators(plan, state, rt, params)
     out = {}
@@ -368,7 +369,7 @@ def monitor_results(scene, plan, state, rt, sources, params=None):
         if isinstance(m, Record):
             continue
         if isinstance(m, FarField):
-            where = f'FarField({m.name!r})'
+            where = f'FarFieldMonitor({m.name!r})'
             eps, mu = farfield_checks(m, scene, grid)
             faces = box_faces(where, grid, m.box)
             accs = {face: obs[m.name + FACE_SEP + face] for face, _, _ in faces}
@@ -376,7 +377,7 @@ def monitor_results(scene, plan, state, rt, sources, params=None):
             out[m.name] = FarFieldResult(m.name, m.wavelengths, rt, accs, faces, grid, eps, mu,
                                          net, parts, dt=plan.dt, propagation=m.propagation)
         elif isinstance(m, Flux):
-            where = f'Flux({m.name!r})'
+            where = f'FluxMonitor({m.name!r})'
             if m.box is not None:
                 faces = box_faces(where, grid, m.box)
                 accs = {face: obs[m.name + FACE_SEP + face] for face, _, _ in faces}
@@ -410,7 +411,7 @@ def _diffraction_sub(monitor, scene, plan, acc, rt, sources):
     dx, dt = grid.dx, plan.dt
     layout, pw = diffraction_layout(monitor, scene, grid)
     P, u, v = layout.P, layout.u, layout.v
-    where = f'Diffraction({monitor.name!r})'
+    where = f'DiffractionMonitor({monitor.name!r})'
     eps, mu = _post.medium_at(scene, grid, P, (layout.k - 1, layout.k), where)
     series = sources[pw.name]
     inc = _incident_split(series, monitor.wavelengths)
@@ -745,10 +746,10 @@ def _knob(scene, faces):
     targets = [scene.boundaries.face(name).reflection for name in faces]
     rho = [sufficient_stabilize(r) for r in targets]
     if any(v is None for v in rho):
-        return (f'PML(stabilize=) (no value was measured at a reflection target weaker than '
-                f'{spell(MEASURED_STABILIZE[-1][0])}; '
+        return (f'PML(stabilizing_loss=) (no value was measured at a reflection target '
+                f'weaker than {spell(MEASURED_STABILIZE[-1][0])}; '
                 f'{spell(MEASURED_STABILIZE[-1][1])} sufficed there)')
-    return f'PML(stabilize={spell(max(rho))})'
+    return f'PML(stabilizing_loss={spell(max(rho))})'
 
 
 def _growth_cause(scene, plan):
@@ -758,8 +759,9 @@ def _growth_cause(scene, plan):
         cause += (' This scene starts from an InitialField, and one passive case reads the same: '
                   'its content near zero frequency, which a PML does not absorb (its CFS term '
                   'makes it transparent there), returns off the wall behind the layer as a slow, '
-                  'steady rise that stabilize does not change (src/wavebit/fdtd/_assemble.py::'
-                  'GROWTH_THRESHOLD). A kick with no zero-frequency content is not affected.')
+                  'steady rise that stabilizing_loss does not change '
+                  '(src/wavebit/fdtd/_assemble.py::GROWTH_THRESHOLD). A kick with no '
+                  'zero-frequency content is not affected.')
     return cause if cause is not None else _no_pml_cause()
 
 
@@ -769,14 +771,14 @@ def _pml_cause(scene, plan):
     pure = [name for name, rho in faces if not rho]
     if pure:
         return (
-            f'The PML on {pure} is the pure stretch (the default, stabilize=0), and a stretch '
-            f'backed by its PEC wall feeds an evanescent field that reaches it: a lossless '
-            f'structure with a bound mode just past the light line (a grating\'s guided '
-            f'resonance at a Rayleigh wavelength, a slab under a fixed transverse k) grows '
-            f'under it (src/wavebit/fdtd/_prepare/cpml.py::stabilizing_rate). {_knob(scene, pure)} on '
-            f'those faces adds the loss that stopped it on every slab family it was measured '
-            f'on, at the price of a reflection at oblique incidence (2.1e-4 at 30 degrees on 12 '
-            f'cells at 3e-3).')
+            f'The PML on {pure} is the pure stretch (the default, stabilizing_loss=None), and '
+            f'a stretch backed by its PEC wall feeds an evanescent field that reaches it: a '
+            f'lossless structure with a bound mode just past the light line (a grating\'s '
+            f'guided resonance at a Rayleigh wavelength, a slab under a fixed transverse k) '
+            f'grows under it (src/wavebit/fdtd/_prepare/cpml.py::stabilizing_rate). '
+            f'{_knob(scene, pure)} on those faces adds the loss that stopped it on every slab '
+            f'family it was measured on, at the price of a reflection at oblique incidence '
+            f'(2.1e-4 at 30 degrees on 12 cells at 3e-3).')
     if faces:
         parts = []
         for name, rho in faces:
@@ -784,14 +786,14 @@ def _pml_cause(scene, plan):
             enough = sufficient_stabilize(target)
             measured = ('no value was measured at a target that weak' if enough is None
                         else f'{spell(enough)} was measured to suffice there')
-            parts.append(f'{name!r} stabilize={spell(rho)} at reflection={spell(target)} '
-                         f'({measured})')
+            parts.append(f'{name!r} stabilizing_loss={spell(rho)} at '
+                         f'reflection={spell(target)} ({measured})')
         return (
             f'Every PML face is stabilized -- {"; ".join(parts)} -- and the loss is a measured '
             f'balance on sampled slab families, not passivity '
             f'(src/wavebit/fdtd/_prepare/cpml.py::stabilizing_rate): this structure lies outside the '
-            f'families it was measured on. Raise stabilize on those faces (it costs reflection '
-            f'at oblique incidence in proportion).')
+            f'families it was measured on. Raise stabilizing_loss on those faces (it costs '
+            f'reflection at oblique incidence in proportion).')
     return None
 
 
