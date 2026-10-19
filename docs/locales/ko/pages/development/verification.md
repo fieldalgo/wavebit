@@ -106,7 +106,7 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)는
 research를 제외하는 두 범위 모두에 검증 도구를 사용하며, 각 범위를
-`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 8개, slow 범위는 6개입니다.
+`--shard INDEX/COUNT`로 여러 runner에 나눕니다. 일반 범위는 16개, slow 범위는 6개입니다.
 
 CI는 검증 결과와 그 안의 pytest 임시 자료를 checkout 바깥의 `RUNNER_TEMP`에
 저장하여 study fixture의 원자료 경로 분리 조건을 지킵니다. GitHub가 이 변수를
@@ -114,7 +114,7 @@ CI는 검증 결과와 그 안의 pytest 임시 자료를 checkout 바깥의 `RU
 artifact 업로드도 같은 결과 경로를 사용합니다.
 
 ```shell
-python tools/run_verification.py --profile full --slow exclude --shard 1/8 --workers 2 \
+python tools/run_verification.py --profile full --slow exclude --shard 1/16 --workers 2 \
   --shard-timings tools/ci_shard_timings.json \
   --timeout 1200 --timeout-method thread --verbose --live-output \
   --output "$RUNNER_TEMP/wavebit-verification/default"
