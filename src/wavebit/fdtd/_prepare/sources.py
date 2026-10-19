@@ -24,6 +24,9 @@ The refusals, and where each lives:
       Dispersive one
     a PlaneWave whose column needs a PML at a traced band    _column_wavelength, here
       centre (a non-absorbing face along its axis)
+    an oblique p PlaneWave whose current drive's upstream    _plane_wave_term -> _check_indices
+      node reaches an absorbing layer or a wall, or whose
+      band centre does not propagate on the column's grid    plane_wave_current_gain, here
     a complex waveform on a real run                         lower_sources, here
     Dipole trilinear / centre outside range                  sources.Dipole
     Dipole support (its range) crossing a wall               _dipole_term -> _check_indices
@@ -39,6 +42,8 @@ import warnings
 import numpy as np
 
 from wavebit._common.backend import check_input_precision
+from wavebit._common.conventions import boundary_kz
+from wavebit._common.conventions import yee_longitudinal_phase
 
 from wavebit.fdtd._legacy_boundaries import AXES
 from wavebit.fdtd._legacy_boundaries import PML_CELLS
@@ -286,6 +291,17 @@ def _plane_wave_term(scene, plan, src, row):
     k0i = _node_index(grid, P, src.position)
     used = (k0i - 1, k0i) if src.sign > 0 else (k0i, k0i + 1)
     _check_indices(f'PlaneWave({src.name!r})', P, used[0], used[1], scene, plan)
+    current_gain = plane_wave_current_gain(scene, plan, src)
+    if current_gain is not None:
+        # The current drive writes the column at ks and at the node upstream of it, one cell
+        # further from the sheet than anything above; the column shares the scene's faces
+        # along P (or pads a PML past a non-absorbing one), so that node is held to the
+        # same clearance on the main grid's indices. The structure check below keeps the
+        # sheet's own cells: the column has no structure.
+        wide = (k0i - 2, k0i) if src.sign > 0 else (k0i, k0i + 2)
+        _check_indices(f'PlaneWave({src.name!r}) with the two-node current drive of an '
+                       f'oblique p wave (one node further upstream of the sheet)',
+                       P, wide[0], wide[1], scene, plan)
     for index, structure in enumerate(scene.structures):
         s_axis, box = _structure_cells(structure, grid)
         c0, c1 = box[P]
@@ -326,11 +342,90 @@ def _plane_wave_term(scene, plan, src, row):
     return ColumnTerm(name=src.name, kind='PlaneWave', row=row, axis=P, sub=sub, drive=drive,
                       ks=ks + off, corrections=corrections, entry_E=k0i + off,
                       entry_H=entry_H + off, plane_E=plane,
-                      plane_H=plane + src.sign * 0.5 * grid.dx)
+                      plane_H=plane + src.sign * 0.5 * grid.dx, current_gain=current_gain)
+
+
+def _discrete_k_par(scene, plan, src):
+    """``(u, v, k_par, K, axis1d)``: the PlaneWave's transverse wavevector, continuum and grid.
+
+    ``k_par[a]`` is the wave's own at the band centre in the background, ``K[a]`` the grid's
+    one-cell difference of it -- ``2 sin(k dx/2)/dx`` on a Bloch (or Periodic) axis, ``k``
+    itself on an ``Axis1D`` axis, whose difference is the exact ``i k`` -- and ``axis1d[a]``
+    which of the two it is.
+    """
+    grid, P = plan.grid, src.axis
+    u, v = (P + 1) % 3, (P + 2) % 3
+    k, _, _ = src.vectors()
+    kpar = {u: 0.0, v: 0.0}
+    if abs(k[u]) >= 1e-12 or abs(k[v]) >= 1e-12:
+        index = as_material(scene.background, 'Scene(background=)').index_bound()
+        k0 = index * 2.0 * math.pi / src.band.concrete_wavelength
+        kpar = {a: (k0 * k[a] if abs(k[a]) >= 1e-12 else 0.0) for a in (u, v)}
+    dx = grid.dx
+    axis1d = {a: isinstance(scene.boundaries.face(AXES[a] + '-'), Axis1D) for a in (u, v)}
+    K = {a: kpar[a] if axis1d[a] else 2.0 * math.sin(kpar[a] * dx / 2.0) / dx for a in (u, v)}
+    return u, v, kpar, K, axis1d
+
+
+def plane_wave_current_gain(scene, plan, src):
+    """``None`` (the hard drive), or the gain ``g`` of an oblique p PlaneWave's current drive.
+
+    **Which drive.** A ``PlaneWave`` with ``polarization='p'`` and a nonzero discrete
+    ``K_par`` (by the same test :func:`plane_wave_drive` uses to leave normal incidence) is
+    driven by the two-node current of ``src/wavebit/fdtd/_kernel/sources.py``
+    (``ColumnTerm._current``; that module's docstring says why); every other PlaneWave, and
+    every TFSF, keeps the hard tangential E, bit for bit.
+
+    **The gain.** On the column the current's tangential E downstream of the drive, referred
+    to ``ks``, is ``g W(w) G(w) weight`` with ``G(w) = -i sin(kappa dx/2) exp(i kappa dx/2)``,
+    the product ``(1 - exp(i w dt)) T_J(w) (1 + exp(i kappa dx))/2`` of the difference's
+    factor, the one-node current's transfer ``T_J = exp(-i w dt/2) tan(kappa dx/2)/(Omega
+    dt)`` (p; ``eps`` cancels) and the two nodes' downstream form factor. ``g = 1/G(w0)`` at the
+    band centre ``w0 = 2 pi/wavelength``, so the drive's tangential E there is the hard
+    drive's ``w * weight`` and the amplitude keeps its meaning:
+
+        g = i exp(-i kappa0 dx/2) / sin(kappa0 dx/2) = 1 + i cot(kappa0 dx/2).
+
+    ``kappa0 dx`` is :func:`~wavebit._common.conventions.yee_longitudinal_phase` at
+    ``Omega0 = 2 sin(w0 dt/2)/dt``, of the root ``q`` that
+    :func:`~wavebit._common.conventions.boundary_kz` takes at ``K_par^2/Omega0^2`` (so
+    ``Kz0 = Omega0 q = sqrt(Omega0^2 eps mu - |K_par|^2)``, as ``fdtd/_periodic`` writes the
+    Yee longitudinal phase): both roots are the conventions', none is chosen here. Only a
+    real ``0 < kappa0 dx/2 < pi/2`` -- the band centre propagating on the column's grid -- has
+    a wave to normalise to; one at or past the grid's cutoff, or at its longitudinal Nyquist,
+    is refused. ``eps mu`` is the background's ``index_bound() ** 2`` and ``K_par`` the grid's
+    (:func:`_discrete_k_par`), as in :func:`plane_wave_drive`; an oblique PlaneWave's band
+    centre and background are concrete (``_plane_wave_term`` refused a traced one), so ``g``
+    is static.
+    """
+    if src.polarization != 'p':
+        return None
+    u, v, kpar, K, axis1d = _discrete_k_par(scene, plan, src)
+    norm = math.hypot(K[u], K[v])
+    if norm <= 1e-12 * (1.0 + norm):
+        return None
+    if plan.dtype != 'complex128':
+        raise AssertionError('a transverse k on a real run')
+    dx, dt = plan.grid.dx, plan.dt
+    index = as_material(scene.background, 'Scene(background=)').index_bound()
+    w0 = 2.0 * math.pi / src.band.concrete_wavelength
+    Omega0 = 2.0 * math.sin(w0 * dt / 2.0) / dt
+    q = boundary_kz(np, np.complex128(index * index),
+                    np.complex128((K[u] * K[u] + K[v] * K[v]) / (Omega0 * Omega0)))
+    half = 0.5 * complex(yee_longitudinal_phase(np, q, Omega0, dx))      # kappa0 dx / 2
+    if not (half.imag == 0.0 and 0.0 < half.real < 0.5 * math.pi):
+        raise ValueError(
+            f'PlaneWave({src.name!r}, theta={angle(src.theta)}, phi={angle(src.phi)}, '
+            f"polarization='p'): at the band centre (wavelength {src.band.concrete_wavelength:g}) "
+            f'the wave does not propagate along {AXES[src.axis]} on this grid (dx = {dx:g}, '
+            f'kappa dx/2 = {half:.6g}, which must be real and in (0, pi/2)). An oblique p '
+            f"wave's column is driven by a current normalised to the propagating wave at the "
+            f'band centre, and there is none; refine the grid or lower theta.')
+    return complex(1.0, 1.0 / math.tan(half.real))
 
 
 def plane_wave_drive(scene, plan, src):
-    """``((component, weight), ...)``: the stored tangential E a PlaneWave's hard source writes.
+    """``((component, weight), ...)``: the stored tangential E a PlaneWave's drive sets at ``ks``.
 
     **The discrete plane wave in a Bloch cell.** A field ``A exp(i k . r)`` on the Yee grid is
     stored with each component at its own position (``__init__``'s offsets), so the value in
@@ -348,11 +443,15 @@ def plane_wave_drive(scene, plan, src):
     tangential part is ``(K_P / |K|) K_hat_par`` -- along ``K_hat_par`` for every frequency, only
     its length depending on ``Omega``. That is the frame ``_post.frame`` reads every order in.
 
-    **The drive.** The hard source imposes the stored tangential E at ``ks``; the column
+    **The drive.** The hard source sets the stored tangential E at ``ks``; the column
     radiates the superposition of the s and p modes whose tangential E matches it. Since the
     two modes' tangential E are ``s_hat_t`` and ``K_hat_par``, orthogonal at every frequency, a
     drive along ``s_hat_t`` launches pure s and one along ``K_hat_par`` pure p **exactly**,
-    provided the drive is written in stagger-removed amplitudes. So the stored weights are
+    provided the drive is written in stagger-removed amplitudes. An oblique p wave's column is
+    driven by a current instead (:func:`plane_wave_current_gain`) with these same weights: a
+    current along ``K_hat_par`` couples to the s mode through ``s_hat_t . K_hat_par = 0``, so it
+    too launches pure p, and its gain makes the tangential E at the band centre the hard
+    drive's. So the stored weights are
 
         s:  (-K_v, K_u) / |K_par|,                       times exp(i k_c dx/2) per component
         p:  sigma cos(theta) (K_u, K_v) / |K_par|,       times exp(i k_c dx/2) per component
@@ -371,17 +470,9 @@ def plane_wave_drive(scene, plan, src):
     ``k_par`` is the wave's own at the band centre, which the transverse faces were checked to
     carry (``_plane_wave_term``); a traced Bloch phase is not read here, so the drive is static.
     """
-    grid, P = plan.grid, src.axis
-    u, v = (P + 1) % 3, (P + 2) % 3
-    k, e, _ = src.vectors()
-    kpar = {u: 0.0, v: 0.0}
-    if abs(k[u]) >= 1e-12 or abs(k[v]) >= 1e-12:
-        index = as_material(scene.background, 'Scene(background=)').index_bound()
-        k0 = index * 2.0 * math.pi / src.band.concrete_wavelength
-        kpar = {a: (k0 * k[a] if abs(k[a]) >= 1e-12 else 0.0) for a in (u, v)}
-    dx = grid.dx
-    axis1d = {a: isinstance(scene.boundaries.face(AXES[a] + '-'), Axis1D) for a in (u, v)}
-    K = {a: kpar[a] if axis1d[a] else 2.0 * math.sin(kpar[a] * dx / 2.0) / dx for a in (u, v)}
+    _, e, _ = src.vectors()
+    u, v, kpar, K, axis1d = _discrete_k_par(scene, plan, src)
+    dx = plan.grid.dx
     norm = math.hypot(K[u], K[v])
     if norm <= 1e-12 * (1.0 + norm):
         tangential = {u: e[u], v: e[v]}
@@ -572,15 +663,17 @@ def _tfsf_driver(scene, src, grid):
 def column_pads(scene, src):
     """``(low, high)``: the cells a column carries past the scene's own along ``src.axis``.
 
-    A ``PlaneWave`` column models the free incident wave in the uniform background, and it is
-    driven by a hard source, which reflects anything coming back up it (``r = -1``). So its
-    two ends must absorb: where the scene's face along the axis does not (a PEC, PMC,
-    Symmetry, Periodic or Bloch face), the column puts a ``PML`` of :data:`PML_CELLS` cells
-    on cells of its own past that face. Without it a PEC-backed cell turned the column into
-    a lossless cavity, the mirror's reflection was counted as incident, and the sheet
-    cancelled it -- no reflection ever appeared above the sheet. The main grid keeps its own
-    face, so the mirror's reflection is scattered field and crosses the sheet. A ``TFSF``
-    already refuses a non-absorbing face on its axis, so its column is never padded.
+    A ``PlaneWave`` column models the free incident wave in the uniform background, and a
+    hard-driven one reflects anything coming back up it at the source (``r = -1``); an oblique
+    p wave's current-driven column does not, but a wave its end returns crosses the entry plane
+    and is counted as incident all the same. So its two ends must absorb: where the scene's
+    face along the axis does not (a PEC, PMC, Symmetry, Periodic or Bloch face), the column
+    puts a ``PML`` of :data:`PML_CELLS` cells on cells of its own past that face. Without it a
+    PEC-backed cell turned the column into a lossless cavity, the mirror's reflection was
+    counted as incident, and the sheet cancelled it -- no reflection ever appeared above the
+    sheet. The main grid keeps its own face, so the mirror's reflection is scattered field and
+    crosses the sheet. A ``TFSF`` already refuses a non-absorbing face on its axis, so its
+    column is never padded.
     """
     if not isinstance(src, PlaneWave):
         return 0, 0

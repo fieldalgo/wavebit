@@ -32,6 +32,15 @@ to say so does not (50,911,380 bytes of active rows on the 56-cell research sphe
 on every one of them and a plan with no prepared operator never reaches the branch: every
 frozen skeleton is the one it was, byte for byte.
 
+**And one field may be left out while it is ``None``.** A dataclass field declared
+``metadata={'skeleton': 'omit-none'}`` is not written at all while it holds ``None``, and is
+written as any other field once it holds a value. ``current_gain`` of
+:class:`~wavebit.fdtd._kernel.sources.ColumnTerm` carries the mark: an oblique p
+``PlaneWave``'s column is driven by a two-node current with a static gain
+(``src/wavebit/fdtd/_prepare/sources.py::plane_wave_current_gain``), which moves that scene's
+skeleton, while every other column -- s, normal incidence, TFSF -- holds ``None`` there and
+encodes exactly as it did before the field existed.
+
 **Dtype.** Real (``float64``) unless any face is Bloch or (stage 3) ``Axis1D``; a Bloch phase
 that is concretely 0 was refused at ``Bloch(...)``, so the dtype rule is simply "any Bloch or
 Axis1D face means complex" (an Axis1D face is complex even at ``k = 0``).
@@ -162,7 +171,9 @@ def _encode(v):
                   else _encode(getattr(v, f.name))]
                  for f in dataclasses.fields(v)
                  if not (isinstance(v, Plan) and f.name in ('junctions', 'shape_ranges', 'decay')
-                         and not getattr(v, f.name))]]
+                         and not getattr(v, f.name))
+                 and not (f.metadata.get('skeleton') == 'omit-none'
+                          and getattr(v, f.name) is None)]]
     if isinstance(v, (tuple, list)):
         return ['tuple', [_encode(x) for x in v]]
     if isinstance(v, dict):

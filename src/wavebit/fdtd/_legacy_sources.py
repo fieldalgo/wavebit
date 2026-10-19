@@ -437,8 +437,11 @@ class PlaneWave:
 
     The cell's transverse faces must be ``Periodic`` (a zero transverse wavevector) or
     ``Bloch`` carrying the wave's transverse wavevector at the band centre --
-    :meth:`Bloch.from_source` writes them. ``amplitude`` scales the tangential part of ``e``,
-    which is what the sheet imposes; the reference series the run returns
+    :meth:`Bloch.from_source` writes them. ``amplitude`` scales the tangential part of ``e``:
+    the incident column's drive sets that tangential E (s, or normal incidence), or for an
+    oblique p wave is a current normalised so that the tangential E at the band centre is the
+    same (elsewhere in the band it differs by the drive's closed-form transfer;
+    ``src/wavebit/fdtd/_kernel/sources.py``). Either way the reference series the run returns
     (``res.sources[name]``) is the incident field itself, so nothing downstream has to believe
     a closed form.
     """

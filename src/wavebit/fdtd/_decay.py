@@ -128,7 +128,8 @@ def source_gate(scene, threshold):
 
     Row times are (n+1/2)dt for electric current and n dt for magnetic current. Requiring
     the WINDOW START n*dt past this bound is conservative for both and for a column's
-    hard electric drive at (n+1)dt. The waveform remains
+    electric drive: the hard one at (n+1)dt, and an oblique p PlaneWave's two-node current,
+    which reads its row at (n+1)dt and n dt. The waveform remains
     its original infinite Gaussian. The last nextafter rounds the computed time upward;
     this is a floating-point eligibility rule, not a rigorously rounded exp certificate.
     """
