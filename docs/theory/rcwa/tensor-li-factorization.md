@@ -32,8 +32,10 @@ result = solver.solve()
 - Tensor rasters with `fourier_coefficients='sampled'` (default) or `'integrated'`.
   Both describe the supplied piecewise-constant pixels. The integrated builder
   retains every pixel, including its independent derivative.
-- Axis-aligned rectangle paintings wholly inside the cell, including its edges,
-  with `'integrated'` coefficients. Later rectangles paint over earlier ones.
+- Axis-aligned rectangle paintings wholly inside one cell, including its edges,
+  with `'integrated'` coefficients. A rectangle written whole periods away is read
+  in the cell (the plan records the fold); one that crosses the cell edge is refused
+  wherever it is written. Later rectangles paint over earlier ones.
   Boundaries follow the live rectangle coordinates; no normal grid is used.
 - Full complex 3×3 epsilon and mu, including independent xy/yx/xz/yz/zx/zy entries.
 - Uniform full tensors through exact scaled-identity blocks. A z coupling in
