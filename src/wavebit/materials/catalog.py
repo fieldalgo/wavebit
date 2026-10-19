@@ -15,10 +15,17 @@ from wavebit._common.backend import eager_under_torch_compile as _eager_under_to
 __all__ = ['available', 'load']
 
 # Explicit entries preserve source identity and avoid filesystem-order defaults.
+# Each identifier names the publications its table comes from; the data are
+# from the public-domain refractiveindex.info database, cited in
+# data/refractiveindex/README.md and rebuilt by tools/build_material_tables.py.
 _CATALOG = {
-    f'filmetrics/{name}': f'filmetrics/{name}.txt'
-    for name in ('Al2O3', 'Si', 'Si3N4', 'SiO2')
+    'Malitson1962/Al2O3': 'refractiveindex/Al2O3.txt',
+    'Green2008-Li1980/Si': 'refractiveindex/Si.txt',
+    'Luke2015/Si3N4': 'refractiveindex/Si3N4.txt',
+    'Malitson1965/SiO2': 'refractiveindex/SiO2.txt',
 }
+# Tables shipped until 2026-10-19 whose source terms could not be confirmed.
+_REMOVED = {f'filmetrics/{name}' for name in ('Al2O3', 'Si', 'Si3N4', 'SiO2')}
 _UNIT_METRES = {'nm': 1e-9, 'um': 1e-6, 'mm': 1e-3, 'm': 1.}
 
 
@@ -40,7 +47,7 @@ def load(name, *, wavelength_unit='nm'):
     Example: ``silicon = wavebit.materials.catalog.load('Si')``. No wavelength argument
     is accepted: loading always returns a dispersion model, and ``silicon.at(w)``
     always returns numerical constitutive values. Names are case-insensitive.
-    Use ``'filmetrics/Si'`` to identify the dataset explicitly. Ambiguous short
+    Use ``'Green2008-Li1980/Si'`` to identify the dataset explicitly. Ambiguous short
     names raise an error instead of choosing an arbitrary source.
 
     ``wavelength_unit`` is the unit of **all lengths in the receiving scene**:
@@ -60,6 +67,9 @@ def load(name, *, wavelength_unit='nm'):
     if not isinstance(wavelength_unit, str) or wavelength_unit not in _UNIT_METRES:
         raise ValueError("wavelength_unit must be 'nm', 'um', 'mm' or 'm'")
     query = name.strip().casefold()
+    if query in {key.casefold() for key in _REMOVED}:
+        raise ValueError(f'{name!r} was removed on 2026-10-19 because its source terms could not be confirmed; '
+                         f'load the short name or one of: {", ".join(available())}')
     matches = [key for key in _CATALOG
                if key.casefold() == query or ('/' not in query and key.split('/')[-1].casefold() == query)]
     if not matches:

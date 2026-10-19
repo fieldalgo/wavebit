@@ -56,9 +56,11 @@ Runnable file: {download}`09_material_sweep.py <../../../examples/rcwa/learning/
 
 | Wavelength (nm) | Circle relative permittivity εᵣ | Total R | Total T |
 | --- | --- | --- | --- |
-| 800.0 | 13.634191 + 0.047966j | 0.057296958 | 0.940747954 |
-| 900.0 | 13.240457 + 0.054569j | 0.050530329 | 0.945208958 |
-| 1000.0 | 12.903107 + 0.029383j | 0.015798325 | 0.983445526 |
+| 800.0 | 13.505596 + 0.039773j | 0.056499512 | 0.941866276 |
+| 900.0 | 13.060991 + 0.015685j | 0.047853562 | 0.950932785 |
+| 1000.0 | 12.759184 + 0.003638j | 0.015657932 | 0.984248122 |
+
+The values were recomputed on 2026-10-19, when the bundled silicon table changed to the cited Green (2008) data; the course record in `learn-measurements.json` was measured with the earlier table.
 
 The table shows that the permittivity inside the circle changes along with wavelength. Orders `(1, 1)` and 64 NVF samples are chosen to demonstrate the workflow briefly; they do not establish optical convergence.
 
@@ -100,14 +102,14 @@ Calling `.at(900.)` leaves the original `silicon` wavelength data intact. `silic
 
 ```python
 wavebit.materials.available()
-# ('filmetrics/Al2O3', 'filmetrics/Si', 'filmetrics/Si3N4', 'filmetrics/SiO2')
-silicon = wavebit.materials.load('filmetrics/Si')  # Specify the source as well
-print(silicon.wavelength_range)                  # (190.7, 2500.0), nm by default
+# ('Green2008-Li1980/Si', 'Luke2015/Si3N4', 'Malitson1962/Al2O3', 'Malitson1965/SiO2')
+silicon = wavebit.materials.load('Green2008-Li1980/Si')  # Specify the source as well
+print(silicon.wavelength_range)                  # (250.0, 14000.0), nm by default
 silicon_um = wavebit.materials.load('Si', wavelength_unit='um')
 value = silicon_um.at(0.9)                       # 0.9 μm = 900 nm
 ```
 
-Short names such as `Si` are case-insensitive. If several sources make a name ambiguous, one is not chosen arbitrarily: include the source, as in `filmetrics/Si`. **The same chemical formula can have different optical properties under different fabrication conditions, so choosing data is part of defining the physical model.** Only the requested file is read, and its immutable object is reused; you do not need to preload the entire material library.
+Short names such as `Si` are case-insensitive. If several sources make a name ambiguous, one is not chosen arbitrarily: include the source, as in `Green2008-Li1980/Si`. **The same chemical formula can have different optical properties under different fabrication conditions, so choosing data is part of defining the physical model.** Only the requested file is read, and its immutable object is reused; you do not need to preload the entire material library.
 
 The default length unit is `nm`. Setting `wavelength_unit='um'` converts the table’s wavelength axis to μm. Supply the calculation wavelength, period, shape dimensions and layer thicknesses in μm as well. Supported units are `nm`, `um`, `mm` and `m`; existing geometry is not silently rescaled. An earlier bundled asset, `p_Si.mat`, lacked unit and original-source metadata; it was never part of this catalog and was removed from the package on 2026-10-14.
 
@@ -135,7 +137,7 @@ value = material.at(850.)              # Linearly interpolate ε between 800 and
 result = solver.solve(wavelength=873.2) # Evaluate assigned dispersive materials here too
 ```
 
-When both ε and μ tables are supplied, both are interpolated. The magnetic example below gives ε=4.1 and μ=1.15 at 850 nm, without adding a new sample wavelength. However, a table spanning 800–1000 nm raises an error at 1100 nm; broader data are required. The default `materials.load('Si')` data cover 190.7–2500 nm. Being able to interpolate within a range does not establish that the table represents the actual material accurately enough. Check sample spacing and the original data where dispersion changes rapidly.
+When both ε and μ tables are supplied, both are interpolated. The magnetic example below gives ε=4.1 and μ=1.15 at 850 nm, without adding a new sample wavelength. However, a table spanning 800–1000 nm raises an error at 1100 nm; broader data are required. The default `materials.load('Si')` data cover 250–14000 nm. Being able to interpolate within a range does not establish that the table represents the actual material accurately enough. Check sample spacing and the original data where dispersion changes rapidly.
 
 ## Supply permeability μ data together with permittivity
 

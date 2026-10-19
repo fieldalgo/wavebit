@@ -15,11 +15,11 @@ assert package == expected and package.is_relative_to(Path(sys.prefix).resolve()
 for optional in ('jax', 'torch', 'matplotlib'):
     assert importlib.util.find_spec(optional) is None, f'{optional} present in base environment'
 
-asset = 'wavebit/data/filmetrics/Si.txt'
+asset = 'wavebit/data/refractiveindex/Si.txt'
 assert importlib.metadata.distribution('wavebit').locate_file(asset).is_file(), asset
 names = wavebit.materials.catalog.available()
-assert set(names) == {'filmetrics/Si', 'filmetrics/SiO2',
-                      'filmetrics/Si3N4', 'filmetrics/Al2O3'}
+assert set(names) == {'Green2008-Li1980/Si', 'Malitson1965/SiO2',
+                      'Luke2015/Si3N4', 'Malitson1962/Al2O3'}
 for name in names:
     assert np.isfinite(wavebit.materials.catalog.load(name).at(900.).epsilon), name
 problem = wavebit.rcwa.Problem(
