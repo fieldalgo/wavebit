@@ -259,6 +259,7 @@ subtrees:
               - file: validation/fdtd/fdtd-ellipse-gradients
               - file: validation/fdtd/fdtd-enz
               - file: validation/fdtd/fdtd-halfspace-gradients
+              - file: validation/fdtd/fdtd-jit-painting-memory
               - file: validation/fdtd/fdtd-lattice-reference
               - file: validation/fdtd/fdtd-layer-alignment
               - file: validation/fdtd/fdtd-layer-gradients
