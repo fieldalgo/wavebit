@@ -378,6 +378,26 @@ def _absorbing(scene, grid):
     return (tuple(cpml), tuple(absorbing), tuple(pml), tuple(absorber), tuple(wavelengths))
 
 
+def _check_term_names(scene, p):
+    """Refuse a source whose name is also the name of one of the solver's own terms.
+
+    Every term's memory lives under its name in the state (``state['mem'][name]``). A source
+    term is named by the user and a material term by the solver (``poles[0]``,
+    ``switched[0]``, ...), so a source called ``'switched[0]'`` would hand one term the other's
+    memory -- it crashed on all three backends before this check.
+    """
+    names = [t.name for t in p.terms]
+    clashes = sorted({n for n in names if names.count(n) > 1})
+    if clashes:
+        sources = {s.name for s in (getattr(scene, 'sources', ()) or ())}
+        mine = [n for n in clashes if n in sources]
+        raise ValueError(
+            f'source name(s) {mine or clashes} are also the names the solver gives its own '
+            f'material terms (structures are named like poles[0] or switched[0] after their '
+            f'index). Each term keeps its memory under its name, so two terms cannot share '
+            f'one. Rename the source.')
+
+
 def _switched_terms(scene, p):
     """One :class:`SwitchedTerm` per structure whose material is ``Switched``.
 
@@ -569,6 +589,7 @@ def plan(scene, _column=False, _grazing=None, _reuse=None, _shape_trace=False):
     switched = _switched_terms(scene, p)
     if switched:
         p = p.with_static(terms=tuple(p.terms) + switched)
+    _check_term_names(scene, p)
     if not _column:
         rows = grazing.enforce(scene, p)
         if _grazing is not None and rows is not None:

@@ -520,3 +520,26 @@ def test_automatic_stopping_waits_for_the_jump():
         jump = (settled + 400) * dt
         stopped = fdtd.run(problem(jump), numerics=numerics).provenance['actual_steps']
     assert stopped * dt > jump
+
+
+@pytest.mark.parametrize('material, name', [
+    (Switched(eps=1.0, after=2.0, time=2.0), 'switched[0]'),
+    (fd.Dispersive(eps_inf=1.0, poles=(fd.Lorentz(omega_0=4.0, gamma=0.1, strength=1.0),)),
+     'poles[0]'),
+])
+def test_a_source_named_like_a_material_term_is_refused(material, name):
+    """A source called ``'switched[0]'`` used to take that term's memory and crash."""
+    def scene(source_name):
+        return fd.Scene(
+            domain=fd.Domain(size=(0.4, 0.4, 3.0)),
+            boundaries=fd.Boundaries(x=fd.Periodic(), y=fd.Periodic(),
+                                     z=fd.PML(cells=12, wavelength=1.0)),
+            resolution=fd.Resolution(dx=0.05), run=fd.Run(steps=10, courant=COURANT),
+            structures=(fd.Structure(fd.Slab(z=(-0.6, 0.0)), material),),
+            sources=(fd.Dipole(source_name, center=(0, 0, 0.5), component='Ey',
+                               band=fd.Band(wavelength=1.0, df=0.2)),))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        fd.plan(scene('d'))
+    assert 'Rename the source' in plan_error(scene(name))
