@@ -518,12 +518,44 @@ def test_marked_units_leave_their_file_and_named_units_stay_together(checkout):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-@pytest.mark.parametrize('marker', ["shard_unit('')", "shard_unit('a', 'b')", 'shard_unit(name="a")'])
+def test_a_file_marked_per_test_keeps_each_tests_cases_and_named_groups_together(checkout):
+    # The module mark makes every test function a unit; a closer named mark overrides it.
+    suite(checkout, '''
+        import pytest
+        pytestmark = pytest.mark.shard_unit(per='test')
+        @pytest.mark.parametrize('n', [1, 2, 3])
+        def test_cases(n): pass
+        @pytest.mark.shard_unit('shared')
+        def test_fill(): pass
+        def test_other(): pass
+        @pytest.mark.shard_unit('shared')
+        def test_read(): pass
+    ''')
+    heavy = 'tests/test_tiny.py'
+    outputs, selected = [], []
+    for index in (1, 2, 3):
+        output = checkout/'artifacts'/f'per{index}'
+        result, receipt = run(checkout, output, '--shard', f'{index}/3')
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert receipt['shard']['units'][f'{heavy}::test_cases[2]'] == f'{heavy}::test_cases'
+        outputs.append(str(output))
+        selected.append([node.split('::')[1] for node in receipt['collected_nodeids']])
+    # Without timings each case costs the same: 3 cases | the named pair | the last test.
+    assert selected == [['test_cases[1]', 'test_cases[2]', 'test_cases[3]'],
+                        ['test_fill', 'test_read'], ['test_other']]
+    command = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '3', *outputs]
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize('marker', ["shard_unit('')", "shard_unit('a', 'b')", 'shard_unit(name="a")',
+                                    "shard_unit(per='case')", "shard_unit('a', per='test')"])
 def test_a_malformed_shard_unit_is_refused_at_collection(checkout, marker):
     suite(checkout, f'import pytest\n@pytest.mark.{marker}\ndef test_one(): pass\n')
     result, receipt = run(checkout, checkout/'artifacts/malformed', '--shard', '1/1')
     assert result.returncode != 0
-    assert 'shard_unit takes no argument or one name' in (checkout/'artifacts/malformed/collection/pytest.log').read_text()
+    log = (checkout/'artifacts/malformed/collection/pytest.log').read_text()
+    assert "shard_unit takes no argument, per='test' or one name" in log
 
 
 @pytest.mark.parametrize('seconds', [-1, float('nan'), float('inf')])
