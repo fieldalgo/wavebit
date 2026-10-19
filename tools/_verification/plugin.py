@@ -33,15 +33,19 @@ def pytest_configure(config):
 def shard_unit(item):
     """The CI shard unit of a node marked `shard_unit`, or None for its file's unit.
 
-    A bare marker makes each node its own unit; `shard_unit('name')` puts the nodes of one
-    file that carry the same name in one unit, for nodes that share a cache or fixture.
+    A bare marker makes each node its own unit; `shard_unit(per='test')` makes each test
+    function one unit with all its parameter cases (a whole file opts in with `pytestmark`);
+    `shard_unit('name')` puts the nodes of one file that carry the same name in one unit, for
+    nodes that share a cache or fixture. The marker closest to the node wins.
     """
     marker = item.get_closest_marker('shard_unit')
     if marker is None:
         return None
+    if marker.kwargs == {'per': 'test'} and not marker.args:
+        return item.nodeid.split('[', 1)[0]
     if marker.kwargs or len(marker.args) > 1 or (
             marker.args and (not isinstance(marker.args[0], str) or not marker.args[0])):
-        raise pytest.UsageError(f'{item.nodeid}: shard_unit takes no argument or one name')
+        raise pytest.UsageError(f"{item.nodeid}: shard_unit takes no argument, per='test' or one name")
     if not marker.args:
         return item.nodeid
     return f"{item.nodeid.split('::', 1)[0]}::@{marker.args[0]}"
