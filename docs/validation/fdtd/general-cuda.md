@@ -857,15 +857,24 @@ derivative claim.
 The public oblique fixture uses a 0.25×0.2×3 µm physical domain, 0.05 µm spacing,
 24-cell PML and a Gaussian pulse. Four cases cover 20° s/p incidence in both
 z directions for 1100 steps. The closed form uses the independently written
-waveform transform, fixed-k Yee dispersion and staggered discrete polarization;
-the hard-source-to-probe distance is derived from the declared geometry.
+waveform transform, fixed-k Yee dispersion, staggered discrete polarization and
+the column drive's transfer: 1 for the hard-driven s cases, and for the
+current-driven oblique p cases the closed-form ratio `D(w) = G(w)/G(w0)` from
+`tests/fdtd/test_fd_planewave.py`. The drive-node-to-probe distance is derived
+from the declared geometry.
 Public seconds/radians and H in A/m are explicitly converted for this oracle.
-Real-frequency errors were at most `5.545210e-7` on CUDA against the existing
-`2e-6` budget. A fifth case, 30° polar/35° azimuth p polarization, uses 1600
-steps and the damped contour `omega + 0.4i` in geometry-time units; its error
-was `6.135543e-8` against `3e-6`.
+A fifth case, 30° polar/35° azimuth p polarization, uses 1600 steps and the
+damped contour `omega + 0.4i` in geometry-time units.
 
-Across the five CUDA runs, backward/forward peak was at most `8.393595e-16`,
+Recorded earlier on CUDA, while every case was hard-driven (main up to `20a9715`):
+real-frequency errors at most `5.545210e-7` against the existing `2e-6` budget,
+and `6.135543e-8` against `3e-6` for the damped case. After the oblique p cases
+became current-driven, CPU Torch gave `5.545210e-7` (s, both directions),
+`2.632067e-7` (20° p, both directions) and `4.039189e-8` (damped 30°/35° p),
+with the budgets unchanged. The CUDA cases have not been rerun with the current
+drive.
+
+Across the five hard-driven CUDA runs, backward/forward peak was at most `8.393595e-16`,
 entry-plane reference error `1.111734e-15`, and neighbouring-cell phase error
 `1.347744e-15`, each below the unchanged `1e-13` budget. All six field components
 are checked, with a nonzero forward floor and complex128 device placement.

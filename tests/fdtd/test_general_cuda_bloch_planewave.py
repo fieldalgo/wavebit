@@ -1,7 +1,8 @@
 """Public oblique Bloch PlaneWave against the independent discrete wave oracle.
 
-The waveform, fixed-k Yee dispersion and staggered polarisation are the existing
-stage-2 closed forms, not a second solver run. Public angles are radians and
+The waveform, fixed-k Yee dispersion, staggered polarisation and the column
+drive's transfer are the existing stage-2 closed forms, not a second solver run:
+s waves are hard-driven (transfer 1), oblique p waves current-driven (``D(w)``). Public angles are radians and
 times are seconds; the oracle explicitly converts back to length/c units.
 The bounded conical case uses a damped transform to suppress finite-window
 ring-down. This does not qualify arbitrary angles, media or AD.
@@ -15,7 +16,7 @@ from wavebit import Material, Units, fdtd
 from wavebit.units import Z0
 from tests.fdtd.test_fd_planewave import (
     A, PHASE, DELAY, CLOSED_TOL, DAMPED_TOL, GAMMA, ROUND_OFF,
-    _dft, _waveform, _discrete_kz, _grid_polarisation,
+    _dft, _waveform, _discrete_kz, _grid_polarisation, _drive_transfer,
 )
 
 
@@ -150,14 +151,17 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
     waveform = _dft(times, _waveform(oracle, times), omega)
     polarisation = _grid_polarisation(oracle, plan)
     normalization = max(np.max(np.abs(value * waveform)) for value in polarisation)
-    # The hard-source plane is one cell upstream of the requested sheet. The
-    # probe is .8 downstream: derive .85 independently, never read column.ks.
+    # The column's E at its drive node ``ks`` is ``W(w) D(w)``: D = 1 for the
+    # hard s drive, the closed-form current-drive ratio for oblique p.
+    drive = _drive_transfer(oracle, plan, omega)
+    # The drive node is one cell upstream of the requested sheet. The probe is
+    # .8 downstream: derive .85 independently, never read column.ks.
     distance = .8 + DX
     error = 0.
     for c, component in enumerate(('Ex', 'Ey')):
         sample = result['forward_' + component]
         np.testing.assert_allclose(sample.coordinates['sample'][2], oracle.sign * .8, atol=1e-14, rtol=0.)
-        expected = polarisation[c] * waveform * np.exp(1j * _discrete_kz(oracle, plan, omega) * distance)
+        expected = polarisation[c] * waveform * drive * np.exp(1j * _discrete_kz(oracle, plan, omega) * distance)
         actual = _dft(host(sample.times) / UNITS.time_seconds, host(sample.values), omega)
         error = max(error, float(np.max(np.abs(actual - expected)) / normalization))
     record_property('closed_form_peak_relative_error', error)
