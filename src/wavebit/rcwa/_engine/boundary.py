@@ -603,21 +603,50 @@ def _centroid(xp, V):
                      xp.sum((y + yn) * cr) / (6.0 * a)])
 
 
-def _paint_centroid(xp, segment_data, plan):
-    """Centroid of the unwrapped painted union, with internal traces canceled first.
+def _paint_centroid(xp, segment_data, plan, loops=(), lattice=None, transform=None):
+    """Centroid of the painted union, each loop counted in its nearest cell.
 
     The plan picks one oriented representative of each unwrapped exterior interval.
     This includes periodic abutting faces for the area integral, but excludes zero-area
     spurs and shared internal cuts. Their cancellation is combinatorial, so an invisible
     nested contour cannot perturb the quadrature origin through floating-point summation.
+
+    A region may be written any number of periods away, and the unwrapped union then
+    moves its centroid by the region's share of the area times a lattice vector: the
+    quadrature grid slides by a fraction of a sample over the same structure. With the
+    resolved ``loops`` (and the cell), each loop whose vertex mean lies outside the cell
+    of the cell centre is carried back by whole lattice vectors on the reduced basis, by
+    adding ``area * shift`` to the moment. A loop already in that cell adds zero, so a
+    layer written inside the cell keeps its anchor to the bit. The shift is a rounding of
+    the live positions -- locally constant, so its derivative is zero, as for every fold.
     """
     a, e, _, _ = segment_data
     ids = xp.asarray([i for i, p in enumerate(plan.pieces) if p.centroid_sign], dtype=xp.int64)
     sign = xp.asarray([p.centroid_sign for p in plan.pieces if p.centroid_sign], dtype=a.dtype)
     a, z = a[ids], (a + e)[ids]
     cross = (a[:, 0] * z[:, 1] - z[:, 0] * a[:, 1]) * sign
-    return xp.stack([xp.sum((a[:, 0] + z[:, 0]) * cross),
-                     xp.sum((a[:, 1] + z[:, 1]) * cross)]) / (3 * xp.sum(cross))
+    moment_x = xp.sum((a[:, 0] + z[:, 0]) * cross)
+    moment_y = xp.sum((a[:, 1] + z[:, 1]) * cross)
+    if loops and lattice is not None:
+        reduced = reduced_basis(lattice, transform)
+        r1x, r2x = reduced[0]
+        r1y, r2y = reduced[1]
+        mid_x = 0.5 * (lattice[0][0] + lattice[0][1])
+        mid_y = 0.5 * (lattice[1][0] + lattice[1][1])
+        det = r1x * r2y - r2x * r1y
+        for V in loops:
+            if V.shape[0] == 0:
+                continue
+            x, y = V[:, 0], V[:, 1]
+            dx, dy = xp.mean(x) - mid_x, xp.mean(y) - mid_y
+            ku = xp.round((r2y * dx - r2x * dy) / det)
+            kv = xp.round((-r1y * dx + r1x * dy) / det)
+            # Twice the loop's signed area; moving the loop by s moves 3 * cross-sums by
+            # 3 * (twice its area) * s, in the units of the two sums above.
+            twice_area = xp.sum(x * xp.roll(y, -1) - xp.roll(x, -1) * y)
+            moment_x = moment_x - 3 * twice_area * (ku * r1x + kv * r2x)
+            moment_y = moment_y - 3 * twice_area * (ku * r1y + kv * r2y)
+    return xp.stack([moment_x, moment_y]) / (3 * xp.sum(cross))
 
 
 def _cell_scale(xp, lattice, dtype):
@@ -1348,7 +1377,8 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
         images=interface_plan.images, image_groups=interface_plan.groups,
         contrasts=interface_contrasts(xp, regions, background, interface_plan, dtype),
         interface_plan=interface_plan,
-        anchor=_paint_centroid(xp, segment_data, interface_plan) if segment_data is not None else None)
+        anchor=(_paint_centroid(xp, segment_data, interface_plan, all_loops, lattice, transform)
+                if segment_data is not None else None))
     return nvf_from_coeffs(xp, eps_c, inv_c, *coeffs[:3], half_width_u, half_width_v,
                            c_yx=coeffs[3] if len(coeffs) == 4 else None,
                            eps_bound=eps_bound)
