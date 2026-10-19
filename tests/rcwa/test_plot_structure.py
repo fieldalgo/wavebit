@@ -110,6 +110,39 @@ def test_the_analytic_sampler_agrees_with_its_own_dc_coefficient(lattice):
     assert solver.slice_structure(n=1024).real.mean() == pytest.approx(dc, rel=1e-4)
 
 
+@pytest.mark.parametrize('lattice', [None, [[P, P * 0.5], [0.0, P * 0.866]]])
+def test_a_shape_written_periods_away_is_drawn_where_it_is(lattice):
+    """``cx`` and ``cx + m a1 + n a2`` are one structure, and they draw as one picture.
+
+    The sampler draws one ring of images around each shape as written, so from two periods
+    out none of them reached the cell and the shape was missing from the picture while the
+    solve integrated it (``<eps>`` 1.18 against 1.00 for a lone box two cells over). Each shape
+    is now carried to the cell of the cell centre first. On the rectangle every move is exact
+    in floating point, so the two pictures are the same array; on the sheared cell the moves
+    round, and the picture is held to the layer's DC term as in the test above.
+    """
+    a1, a2 = (np.array([P, 0.0]), np.array([0.0, P])) if lattice is None else \
+        (np.asarray(lattice, float)[:, 0], np.asarray(lattice, float)[:, 1])
+    base = [dict(type='circle', cx=-200.0, cy=-200.0, lx=260.0, material=12.25),
+            dict(type='rectangle', cx=240.0, cy=150.0, lx=300.0, ly=180.0,
+                 angle=0.45, material=4.840000000000001)]
+    moves = (2 * a2, 3 * a1 - 2 * a2)
+    moved = [dict(s, cx=s['cx'] + d[0], cy=s['cy'] + d[1]) for s, d in zip(base, moves)]
+    cell = {'lattice': lattice} if lattice is not None else {'period': COMMON['period']}
+    picture = lambda shapes: _legacy_wavebit_rcwa(
+        structure=[dict(background=1.0, shapes=shapes)], **cell,
+        **COMMON_NO_CELL).slice_structure(n=512).real
+    if lattice is None:
+        np.testing.assert_array_equal(picture(moved), picture(base))
+    else:
+        solver = _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=base)], **cell,
+                                      **COMMON_NO_CELL)
+        fx, fy = int(solver.truncation_order[0]), int(solver.truncation_order[1])
+        dc = assemble_eps_coeffs(xnp, base, 1.0, fx, fy, solver.lattice,
+                                 xnp.complex128)[0][2 * fy, 2 * fx].real
+        assert picture(moved).mean() == pytest.approx(dc, rel=1e-3)
+
+
 def test_a_circle_is_read_through_shape_geometry():
     """A circle names its diameter once. Reading the dict directly is how that stops being true.
 
@@ -160,6 +193,21 @@ def test_the_paint_renderer_matches_the_boundary_path_loops():
     assert solver.slice_structure(n=64, band_limited=True).real.mean() == pytest.approx(
         want, abs=1e-13)
     assert solver.slice_structure(n=2048).real.mean() == pytest.approx(want, abs=2e-4)
+
+
+def test_a_painted_layer_draws_a_loop_written_periods_away_where_it_is():
+    """The painted renderer carries each resolved loop to the cell of the cell centre too.
+
+    The overlap is resolved as written; a third, disjoint box written two and three cells
+    away is the same structure, and each of its loops draws as the unmoved one does.
+    """
+    extra = dict(type='rectangle', cx=330.0, cy=-350.0, lx=150.0, ly=100.0, material=2.25)
+    picture = lambda box: _legacy_wavebit_rcwa(
+        structure=[dict(background=1.0, shapes=OVERLAP + [box])], **COMMON).slice_structure(n=256)
+    base = picture(extra)
+    for dx, dy in ((2 * P, 0.0), (0.0, -3 * P), (-2 * P, 2 * P)):
+        np.testing.assert_array_equal(
+            picture(dict(extra, cx=extra['cx'] + dx, cy=extra['cy'] + dy)), base)
 
 
 def test_an_overlap_is_drawn_painted_and_not_summed():
