@@ -104,3 +104,23 @@ raw-spectrum units. These checks do not establish grid, smoothing or PML
 convergence. `observations.fit_modes` accepts SI timestamps for offline ringdown
 fitting and returns Hz and decay rates in 1/s; window and model-order convergence
 remain separate checks.
+
+## Memory under an outer `jax.jit` on CPU
+
+Wavebit has no option for this. It is a JAX compiler setting, and the program it affects
+belongs to your own outer `jax.jit`, so you choose it there. With `shape_integration='area'`
+(which every rotated `Rectangle` needs), a forward-mode derivative (`jax.jvp`, `jax.jacfwd`)
+compiled on CPU can need several times the memory of the same derivative computed eagerly.
+XLA:CPU's default scheduler keeps every shape-painting intermediate alive until the end of the
+program. The memory-optimized scheduler computes the same values with a much smaller
+working set:
+
+```python
+options = {'xla_cpu_scheduler_type': 'CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED'}
+jacobian = jax.jit(jax.jacfwd(loss), compiler_options=options)
+```
+
+To apply it to every jit in a process, set
+`XLA_FLAGS=--xla_cpu_scheduler_type=CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED` before JAX starts.
+The `'separable'` route is not affected. The measurements are in
+[outer-jit memory of area-painted FDTD derivatives](../../validation/fdtd/fdtd-jit-painting-memory.md).
