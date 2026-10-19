@@ -422,7 +422,7 @@ def test_a_slab_naming_more_than_one_axis_is_refused_naming_stage_4(kwargs, name
 def test_every_other_shape_is_refused_by_name(keyword):
     with pytest.raises(NotImplementedError, match='stage 4') as e:
         fd.Slab(**{keyword: 1.0})
-    assert 'Slab(x=(lo, hi))' in str(e.value)
+    assert 'SnappedSlab(x=(lo, hi))' in str(e.value)
 
 
 def test_a_slab_that_snaps_to_nothing_is_refused_rather_than_run_as_vacuum():

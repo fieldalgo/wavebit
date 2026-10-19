@@ -82,7 +82,7 @@ def test_later_stages_are_refused_by_name():
 
 
 def test_every_axis_is_required():
-    with pytest.raises(TypeError, match="'z'"):
+    with pytest.raises(TypeError, match="needs 'z'"):
         fd.Boundaries(x=fd.PEC(), y=fd.PEC())
     with pytest.raises(TypeError, match='face type'):
         fd.Boundaries(x='pec', y=fd.PEC(), z=fd.PEC())

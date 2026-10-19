@@ -68,7 +68,7 @@ def test_a_dipole_touching_a_pec_wall_node_is_refused_and_one_cell_in_is_accepte
     with pytest.raises(ValueError) as e:
         _plans(_pec_box((touching,)))
     message = str(e.value)
-    assert "Dipole('d')" in message and 'PEC wall' in message and "'x-'" in message
+    assert "CurrentDipole('d')" in message and 'PEC wall' in message and "'x-'" in message
     assert 'one cell clear' in message
     clear = touching.replace(center=(low + 3.0 * DX, 0.0, 0.0))
     assert _plans(_pec_box((clear,))).terms[-1].slab.x[0] >= 1
@@ -326,7 +326,7 @@ def test_a_range_crossing_a_wall_is_refused():
     with pytest.raises(ValueError) as e:
         _plans(scene.replace(sources=(reaching,)))
     message = str(e.value)
-    assert "Dipole('d') over its range" in message and "reaches into the PML on 'x+'" in message
+    assert "CurrentDipole('d') over its range" in message and "reaches into the PML on 'x+'" in message
     fine = scene.sources[0].replace(range=((-0.1, 0.1), (0.0, 0.0), (0.0, 0.0)))
     _plans(scene.replace(sources=(fine,)))
 

@@ -53,5 +53,6 @@ def test_field_volume_may_sample_the_material_interior():
 def test_farfield_already_requires_the_whole_structure_inside():
     shape = fd.Sphere(radius=.2, center=(.3, 0., 0.))
     monitor = fd.FarField('ff', box=fd.Region(size=(.6,)*3), wavelengths=(1.,))
-    with pytest.raises(ValueError, match=r'FarField.*structures\[0\].*not strictly inside'):
+    with pytest.raises(ValueError,
+                       match=r'FarFieldMonitor\(.ff.\).*structures\[0\].*not strictly inside'):
         planned(scene(shape, monitor))
