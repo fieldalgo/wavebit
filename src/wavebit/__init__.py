@@ -16,7 +16,8 @@ from ._common.execution import Execution, CheckReport
 from ._common.enums import Backend
 from .observations import (DiffractionOrders, FieldSamples, SpectralFieldSamples,
                            RawDiffractionSpectrum, TimeSeries, Validity)
-from .errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError, NumericalError, Issue
+from .errors import (WavebitError, ValidationError, UnsupportedFeatureError, IncompatibleProblemError,
+                     NumericalError, Issue)
 from .jobs import Job, run
 
 __all__ = ['materials', 'rcwa', 'fdtd', 'Material', 'MaterialResponse', 'ConductiveMaterial',
@@ -25,4 +26,4 @@ __all__ = ['materials', 'rcwa', 'fdtd', 'Material', 'MaterialResponse', 'Conduct
            'Execution', 'CheckReport', 'Backend', 'DiffractionOrders', 'FieldSamples',
            'SpectralFieldSamples', 'RawDiffractionSpectrum', 'TimeSeries', 'Validity',
            'ValidationError', 'UnsupportedFeatureError', 'IncompatibleProblemError',
-           'NumericalError', 'Issue', 'Job', 'run']
+           'NumericalError', 'WavebitError', 'Issue', 'Job', 'run']

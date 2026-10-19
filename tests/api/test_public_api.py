@@ -26,7 +26,7 @@ PUBLIC = {
              'DispersiveMaterial', 'Drude', 'Execution', 'FieldSamples', 'IncompatibleProblemError',
              'Issue', 'Job', 'Lattice', 'Lorentz', 'Material', 'MaterialResponse', 'NumericalError',
              'RawDiffractionSpectrum', 'SpectralFieldSamples', 'TabulatedMaterial', 'TimeSeries',
-             'Units', 'UnsupportedFeatureError', 'ValidationError', 'Validity',
+             'Units', 'UnsupportedFeatureError', 'ValidationError', 'Validity', 'WavebitError',
              'eps_from_refractive_index', 'fdtd', 'materials', 'rcwa', 'refractive_index_from_eps',
              'run'),
  'wavebit.fdtd': ('Bloch', 'Boundaries', 'Box', 'ConductiveAbsorber', 'CurrentDipole', 'Cylinder',
@@ -394,3 +394,14 @@ def test_a_lowercase_snapshot_component_is_refused_naming_its_public_spelling(mo
         snapshots(components=('Ex', 'ey'))
     assert snapshots(components=('Ex', 'Ey')).components == ('Ex', 'Ey')
     assert snapshots().components == ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
+
+
+def test_a_numerical_failure_is_a_wavebit_error_and_not_a_validation_error():
+    """``except ValidationError`` meant for a bad input does not swallow a failed calculation."""
+    from wavebit.errors import WavebitError, ValidationError, NumericalError, IncompatibleProblemError
+    error = NumericalError('nonfinite', code='rcwa.nonfinite', path='result')
+    assert isinstance(error, WavebitError) and not isinstance(error, ValidationError)
+    assert not isinstance(error, ValueError)
+    assert (error.code, error.path, error.issue.code) == ('rcwa.nonfinite', 'result', 'rcwa.nonfinite')
+    assert issubclass(ValidationError, WavebitError) and issubclass(ValidationError, ValueError)
+    assert issubclass(IncompatibleProblemError, ValidationError)

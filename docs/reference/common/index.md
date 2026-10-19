@@ -69,6 +69,9 @@ Physical materials and units are shared by both solvers. A common declaration do
 .. autoclass:: wavebit.Validity
    :members:
 
+.. autoclass:: wavebit.WavebitError
+   :members:
+
 .. autoclass:: wavebit.ValidationError
    :members:
 

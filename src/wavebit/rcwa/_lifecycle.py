@@ -7,14 +7,15 @@ import numpy as np
 
 from .._common.execution import Execution, CheckReport
 from .._common.backend import eager_under_torch_compile
-from ..errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError, NumericalError, Issue
+from ..errors import (ValidationError, UnsupportedFeatureError, IncompatibleProblemError, NumericalError,
+                      WavebitError, Issue)
 from .problem import Problem
 from .numerics import Numerics
 from . import _adapt
 
 
 def _issue(error, path='problem'):
-    if isinstance(error, ValidationError):
+    if isinstance(error, WavebitError):
         return error.issue
     return Issue(code='rcwa.unsupported' if isinstance(error, NotImplementedError) else 'rcwa.invalid',
                  path=path, message=str(error))
@@ -25,7 +26,7 @@ def _normalize_errors():
     """Translate legacy admission failures at the public API boundary."""
     try:
         yield
-    except ValidationError:
+    except WavebitError:
         raise
     except NotImplementedError as error:
         raise UnsupportedFeatureError(str(error), code='rcwa.unsupported', path='problem') from error
