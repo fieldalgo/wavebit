@@ -43,7 +43,7 @@ print(result.R.sum(axis=(-2,-1)), result.T.sum(axis=(-2,-1)))
 실행합니다. 두 경로 모두 현재 배정밀도가 필요합니다. 배열을 만들기 전에 JAX x64를 설정하세요.
 
 `spacing`은 명목 z 격자를 정하고, `transverse_spacing`은 선택적으로 x/y를 따로 정합니다.
-`nominal_layer_thickness`는 호출마다 바뀌는(live) 층 두께가 달라지는 동안 격자를 고정합니다.
+`nominal_layer_thickness`는 층 두께가 호출마다 바뀌어도(live) 격자를 고정합니다.
 `variable_depth=True`는 실험실 좌표를 고정하고 호출마다 바뀌는 경계면 위상을 쓰면서 전체 깊이
 변화를 허용합니다. `nominal_indices`는 반공간 재료가 바뀌는 동안 패딩과 비균일 간격(grading)을 고정합니다.
 준비된(prepared) 실행은 매번 같은 선언 배치와, 호출마다 바뀌는 입력 전체를 요구합니다. 양수인
@@ -89,10 +89,10 @@ Wavebit에는 이 설정을 위한 옵션이 없습니다. JAX 컴파일러 설�
 사용자 자신의 외부 `jax.jit`이므로 그곳에서 고릅니다.
 
 한 층에 `shape_integration='area'` 사각형이 두 개 이상 있을 때 해당합니다. 사각형을 하나라도
-회전하면 `'separable'`은 쓸 수 없으므로 이 설정이 필요합니다. 이 경우 전진 모드 미분
-(`jax.jvp`, `jax.jacfwd`)을 CPU에서 컴파일하면, 같은 미분을 즉시 실행할 때보다 몇 배의 메모리가
-필요할 수 있습니다. XLA:CPU 기본 스케줄러가 도형 칠하기 중간값을 칠하기의 마지막 축약까지 모두
-살려 두기 때문입니다. 메모리 최적화 스케줄러는 같은 값을 훨씬 작은 작업 메모리로 계산합니다.
+회전하면 `'separable'`은 쓸 수 없으므로 `shape_integration='area'`가 필요합니다. 이 경우 순방향 모드
+미분(`jax.jvp`, `jax.jacfwd`)을 CPU에서 컴파일하면, 같은 미분을 즉시 실행할 때보다 몇 배의 메모리가
+필요할 수 있습니다. XLA:CPU 기본 스케줄러가 마지막 도형 칠하기 중간값이 만들어질 때까지 어느 것도
+해제하지 않아 모두가 같은 순간에 살아 있기 때문입니다. 메모리 최적화 스케줄러는 같은 값을 훨씬 작은 작업 메모리로 계산합니다.
 
 ```python
 options = {'xla_cpu_scheduler_type': 'CPU_SCHEDULER_TYPE_MEMORY_OPTIMIZED'}
