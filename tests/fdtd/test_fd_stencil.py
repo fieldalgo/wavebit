@@ -1287,7 +1287,7 @@ def test_the_discretisation_door_at_lowering_works_both_ways():
         loss(torch.tensor(2.25, dtype=torch.float64, requires_grad=True), 'torch')
     assert 'StencilMismatchRefused' in str(err.value)
     # The other direction: the plan carries an operator the scene does not ask for.
-    for other, said in ((v, "asks for discretisation='voxel'"),
+    for other, said in ((v, "asks for discretization='voxel'"),
                         (s.replace(structures=()), 'has no structures[0]')):
         message = refusal(None, lambda: lower_params(other, plan, 'numpy'))
         assert 'StencilMismatchRefused' in message and said in message
