@@ -3,2120 +3,3892 @@
     "exclude": {
       "tests/api/test_answers_declaration.py": {
         "nodes": 27,
-        "seconds": 15.93294
+        "seconds": 14.963615
       },
       "tests/api/test_backend_names.py": {
         "nodes": 56,
-        "seconds": 0.423972
+        "seconds": 0.382385
       },
       "tests/api/test_cell_keyword_conflicts.py": {
         "nodes": 69,
-        "seconds": 0.297634
+        "seconds": 0.381484
       },
       "tests/api/test_cell_shape_gate.py": {
         "nodes": 39,
-        "seconds": 12.648496
+        "seconds": 10.370627
       },
       "tests/api/test_ci_runner_diagnostics.py": {
         "nodes": 5,
-        "seconds": 0.076939
+        "seconds": 0.053274
       },
       "tests/api/test_condition_gate.py": {
         "nodes": 37,
-        "seconds": 0.147959
+        "seconds": 0.266418
       },
       "tests/api/test_docs_contract.py": {
-        "nodes": 163,
-        "seconds": 3.753573
+        "nodes": 164,
+        "seconds": 5.914482
       },
       "tests/api/test_domain.py": {
         "nodes": 26,
-        "seconds": 0.085182
+        "seconds": 0.111397
       },
       "tests/api/test_eager_grad_parity.py": {
         "nodes": 14,
-        "seconds": 66.28334
+        "seconds": 65.289246
       },
       "tests/api/test_enums.py": {
         "nodes": 3,
-        "seconds": 0.050462
+        "seconds": 0.015568
       },
       "tests/api/test_fdtd_checkpoint_jobs.py": {
         "nodes": 4,
-        "seconds": 0.01506
+        "seconds": 0.014394
       },
       "tests/api/test_host_shape_topology.py": {
         "nodes": 15,
-        "seconds": 187.602214
+        "seconds": 218.090541
       },
       "tests/api/test_installation_metadata.py": {
         "nodes": 3,
-        "seconds": 0.008192
+        "seconds": 0.006871
       },
       "tests/api/test_job_migration.py": {
         "nodes": 7,
-        "seconds": 2.375623
+        "seconds": 1.709465
       },
       "tests/api/test_manifest.py": {
         "nodes": 98,
-        "seconds": 215.923608
+        "seconds": 403.541185
+      },
+      "tests/api/test_public_api.py": {
+        "nodes": 73,
+        "seconds": 0.083042
       },
       "tests/api/test_repository_layout.py": {
         "nodes": 14,
-        "seconds": 5.124624
+        "seconds": 3.63423
       },
       "tests/api/test_result_api.py": {
         "nodes": 15,
-        "seconds": 0.115731
+        "seconds": 0.085363
       },
       "tests/api/test_run_records.py": {
-        "nodes": 19,
-        "seconds": 7.931821
+        "nodes": 20,
+        "seconds": 15.647852
       },
       "tests/api/test_spec.py": {
         "nodes": 333,
-        "seconds": 1.129408
+        "seconds": 1.392203
       },
       "tests/api/test_structure_sampling.py": {
         "nodes": 18,
-        "seconds": 0.292692
+        "seconds": 0.388224
       },
       "tests/api/test_study_bootstrap.py": {
         "nodes": 37,
-        "seconds": 10.337586
+        "seconds": 10.255713
       },
       "tests/api/test_study_environment_records.py": {
         "nodes": 48,
-        "seconds": 0.265995
+        "seconds": 0.263463
       },
       "tests/api/test_study_source_identity.py": {
         "nodes": 3,
-        "seconds": 0.107784
+        "seconds": 0.047753
+      },
+      "tests/api/test_third_party_licenses.py": {
+        "nodes": 8,
+        "seconds": 204.80145
       },
       "tests/api/test_torch_compile.py": {
         "nodes": 20,
-        "seconds": 40.219181
+        "seconds": 46.09108
       },
       "tests/api/test_traced_rectilinear.py": {
         "nodes": 5,
-        "seconds": 16.905905
+        "seconds": 28.642921
       },
       "tests/api/test_unified_jobs.py": {
-        "nodes": 14,
-        "seconds": 0.235257
+        "nodes": 23,
+        "seconds": 0.228819
       },
       "tests/api/test_unified_rcwa.py": {
-        "nodes": 77,
-        "seconds": 122.544407
+        "nodes": 95,
+        "seconds": 110.495044
       },
       "tests/api/test_unified_rcwa_sources.py": {
         "nodes": 4,
-        "seconds": 0.227182
+        "seconds": 0.312401
       },
       "tests/api/test_verification_environment.py": {
         "nodes": 3,
-        "seconds": 1.838962
+        "seconds": 5.881504
       },
       "tests/api/test_verification_runner.py": {
-        "nodes": 39,
-        "seconds": 31.994582
+        "nodes": 46,
+        "seconds": 41.589873
       },
       "tests/common/test_backend_adapter.py": {
         "nodes": 50,
-        "seconds": 18.533596
+        "seconds": 33.171928
       },
       "tests/common/test_cell_dtype_promotion.py": {
         "nodes": 12,
-        "seconds": 1.07266
+        "seconds": 1.532845
       },
       "tests/common/test_compression_definition.py": {
         "nodes": 2,
-        "seconds": 0.003773
+        "seconds": 0.002071
       },
       "tests/common/test_eig_grad.py": {
         "nodes": 24,
-        "seconds": 22.454443
+        "seconds": 17.069666
       },
       "tests/common/test_lattice_pytree.py": {
         "nodes": 93,
-        "seconds": 223.937204
+        "seconds": 198.555538
       },
       "tests/common/test_layer_thicknesses.py": {
         "nodes": 35,
-        "seconds": 26.493657
+        "seconds": 18.408352
       },
       "tests/common/test_linear_solve_derivatives.py": {
         "nodes": 205,
-        "seconds": 51.589589
+        "seconds": 82.43985
       },
       "tests/common/test_meshgrid_lattice_gradients.py": {
         "nodes": 38,
-        "seconds": 5.585257
+        "seconds": 3.783264
       },
       "tests/common/test_meshgrid_period_gradients.py": {
         "nodes": 30,
-        "seconds": 4.634307
+        "seconds": 4.831537
       },
       "tests/common/test_observation_selection.py": {
         "nodes": 4,
-        "seconds": 0.184554
+        "seconds": 0.312932
       },
       "tests/common/test_scalar_lengths.py": {
         "nodes": 36,
-        "seconds": 9.073301
+        "seconds": 5.319137
       },
       "tests/cross_solver/test_public_lifecycle_diffraction.py": {
         "nodes": 4,
-        "seconds": 112.054163
+        "seconds": 67.410742
       },
       "tests/cross_solver/test_solver_integration.py": {
         "nodes": 37,
-        "seconds": 304.85776
+        "seconds": 126.142811
       },
       "tests/fdtd/test_ade_cost_study.py": {
         "nodes": 17,
-        "seconds": 0.034426
+        "seconds": 0.034145
       },
       "tests/fdtd/test_damping_response_review.py": {
         "nodes": 6,
-        "seconds": 0.49645
+        "seconds": 0.375945
+      },
+      "tests/fdtd/test_explicit_grid_names.py": {
+        "nodes": 171,
+        "seconds": 5.777129
       },
       "tests/fdtd/test_fd_absorber.py": {
         "nodes": 36,
-        "seconds": 20.646528
+        "seconds": 19.047846
       },
       "tests/fdtd/test_fd_airy.py": {
         "nodes": 31,
-        "seconds": 32.380451
+        "seconds": 38.673537
       },
       "tests/fdtd/test_fd_axis1d.py": {
         "nodes": 15,
-        "seconds": 20.528729
+        "seconds": 15.311988
       },
       "tests/fdtd/test_fd_backends.py": {
         "nodes": 77,
-        "seconds": 5.566387
+        "seconds": 4.707319
       },
       "tests/fdtd/test_fd_bloch.py": {
         "nodes": 23,
-        "seconds": 4.665451
+        "seconds": 3.704313
       },
       "tests/fdtd/test_fd_bodies.py": {
         "nodes": 22,
-        "seconds": 31.312893
+        "seconds": 39.160592
       },
       "tests/fdtd/test_fd_box_grad.py": {
         "nodes": 43,
-        "seconds": 178.750509
+        "seconds": 196.091338
       },
       "tests/fdtd/test_fd_c5_texts.py": {
         "nodes": 10,
-        "seconds": 0.614506
+        "seconds": 0.472554
       },
       "tests/fdtd/test_fd_cells_across.py": {
         "nodes": 17,
-        "seconds": 1.611476
+        "seconds": 1.006451
       },
       "tests/fdtd/test_fd_check_block.py": {
         "nodes": 16,
-        "seconds": 22.577357
+        "seconds": 19.603931
       },
       "tests/fdtd/test_fd_clipping.py": {
         "nodes": 18,
-        "seconds": 0.749012
+        "seconds": 0.62232
+      },
+      "tests/fdtd/test_fd_conductive_contact.py": {
+        "nodes": 120,
+        "seconds": 39.918678
       },
       "tests/fdtd/test_fd_conductive_film.py": {
         "nodes": 53,
-        "seconds": 19.959968
+        "seconds": 27.435392
       },
       "tests/fdtd/test_fd_conductive_stack.py": {
         "nodes": 136,
-        "seconds": 82.541926
+        "seconds": 150.835798
       },
       "tests/fdtd/test_fd_constitutive.py": {
         "nodes": 41,
-        "seconds": 95.986136
+        "seconds": 146.874985
       },
       "tests/fdtd/test_fd_constitutive_absorber.py": {
         "nodes": 148,
-        "seconds": 100.60817
+        "seconds": 66.500149
       },
       "tests/fdtd/test_fd_constitutive_study.py": {
         "nodes": 12,
-        "seconds": 20.255926
+        "seconds": 26.161532
       },
       "tests/fdtd/test_fd_contract.py": {
         "nodes": 22,
-        "seconds": 2.056988
+        "seconds": 2.49231
       },
       "tests/fdtd/test_fd_csg_pairs.py": {
         "nodes": 8,
-        "seconds": 2.33735
+        "seconds": 1.61627
       },
       "tests/fdtd/test_fd_cylinder_grad.py": {
         "nodes": 30,
-        "seconds": 96.25244
+        "seconds": 89.122813
       },
       "tests/fdtd/test_fd_debye_film.py": {
         "nodes": 99,
-        "seconds": 60.648228
+        "seconds": 24.415783
       },
       "tests/fdtd/test_fd_debye_stack.py": {
         "nodes": 147,
-        "seconds": 61.48024
+        "seconds": 96.635252
       },
       "tests/fdtd/test_fd_debye_sum_film.py": {
         "nodes": 162,
-        "seconds": 67.976522
+        "seconds": 40.811188
       },
       "tests/fdtd/test_fd_decay.py": {
         "nodes": 92,
-        "seconds": 121.020425
+        "seconds": 136.931568
       },
       "tests/fdtd/test_fd_decay_stop.py": {
         "nodes": 173,
-        "seconds": 11.577031
+        "seconds": 19.868744
       },
       "tests/fdtd/test_fd_diffraction.py": {
         "nodes": 34,
-        "seconds": 61.778334
+        "seconds": 119.708948
       },
       "tests/fdtd/test_fd_dipole.py": {
         "nodes": 26,
-        "seconds": 34.963968
+        "seconds": 17.258889
       },
       "tests/fdtd/test_fd_dispersive.py": {
         "nodes": 34,
-        "seconds": 7.785684
+        "seconds": 8.185624
       },
       "tests/fdtd/test_fd_farfield.py": {
         "nodes": 14,
-        "seconds": 27.492726
+        "seconds": 13.025559
       },
       "tests/fdtd/test_fd_flux.py": {
         "nodes": 17,
-        "seconds": 54.887721
+        "seconds": 34.488309
       },
       "tests/fdtd/test_fd_grad.py": {
         "nodes": 26,
-        "seconds": 3.018715
+        "seconds": 5.693771
       },
       "tests/fdtd/test_fd_grazing.py": {
         "nodes": 65,
-        "seconds": 52.878378
+        "seconds": 115.413467
       },
       "tests/fdtd/test_fd_hybrid_film.py": {
         "nodes": 156,
-        "seconds": 169.446314
+        "seconds": 164.886401
       },
       "tests/fdtd/test_fd_inactive_lorentz.py": {
         "nodes": 127,
-        "seconds": 2.777364
+        "seconds": 3.003328
       },
       "tests/fdtd/test_fd_junction.py": {
         "nodes": 81,
-        "seconds": 120.73315
+        "seconds": 105.802305
       },
       "tests/fdtd/test_fd_junction_physics.py": {
         "nodes": 15,
-        "seconds": 326.294366
+        "seconds": 210.590303
       },
       "tests/fdtd/test_fd_layer_return.py": {
         "nodes": 62,
-        "seconds": 4.693484
+        "seconds": 5.559341
       },
       "tests/fdtd/test_fd_materials_doors.py": {
         "nodes": 61,
-        "seconds": 0.272417
+        "seconds": 0.210807
       },
       "tests/fdtd/test_fd_metasurface.py": {
         "nodes": 4,
-        "seconds": 74.107978
+        "seconds": 55.755102
       },
       "tests/fdtd/test_fd_mie_external.py": {
         "nodes": 6,
-        "seconds": 0.016874
+        "seconds": 0.016768
       },
       "tests/fdtd/test_fd_mie_reference.py": {
         "nodes": 20,
-        "seconds": 1.409565
+        "seconds": 1.463812
       },
       "tests/fdtd/test_fd_mie_study.py": {
         "nodes": 7,
-        "seconds": 0.85899
+        "seconds": 0.742587
       },
       "tests/fdtd/test_fd_mie_transform.py": {
         "nodes": 11,
-        "seconds": 16.815966
+        "seconds": 11.442753
       },
       "tests/fdtd/test_fd_monitor_structure.py": {
         "nodes": 11,
-        "seconds": 0.245359
+        "seconds": 0.318553
       },
       "tests/fdtd/test_fd_monitors_doors.py": {
         "nodes": 62,
-        "seconds": 7.616011
+        "seconds": 6.122687
       },
       "tests/fdtd/test_fd_multi_shape_grad.py": {
         "nodes": 22,
-        "seconds": 251.820404
+        "seconds": 345.707005
       },
       "tests/fdtd/test_fd_occupancy.py": {
         "nodes": 52,
-        "seconds": 109.898941
+        "seconds": 53.779811
       },
       "tests/fdtd/test_fd_occupancy_integration.py": {
         "nodes": 29,
-        "seconds": 128.084845
+        "seconds": 210.820956
       },
       "tests/fdtd/test_fd_oscillator_stack.py": {
         "nodes": 161,
-        "seconds": 152.15562
+        "seconds": 154.632185
       },
       "tests/fdtd/test_fd_oscillator_sum_film.py": {
         "nodes": 148,
-        "seconds": 76.103845
+        "seconds": 49.720592
       },
       "tests/fdtd/test_fd_pec.py": {
         "nodes": 15,
-        "seconds": 2.196533
+        "seconds": 2.131473
       },
       "tests/fdtd/test_fd_phase_control.py": {
         "nodes": 5,
-        "seconds": 3.013539
+        "seconds": 2.071864
       },
       "tests/fdtd/test_fd_planewave.py": {
         "nodes": 104,
-        "seconds": 34.67881
+        "seconds": 57.06563
       },
       "tests/fdtd/test_fd_pmc.py": {
         "nodes": 15,
-        "seconds": 1.765596
+        "seconds": 1.97146
       },
       "tests/fdtd/test_fd_pml.py": {
         "nodes": 34,
-        "seconds": 26.200384
+        "seconds": 11.388043
       },
       "tests/fdtd/test_fd_pml_stability.py": {
         "nodes": 40,
-        "seconds": 292.423252
+        "seconds": 112.105455
       },
       "tests/fdtd/test_fd_polygon_ties.py": {
         "nodes": 42,
-        "seconds": 79.858686
+        "seconds": 42.126191
       },
       "tests/fdtd/test_fd_prism_grad.py": {
         "nodes": 47,
-        "seconds": 402.505464
+        "seconds": 498.441016
       },
       "tests/fdtd/test_fd_radiation.py": {
         "nodes": 15,
-        "seconds": 9.890542
+        "seconds": 7.202752
       },
       "tests/fdtd/test_fd_scene.py": {
         "nodes": 132,
-        "seconds": 1.391542
+        "seconds": 1.65574
       },
       "tests/fdtd/test_fd_shape_protocol.py": {
         "nodes": 33,
-        "seconds": 0.099236
+        "seconds": 0.066162
       },
-      "tests/fdtd/test_fd_shapes.py": {
-        "nodes": 86,
-        "seconds": 937.608618
+      "tests/fdtd/test_fd_shapes.py::test_a_circular_cylinders_angle_carries_no_gradient": {
+        "nodes": 1,
+        "seconds": 2.308885
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_corner_centred_sphere_comes_back_whole_through_the_ring": {
+        "nodes": 1,
+        "seconds": 10.480794
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_crease_is_where_w_jumps_and_this_is_how_far": {
+        "nodes": 1,
+        "seconds": 111.999564
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_csg_node_of_one_body_is_refused": {
+        "nodes": 1,
+        "seconds": 0.00147
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_cut_is_what_a_monte_carlo_says_it_is": {
+        "nodes": 1,
+        "seconds": 0.498555
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_door_holds_under_every_transform_that_carries_a_value": {
+        "nodes": 1,
+        "seconds": 31.712026
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_finite_difference_says_what_the_backend_says": {
+        "nodes": 18,
+        "seconds": 41.447407
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_finite_difference_says_what_the_backend_says_on_the_interface_fills": {
+        "nodes": 3,
+        "seconds": 5.072612
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_geometry_value_that_is_not_a_real_number_is_refused_by_name": {
+        "nodes": 1,
+        "seconds": 0.002639
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_length_is_a_size_and_a_non_positive_one_is_refused_by_name": {
+        "nodes": 1,
+        "seconds": 5.282908
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_node_never_deletes_an_interface_its_children_report": {
+        "nodes": 1,
+        "seconds": 22.761174
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_non_convex_child_is_classified_on_the_side_that_cannot_lie": {
+        "nodes": 1,
+        "seconds": 0.519449
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_non_convex_cross_section_is_the_same_number_on_three_backends": {
+        "nodes": 1,
+        "seconds": 8.162153
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_normal_is_a_unit_vector_even_where_the_gradient_is_not": {
+        "nodes": 1,
+        "seconds": 0.002976
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_numpy_parameter_is_the_same_number_on_every_backend": {
+        "nodes": 1,
+        "seconds": 8.689161
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_one_cell_translation_of_the_whole_scene_rolls_the_fill_bitwise": {
+        "nodes": 1,
+        "seconds": 0.160747
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_sphere_fills_a_voxel_exactly_and_this_is_what_that_replaced": {
+        "nodes": 1,
+        "seconds": 0.557783
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_third_crossing_child_keeps_its_own_face": {
+        "nodes": 1,
+        "seconds": 1.59682
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_traced_parameter_on_a_csg_node_is_refused_by_name": {
+        "nodes": 1,
+        "seconds": 4.931369
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_union_is_never_read_below_the_child_that_fills_the_voxel": {
+        "nodes": 1,
+        "seconds": 78.347182
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_union_of_flush_bodies_is_the_same_number_on_three_backends": {
+        "nodes": 1,
+        "seconds": 9.902158
+      },
+      "tests/fdtd/test_fd_shapes.py::test_a_union_of_flush_bodies_reads_solid_material_on_the_seam": {
+        "nodes": 1,
+        "seconds": 28.971209
+      },
+      "tests/fdtd/test_fd_shapes.py::test_an_axis_aligned_box_a_cylinder_and_a_prism_are_exact": {
+        "nodes": 1,
+        "seconds": 0.071735
+      },
+      "tests/fdtd/test_fd_shapes.py::test_an_axis_aligned_normal_is_a_slab_on_the_edge_and_on_its_dual_face": {
+        "nodes": 1,
+        "seconds": 0.029414
+      },
+      "tests/fdtd/test_fd_shapes.py::test_an_axis_that_is_not_an_axis_is_refused_by_name": {
+        "nodes": 1,
+        "seconds": 0.001243
+      },
+      "tests/fdtd/test_fd_shapes.py::test_an_outline_that_is_not_a_simple_counter_clockwise_polygon_is_refused_by_name": {
+        "nodes": 1,
+        "seconds": 0.005458
+      },
+      "tests/fdtd/test_fd_shapes.py::test_cut_refuses_a_normal_that_is_not_a_unit_vector": {
+        "nodes": 1,
+        "seconds": 0.003624
+      },
+      "tests/fdtd/test_fd_shapes.py::test_each_node_kind_takes_the_side_that_cannot_lie_about_material": {
+        "nodes": 1,
+        "seconds": 35.693904
+      },
+      "tests/fdtd/test_fd_shapes.py::test_every_geometric_predicate_is_free_of_the_coordinate_scale": {
+        "nodes": 1,
+        "seconds": 3.565214
+      },
+      "tests/fdtd/test_fd_shapes.py::test_neither_interface_cut_ever_leaves_the_unit_interval": {
+        "nodes": 1,
+        "seconds": 1.215019
+      },
+      "tests/fdtd/test_fd_shapes.py::test_no_node_kind_steps_at_first_contact": {
+        "nodes": 1,
+        "seconds": 113.044374
+      },
+      "tests/fdtd/test_fd_shapes.py::test_nothing_is_clamped_when_a_body_is_wider_than_its_period": {
+        "nodes": 1,
+        "seconds": 0.796357
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_clip_buffer_holds_what_the_bound_says": {
+        "nodes": 1,
+        "seconds": 0.469319
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_clipped_ball_is_what_quadrature_says_it_is": {
+        "nodes": 1,
+        "seconds": 9.950733
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_closed_form_answers_an_axis_aligned_normal": {
+        "nodes": 1,
+        "seconds": 0.005882
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_doors_this_round_adds_refuse_a_typo_by_name": {
+        "nodes": 1,
+        "seconds": 0.408577
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_edge_and_face_cuts_are_what_an_independent_clip_says": {
+        "nodes": 1,
+        "seconds": 0.161
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_exact_face_moments_are_the_surfaces_own": {
+        "nodes": 1,
+        "seconds": 20.315209
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_exact_sphere_fills_are_what_quadrature_says_and_they_are_c0_too": {
+        "nodes": 1,
+        "seconds": 0.056456
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_exact_two_plane_cut_is_what_an_independent_oracle_says": {
+        "nodes": 1,
+        "seconds": 1.961573
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_face_cut_is_c1_and_the_edge_cut_is_only_c0": {
+        "nodes": 1,
+        "seconds": 0.003548
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_free_invariants_hold_on_every_body": {
+        "nodes": 1,
+        "seconds": 0.315022
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_image_ring_agrees_with_minimising_the_distance_over_it": {
+        "nodes": 1,
+        "seconds": 2.686199
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_image_ring_is_enumerated_in_one_fixed_order": {
+        "nodes": 1,
+        "seconds": 0.001556
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_interface_cuts_are_one_number_on_every_backend_and_every_scale": {
+        "nodes": 3,
+        "seconds": 5.613481
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_interface_cuts_differentiate_where_a_step_is_exactly_zero": {
+        "nodes": 3,
+        "seconds": 2.676384
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_interface_cuts_refuse_a_typo_by_name": {
+        "nodes": 1,
+        "seconds": 0.002906
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_kernel_survives_a_jit_boundary": {
+        "nodes": 1,
+        "seconds": 18.268227
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_liveness_of_w_is_free_of_the_coordinate_scale": {
+        "nodes": 1,
+        "seconds": 6.461936
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_node_reports_what_it_approximated_and_says_nothing_when_it_did_not": {
+        "nodes": 1,
+        "seconds": 5.172479
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_plane_is_not_a_drop_in_for_the_exact_edge_and_face_fills": {
+        "nodes": 1,
+        "seconds": 0.040437
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs": {
+        "nodes": 1,
+        "seconds": 0.071004
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_plane_serves_all_four_bodies_about_equally": {
+        "nodes": 1,
+        "seconds": 2.091206
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_ported_closed_forms_reproduce_the_rcwa_paths_own": {
+        "nodes": 1,
+        "seconds": 0.024946
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_ring_is_periodic_in_the_body_for_one_period_only": {
+        "nodes": 1,
+        "seconds": 14.617389
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_signed_distance_is_the_distance": {
+        "nodes": 1,
+        "seconds": 13.363677
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_stable_form_holds_where_the_naive_one_loses_its_digits": {
+        "nodes": 1,
+        "seconds": 0.031039
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_tangent_plane_over_fills_a_sphere_at_order_two": {
+        "nodes": 1,
+        "seconds": 0.209854
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_two_plane_cut_obeys_its_own_bounds_at_every_coordinate_scale": {
+        "nodes": 1,
+        "seconds": 0.032558
+      },
+      "tests/fdtd/test_fd_shapes.py::test_the_union_of_two_bodies_is_at_or_above_the_truth_and_this_is_how_far_above": {
+        "nodes": 1,
+        "seconds": 175.589636
+      },
+      "tests/fdtd/test_fd_shapes.py::test_three_surfaces_in_one_voxel_are_answered_on_the_safe_side_and_counted": {
+        "nodes": 1,
+        "seconds": 0.284733
+      },
+      "tests/fdtd/test_fd_shapes.py::test_w_vanishes_only_where_the_fill_is_already_decided": {
+        "nodes": 1,
+        "seconds": 12.119308
+      },
+      "tests/fdtd/test_fd_shapes.py::test_wholly_inside_is_the_voxels_circumradius_and_not_its_tangent_planes_support": {
+        "nodes": 1,
+        "seconds": 0.027559
       },
       "tests/fdtd/test_fd_single_pole_film.py": {
         "nodes": 94,
-        "seconds": 38.87533
+        "seconds": 70.816986
       },
       "tests/fdtd/test_fd_sources_doors.py": {
         "nodes": 31,
-        "seconds": 0.245848
+        "seconds": 0.246747
       },
       "tests/fdtd/test_fd_sphere_center_tie.py": {
         "nodes": 19,
-        "seconds": 97.440093
+        "seconds": 61.719339
       },
       "tests/fdtd/test_fd_sphere_clip_jit.py": {
         "nodes": 5,
-        "seconds": 235.4291
+        "seconds": 235.230536
       },
       "tests/fdtd/test_fd_sphere_grad.py": {
         "nodes": 5,
-        "seconds": 104.677818
+        "seconds": 116.699012
       },
       "tests/fdtd/test_fd_sphere_range.py": {
         "nodes": 12,
-        "seconds": 13.463182
+        "seconds": 23.07631
       },
       "tests/fdtd/test_fd_stage1_backends.py": {
         "nodes": 87,
-        "seconds": 11.129151
+        "seconds": 7.362956
       },
       "tests/fdtd/test_fd_stage1_grad.py": {
         "nodes": 27,
-        "seconds": 9.517975
+        "seconds": 8.905855
       },
       "tests/fdtd/test_fd_stage2_backends.py": {
         "nodes": 67,
-        "seconds": 23.566125
+        "seconds": 24.643097
       },
       "tests/fdtd/test_fd_stage2_grad.py": {
         "nodes": 82,
-        "seconds": 100.508127
+        "seconds": 108.165546
       },
       "tests/fdtd/test_fd_stage3_backends.py": {
         "nodes": 105,
-        "seconds": 47.301577
+        "seconds": 32.31296
       },
       "tests/fdtd/test_fd_stage3_grad.py": {
         "nodes": 54,
-        "seconds": 195.706825
+        "seconds": 157.864822
       },
       "tests/fdtd/test_fd_star_lift.py": {
         "nodes": 55,
-        "seconds": 501.23727
+        "seconds": 435.652242
       },
       "tests/fdtd/test_fd_state_bytes.py": {
         "nodes": 78,
-        "seconds": 21.960497
+        "seconds": 13.382484
       },
       "tests/fdtd/test_fd_stencil.py": {
         "nodes": 43,
-        "seconds": 192.130795
+        "seconds": 214.986472
       },
       "tests/fdtd/test_fd_stencil_reuse.py": {
         "nodes": 24,
-        "seconds": 15.679059
+        "seconds": 7.22412
       },
       "tests/fdtd/test_fd_subpixel_study.py": {
         "nodes": 4,
-        "seconds": 0.015842
+        "seconds": 0.014856
       },
       "tests/fdtd/test_fd_symmetric_stencil.py": {
         "nodes": 70,
-        "seconds": 34.303236
+        "seconds": 67.566413
       },
       "tests/fdtd/test_fd_symmetry.py": {
         "nodes": 71,
-        "seconds": 14.733889
+        "seconds": 13.335274
       },
       "tests/fdtd/test_fd_symmetry_door.py": {
         "nodes": 16,
-        "seconds": 1.979747
+        "seconds": 1.208763
       },
       "tests/fdtd/test_fd_terms.py": {
         "nodes": 25,
-        "seconds": 5.77594
+        "seconds": 8.973839
       },
       "tests/fdtd/test_fd_tfsf.py": {
         "nodes": 44,
-        "seconds": 38.701509
+        "seconds": 64.312171
       },
       "tests/fdtd/test_fd_traced_illumination_grad.py": {
         "nodes": 7,
-        "seconds": 222.558459
+        "seconds": 325.399376
       },
       "tests/fdtd/test_fd_traced_junction.py": {
         "nodes": 20,
-        "seconds": 220.971643
+        "seconds": 252.77193
       },
       "tests/fdtd/test_fd_traced_material.py": {
         "nodes": 25,
-        "seconds": 207.181415
+        "seconds": 352.55811
       },
       "tests/fdtd/test_fd_traced_partner_grad.py": {
         "nodes": 9,
-        "seconds": 99.866083
+        "seconds": 178.036157
       },
       "tests/fdtd/test_fd_triplet_research.py": {
         "nodes": 13,
-        "seconds": 2.746618
+        "seconds": 3.326783
       },
       "tests/fdtd/test_fd_triplet_sphere.py": {
         "nodes": 14,
-        "seconds": 29.659034
+        "seconds": 31.082717
       },
       "tests/fdtd/test_fd_two_debye_film.py": {
         "nodes": 127,
-        "seconds": 63.678303
+        "seconds": 68.465228
       },
       "tests/fdtd/test_fd_waveform.py": {
         "nodes": 10,
-        "seconds": 16.258141
+        "seconds": 11.962162
       },
-      "tests/fdtd/test_fdtd.py": {
-        "nodes": 154,
-        "seconds": 545.154553
+      "tests/fdtd/test_fdtd.py::test_a_band_at_oblique_incidence_is_a_fixed_kx_sweep_and_says_so": {
+        "nodes": 1,
+        "seconds": 11.48163
+      },
+      "tests/fdtd/test_fdtd.py::test_a_band_costs_one_run_and_gives_the_same_answers_as_three": {
+        "nodes": 1,
+        "seconds": 2.420566
+      },
+      "tests/fdtd/test_fdtd.py::test_a_band_through_a_metal_carries_the_dispersion_at_every_wavelength": {
+        "nodes": 1,
+        "seconds": 2.470725
+      },
+      "tests/fdtd/test_fdtd.py::test_a_conical_mount_off_normal_takes_the_six_component_stepper": {
+        "nodes": 1,
+        "seconds": 13.458502
+      },
+      "tests/fdtd/test_fdtd.py::test_a_crossed_grating_answers_on_a_two_dimensional_order_grid": {
+        "nodes": 1,
+        "seconds": 29.433347
+      },
+      "tests/fdtd/test_fdtd.py::test_a_crossed_grating_reduces_to_the_2d_path_when_it_is_y_invariant": {
+        "nodes": 1,
+        "seconds": 96.015817
+      },
+      "tests/fdtd/test_fdtd.py::test_a_crossed_raster_answers_the_polarisation_it_was_asked_for": {
+        "nodes": 2,
+        "seconds": 19.372139
+      },
+      "tests/fdtd/test_fdtd.py::test_a_crossed_raster_gives_the_grid_a_real_y_axis": {
+        "nodes": 1,
+        "seconds": 0.009696
+      },
+      "tests/fdtd/test_fdtd.py::test_a_crossed_raster_without_a_y_period_is_refused": {
+        "nodes": 1,
+        "seconds": 0.001169
+      },
+      "tests/fdtd/test_fdtd.py::test_a_crossed_truncation_order_comes_back_labelled_the_way_it_was_asked": {
+        "nodes": 1,
+        "seconds": 3.836086
+      },
+      "tests/fdtd/test_fdtd.py::test_a_drude_slab_matches_the_closed_form": {
+        "nodes": 2,
+        "seconds": 2.409685
+      },
+      "tests/fdtd/test_fdtd.py::test_a_field_still_ringing_at_the_end_of_the_run_warns": {
+        "nodes": 1,
+        "seconds": 0.553007
+      },
+      "tests/fdtd/test_fdtd.py::test_a_graded_run_agrees_with_the_rcwa_path": {
+        "nodes": 1,
+        "seconds": 6.62454
+      },
+      "tests/fdtd/test_fdtd.py::test_a_grading_ratio_outside_its_range_is_refused": {
+        "nodes": 4,
+        "seconds": 0.004929
+      },
+      "tests/fdtd/test_fdtd.py::test_a_layer_that_is_not_a_whole_number_of_cells_still_agrees": {
+        "nodes": 1,
+        "seconds": 1.637221
+      },
+      "tests/fdtd/test_fdtd.py::test_a_lossless_scene_conserves_energy": {
+        "nodes": 2,
+        "seconds": 3.683655
+      },
+      "tests/fdtd/test_fdtd.py::test_a_magnetic_grating_agrees_with_the_rcwa_solve": {
+        "nodes": 2,
+        "seconds": 7.439456
+      },
+      "tests/fdtd/test_fdtd.py::test_a_magnetic_half_space_is_read": {
+        "nodes": 1,
+        "seconds": 1.921
+      },
+      "tests/fdtd/test_fdtd.py::test_a_magnetic_slab_matches_the_closed_form": {
+        "nodes": 2,
+        "seconds": 2.757769
+      },
+      "tests/fdtd/test_fdtd.py::test_a_medium_faster_than_vacuum_does_not_diverge": {
+        "nodes": 1,
+        "seconds": 3.291492
+      },
+      "tests/fdtd/test_fdtd.py::test_a_metal_grating_agrees_with_the_rcwa_solve": {
+        "nodes": 1,
+        "seconds": 8.511513
+      },
+      "tests/fdtd/test_fdtd.py::test_a_mirror_symmetric_grating_scatters_symmetrically": {
+        "nodes": 2,
+        "seconds": 7.438945
+      },
+      "tests/fdtd/test_fdtd.py::test_a_multilayer_stack_matches_the_closed_form": {
+        "nodes": 2,
+        "seconds": 1.348943
+      },
+      "tests/fdtd/test_fdtd.py::test_a_polarisation_mixed_run_is_continuous_across_phi_zero": {
+        "nodes": 6,
+        "seconds": 17.573897
+      },
+      "tests/fdtd/test_fdtd.py::test_a_pole_model_and_a_complex_permittivity_are_the_same_material": {
+        "nodes": 1,
+        "seconds": 0.001559
+      },
+      "tests/fdtd/test_fdtd.py::test_a_profile_with_no_mirror_symmetry_agrees_on_the_AMPLITUDES": {
+        "nodes": 1,
+        "seconds": 1.771357
+      },
+      "tests/fdtd/test_fdtd.py::test_a_run_too_short_for_the_source_is_refused": {
+        "nodes": 1,
+        "seconds": 0.002786
+      },
+      "tests/fdtd/test_fdtd.py::test_a_structure_uniform_along_x_radiates_no_other_order": {
+        "nodes": 2,
+        "seconds": 1.570235
+      },
+      "tests/fdtd/test_fdtd.py::test_a_tooth_edge_between_two_cells_arbitrates_the_harmonic_rule": {
+        "nodes": 1,
+        "seconds": 4.437908
+      },
+      "tests/fdtd/test_fdtd.py::test_a_uniform_slab_matches_the_closed_form": {
+        "nodes": 2,
+        "seconds": 0.64089
+      },
+      "tests/fdtd/test_fdtd.py::test_a_y_invariant_raster_skips_the_y_average_rather_than_running_it": {
+        "nodes": 1,
+        "seconds": 0.001912
+      },
+      "tests/fdtd/test_fdtd.py::test_an_asymmetric_duty_cycle_still_agrees": {
+        "nodes": 1,
+        "seconds": 2.430045
+      },
+      "tests/fdtd/test_fdtd.py::test_an_empty_grid_transmits_everything_and_reflects_nothing": {
+        "nodes": 2,
+        "seconds": 1.117717
+      },
+      "tests/fdtd/test_fdtd.py::test_an_evanescent_order_on_the_crossed_path_is_nan_rather_than_amplified_round_off": {
+        "nodes": 1,
+        "seconds": 5.981798
+      },
+      "tests/fdtd/test_fdtd.py::test_an_evanescent_order_reports_nan_rather_than_an_amplified_reading": {
+        "nodes": 1,
+        "seconds": 2.725717
+      },
+      "tests/fdtd/test_fdtd.py::test_an_evanescent_order_reports_no_power_and_its_amplitude_is_not_a_number": {
+        "nodes": 1,
+        "seconds": 6.982781
+      },
+      "tests/fdtd/test_fdtd.py::test_an_impedance_matched_slab_does_not_reflect_at_all": {
+        "nodes": 2,
+        "seconds": 4.977035
+      },
+      "tests/fdtd/test_fdtd.py::test_an_oblique_scene_scatters_asymmetrically_and_on_the_right_side": {
+        "nodes": 1,
+        "seconds": 9.427864
+      },
+      "tests/fdtd/test_fdtd.py::test_asking_for_orders_past_nyquist_is_refused": {
+        "nodes": 1,
+        "seconds": 0.658441
+      },
+      "tests/fdtd/test_fdtd.py::test_at_normal_incidence_the_azimuth_only_relabels_the_channels": {
+        "nodes": 1,
+        "seconds": 4.113278
+      },
+      "tests/fdtd/test_fdtd.py::test_dispersion_refusals": {
+        "nodes": 6,
+        "seconds": 0.009381
+      },
+      "tests/fdtd/test_fdtd.py::test_grading_does_not_move_the_time_step": {
+        "nodes": 1,
+        "seconds": 6.446606
+      },
+      "tests/fdtd/test_fdtd.py::test_grading_is_off_by_default_and_true_takes_the_measured_optimum": {
+        "nodes": 1,
+        "seconds": 8.476785
+      },
+      "tests/fdtd/test_fdtd.py::test_normal_incidence_stays_in_real_arithmetic": {
+        "nodes": 1,
+        "seconds": 0.001696
+      },
+      "tests/fdtd/test_fdtd.py::test_oblique_incidence_agrees_with_the_rcwa_solve": {
+        "nodes": 2,
+        "seconds": 21.588366
+      },
+      "tests/fdtd/test_fdtd.py::test_orders_past_nyquist_are_refused_on_the_y_axis_as_well": {
+        "nodes": 2,
+        "seconds": 9.82538
+      },
+      "tests/fdtd/test_fdtd.py::test_point_sampling_costs_an_order_of_accuracy": {
+        "nodes": 1,
+        "seconds": 15.863105
+      },
+      "tests/fdtd/test_fdtd.py::test_psi_and_tetm_together_are_refused": {
+        "nodes": 1,
+        "seconds": 0.00103
+      },
+      "tests/fdtd/test_fdtd.py::test_recording_less_often_costs_only_resolution": {
+        "nodes": 1,
+        "seconds": 0.794522
+      },
+      "tests/fdtd/test_fdtd.py::test_refusals": {
+        "nodes": 16,
+        "seconds": 0.014504
+      },
+      "tests/fdtd/test_fdtd.py::test_te_and_tm_are_degenerate_on_a_planar_stack": {
+        "nodes": 1,
+        "seconds": 1.372692
+      },
+      "tests/fdtd/test_fdtd.py::test_tetm_with_an_azimuth_is_still_refused_and_points_at_psi": {
+        "nodes": 1,
+        "seconds": 0.000959
+      },
+      "tests/fdtd/test_fdtd.py::test_the_2d_order_window_is_the_disc_and_not_a_per_axis_rectangle": {
+        "nodes": 1,
+        "seconds": 0.099598
+      },
+      "tests/fdtd/test_fdtd.py::test_the_absorber_holds_up_against_a_dense_substrate": {
+        "nodes": 1,
+        "seconds": 1.635881
+      },
+      "tests/fdtd/test_fdtd.py::test_the_answer_does_not_depend_on_the_length_unit": {
+        "nodes": 1,
+        "seconds": 3.15172
+      },
+      "tests/fdtd/test_fdtd.py::test_the_auxiliary_grid_must_ride_the_same_mesh": {
+        "nodes": 1,
+        "seconds": 0.001438
+      },
+      "tests/fdtd/test_fdtd.py::test_the_auxiliary_grid_takes_a_dimensional_ky": {
+        "nodes": 1,
+        "seconds": 7.112096
+      },
+      "tests/fdtd/test_fdtd.py::test_the_azimuth_refusal_is_two_sided": {
+        "nodes": 4,
+        "seconds": 0.004404
+      },
+      "tests/fdtd/test_fdtd.py::test_the_binary_grating_agrees_with_the_rcwa_solve": {
+        "nodes": 2,
+        "seconds": 6.095615
+      },
+      "tests/fdtd/test_fdtd.py::test_the_cell_is_read_the_way_the_rcwa_door_reads_it": {
+        "nodes": 1,
+        "seconds": 1.51127
+      },
+      "tests/fdtd/test_fdtd.py::test_the_closed_form_reproduces_the_fresnel_signs_it_is_used_to_check": {
+        "nodes": 1,
+        "seconds": 0.00066
+      },
+      "tests/fdtd/test_fdtd.py::test_the_coarse_cells_refine_with_the_fine_ones": {
+        "nodes": 1,
+        "seconds": 7.952762
+      },
+      "tests/fdtd/test_fdtd.py::test_the_conical_amplitudes_converge_at_second_order": {
+        "nodes": 1,
+        "seconds": 83.698237
+      },
+      "tests/fdtd/test_fdtd.py::test_the_conical_dereference_guard_keeps_near_orders_and_masks_deep_ones": {
+        "nodes": 1,
+        "seconds": 1.710483
+      },
+      "tests/fdtd/test_fdtd.py::test_the_conical_projection_matches_the_rcwa_path": {
+        "nodes": 6,
+        "seconds": 46.026901
+      },
+      "tests/fdtd/test_fdtd.py::test_the_conical_route_is_chosen_on_both_signs_of_both_angles": {
+        "nodes": 4,
+        "seconds": 27.887892
+      },
+      "tests/fdtd/test_fdtd.py::test_the_courant_bound_counts_the_y_axis_once": {
+        "nodes": 1,
+        "seconds": 0.00178
+      },
+      "tests/fdtd/test_fdtd.py::test_the_crossed_amplitudes_carry_the_per_leg_signs": {
+        "nodes": 2,
+        "seconds": 69.913259
+      },
+      "tests/fdtd/test_fdtd.py::test_the_crossed_vacuum_transmission_has_the_oblique_propagation_phase": {
+        "nodes": 1,
+        "seconds": 15.218155
+      },
+      "tests/fdtd/test_fdtd.py::test_the_default_crossed_window_is_the_propagating_set_of_the_shortest_wavelength": {
+        "nodes": 1,
+        "seconds": 56.350199
+      },
+      "tests/fdtd/test_fdtd.py::test_the_default_order_window_follows_the_incidence": {
+        "nodes": 1,
+        "seconds": 8.41999
+      },
+      "tests/fdtd/test_fdtd.py::test_the_diagnostics_report_whether_the_run_was_long_enough": {
+        "nodes": 1,
+        "seconds": 1.561883
+      },
+      "tests/fdtd/test_fdtd.py::test_the_error_falls_when_the_grid_is_refined": {
+        "nodes": 2,
+        "seconds": 5.631511
+      },
+      "tests/fdtd/test_fdtd.py::test_the_graded_mesh_puts_both_structure_faces_on_nodes": {
+        "nodes": 1,
+        "seconds": 0.001112
+      },
+      "tests/fdtd/test_fdtd.py::test_the_grading_ratio_is_what_bounds_the_transition": {
+        "nodes": 1,
+        "seconds": 0.002431
+      },
+      "tests/fdtd/test_fdtd.py::test_the_in_plane_phase_is_the_outer_product_of_two_vectors": {
+        "nodes": 1,
+        "seconds": 0.001878
+      },
+      "tests/fdtd/test_fdtd.py::test_the_incident_wave_is_the_same_at_both_monitors": {
+        "nodes": 2,
+        "seconds": 1.357722
+      },
+      "tests/fdtd/test_fdtd.py::test_the_mixed_leg_is_what_sees_the_per_leg_signs": {
+        "nodes": 1,
+        "seconds": 44.73031
+      },
+      "tests/fdtd/test_fdtd.py::test_the_oblique_conical_mount_matches_the_rcwa_path": {
+        "nodes": 1,
+        "seconds": 77.140861
+      },
+      "tests/fdtd/test_fdtd.py::test_the_order_window_narrows_with_ky": {
+        "nodes": 1,
+        "seconds": 0.001097
+      },
+      "tests/fdtd/test_fdtd.py::test_the_p_channel_carries_the_per_order_secant": {
+        "nodes": 1,
+        "seconds": 39.70632
+      },
+      "tests/fdtd/test_fdtd.py::test_the_record_carries_the_axes_it_is_measured_on": {
+        "nodes": 1,
+        "seconds": 0.63313
+      },
+      "tests/fdtd/test_fdtd.py::test_the_record_is_off_by_default_and_costs_nothing": {
+        "nodes": 1,
+        "seconds": 0.41196
+      },
+      "tests/fdtd/test_fdtd.py::test_the_record_of_a_crossed_run_carries_the_field_that_was_driven": {
+        "nodes": 1,
+        "seconds": 8.309127
+      },
+      "tests/fdtd/test_fdtd.py::test_the_recorded_field_travels_at_the_speed_of_light": {
+        "nodes": 3,
+        "seconds": 1.878096
+      },
+      "tests/fdtd/test_fdtd.py::test_the_reported_mesh_is_the_mesh_that_ran": {
+        "nodes": 1,
+        "seconds": 0.982774
+      },
+      "tests/fdtd/test_fdtd.py::test_the_result_is_the_same_container_an_rcwa_solve_returns": {
+        "nodes": 1,
+        "seconds": 0.581073
+      },
+      "tests/fdtd/test_fdtd.py::test_the_same_index_with_a_different_impedance_is_a_different_scene": {
+        "nodes": 1,
+        "seconds": 20.542263
+      },
+      "tests/fdtd/test_fdtd.py::test_the_source_widens_to_cover_whatever_band_is_asked_for": {
+        "nodes": 1,
+        "seconds": 1.438152
+      },
+      "tests/fdtd/test_fdtd.py::test_the_tfsf_source_injects_a_conical_plane_wave": {
+        "nodes": 1,
+        "seconds": 21.09597
+      },
+      "tests/fdtd/test_fdtd.py::test_the_transmitted_leg_carries_its_own_p_direction": {
+        "nodes": 1,
+        "seconds": 8.319338
+      },
+      "tests/fdtd/test_fdtd.py::test_the_two_monitors_need_two_demodulation_kernels": {
+        "nodes": 1,
+        "seconds": 68.696616
+      },
+      "tests/fdtd/test_fdtd.py::test_the_two_pure_legs_are_never_the_same_solve": {
+        "nodes": 1,
+        "seconds": 16.122977
+      },
+      "tests/fdtd/test_fdtd.py::test_the_two_pure_legs_compose_the_given_incidence": {
+        "nodes": 1,
+        "seconds": 3.770376
+      },
+      "tests/fdtd/test_fdtd.py::test_the_y_average_is_harmonic_along_the_component_it_is_for": {
+        "nodes": 1,
+        "seconds": 0.001446
+      },
+      "tests/fdtd/test_fdtd.py::test_the_y_shift_carries_its_own_bloch_phase_on_its_own_axis": {
+        "nodes": 1,
+        "seconds": 0.001392
       },
       "tests/fdtd/test_fdtd_boundary_controls.py": {
         "nodes": 1,
-        "seconds": 81.775818
+        "seconds": 51.6417
       },
       "tests/fdtd/test_fdtd_cavity_convergence.py": {
         "nodes": 2,
-        "seconds": 88.558688
+        "seconds": 190.5133
       },
       "tests/fdtd/test_fdtd_cell_basis.py": {
         "nodes": 25,
-        "seconds": 0.470548
+        "seconds": 0.449806
       },
       "tests/fdtd/test_fdtd_circle_optics.py": {
         "nodes": 2,
-        "seconds": 12.461106
+        "seconds": 25.372947
       },
-      "tests/fdtd/test_fdtd_circles.py": {
-        "nodes": 51,
-        "seconds": 629.210069
+      "tests/fdtd/test_fdtd_circles.py::test_axes_tangencies_and_maximum_diameter_keep_finite_correct_first_derivatives": {
+        "nodes": 6,
+        "seconds": 13.616459
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_bottom_conical_joint_shape_material_and_thickness_derivatives": {
+        "nodes": 4,
+        "seconds": 492.186941
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_circle_angle_is_finite_validated_and_geometrically_inert": {
+        "nodes": 2,
+        "seconds": 0.224793
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_circle_recipe_contract": {
+        "nodes": 6,
+        "seconds": 0.008798
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_disk_cells_match_independent_chords_and_periodic_area": {
+        "nodes": 9,
+        "seconds": 7.779235
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_full_period_translation_kernel_gives_exact_constant_and_area_gradient": {
+        "nodes": 3,
+        "seconds": 9.690278
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_geometry_jacobian_matches_chord_finite_differences": {
+        "nodes": 4,
+        "seconds": 22.427149
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_narrow_translation_windows_remain_well_conditioned": {
+        "nodes": 12,
+        "seconds": 30.392318
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_single_trace_accepts_periodic_motion_and_masks_invalid_circle": {
+        "nodes": 2,
+        "seconds": 15.811924
+      },
+      "tests/fdtd/test_fdtd_circles.py::test_translation_width_equal_to_cell_with_rounded_zero_middle_piece": {
+        "nodes": 3,
+        "seconds": 18.136488
       },
       "tests/fdtd/test_fdtd_components.py": {
         "nodes": 11,
-        "seconds": 22.652817
+        "seconds": 14.109159
       },
       "tests/fdtd/test_fdtd_convergence.py": {
         "nodes": 19,
-        "seconds": 51.805156
+        "seconds": 46.191047
       },
       "tests/fdtd/test_fdtd_dft_sampling.py": {
         "nodes": 12,
-        "seconds": 17.81574
+        "seconds": 15.448422
       },
       "tests/fdtd/test_fdtd_diffraction_planes.py": {
         "nodes": 20,
-        "seconds": 194.128434
+        "seconds": 127.430621
       },
       "tests/fdtd/test_fdtd_directional.py": {
         "nodes": 20,
-        "seconds": 143.101349
+        "seconds": 238.229173
       },
       "tests/fdtd/test_fdtd_ellipse_optics.py": {
         "nodes": 3,
-        "seconds": 52.709165
+        "seconds": 57.531122
       },
       "tests/fdtd/test_fdtd_ellipses.py": {
         "nodes": 58,
-        "seconds": 138.164058
+        "seconds": 87.295117
       },
       "tests/fdtd/test_fdtd_enz.py": {
         "nodes": 2,
-        "seconds": 102.926065
+        "seconds": 167.916031
       },
       "tests/fdtd/test_fdtd_frequency_monitor.py": {
         "nodes": 8,
-        "seconds": 9.052772
+        "seconds": 8.394459
       },
       "tests/fdtd/test_fdtd_grid.py": {
         "nodes": 9,
-        "seconds": 13.943415
+        "seconds": 10.708005
       },
       "tests/fdtd/test_fdtd_grid_backends.py": {
         "nodes": 15,
-        "seconds": 1.829039
+        "seconds": 2.775193
       },
       "tests/fdtd/test_fdtd_grid_bloch.py": {
         "nodes": 4,
-        "seconds": 5.16114
+        "seconds": 4.942332
       },
       "tests/fdtd/test_fdtd_grid_materials.py": {
         "nodes": 10,
-        "seconds": 20.46617
+        "seconds": 19.361756
       },
       "tests/fdtd/test_fdtd_grid_records.py": {
         "nodes": 12,
-        "seconds": 3.516994
+        "seconds": 6.562961
       },
       "tests/fdtd/test_fdtd_halfspace_gradients.py": {
         "nodes": 40,
-        "seconds": 54.461169
+        "seconds": 29.333248
       },
       "tests/fdtd/test_fdtd_incidence.py": {
         "nodes": 39,
-        "seconds": 0.059525
+        "seconds": 0.060165
       },
       "tests/fdtd/test_fdtd_interface_moments.py": {
         "nodes": 39,
-        "seconds": 9.498515
+        "seconds": 11.557729
       },
       "tests/fdtd/test_fdtd_lattice_reference.py": {
         "nodes": 37,
-        "seconds": 168.743261
+        "seconds": 84.155143
       },
       "tests/fdtd/test_fdtd_layer_alignment.py": {
         "nodes": 21,
-        "seconds": 340.245371
+        "seconds": 273.212925
       },
       "tests/fdtd/test_fdtd_layer_gradients.py": {
         "nodes": 48,
-        "seconds": 147.955455
+        "seconds": 95.557238
       },
       "tests/fdtd/test_fdtd_layer_smoothing.py": {
         "nodes": 51,
-        "seconds": 98.380851
+        "seconds": 63.390502
       },
       "tests/fdtd/test_fdtd_material_decay.py": {
         "nodes": 11,
-        "seconds": 12.333889
+        "seconds": 9.261969
       },
       "tests/fdtd/test_fdtd_mixed_metal.py": {
         "nodes": 2,
-        "seconds": 92.610756
+        "seconds": 140.013588
       },
       "tests/fdtd/test_fdtd_modes.py": {
         "nodes": 41,
-        "seconds": 3.061906
+        "seconds": 2.269395
       },
       "tests/fdtd/test_fdtd_multilayer_optimization.py": {
         "nodes": 12,
-        "seconds": 109.940533
+        "seconds": 262.789543
       },
       "tests/fdtd/test_fdtd_nonuniform.py": {
         "nodes": 12,
-        "seconds": 6.046424
+        "seconds": 10.261307
       },
       "tests/fdtd/test_fdtd_painted_optics.py": {
         "nodes": 2,
-        "seconds": 57.961049
+        "seconds": 58.864207
       },
-      "tests/fdtd/test_fdtd_painted_shapes.py": {
-        "nodes": 59,
-        "seconds": 706.880156
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_background_and_both_shape_material_pairs_retain_linear_sensitivities": {
+        "nodes": 2,
+        "seconds": 12.011615
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_coincident_full_cell_and_hidden_shapes_have_correct_last_material": {
+        "nodes": 9,
+        "seconds": 22.904944
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_fully_hidden_shape_has_zero_geometry_and_material_sensitivity": {
+        "nodes": 2,
+        "seconds": 47.333765
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_horizontal_kernel_knots_count_once_in_angle_sensitivity": {
+        "nodes": 4,
+        "seconds": 52.667311
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_joint_fourteen_shape_and_material_derivatives": {
+        "nodes": 4,
+        "seconds": 75.973538
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_mixed_multiple_curves_are_refused_explicitly": {
+        "nodes": 1,
+        "seconds": 0.005322
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_narrow_and_cell_width_kernels_keep_finite_shape_derivatives": {
+        "nodes": 4,
+        "seconds": 57.208581
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_one_trace_accepts_overlap_topology_changes_and_masks_invalid_geometry": {
+        "nodes": 1,
+        "seconds": 23.367795
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_paint_order_matters_and_three_shapes_are_supported": {
+        "nodes": 1,
+        "seconds": 1.93089
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_painted_rotated_cells_match_independent_cartesian_strips": {
+        "nodes": 27,
+        "seconds": 97.546052
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_parallel_edges_and_equal_projections_keep_independent_shape_derivatives": {
+        "nodes": 4,
+        "seconds": 182.737007
       },
       "tests/fdtd/test_fdtd_pml_strength.py": {
         "nodes": 64,
-        "seconds": 5.701925
+        "seconds": 10.121288
       },
       "tests/fdtd/test_fdtd_polarization.py": {
         "nodes": 23,
-        "seconds": 11.558459
+        "seconds": 23.168161
       },
       "tests/fdtd/test_fdtd_pole_colocation.py": {
         "nodes": 3,
-        "seconds": 28.094858
+        "seconds": 22.054784
       },
       "tests/fdtd/test_fdtd_probe.py": {
         "nodes": 23,
-        "seconds": 9.607289
+        "seconds": 7.396233
       },
       "tests/fdtd/test_fdtd_pulse_notches.py": {
         "nodes": 27,
-        "seconds": 131.45978
+        "seconds": 88.842252
       },
       "tests/fdtd/test_fdtd_pulse_width.py": {
         "nodes": 18,
-        "seconds": 256.293429
+        "seconds": 238.958333
       },
       "tests/fdtd/test_fdtd_quadrature.py": {
         "nodes": 11,
-        "seconds": 32.975985
+        "seconds": 14.770159
       },
       "tests/fdtd/test_fdtd_record.py": {
         "nodes": 15,
-        "seconds": 56.049486
+        "seconds": 34.204894
       },
       "tests/fdtd/test_fdtd_record_region.py": {
         "nodes": 15,
-        "seconds": 5.862042
+        "seconds": 4.623304
       },
       "tests/fdtd/test_fdtd_rectangles.py": {
         "nodes": 40,
-        "seconds": 32.485368
+        "seconds": 19.551268
       },
       "tests/fdtd/test_fdtd_rotated_rectangles.py": {
         "nodes": 28,
-        "seconds": 55.574751
+        "seconds": 33.443061
       },
       "tests/fdtd/test_fdtd_rotation_smoothing.py": {
         "nodes": 30,
-        "seconds": 68.812316
+        "seconds": 76.428675
       },
       "tests/fdtd/test_fdtd_route_parity_capture.py": {
         "nodes": 3,
-        "seconds": 0.016392
+        "seconds": 0.022757
       },
       "tests/fdtd/test_fdtd_scan_programs.py": {
-        "nodes": 15,
-        "seconds": 32.292788
+        "nodes": 17,
+        "seconds": 22.995276
       },
       "tests/fdtd/test_fdtd_scattering_convergence.py": {
         "nodes": 6,
-        "seconds": 24.543024
+        "seconds": 17.403247
       },
-      "tests/fdtd/test_fdtd_scene_angles.py": {
-        "nodes": 27,
-        "seconds": 602.448563
+      "tests/fdtd/test_fdtd_scene_angles.py::test_angle_sweeps_leave_mesh_source_planes_and_run_length_fixed": {
+        "nodes": 1,
+        "seconds": 2.230919
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_array_angle_requires_static_diffraction_window": {
+        "nodes": 3,
+        "seconds": 0.096524
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_host_scalar_auto_window_preserves_material_jit": {
+        "nodes": 1,
+        "seconds": 7.180134
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_invalid_angle_is_refused_before_time_stepping": {
+        "nodes": 7,
+        "seconds": 0.0081
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_jitted_angle_dependent_singularities_cannot_report_stable": {
+        "nodes": 3,
+        "seconds": 25.144959
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_jitted_invalid_angle_masks_results_monitors_and_time_records": {
+        "nodes": 1,
+        "seconds": 5.447123
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_magnetic_slab_angle_sensitivity_refines_to_differentiated_airy": {
+        "nodes": 1,
+        "seconds": 108.051639
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_normal_crossed_diffraction_derivative_matches_one_sided_angle_change": {
+        "nodes": 2,
+        "seconds": 77.509273
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_normal_incidence_has_finite_zero_angle_derivative": {
+        "nodes": 2,
+        "seconds": 30.337176
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_real_order_frame_derivatives_are_continuous_on_both_axes": {
+        "nodes": 2,
+        "seconds": 0.285275
+      },
+      "tests/fdtd/test_fdtd_scene_angles.py::test_uniform_phase_angle_derivative_matches_independent_yee_dispersion": {
+        "nodes": 4,
+        "seconds": 174.760773
       },
       "tests/fdtd/test_fdtd_scene_azimuth.py": {
         "nodes": 20,
-        "seconds": 329.136899
+        "seconds": 282.274316
       },
       "tests/fdtd/test_fdtd_scene_backends.py": {
         "nodes": 8,
-        "seconds": 106.262371
+        "seconds": 103.947012
       },
       "tests/fdtd/test_fdtd_scene_bottom.py": {
         "nodes": 12,
-        "seconds": 129.021116
+        "seconds": 147.28417
       },
       "tests/fdtd/test_fdtd_scene_graded.py": {
         "nodes": 4,
-        "seconds": 118.812156
+        "seconds": 58.765084
       },
       "tests/fdtd/test_fdtd_scene_record_bounds.py": {
         "nodes": 14,
-        "seconds": 15.744073
+        "seconds": 20.812716
       },
       "tests/fdtd/test_fdtd_scene_records.py": {
         "nodes": 10,
-        "seconds": 24.64542
+        "seconds": 38.65721
       },
       "tests/fdtd/test_fdtd_source_distance.py": {
         "nodes": 20,
-        "seconds": 198.82136
+        "seconds": 95.368158
       },
       "tests/fdtd/test_fdtd_transverse_resolution.py": {
         "nodes": 27,
-        "seconds": 227.494419
+        "seconds": 277.244393
       },
       "tests/fdtd/test_fdtd_uniform_reference.py": {
         "nodes": 4,
-        "seconds": 6.319293
+        "seconds": 11.060163
       },
-      "tests/fdtd/test_fdtd_variable_depth.py": {
-        "nodes": 46,
-        "seconds": 786.115191
+      "tests/fdtd/test_fdtd_variable_depth.py::test_exterior_smoothing_makes_uniform_mesh_crossing_derivatives_continuous": {
+        "nodes": 1,
+        "seconds": 19.300682
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_fractional_cell_phase_has_independent_endpoint_derivatives": {
+        "nodes": 3,
+        "seconds": 0.144155
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_invalid_geometry_and_exterior_clearance_are_checked_before_stepping": {
+        "nodes": 8,
+        "seconds": 0.014228
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_jit_keeps_laboratory_mesh_sources_monitors_and_records_fixed": {
+        "nodes": 2,
+        "seconds": 8.058185
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_joint_depth_material_and_angle_graph_matches_two_finite_differences": {
+        "nodes": 4,
+        "seconds": 207.170858
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_live_planes_and_nominal_reflection_preserve_the_length_jacobian": {
+        "nodes": 3,
+        "seconds": 0.409127
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_moving_exterior_smoothing_matches_independent_quadrature_and_reflection": {
+        "nodes": 1,
+        "seconds": 0.047485
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_rotated_recipe_keeps_shape_and_total_depth_gradients_together": {
+        "nodes": 2,
+        "seconds": 89.759231
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_roundoff_at_shared_nodes_never_doubles_the_phase_derivative": {
+        "nodes": 2,
+        "seconds": 0.3378
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_uniform_medium_depth_gradient_is_the_independent_yee_phase": {
+        "nodes": 8,
+        "seconds": 289.007744
+      },
+      "tests/fdtd/test_fdtd_variable_depth.py::test_variable_depth_is_an_explicit_static_boolean": {
+        "nodes": 12,
+        "seconds": 0.01307
       },
       "tests/fdtd/test_fdtd_variable_depth_optics.py": {
         "nodes": 5,
-        "seconds": 119.428676
+        "seconds": 86.97164
       },
       "tests/fdtd/test_general_ade_ad.py": {
         "nodes": 6,
-        "seconds": 0.482603
+        "seconds": 0.461987
       },
       "tests/fdtd/test_general_ade_arithmetic.py": {
         "nodes": 10,
-        "seconds": 0.03699
+        "seconds": 0.040749
       },
       "tests/fdtd/test_general_ade_contract.py": {
         "nodes": 71,
-        "seconds": 3.059464
+        "seconds": 0.387694
       },
       "tests/fdtd/test_general_ade_energy.py": {
         "nodes": 16,
-        "seconds": 1.020479
+        "seconds": 0.96924
       },
       "tests/fdtd/test_general_ade_memory.py": {
         "nodes": 31,
-        "seconds": 2.02919
+        "seconds": 2.589227
       },
       "tests/fdtd/test_general_ade_modes.py": {
         "nodes": 54,
-        "seconds": 1.948494
+        "seconds": 2.250186
       },
       "tests/fdtd/test_general_ade_record_ad.py": {
         "nodes": 6,
-        "seconds": 0.649999
+        "seconds": 0.335104
       },
       "tests/fdtd/test_general_ade_units.py": {
         "nodes": 16,
-        "seconds": 0.469646
+        "seconds": 0.601409
       },
       "tests/fdtd/test_general_cuda.py": {
         "nodes": 33,
-        "seconds": 0.115002
+        "seconds": 0.058959
       },
       "tests/fdtd/test_general_cuda_bloch_ad.py": {
         "nodes": 3,
-        "seconds": 0.091731
+        "seconds": 0.136945
       },
       "tests/fdtd/test_general_cuda_bloch_contract.py": {
         "nodes": 39,
-        "seconds": 0.275605
+        "seconds": 0.879844
       },
       "tests/fdtd/test_general_cuda_bloch_observations.py": {
         "nodes": 6,
-        "seconds": 19.260717
+        "seconds": 9.410046
       },
       "tests/fdtd/test_general_cuda_checkpoint.py": {
         "nodes": 23,
-        "seconds": 0.057625
+        "seconds": 0.033273
       },
       "tests/fdtd/test_general_cuda_cpml_higher_order.py": {
         "nodes": 6,
-        "seconds": 5.116589
+        "seconds": 3.913802
       },
       "tests/fdtd/test_general_cuda_dipole.py": {
         "nodes": 50,
-        "seconds": 1.843683
+        "seconds": 1.572161
       },
       "tests/fdtd/test_general_cuda_dipole_conductive.py": {
         "nodes": 24,
-        "seconds": 0.132853
+        "seconds": 0.184169
       },
       "tests/fdtd/test_general_cuda_higher_order.py": {
         "nodes": 2,
-        "seconds": 0.001709
+        "seconds": 0.002001
       },
       "tests/fdtd/test_general_cuda_initial_patterns.py": {
         "nodes": 43,
-        "seconds": 3.281105
+        "seconds": 3.183752
       },
       "tests/fdtd/test_general_cuda_observations.py": {
         "nodes": 2,
-        "seconds": 2.156184
+        "seconds": 2.992636
       },
       "tests/fdtd/test_general_cuda_optimizer.py": {
         "nodes": 30,
-        "seconds": 70.115861
+        "seconds": 17.376578
       },
       "tests/fdtd/test_general_cuda_pulse_higher_order.py": {
         "nodes": 18,
-        "seconds": 3.264437
+        "seconds": 2.578845
       },
       "tests/fdtd/test_general_cuda_pulse_optimizer.py": {
         "nodes": 6,
-        "seconds": 52.222375
+        "seconds": 26.633131
       },
       "tests/fdtd/test_general_cuda_pulse_reference.py": {
         "nodes": 14,
-        "seconds": 2.913981
+        "seconds": 1.093639
       },
       "tests/fdtd/test_general_cuda_region.py": {
         "nodes": 42,
-        "seconds": 1.521655
+        "seconds": 3.488633
       },
       "tests/fdtd/test_general_cuda_region_contract.py": {
         "nodes": 57,
-        "seconds": 0.24183
+        "seconds": 1.440799
       },
       "tests/fdtd/test_general_cuda_wall_ad.py": {
         "nodes": 39,
-        "seconds": 4.795384
+        "seconds": 3.973874
       },
       "tests/fdtd/test_general_source_band_guard.py": {
         "nodes": 43,
-        "seconds": 1.752971
+        "seconds": 2.770614
       },
       "tests/fdtd/test_general_source_finite.py": {
         "nodes": 77,
-        "seconds": 2.985239
+        "seconds": 2.708988
       },
       "tests/fdtd/test_general_source_resolution_guard.py": {
         "nodes": 30,
-        "seconds": 2.166995
+        "seconds": 3.23409
       },
       "tests/fdtd/test_general_source_waveform_guard.py": {
         "nodes": 40,
-        "seconds": 1.07668
+        "seconds": 3.298113
       },
       "tests/fdtd/test_grazing_cos_boundary.py": {
         "nodes": 14,
-        "seconds": 2.624289
+        "seconds": 3.842903
       },
       "tests/fdtd/test_grazing_material_ad.py": {
         "nodes": 14,
-        "seconds": 22.245826
+        "seconds": 26.740892
       },
       "tests/fdtd/test_grazing_prepared_reuse.py": {
         "nodes": 22,
-        "seconds": 45.081337
+        "seconds": 68.87731
       },
       "tests/fdtd/test_grazing_subnormal_band.py": {
         "nodes": 5,
-        "seconds": 1.105229
+        "seconds": 0.986127
+      },
+      "tests/fdtd/test_jax_gpu.py": {
+        "nodes": 3,
+        "seconds": 0.003195
       },
       "tests/fdtd/test_large_damping.py": {
         "nodes": 32,
-        "seconds": 4.058578
+        "seconds": 2.602808
       },
       "tests/fdtd/test_lifecycle.py": {
         "nodes": 32,
-        "seconds": 103.434548
+        "seconds": 90.913102
       },
       "tests/fdtd/test_material_finite_guard.py": {
         "nodes": 36,
-        "seconds": 1.22629
+        "seconds": 0.917127
       },
       "tests/fdtd/test_material_resolution_guard.py": {
         "nodes": 64,
-        "seconds": 7.332543
+        "seconds": 8.554644
       },
       "tests/fdtd/test_mixed_pole_arithmetic.py": {
         "nodes": 38,
-        "seconds": 1.54942
+        "seconds": 1.075827
       },
       "tests/fdtd/test_monitor_aperture.py": {
         "nodes": 43,
-        "seconds": 0.324466
+        "seconds": 0.225579
       },
       "tests/fdtd/test_monitor_aperture_review.py": {
         "nodes": 17,
-        "seconds": 0.047038
+        "seconds": 0.02407
       },
       "tests/fdtd/test_native_cuda.py": {
         "nodes": 8,
-        "seconds": 0.006884
+        "seconds": 0.005819
       },
       "tests/fdtd/test_native_cuda_admission.py": {
         "nodes": 27,
-        "seconds": 0.617685
+        "seconds": 1.609076
       },
       "tests/fdtd/test_physical_native.py": {
         "nodes": 10,
-        "seconds": 9.449525
+        "seconds": 11.430034
       },
       "tests/fdtd/test_physical_periodic.py": {
         "nodes": 12,
-        "seconds": 167.161634
+        "seconds": 321.715495
       },
       "tests/fdtd/test_physical_stopping_absorber.py": {
         "nodes": 8,
-        "seconds": 1.614678
+        "seconds": 1.42368
       },
       "tests/fdtd/test_plot_fdtd.py": {
         "nodes": 7,
-        "seconds": 0.439312
+        "seconds": 0.472083
       },
       "tests/fdtd/test_policy_report.py": {
         "nodes": 33,
-        "seconds": 18.318749
+        "seconds": 17.824401
       },
       "tests/fdtd/test_prepared_admission_recovery.py": {
         "nodes": 6,
-        "seconds": 117.554335
+        "seconds": 81.389379
       },
       "tests/fdtd/test_prepared_policy_admission.py": {
         "nodes": 5,
-        "seconds": 68.556696
+        "seconds": 89.729509
       },
       "tests/fdtd/test_public_discretisation.py": {
         "nodes": 35,
-        "seconds": 17.737325
+        "seconds": 10.196647
       },
       "tests/fdtd/test_public_grazing_guidance.py": {
         "nodes": 11,
-        "seconds": 0.488759
+        "seconds": 0.670404
       },
       "tests/fdtd/test_public_input_followup.py": {
-        "nodes": 19,
-        "seconds": 0.39147
+        "nodes": 35,
+        "seconds": 0.330256
       },
       "tests/fdtd/test_public_junction.py": {
         "nodes": 24,
-        "seconds": 41.975634
+        "seconds": 77.953959
+      },
+      "tests/fdtd/test_public_names.py": {
+        "nodes": 38,
+        "seconds": 2.082646
       },
       "tests/fdtd/test_public_plane_span.py": {
         "nodes": 36,
-        "seconds": 12.303047
+        "seconds": 9.229639
       },
       "tests/fdtd/test_public_source_admission.py": {
         "nodes": 26,
-        "seconds": 0.429233
+        "seconds": 0.617893
       },
       "tests/fdtd/test_public_spelling.py": {
         "nodes": 41,
-        "seconds": 9.178406
+        "seconds": 3.896152
       },
       "tests/fdtd/test_pulse_fit_reference.py": {
         "nodes": 8,
-        "seconds": 1.511601
+        "seconds": 1.4256
       },
       "tests/fdtd/test_selected_pole_arithmetic.py": {
         "nodes": 17,
-        "seconds": 1.571705
+        "seconds": 1.42048
       },
       "tests/fdtd/test_source_decay.py": {
         "nodes": 52,
-        "seconds": 146.526615
+        "seconds": 122.815366
       },
       "tests/fdtd/test_substrate_continuation.py": {
         "nodes": 14,
-        "seconds": 33.481391
+        "seconds": 18.088003
       },
       "tests/materials/test_common_material_models.py": {
         "nodes": 21,
-        "seconds": 1.981314
+        "seconds": 1.844554
       },
       "tests/materials/test_dispersive_material.py": {
         "nodes": 55,
-        "seconds": 112.518946
+        "seconds": 131.086011
       },
       "tests/materials/test_drude_frequency_scaling.py": {
         "nodes": 32,
-        "seconds": 8.606227
+        "seconds": 8.81293
       },
       "tests/materials/test_magnetic_index_material.py": {
         "nodes": 32,
-        "seconds": 7.743387
+        "seconds": 7.002869
       },
       "tests/materials/test_material.py": {
         "nodes": 40,
-        "seconds": 7.123978
+        "seconds": 9.0043
       },
       "tests/materials/test_material_catalog.py": {
-        "nodes": 28,
-        "seconds": 1.342434
+        "nodes": 31,
+        "seconds": 1.294996
       },
       "tests/materials/test_material_convention_anchor.py": {
         "nodes": 10,
-        "seconds": 0.036983
+        "seconds": 0.032314
       },
       "tests/materials/test_physical_inactive_lorentz.py": {
         "nodes": 41,
-        "seconds": 1.500102
+        "seconds": 2.340939
       },
       "tests/materials/test_tensor_material_api.py": {
         "nodes": 34,
-        "seconds": 26.206146
+        "seconds": 35.588312
       },
-      "tests/rcwa/test_2d_exceptional_point.py": {
-        "nodes": 42,
-        "seconds": 840.328845
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_2d_ep_field_and_its_gradient_are_the_1d_rebuild_s": {
+        "nodes": 4,
+        "seconds": 146.031388
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_2d_ep_under_an_abstract_trace": {
+        "nodes": 2,
+        "seconds": 86.577416
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_genuinely_2d_ep_field_gradient_agrees_across_algorithms": {
+        "nodes": 1,
+        "seconds": 43.738637
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_genuinely_2d_ep_field_matches_cauchy_oracles": {
+        "nodes": 4,
+        "seconds": 195.235225
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_genuinely_2d_ep_matches_a_cauchy_oracle": {
+        "nodes": 2,
+        "seconds": 1.130493
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_genuinely_2d_ep_on_the_first_order_path_matches_the_cauchy_oracle": {
+        "nodes": 2,
+        "seconds": 5.002431
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_genuinely_2d_rebuilt_layer": {
+        "nodes": 2,
+        "seconds": 0.132052
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_patterned_ep_in_2d_is_the_1d_rebuild": {
+        "nodes": 6,
+        "seconds": 0.993292
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_a_uniform_cutoff_in_2d_is_unchanged": {
+        "nodes": 2,
+        "seconds": 0.096886
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_derivatives_at_a_2d_ep_are_the_1d_rebuild_s": {
+        "nodes": 4,
+        "seconds": 64.5726
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_genuinely_2d_ep_derivatives_match_cauchy_oracles": {
+        "nodes": 4,
+        "seconds": 170.610353
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_more_pairs_than_the_trace_holds_is_loud": {
+        "nodes": 1,
+        "seconds": 3.445178
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_off_the_band_nothing_moves": {
+        "nodes": 2,
+        "seconds": 0.731055
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_split_labels_are_put_on_one_side": {
+        "nodes": 1,
+        "seconds": 0.002339
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_split_labels_at_an_imaginary_angle": {
+        "nodes": 2,
+        "seconds": 0.096311
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_the_rebuilt_layer_satisfies_both_first_order_relations": {
+        "nodes": 2,
+        "seconds": 0.025348
+      },
+      "tests/rcwa/test_2d_exceptional_point.py::test_two_interacting_jordan_pairs_are_both_rebuilt_exactly": {
+        "nodes": 1,
+        "seconds": 0.004898
       },
       "tests/rcwa/test_amplitude_sp_frame.py": {
         "nodes": 112,
-        "seconds": 38.316942
+        "seconds": 34.569293
       },
       "tests/rcwa/test_anisotropic_berreman.py": {
         "nodes": 33,
-        "seconds": 0.292388
+        "seconds": 0.52245
       },
       "tests/rcwa/test_backside_incidence.py": {
         "nodes": 101,
-        "seconds": 7.31671
+        "seconds": 10.134275
       },
-      "tests/rcwa/test_boundary.py": {
-        "nodes": 94,
-        "seconds": 973.18683
+      "tests/rcwa/test_boundary.py::test_a_chunk_larger_than_the_grid_costs_the_grid_and_not_the_chunk": {
+        "nodes": 1,
+        "seconds": 3.667355
+      },
+      "tests/rcwa/test_boundary.py::test_a_circle_without_ly_is_the_same_circle_on_both_paths": {
+        "nodes": 2,
+        "seconds": 5.717588
+      },
+      "tests/rcwa/test_boundary.py::test_a_circle_without_ly_solves_on_the_closed_form_side": {
+        "nodes": 1,
+        "seconds": 1.059133
+      },
+      "tests/rcwa/test_boundary.py::test_a_circle_without_ly_survives_the_polygon_path": {
+        "nodes": 1,
+        "seconds": 16.687087
+      },
+      "tests/rcwa/test_boundary.py::test_a_disjoint_layer_never_reaches_the_polygon_path": {
+        "nodes": 1,
+        "seconds": 1.65837
+      },
+      "tests/rcwa/test_boundary.py::test_a_frozen_geometry_answers_the_overlap_question_for_every_layer": {
+        "nodes": 1,
+        "seconds": 41.412411
+      },
+      "tests/rcwa/test_boundary.py::test_a_hole_inside_a_hole_is_material_again": {
+        "nodes": 1,
+        "seconds": 6.539489
+      },
+      "tests/rcwa/test_boundary.py::test_a_numpy_float32_shape_parameter_keeps_its_precision_on_every_backend": {
+        "nodes": 4,
+        "seconds": 35.092733
+      },
+      "tests/rcwa/test_boundary.py::test_a_numpy_integer_shape_parameter_is_built_in_the_solver_dtype": {
+        "nodes": 12,
+        "seconds": 111.247401
+      },
+      "tests/rcwa/test_boundary.py::test_a_numpy_scalar_beside_a_traced_parameter_keeps_its_gradient": {
+        "nodes": 4,
+        "seconds": 135.624748
+      },
+      "tests/rcwa/test_boundary.py::test_a_numpy_scalar_shape_parameter_is_the_constant_a_float_is": {
+        "nodes": 12,
+        "seconds": 67.050541
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_ellipse_is_polygonised": {
+        "nodes": 1,
+        "seconds": 19.842905
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction": {
+        "nodes": 1,
+        "seconds": 2.130253
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_layer_on_an_unreduced_basis_replays_under_jit_over_the_lattice": {
+        "nodes": 1,
+        "seconds": 15.882275
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_layer_reads_the_same_field_on_every_spelling_of_its_cell": {
+        "nodes": 1,
+        "seconds": 0.107717
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_layers_position_derivative_integrates_to_the_change": {
+        "nodes": 1,
+        "seconds": 33.951696
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_overlap_agrees_across_backends": {
+        "nodes": 2,
+        "seconds": 64.241994
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_overlap_takes_traced_geometry_on_torch": {
+        "nodes": 1,
+        "seconds": 2.761727
+      },
+      "tests/rcwa/test_boundary.py::test_a_painted_region_written_periods_away_solves_the_same_structure": {
+        "nodes": 2,
+        "seconds": 12.881601
+      },
+      "tests/rcwa/test_boundary.py::test_a_partial_overlap_was_never_affected": {
+        "nodes": 1,
+        "seconds": 55.088838
+      },
+      "tests/rcwa/test_boundary.py::test_a_shape_wider_than_the_period_is_refused_here_too": {
+        "nodes": 1,
+        "seconds": 1.404469
+      },
+      "tests/rcwa/test_boundary.py::test_a_traced_shape_layer_needs_a_freeze_under_jit_and_not_under_grad": {
+        "nodes": 1,
+        "seconds": 39.28659
+      },
+      "tests/rcwa/test_boundary.py::test_a_traced_single_shape_layer_is_not_refused": {
+        "nodes": 1,
+        "seconds": 26.182899
+      },
+      "tests/rcwa/test_boundary.py::test_an_enclosed_shape_comes_back_wound_clockwise": {
+        "nodes": 1,
+        "seconds": 0.054608
+      },
+      "tests/rcwa/test_boundary.py::test_an_enclosed_shape_is_cut_out_of_its_host_not_added_to_it": {
+        "nodes": 2,
+        "seconds": 168.169411
+      },
+      "tests/rcwa/test_boundary.py::test_an_overlap_cannot_be_answered_by_the_summing_builder": {
+        "nodes": 1,
+        "seconds": 20.25797
+      },
+      "tests/rcwa/test_boundary.py::test_both_shape_paths_draw_the_floor_in_the_same_place": {
+        "nodes": 2,
+        "seconds": 8.701296
+      },
+      "tests/rcwa/test_boundary.py::test_conv_mats_agree_across_backends": {
+        "nodes": 2,
+        "seconds": 15.859909
+      },
+      "tests/rcwa/test_boundary.py::test_conv_mats_are_hermitian_for_a_lossless_layer": {
+        "nodes": 1,
+        "seconds": 0.080588
+      },
+      "tests/rcwa/test_boundary.py::test_freeze_geometry_records_a_plan_only_for_overlapping_layers": {
+        "nodes": 1,
+        "seconds": 0.005698
+      },
+      "tests/rcwa/test_boundary.py::test_freezing_a_painted_layer_works_on_torch": {
+        "nodes": 1,
+        "seconds": 3.732188
+      },
+      "tests/rcwa/test_boundary.py::test_frozen_plan_reproduces_the_eager_answer": {
+        "nodes": 1,
+        "seconds": 54.544048
+      },
+      "tests/rcwa/test_boundary.py::test_gradient_reaches_the_shape_parameters": {
+        "nodes": 1,
+        "seconds": 47.487758
+      },
+      "tests/rcwa/test_boundary.py::test_normal_field_chunking_changes_nothing": {
+        "nodes": 1,
+        "seconds": 1.935846
+      },
+      "tests/rcwa/test_boundary.py::test_normal_field_is_a_unit_vector_everywhere": {
+        "nodes": 1,
+        "seconds": 0.795318
+      },
+      "tests/rcwa/test_boundary.py::test_normal_field_is_the_edge_normal_beside_an_edge": {
+        "nodes": 1,
+        "seconds": 0.251726
+      },
+      "tests/rcwa/test_boundary.py::test_normal_grid_floor_is_enforced": {
+        "nodes": 3,
+        "seconds": 0.004147
+      },
+      "tests/rcwa/test_boundary.py::test_paint_agrees_with_a_raster_of_the_same_painting": {
+        "nodes": 1,
+        "seconds": 29.099144
+      },
+      "tests/rcwa/test_boundary.py::test_paint_with_an_enclosed_shape_agrees_with_a_fine_raster": {
+        "nodes": 1,
+        "seconds": 84.970134
+      },
+      "tests/rcwa/test_boundary.py::test_painted_geometry_follows_the_dtype_it_was_given": {
+        "nodes": 1,
+        "seconds": 5.767462
+      },
+      "tests/rcwa/test_boundary.py::test_permittivity_matches_the_analytic_path_for_one_shape": {
+        "nodes": 2,
+        "seconds": 0.2502
+      },
+      "tests/rcwa/test_boundary.py::test_plan_replays_against_moved_vertices": {
+        "nodes": 1,
+        "seconds": 0.002591
+      },
+      "tests/rcwa/test_boundary.py::test_polygon_ft_dc_is_the_area": {
+        "nodes": 1,
+        "seconds": 0.002024
+      },
+      "tests/rcwa/test_boundary.py::test_polygon_ft_exact_for_a_rotated_rectangle": {
+        "nodes": 1,
+        "seconds": 0.00372
+      },
+      "tests/rcwa/test_boundary.py::test_polygon_ft_hole_subtracts_itself": {
+        "nodes": 1,
+        "seconds": 0.001338
+      },
+      "tests/rcwa/test_boundary.py::test_resolved_regions_are_disjoint_on_a_fine_raster": {
+        "nodes": 1,
+        "seconds": 0.012876
+      },
+      "tests/rcwa/test_boundary.py::test_resolved_regions_reproduce_the_painted_area": {
+        "nodes": 1,
+        "seconds": 0.002076
+      },
+      "tests/rcwa/test_boundary.py::test_shape_vertices_reads_the_dict_like_the_transform": {
+        "nodes": 5,
+        "seconds": 0.006545
+      },
+      "tests/rcwa/test_boundary.py::test_the_jax_path_is_one_loop_and_not_one_copy_per_chunk": {
+        "nodes": 1,
+        "seconds": 0.425485
+      },
+      "tests/rcwa/test_boundary.py::test_the_normal_field_does_not_care_which_way_a_hole_is_wound": {
+        "nodes": 1,
+        "seconds": 55.119526
+      },
+      "tests/rcwa/test_boundary.py::test_the_normal_field_gets_the_two_axes_the_right_way_round": {
+        "nodes": 1,
+        "seconds": 5.097904
+      },
+      "tests/rcwa/test_boundary.py::test_the_polygon_normal_field_folds_to_the_nearest_image": {
+        "nodes": 1,
+        "seconds": 15.784479
+      },
+      "tests/rcwa/test_boundary.py::test_the_reduced_basis_mutant_is_killed": {
+        "nodes": 3,
+        "seconds": 0.844517
       },
       "tests/rcwa/test_branch_selection.py": {
         "nodes": 36,
-        "seconds": 11.245228
+        "seconds": 8.974769
       },
       "tests/rcwa/test_cartesian_amplitudes.py": {
         "nodes": 45,
-        "seconds": 31.865982
+        "seconds": 27.215356
       },
       "tests/rcwa/test_centre_reference.py": {
         "nodes": 61,
-        "seconds": 87.554469
+        "seconds": 62.664584
       },
       "tests/rcwa/test_coherent_illumination.py": {
         "nodes": 63,
-        "seconds": 32.882667
+        "seconds": 28.397862
       },
       "tests/rcwa/test_condition_sweep.py": {
         "nodes": 145,
-        "seconds": 81.490379
+        "seconds": 60.367565
       },
       "tests/rcwa/test_conditions_precision.py": {
         "nodes": 19,
-        "seconds": 20.885866
+        "seconds": 29.064708
       },
       "tests/rcwa/test_conforming_affine_profile.py": {
         "nodes": 30,
-        "seconds": 0.081784
+        "seconds": 0.097595
       },
       "tests/rcwa/test_conforming_common_loss.py": {
         "nodes": 2,
-        "seconds": 13.518009
+        "seconds": 9.367108
       },
       "tests/rcwa/test_conforming_lattice_rebasing.py": {
         "nodes": 1,
-        "seconds": 6.786826
+        "seconds": 14.682181
       },
       "tests/rcwa/test_conforming_layer_axes.py": {
         "nodes": 9,
-        "seconds": 17.359558
+        "seconds": 12.267994
       },
       "tests/rcwa/test_conforming_nvf.py": {
         "nodes": 35,
-        "seconds": 20.787437
+        "seconds": 17.33669
       },
       "tests/rcwa/test_conforming_rectangular_lattice.py": {
         "nodes": 7,
-        "seconds": 9.156322
+        "seconds": 14.694255
       },
       "tests/rcwa/test_conforming_separated_rectangles.py": {
         "nodes": 2,
-        "seconds": 17.513471
+        "seconds": 21.634409
       },
-      "tests/rcwa/test_conical_cutoff.py": {
-        "nodes": 141,
-        "seconds": 1099.909247
+      "tests/rcwa/test_conical_cutoff.py::@fit": {
+        "nodes": 7,
+        "seconds": 38.48611
+      },
+      "tests/rcwa/test_conical_cutoff.py::@reference-gradients": {
+        "nodes": 4,
+        "seconds": 93.143606
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_cutoff_beside_a_near_graze": {
+        "nodes": 2,
+        "seconds": 0.100334
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_patterned_cutoff_field_and_its_gradient_agree_across_algorithms": {
+        "nodes": 5,
+        "seconds": 51.828432
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_patterned_cutoff_field_under_jit": {
+        "nodes": 5,
+        "seconds": 252.676215
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_patterned_cutoff_under_an_abstract_trace": {
+        "nodes": 4,
+        "seconds": 160.873768
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_refused_coupling_gives_a_nan_traced_tangent": {
+        "nodes": 2,
+        "seconds": 2.418259
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_split_cluster_is_rebuilt_on_one_side": {
+        "nodes": 4,
+        "seconds": 0.219028
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_split_cluster_under_jit_and_vmap": {
+        "nodes": 2,
+        "seconds": 26.013687
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_uniform_cutoff_at_complex64": {
+        "nodes": 2,
+        "seconds": 0.072348
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_uniform_cutoff_field_matches_the_2d_path": {
+        "nodes": 8,
+        "seconds": 0.306988
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_uniform_cutoff_field_under_jit_matches_the_2d_path": {
+        "nodes": 2,
+        "seconds": 12.603735
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_uniform_cutoff_matches_the_2d_path": {
+        "nodes": 26,
+        "seconds": 3.827007
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_uniform_cutoff_on_jax_and_torch": {
+        "nodes": 4,
+        "seconds": 10.370668
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_wide_cluster_agrees_with_the_family_construction": {
+        "nodes": 2,
+        "seconds": 0.014175
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_a_zero_root_outside_the_cluster_forms_no_inf": {
+        "nodes": 1,
+        "seconds": 0.000852
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_an_eager_field_record_differentiates_alike_under_jit": {
+        "nodes": 2,
+        "seconds": 12.831659
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_angle_derivatives_on_a_rebuilt_layer": {
+        "nodes": 6,
+        "seconds": 25.601253
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_eager_takes_expm_and_a_trace_the_closed_form": {
+        "nodes": 2,
+        "seconds": 25.128955
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_multimode_excitation_at_a_cutoff": {
+        "nodes": 2,
+        "seconds": 0.064526
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_off_the_band_nothing_moves": {
+        "nodes": 2,
+        "seconds": 57.580807
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_one_side_follows_the_deepest_member_and_flips_nothing_else": {
+        "nodes": 1,
+        "seconds": 0.001223
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_patterned_angle_derivatives_match_a_central_difference": {
+        "nodes": 4,
+        "seconds": 33.303759
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_second_derivatives_through_a_traced_cutoff": {
+        "nodes": 2,
+        "seconds": 161.38549
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_coupled_exponential_is_the_matrix_exponential": {
+        "nodes": 3,
+        "seconds": 4.651014
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_coupled_exponential_tangent_under_a_trace_is_the_frechet_derivative": {
+        "nodes": 6,
+        "seconds": 34.256276
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_gate_engages_inside_its_edge_and_not_outside": {
+        "nodes": 2,
+        "seconds": 0.002295
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_gate_never_engages_at_ky_zero": {
+        "nodes": 1,
+        "seconds": 0.001851
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_gate_refuses_a_root_under_the_floor_and_takes_opposite_labels": {
+        "nodes": 1,
+        "seconds": 0.000975
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_gate_under_jit_matches_the_eager_gate": {
+        "nodes": 12,
+        "seconds": 0.613581
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_ky_zero_rayleigh_point_still_refuses": {
+        "nodes": 2,
+        "seconds": 0.039589
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_rayleigh_bound_takes_over_at_small_ky": {
+        "nodes": 1,
+        "seconds": 0.00106
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_rebuilt_layer_satisfies_both_first_order_relations": {
+        "nodes": 4,
+        "seconds": 0.023623
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_the_scattering_matrix_is_finite_and_continuous_at_a_cutoff": {
+        "nodes": 1,
+        "seconds": 0.030475
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_torch_autograd_through_vmap_at_a_cutoff": {
+        "nodes": 6,
+        "seconds": 2.86487
+      },
+      "tests/rcwa/test_conical_cutoff.py::test_under_an_abstract_trace_the_layer_is_rebuilt": {
+        "nodes": 1,
+        "seconds": 54.990002
       },
       "tests/rcwa/test_contact_jones_probe.py": {
         "nodes": 10,
-        "seconds": 40.656524
+        "seconds": 44.971766
       },
       "tests/rcwa/test_contact_reference.py": {
         "nodes": 5,
-        "seconds": 45.638996
+        "seconds": 37.549654
       },
       "tests/rcwa/test_conv_matrices_accessor.py": {
         "nodes": 68,
-        "seconds": 110.013154
+        "seconds": 89.457913
       },
       "tests/rcwa/test_core_full_results.py": {
         "nodes": 6,
-        "seconds": 0.070948
+        "seconds": 0.076013
       },
       "tests/rcwa/test_curved_circular_projector.py": {
         "nodes": 26,
-        "seconds": 122.467511
+        "seconds": 92.253925
       },
       "tests/rcwa/test_degenerate_raster_gradients.py": {
         "nodes": 6,
-        "seconds": 38.17316
+        "seconds": 53.039027
       },
       "tests/rcwa/test_degenerate_tensor_gradients.py": {
         "nodes": 16,
-        "seconds": 27.187414
+        "seconds": 14.760449
       },
       "tests/rcwa/test_detune_stale_runtime.py": {
         "nodes": 2,
-        "seconds": 0.150448
+        "seconds": 0.073198
       },
       "tests/rcwa/test_direct_wavevector.py": {
         "nodes": 160,
-        "seconds": 35.343852
+        "seconds": 59.50887
       },
       "tests/rcwa/test_ellipse_boundary_gradients.py": {
         "nodes": 25,
-        "seconds": 251.251131
+        "seconds": 168.376711
       },
       "tests/rcwa/test_equivalence.py": {
         "nodes": 6,
-        "seconds": 0.269524
+        "seconds": 0.148818
       },
       "tests/rcwa/test_etm_layer_labels.py": {
         "nodes": 19,
-        "seconds": 5.291032
+        "seconds": 4.750208
       },
       "tests/rcwa/test_exceptional_point_clusters.py": {
         "nodes": 93,
-        "seconds": 8.84086
+        "seconds": 8.000957
       },
       "tests/rcwa/test_excitation.py": {
         "nodes": 35,
-        "seconds": 26.033513
+        "seconds": 33.250751
       },
       "tests/rcwa/test_excitation_optimization.py": {
         "nodes": 33,
-        "seconds": 28.44405
+        "seconds": 20.426026
       },
       "tests/rcwa/test_factorization_by_modeling_path.py": {
         "nodes": 21,
-        "seconds": 27.613087
+        "seconds": 24.19453
       },
       "tests/rcwa/test_factorization_core.py": {
         "nodes": 89,
-        "seconds": 77.729596
+        "seconds": 124.391494
       },
       "tests/rcwa/test_field_core.py": {
         "nodes": 49,
-        "seconds": 29.158844
+        "seconds": 37.363789
       },
       "tests/rcwa/test_field_first_order.py": {
         "nodes": 46,
-        "seconds": 22.712127
+        "seconds": 21.768179
       },
       "tests/rcwa/test_field_geometry_precheck.py": {
         "nodes": 58,
-        "seconds": 229.323887
+        "seconds": 213.853888
       },
       "tests/rcwa/test_field_grid_period_gradient.py": {
         "nodes": 36,
-        "seconds": 74.376756
+        "seconds": 39.645414
       },
       "tests/rcwa/test_field_sample_points.py": {
         "nodes": 58,
-        "seconds": 27.095825
+        "seconds": 37.023629
       },
       "tests/rcwa/test_field_stale_scene.py": {
         "nodes": 43,
-        "seconds": 27.771752
+        "seconds": 14.227914
       },
-      "tests/rcwa/test_first_order_exceptional_point.py": {
-        "nodes": 62,
-        "seconds": 540.379057
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_pair_beside_a_coincident_root_is_refused_loudly": {
+        "nodes": 1,
+        "seconds": 0.00247
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_pair_beside_a_root_it_nearly_shares_is_refused_loudly": {
+        "nodes": 3,
+        "seconds": 0.013572
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_pair_beyond_the_separation_floor_is_rebuilt_quietly": {
+        "nodes": 1,
+        "seconds": 0.003496
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_patterned_exceptional_point_is_the_1d_rebuild": {
+        "nodes": 10,
+        "seconds": 0.725348
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_patterned_exceptional_point_under_an_abstract_trace": {
+        "nodes": 4,
+        "seconds": 153.763856
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_traced_y_invariant_raster_gradient_matches_eager": {
+        "nodes": 1,
+        "seconds": 43.385558
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_traced_y_invariant_raster_matches_eager": {
+        "nodes": 1,
+        "seconds": 26.167003
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_uniform_cutoff_on_the_first_order_path": {
+        "nodes": 10,
+        "seconds": 0.139092
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_a_y_invariant_raster_rebuilds_every_row": {
+        "nodes": 10,
+        "seconds": 0.463574
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_derivatives_at_a_patterned_exceptional_point": {
+        "nodes": 6,
+        "seconds": 47.764529
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_fields_and_field_gradients_at_a_patterned_exceptional_point": {
+        "nodes": 4,
+        "seconds": 320.445303
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_more_pairs_than_the_trace_holds_is_loud": {
+        "nodes": 2,
+        "seconds": 16.763457
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_off_the_band_nothing_moves": {
+        "nodes": 2,
+        "seconds": 0.249527
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_offsets_into_the_gate_edge": {
+        "nodes": 4,
+        "seconds": 0.764873
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_the_rebuilt_pair_is_an_invariant_subspace": {
+        "nodes": 2,
+        "seconds": 0.035682
+      },
+      "tests/rcwa/test_first_order_exceptional_point.py::test_the_split_sylvester_solves_its_equation": {
+        "nodes": 1,
+        "seconds": 0.001198
       },
       "tests/rcwa/test_first_order_round_trip_cap.py": {
         "nodes": 29,
-        "seconds": 9.145623
+        "seconds": 8.549258
       },
-      "tests/rcwa/test_fit_geometry.py": {
-        "nodes": 42,
-        "seconds": 740.899597
+      "tests/rcwa/test_fit_geometry.py::test_a_wrapped_forward_uses_the_custom_preparation_contract": {
+        "nodes": 1,
+        "seconds": 12.069314
+      },
+      "tests/rcwa/test_fit_geometry.py::test_another_solvers_forward_is_not_mistaken_for_this_solvers_scene": {
+        "nodes": 1,
+        "seconds": 0.006365
+      },
+      "tests/rcwa/test_fit_geometry.py::test_bad_parameterization_is_refused_before_compiling": {
+        "nodes": 3,
+        "seconds": 15.890145
+      },
+      "tests/rcwa/test_fit_geometry.py::test_custom_forward_requires_and_consumes_fresh_preparation": {
+        "nodes": 2,
+        "seconds": 106.403303
+      },
+      "tests/rcwa/test_fit_geometry.py::test_custom_preparation_receives_custom_partial_keywords_with_dynamic_overrides": {
+        "nodes": 1,
+        "seconds": 30.631731
+      },
+      "tests/rcwa/test_fit_geometry.py::test_dispersive_wavelength_fit_uses_live_materials": {
+        "nodes": 2,
+        "seconds": 22.443131
+      },
+      "tests/rcwa/test_fit_geometry.py::test_explicit_preparation_and_forward_use_the_same_partial_conditions": {
+        "nodes": 6,
+        "seconds": 31.286523
+      },
+      "tests/rcwa/test_fit_geometry.py::test_failed_traced_loss_leaves_concrete_conditions_and_no_reusable_solve_state": {
+        "nodes": 1,
+        "seconds": 16.427048
+      },
+      "tests/rcwa/test_fit_geometry.py::test_fit_crosses_an_overlap_with_fresh_numpy_values_and_gradients": {
+        "nodes": 3,
+        "seconds": 244.791756
+      },
+      "tests/rcwa/test_fit_geometry.py::test_fit_differentiates_a_field_intensity_objective_against_fresh_numpy_fields": {
+        "nodes": 1,
+        "seconds": 31.622871
+      },
+      "tests/rcwa/test_fit_geometry.py::test_fit_method_detection_tolerates_other_instrumented_entry_points": {
+        "nodes": 3,
+        "seconds": 30.649908
+      },
+      "tests/rcwa/test_fit_geometry.py::test_fit_replaces_a_geometry_captured_as_a_positional_argument": {
+        "nodes": 4,
+        "seconds": 204.840095
+      },
+      "tests/rcwa/test_fit_geometry.py::test_fit_replans_a_raster_when_equal_pixels_separate": {
+        "nodes": 6,
+        "seconds": 139.872254
+      },
+      "tests/rcwa/test_fit_geometry.py::test_fit_reuses_a_compilation_when_the_shape_plan_stays_equal": {
+        "nodes": 1,
+        "seconds": 53.25712
+      },
+      "tests/rcwa/test_fit_geometry.py::test_fixed_partial_conditions_and_dynamic_overrides_match_a_fresh_solver": {
+        "nodes": 1,
+        "seconds": 7.345363
+      },
+      "tests/rcwa/test_fit_geometry.py::test_geometry_preparation_cannot_be_hidden_inside_an_outer_jit": {
+        "nodes": 1,
+        "seconds": 0.018143
+      },
+      "tests/rcwa/test_fit_geometry.py::test_joint_shape_and_cell_optimization_matches_fresh_numpy": {
+        "nodes": 2,
+        "seconds": 132.896189
+      },
+      "tests/rcwa/test_fit_geometry.py::test_nested_design_variables_retain_their_gradients_and_final_mapping": {
+        "nodes": 1,
+        "seconds": 25.557687
+      },
+      "tests/rcwa/test_fit_geometry.py::test_preparation_failure_stops_before_another_step_and_clears_retained_tracers": {
+        "nodes": 1,
+        "seconds": 25.008061
+      },
+      "tests/rcwa/test_fit_geometry.py::test_zero_iterations_preserve_the_design_and_eager_solve_state": {
+        "nodes": 1,
+        "seconds": 4.432667
       },
       "tests/rcwa/test_fit_state.py": {
         "nodes": 9,
-        "seconds": 42.940338
+        "seconds": 36.072018
       },
       "tests/rcwa/test_fixes.py": {
         "nodes": 9,
-        "seconds": 4.976948
+        "seconds": 6.412593
       },
       "tests/rcwa/test_formulation_dispatch.py": {
         "nodes": 30,
-        "seconds": 15.349161
+        "seconds": 23.15175
       },
-      "tests/rcwa/test_forward_mode.py": {
-        "nodes": 74,
-        "seconds": 770.458482
+      "tests/rcwa/test_forward_mode.py::@difference": {
+        "nodes": 47,
+        "seconds": 421.089441
+      },
+      "tests/rcwa/test_forward_mode.py::test_a_hessian_that_moves_no_modal_operator_is_exact": {
+        "nodes": 1,
+        "seconds": 40.888043
+      },
+      "tests/rcwa/test_forward_mode.py::test_a_mixed_second_derivative_differentiates_the_rule_once": {
+        "nodes": 1,
+        "seconds": 21.262036
+      },
+      "tests/rcwa/test_forward_mode.py::test_a_sampled_tensor_shape_refuses_a_forward_mode_geometry_derivative": {
+        "nodes": 1,
+        "seconds": 0.007036
+      },
+      "tests/rcwa/test_forward_mode.py::test_a_torch_mixed_second_derivative_is_refused_by_name": {
+        "nodes": 2,
+        "seconds": 0.238245
+      },
+      "tests/rcwa/test_forward_mode.py::test_forward_mode_reaches_the_detuned_retry": {
+        "nodes": 1,
+        "seconds": 0.180412
+      },
+      "tests/rcwa/test_forward_mode.py::test_jax_forward_mode_on_an_oblique_cell_under_jit": {
+        "nodes": 2,
+        "seconds": 75.967024
+      },
+      "tests/rcwa/test_forward_mode.py::test_jax_forward_mode_stops_at_first_order": {
+        "nodes": 14,
+        "seconds": 127.394655
+      },
+      "tests/rcwa/test_forward_mode.py::test_torch_forward_ad_on_an_oblique_cell_angle": {
+        "nodes": 1,
+        "seconds": 0.225173
+      },
+      "tests/rcwa/test_forward_mode.py::test_torch_func_is_refused_by_name": {
+        "nodes": 4,
+        "seconds": 0.081973
       },
       "tests/rcwa/test_fourier_coefficients_by_modeling_path.py": {
         "nodes": 24,
-        "seconds": 143.503214
+        "seconds": 133.718077
       },
       "tests/rcwa/test_fourier_options.py": {
         "nodes": 17,
-        "seconds": 12.322513
+        "seconds": 13.295504
       },
       "tests/rcwa/test_fp_warnings.py": {
         "nodes": 84,
-        "seconds": 91.364745
+        "seconds": 76.525686
       },
-      "tests/rcwa/test_frozen_geometry.py": {
-        "nodes": 78,
-        "seconds": 1053.99425
+      "tests/rcwa/test_frozen_geometry.py::test_a_compression_that_still_separates_the_blocks_is_kept": {
+        "nodes": 1,
+        "seconds": 0.140589
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_frozen_geometry_makes_a_shape_parameter_traceable": {
+        "nodes": 4,
+        "seconds": 149.596451
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_frozen_no_overlap_is_a_claim_about_the_layer_and_is_checked_too": {
+        "nodes": 1,
+        "seconds": 97.295537
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_hand_built_record_carries_no_stamp_and_replays_on_trust": {
+        "nodes": 1,
+        "seconds": 0.024196
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_length_that_moves_without_changing_the_overlaps_reuses_the_compilation": {
+        "nodes": 1,
+        "seconds": 45.647501
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_moving_pattern_needs_no_record_on_the_compression_path": {
+        "nodes": 1,
+        "seconds": 29.373919
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_normal_field_frozen_on_one_size_of_a_cell_replays_on_another": {
+        "nodes": 1,
+        "seconds": 0.073628
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_one_cell_axis_makes_every_same_shape_replay_valid": {
+        "nodes": 1,
+        "seconds": 0.022049
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_raster_record_is_refused_under_another_rule": {
+        "nodes": 12,
+        "seconds": 0.061196
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_shape_record_is_refused_under_another_rule": {
+        "nodes": 6,
+        "seconds": 0.015605
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_shape_the_plan_recorded_as_covered_cannot_be_slid_out_from_under_it": {
+        "nodes": 1,
+        "seconds": 314.699879
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_stale_frozen_geometry_is_refused_rather_than_answered": {
+        "nodes": 1,
+        "seconds": 43.808473
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_stale_painting_plan_is_refused_rather_than_answered": {
+        "nodes": 1,
+        "seconds": 31.142639
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_stale_raster_record_is_refused_rather_than_answered": {
+        "nodes": 2,
+        "seconds": 0.138233
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_a_traced_replay_carries_no_check": {
+        "nodes": 1,
+        "seconds": 3.634492
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_auto_detection_still_blocks_jit": {
+        "nodes": 4,
+        "seconds": 0.052928
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_freeze_geometry_reports_what_the_strategy_needs": {
+        "nodes": 1,
+        "seconds": 0.004935
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_freeze_geometry_runs_the_layer_refusals_it_is_named_for": {
+        "nodes": 1,
+        "seconds": 0.00302
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_frozen_geometry_does_not_change_the_answer": {
+        "nodes": 6,
+        "seconds": 0.080544
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_jit_and_grad_through_the_public_api": {
+        "nodes": 6,
+        "seconds": 73.83307
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_retained_solve_tracers_do_not_hide_a_concrete_stale_record": {
+        "nodes": 12,
+        "seconds": 98.095537
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_compression_decides_itself_inside_a_gradient": {
+        "nodes": 1,
+        "seconds": 16.974966
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_freeze_also_refuses_a_layer_key_nobody_reads": {
+        "nodes": 1,
+        "seconds": 0.002172
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_jitted_field_door_checks_the_permeability_records_beside_the_permittivity": {
+        "nodes": 1,
+        "seconds": 5.058597
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_jitted_field_door_refuses_a_stale_raster_record_too": {
+        "nodes": 3,
+        "seconds": 52.389818
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_normal_field_decides_itself_inside_a_gradient_too": {
+        "nodes": 1,
+        "seconds": 22.070656
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_nvf_gradient_holds_the_interfaces_fixed": {
+        "nodes": 1,
+        "seconds": 26.920146
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_painting_plan_check_is_skipped_under_a_trace_too": {
+        "nodes": 1,
+        "seconds": 52.515967
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_pairings_that_decide_nothing_need_no_frozen_geometry_at_all": {
+        "nodes": 2,
+        "seconds": 11.218357
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_renderer_refuses_what_the_solver_refuses": {
+        "nodes": 1,
+        "seconds": 0.0402
+      },
+      "tests/rcwa/test_frozen_geometry.py::test_the_stamp_is_checked_inside_a_trace_too": {
+        "nodes": 1,
+        "seconds": 0.037311
       },
       "tests/rcwa/test_full_tensor_patterns.py": {
         "nodes": 87,
-        "seconds": 203.468415
+        "seconds": 303.859145
       },
       "tests/rcwa/test_gain_cutoff.py": {
         "nodes": 50,
-        "seconds": 6.999228
+        "seconds": 3.540758
       },
       "tests/rcwa/test_gain_film.py": {
         "nodes": 25,
-        "seconds": 1.155054
+        "seconds": 0.638448
       },
       "tests/rcwa/test_gamma_contact_smooth.py": {
         "nodes": 3,
-        "seconds": 21.732008
+        "seconds": 29.418604
       },
       "tests/rcwa/test_gamma_field.py": {
         "nodes": 43,
-        "seconds": 34.97153
+        "seconds": 42.022207
       },
       "tests/rcwa/test_gamma_frozen.py": {
         "nodes": 37,
-        "seconds": 322.640298
+        "seconds": 446.568388
       },
       "tests/rcwa/test_gamma_layers.py": {
         "nodes": 21,
-        "seconds": 101.478574
+        "seconds": 116.243056
       },
       "tests/rcwa/test_gamma_plan.py": {
-        "nodes": 48,
-        "seconds": 2.361643
+        "nodes": 52,
+        "seconds": 4.63077
       },
       "tests/rcwa/test_golden_legacy_parity.py": {
         "nodes": 53,
-        "seconds": 22.172196
+        "seconds": 27.825553
       },
       "tests/rcwa/test_grad_custom_state.py": {
         "nodes": 12,
-        "seconds": 20.679032
+        "seconds": 14.815479
       },
       "tests/rcwa/test_grad_kept_keywords.py": {
         "nodes": 16,
-        "seconds": 44.714608
+        "seconds": 41.489695
       },
       "tests/rcwa/test_grad_state.py": {
         "nodes": 17,
-        "seconds": 86.967255
+        "seconds": 84.102832
       },
       "tests/rcwa/test_gradients.py": {
         "nodes": 36,
-        "seconds": 108.110916
+        "seconds": 104.715477
       },
       "tests/rcwa/test_half_space_merge.py": {
         "nodes": 72,
-        "seconds": 45.494566
+        "seconds": 36.288587
       },
       "tests/rcwa/test_half_space_power.py": {
         "nodes": 734,
-        "seconds": 49.258563
+        "seconds": 46.090615
       },
       "tests/rcwa/test_integrated_raster_gradients.py": {
         "nodes": 18,
-        "seconds": 99.520567
+        "seconds": 114.265394
       },
       "tests/rcwa/test_jax_device_placement.py": {
         "nodes": 7,
-        "seconds": 406.270172
+        "seconds": 364.410904
       },
       "tests/rcwa/test_lattice_container_solves.py": {
         "nodes": 16,
-        "seconds": 156.717999
+        "seconds": 162.458644
       },
       "tests/rcwa/test_laurent_factorization.py": {
         "nodes": 71,
-        "seconds": 48.641514
+        "seconds": 47.236846
       },
       "tests/rcwa/test_layer_stack.py": {
         "nodes": 31,
-        "seconds": 1.217695
+        "seconds": 1.463621
       },
       "tests/rcwa/test_li_nesting.py": {
         "nodes": 87,
-        "seconds": 38.120899
+        "seconds": 40.50637
       },
       "tests/rcwa/test_lossy_media.py": {
         "nodes": 346,
-        "seconds": 43.604354
+        "seconds": 79.033825
       },
       "tests/rcwa/test_magnetic_1d.py": {
         "nodes": 38,
-        "seconds": 0.387507
+        "seconds": 0.18854
       },
       "tests/rcwa/test_magnetic_layer.py": {
         "nodes": 69,
-        "seconds": 52.702594
+        "seconds": 51.41382
       },
       "tests/rcwa/test_modal_1d_gradients.py": {
         "nodes": 24,
-        "seconds": 51.003899
+        "seconds": 46.850959
       },
       "tests/rcwa/test_modal_matrix_derivatives.py": {
         "nodes": 81,
-        "seconds": 17.369447
+        "seconds": 16.073708
       },
       "tests/rcwa/test_modal_nonlinear_hessian_guard.py": {
         "nodes": 12,
-        "seconds": 2.706311
+        "seconds": 3.275812
       },
       "tests/rcwa/test_modal_source_gradients.py": {
         "nodes": 10,
-        "seconds": 82.668436
+        "seconds": 90.01347
       },
       "tests/rcwa/test_negative_index_half_space.py": {
         "nodes": 167,
-        "seconds": 55.398773
+        "seconds": 38.439149
       },
       "tests/rcwa/test_negative_index_layers.py": {
         "nodes": 187,
-        "seconds": 102.512119
+        "seconds": 109.894678
       },
       "tests/rcwa/test_nested_traced_conditions.py": {
         "nodes": 6,
-        "seconds": 69.8428
+        "seconds": 46.712116
       },
       "tests/rcwa/test_nvf.py": {
         "nodes": 5,
-        "seconds": 0.582438
+        "seconds": 0.603235
       },
       "tests/rcwa/test_nvf_cartesian_pair_opening.py": {
         "nodes": 3,
-        "seconds": 0.002908
+        "seconds": 0.002698
       },
       "tests/rcwa/test_nvf_cartesian_rectangle_api.py": {
         "nodes": 13,
-        "seconds": 3.147492
+        "seconds": 3.604828
       },
       "tests/rcwa/test_nvf_cartesian_rectangle_pair_api.py": {
         "nodes": 12,
-        "seconds": 2.734031
+        "seconds": 7.423361
       },
       "tests/rcwa/test_nvf_energy_builder.py": {
         "nodes": 29,
-        "seconds": 3.744641
+        "seconds": 11.504209
       },
       "tests/rcwa/test_nvf_half_fill.py": {
         "nodes": 4,
-        "seconds": 0.464665
+        "seconds": 0.423457
       },
       "tests/rcwa/test_nvf_lattice_translation.py": {
         "nodes": 67,
-        "seconds": 23.864914
+        "seconds": 34.81111
       },
       "tests/rcwa/test_nvf_metal_inverse_rule.py": {
         "nodes": 79,
-        "seconds": 143.32197
+        "seconds": 206.208192
       },
       "tests/rcwa/test_nvf_non_square_grid.py": {
         "nodes": 14,
-        "seconds": 16.061088
+        "seconds": 28.129802
       },
       "tests/rcwa/test_nvf_normal_field.py": {
         "nodes": 10,
-        "seconds": 0.062732
+        "seconds": 0.195807
       },
       "tests/rcwa/test_nvf_normal_methods.py": {
         "nodes": 68,
-        "seconds": 16.7771
+        "seconds": 10.001588
       },
       "tests/rcwa/test_nvf_option_names.py": {
         "nodes": 27,
-        "seconds": 23.843932
+        "seconds": 20.678604
       },
       "tests/rcwa/test_nvf_pair_refinement.py": {
         "nodes": 4,
-        "seconds": 0.005792
+        "seconds": 0.005648
       },
       "tests/rcwa/test_nvf_pair_transmission.py": {
         "nodes": 3,
-        "seconds": 0.074512
+        "seconds": 0.043756
       },
       "tests/rcwa/test_nvf_period_spanning_shape.py": {
         "nodes": 26,
-        "seconds": 59.854273
+        "seconds": 55.218005
       },
       "tests/rcwa/test_nvf_projector.py": {
         "nodes": 43,
-        "seconds": 68.492169
+        "seconds": 65.711573
       },
       "tests/rcwa/test_nvf_seam_materials.py": {
         "nodes": 22,
-        "seconds": 224.276793
+        "seconds": 206.107156
       },
       "tests/rcwa/test_nvf_self_coincident_faces.py": {
         "nodes": 34,
-        "seconds": 41.330766
+        "seconds": 61.738974
       },
       "tests/rcwa/test_nvf_transmission_common_precision.py": {
         "nodes": 1,
-        "seconds": 0.030322
+        "seconds": 0.019983
       },
       "tests/rcwa/test_nvf_transmission_cutoff_precision.py": {
         "nodes": 8,
-        "seconds": 0.008144
+        "seconds": 0.007116
       },
       "tests/rcwa/test_nvf_vector.py": {
         "nodes": 2,
-        "seconds": 0.015269
+        "seconds": 0.009855
       },
       "tests/rcwa/test_nvf_zero_norm_gradients.py": {
         "nodes": 7,
-        "seconds": 55.420404
+        "seconds": 38.391776
       },
       "tests/rcwa/test_oblique_lattice.py": {
         "nodes": 108,
-        "seconds": 384.134932
+        "seconds": 418.65569
       },
       "tests/rcwa/test_oblique_tensor_exponential_gradients.py": {
         "nodes": 24,
-        "seconds": 246.993788
+        "seconds": 262.257189
       },
       "tests/rcwa/test_optical_scaling_gradients.py": {
         "nodes": 9,
-        "seconds": 91.084473
+        "seconds": 90.445187
       },
       "tests/rcwa/test_optimization_smoke.py": {
         "nodes": 3,
-        "seconds": 19.033014
+        "seconds": 25.127262
       },
       "tests/rcwa/test_optimizer.py": {
         "nodes": 7,
-        "seconds": 25.95666
+        "seconds": 24.339297
       },
       "tests/rcwa/test_optimizer_numpy_lattice_state.py": {
         "nodes": 34,
-        "seconds": 40.147072
+        "seconds": 50.806462
       },
       "tests/rcwa/test_optimizer_numpy_recipe_state.py": {
         "nodes": 16,
-        "seconds": 37.64417
+        "seconds": 30.143757
       },
       "tests/rcwa/test_order_azimuth.py": {
         "nodes": 62,
-        "seconds": 76.524465
+        "seconds": 96.231308
       },
       "tests/rcwa/test_order_naming.py": {
         "nodes": 16,
-        "seconds": 0.340634
+        "seconds": 0.209591
       },
       "tests/rcwa/test_painted_circular_projector.py": {
         "nodes": 14,
-        "seconds": 241.197646
+        "seconds": 234.409381
       },
       "tests/rcwa/test_painted_material_continuity.py": {
         "nodes": 24,
-        "seconds": 277.213152
+        "seconds": 176.984775
       },
       "tests/rcwa/test_parametric.py": {
-        "nodes": 154,
-        "seconds": 167.485021
+        "nodes": 156,
+        "seconds": 292.310197
       },
       "tests/rcwa/test_parametric_field_jit.py": {
         "nodes": 7,
-        "seconds": 56.36504
+        "seconds": 125.237585
       },
       "tests/rcwa/test_period_assignment.py": {
         "nodes": 61,
-        "seconds": 0.948688
+        "seconds": 2.234674
       },
       "tests/rcwa/test_phase_incidence.py": {
         "nodes": 178,
-        "seconds": 20.957181
+        "seconds": 30.12575
       },
       "tests/rcwa/test_plot_structure.py": {
-        "nodes": 16,
-        "seconds": 1.822148
+        "nodes": 19,
+        "seconds": 1.373878
       },
       "tests/rcwa/test_pn_factorization.py": {
         "nodes": 29,
-        "seconds": 48.199698
+        "seconds": 38.389395
       },
       "tests/rcwa/test_polarization.py": {
         "nodes": 143,
-        "seconds": 68.411903
+        "seconds": 66.364277
       },
       "tests/rcwa/test_polarization_precision.py": {
         "nodes": 14,
-        "seconds": 12.870193
+        "seconds": 15.652792
       },
       "tests/rcwa/test_polygon_interfaces.py": {
         "nodes": 29,
-        "seconds": 42.952247
+        "seconds": 52.379777
       },
       "tests/rcwa/test_polygon_region.py": {
         "nodes": 55,
-        "seconds": 149.705836
+        "seconds": 138.124041
       },
       "tests/rcwa/test_pytree_round_trip.py": {
         "nodes": 45,
-        "seconds": 18.164011
+        "seconds": 29.203843
       },
       "tests/rcwa/test_rayleigh_gradient_retry.py": {
         "nodes": 16,
-        "seconds": 38.176662
+        "seconds": 23.7944
       },
       "tests/rcwa/test_rayleigh_guard.py": {
         "nodes": 52,
-        "seconds": 63.527833
+        "seconds": 54.592702
       },
       "tests/rcwa/test_rectilinear_li.py": {
-        "nodes": 33,
-        "seconds": 94.96965
+        "nodes": 35,
+        "seconds": 92.279392
       },
       "tests/rcwa/test_resonant_nvf_probe.py": {
         "nodes": 14,
-        "seconds": 0.105913
+        "seconds": 0.100675
       },
       "tests/rcwa/test_result_field_face_gradients.py": {
         "nodes": 111,
-        "seconds": 109.386413
+        "seconds": 124.856169
       },
       "tests/rcwa/test_result_fields.py": {
         "nodes": 66,
-        "seconds": 26.521064
+        "seconds": 33.097465
       },
       "tests/rcwa/test_same_material.py": {
         "nodes": 23,
-        "seconds": 0.11087
+        "seconds": 0.193242
       },
       "tests/rcwa/test_scattering_core.py": {
         "nodes": 183,
-        "seconds": 65.141351
+        "seconds": 63.483101
       },
       "tests/rcwa/test_shape_circular_projector.py": {
         "nodes": 23,
-        "seconds": 125.190724
+        "seconds": 144.154173
       },
       "tests/rcwa/test_shape_nvf_period_gradient.py": {
         "nodes": 4,
-        "seconds": 0.318349
+        "seconds": 0.300208
       },
       "tests/rcwa/test_shape_position_gradients.py": {
         "nodes": 29,
-        "seconds": 115.804359
+        "seconds": 163.994873
       },
       "tests/rcwa/test_slot_order.py": {
         "nodes": 28,
-        "seconds": 0.44345
+        "seconds": 0.653257
       },
       "tests/rcwa/test_smm_field_state.py": {
         "nodes": 308,
-        "seconds": 126.897339
+        "seconds": 132.598431
       },
       "tests/rcwa/test_smm_first_order.py": {
         "nodes": 15,
-        "seconds": 6.202219
+        "seconds": 7.230943
       },
       "tests/rcwa/test_solve_1d_core.py": {
         "nodes": 36,
-        "seconds": 26.654819
+        "seconds": 27.720603
       },
       "tests/rcwa/test_solve_2d_core.py": {
         "nodes": 23,
-        "seconds": 18.150575
+        "seconds": 23.776114
       },
       "tests/rcwa/test_solve_2d_first_order.py": {
         "nodes": 372,
-        "seconds": 5.008486
+        "seconds": 4.036171
       },
       "tests/rcwa/test_solve_field_jax.py": {
         "nodes": 38,
-        "seconds": 506.601423
+        "seconds": 338.965488
       },
       "tests/rcwa/test_solve_field_sampling_jax.py": {
         "nodes": 32,
-        "seconds": 87.297327
+        "seconds": 79.545778
       },
       "tests/rcwa/test_solve_keywords.py": {
         "nodes": 224,
-        "seconds": 46.309657
+        "seconds": 61.803501
       },
       "tests/rcwa/test_solve_traced_runtime.py": {
         "nodes": 8,
-        "seconds": 79.454746
+        "seconds": 73.158443
       },
       "tests/rcwa/test_source_answers.py": {
         "nodes": 26,
-        "seconds": 42.413788
+        "seconds": 31.084612
       },
       "tests/rcwa/test_source_traced_state.py": {
         "nodes": 7,
-        "seconds": 15.88561
+        "seconds": 10.805638
       },
       "tests/rcwa/test_sources.py": {
         "nodes": 21,
-        "seconds": 37.248186
+        "seconds": 39.675744
       },
       "tests/rcwa/test_split_layer_labels.py": {
         "nodes": 22,
-        "seconds": 10.400956
+        "seconds": 7.333962
       },
       "tests/rcwa/test_stability.py": {
         "nodes": 19,
-        "seconds": 1.113876
+        "seconds": 1.211646
       },
-      "tests/rcwa/test_tensor_curve_normals.py": {
-        "nodes": 75,
-        "seconds": 1067.089358
+      "tests/rcwa/test_tensor_curve_normals.py::test_a_box_crossing_its_own_ring_threshold_replays_as_a_fresh_solve": {
+        "nodes": 3,
+        "seconds": 30.39952
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_a_circle_does_not_turn_with_its_angle": {
+        "nodes": 2,
+        "seconds": 1.569923
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_a_disk_beside_another_shape_is_a_circle_to_the_bit": {
+        "nodes": 2,
+        "seconds": 0.281561
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_a_lone_ellipse_and_the_same_ellipse_beside_a_shape_of_no_contrast_agree": {
+        "nodes": 2,
+        "seconds": 1.66468
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_a_sample_on_an_ellipse_differentiates_as_the_field_around_it": {
+        "nodes": 1,
+        "seconds": 0.382329
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_an_ellipse_as_the_only_curve_takes_the_analytic_candidate": {
+        "nodes": 4,
+        "seconds": 0.406537
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_an_ellipse_growing_out_of_its_wigner_seitz_cell_is_refused_by_name": {
+        "nodes": 3,
+        "seconds": 22.812812
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_an_ellipse_leaving_its_cell_into_a_ring_the_3x3_holds_replays_as_a_fresh_solve": {
+        "nodes": 2,
+        "seconds": 0.212152
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_an_ellipse_shrinking_into_its_wigner_seitz_cell_replays_as_a_fresh_solve": {
+        "nodes": 3,
+        "seconds": 33.309332
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_an_odd_grid_samples_a_curve_centre": {
+        "nodes": 6,
+        "seconds": 5.301659
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_analytic_curve_coefficients_are_the_limit_of_the_polygon_route": {
+        "nodes": 2,
+        "seconds": 24.56306
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_both_sides_converge_to_the_same_value_and_derivative": {
+        "nodes": 4,
+        "seconds": 2.094193
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_curve_candidates_read_the_nearest_periodic_instance_off_the_curve": {
+        "nodes": 5,
+        "seconds": 9.237787
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_disjoint_primitive_coefficients_do_not_depend_on_polygon_resolution": {
+        "nodes": 4,
+        "seconds": 0.481707
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_electric_magnetic_duality": {
+        "nodes": 2,
+        "seconds": 0.427821
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_float32_boundary_gradients_are_finite_in_different_length_units": {
+        "nodes": 3,
+        "seconds": 202.56552
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_float32_gradients_are_finite_with_a_zero_strength_curve": {
+        "nodes": 2,
+        "seconds": 58.649844
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_float32_gradients_of_an_off_centre_ellipse_are_finite_in_any_length_unit": {
+        "nodes": 2,
+        "seconds": 49.0049
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_gradients_through_the_neighbour_sweep_of_an_in_cell_ellipse": {
+        "nodes": 2,
+        "seconds": 64.922184
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_implicit_rectangle_type_is_supported_with_a_curve": {
+        "nodes": 1,
+        "seconds": 0.051794
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_on_curve_samples_read_zero_distance_and_the_outward_normal_on_every_instance": {
+        "nodes": 3,
+        "seconds": 0.024136
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_one_jit_gradient_replays_across_the_old_corner": {
+        "nodes": 1,
+        "seconds": 82.650555
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_regression_sum_T_at_order_1_on_a_64_grid": {
+        "nodes": 1,
+        "seconds": 0.404286
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_regression_sum_T_at_order_7_on_a_256_grid": {
+        "nodes": 1,
+        "seconds": 4.642542
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_shape_derivatives_at_the_old_polygon_vertex": {
+        "nodes": 6,
+        "seconds": 300.284217
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_the_curve_check_reads_shape_values_under_differentiation": {
+        "nodes": 2,
+        "seconds": 58.532521
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_the_gradient_integrates_to_the_change_in_the_loss_across_a_window": {
+        "nodes": 4,
+        "seconds": 66.015691
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_the_nearest_point_vector_would_switch_on_the_medial_segment": {
+        "nodes": 1,
+        "seconds": 5.733642
+      },
+      "tests/rcwa/test_tensor_curve_normals.py::test_the_polygon_route_converges_to_the_nearest_point_vector_and_not_to_the_level_set": {
+        "nodes": 1,
+        "seconds": 6.588911
       },
       "tests/rcwa/test_tensor_exponential_gradients.py": {
         "nodes": 12,
-        "seconds": 58.203199
+        "seconds": 88.428639
       },
       "tests/rcwa/test_tensor_li.py": {
         "nodes": 37,
-        "seconds": 95.775239
+        "seconds": 110.600553
       },
       "tests/rcwa/test_tensor_shape_integrated.py": {
         "nodes": 29,
-        "seconds": 172.248368
+        "seconds": 100.909902
       },
       "tests/rcwa/test_tetm_off_the_pure_path.py": {
         "nodes": 40,
-        "seconds": 7.071942
+        "seconds": 6.317437
       },
       "tests/rcwa/test_torch_field_scene_guard.py": {
         "nodes": 32,
-        "seconds": 1.202445
+        "seconds": 0.864301
       },
       "tests/rcwa/test_torch_vmap_autograd.py": {
         "nodes": 168,
-        "seconds": 39.397922
+        "seconds": 37.592892
       },
       "tests/rcwa/test_uniform_anisotropic.py": {
         "nodes": 13,
-        "seconds": 0.073279
+        "seconds": 0.090984
       },
       "tests/rcwa/test_vertical_coordinates.py": {
         "nodes": 245,
-        "seconds": 38.181502
+        "seconds": 45.948783
       },
       "tests/rcwa/test_zero_order_nvf_gradient.py": {
         "nodes": 20,
-        "seconds": 50.720046
+        "seconds": 38.87899
       },
       "tests/references/test_fdtd_table_golden.py": {
         "nodes": 9,
-        "seconds": 31.478894
+        "seconds": 25.237567
       },
       "tests/references/test_first_order_external_goldens.py": {
         "nodes": 63,
-        "seconds": 0.271409
+        "seconds": 0.403603
       },
       "tests/references/test_fmmax_dng_golden.py": {
         "nodes": 35,
-        "seconds": 0.478711
+        "seconds": 0.374506
       },
       "tests/references/test_fmmax_field_golden.py": {
         "nodes": 46,
-        "seconds": 36.870904
+        "seconds": 43.651022
       },
       "tests/references/test_fmmax_golden.py": {
         "nodes": 14,
-        "seconds": 0.105912
+        "seconds": 0.04714
       },
       "tests/references/test_fmmax_laurent_golden.py": {
         "nodes": 21,
-        "seconds": 6.333097
+        "seconds": 7.195921
       },
       "tests/references/test_fmmax_magnetic_golden.py": {
         "nodes": 30,
-        "seconds": 0.24594
+        "seconds": 0.1873
       },
       "tests/references/test_fmmax_mu_ambient_golden.py": {
         "nodes": 67,
-        "seconds": 0.31208
+        "seconds": 0.260399
       },
       "tests/references/test_fmmax_patterned_golden.py": {
         "nodes": 10,
-        "seconds": 257.878566
+        "seconds": 140.277316
       },
       "tests/references/test_fmmax_patterned_mu_golden.py": {
         "nodes": 26,
-        "seconds": 501.897133
+        "seconds": 278.697389
       },
       "tests/references/test_meep_1d_golden.py": {
         "nodes": 17,
-        "seconds": 0.640324
+        "seconds": 0.458396
       },
       "tests/references/test_meep_adjoint_rotation.py": {
         "nodes": 2,
-        "seconds": 0.051084
+        "seconds": 0.029908
       },
       "tests/references/test_meep_circles.py": {
         "nodes": 1,
-        "seconds": 2.168168
+        "seconds": 2.001645
       },
       "tests/references/test_meep_crossed_golden.py": {
         "nodes": 16,
-        "seconds": 4.994923
+        "seconds": 5.417565
       },
       "tests/references/test_meep_crossed_materials_golden.py": {
         "nodes": 4,
-        "seconds": 0.006558
+        "seconds": 0.010379
       },
       "tests/references/test_meep_crossed_metal_golden.py": {
         "nodes": 3,
-        "seconds": 6.964457
+        "seconds": 6.705716
       },
       "tests/references/test_meep_ellipses.py": {
         "nodes": 1,
-        "seconds": 8.31928
+        "seconds": 7.640205
       },
       "tests/references/test_meep_layer_smoothing.py": {
         "nodes": 1,
-        "seconds": 23.97327
+        "seconds": 26.718539
       },
       "tests/references/test_meep_layer_thickness.py": {
         "nodes": 1,
-        "seconds": 30.720443
+        "seconds": 30.873277
       },
       "tests/references/test_meep_multilayer.py": {
         "nodes": 1,
-        "seconds": 107.420312
+        "seconds": 97.983513
       },
       "tests/references/test_meep_painted_shapes.py": {
         "nodes": 1,
-        "seconds": 8.410589
+        "seconds": 9.612775
       },
       "tests/references/test_meep_rectangle.py": {
         "nodes": 3,
-        "seconds": 273.787293
+        "seconds": 227.578292
       },
       "tests/references/test_meep_ringdown.py": {
         "nodes": 2,
-        "seconds": 0.059403
+        "seconds": 0.016393
       },
       "tests/references/test_meep_rotation.py": {
         "nodes": 1,
-        "seconds": 8.263823
+        "seconds": 4.00969
       },
       "tests/references/test_meep_rotation_smoothing.py": {
         "nodes": 2,
-        "seconds": 24.451846
+        "seconds": 49.757036
       },
       "tests/references/test_meep_source_notch.py": {
         "nodes": 7,
-        "seconds": 5.29142
+        "seconds": 6.178412
       },
       "tests/references/test_meep_variable_depth.py": {
         "nodes": 2,
-        "seconds": 28.111014
+        "seconds": 21.183849
       },
       "tests/references/test_native_bloch_external.py": {
         "nodes": 1,
-        "seconds": 3.961993
+        "seconds": 2.896517
       },
       "tests/references/test_native_grid_external.py": {
         "nodes": 2,
-        "seconds": 14.050344
+        "seconds": 9.483183
       },
       "tests/references/test_native_material_external.py": {
         "nodes": 8,
-        "seconds": 79.17613
+        "seconds": 84.347282
       },
       "tests/references/test_native_torch_external.py": {
         "nodes": 3,
-        "seconds": 0.35692
+        "seconds": 0.44909
       },
       "tests/references/test_pymoosh_dng_golden.py": {
         "nodes": 30,
-        "seconds": 4.54461
+        "seconds": 1.588151
       },
       "tests/references/test_reticolo_anisotropic_golden.py": {
         "nodes": 10,
-        "seconds": 0.030915
+        "seconds": 0.032853
       },
       "tests/references/test_reticolo_complex_kx_golden.py": {
         "nodes": 21,
-        "seconds": 0.063065
+        "seconds": 0.058388
       },
       "tests/references/test_reticolo_conical_field_golden.py": {
         "nodes": 81,
-        "seconds": 0.733304
+        "seconds": 0.855158
       },
       "tests/references/test_reticolo_conical_sweep.py": {
         "nodes": 7,
-        "seconds": 11.198503
+        "seconds": 16.303151
       },
       "tests/references/test_reticolo_field_golden.py": {
         "nodes": 62,
-        "seconds": 0.273855
+        "seconds": 0.508389
       },
       "tests/references/test_reticolo_golden.py": {
         "nodes": 68,
-        "seconds": 7.098045
+        "seconds": 8.276782
       },
       "tests/references/test_reticolo_li_nesting.py": {
         "nodes": 18,
-        "seconds": 1.513491
+        "seconds": 2.314145
       },
       "tests/references/test_s4_field_golden.py": {
         "nodes": 123,
-        "seconds": 1.331627
+        "seconds": 0.476156
       },
       "tests/references/test_s4_golden.py": {
         "nodes": 10,
-        "seconds": 0.059773
+        "seconds": 0.040472
       },
       "tests/references/test_s4_polygon_golden.py": {
         "nodes": 15,
-        "seconds": 9.782062
+        "seconds": 9.68996
       },
       "tests/references/test_scene_bottom_meep.py": {
         "nodes": 1,
-        "seconds": 30.543432
+        "seconds": 34.70911
       },
       "tests/references/test_tensor_li_golden.py": {
         "nodes": 3,
-        "seconds": 93.680321
+        "seconds": 43.473942
       },
       "tests/references/test_tensor_shape_golden.py": {
         "nodes": 3,
-        "seconds": 86.787036
+        "seconds": 89.406209
       }
     },
     "only": {
       "tests/fdtd/test_fd_absorber.py": {
         "nodes": 7,
-        "seconds": 20.980417
+        "seconds": 9.00496
       },
       "tests/fdtd/test_fd_axis1d.py": {
         "nodes": 2,
-        "seconds": 69.97034
+        "seconds": 54.560266
       },
       "tests/fdtd/test_fd_decay.py": {
         "nodes": 4,
-        "seconds": 48.232654
+        "seconds": 82.811835
       },
-      "tests/fdtd/test_fd_diffraction.py": {
-        "nodes": 5,
-        "seconds": 670.575032
+      "tests/fdtd/test_fd_diffraction.py::test_a_crossed_grating_converges_toward_rcwa": {
+        "nodes": 1,
+        "seconds": 107.48012
+      },
+      "tests/fdtd/test_fd_diffraction.py::test_a_lamellar_grating_converges_toward_rcwa[p-0.9-0.005]": {
+        "nodes": 1,
+        "seconds": 116.729038
+      },
+      "tests/fdtd/test_fd_diffraction.py::test_a_lamellar_grating_converges_toward_rcwa[s-0.9-0.008]": {
+        "nodes": 1,
+        "seconds": 67.252152
+      },
+      "tests/fdtd/test_fd_diffraction.py::test_an_oblique_lamellar_grating_converges_toward_rcwa": {
+        "nodes": 1,
+        "seconds": 140.27367
+      },
+      "tests/fdtd/test_fd_diffraction.py::test_the_crossed_gratings_ringing_is_not_what_its_orders_read": {
+        "nodes": 1,
+        "seconds": 40.482039
       },
       "tests/fdtd/test_fd_dispersive.py": {
         "nodes": 3,
-        "seconds": 3.977766
+        "seconds": 3.399958
       },
       "tests/fdtd/test_fd_farfield.py": {
         "nodes": 1,
-        "seconds": 86.367166
+        "seconds": 93.422978
       },
       "tests/fdtd/test_fd_grazing.py": {
         "nodes": 1,
-        "seconds": 39.508496
+        "seconds": 22.448883
       },
       "tests/fdtd/test_fd_layer_return.py": {
         "nodes": 3,
-        "seconds": 3.332606
+        "seconds": 4.773918
       },
       "tests/fdtd/test_fd_metasurface.py": {
         "nodes": 1,
-        "seconds": 288.567884
+        "seconds": 157.960997
       },
       "tests/fdtd/test_fd_mie_physics.py": {
-        "nodes": 7,
-        "seconds": 1031.838663
+        "nodes": 5,
+        "seconds": 423.909494
+      },
+      "tests/fdtd/test_fd_mie_physics.py::test_public_high_contrast_material_rule": {
+        "nodes": 1,
+        "seconds": 160.886825
+      },
+      "tests/fdtd/test_fd_mie_physics.py::test_public_sphere_mie_convergence[1.1]": {
+        "nodes": 1,
+        "seconds": 504.574865
       },
       "tests/fdtd/test_fd_phase_control.py": {
         "nodes": 1,
-        "seconds": 118.841629
+        "seconds": 35.775695
       },
       "tests/fdtd/test_fd_pml.py": {
         "nodes": 39,
-        "seconds": 94.736917
+        "seconds": 142.861495
       },
       "tests/fdtd/test_fd_radiation.py": {
         "nodes": 3,
-        "seconds": 130.928642
+        "seconds": 80.942383
       },
       "tests/fdtd/test_fd_symmetric_stencil.py": {
         "nodes": 2,
-        "seconds": 178.114921
+        "seconds": 278.882348
       },
       "tests/fdtd/test_fd_triplet_research.py": {
         "nodes": 1,
-        "seconds": 21.394961
+        "seconds": 21.647452
       },
       "tests/fdtd/test_fd_triplet_sphere.py": {
         "nodes": 1,
-        "seconds": 30.214076
+        "seconds": 18.852299
       },
-      "tests/fdtd/test_fdtd.py": {
-        "nodes": 6,
-        "seconds": 517.372854
+      "tests/fdtd/test_fdtd.py::test_the_tfsf_source_injects_a_crossed_plane_wave[p-0.0]": {
+        "nodes": 1,
+        "seconds": 110.467053
+      },
+      "tests/fdtd/test_fdtd.py::test_the_tfsf_source_injects_a_crossed_plane_wave[p-30.0]": {
+        "nodes": 1,
+        "seconds": 91.838637
+      },
+      "tests/fdtd/test_fdtd.py::test_the_tfsf_source_injects_a_crossed_plane_wave[p-45.0]": {
+        "nodes": 1,
+        "seconds": 72.081065
+      },
+      "tests/fdtd/test_fdtd.py::test_the_tfsf_source_injects_a_crossed_plane_wave[s-0.0]": {
+        "nodes": 1,
+        "seconds": 131.717517
+      },
+      "tests/fdtd/test_fdtd.py::test_the_tfsf_source_injects_a_crossed_plane_wave[s-30.0]": {
+        "nodes": 1,
+        "seconds": 88.699498
+      },
+      "tests/fdtd/test_fdtd.py::test_the_tfsf_source_injects_a_crossed_plane_wave[s-45.0]": {
+        "nodes": 1,
+        "seconds": 108.696158
       },
       "tests/fdtd/test_fdtd_circle_optics.py": {
         "nodes": 1,
-        "seconds": 114.842393
+        "seconds": 107.790652
       },
       "tests/fdtd/test_fdtd_ellipse_optics.py": {
         "nodes": 1,
-        "seconds": 252.138156
+        "seconds": 126.549617
       },
-      "tests/fdtd/test_fdtd_ellipses.py": {
-        "nodes": 4,
-        "seconds": 748.269335
+      "tests/fdtd/test_fdtd_ellipses.py::test_bottom_conical_joint_eight_parameter_shape_material_and_depth_graph[0.0-jax]": {
+        "nodes": 1,
+        "seconds": 154.195292
+      },
+      "tests/fdtd/test_fdtd_ellipses.py::test_bottom_conical_joint_eight_parameter_shape_material_and_depth_graph[0.0-torch]": {
+        "nodes": 1,
+        "seconds": 164.945117
+      },
+      "tests/fdtd/test_fdtd_ellipses.py::test_bottom_conical_joint_eight_parameter_shape_material_and_depth_graph[smoothing1-jax]": {
+        "nodes": 1,
+        "seconds": 88.148636
+      },
+      "tests/fdtd/test_fdtd_ellipses.py::test_bottom_conical_joint_eight_parameter_shape_material_and_depth_graph[smoothing1-torch]": {
+        "nodes": 1,
+        "seconds": 80.641531
       },
       "tests/fdtd/test_fdtd_enz.py": {
         "nodes": 1,
-        "seconds": 221.318058
+        "seconds": 183.246736
       },
-      "tests/fdtd/test_fdtd_halfspace_gradients.py": {
-        "nodes": 5,
-        "seconds": 898.976521
+      "tests/fdtd/test_fdtd_halfspace_gradients.py::test_joint_halfspace_angle_pole_graphs_through_bottom_scene[directional-jax]": {
+        "nodes": 1,
+        "seconds": 203.232353
       },
-      "tests/fdtd/test_fdtd_layer_gradients.py": {
-        "nodes": 8,
-        "seconds": 1301.509229
+      "tests/fdtd/test_fdtd_halfspace_gradients.py::test_joint_halfspace_angle_pole_graphs_through_bottom_scene[directional-torch]": {
+        "nodes": 1,
+        "seconds": 72.287028
+      },
+      "tests/fdtd/test_fdtd_halfspace_gradients.py::test_joint_halfspace_angle_pole_graphs_through_bottom_scene[electric-jax]": {
+        "nodes": 1,
+        "seconds": 76.664174
+      },
+      "tests/fdtd/test_fdtd_halfspace_gradients.py::test_joint_halfspace_angle_pole_graphs_through_bottom_scene[electric-torch]": {
+        "nodes": 1,
+        "seconds": 160.425159
+      },
+      "tests/fdtd/test_fdtd_halfspace_gradients.py::test_magnetic_halfspace_sensitivities_refine_to_independent_airy": {
+        "nodes": 1,
+        "seconds": 187.6091
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.0-bottom-directional-jax]": {
+        "nodes": 1,
+        "seconds": 108.939695
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.0-bottom-directional-torch]": {
+        "nodes": 1,
+        "seconds": 90.150006
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.0-top-electric-jax]": {
+        "nodes": 1,
+        "seconds": 211.310772
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.0-top-electric-torch]": {
+        "nodes": 1,
+        "seconds": 62.973259
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.06-bottom-directional-jax]": {
+        "nodes": 1,
+        "seconds": 68.47664
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.06-bottom-directional-torch]": {
+        "nodes": 1,
+        "seconds": 64.967175
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.06-top-electric-jax]": {
+        "nodes": 1,
+        "seconds": 191.891665
+      },
+      "tests/fdtd/test_fdtd_layer_gradients.py::test_joint_layer_material_pole_gradients_in_typed_stack[0.06-top-electric-torch]": {
+        "nodes": 1,
+        "seconds": 113.088766
       },
       "tests/fdtd/test_fdtd_mixed_metal.py": {
         "nodes": 1,
-        "seconds": 226.371119
+        "seconds": 294.172688
       },
       "tests/fdtd/test_fdtd_painted_optics.py": {
-        "nodes": 1,
-        "seconds": 163.513311
-      },
-      "tests/fdtd/test_fdtd_painted_shapes.py": {
         "nodes": 2,
-        "seconds": 222.739061
+        "seconds": 168.78222
+      },
+      "tests/fdtd/test_fdtd_painted_shapes.py::test_bottom_conical_complete_shape_material_and_layer_graph": {
+        "nodes": 2,
+        "seconds": 257.079092
       },
       "tests/fdtd/test_fdtd_polarization.py": {
         "nodes": 1,
-        "seconds": 23.250172
+        "seconds": 14.84342
       },
       "tests/fdtd/test_fdtd_rectangles.py": {
         "nodes": 2,
-        "seconds": 172.941716
+        "seconds": 214.445079
       },
       "tests/fdtd/test_fdtd_rotated_rectangles.py": {
         "nodes": 2,
-        "seconds": 150.658965
+        "seconds": 111.059622
       },
       "tests/fdtd/test_fdtd_rotation_smoothing.py": {
         "nodes": 2,
-        "seconds": 162.337862
+        "seconds": 185.089244
       },
-      "tests/fdtd/test_fdtd_scene_angles.py": {
+      "tests/fdtd/test_fdtd_scene_angles.py::test_angle_material_poles_monitors_and_records_share_one_graph": {
         "nodes": 4,
-        "seconds": 245.506443
+        "seconds": 401.278306
       },
-      "tests/fdtd/test_fdtd_scene_azimuth.py": {
-        "nodes": 10,
-        "seconds": 791.308695
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_azimuth_and_material_graphs_match_two_finite_difference_steps[directional-jax]": {
+        "nodes": 1,
+        "seconds": 109.130331
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_azimuth_and_material_graphs_match_two_finite_difference_steps[directional-torch]": {
+        "nodes": 1,
+        "seconds": 101.257111
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_azimuth_and_material_graphs_match_two_finite_difference_steps[electric-jax]": {
+        "nodes": 1,
+        "seconds": 54.103365
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_azimuth_and_material_graphs_match_two_finite_difference_steps[electric-torch]": {
+        "nodes": 1,
+        "seconds": 43.476273
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_azimuth_derivative_respects_axis_exchange[jax]": {
+        "nodes": 1,
+        "seconds": 26.849774
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_azimuth_derivative_respects_axis_exchange[torch]": {
+        "nodes": 1,
+        "seconds": 134.229348
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_two_angle_jacobian_matches_independent_uniform_yee_phase[bottom-jax]": {
+        "nodes": 1,
+        "seconds": 34.682927
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_two_angle_jacobian_matches_independent_uniform_yee_phase[bottom-torch]": {
+        "nodes": 1,
+        "seconds": 103.479939
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_two_angle_jacobian_matches_independent_uniform_yee_phase[top-jax]": {
+        "nodes": 1,
+        "seconds": 58.060105
+      },
+      "tests/fdtd/test_fdtd_scene_azimuth.py::test_two_angle_jacobian_matches_independent_uniform_yee_phase[top-torch]": {
+        "nodes": 1,
+        "seconds": 144.69221
       },
       "tests/fdtd/test_fdtd_scene_backends.py": {
         "nodes": 1,
-        "seconds": 52.745881
+        "seconds": 84.388329
       },
       "tests/fdtd/test_fdtd_scene_graded.py": {
         "nodes": 1,
-        "seconds": 27.485604
+        "seconds": 29.408327
       },
       "tests/fdtd/test_fdtd_source_distance.py": {
         "nodes": 1,
-        "seconds": 52.765814
+        "seconds": 44.068421
       },
       "tests/fdtd/test_general_cuda_airy.py": {
         "nodes": 6,
-        "seconds": 28.706108
+        "seconds": 50.104322
       },
       "tests/fdtd/test_general_cuda_bloch_modes.py": {
         "nodes": 8,
-        "seconds": 0.560564
+        "seconds": 0.358867
       },
       "tests/fdtd/test_general_cuda_bloch_planewave.py": {
         "nodes": 10,
-        "seconds": 11.593293
+        "seconds": 4.606697
       },
       "tests/fdtd/test_general_cuda_dipole_radiation.py": {
         "nodes": 14,
-        "seconds": 7.874895
+        "seconds": 7.699984
       },
       "tests/fdtd/test_general_cuda_walls.py": {
         "nodes": 40,
-        "seconds": 0.640723
+        "seconds": 1.454059
+      },
+      "tests/fdtd/test_jax_gpu.py": {
+        "nodes": 2,
+        "seconds": 0.011228
       },
       "tests/fdtd/test_native_cuda_admission.py": {
         "nodes": 2,
-        "seconds": 0.002355
+        "seconds": 0.002034
       },
       "tests/fdtd/test_periodic_cuda.py": {
         "nodes": 2,
-        "seconds": 0.002702
+        "seconds": 0.001532
       },
       "tests/rcwa/test_polygon_region.py": {
         "nodes": 2,
-        "seconds": 436.965708
+        "seconds": 218.651469
       },
       "tests/references/test_fdtd_table_golden.py": {
         "nodes": 2,
-        "seconds": 83.010896
+        "seconds": 43.406293
       },
       "tests/references/test_meep_1d_golden.py": {
         "nodes": 2,
-        "seconds": 31.655023
+        "seconds": 17.397805
       },
       "tests/references/test_meep_adjoint_rotation.py": {
         "nodes": 1,
-        "seconds": 476.104122
+        "seconds": 206.840682
       },
       "tests/references/test_meep_crossed_golden.py": {
         "nodes": 2,
-        "seconds": 101.42612
+        "seconds": 59.420244
       },
-      "tests/references/test_meep_crossed_materials_golden.py": {
-        "nodes": 9,
-        "seconds": 840.674015
+      "tests/references/test_meep_crossed_materials_golden.py::@drude": {
+        "nodes": 3,
+        "seconds": 237.417618
+      },
+      "tests/references/test_meep_crossed_materials_golden.py::@lorentz": {
+        "nodes": 3,
+        "seconds": 293.45606
+      },
+      "tests/references/test_meep_crossed_materials_golden.py::@magnetic": {
+        "nodes": 3,
+        "seconds": 213.632024
       },
       "tests/references/test_meep_crossed_metal_golden.py": {
         "nodes": 3,
-        "seconds": 210.914351
+        "seconds": 98.255148
       },
       "tests/references/test_meep_halfspace.py": {
         "nodes": 1,
-        "seconds": 175.325765
+        "seconds": 273.971988
       },
       "tests/references/test_meep_rotation.py": {
         "nodes": 1,
-        "seconds": 280.08523
+        "seconds": 274.78218
       },
       "tests/references/test_meep_rotation_smoothing.py": {
         "nodes": 1,
-        "seconds": 162.324724
+        "seconds": 142.212934
       }
     }
   },
   "schema": "wavebit.shard-timings/v1",
-  "source_run": "https://github.com/fieldalgo/wavebit/actions/runs/39148705675"
+  "source_run": "https://github.com/fieldalgo/wavebit/actions/runs/39357008175"
 }

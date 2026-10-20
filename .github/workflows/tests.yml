@@ -117,7 +117,10 @@ jobs:
     # files above 9 worker-minutes are marked `shard_unit(per='test')`, one unit per test
     # function, so the largest unit is now 8.4; on the recorded per-test times thirty-two
     # shards put the slowest near 11 minutes, forty near 10. A run is about 52 jobs with
-    # `slow`, inside the 60 the account ran at once before.
+    # `slow`, inside the 60 the account ran at once before. Measured on run 39357008175,
+    # balanced by the file table of the run above: 6.5 to 18.2 minutes a shard, the run 24
+    # minutes (34 as sixteen); a few jobs waited 3 to 6 minutes for a runner. The table now
+    # holds that run's per-unit times.
     #
     # `--shard` assigns whole units -- files, or `shard_unit` units -- largest first to the
     # lightest shard, from the same collection every shard records, and `test-complete` below
@@ -384,7 +387,9 @@ jobs:
     # `shard_files` in tools/run_verification.py); nodes that share a cache or fixture carry
     # one name and stay together. On the recorded per-test times the largest unit is the Mie
     # glass sweep, 8.1 worker-minutes, and twelve shards put the slowest near 11 minutes;
-    # fourteen or sixteen gain under a minute.
+    # fourteen or sixteen gain under a minute. Measured with the file table: 5.4 to 15.2
+    # minutes a shard on run 39286150908, 5.8 to 14.4 on 39357008175, whose per-unit times
+    # the table now holds.
     strategy:
       fail-fast: false
       matrix:
