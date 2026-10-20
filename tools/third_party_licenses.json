@@ -58,7 +58,21 @@
       "optional (wavebit extras): permissive, or weak copyleft when the entry sets weak_copyleft_review (unmodified, installed separately by pip, never bundled or loaded directly)",
       "tool (installed but not required: test runners, CI tools, external_tools a test environment installs): any license but never, GPL and AGPL included, since tools never ship; each still needs a reviewed entry, and an AGPL one an agpl_review note (unmodified upstream release, unshipped use only, never in a hosted service)",
       "GPL: never imported, linked or bundled by src/wavebit and never a requirement; unshipped tests, studies and reference scripts may run GPL tools, skipping when they are absent",
-      "never (SSPL and other non-AGPL network copyleft): rejected in every environment; shipped_never (AGPL): rejected for runtime, optional and external-process use, accepted for tools"
+      "never (SSPL and other non-AGPL network copyleft): rejected in every environment; shipped_never (AGPL): rejected for runtime, optional and external-process use, accepted for tools",
+      "bundled_files: every shared library a third-party distribution installs, other than its own Python extension modules, must match a glob recorded for the current OS; a record needs a review unless its expression is satisfied by permissive plus bundled_permissive and names no copyleft license; these libraries load into the Wavebit process, so a GPL term passes only with a listed runtime exception or inside an OR with another option; Wavebit's own distribution contains no native files"
+    ],
+    "runtime_exceptions": [
+      "GCC-exception-2.0",
+      "GCC-exception-3.1"
+    ],
+    "bundled_permissive": [
+      "BSD-3-Clause-Open-MPI",
+      "IJG",
+      "libpng-2.0",
+      "libtiff",
+      "MIT-Modern-Variant",
+      "MIT-open-group",
+      "X11"
     ]
   },
   "first_party": [
@@ -285,7 +299,19 @@
     },
     "jaxlib": {
       "spdx": "Apache-2.0",
-      "url": "https://github.com/jax-ml/jax"
+      "url": "https://github.com/jax-ml/jax",
+      "bundled": "jaxlib's own compiled modules (jaxlib/*.so, Python extension modules without a version tag, and libjax_common.so) statically contain the components whose licenses the wheel's LICENSE.txt reproduces: BoringSSL, gRPC, Abseil, Protocol Buffers, RE2, DLPack, double-conversion, Eigen (MPL-2.0, file-level weak copyleft, compiled by the wheel's publisher and used as shipped), Farmhash, FlatBuffers, HighwayHash, libjpeg-turbo, fft2d, giflib, LLVM (Apache-2.0 WITH LLVM-exception), oneDNN, nsync, TensorFlow, pybind11, snappy, upb and zlib. No separately built third-party library. Checked on Linux, jaxlib 0.11.2.",
+      "bundled_files": [
+        {
+          "glob": "jaxlib/*.so",
+          "spdx": "Apache-2.0",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "jaxlib's own compiled modules, loaded by jax; their static contents are listed under 'bundled'. Wavebit only calls jax's Python API and does not modify, relink or redistribute them."
+        }
+      ]
     },
     "jeepney": {
       "spdx": "MIT",
@@ -314,7 +340,8 @@
     "matplotlib": {
       "spdx": "LicenseRef-Matplotlib",
       "url": "https://matplotlib.org/stable/project/license.html",
-      "review": "PSF-based permissive license agreement; no SPDX identifier exists for it."
+      "review": "PSF-based permissive license agreement; no SPDX identifier exists for it.",
+      "bundled": "Extension modules statically include FreeType (FTL OR GPL-2.0-or-later, FTL relied on), HarfBuzz (MIT-Modern-Variant), libraqm (MIT), SheenBidi (Apache-2.0) and Qhull (Qhull license); data files include fonts under OFL-1.1 (STIX, Last Resort), the BaKoMa Fonts Licence, Bitstream Vera terms (DejaVu) and Adobe AFM terms. No separate shared libraries."
     },
     "mdit-py-plugins": {
       "spdx": "MIT",
@@ -351,7 +378,88 @@
     "numpy": {
       "spdx": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
       "url": "https://github.com/numpy/numpy/blob/main/LICENSE.txt",
-      "bundled": "Wheels bundle OpenBLAS (BSD-3-Clause) and, on Linux and Windows, the GCC Fortran runtime (GPL-3.0-or-later WITH GCC-exception-3.1)."
+      "bundled": "Linux and macOS before 14: OpenBLAS with LAPACK (BSD-3-Clause, BSD-3-Clause-Open-MPI), libgfortran (and libgcc_s on macOS; GPL-3.0-or-later WITH GCC-exception-3.1) and libquadmath (LGPL-2.1-or-later, not covered by the GCC exception) as separate shared libraries. macOS 14 and later: nothing bundled (Apple Accelerate). Windows: OpenBLAS DLL with the GCC runtime and winpthreads (MIT AND BSD-3-Clause) statically linked, plus msvcp140.dll (Microsoft redistributable terms, no notice in the wheel).",
+      "bundled_files": [
+        {
+          "glob": "numpy.libs/libscipy_openblas64_-*.so",
+          "spdx": "BSD-3-Clause AND BSD-3-Clause-Open-MPI",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "numpy.libs/libgfortran-*.so.*",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "GCC runtime under the GCC Runtime Library Exception 3.1; loaded by the wheel's own OpenBLAS or extension modules, not by Wavebit package code. Not redistributed."
+        },
+        {
+          "glob": "numpy.libs/libquadmath-*.so.*",
+          "spdx": "LGPL-2.1-or-later",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "libquadmath (LGPL-2.1-or-later, not covered by the GCC exception), a separate shared library loaded by the wheel's GCC runtime; the wheel's notice gives a URL but not the LGPL text. Wavebit does not modify, relink, load or redistribute it."
+        },
+        {
+          "glob": "numpy/.dylibs/libscipy_openblas64_*.dylib",
+          "spdx": "BSD-3-Clause AND BSD-3-Clause-Open-MPI",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "numpy/.dylibs/libgfortran.*.dylib",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "GCC runtime under the GCC Runtime Library Exception 3.1; loaded by the wheel's own OpenBLAS or extension modules, not by Wavebit package code. Not redistributed."
+        },
+        {
+          "glob": "numpy/.dylibs/libgcc_s.*.dylib",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "GCC runtime under the GCC Runtime Library Exception 3.1; loaded by the wheel's own OpenBLAS or extension modules, not by Wavebit package code. Not redistributed."
+        },
+        {
+          "glob": "numpy/.dylibs/libquadmath.*.dylib",
+          "spdx": "LGPL-2.1-or-later",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "libquadmath (LGPL-2.1-or-later, not covered by the GCC exception), a separate shared library loaded by the wheel's GCC runtime; the wheel's notice gives a URL but not the LGPL text. Wavebit does not modify, relink, load or redistribute it."
+        },
+        {
+          "glob": "numpy.libs/libscipy_openblas64_-*.dll",
+          "spdx": "BSD-3-Clause AND BSD-3-Clause-Open-MPI AND GPL-3.0-or-later WITH GCC-exception-3.1 AND MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "OpenBLAS DLL with the GCC runtime (libgfortran, libgcc; GCC Runtime Library Exception 3.1) and winpthreads (MIT AND BSD-3-Clause) statically linked inside, per the wheel's notice and binary strings. Loaded by the wheel's extension modules. Not redistributed."
+        },
+        {
+          "glob": "numpy.libs/msvcp140-*.dll",
+          "spdx": "LicenseRef-MSVC-Redistributable",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "Microsoft Visual C++ runtime redistributable (msvcp140); 'You may not modify these files'. Not redistributed by Wavebit. numpy's wheel carries no notice for it."
+        }
+      ]
     },
     "opt-einsum": {
       "spdx": "MIT",
@@ -367,7 +475,302 @@
     },
     "pillow": {
       "spdx": "MIT-CMU",
-      "url": "https://github.com/python-pillow/Pillow"
+      "url": "https://github.com/python-pillow/Pillow",
+      "bundled_files": [
+        {
+          "glob": "pillow.libs/libXau-*.so.*",
+          "spdx": "MIT-open-group",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libXau.*.dylib",
+          "spdx": "MIT-open-group",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libavif-*.so.*",
+          "spdx": "BSD-2-Clause AND BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libavif.*.dylib",
+          "spdx": "BSD-2-Clause AND BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libbrotlicommon-*.so.*",
+          "spdx": "MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libbrotlicommon.*.dylib",
+          "spdx": "MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libbrotlidec-*.so.*",
+          "spdx": "MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libbrotlidec.*.dylib",
+          "spdx": "MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libfreetype-*.so.*",
+          "spdx": "FTL OR GPL-2.0-or-later",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "FreeType is dual-licensed; the FreeType License (FTL) option is relied on, which requires a credit when binaries are redistributed. Loaded by Pillow's extension modules. Not redistributed."
+        },
+        {
+          "glob": "PIL/.dylibs/libfreetype.*.dylib",
+          "spdx": "FTL OR GPL-2.0-or-later",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "FreeType is dual-licensed; the FreeType License (FTL) option is relied on, which requires a credit when binaries are redistributed. Loaded by Pillow's extension modules. Not redistributed."
+        },
+        {
+          "glob": "pillow.libs/libharfbuzz-*.so.*",
+          "spdx": "MIT-Modern-Variant",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libharfbuzz.*.dylib",
+          "spdx": "MIT-Modern-Variant",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libjpeg-*.so.*",
+          "spdx": "IJG AND BSD-3-Clause AND Zlib",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libjpeg.*.dylib",
+          "spdx": "IJG AND BSD-3-Clause AND Zlib",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/liblcms2-*.so.*",
+          "spdx": "MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/liblcms2.*.dylib",
+          "spdx": "MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/liblzma-*.so.*",
+          "spdx": "0BSD",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "xz 5.8 (5.8.4 in pillow 13.0.0 on Linux, from the binary's version string). Upstream liblzma is 0BSD since xz 5.6.0; Pillow's wheel notice still carries the pre-5.6 public-domain text."
+        },
+        {
+          "glob": "PIL/.dylibs/liblzma.*.dylib",
+          "spdx": "0BSD",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "xz 5.8 (5.8.4 in pillow 13.0.0 on Linux, from the binary's version string). Upstream liblzma is 0BSD since xz 5.6.0; Pillow's wheel notice still carries the pre-5.6 public-domain text."
+        },
+        {
+          "glob": "pillow.libs/libopenjp2-*.so.*",
+          "spdx": "BSD-2-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libopenjp2.*.dylib",
+          "spdx": "BSD-2-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libpng16-*.so.*",
+          "spdx": "libpng-2.0",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libpng16.*.dylib",
+          "spdx": "libpng-2.0",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libsharpyuv-*.so.*",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libsharpyuv.*.dylib",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libtiff-*.so.*",
+          "spdx": "libtiff",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libtiff.*.dylib",
+          "spdx": "libtiff",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libwebp-*.so.*",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libwebp.*.dylib",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libwebpdemux-*.so.*",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libwebpdemux.*.dylib",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libwebpmux-*.so.*",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libwebpmux.*.dylib",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libxcb-*.so.*",
+          "spdx": "X11",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libxcb.*.dylib",
+          "spdx": "X11",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "pillow.libs/libzstd-*.so.*",
+          "spdx": "BSD-3-Clause",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "PIL/.dylibs/libz.*.zlib-ng.dylib",
+          "spdx": "Zlib",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        }
+      ],
+      "bundled": "Linux and macOS: 18 image, font and compression libraries as separate shared libraries, all permissive per the wheel's notice; FreeType is FTL OR GPL-2.0-or-later (FTL relied on); the xz section's LGPL/GPL text covers command-line tools that are not included, and its 'liblzma is in the public domain' line is pre-5.6 xz wording: the bundled xz 5.8 liblzma is 0BSD upstream. Windows: the same codecs statically linked into the extension modules. FriBiDi (LGPL) is not bundled; Pillow loads it at run time only if the system provides it."
     },
     "pip": {
       "spdx": "MIT",
@@ -448,7 +851,79 @@
     "scipy": {
       "spdx": "BSD-3-Clause",
       "url": "https://github.com/scipy/scipy/blob/main/LICENSE.txt",
-      "bundled": "Wheels bundle OpenBLAS (BSD-3-Clause) and, on Linux and Windows, the GCC Fortran runtime (GPL-3.0-or-later WITH GCC-exception-3.1)."
+      "bundled": "Linux: OpenBLAS with LAPACK (BSD-3-Clause, BSD-3-Clause-Open-MPI) and two builds each of libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and libquadmath (LGPL-2.1-or-later) as separate shared libraries. macOS (all versions): libgfortran, libgcc_s and libquadmath, plus OpenBLAS before macOS 14. Windows: OpenBLAS DLL with the GCC runtime and winpthreads statically linked; scipy/odr/__odrpack also statically contains GCC runtime code, very likely including libquadmath (byte-level match), and winpthreads appears in several extension modules; the wheel's notice mentions only the DLL. Qhull (Qhull license) is statically linked on every platform.",
+      "bundled_files": [
+        {
+          "glob": "scipy.libs/libscipy_openblas-*.so",
+          "spdx": "BSD-3-Clause AND BSD-3-Clause-Open-MPI",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ]
+        },
+        {
+          "glob": "scipy.libs/libgfortran-*.so.*",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "GCC runtime under the GCC Runtime Library Exception 3.1; loaded by the wheel's own OpenBLAS or extension modules, not by Wavebit package code. Not redistributed."
+        },
+        {
+          "glob": "scipy.libs/libquadmath-*.so.*",
+          "spdx": "LGPL-2.1-or-later",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "libquadmath (LGPL-2.1-or-later, not covered by the GCC exception), a separate shared library loaded by the wheel's GCC runtime; the wheel's notice gives a URL but not the LGPL text. Wavebit does not modify, relink, load or redistribute it."
+        },
+        {
+          "glob": "scipy/.dylibs/libscipy_openblas*.dylib",
+          "spdx": "BSD-3-Clause AND BSD-3-Clause-Open-MPI",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "glob": "scipy/.dylibs/libgfortran.*.dylib",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "GCC runtime under the GCC Runtime Library Exception 3.1; loaded by the wheel's own OpenBLAS or extension modules, not by Wavebit package code. Not redistributed."
+        },
+        {
+          "glob": "scipy/.dylibs/libgcc_s.*.dylib",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "GCC runtime under the GCC Runtime Library Exception 3.1; loaded by the wheel's own OpenBLAS or extension modules, not by Wavebit package code. Not redistributed."
+        },
+        {
+          "glob": "scipy/.dylibs/libquadmath.*.dylib",
+          "spdx": "LGPL-2.1-or-later",
+          "linkage": "dynamic",
+          "platforms": [
+            "macos"
+          ],
+          "review": "libquadmath (LGPL-2.1-or-later, not covered by the GCC exception), a separate shared library loaded by the wheel's GCC runtime; the wheel's notice gives a URL but not the LGPL text. Wavebit does not modify, relink, load or redistribute it."
+        },
+        {
+          "glob": "scipy.libs/libscipy_openblas-*.dll",
+          "spdx": "BSD-3-Clause AND BSD-3-Clause-Open-MPI AND GPL-3.0-or-later WITH GCC-exception-3.1 AND MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "OpenBLAS DLL with the GCC runtime (libgfortran, libgcc; GCC Runtime Library Exception 3.1) and winpthreads (MIT AND BSD-3-Clause) statically linked inside, per the wheel's notice and binary strings. Loaded by the wheel's extension modules. Not redistributed."
+        }
+      ]
     },
     "secretstorage": {
       "spdx": "BSD-3-Clause",
@@ -520,7 +995,28 @@
     },
     "torch": {
       "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
-      "url": "https://pytorch.org"
+      "url": "https://pytorch.org",
+      "bundled": "Linux CPU wheel: torch's own libraries in torch/lib/ (libtorch*, libc10, libshm and two test libraries) statically contain the third-party code whose licenses the wheel's dist-info/licenses/third_party/ reproduces, plus GNU libgomp (GCC's OpenMP runtime) as a separate shared library. Checked on Linux, torch 2.14.1+cpu.",
+      "bundled_files": [
+        {
+          "glob": "torch/lib/libgomp*.so*",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "GNU libgomp (its symbol versions include GOACC/OACC, which only GCC's runtime provides), under the GCC Runtime Library Exception 3.1; loaded by torch's own libraries, not by Wavebit package code. Not redistributed."
+        },
+        {
+          "glob": "torch/lib/lib*.so",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "torch's own libraries, under the expression its metadata declares; static contents per 'bundled'. Wavebit only calls torch's Python API and does not modify, relink or redistribute them."
+        }
+      ]
     },
     "tqdm": {
       "spdx": "MPL-2.0 AND MIT",

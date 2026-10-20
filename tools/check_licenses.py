@@ -25,10 +25,23 @@ marked ``lab_only``. Wavebit's package code must not import a GPL or AGPL tool,
 and a tool must not become a requirement. Installed metadata that names
 a different expression, or a copyleft family the entry does not record, also fails.
 
+Bundled native files: every shared library (.so, .dylib, .dll) that a
+third-party distribution installs, other than its own Python extension modules,
+must match a ``bundled_files`` glob of its entry (fnmatch on the POSIX path
+relative to site-packages, as listed in RECORD) recorded for the current OS.
+Records whose SPDX expression is copyleft, or is not satisfied by ``permissive``
+plus the reviewed ``bundled_permissive`` ids, need a ``review``. These libraries
+load into the Python process that runs Wavebit, so a GPL term must offer another
+option (``FTL OR GPL-2.0-or-later``) or carry a runtime exception listed under
+``runtime_exceptions`` (``WITH GCC-exception-3.1``). Statically linked code is
+not visible this way and is described by hand in the entry's ``bundled`` note.
+Wavebit's own distribution must contain no native files at all.
+
 ``--reachable-only`` checks only what Wavebit's requirements reach, so a
 developer environment holding unrelated packages passes; CI runs without it.
 
-Adapted from the OpenPhysics repository's license check.
+Adapted from the OpenPhysics repository's license check, including its
+bundled-file records.
 
 Use ``--python`` to inspect another interpreter's environment, e.g. a fresh
 venv holding the installed wheels.
@@ -37,6 +50,7 @@ venv holding the installed wheels.
 import argparse
 import ast
 from collections import deque
+import fnmatch
 import functools
 import importlib.metadata as metadata
 import json
@@ -58,6 +72,14 @@ RANK = {"runtime": 0, "optional": 1, "test": 2, "tool": 3}
 COPYLEFT = re.compile(r"\b(A?GPL|LGPL|MPL|EUPL|EPL|CDDL|SSPL|OSL|CECILL|GENERAL PUBLIC|MOZILLA PUBLIC|AFFERO)",
                       re.IGNORECASE)
 TOKEN = re.compile(r"\(|\)|[A-Za-z0-9.+:-]+")
+# GPL and AGPL identifiers (not LGPL): plain, deprecated, '+' and LicenseRef- forms.
+STRONG_COPYLEFT = re.compile(r"(?:^|[^A-Za-z])A?GPL", re.IGNORECASE)
+# Shared libraries, and the Python extension modules that are not counted as bundled libraries.
+SHARED_LIBRARY = re.compile(r"\.(so(\.[0-9]+)*|dylib|dll)$", re.IGNORECASE)
+EXTENSION_MODULE = re.compile(r"(\.cpython-[^/]*\.so|\.abi3\.so|\.pyd)$", re.IGNORECASE)
+COMPILED = re.compile(r"\.(so(\.[0-9]+)*|dylib|dll|pyd|exe)$", re.IGNORECASE)
+PLATFORMS = ("linux", "macos", "windows")
+BUNDLED_FIELDS = {"glob", "spdx", "linkage", "platforms"}
 
 
 def parse_expression(text):
@@ -194,7 +216,93 @@ def first_party_imports(modules):
     return [path for path, names in _package_imports().items() if names & set(modules)]
 
 
-def check(paths, inventory, check_docs=True, reachable_only=False):
+def current_platform():
+    if sys.platform.startswith("linux"):
+        return "linux"
+    if sys.platform == "darwin":
+        return "macos"
+    if sys.platform in ("win32", "cygwin"):
+        return "windows"
+    return sys.platform
+
+
+def in_process_allowed(node, exceptions):
+    """False when the expression leaves no option but a GPL term without a listed runtime exception."""
+    if isinstance(node, str):
+        identifier, _, exception = node.partition(" WITH ")
+        return not STRONG_COPYLEFT.search(identifier) or exception in exceptions
+    test = any if node[0] == "OR" else all
+    return test(in_process_allowed(item, exceptions) for item in node[1])
+
+
+def bundled_entry_errors(name, entry, policy):
+    """Structure and license rules of one distribution's bundled_files records."""
+    # Bundled libraries load into the Wavebit process, so AGPL is as excluded as the never list.
+    never = set(policy["never"]) | set(policy["shipped_never"])
+    exceptions = set(policy["runtime_exceptions"])
+    plain = set(policy["permissive"]) | set(policy["bundled_permissive"])
+    errors = []
+    globs = set()
+    for item in entry.get("bundled_files", []):
+        where = f"{name} bundled_files {item.get('glob')!r}"
+        if missing := sorted(BUNDLED_FIELDS - item.keys()):
+            errors.append(f"{where}: missing {missing}")
+            continue
+        if item["glob"] in globs:
+            errors.append(f"{where}: duplicate glob")
+        globs.add(item["glob"])
+        try:
+            tree = parse_expression(item["spdx"])
+        except (ValueError, IndexError) as error:
+            errors.append(f"{where}: {error}")
+            continue
+        if bad := sorted(identifiers(tree) & never):
+            errors.append(f"{where}: {bad} is never allowed, also when bundled")
+        elif not in_process_allowed(tree, exceptions):
+            errors.append(f"{where}: {item['spdx']!r} is GPL without a listed runtime exception or another "
+                          "option, and the library loads into the Wavebit process")
+        if item["linkage"] != "dynamic":
+            errors.append(f"{where}: separate library files are dynamic; describe static code in 'bundled'")
+        if not item["platforms"] or set(item["platforms"]) - set(PLATFORMS):
+            errors.append(f"{where}: platforms must be a non-empty subset of {list(PLATFORMS)}")
+        if not str(item.get("review", "")).strip():
+            if COPYLEFT.search(item["spdx"]):
+                errors.append(f"{where}: copyleft {item['spdx']!r} needs a review")
+            elif not satisfies(tree, plain):
+                errors.append(f"{where}: {item['spdx']!r} is not on the permissive lists and needs a review")
+    return errors
+
+
+def native_files(dist, pattern):
+    """POSIX paths (relative to the distribution's base, as in RECORD) whose names match pattern."""
+    return sorted(f.as_posix() for f in dist.files or () if pattern.search(f.name))
+
+
+def bundled_libraries(dist):
+    """Shared libraries a distribution installed, other than its own Python extension modules."""
+    return [path for path in native_files(dist, SHARED_LIBRARY) if not EXTENSION_MODULE.search(path)]
+
+
+def check_bundled(name, dist, items, platform):
+    """Match every bundled shared library against the entry's reviewed bundled_files globs."""
+    errors, matched = [], []
+    if dist.files is None:
+        return [f"{name} {dist.version}: no RECORD file list, so bundled native files cannot be checked"], matched
+    for path in bundled_libraries(dist):
+        hits = [item for item in items if fnmatch.fnmatchcase(path, item.get("glob", ""))]
+        if not hits:
+            errors.append(f"{name} {dist.version}: unrecorded bundled native library {path}; add a reviewed "
+                          "bundled_files entry to the inventory")
+            continue
+        item = hits[0]
+        if platform not in item.get("platforms", ()):
+            errors.append(f"{name} {dist.version}: {path} matches {item['glob']!r}, recorded for "
+                          f"{item.get('platforms')}, but is installed on {platform}; review and update it")
+        matched.append({"file": path, "glob": item["glob"], "spdx": item.get("spdx")})
+    return errors, matched
+
+
+def check(paths, inventory, check_docs=True, reachable_only=False, platform=None):
     policy = inventory["policy"]
     permissive = set(policy["permissive"])
     weak = set(policy["weak_copyleft"])
@@ -209,7 +317,10 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
         dists.setdefault(name, dist)  # first on the path wins, as for imports
     test_extras = {canonicalize_name(e) for e in policy.get("test_extras", ["test"])}
     use = reachability(list(dists.values()), first_party, test_extras)
+    platform = platform or current_platform()
     errors, report = [], {}
+    for name, entry in sorted(entries.items()):
+        errors += bundled_entry_errors(name, entry, policy)
     for name, dist in sorted(dists.items()):
         expression, short, classifiers = declared_license(dist)
         record = {"version": dist.version, "license_expression": expression, "license": short or None,
@@ -219,6 +330,9 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
             expected = inventory["first_party_license"]
             if declared != expected:
                 errors.append(f"{name}: first-party metadata must declare {expected}, found {declared!r}")
+            if compiled := native_files(dist, COMPILED):
+                errors.append(f"{name}: first-party distribution contains native files {compiled}; "
+                              "compiled code needs a license review first")
             report[name] = {**record, "use": "first-party", "spdx": expected}
             continue
         entry = entries.get(name)
@@ -233,6 +347,10 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
         if entry is None:
             errors.append(f"{name} {dist.version}: no reviewed entry in {INVENTORY.relative_to(ROOT).as_posix()}")
             continue
+        bundled_errors, bundled = check_bundled(name, dist, entry.get("bundled_files", []), platform)
+        errors += bundled_errors
+        if bundled:
+            record["bundled_files"] = bundled
         record["spdx"] = entry["spdx"]
         try:
             tree = parse_expression(entry["spdx"])
@@ -319,8 +437,10 @@ def main():
     counts = {}
     for record in report.values():
         counts[record["use"]] = counts.get(record["use"], 0) + 1
-    print(f"Checked {len(report)} installed distributions: "
-          + ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))
+    bundled = sum(len(record.get("bundled_files", ())) for record in report.values())
+    print(f"Checked {len(report)} installed distributions on {current_platform()}: "
+          + ", ".join(f"{k} {v}" for k, v in sorted(counts.items()))
+          + f"; {bundled} bundled shared libraries matched reviewed records")
     for error in errors:
         print("LICENSE CHECK FAILED:", error, file=sys.stderr)
     return 1 if errors else 0
