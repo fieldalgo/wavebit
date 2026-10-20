@@ -306,7 +306,7 @@ def test_cpu_callback_nested_legacy_and_public_policy_reset(monkeypatch):
     prepared = fdtd.prepare(closed_problem(), numerics=fixed_numerics(STEPS), backend='torch')
     # Only the public policy dispatch is simulated; this control never creates a CUDA runtime.
     fake_execution = SimpleNamespace(backend='torch', device='cuda:0',
-                                     scope=contextlib.nullcontext)
+                                     _scope=contextlib.nullcontext)
     nested = dataclasses.replace(prepared, execution=fake_execution)
     monkeypatch.setattr(_api.Prepared, '_lower', lambda self, problem: (None, {}))
 
