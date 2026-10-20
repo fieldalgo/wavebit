@@ -36,7 +36,11 @@ Policy:
   Meep, also in the same process as Wavebit, provided they stay outside the
   sdist and wheel and the installation and the default test run work without
   the tool (tests that need it skip). GPL source is not read for implementation.
-- AGPL and SSPL are not used anywhere.
+- AGPL and SSPL are never a dependency, never in CI and never run by this
+  repository's tests or scripts. One AGPL tool, inkstone, was compared once
+  as a black box before this rule; it is listed under
+  [Past comparisons](#past-comparisons), and any further run happens outside
+  this repository.
 
 ## Python distributions
 
@@ -111,6 +115,18 @@ describes each comparison.
 | `PyMoosh` | MIT | Multilayer reference in a throwaway environment |
 | `NGSolve` | LGPL-2.1-only | Optional FEM reference for NVF research studies. Its installed binaries also carry GPL-2.0-or-later UMFPACK code, so that environment is never redistributed |
 
+### Past comparisons
+
+Tools that were run once, by hand, to measure their public behaviour. The
+numbers are quoted in [Reference cases](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)
+and in the RCWA theory notes; no generator, golden or test in this repository
+runs or imports them.
+
+| Tool | Version | SPDX | How it was used |
+| --- | --- | --- | --- |
+| `inkstone` | 0.3.15 | AGPL-3.0-or-later | Black-box RCWA comparison through its public API and returned numbers only; its source was never read. Not run in this repository again: any further comparison happens outside it, never in Wavebit's tests, CI or dependencies |
+| `EMpy` | 2.2.3 (`ElectroMagneticPython` on PyPI) | MIT | Black-box comparison of its anisotropic transfer matrix |
+
 ## Code and data in this repository
 
 | Component | SPDX | Where | Notes |
@@ -129,7 +145,8 @@ python tools/check_licenses.py --reachable-only   # only what Wavebit's requirem
 The check reads installed metadata with `importlib.metadata`. It fails when an
 installed distribution has no reviewed entry, when its declared license differs
 from the entry, when a component's license is not allowed for the way Wavebit
-reaches it, when Wavebit's package code imports an external tool, or when this
+reaches it, when Wavebit's package code imports an external tool, when an AGPL
+or SSPL external tool is not marked as kept outside this repository, or when this
 page or its Korean translation does not name an entry. CI runs it in the full
 backends environment and in the docs environment;
 `tests/api/test_third_party_licenses.py` runs the reachable-only form in every

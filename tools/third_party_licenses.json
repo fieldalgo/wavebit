@@ -118,6 +118,23 @@
         "ngsolve",
         "netgen"
       ]
+    },
+    "inkstone": {
+      "spdx": "AGPL-3.0-or-later",
+      "url": "https://github.com/alexysong/inkstone",
+      "use": "past black-box RCWA comparison (0.3.15, public API and returned numbers only, source never read); results cited in tests/references/README.md and docs/theory/rcwa/. Not run in this repository again",
+      "lab_only": "AGPL: from 2026-10-20 any further run happens only in the private research repository, never in Wavebit's tests, CI or dependencies",
+      "forbidden_imports": [
+        "inkstone"
+      ]
+    },
+    "EMpy": {
+      "spdx": "MIT",
+      "url": "https://github.com/lbolla/EMpy",
+      "use": "past black-box comparison (ElectroMagneticPython 2.2.3) of anisotropic transfer matrices; results cited in tests/references/README.md and docs/theory/rcwa/",
+      "forbidden_imports": [
+        "EMpy"
+      ]
     }
   },
   "bundled": {

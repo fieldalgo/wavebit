@@ -32,7 +32,9 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
   레퍼런스 스크립트는 S4나 Meep 같은 GPL 도구를 Wavebit과 같은 프로세스에서도
   실행할 수 있습니다. 조건은 sdist·wheel 밖에 있고, 도구가 없어도 설치와 기본 시험이
   동작하는 것(필요한 시험은 건너뜀)입니다. GPL 소스는 구현 참고용으로 읽지 않습니다.
-- AGPL과 SSPL은 어디에도 쓰지 않습니다.
+- AGPL과 SSPL은 의존성·CI에 두지 않고, 이 저장소의 시험·스크립트가 실행하지도
+  않습니다. 이 규칙 전에 AGPL 도구 inkstone을 블랙박스로 한 번 비교했으며,
+  [과거 비교](#과거-비교)에 적었습니다. 이후 실행은 이 저장소 밖에서만 합니다.
 
 ## Python 배포 패키지
 
@@ -107,6 +109,18 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 | `PyMoosh` | MIT | 일회용 환경의 다층막 레퍼런스 |
 | `NGSolve` | LGPL-2.1-only | NVF 연구용 선택 FEM 레퍼런스. 설치 바이너리에 GPL-2.0-or-later UMFPACK 코드도 들어 있어 그 환경은 재배포하지 않음 |
 
+### 과거 비교
+
+공개 동작을 재려고 손으로 한 번 실행한 도구입니다. 수치는
+[레퍼런스 사례](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)와
+RCWA 이론 노트가 인용하며, 이 저장소의 생성기·골든·시험은 이 도구들을 실행하거나
+import하지 않습니다.
+
+| 도구 | 버전 | SPDX | 쓰임새 |
+| --- | --- | --- | --- |
+| `inkstone` | 0.3.15 | AGPL-3.0-or-later | 공개 API와 반환 수치만으로 한 블랙박스 RCWA 비교. 소스는 읽지 않음. 이 저장소에서는 다시 실행하지 않으며, 이후 비교는 저장소 밖에서만 하고 Wavebit 시험·CI·의존성에 두지 않음 |
+| `EMpy` | 2.2.3 (PyPI 이름 `ElectroMagneticPython`) | MIT | 이방성 전달 행렬의 블랙박스 비교 |
+
 ## 저장소 안의 코드와 데이터
 
 | 구성요소 | SPDX | 위치 | 비고 |
@@ -124,7 +138,8 @@ python tools/check_licenses.py --reachable-only   # Wavebit 의존성이 닿는 
 
 검사는 `importlib.metadata`로 설치 메타데이터를 읽습니다. 설치된 패키지에 검토 항목이
 없을 때, 선언한 라이선스가 항목과 다를 때, 라이선스가 Wavebit이 그 패키지에 닿는
-방식에 허용되지 않을 때, Wavebit 패키지 코드가 외부 도구를 import할 때, 이 페이지나
+방식에 허용되지 않을 때, Wavebit 패키지 코드가 외부 도구를 import할 때, AGPL·SSPL
+외부 도구에 저장소 밖 실행 표시가 없을 때, 이 페이지나
 영어 페이지가 항목을 적지 않았을 때 실패합니다. CI는 full backends 환경과 docs
 환경에서 실행하고, `tests/api/test_third_party_licenses.py`는 모든 시험 환경에서
 `--reachable-only` 형태를 실행합니다.
