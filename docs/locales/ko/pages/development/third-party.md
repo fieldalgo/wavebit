@@ -154,7 +154,7 @@ Wavebit 자체 휠과 sdist에는 네이티브 파일이 없습니다. 휠은 `p
 
 ### 과거 비교
 
-공개 동작을 재려고 손으로 한 번 실행한 도구입니다. 수치는
+공개 동작을 재려고 손으로 한 번 실행했거나, 문서와 API로 살펴본 도구입니다. 수치와 관찰은
 [레퍼런스 사례](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)와
 RCWA 이론 노트가 인용하며, 지금 이 저장소의 생성기·골든·시험은 이 도구들을 실행하거나
 import하지 않습니다.
@@ -163,6 +163,18 @@ import하지 않습니다.
 | --- | --- | --- | --- |
 | `inkstone` | 0.3.15 | AGPL-3.0-or-later | 공개 API와 반환 수치만으로 한 블랙박스 RCWA 비교. 소스는 읽지 않음. 이후 비교는 도구가 없으면 건너뛰는 배포하지 않는 시험·연구에서 고치지 않은 PyPI 배포판으로 할 수 있음. Wavebit 코드·의존성·호스팅 서비스에는 두지 않음 |
 | `EMpy` | 2.2.3 (PyPI 이름 `ElectroMagneticPython`) | MIT | 이방성 전달 행렬의 블랙박스 비교 |
+| `torcwa` | 0.1.4.2 | LGPL-3.0-or-later | 블랙박스 RCWA 비교(음굴절 매질) |
+| `nannos` | 2.6.4 | GPL-3.0-or-later | 공개 API로 한 블랙박스 RCWA 비교. 소스는 읽지 않음 |
+| `grcwa` | 0.1.2 | GPL-3.0-only | 문서와 API로만 비교, 실행하지 않음. PyPI 분류자 "GPLv3", "or later" 표기 없음 |
+| `rcwa` | 기록 없음 | MIT | edmundsj 패키지의 블랙박스 RCWA 비교 |
+| `A-FMM` | 기록 없음 | MIT | 읽기만 하고 실행하지 않음(PyPI A-FMM 0.1.2 기준 MIT) |
+| `tmm` | 0.2.0 | MIT | 블랙박스 다층막 비교(Byrnes) |
+| `tmm-fast` | 0.3.0 | MIT | 블랙박스 다층막 비교 |
+| `gyptis` | 1.2.0 | MIT | 블랙박스 FEM 비교 |
+
+음굴절 노트가 인용하는 RCWA 코드 두 개, chiuhans `rcwa`와 rcwa4d는 출처·버전·
+라이선스 기록이 없습니다. 확인될 때까지 이 표에 넣지 않으며, 그 전에는 다시 실행하지
+않습니다.
 
 ## 저장소 안의 코드와 데이터
 
