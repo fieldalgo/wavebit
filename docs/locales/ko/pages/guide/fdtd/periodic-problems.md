@@ -1,7 +1,9 @@
 # 물리 단위 주기 적층 FDTD
 
 `from wavebit.fdtd import periodic`은 불변 객체 `Problem`, `Numerics`와 `check`, `prepare`,
-`run`을 제공합니다. 이식 가능한 job은 `solver='fdtd.periodic'`을 씁니다.
+`run`을 제공합니다. 이식 가능한 job은 `solver='fdtd.periodic'`을 씁니다. 2026-10-19에 바뀐
+이름은 [공개 이름 이전 가이드](../../migration/public-names.md#native-grid-and-periodic-stack-names)에
+있습니다.
 Stack, Layer, Region, 형식이 있는 도형, Excitation, PlaneWave는 RCWA와 같은 물리 선언입니다.
 층은 아래에서 위로 쌓이고, z=0은 아래 경계면, x=y=0은 셀 중심입니다.
 
@@ -18,14 +20,16 @@ problem = fdtd.Problem(
     excitation=fdtd.Excitation(wavelength=(.85,.9,.95),
                                sources=(fdtd.PlaneWave(),)))
 numerics = fdtd.Numerics(spacing=1/30,
-                         duration_seconds=90*units.time_seconds)
+                         duration_seconds=90*units.time_unit_seconds)
 result = fdtd.run(problem, numerics=numerics)
 print(result.R.sum(axis=(-2,-1)), result.T.sum(axis=(-2,-1)))
 ```
 
 공간량은 선언한 길이 단위를 씁니다. 시간과 재료의 rate는 SI 단위입니다.
-`duration_seconds`는 완전한 시간 단계 수로 올림합니다. `Pulse.width_seconds`와
-`notch_frequencies_hz`는 물리 가우시안 광원을 조절합니다. 한 대역은 중심 파장에서 정한
+`duration_seconds`는 완전한 시간 단계 수로 올림합니다. `Pulse(frequency_sigma_hz=...)`와
+`notch_frequencies_hz`는 물리 가우시안 광원을 조절합니다. sigma는 `fdtd.GaussianPulse`와 같이
+진폭 스펙트럼의 표준편차(Hz)이며, 기본 포락선의 1/e 반폭은 중심 파장에서 한 주기입니다
+(sigma = f0/(sqrt(2)·pi)). 한 대역은 중심 파장에서 정한
 횡방향 Bloch 파수벡터를 공유하므로, 대역 안의 입사각은 일반적으로 서로 다릅니다.
 `diagnostics['angles']`가 이를 라디안으로 보고합니다. Theta/phi는 지원하고, 데카르트 kx/ky
 입사는 거부합니다.
@@ -53,7 +57,7 @@ print(result.R.sum(axis=(-2,-1)), result.T.sum(axis=(-2,-1)))
 가이드를 보세요. 형식이 있는 선언을 고른다고 그 범위가 넓어지지는 않습니다.
 
 Region/포트 재료는 비분산 `Material` 선언입니다. 래스터 epsilon은 epsilon-infinity이고,
-`RasterDispersion(labels=..., models={label: (Drude(...), Lorentz(...))})`가 물리적 전기 극점을
+`RasterDispersion(labels=..., poles={label: (Drude(...), Lorentz(...))})`가 물리적 전기 극점을
 제공합니다. 레이블 0은 비분산입니다. 지원하지 않는 인과 모델이나 영역 분산 요청은 거부합니다.
 
 반사·투과 `DiffractionOrders`에는 항상 맨 앞에 파장 축이 있습니다. 효율은 입사파만의 파워로
@@ -68,17 +72,22 @@ reference 스테핑은 soft-source 스펙트럼 보정을 유지합니다. `plan
 양의 파워는 위쪽 방향입니다. 샘플을 별도 기준 실행으로 나누는 비교가 적절한 경우가 많습니다.
 [주파수 평면 예제](../../../examples/fdtd/fdtd_frequency_planes.py)를 보세요.
 
-`Record(every=..., components=..., bounds=...)`는 각 성분의 좌표와 E/H 반단계 타임스탬프(초)를
-포함한 원래 Yee 스냅숏을 보관합니다. 물리 bounds는 shared 스테핑이 필요합니다. shared 기록은
-인과적 파형을 유지하기 위해 일정한 반송파 보정을 쓰며, 주파수별 평면 보정과 다릅니다.
-`result.sample(x=..., y=..., z=..., times=...)`는 기록된 여섯 장 성분 전부를 SI 시간 기준으로
-오프라인 보간합니다. 광원 불연속을 가로지르는 보간은 거부하며 AD는 유지하지 않습니다. 순간 Poynting
-벡터는 phasor 인자 1/2 없이 `cross(E.real, H.real)`입니다.
-[장 기록 예제](../../../examples/fdtd/fdtd_record.py)와
-[Poynting 예제](../../../examples/fdtd/fdtd_poynting.py)를 보세요.
+`Outputs(snapshots=Snapshots(every=..., components=..., bounds=...))`는 성분 `'Ex'`부터
+`'Hz'`까지의 원래 Yee 스냅숏을 각 성분의 좌표와 E/H 반단계 타임스탬프(초)와 함께 보관합니다.
+`result.snapshots`는 성분을 키로 씁니다. `bounds`는 `'x'`, `'y'`, `'z'`를 길이 단위의 물리
+`(low, high)` 쌍에 대응시키며 shared 스테핑이 필요합니다. shared 스냅숏은 인과적 파형을 유지하기
+위해 일정한 반송파 보정을 쓰며, 주파수별 평면 보정과 다릅니다.
+`result.sample(x=..., y=..., z=..., times_seconds=...)`는 여섯 성분 전부를 그 SI 시각에서
+오프라인 보간하므로 기본 `components`가 필요합니다. 광원 불연속을 가로지르는 보간은 거부하며
+AD는 유지하지 않습니다. 순간 Poynting 벡터는 phasor 인자 1/2 없이 `cross(E.real, H.real)`입니다.
+[스냅숏](../../../examples/fdtd/fdtd_record.py) 예제와
+[Poynting](../../../examples/fdtd/fdtd_poynting.py) 예제를 보세요.
 
-`tail_steps`와 `tail_tolerance`는 조기 종료 없이 감쇠와 산란 변화를 진단합니다. 진단에는
-기저별 변화와 산란 한계가 SI 시간 및 명시적인 원시 스펙트럼 단위와 함께 남습니다. 이 검사로
+`Numerics(decay_check=DecayCheck(window_seconds=..., threshold=...))`는 조기 종료 없이 마지막
+창에서 감쇠와 산란 변화를 진단합니다. 창은 초 단위이며 `native.DecayCheck`와 같은 규칙으로 완전한
+시간 단계 수로 올림합니다. `check(...).resolved['time_step_seconds']`에서 얻은 `dt_seconds`로
+`40*dt_seconds`를 주면 40단계를 덮습니다. 진단에는 기저별 변화와 산란 한계가 SI 시간 및 명시적인
+원시 스펙트럼 단위와 함께 남습니다. 이 검사로
 격자, smoothing, PML 수렴이 확인되지는 않습니다. `observations.fit_modes`는 오프라인 ringdown
 피팅에 SI 타임스탬프를 받고 Hz와 1/s 단위 감쇠율을 반환합니다. 창과 모델 차수 수렴은 별도
 검사로 남습니다.

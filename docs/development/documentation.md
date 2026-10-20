@@ -51,7 +51,9 @@ The homepage and all forty imported course chapters have complete Korean Markdow
 overlays under `docs/locales/ko/pages/`. Their source is loaded only in the Korean
 build; English pages remain canonical. Maintained guide and developer pages may also provide
 complete overlays — currently the [current implementation map](source-map.md),
-[recorded verification](verification.md), [run records](../guide/run-records.md),
+[recorded verification](verification.md),
+[third-party software, data and references](third-party.md),
+[run records](../guide/run-records.md),
 [exceptional points](../guide/rcwa/exceptional-points.md),
 [backends, devices and precision](../guide/common/backends.md),
 [how the FDTD solver models a problem](../guide/fdtd/model.md),

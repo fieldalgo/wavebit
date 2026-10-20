@@ -23,7 +23,7 @@ scheduler. Its Jacobian matches the eager one to 1.1e-15.
 Public `wavebit.fdtd.periodic.run(..., backend='jax')` users are affected when a layer holds
 two or more rectangles with `shape_integration='area'`. A layer with one rotated rectangle is not
 affected, and neither is the `'separable'` route. Reverse mode was measured at one resolution and
-is affected much less.
+is affected much less. jax 0.12.0 still shows the effect, at about a quarter of the 0.11.0 ratio.
 
 ## Configuration
 
@@ -92,6 +92,13 @@ Adding the CI setting `--xla_cpu_multi_thread_eigen=false` leaves the temp uncha
 (1,031,495,480 bytes for jvp at resolution 6). `CPU_SCHEDULER_TYPE_CONCURRENCY_OPTIMIZED`
 reproduces the default's temp to the byte, so on this jaxlib the default is the
 concurrency-optimized scheduler.
+
+The same JVP at resolution 6 was compiled again on 2026-10-20, in the 2.10 GHz container, from
+`main` at `20a9715`. With jax/jaxlib 0.12.0 it asks for 785 MB with the default scheduler and
+197 MB with the memory-optimized one, and `CPU_SCHEDULER_TYPE_CONCURRENCY_OPTIMIZED` again
+matches the default to the byte. With jax 0.11.0, the same source still gives 1031 and 42 MB, so
+the change comes from the newer XLA, not from the source. On 0.12.0 the effect is smaller (about
+4× instead of 24×) but still present. The rest of this record was measured on 0.11.0 only.
 
 ## What the buffers are
 
@@ -163,11 +170,13 @@ process here measures 2.93, 3.76 and 4.68 GB at duration 60. The difference betw
 
 The public periodic API reaches the same painting route. The case measured is a forward
 derivative in the rotation angle of the study's two `Rectangle` regions in one 0.2 µm layer.
-The setup:
+The setup, in the public names current since 2026-10-19 (the run at `3f2ad83` spelled the pulse
+`Pulse(width_seconds=2.5*units.time_seconds)` and the time unit `units.time_seconds`; see the
+[public-name migration guide](../../migration/public-names.md#native-grid-and-periodic-stack-names)):
 
 - `Stack(period=(.6, .6), bottom=Material(epsilon=1.21))`, `PlaneWave` at 1 µm,
-  `Pulse(width_seconds=2.5*units.time_seconds)`.
-- `Numerics(spacing=1/6, duration_seconds=60*units.time_seconds, pml_cells=6, orders=0,
+  `Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*2.5*units.time_unit_seconds))`.
+- `Numerics(spacing=1/6, duration_seconds=60*units.time_unit_seconds, pml_cells=6, orders=0,
   align_layers=True, shape_integration='area', shape_smoothing=.05,
   extraction_method='directional')`.
 - `run(..., backend='jax')` under `jax.jit(jax.jvp(...))`.
