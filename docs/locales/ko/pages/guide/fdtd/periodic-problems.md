@@ -62,14 +62,17 @@ Region/포트 재료는 비분산 `Material` 선언입니다. 래스터 epsilon�
 
 반사·투과 `DiffractionOrders`에는 항상 맨 앞에 파장 축이 있습니다. 효율은 입사파만의 파워로
 정규화합니다. 복소 진폭은 V/m 단위이며, 물리 경계면과 셀 중심에서 각 차수의 s/p 좌표계로
-기준을 잡습니다. `R`과 `T`는 이 효율을 편하게 보는 뷰입니다. 사용 가능한 s/p 기저 관측값은
-`result.basis`에 따로 보관합니다.
+기준을 잡습니다. 각 `reference`에는 `port`('top' 또는 'bottom'), `wave`('reflected' 또는
+'transmitted'), `plane`(경계면 z, `length_units` 단위), `lateral_origin` `(0., 0.)`,
+`incident_amplitude`(V/m), 그리고 `cell_measure`와 `cell_measure_units`(교차 셀이면 'm^2', y 불변이면
+y 방향 단위 길이당 'm'이며 이때 `invariant_axes`는 `('y',)`)가 들어 있습니다. `R`과 `T`는 이 효율을
+편하게 보는 뷰입니다. 사용 가능한 s/p 기저 관측값은 `result.basis`에 따로 보관합니다.
 
 `Outputs(planes={'name': z})`는 보정된 phasor를 스트리밍합니다. E는 V/m, H는 A/m이며,
 평면 메타데이터에 보정 방식이 기록됩니다. shared 스테핑은 경계면의 단위 입사 E로 보정하고,
 reference 스테핑은 soft-source 스펙트럼 보정을 유지합니다. `plane_power_z`에는 물리 적분
-측도가 포함됩니다. 교차 셀이면 W, y 불변 문제이면 **W/m**입니다. 단위는 각 평면에 명시됩니다.
-양의 파워는 위쪽 방향입니다. 샘플을 별도 기준 실행으로 나누는 비교가 적절한 경우가 많습니다.
+측도가 포함됩니다. 교차 셀이면 W, y 불변 문제이면 **W/m**입니다. 단위는 각 평면의
+`metadata['power_units']`에 `cell_measure`, `cell_measure_units`와 함께 명시됩니다. 양의 파워는 위쪽 방향입니다. 샘플을 별도 기준 실행으로 나누는 비교가 적절한 경우가 많습니다.
 [주파수 평면 예제](../../../examples/fdtd/fdtd_frequency_planes.py)를 보세요.
 
 `Outputs(snapshots=Snapshots(every=..., components=..., bounds=...))`는 성분 `'Ex'`부터
@@ -85,10 +88,17 @@ AD는 유지하지 않습니다. 순간 Poynting 벡터는 phasor 인자 1/2 없
 
 `Numerics(decay_check=DecayCheck(window_seconds=..., threshold=...))`는 조기 종료 없이 마지막
 창에서 감쇠와 산란 변화를 진단합니다. 창은 초 단위이며 `native.DecayCheck`와 같은 규칙으로 완전한
-시간 단계 수로 올림합니다. `check(...).resolved['time_step_seconds']`에서 얻은 `dt_seconds`로
-`40*dt_seconds`를 주면 40단계를 덮습니다. 진단에는 기저별 변화와 산란 한계가 SI 시간 및 명시적인
-원시 스펙트럼 단위와 함께 남습니다. 이 검사로
-격자, smoothing, PML 수렴이 확인되지는 않습니다. `observations.fit_modes`는 오프라인 ringdown
+시간 단계 수로 올림합니다. `check(...).resolved['time_step_seconds']`에서 얻은 `time_step_seconds`로
+`40*time_step_seconds`를 주면 40단계를 덮습니다. 보고(`validity.convergence['decay']`와
+`diagnostics['decay']`, `DecayCheck`가 없으면 `None`)에는 기저별 변화와 산란 한계가 SI 시간, 주어진
+`threshold`, `_units`로 끝나는 키의 명시적 단위 라벨과 함께 남습니다. 이 검사로 격자, smoothing,
+PML 수렴이 확인되지는 않습니다.
+
+`validity.checks`에는 `runtime_stability`와 `numerical_finite`(R과 T가 유한한지)가 있습니다.
+reference 스테핑은 안정성을 판단하지 않으므로 `algorithm='reference'`에서는 `runtime_stability`가
+참이 아니라 `None`(판단 안 함)입니다. `diagnostics['invariant_axes']`는 y 불변 문제에서 `('y',)`,
+그 밖에는 `()`입니다. `result.provenance`에는 `solver`, `execution`, `numerics`, `units`,
+`coordinate_frame`, `time_convention`, `time_step_seconds`가 기록됩니다. `observations.fit_modes`는 오프라인 ringdown
 피팅에 SI 타임스탬프를 받고 Hz와 1/s 단위 감쇠율을 반환합니다. 창과 모델 차수 수렴은 별도
 검사로 남습니다.
 
