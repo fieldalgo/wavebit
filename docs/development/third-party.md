@@ -3,7 +3,11 @@
 Wavebit's own code is licensed `Apache-2.0 AND MIT`: Apache-2.0 for this project's
 work, with the MIT notices of the code it derives from kept in
 [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE),
-`LICENSE.meent` and `LICENSE.fmmax`. This page lists every third-party component
+`LICENSE.meent` and `LICENSE.fmmax`.
+[NOTICE](https://github.com/fieldalgo/wavebit/blob/main/NOTICE) summarises the
+attributions. All four files ship in the sdist and in the wheel's
+`.dist-info/licenses/`, and `tools/run_distribution_smoke.py` checks that both
+carry them unchanged. This page lists every third-party component
 the repository uses, how it is used and under which terms. Wavebit's license
 does not relicense any of them.
 

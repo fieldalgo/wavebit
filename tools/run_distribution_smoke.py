@@ -11,11 +11,32 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import venv
+import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Shipped at the sdist root and in the wheel's .dist-info/licenses/, byte for byte.
+NOTICES = ('LICENSE', 'LICENSE.meent', 'LICENSE.fmmax', 'NOTICE')
+
+
+def check_notices(wheel, sdist):
+    """Both artifacts carry every license and notice file unchanged."""
+    with zipfile.ZipFile(wheel) as archive:
+        for name in NOTICES:
+            found = [p for p in archive.namelist() if p.endswith(f'.dist-info/licenses/{name}')]
+            if len(found) != 1:
+                raise RuntimeError(f'{wheel.name}: expected one .dist-info/licenses/{name}, found {found}')
+            if archive.read(found[0]) != (ROOT / name).read_bytes():
+                raise RuntimeError(f'{wheel.name}: {name} differs from the checkout')
+    with tarfile.open(sdist) as archive:
+        top = archive.getnames()[0].split('/')[0]
+        for name in NOTICES:
+            member = archive.extractfile(f'{top}/{name}')
+            if member is None or member.read() != (ROOT / name).read_bytes():
+                raise RuntimeError(f'{sdist.name}: {name} is missing or differs from the checkout')
 
 
 def run(command, *, cwd, env):
@@ -48,6 +69,7 @@ def main():
         sdists = list(output.glob('*.tar.gz'))
         if len(wheels) != 1 or len(sdists) != 1:
             raise RuntimeError('expected exactly one wheel and one sdist')
+        check_notices(wheels[0], sdists[0])
         run([sys.executable, '-m', 'twine', 'check', '--strict', *wheels, *sdists],
             cwd=work, env=env)
         target = work / 'venv'

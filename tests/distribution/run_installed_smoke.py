@@ -23,10 +23,13 @@ def main():
     assert distribution.metadata['License-Expression'] == 'Apache-2.0 AND MIT'
     shipped = distribution.files
     assert shipped is not None, 'distribution has no installed file record'
-    for name in ('LICENSE', 'LICENSE.meent', 'LICENSE.fmmax'):
+    for name in ('LICENSE', 'LICENSE.meent', 'LICENSE.fmmax', 'NOTICE'):
         matches = [p for p in shipped if p.name == name and '.dist-info/' in str(p)]
         assert len(matches) == 1, (name, matches)
-        assert distribution.locate_file(matches[0]).stat().st_size > 0, name
+        installed_text = distribution.locate_file(matches[0]).read_bytes()
+        assert installed_text == (checkout / name).read_bytes(), f'installed {name} differs from the checkout'
+    declared = set(distribution.metadata.get_all('License-File') or ())
+    assert {'LICENSE', 'LICENSE.meent', 'LICENSE.fmmax', 'NOTICE'} <= declared, declared
 
     asset = 'wavebit/data/refractiveindex/Si.txt'
     assert distribution.locate_file(asset).is_file(), asset

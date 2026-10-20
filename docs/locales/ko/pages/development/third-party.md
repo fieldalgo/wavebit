@@ -3,7 +3,10 @@
 Wavebit 자체 코드의 라이선스는 `Apache-2.0 AND MIT`입니다. 이 프로젝트가 작성한 부분은
 Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE),
-`LICENSE.meent`, `LICENSE.fmmax`에 보존합니다. 이 페이지는 저장소가 쓰는 모든
+`LICENSE.meent`, `LICENSE.fmmax`에 보존합니다.
+[NOTICE](https://github.com/fieldalgo/wavebit/blob/main/NOTICE)는 저작자 표시를
+요약합니다. 네 파일 모두 sdist와 휠의 `.dist-info/licenses/`에 들어가며,
+`tools/run_distribution_smoke.py`가 두 배포물에 바뀌지 않고 들어 있는지 확인합니다. 이 페이지는 저장소가 쓰는 모든
 제3자 구성요소와 그 쓰임새, 적용 조건을 정리합니다. Wavebit의 라이선스가 이들의
 라이선스를 바꾸지는 않습니다.
 
