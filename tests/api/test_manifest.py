@@ -29,6 +29,7 @@ if __package__ in (None, ""):
     _repository_sys.path.insert(0, str(_RepositoryPath(__file__).resolve().parents[2]))
 from tools.repository_paths import repository_root
 import json
+import re
 
 import numpy as np
 import pytest
@@ -803,9 +804,36 @@ def test_the_manifest_does_not_import_an_optional_backend_to_answer():
         f'building the manifest imported an optional backend: {seen}')
 
 
+#: British spellings a consumer could meet in an emitted manifest key or value (fieldalgo/wavebit#57).
+_BRITISH = re.compile(r'centr(e|ed|es)\b|polaris|normalis|discretis|metre|colour|behaviour|neighbour|'
+                      r'optimis|minimis|maximis|analys(e|ed|es)\b|stabilis|parameteris|modell|favour|'
+                      r'fibre|artefact|catalogue|realis|characteris|initialis|serialis|regularis|linearis',
+                      re.IGNORECASE)
+
+
+def test_the_manifest_emits_american_spellings_in_every_key_and_value():
+    found = []
+
+    def walk(value, path):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if isinstance(key, str) and _BRITISH.search(key):
+                    found.append((path, key))
+                walk(item, f'{path}.{key}')
+        elif isinstance(value, (list, tuple)):
+            for i, item in enumerate(value):
+                walk(item, f'{path}[{i}]')
+        elif isinstance(value, str) and _BRITISH.search(value):
+            found.append((path, value))
+    walk(manifest(), 'manifest')
+    assert not found, found
+    assert manifest()['shape_coordinates']['origin'] == 'cell_center'
+    assert manifest()['shape_coordinates']['omitted_center'] == 'cx = cy = 0'
+
+
 def test_the_published_fourier_origin_matches_a_centred_stripe():
     claim = manifest()['lattice']
-    assert claim['fourier_origin'] == 'cell_centre'
+    assert claim['fourier_origin'] == 'cell_center'
     assert claim['fourier_origin_expression'] == '0.5*(a1 + a2)'
     row = np.ones((1, 1, 100));row[..., 30:70] = 3.
     solver = _legacy_wavebit_rcwa(structure=row, period=(1., 1.), thickness=[.2],
@@ -888,7 +916,7 @@ def test_published_fdtd_rectangles_use_common_route(backend, integration):
         pytest.importorskip('jax').config.update('jax_enable_x64', True)
     common = SOLVERS['fdtd']['routes']['common']
     assert common['parametric_shapes'] == ('rectangle', 'square', 'circle', 'disk', 'ellipse')
-    assert 'rectangle centre' in common['differentiable_parameters']
+    assert 'rectangle center' in common['differentiable_parameters']
     assert 'shape_smoothing' in common['static_parameters']
     assert common['shape_integration'] == ('separable', 'area')
     assert 'exact bilinear polygon moments' in common['area_smoothing']
@@ -1071,7 +1099,7 @@ def test_published_fdtd_ellipse_is_rotated_and_uses_full_axis_lengths(backend):
         pytest.importorskip('torch')
     common = manifest()['solvers']['fdtd']['routes']['common']
     assert 'ellipse' in common['parametric_shapes']
-    assert 'ellipse centre/axes/angle (area)' in common['differentiable_parameters']
+    assert 'ellipse center/axes/angle (area)' in common['differentiable_parameters']
     assert 'full principal-axis lengths' in common['ellipse_convention']
     stack = _legacy_wavebit_Stack.from_structure([dict(shapes=[
         dict(type='ellipse', lx=.15, ly=.07, angle=.41, material=2.)])],

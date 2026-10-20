@@ -95,7 +95,7 @@ def assemble(problem, *, numerics, backend='numpy', device='cpu', precision='dou
     return Operators(epsilon=tuple(epsilon), mu=tuple(mu),
                      wavelengths=tuple(_adapt.wavelengths(problem)),
                      numerics=numerics, execution=prepared.execution,
-                     metadata={'fourier_origin': 'cell centre (0,0)',
+                     metadata={'fourier_origin': 'cell center (0,0)',
                                'slot_order': ('xx', 'yy', 'inverse_zz', 'xy', 'yx', 'xz', 'yz', 'zx', 'zy'),
                                'off_diagonal_sign': 'negative',
                                'length_units': problem.units.length,
@@ -153,4 +153,4 @@ def solve(problem, operators):
         finite = result.validity.checks['numerical_finite']
         if not _adapt.has_tracer(finite) and not bool(_adapt.host(finite, 'result')):
             raise NumericalError('Explicit operators produced nonfinite observables.', code='rcwa.nonfinite', path='operators')
-        return result.replace(provenance={**result.provenance, 'constitutive_operators': 'explicit cell-centred operators'})
+        return result.replace(provenance={**result.provenance, 'constitutive_operators': 'explicit cell-centered operators'})

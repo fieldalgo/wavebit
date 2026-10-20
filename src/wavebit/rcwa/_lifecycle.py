@@ -419,7 +419,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
                                  'runtime_guards': ('finite inputs', 'positive wavelength', 'nonnegative thickness',
                                                     'nonzero polarization', 'raster phase partition',
                                                     'Cartesian Li rectangle edge order and positive sizes'),
-                                 'traced_geometry': 'fixed-cell Cartesian Li rectangle sizes and centres use an array-valued topology guard under jit/vmap; other admitted scalar shapes/cells can explicitly select topology_check=host, otherwise they require concrete values or the primal of eager jax.grad',
+                                 'traced_geometry': 'fixed-cell Cartesian Li rectangle sizes and centers use an array-valued topology guard under jit/vmap; other admitted scalar shapes/cells can explicitly select topology_check=host, otherwise they require concrete values or the primal of eager jax.grad',
                                  'topology_check': numerics.topology_check,
                                  'host_topology': 'when explicitly selected, live scalar shape/cell geometry is checked by a CPU callback; vmap checks sequentially, numerical derivatives stay on the selected backend',
                                  'cache_policy': 'static geometry only; every run rebuilds material, mode, and propagation operators'})
