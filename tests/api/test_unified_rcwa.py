@@ -292,7 +292,7 @@ def test_explicit_magnetic_operators_match_direct_solver_and_refuse_stale_stack(
     direct, assembled = rcwa.run(problem, numerics=rcwa.Numerics()), operators.solve(problem, matrices)
     np.testing.assert_allclose(assembled.R, direct.R, atol=2e-14)
     np.testing.assert_allclose(assembled.transmission.amplitude_s, direct.transmission.amplitude_s, atol=2e-14)
-    assert assembled.provenance['constitutive_operators'] == 'explicit cell-centred operators'
+    assert assembled.provenance['constitutive_operators'] == 'explicit cell-centered operators'
     changed = problem.replace(stack=problem.stack.replace(layers=(problem.stack.layers[0].replace(thickness=.2),)))
     with pytest.raises(IncompatibleProblemError):
         operators.solve(changed, matrices)

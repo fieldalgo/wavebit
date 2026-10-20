@@ -186,7 +186,13 @@ from wavebit._common._jobs_v1 import SPEC_VERSION
 # '25': the rcwa names say what they are too (OrderExcitation(orders=) is
 # IncidentOrders(weights=), GaussianBeam(spectral_extent=) is angular_spectrum_extent=,
 # layer_thicknesses moves to wavebit, among others); Jobs stay v2. Removed, not aliased.
-MANIFEST_VERSION = '25'
+# '26': result and report keys say what they are (fieldalgo/wavebit#57 section 5): shared
+# validity, time-step and provenance keys, one DiffractionOrders.reference key set, unit
+# labels in `_units` keys, error codes in one `area.item` grammar, explicit order pairs, and
+# American spellings in emitted values (shape_coordinates.origin and lattice.fourier_origin
+# are 'cell_center', omitted_centre is omitted_center). Jobs stay v2 and run records
+# wavebit.run/v2. Renamed, not aliased.
+MANIFEST_VERSION = '26'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -208,7 +214,7 @@ SPELLINGS = (
         'mu': 'a second array of the same shape, passed as mu=',
         'overlap': None,
         'summary': 'Permittivity as samples. The only path that implements both Fourier '
-                   'series and every factorization rule, and the one topology optimisation '
+                   'series and every factorization rule, and the one topology optimization '
                    'uses.',
     },
     {
@@ -290,9 +296,9 @@ MATERIAL_QUANTITY = {
 #: The **raster** path has no such coordinate and did not move: an array is the geometry.
 SHAPE_COORDINATES = {
     'lengths': 'absolute',
-    'origin': 'cell_centre',
+    'origin': 'cell_center',
     'origin_expression': '0.5*(a1 + a2)',
-    'omitted_centre': 'cx = cy = 0',
+    'omitted_center': 'cx = cy = 0',
     'applies_to': ('parametric',),
 }
 
@@ -389,7 +395,7 @@ LATTICE = {
     'oblique': 'pass the two lattice vectors as the columns of `lattice`; `period` then '
                'reports their lengths',
     'raster_coordinates': 'lattice',
-    'fourier_origin': 'cell_centre',
+    'fourier_origin': 'cell_center',
     'fourier_origin_expression': SHAPE_COORDINATES['origin_expression'],
     #: The same refusals as ``refused_on_oblique`` below, named rather than described.
     #: A consumer deciding *what to recommend* needs to test membership, and prose is not a
@@ -520,7 +526,7 @@ RESULTS = {
         'total': ('R', 'T'),
         'by_outgoing_polarization': ('R_s', 'R_p', 'T_s', 'T_p'),
         'layout': 'arrays of shape (n_orders_v, n_orders_u) — y first, the transpose of the '
-                  'truncation_order=[x, y] input order. Centred on the incident order unless '
+                  'truncation_order=[x, y] input order. Centered on the incident order unless '
                   'an excitation widened the retained window; result.order_window says which '
                   'orders these are, and result.order(m, n) spares you the arithmetic',
         'accessor': 'result.order(m, n) indexes every per-order quantity by the order '
@@ -546,10 +552,10 @@ RESULTS = {
                            's_hat / p_hat; the scattering matrix p block holds port '
                            'variables (S11 @ delta = -r_p)',
         'phase_reference': 'r at the illuminated interface, t at the opposite one; laterally '
-                           'the cell centre x = y = 0, the origin of every public coordinate '
+                           'the cell center x = y = 0, the origin of every public coordinate '
                            '(since 2026-09-27; the cell corner before, which negated every '
                            'order with m + n odd). Each amplitude is the Fourier coefficient '
-                           'of the public field on its face about the centre; an ordinary '
+                           'of the public field on its face about the center; an ordinary '
                            'incidence is unit there; excitation weights mean what '
                            'IncidentOrders(weights=...) weights mean, and the scattering '
                            'matrix ports use the same variables as the amplitudes',
@@ -564,7 +570,7 @@ RESULTS = {
             'meaning': "each outgoing order's E vector per unit incident amplitude, "
                        'r_s*s_hat + r_p*p_hat: no per-order frame, so continuous where an '
                        "order's kx crosses 0. Same phase reference as r_s -- laterally the "
-                       'cell centre, x = y = 0',
+                       'cell center, x = y = 0',
         },
     },
     'incidences': {
@@ -669,7 +675,7 @@ SOLVERS = {
                 'differentiable_parameters': ('theta', 'phi', 'raster epsilon', 'raster mu',
                                               'electric pole coefficients', 'half-space epsilon',
                                               'half-space mu', 'fixed-total layer thickness', 'independent layer thickness (variable_depth)',
-                                              'rectangle centre', 'rectangle size', 'rectangle angle (area)', 'circle centre (area)', 'circle diameter (area)', 'ellipse centre/axes/angle (area)', 'shape epsilon/mu'),
+                                              'rectangle center', 'rectangle size', 'rectangle angle (area)', 'circle center (area)', 'circle diameter (area)', 'ellipse center/axes/angle (area)', 'shape epsilon/mu'),
                 'static_parameters': ('periods', 'shape types/count/paint order', 'nominal mesh depth', 'wavelength',
                                       'mesh_indices', 'mesh_thickness', 'variable_depth', 'layer_smoothing', 'shape_smoothing', 'shape_integration', 'truncation_order'),
                 'parametric_shapes': ('rectangle', 'square', 'circle', 'disk', 'ellipse'),
