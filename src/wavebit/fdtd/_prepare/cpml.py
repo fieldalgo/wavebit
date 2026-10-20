@@ -66,14 +66,24 @@ ORDER = 4.0
 #: legacy probe measured (1.29e-6 / 1.36e-6 / 1.63e-6 at kappa 1 / 2 / 5) and is classically
 #: justified by grazing and evanescent absorption, which that probe could not see. 2 is the
 #: compromise, and it is the one constant here not settled by a measurement. The doubling
-#: table's ``kappa = 1`` mutant is the first thing in this repository that can see it.
+#: table's ``kappa = 1`` mutant sees only propagating waves (it lowers the 12-cell
+#: normal-incidence number 1.4x); the near-field study of 97899abf
+#: (``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py``) sees a dipole's near field too;
+#: its four readings of "wins on the near field" disagree, and it moved no constant.
 KAPPA_MAX = 2.0
 
 #: The CFS pole, **as a multiple of the operating frequency** -- which is what makes it
 #: dimensionless and the solver scale-free. The legacy measured optimum is flat between 1 and
-#: 2 in every medium (1.15e-6 at 2.0 in air, glass and n = 3.5), rising to 3.9e-6 at 4. Zero
-#: is not safe: the shifted pole is what absorbs the evanescent field a structure radiates
-#: into the layer, and the doubling table's ``alpha = 0`` mutant is what shows it.
+#: 2 in every medium (1.15e-6 at 2.0 in air, glass and n = 3.5), rising to 3.9e-6 at 4.
+#: Whether zero is safe is not settled. The ``alpha = 0`` mutant in
+#: ``tests/fdtd/test_fd_pml.py`` *lowers* the 12-cell normal-incidence number 127x, so it does
+#: not show zero unsafe. The near-field study of 97899abf
+#: (``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py``) finds zero mixed. In its re-run
+#: of the doubling table, zero reflects 2.5-4x more on the 16- and 24-cell 30-degree entries,
+#: so it fails the study's 2x admissibility test. On a dipole, at the carrier, zero returns
+#: 1.7-1.8x more at 0.05 wavelengths from the layer and 4-50x less at 0.5, where the return is
+#: mostly the propagating part of the dipole's field. The study's 7.7-period window cannot see
+#: a late-time growth of a layer with zero shift.
 ALPHA_RELATIVE = 1.5
 
 #: The stabilizing loss that suffices **at the default reflection target, 1e-8** (and at
@@ -202,9 +212,10 @@ def damping_profile(depth, thickness):
 
     **The strength is ported, not measured here, and it is far from this probe's optimum**:
     scaling ``6 u^3`` by 5 takes the normal-incidence number from 4.9e-2 to 1.3e-5 while 30 and
-    60 degrees do not move. It is left where it is for the reason ``KAPPA_MAX`` is: what the
-    strength is *for* is the evanescent near field a structure radiates into the layer, and
-    nothing in this repository can see one yet
+    60 degrees do not move. It is left where it is because what the strength is *for* is the
+    evanescent near field a structure radiates into the layer, and that is not measured for
+    this layer: ``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py`` measured the PML's
+    two constants on a dipole's near field and did not measure this profile
     (``tests/fdtd/test_fd_absorber.py::test_the_profile_strength_is_not_settled_by_this_probe``).
     """
     u = np.clip(depth / thickness, 0.0, 1.0)
