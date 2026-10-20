@@ -153,7 +153,7 @@ def pack(problem, numerics, execution, solves, checks, report):
     records, amplitudes, scattering = [], [], []
     actual_wavelengths = []
     actual_directions = []
-    power_defined = []
+    power_defined, efficiency_defined = [], []
     merges = []
     if single_plane(problem):
         source = problem.excitation.sources[0]
@@ -174,15 +174,21 @@ def pack(problem, numerics, execution, solves, checks, report):
             area = xp.abs(xp.linalg.det(lattice)) * problem.units.length_metres**2
             boundary = state.data['boundary']['incident']
             k_incident = solver._incident_kxy(solver.wavelength)
-            # A complex k_par has no uniform-intensity power integral, and an evanescent incident
-            # wave (real k_par beyond the lit medium's light line) carries no power to divide by.
+            # Two conditions, one flag each. A complex k_par has no uniform-intensity cell
+            # integral, so no port power in W (power_defined). An evanescent incident wave (real
+            # k_par beyond the lit medium's light line) has one, but carries no power of its own
+            # to divide by (efficiency_defined). Its tunnelled port powers are physical (#84).
+            physical_power = transverse_k_is_real(xp, *k_incident)
             carries_s, carries_p = solver._incident_power_defined()
-            physical_power = transverse_k_is_real(xp, *k_incident) & carries_s & carries_p
+            normalized = physical_power & carries_s & carries_p
             power_defined.append(physical_power)
+            efficiency_defined.append(normalized)
             shape = result.R.shape
             incoming = _sum_power(boundary[side][0], xp, -1 if side == 'top' else 1,
                                   area, amplitude)
-            incident_powers.append(xp.where(physical_power, xp.sum(incoming), xp.nan))
+            # The normalization efficiencies are divided by, so its flag: NaN rather than the
+            # incident wave's true 0, which would let a per-wave budget pass for an absorption.
+            incident_powers.append(xp.where(normalized, xp.sum(incoming), xp.nan))
             entering.append(result.power_entering)
             absorptions.append(result.absorption)
             for name, port, prefix in (('reflected', side, 'r'), ('transmitted', other, 't')):
@@ -199,7 +205,9 @@ def pack(problem, numerics, execution, solves, checks, report):
                 per_port[name].append(dict(amplitude_s=getattr(result, prefix+'_s'),
                                            amplitude_p=getattr(result, prefix+'_p'),
                                            cartesian=getattr(result, prefix+'_xyz'),
-                                           efficiency=xp.where(physical_power, result.R if name == 'reflected' else result.T, xp.nan),
+                                           # The engine has already set R/T to NaN where no incident
+                                           # power exists; this ties the value to its own flag.
+                                           efficiency=xp.where(normalized, result.R if name == 'reflected' else result.T, xp.nan),
                                            power=xp.where(physical_power, outgoing, xp.nan),
                                            k_parallel=k_parallel, kz=longitudinal,
                                            epsilon=material.epsilon, mu=material.mu_value,
@@ -231,7 +239,9 @@ def pack(problem, numerics, execution, solves, checks, report):
                                'mu': tuple(e['mu'] for e in entries),
                                'cell_area_m2': tuple(e['area'] for e in entries)},
                     metadata={'power_defined': xp.stack(power_defined),
-                              'unavailable_power_reason': 'complex transverse wavevectors require a different spatial power integral, and an evanescent incident wave carries no incident power to normalize by; amplitudes remain valid',
+                              'efficiency_defined': xp.stack(efficiency_defined),
+                              'unavailable_power_reason': 'complex transverse wavevectors require a different spatial power integral; amplitudes remain valid',
+                              'unavailable_efficiency_reason': 'efficiencies need an incident power: a complex transverse wavevector has no cell power integral, and an evanescent incident wave carries none; amplitudes remain valid',
                               'amplitude_units': 'dimensionless electric-field ratio', 'power_units': 'W',
                               'integration_measure': 'periodic cell', 'propagation': 'continuum',
                               'polarization_frame': "each order's outgoing s/p frame",
@@ -297,6 +307,9 @@ def pack(problem, numerics, execution, solves, checks, report):
                                'source_groups': tuple(getattr(r, 'group_count', 1) for _, r in solves),
                                'effective_theta': tuple(actual_directions),
                                'port_power_defined': xp.stack(power_defined) if power_defined else None,
+                               # Says why power_entering and absorption are NaN when no
+                               # diffraction output carries the metadata flag.
+                               'efficiency_defined': xp.stack(efficiency_defined) if efficiency_defined else None,
                                'detuning_relative_step': numerics.detuning,
                                'half_space_merge': tuple(merges) if merges else None},
                   provenance={'solver': 'rcwa', 'code_version': '0.1.0', 'length_unit': problem.units.length,
