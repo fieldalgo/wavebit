@@ -174,7 +174,10 @@ def pack(problem, numerics, execution, solves, checks, report):
             area = xp.abs(xp.linalg.det(lattice)) * problem.units.length_metres**2
             boundary = state.data['boundary']['incident']
             k_incident = solver._incident_kxy(solver.wavelength)
-            physical_power = transverse_k_is_real(xp, *k_incident)
+            # A complex k_par has no uniform-intensity power integral, and an evanescent incident
+            # wave (real k_par beyond the lit medium's light line) carries no power to divide by.
+            carries_s, carries_p = solver._incident_power_defined()
+            physical_power = transverse_k_is_real(xp, *k_incident) & carries_s & carries_p
             power_defined.append(physical_power)
             shape = result.R.shape
             incoming = _sum_power(boundary[side][0], xp, -1 if side == 'top' else 1,
@@ -228,7 +231,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                                'mu': tuple(e['mu'] for e in entries),
                                'cell_area_m2': tuple(e['area'] for e in entries)},
                     metadata={'power_defined': xp.stack(power_defined),
-                              'unavailable_power_reason': 'complex transverse wavevectors require a different spatial power integral; amplitudes remain valid',
+                              'unavailable_power_reason': 'complex transverse wavevectors require a different spatial power integral, and an evanescent incident wave carries no incident power to normalize by; amplitudes remain valid',
                               'amplitude_units': 'dimensionless electric-field ratio', 'power_units': 'W',
                               'integration_measure': 'periodic cell', 'propagation': 'continuum',
                               'polarization_frame': "each order's outgoing s/p frame",

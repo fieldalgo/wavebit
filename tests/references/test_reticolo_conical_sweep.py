@@ -193,10 +193,12 @@ def test_uniform_stack_does_not_diffract_at_a_complex_angle():
     Away from that value it produced a loud one instead — off-centre amplitudes of ~7e3 here
     — so both symptoms need a case, and this is the cheap one.
 
-    Note that ``|R| <= 1`` is **not** available as an assertion: under evanescent
-    illumination the incident wave carries no power, and the analytic Airy result for this
-    stack legitimately exceeds unity (1.01 at ``pi/2 + 0.3j``). Orders that must be identically
-    zero are the honest invariant.
+    Note that ``|r_s| <= 1`` is **not** available as an assertion: under evanescent
+    illumination the incident wave carries no power, and the analytic Airy amplitude for this
+    stack legitimately exceeds unity (1.01 at ``pi/2 + 0.3j``). The efficiencies are no
+    invariant there either: with no incident power to divide by, the solve returns ``R`` and
+    ``T`` as NaN at ``Re(theta) == pi/2`` (#84, ``tests/rcwa/test_evanescent_incidence_power.py``).
+    Orders that must be identically zero are the honest invariant.
     """
     g = _golden()
     scene = _scene(g)

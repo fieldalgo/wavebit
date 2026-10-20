@@ -100,7 +100,7 @@ k_x\approx n\times0.3894=(2.1213+0.7071i)\times0.3894\approx0.826+0.275i .
 
 **왜 규칙이 둘인가.** 예전에는 실수 `theta`에도 {math}`n\sin\theta`를 썼습니다. 그러면 흡수 매질에서는 실수 각도도 복소 {math}`k_x`가 되었습니다. [시간 규약 감사](../../validation/rcwa/time-convention-audit.md)가 찾은 사례가 거기서 나왔습니다. 금 위의 손실 유전체에서 각도를 {math}`6.7\times10^{-5}` rad 움직였더니 반사 진폭이 2.96 튀었습니다. 그 사례가 어느 branch cut에 걸렸는지는 {ref}`다음 절 <ckr-lossy>`에서 봅니다. 지금은 실수 `theta`를 물리적인 방향으로만 읽고, 형식적인 계산은 복소 `theta`로만 합니다.
 
-**소멸파 입사.** 입사파 자체가 입사 매질 안에서 소멸파인 경우입니다. 부록 A에서 본 대로 {math}`\theta=\pi/2+i\alpha` 꼴은 {math}`\sin\theta=\cosh\alpha`가 실수입니다. 입사 매질이 무손실이면 {math}`k_x=n\cosh\alpha`도 실수로 남습니다. 입사 매질이 흡수 매질이면 {math}`n`이 복소수라 {math}`k_x`도 복소수가 되고, `ComplexIncidenceWarning`이 나옵니다.
+**소멸파 입사.** 입사파 자체가 입사 매질 안에서 소멸파인 경우입니다. 부록 A에서 본 대로 {math}`\theta=\pi/2+i\alpha` 꼴은 {math}`\sin\theta=\cosh\alpha`가 실수입니다. 입사 매질이 무손실이면 {math}`k_x=n\cosh\alpha`도 실수로 남습니다. 이때 입사파는 표면 쪽으로 전력을 나르지 않으므로 `R`, `T`, `power_entering`, `absorption`은 `NaN`이고, 진폭은 그대로 남습니다. 입사 매질이 흡수 매질이면 {math}`n`이 복소수라 {math}`k_x`도 복소수가 되고, `ComplexIncidenceWarning`이 나옵니다.
 
 (ckr-lossy)=
 ## 흡수 반공간: branch point가 뜹니다

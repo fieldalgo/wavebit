@@ -96,7 +96,8 @@ class ResultSub:
         Excludes absorption in either half-space. Negative values describe
         net generation or numerical error; they are not clipped to zero.
         NaN for complex transverse wavevectors, whose cell-power integral
-        is not supported. None if entering power or transmitted power is absent.
+        is not supported, and for an evanescent incident wave, which carries
+        no incident power. None if entering power or transmitted power is absent.
         """
         if self.power_entering is None or self.T is None:
             return None

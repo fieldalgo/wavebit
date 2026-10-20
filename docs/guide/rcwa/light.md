@@ -87,7 +87,11 @@ complex `theta`/`phi`. Its amplitudes are returned, but `R`, `T` and the port po
 and `result.reflection.metadata['power_defined']` is false, because the uniform-intensity power
 normalization does not hold there (see
 [Real-angle incidence](../../reference/common/conventions.md#real-angle-incidence)); the earlier
-interface returned formal `R` and `T` instead. Direct components carry no
+interface returned formal `R` and `T` instead. Evanescent incidence, `theta = pi/2 + 1j*alpha`
+from a lossless half-space, keeps `kx` real but its incident wave carries no power, so it is
+marked the same way: `R`, `T` and the port powers are NaN and `power_defined` is false, with
+the amplitudes returned (the earlier interface's `R`, `T` and `power_entering` are NaN there
+too). Direct components carry no
 angle, so they are taken as given in any medium, a negative-index one included. With
 `kx=ky=0`, the s/p basis uses azimuth zero (s along y, p in xz); choose `polarization` to
 orient the field.

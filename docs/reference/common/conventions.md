@@ -354,8 +354,8 @@ analytic continuation of each other across the real-angle boundary (`N` against 
 
 When that parameterization leaves the transverse wavevector with a nonzero
 imaginary part, the incident intensity varies along the surface. Evanescent
-incidence, `theta = pi/2 + 1j*alpha`, is not such a case: its `kx` is real.
-The per-order `R` and `T` are then formal ratios rather than fractions of an
+incidence, `theta = pi/2 + 1j*alpha`, is not such a case: its `kx` is real
+(below). The per-order `R` and `T` are then formal ratios rather than fractions of an
 incident power, and their sum can exceed 1 on a lossless stack. `power_entering`
 and `absorption` are NaN, and each such solve emits `ComplexIncidenceWarning`.
 Which root of `kz` the exit medium takes is a convention at a complex `kx`, and
@@ -364,6 +364,21 @@ the only route to a complex transverse wavevector. A direct `kx`/`ky` must be
 real, and refusing a complex one names this route: for `ky = 0`,
 `theta = arcsin(kx/(k0*n))`, `phi = 0`. A direct `kx`/`ky` carries no angle and is taken as
 given whatever the lit medium; at `kx = ky = 0` its s/p basis uses azimuth zero.
+
+**Evanescent incidence** has a real `kx = n*cosh(alpha)` beyond the lit medium's light line.
+In a lossless lit medium its `kz` is imaginary, so the incident wave carries no normal power
+and nothing can be divided by it: `R`, `T` and their s/p parts, `power_entering` and
+`absorption` are NaN, and an `rcwa.run` result also has NaN port powers and
+`metadata['power_defined']` false, as for a complex `kx`. The amplitudes and fields are
+returned unchanged. The test is a roundoff floor, not an exact zero: `cos(pi/2)` is `6.1e-17`
+in double precision, so `kx` keeps an imaginary part the transverse test accepts as roundoff,
+and it leaves `Re(kz)` near `6e-17*|kx|`; divided by that, `T` once came out near `1e16`, with
+its sign set by the sign of `alpha` ([#84](https://github.com/fieldalgo/wavebit/issues/84)).
+No warning accompanies the NaN, which marks itself, and a `jax.jit` solve, which cannot warn,
+marks the same values. An `excitation` or a direct `kx`/`ky` that lights an order carrying no
+power is refused instead, wherever its value can be read. Light emitted inside a stack, where
+this evanescent light matters, is a different calculation
+([#85](https://github.com/fieldalgo/wavebit/issues/85)).
 
 `order_kxy()` returns wavevectors **divided by `k0`**, including reciprocal
 lattice shifts for each retained order. Multiply by `2*pi/wavelength` for

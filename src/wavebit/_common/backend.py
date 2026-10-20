@@ -1154,6 +1154,11 @@ class ComplexIncidenceWarning(UserWarning):
     negative ratio. ``power_entering`` and ``absorption`` are NaN.
 
     Evanescent incidence (``theta = pi/2 + 1j*alpha``) keeps ``kx`` real and does not fire.
+    From a lossless medium its incident wave carries no normal power, so there is no ratio,
+    formal or not, to report: ``R``, ``T`` and ``power_entering`` are NaN instead
+    (:func:`~wavebit.observations.power.carries_normal_power`, #84). No warning is added for
+    it. This one exists because R and T stay finite and read like efficiencies; a NaN marks
+    itself, and is marked under ``jax.jit`` too, where no warning can run.
     For an absorbing incident medium, a real ``theta`` is the physical input: a real angle
     keeps ``kx`` real and puts the loss in ``kz``. Its own category so a study that means the
     formal parameterization can silence it without silencing anything else.
