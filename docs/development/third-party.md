@@ -166,8 +166,9 @@ describes each comparison.
 
 ### Past comparisons
 
-Tools that were run once, by hand, to measure their public behaviour. The
-numbers are quoted in [Reference cases](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)
+Tools that were run once, by hand, to measure their public behaviour, or
+studied through their documentation and API. The numbers and observations are
+quoted in [Reference cases](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)
 and in the RCWA theory notes; no generator, golden or test in this repository
 runs or imports them today.
 
@@ -175,6 +176,18 @@ runs or imports them today.
 | --- | --- | --- | --- |
 | `inkstone` | 0.3.15 | AGPL-3.0-or-later | Black-box RCWA comparison through its public API and returned numbers only; its source was never read. A later comparison may run in an unshipped test or study that skips without it, using the unmodified PyPI release; never in Wavebit's code, requirements or a hosted service |
 | `EMpy` | 2.2.3 (`ElectroMagneticPython` on PyPI) | MIT | Black-box comparison of its anisotropic transfer matrix |
+| `torcwa` | 0.1.4.2 | LGPL-3.0-or-later | Black-box RCWA comparison (negative-index media) |
+| `nannos` | 2.6.4 | GPL-3.0-or-later | Black-box RCWA comparison through its public API; its source was never read |
+| `grcwa` | 0.1.2 | GPL-3.0-only | Compared by its documentation and API only, not run. PyPI classifier "GPLv3", no "or later" stated |
+| `rcwa` | not recorded | MIT | Black-box RCWA comparison of edmundsj's package |
+| `A-FMM` | not recorded | MIT | Read, not run (MIT per PyPI A-FMM 0.1.2) |
+| `tmm` | 0.2.0 | MIT | Black-box multilayer comparison (Byrnes) |
+| `tmm-fast` | 0.3.0 | MIT | Black-box multilayer comparison |
+| `gyptis` | 1.2.0 | MIT | Black-box FEM comparison |
+
+Two more RCWA codes quoted in the negative-index notes, chiuhans `rcwa` and
+rcwa4d, have no recorded source, version or license; they are not listed here
+until those are verified, and are not to be run again before then.
 
 ## Code and data in this repository
 

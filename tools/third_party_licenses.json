@@ -163,6 +163,68 @@
       "forbidden_imports": [
         "EMpy"
       ]
+    },
+    "torcwa": {
+      "spdx": "LGPL-3.0-or-later",
+      "url": "https://github.com/kch3782/torcwa",
+      "use": "past black-box RCWA comparison (0.1.4.2; license from its wheel's LICENSE); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "torcwa"
+      ]
+    },
+    "nannos": {
+      "spdx": "GPL-3.0-or-later",
+      "url": "https://github.com/benvial/nannos",
+      "use": "past black-box RCWA comparison (2.6.4), public API and returned numbers only, source never read; results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "nannos"
+      ]
+    },
+    "grcwa": {
+      "spdx": "GPL-3.0-only",
+      "url": "https://github.com/weiliangjinca/grcwa",
+      "use": "past comparison by documentation and API only, not run (0.1.2; PyPI classifier 'GPLv3', no 'or later' stated); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "grcwa"
+      ]
+    },
+    "rcwa": {
+      "spdx": "MIT",
+      "url": "https://github.com/edmundsj/RCWA",
+      "use": "past black-box RCWA comparison of edmundsj's rcwa package (version not recorded); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "rcwa"
+      ]
+    },
+    "A-FMM": {
+      "spdx": "MIT",
+      "url": "https://pypi.org/project/A-FMM/",
+      "use": "past comparison by reading, not run (version not recorded; PyPI A-FMM 0.1.2 is MIT); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": []
+    },
+    "tmm": {
+      "spdx": "MIT",
+      "url": "https://pypi.org/project/tmm/",
+      "use": "past black-box multilayer comparison (Byrnes tmm 0.2.0); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "tmm"
+      ]
+    },
+    "tmm-fast": {
+      "spdx": "MIT",
+      "url": "https://github.com/MLResearchAtOSRAM/tmm_fast",
+      "use": "past black-box multilayer comparison (0.3.0); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "tmm_fast"
+      ]
+    },
+    "gyptis": {
+      "spdx": "MIT",
+      "url": "https://pypi.org/project/gyptis/",
+      "use": "past black-box FEM comparison (1.2.0); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "gyptis"
+      ]
     }
   },
   "bundled": {
