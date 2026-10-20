@@ -37,6 +37,7 @@ venv holding the installed wheels.
 import argparse
 import ast
 from collections import deque
+import functools
 import importlib.metadata as metadata
 import json
 from pathlib import Path
@@ -172,21 +173,25 @@ def reachability(dists, first_party, test_extras=frozenset({"test"})):
     return use
 
 
-def first_party_imports(modules):
-    """Return first-party source files that import any of the given top-level modules."""
-    offenders = []
+@functools.cache
+def _package_imports():
+    """Top-level module names each first-party source file imports, parsed once per run."""
+    imports = {}
     for path in sorted(PACKAGE.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        names = set()
         for node in ast.walk(tree):
-            names = []
             if isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
+                names.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                names = [node.module]
-            if any(name.split(".")[0] in modules for name in names):
-                offenders.append(path.relative_to(ROOT).as_posix())
-                break
-    return offenders
+                names.add(node.module.split(".")[0])
+        imports[path.relative_to(ROOT).as_posix()] = frozenset(names)
+    return imports
+
+
+def first_party_imports(modules):
+    """Return first-party source files that import any of the given top-level modules."""
+    return [path for path, names in _package_imports().items() if names & set(modules)]
 
 
 def check(paths, inventory, check_docs=True, reachable_only=False):
