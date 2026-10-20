@@ -14,11 +14,15 @@ Runtime dependencies must be permissive. Weak copyleft (LGPL, MPL) is accepted
 for optional entries that set ``weak_copyleft_review``: such a component is
 installed separately by pip, unmodified, and never bundled. Tools never ship, so
 unshipped tests, studies and CI tools may use them under any license but the
-``never`` list, GPL included and in the same process as Wavebit; they still need
-a reviewed entry, and a reference tool recorded under ``external_tools`` counts
-as one. Wavebit's package code must not import a GPL tool, and a tool must not
-become a requirement. AGPL and SSPL are always rejected; an external tool under them
-may be listed only as a past comparison marked ``lab_only``. Installed metadata that names
+``never`` list (SSPL and other non-AGPL network copyleft), GPL and AGPL included
+and in the same process as Wavebit; they still need a reviewed entry, and a
+reference tool recorded under ``external_tools`` counts as one. An AGPL tool
+also needs an ``agpl_review`` note (unmodified upstream release, unshipped use
+only, never in a hosted service). AGPL (``shipped_never``) is rejected for
+everything Wavebit ships or requires, also as a separate-process backend; an
+external tool under a ``never`` license may be listed only as a past comparison
+marked ``lab_only``. Wavebit's package code must not import a GPL or AGPL tool,
+and a tool must not become a requirement. Installed metadata that names
 a different expression, or a copyleft family the entry does not record, also fails.
 
 ``--reachable-only`` checks only what Wavebit's requirements reach, so a
@@ -190,6 +194,7 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
     permissive = set(policy["permissive"])
     weak = set(policy["weak_copyleft"])
     never = set(policy["never"])
+    shipped_never = set(policy["shipped_never"])
     first_party = {canonicalize_name(n) for n in inventory["first_party"]}
     entries = {canonicalize_name(k): v for k, v in inventory["distributions"].items()}
     external = {canonicalize_name(k): v for k, v in inventory.get("external_tools", {}).items()}
@@ -244,6 +249,9 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
         if external_tool and klass != "tool":
             errors.append(f"{name} is recorded only as an external tool but is a Wavebit {klass} requirement")
             continue
+        if ids & shipped_never and klass != "tool":
+            errors.append(f"{name}: {entry['spdx']} is never allowed for {klass} use, also as a separate process")
+            continue
         if "external_process" in entry:
             record["use"] = "external-process"
             modules = set(entry["external_process"]["forbidden_imports"])
@@ -254,8 +262,11 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
             continue
         if klass == "tool":
             # Unshipped tests, studies and CI tools may run any non-never license in the
-            # Wavebit process (GPL included); the never check above still applies.
+            # Wavebit process (GPL and AGPL included); the never check above still applies.
             record["use"] = "external-tool" if external_tool else "tool"
+            if ids & shipped_never and not str(entry.get("agpl_review", "")).strip():
+                errors.append(f"{name}: {entry['spdx']} tool needs an agpl_review note (unmodified upstream "
+                              "release, unshipped use only, never in a hosted service)")
             continue
         allowed = permissive if klass == "runtime" else (
             permissive | weak if entry.get("weak_copyleft_review") else permissive)
@@ -272,6 +283,9 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
         if tool_ids & never and not str(entry.get("lab_only", "")).strip():
             errors.append(f"{tool}: {entry['spdx']} is never run here; record it only as a past comparison "
                           "with a lab_only note")
+        if tool_ids & shipped_never and not str(entry.get("agpl_review", "")).strip():
+            errors.append(f"{tool}: {entry['spdx']} tool needs an agpl_review note (unmodified upstream "
+                          "release, unshipped use only, never in a hosted service)")
     if check_docs:
         for doc in DOCS:
             text = doc.read_text(encoding="utf-8")

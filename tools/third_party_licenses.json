@@ -34,18 +34,31 @@
     ],
     "test_extras": [],
     "never": [
+      "SSPL-1.0",
+      "EUPL-1.0",
+      "EUPL-1.1",
+      "EUPL-1.2",
+      "OSL-1.0",
+      "OSL-1.1",
+      "OSL-2.0",
+      "OSL-2.1",
+      "OSL-3.0",
+      "CPAL-1.0",
+      "RPL-1.1",
+      "RPL-1.5"
+    ],
+    "shipped_never": [
       "AGPL-1.0-only",
       "AGPL-1.0-or-later",
       "AGPL-3.0-only",
-      "AGPL-3.0-or-later",
-      "SSPL-1.0"
+      "AGPL-3.0-or-later"
     ],
     "rules": [
       "runtime (base requirements of wavebit, transitively): permissive only",
       "optional (wavebit extras): permissive, or weak copyleft when the entry sets weak_copyleft_review (unmodified, installed separately by pip, never bundled or loaded directly)",
-      "tool (installed but not required: test runners, CI tools, external_tools a test environment installs): any license but never, GPL included, since tools never ship; each still needs a reviewed entry",
+      "tool (installed but not required: test runners, CI tools, external_tools a test environment installs): any license but never, GPL and AGPL included, since tools never ship; each still needs a reviewed entry, and an AGPL one an agpl_review note (unmodified upstream release, unshipped use only, never in a hosted service)",
       "GPL: never imported, linked or bundled by src/wavebit and never a requirement; unshipped tests, studies and reference scripts may run GPL tools, skipping when they are absent",
-      "never: rejected in every environment"
+      "never (SSPL and other non-AGPL network copyleft): rejected in every environment; shipped_never (AGPL): rejected for runtime, optional and external-process use, accepted for tools"
     ]
   },
   "first_party": [
@@ -123,8 +136,8 @@
     "inkstone": {
       "spdx": "AGPL-3.0-or-later",
       "url": "https://github.com/alexysong/inkstone",
-      "use": "past black-box RCWA comparison (0.3.15, public API and returned numbers only, source never read); results cited in tests/references/README.md and docs/theory/rcwa/. Not run in this repository again",
-      "lab_only": "AGPL: from 2026-10-20 any further run happens only in the private research repository, never in Wavebit's tests, CI or dependencies",
+      "use": "black-box RCWA comparison (0.3.15, public API and returned numbers only, source never read); results cited in tests/references/README.md and docs/theory/rcwa/. No harness in this repository today",
+      "agpl_review": "unmodified upstream release from PyPI; may run only in unshipped tests or studies that skip without it; never imported by src/wavebit, never a requirement or extra, never in a hosted service",
       "forbidden_imports": [
         "inkstone"
       ]

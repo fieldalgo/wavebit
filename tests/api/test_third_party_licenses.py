@@ -45,11 +45,30 @@ def test_a_gpl_runtime_requirement_fails(tmp_path):
     assert any('not allowed for runtime use' in error for error in errors)
 
 
-def test_an_agpl_tool_fails_even_when_reviewed(tmp_path):
+def test_an_sspl_tool_fails_even_when_reviewed(tmp_path):
     _distribution(tmp_path, 'wavebit', 'Apache-2.0 AND MIT')
-    _distribution(tmp_path, 'server', 'AGPL-3.0-only')
-    errors, _ = checker.check([str(tmp_path)], _inventory(server={'spdx': 'AGPL-3.0-only'}), check_docs=False)
+    _distribution(tmp_path, 'server', 'SSPL-1.0')
+    errors, _ = checker.check([str(tmp_path)], _inventory(server={'spdx': 'SSPL-1.0'}), check_docs=False)
     assert any('never allowed' in error for error in errors)
+
+
+def test_an_agpl_tool_passes_only_with_its_review(tmp_path):
+    _distribution(tmp_path, 'wavebit', 'Apache-2.0 AND MIT')
+    _distribution(tmp_path, 'rcwatool', 'AGPL-3.0-or-later')
+    errors, _ = checker.check([str(tmp_path)], _inventory(rcwatool={'spdx': 'AGPL-3.0-or-later'}), check_docs=False)
+    assert any('needs an agpl_review note' in error for error in errors)
+    reviewed = {'spdx': 'AGPL-3.0-or-later', 'agpl_review': 'unmodified upstream, unshipped tests only'}
+    errors, report = checker.check([str(tmp_path)], _inventory(rcwatool=reviewed), check_docs=False)
+    assert errors == [] and report['rcwatool']['use'] == 'tool'
+
+
+@pytest.mark.parametrize('requires', ['rcwatool', 'rcwatool; extra == "fast"'])
+def test_agpl_fails_as_a_requirement_even_when_reviewed(tmp_path, requires):
+    _distribution(tmp_path, 'wavebit', 'Apache-2.0 AND MIT', extras=['fast'], requires=[requires])
+    _distribution(tmp_path, 'rcwatool', 'AGPL-3.0-or-later')
+    reviewed = {'spdx': 'AGPL-3.0-or-later', 'agpl_review': 'x', 'external_process': {'forbidden_imports': []}}
+    errors, _ = checker.check([str(tmp_path)], _inventory(rcwatool=reviewed), check_docs=False)
+    assert any('never allowed for' in error and 'also as a separate process' in error for error in errors)
 
 
 def test_weak_copyleft_in_an_extra_needs_a_review(tmp_path):
@@ -73,7 +92,7 @@ def test_weak_copyleft_in_the_base_requirements_fails_even_when_reviewed(tmp_pat
 
 
 def test_gpl_test_tools_installed_in_a_test_environment_pass(tmp_path):
-    # Unshipped tests may run GPL tools in the Wavebit process; only AGPL/SSPL and requirements fail.
+    # Unshipped tests may run GPL tools in the Wavebit process; only SSPL-like licenses and requirements fail.
     _distribution(tmp_path, 'wavebit', 'Apache-2.0 AND MIT')
     _distribution(tmp_path, 's4', 'GPL-2.0-or-later')  # recorded under external_tools as S4
     _distribution(tmp_path, 'gpltool', 'GPL-3.0-only')
@@ -105,12 +124,18 @@ def test_wavebit_does_not_import_an_external_tool():
     assert checker.first_party_imports({'numpy'})
 
 
-def test_an_agpl_external_tool_must_be_marked_lab_only():
+def test_an_agpl_external_tool_needs_its_review():
     tools = dict(INVENTORY['external_tools'])
-    tools['inkstone'] = {k: v for k, v in tools['inkstone'].items() if k != 'lab_only'}
+    tools['inkstone'] = {k: v for k, v in tools['inkstone'].items() if k != 'agpl_review'}
     errors, _ = checker.check([], dict(INVENTORY, external_tools=tools), check_docs=False)
-    assert any(error.startswith('inkstone') and 'lab_only' in error for error in errors)
+    assert any(error.startswith('inkstone') and 'agpl_review' in error for error in errors)
     assert checker.check([], INVENTORY, check_docs=False)[0] == []
+
+
+def test_an_sspl_external_tool_must_be_marked_lab_only():
+    tools = dict(INVENTORY['external_tools'], server={'spdx': 'SSPL-1.0', 'forbidden_imports': []})
+    errors, _ = checker.check([], dict(INVENTORY, external_tools=tools), check_docs=False)
+    assert any(error.startswith('server') and 'lab_only' in error for error in errors)
 
 
 def test_both_language_pages_name_every_entry():
