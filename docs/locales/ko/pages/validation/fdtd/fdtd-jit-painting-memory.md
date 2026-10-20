@@ -22,7 +22,8 @@ Targets: `src/wavebit/fdtd/_periodic/scene.py`, `src/wavebit/fdtd/_periodic/runt
 
 공개 `wavebit.fdtd.periodic.run(..., backend='jax')` 사용자는 한 층에 `shape_integration='area'`
 사각형이 두 개 이상 있을 때 영향을 받습니다. 회전 사각형이 하나뿐인 층과 `'separable'` 경로는
-영향을 받지 않습니다. 역방향 모드는 한 해상도에서만 측정했고, 영향이 훨씬 작습니다.
+영향을 받지 않습니다. 역방향 모드는 한 해상도에서만 측정했고, 영향이 훨씬 작습니다. jax 0.12.0에서도 효과가 있지만,
+그 비율은 0.11.0의 약 4분의 1입니다.
 
 ## 구성
 
@@ -89,6 +90,13 @@ primal은 해상도 8과 10에서 더 느렸습니다(2.3 대 1.7 s, 2.9 대 2.6
 CI 설정 `--xla_cpu_multi_thread_eigen=false`를 더해도 temp는 바뀌지 않습니다(해상도 6 jvp에서
 1,031,495,480바이트). `CPU_SCHEDULER_TYPE_CONCURRENCY_OPTIMIZED`는 기본값의 temp를 바이트까지
 재현하므로, 이 jaxlib에서 기본값은 동시성 최적화 스케줄러입니다.
+
+같은 해상도 6 JVP를 2026-10-20에 2.10 GHz 컨테이너에서 `main`의 `20a9715`로 다시 컴파일했습니다.
+jax/jaxlib 0.12.0에서는 기본 스케줄러 785 MB, 메모리 최적화 197 MB를 요청하며,
+`CPU_SCHEDULER_TYPE_CONCURRENCY_OPTIMIZED`는 이번에도 기본값과 바이트까지 같습니다. 같은 소스를
+jax 0.11.0으로 컴파일하면 여전히 1031 MB와 42 MB이므로, 차이는 소스가 아니라 새 XLA에서
+옵니다. 0.12.0에서는 효과가 더 작지만(24배 대신 약 4배) 여전히 있습니다. 이 문서의 나머지는
+0.11.0에서만 측정했습니다.
 
 ## 버퍼의 정체
 
@@ -157,11 +165,14 @@ primal도 같은 구조이며 큰 값 297개가 모두 동시에 살아 있습�
 ## 공개 사용자
 
 공개 periodic API도 같은 칠하기 경로에 도달합니다. 측정한 경우는 0.2 µm 층 하나에 있는
-연구의 `Rectangle` 영역 두 개의 회전각에 대한 순방향 미분입니다. 설정은 다음과 같습니다.
+연구의 `Rectangle` 영역 두 개의 회전각에 대한 순방향 미분입니다. 설정은 2026-10-19부터 쓰는 공개 이름으로
+적으면 다음과 같습니다(`3f2ad83`의 실행에서는 펄스를 `Pulse(width_seconds=2.5*units.time_seconds)`,
+시간 단위를 `units.time_seconds`로 썼습니다.
+[공개 이름 이전 가이드](../../migration/public-names.md#native-grid-and-periodic-stack-names) 참고).
 
 - `Stack(period=(.6, .6), bottom=Material(epsilon=1.21))`, 1 µm `PlaneWave`,
-  `Pulse(width_seconds=2.5*units.time_seconds)`.
-- `Numerics(spacing=1/6, duration_seconds=60*units.time_seconds, pml_cells=6, orders=0,
+  `Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*2.5*units.time_unit_seconds))`.
+- `Numerics(spacing=1/6, duration_seconds=60*units.time_unit_seconds, pml_cells=6, orders=0,
   align_layers=True, shape_integration='area', shape_smoothing=.05,
   extraction_method='directional')`.
 - `jax.jit(jax.jvp(...))` 아래의 `run(..., backend='jax')`.
