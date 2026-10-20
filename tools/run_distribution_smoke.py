@@ -2,12 +2,15 @@
 
 Requires build and twine in this Python environment. Public dependencies are downloaded
 by pip. No artifacts are published. Run from any directory; --output must not exist.
+The wheel and sdist must hold no native files, and the installed environment goes through
+tools/check_licenses.py, including its per-OS records of bundled native libraries.
 """
 from __future__ import annotations
 
 import argparse
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -37,6 +40,22 @@ def check_notices(wheel, sdist):
             member = archive.extractfile(f'{top}/{name}')
             if member is None or member.read() != (ROOT / name).read_bytes():
                 raise RuntimeError(f'{sdist.name}: {name} is missing or differs from the checkout')
+
+
+# Same pattern as tools/check_licenses.py: compiled code Wavebit itself must not ship.
+COMPILED = re.compile(r'\.(so(\.[0-9]+)*|dylib|dll|pyd|exe)$', re.IGNORECASE)
+
+
+def check_no_native_files(wheel, sdist):
+    """Wavebit is pure Python: a py3-none-any wheel and an sdist without compiled files."""
+    if not wheel.name.endswith('-py3-none-any.whl'):
+        raise RuntimeError(f'{wheel.name}: expected a pure-Python py3-none-any wheel')
+    with zipfile.ZipFile(wheel) as archive:
+        if compiled := [n for n in archive.namelist() if COMPILED.search(n)]:
+            raise RuntimeError(f'{wheel.name} contains native files: {compiled}')
+    with tarfile.open(sdist) as archive:
+        if compiled := [n for n in archive.getnames() if COMPILED.search(n)]:
+            raise RuntimeError(f'{sdist.name} contains native files: {compiled}')
 
 
 def run(command, *, cwd, env):
@@ -70,6 +89,7 @@ def main():
         if len(wheels) != 1 or len(sdists) != 1:
             raise RuntimeError('expected exactly one wheel and one sdist')
         check_notices(wheels[0], sdists[0])
+        check_no_native_files(wheels[0], sdists[0])
         run([sys.executable, '-m', 'twine', 'check', '--strict', *wheels, *sdists],
             cwd=work, env=env)
         target = work / 'venv'
@@ -89,6 +109,10 @@ def main():
         run([python, '-m', 'pip', 'check'], cwd=work, env=env)
         run([python, '-I', ROOT / 'examples/fdtd/fdtd_record.py',
              '--output', output / 'fdtd-field.png'], cwd=work, env=env)
+        # Licenses and bundled native libraries of what this OS installs for wavebit[plot]
+        # (numpy, scipy, matplotlib, pillow, ...), matched against the per-OS records.
+        run([sys.executable, ROOT / 'tools/check_licenses.py', '--python', python, '--reachable-only',
+             '--skip-docs', '--report', output / 'licenses.json'], cwd=work, env=env)
     print(f'Distribution checks passed; artifacts: {output}', flush=True)
 
 

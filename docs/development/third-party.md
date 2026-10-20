@@ -108,6 +108,37 @@ Version floors are in `pyproject.toml`; the table names what CI installs.
 | `nh3`, `rich`, `keyring`, `jaraco-classes`, `jaraco-context`, `jaraco-functools`, `more-itertools`, `jeepney`, `pip` | twine, environment | MIT |
 | `secretstorage`, `cryptography`, `cffi`, `pycparser` | keyring | BSD-3-Clause, Apache-2.0 OR BSD-3-Clause, MIT-0, BSD-3-Clause |
 
+### Native libraries inside third-party wheels
+
+Some wheels carry separate shared libraries (`.so`, `.dylib`, `.dll`) beside
+their own extension modules. They load into the Python process that runs
+Wavebit, keep their own terms, and are installed by pip as part of that wheel;
+Wavebit does not modify, relink or redistribute them. Each one is recorded under
+the owning distribution's `bundled_files` in the inventory, per operating
+system, and the check fails on a library that no record covers for the OS it
+runs on.
+
+| Distribution | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| `numpy`, `scipy` | OpenBLAS (BSD-3-Clause), libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1), libquadmath (LGPL-2.1-or-later) | OpenBLAS before macOS 14, libgfortran, libgcc_s, libquadmath | OpenBLAS DLL with the GCC runtime linked in; numpy also msvcp140 |
+| `pillow` | 18 image, font and compression libraries, all permissive; FreeType used under FTL | the same as `.dylib` | none (linked into the extension modules) |
+| `jaxlib` | jaxlib's own compiled modules (Apache-2.0) | not checked | not checked |
+| `torch` | torch's own libraries, and GNU libgomp (GPL-3.0-or-later WITH GCC-exception-3.1) | not checked | not checked |
+
+Where they are checked: the full backends CI environment on Linux (every
+distribution above), and the `distribution` CI job on Linux, macOS and Windows,
+which installs `wavebit[plot]` from the built wheel (numpy, scipy, matplotlib,
+pillow and their dependencies). No CI job installs `jax` or `torch` on macOS or
+Windows, so their native files there have not been checked; the records name
+Linux only, and running the check in such an environment fails until someone
+reviews and records them. Code linked statically into a library or extension
+module is not visible this way; the inventory's `bundled` notes describe what
+is known of it.
+
+Wavebit's own wheel and sdist contain no native files: the wheel is
+`py3-none-any`, and `tools/run_distribution_smoke.py` fails if either artifact
+holds a `.so`, `.dylib`, `.dll`, `.pyd` or `.exe` file.
+
 ## External reference tools
 
 None of these is a Wavebit dependency or part of the sdist and wheel. Each is
@@ -157,11 +188,14 @@ python tools/check_licenses.py --reachable-only   # only what Wavebit's requirem
 The check reads installed metadata with `importlib.metadata`. It fails when an
 installed distribution has no reviewed entry, when its declared license differs
 from the entry, when a component's license is not allowed for the way Wavebit
-reaches it, when Wavebit's package code imports an external tool, when an AGPL
+reaches it, when a wheel installs a shared library that no `bundled_files`
+record covers for the current OS, when Wavebit's own distribution contains a
+native file, when Wavebit's package code imports an external tool, when an AGPL
 tool has no recorded review or AGPL is reached as a requirement, when an SSPL or
 other non-AGPL network-copyleft component appears, or when this page or its
 Korean translation does not name an entry. CI runs it in the full
-backends environment and in the docs environment;
+backends environment, in the docs environment and, for the installed
+`wavebit[plot]` wheel, in the `distribution` job on Linux, macOS and Windows;
 `tests/api/test_third_party_licenses.py` runs the reachable-only form in every
 test environment.
 

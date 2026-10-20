@@ -101,6 +101,33 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 | `nh3`, `rich`, `keyring`, `jaraco-classes`, `jaraco-context`, `jaraco-functools`, `more-itertools`, `jeepney`, `pip` | twine, 환경 | MIT |
 | `secretstorage`, `cryptography`, `cffi`, `pycparser` | keyring | BSD-3-Clause, Apache-2.0 OR BSD-3-Clause, MIT-0, BSD-3-Clause |
 
+### 제3자 휠 안의 네이티브 라이브러리
+
+어떤 휠은 자체 확장 모듈 말고도 별도 공유 라이브러리(`.so`, `.dylib`, `.dll`)를
+담고 있습니다. 이 라이브러리는 Wavebit을 실행하는 Python 프로세스에 로드되고, 각자의
+조건을 따르며, pip이 그 휠의 일부로 설치합니다. Wavebit은 이를 수정·재링크·재배포하지
+않습니다. 목록에는 운영체제별로 소유 배포 패키지의 `bundled_files`에 하나씩 기록하며,
+검사는 실행 중인 OS에 대한 기록이 없는 라이브러리를 만나면 실패합니다.
+
+| 배포 패키지 | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| `numpy`, `scipy` | OpenBLAS(BSD-3-Clause), libgfortran(GPL-3.0-or-later WITH GCC-exception-3.1), libquadmath(LGPL-2.1-or-later) | macOS 14 전에는 OpenBLAS, 그리고 libgfortran, libgcc_s, libquadmath | GCC 런타임을 링크한 OpenBLAS DLL. numpy는 msvcp140도 |
+| `pillow` | 이미지·글꼴·압축 라이브러리 18개, 모두 허용형. FreeType은 FTL로 사용 | 같은 것을 `.dylib`로 | 없음(확장 모듈에 링크됨) |
+| `jaxlib` | jaxlib 자체 컴파일 모듈(Apache-2.0) | 확인 안 함 | 확인 안 함 |
+| `torch` | torch 자체 라이브러리와 GNU libgomp(GPL-3.0-or-later WITH GCC-exception-3.1) | 확인 안 함 | 확인 안 함 |
+
+확인하는 곳: Linux의 full backends CI 환경(위 모든 배포 패키지), 그리고 Linux·macOS·
+Windows의 `distribution` CI 작업. 이 작업은 빌드한 휠에서 `wavebit[plot]`(numpy, scipy,
+matplotlib, pillow와 그 의존성)을 설치합니다. macOS나 Windows에 `jax`·`torch`를 설치하는
+CI 작업은 없어 그 OS에서의 네이티브 파일은 확인하지 않았습니다. 기록은 Linux만 적으며,
+그런 환경에서 검사를 돌리면 누군가 검토해 기록할 때까지 실패합니다. 라이브러리나 확장
+모듈에 정적으로 링크된 코드는 이 방법으로 보이지 않으며, 목록의 `bundled` 메모가 알려진
+내용을 적습니다.
+
+Wavebit 자체 휠과 sdist에는 네이티브 파일이 없습니다. 휠은 `py3-none-any`이고,
+`tools/run_distribution_smoke.py`는 두 배포물 중 하나에 `.so`, `.dylib`, `.dll`, `.pyd`,
+`.exe` 파일이 있으면 실패합니다.
+
 ## 외부 레퍼런스 도구
 
 모두 Wavebit 의존성이 아니고 sdist·wheel에 들어가지 않습니다. 각각 따로 설치하며,
@@ -149,11 +176,12 @@ python tools/check_licenses.py --reachable-only   # Wavebit 의존성이 닿는 
 
 검사는 `importlib.metadata`로 설치 메타데이터를 읽습니다. 설치된 패키지에 검토 항목이
 없을 때, 선언한 라이선스가 항목과 다를 때, 라이선스가 Wavebit이 그 패키지에 닿는
-방식에 허용되지 않을 때, Wavebit 패키지 코드가 외부 도구를 import할 때, AGPL 도구에
-검토 기록이 없거나 AGPL이 요구사항으로 닿을 때, SSPL이나 그 밖의 AGPL이 아닌 네트워크
-copyleft 구성요소가 있을 때, 이 페이지나
-영어 페이지가 항목을 적지 않았을 때 실패합니다. CI는 full backends 환경과 docs
-환경에서 실행하고, `tests/api/test_third_party_licenses.py`는 모든 시험 환경에서
+방식에 허용되지 않을 때, 휠이 설치한 공유 라이브러리에 현재 OS용 `bundled_files` 기록이
+없을 때, Wavebit 자체 배포 패키지에 네이티브 파일이 있을 때, Wavebit 패키지 코드가 외부
+도구를 import할 때, AGPL 도구에 검토 기록이 없거나 AGPL이 요구사항으로 닿을 때, SSPL이나
+그 밖의 AGPL이 아닌 네트워크 copyleft 구성요소가 있을 때, 이 페이지나
+영어 페이지가 항목을 적지 않았을 때 실패합니다. CI는 full backends 환경, docs 환경,
+그리고 Linux·macOS·Windows `distribution` 작업에서 설치한 `wavebit[plot]` 휠에 대해 실행하고, `tests/api/test_third_party_licenses.py`는 모든 시험 환경에서
 `--reachable-only` 형태를 실행합니다.
 
 의존성을 추가하기 전에 목록에 검토 항목을 넣고, 이 페이지와 영어 페이지에 행을
