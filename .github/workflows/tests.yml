@@ -180,7 +180,7 @@ jobs:
 
       # Every installed distribution against tools/third_party_licenses.json, strictly:
       # an unreviewed package or a changed license fails. One shard is enough, since the
-      # sixteen install the same environment. docs/development/third-party.md is the policy.
+      # shards all install the same environment. docs/development/third-party.md is the policy.
       - name: Check installed licenses against the reviewed inventory
         if: ${{ matrix.shard == 1 }}
         run: python tools/check_licenses.py
