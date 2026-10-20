@@ -18,7 +18,7 @@ def problem(radius=.12, height=.3, epsilon=2.25):
         sources=(fdtd.PlaneWave('pw',plane=fdtd.Plane(z=.45),
             pulse=fdtd.GaussianPulse(wavelength=1.,frequency_sigma_hz=.15*C0/1e-6)),),
         outputs=fdtd.Outputs(monitors=(fdtd.DiffractionMonitor('T',plane=fdtd.Plane(z=-.55),
-            source='pw',wave='transmitted',wavelengths=(1.,),orders=0),)))
+            source='pw',wave='transmitted',wavelengths=(1.,),orders=(0, 0)),)))
 
 
 def main(backend='torch'):

@@ -61,7 +61,7 @@ The rest of the periodic cell contains the layer background.
 
 | Input | Contract |
 | --- | --- |
-| `orders` | Nonnegative integer or `(u, v)` integer pair. The exact requested modes are selected before matrix closure, including zero order along either axis. |
+| `orders` | An explicit `(Mu, Mv)` pair of nonnegative integers, default `(3, 3)`; a bare integer is refused (`experimental.orders`). The exact requested modes are selected before matrix closure, including zero order along either axis. |
 | `lattice` | A `Lattice` or finite real 2-by-2 array with positive determinant. Its vectors and `offset` use the consuming problem's length unit. No integer basis reduction is performed. |
 | `structure` | Nonempty sequence of layer dictionaries with `background` and `profile`. An absent or `None` profile is uniform. Background defaults to 1. |
 | `width` | Required positive fractional span strictly less than 1. |

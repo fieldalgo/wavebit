@@ -89,6 +89,7 @@
 | 솔버 간 위상, 포트 또는 회절 정규화 | [test_public_lifecycle_diffraction.py](https://github.com/fieldalgo/wavebit/blob/main/tests/cross_solver/test_public_lifecycle_diffraction.py) | 현재 공개 API, 비대칭 구조와 복소수 비영차 회절을 확인합니다. 총 전력 일치만으로는 위상 오류가 드러나지 않을 수 있습니다. |
 | 결과 기록과 소스 식별 | [test_run_records.py](https://github.com/fieldalgo/wavebit/blob/main/tests/api/test_run_records.py) | 배열·단위의 정확한 보존, 손상되거나 미완료인 아카이브 거부, 명시적인 입력 연결, 계산에 쓴 백엔드 없이 읽기를 확인합니다. |
 | Job 직렬화 | [test_unified_jobs.py](https://github.com/fieldalgo/wavebit/blob/main/tests/api/test_unified_jobs.py) | 물리 선언, 단위, dtype·shape와 지원하지 않는 직렬화 입력을 확인합니다. |
+| 거부 코드 또는 `orders=` 창 | [test_error_codes.py](https://github.com/fieldalgo/wavebit/blob/main/tests/api/test_error_codes.py) | 모든 공개 거부의 단일 `area.item` 코드, 바뀐 선언을 가리키는 `prepared.structure`, check와 같은 코드로 발생하는 엔진 거부, 모든 곳에서 명시하는 `(Mu, Mv)` 쌍을 확인합니다. |
 
 예를 들어 다음 두 검사는 준비 작업이 시간 적분·산란 계산과 분리되어 있는지 확인합니다.
 

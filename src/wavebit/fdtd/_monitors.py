@@ -5,7 +5,7 @@ monitors keep the raw pulse Fourier transform; see the reference for each result
 normalization.
 """
 from wavebit._common.backend import eager_under_torch_compile
-from wavebit._common.declarations import spec
+from wavebit._common.declarations import order_pair, spec
 from . import _legacy_monitors
 from ._spelling import Spoken
 from ._structure import tuples
@@ -81,7 +81,9 @@ class DiffractionMonitor:
     :class:`wavebit.DiffractionOrders` normalized to the named :class:`fdtd.PlaneWave` (the only
     source in the problem). ``wave`` is ``'reflected'`` (leaving on the incidence side) or
     ``'transmitted'`` (leaving on the far side). The plane spans the whole transverse cell.
-    ``orders`` is the half-width window; ``reference_plane`` and ``incident_plane`` refer the
+    ``orders`` is the retained window ``(Mu, Mv)``, an explicit pair of nonnegative integers: the
+    half-widths along the two lattice vectors (``None``, the default, keeps every order
+    propagating at any requested wavelength); ``reference_plane`` and ``incident_plane`` refer the
     amplitudes to other planes along the propagation axis. ``raw=True`` returns the
     un-normalized :class:`wavebit.RawDiffractionSpectrum` instead.
     """
@@ -96,8 +98,11 @@ class DiffractionMonitor:
     raw: bool = False
 
     def __post_init__(self):
-        for name in ('wavelengths', 'orders'):
-            object.__setattr__(self, name, tuples(getattr(self, name)))
+        object.__setattr__(self, 'wavelengths', tuples(self.wavelengths))
+        if self.orders is not None:
+            object.__setattr__(self, 'orders', order_pair(
+                'DiffractionMonitor', self.orders, code='monitor.orders',
+                path=f'outputs.{self.name}.orders'))
         if self.wave not in WAVES:
             hint = ({'reflect': 'reflected', 'transmit': 'transmitted'}.get(self.wave)
                     if isinstance(self.wave, str) else None)

@@ -31,9 +31,9 @@ def make_problem():
             fdtd.FieldMonitor('fourier_fields', plane=fdtd.Plane(z=-.3),
                 wavelengths=WAVELENGTHS, components=('Ey', 'Hx')),
             fdtd.DiffractionMonitor('r', plane=fdtd.Plane(z=.4), wavelengths=WAVELENGTHS,
-                source='pulse', wave='reflected', orders=0, reference_plane=.2, incident_plane=.2),
+                source='pulse', wave='reflected', orders=(0, 0), reference_plane=.2, incident_plane=.2),
             fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-.3), wavelengths=WAVELENGTHS,
-                source='pulse', wave='transmitted', orders=0, reference_plane=0., incident_plane=.2),
+                source='pulse', wave='transmitted', orders=(0, 0), reference_plane=0., incident_plane=.2),
         )))
     return problem, film
 

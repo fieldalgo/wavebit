@@ -22,7 +22,7 @@ def pillar(radius=.12, height=.3, epsilon=2.25, substrate=2.1, *, scale=1., leng
                 center=(.011*scale, -.007*scale, plane+height*scale/2)), material=Material(epsilon)))),
         sources=(source,), outputs=fdtd.Outputs(final_fields=True, monitors=(
             fdtd.DiffractionMonitor('T', plane=fdtd.Plane(z=-.55*scale), source='pw',
-                             wave='transmitted', wavelengths=(scale,), orders=0),)))
+                             wave='transmitted', wavelengths=(scale,), orders=(0, 0)),)))
 
 
 def numerics(*, scale=1., steps=40):

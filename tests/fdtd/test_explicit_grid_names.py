@@ -74,7 +74,7 @@ def periodic_case(length='um', scale=1., wavelength=(.85, .9, .95), duration_per
         excitation=periodic.Excitation(wavelength=tuple(w*scale for w in wavelength),
                                        sources=(periodic.PlaneWave(),)),
         outputs=periodic.Outputs(planes={'outside': -.2*scale}), **problem)
-    n = periodic.Numerics(spacing=scale/30, duration_seconds=duration_periods*.9e-6/C0, orders=0)
+    n = periodic.Numerics(spacing=scale/30, duration_seconds=duration_periods*.9e-6/C0, orders=(0, 0))
     return q, n
 
 
@@ -483,17 +483,24 @@ def test_a_periodic_engine_refusal_names_the_public_declaration_in_check_and_run
         bounds={'w': (0, 1)}))), n), 'Snapshots(bounds=...)'),
     (lambda q, n: (q.replace(outputs=periodic.Outputs(snapshots=periodic.Snapshots(
         bounds={'z': (5, 6)}))), n), "no native samples for 'Ex'"),
-    (lambda q, n: (q, n.replace(orders=-1)), 'Numerics(orders=...)'),
     (lambda q, n: (q, n.replace(nominal_indices=(-1.,))), 'Numerics(nominal_indices=...)'),
     (lambda q, n: (q, n.replace(nominal_layer_thickness=(-1.,))),
      'Numerics(nominal_layer_thickness=...)'),
     (lambda q, n: (q.replace(pulse=periodic.Pulse(notch_frequencies_hz=[-1.])), n),
      'Pulse(notch_frequencies_hz=...)'),
-], ids=['sigma-too-broad', 'window-too-long', 'bounds-axis', 'bounds-empty', 'orders',
+], ids=['sigma-too-broad', 'window-too-long', 'bounds-axis', 'bounds-empty',
         'nominal-indices', 'nominal-thickness', 'notches'])
 def test_other_periodic_engine_refusals_name_the_public_declaration(change, phrase):
     q, n = change(*periodic_case())
     assert _refused(q, n, phrase).path == 'problem'
+
+
+def test_a_negative_periodic_order_window_is_refused_where_it_is_written():
+    # Numerics(orders=) is an explicit (Mu, Mv) pair, checked by the declaration itself.
+    _, n = periodic_case()
+    with pytest.raises(ValidationError, match=r'Numerics\(orders=\.\.\.\)') as caught:
+        n.replace(orders=(-1, 0))
+    assert (caught.value.code, caught.value.path) == ('numerics.orders', 'numerics.orders')
 
 
 def test_a_periodic_decay_window_of_the_whole_run_is_refused_and_one_step_less_is_not():

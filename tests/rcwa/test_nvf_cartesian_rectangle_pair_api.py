@@ -245,7 +245,7 @@ import sys
 import numpy as np
 from wavebit.rcwa import experimental
 assert 'CartesianRectanglePairNVF' in experimental.__all__
-b = experimental.CartesianRectanglePairNVF(0)
+b = experimental.CartesianRectanglePairNVF((0, 0))
 a = np.array([[700.,315.],[0.,490.]])
 s = [dict(shapes=[dict(lx=140.,ly=210.,cx=-47.5,cy=-21.,material=4.),
                   dict(lx=193.,ly=210.,cx=119.,cy=-21.,material=9.)])]

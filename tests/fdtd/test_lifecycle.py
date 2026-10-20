@@ -172,8 +172,8 @@ def test_live_amplitude_derivative_matches_exact_quadratic(backend):
 
 def spectral_problem(scale=1.,length='um',amplitude=1.):
     plane=fdtd.Plane(z=-.4*scale);wavelengths=(.8*scale,)
-    monitors=(fdtd.DiffractionMonitor('t',plane=plane,wavelengths=wavelengths,source='pw',wave='transmitted',orders=0),
-        fdtd.DiffractionMonitor('raw',plane=plane,wavelengths=wavelengths,source='pw',wave='transmitted',orders=0,raw=True),
+    monitors=(fdtd.DiffractionMonitor('t',plane=plane,wavelengths=wavelengths,source='pw',wave='transmitted',orders=(0, 0)),
+        fdtd.DiffractionMonitor('raw',plane=plane,wavelengths=wavelengths,source='pw',wave='transmitted',orders=(0, 0),raw=True),
         fdtd.FluxMonitor('q',plane=plane,wavelengths=wavelengths),
         fdtd.FieldMonitor('f',plane=plane,wavelengths=wavelengths,components=('Ey','Hx')))
     p=plane_problem(scale,length,monitors=monitors)

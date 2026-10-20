@@ -255,7 +255,7 @@ what differs:
 | `dispersion`, `poles` | `DispersiveMaterial(epsilon_inf, poles=(Drude(...), Lorentz(...), Debye(...)))`, rates in SI | — |
 | `record_field` | `fdtd.TimeSeriesMonitor(name, at=..., component=...)`: one component at one Yee point | — |
 | `pad_scale` | the `Domain` size; each PML is added outside it | `AbsorberProximityWarning` closer than half a wavelength in the structure's own medium |
-| `truncation_order` | `fdtd.DiffractionMonitor(orders=...)` | every propagating order |
+| `truncation_order` | `fdtd.DiffractionMonitor(orders=(Mu, Mv))`, an explicit pair; a bare integer is refused (`monitor.orders`) | every propagating order |
 | `return_diagnostics` | `result.validity`, `result.diagnostics` and `result.provenance`, always present | — |
 | `wavelength` (a band) | each frequency-domain monitor's `wavelengths` | — |
 

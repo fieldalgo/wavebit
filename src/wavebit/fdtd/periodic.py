@@ -10,7 +10,7 @@ from collections.abc import Mapping
 import numpy as np
 
 from wavebit._common.backend import eager_under_torch_compile, array_namespace, _concrete
-from wavebit._common.declarations import renamed_keywords, spec
+from wavebit._common.declarations import order_pair, renamed_keywords, spec
 from wavebit._common.execution import Execution, CheckReport, frozen_mapping
 from wavebit._common.pytrees import register_dataclass
 from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
@@ -140,6 +140,9 @@ class Numerics:
     ``decay_check`` only diagnoses the final window; it never stops a run early.
     Reference stepping admits only its explicitly supported subset and refuses
     shared-only controls, rather than silently ignoring them.
+    ``orders`` is the diffraction-order window ``(Mu, Mv)``: an explicit pair of nonnegative
+    integers, the half-widths along the two lattice vectors (``(M, 0)`` for a one-dimensional
+    period), or ``None`` for the engine's default window.
     """
     spacing: float
     duration_seconds: float
@@ -175,6 +178,10 @@ class Numerics:
                 raise ValidationError('expected a finite positive static scalar', code='numerics.'+name, path='numerics.'+name)
         if self.decay_check is not None and not isinstance(self.decay_check, DecayCheck):
             raise ValidationError('expected periodic.DecayCheck', code='numerics.type', path='numerics.decay_check')
+        if self.orders is not None:
+            object.__setattr__(self, 'orders', order_pair('Numerics', self.orders,
+                                                          code='numerics.orders',
+                                                          path='numerics.orders'))
 
 
 @spec

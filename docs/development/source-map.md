@@ -90,6 +90,7 @@ research cases; inspect its scope before launching a long calculation.
 | Cross-solver phase, port or diffraction normalization | [test_public_lifecycle_diffraction.py](https://github.com/fieldalgo/wavebit/blob/main/tests/cross_solver/test_public_lifecycle_diffraction.py) | Current public APIs, unequal structures and complex nonzero orders; equal total power alone can hide a phase error. |
 | Recorded results and source identity | [test_run_records.py](https://github.com/fieldalgo/wavebit/blob/main/tests/api/test_run_records.py) | Exact arrays/units, corrupt or incomplete archive refusal, clean input association and loading without the producing backend. |
 | Job serialization | [test_unified_jobs.py](https://github.com/fieldalgo/wavebit/blob/main/tests/api/test_unified_jobs.py) | Physical declarations, units, dtype/shape and unsupported serialization inputs. |
+| Refusal codes or an `orders=` window | [test_error_codes.py](https://github.com/fieldalgo/wavebit/blob/main/tests/api/test_error_codes.py) | One `area.item` code at every public refusal, `prepared.structure` naming what changed, engine refusals raised with the check's code, and the explicit `(Mu, Mv)` pair everywhere. |
 
 For example, these two checks isolate preparation from stepping/scattering:
 

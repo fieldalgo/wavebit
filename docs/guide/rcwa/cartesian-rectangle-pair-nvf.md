@@ -49,7 +49,7 @@ refinement and optical Fourier order are distinct resolutions; the
 
 | Input | Contract |
 | --- | --- |
-| `orders` | Nonnegative integer or `(x, y)` pair, default 1. Either or both axes may be zero. The exact original difference-mode set is selected before closure. |
+| `orders` | An explicit `(Mu, Mv)` pair of nonnegative integers, the half-widths along the two lattice vectors, default `(1, 1)`; a bare integer is refused (`experimental.orders`). Either or both axes may be zero. The exact original difference-mode set is selected before closure. |
 | `refinement` | Integer 0 through 3, default 0. Separated pairs have 8/35/143/575 free potential unknowns; contacts have 6/27/111/447. See the [refinement controls and optical limits](../../validation/rcwa/nvf-pair-refinement.md). |
 | `lattice` | A `Lattice` or finite real 2-by-2 matrix whose columns are physical basis vectors, with positive finite determinant. No lattice reduction is performed. |
 | `structure` | Nonempty list or tuple of dictionaries with only `background` and `shapes`. Background defaults to vacuum. |

@@ -75,9 +75,9 @@ def invariant():
                                    material=Material(epsilon=2.)),)),
         sources=(source,), outputs=fdtd.Outputs(final_fields=True, monitors=(
             fdtd.DiffractionMonitor('T', plane=fdtd.Plane(z=-.3), wavelengths=(1.,), source='pw',
-                                    wave='transmitted', orders=0),
+                                    wave='transmitted', orders=(0, 0)),
             fdtd.DiffractionMonitor('R', plane=fdtd.Plane(z=.35), wavelengths=(1.,), source='pw',
-                                    wave='reflected', orders=0))))
+                                    wave='reflected', orders=(0, 0)))))
 
 
 def mirror():

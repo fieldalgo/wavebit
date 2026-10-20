@@ -1,11 +1,14 @@
 """Discretization and algorithm declarations; physical inputs belong to Problem."""
-from .._common.declarations import spec
+from .._common.declarations import order_pair, spec
 from ..errors import ValidationError
 
 
 @spec
 class Numerics:
     """RCWA approximation and topology-check policy.
+
+    ``orders`` is the retained Fourier window ``(Mu, Mv)``: an explicit pair of nonnegative
+    integers, the half-widths along the first and second lattice vectors.
 
     ``topology_check='device'`` uses available array guards and refuses other
     traced geometry. ``'host'`` explicitly permits a CPU callback for admitted
@@ -28,10 +31,8 @@ class Numerics:
     _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance',)
 
     def __post_init__(self):
-        object.__setattr__(self, 'orders', tuple(self.orders))
-        if len(self.orders) != 2 or any(type(v) is not int or v < 0 for v in self.orders):
-            raise ValidationError('orders needs two nonnegative integers.',
-                                  code='numerics.orders', path='numerics.orders')
+        object.__setattr__(self, 'orders', order_pair('Numerics', self.orders,
+                                                      code='numerics.orders', path='numerics.orders'))
         choices = {'algorithm': ('smm', 'etm'),
                    'fourier_coefficients': (None, 'sampled', 'integrated'),
                    'factorization': (None, 'li', 'nvf', 'laurent'),

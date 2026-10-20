@@ -1,8 +1,9 @@
-"""One ``area.item`` grammar for every public refusal code.
+"""One ``area.item`` grammar for every public refusal code, and one ``orders=`` rule.
 
 Every structured failure a public caller can meet carries a lowercase dotted code
-(``numerics.choice``, ``prepared.structure``, ``native.invalid``); none is the bare
-``invalid_input`` an uncoded construction used to get.
+(``numerics.orders``, ``prepared.structure``, ``native.invalid``); none is the bare
+``invalid_input`` an uncoded construction used to get. Every public ``orders=`` takes an
+explicit ``(Mu, Mv)`` pair of nonnegative integers and refuses a bare integer and a bool.
 """
 import ast
 import pathlib
@@ -17,6 +18,7 @@ from wavebit.errors import (IncompatibleProblemError, Issue, NumericalError,
                             UnsupportedFeatureError, ValidationError, WavebitError)
 from wavebit.fdtd import native, periodic
 from wavebit.materials import Drude
+from wavebit.rcwa import experimental
 from wavebit.units import C0
 
 #: Two or more lowercase dotted parts, each a snake-case word.
@@ -79,8 +81,8 @@ def test_each_failure_class_defaults_to_a_dotted_code():
     assert IncompatibleProblemError('x').code == 'problem.incompatible'
     assert NumericalError('x').code == 'numerical.failure'
     assert WavebitError('x').code == 'input.invalid'
-    error = ValidationError('x', code='numerics.choice', path='numerics.algorithm')
-    assert error.issue == Issue(code='numerics.choice', path='numerics.algorithm', message='x')
+    error = ValidationError('x', code='numerics.orders', path='numerics.orders')
+    assert error.issue == Issue(code='numerics.orders', path='numerics.orders', message='x')
 
 
 # -- Refusals a public caller meets, in each solver ------------------------------------------------
@@ -144,16 +146,20 @@ REFUSALS = {
     'execution.backend': lambda: Execution(backend='JAX').validate(),
     'execution.precision': lambda: Execution(precision='quad').validate(),
     'material.scalar': lambda: Drude(omega_p='x', gamma=1.),
+    'rcwa.numerics.orders': lambda: rcwa.Numerics(orders=2),
     'rcwa.numerics.choice': lambda: rcwa.Numerics(algorithm='ETM'),
     'rcwa.problem.type': lambda: rcwa.check(None, numerics=rcwa.Numerics()),
     'rcwa.stack.period': lambda: rcwa.check(rcwa.Problem(
         units=Units(length='um'), stack=rcwa.Stack(period=(-.8, .9), layers=()),
         excitation=rcwa.Excitation(wavelength=.6, sources=(rcwa.PlaneWave(),))),
         numerics=rcwa.Numerics()),
+    'experimental.orders': lambda: experimental.ConformingNVF(3),
     'fdtd.numerics.choice': lambda: fdtd.check(_fdtd_problem(),
                                                numerics=_fdtd_numerics(discretization='bogus')),
     'fdtd.numerics.duration': lambda: fdtd.Duration(),
     'fdtd.boundaries.face': lambda: fdtd.Boundaries(x='open', y=fdtd.Periodic(), z=fdtd.Open()),
+    'fdtd.monitor.orders': lambda: fdtd.DiffractionMonitor(
+        't', plane=fdtd.Plane(z=-.3), wavelengths=(.8,), source='pw', wave='transmitted', orders=1),
     'fdtd.execution.device': lambda: fdtd.check(_fdtd_problem(), numerics=_fdtd_numerics(),
                                                 device='gpu'),
     'native.medium.poles': lambda: native.Medium(epsilon=1., poles=(1.,)),
@@ -162,6 +168,8 @@ REFUSALS = {
                                                   numerics=_native_case(dt=100*.02e-6/C0)[1]),
     'periodic.numerics.choice': lambda: periodic.Numerics(spacing=.1, duration_seconds=1e-15,
                                                           algorithm='bogus'),
+    'periodic.numerics.orders': lambda: periodic.Numerics(spacing=.1, duration_seconds=1e-15,
+                                                          orders=0),
     'periodic.numerics.spacing': lambda: periodic.Numerics(spacing=-.1, duration_seconds=1e-15),
     'periodic.periodic.invalid': lambda: periodic.check(*_periodic_case(orders=(1, 1))[:1],
                                                         numerics=_periodic_case(orders=(1, 1))[1]),
@@ -277,3 +285,72 @@ def test_an_fdtd_runtime_error_is_not_reworded_as_a_refusal(monkeypatch):
     monkeypatch.setattr(api, 'execute', execute)
     with pytest.raises(RuntimeError, match='oom'):
         prepared.run(_fdtd_problem())
+
+
+# -- orders: an explicit (Mu, Mv) pair everywhere --------------------------------------------------
+
+ORDERS = {
+    'rcwa.Numerics': (lambda v: rcwa.Numerics(orders=v).orders, 'numerics.orders',
+                      'numerics.orders'),
+    'fdtd.periodic.Numerics': (lambda v: periodic.Numerics(
+        spacing=.1, duration_seconds=1e-15, orders=v).orders, 'numerics.orders', 'numerics.orders'),
+    'fdtd.DiffractionMonitor': (lambda v: fdtd.DiffractionMonitor(
+        't', plane=fdtd.Plane(z=-.3), wavelengths=(.8,), source='pw', wave='transmitted',
+        orders=v).orders, 'monitor.orders', 'outputs.t.orders'),
+    'rcwa.experimental': (lambda v: experimental.CartesianRectangleNVF(v).orders,
+                          'experimental.orders', 'orders'),
+}
+
+
+@pytest.mark.parametrize('where', list(ORDERS))
+@pytest.mark.parametrize('value', [2, 0, np.int64(2), True, (True, 1), (1, np.bool_(True)), (-1, 0),
+                                   (2,), (1, 2, 3), (2., 2), {'u': 2, 'v': 1}, {1, 3}, range(2, 4),
+                                   np.array([2, 2]), '22'],
+                         ids=repr)
+def test_orders_refuses_anything_but_an_explicit_pair(where, value):
+    make, code, path = ORDERS[where]
+    with pytest.raises(ValidationError) as caught:
+        make(value)
+    assert (caught.value.code, caught.value.path) == (code, path)
+    assert '(orders=...) must be an explicit pair (Mu, Mv)' in caught.value.message
+
+
+@pytest.mark.parametrize('where', list(ORDERS))
+def test_orders_takes_a_pair_of_nonnegative_integers_numpy_ones_included(where):
+    make = ORDERS[where][0]
+    for value in ((2, 1), [2, 1], (np.int64(2), np.int32(1)), (np.uint8(2), 1)):
+        orders = make(value)
+        assert orders == (2, 1) and all(type(m) is int for m in orders), (value, orders)
+
+
+def test_a_bare_order_says_which_pair_to_write():
+    with pytest.raises(ValidationError, match=r'write \(3, 3\) for the same half-width along both '
+                                              r'lattice vectors, or \(3, 0\) for the first only'):
+        fdtd.DiffractionMonitor('t', plane=fdtd.Plane(z=-.3), wavelengths=(.8,), source='pw',
+                                wave='transmitted', orders=3)
+
+
+def test_the_experimental_builders_default_to_pairs():
+    assert experimental.ConformingNVF().orders == (3, 3)
+    assert experimental.AffineProfileNVF().orders == (3, 3)
+    assert experimental.CartesianRectangleNVF().orders == (1, 1)
+    assert experimental.CartesianRectanglePairNVF().orders == (1, 1)
+
+
+def test_the_transmission_gap_cell_reports_its_window_as_orders():
+    # The engine cell names the window ``order`` (its own tests read that); the public closure
+    # returns it as ``orders``, in place. A stand-in engine keeps this test from solving one.
+    class Engine:
+        order = (1, 2)
+
+        def closure(self, **given):
+            return 'value', 'tangent', {'closure': given['gap'], 'order': self.order,
+                                        'angular_order': 0, 'transmission_cutoff_order': 0}
+
+    cell = object.__new__(experimental.CartesianPairTransmissionGalerkinGapCell)
+    cell._cell = Engine()
+    value, tangent, metadata = cell.closure(gap=0., basis=np.eye(2), widths=(.3, .4), height=.45,
+                                            epsilon=(3., 3.))
+    assert (value, tangent, cell.orders) == ('value', 'tangent', (1, 2))
+    assert list(metadata) == ['closure', 'orders', 'angular_order', 'transmission_cutoff_order']
+    assert metadata['orders'] == (1, 2)

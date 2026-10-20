@@ -47,7 +47,7 @@ what has been verified.
 
 | Input | Contract |
 | --- | --- |
-| `orders` | Nonnegative integer or `(x, y)` pair, default 1. Zero along either axis is allowed. The exact original difference-mode set is selected before closure. |
+| `orders` | An explicit `(Mu, Mv)` pair of nonnegative integers, the half-widths along the two lattice vectors, default `(1, 1)`; a bare integer is refused (`experimental.orders`). Zero along either axis is allowed. The exact original difference-mode set is selected before closure. |
 | `refinement` | 0, 1 or 2, default 0. These give 4, 19 or 79 free scalar potential unknowns. This is independent of the optical Fourier order. |
 | `lattice` | A `Lattice` or finite real 2-by-2 array with positive finite determinant, with physical basis vectors in columns. No lattice reduction is performed. |
 | `structure` | Nonempty list or tuple of layer dictionaries containing only `background` and `shapes`. Background defaults to vacuum. |
