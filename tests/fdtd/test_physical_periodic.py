@@ -153,6 +153,19 @@ def test_full_result_crosses_jit_and_keeps_physical_snapshots_and_power_metadata
     assert result.provenance['numerics'].algorithm=='shared' and result.provenance['numerics'].spacing==n.spacing
 
 
+def test_jitted_provenance_numerics_keeps_orders_a_pair_of_python_ints():
+    # orders is static pytree data, so the Numerics a jitted result reports can be replaced and reused.
+    jax=pytest.importorskip('jax');jax.config.update('jax_enable_x64',True)
+    q,n=case()
+    n=n.replace(orders=(1,0))
+    held=p.prepare(q,numerics=n,backend='jax')
+    def forward(amplitude):
+        return held.run(q.replace(excitation=q.excitation.replace(sources=(p.PlaneWave(amplitude=amplitude),))))
+    reported=jax.jit(forward)(1.3).provenance['numerics']
+    assert reported.orders==(1,0) and all(type(v) is int for v in reported.orders)
+    assert reported.replace(spacing=n.spacing).orders==(1,0)
+
+
 def test_validity_names_stability_and_finiteness_of_r_and_t(monkeypatch):
     q,n=case()
     r=p.run(q,numerics=n)

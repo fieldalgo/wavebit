@@ -1276,7 +1276,8 @@ stays `wavebit.job/v2`; an old RCWA tag or field is refused, so the keys of RCWA
 change.
 
 A fourth change the same day gave the facts every solver reports one key each (§5 of the
-issue). The checks are `runtime_stability` and `numerical_finite` everywhere (periodic's
+issue). The checks are `runtime_stability` and `numerical_finite` in every FDTD route, and rcwa reports
+`numerical_finite` (periodic's
 finiteness now covers T as well as R, and its reference algorithm reports stability as not
 assessed, `None`); the time step is `time_step_seconds`; decay evidence sits under
 `convergence['decay']` and `diagnostics['decay']` in every FDTD route; every `provenance` has

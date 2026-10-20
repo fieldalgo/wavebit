@@ -228,11 +228,12 @@ def test_each_port_reference_carries_the_core_keys_every_solver_shares(side):
         reference = observation.reference
         labels = {key: reference[key] for key in (
             'port', 'wave', 'length_units', 'lateral_origin', 'incident_amplitude_units',
-            'incident_power_units', 'cell_measure_units', 'invariant_axes', 'amplitude_units', 'power_units')}
+            'incident_power_units', 'cell_measure_units', 'invariant_axes', 'amplitude_units', 'power_units',
+            'wavevector_units')}
         assert labels == {'port': port, 'wave': wave, 'length_units': 'um', 'lateral_origin': (0., 0.),
                           'incident_amplitude_units': 'V/m', 'incident_power_units': 'W',
                           'cell_measure_units': 'm^2', 'invariant_axes': (), 'amplitude_units': '1',
-                          'power_units': 'W'}
+                          'power_units': 'W', 'wavevector_units': 'rad/um'}
         np.testing.assert_allclose(reference['plane'], (.18 if port == 'top' else 0.,)*3, rtol=1e-15)
         assert complex(reference['incident_amplitude']) == 2.
         assert reference['incident_power'].shape == (3,)
