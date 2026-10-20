@@ -184,10 +184,8 @@ runs or imports them today.
 | `tmm` | 0.2.0 | MIT | Black-box multilayer comparison (Byrnes) |
 | `tmm-fast` | 0.3.0 | MIT | Black-box multilayer comparison |
 | `gyptis` | 1.2.0 | MIT | Black-box FEM comparison |
-
-Two more RCWA codes quoted in the negative-index notes, chiuhans `rcwa` and
-rcwa4d, have no recorded source, version or license; they are not listed here
-until those are verified, and are not to be run again before then.
+| `chiuhans-rcwa` | not recorded | MIT | Black-box RCWA comparison of Hans Chiu's `rcwa` package ([source](https://github.com/chiuhans111/RCWA)) |
+| `rcwa4d` | not recorded | MIT | RCWA comparison, run after a local patch ([source](https://github.com/fancompute/rcwa4d)) |
 
 ## Code and data in this repository
 

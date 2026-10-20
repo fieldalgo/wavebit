@@ -171,10 +171,8 @@ import하지 않습니다.
 | `tmm` | 0.2.0 | MIT | 블랙박스 다층막 비교(Byrnes) |
 | `tmm-fast` | 0.3.0 | MIT | 블랙박스 다층막 비교 |
 | `gyptis` | 1.2.0 | MIT | 블랙박스 FEM 비교 |
-
-음굴절 노트가 인용하는 RCWA 코드 두 개, chiuhans `rcwa`와 rcwa4d는 출처·버전·
-라이선스 기록이 없습니다. 확인될 때까지 이 표에 넣지 않으며, 그 전에는 다시 실행하지
-않습니다.
+| `chiuhans-rcwa` | 기록 없음 | MIT | Hans Chiu의 `rcwa` 패키지 블랙박스 RCWA 비교([출처](https://github.com/chiuhans111/RCWA)) |
+| `rcwa4d` | 기록 없음 | MIT | 로컬 패치 뒤 실행한 RCWA 비교([출처](https://github.com/fancompute/rcwa4d)) |
 
 ## 저장소 안의 코드와 데이터
 
