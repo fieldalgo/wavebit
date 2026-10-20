@@ -24,7 +24,7 @@ numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
 report = fdtd.check(problem, numerics=numerics)
 assert report.ok
 result = fdtd.run(problem, numerics=numerics)
-print("samples:", len(result["probe"].times_seconds), "time unit: s; field unit:", result["probe"].units)
+print("samples:", len(result["probe"].times_seconds), "time unit: s; units:", result["probe"].units)
 ```
 
 ## Physical coordinates and units
@@ -37,7 +37,7 @@ Shared material rates are SI quantities. The FDTD adapter converts them to the i
 
 ## Requested observations
 
-Named monitors determine what is accumulated. `TimeSeriesMonitor` returns a `TimeSeries` with seconds and field units; E is V/m and H is A/m. Electric and magnetic samples retain their Yee time staggering. The spectral `FieldMonitor`, `FluxMonitor`, `DiffractionMonitor` and `FarFieldMonitor` have different normalization and validity requirements; use the [reference](../../reference/fdtd/index.md) and inspect returned metadata. A raw diffracted spectrum does not automatically certify normalized R/T or complete entering power.
+Named monitors determine what is accumulated. `TimeSeriesMonitor` returns a `TimeSeries` with seconds and field units; E is V/m and H is A/m. Every field observation's `units` maps each component present (`'Ex'`..`'Hz'`) to its unit and `'coordinates'` to the problem's length unit. Electric and magnetic samples retain their Yee time staggering. The spectral `FieldMonitor`, `FluxMonitor`, `DiffractionMonitor` and `FarFieldMonitor` have different normalization and validity requirements; use the [reference](../../reference/fdtd/index.md) and inspect returned metadata. A raw diffracted spectrum does not automatically certify normalized R/T or complete entering power.
 
 Use `check` to inspect resolved settings and restrictions, `prepare` to establish a reusable discrete contract, and `prepared.run(problem)` for each complete live input. `check` also lists warnings that leave `report.ok` true: a cell-snapped `SnappedSlab` or `SnappedBox` whose interfaces fall between cell boundaries is reported as `geometry.cell_snapped`, with the requested span in `expected` and the cell boundaries it runs at in `actual`; [how the solver models a problem](model.md) explains snapping and the smoothed alternatives. Earlier results retain their own observations. Changing discrete source/monitor layout, grid topology or incompatible time stepping needs a new preparation.
 

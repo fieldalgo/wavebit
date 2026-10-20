@@ -37,7 +37,15 @@ def test_port_amplitudes_and_si_plane_power_match_original_and_airy(algorithm,si
     np.testing.assert_allclose(fine.reflection.amplitude_s[:,0,0],exact,atol=.005)
     assert np.linalg.norm(fine.reflection.amplitude_s[:,0,0]-exact)<np.linalg.norm(r.reflection.amplitude_s[:,0,0]-exact)
     np.testing.assert_allclose((r.R+r.T)[:,0,0],1.,atol=.002)
-    assert r.reflection.reference['side']==side
+    other='bottom' if side=='top' else 'top'
+    for orders,port,wave,plane in ((r.reflection,side,'reflected',.1 if side=='top' else 0.),
+                                   (r.transmission,other,'transmitted',0. if side=='top' else .1)):
+        reference=dict(orders.reference)
+        assert reference.pop('incident_amplitude')==1.
+        assert reference.pop('cell_measure')==pytest.approx(.2e-6,rel=1e-15)
+        assert reference=={'port':port,'wave':wave,'plane':pytest.approx(plane),'length_units':'um',
+            'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p','amplitude_units':'V/m',
+            'incident_amplitude_units':'V/m','cell_measure_units':'m','invariant_axes':('y',)}
 
 
 @pytest.mark.parametrize('algorithm',['shared','reference'])
@@ -111,7 +119,12 @@ def test_crossed_cell_power_is_watts_and_sampled_fields_are_si():
     plane=result.planes['outside'];v=plane.values
     integrated=.5*np.real(np.cross(v[...,:3],np.conj(v[...,3:])))[...,2].mean(axis=(-1,-2))*(.2e-6)**2
     np.testing.assert_allclose(result.plane_power_z['outside'],integrated,rtol=2e-14)
-    assert plane.metadata['power_unit']=='W'
+    assert plane.metadata['power_units']=='W'
+    assert plane.metadata['cell_measure']==pytest.approx((.2e-6)**2) and plane.metadata['cell_measure_units']=='m^2'
+    assert plane.units=={'Ex':'V/m','Ey':'V/m','Ez':'V/m','Hx':'A/m','Hy':'A/m','Hz':'A/m','coordinates':'um'}
+    reference=result.reflection.reference
+    assert (reference['cell_measure'],reference['cell_measure_units'],reference['invariant_axes'])==(
+        pytest.approx((.2e-6)**2),'m^2',())
     # The offline interpolation keeps the E/H half-step and returns physical H.
     from wavebit.fdtd._periodic.probes import sample_fdtd_fields
     sample=result.sample(z=.05)
@@ -119,6 +132,9 @@ def test_crossed_cell_power_is_watts_and_sampled_fields_are_si():
     np.testing.assert_allclose(sample.values[:,:3],raw['E'],rtol=1e-13)
     np.testing.assert_allclose(sample.values[:,3:],raw['H']/Z0,rtol=1e-13)
     np.testing.assert_allclose(sample.times_seconds,raw['t']*q.units.time_unit_seconds,rtol=1e-13)
+    assert sample.units==plane.units
+    for name,series in result.snapshots.items():
+        assert series.units=={name:'V/m' if name[0]=='E' else 'A/m','coordinates':'um'}
 
 
 def test_full_result_crosses_jit_and_keeps_physical_snapshots_and_power_metadata():
@@ -133,7 +149,7 @@ def test_full_result_crosses_jit_and_keeps_physical_snapshots_and_power_metadata
     expected=forward(1.3)
     np.testing.assert_allclose(result.plane_power_z['outside'],expected.plane_power_z['outside'],rtol=5e-12)
     np.testing.assert_allclose(result.snapshots['Hy'].values,expected.snapshots['Hy'].values,rtol=5e-12,atol=1e-15)
-    assert result.planes['outside'].metadata['power_unit']=='W/m'
+    assert result.planes['outside'].metadata['power_units']=='W/m'
     assert result.provenance['numerics'].algorithm=='shared' and result.provenance['numerics'].spacing==n.spacing
 
 

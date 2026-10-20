@@ -87,8 +87,8 @@ def check_forward(result, expected, steps, device):
     dt = result.provenance['time_step_seconds']
     np.testing.assert_allclose(dt, reference.DT, rtol=2e-14, atol=0.)
     n = np.arange(steps)
-    np.testing.assert_allclose(host(history['time']), (n+.5)*dt, rtol=2e-14, atol=0.)
-    np.testing.assert_allclose(host(history['field_time']), (n+1)*dt, rtol=2e-14, atol=0.)
+    np.testing.assert_allclose(host(history['times_seconds']), (n+.5)*dt, rtol=2e-14, atol=0.)
+    np.testing.assert_allclose(host(history['field_times_seconds']), (n+1)*dt, rtol=2e-14, atol=0.)
     for name in COMPONENTS:
         shift = 1 if name[0] == 'E' else .5
         np.testing.assert_allclose(host(result[name].times_seconds), (n+shift)*dt, rtol=2e-14, atol=0.)

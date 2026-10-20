@@ -10,8 +10,12 @@ from .._common.declarations import renamed_attributes, spec
 from .._common.backend import array_namespace, as_array
 from ..errors import UnsupportedFeatureError, ValidationError
 from ..observations import FieldSamples
+from ..observations.fields import _component_units
 from ..units import Z0
 
+
+#: The six collocated components every field sample carries.
+_COMPONENTS = ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
 
 #: BoundaryPower fields that were renamed (fieldalgo/wavebit#57), and their replacements.
 _POWER_RENAMED = {'integration_measure': 'power_region'}
@@ -155,7 +159,7 @@ class Result:
         data = array_namespace(values[0]).stack(values)
         return FieldSamples(coordinates={'x': x, 'y': y, 'z': z, 'wavelength': self.wavelengths},
                             values=data, components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
-                            units={'E': 'V/m', 'H': 'A/m', 'coordinates': self.provenance['length_unit']},
+                            units=_component_units(_COMPONENTS, self.provenance['length_units']),
                             sampling='collocated Cartesian phasor',
                             metadata={'axis_order': ('wavelength', 'z', 'y', 'x', 'component'),
                                       'time_convention': 'exp(-i*omega*t)'})
@@ -176,7 +180,7 @@ class Result:
         data = array_namespace(values[0]).stack(values)
         return FieldSamples(coordinates={'x': x, 'y': y, 'wavelength': self.wavelengths},
                             values=data, components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
-                            units={'E': 'V/m', 'H': 'A/m', 'coordinates': self.provenance['length_unit']},
+                            units=_component_units(_COMPONENTS, self.provenance['length_units']),
                             sampling='collocated boundary phasor',
                             metadata={'side': side, 'part': part,
                                       'axis_order': ('wavelength', 'y', 'x', 'component')})
@@ -280,19 +284,22 @@ def pack(problem, numerics, execution, solves, checks, report):
                     power=_stack([e['power'] for e in entries]),
                     k_parallel=_stack([e['k_parallel'] for e in entries]),
                     k_normal=_stack([e['k_normal'] for e in entries]),
-                    reference={'port': port, 'z': tuple(e['reference_z'] for e in entries),
+                    reference={'port': port, 'wave': name, 'plane': tuple(e['reference_z'] for e in entries),
+                               'length_units': problem.units.length,
                                'lateral_origin': (0., 0.), 'outward_normal': (0., 0., 1. if port == 'top' else -1.),
-                               'incident_port': side, 'incident_power_w': _stack(incident_powers),
-                               'incident_electric_amplitude_v_per_m': amplitude,
+                               'incident_port': side,
+                               'incident_amplitude': amplitude, 'incident_amplitude_units': 'V/m',
+                               'incident_power': _stack(incident_powers), 'incident_power_units': 'W',
+                               'cell_measure': tuple(e['area'] for e in entries), 'cell_measure_units': 'm^2',
+                               'invariant_axes': (),
                                'epsilon': tuple(e['epsilon'] for e in entries),
                                'mu': tuple(e['mu'] for e in entries),
-                               'cell_area_m2': tuple(e['area'] for e in entries)},
+                               'amplitude_units': '1', 'power_units': 'W'},
                     metadata={'power_defined': xp.stack(power_defined),
                               'unavailable_power_reason': 'complex transverse wavevectors require a different spatial power integral; amplitudes remain valid',
-                              'amplitude_units': 'dimensionless electric-field ratio', 'power_units': 'W',
-                              'integration_measure': 'periodic cell', 'propagation': 'continuum',
+                              'propagation': 'continuum',
                               'polarization_frame': "each order's outgoing s/p frame",
-                              'time_convention': 'exp(-i*omega*t)', 'length_unit': problem.units.length})
+                              'time_convention': 'exp(-i*omega*t)'})
         outputs['power_entering'] = _stack(entering)
         outputs['absorption'] = _stack(absorptions)
     else:
@@ -356,7 +363,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                                'port_power_defined': xp.stack(power_defined) if power_defined else None,
                                'detuning_relative_step': numerics.detuning,
                                'half_space_merge': tuple(merges) if merges else None},
-                  provenance={'solver': 'rcwa', 'code_version': __version__, 'length_unit': problem.units.length,
+                  provenance={'solver': 'rcwa', 'code_version': __version__, 'length_units': problem.units.length,
                               'units': problem.units, 'execution': execution, 'numerics': numerics,
                               'coordinate_frame': '+z up; bottom interface z=0; layers bottom-to-top',
                               'time_convention': 'exp(-i*omega*t)',

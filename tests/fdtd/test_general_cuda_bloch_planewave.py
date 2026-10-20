@@ -111,9 +111,9 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
     dt = prepared.contract['resolved_time_step_seconds'] / UNITS.time_unit_seconds
     plan = SimpleNamespace(dx=DX, dt=dt)
     source = result.source_references['pw']
-    assert source['plane'] == pytest.approx(0., abs=1e-14)
+    assert source['plane_E'] == pytest.approx(0., abs=1e-14)
     assert source['plane_H'] == pytest.approx(oracle.sign * DX / 2, abs=1e-14)
-    incident = (host(source['incident']), Z0 * host(source['incident_H']))
+    incident = (host(source['incident_E']), Z0 * host(source['incident_H']))
     assert all(value.shape == (case[4], 3) for value in incident)
     forward = max(np.max(np.abs(host(result['forward_' + c].values))) * (Z0 if c[0] == 'H' else 1.)
                   for c in COMPONENTS)
@@ -129,7 +129,7 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
         values = host(entry.values) * scale
         expected = incident[index // 3][:, index % 3]
         entry_error = max(entry_error, np.max(np.abs(values - expected)) / reference_peak)
-        expected_times = host(source['magnetic_time' if component[0] == 'H' else 'time'])
+        expected_times = host(source['magnetic_times_seconds' if component[0] == 'H' else 'times_seconds'])
         np.testing.assert_array_equal(host(entry.times_seconds), expected_times)
         for name in ('entry', 'forward', 'backward', 'xnext', 'ynext'):
             actual = result[name + '_' + component].values

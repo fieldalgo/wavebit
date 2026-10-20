@@ -51,8 +51,8 @@ def main():
     fields = result['fourier_fields']
     time = result['time_Ey']
     assert bool(result.validity.checks['runtime_stability'])
-    assert time.units == 'V/m' and time.metadata['time_unit'] == 's'
-    assert fields.units == {'Ey': 'V*s/m', 'Hx': 'A*s/m'}
+    assert time.units == {'Ey': 'V/m', 'coordinates': 'um'}
+    assert fields.units == {'Ey': 'V*s/m', 'Hx': 'A*s/m', 'coordinates': 'um'}
     assert all(np.all(np.isfinite(v)) and np.max(np.abs(v)) > 0 for v in fields.values.values())
 
     # The shared physical model is evaluated at the same vacuum wavelengths.

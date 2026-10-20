@@ -247,7 +247,7 @@ def test_native_snapshots_are_keyed_by_the_public_component_names(native_run):
     assert tuple(result.snapshots) == ('Ex', 'Hy')
     for name, series in result.snapshots.items():
         assert series.components == (name,)
-        assert series.units['field'] == ('V/m' if name.startswith('E') else 'A/m')
+        assert series.units == {name: 'V/m' if name.startswith('E') else 'A/m', 'coordinates': 'um'}
     assert len(result.polarization_density) == len(result.previous_polarization_density) == 0
 
 
@@ -256,7 +256,7 @@ def test_periodic_snapshots_are_keyed_by_the_public_component_names(periodic_run
     assert tuple(result.snapshots) == ('Ex', 'Hy')
     for name, series in result.snapshots.items():
         assert series.components == (name,)
-        assert series.units['field'] == ('V/m' if name.startswith('E') else 'A/m')
+        assert series.units == {name: 'V/m' if name.startswith('E') else 'A/m', 'coordinates': 'um'}
 
 
 # 3. DecayCheck: a ratio in (0, 1) and a positive window in seconds.

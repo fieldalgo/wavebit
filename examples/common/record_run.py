@@ -30,7 +30,8 @@ def record_and_check(path):
     assert restored.job.key == job.key
     np.testing.assert_array_equal(restored.outputs['transmitted']['efficiency'], observed['T'])
     np.testing.assert_array_equal(restored.samples['inside_film']['values'], observed['field'])
-    assert restored.samples['inside_film']['units'] == {'E': 'V/m', 'H': 'A/m', 'coordinates': 'um'}
+    assert restored.samples['inside_film']['units'] == {'Ex': 'V/m', 'Ey': 'V/m', 'Ez': 'V/m',
+                                                         'Hx': 'A/m', 'Hy': 'A/m', 'Hz': 'A/m', 'coordinates': 'um'}
     assert not restored.outputs['transmitted']['efficiency'].flags.writeable
     print('Transmission:', restored.outputs['transmitted']['efficiency'].ravel())
     print('Field units:', dict(restored.samples['inside_film']['units']))

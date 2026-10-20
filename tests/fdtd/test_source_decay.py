@@ -98,7 +98,7 @@ def test_public_column_decay_returns_the_executed_prefix(kind, backend, padding)
         near(result.final_fields.values[component], fixed.final_fields.values[component])
     near(result['probe'].values, fixed['probe'].values)
     np.testing.assert_array_equal(result['probe'].times_seconds, fixed['probe'].times_seconds)
-    for key in ('time', 'magnetic_time', 'incident', 'incident_H'):
+    for key in ('times_seconds', 'magnetic_times_seconds', 'incident_E', 'incident_H'):
         near(result.source_references['s'][key], fixed.source_references['s'][key])
         assert result.source_references['s'][key].shape[0] == count
     near(result['spectrum'].values['Ex'], fixed['spectrum'].values['Ex'],

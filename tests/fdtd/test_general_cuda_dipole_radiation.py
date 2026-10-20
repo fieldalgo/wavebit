@@ -74,8 +74,8 @@ def solve(device, physical, numerics):
     assert bool(result.validity.checks['runtime_stability'])
     reference = result.source_references['d']
     assert reference['drive_units'] == ('A*m' if source.kind == 'electric' else 'V*m')
-    assert reference['field_units'] == ('V/m' if source.kind == 'electric' else 'A/m')
-    assert reference['power_units'] == 'W' and reference['time_unit'] == 's'
+    assert reference['field_units'] == ({'E': 'V/m'} if source.kind == 'electric' else {'H': 'A/m'})
+    assert reference['power_units'] == 'W' and reference['time_units'] == 's'
     for key in ('drive', 'field', 'delivered_power'):
         assert reference[key].device == torch.device(name)
         assert reference[key].dtype == torch.float64
@@ -84,7 +84,7 @@ def solve(device, physical, numerics):
     sample = dict(dt=dt, energy=dt*float(host(reference['delivered_power']).sum()),
         drive=host(reference['drive']).copy(), field=host(reference['field']).copy(),
         power=host(reference['delivered_power']).copy(),
-        time=np.asarray(reference['time']).copy(), field_time=np.asarray(reference['field_time']).copy())
+        time=np.asarray(reference['times_seconds']).copy(), field_time=np.asarray(reference['field_times_seconds']).copy())
     if physical.outputs.final_fields:
         sample.update(E=host(result.final_fields.values['E']).copy(),
                       H=host(result.final_fields.values['H']).copy())

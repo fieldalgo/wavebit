@@ -84,13 +84,16 @@ def test_public_order_amplitudes_and_powers_converge_at_shared_reference_planes(
         for port, other, reference_z in zip(ports, (reference.reflection, reference.transmission), (.2, 0.)):
             assert tuple(port.orders_u) == (-1, 0, 1)
             assert port.amplitude_s.shape == (1, 1, 3)
-            assert port.reference['plane'] == other.reference['z'][0] == reference_z
+            assert port.reference['plane'] == other.reference['plane'][0] == reference_z
+            assert port.reference['wave'] == other.reference['wave']
+            assert (port.reference['port'], other.reference['port']) in (('z+', 'top'), ('z-', 'bottom'))
             assert port.reference['incident_plane'] == .2
             assert port.reference['lateral_origin'] == other.reference['lateral_origin'] == (0., 0.)
             assert port.reference['outward_normal'] == other.reference['outward_normal']
             assert port.reference['epsilon'] == other.reference['epsilon'][0] == 1.
             assert port.reference['mu'] == other.reference['mu'][0] == 1.
-            assert port.reference['cell_area_m2'] == pytest.approx(other.reference['cell_area_m2'][0])
+            assert port.reference['cell_measure'] == pytest.approx(other.reference['cell_measure'][0])
+            assert port.reference['cell_measure_units'] == other.reference['cell_measure_units'] == 'm^2'
             assert bool(port.metadata['source_usable'][0])
         measured.append(observations(ports))
 

@@ -24,7 +24,8 @@ CPML 및 지원하는 재료 기억을 각각 감시합니다. 누적 광원 이
 이유로 그룹을 버리지 않습니다. `reason`, `reached`, 그룹별 비율을 확인하세요.
 상한 도달은 감쇠 조건 통과를 뜻하지 않습니다.
 
-결과의 `provenance['actual_steps']`, 시간 이력, 최종 E/H 시각과 푸리에 창은
+결과의 `provenance['actual_steps']`, 시간 이력, 최종 E/H 시각(`final_fields.metadata['E_time_seconds']`,
+`['H_time_seconds']`)과 푸리에 창은
 실제 실행 구간을 나타냅니다. 광원의 입사 E/H 이력도 같은 구간에서 끝납니다.
 `prepared.report.resolved`에는 요청한 상한이 유지됩니다.
 `diagnostics['stopping']`에는 종료 이유, 상한·실행 단계 수, `window_seconds`,

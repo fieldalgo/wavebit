@@ -64,7 +64,7 @@ print(result.transmission.at_wavelength_index(1).wavelengths)
 ```python
 samples = result.field(x=np.array([0., .1]), y=np.array([0.]), z=np.array([.09]))
 print(samples.values.shape)  # (3, 1, 1, 2, 6)
-print(samples.units)         # E: V/m, H: A/m, coordinates: um
+print(samples.units)         # Ex..Ez: V/m, Hx..Hz: A/m, coordinates: um
 ```
 
 결과 축은 `(파장, z, y, x, 성분)`이며, 성분 순서는 `(Ex, Ey, Ez, Hx, Hy, Hz)`입니다. 전기장은 V/m, 자기장은 A/m, 좌표는 문제에서 정한 길이 단위를 사용합니다.

@@ -97,7 +97,8 @@ def test_public_h_and_conductivity_obey_si_update_equation():
     ratio=(EPSILON0*eps-.5*sigma*dt)/(EPSILON0*eps+.5*sigma*dt)
     np.testing.assert_allclose(r.final_fields.values['E'][1],ratio,rtol=2e-15)
     np.testing.assert_allclose(r.final_fields.values['H'][0],2.,rtol=2e-15)
-    assert r.final_fields.units['H']=='A/m'
+    assert dict(r.final_fields.units)=={'Ex':'V/m','Ey':'V/m','Ez':'V/m','Hx':'A/m','Hy':'A/m','Hz':'A/m',
+                                        'coordinates':'um'}
     assert fdtd.run(periodic_problem(),numerics=n).final_fields is None
 
 
@@ -186,7 +187,18 @@ def test_raw_spectral_energy_integrates_the_cell_and_keeps_one_port():
     assert scattering.k_parallel.shape==(1,1,1,2)
     assert np.all(np.real(scattering.k_normal)<0)  # transmitted wave travels toward -z
     assert scattering.reference['outward_normal']==(0,0,-1)
-    assert scattering.reference['cell_area_m2']==pytest.approx(1e-14)
+    assert scattering.reference['cell_measure']==pytest.approx(1e-14)
+    # The core reference keys every diffraction producer shares (rcwa and fdtd.periodic too).
+    for port in (scattering,outgoing):
+        labels={key:port.reference[key] for key in ('port','wave','plane','length_units','lateral_origin',
+            'incident_amplitude_units','cell_measure_units')}
+        assert labels=={'port':'z-','wave':'transmitted','plane':pytest.approx(-.4),'length_units':'um',
+            'lateral_origin':(0.,0.),'incident_amplitude_units':'V*s/m','cell_measure_units':'m^2'}
+        assert port.reference['incident_amplitude'].shape==(1,) and 'invariant_axes' in port.reference
+        assert not {'z','side','coordinates','cell_area_m2','integration_measure','integration_measure_units',
+                    'length_unit','incident_power','incident_power_units'}&set(port.reference)
+    assert scattering.reference['amplitude_units']=='1' and outgoing.reference['amplitude_units']=='V*s/m'
+    assert scattering.reference['wavevector_units']=='rad/um' and 'wavevector_units' not in scattering.metadata
     assert scattering.power is None and not hasattr(scattering,'T')
     assert bool(scattering.metadata['source_usable'][0])
     assert float(scattering.efficiency[0,0,0])==pytest.approx(1.,abs=3e-6)
@@ -194,7 +206,8 @@ def test_raw_spectral_energy_integrates_the_cell_and_keeps_one_port():
     np.testing.assert_allclose(outgoing.amplitude_s,
         scattering.amplitude_s*scattering.reference['incident_amplitude'][:,None,None],rtol=1e-14)
     assert outgoing.reference['spectral_energy_units']=='J/Hz'
-    assert r['f'].units=={'Ey':'V*s/m','Hx':'A*s/m'}
+    assert r['f'].units=={'Ey':'V*s/m','Hx':'A*s/m','coordinates':'um'}
+    assert dict(r['f'].metadata)=={'duration_seconds':r['f'].metadata['duration_seconds']}
     np.testing.assert_array_equal(outgoing.at_wavelength_index(0).spectral_energy,outgoing.spectral_energy)
     assert scattering.reference['invariant_axes']==() and r['q'].metadata['invariant_axes']==()
     assert bool(r.validity.checks['numerical_finite'])
@@ -276,6 +289,12 @@ def test_point_current_si_units_are_invariant_under_geometry_units(kind,componen
     np.testing.assert_allclose(a.source_references['d']['drive'],b.source_references['d']['drive'],rtol=1e-12,atol=amplitude*1e-14)
     assert max(abs(a.source_references['d']['drive']))<=amplitude
     assert a.source_references['d']['drive_units']==('A*m' if kind=='electric' else 'V*m')
+    field=('E' if kind=='electric' else 'H')
+    assert a.source_references['d']['field_units']=={field:'V/m' if field=='E' else 'A/m'}
+    assert {'times_seconds','field_times_seconds','time_units'}<=set(a.source_references['d'])
+    assert not {'time','field_time','time_unit'}&set(a.source_references['d'])
+    assert a['p'].units=={component:'V/m' if component[0]=='E' else 'A/m','coordinates':'um'}
+    assert b['p'].units['coordinates']=='nm' and 'time_unit' not in a['p'].metadata
 
 
 def test_halfspace_continues_to_outer_edge_with_its_own_material():

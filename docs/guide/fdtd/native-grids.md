@@ -36,16 +36,18 @@ spelling of every Wavebit output; lowercase `'ex'` is refused). `slices` optiona
 picks a part of the grid by integer index: per `(z,y,x)` axis an index or a
 `(start, stop[, step])` tuple. It keeps singleton axes and does not crop the solve.
 `result.snapshots` maps each component name to a `TimeSeries` with physical
-coordinates and SI timestamps. H remains half a time step behind E. `result.E` and
+coordinates and SI timestamps. H remains half a time step behind E; the final times are
+`diagnostics['E_time_seconds']` and `diagnostics['H_time_seconds']`. `result.E` and
 `result.H` are final native arrays; `result.polarization_density` is the material
-polarization density P in C/m² for each pole, and `previous_polarization_density`
+polarization density P in `'C/m^2'` for each pole, and `previous_polarization_density`
 the same one step earlier, the previous ADE state.
 
 `Spectrum(wavelengths=..., z_indices=...)` uses integer z-node indices and streams
 spatially collocated Fourier fields. `result.spectrum` has axes
-`(wavelength,plane,y,x,component)`, E units V s/m and H units A s/m. The transform
+`(wavelength,plane,y,x,component)`, E units `'V*s/m'` and H units `'A*s/m'` (its `units` maps
+each component and `'coordinates'`). The transform
 is the raw integral with exp(+i 2 pi f t), without incident-field calibration.
-`result.spectral_power_z` is consequently in W s², including physical transverse
+`result.spectral_power_z` is consequently in `'W*s^2'`, including physical transverse
 cell area. It is not a monochromatic power or pulse-energy measurement.
 `dft_subsample` reduces monitor work only, with no anti-alias filter.
 

@@ -11,8 +11,8 @@ def observation(cls=DiffractionOrders, **extra):
     data = np.arange(6.).reshape(shape)
     return cls(wavelengths=np.array([.5, .7, .9]), orders_u=(0, 1), orders_v=(0,),
                amplitude_s=data + 1j, k_normal=data, k_parallel=np.stack((data, 2*data), -1),
-               reference={'epsilon': (2., 3., 4.), 'mu': 1., 'z': (1., 2., 3.),
-                          'incident_power_w': np.array([4., 5., 6.]),
+               reference={'epsilon': (2., 3., 4.), 'mu': 1., 'plane': (1., 2., 3.),
+                          'incident_power': np.array([4., 5., 6.]), 'cell_measure': (7., 8., 9.),
                           'outward_normal': (0., 0., 1.), 'lateral_origin': (0., 0.)},
                metadata={'power_defined': np.array([True, False, True]), 'theta_radians': np.array([.1, .2, .3]), 'axis_order': ('wavelength', 'v', 'u')},
                **extra)
@@ -25,9 +25,10 @@ def test_spectral_selection_slices_declared_calibration_but_not_static_vectors()
     np.testing.assert_array_equal(selected.k_parallel, original.k_parallel[1:2])
     np.testing.assert_array_equal(selected.k_normal, original.k_normal[1:2])
     assert selected.reference['epsilon'] == (3.,)
-    assert selected.reference['z'] == (2.,)
+    assert selected.reference['plane'] == (2.,)
+    assert selected.reference['cell_measure'] == (8.,)
     assert selected.reference['mu'] == 1.
-    np.testing.assert_array_equal(selected.reference['incident_power_w'], [5.])
+    np.testing.assert_array_equal(selected.reference['incident_power'], [5.])
     assert selected.reference['outward_normal'] == (0., 0., 1.)
     assert selected.metadata['axis_order'] == ('wavelength', 'v', 'u')
     np.testing.assert_array_equal(selected.metadata['theta_radians'], [.2])
@@ -56,10 +57,10 @@ def test_spectral_selection_survives_jit_without_detaching_reference_arrays():
     import jax.numpy as jnp
     def select(power):
         return DiffractionOrders(wavelengths=jnp.array([.5, .7, .9]), orders_u=(0,), orders_v=(0,),
-                                 power=power[:, None, None], reference={'incident_power_w': power,
+                                 power=power[:, None, None], reference={'incident_power': power,
                                  'outward_normal': (0., 0., 1.)}).at_wavelength_index(1)
     values = jnp.array([1., 2., 3.])
     selected = jax.jit(select)(values)
     assert selected.power.shape == (1, 1, 1)
-    np.testing.assert_array_equal(selected.reference['incident_power_w'], [2.])
-    np.testing.assert_array_equal(jax.grad(lambda v: select(v).reference['incident_power_w'].sum())(values), [0., 1., 0.])
+    np.testing.assert_array_equal(selected.reference['incident_power'], [2.])
+    np.testing.assert_array_equal(jax.grad(lambda v: select(v).reference['incident_power'].sum())(values), [0., 1., 0.])

@@ -36,16 +36,18 @@ z Bloch 위상은 영입니다. `fdtd.ConductiveAbsorber`는 유한한 감쇠 �
 인덱스로 격자의 일부를 고를 수 있습니다. `(z,y,x)` 각 축마다 인덱스 하나 또는
 `(start, stop[, step])` 튜플을 줍니다. 길이 1인 축도 그대로 두며, 계산하는 영역을
 잘라 내지는 않습니다. `result.snapshots`는 각 성분 이름을 물리 좌표와 SI 시각을 가진
-`TimeSeries`에 대응시킵니다. H는 E보다 반 시간 단계 뒤에 있습니다. `result.E`와
+`TimeSeries`에 대응시킵니다. H는 E보다 반 시간 단계 뒤에 있으며, 최종 시각은
+`diagnostics['E_time_seconds']`와 `diagnostics['H_time_seconds']`입니다. `result.E`와
 `result.H`는 최종 native 배열입니다. `result.polarization_density`는 극점마다의 재료
-분극 밀도 P(C/m²)이고, `previous_polarization_density`는 한 단계 전의 같은 값, 즉
+분극 밀도 P(`'C/m^2'`)이고, `previous_polarization_density`는 한 단계 전의 같은 값, 즉
 이전 ADE 상태입니다.
 
 `Spectrum(wavelengths=..., z_indices=...)`은 정수 z 노드 인덱스를 사용해
 공간적으로 같은 위치의 푸리에 장을 누적합니다. `result.spectrum`의 축은
-`(wavelength,plane,y,x,component)`, E 단위는 V s/m, H 단위는 A s/m입니다.
+`(wavelength,plane,y,x,component)`, E 단위는 `'V*s/m'`, H 단위는 `'A*s/m'`입니다(`units`가
+각 성분과 `'coordinates'`의 단위를 담습니다).
 변환은 exp(+i 2 pi f t)를 쓰는 원시 적분이며 입사장 보정을 하지 않습니다.
-따라서 `result.spectral_power_z`는 물리적 횡방향 셀 면적을 포함한 W s²
+따라서 `result.spectral_power_z`는 물리적 횡방향 셀 면적을 포함한 `'W*s^2'`
 단위입니다. 단색파 파워나 펄스 에너지 측정량이 아닙니다. `dft_subsample`은
 관측 계산만 줄이며 안티앨리어싱 필터는 없습니다.
 

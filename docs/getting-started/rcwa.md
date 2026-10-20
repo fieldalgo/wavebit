@@ -64,7 +64,7 @@ The run above retains fields with `outputs=rcwa.Outputs(fields=True)`. Sample th
 ```python
 samples = result.field(x=np.array([0., .1]), y=np.array([0.]), z=np.array([.09]))
 print(samples.values.shape)  # (3, 1, 1, 2, 6)
-print(samples.units)         # E: V/m, H: A/m, coordinates: um
+print(samples.units)         # Ex..Ez: V/m, Hx..Hz: A/m, coordinates: um
 ```
 
 The axes are `(wavelength, z, y, x, component)` and components are `(Ex, Ey, Ez, Hx, Hy, Hz)`. Electric fields use V/m and magnetic fields use A/m; coordinates use the problem's length unit.

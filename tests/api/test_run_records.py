@@ -91,19 +91,20 @@ def test_fdtd_time_spectral_units_source_calibration_and_final_fields(tmp_path):
     result = run(job)
     record = records.save_run(tmp_path/'fdtd', job=job, result=result)
     probe = record.outputs['probe']
-    assert probe['units'] == 'V/m' and probe['metadata']['time_unit'] == 's'
+    assert probe['units'] == {'Ey': 'V/m', 'coordinates': 'um'}
     np.testing.assert_array_equal(probe['times_seconds'], result['probe'].times_seconds)
     np.testing.assert_array_equal(probe['values'], result['probe'].values)
     spectrum = record.outputs['spectrum']
-    assert spectrum['units'] == {'Ey': 'V*s/m', 'Hx': 'A*s/m'}
+    assert spectrum['units'] == {'Ey': 'V*s/m', 'Hx': 'A*s/m', 'coordinates': 'um'}
     for component in ('Ey', 'Hx'):
         np.testing.assert_array_equal(spectrum['values'][component], result['spectrum'].values[component])
         for axis, values in enumerate(spectrum['coordinates'][component]):
             np.testing.assert_array_equal(values, result['spectrum'].coordinates[component][axis])
-    assert record.extra['source_references']['pw']['time_unit'] == 's'
-    np.testing.assert_array_equal(record.extra['source_references']['pw']['incident'], result.source_references['pw']['incident'])
+    assert record.extra['source_references']['pw']['time_units'] == 's'
+    np.testing.assert_array_equal(record.extra['source_references']['pw']['incident_E'], result.source_references['pw']['incident_E'])
     final = record.extra['final_fields']
-    assert final['units'] == {'E': 'V/m', 'H': 'A/m'}
+    assert final['units'] == {'Ex': 'V/m', 'Ey': 'V/m', 'Ez': 'V/m', 'Hx': 'A/m', 'Hy': 'A/m', 'Hz': 'A/m',
+                              'coordinates': 'um'}
     np.testing.assert_array_equal(final['values']['H'], result.final_fields.values['H'])
 
 

@@ -37,8 +37,8 @@ def test_physical_stopping_matches_an_independent_scalar_recurrence_and_prefix(b
                     if a**(end-width+1) <= n.stopping.threshold)
     assert result.provenance['actual_steps'] == expected < 173
     np.testing.assert_allclose(result.final_fields.values['E'][0], a**expected, rtol=3e-14)
-    assert result.final_fields.metadata['E_time'] == pytest.approx(expected*dt)
-    assert result.final_fields.metadata['H_time'] == pytest.approx((expected-.5)*dt)
+    assert result.final_fields.metadata['E_time_seconds'] == pytest.approx(expected*dt)
+    assert result.final_fields.metadata['H_time_seconds'] == pytest.approx((expected-.5)*dt)
     stopping = result.diagnostics['stopping']
     assert stopping['reason'] == 'decay' and stopping['reached']
     assert stopping['window_seconds'] == pytest.approx(n.stopping.window_seconds)
@@ -59,7 +59,7 @@ def test_stopping_is_invariant_under_geometry_unit_changes_and_portable_jobs():
     b = fdtd.run(restored.problem, numerics=restored.numerics)
     assert a.provenance['actual_steps'] == b.provenance['actual_steps']
     np.testing.assert_allclose(a.final_fields.values['E'], b.final_fields.values['E'], rtol=5e-14)
-    assert a.final_fields.metadata['E_time'] == pytest.approx(b.final_fields.metadata['E_time'], rel=1e-15)
+    assert a.final_fields.metadata['E_time_seconds'] == pytest.approx(b.final_fields.metadata['E_time_seconds'], rel=1e-15)
     graded = job.replace(numerics=other_n.replace(absorber=fdtd.ConductiveAbsorber(cells=4)))
     assert Job.from_json(graded.to_json()).key == graded.key
 

@@ -188,7 +188,7 @@ def test_checkpoint_forward_context_then_live_gradient_reuse(cuda,forward_contex
     def arrays(result):
         return (result.final_fields.values['E'],result.final_fields.values['H'],
                 result['e'].values,result['field'].values['Ey'],result['field'].values['Hx'],
-                result['flux'].spectral_energy,result.source_references['pw']['incident'],
+                result['flux'].spectral_energy,result.source_references['pw']['incident_E'],
                 result.source_references['pw']['incident_H'])
 
     # Live leaves created outside the disabled-grad context remain caller-owned.

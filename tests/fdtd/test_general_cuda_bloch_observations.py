@@ -55,7 +55,7 @@ def groups(result):
         (result['e'].values, Z0 * result['h'].values),
         tuple(result['field'].values[c] * (Z0 if c[0] == 'H' else 1.) / UNITS.time_unit_seconds
               for c in COMPONENTS),
-        (source['incident'], Z0 * source['incident_H']),
+        (source['incident_E'], Z0 * source['incident_H']),
     )
 
 
@@ -114,7 +114,7 @@ def snapshot(result):
     # Snapshot the public buffers themselves, not rescaled temporary tensors.
     source = result.source_references['pw']
     values = (*result.final_fields.values.values(), result['e'].values, result['h'].values,
-              *result['field'].values.values(), source['incident'], source['incident_H'],
+              *result['field'].values.values(), source['incident_E'], source['incident_H'],
               result['flux'].spectral_energy)
     return [(v, v.detach().clone()) for v in values]
 
