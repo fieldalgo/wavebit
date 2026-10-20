@@ -4174,6 +4174,8 @@ class CoreFactorizationMixin:
                 if key in result_dict:
                     result_dict[key] = dict(result_dict[key], **cartesian_amplitudes(
                         spectra, name, result_dict[key]['r_s'].shape))
+        result_dict = self._mark_unpowered(result_dict, eps_top=eps_top, eps_bot=eps_bot,
+                                           mu_top=mu_top, mu_bot=mu_bot)
 
         incident = self._RESULT_SUB(**result_dict['incident']) if 'incident' in result_dict else None
         s_inc = self._RESULT_SUB(**result_dict['s_inc']) if 's_inc' in result_dict else None
@@ -4445,6 +4447,80 @@ class CoreFactorizationMixin:
             if _concrete(self.xp.any(masks[side])):
                 warnings.warn(_GAIN_CUTOFF_MESSAGE.format(side=side), GainCutoffWarning,
                               stacklevel=3)
+
+    def _incident_power_defined(self, eps_top=None, eps_bot=None, mu_top=None, mu_bot=None):
+        """``(s, p)``: whether the incident wave carries normal power in each channel.
+
+        Every efficiency, and ``power_entering``, is divided by the incident wave's normal
+        power, ``Re(kz/mu)`` for s and ``Re(kz/eps)`` for p. An evanescent incident wave carries
+        none: ``theta = pi/2 + 1j*alpha`` from a lossless medium keeps ``kx`` real, so
+        :func:`~wavebit.observations.power.transverse_k_is_real` passes it and no
+        :class:`~wavebit._common.backend.ComplexIncidenceWarning` fires, and its divisor is
+        roundoff (:func:`~wavebit.observations.power.carries_normal_power`). Its amplitudes are a
+        well-posed answer -- ``r_s`` matches RETICOLO to 2e-13 there
+        (``tests/references/test_reticolo_conical_sweep.py``) -- and are kept; :meth:`_mark_unpowered`
+        sets the ratios to NaN where this is false (#84).
+
+        Tested on the order the kernels divide by: the specular one, or each lit order of an
+        :attr:`excitation` (all of them must carry power, as its eager refusal requires), with
+        the lit half-space's root as the kernels take it (``n**2`` and the solve's own
+        ``(eps, mu)``, :meth:`_merge_factors`). Called with no media, a magnetic scene reads the
+        half-spaces' own ``epsilon`` and ``mu``, as :meth:`_solve_built` hands them to the solve
+        and as :meth:`gain_cutoff_band` reads them. Traceable: under ``jax.jit`` the flags are
+        traced and nothing reads them, so a jitted solve marks the same values an eager one does.
+        """
+        if all(v is None for v in (eps_top, eps_bot, mu_top, mu_bot)) and self._is_magnetic():
+            eps_top, eps_bot = self._top.epsilon, self._bot.epsilon
+            mu_top, mu_bot = self._top.mu, self._bot.mu
+        from wavebit._common.conventions import boundary_kz
+        from wavebit._common.conventions import half_space_medium
+        from wavebit.observations.power import carries_normal_power
+        from wavebit.rcwa._engine.solve_2d import order_grid_kxy
+        xp = self.xp
+        gx, gy = order_grid_kxy(xp, *self.order_kxy())
+        gx, gy = xp.reshape(gx, (-1,)), xp.reshape(gy, (-1,))
+        lit = self._lit()
+        if lit is None:
+            (cx, hx), (cy, hy) = self.order_window
+            indices = ((hy - cy)*(2*hx + 1) + hx - cx,)
+        else:
+            indices = tuple(one.index for one in lit)
+        top = self._incidence_side == 'top'
+        n = self.n_top if top else self.n_bot
+        epsilon, mu = (eps_top, mu_top) if top else (eps_bot, mu_bot)
+        # The kernels' numeric defaults for an unnamed permeability and permittivity.
+        mu = 1.0 if mu is None else mu
+        medium = half_space_medium(epsilon, mu)
+        epsilon = n**2/mu if epsilon is None else epsilon
+        s = p = None
+        for i in indices:
+            kz = boundary_kz(xp, n**2, gx[i]*gx[i] + gy[i]*gy[i], medium)
+            s_i, p_i = carries_normal_power(xp, kz/mu), carries_normal_power(xp, kz/epsilon)
+            s, p = (s_i, p_i) if s is None else (s & s_i, p & p_i)
+        return s, p
+
+    def _mark_unpowered(self, result_dict, **media):
+        """NaN every ratio to the incident power where the incident wave carries none.
+
+        ``R``, ``T``, their s/p parts and ``power_entering`` -- so ``absorption`` too -- of each
+        incidence the solve answered, on :meth:`_incident_power_defined`'s flags: the declared
+        incidence needs both channels, ``s_inc`` / ``p_inc`` their own. Amplitudes, fields and
+        the scattering matrix are not normalized by the incident power and are left alone. A
+        ``where``, so a defined solve keeps its bits, a derivative passes through it unchanged,
+        and a traced one is marked without a read. Applied after the kernels' ``check_finite``,
+        which the roundoff ratio passes (it is finite); this is what marks it.
+        """
+        s, p = self._incident_power_defined(**media)
+        xp = self.xp
+        flags = {'incident': s & p, 's_inc': s, 'p_inc': p}
+        names = ('R', 'R_s', 'R_p', 'T', 'T_s', 'T_p', 'power_entering')
+        for key, defined in flags.items():
+            sub = result_dict.get(key)
+            if sub is None:
+                continue
+            result_dict[key] = dict(sub, **{name: xp.where(defined, sub[name], xp.nan)
+                                            for name in names if sub.get(name) is not None})
+        return result_dict
 
     def _warn_complex_incidence(self):
         """Say once per solve that a complex incident ``kx`` / ``ky`` made R and T formal.

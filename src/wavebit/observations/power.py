@@ -64,6 +64,32 @@ def power_for_real_k(xp, value, kx, ky=None):
     return xp.where(valid, value, xp.full_like(value, float('nan')))
 
 
+def _normal_power_roundoff(xp, admittance):
+    """The roundoff floor below which ``Re(admittance)`` is no normal power at all.
+
+    The tolerance of :func:`transverse_k_is_real`, applied to the admittance, and absolute as
+    well as relative for the same reason. An evanescent incident wave written as a complex
+    angle, ``theta = pi/2 + 1j*alpha`` from a lossless medium, has ``kx = n*cosh(alpha)`` in
+    exact arithmetic, but ``cos(pi/2)`` is ``6.1e-17`` in double precision, so ``kx`` keeps an
+    imaginary part of about ``6.1e-17*n*sinh(alpha)``. That is roundoff by the transverse test,
+    and it reaches ``Re(kz)`` as about ``6.1e-17*n*cosh(alpha)``, which does not shrink with
+    ``|kz|``: a relative test would call the wave propagating close to the light line.
+    """
+    return 32 * xp.finfo(xp.real(admittance).dtype).eps * (1 + xp.abs(admittance))
+
+
+def carries_normal_power(xp, admittance):
+    """Whether a wave with this admittance carries normal power beyond floating-point roundoff.
+
+    False for an evanescent wave in a lossless medium, whose ``kz`` is imaginary, and for a wave
+    at grazing to roundoff; true wherever ``Re(admittance)`` is a power of either sign. An
+    efficiency divided by a power this test rejects is a ratio of roundoff: measured on air
+    onto glass at ``theta = pi/2 +- 1j*acosh(1.2)``, ``T = -+1.7e16``, its sign set by the sign
+    of ``alpha`` (#84). Traceable: a traced admittance gives a traced flag, read by no one.
+    """
+    return xp.abs(xp.real(admittance)) > _normal_power_roundoff(xp, admittance)
+
+
 def incident_power(xp, C, lit, admittance):
     """Power for the declared order amplitudes of one polarization channel.
 
@@ -71,13 +97,20 @@ def incident_power(xp, C, lit, admittance):
     superposition, each illuminated order has its own real power weight.
     This function does not convert electric p amplitudes to magnetic ones;
     callers include that scale when forming the actual incident power.
+
+    An explicitly lit order whose weight is not a positive power beyond roundoff
+    (:func:`carries_normal_power`) is refused wherever its value can be read. Under
+    ``jax.jit`` it cannot, and the solver marks what this power normalizes as NaN instead
+    (:meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin._incident_power_defined`). With no
+    excitation an evanescent incident order is not refused: its amplitudes are a well-posed
+    answer, and only the ratios to its power are undefined.
     """
     if lit is None:
         return xp.real(admittance[admittance.shape[0] // 2])
     total = None
     for one in lit:
         weight = xp.real(admittance[one.index])
-        if _concrete(weight > 0) is False:
+        if _concrete(weight > _normal_power_roundoff(xp, admittance[one.index])) is False:
             raise ValueError(
                 f'the excitation lights order {one.order!r}, which is evanescent '
                 'or carries no positive incident power in this medium; '
