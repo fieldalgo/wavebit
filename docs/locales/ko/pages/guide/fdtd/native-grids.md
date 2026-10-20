@@ -54,7 +54,12 @@ z Bloch 위상은 영입니다. `fdtd.ConductiveAbsorber`는 유한한 감쇠 �
 정수 개의 시간 단계로 올림하며(N 시간 단계로 적은 창은 N 단계를 덮습니다), 실행
 길이보다 짧아야 합니다. 장 감쇠, ADE 활동, 푸리에 꼬리 비율은 별개입니다.
 ADE 진단은 저장 에너지가 아닌 상대 노름이고 CPML 기억은 평가하지 않습니다.
-`Validity`는 수치적 입력 허용과 이러한 수렴 진단을 구별합니다.
+보고서는 `validity.convergence['decay']`와 `diagnostics['decay']`이며(`DecayCheck`가
+없으면 `None`), 그 `threshold`는 지정한 값이고 단위 표기는 `_units`로 끝나는 키입니다.
+`validity.checks`는 이 수렴 진단과 별개로 수치 판정 `runtime_stability`와
+`numerical_finite`(E와 H가 유한한지)를 담습니다. `result.provenance`는 `solver`,
+`execution`, `numerics`, `units`, `coordinate_frame`, `time_convention`,
+`time_step_seconds`를 기록합니다.
 
 `check`는 실행의 입력 허용 검사와 예상 배열 할당을 수행하지만 장을 진행하지
 않습니다. prepared 실행은 수치 설정·배치·관측을 고정하면서 매 호출의

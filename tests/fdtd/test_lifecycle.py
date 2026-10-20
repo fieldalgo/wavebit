@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import warnings
 
-from wavebit import Material, Units, fdtd
+from wavebit import Execution, Material, Units, fdtd
 from wavebit.materials import ConductiveMaterial
 from wavebit.units import C0, EPSILON0, Z0
 from wavebit.fdtd import _legacy as legacy
@@ -93,7 +93,7 @@ def test_public_h_and_conductivity_obey_si_update_equation():
     p=p.replace(scene=p.scene.replace(background=ConductiveMaterial(epsilon=eps,conductivity=sigma)),
                 initial=fdtd.InitialField(E=(0,1,0),H=(2,0,0)))
     n=small_numerics(steps=1);r=fdtd.run(p,numerics=n)
-    dt=r.provenance['dt_seconds']
+    dt=r.provenance['time_step_seconds']
     ratio=(EPSILON0*eps-.5*sigma*dt)/(EPSILON0*eps+.5*sigma*dt)
     np.testing.assert_allclose(r.final_fields.values['E'][1],ratio,rtol=2e-15)
     np.testing.assert_allclose(r.final_fields.values['H'][0],2.,rtol=2e-15)
@@ -196,6 +196,28 @@ def test_raw_spectral_energy_integrates_the_cell_and_keeps_one_port():
     assert outgoing.reference['spectral_energy_units']=='J/Hz'
     assert r['f'].units=={'Ey':'V*s/m','Hx':'A*s/m'}
     np.testing.assert_array_equal(outgoing.at_wavelength_index(0).spectral_energy,outgoing.spectral_energy)
+    assert scattering.reference['invariant_axes']==() and r['q'].metadata['invariant_axes']==()
+    assert bool(r.validity.checks['numerical_finite'])
+    assert set(r.validity.convergence['decay'])=={'t','raw','q','f'}
+    assert r.validity.convergence['decay']==r.diagnostics['decay']
+
+
+def test_invariant_axes_name_the_invariant_axes():
+    p=spectral_problem()
+    p=p.replace(scene=p.scene.replace(domain=fdtd.Domain(size=(.1,.05,1.6)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(),y=fdtd.InvariantAxis(),z=fdtd.Open())))
+    r=fdtd.run(p,numerics=plane_numerics(steps=40))
+    assert r['t'].reference['invariant_axes']==('y',) and r['q'].metadata['invariant_axes']==('y',)
+    assert r['raw'].reference['invariant_axes']==('y',)
+
+
+def test_provenance_carries_the_shared_core_keys():
+    p=periodic_problem();n=small_numerics();r=fdtd.run(p,numerics=n)
+    prov=r.provenance
+    assert prov['solver']=='fdtd' and prov['numerics'] is n and prov['units'] is p.units
+    assert prov['execution']==Execution() and prov['time_convention']=='exp(-i*omega*t)'
+    assert isinstance(prov['coordinate_frame'],str) and prov['time_step_seconds']>0
+    assert not {'backend','device','precision','dt_seconds'}&set(prov)
 
 
 def test_raw_spectral_units_are_invariant_under_geometry_length_unit():
@@ -213,6 +235,8 @@ def test_zero_source_retains_zero_raw_spectrum_but_cannot_normalize():
         r=fdtd.run(spectral_problem(amplitude=0.),numerics=plane_numerics(steps=30))
     assert not bool(r.validity.checks['source_reference']['t'][0])
     assert np.isnan(r['t'].amplitude_s).all() and np.isnan(r['t'].efficiency).all()
+    # The NaN is the published mask of an unusable wavelength, not a nonfinite computation.
+    assert bool(r.validity.checks['numerical_finite'])
     np.testing.assert_array_equal(r['raw'].amplitude_s,0.)
     np.testing.assert_array_equal(r['raw'].amplitude_p,0.)
     np.testing.assert_array_equal(r['raw'].spectral_energy,0.)
@@ -233,6 +257,8 @@ def test_material_derivative_matches_finite_difference_and_invalid_jit_is_marked
     compiled=jax.jit(lambda eps:(result(eps)['p'].values[-1],result(eps).validity.checks['runtime_stability']))
     value,valid=compiled(jnp.asarray(center));assert bool(valid) and np.isfinite(value)
     value,valid=compiled(jnp.asarray(.01));assert not bool(valid) and np.isnan(value)
+    finite=jax.jit(lambda eps:result(eps).validity.checks['numerical_finite'])
+    assert bool(finite(jnp.asarray(center))) and not bool(finite(jnp.asarray(.01)))
 
 
 @pytest.mark.parametrize('kind,component,amplitude',[('electric','Ey',1e-16),('magnetic','Hy',1e-14)])
@@ -461,6 +487,7 @@ def test_a_torch_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_v
     eps = torch.tensor(refused, dtype=torch.float64, requires_grad=True)
     r = prepared.run(_with_epsilon(problem, eps))
     assert not bool(r.validity.checks['runtime_stability'])
+    assert not bool(r.validity.checks['numerical_finite'])
     assert torch.isnan(r['e'].values).all()
 
 

@@ -132,8 +132,8 @@ class DecayCheck:
     """Diagnose whether the fields have decayed over the run's final ``window_seconds``.
 
     A diagnostic, not a stopping rule: the run always takes its ``steps``, and the result's
-    ``validity.convergence`` reports the final-window change against ``threshold``. CPML memory
-    is not assessed. Example: ``native.Numerics(..., decay_check=native.DecayCheck(window_seconds=2e-15))``.
+    ``validity.convergence['decay']`` reports the final-window change against ``threshold``.
+    CPML memory is not assessed. Example: ``native.Numerics(..., decay_check=native.DecayCheck(window_seconds=2e-15))``.
     """
     threshold: float = 1e-4
     window_seconds: float
@@ -378,7 +378,7 @@ class Result:
         raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
 
 
-def _adapt(raw, problem, numerics):
+def _adapt(raw, problem, numerics, execution):
     from wavebit._common.backend import array_namespace, _device_of
     u = problem.units
     snapshots = {}
@@ -408,37 +408,54 @@ def _adapt(raw, problem, numerics):
             sampling='spatially collocated; E/H retain their native Fourier timestamps',
             metadata={'axis_order': ('wavelength', 'plane', 'y', 'x', 'component'),
                       'normalization': 'raw Fourier integral; no incident normalization'})
-    tail = raw['convergence']
-    if tail is not None:
-        tail = dict(tail)
-        tail['electric_spectrum_before_window'] *= u.time_unit_seconds
-        tail['magnetic_spectrum_before_window'] *= u.time_unit_seconds/Z0
+    decay = raw['convergence']
+    if decay is not None:
+        # The engine's ``tolerance`` is what the public DecayCheck(threshold=) set.
+        decay = {('threshold' if key == 'tolerance' else key): value for key, value in decay.items()}
+        decay['electric_spectrum_before_window'] *= u.time_unit_seconds
+        decay['magnetic_spectrum_before_window'] *= u.time_unit_seconds/Z0
         # The engine's activity is a weighted diagnostic norm, not stored energy.
-        tail['material_activity_units'] = 'internal relative norm; not physical energy'
+        decay['material_activity_units'] = 'internal relative norm; not physical energy'
+        decay['electric_spectrum_before_window_units'] = 'V*s/m'
+        decay['magnetic_spectrum_before_window_units'] = 'A*s/m'
     diagnostics = dict(time_seconds=raw['time']*u.time_unit_seconds,
         magnetic_time_seconds=raw['h_time']*u.time_unit_seconds,
         cfl_time_step_seconds=raw['cfl_dt']*u.time_unit_seconds,
         z_nodes=raw['z_nodes'], z_spacing=raw['z_spacing'], spacing=raw['spacing'],
         bloch_phase=raw['bloch_phase'], dft_subsample=raw['dft_subsample'],
-        dft_samples=raw['dft_samples'], tail=tail)
+        dft_samples=raw['dft_samples'], decay=decay)
     return Result(E=raw['E'], H=raw['H']/Z0,
         polarization_density=tuple(p*EPSILON0 for p in raw['polarization']),
         previous_polarization_density=tuple(p*EPSILON0 for p in raw['previous_polarization']),
         snapshots=snapshots, spectrum=spectrum,
         spectral_power_z=raw['power_z']*u.time_unit_seconds**2*u.length_unit_meters**2/Z0,
-        validity=Validity(checks={'stable':raw['stable'],
-            'finite_fields':xp.all(xp.isfinite(raw['E'])) & xp.all(xp.isfinite(raw['H']))},
-            convergence={} if tail is None else tail), diagnostics=diagnostics,
-        provenance={'length_unit': u.length, 'E_unit': 'V/m', 'H_unit': 'A/m',
+        validity=Validity(checks={'runtime_stability': raw['stable'],
+            'numerical_finite': xp.all(xp.isfinite(raw['E'])) & xp.all(xp.isfinite(raw['H']))},
+            convergence={'decay': decay}), diagnostics=diagnostics,
+        provenance={'solver': 'fdtd.native', 'execution': execution, 'numerics': numerics,
+                    'units': u, 'coordinate_frame': _COORDINATE_FRAME,
+                    'time_convention': 'exp(-i*omega*t)',
+                    'time_step_seconds': numerics.time_step_seconds,
+                    'length_unit': u.length, 'E_unit': 'V/m', 'H_unit': 'A/m',
                     'polarization_unit': 'C/m²', 'spectral_power_unit': 'W s²',
                     'axis_order': ('component', 'z', 'y', 'x'),
                     'sampling': 'native Yee stagger; E at t, H at t-dt/2'})
 
 
+#: ``Result.provenance['coordinate_frame']``.
+_COORDINATE_FRAME = ('Yee grid indexed (z, y, x) from 0 at Grid spacing in Problem.units; '
+                     'Bloch-periodic edges, z closed by an absorber when one is set')
+
+# The scalar settings of the Numerics a result's provenance carries stay static under jax.jit
+# (strings, such as Execution's and Units', are static already).
+register_dataclass(Numerics, static_fields=('time_step_seconds', 'steps', 'checkpoint_steps',
+                                            'dft_subsample', 'decay_check'))
+
+
 def _run(problem, numerics, execution):
     with execution._scope():
         epsilon, options = _arguments(problem, numerics, execution)
-        return _adapt(_grid(epsilon, options), problem, numerics)
+        return _adapt(_grid(epsilon, options), problem, numerics, execution)
 
 
 @eager_under_torch_compile

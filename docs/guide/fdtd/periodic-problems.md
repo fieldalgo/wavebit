@@ -97,10 +97,18 @@ Poynting is `cross(E.real, H.real)`, without the phasor factor 1/2. See the
 `Numerics(decay_check=DecayCheck(window_seconds=..., threshold=...))` diagnoses
 decay and scattering changes over the final window without terminating early. The
 window is in seconds and is rounded up to whole time steps by the same rule as
-`native.DecayCheck`: `40*dt_seconds`, with `dt_seconds` from
-`check(...).resolved['time_step_seconds']`, covers 40 steps. Diagnostics retain
-basis-specific changes and the scattering bound, with SI times and explicit
-raw-spectrum units. These checks do not establish grid, smoothing or PML
-convergence. `observations.fit_modes` accepts SI timestamps for offline ringdown
+`native.DecayCheck`: `40*time_step_seconds`, with `time_step_seconds` from
+`check(...).resolved['time_step_seconds']`, covers 40 steps. The report,
+`validity.convergence['decay']` and `diagnostics['decay']` (`None` without a
+`DecayCheck`), retains basis-specific changes and the scattering bound, with SI times,
+the given `threshold` and explicit unit labels in its keys ending in `_units`. These checks
+do not establish grid, smoothing or PML convergence.
+
+`validity.checks` holds `runtime_stability` and `numerical_finite` (R and T are finite).
+Reference stepping assesses no stability, so under `algorithm='reference'`
+`runtime_stability` is `None` (not assessed), not true. `diagnostics['invariant_axes']` is
+`('y',)` for an invariant-y problem and `()` otherwise. `result.provenance` records the
+`solver`, `execution`, `numerics`, `units`, `coordinate_frame`, `time_convention` and
+`time_step_seconds`. `observations.fit_modes` accepts SI timestamps for offline ringdown
 fitting and returns Hz and decay rates in 1/s; window and model-order convergence
 remain separate checks.

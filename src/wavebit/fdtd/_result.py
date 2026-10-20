@@ -1,5 +1,5 @@
 """Owned observations with SI field/time units and explicit Fourier normalization."""
-from wavebit._common.backend import eager_under_torch_compile
+from wavebit._common.backend import array_namespace, eager_under_torch_compile
 from dataclasses import dataclass, field
 import math
 import numpy as np
@@ -66,11 +66,35 @@ class Result(Declaration):
     __getattr__ = renamed_attributes(_RESULT_RENAMED, prefix='fdtd.')
 
 
+def _invariant_axes(problem):
+    """The names of the InvariantAxis axes, in x, y, z order; ``()`` when there are none."""
+    return tuple(a for a in 'xyz' if isinstance(problem.scene.boundaries.face(a+'-'),boundaries.InvariantAxis))
+
+
 def _measure(problem, raw):
-    invariant=sum(isinstance(problem.scene.boundaries.face(a+'-'),boundaries.InvariantAxis) for a in 'xyz')
+    invariant=len(_invariant_axes(problem))
     exponent=2-invariant
     return (problem.units.length_unit_meters**exponent / (Z0*raw.plan.dx**invariant),
             'J/Hz' if invariant==0 else ('J/(Hz*m)' if invariant==1 else 'J/(Hz*m^2)'), invariant)
+
+
+def _finite(values, xp):
+    """Whether every array in ``values`` is finite; traced-safe, as ``runtime_stability`` is.
+
+    ``values`` holds ``(array, usable)`` pairs: ``usable`` (or ``None`` for everywhere) marks the
+    entries that must be finite, since a DiffractionOrders output publishes NaN on purpose at
+    wavelengths its source cannot normalize.
+    """
+    finite=True
+    for value,usable in values:
+        ns=array_namespace(value)
+        ok=ns.isfinite(value)
+        if usable is not None:
+            ok=ok|~usable
+        ok=ns.all(ok)
+        # Host arrays beside the run's backend (NumPy beside JAX or Torch) are concrete.
+        finite=finite&(ok if ns is xp else bool(ok))
+    return finite
 
 
 def _coords(raw,component):
@@ -96,9 +120,17 @@ class FarFieldSpectrum(Declaration):
         return e*scale,p*scale
 
 
+#: ``Result.provenance['coordinate_frame']``.
+_COORDINATE_FRAME=('Cartesian x, y, z in Problem.units, as the scene declares them; '
+                   'Yee components at their staggered sites')
+
+
 def adapt_result(problem,numerics,execution,raw,metadata):
     units=problem.units;ts=units.time_unit_seconds
     measure,flux_units,invariant=_measure(problem,raw)
+    invariant_axes=_invariant_axes(problem)
+    # Every monitor output and the final field, for Validity.checks['numerical_finite'].
+    measured=[(raw.final.E,None),(raw.final.H,None)]
     spectral_factor=2*ts**2*measure
     outputs={}
     source_usable={}
@@ -115,22 +147,26 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             coordinates={'requested':m.at,'sample':tuple(axes[a][index] for a,index in enumerate((observer.i,observer.j,observer.k)))}
             for key in ('index','indices','at'):
                 if hasattr(observer,key):coordinates['sample_'+key]=getattr(observer,key)
+            measured.append((value.values,None))
             outputs[name]=TimeSeries(times_seconds=value.t*ts,coordinates=coordinates,values=value.values*scale,
                 components=(m.component,),units='A/m' if scale!=1 else 'V/m',sampling='raw Yee component',
                 metadata={'time_unit':'s','length_unit':units.length,'component_time_level':m.component[0]})
         elif isinstance(m,monitors.FieldMonitor):
             values={c:v*(ts/Z0 if c.startswith('H') else ts) for c,v in value.fields.items()}
+            measured.extend((v,None) for v in value.fields.values())
             outputs[name]=RawFieldSpectrum(coordinates=value.coords,values=values,
                 components=tuple(value.fields),units={c:'A*s/m' if c.startswith('H') else 'V*s/m' for c in value.fields},
                 sampling='raw Yee components',wavelengths=value.wavelengths,
                 frequencies_hz=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
                 window=transform['window'],metadata={'length_unit':units.length,'duration_seconds':transform['duration_seconds']})
         elif isinstance(m,monitors.FluxMonitor):
+            measured.append((value.flux,None))
+            measured.extend((v,None) for v in (value.faces or {}).values())
             outputs[name]=SpectralFlux(wavelengths=value.wavelengths,
                 frequencies_hz=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
                 spectral_energy=value.flux*spectral_factor,units=flux_units,
                 faces=None if value.faces is None else {f:v*spectral_factor for f,v in value.faces.items()},
-                metadata=dict(transform,orientation='positive plane normal or outward closed surface',invariant_axes=invariant))
+                metadata=dict(transform,orientation='positive plane normal or outward closed surface',invariant_axes=invariant_axes))
         elif isinstance(m,monitors.FarFieldMonitor):
             outputs[name]=FarFieldSpectrum(_raw=value,_factor=spectral_factor,wavelengths=value.wavelengths,
                                            units=flux_units+'/sr')
@@ -153,7 +189,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             reference=dict(plane=value.reference_plane,incident_plane=value.incident_plane,
                 lateral_origin=value.lateral_origin,propagation='yee',polarization_frame='per-order s/p',
                 source=m.source,normalization='measured incident reference',length_unit=units.length,
-                amplitude_units='dimensionless',port='reflect' if reflected else 'transmit',invariant_axes=invariant,
+                amplitude_units='dimensionless',port='reflect' if reflected else 'transmit',invariant_axes=invariant_axes,
                 epsilon=value.raw['epsilon'],mu=value.raw['mu'],
                 outward_normal=value.raw['outward_normal'],tangent_axes=value.raw['tangent_axes'],
                 incident_amplitude=incident,incident_amplitude_units='V*s/m')
@@ -169,6 +205,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                             'source_usable':usable,'source_band_cutoff':declaration.pulse.cutoff,
                             'measured_reference_floor':floor,'wavevector_units':'rad/'+units.length})
             if m.raw:
+                measured.extend((value.raw[k],None) for k in ('raw_s','raw_p','raw_flux'))
                 reference.update(normalization='none (raw pulse transform)',amplitude_units='V*s/m',
                                  spectral_energy_units=flux_units)
                 outputs[name]=RawDiffractionSpectrum(**common,amplitude_s=value.raw['raw_s']*ts,
@@ -177,6 +214,8 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                     reference=reference,window=transform['window'],amplitude_units='V*s/m')
             else:
                 valid=usable[:,None,None]
+                measured.extend((v,valid) for v in (a,b,efficiency))
+                measured.append((getattr(order,side+'_xyz'),valid[...,None]))
                 outputs[name]=DiffractionOrders(**common,amplitude_s=xp.where(valid,a,complex('nan')),
                     amplitude_p=xp.where(valid,b,complex('nan')),efficiency=xp.where(valid,efficiency,float('nan')),
                     amplitude_xyz=xp.where(valid[...,None],getattr(order,side+'_xyz'),complex('nan')),
@@ -211,11 +250,13 @@ def adapt_result(problem,numerics,execution,raw,metadata):
         stopping['eligible_time_seconds'] = stopping.pop('eligible_time') * ts
         stopping['state_amplitude_units'] = 'internal normalized Yee state per group; ratios are dimensionless'
         diagnostics['stopping'] = stopping
-    validity=Validity(checks={'admitted':True,'runtime_stability':diagnostics.get('stable'),'source_reference':source_usable},
+    validity=Validity(checks={'admitted':True,'runtime_stability':diagnostics.get('stable'),
+                              'numerical_finite':_finite(measured,array_namespace(raw.final.E)),
+                              'source_reference':source_usable},
                       convergence={'continuum_convergence':'not assessed','decay':diagnostics.get('decay')})
-    provenance=dict(solver='fdtd',backend=execution.backend,device=execution.device,precision=execution.precision,
-        units={'length':units.length,'time':'s','E':'V/m','H':'A/m'},numerics=numerics,
-        actual_steps=raw.plan.steps,dt_seconds=raw.plan.dt*ts,source_normalization={s.name:('current moment in A*m' if s.kind=='electric' else 'equivalent magnetic current moment in V*m')
+    provenance=dict(solver='fdtd',execution=execution,numerics=numerics,units=units,
+        coordinate_frame=_COORDINATE_FRAME,time_convention='exp(-i*omega*t)',
+        actual_steps=raw.plan.steps,time_step_seconds=raw.plan.dt*ts,source_normalization={s.name:('current moment in A*m' if s.kind=='electric' else 'equivalent magnetic current moment in V*m')
             if hasattr(s,'current_moment') else 'electric field amplitude in V/m' for s in problem.sources},**metadata)
     return Result(outputs=outputs,validity=validity,diagnostics=diagnostics,provenance=provenance,
                   source_references=source_references,final_fields=final)

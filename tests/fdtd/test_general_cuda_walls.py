@@ -76,7 +76,7 @@ def run(device, problem, steps=STEPS):
     with torch.no_grad():
         result = fdtd.run(problem, numerics=numerics, backend='torch', device=name)
     assert bool(result.validity.checks['runtime_stability'])
-    assert result.provenance['dt_seconds'] == pytest.approx(
+    assert result.provenance['time_step_seconds'] == pytest.approx(
         DT * UNITS.time_unit_seconds, rel=2e-15, abs=0.)
     for field in ('E', 'H'):
         value = result.final_fields.values[field]

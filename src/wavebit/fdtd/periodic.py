@@ -108,7 +108,8 @@ class DecayCheck:
     """Diagnose whether the fields have decayed over the run's final ``window_seconds``.
 
     A diagnostic, not a stopping rule: the run always lasts ``Numerics(duration_seconds=)``, and
-    the result's ``validity.convergence`` reports the final-window change against ``threshold``.
+    the result's ``validity.convergence['decay']`` reports the final-window change against
+    ``threshold``.
     The window is rounded up to whole time steps. Example:
     ``periodic.Numerics(..., decay_check=periodic.DecayCheck(window_seconds=20e-15))``.
     """
@@ -446,6 +447,9 @@ class Result:
     """Diffraction orders, plane phasors and optional field snapshots of one periodic run.
 
     ``snapshots`` maps each recorded component ('Ex'..'Hz') to its ``TimeSeries``.
+    ``validity.checks['runtime_stability']`` is ``None`` (not assessed) under
+    ``algorithm='reference'``, whose stepping assesses no stability; ``numerical_finite`` covers
+    R and T.
     """
     reflection: DiffractionOrders
     transmission: DiffractionOrders
@@ -494,7 +498,7 @@ class Result:
             metadata={'region':raw['region'],'axis_order':('time','component')})
 
 
-def _adapt(raw,diag,problem,numerics):
+def _adapt(raw,diag,problem,numerics,execution):
     raw=raw if isinstance(raw,list) else [raw]
     xp=array_namespace(raw[0].R)
     wavelengths=xp.asarray(np.atleast_1d(problem.excitation.wavelength))
@@ -546,7 +550,10 @@ def _adapt(raw,diag,problem,numerics):
     # normalized arrays or internal grid objects as user-facing measurements.
     diagnostics={k:diag[k] for k in ('shape','spacing','steps','n_steps','dft_subsample','dft_samples',
         'z_nodes','z_spacing','source_z','pml_bounds','layer_planes','angles','azimuth',
-        'invariant_y','diffraction','residual') if k in diag}
+        'diffraction','residual') if k in diag}
+    if 'invariant_y' in diag:
+        # The axes along which the cell is invariant, by name, as fdtd outputs report them.
+        diagnostics['invariant_axes']=('y',) if diag['invariant_y'] else ()
     if 'dt' in diag: diagnostics['time_step_seconds']=diag['dt']*u.time_unit_seconds
     elif 'grid' in diag: diagnostics['time_step_seconds']=diag['grid'].dt*u.time_unit_seconds
     if 'pulse' in diag:
@@ -564,27 +571,43 @@ def _adapt(raw,diag,problem,numerics):
         result={}
         for key,v in value.items():
             if key=='comparison_time': result['comparison_time_seconds']=v*u.time_unit_seconds
+            # The engine's tolerance is what the public DecayCheck(threshold=) set.
+            elif key=='tolerance': result['threshold']=v
             elif key=='electric_spectrum_before_window': result[key]=v*u.time_unit_seconds
             elif key=='magnetic_spectrum_before_window': result[key]=v*u.time_unit_seconds/Z0
             else: result[key]=tail(v)
         return result
-    convergence=tail(diag.get('convergence',{}))
-    if convergence:
-        convergence['units']={'amplitude_change':'relative incident amplitude',
-            'scattering_change_bound':'relative incident amplitude',
-            'electric_spectrum_before_window':'V s/m, uncalibrated current basis',
-            'magnetic_spectrum_before_window':'A s/m, uncalibrated current basis',
-            'material_activity':'internal relative norm; not physical energy'}
-        diagnostics['convergence']=convergence
-    checks={'stable':diag.get('stable',True),'finite':xp.all(xp.isfinite(xp.stack([r.R for r in raw])))}
+    decay=tail(diag.get('convergence',{})) or None
+    if decay is not None:
+        decay.update(amplitude_change_units='relative incident amplitude',
+            scattering_change_bound_units='relative incident amplitude',
+            electric_spectrum_before_window_units='V*s/m, uncalibrated current basis',
+            magnetic_spectrum_before_window_units='A*s/m, uncalibrated current basis',
+            material_activity_units='internal relative norm; not physical energy')
+    diagnostics['decay']=decay
+    # Reference stepping assesses no stability: None (not assessed), never a defaulted True.
+    checks={'runtime_stability':diag.get('stable') if numerics.algorithm=='shared' else None,
+            'numerical_finite':xp.all(xp.isfinite(xp.stack([r.R for r in raw])))
+                               & xp.all(xp.isfinite(xp.stack([r.T for r in raw])))}
     return Result(reflection=orders('r','incident'),transmission=orders('t','incident'),basis=basis,
         snapshots=snapshots,planes=planes,plane_power_z=powers,
-        validity=Validity(checks=checks,convergence=dict(convergence,residual=diag.get('residual'))),
-        diagnostics=diagnostics,provenance={'length_unit':u.length,'time_unit_seconds':u.time_unit_seconds,
+        validity=Validity(checks=checks,convergence={'decay':decay,'residual':diag.get('residual')}),
+        diagnostics=diagnostics,provenance={'solver':'fdtd.periodic','execution':execution,
+            'numerics':numerics,'units':u,'coordinate_frame':'+z up; bottom interface z=0; layers '
+            'bottom-to-top; x/y about the cell center','time_convention':'exp(-i*omega*t)',
+            'time_step_seconds':diagnostics.get('time_step_seconds'),
+            'length_unit':u.length,'time_unit_seconds':u.time_unit_seconds,
             'incident_amplitude':amplitude,'algorithm':numerics.algorithm,
-            'plane_power_units':{name:plane.metadata['power_unit'] for name,plane in planes.items()},
-            'time_convention':'exp(-i omega t)','coordinate_convention':'+z up; bottom interface z=0'},
+            'plane_power_units':{name:plane.metadata['power_unit'] for name,plane in planes.items()}},
         _engine_diagnostics=diag)
+
+
+# The scalar settings of the Numerics a result's provenance carries stay static under jax.jit
+# (strings, such as Execution's and Units', are static already).
+register_dataclass(Numerics,static_fields=('spacing','duration_seconds','algorithm','courant',
+    'pml_cells','pml_reflection','subpixel','padding_scale','align_layers','variable_depth',
+    'layer_smoothing','shape_integration','extraction_method','checkpoint_steps','dft_subsample',
+    'decay_check'))
 
 
 def _run(problem,numerics,execution):
@@ -592,7 +615,7 @@ def _run(problem,numerics,execution):
     with execution._scope():
         options,backend=_arguments(problem,numerics,execution)
         raw,diag=_engine(solve_periodic_fdtd,options,backend=backend)
-        return _adapt(raw,diag,problem,numerics)
+        return _adapt(raw,diag,problem,numerics,execution)
 
 
 @eager_under_torch_compile

@@ -238,7 +238,7 @@ def main(argv=None):
         prepared = fdtd.prepare(problem, numerics=policy, backend='torch', device=args.device)
         assert prepared.report.ok and prepared.contract['resolved_steps'] == STEPS
         assert prepared.contract['resolved_checkpoint_steps'] == args.checkpoint_steps
-        np.testing.assert_allclose(prepared.contract['resolved_dt_seconds'], dt, rtol=2e-15, atol=0.)
+        np.testing.assert_allclose(prepared.contract['resolved_time_step_seconds'], dt, rtol=2e-15, atol=0.)
         term, = prepared._plan.terms
         assert type(term) is (CompactPoleTerm if cuda else PoleTerm)
         rt = _runtime.runtime('torch', args.device)

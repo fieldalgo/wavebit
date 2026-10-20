@@ -124,7 +124,7 @@ E and H are updated alternately (leapfrog): E at whole steps, H half a step earl
 `(0, 1)`, the three-dimensional stability limit in vacuum. Materials can tighten that limit: a
 medium with `ε·μ < 1`, or a dispersive pole, lowers the largest stable step, and a scene whose
 `dt` would exceed it is refused with the bound in the message (lower `courant` then).
-`check` reports `resolved["dt_seconds"]` and `resolved["steps"]`.
+`check` reports `resolved["time_step_seconds"]` and `resolved["steps"]`.
 
 `Duration` takes exactly one of `steps`, `seconds`, or `periods` with `source="name"` (that
 many periods of the named source's centre wavelength). By default a run lasts that duration.
@@ -473,7 +473,7 @@ emits them as Python warnings from `wavebit.fdtd.diagnostics`.
 
 `check(problem, numerics=...)` validates and estimates without advancing any field. Its
 `CheckReport` holds `issues` (errors, and warnings such as `geometry.cell_snapped`; `report.ok` is
-false only for errors), `resolved` (grid shape, spacing, domains, padding, `dt_seconds`, steps),
+false only for errors), `resolved` (grid shape, spacing, domains, padding, `time_step_seconds`, steps),
 `capabilities` (backend, warnings) and `estimates` (memory of the main field and material arrays).
 
 `prepare(problem, numerics=...)` fixes the computational structure; `prepared.run(problem)`
@@ -485,9 +485,15 @@ shapes, monitor layout, the material model types — is fixed; changing it raise
 `IncompatibleProblemError`. `run` is `prepare` followed by one `run`.
 
 A `Result` carries `validity.checks`: `admitted`, `runtime_stability` (false when a runtime guard
-rejected a traced value, see below) and, per `DiffractionMonitor`, `source_reference`.
-`result.provenance` records the backend, the units, `dt_seconds`, the actual step count and every
-domain.
+rejected a traced value, see below), `numerical_finite` (every monitor output and the final field
+are finite; a `DiffractionOrders` output is judged only at the wavelengths its source can
+normalize) and, per `DiffractionMonitor`, `source_reference`. `validity.convergence['decay']` and
+`diagnostics['decay']` hold the per-monitor decay ratios. `result.provenance` records the
+`solver`, the `execution` (backend, device, precision), the `numerics`, the `units`, the
+`coordinate_frame`, the `time_convention` (`'exp(-i*omega*t)'`), `time_step_seconds`, the actual
+step count and every domain. `SpectralFlux.metadata['invariant_axes']` and
+`DiffractionOrders.reference['invariant_axes']` name the `InvariantAxis` axes, such as `('y',)`,
+or are `()`.
 
 A true `runtime_stability` reports that the implemented runtime certificates
 passed; it is not a scan of every output or derivative for finite values.

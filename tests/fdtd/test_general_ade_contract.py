@@ -74,7 +74,7 @@ def test_translated_rounded_full_cells_admit_without_runtime(no_device, axis, un
     assert report.resolved['grid_shape'] == cells
     prepared = fdtd.prepare(p, numerics=n, backend='torch', device='cuda:0')
     assert prepared.validate(p).ok
-    assert prepared.contract['resolved_dt_seconds'] == pytest.approx(
+    assert prepared.contract['resolved_time_step_seconds'] == pytest.approx(
         .5*.05/math.sqrt(3)*SCALE, rel=2e-15, abs=0.)
     assert 'oscillator weight' in prepared.contract['differentiation']
 

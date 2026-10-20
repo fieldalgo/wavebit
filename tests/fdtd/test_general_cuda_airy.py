@@ -68,7 +68,7 @@ def measurements(request):
             result = prepared.run(problem)
         assert bool(result.validity.checks['runtime_stability'])
         sample = dict(dx=dx, periods=periods,
-                      dt=prepared.contract['resolved_dt_seconds'] / problem.units.time_unit_seconds,
+                      dt=prepared.contract['resolved_time_step_seconds'] / problem.units.time_unit_seconds,
                       steps=prepared.contract['resolved_steps'])
         for name in ('front', 'back'):
             value = result[name].values['Ey']

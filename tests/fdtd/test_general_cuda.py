@@ -131,11 +131,11 @@ def test_cuda_prepared_reuse_keeps_structural_and_material_guards(monkeypatch):
 def test_cuda_uniform_conductor_matches_independent_si_recurrence(cuda):
     p=closed_problem(); n=fixed_numerics()
     result=fdtd.run(p,numerics=n,backend='torch',device='cuda:0')
-    dt=result.provenance['dt_seconds']
+    dt=result.provenance['time_step_seconds']
     half=600.*dt/(2*EPSILON0*2.25)
     ratio=(1-half)/(1+half)
     expected=ratio**20
-    assert result.provenance['device']=='cuda:0'
+    assert result.provenance['execution'].device=='cuda:0'
     for value in result.final_fields.values.values():
         assert value.device.type=='cuda' and value.dtype==cuda.float64
     assert result['e'].values.device.type=='cuda'
@@ -177,7 +177,7 @@ def test_cuda_conductivity_and_initial_amplitude_gradients_are_independent(cuda,
     result=prepared.run(live)
     loss=result.final_fields.values['E'][1].mean()
     gs,ga=cuda.autograd.grad(loss,(sigma,amplitude))
-    dt=result.provenance['dt_seconds']
+    dt=result.provenance['time_step_seconds']
     factor=dt/(2*EPSILON0*2.25)
     ratio=(1-600*factor)/(1+600*factor)
     np.testing.assert_allclose(host(ga),ratio**20,rtol=2e-12,atol=0.)
@@ -342,7 +342,7 @@ def test_cuda_cpu_initial_tensors_keep_precision_warning_and_input_ownership(cud
     assert result.final_fields.values['E'].dtype==cuda.float64
     assert result.final_fields.values['H'].dtype==cuda.float64
     assert result.final_fields.values['E'].device==cuda.device('cuda:0')
-    dt=result.provenance['dt_seconds']
+    dt=result.provenance['time_step_seconds']
     half=600.*dt/(2*EPSILON0*2.25)
     ratio=(1-half)/(1+half)
     loss=result.final_fields.values['E'][1].mean()

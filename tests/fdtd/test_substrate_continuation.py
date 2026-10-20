@@ -62,7 +62,7 @@ def test_same_substrate_in_nanometres_has_identical_fields_and_seconds():
     for field in ('E', 'H'):
         for x, y in zip(a.final_fields.values[field], b.final_fields.values[field]):
             np.testing.assert_allclose(x, y, rtol=3e-12, atol=1e-14)
-    assert a.provenance['dt_seconds'] == pytest.approx(b.provenance['dt_seconds'], rel=1e-15)
+    assert a.provenance['time_step_seconds'] == pytest.approx(b.provenance['time_step_seconds'], rel=1e-15)
 
 
 def test_explicit_continuation_extends_the_box_without_moving_its_interior_face():

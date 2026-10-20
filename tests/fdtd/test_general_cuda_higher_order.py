@@ -82,7 +82,7 @@ def solve_hessian(torch, prepared, amplitude_value, conductivity_value):
     actual = (host(loss), np.asarray([host(g) for g in gradient]),
               np.asarray([[host(g) for g in row] for row in rows]))
     expected = conductor_quadratic_derivatives(
-        amplitude_value, conductivity_value, result.provenance['dt_seconds'])
+        amplitude_value, conductivity_value, result.provenance['time_step_seconds'])
     for got, want in zip(actual, expected):
         np.testing.assert_allclose(got, want, rtol=RTOL, atol=0.)
         assert np.all(np.asarray(got) != 0)

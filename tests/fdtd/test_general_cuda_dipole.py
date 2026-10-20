@@ -75,7 +75,7 @@ def test_public_dipole_one_step_si_moment_and_yee_centroid(torch_device, kind, a
     field = 'E' if kind == 'electric' else 'H'
     problem = periodic_problem(kind, field + axis, stamp)
     prepared = fdtd.prepare(problem, numerics=numerics(1), backend='torch', device=device)
-    dt = prepared.contract['resolved_dt_seconds']
+    dt = prepared.contract['resolved_time_step_seconds']
     first = .5 * dt if kind == 'electric' else 0.
     source = problem.sources[0].replace(delay_seconds=first - pulse_peak_seconds())
     problem = problem.replace(sources=(source,))
@@ -128,7 +128,7 @@ def slab_problem(kind='electric', stamp='bspline', moment=1.3e-16, phase=.4,
 def assert_source_contract(result, problem):
     source, history = problem.sources[0], result.source_references['d']
     magnetic = source.kind == 'magnetic'
-    dt = result.provenance['dt_seconds']
+    dt = result.provenance['time_step_seconds']
     times = (np.arange(STEPS) + (0. if magnetic else .5)) * dt
     field_times = (np.arange(STEPS) + (.5 if magnetic else 1.)) * dt
     np.testing.assert_allclose(host(history['time']), times, rtol=2e-14, atol=0.)

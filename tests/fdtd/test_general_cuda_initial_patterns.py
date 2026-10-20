@@ -37,7 +37,7 @@ def verify(prepared, problem, leaf, torch):
     electric = result.final_fields.values['E'][1]
     loss = electric.square().mean()
     gradient, = torch.autograd.grad(loss, leaf)
-    dt = result.provenance['dt_seconds']
+    dt = result.provenance['time_step_seconds']
     r = 600.*dt/(2*EPSILON0*2.25)
     q = (1-r)/(1+r)
     amplitude = float(leaf.detach().cpu())

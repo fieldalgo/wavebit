@@ -54,8 +54,13 @@ the final interval. It does not stop early. The window is rounded up to whole ti
 steps (a window written as N time steps covers N), by the same rule as
 `periodic.DecayCheck`, and must be shorter than the run. Field decay, ADE activity
 and Fourier-tail ratios remain separate; the ADE diagnostic is a relative norm, not
-stored energy, and CPML memory is not assessed. `Validity` distinguishes numerical
-admission from these convergence diagnostics.
+stored energy, and CPML memory is not assessed. The report is
+`validity.convergence['decay']` and `diagnostics['decay']` (`None` without a
+`DecayCheck`); its `threshold` is the one given, and its unit labels are the keys ending
+in `_units`. `validity.checks` holds the numerical checks, `runtime_stability` and
+`numerical_finite` (E and H are finite), apart from these convergence diagnostics.
+`result.provenance` records the `solver`, `execution`, `numerics`, `units`,
+`coordinate_frame`, `time_convention` and `time_step_seconds`.
 
 `check` shares the execution admission checks and allocates prospective arrays,
 but advances no fields. Prepared execution fixes numerical settings, layout and

@@ -267,3 +267,40 @@ def test_every_public_rcwa_declaration_has_a_tag():
         if (isinstance(obj, type) and dataclasses.is_dataclass(obj)
                 and name not in ('Prepared', 'Result', 'BoundaryPower')):
             assert f'wavebit.rcwa.{name}' in registry, name
+
+
+def _solver_job(solver):
+    """A small job of each solver, from the tests that already pin its numbers."""
+    if solver == 'rcwa':
+        return job()
+    if solver == 'fdtd':
+        from tests.api.test_run_records import fdtd_job
+        return fdtd_job()
+    if solver == 'fdtd.native':
+        from tests.fdtd.test_physical_native import problem
+        problem, numerics = problem()
+    else:
+        from tests.fdtd.test_physical_periodic import case
+        problem, numerics = case()
+    return Job(solver=solver, problem=problem, numerics=numerics)
+
+
+@pytest.mark.parametrize('solver', ['rcwa', 'fdtd', 'fdtd.native', 'fdtd.periodic'])
+def test_every_solver_result_carries_the_shared_provenance_core(solver):
+    import wavebit
+    from wavebit import Execution
+    original = _solver_job(solver)
+    result = run(original)
+    provenance = result.provenance
+    assert {'solver', 'execution', 'numerics', 'units', 'coordinate_frame',
+            'time_convention'} <= set(provenance)
+    assert provenance['solver'] == solver
+    assert provenance['execution'] == Execution()
+    assert provenance['numerics'] is original.numerics
+    assert provenance['units'] == original.problem.units
+    assert isinstance(provenance['coordinate_frame'], str) and provenance['coordinate_frame']
+    assert provenance['time_convention'] == 'exp(-i*omega*t)'
+    if solver == 'rcwa':
+        assert provenance['code_version'] == wavebit.__version__
+    else:
+        assert provenance['time_step_seconds'] > 0

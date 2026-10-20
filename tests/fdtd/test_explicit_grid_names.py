@@ -364,9 +364,9 @@ def test_a_window_between_whole_steps_rounds_up(dt):
 def test_a_native_window_of_n_time_steps_reports_n_steps(length, scale):
     for n in (1, 7, 23):
         q, nums = native_case(length, scale, window_steps_=n)
-        tail = native.run(q, numerics=nums).diagnostics['tail']
-        assert tail['window_steps'] == n
-        assert tail['tolerance'] == 1e-4
+        decay = native.run(q, numerics=nums).diagnostics['decay']
+        assert decay['window_steps'] == n
+        assert decay['threshold'] == 1e-4
 
 
 # 5. The periodic pulse is given by its spectral standard deviation.
@@ -516,11 +516,24 @@ def test_sampling_a_periodic_result_without_all_six_components_names_snapshots(p
 # 7. A periodic window of N time steps is N steps, whichever unit the problem uses.
 
 def test_a_periodic_decay_window_of_n_time_steps_reports_n_steps(periodic_run):
-    convergence = periodic_run['result'].diagnostics['convergence']
-    counts = _found(convergence, 'window_steps')
+    decay = periodic_run['result'].diagnostics['decay']
+    counts = _found(decay, 'window_steps')
     assert counts and all(c == PERIODIC_WINDOW for c in counts), counts
-    tolerances = _found(convergence, 'tolerance')
-    assert tolerances and all(t == 3e-4 for t in tolerances), tolerances
+    thresholds = _found(decay, 'threshold')
+    assert thresholds and all(t == 3e-4 for t in thresholds), thresholds
+    assert not _found(decay, 'tolerance')
+
+
+def test_a_periodic_decay_report_sits_under_decay_with_its_unit_labels(periodic_run):
+    result = periodic_run['result']
+    convergence = result.validity.convergence
+    assert set(convergence) == {'decay', 'residual'}
+    assert set(convergence['decay']) == set(result.diagnostics['decay'])
+    assert 'units' not in convergence['decay']
+    labels = {k for k in convergence['decay'] if k.endswith('_units')}
+    assert labels == {'amplitude_change_units', 'scattering_change_bound_units',
+                      'electric_spectrum_before_window_units',
+                      'magnetic_spectrum_before_window_units', 'material_activity_units'}
 
 
 @pytest.mark.parametrize('length, scale', [('um', 1.), ('nm', 1000.), ('mm', 1e-3)])

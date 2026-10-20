@@ -80,7 +80,7 @@ def solve(device, physical, numerics):
         assert reference[key].device == torch.device(name)
         assert reference[key].dtype == torch.float64
         assert np.isfinite(host(reference[key])).all()
-    dt = result.provenance['dt_seconds']
+    dt = result.provenance['time_step_seconds']
     sample = dict(dt=dt, energy=dt*float(host(reference['delivered_power']).sum()),
         drive=host(reference['drive']).copy(), field=host(reference['field']).copy(),
         power=host(reference['delivered_power']).copy(),

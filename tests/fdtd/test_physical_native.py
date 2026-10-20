@@ -120,7 +120,7 @@ def test_native_cpml_poles_and_si_initial_h_match_normalized_engine():
     np.testing.assert_allclose(a.E,b['E'],rtol=5e-13,atol=1e-14)
     np.testing.assert_allclose(a.H,b['H']/Z0,rtol=5e-13,atol=1e-16)
     np.testing.assert_allclose(a.polarization_density[0],b['polarization'][0]*EPSILON0,rtol=5e-13,atol=1e-26)
-    assert bool(a.validity.checks['stable'])
+    assert bool(a.validity.checks['runtime_stability'])
 
 
 def test_si_ringdown_fit_recovers_independent_poles():
@@ -145,4 +145,26 @@ def test_full_result_crosses_jit_with_live_si_observations():
     result=jax.jit(forward)(1.3)
     expected=forward(1.3)
     np.testing.assert_allclose(result.spectrum.values,expected.spectrum.values,rtol=3e-13,atol=1e-30)
-    assert result.validity.checks['finite_fields']
+    assert result.validity.checks['numerical_finite']
+    # The provenance declarations cross jit; their scalar settings stay static.
+    assert result.provenance['execution'].backend=='jax' and result.provenance['units']==p.units
+    assert result.provenance['numerics'].steps==nums.steps
+    assert result.provenance['numerics'].time_step_seconds==nums.time_step_seconds
+
+
+def test_validity_decay_and_provenance_use_the_shared_result_keys():
+    p,nums=problem();r=n.run(p,numerics=nums)
+    assert set(r.validity.checks)=={'runtime_stability','numerical_finite'}
+    assert bool(r.validity.checks['runtime_stability']) and bool(r.validity.checks['numerical_finite'])
+    assert set(r.validity.convergence)=={'decay'}
+    decay=r.validity.convergence['decay']
+    assert set(decay)==set(r.diagnostics['decay']) and 'tail' not in r.diagnostics
+    assert decay['threshold']==nums.decay_check.threshold and 'tolerance' not in decay
+    assert {k for k in decay if k.endswith('_units')}=={'material_activity_units',
+        'electric_spectrum_before_window_units','magnetic_spectrum_before_window_units'}
+    plain=n.run(p,numerics=nums.replace(decay_check=None))
+    assert dict(plain.validity.convergence)=={'decay':None} and plain.diagnostics['decay'] is None
+    prov=r.provenance
+    assert prov['solver']=='fdtd.native' and prov['numerics'] is nums and prov['units'] is p.units
+    assert prov['execution']==Execution() and prov['time_convention']=='exp(-i*omega*t)'
+    assert prov['time_step_seconds']==nums.time_step_seconds and isinstance(prov['coordinate_frame'],str)
