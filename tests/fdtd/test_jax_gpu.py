@@ -94,7 +94,7 @@ def test_jax_gpu_slab_refines_towards_independent_airy_and_matches_cpu(gpu, side
         stack=p.Stack(period=(.2,), top=Material(1.), bottom=Material(1.),
             layers=(p.Layer(thickness=.1, epsilon=np.full((1, 2), 2.25)),)),
         excitation=p.Excitation(wavelength=wavelengths, sources=(p.PlaneWave(side=side),)))
-    nums = p.Numerics(spacing=1/30, duration_seconds=55*.9e-6/C0, orders=0)
+    nums = p.Numerics(spacing=1/30, duration_seconds=55*.9e-6/C0, orders=(0, 0))
     prepared = p.prepare(problem, numerics=nums, backend='jax', device='gpu')
     assert prepared.report.ok
     assert prepared.validate(problem).ok

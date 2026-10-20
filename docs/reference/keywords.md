@@ -209,14 +209,14 @@ than ignored.
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `orders` | `(0, 0)` | the retained Fourier orders per axis, `(Mx, My)`, x first: `2*Mx + 1` orders along u and `2*My + 1` along v. Two nonnegative Python `int`s | anything else, a `dict` or a NumPy integer included: `numerics.orders`, at construction |
+| `orders` | `(0, 0)` | the retained Fourier window `(Mu, Mv)`, the half-widths along the two lattice vectors, u first: `2*Mu + 1` orders along u and `2*Mv + 1` along v. An explicit tuple or list of two nonnegative integers (`int` or a NumPy integer) | anything else -- a bare integer, a `bool`, a `dict`, a set, a range or an iterator included: `numerics.orders`, at construction |
 | `algorithm` | `'smm'` | `'smm'` (scattering matrix) or `'etm'` (enhanced transmittance matrix), lowercase. The same modes and answers; only `'smm'` forms a scattering matrix and runs coherent sources | anything else, `'ETM'` included: `numerics.choice`, at construction |
 | `fourier_coefficients` | `None`: `'sampled'` on a raster, `'integrated'` on regions | `'sampled'` (series off the pixel grid) or `'integrated'` (closed-form transform of the raster's rectangles) | anything else: `numerics.choice`; `'sampled'` on a region layer: `rcwa.unsupported`, at check |
 | `factorization` | `None`: `'li'` on a raster, `'nvf'` on regions | `'li'` (successive rules along v then u, with axes aligned to y and x, in the default `li_nesting`), `'nvf'` (normal vector field, factorizing along material interfaces) or `'laurent'` (the direct rule for every product -- opt-in, for comparing with solvers that use it); tensor support is described in [the material guide](../migration/materials-v1.md#anisotropic-materials) | anything else: `numerics.choice`; `'li'` on a region that is not an axis-aligned rectangle, and `'laurent'` on a tensor material: `rcwa.unsupported`, at check |
 | `formulation` | `'auto'` | `'auto'` reads the problem: a material with a z row or column takes `'first_order'`, everything else `'second_order'`. Forcing `'first_order'` on a problem that does not need it is how the two are cross-checked | anything else (`'2ff'`): `numerics.choice`; `'second_order'` on a z-coupled tensor: `rcwa.invalid`, at run, because dropping the row answers a different problem while conserving energy to machine precision |
 | `raster_normal_method` | `None`: `'distance'` | raster NVF only: `'distance'`, `'contour'`, `'spectral'` or `'smooth'` | anything else: `numerics.choice`; set on regions or under `'li'`: `rcwa.unsupported`, at check |
 | `nvf_projector` | `None`: `'linear'` | raster and shape NVF: `'linear'` or `'circular'`; independent of incident polarization | anything else: `numerics.choice`; set without `'nvf'`, or `'circular'` on a polygon: `rcwa.unsupported`, at check |
-| `shape_nvf_grid_size` | `None`: `max(1024, 4*Mx + 1, 4*My + 1)` | shape NVF only: projector sampling points per cell axis, a positive `int`; `128` means a 128×128 grid | not a positive `int`: `numerics.grid`, at construction; set where shape NVF does not read it (a raster, `'li'`, `'laurent'`): `rcwa.unsupported`, at check |
+| `shape_nvf_grid_size` | `None`: `max(1024, 4*Mu + 1, 4*Mv + 1)` | shape NVF only: projector sampling points per cell axis, a positive `int`; `128` means a 128×128 grid | not a positive `int`: `numerics.grid`, at construction; set where shape NVF does not read it (a raster, `'li'`, `'laurent'`): `rcwa.unsupported`, at check |
 | `li_nesting` | `None`: `'fixed'` | Li only: the order Li's rules are nested in. `'fixed'` (`v` inside `u` for every slot) or `'symmetric'` (each slot's inverse-rule axis inside -- covariant under swapping x and y). Read on rasters and on axis-aligned rectangles | anything else: `numerics.choice`; set under `'nvf'` or `'laurent'`, or `'symmetric'` on a tensor material (tensor Li builds `'fixed'` only): `rcwa.unsupported`, at check |
 | `detuning` | `None`: the requested point, exactly | a positive relative step. Where the requested point is numerically singular (an order on a light line), the solve is retried that far off -- the wavelength first, then the angle -- and `result.diagnostics['effective_wavelengths']` records what was solved | `0`, `True`, or a value that is negative or not finite: `numerics.detuning`, at construction; under `jax.jit` or `jax.vmap` (eager `jax.grad` runs it as PyTorch does): `prepared.detuning_transform`; with a coherent source: `rcwa.coherent_detuning`, at check |
 | `half_space_merge_tolerance` | `0.0`: bit-identical materials only | how near a layer's material must be to the half-space beside it to be merged into it, a relative tolerance in `[0, 1)`. `0` merges only a layer whose every permittivity and permeability value is the half-space's bit for bit, and only at a complex in-plane wavevector, where solving it as a layer can be O(1) wrong; real angles keep their bits. A positive value takes a material within it **to be** the half-space's, at every angle, and the answer is that snapped scene's; `result.diagnostics['half_space_merge']` names the layers. See [connecting algorithms §10](../theory/rcwa/connecting-algorithms.md#10-etms-labels-at-a-complex-in-plane-wavevector) | negative, not below 1, or not finite: `numerics.half_space_merge_tolerance`, at construction; positive with a coherent source: `rcwa.coherent_half_space_merge`, at check; positive with an `IncidentOrders`, under `jax.jit` or with a material derivative: refused at run, since the merge is decided from concrete materials (a traced angle alone is fine) |
@@ -260,11 +260,11 @@ is how a `wavebit.Job` carries them. It is validated when a run uses it, not whe
 ## Two axis-order rules, and where they meet
 
 
-**Every array axis runs `v` first. Every hand-written pair runs `x` first.** No exceptions
-either way. They meet at `Numerics(orders=...)`, which is a written pair:
+**Every array axis runs `v` first. Every hand-written pair runs `u` (`x`) first.** No exceptions
+either way. They meet at `Numerics(orders=...)`, which is a written pair, `(Mu, Mv)`:
 
 ```python
-numerics = rcwa.Numerics(orders=(4, 1))        # x first
+numerics = rcwa.Numerics(orders=(4, 1))        # (Mu, Mv): u first
 result.R.shape                                  # (1, 3, 9) -- wavelength, then v, then u;
                                                 # the leading 4 sized the TRAILING axis
 result.reflection.orders_u, result.reflection.orders_v  # the order each column and each row is
@@ -275,6 +275,15 @@ length mismatch rather than a plausible number. `u` runs along the cell's first 
 `v` along the second — x and y on a rectangular cell. `result.reflection.order(m, n)` indexes by
 order directly and needs none of this. `orders` takes the pair only; the named
 `dict(u=..., v=...)` spelling of the earlier `truncation_order` has no current form.
+
+The same rule holds for every public `orders=`: `rcwa.Numerics` and `fdtd.periodic.Numerics`
+(`numerics.orders`), `fdtd.DiffractionMonitor` (`monitor.orders`, at construction) and the
+`rcwa.experimental` builders (`experimental.orders`). Each takes an explicit pair of nonnegative
+integers, NumPy integers included, and refuses a bare integer and a `bool`: a bare `M` meant
+`(M, M)` to the FDTD monitor and the experimental builders but `(M, 0)` to `fdtd.periodic`, so
+write the pair you mean (a one-dimensional period takes `(M, 0)`). `None`, where a field
+defaults to it (`fdtd.DiffractionMonitor`, `fdtd.periodic.Numerics`), keeps that field's default
+window.
 
 ## Named constants
 
@@ -340,9 +349,9 @@ from the one a preparation fixed; its `.path` names the declaration that changed
 | `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field`; `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
 | `medium` | `medium.poles` | `fdtd.native` |
 | `migration` | `migration.shape`, `migration.shape_fields`, `migration.layer_fields`, `migration.layer_mu`, `migration.solver` | `wavebit.migration` |
-| `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source` | `fdtd` |
+| `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source`, `monitor.orders` | `fdtd` |
 | `native` | `native.invalid`, `native.unsupported` | `fdtd.native` |
-| `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance` | `rcwa` (`numerics.type` and `numerics.choice` also FDTD) |
+| `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance` | `rcwa` (`numerics.type`, `numerics.choice` and `numerics.orders` also FDTD) |
 | `numerics` (FDTD) | `numerics.absorber`, `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `numerics.discretization`, `numerics.duration`, `numerics.geometry_ranges`, `numerics.junction`, `numerics.memory_bound`, `numerics.stopping`; `numerics.time_step_seconds`; `numerics.spacing`, `numerics.duration_seconds`, `numerics.transverse_spacing`, `numerics.reference_scope` | `fdtd`; `fdtd.native`; `fdtd.periodic` |
 | `observation` | `observation.empty`, `observation.order_labels`, `observation.shape`, `observation.wavelength_axis` | `wavebit.DiffractionOrders` |
 | `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
@@ -392,7 +401,7 @@ amplitudes and scattering matrices agree to round-off (3e-13 or better). The
 | `excitation`, an order map | `IncidentOrders(weights=(((m, n), weight), ...))` | `{0: 1.0}` on 1D becomes `((0, 0), 1.0)`. A coherent-source run: its total boundary power agrees with the earlier per-order sums, but **per-order efficiencies have no current form** (`rcwa.coherent_diffraction`) |
 | `excitation`, a side-keyed map or a source list | `Excitation(sources=(...))` | |
 | `stack=`, `incidence=` | `rcwa.Stack`, `rcwa.PlaneWave` | |
-| `truncation_order` | `Numerics(orders=...)` | the pair of Python `int`s only; the `dict` spellings are refused |
+| `truncation_order` | `Numerics(orders=...)` | the pair `(Mu, Mv)` of nonnegative integers only; a bare integer and the `dict` spellings are refused |
 | `layer_algorithm` | `Numerics(algorithm=...)` | lowercase. **The default moved** from ETM to `'smm'` |
 | `fourier_coefficients`, `factorization`, `raster_normal_method`, `nvf_projector`, `li_nesting`, `shape_nvf_grid_size` | `Numerics(...)`, the same names | the same values and defaults |
 | `formulation`, a solver attribute | `Numerics(formulation=...)` | |

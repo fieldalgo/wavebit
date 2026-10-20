@@ -37,7 +37,7 @@ def public_case(wavelength=10., reflection=1e-8, sine=.3):
             boundaries=fd.Boundaries(**faces,z=fd.Open()),
             structures=(fd.Structure('slab',shape=fd.SnappedSlab(z=(-.5,-.1)),material=Material(epsilon)),)),
             sources=(source,),outputs=fd.Outputs(final_fields=True,monitors=(fd.DiffractionMonitor('T',
-                plane=fd.Plane(z=-.3),wave='transmitted',source='pw',wavelengths=(wavelength,),orders=0),)))
+                plane=fd.Plane(z=-.3),wave='transmitted',source='pw',wavelengths=(wavelength,),orders=(0, 0)),)))
     numerics=fd.Numerics(grid=fd.UniformGrid(spacing=.01),duration=fd.Duration(steps=2),
         absorber=fd.PML(cells=12,wavelength=1.,reflection=reflection,reference_media={'z-':Material(1.)}))
     return problem,numerics

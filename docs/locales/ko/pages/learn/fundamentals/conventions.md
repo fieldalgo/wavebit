@@ -49,7 +49,7 @@ Wavebit는 숫자만 보고 nm인지 µm인지 알아내지 않습니다. `wavel
 | --- | --- |
 | `structure[layer, y, x]` | 래스터: 층, 행, 열. 사선 격자에서는 층, v, u |
 | `period=(Px, Py)` | 직접 쓰는 쌍은 x 먼저 |
-| `truncation_order=(Nx, Ny)` | 남길 차수의 반폭도 x 먼저 |
+| `Numerics(orders=(Mu, Mv))` | 남길 차수의 격자 벡터 방향 반폭도 u 먼저(직사각형 셀에서는 x 먼저). 항상 쌍을 명시 |
 | `result.T[row, column]` | 결과 배열은 v 방향 차수가 행, u 방향 차수가 열 |
 | `thickness=[d0, d1]` | 바닥부터 위로 나열한 각 층의 두께 |
 | `top`, `bot` | 위·아래의 반무한 매질; 입사 방향을 바꿔도 이름 유지 |

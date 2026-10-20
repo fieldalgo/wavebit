@@ -50,7 +50,7 @@ Figure 3-2. The left panel shows the xy coordinates of one layer; the right show
 | --- | --- |
 | `structure[layer, y, x]` | Raster: layer, row, column. For an oblique lattice: layer, v, u |
 | `period=(Px, Py)` | Explicit pairs put x first |
-| `truncation_order=(Nx, Ny)` | The retained-order half-widths also put x first |
+| `Numerics(orders=(Mu, Mv))` | The retained-order half-widths along the lattice vectors, u first (x first on a rectangular cell); always an explicit pair |
 | `result.T[row, column]` | In result arrays, v-direction orders occupy rows and u-direction orders occupy columns |
 | `thickness=[d0, d1]` | Thicknesses listed from bottom to top |
 | `top`, `bot` | Upper and lower semi-infinite media; these names remain fixed when the incident direction changes |

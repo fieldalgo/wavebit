@@ -65,7 +65,7 @@ explain the distinction.
 
 | Input | Contract |
 | --- | --- |
-| `orders` | Nonnegative integer or `(u, v)` integer pair, matching the consuming `rcwa.Numerics(orders=...)`. Projection uses this order set before closing the energy matrices. |
+| `orders` | An explicit `(Mu, Mv)` pair of nonnegative integers, default `(3, 3)`, matching the consuming `rcwa.Numerics(orders=...)`; a bare integer is refused (`experimental.orders`). Projection uses this order set before closing the energy matrices. |
 | `lattice` | A `wavebit.Lattice` or 2-by-2 array with basis vectors in columns. A right-handed basis that reduces to an orthogonal basis by an integer unimodular change is supported. The two reduced periods are positive and may vary independently. |
 | `structure` | Nonempty list or tuple of layer dictionaries, each with `background` and/or `shapes`. A layer with no shapes is uniform. |
 | `cx`, `cy` | Cartesian offsets from the original supplied cell center, in the lattice's length units. Default zero. Periodic translation is unrestricted; coordinates must describe one ordered profile with span below one period, rather than separately wrapped pieces. |
@@ -211,7 +211,7 @@ import numpy as np
 from wavebit.rcwa import experimental
 
 lattice = np.eye(2)*700.
-builder = experimental.ConformingNVF(1, rows=2, body_degree=2, gap_degree=2)
+builder = experimental.ConformingNVF((1, 1), rows=2, body_degree=2, gap_degree=2)
 
 def layers(gap, epsilon, loss):
     return [dict(background=1., shapes=[

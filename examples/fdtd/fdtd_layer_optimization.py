@@ -26,7 +26,7 @@ def reflection(d, resolution, smoothing_cells=0.):
         pulse=fdtd.Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*3*units.time_unit_seconds)))
     numerics=fdtd.Numerics(spacing=1/resolution,duration_seconds=60*units.time_unit_seconds,
         nominal_layer_thickness=(.2,.2),align_layers=True,layer_smoothing=smoothing_cells/resolution,
-        pml_cells=resolution,extraction_method='directional',orders=0)
+        pml_cells=resolution,extraction_method='directional',orders=(0, 0))
     return fdtd.run(problem,numerics=numerics,backend='jax').R.sum()
 
 

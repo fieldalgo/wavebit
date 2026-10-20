@@ -43,7 +43,7 @@ def test_constrained_coating_gradients_against_meep_and_continuum(record_propert
             spacing=1/resolution, pml_cells=resolution,
             nominal_layer_thickness=(.2,)*4, layer_smoothing=1/resolution, align_layers=True,
             duration_seconds=65*.5*(float(np.min(band))+float(np.max(band)))*units.time_unit_seconds,
-            orders=0, extraction_method='directional'))
+            orders=(0, 0), extraction_method='directional'))
         return jnp.stack((result.reflection.amplitude_s.reshape(-1),
                           result.transmission.amplitude_s.reshape(-1)))
     def evaluate(resolution):

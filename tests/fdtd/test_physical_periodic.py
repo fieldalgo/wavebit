@@ -13,7 +13,7 @@ def case(algorithm='shared',length='um',scale=1.,side='top',snapshots=False):
             layers=(p.Layer(thickness=.1*scale,epsilon=np.full((1,2),2.25)),)),
         excitation=p.Excitation(wavelength=(.85*scale,.9*scale,.95*scale),sources=(p.PlaneWave(side=side),)),
         outputs=p.Outputs(planes={'outside':-.2*scale},snapshots=p.Snapshots(every=17) if snapshots else None))
-    n=p.Numerics(algorithm=algorithm,spacing=scale/30,duration_seconds=55*.9e-6/C0,orders=0)
+    n=p.Numerics(algorithm=algorithm,spacing=scale/30,duration_seconds=55*.9e-6/C0,orders=(0, 0))
     return q,n
 
 
@@ -87,7 +87,7 @@ def test_live_layer_thickness_gradient_matches_finite_difference(backend):
     q=p.Problem(units=u,stack=p.Stack(period=(.05,),bottom=Material(2.25),layers=(
         p.Layer(thickness=.28,epsilon=np.array([[2.25]])),p.Layer(thickness=.12,epsilon=np.array([[1.5]])))),
         excitation=p.Excitation(wavelength=1.,sources=(p.PlaneWave(),)),pulse=p.Pulse(frequency_sigma_hz=1/(np.sqrt(2)*np.pi*3*u.time_unit_seconds)))
-    n=p.Numerics(spacing=1/25,duration_seconds=45*u.time_unit_seconds,orders=0,nominal_layer_thickness=(.2,.2),
+    n=p.Numerics(spacing=1/25,duration_seconds=45*u.time_unit_seconds,orders=(0, 0),nominal_layer_thickness=(.2,.2),
         align_layers=True,pml_cells=25,extraction_method='directional',layer_smoothing=.04)
     prepared=p.prepare(q,numerics=n,backend=backend)
     def loss(d,engine):

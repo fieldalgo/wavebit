@@ -207,6 +207,30 @@ def static_int(where, name, v):
         raise ValueError(f'{where}({name}={v!r}): an integer is needed.') from err
 
 
+def order_pair(where, value, *, code, path):
+    """``value`` as an order window ``(Mu, Mv)`` of Python ints, or a ``ValidationError``.
+
+    Every public ``orders=`` takes the same thing: an explicit tuple or list of two nonnegative
+    integers, the Fourier half-widths along the first and second lattice vectors. NumPy
+    integers count; a bool, a bare integer, a mapping or any other iterable is refused, so no
+    reader has to guess whether ``2`` meant ``(2, 2)`` or ``(2, 0)``.
+    """
+    import numpy as np
+    from wavebit.errors import ValidationError
+    if (isinstance(value, (tuple, list)) and len(value) == 2
+            and all(isinstance(n, (int, np.integer)) and not isinstance(n, (bool, np.bool_))
+                    and n >= 0 for n in value)):
+        return tuple(int(n) for n in value)
+    hint = ''
+    if isinstance(value, (int, np.integer)) and not isinstance(value, (bool, np.bool_)):
+        hint = (f' A bare {value!r} is not read: write (0, 0).' if value == 0 else
+                f' A bare {value!r} is not read: write ({value}, {value}) for the same half-width '
+                f'along both lattice vectors, or ({value}, 0) for the first only.')
+    raise ValidationError(f'{where}(orders=...) must be an explicit pair (Mu, Mv) of nonnegative '
+                          f'integers, the Fourier half-widths along the two lattice vectors; got '
+                          f'{value!r}.{hint}', code=code, path=path, actual=value)
+
+
 def unknown_keyword_message(where, unknown, known):
     """The refusal text for keywords ``unknown`` at ``where``; ``known`` are the legal names."""
     bits = []

@@ -709,11 +709,11 @@ def _gap_cell(**kw):
 RCWA_RENAMED_KEYWORDS = [
     (lambda **kw: rcwa.IncidentOrders(**kw), 'orders', (((0, 0), 1.),), 'weights'),
     (lambda **kw: rcwa.GaussianBeam(waist=1., **kw), 'spectral_extent', 3., 'angular_spectrum_extent'),
-    (lambda **kw: experimental.ConformingNVF(**kw), 'truncation_order', 1, 'orders'),
-    (lambda **kw: experimental.AffineProfileNVF(**kw), 'truncation_order', 1, 'orders'),
-    (lambda **kw: experimental.CartesianRectangleNVF(**kw), 'truncation_order', 1, 'orders'),
-    (lambda **kw: experimental.CartesianRectanglePairNVF(**kw), 'truncation_order', 1, 'orders'),
-    (_gap_cell, 'order', 1, 'orders'),
+    (lambda **kw: experimental.ConformingNVF(**kw), 'truncation_order', (1, 1), 'orders'),
+    (lambda **kw: experimental.AffineProfileNVF(**kw), 'truncation_order', (1, 1), 'orders'),
+    (lambda **kw: experimental.CartesianRectangleNVF(**kw), 'truncation_order', (1, 1), 'orders'),
+    (lambda **kw: experimental.CartesianRectanglePairNVF(**kw), 'truncation_order', (1, 1), 'orders'),
+    (_gap_cell, 'order', (1, 1), 'orders'),
 ]
 
 
@@ -726,7 +726,7 @@ def test_a_removed_rcwa_keyword_fails_naming_its_replacement(make, old, value, n
     shown = _shown(caught.value)
     assert 'public-names.md' in shown and 'did you mean' not in shown.lower(), shown
     made = make(**{new: value})
-    assert getattr(made, new) == (value if new != 'orders' else (value, value))
+    assert getattr(made, new) == value
 
 
 def test_sample_structure_names_its_samples_keyword():
@@ -760,13 +760,13 @@ RCWA_RENAMED_ATTRIBUTES = [
     (_port, 'kx', 'rcwa.operators.Port.kx_over_k0'),
     (_port, 'ky', 'rcwa.operators.Port.ky_over_k0'),
     (_port, 'index', 'rcwa.operators.Port.refractive_index'),
-    (lambda: experimental.ConformingNVF(1), 'truncation_order',
+    (lambda: experimental.ConformingNVF((1, 1)), 'truncation_order',
      'rcwa.experimental.ConformingNVF.orders'),
-    (lambda: experimental.AffineProfileNVF(1), 'truncation_order',
+    (lambda: experimental.AffineProfileNVF((1, 1)), 'truncation_order',
      'rcwa.experimental.AffineProfileNVF.orders'),
-    (lambda: experimental.CartesianRectangleNVF(1), 'truncation_order',
+    (lambda: experimental.CartesianRectangleNVF((1, 1)), 'truncation_order',
      'rcwa.experimental.CartesianRectangleNVF.orders'),
-    (lambda: experimental.CartesianRectanglePairNVF(1), 'truncation_order',
+    (lambda: experimental.CartesianRectanglePairNVF((1, 1)), 'truncation_order',
      'rcwa.experimental.CartesianRectanglePairNVF.orders'),
     (_gap_cell, 'order', 'rcwa.experimental.CartesianPairTransmissionGalerkinGapCell.orders'),
     (lambda: rcwa.IncidentOrders(weights=(((0, 0), 1.),)), 'orders', 'rcwa.IncidentOrders.weights'),

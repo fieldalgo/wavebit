@@ -39,7 +39,7 @@ def spectrum(parameters, resolution=40, smoothing_cells=1., band=BAND, duration=
     numerics=fdtd.Numerics(spacing=1/resolution,
         duration_seconds=duration*.5*(float(np.min(band))+float(np.max(band)))*units.time_unit_seconds,
         nominal_layer_thickness=(DEPTH/4,)*4,layer_smoothing=smoothing_cells/resolution,
-        align_layers=True,pml_cells=resolution,extraction_method='directional',orders=0)
+        align_layers=True,pml_cells=resolution,extraction_method='directional',orders=(0, 0))
     return fdtd.run(problem,numerics=numerics,backend='jax').R.sum(axis=(-2,-1))
 
 

@@ -228,7 +228,7 @@ import numpy as np
 from wavebit.rcwa import experimental
 from wavebit import Material
 assert 'CartesianRectangleNVF' in experimental.__all__
-builder = experimental.CartesianRectangleNVF(0)
+builder = experimental.CartesianRectangleNVF((0, 0))
 basis = np.array([[700.,315.],[0.,490.]])
 structure = [dict(shapes=[dict(l=200., angle=3.45, material=Material(4.))])]
 plan = builder.plan(structure,basis)

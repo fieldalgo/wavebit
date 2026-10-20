@@ -49,7 +49,7 @@ python examples/rcwa/learning/nvf/01_shape_nvf.py
 그림 7-1. 차수는 x 먼저, 결과 배열은 y 행과 x 열
 ```
 
-`Numerics(orders=(Nx, Ny))`에서 x 차수와 y 차수는 독립입니다. 현재 결과의 축은 `(파장, y, x)`이므로 `(2,1)`이면 한 파장의 shape는 `(1,3,5)`입니다. `result.transmission.orders_u`, `.orders_v`로 순서를 확인하고 `result.transmission.order(m,n).efficiency`로 특정 차수의 투과 효율을 읽습니다. 모든 유지 모드가 멀리까지 전파하는 것은 아니며, 감쇠하는 모드도 근접장과 경계조건 표현에 필요합니다.
+`Numerics(orders=(Mu, Mv))`에서 두 격자 벡터 방향(이 직사각형 셀에서는 x와 y)의 반폭은 서로 독립이며 항상 쌍으로 씁니다. 현재 결과의 축은 `(파장, v, u)`이므로 `(2,1)`이면 한 파장의 shape는 `(1,3,5)`입니다. `result.transmission.orders_u`, `.orders_v`로 순서를 확인하고 `result.transmission.order(m,n).efficiency`로 특정 차수의 투과 효율을 읽습니다. 모든 유지 모드가 멀리까지 전파하는 것은 아니며, 감쇠하는 모드도 근접장과 경계조건 표현에 필요합니다.
 
 ```{raw} html
 <section class="exercise" aria-labelledby="orders-title"><h3 id="orders-title">직접 바꿔 보기 · 내가 유지하는 Fourier 모드는?</h3><p class="explain">선택된 정수 모드만 보여 줍니다. 점은 편광이 아니라 (m,n) Fourier 라벨입니다.</p><div class="controls"><label for="nx">Nx <output id="nx-value" for="nx">2</output><input id="nx" type="range" min="0" max="4" step="1" value="2"></label><label for="ny">Ny <output id="ny-value" for="ny">1</output><input id="ny" type="range" min="0" max="4" step="1" value="1"></label></div><svg class="mini-svg" viewBox="0 0 400 340" role="img" aria-label="선택된 Fourier 모드의 격자"><rect x="32" y="20" width="312" height="280" fill="white" stroke="#b3cbc2"/><g id="mode-dots"></g><text x="370" y="172" font-size="16" fill="#182b3e">m</text><text x="189" y="14" font-size="16" fill="#182b3e">n</text><text x="187" y="325" font-size="14" fill="#526779">0</text></svg><div class="readout" id="orders-result" aria-live="polite"></div><noscript><p class="no-js">본문의 식에서 (2,1)의 15개 모드를 확인할 수 있습니다.</p></noscript></section>
