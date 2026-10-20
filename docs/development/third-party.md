@@ -28,8 +28,9 @@ Policy:
   separately by pip, unmodified and never bundled; the inventory records the
   review for each.
 - Tools never ship, so a test runner, CI tool or reference tool installed in a
-  test environment may be under any license except AGPL and SSPL. It still
-  needs a reviewed entry; a reference tool listed under
+  test environment may be under any license except SSPL and the other
+  non-AGPL network copyleft licenses (EUPL, OSL, CPAL, RPL). It still needs a
+  reviewed entry; a reference tool listed under
   [External reference tools](#external-reference-tools) counts as one.
 - LGPL or MPL is never a runtime requirement, and Wavebit's code never loads
   such a library directly (ctypes, cffi or a compiled extension); it uses the
@@ -41,11 +42,13 @@ Policy:
   sdist and wheel and the installation and the default test run work without
   the tool (tests that need it skip). The license check accepts such a tool
   installed in a test environment. GPL source is not read for implementation.
-- AGPL and SSPL are never a dependency, never in CI and never run by this
-  repository's tests or scripts. One AGPL tool, inkstone, was compared once
-  as a black box before this rule; it is listed under
-  [Past comparisons](#past-comparisons), and any further run happens outside
-  this repository.
+- AGPL is treated like GPL for unshipped tests, studies and CI tools, with two
+  more conditions: only an unmodified upstream release is used, and never in a
+  hosted service. Its entry records that review. AGPL is never part of what
+  Wavebit ships, never a requirement or extra, and not used as a
+  separate-process backend either. inkstone, compared once as a black box, is
+  listed under [Past comparisons](#past-comparisons).
+- SSPL and the other non-AGPL network copyleft licenses are not used anywhere.
 
 ## Python distributions
 
@@ -125,11 +128,11 @@ describes each comparison.
 Tools that were run once, by hand, to measure their public behaviour. The
 numbers are quoted in [Reference cases](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)
 and in the RCWA theory notes; no generator, golden or test in this repository
-runs or imports them.
+runs or imports them today.
 
 | Tool | Version | SPDX | How it was used |
 | --- | --- | --- | --- |
-| `inkstone` | 0.3.15 | AGPL-3.0-or-later | Black-box RCWA comparison through its public API and returned numbers only; its source was never read. Not run in this repository again: any further comparison happens outside it, never in Wavebit's tests, CI or dependencies |
+| `inkstone` | 0.3.15 | AGPL-3.0-or-later | Black-box RCWA comparison through its public API and returned numbers only; its source was never read. A later comparison may run in an unshipped test or study that skips without it, using the unmodified PyPI release; never in Wavebit's code, requirements or a hosted service |
 | `EMpy` | 2.2.3 (`ElectroMagneticPython` on PyPI) | MIT | Black-box comparison of its anisotropic transfer matrix |
 
 ## Code and data in this repository
@@ -151,8 +154,9 @@ The check reads installed metadata with `importlib.metadata`. It fails when an
 installed distribution has no reviewed entry, when its declared license differs
 from the entry, when a component's license is not allowed for the way Wavebit
 reaches it, when Wavebit's package code imports an external tool, when an AGPL
-or SSPL external tool is not marked as kept outside this repository, or when this
-page or its Korean translation does not name an entry. CI runs it in the full
+tool has no recorded review or AGPL is reached as a requirement, when an SSPL or
+other non-AGPL network-copyleft component appears, or when this page or its
+Korean translation does not name an entry. CI runs it in the full
 backends environment and in the docs environment;
 `tests/api/test_third_party_licenses.py` runs the reachable-only form in every
 test environment.
