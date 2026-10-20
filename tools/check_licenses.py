@@ -25,8 +25,8 @@ marked ``lab_only``. Wavebit's package code must not import a GPL or AGPL tool,
 and a tool must not become a requirement. Installed metadata that names
 a different expression, or a copyleft family the entry does not record, also fails.
 
-Bundled native files: every shared library (.so, .dylib, .dll) that a
-third-party distribution installs, other than its own Python extension modules,
+Bundled native files: every shared library (.so, .dylib, .dll) that a runtime
+or optional distribution installs, other than its own Python extension modules,
 must match a ``bundled_files`` glob of its entry (fnmatch on the POSIX path
 relative to site-packages, as listed in RECORD) recorded for the current OS.
 Records whose SPDX expression is copyleft, or is not satisfied by ``permissive``
@@ -35,7 +35,9 @@ load into the Python process that runs Wavebit, so a GPL term must offer another
 option (``FTL OR GPL-2.0-or-later``) or carry a runtime exception listed under
 ``runtime_exceptions`` (``WITH GCC-exception-3.1``). Statically linked code is
 not visible this way and is described by hand in the entry's ``bundled`` note.
-Wavebit's own distribution must contain no native files at all.
+Tool distributions (test runners, linters, build and upload tools) are not
+matched: they never reach a user's installation. Wavebit's own distribution
+must contain no native files at all.
 
 ``--reachable-only`` checks only what Wavebit's requirements reach, so a
 developer environment holding unrelated packages passes; CI runs without it.
@@ -347,10 +349,13 @@ def check(paths, inventory, check_docs=True, reachable_only=False, platform=None
         if entry is None:
             errors.append(f"{name} {dist.version}: no reviewed entry in {INVENTORY.relative_to(ROOT).as_posix()}")
             continue
-        bundled_errors, bundled = check_bundled(name, dist, entry.get("bundled_files", []), platform)
-        errors += bundled_errors
-        if bundled:
-            record["bundled_files"] = bundled
+        # Only what installing Wavebit brings along (base requirements and extras) reaches users'
+        # processes; test and CI tools never do, so their wheels' contents are not matched.
+        if klass in ("runtime", "optional"):
+            bundled_errors, bundled = check_bundled(name, dist, entry.get("bundled_files", []), platform)
+            errors += bundled_errors
+            if bundled:
+                record["bundled_files"] = bundled
         record["spdx"] = entry["spdx"]
         try:
             tree = parse_expression(entry["spdx"])

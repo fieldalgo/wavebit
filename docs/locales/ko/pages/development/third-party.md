@@ -104,10 +104,14 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 ### 제3자 휠 안의 네이티브 라이브러리
 
 어떤 휠은 자체 확장 모듈 말고도 별도 공유 라이브러리(`.so`, `.dylib`, `.dll`)를
-담고 있습니다. 이 라이브러리는 Wavebit을 실행하는 Python 프로세스에 로드되고, 각자의
-조건을 따르며, pip이 그 휠의 일부로 설치합니다. Wavebit은 이를 수정·재링크·재배포하지
-않습니다. 목록에는 운영체제별로 소유 배포 패키지의 `bundled_files`에 하나씩 기록하며,
-검사는 실행 중인 OS에 대한 기록이 없는 라이브러리를 만나면 실패합니다.
+담고 있습니다. 이 라이브러리는 각자의 조건을 따르며, pip이 그 휠의 일부로 설치합니다.
+Wavebit은 이를 수정·재링크·재배포하지 않습니다. 휠이 선언한 라이선스에는 이 라이브러리가
+드러나지 않습니다. 허용형 라이선스를 선언한 휠이 Wavebit을 실행하는 프로세스에 로드되는
+GPL 라이브러리를 담을 수 있는데, 위 정책은 그런 것을 Wavebit의 필수 의존성과 extra에
+들이지 않습니다. 그래서 runtime과 optional 배포 패키지, 즉 Wavebit을 설치할 때 함께 오는
+모든 패키지는 이런 라이브러리를 운영체제별로 소유 배포 패키지의 `bundled_files`에 하나씩
+기록하며, 검사는 실행 중인 OS에 대한 기록이 없는 라이브러리를 만나면 실패합니다. 도구(시험
+실행기, 린터, 빌드·업로드 도구)는 사용자 설치에 들어가지 않으므로 대조하지 않습니다.
 
 | 배포 패키지 | Linux | macOS | Windows |
 | --- | --- | --- | --- |
@@ -176,11 +180,11 @@ python tools/check_licenses.py --reachable-only   # Wavebit 의존성이 닿는 
 
 검사는 `importlib.metadata`로 설치 메타데이터를 읽습니다. 설치된 패키지에 검토 항목이
 없을 때, 선언한 라이선스가 항목과 다를 때, 라이선스가 Wavebit이 그 패키지에 닿는
-방식에 허용되지 않을 때, 휠이 설치한 공유 라이브러리에 현재 OS용 `bundled_files` 기록이
-없을 때, Wavebit 자체 배포 패키지에 네이티브 파일이 있을 때, Wavebit 패키지 코드가 외부
-도구를 import할 때, AGPL 도구에 검토 기록이 없거나 AGPL이 요구사항으로 닿을 때, SSPL이나
-그 밖의 AGPL이 아닌 네트워크 copyleft 구성요소가 있을 때, 이 페이지나
-영어 페이지가 항목을 적지 않았을 때 실패합니다. CI는 full backends 환경, docs 환경,
+방식에 허용되지 않을 때, runtime·optional 휠이 설치한 공유 라이브러리에 현재 OS용
+`bundled_files` 기록이 없을 때, Wavebit 자체 배포 패키지에 네이티브 파일이 있을 때,
+Wavebit 패키지 코드가 외부 도구를 import할 때, AGPL 도구에 검토 기록이 없거나 AGPL이
+요구사항으로 닿을 때, SSPL이나 그 밖의 AGPL이 아닌 네트워크 copyleft 구성요소가 있을 때,
+이 페이지나 영어 페이지가 항목을 적지 않았을 때 실패합니다. CI는 full backends 환경, docs 환경,
 그리고 Linux·macOS·Windows `distribution` 작업에서 설치한 `wavebit[plot]` 휠에 대해 실행하고, `tests/api/test_third_party_licenses.py`는 모든 시험 환경에서
 `--reachable-only` 형태를 실행합니다.
 

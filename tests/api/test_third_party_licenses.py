@@ -185,6 +185,24 @@ def test_an_unrecorded_bundled_library_fails(tmp_path):
     assert any('unrecorded bundled native library numlib.libs/libopenblas-abc123.so' in e for e in errors)
 
 
+def test_only_what_installing_wavebit_brings_along_is_matched(tmp_path):
+    gpl = {'spdx': 'MIT'}  # no bundled_files record for the GPL library below
+    library = 'numlib.libs/libfftw3-abc123.so'
+    (tmp_path/'optional').mkdir()
+    _distribution(tmp_path/'optional', 'wavebit', 'Apache-2.0 AND MIT', extras=['fast'],
+                  requires=['numlib; extra == "fast"'])
+    _distribution(tmp_path/'optional', 'numlib', 'MIT', files=['numlib/__init__.py', library])
+    errors, report = checker.check([str(tmp_path/'optional')], _inventory(numlib=gpl), check_docs=False)
+    assert report['numlib']['use'] == 'optional'
+    assert any(f'unrecorded bundled native library {library}' in e for e in errors)
+    (tmp_path/'tool').mkdir()
+    _distribution(tmp_path/'tool', 'wavebit', 'Apache-2.0 AND MIT')
+    _distribution(tmp_path/'tool', 'numlib', 'MIT', files=['numlib/__init__.py', library])
+    errors, report = checker.check([str(tmp_path/'tool')], _inventory(numlib=gpl), check_docs=False)
+    assert report['numlib']['use'] == 'tool'
+    assert errors == [] and 'bundled_files' not in report['numlib']
+
+
 def test_extension_modules_are_not_bundled_libraries(tmp_path):
     errors, report = _bundled_check(tmp_path, {'spdx': 'MIT'}, files=EXTENSIONS)
     assert errors == [] and 'bundled_files' not in report['numlib']
