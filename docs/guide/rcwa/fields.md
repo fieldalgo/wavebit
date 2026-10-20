@@ -55,7 +55,7 @@ condition used by reconstruction had changed since the solve.
 
 This rule applies to every source type. `boundary_fields` and `field` both require
 `Outputs(fields=True)`; without it they raise `UnsupportedFeatureError` (code
-`output.unavailable`) naming the request. `Outputs` is part of the prepared contract, so it is
+`outputs.unavailable`) naming the request. `Outputs` is part of the prepared contract, so it is
 static under JAX `jit`.
 
 A source-based result's `outputs['top']` and `outputs['bottom']` store the power evaluated

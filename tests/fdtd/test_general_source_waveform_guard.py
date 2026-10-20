@@ -56,7 +56,7 @@ def test_same_delay_leaf_huge_waveform_then_recovers(device, block, huge, tmp_pa
     concrete, _ = pulse.fixture((1., 1., .4, huge), steps=17, block=block)
     with pytest.raises(ValidationError) as caught:
         prepared.run(concrete)
-    assert caught.value.code == 'source_waveform_range'
+    assert caught.value.code == 'source.waveform_range'
     assert caught.value.issue.path == 'sources.d'
     with torch.no_grad():
         leaves[3].fill_(huge)
@@ -160,7 +160,7 @@ def test_concrete_and_carried_waveform_arithmetic_certificate(device, name):
     else:
         with pytest.raises(ValidationError) as caught:
             _source_waveform_guard(*concrete, rt, None)
-        assert caught.value.code == 'source_waveform_range'
+        assert caught.value.code == 'source.waveform_range'
         assert caught.value.issue.path == 'sources.d'
     leaves = tuple(torch.tensor(v, dtype=torch.float64, requires_grad=True,
                                device='cpu' if i in (0, 2) else device)
@@ -326,7 +326,7 @@ def test_adjacent_t0_boundary_certifies_actual_backend_parameters(device):
         else:
             with pytest.raises(ValidationError) as caught:
                 _source_waveform_guard(scene, plan, params, rt, incoming)
-            assert caught.value.code == 'source_waveform_range'
+            assert caught.value.code == 'source.waveform_range'
         live = tuple(torch.tensor(v, dtype=torch.float64, requires_grad=True,
                                   device='cpu' if i in (0, 2) else device)
                       for i, v in enumerate(values))
@@ -386,7 +386,7 @@ def test_torch_transforms_keep_closed_source_certificate_off_host(device, name, 
         else:
             with pytest.raises(ValidationError) as caught:
                 function(dual)
-            assert caught.value.code == 'source_waveform_range'
+            assert caught.value.code == 'source.waveform_range'
 
     def forbidden(*args, **kwargs):
         pytest.fail('a closed-source transform certificate attempted a host read')

@@ -268,6 +268,37 @@ def structure(value):
                           code='problem.leaf', path='problem')
 
 
+def structure_change(new, old, path=''):
+    """The public path of the first difference between two ``structure`` records, or ``path``.
+
+    Descends through declarations by field name and through sequences by index
+    (``stack.layers[1].regions``), stopping at a leaf, a changed type or a changed count.
+    """
+    if new == old:
+        return path
+    def join(name):
+        return f'{path}.{name}' if path else name
+    def declaration(v):
+        return (isinstance(v, tuple) and len(v) == 3 and isinstance(v[0], str)
+                and isinstance(v[1], str) and isinstance(v[2], tuple)
+                and all(isinstance(f, tuple) and len(f) == 2 and isinstance(f[0], str) for f in v[2]))
+    if declaration(new) and declaration(old) and new[:2] == old[:2]:
+        for (name, a), (_, b) in zip(new[2], old[2]):
+            if a != b:
+                return structure_change(a, b, join(name))
+        return path
+    if (isinstance(new, tuple) and isinstance(old, tuple) and len(new) == len(old)
+            and new[:1] not in (('numeric',), ('tabulated',)) and path):
+        for i, (a, b) in enumerate(zip(new, old)):
+            if a != b:
+                key = a[0] if (isinstance(a, tuple) and len(a) == 2 and isinstance(a[0], str)
+                               and isinstance(b, tuple) and len(b) == 2 and a[0] == b[0]) else None
+                if key is not None:
+                    return structure_change(a[1], b[1], join(key))
+                return structure_change(a, b, f'{path}[{i}]')
+    return path
+
+
 def structure_key(problem):
     # Period, shape values, and thickness can vary eagerly if the original
     # topology record still validates. Units and source grouping stay fixed.
@@ -351,9 +382,13 @@ def primal_problem(value):
 
 
 def check_structure(problem, expected):
-    if structure_key(problem) != expected:
+    key = structure_key(problem)
+    if key != expected:
+        # The declaration that changed; order labels and sampling belong to the sources.
+        path = (structure_change(key[0], expected[0]) if key[0] != expected[0]
+                else 'excitation.sources')
         raise IncompatibleProblemError('The problem declaration layout changed. Prepare it again (layer/source/model counts, tensor shape, magnetic presence, outputs, and spectral shape are structural).',
-                                       code='prepared.structure', path='problem')
+                                       code='prepared.structure', path=path or 'problem')
 
 
 #: The fields of each source type that the engine's source grouping and order window read, and

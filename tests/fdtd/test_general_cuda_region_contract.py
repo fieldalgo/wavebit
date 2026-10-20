@@ -139,12 +139,12 @@ def test_metadata_refuses_outside_region_family(no_device, monkeypatch, case):
     report = fdtd.check(p, numerics=numerics(), backend='torch', device='cuda:0')
     assert not report.ok, case
     if case in scope_paths:
-        assert report.issues[0].code == 'cuda_scope'
+        assert report.issues[0].code == 'execution.cuda_scope'
         assert report.issues[0].path == scope_paths[case]
     with pytest.raises(ValidationError) as exc:
         fdtd.prepare(p, numerics=numerics(), backend='torch', device='cuda:0')
     if case in scope_paths:
-        assert exc.value.issue.code == 'cuda_scope'
+        assert exc.value.issue.code == 'execution.cuda_scope'
         assert exc.value.issue.path == scope_paths[case]
 
 
@@ -169,7 +169,7 @@ def test_metadata_live_material_reuse_and_static_pattern_refusal(no_device):
     moved = live.scene.structures[0].replace(shape=fdtd.SnappedBox(size=(.31, .225, .365),
                                                              center=(.0375, -.2025, .1625)))
     report = prepared.validate(live.replace(scene=live.scene.replace(structures=(moved,))))
-    assert not report.ok and report.issues[0].code == 'prepared_structure'
+    assert not report.ok and report.issues[0].code == 'prepared.structure'
     assert all(leaf.is_leaf and leaf.grad is None for leaf in leaves)
 
 
@@ -249,7 +249,7 @@ def test_invalid_same_leaf_recovers_without_mutating_prior_outputs(device, param
         message = str(exc).lower()
         labels = {'epsilon': ('epsilon', 'eps'), 'mu': ('mu', 'permeability'),
                   'sigma': ('sigma', 'conductivity'), 'amplitude': ('amplitude', 'initial')}
-        assert exc.issue.code in ('fdtd_input', 'material_value', 'runtime_stability')
+        assert exc.issue.code == 'fdtd.invalid'
         assert any(label in message for label in labels[parameter])
         reasons = (('finite', 'nan') if parameter == 'amplitude' else
                    ('finite', 'positive', 'nonnegative', 'non-negative', 'stable', 'cfl'))

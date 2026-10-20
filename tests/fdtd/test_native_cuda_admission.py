@@ -40,7 +40,7 @@ def test_unavailable_cuda_is_reported_without_execution(monkeypatch):
     monkeypatch.setattr(torch.cuda, 'is_available', lambda: False)
     report = n.check(problem, numerics=numerics, backend='torch', device='cuda:0')
     assert not report.ok
-    assert report.issues[0].code == 'device_unavailable'
+    assert report.issues[0].code == 'execution.device_unavailable'
     assert report.issues[0].path == 'execution.device'
     for action in (n.prepare, n.run):
         with pytest.raises(UnsupportedFeatureError, match='CUDA device is unavailable'):

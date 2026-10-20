@@ -20,8 +20,8 @@ from wavebit.observations.fields import _component_units
 from wavebit.rcwa import Stack, Layer, Region, Rectangle, Circle, Ellipse, Polygon, Excitation, PlaneWave
 from wavebit.units import require_units, Z0
 from ._public_names import removed as _removed
-from ._yee_outputs import (COMPONENTS, decay_check_fields, engine_components, snapshot_components,
-                           snapshot_every)
+from ._yee_outputs import (COMPONENTS, decay_check_fields, engine_components, public_refusal,
+                           refusals, snapshot_components, snapshot_every)
 
 
 @spec(renamed={'models': 'poles'})
@@ -39,9 +39,9 @@ class RasterDispersion:
     def __post_init__(self):
         poles = {k: tuple(v) for k, v in self.poles.items()}
         if any(type(k) is not int or k == 0 for k in poles):
-            raise ValidationError('poles require nonzero integer labels', path='dispersion.poles')
+            raise ValidationError('poles require nonzero integer labels', code='dispersion.poles', path='dispersion.poles')
         if any(not isinstance(p, (Drude, Lorentz)) for v in poles.values() for p in v):
-            raise ValidationError('use physical Drude/Lorentz poles', path='dispersion.poles')
+            raise ValidationError('use physical Drude/Lorentz poles', code='dispersion.poles', path='dispersion.poles')
         object.__setattr__(self, 'poles', frozen_mapping(poles))
 
 
@@ -70,7 +70,7 @@ class Pulse:
             if (isinstance(sigma, (bool, np.bool_)) or np.ndim(sigma) or np.iscomplexobj(sigma)
                     or not np.isfinite(sigma) or sigma <= 0):
                 raise ValidationError(f'frequency_sigma_hz={sigma!r}: a finite positive static '
-                                      f'scalar in Hz is needed', path='pulse.frequency_sigma_hz')
+                                      f'scalar in Hz is needed', code='pulse.frequency_sigma_hz', path='pulse.frequency_sigma_hz')
 
 
 @spec
@@ -101,7 +101,7 @@ class Outputs:
     def __post_init__(self):
         object.__setattr__(self, 'planes', frozen_mapping(self.planes))
         if self.snapshots is not None and not isinstance(self.snapshots, Snapshots):
-            raise ValidationError('expected periodic.Snapshots', path='outputs.snapshots')
+            raise ValidationError('expected periodic.Snapshots', code='problem.type', path='outputs.snapshots')
 
 
 @spec
@@ -168,13 +168,13 @@ class Numerics:
 
     def __post_init__(self):
         if self.algorithm not in ('shared', 'reference'):
-            raise ValidationError("algorithm must be 'shared' or 'reference'", path='numerics.algorithm')
+            raise ValidationError("algorithm must be 'shared' or 'reference'", code='numerics.choice', path='numerics.algorithm')
         for name in ('spacing', 'duration_seconds'):
             v=getattr(self,name)
             if isinstance(v,bool) or np.ndim(v) or not np.isfinite(v) or v<=0:
-                raise ValidationError('expected a finite positive static scalar', path='numerics.'+name)
+                raise ValidationError('expected a finite positive static scalar', code='numerics.'+name, path='numerics.'+name)
         if self.decay_check is not None and not isinstance(self.decay_check, DecayCheck):
-            raise ValidationError('expected periodic.DecayCheck', path='numerics.decay_check')
+            raise ValidationError('expected periodic.DecayCheck', code='numerics.type', path='numerics.decay_check')
 
 
 @spec
@@ -190,48 +190,48 @@ class Problem:
         require_units(self.units)
         for name, typ in (('stack',Stack),('excitation',Excitation),('pulse',Pulse),('outputs',Outputs)):
             if not isinstance(getattr(self,name),typ):
-                raise ValidationError(f'expected periodic.{typ.__name__}',path=name)
+                raise ValidationError(f'expected periodic.{typ.__name__}',code='problem.type',path=name)
         if len(self.excitation.sources)!=1 or not isinstance(self.excitation.sources[0],PlaneWave):
-            raise UnsupportedFeatureError('periodic FDTD requires exactly one PlaneWave',path='excitation.sources')
+            raise UnsupportedFeatureError('periodic FDTD requires exactly one PlaneWave',code='excitation.sources',path='excitation.sources')
         if self.dispersion is not None and not isinstance(self.dispersion,RasterDispersion):
-            raise ValidationError('expected periodic.RasterDispersion',path='dispersion')
+            raise ValidationError('expected periodic.RasterDispersion',code='problem.type',path='dispersion')
 
 
 def _execution(numerics,backend,device,precision):
     if not isinstance(numerics,Numerics):
-        raise ValidationError('expected periodic.Numerics',path='numerics')
+        raise ValidationError('expected periodic.Numerics',code='numerics.type',path='numerics')
     execution=Execution(backend=backend,device=device,precision=precision).validate()
     if precision!='double':
-        raise UnsupportedFeatureError('periodic execution requires double precision',path='execution.precision')
+        raise UnsupportedFeatureError('periodic execution requires double precision',code='execution.precision',path='execution.precision')
     if numerics.algorithm=='reference' and backend!='numpy':
-        raise UnsupportedFeatureError('reference stepping supports NumPy only',path='execution.backend')
+        raise UnsupportedFeatureError('reference stepping supports NumPy only',code='execution.backend',path='execution.backend')
     return execution
 
 
 def _arguments(problem,numerics,execution):
     from wavebit.rcwa._adapt import _namespace, _array, geometry_recipe, polarization
     if not isinstance(problem,Problem) or not isinstance(numerics,Numerics):
-        raise ValidationError('expected periodic.Problem and periodic.Numerics',path='problem')
+        raise ValidationError('expected periodic.Problem and periodic.Numerics',code='problem.type',path='problem')
     xp=_namespace(execution)
     source=problem.excitation.sources[0]
     if source.kx is not None or source.ky is not None:
-        raise UnsupportedFeatureError('use real theta/phi for periodic FDTD',path='excitation.sources')
+        raise UnsupportedFeatureError('use real theta/phi for periodic FDTD',code='source.direction',path='excitation.sources')
     amplitude=_array(xp,source.amplitude,execution,True)
     if amplitude.shape or _concrete(xp.isfinite(amplitude)) is False:
-        raise ValidationError('amplitude must be a finite scalar in V/m',path='excitation.sources.amplitude')
+        raise ValidationError('amplitude must be a finite scalar in V/m',code='source.amplitude',path='excitation.sources.amplitude')
     pair=polarization(source,xp,execution)
     if _concrete(xp.all(xp.isfinite(pair))) is False:
-        raise ValidationError('polarization must be a finite nonzero Jones pair',path='excitation.sources.polarization')
+        raise ValidationError('polarization must be a finite nonzero Jones pair',code='source.polarization_value',path='excitation.sources.polarization')
     def material(value):
         if not isinstance(value,Material):
-            raise UnsupportedFeatureError('periodic regions and ports require nondispersive Material; use RasterDispersion for electric poles',path='stack.material')
+            raise UnsupportedFeatureError('periodic regions and ports require nondispersive Material; use RasterDispersion for electric poles',code='material.type',path='stack.material')
         return value
     stack=problem.stack
     if not stack.layers:
-        raise ValidationError('periodic FDTD requires at least one finite layer',path='stack.layers')
+        raise ValidationError('periodic FDTD requires at least one finite layer',code='stack.layers',path='stack.layers')
     sampled=[layer.epsilon is not None for layer in stack.layers]
     if any(sampled) and not all(sampled):
-        raise UnsupportedFeatureError('use either sampled layers or typed regions throughout a stack',path='stack.layers')
+        raise UnsupportedFeatureError('use either sampled layers or typed regions throughout a stack',code='stack.mixed_layer_encoding',path='stack.layers')
     if all(sampled):
         structure=xp.stack([_array(xp,l.epsilon,execution,True) for l in stack.layers])
         mu=xp.stack([xp.ones_like(structure[0]) if l.mu is None else _array(xp,l.mu,execution,True) for l in stack.layers])
@@ -244,7 +244,7 @@ def _arguments(problem,numerics,execution):
                else xp.stack([_array(xp,l.thickness,execution) for l in stack.layers]))
     band=np.atleast_1d(np.asarray(problem.excitation.wavelength,float))
     if band.ndim!=1 or not len(band) or not np.isfinite(band).all() or np.any(band<=0):
-        raise ValidationError('wavelength must be a positive finite scalar or vector',path='excitation.wavelength')
+        raise ValidationError('wavelength must be a positive finite scalar or vector',code='wavelength.value',path='excitation.wavelength')
     ts=problem.units.time_unit_seconds
     centre=float((band.min()+band.max())/2)
     snapshots=problem.outputs.snapshots
@@ -273,11 +273,11 @@ def _arguments(problem,numerics,execution):
                      'dft_subsample','decay_check'):
             value=getattr(numerics,name)
             if isinstance(value,(np.ndarray,Mapping)) or value!=getattr(defaults,name):
-                raise UnsupportedFeatureError('this control requires shared stepping',path='numerics.'+name)
+                raise UnsupportedFeatureError('this control requires shared stepping',code='numerics.reference_scope',path='numerics.'+name)
         if problem.pulse.frequency_sigma_hz is not None or problem.pulse.notch_frequencies_hz is not None:
-            raise UnsupportedFeatureError('custom pulse controls require shared stepping',path='pulse')
+            raise UnsupportedFeatureError('custom pulse controls require shared stepping',code='numerics.reference_scope',path='pulse')
         if snapshots is not None and snapshots.bounds is not None:
-            raise UnsupportedFeatureError('snapshot bounds require shared stepping',path='outputs.snapshots.bounds')
+            raise UnsupportedFeatureError('snapshot bounds require shared stepping',code='numerics.reference_scope',path='outputs.snapshots.bounds')
         return options,None
     device=execution.device
     if execution.backend=='jax':
@@ -287,7 +287,7 @@ def _arguments(problem,numerics,execution):
     if numerics.transverse_spacing is not None:
         spacing=np.asarray(numerics.transverse_spacing)
         if spacing.shape not in ((),(2,)) or np.iscomplexobj(spacing) or not np.isfinite(spacing).all() or np.any(spacing<=0):
-            raise ValidationError('expected positive x/y spacing',path='numerics.transverse_spacing')
+            raise ValidationError('expected positive x/y spacing',code='numerics.transverse_spacing',path='numerics.transverse_spacing')
         transverse=1/spacing
     notches=problem.pulse.notch_frequencies_hz
     sigma=problem.pulse.frequency_sigma_hz
@@ -354,15 +354,16 @@ def _public(exc):
         public = re.sub(r"\bfor ([eh][xyz])\b", lambda m: f"for '{m.group(1).capitalize()}'", public)
     if public == text:
         return exc
-    return ValidationError(public, path=getattr(exc, 'path', '') or 'problem')
+    return ValidationError(public, code=getattr(exc, 'code', None) or 'periodic.invalid',
+                           path=getattr(exc, 'path', '') or 'problem')
 
 
 def _engine(call, *args, **kwargs):
-    """Run an engine call, raising its refusals in the public spelling."""
+    """Run an engine call, raising its refusals in the public spelling with a code."""
     try:
         return call(*args, **kwargs)
     except ValueError as exc:
-        public = _public(exc)
+        public = public_refusal(_public(exc), 'periodic')
         if public is exc:
             raise
         raise public from exc
@@ -370,7 +371,7 @@ def _engine(call, *args, **kwargs):
 
 def _signature(problem,numerics):
     if not isinstance(problem,Problem) or not isinstance(numerics,Numerics):
-        raise ValidationError('expected periodic.Problem and periodic.Numerics',path='problem')
+        raise ValidationError('expected periodic.Problem and periodic.Numerics',code='problem.type',path='problem')
     from ._api import _static
     from wavebit.rcwa._adapt import structure
     fixed=dict(units=problem.units.length,numerics=_static(numerics,'numerics'),
@@ -388,6 +389,40 @@ def _signature(problem,numerics):
     static_phi=phi is None or isinstance(phi,(int,float,np.number))
     fixed['direction_layout']=(static_phi, (phi is None or phi==0) if static_phi else None)
     return structure(problem),fixed
+
+
+#: The declaration each fixed entry of ``_signature`` holds, as a public path; a pair names
+#: its two declarations, and ``thickness`` holds one entry per layer.
+_FIXED_PATHS={'units':'units.length','numerics':'numerics','cell':('stack.period','stack.lattice'),
+              'wavelength':'excitation.wavelength','outputs':'outputs',
+              'thickness':'stack.layers[{}].thickness','labels':'dispersion.labels',
+              'ports':('stack.top','stack.bottom'),'direction_layout':'excitation.sources[0].phi'}
+
+
+def _fixed_path(key,new,old):
+    path=_FIXED_PATHS[key]
+    if isinstance(path,str) and '{}' not in path:
+        return path
+    if new is None or old is None or len(new)!=len(old):
+        return path[0].split('.')[0] if isinstance(path,tuple) else 'stack.layers'
+    index=next(i for i,(a,b) in enumerate(zip(new,old)) if a!=b)
+    return path[index] if isinstance(path,tuple) else path.format(index)
+
+
+def _same_layout(problem,numerics,signature):
+    """Refuse a problem whose fixed layout differs from a preparation's, naming what changed."""
+    from wavebit.rcwa._adapt import structure_change
+    layout,fixed=_signature(problem,numerics)
+    if (layout,fixed)!=signature:
+        old=signature[1]
+        if layout!=signature[0]:
+            path=structure_change(layout,signature[0]) or 'problem'
+        else:
+            key=next(k for k in list(fixed)+[k for k in old if k not in fixed]
+                     if fixed.get(k)!=old.get(k))
+            path=_fixed_path(key,fixed.get(key),old.get(key))
+        raise IncompatibleProblemError('periodic layout changed; prepare this problem again',
+                                       code='prepared.structure',path=path)
 
 
 def _validated(problem,numerics,execution):
@@ -409,8 +444,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
         _signature(problem,numerics)
         return _validated(problem,numerics,execution)
     except (TypeError,ValueError,NotImplementedError) as exc:
-        issue=exc if isinstance(exc,ValidationError) else ValidationError(str(exc),path='problem')
-        return CheckReport(issues=(issue.issue,))
+        return CheckReport(issues=(public_refusal(exc,'periodic').issue,))
 
 
 @spec
@@ -423,24 +457,23 @@ class Prepared:
     def validate(self, problem):
         """Check concrete reuse and input admission without advancing fields."""
         try:
-            if _signature(problem, self.numerics) != self._signature:
-                raise IncompatibleProblemError('periodic layout changed; prepare this problem again', path='problem')
+            _same_layout(problem, self.numerics, self._signature)
             return _validated(problem, self.numerics, self.execution)
         except (TypeError, ValueError, NotImplementedError) as exc:
-            issue = exc if isinstance(exc, ValidationError) else ValidationError(str(exc), path='problem')
-            return CheckReport(issues=(issue.issue,))
+            return CheckReport(issues=(public_refusal(exc, 'periodic').issue,))
 
     def run(self,problem):
-        if _signature(problem,self.numerics)!=self._signature:
-            raise IncompatibleProblemError('periodic layout changed; prepare this problem again',path='problem')
-        return _run(problem,self.numerics,self.execution)
+        with refusals('periodic'):
+            _same_layout(problem,self.numerics,self._signature)
+            return _run(problem,self.numerics,self.execution)
 
 
 @eager_under_torch_compile
 def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
-    execution=_execution(numerics,backend,device,precision)
-    return Prepared(numerics=numerics,execution=execution,report=_validated(problem,numerics,execution),
-                    _signature=_signature(problem,numerics))
+    with refusals('periodic'):
+        execution=_execution(numerics,backend,device,precision)
+        return Prepared(numerics=numerics,execution=execution,report=_validated(problem,numerics,execution),
+                        _signature=_signature(problem,numerics))
 
 
 @spec
@@ -629,7 +662,8 @@ def _run(problem,numerics,execution):
 
 @eager_under_torch_compile
 def run(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
-    return _run(problem,numerics,_execution(numerics,backend,device,precision))
+    with refusals('periodic'):
+        return _run(problem,numerics,_execution(numerics,backend,device,precision))
 
 
 __all__=['Stack','Layer','Region','Rectangle','Circle','Ellipse','Polygon','Excitation','PlaneWave',

@@ -141,12 +141,12 @@ class Boundaries:
             value = getattr(self, axis)
             pair = value if isinstance(value, (tuple, list)) else (value, value)
             if len(pair) != 2 or any(not isinstance(v, FACES) for v in pair):
-                raise ValidationError('expected a physical face or (low, high) pair', path='scene.boundaries.'+axis)
+                raise ValidationError('expected a physical face or (low, high) pair', code='boundaries.face', path='scene.boundaries.'+axis)
             object.__setattr__(self, axis, tuple(pair))
 
     def face(self, name):
         if name not in ('x-', 'x+', 'y-', 'y+', 'z-', 'z+'):
-            raise ValidationError('unknown face', path='scene.boundaries', actual=name)
+            raise ValidationError('unknown face', code='boundaries.face', path='scene.boundaries', actual=name)
         return getattr(self, name[0])[name[1] == '+']
 
     @classmethod

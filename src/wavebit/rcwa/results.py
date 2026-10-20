@@ -104,7 +104,7 @@ class Result:
         observation = self.outputs.get(port)
         if observation is None or observation.efficiency is None:
             raise UnsupportedFeatureError('No single-incident-port diffraction efficiency was requested or is available for this result.',
-                                          code='output.unavailable', path=f'outputs.{port}.efficiency')
+                                          code='outputs.unavailable', path=f'outputs.{port}.efficiency')
         return observation.efficiency
 
     @property
@@ -129,13 +129,13 @@ class Result:
     def scattering(self):
         if self._scattering is None:
             raise UnsupportedFeatureError('Request Outputs(scattering=True) with the SMM algorithm before running.',
-                                          code='output.unavailable', path='outputs.scattering')
+                                          code='outputs.unavailable', path='outputs.scattering')
         return self._scattering
 
     def _fields(self):
         if not self._field_records:
             raise UnsupportedFeatureError('This result did not retain field reconstruction state. Request Outputs(fields=True).',
-                                          code='output.unavailable', path='outputs.fields')
+                                          code='outputs.unavailable', path='outputs.fields')
         return self._field_records
 
     def field(self, *, x, y, z):
@@ -190,7 +190,7 @@ class Result:
         """Net entering minus transmitted power, where the normalization is defined."""
         if 'absorption' not in self.outputs:
             raise UnsupportedFeatureError('Absorption is unavailable for this observation geometry.',
-                                          code='output.unavailable', path='outputs.absorption')
+                                          code='outputs.unavailable', path='outputs.absorption')
         return self.outputs['absorption']
 
 

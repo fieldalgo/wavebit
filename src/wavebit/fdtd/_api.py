@@ -37,7 +37,7 @@ def _static(v,path):
         array=np.asarray(v)
         return (array.shape,array.dtype.str,array.tobytes())
     except Exception as exc:
-        raise IncompatibleProblemError('this field is static for a prepared calculation',code='static_input',path=path) from exc
+        raise IncompatibleProblemError('this field is static for a prepared calculation',code='prepared.static_input',path=path) from exc
 
 
 def _leaf_shape(v):
@@ -76,9 +76,9 @@ def _execution(backend,device,precision):
     value=Execution(backend=backend,device=device,precision=precision)
     value.validate()
     if device!='cpu' and not (backend=='torch' and device.split(':')[0]=='cuda'):
-        raise UnsupportedFeatureError('FDTD supports CPU or the limited Torch CUDA route',code='device',path='execution.device')
+        raise UnsupportedFeatureError('FDTD supports CPU or the limited Torch CUDA route',code='execution.device',path='execution.device')
     if precision!='double':
-        raise UnsupportedFeatureError('the current FDTD executor requires double precision',code='precision',path='execution.precision')
+        raise UnsupportedFeatureError('the current FDTD executor requires double precision',code='execution.precision',path='execution.precision')
     return value
 
 
@@ -97,13 +97,13 @@ def _checkpoint(numerics,execution):
             raise ValueError('checkpoint_steps must be positive')
     except (TypeError,ValueError) as exc:
         raise ValidationError('checkpoint_steps must be a positive static integer or None',
-                              code='checkpoint_steps',path=path) from exc
+                              code='numerics.checkpoint_steps',path=path) from exc
     if execution.backend!='torch' or execution.device.split(':')[0]!='cuda':
         raise UnsupportedFeatureError('checkpoint_steps currently requires Torch CUDA execution',
-                                      code='checkpoint_scope',path=path)
+                                      code='numerics.checkpoint_scope',path=path)
     if numerics.stopping is not None:
         raise UnsupportedFeatureError('checkpoint_steps requires fixed-duration execution without a DecayStop',
-                                      code='checkpoint_scope',path='numerics.stopping')
+                                      code='numerics.checkpoint_scope',path='numerics.stopping')
     return value
 
 
@@ -120,7 +120,7 @@ def _cuda_homogeneous_ade(problem,scene):
     from wavebit._common.declarations import static_float
 
     def refuse(message,path):
-        raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
+        raise UnsupportedFeatureError(message,code='execution.cuda_scope',path=path)
 
     if type(problem.scene.background) is not Material:
         refuse('CUDA homogeneous ADE requires an ordinary Material background',
@@ -155,7 +155,7 @@ def _cuda_homogeneous_ade(problem,scene):
             raise IncompatibleProblemError(
                 'CUDA homogeneous ADE differentiates only oscillator weight and initial amplitude; '
                 'epsilon_inf, mu, gamma and omega_0 must be static scalars',
-                code='static_input',path=where) from exc
+                code='prepared.static_input',path=where) from exc
     grid=Grid.from_domain(scene.domain.size,scene.domain.center,scene.resolution.dx)
     if scene.structures[0].shape.filled_cells(grid)!=tuple((0,n) for n in grid.n):
         refuse('CUDA homogeneous ADE SnappedSlab must fill every cell of the actual rounded grid',
@@ -193,7 +193,7 @@ def _cuda_region(problem,scene):
     from ._kernel.grid import Grid
 
     def refuse(message,path):
-        raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
+        raise UnsupportedFeatureError(message,code='execution.cuda_scope',path=path)
 
     if len(problem.scene.structures)!=1:
         refuse('CUDA SnappedBox requires exactly one structure without SnappedSlab mixtures', 'scene.structures')
@@ -261,7 +261,7 @@ def _cuda_scope(problem,numerics,execution,*,scene=None):
     from wavebit._common.declarations import static_float
 
     def refuse(message,path):
-        raise UnsupportedFeatureError(message,code='cuda_scope',path=path)
+        raise UnsupportedFeatureError(message,code='execution.cuda_scope',path=path)
 
     if numerics.stopping is not None:
         refuse('CUDA requires a fixed duration; DecayStop remains CPU only','numerics.stopping')
@@ -287,7 +287,7 @@ def _cuda_scope(problem,numerics,execution,*,scene=None):
                     except (TypeError,ValueError) as exc:
                         raise IncompatibleProblemError(
                             'CUDA Bloch phase and wavevector must be static scalars',
-                            code='static_input',path='scene.boundaries.'+name+'.'+parameter) from exc
+                            code='prepared.static_input',path='scene.boundaries.'+name+'.'+parameter) from exc
         if has_bloch and type(face) in (boundaries.PEC,boundaries.PMC):
             refuse('CUDA Bloch currently supports Periodic or Open companion faces only',
                    'scene.boundaries.'+name)
@@ -388,9 +388,41 @@ def _report(problem,numerics,execution,scene,plan,metadata):
 
 
 def _issue(exc):
-    """``exc`` as a structured error, in the public vocabulary (``_spelling``)."""
+    """``exc`` as a structured error, in the public vocabulary (``_spelling``).
+
+    An engine refusal that is not one already carries the catch-all code: ``fdtd.unsupported``
+    for a ``NotImplementedError``, ``fdtd.invalid`` otherwise; its message is kept.
+    """
     exc=public_error(exc)
-    return exc if isinstance(exc,ValidationError) else ValidationError(str(exc),code='fdtd_input',path='problem')
+    if isinstance(exc,ValidationError):
+        return exc
+    if isinstance(exc,NotImplementedError):
+        return UnsupportedFeatureError(str(exc),code='fdtd.unsupported',path='problem')
+    return ValidationError(str(exc),code='fdtd.invalid',path='problem')
+
+
+def _changed(signature,prepared):
+    """The public path of the first prepared-structure entry that differs (``scene.domain``)."""
+    for key,value in signature.items():
+        if value==prepared[key]:
+            continue
+        if key in ('structures','sources') and len(value)==len(prepared[key]):
+            root='scene.structures.' if key=='structures' else 'sources.'
+            for item,old in zip(value,prepared[key]):
+                if item!=old:
+                    # Each entry is keyed by its declared name: the structure's, or the source's.
+                    name=item[0] if key=='structures' else dict(item[1]).get('name')
+                    return root+str(name) if isinstance(name,str) else root[:-1]
+        if key=='initial' and value is not None and prepared[key] is not None and value[0]==prepared[key][0]:
+            return 'initial.E' if value[1]!=prepared[key][1] else 'initial.H'
+        return _SIGNATURE_PATHS[key]
+    return 'problem'
+
+
+#: The declaration each prepared-structure signature entry fixes, as a public path.
+_SIGNATURE_PATHS={'units':'units.length','domain':'scene.domain','boundaries':'scene.boundaries',
+                  'background':'scene.background','structures':'scene.structures',
+                  'sources':'sources','outputs':'outputs','initial':'initial'}
 
 
 def _reraise_public(exc):
@@ -441,9 +473,9 @@ class Prepared:
         if not isinstance(problem, Problem):
             raise ValidationError('expected fdtd.Problem', code='problem.type', path='problem')
         signature=_signature(problem,self.numerics)
-        for key,value in signature.items():
-            if value!=self._signature[key]:
-                raise IncompatibleProblemError('changed prepared structure; prepare this problem again',code='prepared_structure',path=key)
+        if signature!=dict(self._signature):
+            raise IncompatibleProblemError('changed prepared structure; prepare this problem again',
+                                           code='prepared.structure',path=_changed(signature,self._signature))
         scene,metadata=lower_problem(problem,self.numerics,plan=self._plan)
         schedule=_checkpoint(self.numerics,self.execution)
         _cuda_scope(problem,self.numerics,self.execution,scene=scene)
@@ -451,7 +483,7 @@ class Prepared:
                         compact_poles=_compact_poles(problem,self.execution))
         if plan.skeleton!=self._plan.skeleton:
             path='numerics.duration' if (plan.steps,plan.dt)!=(self._plan.steps,self._plan.dt) else 'problem'
-            raise IncompatibleProblemError('resolved numerical dependencies changed; prepare this problem again',code='prepared_dependencies',path=path)
+            raise IncompatibleProblemError('resolved numerical dependencies changed; prepare this problem again',code='prepared.dependencies',path=path)
         return scene,metadata
 
     @eager_under_torch_compile
@@ -472,7 +504,9 @@ class Prepared:
                 metadata=dict(metadata,checkpoint_steps=raw.plan.schedule,numerical_policies=numerical_policies(
                     problem,self.numerics,scene,raw.plan))
                 return adapt_result(problem,self.numerics,self.execution,raw,metadata)
-            except (TypeError,ValueError,NotImplementedError,RuntimeError) as exc:
+            except (TypeError,ValueError,NotImplementedError) as exc:
+                raise _issue(exc) from exc
+            except RuntimeError as exc:
                 _reraise_public(exc)
 
 

@@ -38,7 +38,8 @@ A few rules cover the whole surface and are worth stating once:
 * **Declarations are immutable.** `.replace(...)` builds a new one and runs its validation
   again, and `prepared.run(problem)` takes the complete new problem.
 * **A refusal is named by its code and by when it is found.** A code such as `stack.period` is
-  the `.code` of the `ValidationError` or `UnsupportedFeatureError` raised. *At construction*
+  the `.code` of the `ValidationError` or `UnsupportedFeatureError` raised; every code has the
+  one `area.item` form listed in [Refusal codes](#refusal-codes). *At construction*
   is the declaration's own constructor; *at check* means `rcwa.check` reports it and
   `rcwa.prepare` and `rcwa.run` raise it; *at prepare* and *at run* mean nothing earlier sees
   it.
@@ -58,7 +59,7 @@ A few rules cover the whole surface and are worth stating once:
 | --- | --- | --- | --- |
 | `stack` | required | an `rcwa.Stack` | anything else: `problem.type`, at construction |
 | `excitation` | required | an `rcwa.Excitation` | anything else: `problem.type` |
-| `units` | `Units()`, metres | a `wavebit.Units`. `Units(length=...)` takes `'m'`, `'mm'`, `'um'` or `'nm'` | a bare string such as `'nm'`: `problem.type`; any other unit name: `unknown_length_unit` |
+| `units` | `Units()`, metres | a `wavebit.Units`. `Units(length=...)` takes `'m'`, `'mm'`, `'um'` or `'nm'` | a bare string such as `'nm'`: `problem.type`; any other unit name: `units.length` |
 | `outputs` | `Outputs()` | an `rcwa.Outputs` | anything else: `problem.type` |
 
 ### `rcwa.Outputs`
@@ -252,9 +253,9 @@ is how a `wavebit.Job` carries them. It is validated when a run uses it, not whe
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly, or a `wavebit.Backend` member | anything else (`'JAX'`, `1`): `backend` |
-| `device` | `'cpu'` | a string: `'cpu'`; on PyTorch also `'cuda'` or `'cuda:N'`; on JAX also `'gpu'` or `'tpu'`, optionally with `:N` | not a string (`0`): `device`; NumPy off the CPU, PyTorch's `'mps'` or JAX's `'cuda'`: `device`; a device that is not present: `device_unavailable` |
-| `precision` | `'double'` | `'double'` (complex128) or `'single'` (complex64) | anything else: `precision`; JAX `'double'` before `jax.config.update("jax_enable_x64", True)`: `jax_x64_disabled` |
+| `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly, or a `wavebit.Backend` member | anything else (`'JAX'`, `1`): `execution.backend`; an extra that is not installed: `execution.backend_unavailable` |
+| `device` | `'cpu'` | a string: `'cpu'`; on PyTorch also `'cuda'` or `'cuda:N'`; on JAX also `'gpu'` or `'tpu'`, optionally with `:N` | not a string (`0`): `execution.device`; NumPy off the CPU, PyTorch's `'mps'` or JAX's `'cuda'`: `execution.device`; a device that is not present: `execution.device_unavailable` |
+| `precision` | `'double'` | `'double'` (complex128) or `'single'` (complex64) | anything else: `execution.precision`; JAX `'double'` before `jax.config.update("jax_enable_x64", True)`: `execution.jax_x64` |
 
 ## Two axis-order rules, and where they meet
 
@@ -295,6 +296,70 @@ from `wavebit.compat.legacy`. `Answers` and `Tetm` name choices with no current 
 six -- `FourierCoefficients`, `Factorization`, `NormalMethod`, `Projector`, `Nesting` and
 `Formulation` -- equal their strings, so `rcwa.Numerics` accepts them, but a `Job` refuses them
 the same way.
+
+## Refusal codes
+
+Every structured failure -- a `ValidationError`, `UnsupportedFeatureError`,
+`IncompatibleProblemError` or `NumericalError`, and the `Issue` a `check` report holds -- carries a
+`.code` of one form, `area.item`: two or more lowercase dotted parts, each a snake-case word
+(`[a-z][a-z0-9_]*`). The area is the declaration or subsystem the refusal's `.path` names
+(`numerics`, `source`, `monitor`, `execution`, `prepared`, ...); the item says what is wrong with
+it. A code is matched exactly; the `.path` says where, and the message says why in words that may
+change.
+
+Each solver module has a catch-all pair for an engine refusal no specific code describes, with
+the engine's message kept: `rcwa.invalid` / `rcwa.unsupported`, `fdtd.invalid` /
+`fdtd.unsupported`, `native.invalid` / `native.unsupported` (`fdtd.native`) and
+`periodic.invalid` / `periodic.unsupported` (`fdtd.periodic`). The `.unsupported` code is an
+`UnsupportedFeatureError` (an engine `NotImplementedError`); the `.invalid` code a
+`ValidationError`. `check` reports the same code that `prepare`, `run` and `Prepared.run` raise.
+A failure constructed without a code takes its class's default: `input.invalid`
+(`ValidationError`), `feature.unsupported` (`UnsupportedFeatureError`), `problem.incompatible`
+(`IncompatibleProblemError`) or `numerical.failure` (`NumericalError`); no Wavebit refusal relies
+on one.
+
+`prepared.structure` is the one code, in every solver, for a problem whose fixed layout differs
+from the one a preparation fixed; its `.path` names the declaration that changed
+(`scene.domain`, `sources.<name>`, `initial.E`, `stack.layers[1].regions`, `units.length`, ...).
+
+| Area | Codes | Raised by |
+| --- | --- | --- |
+| `boundaries` | `boundaries.face` | `fdtd` |
+| `check`, `validate`, `prepare` | `check.concrete`, `validate.concrete`, `prepare.concrete` | `rcwa` |
+| `decay_check` | `decay_check.threshold`, `decay_check.window_seconds` | `fdtd.native`, `fdtd.periodic` |
+| `dispersion` | `dispersion.poles` | `fdtd.periodic` |
+| `excitation` | `excitation.sources` | `rcwa`, `fdtd.periodic` |
+| `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`; `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
+| `experimental` | `experimental.orders` | `rcwa.experimental` |
+| `fdtd` | `fdtd.invalid`, `fdtd.unsupported`, `fdtd.padding_continuation` | `fdtd` |
+| `field` | `field.coordinates` | `rcwa` |
+| `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
+| `initial` | `initial.type` | `fdtd` |
+| `job`, `record` | `job.encoding`, `job.schema`, `record.format` | `wavebit.Job`, run records |
+| `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.regions`, `layer.thickness` | `rcwa` |
+| `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field`; `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
+| `medium` | `medium.poles` | `fdtd.native` |
+| `migration` | `migration.shape`, `migration.shape_fields`, `migration.layer_fields`, `migration.layer_mu`, `migration.solver` | `wavebit.migration` |
+| `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source` | `fdtd` |
+| `native` | `native.invalid`, `native.unsupported` | `fdtd.native` |
+| `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance` | `rcwa` (`numerics.type` and `numerics.choice` also FDTD) |
+| `numerics` (FDTD) | `numerics.absorber`, `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `numerics.discretization`, `numerics.duration`, `numerics.geometry_ranges`, `numerics.junction`, `numerics.memory_bound`, `numerics.stopping`; `numerics.time_step_seconds`; `numerics.spacing`, `numerics.duration_seconds`, `numerics.transverse_spacing`, `numerics.reference_scope` | `fdtd`; `fdtd.native`; `fdtd.periodic` |
+| `observation` | `observation.empty`, `observation.order_labels`, `observation.shape`, `observation.wavelength_axis` | `wavebit.DiffractionOrders` |
+| `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
+| `outputs` | `outputs.boolean`, `outputs.unavailable` | `rcwa` |
+| `periodic` | `periodic.invalid`, `periodic.unsupported` | `fdtd.periodic` |
+| `prepared` | `prepared.structure`; `prepared.static_input`, `prepared.dependencies`; `prepared.topology`, `prepared.host_topology`, `prepared.host_topology_scope`, `prepared.source_grouping`, `prepared.detuning_transform`, `prepared.shape_topology`, `prepared.rectilinear_topology`, and the runtime guards `prepared.finite_inputs`, `prepared.positive_wavelength`, `prepared.nonnegative_thickness`, `prepared.nonzero_polarization`, `prepared.raster_partition` | every solver; `fdtd`; `rcwa` |
+| `problem` | `problem.type`, `problem.leaf` | every solver; `rcwa` |
+| `pulse` | `pulse.frequency_sigma_hz` | `fdtd.periodic` |
+| `rcwa` | `rcwa.invalid`, `rcwa.unsupported`, `rcwa.singular`, `rcwa.nonfinite`, `rcwa.host_geometry`, `rcwa.mixed_layer_encoding`, `rcwa.raster_partition_transform`, `rcwa.scattering_algorithm`, `rcwa.coherent_detuning`, `rcwa.coherent_diffraction`, `rcwa.coherent_half_space_merge`, `rcwa.coherent_scattering`, `rcwa.coherent_transform` | `rcwa` |
+| `scene` | `scene.type`, `scene.structure_name`, `scene.structure_name_duplicate` | `fdtd` |
+| `shape` | `shape.type`, `shape.dimension`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd` (`shape.type`) |
+| `snapshots` | `snapshots.every`, `snapshots.components`, `snapshots.slices` | `fdtd.native`, `fdtd.periodic` |
+| `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`; `source.amplitude`, `source.direction`, `source.polarization_value`; `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent` | `fdtd`; `rcwa` and `fdtd.periodic`; `rcwa` |
+| `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |
+| `structure` | `structure.concrete`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
+| `units` | `units.type`, `units.length` | every solver |
+| `wavelength` | `wavelength.value`, `wavelength.empty`, `wavelength.shape` | `rcwa`, `fdtd.periodic`, `wavebit.materials` |
 
 ## Earlier spellings
 

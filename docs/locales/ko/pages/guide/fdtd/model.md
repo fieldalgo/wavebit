@@ -220,7 +220,7 @@ flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없
 
 잘못된 selector 값은 공개 `Numerics(junction=...)` 또는
 `Numerics(discretization=...)` 표기와 지원하는 값으로 설명합니다. `check`는
-`invalid_input` issue를 반환하고 `prepare`는 같은 issue를 가진 `ValidationError`를
+`numerics.choice` issue를 반환하고 `prepare`는 같은 issue를 가진 `ValidationError`를
 발생시킵니다. `path`는 해당 설정을 가리키며 `actual`은 입력한 값을 보존합니다.
 
 `check(...).resolved["numerical_policies"]`와 `prepare(...).report.resolved`는 요청한
@@ -365,8 +365,8 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 `FieldMonitor`와 `FluxMonitor`는 `fdtd.Plane(z=.3, x=(-.05, .05))` 같은 유한 가로 범위도
 지원합니다. `PlaneWave`와 `DiffractionMonitor`는 가로 셀 전체를 사용하므로 두 가로
 범위를 모두 생략해야 합니다. 셀 경계와 일치하더라도 명시한 범위는 지원하지
-않으며, `sources.<name>.plane` 또는 `outputs.<name>.plane` 경로의 구조화된
-`plane_span` 오류가 됩니다. `check`는 이 오류를 보고하고, `prepare`와 `run`은
+않으며, `sources.<name>.plane` 경로의 구조화된 `source.plane_span` 오류 또는
+`outputs.<name>.plane` 경로의 `monitor.plane_span` 오류가 됩니다. `check`는 이 오류를 보고하고, `prepare`와 `run`은
 `UnsupportedFeatureError`를 발생시킵니다.
 
 | 소스 | 하는 일 |
@@ -395,7 +395,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 마지막 저장 노드 이내에서 끝나야 합니다(높은 쪽 domain 면 자체는 저장하지
 않습니다). `FieldMonitor` 구간은 요청한 모든 성분의 점을 포함해야 합니다.
 두 monitor 모두 물리 domain 밖의 요청 가로 구간을 자르거나 격자에 맞추기 전에
-`outputs.<name>.plane.<axis>` 경로의 `monitor_extent` 오류로 거부합니다.
+`outputs.<name>.plane.<axis>` 경로의 `monitor.extent` 오류로 거부합니다.
 역순 또는 폭이 0인 구간은 `Plane`을 만들 때 거부합니다.
 
 | 모니터 | 돌려주는 것 |
@@ -470,7 +470,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 `runtime_stability`가 true이면 구현된 런타임 certificate를 통과했다는
 뜻입니다. 모든 출력이나 미분값의 유한성을 스캔한 결과는 아닙니다.
 고정 시간 광원은 각 광원 행의 끝점에서 Gaussian 중간 연산의 표현 가능성도
-검사합니다. Concrete 무효 값은 `source_waveform_range`로 거부하고 carried
+검사합니다. Concrete 무효 값은 `source.waveform_range`로 거부하고 carried
 무효 값은 런타임 유효성을 실패시킵니다. 보수적인 범위 제한이므로 이상적인
 피복이 0이더라도 매우 큰 유한 펄스는 거부될 수 있습니다. 적응형 `DecayStop`
 경로는 변경하지 않습니다.

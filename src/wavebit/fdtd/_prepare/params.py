@@ -634,7 +634,7 @@ def _source_waveform_guard(scene, plan, params, rt, guard):
             raise ValidationError(
                 'Gaussian waveform arguments must remain finite and its frequency, '
                 'width and offset must remain positive finite over the fixed run',
-                code='source_waveform_range', path=f'sources.{source.name}')
+                code='source.waveform_range', path=f'sources.{source.name}')
     if not predicates:
         return guard
     ok = predicates[0]

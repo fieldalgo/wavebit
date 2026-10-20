@@ -212,9 +212,9 @@ def test_contract_static_pulse_dependencies_refuse_before_execution(monkeypatch,
     with pytest.raises(error) as caught:
         prepared.run(changed)
     if change in ('cutoff', 'center'):
-        assert caught.value.issue.code == 'prepared_structure' and caught.value.issue.path == 'sources'
+        assert caught.value.issue.code == 'prepared.structure' and caught.value.issue.path == 'sources.d'
     elif change == 'periods':
-        assert caught.value.issue.code == 'prepared_dependencies'
+        assert caught.value.issue.code == 'prepared.dependencies'
         assert caught.value.issue.path == 'numerics.duration'
     else:
         assert 'scalar' in str(caught.value)

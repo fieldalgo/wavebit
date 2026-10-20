@@ -230,7 +230,7 @@ fallback.
 
 Invalid selector values are reported with the public `Numerics(junction=...)` or
 `Numerics(discretization=...)` spelling and the supported choices. `check` returns
-an `invalid_input` issue and `prepare` raises `ValidationError` with the same issue:
+a `numerics.choice` issue and `prepare` raises `ValidationError` with the same issue:
 `path` identifies the selector and `actual` retains the supplied value.
 
 `check(...).resolved["numerical_policies"]` and `prepare(...).report.resolved` record
@@ -391,7 +391,8 @@ that band is the wavelength the resolution rule reads (next section). `amplitude
 `fdtd.Plane(z=.3, x=(-.05, .05))`. `PlaneWave` and `DiffractionMonitor` require the
 whole transverse cell: omit both transverse spans. Any explicit span, even
 one matching the cell boundaries, is unsupported and produces a structured
-`plane_span` issue at `sources.<name>.plane` or `outputs.<name>.plane`.
+`source.plane_span` issue at `sources.<name>.plane` or `monitor.plane_span` at
+`outputs.<name>.plane`.
 `check` reports the issue; `prepare` and `run` raise `UnsupportedFeatureError`.
 
 | Source | What it does |
@@ -422,7 +423,7 @@ or fractional edge-cell integration is performed. A finite `FluxMonitor` span mu
 least one cell and end at or before the last stored node (the high domain face is
 not stored); a `FieldMonitor` span must contain a point of every requested component.
 Both refuse requested transverse intervals outside the physical domain, before
-clipping or snapping, with `monitor_extent` at `outputs.<name>.plane.<axis>`.
+clipping or snapping, with `monitor.extent` at `outputs.<name>.plane.<axis>`.
 Reversed or zero-width intervals are refused when constructing `Plane`.
 
 | Monitor | Returns |
@@ -499,7 +500,7 @@ A true `runtime_stability` reports that the implemented runtime certificates
 passed; it is not a scan of every output or derivative for finite values.
 Fixed-time sources also check the representability of sampled Gaussian
 intermediates at each source row's endpoints. Concrete invalid values raise
-`source_waveform_range`; carried invalid values fail runtime validity. This
+`source.waveform_range`; carried invalid values fail runtime validity. This
 conservative restriction can refuse huge finite pulses even when the ideal
 envelope would be zero; the adaptive `DecayStop` path is unchanged. See the
 [waveform representability contract](../../validation/fdtd/general-cuda.md#fixed-time-waveform-representability).

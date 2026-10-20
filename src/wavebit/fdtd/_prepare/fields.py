@@ -61,14 +61,14 @@ def _check_static_host_pattern(name, value):
         raise IncompatibleProblemError(
             'CUDA initial field patterns must be static host values; use '
             'InitialField.amplitude for a live excitation scale',
-            code='static_input', path=f'initial.{name}')
+            code='prepared.static_input', path=f'initial.{name}')
     device = getattr(value, 'device', None)
     if device is not None:
         kind = getattr(device, 'type', getattr(device, 'platform', device))
         if str(kind).split(':')[0] != 'cpu':
             raise UnsupportedFeatureError(
                 'CUDA initial field patterns must be host values, including callable results',
-                code='cuda_scope', path=f'initial.{name}')
+                code='execution.cuda_scope', path=f'initial.{name}')
 
 
 def _is_complex(v):

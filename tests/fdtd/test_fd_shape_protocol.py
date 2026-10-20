@@ -819,4 +819,4 @@ def test_custom_protocol_support_is_used_for_open_face_clearance():
         fdtd.Structure('custom',shape=_Pebble(.18,center=(.25,0.,0.)),material=Material(epsilon=2.)),)))
     report=fdtd.check(touching,numerics=numerics)
     assert not report.ok
-    assert any(issue.code=='padding_continuation' for issue in report.issues)
+    assert any(issue.code=='fdtd.padding_continuation' for issue in report.issues)

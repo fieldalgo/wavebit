@@ -70,18 +70,18 @@ def test_bloch_prepared_static_changes_refuse_before_execution(device, monkeypat
     prepared = fdtd.prepare(problem, numerics=numerics(), backend='torch', device=name)
     if change == 'initial':
         altered = problem.replace(initial=problem.initial.replace(E=(0., 1. + .3j, 0.)))
-        path = 'initial'
+        path = 'initial.E'
     else:
         face = fdtd.Bloch(phase=.31) if change == 'phase' else fdtd.Bloch(k=.3 / .4)
         altered = problem.replace(scene=problem.scene.replace(
             boundaries=problem.scene.boundaries.replace(x=face)))
-        path = 'boundaries'
+        path = 'scene.boundaries'
     monkeypatch.setattr(api, 'execute', lambda *args, **kwargs: pytest.fail('static change executed'))
     report = prepared.validate(altered)
-    assert not report.ok and report.issues[0].code == 'prepared_structure'
+    assert not report.ok and report.issues[0].code == 'prepared.structure'
     with pytest.raises(IncompatibleProblemError) as caught:
         prepared.run(altered)
-    assert caught.value.code == 'prepared_structure' and caught.value.path == path
+    assert caught.value.code == 'prepared.structure' and caught.value.path == path
 
 
 @pytest.mark.parametrize('field', ['phase', 'k'])
@@ -91,7 +91,7 @@ def test_bloch_phase_and_wavevector_are_static_not_live_parameters(device, field
     problem = initial_problem(fdtd.Bloch(**{field: value}))
     with pytest.raises(IncompatibleProblemError) as caught:
         fdtd.prepare(problem, numerics=numerics(), backend='torch', device=name)
-    assert caught.value.code == 'static_input'
+    assert caught.value.code == 'prepared.static_input'
     assert caught.value.path.startswith('scene.boundaries.x')
     assert value.grad is None and value.device.type == 'cpu'
 
@@ -134,7 +134,7 @@ def test_cuda_bloch_dipole_refuses_without_constructing_a_runtime(monkeypatch):
         pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),))
     with pytest.raises(UnsupportedFeatureError) as caught:
         fdtd.prepare(problem, numerics=numerics(), backend='torch', device='cuda:0')
-    assert caught.value.code == 'cuda_scope' and caught.value.path == 'sources.d'
+    assert caught.value.code == 'execution.cuda_scope' and caught.value.path == 'sources.d'
 
 
 @pytest.mark.parametrize('wall', [fdtd.PEC, fdtd.PMC])
@@ -147,7 +147,7 @@ def test_cuda_bloch_wall_combination_remains_outside_qualified_scope(monkeypatch
         boundaries=problem.scene.boundaries.replace(z=wall())))
     with pytest.raises(UnsupportedFeatureError) as caught:
         fdtd.prepare(problem, numerics=numerics(), backend='torch', device='cuda:0')
-    assert caught.value.code == 'cuda_scope' and caught.value.path == 'scene.boundaries.z-'
+    assert caught.value.code == 'execution.cuda_scope' and caught.value.path == 'scene.boundaries.z-'
 
 
 @pytest.mark.parametrize('field', ['phase', 'k'])
@@ -168,11 +168,11 @@ def test_cuda_bloch_transformed_static_parameters_refuse_before_planning(monkeyp
         torch_forward_paths(torch)[transform](prepare, .3)
     if transform == 'torch.func.vmap':
         # Existing scalar lowering refuses batches before CUDA admission.
-        assert caught.value.code == 'fdtd_input' and caught.value.path == 'problem'
+        assert caught.value.code == 'fdtd.invalid' and caught.value.path == 'problem'
         assert 'Bloch(' + field in str(caught.value)
     else:
         assert isinstance(caught.value, IncompatibleProblemError)
-        assert caught.value.code == 'static_input'
+        assert caught.value.code == 'prepared.static_input'
         assert caught.value.path == 'scene.boundaries.x-.' + field
 
 
@@ -190,8 +190,8 @@ def test_cuda_bloch_reuse_cannot_introduce_a_forward_tangent(monkeypatch, field)
         dual = torch.autograd.forward_ad.make_dual(value, torch.ones_like(value))
         changed = initial_problem(fdtd.Bloch(**{field: dual}))
         report = prepared.validate(changed)
-        assert not report.ok and report.issues[0].code == 'static_input'
+        assert not report.ok and report.issues[0].code == 'prepared.static_input'
         with pytest.raises(IncompatibleProblemError) as caught:
             prepared.run(changed)
-        assert caught.value.code == 'static_input'
+        assert caught.value.code == 'prepared.static_input'
         assert caught.value.path == 'scene.boundaries.x-.' + field

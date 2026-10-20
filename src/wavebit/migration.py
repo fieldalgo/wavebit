@@ -38,7 +38,7 @@ def migrate_legacy_jobs(document, *, units):
                  {'type','cx','cy','lx','ly','l','angle','material'})
         unknown=set(shape)-allowed
         if unknown:
-            raise ValidationError(f'unsupported shape fields: {sorted(unknown)}',path='stack.layers.shapes')
+            raise ValidationError(f'unsupported shape fields: {sorted(unknown)}',code='migration.shape_fields',path='stack.layers.shapes')
         from wavebit._common.geometry.recipes import check_shape_spec
         check_shape_spec(shape)
         center=(shape.get('cx',0.),shape.get('cy',0.))
@@ -54,22 +54,22 @@ def migrate_legacy_jobs(document, *, units):
         elif kind=='polygon':
             geometry=rcwa.Polygon(vertices=shape['vertices'])
         else:
-            raise UnsupportedFeatureError(f'cannot migrate shape {kind!r}',path='stack.layers.shapes')
+            raise UnsupportedFeatureError(f'cannot migrate shape {kind!r}',code='migration.shape',path='stack.layers.shapes')
         return rcwa.Region(geometry=geometry,material=material(shape['material']))
 
     result=[]
     for point in spec.expand():
         if point.solver!='rcwa':
-            raise UnsupportedFeatureError('JobSpec migration accepts RCWA v10 jobs',path='solver')
+            raise UnsupportedFeatureError('JobSpec migration accepts RCWA v10 jobs',code='migration.solver',path='solver')
         layers=[]
         for layer in point.stack.layers:
             structure=layer.structure
             if isinstance(structure,dict):
                 if layer.mu is not None:
-                    raise ValidationError('parametric permeability belongs to each region material',path='stack.layers.mu')
+                    raise ValidationError('parametric permeability belongs to each region material',code='migration.layer_mu',path='stack.layers.mu')
                 unknown=set(structure)-{'background','shapes'}
                 if unknown:
-                    raise ValidationError(f'unsupported layer fields: {sorted(unknown)}',path='stack.layers')
+                    raise ValidationError(f'unsupported layer fields: {sorted(unknown)}',code='migration.layer_fields',path='stack.layers')
                 layers.append(rcwa.Layer(thickness=layer.thickness,background=material(structure.get('background',1.)),
                     regions=tuple(region(shape) for shape in structure.get('shapes',()))))
             else:

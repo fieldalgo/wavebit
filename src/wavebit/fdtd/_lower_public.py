@@ -23,7 +23,7 @@ def _number(value, path):
     try:
         return static_float('fdtd', path, value)
     except (TypeError, ValueError) as exc:
-        raise ValidationError(str(exc), code='static_input', path=path) from exc
+        raise ValidationError(str(exc), code='prepared.static_input', path=path) from exc
 
 
 #: Each public smoothed body and the engine body it lowers to. Explicit, never by class name:
@@ -38,11 +38,11 @@ def _geometry(shape, reserved=None):
     if isinstance(shape, geometry.Shape) and type(shape).__module__ != old_geometry.__name__:
         if reserved is not None:
             raise UnsupportedFeatureError('custom Shape geometry is static; geometry_ranges requires a built-in body',
-                                          path='numerics.geometry_ranges')
+                                          code='numerics.geometry_ranges', path='numerics.geometry_ranges')
         return shape
     engine = next((engine for public, engine in _SMOOTHED if isinstance(shape, public)), None)
     if engine is None:
-        raise UnsupportedFeatureError('unsupported geometry', path='scene.structures.shape', actual=type(shape).__name__)
+        raise UnsupportedFeatureError('unsupported geometry', code='shape.type', path='scene.structures.shape', actual=type(shape).__name__)
     fields = {f.name: getattr(shape, f.name) for f in dataclasses.fields(shape)}
     if 'angle' in fields:
         fields['angle'] = math.degrees(_number(fields['angle'], 'scene.structures.shape.angle'))
@@ -55,7 +55,7 @@ def _continue_box(item, shape, pad, physical_low, physical_high,
     """Extend only the explicitly declared homogeneous, fixed substrate faces."""
     path = 'scene.structures.' + item.name
     def refuse(message):
-        raise UnsupportedFeatureError(message, code='padding_continuation', path=path)
+        raise UnsupportedFeatureError(message, code='fdtd.padding_continuation', path=path)
     if not isinstance(shape, old_geometry.Box) or shape.angle != 0 or shape.range is not None:
         refuse('continuation requires a fixed, unturned Box; ranged or curved bodies cannot continue into PML')
     axes = {face[0] for face in item.continuation}
@@ -89,27 +89,32 @@ def _continue_box(item, shape, pad, physical_low, physical_high,
 
 def _pulse(value, units):
     if not isinstance(value, sources.GaussianPulse):
-        raise ValidationError('expected GaussianPulse', path='sources.pulse')
+        raise ValidationError('expected GaussianPulse', code='source.pulse', path='sources.pulse')
     return old_sources.Band(wavelength=value.wavelength,
                            df=units._rate_to_internal(value.frequency_sigma_hz), cutoff=value.cutoff)
+
+
+def _area(path):
+    """The code area of a source or monitor path: ``'source'`` or ``'monitor'``."""
+    return 'source' if path.startswith('sources.') else 'monitor'
 
 
 def _full_cell_plane(plane, path):
     """Full-cell ports cannot implement a finite transverse aperture."""
     if not isinstance(plane, geometry.Plane):
-        raise ValidationError('expected Plane', path=path)
+        raise ValidationError('expected Plane', code=_area(path)+'.plane', path=path)
     spans = {a: getattr(plane, a) for i, a in enumerate('xyz')
              if i != plane.axis and getattr(plane, a) is not None}
     if spans:
         raise UnsupportedFeatureError(
             'PlaneWave and DiffractionMonitor require the full transverse cell; '
             'omit transverse Plane spans. FieldMonitor and FluxMonitor support finite spans.',
-            code='plane_span', path=path, expected='no transverse spans', actual=spans)
+            code=_area(path)+'.plane_span', path=path, expected='no transverse spans', actual=spans)
 
 
 def _source(source, units):
     if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
-        raise UnsupportedFeatureError('unsupported source', path='sources', actual=type(source).__name__)
+        raise UnsupportedFeatureError('unsupported source', code='source.type', path='sources', actual=type(source).__name__)
     kw = dict(name=source.name, band=_pulse(source.pulse, units),
               amplitude=source.current_moment if isinstance(source,sources.CurrentDipole) else source.amplitude,
               phase=source.phase, delay=units._time_to_internal(source.delay_seconds))
@@ -151,7 +156,7 @@ def _monitor_geometry(m, field, expected):
     """
     value = getattr(m, field)
     if not isinstance(value, _GEOMETRY):
-        raise ValidationError('expected ' + expected, path='outputs.'+m.name+'.'+field)
+        raise ValidationError('expected ' + expected, code='monitor.geometry', path='outputs.'+m.name+'.'+field)
     return _geometry(value)
 
 
@@ -176,14 +181,14 @@ def _monitor(m, problem):
     if isinstance(m, monitors.DiffractionMonitor):
         choices = [s for s in problem.sources if s.name == m.source]
         if len(choices) != 1 or not isinstance(choices[0], sources.PlaneWave):
-            raise ValidationError('a DiffractionMonitor source must name one PlaneWave', path='outputs.'+m.name+'.source')
+            raise ValidationError('a DiffractionMonitor source must name one PlaneWave', code='monitor.source', path='outputs.'+m.name+'.source')
         if len(problem.sources) != 1:
-            raise UnsupportedFeatureError('normalized diffraction currently requires one PlaneWave', path='outputs.'+m.name)
+            raise UnsupportedFeatureError('normalized diffraction currently requires one PlaneWave', code='monitor.source', path='outputs.'+m.name)
         _full_cell_plane(m.plane, 'outputs.'+m.name+'.plane')
         return old_monitors.Diffraction(m.name, **{'xyz'[m.plane.axis]: m.plane.position},
             side=_ENGINE_SIDE[m.wave], wavelengths=m.wavelengths, orders=m.orders,
             reference_plane=m.reference_plane, incident_plane=m.incident_plane)
-    raise UnsupportedFeatureError('unsupported monitor', path='outputs.monitors', actual=type(m).__name__)
+    raise UnsupportedFeatureError('unsupported monitor', code='monitor.type', path='outputs.monitors', actual=type(m).__name__)
 
 
 def _monitor_plane_bounds(monitor, low, high):
@@ -198,7 +203,7 @@ def _monitor_plane_bounds(monitor, low, high):
         if span is not None and (not all(math.isfinite(v) for v in span)
                                  or span[0] < low[a] - 1e-12 or span[1] > high[a] + 1e-12):
             raise ValidationError('monitor aperture is outside the physical domain',
-                                  code='monitor_extent', path='outputs.'+monitor.name+'.plane.'+axis,
+                                  code='monitor.extent', path='outputs.'+monitor.name+'.plane.'+axis,
                                   expected=(low[a], high[a]), actual=span)
 
 
@@ -214,19 +219,19 @@ def validate_sources(problem):
         indexed = f'sources[{index}]'
         if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
             raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole or TFSF',
-                                          path=indexed, actual=type(source).__name__)
+                                          code='source.type', path=indexed, actual=type(source).__name__)
         if not isinstance(source.name, str) or not source.name:
-            raise ValidationError('source name must be a nonempty string', path=indexed+'.name')
+            raise ValidationError('source name must be a nonempty string', code='source.name', path=indexed+'.name')
         if source.name in names:
-            raise ValidationError('source names must be unique', path=indexed+'.name', actual=source.name)
+            raise ValidationError('source names must be unique', code='source.name_duplicate', path=indexed+'.name', actual=source.name)
         names.add(source.name)
         path = 'sources.' + source.name
         if not isinstance(source.pulse, sources.GaussianPulse):
-            raise ValidationError('expected GaussianPulse', path=path+'.pulse',
+            raise ValidationError('expected GaussianPulse', code='source.pulse', path=path+'.pulse',
                                   actual=type(source.pulse).__name__)
         if isinstance(source, sources.TFSF) and not isinstance(source.box, geometry.SnappedBox):
             raise ValidationError('expected SnappedBox: a TFSF surface uses cell-snapped node planes; '
-                                  'Box is a smoothed structure body', path=path+'.box',
+                                  'Box is a smoothed structure body', code='source.box', path=path+'.box',
                                   actual=type(source.box).__name__)
 
 
@@ -239,7 +244,7 @@ def _stencil_memory_bound(problem, numerics):
     if numerics.discretization != 'stencil' or not any(
             type(item.shape) is geometry.Sphere for item in problem.scene.structures):
         raise ValidationError("memory_bound requires discretization='stencil' with a Sphere",
-                              path=path, actual=bound)
+                              code='numerics.memory_bound', path=path, actual=bound)
     try:
         valid = (not isinstance(bound, bool) and isinstance(bound, Real)
                  and math.isfinite(bound) and bound > 0)
@@ -247,24 +252,24 @@ def _stencil_memory_bound(problem, numerics):
         valid = False
     if not valid:
         raise ValidationError('memory_bound must be a positive, finite number of bytes',
-                              path=path, actual=bound)
+                              code='numerics.memory_bound', path=path, actual=bound)
 
 
 def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
-        raise ValidationError('expected fdtd.Problem and fdtd.Numerics', path='problem')
+        raise ValidationError('expected fdtd.Problem and fdtd.Numerics', code='problem.type', path='problem')
     validate_sources(problem)
     if not isinstance(numerics.grid, UniformGrid) or not isinstance(numerics.duration, Duration):
-        raise ValidationError('expected UniformGrid and Duration', path='numerics')
+        raise ValidationError('expected UniformGrid and Duration', code='numerics.type', path='numerics')
     if not isinstance(numerics.absorber, (PML, ConductiveAbsorber)):
-        raise UnsupportedFeatureError('choose PML or ConductiveAbsorber numerical padding', path='numerics.absorber')
+        raise UnsupportedFeatureError('choose PML or ConductiveAbsorber numerical padding', code='numerics.absorber', path='numerics.absorber')
     scene, units = problem.scene, problem.units
     _stencil_memory_bound(problem, numerics)
     rule = numerics.discretization
     if rule not in ('voxel', 'stencil'):
         raise ValidationError(
             f"Numerics(discretization={rule!r}): the two spellings are 'voxel' and 'stencil'.",
-            path='numerics.discretization', actual=rule)
+            code='numerics.choice', path='numerics.discretization', actual=rule)
     if rule == 'stencil':
         # Whole-cell shapes retain their fill rule. Do not silently fall back for
         # unsupported smoothed bodies or accept an option that affects nothing.
@@ -275,10 +280,10 @@ def lower_problem(problem, numerics, *, plan=None):
         if unsupported:
             raise UnsupportedFeatureError(
                 'stencil supports only Sphere smoothed bodies; SnappedSlab/SnappedBox keep whole-cell fills',
-                path='numerics.discretization', actual=unsupported)
+                code='numerics.discretization', path='numerics.discretization', actual=unsupported)
         if not any(type(s) is geometry.Sphere for s in shapes):
             raise UnsupportedFeatureError('stencil requires an applicable Sphere smoothed body',
-                                          path='numerics.discretization')
+                                          code='numerics.discretization', path='numerics.discretization')
     dx = _number(numerics.grid.spacing, 'numerics.grid.spacing')
     old_scene.Resolution(dx=dx)
     physical_n = tuple(cell_count(s, dx) for s in scene.domain.size)
@@ -303,7 +308,7 @@ def lower_problem(problem, numerics, *, plan=None):
     structures = []
     unknown_ranges = set(numerics.geometry_ranges)-{s.name for s in scene.structures}
     if unknown_ranges:
-        raise ValidationError('range names an absent structure', path='numerics.geometry_ranges', actual=sorted(unknown_ranges))
+        raise ValidationError('range names an absent structure', code='numerics.geometry_ranges', path='numerics.geometry_ranges', actual=sorted(unknown_ranges))
     for item in scene.structures:
         material = lower_material(item.material, units=units)
         shape = _geometry(item.shape, numerics.geometry_ranges.get(item.name))
@@ -325,7 +330,7 @@ def lower_problem(problem, numerics, *, plan=None):
             shape = shape.replace(**{axis_name:tuple(bounds)})
             # A slab cutting an orthogonal open face is heterogeneous along that face.
             if any(n for f,n in pad.items() if f[0] != axis_name):
-                raise UnsupportedFeatureError('a slab crossing an orthogonal Open face has no homogeneous PML continuation', code='padding_continuation', path='scene.structures.'+item.name)
+                raise UnsupportedFeatureError('a slab crossing an orthogonal Open face has no homogeneous PML continuation', code='fdtd.padding_continuation', path='scene.structures.'+item.name)
         elif any(pad.values()):
             # Supported bodies are fully contained in the physical region; their lowerer
             # subsequently applies the stricter Yee/interpolation halo clearance checks.
@@ -347,7 +352,7 @@ def lower_problem(problem, numerics, *, plan=None):
                      and _number(lo[a], 'scene.structures.'+item.name) <= physical_low[a]) or
                     (pad[axis+'+'] and axis+'+' not in item.continuation
                      and _number(hi[a], 'scene.structures.'+item.name) >= physical_high[a])):
-                    raise UnsupportedFeatureError('a finite body touches an Open face; its continuation into padding is unspecified', code='padding_continuation', path='scene.structures.'+item.name)
+                    raise UnsupportedFeatureError('a finite body touches an Open face; its continuation into padding is unspecified', code='fdtd.padding_continuation', path='scene.structures.'+item.name)
         structures.append(old_geometry.Structure(shape, material,
                           discretisation=rule if type(shape) is old_geometry.Sphere else 'voxel'))
     if numerics.memory_bound is not None:
@@ -358,7 +363,7 @@ def lower_problem(problem, numerics, *, plan=None):
     invalid_references = set(references)-{f for f,n in pad.items() if n}
     if invalid_references:
         raise ValidationError('PML reference_media must name Open faces with padding',
-                              path='numerics.absorber.reference_media', actual=sorted(invalid_references))
+                              code='numerics.absorber', path='numerics.absorber.reference_media', actual=sorted(invalid_references))
     # A public mirror or invariant axis lowers to one engine face per declared object, so a
     # face shared between declarations stays one object -- and its traced k one leaf.
     engine_faces = {}
@@ -391,7 +396,7 @@ def lower_problem(problem, numerics, *, plan=None):
     if duration.periods is not None:
         selected=[s for s in problem.sources if s.name==duration.source]
         if len(selected)!=1:
-            raise ValidationError('duration source must name exactly one source',path='numerics.duration.source')
+            raise ValidationError('duration source must name exactly one source',code='numerics.duration',path='numerics.duration.source')
         wavelength=_number(selected[0].pulse.wavelength,'sources.'+duration.source+'.pulse.wavelength')
         run=old_scene.Run(time=_number(duration.periods,'numerics.duration.periods')*wavelength,courant=numerics.courant)
     elif duration.seconds is not None:
@@ -399,14 +404,14 @@ def lower_problem(problem, numerics, *, plan=None):
     else:run=old_scene.Run(steps=duration.steps,courant=numerics.courant)
     if numerics.stopping is not None:
         if not isinstance(numerics.stopping, DecayStop):
-            raise ValidationError('expected DecayStop or None', path='numerics.stopping')
+            raise ValidationError('expected DecayStop or None', code='numerics.stopping', path='numerics.stopping')
         run=run.replace(decay=old_monitors.Decay(threshold=numerics.stopping.threshold,
             window=units._time_to_internal(_number(numerics.stopping.window_seconds,
                                                   'numerics.stopping.window_seconds'))))
     initial=None
     if problem.initial is not None:
         if not isinstance(problem.initial,sources.InitialField):
-            raise ValidationError('expected fdtd.InitialField',path='initial')
+            raise ValidationError('expected fdtd.InitialField',code='initial.type',path='initial')
         initial=old_sources.InitialField(E=problem.initial.E,H=_scaled_initial(problem.initial.H,Z0),amplitude=problem.initial.amplitude)
     # Validate physical monitor positions before adding the implementation padding.
     outputs=tuple(_monitor(m,problem) for m in problem.outputs.monitors)
@@ -414,21 +419,21 @@ def lower_problem(problem, numerics, *, plan=None):
         _monitor_plane_bounds(m, physical_low, physical_high)
         if isinstance(m,old_monitors.Record):
             if any(not(a<=p<=b) for a,p,b in zip(physical_low,m.at,physical_high)):
-                raise ValidationError('monitor is outside the physical domain',path='outputs.'+m.name)
+                raise ValidationError('monitor is outside the physical domain',code='monitor.outside_domain',path='outputs.'+m.name)
         else:old_scene._monitor_inside(m,physical_low,physical_high)
     for source in problem.sources:
         if isinstance(source,sources.PlaneWave):
             if not isinstance(source.plane, geometry.Plane):
-                raise ValidationError('expected Plane', path='sources.'+source.name+'.plane')
+                raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
             axis=source.plane.axis
             if not physical_low[axis]<=source.plane.position<=physical_high[axis]:
-                raise ValidationError('source is outside the physical domain',path='sources.'+source.name+'.plane')
+                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.plane')
         elif isinstance(source,sources.CurrentDipole):
             if any(not a<=p<=b for a,p,b in zip(physical_low,source.center,physical_high)):
-                raise ValidationError('source is outside the physical domain',path='sources.'+source.name+'.center')
+                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.center')
         elif isinstance(source,sources.TFSF):
             if any(a<low or b>high for a,b,low,high in zip(source.box.low,source.box.high,physical_low,physical_high)):
-                raise ValidationError('source is outside the physical domain',path='sources.'+source.name+'.box')
+                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.box')
     legacy=old_scene.Scene(domain=old_scene.Domain(size=size,center=center),
         boundaries=old_boundaries.Boundaries(**converted),resolution=old_scene.Resolution(dx=dx),run=run,
         background=background,structures=tuple(structures),sources=tuple(_source(s,units) for s in problem.sources),
@@ -441,7 +446,7 @@ def lower_problem(problem, numerics, *, plan=None):
     if not isinstance(numerics.junction, str) or numerics.junction not in RULES:
         raise ValidationError(
             f'Numerics(junction={numerics.junction!r}): choose split, staircase, or refuse.',
-            path='numerics.junction', actual=numerics.junction)
+            code='numerics.choice', path='numerics.junction', actual=numerics.junction)
     if numerics.junction != DEFAULT:
         from ._prepare.shape_ranges import traced
         if plan is not None:
@@ -451,12 +456,12 @@ def lower_problem(problem, numerics, *, plan=None):
             if any(traced(legacy.replace(structures=(structures[i],))) for i in standing):
                 raise UnsupportedFeatureError(
                     "a traced standing body supports junction='split' only; "
-                    'staircase and refuse cannot be differentiated', path='numerics.junction')
+                    'staircase and refuse cannot be differentiated', code='numerics.junction', path='numerics.junction')
         else:
             if traced(legacy):
                 raise UnsupportedFeatureError(
                     'non-default junction policy requires preparation from concrete geometry',
-                    path='numerics.junction')
+                    code='numerics.junction', path='numerics.junction')
             from ._kernel.grid import Grid
             from ._prepare.checks import _shared_surface_voxels
             grid = Grid.from_domain(size=size, center=center, dx=dx)
@@ -476,7 +481,7 @@ def lower_problem(problem, numerics, *, plan=None):
                             standing.add(roles[1])
         if not standing:
             raise ValidationError('no supported flush pair reads this non-default policy',
-                                  path='numerics.junction', actual=numerics.junction)
+                                  code='numerics.junction', path='numerics.junction', actual=numerics.junction)
         legacy = legacy.replace(structures=tuple(
             s.replace(junction=numerics.junction) if i in standing else s
             for i, s in enumerate(structures)))
