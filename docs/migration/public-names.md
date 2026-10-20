@@ -1,4 +1,4 @@
-# Public names (2026-10-19, 2026-10-20)
+# Public names and result keys (2026-10-19, 2026-10-20)
 
 Wavebit is still in alpha, so the general-FDTD declarations were renamed in one clean break.
 Every class is now named for what it is, every monitor for what it records, and every keyword
@@ -14,7 +14,9 @@ This page covers `wavebit.fdtd` and, from a second change the same day, the expl
 modules `fdtd.native` and `fdtd.periodic`
 ([native-grid and periodic-stack names](#native-grid-and-periodic-stack-names)), and, from a
 third change the next day, RCWA, the observation objects and the shared modules
-([shared, observation and RCWA names](#shared-observation-and-rcwa-names)).
+([shared, observation and RCWA names](#shared-observation-and-rcwa-names)), and, from a fourth
+change the same day, the keys every solver's results and reports use
+([result and report keys](#result-and-report-keys)).
 
 ## Classes
 
@@ -359,3 +361,119 @@ classes, but it loads only if its job does: a record whose job holds an `OrderEx
 The solvers receive the same inputs. The FDTD plan skeletons are unchanged: the materials
 modules that became private are still recorded under their old names. No reference golden or
 solver tolerance changed.
+
+## Result and report keys
+
+The fourth change (2026-10-20) gives the facts every solver reports one key each: the same check,
+time step, reference value or error has the same name in `rcwa`, `fdtd`, `fdtd.native` and
+`fdtd.periodic`. A key is renamed, not aliased: reading an old key raises `KeyError`. Nothing
+numerical changed.
+
+### Validity, time step and decay
+
+| Before | After |
+| --- | --- |
+| native `validity.checks['stable']`, `['finite_fields']` | `['runtime_stability']`, `['numerical_finite']` |
+| periodic `validity.checks['stable']`, `['finite']` (R only) | `['runtime_stability']`, `['numerical_finite']` (R and T) |
+| general FDTD: no finiteness check | `validity.checks['numerical_finite']` over every monitor output and the final fields |
+| `fdtd` `report.resolved['dt_seconds']`, `provenance['dt_seconds']`, `contract['resolved_dt_seconds']` | `'time_step_seconds'`, `'time_step_seconds'`, `'resolved_time_step_seconds'` |
+| native `diagnostics['tail']`; `validity.convergence` was that report | `diagnostics['decay']`; `validity.convergence == {'decay': report or None}` |
+| periodic `diagnostics['convergence']`; `validity.convergence` was that report plus `residual` | `diagnostics['decay']`; `validity.convergence == {'decay': report or None, 'residual': ...}` |
+| inside a decay report: `tolerance`, periodic `units` sub-mapping | `threshold` (as `DecayCheck(threshold=)`), `<quantity>_units` keys |
+| `invariant_axes` a count (general FDTD); periodic `diagnostics['invariant_y']` | `invariant_axes`, a tuple of axis names, `()` when none |
+
+Under `fdtd.periodic` `algorithm='reference'` the stepping assesses no stability, so
+`validity.checks['runtime_stability']` is `None` (not assessed). It used to read `True` by
+default.
+
+### Provenance
+
+Every solver's `provenance` has `solver`, `execution`, `numerics`, `units`, `coordinate_frame`
+and `time_convention` (`'exp(-i*omega*t)'`, one spelling everywhere). General FDTD no longer has
+the flat `backend`, `device` and `precision` keys: read `provenance['execution'].device`.
+`provenance['units']` is the `Units` declaration. native and periodic also report
+`time_step_seconds`. periodic's `coordinate_convention` is `coordinate_frame`. rcwa's
+`code_version` is the installed package version (it was a fixed `'0.1.0'`).
+
+### Diffraction references
+
+`DiffractionOrders.reference` (and `RawDiffractionSpectrum.reference`) has one core key set
+from every producer:
+
+| Key | Meaning | Before |
+| --- | --- | --- |
+| `port` | the face the orders leave through: `'top'`/`'bottom'` in rcwa and `fdtd.periodic`, a face such as `'z+'` in `fdtd` | fdtd `port` held `'reflect'`/`'transmit'`; periodic `side` |
+| `wave` | `'reflected'` or `'transmitted'` | new |
+| `plane` | the port plane along its normal, in length units | rcwa and periodic `z` |
+| `length_units` | the length unit of `plane` and the coordinates | `length_unit`; periodic `coordinates` |
+| `lateral_origin` | coordinates | periodic `'cell_centre'` (now `(0., 0.)`) |
+| `incident_amplitude`, `incident_amplitude_units` | the incident amplitude and its unit | rcwa `incident_electric_amplitude_v_per_m` |
+| `cell_measure`, `cell_measure_units` | the periodic cell's measure: `'m^2'`, or `'m'`/`'1'` per unit length of each invariant axis | `cell_area_m2`; numeric `integration_measure(_units)` |
+| `invariant_axes` | axis names | a count |
+
+rcwa also has `incident_power` and `incident_power_units` (was `incident_power_w`). The unit
+labels of a reference (`amplitude_units`, `power_units`, `wavevector_units`) are in `reference`
+for every producer. A dimensionless amplitude is labeled `'1'`. rcwa's metadata string
+`integration_measure` (`'periodic cell'`) is gone.
+
+### Units and sample times
+
+- Unit-label keys end in `_units`: `length_unit` → `length_units`, `time_unit` → `time_units`,
+  native `E_unit`/`H_unit`/`polarization_unit`/`spectral_power_unit` → `*_units`, periodic plane
+  metadata `power_unit` → `power_units`. One spelling per unit, ASCII: `'V*s/m'`, `'A*s/m'`,
+  `'C/m^2'`, `'W*s^2'`.
+- `FieldSamples.units` (and `TimeSeries`, `RawFieldSpectrum`) is one mapping everywhere: each
+  component present (`'Ex'` to `'Hz'`) plus `'coordinates'`. An fdtd `TimeSeries.units` was a
+  string, native snapshots `{'field', 'coordinates', 'time'}`, final fields `{'E', 'H'}`.
+- E and H sample times: fdtd `final_fields` metadata `E_time`/`H_time` and native
+  `diagnostics['time_seconds']`/`['magnetic_time_seconds']` → `E_time_seconds`/`H_time_seconds`.
+- `fdtd.Result.source_references` entries: `time` → `times_seconds`, `magnetic_time` →
+  `magnetic_times_seconds`, `field_time` → `field_times_seconds`, `incident` → `incident_E`,
+  `plane` → `plane_E` (beside `incident_H`, `plane_H`), `time_unit`/`length_unit` →
+  `time_units`/`length_units`; `field_units` is always a mapping.
+- `diagnostics['grazing']` rows say `polarization(s)`, `stabilizing_loss` and `invariant_axes`
+  (axis names), the public names; they said `polarisation(s)`, `stabilize` and `axis1d`.
+- Emitted values use American spelling: `'cell_center'` and `omitted_center` in the capability
+  manifest, `'cell center (0,0)'` in `rcwa.operators` metadata, `'explicit cell-centered
+  operators'` in rcwa provenance.
+
+### Error codes
+
+Every public refusal has a code of the form `area.item` (lowercase, dotted), listed in
+[keywords](../reference/keywords.md). A code that was not of that form was renamed; the most
+visible ones:
+
+| Before | After |
+| --- | --- |
+| `invalid_input` (the default, on about a hundred sites) | a specific code (`monitor.plane`, `numerics.duration`, `source.name_duplicate`, ...); the default is now `input.invalid` |
+| fdtd `prepared_structure`; native and periodic `invalid_input` | `prepared.structure` in every solver, with the path of the declaration that changed (`scene.domain`, `stack.layers`, ...) |
+| fdtd `prepared_dependencies`, `static_input`, `cuda_scope` | `prepared.dependencies`, `prepared.static_input`, `execution.cuda_scope` |
+| fdtd `checkpoint_steps`, `checkpoint_scope`, `fdtd_input` | `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `fdtd.invalid` |
+| fdtd `plane_span`, `monitor_extent`, `source_waveform_range`, `padding_continuation` | `source.plane_span` or `monitor.plane_span`, `monitor.extent`, `source.waveform_range`, `fdtd.padding_continuation` |
+| `backend`, `device`, `precision`, `device_unavailable`, `jax_x64_disabled` | `execution.backend`, `execution.device`, `execution.precision`, `execution.device_unavailable`, `execution.jax_x64` |
+| `unknown_length_unit`, `units_required` | `units.length`, `units.type` |
+| `material_scalar`, `material_shape`, `material_poles`, `material_wavelength`, `fdtd_material` | `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.fdtd` |
+| rcwa `output.unavailable` | `outputs.unavailable` |
+
+`fdtd.native` and `fdtd.periodic` `prepare` and `run` now raise a coded `ValidationError`
+(`native.invalid`, `periodic.invalid`, or a specific code) where an engine refusal used to escape
+as a plain `ValueError`; `check` already reported the same failure.
+
+### `orders` is an explicit pair
+
+`orders=` is the half-width pair `(Mu, Mv)` along the two lattice vectors in every public call:
+`rcwa.Numerics`, `fdtd.periodic.Numerics`, `fdtd.DiffractionMonitor` and the `rcwa.experimental`
+builders. A bare integer is refused with code `numerics.orders`, `monitor.orders` or
+`experimental.orders`, and the message names the pair to write. It used to mean `(M, M)` in
+`fdtd.DiffractionMonitor` and the experimental builders, `(M, 0)` in `fdtd.periodic.Numerics`,
+and crashed `rcwa.Numerics` with a bare `TypeError`. Write `orders=(0, 0)` for `orders=0`.
+NumPy integers are accepted; `True`/`False` are not. The experimental builders' defaults are
+`(3, 3)` and `(1, 1)`, and the transmission gap cell's `closure()` metadata key `order` is
+`orders`.
+
+### Result-key job files, run records and numbers
+
+No job field changes, so job keys and `wavebit.job/v2` are unchanged. Run records stay
+`wavebit.run/v2`: a record stores a result's mappings as they were, so a record saved earlier
+still loads with its old keys, and a record saved now has the new ones. The capability manifest is
+version 26. Every number, plan skeleton and reference golden is unchanged.

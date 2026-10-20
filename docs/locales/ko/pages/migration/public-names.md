@@ -1,4 +1,4 @@
-# 공개 이름 (2026-10-19, 2026-10-20)
+# 공개 이름과 결과 키 (2026-10-19, 2026-10-20)
 
 Wavebit은 아직 알파 단계이므로 general-FDTD 선언의 이름을 한 번에 바꿨습니다. 이제 모든
 클래스는 그것이 무엇인지로, 모든 모니터는 무엇을 기록하는지로 이름이 붙고, 단위가 분명하지 않은
@@ -12,7 +12,8 @@ Wavebit은 아직 알파 단계이므로 general-FDTD 선언의 이름을 한 �
 페이지는 `wavebit.fdtd`와, 같은 날의 두 번째 변경으로 이름이 바뀐 명시적 격자 모듈 `fdtd.native`,
 `fdtd.periodic`을 다룹니다([native 격자와 주기 적층의 이름](#native-grid-and-periodic-stack-names)).
 다음 날의 세 번째 변경으로 이름이 바뀐 RCWA, 관측 객체, 공통 모듈도 다룹니다
-([공통·관측·RCWA 이름](#shared-observation-and-rcwa-names)).
+([공통·관측·RCWA 이름](#shared-observation-and-rcwa-names)). 같은 날의 네 번째 변경으로 바뀐, 모든
+솔버의 결과와 보고서가 쓰는 키도 다룹니다([결과와 보고 키](#result-and-report-keys)).
 
 ## 클래스
 
@@ -346,3 +347,115 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 
 솔버는 같은 입력을 받습니다. FDTD 계획 골격은 바뀌지 않았습니다. 비공개가 된 materials 모듈은
 여전히 옛 이름으로 기록됩니다. 기준 골든과 솔버 허용 오차는 하나도 바뀌지 않았습니다.
+
+## Result and report keys
+
+네 번째 변경(2026-10-20)은 모든 솔버가 보고하는 같은 사실에 키 하나씩을 줍니다. 같은 검사, 시간
+간격, 기준 값, 오류가 `rcwa`, `fdtd`, `fdtd.native`, `fdtd.periodic`에서 같은 이름을 갖습니다. 키는
+별칭 없이 이름만 바뀌므로 옛 키를 읽으면 `KeyError`가 납니다. 수치 계산은 바뀌지 않았습니다.
+
+### 검증, 시간 간격, 감쇠
+
+| 이전 | 이후 |
+| --- | --- |
+| native `validity.checks['stable']`, `['finite_fields']` | `['runtime_stability']`, `['numerical_finite']` |
+| periodic `validity.checks['stable']`, `['finite']`(R만) | `['runtime_stability']`, `['numerical_finite']`(R과 T) |
+| general FDTD: 유한성 검사 없음 | 모든 모니터 출력과 최종 필드에 대한 `validity.checks['numerical_finite']` |
+| `fdtd` `report.resolved['dt_seconds']`, `provenance['dt_seconds']`, `contract['resolved_dt_seconds']` | `'time_step_seconds'`, `'time_step_seconds'`, `'resolved_time_step_seconds'` |
+| native `diagnostics['tail']`; `validity.convergence`가 그 보고 자체 | `diagnostics['decay']`; `validity.convergence == {'decay': 보고 또는 None}` |
+| periodic `diagnostics['convergence']`; `validity.convergence`가 그 보고에 `residual`을 더한 것 | `diagnostics['decay']`; `validity.convergence == {'decay': 보고 또는 None, 'residual': ...}` |
+| 감쇠 보고 안의 `tolerance`, periodic `units` 하위 매핑 | `threshold`(`DecayCheck(threshold=)`와 같음), `<양>_units` 키 |
+| general FDTD의 개수 `invariant_axes`; periodic `diagnostics['invariant_y']` | 축 이름 튜플 `invariant_axes`, 없으면 `()` |
+
+`fdtd.periodic`의 `algorithm='reference'`는 안정성을 판단하지 않으므로
+`validity.checks['runtime_stability']`가 `None`(판단 안 함)입니다. 전에는 기본값으로 `True`가
+나왔습니다.
+
+### provenance
+
+모든 솔버의 `provenance`에 `solver`, `execution`, `numerics`, `units`, `coordinate_frame`,
+`time_convention`(`'exp(-i*omega*t)'`, 철자 하나)이 있습니다. general FDTD에는 평면 키 `backend`,
+`device`, `precision`이 더 이상 없습니다. `provenance['execution'].device`를 읽으십시오.
+`provenance['units']`는 `Units` 선언입니다. native와 periodic은 `time_step_seconds`도 보고합니다.
+periodic의 `coordinate_convention`은 `coordinate_frame`입니다. rcwa의 `code_version`은 설치된
+패키지 버전입니다(전에는 고정값 `'0.1.0'`).
+
+### 회절 기준 값
+
+`DiffractionOrders.reference`(와 `RawDiffractionSpectrum.reference`)는 모든 생산자에서 핵심 키가
+같습니다.
+
+| 키 | 뜻 | 이전 |
+| --- | --- | --- |
+| `port` | 차수가 나가는 면: rcwa와 `fdtd.periodic`은 `'top'`/`'bottom'`, `fdtd`는 `'z+'` 같은 면 | fdtd `port`는 `'reflect'`/`'transmit'`; periodic `side` |
+| `wave` | `'reflected'` 또는 `'transmitted'` | 새로 추가 |
+| `plane` | 법선 방향의 포트 평면 위치(길이 단위) | rcwa와 periodic `z` |
+| `length_units` | `plane`과 좌표의 길이 단위 | `length_unit`; periodic `coordinates` |
+| `lateral_origin` | 좌표 | periodic `'cell_centre'`(이제 `(0., 0.)`) |
+| `incident_amplitude`, `incident_amplitude_units` | 입사 진폭과 그 단위 | rcwa `incident_electric_amplitude_v_per_m` |
+| `cell_measure`, `cell_measure_units` | 주기 셀의 측도: `'m^2'`, 또는 불변 축마다 단위 길이당 `'m'`/`'1'` | `cell_area_m2`; 숫자 `integration_measure(_units)` |
+| `invariant_axes` | 축 이름 | 개수 |
+
+rcwa에는 `incident_power`와 `incident_power_units`도 있습니다(전에는 `incident_power_w`). 기준 값의
+단위 라벨(`amplitude_units`, `power_units`, `wavevector_units`)은 모든 생산자에서 `reference`에
+있습니다. 무차원 진폭의 라벨은 `'1'`입니다. rcwa metadata의 문자열 `integration_measure`
+(`'periodic cell'`)는 없어졌습니다.
+
+### 단위와 표본 시각
+
+- 단위 라벨 키는 `_units`로 끝납니다. `length_unit` → `length_units`, `time_unit` → `time_units`,
+  native `E_unit`/`H_unit`/`polarization_unit`/`spectral_power_unit` → `*_units`, periodic 평면
+  metadata `power_unit` → `power_units`. 단위마다 ASCII 철자 하나: `'V*s/m'`, `'A*s/m'`,
+  `'C/m^2'`, `'W*s^2'`.
+- `FieldSamples.units`(와 `TimeSeries`, `RawFieldSpectrum`)는 어디서나 한 모양의 매핑입니다. 있는
+  성분마다(`'Ex'`~`'Hz'`) 하나씩과 `'coordinates'`. 전에는 fdtd `TimeSeries.units`가 문자열, native
+  스냅샷이 `{'field', 'coordinates', 'time'}`, 최종 필드가 `{'E', 'H'}`였습니다.
+- E와 H 표본 시각: fdtd `final_fields` metadata `E_time`/`H_time`과 native
+  `diagnostics['time_seconds']`/`['magnetic_time_seconds']` → `E_time_seconds`/`H_time_seconds`.
+- `fdtd.Result.source_references` 항목: `time` → `times_seconds`, `magnetic_time` →
+  `magnetic_times_seconds`, `field_time` → `field_times_seconds`, `incident` → `incident_E`,
+  `plane` → `plane_E`(`incident_H`, `plane_H` 옆), `time_unit`/`length_unit` →
+  `time_units`/`length_units`; `field_units`는 항상 매핑.
+- `diagnostics['grazing']` 행은 공개 이름 `polarization(s)`, `stabilizing_loss`,
+  `invariant_axes`(축 이름)를 씁니다. 전에는 `polarisation(s)`, `stabilize`, `axis1d`였습니다.
+- 방출 값은 미국 철자를 씁니다. 기능 매니페스트의 `'cell_center'`와 `omitted_center`,
+  `rcwa.operators` metadata의 `'cell center (0,0)'`, rcwa provenance의 `'explicit cell-centered
+  operators'`.
+
+### 오류 코드
+
+모든 공개 거부 코드는 `area.item`(소문자, 점 구분) 형태이며 [keywords](../reference/keywords.md)에
+목록이 있습니다. 이 형태가 아니던 코드는 이름이 바뀌었습니다. 눈에 띄는 것:
+
+| 이전 | 이후 |
+| --- | --- |
+| `invalid_input`(기본값, 약 100곳) | 구체적 코드(`monitor.plane`, `numerics.duration`, `source.name_duplicate` 등); 기본값은 이제 `input.invalid` |
+| fdtd `prepared_structure`; native와 periodic `invalid_input` | 모든 솔버에서 `prepared.structure`, 바뀐 선언의 경로와 함께(`scene.domain`, `stack.layers` 등) |
+| fdtd `prepared_dependencies`, `static_input`, `cuda_scope` | `prepared.dependencies`, `prepared.static_input`, `execution.cuda_scope` |
+| fdtd `checkpoint_steps`, `checkpoint_scope`, `fdtd_input` | `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `fdtd.invalid` |
+| fdtd `plane_span`, `monitor_extent`, `source_waveform_range`, `padding_continuation` | `source.plane_span` 또는 `monitor.plane_span`, `monitor.extent`, `source.waveform_range`, `fdtd.padding_continuation` |
+| `backend`, `device`, `precision`, `device_unavailable`, `jax_x64_disabled` | `execution.backend`, `execution.device`, `execution.precision`, `execution.device_unavailable`, `execution.jax_x64` |
+| `unknown_length_unit`, `units_required` | `units.length`, `units.type` |
+| `material_scalar`, `material_shape`, `material_poles`, `material_wavelength`, `fdtd_material` | `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.fdtd` |
+| rcwa `output.unavailable` | `outputs.unavailable` |
+
+`fdtd.native`와 `fdtd.periodic`의 `prepare`와 `run`은 엔진 거부가 맨 `ValueError`로 새어 나가던 곳에서
+이제 코드가 붙은 `ValidationError`(`native.invalid`, `periodic.invalid` 또는 구체적 코드)를 냅니다.
+`check`는 전부터 같은 실패를 보고했습니다.
+
+### `orders`는 명시적 쌍
+
+`orders=`는 모든 공개 호출(`rcwa.Numerics`, `fdtd.periodic.Numerics`, `fdtd.DiffractionMonitor`,
+`rcwa.experimental` 빌더)에서 두 격자 벡터 방향의 반폭 쌍 `(Mu, Mv)`입니다. 맨 정수는 코드
+`numerics.orders`, `monitor.orders`, `experimental.orders`로 거부되며, 메시지가 써야 할 쌍을
+알려 줍니다. 전에는 `fdtd.DiffractionMonitor`와 실험 빌더에서 `(M, M)`, `fdtd.periodic.Numerics`에서
+`(M, 0)`을 뜻했고, `rcwa.Numerics`는 맨 `TypeError`로 멈췄습니다. `orders=0`은 `orders=(0, 0)`으로
+쓰십시오. NumPy 정수는 받고 `True`/`False`는 받지 않습니다. 실험 빌더의 기본값은 `(3, 3)`과
+`(1, 1)`이고, 전송 gap cell의 `closure()` metadata 키 `order`는 `orders`입니다.
+
+### 결과 키 Job 파일, 실행 기록, 수치
+
+Job 필드는 바뀌지 않으므로 job 키와 `wavebit.job/v2`는 그대로입니다. 실행 기록은
+`wavebit.run/v2` 그대로입니다. 기록은 결과의 매핑을 그대로 저장하므로 이전에 저장한 기록은 옛 키로
+읽히고, 지금 저장하는 기록에는 새 키가 들어갑니다. 기능 매니페스트는 버전 26입니다. 수치, 계획
+골격, 기준 골든은 하나도 바뀌지 않았습니다.
