@@ -28,6 +28,8 @@ _SPELLING = (
      'default (detuning=None).'),
     (r'\buse auto_detune\b', 'set rcwa.Numerics(detuning=...)'),
     (r'\bauto_detune\b', 'Numerics(detuning=...)'),
+    (r'\btruncation_order\[1\] is 0', 'the second entry of Numerics(orders=...) is 0 on a 1D lattice'),
+    (r'\bmax\(truncation_order\)', 'max(orders)'),
     (r'\btruncation_order=\[([^\]]*)\]', r'Numerics(orders=(\1))'),
     (r'\btruncation_order=\(([^)]*)\)', r'Numerics(orders=(\1))'),
     (r'\btruncation_order=(\d+)', r'Numerics(orders=(\1, \1))'),

@@ -769,7 +769,19 @@ RCWA_RENAMED_ATTRIBUTES = [
     (lambda: experimental.CartesianRectanglePairNVF(1), 'truncation_order',
      'rcwa.experimental.CartesianRectanglePairNVF.orders'),
     (_gap_cell, 'order', 'rcwa.experimental.CartesianPairTransmissionGalerkinGapCell.orders'),
+    (lambda: rcwa.IncidentOrders(weights=(((0, 0), 1.),)), 'orders', 'rcwa.IncidentOrders.weights'),
+    (lambda: rcwa.GaussianBeam(waist=1.), 'spectral_extent',
+     'rcwa.GaussianBeam.angular_spectrum_extent'),
 ]
+
+
+def test_the_transmission_gap_cell_still_reads_its_settings():
+    # Before the wrapper the public class was the engine cell; only ``order`` was renamed.
+    cell = _gap_cell()
+    names = ('reference', 'branches', 'quadrature', 'angular_quadrature', 'angular_order',
+             'cutoff_order', 'root_order', 'exponents', 'junctions', 'corner_controls', 'mesh')
+    for name in names:
+        assert repr(getattr(cell, name)) == repr(getattr(cell._cell, name)), name
 
 
 @pytest.mark.parametrize('build, old, replacement', RCWA_RENAMED_ATTRIBUTES,

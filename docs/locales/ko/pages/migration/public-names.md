@@ -297,7 +297,7 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 
 | 이전 | 이후 | 이유 |
 | --- | --- | --- |
-| `rcwa.OrderExcitation(orders={...})` | `rcwa.IncidentOrders(weights={...})` | 입사 차수와 각 차수의 복소 가중치 |
+| `rcwa.OrderExcitation(orders=(((m, n), w), ...))` | `rcwa.IncidentOrders(weights=(((m, n), w), ...))` | 입사 차수와 각 차수의 복소 가중치 |
 | `rcwa.GaussianBeam(spectral_extent=...)` | `rcwa.GaussianBeam(angular_spectrum_extent=...)` | 빔 각 스펙트럼의 범위(1/waist 단위) |
 | `rcwa.sample_structure(n=...)` | `rcwa.sample_structure(samples=...)` | 표본 수 |
 | `rcwa.operators.Port`의 필드 `kx`, `ky`, `index` | `kx_over_k0`, `ky_over_k0`, `refractive_index` | 정규화한 파수 성분과 포트 매질의 굴절률 |
@@ -312,14 +312,12 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 `ComplexIncidenceWarning`, `GainCutoffWarning`.
 
 `Port`는 named tuple이라 속성만 새 이름을 알려 줄 수 있습니다. `port.kx`는 `kx_over_k0`를
-알려 주며 실패하지만, `Port(kx=...)`와 `port._replace(kx=...)`는 알 수 없는 필드에 대한 파이썬
-자체의 `TypeError`를 냅니다. 새 이름은 위 표에 있습니다.
-`index`가 필드였으므로 `Port`에는 이제 튜플 메서드 `.index()`가 없습니다. `port.index`를 읽으면
-`refractive_index`를 알려 줍니다.
+알려 주며 실패하지만, 알 수 없는 필드에 대해 `Port(kx=...)`는 파이썬 자체의 `TypeError`를,
+`port._replace(kx=...)`는 파이썬 자체의 `ValueError`를 냅니다. 새 이름은 위 표에 있습니다.
 
 `rcwa.check`는 이제 양의 유한 실수가 아닌 `GaussianBeam(angular_spectrum_extent=...)`를 코드
-`source.angular_spectrum_extent`로 거부합니다. 같은 값은 전에도 거부됐지만 더 늦게, 엔진의
-표현으로 거부됐습니다. `IncidentOrders` 거부 코드는 `source.weights`입니다(전에는
+`source.angular_spectrum_extent`로 거부합니다. 같은 값은 전에도 check에서 거부됐지만, 코드
+`rcwa.invalid`와 엔진의 표현으로 거부됐습니다. `IncidentOrders` 거부 코드는 `source.weights`입니다(전에는
 `source.orders`).
 
 `rcwa.check`와 `rcwa.run`의 거부 메시지는 엔진 키워드를 쓰던 곳에서 이제 공개 설정
@@ -338,8 +336,10 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 실행 기록은 `wavebit.run/v2` 그대로입니다. 이제부터 저장하는 기록에는 새 필드 이름
 (`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz`, `k_normal`, `spectral_energy`,
 `power_region`, `Port` 필드, `extra['source_references']`, 진단 키 `source_group_counts`)이
-들어갑니다. 이전에 저장한 기록도 그대로 읽히며 저장 당시의 이름을 유지합니다. `load_run`은 클래스를
-다시 만들지 않고 저장된 필드를 `RecordedObject` 매핑으로 돌려주기 때문입니다. 기능 매니페스트는
+들어갑니다. 이전에 저장한 기록은 저장 당시의 이름을 유지합니다. `load_run`은 클래스를 다시 만들지
+않고 저장된 필드를 `RecordedObject` 매핑으로 돌려주기 때문입니다. 다만 기록은 그 job을 읽을 수
+있을 때만 읽힙니다. `OrderExcitation`이나 `GaussianBeam`이 든 job의 기록은 그 job 파일처럼 코드
+`job.encoding`으로 거부됩니다. 기능 매니페스트는
 버전 25입니다.
 
 ### 공통·관측·RCWA 수치

@@ -402,7 +402,7 @@ class Port(NamedTuple):
     The fields were ``kx``, ``ky`` and ``index`` until fieldalgo/wavebit#57. Reading an old
     name raises and names the new one. ``Port(kx=...)`` and ``port._replace(kx=...)`` cannot:
     ``typing.NamedTuple`` refuses a custom ``__new__``, so those raise Python's own
-    ``TypeError`` for an unexpected field.
+    ``TypeError`` (the constructor) or ``ValueError`` (``_replace``) for an unexpected field.
     """
     kx_over_k0: object
     ky_over_k0: object
