@@ -88,9 +88,12 @@ def test_painted_eight_complex_channels_and_three_shape_derivatives_at_resolutio
 @pytest.mark.slow
 def test_painted_jacobian_under_jit_equals_the_eager_one_at_resolution_6():
     """The resolution-20 case above runs eagerly; this keeps the outer ``jax.jit`` around the
-    value and ``jacfwd`` covered, on the same painted scene at resolution 6, where it costs
-    5.3 GB peak RSS rather than 13.6 (Linux CPU, jax 0.11.0; the jit's cost is mostly
-    compilation, 6.2 GB at resolution 8 and 7.2 at 10). Measured: both paths agree to 1.1e-15
+    value and ``jacfwd`` covered, on the same painted scene at resolution 6, where this test's
+    process peaks at 5.3 GB RSS rather than 13.6 (Linux CPU, jax 0.11.0; 6.2 GB at resolution 8
+    and 7.2 at 10). The jit's cost is not compilation, which adds about 1.2 GB at every
+    resolution. XLA:CPU's default scheduler keeps every shape-painting intermediate alive at
+    once, so the execution temp grows with the grid; see
+    docs/validation/fdtd/fdtd-jit-painting-memory.md. Measured: both paths agree to 1.1e-15
     in value and Jacobian, and every Jacobian column reaches 1.2e-2, so the comparison is not
     of zeros."""
     jax = pytest.importorskip('jax'); jax.config.update('jax_enable_x64', True)

@@ -146,8 +146,8 @@ Disabling YNN fusion (`--xla_cpu_experimental_ynn_fusion_type=`) gives 107 MB fo
   0.45 MB (`c128[3,42,4,4]` fields with their tangents). The checkpointed scans are not where the
   memory goes.
 - **Captured constants.** All HLO constants together come to 0.26 MB in the JVP module.
-- **Compilation as the main cost.** The resolution-6 test's docstring calls the jit's cost
-  "mostly compilation". Compiling adds 1.0–1.2 GB and hardly changes with resolution. The part
+- **Compilation as the main cost.** At `3f2ad83` the resolution-6 test's docstring called the
+  jit's cost "mostly compilation"; it now cites this record. Compiling adds 1.0–1.2 GB and hardly changes with resolution. The part
   that grows is the execution temp. Here it takes the derivative case from 1.2–2.5× the eager
   peak at resolutions 6–10 to about 3.8× at resolution 20 (13.6 GB against 3.6 GB in the
   docstring of the resolution-20 test).
