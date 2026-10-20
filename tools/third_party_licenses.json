@@ -225,6 +225,22 @@
       "forbidden_imports": [
         "gyptis"
       ]
+    },
+    "chiuhans-rcwa": {
+      "spdx": "MIT",
+      "url": "https://github.com/chiuhans111/RCWA",
+      "use": "past black-box RCWA comparison of Hans Chiu's rcwa package (version not recorded; license from its LICENSE.txt at a812dbe, checked 2026-10-20); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "rcwa"
+      ]
+    },
+    "rcwa4d": {
+      "spdx": "MIT",
+      "url": "https://github.com/fancompute/rcwa4d",
+      "use": "past RCWA comparison, run after a local patch (version not recorded; license from its LICENSE and pyproject at 92ebd02, checked 2026-10-20); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "forbidden_imports": [
+        "rcwa4d"
+      ]
     }
   },
   "bundled": {
