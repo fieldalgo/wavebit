@@ -1,0 +1,5 @@
+# Tests, studies and reference scripts stay out of the sdist: some of them may run GPL or
+# AGPL tools, which only unshipped code may do. setuptools would otherwise add top-level
+# tests/test*.py on its own. tools/run_distribution_smoke.py checks the result.
+prune tests
+prune studies
