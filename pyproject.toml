@@ -9,6 +9,9 @@ version = "0.0.4"
 description = "Differentiable electromagnetic simulation with RCWA and FDTD"
 readme = "README.md"
 license = "Apache-2.0 AND MIT"
+# Shipped in the sdist and in the wheel's .dist-info/licenses/; tools/run_distribution_smoke.py
+# checks that both carry them unchanged.
+license-files = ["LICENSE", "LICENSE.meent", "LICENSE.fmmax", "NOTICE"]
 classifiers = ["Development Status :: 3 - Alpha"]
 authors = [{ name = "FieldAlgo", email = "dev@fieldalgo.com" }]
 
